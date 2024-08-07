@@ -41,7 +41,7 @@ XChain_`{CHAIN}`\_`{NETWORK}`\_`{COMPONENT}`
 - XChain_BTC_Testnet_Data
 - XChain_BTC_Regtest_Data
 
-## Bitcoin Table Names
+## Litecoin Table Names
 - XChain_LTC_Mainnet_Transactions
 - XChain_LTC_Testnet_Transactions
 - XChain_LTC_Regtest_Transactions
@@ -51,3 +51,14 @@ XChain_`{CHAIN}`\_`{NETWORK}`\_`{COMPONENT}`
 - XChain_LTC_Mainnet_Data
 - XChain_LTC_Testnet_Data
 - XChain_LTC_Regtest_Data
+
+## Dogecoin Table Names
+- XChain_DOGE_Mainnet_Transactions
+- XChain_DOGE_Testnet_Transactions
+- XChain_DOGE_Regtest_Transactions
+- XChain_DOGE_Mainnet_Addresses
+- XChain_DOGE_Testnet_Addresses
+- XChain_DOGE_Regtest_Addresses
+- XChain_DOGE_Mainnet_Data
+- XChain_DOGE_Testnet_Data
+- XChain_DOGE_Regtest_Data
