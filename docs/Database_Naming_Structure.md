@@ -26,39 +26,39 @@ XChain_`{CHAIN}`\_`{NETWORK}`\_`{COMPONENT}`
 ----------------- | -------------- |
 | Encoder/Decoder | `Transactions` |
 | Address Indexer | `Addresses`    |
-| Indexer         | `Data`         |
+| XChain Indexer  | `Data`         |
 
 # Examples
 
 ## Bitcoin Table Names
-- XChain_BTC_Mainnet_Transactions
-- XChain_BTC_Testnet_Transactions
-- XChain_BTC_Regtest_Transactions
-- XChain_BTC_Mainnet_Addresses
-- XChain_BTC_Testnet_Addresses
-- XChain_BTC_Regtest_Addresses
-- XChain_BTC_Mainnet_Data
-- XChain_BTC_Testnet_Data
-- XChain_BTC_Regtest_Data
+- `XChain_BTC_Mainnet_Transactions`
+- `XChain_BTC_Testnet_Transactions`
+- `XChain_BTC_Regtest_Transactions`
+- `XChain_BTC_Mainnet_Addresses`
+- `XChain_BTC_Testnet_Addresses`
+- `XChain_BTC_Regtest_Addresses`
+- `XChain_BTC_Mainnet_Data`
+- `XChain_BTC_Testnet_Data`
+- `XChain_BTC_Regtest_Data`
 
 ## Litecoin Table Names
-- XChain_LTC_Mainnet_Transactions
-- XChain_LTC_Testnet_Transactions
-- XChain_LTC_Regtest_Transactions
-- XChain_LTC_Mainnet_Addresses
-- XChain_LTC_Testnet_Addresses
-- XChain_LTC_Regtest_Addresses
-- XChain_LTC_Mainnet_Data
-- XChain_LTC_Testnet_Data
-- XChain_LTC_Regtest_Data
+- `XChain_LTC_Mainnet_Transactions`
+- `XChain_LTC_Testnet_Transactions`
+- `XChain_LTC_Regtest_Transactions`
+- `XChain_LTC_Mainnet_Addresses`
+- `XChain_LTC_Testnet_Addresses`
+- `XChain_LTC_Regtest_Addresses`
+- `XChain_LTC_Mainnet_Data`
+- `XChain_LTC_Testnet_Data`
+- `XChain_LTC_Regtest_Data`
 
 ## Dogecoin Table Names
-- XChain_DOGE_Mainnet_Transactions
-- XChain_DOGE_Testnet_Transactions
-- XChain_DOGE_Regtest_Transactions
-- XChain_DOGE_Mainnet_Addresses
-- XChain_DOGE_Testnet_Addresses
-- XChain_DOGE_Regtest_Addresses
-- XChain_DOGE_Mainnet_Data
-- XChain_DOGE_Testnet_Data
-- XChain_DOGE_Regtest_Data
+- `XChain_DOGE_Mainnet_Transactions`
+- `XChain_DOGE_Testnet_Transactions`
+- `XChain_DOGE_Regtest_Transactions`
+- `XChain_DOGE_Mainnet_Addresses`
+- `XChain_DOGE_Testnet_Addresses`
+- `XChain_DOGE_Regtest_Addresses`
+- `XChain_DOGE_Mainnet_Data`
+- `XChain_DOGE_Testnet_Data`
+- `XChain_DOGE_Regtest_Data`
