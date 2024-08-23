@@ -22,43 +22,33 @@ XChain_`{CHAIN}`\_`{NETWORK}`\_`{COMPONENT}`
 
 # Components
 
-| Component       | Name           |
------------------ | -------------- |
-| Encoder/Decoder | `Transactions` |
-| Address Indexer | `Addresses`    |
-| XChain Indexer  | `Data`         |
+| Component       | Name      |
+----------------- | --------- |
+| Encoder/Decoder | `Decoder` |
+| XChain Indexer  | `Indexer` |
 
 # Examples
 
-## Bitcoin Table Names
-- `XChain_BTC_Mainnet_Transactions`
-- `XChain_BTC_Testnet_Transactions`
-- `XChain_BTC_Regtest_Transactions`
-- `XChain_BTC_Mainnet_Addresses`
-- `XChain_BTC_Testnet_Addresses`
-- `XChain_BTC_Regtest_Addresses`
-- `XChain_BTC_Mainnet_Data`
-- `XChain_BTC_Testnet_Data`
-- `XChain_BTC_Regtest_Data`
+## Bitcoin Database Names
+- `XChain_BTC_Mainnet_Decoder`
+- `XChain_BTC_Testnet_Decoder`
+- `XChain_BTC_Regtest_Decoder`
+- `XChain_BTC_Mainnet_Indexer`
+- `XChain_BTC_Testnet_Indexer`
+- `XChain_BTC_Regtest_Indexer`
 
-## Litecoin Table Names
-- `XChain_LTC_Mainnet_Transactions`
-- `XChain_LTC_Testnet_Transactions`
-- `XChain_LTC_Regtest_Transactions`
-- `XChain_LTC_Mainnet_Addresses`
-- `XChain_LTC_Testnet_Addresses`
-- `XChain_LTC_Regtest_Addresses`
-- `XChain_LTC_Mainnet_Data`
-- `XChain_LTC_Testnet_Data`
-- `XChain_LTC_Regtest_Data`
+## Litecoin Database Names
+- `XChain_LTC_Mainnet_Decoder`
+- `XChain_LTC_Testnet_Decoder`
+- `XChain_LTC_Regtest_Decoder`
+- `XChain_LTC_Mainnet_Indexer`
+- `XChain_LTC_Testnet_Indexer`
+- `XChain_LTC_Regtest_Indexer`
 
-## Dogecoin Table Names
-- `XChain_DOGE_Mainnet_Transactions`
-- `XChain_DOGE_Testnet_Transactions`
-- `XChain_DOGE_Regtest_Transactions`
-- `XChain_DOGE_Mainnet_Addresses`
-- `XChain_DOGE_Testnet_Addresses`
-- `XChain_DOGE_Regtest_Addresses`
-- `XChain_DOGE_Mainnet_Data`
-- `XChain_DOGE_Testnet_Data`
-- `XChain_DOGE_Regtest_Data`
+## Dogecoin Database Names
+- `XChain_DOGE_Mainnet_Decoder`
+- `XChain_DOGE_Testnet_Decoder`
+- `XChain_DOGE_Regtest_Decoder`
+- `XChain_DOGE_Mainnet_Indexer`
+- `XChain_DOGE_Testnet_Indexer`
+- `XChain_DOGE_Regtest_Indexer`
