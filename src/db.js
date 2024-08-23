@@ -13,14 +13,6 @@ class Database {
         this.dbName = dbName;
         this.user   = user;
         this.pass   = pass;
-        // Database connection parameters
-        this.connectionParams = {
-            host:     this.host,
-            user:     this.user,
-            password: this.pass,
-            database: this.dbName,
-            port:     this.port
-        };
         // Database pool connection parameters
         let connectionParams = {
             host: host,
@@ -54,7 +46,7 @@ class Database {
             user:     this.user,
             password: this.pass,
             port:     this.port
-        }
+        };
         while(true){
             try {
                 let db     = await mariadb.createConnection(connectionParams);
@@ -79,7 +71,7 @@ class Database {
             user:     this.user,
             password: this.pass,
             port:     this.port
-        }
+        };
         let databaseCreated = false;
         console.log("Creating " + this.dbName + " database!");
         while(!databaseCreated){
@@ -99,24 +91,34 @@ class Database {
     
     // Handle verifying all database tables exist 
     async verifyTables(){
+        let connectionParams = {
+            host:     this.host,
+            user:     this.user,
+            password: this.pass,
+            database: this.dbName,
+            port:     this.port
+        };
         let path  = '/XChainIndexer/src/sql';
         let files = fs.readdirSync(path);
         let file  = null;
-        let db    = await mariadb.createConnection(this.connectionParams);
+        let db    = await mariadb.createConnection(connectionParams);
         // Loop through SQL files
         for (file of files){
-            let table   = file.substring(0, file.indexOf('.sql'));
-            console.log('Verifying ' + table + ' table exists...');
-            try {
-                let result = await db.query("SELECT * FROM information_schema.tables WHERE table_schema = ? AND table_name = ?",[this.dbName, table]);
-                if(result.length > 0){
-                    continue;
-                } else {
-                    await this.createTable(file);
+            var isSql = file.indexOf('.sql');
+            if(isSql){
+                let table   = file.substring(0, file.indexOf('.sql'));
+                console.log('Verifying ' + table + ' table exists...');
+                try {
+                    let result = await db.query("SELECT * FROM information_schema.tables WHERE table_schema = ? AND table_name = ?",[this.dbName, table]);
+                    if(result.length > 0){
+                        continue;
+                    } else {
+                        await this.createTable(file);
+                    }
+                } catch(e){
+                    console.log('Error: SQL error=',e);
+                    this.throwError('Error while trying to verify ' + table + ' table exists!');
                 }
-            } catch(e){
-                console.log('Error: SQL error=',e);
-                this.throwError('Error while trying to verify ' + table + ' table exists!');
             }
         }
         db.end();
@@ -124,10 +126,17 @@ class Database {
 
     // Handle verifying all database tables exist 
     async createTable(file){
+        let connectionParams = {
+            host:     this.host,
+            user:     this.user,
+            password: this.pass,
+            database: this.dbName,
+            port:     this.port
+        };
         let path    = '/XChainIndexer/src/sql';
         let data    = fs.readFileSync(path + '/' + file, "utf8");
         let table   = file.substring(0, file.indexOf('.sql'));
-        let db      = await mariadb.createConnection(this.connectionParams);
+        let db      = await mariadb.createConnection(connectionParams);
         let queries = data.split(';');
         let query   = null;
         console.log('Creating ' + table + ' table and indexes...');
