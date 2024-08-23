@@ -1,0 +1,35 @@
+DROP TABLE IF EXISTS dispensers;
+CREATE TABLE dispensers (
+    tx_index         INTEGER UNSIGNED,
+    tx_hash_id       INTEGER UNSIGNED, -- id of record in index_transactions
+    block_index      INTEGER UNSIGNED,
+    source_id        INTEGER UNSIGNED, -- id of record in index_addresses (source/origin)
+    address_id       INTEGER UNSIGNED, -- id of record in index_addresses
+    dispense_tick_id INTEGER UNSIGNED, -- id of record in index_tickers table
+    dispense_amount  VARCHAR(250),     -- Tokens to vend per dispense
+    escrow_amount    VARCHAR(250),     -- Tokens to escrow in dispenser
+    trigger_tick_id  INTEGER UNSIGNED, -- id of record in index_tickers table
+    trigger_amount   VARCHAR(250),     -- Amount required to trigger a dispense
+    allow_list_id    INTEGER UNSIGNED, -- id of record in index_transactions table
+    block_list_id    INTEGER UNSIGNED, -- id of record in index_transactions table
+    action           INTEGER UNSIGNED, -- Dispenser action (0=Open, 1=Refill, 2=Close, 3=List Edit)
+    memo_id          INTEGER UNSIGNED, -- id of record in index_memos table 
+    status_id        INTEGER UNSIGNED, -- id of record in index_statuses table
+    -- State fields
+    status           INTEGER UNSIGNED, -- dispenser status (1=Open, 2=Closing, 3=Closed)    
+    escrow_remaining VARCHAR(250)      -- Tokens escrowed in the dispensers (state field)
+) ENGINE=MyISAM DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;
+
+CREATE        INDEX tx_index         ON dispensers (tx_index);
+CREATE        INDEX tx_hash_id       ON dispensers (tx_hash_id);
+CREATE        INDEX source_id        ON dispensers (source_id);
+CREATE        INDEX address_id       ON dispensers (address_id);
+CREATE        INDEX dispense_tick_id ON dispensers (dispense_tick_id);
+CREATE        INDEX trigger_tick_id  ON dispensers (trigger_tick_id);
+CREATE        INDEX block_index      ON dispensers (block_index);
+CREATE        INDEX allow_list_id    ON dispensers (allow_list_id);
+CREATE        INDEX block_list_id    ON dispensers (block_list_id);
+CREATE        INDEX action           ON dispensers (action);
+CREATE        INDEX memo_id          ON dispensers (memo_id);
+CREATE        INDEX status_id        ON dispensers (status_id);
+CREATE        INDEX status           ON dispensers (status);
