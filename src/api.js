@@ -6,27 +6,27 @@ const bodyParser    = require('body-parser');
 const helmet        = require('helmet');
 const cors          = require('cors');
 const XChainIndexer = require('./XChainIndexer');
-const jsonRouter    = require('express-json-rpc-router')
+const jsonRouter    = require('express-json-rpc-router');
 
 // Parse in .env config data
 dotenv.config();
 
 // Parse in the environmental variables
-const INDEXER_API_PORT = process.env.INDEXER_API_PORT
+const INDEXER_API_PORT = process.env.INDEXER_API_PORT;
 
 // Decoder database config
-const DECODER_DB_HOST  = process.env.DECODER_DB_HOST
-const DECODER_DB_PORT  = process.env.DECODER_DB_PORT
-const DECODER_DB_NAME  = process.env.DECODER_DB_NAME
-const DECODER_DB_USER  = process.env.DECODER_DB_USER
-const DECODER_DB_PASS  = process.env.DECODER_DB_PASS
+const DECODER_DB_HOST  = process.env.DECODER_DB_HOST;
+const DECODER_DB_PORT  = process.env.DECODER_DB_PORT;
+const DECODER_DB_NAME  = process.env.DECODER_DB_NAME;
+const DECODER_DB_USER  = process.env.DECODER_DB_USER;
+const DECODER_DB_PASS  = process.env.DECODER_DB_PASS;
 
 // Indexer database config
-const INDEXER_DB_HOST  = process.env.INDEXER_DB_HOST
-const INDEXER_DB_PORT  = process.env.INDEXER_DB_PORT
-const INDEXER_DB_NAME  = process.env.INDEXER_DB_NAME
-const INDEXER_DB_USER  = process.env.INDEXER_DB_USER
-const INDEXER_DB_PASS  = process.env.INDEXER_DB_PASS
+const INDEXER_DB_HOST  = process.env.INDEXER_DB_HOST;
+const INDEXER_DB_PORT  = process.env.INDEXER_DB_PORT;
+const INDEXER_DB_NAME  = process.env.INDEXER_DB_NAME;
+const INDEXER_DB_USER  = process.env.INDEXER_DB_USER;
+const INDEXER_DB_PASS  = process.env.INDEXER_DB_PASS;
 
 // Start up the API
 async function startApi(){
@@ -57,10 +57,10 @@ async function startApi(){
 		}
 		*/
 
-	}
+	};
 
 	// Allow JSON-RPC requests
-	app.use(jsonRouter({methods: jsonRpcController}))
+	app.use(jsonRouter({methods: jsonRpcController}));
 
 	// Start the server
 	app.listen(INDEXER_API_PORT, () => {
@@ -73,4 +73,4 @@ async function startApi(){
 
 }
 
-startApi()
+startApi();
