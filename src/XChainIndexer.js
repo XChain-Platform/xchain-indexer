@@ -1,6 +1,7 @@
 /* XChain Indexer Class */
 
 const Database = require('./db.js');
+const util     = require('./util.js');
 
 class XChainIndexer {
     constructor(decoderDbHost, decoderDbPort, decoderDbName, decoderDbUser, decoderDbPass, indexerDbHost, indexerDbPort, indexerDbName, indexerDbUser, indexerDbPass){
@@ -29,46 +30,14 @@ class XChainIndexer {
         this.blockchainInfoLastBlock = -1
     }
 
-    async sleep(ms) {
-        return new Promise((resolve) => setTimeout(resolve, ms));
-    }
-
-    markTime(timeName){
-        this.debugTime[timeName] = Date.now()
-    }
-    
-    logTime(timeName){
-        let endTime = Date.now()
-        let msTime  = (endTime - this.debugTime[timeName])
-        console.log("Time('"+timeName+"'): "+(msTime)+"ms")
-    }
-    
-    millisecondsToTimeString(ms){
-        var milliseconds = Math.floor((ms % 1000) / 100),
-            seconds      = Math.floor((ms / 1000) % 60),
-            minutes      = Math.floor((ms / (1000 * 60)) % 60),
-            hours        = Math.floor((ms / (1000 * 60 * 60)) % 24),
-            days         = Math.floor((ms / (1000 * 60 * 60 * 24)) % 365);
-  
-        hours   = (hours < 10) ? "0" + hours : hours;
-        minutes = (minutes < 10) ? "0" + minutes : minutes;
-        seconds = (seconds < 10) ? "0" + seconds : seconds;
-  
-        return days+"d"+ hours + "h" + minutes + "m" + seconds + "." + milliseconds+"s";
-    }
-    
+    // Handle indicating if indexer is synced
     isSynced(){
         return this.synced;
     }
 
+    // Handle setting flag to stop indexer
     stop(){
-        this.stopFlag = true
-    }
-
-    // Handle throwing an error and logging to console
-    throwError(error){
-        console.log(error);
-        throw new Error(error);
+        this.stopFlag = true;
     }
 
     // Handle starting up the XChain indexer
@@ -78,42 +47,36 @@ class XChainIndexer {
         this.indexerDb = new Database(this.indexerDbHost, this.indexerDbPort, this.indexerDbName, this.indexerDbUser, this.indexerDbPass);
         
         // Verify the Decoder database exists
-        await this.decoderDb.createDatabase();
-        let decoderDbVerified = this.decoderDb.verifyDatabase();
+        let decoderDbStatus   = await this.decoderDb.createDatabase();
+        let decoderDbVerified = await this.decoderDb.verifyDatabase();
         if(!decoderDbVerified){
-            this.throwError("Database " + this.decoderDbName + " doesn't exist!");
+            util.throwError("Database " + this.decoderDbName + " doesn't exist!");
         } else {
             // Add optional code here to verify decoder database tables exist (Blocks / Transactions)
         }
 
         // Verify the Indexer database exists
-        await this.indexerDb.createDatabase();
-        let indexerDbVerified = this.indexerDb.verifyDatabase();
+        let indexerDbStatus   = await this.indexerDb.createDatabase();
+        let indexerDbVerified = await this.indexerDb.verifyDatabase();
         if(!indexerDbVerified){
-            this.throwError("Database " + this.indexerDbName + " doesn't exist!");
+            util.throwError("Database " + this.indexerDbName + " doesn't exist!");
         } else {
-            let indexerTablesVerified = this.indexerDb.verifyTables();
-            if(!indexerTablesVerified){
-                await this.indexerDb.createTables();
-                indexerTablesVerified = this.indexerDb.verifyTables();
-                if(!indexerTablesVerified){
-                    this.throwError("Database " + this.indexerDbName + " tables don't exist!");
-                }
-            }
+            // Verify the Indexer tables exists
+            let indexerTablesVerified = await this.indexerDb.verifyTables();
+            if(!indexerTablesVerified)
+                util.throwError("Database " + this.decoderDbName + " tables don't exist!");
         }
 
-        // Make sure the Indexer database exists
-        // let dbVerified = await this.db.verifyDatabaseExists()
-        // if (!dbVerified){
-        //   console.log("Database doesn't exist!!!!")
-        //   throw new Error("Database "+this.dbName+" doesn't exist")
-        // }
-      
-        // console.log("Connected to database!")
-        // console.log("Parsing...")
-        
-        // let lastProcessedBlockIndex = await this.db.getLastBlock()
-        // let lastProcessedTxIndex = -1
+        // Get first block from decoder
+        let firstDecoderBlock = await this.decoderDb.getBlockIndex('decoder','first');
+
+        // Define placeholders for block parsing status
+        let lastIndexerBlock  = null; 
+        let lastDecoderBlock  = null;
+        let lastRollbackBlock = null;
+
+        // Get first decoder block index
+
         
         // if (lastProcessedBlockIndex < this.startBlockIndex - 1){
         //   lastProcessedBlockIndex = this.startBlockIndex - 1
@@ -134,28 +97,42 @@ class XChainIndexer {
             // Bail out if stop is requested
             if(this.stopFlag)
                 break;
+
+            // Get last processed and rollback block from Indexer database
+            lastDecoderBlock         = await this.decoderDb.getBlockIndex('decoder', 'last');
+            // lastDecoderRollbackBlock = await this.decoderDb.getBlockIndex('decoder', 'rollback');
+
+            // Get last processed block from Decoder database
+            lastIndexerBlock         = await this.indexerDb.getBlockIndex('indexer', 'last');
+            // lastIndexerRollbackBlock = await this.indexerDb.getBlockIndex('indexer', 'rollback');
+
+            console.log('firstDecoderBlock=',firstDecoderBlock);
+            console.log('lastDecoderBlock=',lastDecoderBlock);
+            console.log('lastIndexerBlock=',lastIndexerBlock);
+            // console.log('lastRollbackBlock=',lastRollbacBlock);
+
             // Get last block parsed from database 
-            // if (!lastBlockchainInfo || (lastProcessedBlockIndex >= this.blockchainInfoLastBlock)){
-            //   try {
-            //     lastBlockchainInfo = await this.connector.getBlockchainInfo()
+            if (!lastIndexerBlock || (lastDecoderBlock > lastIndexerBlock)){
+              try {
+                // lastBlockchainInfo = await this.decoderDb.getBlockData();
                 
             //     this.blockchainInfoLastBlock = lastBlockchainInfo["blocks"]
-            //   } catch (e){
-            //     console.log(e)
-            //     console.log("Error trying to get network info from the node. Trying again...")
-            //     await this.sleep(3000)
-            //     continue
-            //   }
+              } catch (e){
+                console.log(e);
+                console.log("Error trying to get block info from the decoder. Trying again...");
+                await util.sleep(3000);
+                continue;
+              }
               
             //   if (lastProcessedBlockIndex > this.blockchainInfoLastBlock){
             //     console.log("The last processed block height ("+lastProcessedBlockIndex+") is greater than the last block from the node ("+this.blockchainInfoLastBlock+")")
             //     await sleep(5000)
             //     continue
             //   }
-            // }
+            }
 
             console.log('sleeping for 5 seconds');
-            await this.sleep(5000);
+            await util.sleep(5000);
         }      
 
     }
