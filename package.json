@@ -1,4 +1,13 @@
 {
+  "name": "xchain-indexer",
+  "description": "xchain-indexer is a free open source token platform indexer",
+  "version": "1.0.0",
+  "author": "Jeremy Johnson <j-dog@j-dog.net>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/XChain-platform/xchain-indexer.git"
+  },
   "dependencies": {
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",

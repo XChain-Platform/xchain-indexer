@@ -424,6 +424,44 @@ class Database {
         return id;
     }
 
+    // Lookup a record in the `index_addresses` table and return record id
+    async getAddressId(address){
+        let id    = null;
+        let db    = await this.getConnection();
+        let query = "SELECT id FROM index_addresses WHERE `address`=? LIMIT 1"
+        try {
+            let rows = await db.query(query, [address]);
+            if(rows.length > 0)
+                id = rows[0].id;
+        } catch (err) {
+            console.error('Error looking up address record id in index_addresses table:', err);
+        }
+        await this.releaseConnection();
+        return id;
+    }
+
+    // Create records in the 'index_addresses' table and return record id
+    async createAddress(address){
+        // Ignore empty address and return hardcoded record id
+        if(address==null||address=='')
+            return 1;
+        var id = await this.getAddressId(address);
+        // Handle creating record
+        if(id==null){
+            let db    = await this.getConnection();
+            let query = "INSERT INTO index_addresses (`address`) values (?)"
+            try {
+                let result = await db.query(query, [address]);
+                if(result.insertId)
+                    id = result.insertId;
+            } catch (err) {
+                console.error('Error trying to create address record in index_addresses table:', err);
+            }
+            await this.releaseConnection();
+        }
+        return id;
+    }
+
     // Lookup a record in the `blocks` table and return record id
     async getBlockId(block_index){
         let id    = null;

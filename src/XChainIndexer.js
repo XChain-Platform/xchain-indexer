@@ -5,7 +5,13 @@ const actions  = require('./actions.js');
 const util     = require('./util.js');
 
 class XChainIndexer {
+
+    // Handle constructing a class instance
     constructor(decoderDbHost, decoderDbPort, decoderDbName, decoderDbUser, decoderDbPass, indexerDbHost, indexerDbPort, indexerDbName, indexerDbUser, indexerDbPass){
+        // XChain Indexer Version
+        this.version = process.env.npm_package_version;
+        this.name    = process.env.npm_package_name;
+
         // Decoder database config
         this.decoderDbHost = decoderDbHost;
         this.decoderDbPort = decoderDbPort;
@@ -42,12 +48,14 @@ class XChainIndexer {
 
     // Handle starting up the XChain indexer
     async start(){
+        console.log('Starting up ' + this.name + ' v' + this.version + '...');
+
         // Establish database connections
         this.decoderDb = new database(this.decoderDbHost, this.decoderDbPort, this.decoderDbName, this.decoderDbUser, this.decoderDbPass);
         this.indexerDb = new database(this.indexerDbHost, this.indexerDbPort, this.indexerDbName, this.indexerDbUser, this.indexerDbPass);
 
-        // Create instance of the actions class and pass indexerDb database connection to it
-        this.actions = new actions(this.indexerDb);
+        // Create instance of the actions class and pass database connection instances to it
+        this.actions = new actions(this.decoderDb, this.indexerDb);
         
         // Verify the Decoder database exists
         let decoderDbStatus   = await this.decoderDb.createDatabase();
@@ -133,8 +141,8 @@ class XChainIndexer {
 
                 // DEBUG: counter to enable stopping parsing after a set number of blocks
                 cnt++;
-                // if(cnt>=1)
-                //     break;
+                if(cnt>=1)
+                    break;
             }
 
             console.log('sleeping for 5 seconds');

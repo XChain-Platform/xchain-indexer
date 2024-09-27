@@ -13,6 +13,7 @@ dotenv.config();
 
 // Parse in the environmental variables
 const INDEXER_API_PORT = process.env.INDEXER_API_PORT;
+const INDEXER_NETWORK  = process.env.INDEXER_NETWORK;
 
 // Decoder database config
 const DECODER_DB_HOST  = process.env.DECODER_DB_HOST;
