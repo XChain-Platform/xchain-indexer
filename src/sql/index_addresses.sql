@@ -7,4 +7,4 @@ CREATE TABLE index_addresses (
 CREATE INDEX address on index_addresses (address(10));
 
 -- Create record for blank/empty address
-INSERT INTO index_addresses (id,address) values (0,'');
+INSERT INTO index_addresses (id,address) values (1,'');

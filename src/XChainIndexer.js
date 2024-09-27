@@ -1,6 +1,7 @@
 /* XChain Indexer Class */
 
-const Database = require('./db.js');
+const database = require('./db.js');
+const actions  = require('./actions.js');
 const util     = require('./util.js');
 
 class XChainIndexer {
@@ -24,7 +25,6 @@ class XChainIndexer {
         this.indexerDb = null;
 
         // Misc placeholders
-        this.debugTime = {};
         this.synced    = false;
         this.stopFlag  = false
         this.blockchainInfoLastBlock = -1
@@ -43,8 +43,11 @@ class XChainIndexer {
     // Handle starting up the XChain indexer
     async start(){
         // Establish database connections
-        this.decoderDb = new Database(this.decoderDbHost, this.decoderDbPort, this.decoderDbName, this.decoderDbUser, this.decoderDbPass);
-        this.indexerDb = new Database(this.indexerDbHost, this.indexerDbPort, this.indexerDbName, this.indexerDbUser, this.indexerDbPass);
+        this.decoderDb = new database(this.decoderDbHost, this.decoderDbPort, this.decoderDbName, this.decoderDbUser, this.decoderDbPass);
+        this.indexerDb = new database(this.indexerDbHost, this.indexerDbPort, this.indexerDbName, this.indexerDbUser, this.indexerDbPass);
+
+        // Create instance of the actions class and pass indexerDb database connection to it
+        this.actions = new actions(this.indexerDb);
         
         // Verify the Decoder database exists
         let decoderDbStatus   = await this.decoderDb.createDatabase();
@@ -67,74 +70,77 @@ class XChainIndexer {
                 util.throwError("Database " + this.decoderDbName + " tables don't exist!");
         }
 
-        // Get first block from decoder
-        let firstDecoderBlock = await this.decoderDb.getBlockIndex('decoder','first');
-
         // Define placeholders for block parsing status
-        let lastIndexerBlock  = null; 
-        let lastDecoderBlock  = null;
-        let lastRollbackBlock = null;
-
-        // Get first decoder block index
-
-        
-        // if (lastProcessedBlockIndex < this.startBlockIndex - 1){
-        //   lastProcessedBlockIndex = this.startBlockIndex - 1
-        // }
-        
-        // let lastBlockchainInfo = null
-        // this.blockchainInfoLastBlock = -1
-        //   let blocksQuantity = 0
-        
-        // let startTimeStamp = Date.now()
-        
-        // let blocksCount = 0
-        // let transactionsCount = 0
-        // let validTransactionsCount = 0
-        // let outputCount = 0      
+        let firstDecoderBlock        = null;
+        let lastIndexerBlock         = null; 
+        let lastDecoderBlock         = null;
+        let lastDecoderRollbackBlock = null;
+        let lastIndexerRollbackBlock = null;
 
         while (true){
             // Bail out if stop is requested
             if(this.stopFlag)
                 break;
 
-            // Get last processed and rollback block from Indexer database
-            lastDecoderBlock         = await this.decoderDb.getBlockIndex('decoder', 'last');
-            // lastDecoderRollbackBlock = await this.decoderDb.getBlockIndex('decoder', 'rollback');
+            // Get last processed block from Indexer and Decoder databases
+            lastDecoderBlock  = await this.decoderDb.getBlockIndex('decoder', 'last');
+            lastIndexerBlock  = await this.indexerDb.getBlockIndex('indexer', 'last');
 
-            // Get last processed block from Decoder database
-            lastIndexerBlock         = await this.indexerDb.getBlockIndex('indexer', 'last');
+            // TODO: Write rollback detection code
+            // Get last rollback block from Indexer and Decoder databases
+            // lastDecoderRollbackBlock = await this.indexerDb.getBlockIndex('decoder', 'rollback');
             // lastIndexerRollbackBlock = await this.indexerDb.getBlockIndex('indexer', 'rollback');
 
-            console.log('firstDecoderBlock=',firstDecoderBlock);
-            console.log('lastDecoderBlock=',lastDecoderBlock);
-            console.log('lastIndexerBlock=',lastIndexerBlock);
-            // console.log('lastRollbackBlock=',lastRollbacBlock);
+            // If indexer has no parsed blocks, set firstDecoderBlock from Decoder database
+            if(!lastIndexerBlock)
+                firstDecoderBlock = await this.decoderDb.getBlockIndex('decoder', 'first');
 
-            // Get last block parsed from database 
-            if (!lastIndexerBlock || (lastDecoderBlock > lastIndexerBlock)){
-              try {
-                // lastBlockchainInfo = await this.decoderDb.getBlockData();
-                
-            //     this.blockchainInfoLastBlock = lastBlockchainInfo["blocks"]
-              } catch (e){
-                console.log(e);
-                console.log("Error trying to get block info from the decoder. Trying again...");
-                await util.sleep(3000);
-                continue;
-              }
-              
-            //   if (lastProcessedBlockIndex > this.blockchainInfoLastBlock){
-            //     console.log("The last processed block height ("+lastProcessedBlockIndex+") is greater than the last block from the node ("+this.blockchainInfoLastBlock+")")
-            //     await sleep(5000)
-            //     continue
-            //   }
+            // Log block parsing start
+            var startBlock = (lastIndexerBlock) ? (lastIndexerBlock+1) : firstDecoderBlock;
+            console.log('Resuming block parsing at block ' + startBlock + '...');
+
+            var cnt = 0;
+
+            // Loop through blocks until indexer has parsed lastDecoderBlock
+            while( (!lastIndexerBlock || lastIndexerBlock < lastDecoderBlock )){
+
+                // Start tracking time to parse block
+                var debugTimer = util.startTimer();
+
+                // If indexer has no parsed blocks, set block to first Decoder block -1
+                if(!lastIndexerBlock)
+                    lastIndexerBlock = firstDecoderBlock - 1;
+
+                // Increase lastIndexerBlock to next block
+                lastIndexerBlock++;
+
+                // Get a list of any transactions in this block from the decoder database
+                let blockTransactions = await this.decoderDb.getBlockData(lastIndexerBlock);
+
+                // Loop through any block transactions and process them
+                for(const tx of blockTransactions)
+                    await this.actions.processTransaction(tx);
+
+                // Create record in `blocks` table with hashes of the credits/debits/transactions tables
+                await this.indexerDb.createBlock(lastIndexerBlock);
+
+                // Do a sanity check to verify that token supplys match data in credits/debits/balances tables 
+                // await util.sanityCheck(lastIndexerBlock);
+                // await util.sleep(3500);
+
+                // Log the debug time
+                util.logTimer(debugTimer, 'Block Parsed');
+
+                // DEBUG: counter to enable stopping parsing after a set number of blocks
+                cnt++;
+                // if(cnt>=1)
+                //     break;
             }
 
             console.log('sleeping for 5 seconds');
+            // Sleep for 5 seconds before checking for new transaction data
             await util.sleep(5000);
         }      
-
     }
 
 }
