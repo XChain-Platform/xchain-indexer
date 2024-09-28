@@ -517,7 +517,96 @@ class Database {
         console.log('Block Created' + "\t: " + block_index + ' [credits:' + credits + ' debits:' + debits + ' txlist:' + txlist + ']');
     }
 
+    // Lookup a record in the `index_actions` table and return record id
+    async getActionId(action){
+        let id    = null;
+        let db    = await this.getConnection();
+        let query = "SELECT id FROM index_actions WHERE action=? LIMIT 1";
+        try {
+            let rows = await db.query(query, [action]);
+            if(rows.length > 0)
+                id = rows[0].id;
+        } catch (err) {
+            console.error('Error looking up action record id in index_actions table:', err);
+        }
+        await this.releaseConnection();
+        return id;
+    }
 
+    // Create records in the 'index_actions' table and return record id
+    async createAction(action){
+        var id = await this.getActionId(action);
+        // Handle creating record
+        if(id==null){
+            let db    = await this.getConnection();
+            let query = "INSERT INTO index_actions (action) values (?)";
+            try {
+                let result = await db.query(query, [action]);
+                if(result.insertId)
+                    id = result.insertId;
+            } catch (err) {
+                console.error('Error trying to create action record in index_actions table:', err);
+            }
+            await this.releaseConnection();
+        }
+        return id;
+    }
+
+    // Handles returning the highest tx_index from transactions table
+    async getNextTxIndex(){
+        let idx   = 0;
+        let db    = await this.getConnection();
+        let query = "SELECT tx_index FROM transactions ORDER BY tx_index DESC LIMIT 1";
+        try {
+            let rows = await db.query(query);
+            if(rows.length > 0)
+                idx = rows[0].tx_index;
+        } catch (err) {
+            console.error('Error looking up action record id in index_actions table:', err);
+        }
+        // Increase current tx_index by 1 to get the next tx_index
+        idx++;
+        await this.releaseConnection();
+        return idx;
+    }
+
+    // Lookup a record in the `transactions` table and return record id
+    async getTxIndex(hash){
+        let id      = null;
+        let hash_id = await this.createTransaction(hash);
+        let db      = await this.getConnection();
+        let query = "SELECT tx_index FROM transactions WHERE tx_hash_id=? LIMIT 1";
+        try {
+            let rows = await db.query(query, [hash_id]);
+            if(rows.length > 0)
+                id = rows[0].tx_index;
+        } catch (err) {
+            console.error('Error looking up tx_index in transactions table:', err);
+        }
+        await this.releaseConnection();
+        return id;
+    }
+
+    // Create records in the 'transactions' table and return record id
+    async createTxIndex(data){
+        var id = await this.getTxIndex(data.TX_HASH);
+        // Handle creating record
+        if(id==null){
+            let block_index = data.BLOCK_INDEX;
+            let tx_hash_id  = await this.createTransaction(data.TX_HASH);
+            let action_id   = await this.createAction(data.ACTION);
+            let tx_index    = await this.getNextTxIndex();
+            let db          = await this.getConnection();
+            let query       = "INSERT INTO transactions (tx_index, block_index, tx_hash_id, action_id) values (?, ?, ?, ?)";
+            try {
+                let result = await db.query(query, [tx_index, block_index, tx_hash_id, action_id]);
+            } catch (err) {
+                console.error('Error while trying to create record in transactions table:', err);
+                util.throwError('Error while trying to create record in transactions table');
+            }
+            await this.releaseConnection();
+        }
+    }
 
 }
 
