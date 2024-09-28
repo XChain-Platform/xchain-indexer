@@ -24,7 +24,7 @@ class Actions {
     // Generalized function to handle processing a transaction
     // @param tx             object     Transaction object
     // @param tx.source      string     Source address
-    // @param tx.data        string     Action `text`
+    // @param tx.data        string     Action `data`
     // @param tx.tx_hash     string     Transaction hash
     // @param tx.block_index integer    Block index of tx
     async processTransaction(tx){
@@ -72,10 +72,10 @@ class Actions {
             error = 'invalid: ACTION is not yet activated';
 
         // Create a record of this transaction in the transactions table
-        // createTxIndex(data);
+        await this.indexerDb.createTxIndex(data);
 
         // Get tx_index of record using tx_hash
-        // data['TX_INDEX'] = getTxIndex(data['TX_HASH']);
+        data['TX_INDEX'] = await this.indexerDb.getTxIndex(data['TX_HASH']);
 
         // Process the specific BTNS ACTION commands
         await this.processAction(action, params, data, error);
@@ -83,6 +83,7 @@ class Actions {
 
     // Generalized function to handle processing a specific ACTION
     async processAction(action, params, data, error){
+        console.log('data=',data);
         // coming soon...
     }
 
