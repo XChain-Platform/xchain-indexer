@@ -1,7 +1,23 @@
-/* XChain Indexer Actions */
+/* XChain Indexer Actions Class */
 
 const changes = require('./protocol_changes.js');
 const util    = require('./util.js');
+
+/* XChain Indexer Actions */
+// const airdrop   = require('./actions/airdrop.js');
+// const batch     = require('./actions/batch.js');
+// const bet       = require('./actions/bet.js');
+// const callback  = require('./actions/callback.js');
+// const destroy   = require('./actions/destroy.js');
+// const dispenser = require('./actions/dispenser.js');
+// const dividend  = require('./actions/dividend.js');
+const issue     = require('./actions/issue.js');
+// const list      = require('./actions/list.js');
+// const mint      = require('./actions/mint.js');
+// const rug       = require('./actions/rug.js');
+// const sleep     = require('./actions/sleep.js');
+// const send      = require('./actions/send.js');
+// const sweep     = require('./actions/sweep.js');
 
 class Actions {
 
@@ -14,11 +30,28 @@ class Actions {
         // Create instance of the protocol changes class
         this.protocolChanges = new changes(this.decoderDb, this.indexerDb);
 
+        // Create action instances and pass database connections
+        // this.actionAirdrop   = new airdrop(this.decoderDb, this.indexerDb);
+        // this.actionBatch     = new batch(this.decoderDb, this.indexerDb);
+        // this.actionBet       = new bet(this.decoderDb, this.indexerDb);
+        // this.actionCallback  = new callback(this.decoderDb, this.indexerDb);
+        // this.actionDestroy   = new destroy(this.decoderDb, this.indexerDb);
+        // this.actionDispenser = new dispenser(this.decoderDb, this.indexerDb);
+        // this.actionDividend  = new dividend(this.decoderDb, this.indexerDb);
+        this.actionIssue     = new issue(this.decoderDb, this.indexerDb);
+        // this.actionList      = new list(this.decoderDb, this.indexerDb);
+        // this.actionMint      = new mint(this.decoderDb, this.indexerDb);
+        // this.actionRug       = new rug(this.decoderDb, this.indexerDb);
+        // this.actionSleep     = new sleep(this.decoderDb, this.indexerDb);
+        // this.actionSend      = new send(this.decoderDb, this.indexerDb);
+        // this.actionSweep     = new sweep(this.decoderDb, this.indexerDb);
+
         // Define ACTION aliases
         this.actionAliases = {};
         this.actionAliases['TRANSFER'] = 'SEND';    // Legacy BRC20 format
         this.actionAliases['DEPLOY']   = 'ISSUE';   // Legacy BRC20 format
         this.actionAliases['ADDR']     = 'ADDRESS'; // Short alias
+
     }
 
     // Generalized function to handle processing a transaction
@@ -81,10 +114,22 @@ class Actions {
         await this.processAction(action, params, data, error);
     }
 
-    // Generalized function to handle processing a specific ACTION
+    // Generalized function to handle parsing and processing a specific ACTION
     async processAction(action, params, data, error){
-        console.log('data=',data);
-        // coming soon...
+        // if(action=='AIRDROP')   await this.actionAirdrop.parse(params, data, error);
+        // if(action=='BATCH')     await this.actionBatch.parse(params, data, error);
+        // if(action=='BET')       await this.actionBet.parse(params, data, error);
+        // if(action=='CALLBACK')  await this.actionCallback.parse(params, data, error);
+        // if(action=='DESTROY')   await this.actionDestroy.parse(params, data, error);
+        // if(action=='DISPENSER') await this.actionDispenser.parse(params, data, error);
+        // if(action=='DIVIDEND')  await this.actionDividend.parse(params, data, error);
+        if(action=='ISSUE')     await this.actionIssue.parse(params, data, error);
+        // if(action=='LIST')      await this.actionList.parse(params, data, error);
+        // if(action=='MINT')      await this.actionMint.parse(params, data, error);
+        // if(action=='RUG')       await this.actionRug.parse(params, data, error);
+        // if(action=='SLEEP')     await this.actionSleep.parse(params, data, error);
+        // if(action=='SEND')      await this.actionSend.parse(params, data, error);
+        // if(action=='SWEEP')     await this.actionSweep.parse(params, data, error);
     }
 
 }
