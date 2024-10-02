@@ -1,5 +1,6 @@
 /* XChain Indexer Actions Class */
 
+const config  = require('./config.js');
 const changes = require('./protocol_changes.js');
 const util    = require('./util.js');
 
@@ -27,24 +28,27 @@ class Actions {
         this.decoderDb = decoderDb;
         this.indexerDb = indexerDb;
 
+        // Parse in indexer configuration
+        this.config    = config.getConfig();
+
         // Create instance of the protocol changes class
         this.protocolChanges = new changes(this.decoderDb, this.indexerDb);
 
         // Create action instances and pass database connections
-        // this.actionAirdrop   = new airdrop(this.decoderDb, this.indexerDb);
-        // this.actionBatch     = new batch(this.decoderDb, this.indexerDb);
-        // this.actionBet       = new bet(this.decoderDb, this.indexerDb);
-        // this.actionCallback  = new callback(this.decoderDb, this.indexerDb);
-        // this.actionDestroy   = new destroy(this.decoderDb, this.indexerDb);
-        // this.actionDispenser = new dispenser(this.decoderDb, this.indexerDb);
-        // this.actionDividend  = new dividend(this.decoderDb, this.indexerDb);
-        this.actionIssue     = new issue(this.decoderDb, this.indexerDb);
-        // this.actionList      = new list(this.decoderDb, this.indexerDb);
-        // this.actionMint      = new mint(this.decoderDb, this.indexerDb);
-        // this.actionRug       = new rug(this.decoderDb, this.indexerDb);
-        // this.actionSleep     = new sleep(this.decoderDb, this.indexerDb);
-        // this.actionSend      = new send(this.decoderDb, this.indexerDb);
-        // this.actionSweep     = new sweep(this.decoderDb, this.indexerDb);
+        // this.actionAirdrop   = new airdrop(this.config, this.decoderDb, this.indexerDb);
+        // this.actionBatch     = new batch(this.config, this.decoderDb, this.indexerDb);
+        // this.actionBet       = new bet(this.config, this.decoderDb, this.indexerDb);
+        // this.actionCallback  = new callback(this.config, this.decoderDb, this.indexerDb);
+        // this.actionDestroy   = new destroy(this.config, this.decoderDb, this.indexerDb);
+        // this.actionDispenser = new dispenser(this.config, this.decoderDb, this.indexerDb);
+        // this.actionDividend  = new dividend(this.config, this.decoderDb, this.indexerDb);
+        this.actionIssue     = new issue(this.config, this.decoderDb, this.indexerDb);
+        // this.actionList      = new list(this.config, this.decoderDb, this.indexerDb);
+        // this.actionMint      = new mint(this.config, this.decoderDb, this.indexerDb);
+        // this.actionRug       = new rug(this.config, this.decoderDb, this.indexerDb);
+        // this.actionSleep     = new sleep(this.config, this.decoderDb, this.indexerDb);
+        // this.actionSend      = new send(this.config, this.decoderDb, this.indexerDb);
+        // this.actionSweep     = new sweep(this.config, this.decoderDb, this.indexerDb);
 
         // Define ACTION aliases
         this.actionAliases = {};

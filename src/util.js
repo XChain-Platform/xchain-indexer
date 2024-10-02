@@ -1,4 +1,4 @@
-/* XChain Indexer Utility Class */
+/* XChain Indexer Utility Functions */
 
 const crypto = require('crypto');
 
