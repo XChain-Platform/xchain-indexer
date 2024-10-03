@@ -36,22 +36,107 @@
  * 
  ********************************************************************/
 
-const util    = require('../util.js');
+const util = require('../util.js');
 
 class Issue {
 
     // Handle constructing a class instance
-    constructor(decoderDb, indexerDb){
+    constructor(config, decoderDb, indexerDb){
+        // Parse in indexer configuration
+        this.config    = config;
+
         // Setup alias to the indexer database connections
         this.decoderDb = decoderDb;
         this.indexerDb = indexerDb;
 
+        // Define list of known FORMATS
+        this.formats = {};
+        this.formats[0] = 'VERSION|TICK|MAX_SUPPLY|MAX_MINT|DECIMALS|DESCRIPTION|MINT_SUPPLY|TRANSFER|TRANSFER_SUPPLY|LOCK_MAX_SUPPLY|LOCK_MAX_MINT|LOCK_DESCRIPTION|LOCK_RUG|LOCK_SLEEP|LOCK_CALLBACK|CALLBACK_BLOCK|CALLBACK_TICK|CALLBACK_AMOUNT|ALLOW_LIST|BLOCK_LIST|MINT_ADDRESS_MAX|MINT_START_BLOCK|MINT_STOP_BLOCK|LOCK_MINT|LOCK_MINT_SUPPLY';
+        this.formats[1] = 'VERSION|TICK|DESCRIPTION';
+        this.formats[2] = 'VERSION|TICK|MAX_MINT|MINT_SUPPLY|TRANSFER_SUPPLY|MINT_ADDRESS_MAX|MINT_START_BLOCK|MINT_STOP_BLOCK';
+        this.formats[3] = 'VERSION|TICK|LOCK_MAX_SUPPLY|LOCK_MAX_MINT|LOCK_DESCRIPTION|LOCK_RUG|LOCK_SLEEP|LOCK_CALLBACK|LOCK_MINT|LOCK_MINT_SUPPLY';
+        this.formats[4] = 'VERSION|TICK|CALLBACK_BLOCK|CALLBACK_TICK|CALLBACK_AMOUNT';
+
+        // Define list of AMOUNT and LOCK fields (used in validations)
+        this.fieldList = {};
+        this.fieldList['AMOUNT'] = ['MAX_SUPPLY', 'MAX_MINT', 'MINT_SUPPLY', 'CALLBACK_AMOUNT', 'MINT_ADDRESS_MAX', 'MINT_START_BLOCK', 'MINT_STOP_BLOCK'];
+        this.fieldList['LOCK']   = ['LOCK_MAX_SUPPLY', 'LOCK_MINT', 'LOCK_MINT_SUPPLY', 'LOCK_MAX_MINT', 'LOCK_DESCRIPTION', 'LOCK_RUG', 'LOCK_SLEEP', 'LOCK_CALLBACK'];
     }
 
     // Handle parsing the ISSUE transaction
     async parse(params, data, error){
-        console.log('parse params=',params);
-        console.log('parse data=',data);
+        /*****************************************************************
+         * DEBUGGING - Force params
+         ****************************************************************/
+        // let str    = "0|JDOG|1000||18";
+        // params = String(str).split('|');
+        // data['SOURCE'] = this.config['ADDRESS']['BURN'];
+
+        // Validate that format is known
+        let format = util.getFormatVersion(params[0]);
+        if(!error && (format===null || this.formats[format] === undefined ))
+            error = 'invalid: VERSION (unknown)';
+
+        // Parse PARAMS using given VERSION format and update BTNS transaction data object
+        if(!error)
+            data = util.setActionParams(data, params, this.formats[format]);
+
+        // TODO: Decode any base64 tickers
+        // if(util.isBase64(data['TICK']))
+        //     $data['TICK'] = util.base64Decode(data['TICK']);
+
+        /*****************************************************************
+         * TICK Validations
+         ****************************************************************/
+
+        // Verify TICK length is within acceptable range
+        let len = String(data['TICK']).length,
+            min = parseInt(this.config['MIN_TICK_LENGTH']),
+            max = parseInt(this.config['MAX_TICK_LENGTH']);
+        if(!error && (len < min || len > max))
+            error = 'invalid: TICK (length)';
+
+        // Verify no pipe in TICK (pipe is field delimiter)
+        if(!error && String(data['TICK']).indexOf('|')!=-1)
+            error = 'invalid: TICK (pipe)';
+
+        // Verify no semicolon in TICK (semicolon is action delimiter)
+        if(!error && String(data['TICK']).indexOf(';')!=-1)
+            error = 'invalid: TICK (semicolon)';
+
+        // Verify TICK is not on RESERVED_TICKS list
+        if(!error && this.config['RESERVED_TICKS'].indexOf(data['TICK'])!=-1)
+            error = 'invalid: TICK (reserved)';
+
+        // Verify only GAS address can issue on GAS token
+        if(!error && String(data['TICK'].toUpperCase())==this.config['GAS'] && data['SOURCE']!=this.config['ADDRESS']['GAS'])        
+            error = 'invalid: GAS Address';
+
+        // Get information on token
+        let tokenInfo     = await this.indexerDb.getTokenInfo(data['TICK'], null, data['BLOCK_INDEX'], data['TX_INDEX']);
+        // let isDistributed = await this.indexerDb.isDistributed(data['TICK'], data['BLOCK_INDEX'], data['TX_INDEX']);
+
+console.log('tokenInfo=',tokenInfo);
+
+        // Clone the raw data for storage in issues table
+        let issue = structuredClone(data);
+
+        // Determine final status
+        let status = (error) ? error : 'valid';
+        data['STATUS'] = issue['STATUS'] = status;
+
+        // Print status message 
+        console.log("\t ISSUE : " + data['TICK'] + ' : ' + data['STATUS']);
+
+        // Create record in issues table
+        // createIssue($issue);
+
+
+        // console.log('parse params=',params);
+        // console.log('parse isssue=',issue);
+        // console.log('parse data=',data);
+        // if(error)
+        //     console.log('error=',error);
     }
 
 }
