@@ -90,6 +90,10 @@ class Actions {
                 action = this.actionAliases[alias];
         }
 
+        // Support legacy ACTION format with no VERSION (default to VERSION 0)
+        if(['ISSUE','MINT','SEND'].includes(action) && util.isLegacyActionFormat(params))
+            params.splice(0,0,0);
+
         // Define basic ACTION transaction data object
         let data = {};
         data['ACTION']      = action;      // Action (ISSUE, MINT, SEND, etc)
