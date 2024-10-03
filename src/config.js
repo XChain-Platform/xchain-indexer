@@ -6,13 +6,15 @@ module.exports = {
     getConfig: function(){
 
         // Set coin and network from environmental variables
+        let gas     = 'XCHAIN';                     // TICK to be used as gas token
         let coin    = process.env.INDEXER_COIN;     // BTC / LTC / DOGE
         let network = process.env.INDEXER_NETWORK;  // mainnet / testnet / regtest
 
         // Define basic config object
         let config = {};
 
-        // Parse in the coin and network
+        // Parse in the gas / coin / network information
+        config['GAS']     = gas;
         config['COIN']    = coin;
         config['NETWORK'] = network;
 
@@ -25,7 +27,7 @@ module.exports = {
         config["MAX_TICK_LENGTH"] = 250;
 
         // Reserved BTNS TICK names
-        config['RESERVED_TICKS'] = [coin, 'XCHAIN'];
+        config['RESERVED_TICKS'] = [coin];
 
         // Min/Max DECIMALS
         config['MIN_TOKEN_DECIMALS'] = 0;
