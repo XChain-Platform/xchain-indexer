@@ -608,6 +608,289 @@ class Database {
         }
     }
 
+    // Lookup a record in the `index_tickers` table and return record id
+    async getTickerId(tick){
+        let id    = null;
+        let db    = await this.getConnection();
+        let query = "SELECT id FROM index_tickers WHERE tick=? LIMIT 1";
+        try {
+            let rows = await db.query(query, [tick]);
+            if(rows.length > 0)
+                id = rows[0].id;
+        } catch (err) {
+            console.error('Error looking up ticker record id in index_tickers table:', err);
+        }
+        await this.releaseConnection();
+        return id;
+    }
+
+    // Create records in the 'index_actions' table and return record id
+    async createTicker(tick){
+        var id = await this.getTickerId(tick);
+        // Handle creating record
+        if(id==null){
+            let db    = await this.getConnection();
+            let query = "INSERT INTO index_tickers (tick) values (?)";
+            try {
+                let result = await db.query(query, [tick]);
+                if(result.insertId)
+                    id = result.insertId;
+            } catch (err) {
+                console.error('Error trying to create ticker record in index_tickers table:', err);
+            }
+            await this.releaseConnection();
+        }
+        return id;
+    }
+
+    // Handle getting token information using issues table
+    // @param {tick}            string  Ticker name
+    // @param {tick_id}         integer Ticker database record id
+    // @param {block_index}     integer Block Index 
+    // @param {tx_index}        integer tx_index of transaction
+    async getTokenInfo(tick, tick_id, block_index, tx_index){
+        let data = false,
+            sql  = '',
+            args = [];
+        // Get the tick_id for the given ticker
+        if(!util.isNull(tick) && util.isNull(tick_id))
+            tick_id = await this.createTicker(tick);
+        // Add tick_id to SQL query arguments
+        args.push(tick_id);
+        // If a block_index was given, only lookup tokens created before or in given block_index
+        if(!util.isNull(block_index) && util.isNumeric(block_index)){
+            sql += " AND t1.block_index <= ?";
+            args.push(parseInt(block_index));
+        }
+        // If a tx_index was given, only lookup tokens created before given tx_index
+        if(!util.isNull(tx_index) && util.isNumeric(tx_index)){
+            sql += " AND t1.tx_index < ?";
+            args.push(parseInt(tx_index));
+        }
+        // Build out SQL query based on search params
+        let query = `SELECT 
+                        t2.tick,
+                        t1.max_supply,
+                        t1.max_mint,
+                        t1.decimals,
+                        t1.description,
+                        t1.block_index,
+                        t1.lock_max_supply,
+                        t1.lock_mint_supply,
+                        t1.lock_mint,
+                        t1.lock_max_mint,
+                        t1.lock_description,
+                        t1.lock_rug,
+                        t1.lock_sleep,
+                        t1.lock_callback,
+                        t1.callback_block,
+                        t3.tick as callback_tick,            
+                        t1.callback_amount,
+                        t4.hash as allow_list,
+                        t5.hash as block_list,
+                        t1.mint_address_max,
+                        t1.mint_start_block,
+                        t1.mint_stop_block,
+                        a1.address as owner,
+                        a2.address as transfer
+                    FROM 
+                        issues t1
+                        LEFT JOIN index_addresses a2 on (a2.id=t1.transfer_id)
+                        LEFT JOIN index_tickers t3 on (t3.id=t1.callback_tick_id)
+                        LEFT JOIN index_transactions t4 on (t4.id=t1.allow_list_id)
+                        LEFT JOIN index_transactions t5 on (t5.id=t1.block_list_id),
+                        index_tickers t2,
+                        index_addresses a1,
+                        index_statuses s1
+                    WHERE 
+                        t2.id=t1.tick_id AND
+                        a1.id=t1.source_id AND
+                        s1.id=t1.status_id AND
+                        s1.status='valid' AND
+                        t1.tick_id=?` + sql + `
+                    ORDER BY tx_index ASC`;
+        try {
+            let db   = await this.getConnection();
+            let rows = await db.query(query, args);
+            if(rows.length > 0){
+                // Define data object
+                if(!data)
+                    data = {};
+                // Loop through ISSUE transactions for the given ticker
+                rows.forEach(function(row){
+                    // Define object of values for this ISSUE tx
+                    let arr  = {};
+                    arr['TICK']              = row.tick;
+                    arr['OWNER']             = (row.transfer) ? row.transfer : row.owner;
+                    arr['MAX_SUPPLY']        = row.max_supply;
+                    arr['MAX_MINT']          = row.max_mint;
+                    // Force decimal precision to a integer value
+                    arr['DECIMALS']          = (!util.isNull(row.decimals)) ? parseInt(row.decimals) : 0;
+                    arr['DESCRIPTION']       = row.description;
+                    arr['LOCK_MAX_SUPPLY']   = row.lock_max_supply;
+                    arr['LOCK_MINT_SUPPLY']  = row.lock_mint_supply;
+                    arr['LOCK_MINT']         = row.lock_mint;
+                    arr['LOCK_MAX_MINT']     = row.lock_max_mint;
+                    arr['LOCK_DESCRIPTION']  = row.lock_description;
+                    arr['LOCK_RUG']          = row.lock_rug;
+                    arr['LOCK_SLEEP']        = row.lock_sleep;
+                    arr['LOCK_CALLBACK']     = row.lock_callback;
+                    arr['CALLBACK_TICK']     = row.callback_tick;
+                    arr['CALLBACK_BLOCK']    = row.callback_block;
+                    arr['CALLBACK_AMOUNT']   = row.callback_amount;
+                    arr['ALLOW_LIST']        = row.allow_list;
+                    arr['BLOCK_LIST']        = row.block_list;
+                    arr['MINT_ADDRESS_MAX']  = row.mint_address_max;
+                    arr['MINT_START_BLOCK']  = row.mint_start_block;
+                    arr['MINT_STOP_BLOCK']   = row.mint_stop_block;
+                    // build out token state
+                    // TODO: will need to massage the data a bit more to build out accurate token state... this is quick and dirty
+                    for(key in arr){
+                        let value = arr[key];
+                        console.log('key,value=',key,value);
+                        // Disallow unsetting of LOCK flags
+                        if(String(key).substr(0,5)=='LOCK_')
+                            if(data[key]==1)
+                                continue;
+                        // Prevent changing decimal precision 
+                        if(key=='DECIMALS' && data[key] > value)
+                            continue;
+                        // Skip setting value if value is null or empty (use last explicit value)
+                        if(util.isNull(value) || value=='')
+                            continue;
+                        // Update data object with value from this ISSUE tx
+                        data[key] = value;
+                    }
+                });
+            }
+        } catch (err) {
+            console.error('Error looking up token info : ', err);
+        }
+        await this.releaseConnection();
+        // Get token supply at the given tx_index
+        if(data)
+            data['SUPPLY'] = await this.getTokenSupply(tick, tick_id, null, tx_index); 
+        // TODO: Remove this debug line
+        let supply = await this.getTokenSupply(tick, tick_id, null, tx_index); 
+
+        return data;
+    }
+
+    // Handle getting decimal precision for a given tick_id
+    async getTokenDecimalPrecision(tick_id){
+        let decimals = 0;
+        // Lookup decimal precision using the issues table 
+        // DO NOT lookup precision using getTokenInfo() (avoid recursive queries)
+        let db      = await this.getConnection();
+        let query = `SELECT
+                        i.decimals
+                    FROM
+                        issues i,
+                        index_statuses s
+                    WHERE
+                        i.status_id=s.id AND
+                        i.tick_id=? AND
+                        s.status='valid'`;
+        try {
+            let rows = await db.query(query, [tick_id]);
+            if(rows.length > 0){
+                // Loop through ISSUE transactions for the given ticker
+                rows.forEach(function(row){
+                if(!isNull(row.decimals) && row.decimals > decimals)
+                    decimals = row.decimals;
+                });
+            }
+        } catch (err) {
+            console.error('Error looking up decimal precision from the issues table:', err);
+        }
+        await this.releaseConnection();
+        return decimals;
+    }
+
+    // Get token supply from credits/debits table (credits - debits = supply)
+    // @param {tick}            string  Ticker name
+    // @param {tick_id}         integer Ticker database record id
+    // @param {block_index}     integer Block Index 
+    // @param {tx_index}        integer tx_index of transaction
+    async getTokenSupply(tick, tick_id, block_index, tx_index){
+        let credits = 0;
+        let debits  = 0;
+        let escrow  = 0;
+        let supply  = 0;
+        let db      = await this.getConnection(),
+            sql     = '',
+            query   = '',
+            args    = [];
+        // Get the tick_id for the given ticker
+        if(!util.isNull(tick) && util.isNull(tick_id))
+            tick_id = await this.createTicker(tick);
+        // Get info on decimal precision
+        let decimals = await this.getTokenDecimalPrecision(tick_id);
+        // Add tick_id to SQL query arguments
+        args.push(tick_id);
+        // If a block_index was given, only lookup tokens created before or in given block_index
+        if(!util.isNull(block_index) && util.isNumeric(block_index)){
+            sql += " AND m.block_index <= ?";
+            args.push(parseInt(block_index));
+        }
+        // If a tx_index was given, only lookup tokens created before given tx_index
+        if(!util.isNull(tx_index) && util.isNumeric(tx_index)){
+            sql += " AND t.tx_index < ?";
+            args.push(parseInt(tx_index));
+        }
+        // Get Credits 
+        query = `SELECT 
+                    CAST(SUM(m.amount) AS DECIMAL(60,` + decimals + `)) as credits 
+                FROM 
+                    credits m,
+                    transactions t
+                WHERE 
+                    m.event_id=t.tx_hash_id AND
+                    m.tick_id=?` + sql;
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0)
+                credits = rows[0].credits;
+        } catch (err) {
+            console.error('Error while trying to get list of credits:', err);
+        }
+        // Get Debits 
+        query = `SELECT 
+                    CAST(SUM(m.amount) AS DECIMAL(60,` + decimals + `)) as debits 
+                FROM 
+                    debits m,
+                    transactions t
+                WHERE 
+                    m.event_id=t.tx_hash_id AND
+                    m.tick_id=?` + sql;
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0)
+                debits = rows[0].debits;
+        } catch (err) {
+            console.error('Error while trying to get list of debits:', err);
+        }
+        // TODO: Get Escrowed supply
+        // query = `SELECT 
+        //             CAST(SUM(m.amount) AS DECIMAL(60,` + decimals + `)) as escrow 
+        //         FROM 
+        //             debits m,
+        //             transactions t
+        //         WHERE 
+        //             m.event_id=t.tx_hash_id AND
+        //             m.tick_id=?` + sql;
+        // try {
+        //     let rows = await db.query(query, args);
+        //     if(rows.length > 0)
+        //         escrow = rows[0].escrow;
+        // } catch (err) {
+        //     console.error('Error while trying to get list of escrowed supply:', err);
+        // }
+        // Determine total supply (credits - debits)
+        supply = util.bcsub(credits, debits, decimals);
+        return supply;
+    }
+
 }
 
 module.exports = Database
