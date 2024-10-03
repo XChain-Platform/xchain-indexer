@@ -770,9 +770,6 @@ class Database {
         // Get token supply at the given tx_index
         if(data)
             data['SUPPLY'] = await this.getTokenSupply(tick, tick_id, null, tx_index); 
-        // TODO: Remove this debug line
-        let supply = await this.getTokenSupply(tick, tick_id, null, tx_index); 
-
         return data;
     }
 
