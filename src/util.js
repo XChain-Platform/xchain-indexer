@@ -136,6 +136,31 @@ module.exports = {
     bcadd: function(a, b, decimals){
         let precision = (decimals) ? decimals : 0;
         return result = mathjs.format(mathjs.add(mathjs.bignumber(a),mathjs.bignumber(b)),{notation: 'fixed', precision: precision});
+    },
+
+    // Handle validating amount format
+    isValidAmountFormat: function(divisible, amount){
+        let [int, sats] = String(amount).split('.');
+        if(!divisible && this.isNumeric(int) && int==amount)
+            return true;
+        if(divisible && this.isNumeric(int) && (this.isNull(sats) || this.isNumeric(sats)))
+            return true;
+        return false;
+    },
+
+    // Validate if a lock flag value evaluates to 0 (unlocked) or 1 (locked)
+    isValidLockValue: function(value){
+        let type  = typeof value,
+            valid = [0,1];
+        // Convert any numeric strings to integer value
+        if(type=='string' && this.isNumeric(value))
+            value = parseInt(value);
+        // Only return true for 0/1 values
+        if(valid.indexOf(value)!=-1)
+            return true;
+        return false;
     }
+
+
 
 }

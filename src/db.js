@@ -888,6 +888,102 @@ class Database {
         return supply;
     }
 
+    // Handle getting a list of TICK holders and amounts
+    // @param {tick}            string  Ticker name
+    // @param {block_index}     integer Block Index 
+    // @param {tx_index}        integer tx_index of transaction
+    // TODO: Add support for 'escrowed' tokens (dispensers, orders, bets)
+    async getHolders(tick, block_index, tx_index){
+        let holders = {};
+        let db      = await this.getConnection(),
+            sql     = '',
+            query   = '',
+            args    = [];
+        // Get the tick_id for the given ticker
+        if(!util.isNull(tick) && util.isNull(tick_id))
+            tick_id = await this.createTicker(tick);
+        // Get info on decimal precision
+        let decimals = await this.getTokenDecimalPrecision(tick_id);
+        // Add tick_id to SQL query arguments
+        args.push(tick_id);
+        // If a block_index was given, only lookup tokens created before or in given block_index
+        if(!util.isNull(block_index) && util.isNumeric(block_index)){
+            sql += " AND m.block_index <= ?";
+            args.push(parseInt(block_index));
+        }
+        // If a tx_index was given, only lookup tokens created before given tx_index
+        if(!util.isNull(tx_index) && util.isNumeric(tx_index)){
+            sql += " AND t.tx_index < ?";
+            args.push(parseInt(tx_index));
+        }
+        // Get Credits 
+        query = `SELECT 
+                    CAST(SUM(m.amount) AS DECIMAL(60,` + decimals + `)) as credits,
+                    a.address
+                FROM 
+                    credits m,
+                    transactions t,
+                    index_addresses a
+                WHERE 
+                    m.event_id=t.tx_hash_id AND
+                    m.address_id=a.id AND
+                    m.tick_id=?` + sql;
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0){
+                rows.forEach(function(row){
+                    holders[row.address] = row.credits;
+                });
+            }
+        } catch (err) {
+            console.error('Error while trying to get list of holders from credits table:', err);
+        }
+        // Get Debits 
+        query = `SELECT 
+                    CAST(SUM(m.amount) AS DECIMAL(60,` + decimals + `)) as debits,
+                    a.address
+                FROM 
+                    debits m,
+                    transactions t,
+                    index_addresses a
+                WHERE 
+                    m.event_id=t.tx_hash_id AND
+                    m.address_id=a.id AND
+                    m.tick_id=?` + sql;
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0){
+                rows.forEach(function(row){
+                    let balance = util.bcsub(holders[row.address], row.debits, decimals);
+                    if(balance > 0)
+                        holders[row.address] = balance;
+                    else
+                       delete holders[row.address];
+                });
+            }
+        } catch (err) {
+            console.error('Error while trying to get list of holders from debits table:', err);
+        }
+        return holders;
+    }
+
+    // Determine if an ticker is distributed to users (held by more than owner)
+    // @param {tick}            string  Ticker name
+    // @param {block_index}     integer Block Index 
+    // @param {tx_index}        integer tx_index of transaction
+    async isDistributed(tick, block_index, tx_index){
+        let info    = await this.getTokenInfo(tick, null, block_index, tx_index);
+        let holders = (info) ? await this.getHolders(tick, block_index, tx_index) : [];
+        // More than one holder
+        if(Object.keys(holders).length>1)
+            return true;
+        // Holder that is not OWNER
+        for(address in holders)
+            if(address!=info['OWNER'])
+                return true;
+        return false;
+    }
+
 }
 
 module.exports = Database
