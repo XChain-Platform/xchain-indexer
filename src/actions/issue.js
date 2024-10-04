@@ -114,12 +114,177 @@ class Issue {
 
         // Get information on token
         let tokenInfo     = await this.indexerDb.getTokenInfo(data['TICK'], null, data['BLOCK_INDEX'], data['TX_INDEX']);
-        // let isDistributed = await this.indexerDb.isDistributed(data['TICK'], data['BLOCK_INDEX'], data['TX_INDEX']);
-
-console.log('tokenInfo=',tokenInfo);
+        let isDistributed = await this.indexerDb.isDistributed(data['TICK'], data['BLOCK_INDEX'], data['TX_INDEX']);
 
         // Clone the raw data for storage in issues table
         let issue = structuredClone(data);
+
+        // Populate empty PARAMS with current setting
+        if(tokenInfo){
+            for(key in tokenInfo){
+                if(!data[key])
+                    data[key] = tokenInfo[key];
+            }
+        }
+
+        // Get information on CALLBACK_TICK
+        let cbInfo = false;
+        if(data['CALLBACK_TICK'])
+            cbInfo = await this.indexerDb.getTokenInfo(data['CALLBACK_TICK'], null, data['BLOCK_INDEX'], data['TX_INDEX']);
+
+        /*****************************************************************
+         * FORMAT Validations
+         ****************************************************************/
+
+        // Set divisible first based on if token exist, if not, use DECIMALS in request
+        let tick_divisible = (data['DECIMALS]']==0) ? 0 : 1;
+        if(tokenInfo)
+            tick_divisible = (tokenInfo['DECIMALS']==0) ? 0 : 1;
+
+        // Set CALLBACK_TICK divisibillity flag
+        let callback_divisible = (cbInfo && cbInfo['DECIMALS']>0) ? 1 : 0;
+
+        // Verify AMOUNT field formats
+        this.fieldList['AMOUNT'].forEach(function(name){
+            let value = issue[name],
+                div   = (name=='CALLBACK_AMOUNT') ? callback_divisible : tick_divisible;
+            if(!error && !util.isNull(value) && !util.isValidAmountFormat(div, value))
+                error = "invalid: " + name + " (format)";
+        });
+
+        // Verify LOCK field formats
+        this.fieldList['LOCK'].forEach(function(name){
+            let value = issue[name];
+            if(!error && !util.isNull(value) && !util.isValidLockValue(value))
+                error = "invalid: " + name + " (format)";
+        });
+
+        /*****************************************************************
+         * General Validations
+         ****************************************************************/
+
+        // Verify ISSUE is coming from TICK owner
+        if(!$error && $btInfo && $btInfo->OWNER!=$data->SOURCE)
+            $error = 'invalid: issued by another address';
+
+        // Verify LOCK fields cannot be changed once enabled/locked
+        foreach($fieldList['LOCK'] as $name){
+            $value = $issue->{$name};
+            if(!$error && isset($value) && !isValidLock($btInfo, $issue, $name))
+                $error = "invalid: {$name} (locked)";
+        }
+
+        // Verify MAX_SUPPLY min/max
+        if(!error && !util.isNull(data['MAX_SUPPLY']) && data['MAX_SUPPLY'] > 0 && (data['MAX_SUPPLY'] < this.config.MIN_TOKEN_SUPPLY || data['MAX_SUPPLY'] > this.config.MAX_TOKEN_SUPPLY))
+            $error = 'invalid: MAX_SUPPLY (min/max)';
+
+        // // Verify MAX_SUPPLY is not set below current SUPPLY
+        // if(!$error && isset($data->MAX_SUPPLY) && $data->MAX_SUPPLY > 0 && $data->MAX_SUPPLY < getTokenSupply($data->TICK, null, $data->BLOCK_INDEX, $data->TX_INDEX))
+        //     $error = 'invalid: MAX_SUPPLY < SUPPLY';
+
+        // // Verify SUPPLY is at least MIN_TOKEN_SUPPLY before allowing LOCK_MAX_SUPPLY
+        // if(!$error && $data->LOCK_MAX_SUPPLY && (($btInfo && $btInfo->SUPPLY < MIN_TOKEN_SUPPLY) || (!$btInfo && $data->MINT_SUPPLY < MIN_TOKEN_SUPPLY)))
+        //     $error = 'invalid: LOCK_MAX_SUPPLY (no supply)';
+
+        // // Verify DECIMAL min/max
+        // if(!$error && isset($data->DECIMALS) && ($data->DECIMALS < MIN_TOKEN_DECIMALS || $data->DECIMALS > MAX_TOKEN_DECIMALS))
+        //     $error = 'invalid: DECIMALS (min/max)';
+
+        // // Verify DECIMALS cannot be changed after supply has been issued
+        // if(!$error && isset($data->DECIMALS) && $btInfo->SUPPLY > 0 && $data->DECIMALS!=$btInfo->DECIMALS)
+        //     $error = 'invalid: DECIMALS (locked)';
+
+        // // Verify TRANSFER addresses
+        // if(!$error && isset($data->TRANSFER) && !isCryptoAddress($data->TRANSFER))
+        //     $error = 'invalid: TRANSFER (bad address)';
+
+        // // Verify TRANSFER_SUPPLY and SOURCE are different
+        // if($data->TRANSFER_SUPPLY == $data->SOURCE)
+        //     unset($data->TRANSFER_SUPPLY);
+
+        // // Verify TRANSFER_SUPPLY addresses
+        // if(!$error && isset($data->TRANSFER_SUPPLY) && !isCryptoAddress($data->TRANSFER_SUPPLY))
+        //     $error = 'invalid: TRANSFER_SUPPLY (bad address)';
+
+        // // Verify MINT_SUPPLY is allowed and LOCK_MINT_SUPPLY is not set
+        // if(!$error && isset($data->MINT_SUPPLY) && $btInfo && $btInfo->LOCK_MINT_SUPPLY==1)
+        //     $error = 'invalid: MINT_SUPPLY (locked)';
+
+        // // Verify MINT_SUPPLY is less than MAX_SUPPLY
+        // if(!$error && isset($data->MINT_SUPPLY) && $data->MINT_SUPPLY > $data->MAX_SUPPLY)
+        //     $error = 'invalid: MINT_SUPPLY > MAX_SUPPLY';
+
+        // // Verify MINT_ADDRESS_MAX is less than MAX_SUPPLY
+        // if(!$error && isset($data->MINT_ADDRESS_MAX) && $data->MINT_ADDRESS_MAX > 0 && $data->MINT_ADDRESS_MAX > $data->MAX_SUPPLY)
+        //     $error = 'invalid: MINT_ADDRESS_MAX > MAX_SUPPLY';
+
+        // // Verify MINT_ADDRESS_MAX is greater than than MAX_MINT
+        // if(!$error && isset($data->MINT_ADDRESS_MAX) && $data->MINT_ADDRESS_MAX > 0 && $data->MINT_ADDRESS_MAX < $data->MAX_MINT)
+        //     $error = 'invalid: MINT_ADDRESS_MAX < MAX_MINT';
+
+        // // Verify MAX_SUPPLY can not be changed if LOCK_MAX_SUPPLY is enabled
+        // if(!$error && $btInfo && $btInfo->LOCK_MAX_SUPPLY && isset($data->MAX_SUPPLY) && $data->MAX_SUPPLY!=$btInfo->MAX_SUPPLY)
+        //     $error = 'invalid: MAX_SUPPLY (locked)';
+
+        // // Verify MAX_MINT can not be changed if LOCK_MAX_MINT is enabled
+        // if(!$error && $btInfo && $btInfo->LOCK_MAX_MINT && isset($data->MAX_MINT) && $data->MAX_MINT!=$btInfo->MAX_MINT)
+        //     $error = 'invalid: MAX_MINT (locked)';
+
+        // // Verify DESCRIPTION is less than or equal to MAX_TOKEN_DESCRIPTION
+        // if(!$error && $data->DESCRIPTION && strlen($data->DESCRIPTION) >= MAX_TOKEN_DESCRIPTION)
+        //     $error = 'invalid: DESCRIPTION (length)';
+
+        // // Verify DESCRIPTION can not be changed if LOCK_DESCRIPTION is enabled
+        // if(!$error && $btInfo && $btInfo->LOCK_DESCRIPTION && isset($data->DESCRIPTION) && $data->DESCRIPTION!=$btInfo->DESCRIPTION)
+        //     $error = 'invalid: DESCRIPTION (locked)';
+
+        // // Verify CALLBACK_BLOCK can not be changed if LOCK_CALLBACK is enabled
+        // if(!$error && $btInfo && $btInfo->LOCK_CALLBACK && isset($data->CALLBACK_BLOCK) && $data->CALLBACK_BLOCK!=$btInfo->CALLBACK_BLOCK)
+        //     $error = 'invalid: CALLBACK_BLOCK (locked)';
+
+        // // Verify CALLBACK_TICK can not be changed if LOCK_CALLBACK is enabled
+        // if(!$error && $btInfo && $btInfo->LOCK_CALLBACK && isset($data->CALLBACK_TICK) && $data->CALLBACK_TICK!=$btInfo->CALLBACK_TICK)
+        //     $error = 'invalid: CALLBACK_TICK (locked)';
+
+        // // Verify CALLBACK_TICK can not be changed if LOCK_CALLBACK is enabled
+        // if(!$error && $btInfo && $btInfo->LOCK_CALLBACK && isset($data->CALLBACK_AMOUNT) && $data->CALLBACK_AMOUNT!=$btInfo->CALLBACK_AMOUNT)
+        //     $error = 'invalid: CALLBACK_AMOUNT (locked)';
+
+        // // Verify CALLBACK_BLOCK is greater than current block index
+        // if(!$error && $btInfo && isset($issue->CALLBACK_BLOCK) && $data->CALLBACK_BLOCK < $data->BLOCK_INDEX)
+        //     $error = 'invalid: CALLBACK_BLOCK (block index)';
+
+        // // Verify CALLBACK_BLOCK can not be changed if supply is distributed
+        // if(!$error && isset($issue->CALLBACK_BLOCK) && $data->CALLBACK_BLOCK!=$btInfo->CALLBACK_BLOCK && $isDistributed)
+        //     $error = 'invalid: CALLBACK_BLOCK (supply distributed)';
+
+        // // Verify CALLBACK_TICK can not be changed if supply is distributed
+        // if(!$error && isset($issue->CALLBACK_TICK) && $data->CALLBACK_TICK!=$btInfo->CALLBACK_TICK && $isDistributed)
+        //     $error = 'invalid: CALLBACK_TICK (supply distributed)';
+
+        // // Verify CALLBACK_AMOUNT can not be changed if supply is distributed
+        // if(!$error && isset($issue->CALLBACK_AMOUNT) && $data->CALLBACK_AMOUNT!=$btInfo->CALLBACK_AMOUNT && $isDistributed)
+        //     $error = 'invalid: CALLBACK_AMOUNT (supply distributed)';
+
+        // // Verify ALLOW_LIST is a valid list of addresses
+        // if(!$error && isset($data->ALLOW_LIST) && !isValidList($data->ALLOW_LIST,3))
+        //     $error = 'invalid: ALLOW_LIST (bad list)';
+
+        // // Verify BLOCK_LIST is a valid list of addresses
+        // if(!$error && isset($data->BLOCK_LIST) && !isValidList($data->BLOCK_LIST,3))
+        //     $error = 'invalid: BLOCK_LIST (bad list)';
+
+        // // Verify MINT_START_BLOCK is greater than or equal to current block
+        // if(!$error && isset($issue->MINT_START_BLOCK) && $issue->MINT_START_BLOCK > 0 && $issue->MINT_START_BLOCK < $issue->BLOCK_INDEX)
+        //     $error = 'invalid: MINT_START_BLOCK < BLOCK_INDEX';
+
+        // // Verify MINT_STOP_BLOCK is greater than or equal to current block
+        // if(!$error && isset($issue->MINT_STOP_BLOCK) && $issue->MINT_STOP_BLOCK > 0 && $issue->MINT_STOP_BLOCK < $issue->BLOCK_INDEX)
+        //     $error = 'invalid: MINT_STOP_BLOCK < BLOCK_INDEX';
+
+        // // Verify MINT_STOP_BLOCK is greater than or equal to MINT_START_BLOCK
+        // if(!$error && isset($issue->MINT_STOP_BLOCK) && $issue->MINT_START_BLOCK > 0 && $issue->MINT_STOP_BLOCK > 0 && $issue->MINT_STOP_BLOCK < $issue->MINT_START_BLOCK)
+        //     $error = 'invalid: MINT_STOP_BLOCK < MINT_START_BLOCK';
 
         // Determine final status
         let status = (error) ? error : 'valid';
