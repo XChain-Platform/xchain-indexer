@@ -164,19 +164,19 @@ class Issue {
          ****************************************************************/
 
         // Verify ISSUE is coming from TICK owner
-        if(!$error && $btInfo && $btInfo->OWNER!=$data->SOURCE)
-            $error = 'invalid: issued by another address';
+        // if(!$error && $btInfo && $btInfo->OWNER!=$data->SOURCE)
+        //     $error = 'invalid: issued by another address';
 
-        // Verify LOCK fields cannot be changed once enabled/locked
-        foreach($fieldList['LOCK'] as $name){
-            $value = $issue->{$name};
-            if(!$error && isset($value) && !isValidLock($btInfo, $issue, $name))
-                $error = "invalid: {$name} (locked)";
-        }
+        // // Verify LOCK fields cannot be changed once enabled/locked
+        // foreach($fieldList['LOCK'] as $name){
+        //     $value = $issue->{$name};
+        //     if(!$error && isset($value) && !isValidLock($btInfo, $issue, $name))
+        //         $error = "invalid: {$name} (locked)";
+        // }
 
-        // Verify MAX_SUPPLY min/max
-        if(!error && !util.isNull(data['MAX_SUPPLY']) && data['MAX_SUPPLY'] > 0 && (data['MAX_SUPPLY'] < this.config.MIN_TOKEN_SUPPLY || data['MAX_SUPPLY'] > this.config.MAX_TOKEN_SUPPLY))
-            $error = 'invalid: MAX_SUPPLY (min/max)';
+        // // Verify MAX_SUPPLY min/max
+        // if(!error && !util.isNull(data['MAX_SUPPLY']) && data['MAX_SUPPLY'] > 0 && (data['MAX_SUPPLY'] < this.config.MIN_TOKEN_SUPPLY || data['MAX_SUPPLY'] > this.config.MAX_TOKEN_SUPPLY))
+        //     $error = 'invalid: MAX_SUPPLY (min/max)';
 
         // // Verify MAX_SUPPLY is not set below current SUPPLY
         // if(!$error && isset($data->MAX_SUPPLY) && $data->MAX_SUPPLY > 0 && $data->MAX_SUPPLY < getTokenSupply($data->TICK, null, $data->BLOCK_INDEX, $data->TX_INDEX))
