@@ -18,7 +18,7 @@ CREATE TABLE dispensers (
     -- State fields
     status           INTEGER UNSIGNED, -- dispenser status (1=Open, 2=Closing, 3=Closed)    
     escrow_remaining VARCHAR(250)      -- Tokens escrowed in the dispensers (state field)
-) ENGINE=MyISAM DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;
+) ENGINE=MyISAM DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
 CREATE        INDEX tx_index         ON dispensers (tx_index);
 CREATE        INDEX tx_hash_id       ON dispensers (tx_hash_id);

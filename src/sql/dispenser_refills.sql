@@ -13,7 +13,7 @@ CREATE TABLE dispenser_refills (
     -- dispenser_tx_hash   TEXT,
     dispenser_tx_hash_id    INTEGER UNSIGNED, -- id of record in index_transactions
     dispense_quantity      BIGINT
-) ENGINE=MyISAM DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;
+) ENGINE=MyISAM DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
 CREATE UNIQUE INDEX tx_index               ON dispenser_refills (tx_index);
 CREATE        INDEX tx_hash_id             ON dispenser_refills (tx_hash_id);

@@ -4,7 +4,7 @@ CREATE TABLE balances (
     address_id INTEGER UNSIGNED, -- id of record in index_addresses
     tick_id    INTEGER UNSIGNED, -- id of record in index_tickers
     amount     VARCHAR(250)      -- AMOUNT of balance
-) ENGINE=MyISAM DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;
+) ENGINE=MyISAM DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
 CREATE INDEX address_id ON balances (address_id);
 CREATE INDEX tick_id    ON balances (tick_id);

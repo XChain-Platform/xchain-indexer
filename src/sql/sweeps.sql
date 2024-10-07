@@ -9,7 +9,7 @@ CREATE TABLE sweeps (
     destination_id   INTEGER UNSIGNED, -- id of record in index_addresses table
     memo_id          INTEGER UNSIGNED, -- id of record in index_memos table 
     status_id        INTEGER UNSIGNED  -- id of record in index_statuses table
-) ENGINE=MyISAM DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;
+) ENGINE=MyISAM DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
 CREATE        INDEX tx_index       ON sweeps (tx_index);
 CREATE        INDEX source_id      ON sweeps (source_id);

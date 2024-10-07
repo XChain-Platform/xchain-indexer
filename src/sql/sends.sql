@@ -9,7 +9,7 @@ CREATE TABLE sends (
     amount         VARCHAR(250),     -- Amount of token in send
     memo_id        INTEGER UNSIGNED, -- id of record in index_memos table 
     status_id      INTEGER UNSIGNED  -- id of record in index_statuses table
-) ENGINE=MyISAM DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;
+) ENGINE=MyISAM DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
 CREATE        INDEX tx_index       ON sends (tx_index);
 CREATE        INDEX tick_id        ON sends (tick_id);
