@@ -29,7 +29,7 @@ CREATE TABLE issues (
     tx_hash_id          INTEGER UNSIGNED,          -- id of record in index_transactions
     block_index         INTEGER UNSIGNED,          -- block index of DEPLOY transaction
     status_id           INTEGER UNSIGNED           -- id of record in index_statuses table
-) ENGINE=MyISAM DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;
+) ENGINE=MyISAM DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
 CREATE UNIQUE INDEX tx_index           ON issues (tx_index);
 CREATE        INDEX tick_id            ON issues (tick_id);

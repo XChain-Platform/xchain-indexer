@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS addresses (
     fee_preference INTEGER UNSIGNED,
     require_memo   INTEGER UNSIGNED,
     status_id      INTEGER UNSIGNED  -- id of record in index_statuses table
-) ENGINE=MyISAM DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;
+) ENGINE=MyISAM DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
 CREATE UNIQUE INDEX tx_index       ON addresses (tx_index);
 CREATE        INDEX source_id      ON addresses (source_id);

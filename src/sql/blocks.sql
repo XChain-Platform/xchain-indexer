@@ -6,7 +6,7 @@ CREATE TABLE blocks (
     credits_hash_id  INTEGER UNSIGNED,  -- id of record in index_transactions table (sha256 hash of credits data)
     debits_hash_id   INTEGER UNSIGNED,  -- id of record in index_transactions table (sha256 hash of debits data)
     txlist_hash_id   INTEGER UNSIGNED   -- id of record in index_transactions table (sha256 hash of index_tx data)
-) ENGINE=MyISAM DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;
+) ENGINE=MyISAM DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
 CREATE INDEX block_index       ON blocks (block_index);
 CREATE INDEX credits_hash_id   ON blocks (credits_hash_id);

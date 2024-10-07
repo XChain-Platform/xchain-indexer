@@ -2,7 +2,7 @@ DROP TABLE IF EXISTS index_transactions;
 CREATE TABLE index_transactions (
     id   INTEGER UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
     hash VARCHAR(250) NOT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;
+) ENGINE=MyISAM DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
 CREATE INDEX hash on index_transactions (hash(20));
 

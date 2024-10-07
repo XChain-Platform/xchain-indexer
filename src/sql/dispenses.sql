@@ -11,7 +11,7 @@ CREATE TABLE dispenses (
     trigger_tick_id INTEGER UNSIGNED, -- id of record in index_tickers table
     trigger_amount  VARCHAR(250),     -- Amount of trigger_tick_id paid in this dispense
     status_id       INTEGER UNSIGNED  -- id of record in index_statuses table
-) ENGINE=MyISAM DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;
+) ENGINE=MyISAM DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
 CREATE        INDEX tx_index         ON dispenses (tx_index);
 CREATE        INDEX tx_hash_id       ON dispenses (tx_hash_id);
