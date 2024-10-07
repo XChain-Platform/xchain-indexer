@@ -6,7 +6,7 @@ CREATE TABLE credits (
     amount      VARCHAR(250),     -- AMOUNT of credit
     action_id   INTEGER UNSIGNED, -- id of record in index_actions table
     event_id    INTEGER UNSIGNED  -- id of record in index_transactions table
-) ENGINE=MyISAM DEFAULT  CHARSET=utf8mb4 COLLATE=utf8_general_ci;
+) ENGINE=MyISAM DEFAULT  CHARSET=utf8 COLLATE=utf8_general_ci;
 
 CREATE INDEX block_index   ON credits (block_index);
 CREATE INDEX address_id    ON credits (address_id);
