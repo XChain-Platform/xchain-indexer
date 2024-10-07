@@ -26,7 +26,7 @@ CREATE TABLE tokens (
     mint_stop_block    INTEGER UNSIGNED,                     -- BLOCK_INDEX when MINT transactions are NOT allowed (end mint)
     owner_id           INTEGER UNSIGNED,                     -- id of record in index_addresses table
     btc_price          VARCHAR(250) NOT NULL default 0       -- last price of BTC purchase of 1 token
-) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8_general_ci;
+) ENGINE=MyISAM DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
 CREATE        INDEX tick_id            ON tokens (tick_id);
 CREATE        INDEX owner_id           ON tokens (owner_id);
