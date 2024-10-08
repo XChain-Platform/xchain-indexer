@@ -5,3 +5,6 @@ CREATE TABLE index_tickers (
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
 CREATE INDEX tick on index_tickers (tick);
+
+-- Create record for blank/empty transaction
+INSERT INTO index_tickers (id,tick) values (1,'');
