@@ -128,19 +128,19 @@ module.exports = {
 
     // Handle subtracting 2 big numbers
     bcsub: function(a, b, decimals){
-        let precision = (decimals) ? decimals : 0;
+        let precision = (decimals) ? parseInt(decimals) : 0;
         return result = mathjs.format(mathjs.subtract(mathjs.bignumber(a),mathjs.bignumber(b)),{notation: 'fixed', precision: precision});
     },
 
     // Handle adding 2 big numbers
     bcadd: function(a, b, decimals){
-        let precision = (decimals) ? decimals : 0;
+        let precision = (decimals) ? parseInt(decimals) : 0;
         return result = mathjs.format(mathjs.add(mathjs.bignumber(a),mathjs.bignumber(b)),{notation: 'fixed', precision: precision});
     },
 
     // Handle adding 2 big numbers
     bcmul: function(a, b, decimals){
-        let precision = (decimals) ? decimals : 0;
+        let precision = (decimals) ? parseInt(decimals) : 0;
         return result = mathjs.format(mathjs.multiply(mathjs.bignumber(a),mathjs.bignumber(b)),{notation: 'fixed', precision: precision});
     },
 
