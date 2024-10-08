@@ -105,7 +105,10 @@ class XChainIndexer {
 
             // Log block parsing start
             var startBlock = (lastIndexerBlock) ? (lastIndexerBlock+1) : firstDecoderBlock;
-            console.log('Resuming block parsing at block ' + startBlock + '...');
+
+            // Print out status message about where parsing is resuming
+            if(startBlock < lastDecoderBlock)
+                console.log('Resuming block parsing at block ' + startBlock + '...');
 
             var cnt = 0;
 
