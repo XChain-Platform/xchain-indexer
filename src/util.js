@@ -2,6 +2,7 @@
 
 const crypto = require('crypto');
 const mathjs = require('mathjs');
+const fs     = require('fs');
 
 module.exports = {
 
@@ -12,8 +13,17 @@ module.exports = {
 
     // Throw an error and log to console
     throwError: function(error){
-        console.log(error);
+        console.error('throwError: ' + error);
         throw new Error(error);
+    },
+
+    // Log an error to the error.log file
+    logError: function(error, info){
+        // let file  = '/XChainIndexer/error.log';
+        // fs.appendFileSync(file, error);
+        console.error('logError: ' + error, info);
+        // DEBUG: Throw exception on any error
+        this.throwError(error);
     },
 
     // Get a SHA256 hash of a given data object
@@ -127,21 +137,28 @@ module.exports = {
     },
 
     // Handle subtracting 2 big numbers
-    bcsub: function(a, b, decimals){
-        let precision = (decimals) ? parseInt(decimals) : 0;
-        return result = mathjs.format(mathjs.subtract(mathjs.bignumber(a),mathjs.bignumber(b)),{notation: 'fixed', precision: precision});
+    bcsub: function(numA, numB, decimals){
+        // Normalize the data
+        let a = (!this.isNull(numA)) ? numA : 0;
+        let b = (!this.isNull(numB)) ? numB : 0;
+        let d = (!this.isNull(decimals)) ? parseInt(decimals) : 0;
+        return mathjs.format(mathjs.subtract(mathjs.bignumber(a),mathjs.bignumber(b)),{notation: 'fixed', precision: d});
     },
 
     // Handle adding 2 big numbers
-    bcadd: function(a, b, decimals){
-        let precision = (decimals) ? parseInt(decimals) : 0;
-        return result = mathjs.format(mathjs.add(mathjs.bignumber(a),mathjs.bignumber(b)),{notation: 'fixed', precision: precision});
+    bcadd: function(numA, numB, decimals){
+        let a = (!this.isNull(numA)) ? numA : 0;
+        let b = (!this.isNull(numB)) ? numB : 0;
+        let d = (!this.isNull(decimals)) ? parseInt(decimals) : 0;
+        return mathjs.format(mathjs.add(mathjs.bignumber(a),mathjs.bignumber(b)),{notation: 'fixed', precision: d});
     },
 
-    // Handle adding 2 big numbers
-    bcmul: function(a, b, decimals){
-        let precision = (decimals) ? parseInt(decimals) : 0;
-        return result = mathjs.format(mathjs.multiply(mathjs.bignumber(a),mathjs.bignumber(b)),{notation: 'fixed', precision: precision});
+    // Handle multiplying 2 big numbers
+    bcmul: function(numA, numB, decimals){
+        let a = (!this.isNull(numA)) ? numA : 0;
+        let b = (!this.isNull(numB)) ? numB : 0;
+        let d = (!this.isNull(decimals)) ? parseInt(decimals) : 0;
+        return mathjs.format(mathjs.multiply(mathjs.bignumber(a),mathjs.bignumber(b)),{notation: 'fixed', precision: d});
     },
 
     // Handle validating amount format
