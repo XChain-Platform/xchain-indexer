@@ -44,7 +44,6 @@ module.exports = {
         // TODO : Generate BURN/GAS/DONATE addresses before launching XChain platform
         var coinNet = coin + '-' +  network,
             address = {};
-        console.log('coinNet=',coinNet);
         switch(coinNet){
             // Bitcoin
             case 'BTC-mainnet':
