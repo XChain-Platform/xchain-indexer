@@ -164,127 +164,127 @@ class Issue {
          ****************************************************************/
 
         // Verify ISSUE is coming from TICK owner
-        // if(!$error && $btInfo && $btInfo->OWNER!=$data->SOURCE)
-        //     $error = 'invalid: issued by another address';
+        if(!error && tokenInfo && tokenInfo['OWNER']!=data['SOURCE'])
+            error = 'invalid: issued by another address';
 
-        // // Verify LOCK fields cannot be changed once enabled/locked
-        // foreach($fieldList['LOCK'] as $name){
-        //     $value = $issue->{$name};
-        //     if(!$error && isset($value) && !isValidLock($btInfo, $issue, $name))
-        //         $error = "invalid: {$name} (locked)";
-        // }
+        // Verify LOCK fields cannot be changed once enabled/locked
+        this.fieldList['LOCK'].forEach(function(name){
+            let value = issue[name];
+            if(!error && !util.isNull(value) && !util.isValidLock(value))
+                error = "invalid: " + name + " (locked)";
+        });
 
-        // // Verify MAX_SUPPLY min/max
-        // if(!error && !util.isNull(data['MAX_SUPPLY']) && data['MAX_SUPPLY'] > 0 && (data['MAX_SUPPLY'] < this.config.MIN_TOKEN_SUPPLY || data['MAX_SUPPLY'] > this.config.MAX_TOKEN_SUPPLY))
-        //     $error = 'invalid: MAX_SUPPLY (min/max)';
+        // Verify MAX_SUPPLY min/max
+        if(!error && !util.isNull(data['MAX_SUPPLY']) && data['MAX_SUPPLY'] > 0 && (data['MAX_SUPPLY'] < this.config.MIN_TOKEN_SUPPLY || data['MAX_SUPPLY'] > this.config.MAX_TOKEN_SUPPLY))
+            $error = 'invalid: MAX_SUPPLY (min/max)';
 
-        // // Verify MAX_SUPPLY is not set below current SUPPLY
-        // if(!$error && isset($data->MAX_SUPPLY) && $data->MAX_SUPPLY > 0 && $data->MAX_SUPPLY < getTokenSupply($data->TICK, null, $data->BLOCK_INDEX, $data->TX_INDEX))
-        //     $error = 'invalid: MAX_SUPPLY < SUPPLY';
+        // Verify MAX_SUPPLY is not set below current SUPPLY
+        if(!error && !util.isNull(data['MAX_SUPPLY']) && data['MAX_SUPPLY'] > 0 && data['MAX_SUPPLY'] < await this.indexerDb.getTokenSupply(data['TICK'], null, data['BLOCK_INDEX'], data['TX_INDEX']))
+            error = 'invalid: MAX_SUPPLY < SUPPLY';
 
-        // // Verify SUPPLY is at least MIN_TOKEN_SUPPLY before allowing LOCK_MAX_SUPPLY
-        // if(!$error && $data->LOCK_MAX_SUPPLY && (($btInfo && $btInfo->SUPPLY < MIN_TOKEN_SUPPLY) || (!$btInfo && $data->MINT_SUPPLY < MIN_TOKEN_SUPPLY)))
-        //     $error = 'invalid: LOCK_MAX_SUPPLY (no supply)';
+        // Verify SUPPLY is at least MIN_TOKEN_SUPPLY before allowing LOCK_MAX_SUPPLY
+        if(!error && data['LOCK_MAX_SUPPLY'] && ((tokenInfo && tokenInfo['SUPPLY'] < this.config.MIN_TOKEN_SUPPLY) || (!tokenInfo && data['MINT_SUPPLY'] < this.config.MIN_TOKEN_SUPPLY)))
+            error = 'invalid: LOCK_MAX_SUPPLY (no supply)';
 
-        // // Verify DECIMAL min/max
-        // if(!$error && isset($data->DECIMALS) && ($data->DECIMALS < MIN_TOKEN_DECIMALS || $data->DECIMALS > MAX_TOKEN_DECIMALS))
-        //     $error = 'invalid: DECIMALS (min/max)';
+        // Verify DECIMAL min/max
+        if(!error && !util.isNull(data['DECIMALS']) && (data['DECIMALS'] < this.config.MIN_TOKEN_DECIMALS || data['DECIMALS'] > this.config.MAX_TOKEN_DECIMALS))
+            error = 'invalid: DECIMALS (min/max)';
 
-        // // Verify DECIMALS cannot be changed after supply has been issued
-        // if(!$error && isset($data->DECIMALS) && $btInfo->SUPPLY > 0 && $data->DECIMALS!=$btInfo->DECIMALS)
-        //     $error = 'invalid: DECIMALS (locked)';
+        // Verify DECIMALS cannot be changed after supply has been issued
+        if(!error && !util.isNull(data['DECIMALS']) && tokenInfo['SUPPLY'] > 0 && data['DECIMALS']!=tokenInfo['DECIMALS'])
+            error = 'invalid: DECIMALS (locked)';
 
-        // // Verify TRANSFER addresses
-        // if(!$error && isset($data->TRANSFER) && !isCryptoAddress($data->TRANSFER))
-        //     $error = 'invalid: TRANSFER (bad address)';
+        // Verify TRANSFER addresses
+        if(!error && !util.isNull(data['TRANSFER']) && !util.isCryptoAddress(data['TRANSFER']))
+            error = 'invalid: TRANSFER (bad address)';
 
-        // // Verify TRANSFER_SUPPLY and SOURCE are different
-        // if($data->TRANSFER_SUPPLY == $data->SOURCE)
-        //     unset($data->TRANSFER_SUPPLY);
+        // Verify TRANSFER_SUPPLY and SOURCE are different
+        if(data['TRANSFER_SUPPLY'] == data['SOURCE'])
+            delete data['TRANSFER_SUPPLY'];
 
-        // // Verify TRANSFER_SUPPLY addresses
-        // if(!$error && isset($data->TRANSFER_SUPPLY) && !isCryptoAddress($data->TRANSFER_SUPPLY))
-        //     $error = 'invalid: TRANSFER_SUPPLY (bad address)';
+        // Verify TRANSFER_SUPPLY addresses
+        if(!error && !util.isNull(data['TRANSFER_SUPPLY']) && !util.isCryptoAddress(data['TRANSFER_SUPPLY']))
+            error = 'invalid: TRANSFER_SUPPLY (bad address)';
 
-        // // Verify MINT_SUPPLY is allowed and LOCK_MINT_SUPPLY is not set
-        // if(!$error && isset($data->MINT_SUPPLY) && $btInfo && $btInfo->LOCK_MINT_SUPPLY==1)
-        //     $error = 'invalid: MINT_SUPPLY (locked)';
+        // Verify MINT_SUPPLY is allowed and LOCK_MINT_SUPPLY is not set
+        if(!error && !util.isNull(data['MINT_SUPPLY']) && tokenInfo && tokenInfo['LOCK_MINT_SUPPLY']==1)
+            error = 'invalid: MINT_SUPPLY (locked)';
 
-        // // Verify MINT_SUPPLY is less than MAX_SUPPLY
-        // if(!$error && isset($data->MINT_SUPPLY) && $data->MINT_SUPPLY > $data->MAX_SUPPLY)
-        //     $error = 'invalid: MINT_SUPPLY > MAX_SUPPLY';
+        // Verify MINT_SUPPLY is less than MAX_SUPPLY
+        if(!error && !util.isNull(data['MINT_SUPPLY']) && data['MINT_SUPPLY'] > data['MAX_SUPPLY'])
+            error = 'invalid: MINT_SUPPLY > MAX_SUPPLY';
 
-        // // Verify MINT_ADDRESS_MAX is less than MAX_SUPPLY
-        // if(!$error && isset($data->MINT_ADDRESS_MAX) && $data->MINT_ADDRESS_MAX > 0 && $data->MINT_ADDRESS_MAX > $data->MAX_SUPPLY)
-        //     $error = 'invalid: MINT_ADDRESS_MAX > MAX_SUPPLY';
+        // Verify MINT_ADDRESS_MAX is less than MAX_SUPPLY
+        if(!error && !util.isNull(data['MINT_ADDRESS_MAX']) && data['MINT_ADDRESS_MAX'] > 0 && data['MINT_ADDRESS_MAX'] > data['MAX_SUPPLY'])
+            error = 'invalid: MINT_ADDRESS_MAX > MAX_SUPPLY';
 
-        // // Verify MINT_ADDRESS_MAX is greater than than MAX_MINT
-        // if(!$error && isset($data->MINT_ADDRESS_MAX) && $data->MINT_ADDRESS_MAX > 0 && $data->MINT_ADDRESS_MAX < $data->MAX_MINT)
-        //     $error = 'invalid: MINT_ADDRESS_MAX < MAX_MINT';
+        // Verify MINT_ADDRESS_MAX is greater than than MAX_MINT
+        if(!error && !util.isNull(data['MINT_ADDRESS_MAX']) && data['MINT_ADDRESS_MAX'] > 0 && data['MINT_ADDRESS_MAX'] < data['MAX_MINT'])
+            error = 'invalid: MINT_ADDRESS_MAX < MAX_MINT';
 
-        // // Verify MAX_SUPPLY can not be changed if LOCK_MAX_SUPPLY is enabled
-        // if(!$error && $btInfo && $btInfo->LOCK_MAX_SUPPLY && isset($data->MAX_SUPPLY) && $data->MAX_SUPPLY!=$btInfo->MAX_SUPPLY)
-        //     $error = 'invalid: MAX_SUPPLY (locked)';
+        // Verify MAX_SUPPLY can not be changed if LOCK_MAX_SUPPLY is enabled
+        if(!error && tokenInfo && tokenInfo['LOCK_MAX_SUPPLY'] && !util.isNull(data['MAX_SUPPLY']) && data['MAX_SUPPLY'] != tokenInfoInfo['MAX_SUPPLY'])
+            error = 'invalid: MAX_SUPPLY (locked)';
 
-        // // Verify MAX_MINT can not be changed if LOCK_MAX_MINT is enabled
-        // if(!$error && $btInfo && $btInfo->LOCK_MAX_MINT && isset($data->MAX_MINT) && $data->MAX_MINT!=$btInfo->MAX_MINT)
-        //     $error = 'invalid: MAX_MINT (locked)';
+        // Verify MAX_MINT can not be changed if LOCK_MAX_MINT is enabled
+        if(!error && tokenInfo && tokenInfo['LOCK_MAX_MINT'] && !util.isNull(data['MAX_MINT']) && data['MAX_MINT'] != tokenInfo['MAX_MINT'])
+            error = 'invalid: MAX_MINT (locked)';
 
-        // // Verify DESCRIPTION is less than or equal to MAX_TOKEN_DESCRIPTION
-        // if(!$error && $data->DESCRIPTION && strlen($data->DESCRIPTION) >= MAX_TOKEN_DESCRIPTION)
-        //     $error = 'invalid: DESCRIPTION (length)';
+        // Verify DESCRIPTION is less than or equal to MAX_TOKEN_DESCRIPTION
+        if(!error && data['DESCRIPTION'] && String(data['DESCRIPTION']).length >= this.config.MAX_TOKEN_DESCRIPTION)
+            error = 'invalid: DESCRIPTION (length)';
 
-        // // Verify DESCRIPTION can not be changed if LOCK_DESCRIPTION is enabled
-        // if(!$error && $btInfo && $btInfo->LOCK_DESCRIPTION && isset($data->DESCRIPTION) && $data->DESCRIPTION!=$btInfo->DESCRIPTION)
-        //     $error = 'invalid: DESCRIPTION (locked)';
+        // Verify DESCRIPTION can not be changed if LOCK_DESCRIPTION is enabled
+        if(!error && tokenInfo && tokenInfo['LOCK_DESCRIPTION'] && !util.isNull(data['DESCRIPTION']) && data['DESCRIPTION'] != tokenInfo['DESCRIPTION'])
+            error = 'invalid: DESCRIPTION (locked)';
 
-        // // Verify CALLBACK_BLOCK can not be changed if LOCK_CALLBACK is enabled
-        // if(!$error && $btInfo && $btInfo->LOCK_CALLBACK && isset($data->CALLBACK_BLOCK) && $data->CALLBACK_BLOCK!=$btInfo->CALLBACK_BLOCK)
-        //     $error = 'invalid: CALLBACK_BLOCK (locked)';
+        // Verify CALLBACK_BLOCK can not be changed if LOCK_CALLBACK is enabled
+        if(!error && tokenInfo && tokenInfo['LOCK_CALLBACK'] && !util.isNull(data['CALLBACK_BLOCK']) && data['CALLBACK_BLOCK'] != tokenInfo['CALLBACK_BLOCK'])
+            error = 'invalid: CALLBACK_BLOCK (locked)';
 
-        // // Verify CALLBACK_TICK can not be changed if LOCK_CALLBACK is enabled
-        // if(!$error && $btInfo && $btInfo->LOCK_CALLBACK && isset($data->CALLBACK_TICK) && $data->CALLBACK_TICK!=$btInfo->CALLBACK_TICK)
-        //     $error = 'invalid: CALLBACK_TICK (locked)';
+        // Verify CALLBACK_TICK can not be changed if LOCK_CALLBACK is enabled
+        if(!error && tokenInfo && tokenInfo['LOCK_CALLBACK'] && !util.isNull(data['CALLBACK_TICK']) && data['CALLBACK_TICK'] != tokenInfo['CALLBACK_TICK'])
+            error = 'invalid: CALLBACK_TICK (locked)';
 
-        // // Verify CALLBACK_TICK can not be changed if LOCK_CALLBACK is enabled
-        // if(!$error && $btInfo && $btInfo->LOCK_CALLBACK && isset($data->CALLBACK_AMOUNT) && $data->CALLBACK_AMOUNT!=$btInfo->CALLBACK_AMOUNT)
-        //     $error = 'invalid: CALLBACK_AMOUNT (locked)';
+        // Verify CALLBACK_TICK can not be changed if LOCK_CALLBACK is enabled
+        if(!error && tokenInfo && tokenInfo['LOCK_CALLBACK'] && !util.isNull(data['CALLBACK_AMOUNT']) && data['CALLBACK_AMOUNT'] != tokenInfo['CALLBACK_AMOUNT'])
+            error = 'invalid: CALLBACK_AMOUNT (locked)';
 
-        // // Verify CALLBACK_BLOCK is greater than current block index
-        // if(!$error && $btInfo && isset($issue->CALLBACK_BLOCK) && $data->CALLBACK_BLOCK < $data->BLOCK_INDEX)
-        //     $error = 'invalid: CALLBACK_BLOCK (block index)';
+        // Verify CALLBACK_BLOCK is greater than current block index
+        if(!error && tokenInfo && !util.isNull(issue['CALLBACK_BLOCK']) && data['CALLBACK_BLOCK'] < data['BLOCK_INDEX'])
+            error = 'invalid: CALLBACK_BLOCK (block index)';
 
-        // // Verify CALLBACK_BLOCK can not be changed if supply is distributed
-        // if(!$error && isset($issue->CALLBACK_BLOCK) && $data->CALLBACK_BLOCK!=$btInfo->CALLBACK_BLOCK && $isDistributed)
-        //     $error = 'invalid: CALLBACK_BLOCK (supply distributed)';
+        // Verify CALLBACK_BLOCK can not be changed if supply is distributed
+        if(!error && !util.isNull(issue['CALLBACK_BLOCK']) && data['CALLBACK_BLOCK'] != tokenInfo['CALLBACK_BLOCK'] && isDistributed)
+            error = 'invalid: CALLBACK_BLOCK (supply distributed)';
 
-        // // Verify CALLBACK_TICK can not be changed if supply is distributed
-        // if(!$error && isset($issue->CALLBACK_TICK) && $data->CALLBACK_TICK!=$btInfo->CALLBACK_TICK && $isDistributed)
-        //     $error = 'invalid: CALLBACK_TICK (supply distributed)';
+        // Verify CALLBACK_TICK can not be changed if supply is distributed
+        if(!error && !util.isNull(issue['CALLBACK_TICK']) && data['CALLBACK_TICK'] != tokenInfo['CALLBACK_TICK'] && isDistributed)
+            error = 'invalid: CALLBACK_TICK (supply distributed)';
 
         // // Verify CALLBACK_AMOUNT can not be changed if supply is distributed
-        // if(!$error && isset($issue->CALLBACK_AMOUNT) && $data->CALLBACK_AMOUNT!=$btInfo->CALLBACK_AMOUNT && $isDistributed)
-        //     $error = 'invalid: CALLBACK_AMOUNT (supply distributed)';
+        if(!error && !util.isNull(issue['CALLBACK_AMOUNT']) && data['CALLBACK_AMOUNT'] != tokenInfo['CALLBACK_AMOUNT'] && isDistributed)
+            error = 'invalid: CALLBACK_AMOUNT (supply distributed)';
 
-        // // Verify ALLOW_LIST is a valid list of addresses
-        // if(!$error && isset($data->ALLOW_LIST) && !isValidList($data->ALLOW_LIST,3))
-        //     $error = 'invalid: ALLOW_LIST (bad list)';
+        // Verify ALLOW_LIST is a valid list of addresses
+        if(!error && !util.isNull(data['ALLOW_LIST']) && !util.isValidList(data['ALLOW_LIST'],3))
+            error = 'invalid: ALLOW_LIST (bad list)';
 
         // // Verify BLOCK_LIST is a valid list of addresses
-        // if(!$error && isset($data->BLOCK_LIST) && !isValidList($data->BLOCK_LIST,3))
-        //     $error = 'invalid: BLOCK_LIST (bad list)';
+        if(!error && !util.isNull(data['BLOCK_LIST']) && !util.isValidList(data['BLOCK_LIST'],3))
+            error = 'invalid: BLOCK_LIST (bad list)';
 
-        // // Verify MINT_START_BLOCK is greater than or equal to current block
-        // if(!$error && isset($issue->MINT_START_BLOCK) && $issue->MINT_START_BLOCK > 0 && $issue->MINT_START_BLOCK < $issue->BLOCK_INDEX)
-        //     $error = 'invalid: MINT_START_BLOCK < BLOCK_INDEX';
+        // Verify MINT_START_BLOCK is greater than or equal to current block
+        if(!error && !util.isNull(issue['MINT_START_BLOCK']) && issue['MINT_START_BLOCK'] > 0 && issue['MINT_START_BLOCK'] < issue['BLOCK_INDEX'])
+            error = 'invalid: MINT_START_BLOCK < BLOCK_INDEX';
 
-        // // Verify MINT_STOP_BLOCK is greater than or equal to current block
-        // if(!$error && isset($issue->MINT_STOP_BLOCK) && $issue->MINT_STOP_BLOCK > 0 && $issue->MINT_STOP_BLOCK < $issue->BLOCK_INDEX)
-        //     $error = 'invalid: MINT_STOP_BLOCK < BLOCK_INDEX';
+        // Verify MINT_STOP_BLOCK is greater than or equal to current block
+        if(!error && !util.isNull(issue['MINT_STOP_BLOCK']) && issue['MINT_STOP_BLOCK'] > 0 && issue['MINT_STOP_BLOCK'] < issue['BLOCK_INDEX'])
+            error = 'invalid: MINT_STOP_BLOCK < BLOCK_INDEX';
 
-        // // Verify MINT_STOP_BLOCK is greater than or equal to MINT_START_BLOCK
-        // if(!$error && isset($issue->MINT_STOP_BLOCK) && $issue->MINT_START_BLOCK > 0 && $issue->MINT_STOP_BLOCK > 0 && $issue->MINT_STOP_BLOCK < $issue->MINT_START_BLOCK)
-        //     $error = 'invalid: MINT_STOP_BLOCK < MINT_START_BLOCK';
+        // Verify MINT_STOP_BLOCK is greater than or equal to MINT_START_BLOCK
+        if(!error && !util.isNull(issue['MINT_STOP_BLOCK']) && issue['MINT_START_BLOCK'] > 0 && issue['MINT_STOP_BLOCK'] > 0 && issue['MINT_STOP_BLOCK'] < issue['MINT_START_BLOCK'])
+            error = 'invalid: MINT_STOP_BLOCK < MINT_START_BLOCK';
 
         // Determine final status
         let status = (error) ? error : 'valid';
@@ -294,16 +294,39 @@ class Issue {
         console.log("\t ISSUE : " + data['TICK'] + ' : ' + data['STATUS']);
 
         // Create record in issues table
-        // createIssue($issue);
+        await this.indexerDb.createIssue(issue);
 
+        // If this was a valid transaction, then create the token record, and perform any additional actions
+        if(status=='valid'){
 
-        // console.log('parse params=',params);
-        // console.log('parse isssue=',issue);
-        // console.log('parse data=',data);
-        // if(error)
-        //     console.log('error=',error);
+            // Support token ownership transfers
+            data['OWNER']  = (!util.isNull(data['TRANSFER'])) ? data['TRANSFER'] : data['SOURCE'];
+
+            // Create/Update record in tokens table
+            await this.indexerDb.createToken(data);
+
+            // Credit MINT_SUPPLY to source address
+            if(data['MINT_SUPPLY'])
+                await this.indexerDb.createCredit('ISSUE', data['BLOCK_INDEX'], data['TX_HASH'], data['TICK'], data['MINT_SUPPLY'], data['SOURCE']);
+
+            // Transfer MINT_SUPPLY to TRANSFER_SUPPLY address
+            if(data['MINT_SUPPLY'] && data['TRANSFER_SUPPLY']){
+                await this.indexerDb.createDebit('ISSUE', data['BLOCK_INDEX'], data['TX_HASH'], data['TICK'], data['MINT_SUPPLY'], data['SOURCE']);
+                await this.indexerDb.createCredit('ISSUE',data['BLOCK_INDEX'], data['TX_HASH'], data['TICK'], data['MINT_SUPPLY'], data['TRANSFER_SUPPLY']);
+            }
+
+            // TODO: If this is a reparse, bail out before updating balances and token information
+            // if(reparse)
+            //     return;
+
+            // Update balances for addresses
+            await this.indexerDb.updateBalances([data['SOURCE'], data['TRANSFER_SUPPLY']]);
+
+            // // Update supply for token
+            // await this.indexerDb.updateTokenInfo(data['TICK']);
+
+        }    
     }
-
 }
 
 module.exports = Issue;

@@ -138,6 +138,12 @@ module.exports = {
         return result = mathjs.format(mathjs.add(mathjs.bignumber(a),mathjs.bignumber(b)),{notation: 'fixed', precision: precision});
     },
 
+    // Handle adding 2 big numbers
+    bcmul: function(a, b, decimals){
+        let precision = (decimals) ? decimals : 0;
+        return result = mathjs.format(mathjs.multiply(mathjs.bignumber(a),mathjs.bignumber(b)),{notation: 'fixed', precision: precision});
+    },
+
     // Handle validating amount format
     isValidAmountFormat: function(divisible, amount){
         let [int, sats] = String(amount).split('.');
@@ -159,8 +165,40 @@ module.exports = {
         if(valid.indexOf(value)!=-1)
             return true;
         return false;
-    }
+    },
 
+
+    // Handle validating lock status
+    isValidLock: function(tokenInfo, data, lock){
+        // Get lock VALUE
+        let value = data[lock];
+        // If we dont have any info on the token, it hasn't been created yet, so all flags are valid
+        if(this.isNull(tokenInfo))
+            return true;
+        // If token exists and lock value does not exist yet, its valid
+        if(tokenInfo[lock]=="")
+            return true;
+        // If lock value is not changing, its valid
+        if(!this.isNull(value) && tokenInfo[lock]==value)
+            return true;
+        // If lock is unlocked and we are locking, its valid
+        if(!this.isNull(value) && tokenInfo[lock]==0 && value==1)
+            return true;
+        return false;
+    },
+
+    // Handle doing VERY lose validation on an address
+    // TODO: Clean this up to actually verify crypto addresses using crypto library
+    isCryptoAddress: function(address){
+        let len = String(address).length;
+        // Check P2PKH (26-35 chars)
+        if(len>=26 && len<=35)
+            return true;
+        // Check Segwit (42 chars)
+        if(len==42)
+            return true;
+        return false;
+    }
 
 
 }
