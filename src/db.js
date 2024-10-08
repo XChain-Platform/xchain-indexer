@@ -751,9 +751,8 @@ class Database {
                     arr['MINT_STOP_BLOCK']   = row.mint_stop_block;
                     // build out token state
                     // TODO: will need to massage the data a bit more to build out accurate token state... this is quick and dirty
-                    for(key in arr){
+                    for(let key in arr){
                         let value = arr[key];
-                        console.log('key,value=',key,value);
                         // Disallow unsetting of LOCK flags
                         if(String(key).substr(0,5)=='LOCK_')
                             if(data[key]==1)
@@ -904,7 +903,8 @@ class Database {
         let db      = await this.getConnection(),
             sql     = '',
             query   = '',
-            args    = [];
+            args    = [],
+            tick_id = null;
         // Get the tick_id for the given ticker
         if(!util.isNull(tick) && util.isNull(tick_id))
             tick_id = await this.createTicker(tick);
@@ -984,7 +984,7 @@ class Database {
         if(Object.keys(holders).length>1)
             return true;
         // Holder that is not OWNER
-        for(address in holders)
+        for(let address in holders)
             if(address!=info['OWNER'])
                 return true;
         return false;

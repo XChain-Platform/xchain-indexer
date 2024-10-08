@@ -140,9 +140,9 @@ class XChainIndexer {
                 util.logTimer(debugTimer, 'Block Parsed');
 
                 // DEBUG: counter to enable stopping parsing after a set number of blocks
-                cnt++;
-                if(cnt>=1)
-                    break;
+                // cnt++;
+                // if(cnt>=1)
+                //     break;
             }
 
             console.log('sleeping for 5 seconds');
