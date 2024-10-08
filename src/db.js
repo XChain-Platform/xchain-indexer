@@ -84,7 +84,7 @@ class Database {
                 await db.end();
                 databaseCreated = true;
             } catch(e){
-                console.log('e=',e);
+                // console.log('e=',e);
                 console.log("There was an error trying to connect to the " + this.dbName + " database. Trying again in a few seconds...");
                 await util.sleep(5000); // Waiting 5 seconds
             }
@@ -112,7 +112,7 @@ class Database {
                         await this.createTable(file);
                     }
                 } catch(e){
-                    console.log('e=',e);
+                    // console.log('e=',e);
                     util.throwError('Error while trying to verify ' + table + ' table exists!');
                     return false;
                 }
@@ -231,13 +231,13 @@ class Database {
         // Bail out on any invalid request type
         var componentTypes = ['decoder', 'indexer'];
         if(!componentTypes.includes(component)){
-            console.error('Invalid component');
+            util.logError('Invalid component');
             return false;
         }
         // Bail out on any invalid request type
         var validTypes = ['first', 'last', 'rollback'];
         if(!validTypes.includes(type)){
-            console.error('Invalid type');
+            util.logError('Invalid type');
             return false;
         }
         let db    = await this.getConnection();
@@ -258,8 +258,8 @@ class Database {
             } else {
                 return -1   
             }
-        } catch (err) {
-            console.error('Error getting block height:', err);
+        } catch (error){
+            util.logError('Error getting block height:', error);
             return false;
         }
         await this.releaseConnection();
@@ -287,8 +287,8 @@ class Database {
             const rows = await db.query(query, [block_index]);
             await db.end();
             return rows;
-        } catch (err) {
-            console.error('Error getting decoder block data:', err);
+        } catch (error) {
+            util.logError('Error getting decoder block data:', error);
             return false;
         }
         await this.releaseConnection();
@@ -306,8 +306,8 @@ class Database {
             } else {
                 return null;
             }            
-        } catch (err) {
-            console.error('Error getting decoder block time:', err);
+        } catch (error) {
+            util.logError('Error getting decoder block time:', error);
             return false;
         }
         await this.releaseConnection();
@@ -326,22 +326,22 @@ class Database {
         query  = `SELECT * FROM credits WHERE block_index=? ORDER BY block_index ASC, tick_id ASC, address_id ASC, amount DESC`;
         try {
             credits = await db.query(query, [block_index]);
-        } catch (err) {
-            console.error('Error getting data from the credits table:', err);
+        } catch (error){
+            util.logError('Error getting data from the credits table:', error);
         }
         // Get data from debits table
         query  = `SELECT * FROM debits WHERE block_index=? ORDER BY block_index ASC, tick_id ASC, address_id ASC, amount DESC`;
         try {
             debits = await db.query(query, [block_index]);
-        } catch (err) {
-            console.error('Error getting data from the debits table:', err);
+        } catch (error){
+            util.logError('Error getting data from the debits table:', error);
         }
         // Get data from transactions table
         query  = `SELECT * FROM transactions WHERE block_index=? ORDER BY tx_index ASC`;
         try {
             txlist = await db.query(query, [block_index]);
-        } catch (err) {
-            console.error('Error getting data from the txlist table:', err);
+        } catch (error){
+            util.logError('Error getting data from the txlist table:', error);
         }
         // Subtract one block from current block
         let prev_block_index = block_index -1;
@@ -367,8 +367,8 @@ class Database {
                 hashes['debits']  = rows[0].debits;
                 hashes['txlist']  = rows[0].txlist;
             }
-        } catch (err) {
-            console.error('Error getting data on the previous block hashes:', err);
+        } catch (error) {
+            util.logError('Error getting data on the previous block hashes:', error);
         }
         // Define list of tables with data to hash
         let tables = ['credits','debits','txlist'];
@@ -398,8 +398,8 @@ class Database {
             let rows = await db.query(query, [hash]);
             if(rows.length > 0)
                 id = rows[0].id;
-        } catch (err) {
-            console.error('Error looking up hash record id in index_transactions table:', err);
+        } catch (error) {
+            util.logError('Error looking up hash record id in index_transactions table:', error);
         }
         await this.releaseConnection();
         return id;
@@ -419,8 +419,8 @@ class Database {
                 let result = await db.query(query, [hash]);
                 if(result.insertId)
                     id = result.insertId;
-            } catch (err) {
-                console.error('Error trying to create hash record in index_transactions table:', err);
+            } catch (error) {
+                util.logError('Error trying to create hash record in index_transactions table:', error);
             }
             await this.releaseConnection();
         }
@@ -436,8 +436,8 @@ class Database {
             let rows = await db.query(query, [address]);
             if(rows.length > 0)
                 id = rows[0].id;
-        } catch (err) {
-            console.error('Error looking up address record id in index_addresses table:', err);
+        } catch (error) {
+            util.logError('Error looking up address record id in index_addresses table:', error);
         }
         await this.releaseConnection();
         return id;
@@ -457,8 +457,8 @@ class Database {
                 let result = await db.query(query, [address]);
                 if(result.insertId)
                     id = result.insertId;
-            } catch (err) {
-                console.error('Error trying to create address record in index_addresses table:', err);
+            } catch (error) {
+                util.logError('Error trying to create address record in index_addresses table:', error);
             }
             await this.releaseConnection();
         }
@@ -474,8 +474,8 @@ class Database {
             let rows = await db.query(query, [block_index]);
             if(rows.length > 0)
                 id = rows[0].id;
-        } catch (err) {
-            console.error('Error looking up block record id in blocks table:', err);
+        } catch (error) {
+            util.logError('Error looking up block record id in blocks table:', error);
         }
         await this.releaseConnection();
         return id;
@@ -509,8 +509,8 @@ class Database {
         }
         try {
             let result = await db.query(query, [block_time, credits_hash_id, debits_hash_id, txlist_hash_id, block_index]);
-        } catch (err) {
-            console.error('Error trying to create record in blocks table:', err);
+        } catch (error) {
+            util.logError('Error trying to create record in blocks table:', error);
         }
         await this.releaseConnection();
         // Display status message
@@ -529,8 +529,8 @@ class Database {
             let rows = await db.query(query, [action]);
             if(rows.length > 0)
                 id = rows[0].id;
-        } catch (err) {
-            console.error('Error looking up action record id in index_actions table:', err);
+        } catch (error) {
+            util.logError('Error looking up action record id in index_actions table:', error);
         }
         await this.releaseConnection();
         return id;
@@ -547,8 +547,8 @@ class Database {
                 let result = await db.query(query, [action]);
                 if(result.insertId)
                     id = result.insertId;
-            } catch (err) {
-                console.error('Error trying to create action record in index_actions table:', err);
+            } catch (error) {
+                util.logError('Error trying to create action record in index_actions table:', error);
             }
             await this.releaseConnection();
         }
@@ -564,8 +564,8 @@ class Database {
             let rows = await db.query(query);
             if(rows.length > 0)
                 idx = rows[0].tx_index;
-        } catch (err) {
-            console.error('Error looking up action record id in index_actions table:', err);
+        } catch (error) {
+            util.logError('Error looking up action record id in index_actions table:', error);
         }
         // Increase current tx_index by 1 to get the next tx_index
         idx++;
@@ -583,8 +583,8 @@ class Database {
             let rows = await db.query(query, [hash_id]);
             if(rows.length > 0)
                 id = rows[0].tx_index;
-        } catch (err) {
-            console.error('Error looking up tx_index in transactions table:', err);
+        } catch (error) {
+            util.logError('Error looking up tx_index in transactions table:', error);
         }
         await this.releaseConnection();
         return id;
@@ -603,9 +603,8 @@ class Database {
             let query       = "INSERT INTO transactions (tx_index, block_index, tx_hash_id, action_id) values (?, ?, ?, ?)";
             try {
                 let result = await db.query(query, [tx_index, block_index, tx_hash_id, action_id]);
-            } catch (err) {
-                console.error('Error while trying to create record in transactions table:', err);
-                util.throwError('Error while trying to create record in transactions table');
+            } catch (error) {
+                util.logError('Error while trying to create record in transactions table:', error);
             }
             await this.releaseConnection();
         }
@@ -620,8 +619,8 @@ class Database {
             let rows = await db.query(query, [tick]);
             if(rows.length > 0)
                 id = rows[0].id;
-        } catch (err) {
-            console.error('Error looking up ticker record id in index_tickers table:', err);
+        } catch (error) {
+            util.logError('Error looking up ticker record id in index_tickers table:', error);
         }
         await this.releaseConnection();
         return id;
@@ -641,8 +640,8 @@ class Database {
                 let result = await db.query(query, [tick]);
                 if(result.insertId)
                     id = result.insertId;
-            } catch (err) {
-                console.error('Error trying to create ticker record in index_tickers table:', err);
+            } catch (error) {
+                util.logError('Error trying to create ticker record in index_tickers table:', error);
             }
             await this.releaseConnection();
         }
@@ -768,8 +767,8 @@ class Database {
                     }
                 });
             }
-        } catch (err) {
-            console.error('Error looking up token info : ', err);
+        } catch (error) {
+            util.logError('Error looking up token info : ', error);
         }
         await this.releaseConnection();
         // Get token supply at the given tx_index
@@ -802,8 +801,8 @@ class Database {
                     decimals = row.decimals;
                 });
             }
-        } catch (err) {
-            console.error('Error looking up decimal precision from the issues table:', err);
+        } catch (error) {
+            util.logError('Error looking up decimal precision from the issues table:', error);
         }
         await this.releaseConnection();
         return decimals;
@@ -853,8 +852,8 @@ class Database {
             let rows = await db.query(query, args);
             if(rows.length > 0)
                 credits = rows[0].credits;
-        } catch (err) {
-            console.error('Error while trying to get list of credits:', err);
+        } catch (error) {
+            util.logError('Error while trying to get list of credits:', error);
         }
         // Get Debits 
         query = `SELECT 
@@ -869,8 +868,8 @@ class Database {
             let rows = await db.query(query, args);
             if(rows.length > 0)
                 debits = rows[0].debits;
-        } catch (err) {
-            console.error('Error while trying to get list of debits:', err);
+        } catch (error) {
+            util.logError('Error while trying to get list of debits:', error);
         }
         // TODO: Get Escrowed supply
         // query = `SELECT 
@@ -885,8 +884,8 @@ class Database {
         //     let rows = await db.query(query, args);
         //     if(rows.length > 0)
         //         escrow = rows[0].escrow;
-        // } catch (err) {
-        //     console.error('Error while trying to get list of escrowed supply:', err);
+        // } catch (error) {
+        //     util.logError('Error while trying to get list of escrowed supply:', error);
         // }
         // Determine total supply (credits - debits)
         supply = util.bcsub(credits, debits, decimals);
@@ -941,8 +940,8 @@ class Database {
                     holders[row.address] = row.credits;
                 });
             }
-        } catch (err) {
-            console.error('Error while trying to get list of holders from credits table:', err);
+        } catch (error) {
+            util.logError('Error while trying to get list of holders from credits table:', error);
         }
         // Get Debits 
         query = `SELECT 
@@ -967,8 +966,8 @@ class Database {
                        delete holders[row.address];
                 });
             }
-        } catch (err) {
-            console.error('Error while trying to get list of holders from debits table:', err);
+        } catch (error) {
+            util.logError('Error while trying to get list of holders from debits table:', error);
         }
         return holders;
     }
@@ -1010,8 +1009,8 @@ class Database {
             let rows = await db.query(query, [tick]);
             if(rows.length > 0)
                 type = rows[0].type;
-        } catch (err) {
-            console.error('Error looking up list type in lists table:', err);
+        } catch (error) {
+            util.logError('Error looking up list type in lists table:', error);
         }
         await this.releaseConnection();
         return type;
@@ -1026,8 +1025,8 @@ class Database {
             let rows = await db.query(query, [status]);
             if(rows.length > 0)
                 id = rows[0].id;
-        } catch (err) {
-            console.error('Error looking up status record id in index_statuses table:', err);
+        } catch (error) {
+            util.logError('Error looking up status record id in index_statuses table:', error);
         }
         await this.releaseConnection();
         return id;
@@ -1044,8 +1043,8 @@ class Database {
                 let result = await db.query(query, [status]);
                 if(result.insertId)
                     id = result.insertId;
-            } catch (err) {
-                console.error('Error trying to create status record in index_statuses table:', err);
+            } catch (error) {
+                util.logError('Error trying to create status record in index_statuses table:', error);
             }
             await this.releaseConnection();
         }
@@ -1112,8 +1111,8 @@ class Database {
             let rows = await db.query(query, [tx_hash_id]);
             if(rows.length > 0)
                 exists = true;
-        } catch (err) {
-            console.error('Error looking up record issues table:', err);
+        } catch (error) {
+            util.logError('Error looking up record issues table:', error);
         }
         if(exists){
             // UPDATE record
@@ -1188,8 +1187,8 @@ class Database {
         // Create or Update the record in the issues table
         try {
             let result = await db.query(query, args);
-        } catch (err) {
-            console.error('Error trying to create record in issues table:', err);
+        } catch (error){
+            util.logError('Error trying to create record in issues table:', error);
         }
         await this.releaseConnection();
     }
@@ -1238,8 +1237,8 @@ class Database {
             let rows = await db.query(query, [tick_id]);
             if(rows.length > 0)
                 exists = true;
-        } catch (err) {
-            console.error('Error looking up record tokens table:', err);
+        } catch (error){
+            util.logError('Error looking up record tokens table:', error);
         }
         if(exists){
             // UPDATE record
@@ -1302,8 +1301,8 @@ class Database {
         // Create or Update the record in the tokens table
         try {
             let result = await db.query(query, args);
-        } catch (err) {
-            console.error('Error trying to create record in tokens table:', err);
+        } catch (error){
+            util.logError('Error trying to create record in tokens table:', error);
         }
         await this.releaseConnection();
     }
@@ -1331,8 +1330,8 @@ class Database {
             let rows = await db.query(query, [address_id, tick_id, amount, action_id, event_id]);
             if(rows.length > 0)
                 exists = true;
-        } catch (err) {
-            console.error('Error looking up record in credits table:', err);
+        } catch (error){
+            util.logError('Error looking up record in credits table:', error);
         }
         if(exists){
             // UPDATE record
@@ -1354,8 +1353,8 @@ class Database {
         // Create or Update the record in the credits table
         try {
             let result = await db.query(query, args);
-        } catch (err) {
-            console.error('Error trying to create record in credits table:', err);
+        } catch (error){
+            util.logError('Error trying to create record in credits table:', error);
         }
         await this.releaseConnection();
     }
@@ -1383,8 +1382,8 @@ class Database {
             let rows = await db.query(query, [address_id, tick_id, amount, action_id, event_id]);
             if(rows.length > 0)
                 exists = true;
-        } catch (err) {
-            console.error('Error looking up record in debits table:', err);
+        } catch (error){
+            util.logError('Error looking up record in debits table:', error);
         }
         if(exists){
             // UPDATE record
@@ -1406,8 +1405,8 @@ class Database {
         // Create or Update the record in the credits table
         try {
             let result = await db.query(query, args);
-        } catch (err) {
-            console.error('Error trying to create record in debits table:', err);
+        } catch (error){
+            util.logError('Error trying to create record in debits table:', error);
         }
         await this.releaseConnection();
     }
@@ -1437,8 +1436,8 @@ class Database {
                 let rows = await db.query(query);
                 if(rows.length > 0)
                     addrs = rows;
-            } catch (err) {
-                console.error('Error looking up list of all addresses from index_addresses table:', err);
+            } catch (error){
+                util.logError('Error looking up list of all addresses from index_addresses table:', error);
             }
             await this.releaseConnection();
         }
@@ -1468,8 +1467,8 @@ class Database {
                     let rows = await db.query(query, [address_id, tick_id]);
                     if(rows.length > 0)
                         action == 'update';
-                } catch (err) {
-                    console.error('Error looking up address from balances table:', err);
+                } catch (error){
+                    util.logError('Error looking up address from balances table:', error);
                 }
                 let args = [];
                 if(balance==0)
@@ -1487,8 +1486,8 @@ class Database {
                 }
                 try {
                     let result = await db.query(query, args);
-                } catch (err) {
-                    console.error('Error while trying to ' + action + ' balance record for address=' + address + ' tick_id=' + tick_id, err);
+                } catch (error){
+                    util.logError('Error while trying to ' + action + ' balance record for address=' + address + ' tick_id=' + tick_id, error);
                 }                
             }
             // If this is a rollback, then handle detecting records in balances table which should not exist and delete them
@@ -1503,8 +1502,8 @@ class Database {
                             let rows = await db.query(query, [address_id, tick_id]);
                             if(rows.length > 0)
                                 action == 'update';
-                        } catch (err) {
-                            console.error('Error deleting balance record address=' + address + ' tick_id=' + tick_id, err);
+                        } catch (error){
+                            util.logError('Error deleting balance record address=' + address + ' tick_id=' + tick_id, error);
                         }                        
                     }
                 }
@@ -1594,13 +1593,24 @@ class Database {
                         data[row.tick_id] = util.bcadd(data[row.tick_id], row.amount, row.decimals);
                     });
                 }
-            } catch (err) {
-                console.error('Error looking up addresses ' + table + ' for ' + address + ':', err);
+            } catch (error){
+                util.logError('Error looking up addresses ' + table + ' for ' + address + ':', error);
             }
             await this.releaseConnection();
         }
         return data;
     }
+
+    // Handle getting token info (supply, price, etc) and updating the `tokens` table
+    async updateTokenInfo(tick){
+        let tick_id = await this.createTicker(tick);
+        // Lookup current token information
+        let data = await this.getTokenInfo(tick);
+        // Update the record in `tokens` table
+        if(data)
+            await this.createToken(data);
+    }
+
 
 }
 
