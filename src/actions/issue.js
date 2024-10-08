@@ -170,7 +170,7 @@ class Issue {
         // Verify LOCK fields cannot be changed once enabled/locked
         this.fieldList['LOCK'].forEach(function(name){
             let value = issue[name];
-            if(!error && !util.isNull(value) && !util.isValidLock(value))
+            if(!error && !util.isNull(value) && !util.isValidLock(tokenInfo, issue, name))
                 error = "invalid: " + name + " (locked)";
         });
 
@@ -322,8 +322,8 @@ class Issue {
             // Update balances for addresses
             await this.indexerDb.updateBalances([data['SOURCE'], data['TRANSFER_SUPPLY']]);
 
-            // // Update supply for token
-            // await this.indexerDb.updateTokenInfo(data['TICK']);
+            // Update supply for token
+            await this.indexerDb.updateTokenInfo(data['TICK']);
 
         }    
     }
