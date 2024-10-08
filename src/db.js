@@ -3,11 +3,14 @@
 const mariadb = require('mariadb');
 const fs      = require('fs');
 const util    = require('./util.js');
+const config  = require('./config.js');
 
 class Database {
 
     // Handle constructing a class instance
     constructor(host, port, dbName, user, pass) {
+        // Parse in indexer configuration
+        this.config = config.getConfig();
         // Database connection information
         this.host   = host;
         this.port   = port;
@@ -626,6 +629,9 @@ class Database {
 
     // Create records in the 'index_actions' table and return record id
     async createTicker(tick){
+        // Ignore empty tickers and return hardcoded record id
+        if(util.isNull(tick) || tick=='')
+            return 1;
         var id = await this.getTickerId(tick);
         // Handle creating record
         if(id==null){
@@ -793,7 +799,7 @@ class Database {
             if(rows.length > 0){
                 // Loop through ISSUE transactions for the given ticker
                 rows.forEach(function(row){
-                if(!isNull(row.decimals) && row.decimals > decimals)
+                if(!util.isNull(row.decimals) && row.decimals > decimals)
                     decimals = row.decimals;
                 });
             }
@@ -982,6 +988,618 @@ class Database {
             if(address!=info['OWNER'])
                 return true;
         return false;
+    }
+
+    // Validate if a list is a valid type
+    // @param {tx_hash}  string   TX_HASH to a list
+    // @param {type}     string   List Type (1=TICK, 2=ASSET, 3=ADDRESS)
+    async isValidList(tx_hash, type){
+        let list_type = this.getListType(tx_hash);
+        if(list_type==type)
+            return true;
+        return false;
+    }
+
+    // Return a list type given a tx_hash
+    async getListType(tx_hash){
+        let list_id = (util.isNumeric(tx_hash)) ? tx_HASH : (await this.createTransaction(tx_hash));
+        let type    = false;
+        let db      = await this.getConnection();
+        let query   = "SELECT type FROM lists WHERE tx_hash_id=? LIMIT 1";
+        try {
+            let rows = await db.query(query, [tick]);
+            if(rows.length > 0)
+                type = rows[0].type;
+        } catch (err) {
+            console.error('Error looking up list type in lists table:', err);
+        }
+        await this.releaseConnection();
+        return type;
+    }
+
+    // Lookup a record in the `index_statuses` table and return record id
+    async getStatusId(status){
+        let id    = null;
+        let db    = await this.getConnection();
+        let query = "SELECT id FROM index_statuses WHERE status=? LIMIT 1";
+        try {
+            let rows = await db.query(query, [status]);
+            if(rows.length > 0)
+                id = rows[0].id;
+        } catch (err) {
+            console.error('Error looking up status record id in index_statuses table:', err);
+        }
+        await this.releaseConnection();
+        return id;
+    }
+
+    // Create records in the 'index_statuses' table and return record id
+    async createStatus(status){
+        var id = await this.getStatusId(status);
+        // Handle creating record
+        if(id==null){
+            let db    = await this.getConnection();
+            let query = "INSERT INTO index_statuses (status) values (?)";
+            try {
+                let result = await db.query(query, [status]);
+                if(result.insertId)
+                    id = result.insertId;
+            } catch (err) {
+                console.error('Error trying to create status record in index_statuses table:', err);
+            }
+            await this.releaseConnection();
+        }
+        return id;
+    }
+
+    // Create/Update record in `issues` table
+    async createIssue(data){
+        // Define list of LOCK fields
+        let locks = [
+            'LOCK_MAX_SUPPLY',
+            'LOCK_MINT',
+            'LOCK_MINT_SUPPLY',
+            'LOCK_MAX_MINT',
+            'LOCK_DESCRIPTION',
+            'LOCK_RUG',
+            'LOCK_SLEEP',
+            'LOCK_CALLBACK'
+        ];
+        // Unset any LOCK fields with invalid values
+        locks.forEach(function(lock){
+            if([0,1].indexOf(data[lock]) == -1)
+                delete data[lock];
+        });
+        // Unset DECIMALS if it is outside of the acceptable range
+        if(!util.isNull(data['DECIMALS']) && (data['DECIMALS'] < this.config.MIN_TOKEN_DECIMALS || data['DECIMALS'] > this.config.MAX_TOKEN_DECIMALS))
+            delete data['DECIMALS'];
+        // Make data safe for use in SQL queries
+        let description        = String(data['DESCRIPTION']).substring(0,250); // Truncate description to 250 chars 
+        let max_supply         = data['MAX_SUPPLY'];
+        let max_mint           = data['MAX_MINT'];
+        let mint_supply        = data['MINT_SUPPLY'];
+        let mint_address_max   = data['MINT_ADDRESS_MAX'];
+        let mint_start_block   = data['MINT_START_BLOCK'];
+        let mint_stop_block    = data['MINT_STOP_BLOCK'];
+        let decimals           = data['DECIMALS'];
+        let block_index        = data['BLOCK_INDEX'];
+        let tx_index           = data['TX_INDEX'];
+        let status             = data['STATUS'];
+        let lock_max_supply    = data['LOCK_MAX_SUPPLY'];
+        let lock_mint          = data['LOCK_MINT'];
+        let lock_mint_supply   = data['LOCK_MINT_SUPPLY'];
+        let lock_max_mint      = data['LOCK_MAX_MINT'];
+        let lock_description   = data['LOCK_DESCRIPTION'];
+        let lock_rug           = data['LOCK_RUG'];
+        let lock_sleep         = data['LOCK_SLEEP'];
+        let lock_callback      = data['LOCK_CALLBACK'];
+        let callback_block     = data['CALLBACK_BLOCK'];
+        let callback_amount    = data['CALLBACK_AMOUNT'];
+        let callback_tick_id   = await this.createTicker(data['CALLBACK_TICK']);
+        let tick_id            = await this.createTicker(data['TICK']);
+        let source_id          = await this.createAddress(data['SOURCE']);
+        let transfer_id        = await this.createAddress(data['TRANSFER']);
+        let transfer_supply_id = await this.createAddress(data['TRANSFER_SUPPLY']);
+        let tx_hash_id         = await this.createTransaction(data['TX_HASH']);
+        let allow_list_id      = await this.createTransaction(data['ALLOW_LIST']);
+        let block_list_id      = await this.createTransaction(data['BLOCK_LIST']);
+        let status_id          = await this.createStatus(data['STATUS']);
+        // Check if record already exists for this ISSUE action
+        let db     = await this.getConnection();
+        let query  = "SELECT tx_index FROM issues WHERE tx_hash_id=? LIMIT 1";
+        let exists = false;
+        try {
+            let rows = await db.query(query, [tx_hash_id]);
+            if(rows.length > 0)
+                exists = true;
+        } catch (err) {
+            console.error('Error looking up record issues table:', err);
+        }
+        if(exists){
+            // UPDATE record
+            query = `UPDATE
+                        issues
+                    SET
+                        tick_id=?,
+                        max_supply=?,
+                        max_mint=?,
+                        decimals=?,
+                        description=?,
+                        mint_supply=?,
+                        transfer_id=?,
+                        transfer_supply_id=?,
+                        lock_max_supply=?,
+                        lock_mint=?,
+                        lock_mint_supply=?,
+                        lock_max_mint=?,
+                        lock_description=?,
+                        lock_rug=?,
+                        lock_sleep=?,
+                        lock_callback=?,
+                        callback_block=?,
+                        callback_tick_id=?,
+                        callback_amount=?,
+                        allow_list_id=?,
+                        block_list_id=?,
+                        mint_address_max=?,
+                        mint_start_block=?,
+                        mint_stop_block=?,
+                        source_id=?,
+                        block_index=?,
+                        tx_index=?,
+                        status_id=?
+                    WHERE 
+                        tx_hash_id=?`;
+        } else {
+            // INSERT record
+            query = `INSERT INTO issues (
+                        tick_id, 
+                        max_supply, 
+                        max_mint, 
+                        decimals, 
+                        description, 
+                        mint_supply, 
+                        transfer_id, 
+                        transfer_supply_id, 
+                        lock_max_supply, 
+                        lock_mint, 
+                        lock_mint_supply, 
+                        lock_max_mint, 
+                        lock_description, 
+                        lock_rug, 
+                        lock_sleep, 
+                        lock_callback, 
+                        callback_block, 
+                        callback_tick_id, 
+                        callback_amount, 
+                        allow_list_id, 
+                        block_list_id, 
+                        mint_address_max, 
+                        mint_start_block, 
+                        mint_stop_block, 
+                        source_id, 
+                        block_index, 
+                        tx_index, 
+                        status_id,
+                        tx_hash_id
+                    ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+        }
+        let args = [tick_id, max_supply, max_mint, decimals, description, mint_supply, transfer_id, transfer_supply_id, lock_max_supply, lock_mint, lock_mint_supply, lock_max_mint, lock_description, lock_rug, lock_sleep, lock_callback, callback_block, callback_tick_id, callback_amount, allow_list_id, block_list_id, mint_address_max, mint_start_block, mint_stop_block, source_id, block_index,  tx_index,  status_id, tx_hash_id];
+        // Create or Update the record in the issues table
+        try {
+            let result = await db.query(query, args);
+        } catch (err) {
+            console.error('Error trying to create record in issues table:', err);
+        }
+        await this.releaseConnection();
+    }
+
+    // Create/Update record in `tokens` table
+    async createToken(data){
+        // Normalize data
+        let supply             = (!util.isNull(data['SUPPLY']) &&               util.isNumeric(data['SUPPLY'])) ? data['SUPPLY'] : 0;
+        let max_supply         = (!util.isNull(data['MAX_SUPPLY']) &&           util.isNumeric(data['MAX_SUPPLY'])) ? data['MAX_SUPPLY'] : 0;
+        let max_mint           = (!util.isNull(data['MAX_MINT']) &&             util.isNumeric(data['MAX_MINT'])) ? data['MAX_MINT'] : 0;
+        let mint_supply        = (!util.isNull(data['MINT_SUPPLY']) &&          util.isNumeric(data['MINT_SUPPLY'])) ? data['MINT_SUPPLY'] : 0;
+        let mint_address_max   = (!util.isNull(data['MINT_ADDRESS_MAX']) &&     util.isNumeric(data['MINT_ADDRESS_MAX'])) ? data['MINT_ADDRESS_MAX'] : 0;
+        let mint_start_block   = (!util.isNull(data['MINT_START_BLOCK']) &&     util.isNumeric(data['MINT_START_BLOCK'])) ? data['MINT_START_BLOCK'] : 0;
+        let mint_stop_block    = (!util.isNull(data['MINT_STOP_BLOCK']) &&      util.isNumeric(data['MINT_STOP_BLOCK'])) ? data['MINT_STOP_BLOCK'] : 0;
+        let callback_amount    = (!util.isNull(data['CALLBACK_AMOUNT']) &&      util.isNumeric(data['CALLBACK_AMOUNT'])) ? data['CALLBACK_AMOUNT'] : 0;
+        let decimals           = (!util.isNull(data['DECIMALS']) &&             util.isNumeric(data['DECIMALS'])) ? parseInt(data['DECIMALS']) : 0;
+        // Force any amount values to the correct decimal precision
+        if(util.isNumeric(decimals) && decimals >= this.config.MIN_TOKEN_DECIMALS && decimals <= this.config.MAX_TOKEN_DECIMALS){
+            max_supply         = util.bcmul(max_supply, 1, decimals);
+            max_mint           = util.bcmul(max_mint, 1, decimals);
+            mint_supply        = util.bcmul(mint_supply, 1, decimals);
+            mint_address_max   = util.bcmul(mint_address_max, 1, decimals);
+            // callback_amount    = util.bcmul(callback_amount, 1, decimals);
+        }
+        let description        = data['DESCRIPTION'];
+        let block_index        = data['BLOCK_INDEX'];
+        // Force lock fields to integer values 
+        let lock_max_supply    = (data['LOCK_MAX_SUPPLY']==1) ? 1 : 0;
+        let lock_mint          = (data['LOCK_MINT']==1) ? 1 : 0;
+        let lock_max_mint      = (data['LOCK_MAX_MINT']==1) ? 1 : 0;
+        let lock_description   = (data['LOCK_DESCRIPTION']==1) ? 1 : 0;
+        let lock_rug           = (data['LOCK_RUG']==1) ? 1 : 0;
+        let lock_sleep         = (data['LOCK_SLEEP']==1) ? 1 : 0;
+        let lock_callback      = (data['LOCK_CALLBACK']==1) ? 1 : 0;
+        let callback_block     = (data['CALLBACK_BLOCK']>0) ? data['CALLBACK_BLOCK'] : 0;
+        let callback_tick_id   = await this.createTicker(data['CALLBACK_TICK']);
+        let tick_id            = await this.createTicker(data['TICK']);
+        let owner_id           = await this.createAddress(data['OWNER']);
+        let allow_list_id      = await this.createTransaction(data['ALLOW_LIST']);
+        let block_list_id      = await this.createTransaction(data['BLOCK_LIST']);
+        // Check if record already exists for this token
+        let db     = await this.getConnection();
+        let query  = "SELECT id FROM tokens WHERE tick_id=? LIMIT 1";
+        let exists = false;
+        try {
+            let rows = await db.query(query, [tick_id]);
+            if(rows.length > 0)
+                exists = true;
+        } catch (err) {
+            console.error('Error looking up record tokens table:', err);
+        }
+        if(exists){
+            // UPDATE record
+            query = `UPDATE
+                        tokens
+                    SET
+                        max_supply=?,
+                        max_mint=?,
+                        decimals=?,
+                        description=?,
+                        lock_max_supply=?,
+                        lock_mint=?,
+                        lock_max_mint=?,
+                        lock_description=?,
+                        lock_rug=?,
+                        lock_sleep=?,
+                        lock_callback=?,
+                        callback_block=?,
+                        callback_tick_id=?,
+                        callback_amount=?,
+                        allow_list_id=?,
+                        block_list_id=?,
+                        mint_address_max=?,
+                        mint_start_block=?,
+                        mint_stop_block=?,
+                        supply=?,
+                        owner_id=?,
+                        block_index=?
+                    WHERE 
+                        tick_id=?`;
+        } else {
+            // INSERT record
+            query = `INSERT INTO tokens (
+                        max_supply, 
+                        max_mint, 
+                        decimals, 
+                        description, 
+                        lock_max_supply, 
+                        lock_mint, 
+                        lock_max_mint,
+                        lock_description, 
+                        lock_rug, 
+                        lock_sleep, 
+                        lock_callback, 
+                        callback_block, 
+                        callback_tick_id, 
+                        callback_amount, 
+                        allow_list_id, 
+                        block_list_id, 
+                        mint_address_max, 
+                        mint_start_block, 
+                        mint_stop_block, 
+                        supply, 
+                        owner_id, 
+                        block_index,
+                        tick_id 
+                    ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+        }
+        let args = [max_supply, max_mint, decimals, description, lock_max_supply, lock_mint, lock_max_mint,lock_description, lock_rug, lock_sleep, lock_callback, callback_block, callback_tick_id, callback_amount, allow_list_id, block_list_id, mint_address_max, mint_start_block, mint_stop_block, supply, owner_id, block_index, tick_id];
+        // Create or Update the record in the tokens table
+        try {
+            let result = await db.query(query, args);
+        } catch (err) {
+            console.error('Error trying to create record in tokens table:', err);
+        }
+        await this.releaseConnection();
+    }
+
+    // Create/Update record in `credits` table
+    async createCredit(action, block_index, event, tick, amount, address){
+        let tick_id    = await this.createTicker(tick);
+        let address_id = await this.createAddress(address);
+        let event_id   = await this.createTransaction(event);
+        let action_id  = await this.createAction(action);
+        // Check if record already exists for this token
+        let db    = await this.getConnection();
+        let query = `SELECT
+                        event_id
+                    FROM
+                        credits
+                    WHERE
+                        address_id=? AND 
+                        tick_id=? AND
+                        amount=? AND
+                        action_id=? AND
+                        event_id=?`;
+        let exists = false;
+        try {
+            let rows = await db.query(query, [address_id, tick_id, amount, action_id, event_id]);
+            if(rows.length > 0)
+                exists = true;
+        } catch (err) {
+            console.error('Error looking up record in credits table:', err);
+        }
+        if(exists){
+            // UPDATE record
+            query = `UPDATE
+                        credits
+                    SET
+                        block_index=?
+                    WHERE 
+                        address_id=? AND 
+                        tick_id=? AND
+                        amount=? AND
+                        action_id=? AND
+                        event_id=?`;
+        } else {
+            // INSERT record
+            query = `INSERT INTO credits (block_index, address_id, tick_id, amount, action_id, event_id) values (?, ?, ?, ?, ?, ?)`;
+        }
+        let args = [block_index, address_id, tick_id, amount, action_id, event_id];
+        // Create or Update the record in the credits table
+        try {
+            let result = await db.query(query, args);
+        } catch (err) {
+            console.error('Error trying to create record in credits table:', err);
+        }
+        await this.releaseConnection();
+    }
+
+    // Create/Update record in `credits` table
+    async createDebit(action, block_index, event, tick, amount, address){
+        let tick_id    = await this.createTicker(tick);
+        let address_id = await this.createAddress(address);
+        let event_id   = await this.createTransaction(event);
+        let action_id  = await this.createAction(action);
+        // Check if record already exists for this token
+        let db    = await this.getConnection();
+        let query = `SELECT
+                        event_id
+                    FROM
+                        debits
+                    WHERE
+                        address_id=? AND 
+                        tick_id=? AND
+                        amount=? AND
+                        action_id=? AND
+                        event_id=?`;
+        let exists = false;
+        try {
+            let rows = await db.query(query, [address_id, tick_id, amount, action_id, event_id]);
+            if(rows.length > 0)
+                exists = true;
+        } catch (err) {
+            console.error('Error looking up record in debits table:', err);
+        }
+        if(exists){
+            // UPDATE record
+            query = `UPDATE
+                        debits
+                    SET
+                        block_index=?
+                    WHERE 
+                        address_id=? AND 
+                        tick_id=? AND
+                        amount=? AND
+                        action_id=? AND
+                        event_id=?`;
+        } else {
+            // INSERT record
+            query = `INSERT INTO debits (block_index, address_id, tick_id, amount, action_id, event_id) values (?, ?, ?, ?, ?, ?)`;
+        }
+        let args = [block_index, address_id, tick_id, amount, action_id, event_id];
+        // Create or Update the record in the credits table
+        try {
+            let result = await db.query(query, args);
+        } catch (err) {
+            console.error('Error trying to create record in debits table:', err);
+        }
+        await this.releaseConnection();
+    }
+
+    // Handle updating address balances (credits-debits=balance)
+    // @param {address}  boolean Full update
+    // @param {address}  string  Address string
+    // @param {address}  array   Array of address strings
+    // @param {rollback} boolean Rollback
+    async updateBalances(address, rollback){
+        let addrs = [];
+        let type  = typeof address;
+        // Handle arrays and objects
+        if(type==='object'){
+            for(let addr of address){
+                if(!util.isNull(addr) && addr!='')
+                    addrs.push(addr);
+            }
+        }
+        if(type==='string')
+            addrs.push(address);
+        // Dump full list of addresses
+        if(type==='boolean' && address===true){
+            let db    = await this.getConnection();
+            let query = "SELECT address FROM index_addresses";
+            try {
+                let rows = await db.query(query);
+                if(rows.length > 0)
+                    addrs = rows;
+            } catch (err) {
+                console.error('Error looking up list of all addresses from index_addresses table:', err);
+            }
+            await this.releaseConnection();
+        }
+        // Loop through addresses and update balance list
+        for(address of addrs)
+            await this.updateAddressBalance(address, rollback);
+    }
+
+    // Create/Update/Delete records in the 'balances' table
+    async updateAddressBalance(address, rollback){
+        let type       = typeof address;
+        let address_id = null;
+        let balance    = 0;
+        if(type==='number' && util.isNumeric(address))
+            address_id = $address;
+        if(type==='string' && !util.isNumeric(address))
+            address_id = await this.createAddress(address);
+        // Get list of address balances based on credits/debits tables
+        let balances = await this.getAddressBalances(address_id);
+        if(balances.length > 0){
+            let db    = await this.getConnection();
+            for(let tick_id in balances){
+                balance = balances[tick_id];
+                let action  = 'insert';
+                let query = "SELECT id FROM balances WHERE address_id=? AND tick_id=? LIMIT 1";
+                try {
+                    let rows = await db.query(query, [address_id, tick_id]);
+                    if(rows.length > 0)
+                        action == 'update';
+                } catch (err) {
+                    console.error('Error looking up address from balances table:', err);
+                }
+                let args = [];
+                if(balance==0)
+                    action = 'delete';
+                // print "action={$action}\n";
+                if(action=='delete'){
+                    query = "DELETE FROM balances WHERE address_id=? AND tick_id=? ";
+                    args.push(address_id, tick_id);
+                } else if(action=='update'){
+                    query = "UPDATE balances SET amount=? WHERE address_id=? AND tick_id=? ";
+                    args.push(balance, address_id, tick_id);
+                } else if(action=='insert'){
+                    query = "INSERT INTO balances (tick_id, address_id, amount) values (?, ?, ?)";
+                    args.push(tick_id, address_id, balance);
+                }
+                try {
+                    let result = await db.query(query, args);
+                } catch (err) {
+                    console.error('Error while trying to ' + action + ' balance record for address=' + address + ' tick_id=' + tick_id, err);
+                }                
+            }
+            // If this is a rollback, then handle detecting records in balances table which should not exist and delete them
+            if(rollback){
+                // Get list of address balances based on balances table
+                let old_balances = await this.getAddressTableBalances(address_id);
+                for(let tick_id of old_balances){
+                    balance = balances[tick_id];
+                    if(!util.isNull(balance) || balance==0){
+                        query = "DELETE FROM balances WHERE address_id=? AND tick_id=?";
+                        try {
+                            let rows = await db.query(query, [address_id, tick_id]);
+                            if(rows.length > 0)
+                                action == 'update';
+                        } catch (err) {
+                            console.error('Error deleting balance record address=' + address + ' tick_id=' + tick_id, err);
+                        }                        
+                    }
+                }
+            }
+            await this.releaseConnection();
+        }
+    }
+
+    // Get address balances using credits/debits table data
+    async getAddressBalances(address, tick, block_index, tx_index){
+        let type       = typeof address;
+        let address_id = null;
+        if(type==='number' && util.isNumeric(address))
+            address_id = address;
+        if(type==='string' && !util.isNumeric(address))
+            address_id = await this.createAddress(address);
+        let credits  = await this.getAddressCreditDebit('credits', address_id, null, block_index, tx_index);
+        let debits   = await this.getAddressCreditDebit('debits',  address_id, null, block_index, tx_index);
+        let decimals = []; // Assoc array to store tick/decimals
+        let balances = []; // Assoc array to store tick/balance
+        for(let tick_id in credits)
+            decimals[tick_id] = await this.getTokenDecimalPrecision(tick_id);
+        // Build out balances (credits - debits)
+        for(let tick_id in credits){
+            let credit  = credits[tick_id];
+            let debit   = (!util.isNull(debits[tick_id])) ? debits[tick_id] : 0;
+            let decimal = decimals[tick_id];
+            let balance = null;
+            try {
+                balance = util.bcsub(credit, debit, decimal);
+            } catch(err){
+                balance = util.bcadd(0, 0, decimal);
+            }
+            // Pass forward any numeric values (including 0 balance)
+            if(util.isNumeric(balance))
+                balances[tick_id] = balance;
+        }
+        return balances;
+    }
+
+    // Handle getting credits or debits records for a given address
+    async getAddressCreditDebit(table, address, action, block_index, tx_index){
+        let data       = [];
+        let type       = typeof address;
+        let address_id = null;
+        let action_id  = null;
+        if(type==='number' && util.isNumeric(address))
+            address_id = address;
+        if(type==='string' && !util.isNumeric(address))
+            address_id = await this.createAddress(address);
+        if(!util.isNull(action))
+            $action_id = await this.createAction(action);
+        let sql  = '';
+        let args = [address_id];
+        if(!util.isNull(action)){
+            sql += " AND t1.action_id=?";
+            args.push(action_id);
+        }
+        // Query using either block_index OR tx_index
+        if(!util.isNull(tx_index) && util.isNumeric(tx_index)){
+            sql += " AND t3.tx_index < ?";
+            args.push(tx_index);
+        } else if(!util.isNull(block_index) && util.isNumeric(block_index)){
+            sql += " AND t1.block_index < ?";
+            args.push(block_index);
+        }
+        if(['credits','debits'].indexOf(table) != -1){
+            let db    = await this.getConnection();
+            let query = `SELECT 
+                    t1.tick_id,
+                    t1.amount,
+                    t2.decimals
+                FROM
+                    ` + table + ` t1,
+                    tokens t2,
+                    transactions t3
+                WHERE 
+                    t2.tick_id=t1.tick_id AND
+                    t3.tx_hash_id=t1.event_id AND
+                    t1.address_id=?` + sql;
+            try {
+                let rows = await db.query(query, args);
+                if(rows.length > 0){
+                    rows.forEach(function(row){
+                        if(!data[row.tick_id])
+                            data[row.tick_id] = 0;
+                        data[row.tick_id] = util.bcadd(data[row.tick_id], row.amount, row.decimals);
+                    });
+                }
+            } catch (err) {
+                console.error('Error looking up addresses ' + table + ' for ' + address + ':', err);
+            }
+            await this.releaseConnection();
+        }
+        return data;
     }
 
 }
