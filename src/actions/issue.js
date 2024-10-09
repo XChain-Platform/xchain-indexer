@@ -279,11 +279,11 @@ class Issue {
             error = 'invalid: CALLBACK_AMOUNT (supply distributed)';
 
         // Verify ALLOW_LIST is a valid list of addresses
-        if(!error && !util.isNull(data['ALLOW_LIST']) && !util.isValidList(data['ALLOW_LIST'],3))
+        if(!error && !util.isNull(data['ALLOW_LIST']) && !this.indexerDb.isValidList(data['ALLOW_LIST'],3))
             error = 'invalid: ALLOW_LIST (bad list)';
 
         // // Verify BLOCK_LIST is a valid list of addresses
-        if(!error && !util.isNull(data['BLOCK_LIST']) && !util.isValidList(data['BLOCK_LIST'],3))
+        if(!error && !util.isNull(data['BLOCK_LIST']) && !this.indexerDb.isValidList(data['BLOCK_LIST'],3))
             error = 'invalid: BLOCK_LIST (bad list)';
 
         // Verify MINT_START_BLOCK is greater than or equal to current block
