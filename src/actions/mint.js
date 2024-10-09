@@ -28,6 +28,13 @@ class Mint {
         // Define list of known FORMATS
         this.formats = {};
         this.formats[0] = 'VERSION|TICK|AMOUNT|DESTINATION|MEMO';
+
+        // Define lists of various fields
+        this.fieldList = {};
+
+        // Define list of NUMBER fields (used to convert values from string to number)
+        this.fieldList['NUMBER'] = ['AMOUNT'];
+
     }
 
     // Handle parsing the MINT transaction
@@ -43,15 +50,22 @@ class Mint {
         if(!error && (format===null || this.formats[format] === undefined ))
             error = 'invalid: VERSION (unknown)';
 
-        // Parse PARAMS using given VERSION format and update BTNS transaction data object
+        // Parse PARAMS using given VERSION format and update transaction data object
         if(!error)
             data = util.setActionParams(data, params, this.formats[format]);
 
-        // Get information on token
-        let tokenInfo = await this.indexerDb.getTokenInfo(data['TICK'], null, data['BLOCK_INDEX'], data['TX_INDEX']);
-
         // Clone the raw data for storage in mints table
         let mint = structuredClone(data);
+
+        // Convert NUMBER fields from string value to number value so comparisons are mathematical 
+        this.fieldList['NUMBER'].forEach(function(name){
+            let value = data[name];
+            if(!util.isNull(value))
+                data[name] = util.bcnum(value);
+        });
+
+        // Get information on token
+        let tokenInfo = await this.indexerDb.getTokenInfo(data['TICK'], null, data['BLOCK_INDEX'], data['TX_INDEX']);
 
         // Verify TICK is valid before MINT
         if(tokenInfo['BLOCK_INDEX']==data['BLOCK_INDEX'] && !(await this.indexerDb.validTickerBeforeTxIndex(data['TICK'], data['TX_INDEX'])))
@@ -68,15 +82,15 @@ class Mint {
         if(data['DESTINATION'] == data['SOURCE'])
             delete data['DESTINATION'];
 
-        // Update BTNS transaction object with basic token details
+        // Update transaction object with basic token details and ensure the values are numbers and not strings
         if(tokenInfo){
-            data['SUPPLY']           = (tokenInfo) ? tokenInfo['SUPPLY'] : 0;
-            data['DECIMALS']         = (tokenInfo) ? tokenInfo['DECIMALS'] : 0;
-            data['MAX_SUPPLY']       = (tokenInfo) ? tokenInfo['MAX_SUPPLY'] : 0;
-            data['MAX_MINT']         = (tokenInfo) ? tokenInfo['MAX_MINT'] : 0;
-            data['MINT_ADDRESS_MAX'] = (tokenInfo) ? tokenInfo['MINT_ADDRESS_MAX'] : 0;
-            data['MINT_START_BLOCK'] = (tokenInfo) ? tokenInfo['MINT_START_BLOCK'] : 0;
-            data['MINT_STOP_BLOCK']  = (tokenInfo) ? tokenInfo['MINT_STOP_BLOCK'] : 0;
+            data['SUPPLY']           = (tokenInfo && !util.isNull(tokenInfo['SUPPLY']))           ? util.bcnum(tokenInfo['SUPPLY']) : 0;
+            data['DECIMALS']         = (tokenInfo && !util.isNull(tokenInfo['DECIMALS']))         ? util.bcnum(tokenInfo['DECIMALS']) : 0;
+            data['MAX_SUPPLY']       = (tokenInfo && !util.isNull(tokenInfo['MAX_SUPPLY']))       ? util.bcnum(tokenInfo['MAX_SUPPLY']) : 0;
+            data['MAX_MINT']         = (tokenInfo && !util.isNull(tokenInfo['MAX_MINT']))         ? util.bcnum(tokenInfo['MAX_MINT']) : 0;
+            data['MINT_ADDRESS_MAX'] = (tokenInfo && !util.isNull(tokenInfo['MINT_ADDRESS_MAX'])) ? util.bcnum(tokenInfo['MINT_ADDRESS_MAX']) : 0;
+            data['MINT_START_BLOCK'] = (tokenInfo && !util.isNull(tokenInfo['MINT_START_BLOCK'])) ? util.bcnum(tokenInfo['MINT_START_BLOCK']) : 0;
+            data['MINT_STOP_BLOCK']  = (tokenInfo && !util.isNull(tokenInfo['MINT_STOP_BLOCK']))  ? util.bcnum(tokenInfo['MINT_STOP_BLOCK']) : 0;
         }
 
         /*****************************************************************
