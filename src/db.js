@@ -1001,12 +1001,12 @@ class Database {
 
     // Return a list type given a tx_hash
     async getListType(tx_hash){
-        let list_id = (util.isNumeric(tx_hash)) ? tx_HASH : (await this.createTransaction(tx_hash));
-        let type    = false;
-        let db      = await this.getConnection();
-        let query   = "SELECT type FROM lists WHERE tx_hash_id=? LIMIT 1";
+        let id    = (util.isNumeric(tx_hash)) ? tx_hash : (await this.createTransaction(tx_hash));
+        let type  = false;
+        let db    = await this.getConnection();
+        let query = "SELECT type FROM lists WHERE tx_hash_id=? LIMIT 1";
         try {
-            let rows = await db.query(query, [tick]);
+            let rows = await db.query(query, [id]);
             if(rows.length > 0)
                 type = rows[0].type;
         } catch (error) {
@@ -1014,6 +1014,30 @@ class Database {
         }
         await this.releaseConnection();
         return type;
+    }
+
+    // Return a list given a tx_hash
+    async getList(tx_hash){
+        let id    = (util.isNumeric(tx_hash)) ? tx_hash : (await this.createTransaction(tx_hash));
+        let type  = await this.getListType(id);
+        let list  = [];
+        if(type){
+            let db    = await this.getConnection();
+            let query = '';
+            if(type==1)
+                query = `SELECT t.tick as item FROM list_items l, index_tickers t WHERE l.item_id=t.id AND l.list_id=?`;
+            if(type==2)
+                query = `SELECT a.address as item FROM list_items l, index_addresses a WHERE l.item_id=a.id AND l.list_id=?`;
+            try {
+                let rows = await db.query(query, [id]);
+                if(rows.length > 0)
+                    list = rows;
+            } catch (error) {
+                util.logError('Error looking up list data in lists table:', error);
+            }
+            await this.releaseConnection();
+        }
+        return list;
     }
 
     // Lookup a record in the `index_statuses` table and return record id
