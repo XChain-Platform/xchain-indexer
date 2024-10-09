@@ -21,8 +21,8 @@
  * - CALLBACK_BLOCK   - Enable `CALLBACK` command after `CALLBACK_BLOCK` 
  * - CALLBACK_TICK    - `TICK` `token` users get when `CALLBACK` command is used
  * - CALLBACK_AMOUNT  - `TICK` `token` amount that users get when `CALLBACK` command is used
- * - ALLOW_LIST       - `TX_HASH` of a BTNS LIST of addresses allowed to interact with this token
- * - BLOCK_LIST       - `TX_HASH` of a BTNS LIST of addresses NOT allowed to interact with this token
+ * - ALLOW_LIST       - `TX_HASH` of a LIST of addresses allowed to interact with this token
+ * - BLOCK_LIST       - `TX_HASH` of a LIST of addresses NOT allowed to interact with this token
  * - MINT_ADDRESS_MAX - Maximum amount of supply any address can mint via `MINT` transactions
  * - MINT_START_BLOCK - `BLOCK_INDEX` when `MINT` transactions are allowed (begin mint)
  * - MINT_STOP_BLOCK` - `BLOCK_INDEX` when `MINT` transactions are NOT allowed (end mint)
@@ -57,8 +57,13 @@ class Issue {
         this.formats[3] = 'VERSION|TICK|LOCK_MAX_SUPPLY|LOCK_MAX_MINT|LOCK_DESCRIPTION|LOCK_RUG|LOCK_SLEEP|LOCK_CALLBACK|LOCK_MINT|LOCK_MINT_SUPPLY';
         this.formats[4] = 'VERSION|TICK|CALLBACK_BLOCK|CALLBACK_TICK|CALLBACK_AMOUNT';
 
-        // Define list of AMOUNT and LOCK fields (used in validations)
+        // Define lists of various fields
         this.fieldList = {};
+
+        // Define list of NUMBER fields (used to convert values from string to number)
+        this.fieldList['NUMBER'] = ['MAX_SUPPLY', 'MAX_MINT', 'DECIMALS', 'MINT_SUPPLY', 'TRANSFER_SUPPLY', 'CALLBACK_BLOCK', 'CALLBACK_AMOUNT', 'MINT_ADDRESS_MAX', 'MINT_START_BLOCK', 'MINT_STOP_BLOCK'];
+
+        // Define list of AMOUNT, LOCK fields (used in validations)
         this.fieldList['AMOUNT'] = ['MAX_SUPPLY', 'MAX_MINT', 'MINT_SUPPLY', 'CALLBACK_AMOUNT', 'MINT_ADDRESS_MAX', 'MINT_START_BLOCK', 'MINT_STOP_BLOCK'];
         this.fieldList['LOCK']   = ['LOCK_MAX_SUPPLY', 'LOCK_MINT', 'LOCK_MINT_SUPPLY', 'LOCK_MAX_MINT', 'LOCK_DESCRIPTION', 'LOCK_RUG', 'LOCK_SLEEP', 'LOCK_CALLBACK'];
     }
@@ -77,13 +82,23 @@ class Issue {
         if(!error && (format===null || this.formats[format] === undefined ))
             error = 'invalid: VERSION (unknown)';
 
-        // Parse PARAMS using given VERSION format and update BTNS transaction data object
+        // Parse PARAMS using given VERSION format and update transaction data object
         if(!error)
             data = util.setActionParams(data, params, this.formats[format]);
 
         // TODO: Decode any base64 tickers
         // if(util.isBase64(data['TICK']))
         //     $data['TICK'] = util.base64Decode(data['TICK']);
+
+        // Clone the raw data for storage in issues table
+        let issue = structuredClone(data);
+
+        // Convert NUMBER fields from string value to number value so comparisons are mathematical 
+        this.fieldList['NUMBER'].forEach(function(name){
+            let value = data[name];
+            if(!util.isNull(value))
+                data[name] = util.bcnum(value);
+        });
 
         /*****************************************************************
          * TICK Validations
@@ -115,9 +130,6 @@ class Issue {
         // Get information on token
         let tokenInfo     = await this.indexerDb.getTokenInfo(data['TICK'], null, data['BLOCK_INDEX'], data['TX_INDEX']);
         let isDistributed = await this.indexerDb.isDistributed(data['TICK'], data['BLOCK_INDEX'], data['TX_INDEX']);
-
-        // Clone the raw data for storage in issues table
-        let issue = structuredClone(data);
 
         // Populate empty PARAMS with current setting
         if(tokenInfo){
