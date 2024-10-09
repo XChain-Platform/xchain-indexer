@@ -5,3 +5,6 @@ CREATE TABLE index_memos (
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
 CREATE INDEX memo on index_memos (memo);
+
+-- Create record for blank/empty memos
+INSERT INTO index_memos (id,memo) values (1,'');
