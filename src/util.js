@@ -87,9 +87,9 @@ module.exports = {
         return value === +value && value === (value|0);
     },
 
-    // Determine if value is null or undefined
+    // Determine if value is null or undefined or empty
     isNull: function(value){
-        return (value === null || value === undefined);
+        return (value === null || value === undefined || value==='');
     },
 
     // Handle determining if first param is TICK or VERSION
