@@ -14,7 +14,7 @@ const util    = require('./util.js');
 // const dividend  = require('./actions/dividend.js');
 const issue     = require('./actions/issue.js');
 // const list      = require('./actions/list.js');
-// const mint      = require('./actions/mint.js');
+const mint      = require('./actions/mint.js');
 // const rug       = require('./actions/rug.js');
 // const sleep     = require('./actions/sleep.js');
 // const send      = require('./actions/send.js');
@@ -44,7 +44,7 @@ class Actions {
         // this.actionDividend  = new dividend(this.config, this.decoderDb, this.indexerDb);
         this.actionIssue     = new issue(this.config, this.decoderDb, this.indexerDb);
         // this.actionList      = new list(this.config, this.decoderDb, this.indexerDb);
-        // this.actionMint      = new mint(this.config, this.decoderDb, this.indexerDb);
+        this.actionMint      = new mint(this.config, this.decoderDb, this.indexerDb);
         // this.actionRug       = new rug(this.config, this.decoderDb, this.indexerDb);
         // this.actionSleep     = new sleep(this.config, this.decoderDb, this.indexerDb);
         // this.actionSend      = new send(this.config, this.decoderDb, this.indexerDb);
@@ -98,7 +98,7 @@ class Actions {
         let data = {};
         data['ACTION']      = action;      // Action (ISSUE, MINT, SEND, etc)
         data['BLOCK_INDEX'] = block_index; // Block index 
-        data['SOURCE']      = source;      // Source/Broadcasting address
+        data['SOURCE']      = source;      // Source address
         data['TX_HASH']     = tx_hash;     // Transaction Hash
         data['TX_DATA']     = tx_data;     // Raw tx data string
 
@@ -118,7 +118,7 @@ class Actions {
         // Get tx_index of record using tx_hash
         data['TX_INDEX'] = await this.indexerDb.getTxIndex(data['TX_HASH']);
 
-        // Process the specific BTNS ACTION commands
+        // Process the specific ACTION commands
         await this.processAction(action, params, data, error);
     }
 
@@ -133,7 +133,7 @@ class Actions {
         // if(action=='DIVIDEND')  await this.actionDividend.parse(params, data, error);
         if(action=='ISSUE')     await this.actionIssue.parse(params, data, error);
         // if(action=='LIST')      await this.actionList.parse(params, data, error);
-        // if(action=='MINT')      await this.actionMint.parse(params, data, error);
+        if(action=='MINT')      await this.actionMint.parse(params, data, error);
         // if(action=='RUG')       await this.actionRug.parse(params, data, error);
         // if(action=='SLEEP')     await this.actionSleep.parse(params, data, error);
         // if(action=='SEND')      await this.actionSend.parse(params, data, error);

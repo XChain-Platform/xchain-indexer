@@ -1238,7 +1238,7 @@ class Database {
             if(rows.length > 0)
                 exists = true;
         } catch (error){
-            util.logError('Error looking up record tokens table:', error);
+            util.logError('Error looking up record in tokens table:', error);
         }
         if(exists){
             // UPDATE record
@@ -1466,14 +1466,13 @@ class Database {
                 try {
                     let rows = await db.query(query, [address_id, tick_id]);
                     if(rows.length > 0)
-                        action == 'update';
+                        action = 'update';
                 } catch (error){
                     util.logError('Error looking up address from balances table:', error);
                 }
                 let args = [];
                 if(balance==0)
                     action = 'delete';
-                // print "action={$action}\n";
                 if(action=='delete'){
                     query = "DELETE FROM balances WHERE address_id=? AND tick_id=? ";
                     args.push(address_id, tick_id);
@@ -1611,6 +1610,159 @@ class Database {
             await this.createToken(data);
     }
 
+    // Get tx_index of the first valid ISSUE action for a given ticker
+    async getFirstIssueTxIndex(tick){
+        let tick_id  = await this.createTicker($tick);
+        let tx_index = false;
+        let db       = await this.getConnection();
+        let query    = `SELECT 
+                            tx_index 
+                        FROM 
+                            issues i,
+                            index_statuses s
+                        WHERE 
+                            i.tick_id=? AND 
+                            s.id=i.status_id AND
+                            s.status='valid'
+                        ORDER BY tx_index ASC LIMIT 1`;
+        try {
+            let rows = await db.query(query, [tick_id]);
+            if(rows.length > 0)
+                tx_index = rows[0].tx_index;
+        } catch (error) {
+            util.logError('Error looking up tx_index of first valid issue:', error);
+        }
+        await this.releaseConnection();
+        return tx_index;
+    }
+
+    // Validate if a ticker exists before before a given tx_index
+    async validTickerBeforeTxIndex(tick, tx_index){
+        let issue_index = await this.getFirstIssueTxIndex(tick);
+        if(issue_index < tx_index)
+            return true;
+        return false;
+    }
+
+    // Check if an address is allowed to perform an action on a token (ALLOW/BLOCK list)
+    async isActionAllowed(tick, address){
+        let info = await this.getTokenInfo(tick);
+        let list = null;
+        // False if we have an ALLOW_LIST and user is NOT on it
+        if(info['ALLOW_LIST']){
+            list = await this.getList(info['ALLOW_LIST']);
+            if(!list.includes(address))
+                return false;
+        }
+        // False if we have an BLOCK_LIST and user IS on it
+        if(info['BLOCK_LIST']){
+            list = await this.getList(info['BLOCK_LIST']);
+            if(list.includes(address))
+                return false;
+        }
+        return true;
+    }
+
+    // Get total amount of credit or debit records for a given address, ticker, and action
+    async getActionCreditDebitAmount(table, action, tick, address, tx_index){
+        let total   = 0;
+        let tick_id = await this.createTicker(tick);
+        let addr_id = await this.createAddress(address);
+        let data    = await this.getAddressCreditDebit(table, addr_id, action, null, tx_index);
+        if(data[tick_id])
+            total = data[tick_id];
+        return total;
+    }
+
+    // Lookup a record in the `index_memos` table and return record id
+    async getMemoId(memo){
+        let id    = null;
+        let db    = await this.getConnection();
+        let query = "SELECT id FROM index_memos WHERE memo=? LIMIT 1";
+        try {
+            let rows = await db.query(query, [memo]);
+            if(rows.length > 0)
+                id = rows[0].id;
+        } catch (error) {
+            util.logError('Error looking up ticker record id in index_memos table:', error);
+        }
+        await this.releaseConnection();
+        return id;
+    }
+
+    // Create records in the 'index_memos' table and return record id
+    async createMemo(memo){
+        // Ignore empty memos and return hardcoded record id
+        if(util.isNull(memo) || memo=='')
+            return 1;
+        var id = await this.getMemoId(memo);
+        // Handle creating record
+        if(id==null){
+            let db    = await this.getConnection();
+            let query = "INSERT INTO index_memos (memo) values (?)";
+            try {
+                let result = await db.query(query, [memo]);
+                if(result.insertId)
+                    id = result.insertId;
+            } catch (error) {
+                util.logError('Error trying to create memo record in index_memos table:', error);
+            }
+            await this.releaseConnection();
+        }
+        return id;
+    }
+
+    // Create/Update record in `mints` table
+    async createMint(data){
+        // Normalize data
+        let tick_id        = await this.createTicker(data['TICK']);
+        let source_id      = await this.createAddress(data['SOURCE']);
+        let destination_id = await this.createAddress(data['DESTINATION']);
+        let tx_hash_id     = await this.createTransaction(data['TX_HASH']);
+        let memo_id        = await this.createMemo(data['MEMO']);
+        let status_id      = await this.createStatus(data['STATUS']);
+        let tx_index       = data['TX_INDEX'];
+        let amount         = data['AMOUNT'];
+        let block_index    = data['BLOCK_INDEX'];
+        // Check if record already exists for this mint
+        let db     = await this.getConnection();
+        let query  = "SELECT tx_index FROM mints WHERE tx_hash_id=? LIMIT 1";
+        let exists = false;
+        try {
+            let rows = await db.query(query, [tx_hash_id]);
+            if(rows.length > 0)
+                exists = true;
+        } catch (error){
+            util.logError('Error looking up record in mints table:', error);
+        }
+        if(exists){
+            // UPDATE record
+            query = `UPDATE
+                        mints
+                    SET
+                        tx_index=?,
+                        tick_id=?,
+                        amount=?,
+                        source_id=?,
+                        destination_id=?,
+                        block_index=?,
+                        memo_id=?,
+                        status_id=?
+                    WHERE 
+                        tx_hash_id=?`;
+        } else {
+            // INSERT record
+            query = `INSERT INTO mints (tx_index, tick_id, amount, source_id, destination_id, block_index, memo_id, status_id, tx_hash_id) values (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+        }
+        let args = [tx_index, tick_id, amount, source_id, destination_id, block_index, memo_id, status_id, tx_hash_id];
+        // Create or Update the record in the mints table
+        try {
+            let result = await db.query(query, args);
+        } catch (error){
+            util.logError('Error trying to create record in mints table:', error);
+        }
+        await this.releaseConnection();
+    }
 
 }
 
