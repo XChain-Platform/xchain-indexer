@@ -136,13 +136,20 @@ module.exports = {
         return data;
     },
 
+    // Handle converting a string number to an integer or float
+    bcnum: function(num){
+        if(String(num).indexOf('.')!=-1)
+            return parseFloat(num);
+        else
+            return parseInt(num);
+    },
+
     // Handle subtracting 2 big numbers
     bcsub: function(numA, numB, decimals){
-        // Normalize the data
         let a = (!this.isNull(numA)) ? numA : 0;
         let b = (!this.isNull(numB)) ? numB : 0;
         let d = (!this.isNull(decimals)) ? parseInt(decimals) : 0;
-        return mathjs.format(mathjs.subtract(mathjs.bignumber(a),mathjs.bignumber(b)),{notation: 'fixed', precision: d});
+        return this.bcnum(mathjs.format(mathjs.subtract(mathjs.bignumber(a),mathjs.bignumber(b)),{notation: 'fixed', precision: d}));
     },
 
     // Handle adding 2 big numbers
@@ -150,7 +157,7 @@ module.exports = {
         let a = (!this.isNull(numA)) ? numA : 0;
         let b = (!this.isNull(numB)) ? numB : 0;
         let d = (!this.isNull(decimals)) ? parseInt(decimals) : 0;
-        return mathjs.format(mathjs.add(mathjs.bignumber(a),mathjs.bignumber(b)),{notation: 'fixed', precision: d});
+        return this.bcnum(mathjs.format(mathjs.add(mathjs.bignumber(a),mathjs.bignumber(b)),{notation: 'fixed', precision: d}));
     },
 
     // Handle multiplying 2 big numbers
@@ -158,7 +165,7 @@ module.exports = {
         let a = (!this.isNull(numA)) ? numA : 0;
         let b = (!this.isNull(numB)) ? numB : 0;
         let d = (!this.isNull(decimals)) ? parseInt(decimals) : 0;
-        return mathjs.format(mathjs.multiply(mathjs.bignumber(a),mathjs.bignumber(b)),{notation: 'fixed', precision: d});
+        return this.bcnum(mathjs.format(mathjs.multiply(mathjs.bignumber(a),mathjs.bignumber(b)),{notation: 'fixed', precision: d}));
     },
 
     // Handle validating amount format
