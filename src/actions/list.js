@@ -45,7 +45,7 @@ class List {
         this.fieldList['NUMBER'] = ['TYPE', 'EDIT'];
     }
 
-    // Handle parsing the MINT transaction
+    // Handle parsing the LIST transaction
     async parse(params, data, error){
         /*****************************************************************
          * DEBUGGING - Force params
