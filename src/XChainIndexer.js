@@ -146,7 +146,7 @@ class XChainIndexer {
                 await this.indexerDb.createBlock(lastIndexerBlock);
 
                 // Do a sanity check to verify that token supplys match data in credits/debits/balances tables 
-                // await this.indexerDb.sanityCheck(lastIndexerBlock);
+                await this.indexerDb.sanityCheck(lastIndexerBlock);
 
                 // Log the debug time
                 util.logTimer(debugTimer, 'Block Parsed');

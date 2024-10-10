@@ -887,8 +887,27 @@ class Database {
         // } catch (error) {
         //     util.logError('Error while trying to get list of escrowed supply:', error);
         // }
+        await this.releaseConnection();
         // Determine total supply (credits - debits)
         supply = util.bcsub(credits, debits, decimals);
+        return supply;
+    }
+
+    // Get token supply for a given ticker from balances table
+    async getTokenSupplyBalance(tick){
+        let supply   = 0;
+        let tick_id  = await this.createTicker(tick);
+        let decimals = await this.getTokenDecimalPrecision(tick_id);
+        let db       = await this.getConnection();
+        let query = `SELECT CAST(SUM(amount) AS DECIMAL(60, ` + decimals + `)) as supply FROM balances WHERE tick_id=? LIMIT 1`;
+        try {
+            let rows = await db.query(query, [tick_id]);
+            if(rows.length > 0)
+                supply = rows[0].supply;
+        } catch (error) {
+            util.logError('Error looking up token supply from balances table:', error);
+        }
+        await this.releaseConnection();
         return supply;
     }
 
@@ -969,6 +988,7 @@ class Database {
         } catch (error) {
             util.logError('Error while trying to get list of holders from debits table:', error);
         }
+        await this.releaseConnection();
         return holders;
     }
 
@@ -1867,6 +1887,7 @@ class Database {
                 util.logError('Error trying to create record in list_edits table:', error);
             }
         }
+        await this.releaseConnection();
     }
 
     // Create record in `list_items` table
@@ -1898,6 +1919,62 @@ class Database {
                 util.logError('Error trying to create record in list_items table:', error);
             }
         }
+        await this.releaseConnection();
+    }
+
+    // Validate that token supplys match credits/debits/balances information
+    async sanityCheck(block_index){
+        // Ignore any calls without a block index
+        if(util.isNull(block_index))
+            return;
+        let tickers = {};
+        let supply  = {}; // Assoc array of supplys
+        let db      = await this.getConnection();
+        // Get list of tickers and supply from credits/debits/tokens tables using block_index
+        let query   = `SELECT
+                        DISTINCT(x.tick_id),
+                        t2.tick,
+                        t1.supply 
+                    FROM 
+                        (
+                            SELECT tick_id FROM credits WHERE block_index=? UNION
+                            SELECT tick_id FROM debits  WHERE block_index=?
+                        ) as x,
+                        tokens t1,
+                        index_tickers t2
+                    WHERE
+                        t1.tick_id=x.tick_id AND
+                        t2.id=x.tick_id
+                    ORDER BY t2.tick ASC`;
+        try {
+            let rows = await db.query(query, [block_index, block_index]);
+            if(rows.length >0){
+                rows.forEach(function(row){
+                    // Add ticker and supply info to assoc arrays
+                    tickers[row.tick] = row.tick_id;
+                    supply[row.tick]  = (!util.isNull(row.supply)) ? row.supply : "0";
+                });
+            }
+        } catch (error){
+            util.logError('Error looking up credits/debits in block:', error);
+        }
+        // Loop through the tickers and validate token supply match credits/debits/balances info
+        for(let tick in tickers){
+            let tick_id = tickers[tick];
+            let supplyA = util.bcnum(supply[tick]);                            // Supply from tokens table
+            let supplyB = util.bcnum(await this.getTokenSupplyBalance(tick)); // Supply from balances table
+            let supplyC = util.bcnum(await this.getTokenSupply(tick));        // Supply from credits/debits tables
+            // DEBUG
+            // console.log("Tick,       tick_id =", tick, tick_id);
+            // console.log("token        supply =", supplyA);
+            // console.log("balances     supply =", supplyB);
+            // console.log("credit/debit supply =", supplyC);
+            if(supplyA!=supplyB)
+                util.throwError("SanityError: balances table supply does not match token supply : " + tick + " (" + supplyB + " != " + supplyA + ")");
+            if(supplyA!=supplyC)
+                util.throwError("SanityError: credits/debits table supply does not match token supply : " + tick + " (" + supplyC + " != " + supplyA + ")");
+        }
+        await this.releaseConnection();
     }
 
 }
