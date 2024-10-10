@@ -106,6 +106,9 @@ class XChainIndexer {
             // Log block parsing start
             var startBlock = (lastIndexerBlock) ? (lastIndexerBlock+1) : firstDecoderBlock;
 
+            // DEBUG
+            // startBlock = 794376;
+
             // Print out status message about where parsing is resuming
             if(startBlock < lastDecoderBlock)
                 console.log('Resuming block parsing at block ' + startBlock + '...');
@@ -114,6 +117,10 @@ class XChainIndexer {
 
             // Loop through blocks until indexer has parsed lastDecoderBlock
             while( (!lastIndexerBlock || lastIndexerBlock < lastDecoderBlock )){
+
+                // If we have no blocks from the decoder stop parsing loop
+                if(util.isNull(lastDecoderBlock))
+                    break;
 
                 // Start tracking time to parse block
                 var debugTimer = util.startTimer();
@@ -124,6 +131,9 @@ class XChainIndexer {
 
                 // Increase lastIndexerBlock to next block
                 lastIndexerBlock++;
+
+                // DEBUG
+                // lastIndexerBlock = startBlock;
 
                 // Get a list of any transactions in this block from the decoder database
                 let blockTransactions = await this.decoderDb.getBlockData(lastIndexerBlock);
@@ -136,8 +146,7 @@ class XChainIndexer {
                 await this.indexerDb.createBlock(lastIndexerBlock);
 
                 // Do a sanity check to verify that token supplys match data in credits/debits/balances tables 
-                // await util.sanityCheck(lastIndexerBlock);
-                // await util.sleep(3500);
+                // await this.indexerDb.sanityCheck(lastIndexerBlock);
 
                 // Log the debug time
                 util.logTimer(debugTimer, 'Block Parsed');
