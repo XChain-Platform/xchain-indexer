@@ -5,6 +5,7 @@ const changes = require('./protocol_changes.js');
 const util    = require('./util.js');
 
 /* XChain Indexer Actions */
+const address   = require('./actions/address.js');
 // const airdrop   = require('./actions/airdrop.js');
 // const batch     = require('./actions/batch.js');
 // const bet       = require('./actions/bet.js');
@@ -35,6 +36,7 @@ class Actions {
         this.protocolChanges = new changes(this.decoderDb, this.indexerDb);
 
         // Create action instances and pass database connections
+        this.actionAddress      = new address(this.config, this.decoderDb, this.indexerDb);
         // this.actionAirdrop   = new airdrop(this.config, this.decoderDb, this.indexerDb);
         // this.actionBatch     = new batch(this.config, this.decoderDb, this.indexerDb);
         // this.actionBet       = new bet(this.config, this.decoderDb, this.indexerDb);
@@ -124,6 +126,7 @@ class Actions {
 
     // Generalized function to handle parsing and processing a specific ACTION
     async processAction(action, params, data, error){
+        if(action=='ADDRESS')   await this.actionAddress.parse(params, data, error);
         // if(action=='AIRDROP')   await this.actionAirdrop.parse(params, data, error);
         // if(action=='BATCH')     await this.actionBatch.parse(params, data, error);
         // if(action=='BET')       await this.actionBet.parse(params, data, error);

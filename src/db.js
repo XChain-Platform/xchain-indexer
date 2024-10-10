@@ -1961,7 +1961,7 @@ class Database {
         // Loop through the tickers and validate token supply match credits/debits/balances info
         for(let tick in tickers){
             let tick_id = tickers[tick];
-            let supplyA = util.bcnum(supply[tick]);                            // Supply from tokens table
+            let supplyA = util.bcnum(supply[tick]);                           // Supply from tokens table
             let supplyB = util.bcnum(await this.getTokenSupplyBalance(tick)); // Supply from balances table
             let supplyC = util.bcnum(await this.getTokenSupply(tick));        // Supply from credits/debits tables
             // DEBUG
@@ -1973,6 +1973,49 @@ class Database {
                 util.throwError("SanityError: balances table supply does not match token supply : " + tick + " (" + supplyB + " != " + supplyA + ")");
             if(supplyA!=supplyC)
                 util.throwError("SanityError: credits/debits table supply does not match token supply : " + tick + " (" + supplyC + " != " + supplyA + ")");
+        }
+        await this.releaseConnection();
+    }
+
+    // Create record in `addresses` table
+    async createAddressOption(data){
+        let source_id      = await this.createAddress(data['SOURCE']);
+        let tx_hash_id     = await this.createTransaction(data['TX_HASH']);
+        let status_id      = await this.createStatus(data['STATUS']);
+        let block_index    = data['BLOCK_INDEX'];
+        let tx_index       = data['TX_INDEX'];
+        let fee_preference = data['FEE_PREFERENCE'];
+        let require_memo   = data['REQUIRE_MEMO'];
+        // Check if record already exists for this address
+        let db     = await this.getConnection();
+        let query  = "SELECT tx_index FROM addresses WHERE tx_hash_id=? LIMIT 1";
+        let exists = false;
+        try {
+            let rows = await db.query(query, tx_hash_id);
+            if(rows.length > 0)
+                exists = true;
+        } catch (error){
+            util.logError('Error looking up record in addresses table:', error);
+        }
+        if(exists){
+            query = `UPDATE
+                        addresses
+                    SET
+                        tx_index=?,
+                        source_id=?,
+                        block_index=?,
+                        fee_preference=?,
+                        require_memo=?,
+                        status_id=?
+                    WHERE 
+                        tx_hash_id=?`;
+        } else {
+            query = "INSERT INTO addresses (tx_index, source_id, block_index, fee_preference, require_memo, status_id, tx_hash_id) values (?, ?, ?, ?, ?, ?, ?)";
+        }
+        try {
+            let rows = await db.query(query, [tx_index, source_id, block_index, fee_preference, require_memo, status_id, tx_hash_id]);
+        } catch (error){
+            util.logError('Error trying to create record in addresses table:', error);
         }
         await this.releaseConnection();
     }
