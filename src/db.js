@@ -1040,6 +1040,55 @@ class Database {
         return list;
     }
 
+    // Create record in `lists` table
+    async createList(data){
+        let source_id       = await this.createAddress(data['SOURCE']);
+        let tx_hash_id      = await this.createTransaction(data['TX_HASH']);
+        let list_tx_hash_id = await this.createTransaction(data['LIST_TX_HASH']);
+        let status_id       = await this.createStatus(data['STATUS']);
+        let tx_index        = data['TX_INDEX'];
+        let list_type       = data['TYPE'];
+        let list_edit       = data['EDIT'];
+        let block_index     = data['BLOCK_INDEX'];
+        // Check if record already exists for this token
+        let db     = await this.getConnection();
+        let query  = "SELECT tx_index FROM lists WHERE tx_hash_id=? LIMIT 1";
+        let exists = false;
+        try {
+            let rows = await db.query(query, [tx_hash_id]);
+            if(rows.length > 0)
+                exists = true;
+        } catch (error){
+            util.logError('Error looking up record in lists table:', error);
+        }
+        if(exists){
+            // UPDATE record
+            query = `UPDATE
+                            lists
+                        SET
+                            tx_index=?,
+                            block_index=?,
+                            type=?,
+                            edit=?,
+                            source_id=?,
+                            list_tx_hash_id=?,
+                            status_id=?
+                        WHERE 
+                            tx_hash_id=?`;
+        } else {
+            // INSERT record
+            query = `INSERT INTO lists (tx_index, block_index, type, edit, source_id, list_tx_hash_id, status_id, tx_hash_id) values (?, ?, ?, ?, ?, ?, ?, ?)`;
+        }
+        let args = [tx_index, block_index, list_type, list_edit, source_id, list_tx_hash_id, status_id, tx_hash_id];
+        // Create or Update the record in the tokens table
+        try {
+            let result = await db.query(query, args);
+        } catch (error){
+            util.logError('Error trying to create record in lists table:', error);
+        }
+        await this.releaseConnection();
+    }
+
     // Lookup a record in the `index_statuses` table and return record id
     async getStatusId(status){
         let id    = null;
@@ -1476,7 +1525,7 @@ class Database {
         let address_id = null;
         let balance    = 0;
         if(type==='number' && util.isNumeric(address))
-            address_id = $address;
+            address_id = address;
         if(type==='string' && !util.isNumeric(address))
             address_id = await this.createAddress(address);
         // Get list of address balances based on credits/debits tables
@@ -1578,7 +1627,7 @@ class Database {
         if(type==='string' && !util.isNumeric(address))
             address_id = await this.createAddress(address);
         if(!util.isNull(action))
-            $action_id = await this.createAction(action);
+            action_id = await this.createAction(action);
         let sql  = '';
         let args = [address_id];
         if(!util.isNull(action)){
@@ -1636,7 +1685,7 @@ class Database {
 
     // Get tx_index of the first valid ISSUE action for a given ticker
     async getFirstIssueTxIndex(tick){
-        let tick_id  = await this.createTicker($tick);
+        let tick_id  = await this.createTicker(tick);
         let tx_index = false;
         let db       = await this.getConnection();
         let query    = `SELECT 
@@ -1786,6 +1835,69 @@ class Database {
             util.logError('Error trying to create record in mints table:', error);
         }
         await this.releaseConnection();
+    }
+
+    // Create record in `list_edits` table
+    async createListEdit(data, item, status){
+        let list_id   = await this.createTransaction(data['TX_HASH']);
+        let status_id = await this.createStatus(status);
+        let item_id   = null;
+        if(data['TYPE']==1)
+            item_id = await this.createTicker(item);
+        if(data['TYPE']==2)
+            item_id = await this.createAddress(item);
+        // Check if record already exists for this list
+        let db     = await this.getConnection();
+        let query  = "SELECT item_id FROM list_edits WHERE list_id=? AND item_id=? AND status_id=? LIMIT 1";
+        let args   = [list_id, item_id, status_id];
+        let exists = false;
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0)
+                exists = true;
+        } catch (error){
+            util.logError('Error looking up record in list_edits table:', error);
+        }
+        // INSERT record
+        if(!exists){
+            query = "INSERT INTO list_edits (list_id, item_id, status_id) values (?, ?, ?)";
+            try {
+                let rows = await db.query(query, args);
+            } catch (error){
+                util.logError('Error trying to create record in list_edits table:', error);
+            }
+        }
+    }
+
+    // Create record in `list_items` table
+    async createListItem(data, item){
+        let list_id   = await this.createTransaction(data['TX_HASH']);
+        let item_id   = null;
+        if(data['TYPE']==1)
+            item_id = await this.createTicker(item);
+        if(data['TYPE']==2)
+            item_id = await this.createAddress(item);
+        // Check if record already exists for this list
+        let db     = await this.getConnection();
+        let query  = "SELECT item_id FROM list_items WHERE list_id=? AND item_id=? LIMIT 1";
+        let args   = [list_id, item_id];
+        let exists = false;
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0)
+                exists = true;
+        } catch (error){
+            util.logError('Error looking up record in list_items table:', error);
+        }
+        // INSERT record
+        if(!exists){
+            query = "INSERT INTO list_items (list_id, item_id) values (?, ?)";
+            try {
+                let rows = await db.query(query, args);
+            } catch (error){
+                util.logError('Error trying to create record in list_items table:', error);
+            }
+        }
     }
 
 }

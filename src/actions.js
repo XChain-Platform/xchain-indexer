@@ -13,7 +13,7 @@ const util    = require('./util.js');
 // const dispenser = require('./actions/dispenser.js');
 // const dividend  = require('./actions/dividend.js');
 const issue     = require('./actions/issue.js');
-// const list      = require('./actions/list.js');
+const list      = require('./actions/list.js');
 const mint      = require('./actions/mint.js');
 // const rug       = require('./actions/rug.js');
 // const sleep     = require('./actions/sleep.js');
@@ -43,7 +43,7 @@ class Actions {
         // this.actionDispenser = new dispenser(this.config, this.decoderDb, this.indexerDb);
         // this.actionDividend  = new dividend(this.config, this.decoderDb, this.indexerDb);
         this.actionIssue     = new issue(this.config, this.decoderDb, this.indexerDb);
-        // this.actionList      = new list(this.config, this.decoderDb, this.indexerDb);
+        this.actionList      = new list(this.config, this.decoderDb, this.indexerDb);
         this.actionMint      = new mint(this.config, this.decoderDb, this.indexerDb);
         // this.actionRug       = new rug(this.config, this.decoderDb, this.indexerDb);
         // this.actionSleep     = new sleep(this.config, this.decoderDb, this.indexerDb);
@@ -132,7 +132,7 @@ class Actions {
         // if(action=='DISPENSER') await this.actionDispenser.parse(params, data, error);
         // if(action=='DIVIDEND')  await this.actionDividend.parse(params, data, error);
         if(action=='ISSUE')     await this.actionIssue.parse(params, data, error);
-        // if(action=='LIST')      await this.actionList.parse(params, data, error);
+        if(action=='LIST')      await this.actionList.parse(params, data, error);
         if(action=='MINT')      await this.actionMint.parse(params, data, error);
         // if(action=='RUG')       await this.actionRug.parse(params, data, error);
         // if(action=='SLEEP')     await this.actionSleep.parse(params, data, error);
