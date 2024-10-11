@@ -28,7 +28,7 @@ class Actions {
         this.decoderDb = decoderDb;
         this.indexerDb = indexerDb;
 
-        // Setup alias to the utility class
+        // Setup alias to the utility class instance
         this.util = util;
 
         // Parse in indexer configuration
@@ -117,10 +117,7 @@ class Actions {
             error = 'invalid: ACTION is not yet activated';
 
         // Create a record of this transaction in the transactions table
-        await this.indexerDb.createTxIndex(data);
-
-        // Get tx_index of record using tx_hash
-        data['TX_INDEX'] = await this.indexerDb.getTxIndex(data['TX_HASH']);
+        data['TX_INDEX'] = await this.indexerDb.createTxIndex(data);
 
         // Process the specific ACTION commands
         await this.processAction(action, params, data, error);

@@ -48,6 +48,10 @@ class Database {
         this.transactionConnection = null;
     }
 
+    /* 
+     * Database creation and verification functions 
+     */
+
     // Verify a database exists and return true or false
     async verifyDatabase(){
         let connectionParams = {
@@ -244,9 +248,8 @@ class Database {
 
 
     /* 
-     * Common database connection functions (connect / rollback / commit)
+     * General database functions
      */
-
 
     // Handle getting block index for a given component and request type
     async getBlockIndex(component, type){
@@ -597,30 +600,30 @@ class Database {
 
     // Lookup a record in the `transactions` table and return record id
     async getTxIndex(hash){
-        let id      = null;
-        let hash_id = await this.createTransaction(hash);
-        let db      = await this.getConnection();
+        let tx_index = null;
+        let hash_id  = await this.createTransaction(hash);
+        let db       = await this.getConnection();
         let query = "SELECT tx_index FROM transactions WHERE tx_hash_id=? LIMIT 1";
         try {
             let rows = await db.query(query, [hash_id]);
             if(rows.length > 0)
-                id = rows[0].tx_index;
+                tx_index = rows[0].tx_index;
         } catch (error) {
             this.util.logError('Error looking up tx_index in transactions table:', error);
         }
         await this.releaseConnection();
-        return id;
+        return tx_index;
     }
 
     // Create records in the 'transactions' table and return record id
     async createTxIndex(data){
-        var id = await this.getTxIndex(data.TX_HASH);
+        let tx_index = await this.getTxIndex(data.TX_HASH);
         // Handle creating record
-        if(id==null){
+        if(tx_index==null){
+            tx_index        = await this.getNextTxIndex();
             let block_index = data.BLOCK_INDEX;
             let tx_hash_id  = await this.createTransaction(data.TX_HASH);
             let action_id   = await this.createAction(data.ACTION);
-            let tx_index    = await this.getNextTxIndex();
             let db          = await this.getConnection();
             let query       = "INSERT INTO transactions (tx_index, block_index, tx_hash_id, action_id) values (?, ?, ?, ?)";
             try {
@@ -630,6 +633,7 @@ class Database {
             }
             await this.releaseConnection();
         }
+        return tx_index;
     }
 
     // Lookup a record in the `index_tickers` table and return record id
@@ -1616,8 +1620,6 @@ class Database {
                         query = "DELETE FROM balances WHERE address_id=? AND tick_id=?";
                         try {
                             let rows = await db.query(query, [address_id, tick_id]);
-                            if(rows.length > 0)
-                                action == 'update';
                         } catch (error){
                             this.util.logError('Error deleting balance record address=' + address + ' tick_id=' + tick_id, error);
                         }                        
@@ -1657,6 +1659,29 @@ class Database {
             if(this.util.isNumeric(balance))
                 balances[tick_id] = balance;
         }
+        return balances;
+    }
+
+    // Get address balances using balances table data
+    async getAddressTableBalances(address){
+        let type       = typeof address;
+        let address_id = null;
+        let balances   = []; // Assoc array to store tick/balance
+        if(type==='number' && this.util.isNumeric(address))
+            address_id = address;
+        if(type==='string' && !this.util.isNumeric(address))
+            address_id = await this.createAddress(address);
+        let db    = await this.getConnection();
+        let query = "SELECT tick_id, amount FROM balances WHERE address_id=?";
+        try {
+            let rows = await db.query(query, address_id);
+            if(rows.length > 0)
+                for(let row of rows)
+                    balances[row.tick_id] = row.amount;
+        } catch (error){
+            this.util.logError('Error while trying to get list of all tokens:', error);
+        }
+        await this.releaseConnection();
         return balances;
     }
 
@@ -1715,6 +1740,40 @@ class Database {
             await this.releaseConnection();
         }
         return data;
+    }
+
+    // Handle updating token information (supply, price, etc)
+    // @param {tickers} boolean Full update
+    // @param {tickers} string  Ticker 
+    // @param {tickers} array   Array of Tickers
+    async updateTokens(tickers, rollback){
+        let tokens = [];
+        let type  = typeof tickers;
+        if(type==='object'){
+            for(let tick of tickers){
+                if(!this.util.isNull(tick))
+                    tokens.push(tick);
+            }
+        }
+        if(type==='string')
+            tokens.push(tickers);
+        // Dump full list of tokens
+        if(type==='boolean' &&$tickers===true){
+            let db    = await this.getConnection();
+            let query = "SELECT t2.tick FROM tokens t1, index_tickers t2 WHERE t1.tick_id=t2.id";
+            try {
+                let rows = await db.query(query);
+                if(rows.length > 0)
+                    for(let row of rows)
+                        tokens.push(row.tick);
+            } catch (error){
+                this.util.logError('Error while trying to get list of all tokens:', error);
+            }
+            await this.releaseConnection();
+        }
+        // Loop through tokens and update basic info
+        for(let tick of tokens)
+            this.updateTokenInfo(tick);
     }
 
     // Handle getting token info (supply, price, etc) and updating the `tokens` table
@@ -1988,11 +2047,13 @@ class Database {
             let supplyA = this.util.bcnum(supply[tick]);                           // Supply from tokens table
             let supplyB = this.util.bcnum(await this.getTokenSupplyBalance(tick)); // Supply from balances table
             let supplyC = this.util.bcnum(await this.getTokenSupply(tick));        // Supply from credits/debits tables
-            // DEBUG
-            // console.log("Tick,       tick_id =", tick, tick_id);
-            // console.log("token        supply =", supplyA);
-            // console.log("balances     supply =", supplyB);
-            // console.log("credit/debit supply =", supplyC);
+            // DEBUG : Dump information on the sanity check failure
+            if(supplyA!=supplyB || supplyA!=supplyC){
+                console.log("Tick,       tick_id =", tick, tick_id);
+                console.log("token        supply =", supplyA);
+                console.log("balances     supply =", supplyB);
+                console.log("credit/debit supply =", supplyC);
+            }
             if(supplyA!=supplyB)
                 this.util.throwError("SanityError: balances table supply does not match token supply : " + tick + " (" + supplyB + " != " + supplyA + ")");
             if(supplyA!=supplyC)
@@ -2042,6 +2103,34 @@ class Database {
             this.util.logError('Error trying to create record in addresses table:', error);
         }
         await this.releaseConnection();
+    }
+
+    // Delete records in lists, list_items, and list_edits tables
+    async deleteLists(list, rollback){
+        if(!this.util.isNull(list) && list.length > 0){
+            let db     = await this.getConnection();
+            let tables = ['list_items', 'list_edits'];
+            let query  = '';
+            for(let list_id of list){
+                // Delete item from lists table
+                query = `DELETE FROM lists WHERE tx_hash_id=?`;
+                try {
+                    let rows = await db.query(query, list_id);
+                } catch (error){
+                    this.util.logError('Error while trying to delete data from lists table:', error);
+                }
+                // Deletes item from list_items and list_edits tables
+                for(let table of tables){
+                    query = `DELETE FROM ` + table + ` WHERE list_id=?`;
+                    try {
+                        let rows = await db.query(query, list_id);
+                    } catch (error){
+                        this.util.logError('Error while trying to delete data from ' + table + ' table:', error);
+                    }
+                }
+            }
+            await this.releaseConnection();
+        }
     }
 
 }
