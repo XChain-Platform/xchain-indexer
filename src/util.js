@@ -6,6 +6,59 @@ const fs     = require('fs');
 
 class Util {
 
+    // Handle constructing a class instance
+    constructor(){
+        // Setup placeholders to keep track of addresses/tickers/transactions 
+        this.addresses    = {}; // this.addresses[address] = [tick, tick, tick]
+        this.tickers      = [];
+        this.transactions = []; 
+    }
+
+    /*
+     *  List management functions
+     */
+
+    // Reset the addresses list
+    resetAddressesList(){
+        this.addresses = {};
+    }
+
+    // Reset the tickers list
+    resetTickersList(){
+        this.tickers = [];
+    }
+
+    // Reset the transactions list
+    resetTransactionsList(){
+        this.transactions = [];
+    }
+
+    // Reset all the lists
+    resetLists(){
+        this.resetAddressesList();
+        this.resetTickersList();
+        this.resetTransactionsList();
+    }
+
+    // Return list of addresses
+    getAddressesList(){
+        return this.addresses;
+    }
+
+    // Return list of tickers
+    getTickersList(){
+        return this.tickers;
+    }
+
+    // Return list of transactions
+    getTransactionsList(){
+        return this.transactions;
+    }
+
+    /* 
+     * General utility functions
+     */
+
     // Handle sleeping for a given number of milliseconds
     sleep(ms) {
         return new Promise((resolve) => setTimeout(resolve, ms));
@@ -224,31 +277,37 @@ class Util {
         return false;
     }
 
-    // // Handle adding a ticker to the $addresses assoc array and $tickers array
-    // function addAddressTicker($address=null, $tick=null){
-    //     global $addresses, $tickers;
-    //     $type = gettype($tick);
-    //     $list = (isset($addresses[$address])) ? $addresses[$address] : [];
-    //     // If $tick is an array, use the array
-    //     if($type=="array"){
-    //         foreach($tick as $t){
-    //             // Add TICK to $addresses
-    //             if(!in_array($t, $list))
-    //                 array_push($list, $t);
-    //             // Add TICK to $tickers
-    //             if(!in_array($t, $tickers))
-    //                 array_push($tickers, $t);
-    //         }
-    //     } else {
-    //         // Add TICK to $addresses
-    //         if(!in_array($tick, $list))
-    //             array_push($list, $tick);
-    //         // Add TICK to $tickers
-    //         if(!in_array($tick, $tickers))
-    //             array_push($tickers, $tick);
-    //     }
-    //     $addresses[$address] = $list;
-    // }
+    // Handle adding a ticker to the addreses
+    addAddressTicker(address, tick){
+        let type = typeof tick;
+        let list = (!this.isNull(this.addresses[address])) ? this.addresses[address] : [];
+        // If tick is an object, use the array
+        if(type=="object"){
+            for(let t of tick){
+                // Add ticker to addresses list 
+                if(!list.includes(t))
+                    list.push(t);
+                // Add ticker to tickers list
+                if(!this.tickers.includes(t))
+                    this.tickers.push(t);
+            }
+        } else {
+            // Add ticker to addresses list 
+            if(!list.includes(tick))
+                list.push(tick);
+            // Add ticker to tickers list
+            if(!this.tickers.includes(tick))
+                this.tickers.push(tick);
+        }
+        // Update address list with updated list of tickers
+        this.addresses[address] = list;
+    }
+
+    // Handle adding a transaction hash (or id) to the transactions list
+    addTransaction(tx_hash){
+        if(!this.transactions.includes(tx_hash))
+            this.transactions.push(tx_hash);
+    }
 
 }
 

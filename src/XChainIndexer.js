@@ -160,10 +160,15 @@ class XChainIndexer {
 
                 // DEBUG: counter to enable stopping parsing after a set number of blocks
                 cnt++;
+
+                // DEBUG: Delay processing after X blocks
                 // if(cnt>=1)
                 //     break;
-                // if(cnt>=10){
-                //     this.rollback.rollback(lastIndexerBlock-5);
+
+                // DEBUG: Test some rollbacks
+                // if(cnt>=3){
+                //     this.rollback.rollback(lastIndexerBlock-1);
+                //     break;
                 // }
 
             }
