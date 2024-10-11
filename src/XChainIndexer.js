@@ -1,5 +1,7 @@
 /* XChain Indexer Class */
 
+const config   = require('./config.js');
+const changes  = require('./protocol_changes.js');
 const database = require('./db.js');
 const actions  = require('./actions.js');
 const util     = require('./util.js');
@@ -51,18 +53,24 @@ class XChainIndexer {
     async start(){
         console.log('Starting up ' + this.name + ' v' + this.version + '...');
 
+        // Get indexer configuration
+        this.config = config.getConfig();
+
         // Create instance of the utility class
         this.util = new util();
 
         // Establish database connections
-        this.decoderDb = new database(this.decoderDbHost, this.decoderDbPort, this.decoderDbName, this.decoderDbUser, this.decoderDbPass, this.util);
-        this.indexerDb = new database(this.indexerDbHost, this.indexerDbPort, this.indexerDbName, this.indexerDbUser, this.indexerDbPass, this.util);
+        this.decoderDb = new database(this.decoderDbHost, this.decoderDbPort, this.decoderDbName, this.decoderDbUser, this.decoderDbPass, this);
+        this.indexerDb = new database(this.indexerDbHost, this.indexerDbPort, this.indexerDbName, this.indexerDbUser, this.indexerDbPass, this);
+
+        // Create instance of the protocol changes class
+        this.protocolChanges = new changes(this);
 
         // Create instance of the actions class and pass database connection instances to it
-        this.actions = new actions(this.decoderDb, this.indexerDb, this.util);
+        this.actions = new actions(this);
         
         // Create instance of the rollback class and pass database connection instances to it
-        this.rollback = new rollback(this.decoderDb, this.indexerDb, this.util);
+        this.rollback = new rollback(this);
 
         // Verify the Decoder database exists
         let decoderDbStatus   = await this.decoderDb.createDatabase();

@@ -15,16 +15,16 @@
 class Mint {
 
     // Handle constructing a class instance
-    constructor(config, decoderDb, indexerDb, util){
+    constructor(action){
         // Parse in indexer configuration
-        this.config    = config;
+        this.config    = action.config;
 
         // Setup alias to the indexer database connections
-        this.decoderDb = decoderDb;
-        this.indexerDb = indexerDb;
+        this.decoderDb = action.decoderDb;
+        this.indexerDb = action.indexerDb;
 
         // Setup alias to utility class
-        this.util = util;
+        this.util      = action.util;
 
         // Define list of known FORMATS
         this.formats = {};

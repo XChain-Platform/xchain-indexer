@@ -3,18 +3,22 @@
 class ProtocolChanges {
 
     // Handle constructing a class instance
-    constructor(decoderDb, indexerDb, util){
+    constructor(indexer){
+        // Parse in indexer configuration
+        this.config    = indexer.config;
+
+        // Setup alias to the utility class instance
+        this.util      = indexer.util;
+
         // Setup alias to the indexer database connection
-        this.decoderDb = decoderDb;
-        this.indexerDb = indexerDb;
+        this.decoderDb = indexer.decoderDb;
+        this.indexerDb = indexer.indexerDb;
 
         // XChain Indexer Version and network
         this.version = process.env.npm_package_version;
         this.network = process.env.INDEXER_NETWORK;
 
         // Setup alias to the utility class
-        this.util = util;
-
         // Protocol Changes object
         this.changes = {};
 

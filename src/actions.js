@@ -1,8 +1,5 @@
 /* XChain Indexer Actions Class */
 
-const config  = require('./config.js');
-const changes = require('./protocol_changes.js');
-
 /* XChain Indexer Actions */
 const address   = require('./actions/address.js');
 // const airdrop   = require('./actions/airdrop.js');
@@ -23,36 +20,36 @@ const mint      = require('./actions/mint.js');
 class Actions {
 
     // Handle constructing a class instance
-    constructor(decoderDb, indexerDb, util){
-        // Setup alias to the indexer database connection
-        this.decoderDb = decoderDb;
-        this.indexerDb = indexerDb;
+    constructor(indexer){
+        // Parse in indexer configuration
+        this.config    = indexer.config;
 
         // Setup alias to the utility class instance
-        this.util = util;
+        this.util      = indexer.util;
 
-        // Parse in indexer configuration
-        this.config = config.getConfig();
+        // Setup alias to the indexer database connection
+        this.decoderDb = indexer.decoderDb;
+        this.indexerDb = indexer.indexerDb;
 
-        // Create instance of the protocol changes class
-        this.protocolChanges = new changes(this.decoderDb, this.indexerDb, this.util);
+        // Setup alias to the indexer protocol changes instance
+        this.protocolChanges = indexer.protocolChanges;
 
         // Create action instances and pass database connections
-        this.actionAddress      = new address(this.config, this.decoderDb, this.indexerDb, this.util);
-        // this.actionAirdrop   = new airdrop(this.config, this.decoderDb, this.indexerDb, this.util);
-        this.actionBatch     = new batch(this.config, this.decoderDb, this.indexerDb, this.util, this.protocolChanges, this);
-        // this.actionBet       = new bet(this.config, this.decoderDb, this.indexerDb, this.util);
-        // this.actionCallback  = new callback(this.config, this.decoderDb, this.indexerDb, this.util);
-        // this.actionDestroy   = new destroy(this.config, this.decoderDb, this.indexerDb, this.util);
-        // this.actionDispenser = new dispenser(this.config, this.decoderDb, this.indexerDb, this.util);
-        // this.actionDividend  = new dividend(this.config, this.decoderDb, this.indexerDb, this.util);
-        this.actionIssue     = new issue(this.config, this.decoderDb, this.indexerDb, this.util);
-        this.actionList      = new list(this.config, this.decoderDb, this.indexerDb, this.util);
-        this.actionMint      = new mint(this.config, this.decoderDb, this.indexerDb, this.util);
-        // this.actionRug       = new rug(this.config, this.decoderDb, this.indexerDb, this.util);
-        // this.actionSleep     = new sleep(this.config, this.decoderDb, this.indexerDb, this.util);
-        // this.actionSend      = new send(this.config, this.decoderDb, this.indexerDb, this.util);
-        // this.actionSweep     = new sweep(this.config, this.decoderDb, this.indexerDb, this.util);
+        this.actionAddress      = new address(this);
+        // this.actionAirdrop   = new airdrop(this);
+        this.actionBatch     = new batch(this);
+        // this.actionBet       = new bet(this;
+        // this.actionCallback  = new callback(this);
+        // this.actionDestroy   = new destroy(this);
+        // this.actionDispenser = new dispenser(this);
+        // this.actionDividend  = new dividend(this);
+        this.actionIssue     = new issue(this);
+        this.actionList      = new list(this);
+        this.actionMint      = new mint(this);
+        // this.actionRug       = new rug(this);
+        // this.actionSleep     = new sleep(this);
+        // this.actionSend      = new send(this);
+        // this.actionSweep     = new sweep(this);
 
         // Define ACTION aliases
         this.actionAliases = {};
@@ -69,8 +66,6 @@ class Actions {
     // @param tx.tx_hash     string     Transaction hash
     // @param tx.block_index integer    Block index of tx
     async processTransaction(tx){
-        // DEBUG : Force batch
-        tx.data         = 'BATCH|0|MINT|0|GAS|60;ISSUE|0|JDOGTEST';
         let error       = false;
         let params      = String(tx.data).split('|');
         let source      = tx.source;
