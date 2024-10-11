@@ -2,21 +2,25 @@
 
 const mariadb = require('mariadb');
 const fs      = require('fs');
-const util    = require('./util.js');
 const config  = require('./config.js');
 
 class Database {
 
     // Handle constructing a class instance
-    constructor(host, port, dbName, user, pass) {
+    constructor(host, port, dbName, user, pass, util) {
         // Parse in indexer configuration
         this.config = config.getConfig();
+
+        // Create instance of the utility class
+        this.util = util;
+
         // Database connection information
         this.host   = host;
         this.port   = port;
         this.dbName = dbName;
         this.user   = user;
         this.pass   = pass;
+
         // Database connection parameters
         this.connectionParams = {
             host:     this.host,
@@ -25,6 +29,7 @@ class Database {
             database: this.dbName,
             port:     this.port
         };
+
         // Database pool connection parameters
         this.connectionPoolParams = {
             host:     this.host,
@@ -37,6 +42,7 @@ class Database {
             //connectTimeout: 0,
             insertIdAsNumber: true
         };
+
         // Setup pool of connections
         this.pool = mariadb.createPool(this.connectionPoolParams);
         this.transactionConnection = null;
@@ -61,7 +67,7 @@ class Database {
             } catch (e){
                 // console.log('e=',e);
                 console.log("There was an error trying to check if the " + this.dbName + " database exists. Trying again in a few seconds...");
-                await util.sleep(5000); // Wait 5 seconds
+                await this.util.sleep(5000); // Wait 5 seconds
             }
         }
     }
@@ -86,7 +92,7 @@ class Database {
             } catch(e){
                 // console.log('e=',e);
                 console.log("There was an error trying to connect to the " + this.dbName + " database. Trying again in a few seconds...");
-                await util.sleep(5000); // Waiting 5 seconds
+                await this.util.sleep(5000); // Waiting 5 seconds
             }
         }
         return true;
@@ -113,7 +119,7 @@ class Database {
                     }
                 } catch(e){
                     // console.log('e=',e);
-                    util.throwError('Error while trying to verify ' + table + ' table exists!');
+                    this.util.throwError('Error while trying to verify ' + table + ' table exists!');
                     return false;
                 }
             }
@@ -143,7 +149,7 @@ class Database {
                     continue;
             } catch(e){
                 // console.log('e=',e);
-                util.throwError('Error while trying to create ' + table + ' table!');
+                this.util.throwError('Error while trying to create ' + table + ' table!');
             }
         }
         // Dont release connection after each table is created, connection released in verifyTables() after ALL tables created and verified
@@ -151,7 +157,7 @@ class Database {
     }
 
     /* 
-     * Common database connection functions (connect / rollback / commit)
+     * Common database connection functions (connect / rollback / commit / doQuery)
      */
 
     // Handle getting a database Connection    
@@ -166,7 +172,7 @@ class Database {
             } catch (e){
                 console.log("Can't connect to mariadb. Trying again...");
                 connection = null;
-                await util.sleep(1000);
+                await this.util.sleep(1000);
             }
         }
         this.transactionConnection = connection;
@@ -190,7 +196,7 @@ class Database {
         try {
             await this.transactionConnection.beginTransaction();
         } catch(e){
-            util.throwError('beginTransaction error=' + e);
+            this.util.throwError('beginTransaction error=' + e);
         }
     }
 
@@ -220,6 +226,22 @@ class Database {
         return false;
     }
 
+    // Handle running a query and returning the results
+    async doQuery(query, args){
+        let result = false;
+        if(!this.util.isNull(query)){
+            let db     = await this.getConnection();
+            let exists = false;
+            try {
+                result = await db.query(query, args);
+            } catch (error){
+                this.util.logError('Error running database query :', error);
+            }
+            await this.releaseConnection();
+        }
+        return result;
+    }
+
 
     /* 
      * Common database connection functions (connect / rollback / commit)
@@ -231,13 +253,13 @@ class Database {
         // Bail out on any invalid request type
         var componentTypes = ['decoder', 'indexer'];
         if(!componentTypes.includes(component)){
-            util.logError('Invalid component');
+            this.util.logError('Invalid component');
             return false;
         }
         // Bail out on any invalid request type
         var validTypes = ['first', 'last', 'rollback'];
         if(!validTypes.includes(type)){
-            util.logError('Invalid type');
+            this.util.logError('Invalid type');
             return false;
         }
         let db    = await this.getConnection();
@@ -259,7 +281,7 @@ class Database {
                 return -1   
             }
         } catch (error){
-            util.logError('Error getting block height:', error);
+            this.util.logError('Error getting block height:', error);
             return false;
         }
         await this.releaseConnection();
@@ -288,7 +310,7 @@ class Database {
             await db.end();
             return rows;
         } catch (error) {
-            util.logError('Error getting decoder block data:', error);
+            this.util.logError('Error getting decoder block data:', error);
             return false;
         }
         await this.releaseConnection();
@@ -307,7 +329,7 @@ class Database {
                 return null;
             }            
         } catch (error) {
-            util.logError('Error getting decoder block time:', error);
+            this.util.logError('Error getting decoder block time:', error);
             return false;
         }
         await this.releaseConnection();
@@ -327,21 +349,21 @@ class Database {
         try {
             credits = await db.query(query, [block_index]);
         } catch (error){
-            util.logError('Error getting data from the credits table:', error);
+            this.util.logError('Error getting data from the credits table:', error);
         }
         // Get data from debits table
         query  = `SELECT * FROM debits WHERE block_index=? ORDER BY block_index ASC, tick_id ASC, address_id ASC, amount DESC`;
         try {
             debits = await db.query(query, [block_index]);
         } catch (error){
-            util.logError('Error getting data from the debits table:', error);
+            this.util.logError('Error getting data from the debits table:', error);
         }
         // Get data from transactions table
         query  = `SELECT * FROM transactions WHERE block_index=? ORDER BY tx_index ASC`;
         try {
             txlist = await db.query(query, [block_index]);
         } catch (error){
-            util.logError('Error getting data from the txlist table:', error);
+            this.util.logError('Error getting data from the txlist table:', error);
         }
         // Subtract one block from current block
         let prev_block_index = block_index -1;
@@ -368,7 +390,7 @@ class Database {
                 hashes['txlist']  = rows[0].txlist;
             }
         } catch (error) {
-            util.logError('Error getting data on the previous block hashes:', error);
+            this.util.logError('Error getting data on the previous block hashes:', error);
         }
         // Define list of tables with data to hash
         let tables = ['credits','debits','txlist'];
@@ -382,7 +404,7 @@ class Database {
             data['block_index']   = block_index;
             data['previous_hash'] = hashes[table];
             info[table] = [];
-            info[table]['hash'] = util.getDataHash(data);
+            info[table]['hash'] = this.util.getDataHash(data);
             // info[table]['data'] = data;
         });
         await this.releaseConnection();
@@ -399,7 +421,7 @@ class Database {
             if(rows.length > 0)
                 id = rows[0].id;
         } catch (error) {
-            util.logError('Error looking up hash record id in index_transactions table:', error);
+            this.util.logError('Error looking up hash record id in index_transactions table:', error);
         }
         await this.releaseConnection();
         return id;
@@ -420,7 +442,7 @@ class Database {
                 if(result.insertId)
                     id = result.insertId;
             } catch (error) {
-                util.logError('Error trying to create hash record in index_transactions table:', error);
+                this.util.logError('Error trying to create hash record in index_transactions table:', error);
             }
             await this.releaseConnection();
         }
@@ -437,7 +459,7 @@ class Database {
             if(rows.length > 0)
                 id = rows[0].id;
         } catch (error) {
-            util.logError('Error looking up address record id in index_addresses table:', error);
+            this.util.logError('Error looking up address record id in index_addresses table:', error);
         }
         await this.releaseConnection();
         return id;
@@ -458,7 +480,7 @@ class Database {
                 if(result.insertId)
                     id = result.insertId;
             } catch (error) {
-                util.logError('Error trying to create address record in index_addresses table:', error);
+                this.util.logError('Error trying to create address record in index_addresses table:', error);
             }
             await this.releaseConnection();
         }
@@ -475,7 +497,7 @@ class Database {
             if(rows.length > 0)
                 id = rows[0].id;
         } catch (error) {
-            util.logError('Error looking up block record id in blocks table:', error);
+            this.util.logError('Error looking up block record id in blocks table:', error);
         }
         await this.releaseConnection();
         return id;
@@ -510,7 +532,7 @@ class Database {
         try {
             let result = await db.query(query, [block_time, credits_hash_id, debits_hash_id, txlist_hash_id, block_index]);
         } catch (error) {
-            util.logError('Error trying to create record in blocks table:', error);
+            this.util.logError('Error trying to create record in blocks table:', error);
         }
         await this.releaseConnection();
         // Display status message
@@ -530,7 +552,7 @@ class Database {
             if(rows.length > 0)
                 id = rows[0].id;
         } catch (error) {
-            util.logError('Error looking up action record id in index_actions table:', error);
+            this.util.logError('Error looking up action record id in index_actions table:', error);
         }
         await this.releaseConnection();
         return id;
@@ -548,7 +570,7 @@ class Database {
                 if(result.insertId)
                     id = result.insertId;
             } catch (error) {
-                util.logError('Error trying to create action record in index_actions table:', error);
+                this.util.logError('Error trying to create action record in index_actions table:', error);
             }
             await this.releaseConnection();
         }
@@ -565,7 +587,7 @@ class Database {
             if(rows.length > 0)
                 idx = rows[0].tx_index;
         } catch (error) {
-            util.logError('Error looking up action record id in index_actions table:', error);
+            this.util.logError('Error looking up action record id in index_actions table:', error);
         }
         // Increase current tx_index by 1 to get the next tx_index
         idx++;
@@ -584,7 +606,7 @@ class Database {
             if(rows.length > 0)
                 id = rows[0].tx_index;
         } catch (error) {
-            util.logError('Error looking up tx_index in transactions table:', error);
+            this.util.logError('Error looking up tx_index in transactions table:', error);
         }
         await this.releaseConnection();
         return id;
@@ -604,7 +626,7 @@ class Database {
             try {
                 let result = await db.query(query, [tx_index, block_index, tx_hash_id, action_id]);
             } catch (error) {
-                util.logError('Error while trying to create record in transactions table:', error);
+                this.util.logError('Error while trying to create record in transactions table:', error);
             }
             await this.releaseConnection();
         }
@@ -620,7 +642,7 @@ class Database {
             if(rows.length > 0)
                 id = rows[0].id;
         } catch (error) {
-            util.logError('Error looking up ticker record id in index_tickers table:', error);
+            this.util.logError('Error looking up ticker record id in index_tickers table:', error);
         }
         await this.releaseConnection();
         return id;
@@ -629,7 +651,7 @@ class Database {
     // Create records in the 'index_actions' table and return record id
     async createTicker(tick){
         // Ignore empty tickers and return hardcoded record id
-        if(util.isNull(tick) || tick=='')
+        if(this.util.isNull(tick) || tick=='')
             return 1;
         var id = await this.getTickerId(tick);
         // Handle creating record
@@ -641,7 +663,7 @@ class Database {
                 if(result.insertId)
                     id = result.insertId;
             } catch (error) {
-                util.logError('Error trying to create ticker record in index_tickers table:', error);
+                this.util.logError('Error trying to create ticker record in index_tickers table:', error);
             }
             await this.releaseConnection();
         }
@@ -657,18 +679,20 @@ class Database {
         let data = false,
             sql  = '',
             args = [];
+        // Setup alias for utility class;
+        let util = this.util;
         // Get the tick_id for the given ticker
-        if(!util.isNull(tick) && util.isNull(tick_id))
+        if(!this.util.isNull(tick) && this.util.isNull(tick_id))
             tick_id = await this.createTicker(tick);
         // Add tick_id to SQL query arguments
         args.push(tick_id);
         // If a block_index was given, only lookup tokens created before or in given block_index
-        if(!util.isNull(block_index) && util.isNumeric(block_index)){
+        if(!this.util.isNull(block_index) && this.util.isNumeric(block_index)){
             sql += " AND t1.block_index <= ?";
             args.push(parseInt(block_index));
         }
         // If a tx_index was given, only lookup tokens created before given tx_index
-        if(!util.isNull(tx_index) && util.isNumeric(tx_index)){
+        if(!this.util.isNull(tx_index) && this.util.isNumeric(tx_index)){
             sql += " AND t1.tx_index < ?";
             args.push(parseInt(tx_index));
         }
@@ -722,7 +746,7 @@ class Database {
                 if(!data)
                     data = {};
                 // Loop through ISSUE transactions for the given ticker
-                rows.forEach(function(row){
+                for(let row of rows){
                     // Define object of values for this ISSUE tx
                     let arr  = {};
                     arr['TICK']              = row.tick;
@@ -730,7 +754,7 @@ class Database {
                     arr['MAX_SUPPLY']        = row.max_supply;
                     arr['MAX_MINT']          = row.max_mint;
                     // Force decimal precision to a integer value
-                    arr['DECIMALS']          = (!util.isNull(row.decimals)) ? parseInt(row.decimals) : 0;
+                    arr['DECIMALS']          = (!this.util.isNull(row.decimals)) ? parseInt(row.decimals) : 0;
                     arr['DESCRIPTION']       = row.description;
                     arr['LOCK_MAX_SUPPLY']   = row.lock_max_supply;
                     arr['LOCK_MINT_SUPPLY']  = row.lock_mint_supply;
@@ -760,15 +784,15 @@ class Database {
                         if(key=='DECIMALS' && data[key] > value)
                             continue;
                         // Skip setting value if value is null or empty (use last explicit value)
-                        if(util.isNull(value) || value=='')
+                        if(this.util.isNull(value) || value=='')
                             continue;
                         // Update data object with value from this ISSUE tx
                         data[key] = value;
                     }
-                });
+                }
             }
         } catch (error) {
-            util.logError('Error looking up token info : ', error);
+            this.util.logError('Error looking up token info : ', error);
         }
         await this.releaseConnection();
         // Get token supply at the given tx_index
@@ -796,13 +820,13 @@ class Database {
             let rows = await db.query(query, [tick_id]);
             if(rows.length > 0){
                 // Loop through ISSUE transactions for the given ticker
-                rows.forEach(function(row){
-                if(!util.isNull(row.decimals) && row.decimals > decimals)
-                    decimals = row.decimals;
-                });
+                for(let row of rows){
+                    if(!this.util.isNull(row.decimals) && row.decimals > decimals)
+                        decimals = row.decimals;
+                }
             }
         } catch (error) {
-            util.logError('Error looking up decimal precision from the issues table:', error);
+            this.util.logError('Error looking up decimal precision from the issues table:', error);
         }
         await this.releaseConnection();
         return decimals;
@@ -823,19 +847,19 @@ class Database {
             query   = '',
             args    = [];
         // Get the tick_id for the given ticker
-        if(!util.isNull(tick) && util.isNull(tick_id))
+        if(!this.util.isNull(tick) && this.util.isNull(tick_id))
             tick_id = await this.createTicker(tick);
         // Get info on decimal precision
         let decimals = await this.getTokenDecimalPrecision(tick_id);
         // Add tick_id to SQL query arguments
         args.push(tick_id);
         // If a block_index was given, only lookup tokens created before or in given block_index
-        if(!util.isNull(block_index) && util.isNumeric(block_index)){
+        if(!this.util.isNull(block_index) && this.util.isNumeric(block_index)){
             sql += " AND m.block_index <= ?";
             args.push(parseInt(block_index));
         }
         // If a tx_index was given, only lookup tokens created before given tx_index
-        if(!util.isNull(tx_index) && util.isNumeric(tx_index)){
+        if(!this.util.isNull(tx_index) && this.util.isNumeric(tx_index)){
             sql += " AND t.tx_index < ?";
             args.push(parseInt(tx_index));
         }
@@ -853,7 +877,7 @@ class Database {
             if(rows.length > 0)
                 credits = rows[0].credits;
         } catch (error) {
-            util.logError('Error while trying to get list of credits:', error);
+            this.util.logError('Error while trying to get list of credits:', error);
         }
         // Get Debits 
         query = `SELECT 
@@ -869,7 +893,7 @@ class Database {
             if(rows.length > 0)
                 debits = rows[0].debits;
         } catch (error) {
-            util.logError('Error while trying to get list of debits:', error);
+            this.util.logError('Error while trying to get list of debits:', error);
         }
         // TODO: Get Escrowed supply
         // query = `SELECT 
@@ -885,11 +909,11 @@ class Database {
         //     if(rows.length > 0)
         //         escrow = rows[0].escrow;
         // } catch (error) {
-        //     util.logError('Error while trying to get list of escrowed supply:', error);
+        //     this.util.logError('Error while trying to get list of escrowed supply:', error);
         // }
         await this.releaseConnection();
         // Determine total supply (credits - debits)
-        supply = util.bcsub(credits, debits, decimals);
+        supply = this.util.bcsub(credits, debits, decimals);
         return supply;
     }
 
@@ -905,7 +929,7 @@ class Database {
             if(rows.length > 0)
                 supply = rows[0].supply;
         } catch (error) {
-            util.logError('Error looking up token supply from balances table:', error);
+            this.util.logError('Error looking up token supply from balances table:', error);
         }
         await this.releaseConnection();
         return supply;
@@ -924,19 +948,19 @@ class Database {
             args    = [],
             tick_id = null;
         // Get the tick_id for the given ticker
-        if(!util.isNull(tick) && util.isNull(tick_id))
+        if(!this.util.isNull(tick) && this.util.isNull(tick_id))
             tick_id = await this.createTicker(tick);
         // Get info on decimal precision
         let decimals = await this.getTokenDecimalPrecision(tick_id);
         // Add tick_id to SQL query arguments
         args.push(tick_id);
         // If a block_index was given, only lookup tokens created before or in given block_index
-        if(!util.isNull(block_index) && util.isNumeric(block_index)){
+        if(!this.util.isNull(block_index) && this.util.isNumeric(block_index)){
             sql += " AND m.block_index <= ?";
             args.push(parseInt(block_index));
         }
         // If a tx_index was given, only lookup tokens created before given tx_index
-        if(!util.isNull(tx_index) && util.isNumeric(tx_index)){
+        if(!this.util.isNull(tx_index) && this.util.isNumeric(tx_index)){
             sql += " AND t.tx_index < ?";
             args.push(parseInt(tx_index));
         }
@@ -960,7 +984,7 @@ class Database {
                 });
             }
         } catch (error) {
-            util.logError('Error while trying to get list of holders from credits table:', error);
+            this.util.logError('Error while trying to get list of holders from credits table:', error);
         }
         // Get Debits 
         query = `SELECT 
@@ -977,16 +1001,16 @@ class Database {
         try {
             let rows = await db.query(query, args);
             if(rows.length > 0){
-                rows.forEach(function(row){
-                    let balance = util.bcsub(holders[row.address], row.debits, decimals);
+                for(let row of rows){
+                    let balance = this.util.bcsub(holders[row.address], row.debits, decimals);
                     if(balance > 0)
                         holders[row.address] = balance;
                     else
                        delete holders[row.address];
-                });
+                }
             }
         } catch (error) {
-            util.logError('Error while trying to get list of holders from debits table:', error);
+            this.util.logError('Error while trying to get list of holders from debits table:', error);
         }
         await this.releaseConnection();
         return holders;
@@ -1021,7 +1045,7 @@ class Database {
 
     // Return a list type given a tx_hash
     async getListType(tx_hash){
-        let id    = (util.isNumeric(tx_hash)) ? tx_hash : (await this.createTransaction(tx_hash));
+        let id    = (this.util.isNumeric(tx_hash)) ? tx_hash : (await this.createTransaction(tx_hash));
         let type  = false;
         let db    = await this.getConnection();
         let query = "SELECT type FROM lists WHERE tx_hash_id=? LIMIT 1";
@@ -1030,7 +1054,7 @@ class Database {
             if(rows.length > 0)
                 type = rows[0].type;
         } catch (error) {
-            util.logError('Error looking up list type in lists table:', error);
+            this.util.logError('Error looking up list type in lists table:', error);
         }
         await this.releaseConnection();
         return type;
@@ -1038,7 +1062,7 @@ class Database {
 
     // Return a list given a tx_hash
     async getList(tx_hash){
-        let id    = (util.isNumeric(tx_hash)) ? tx_hash : (await this.createTransaction(tx_hash));
+        let id    = (this.util.isNumeric(tx_hash)) ? tx_hash : (await this.createTransaction(tx_hash));
         let type  = await this.getListType(id);
         let list  = [];
         if(type){
@@ -1053,7 +1077,7 @@ class Database {
                 if(rows.length > 0)
                     list = rows;
             } catch (error) {
-                util.logError('Error looking up list data in lists table:', error);
+                this.util.logError('Error looking up list data in lists table:', error);
             }
             await this.releaseConnection();
         }
@@ -1079,7 +1103,7 @@ class Database {
             if(rows.length > 0)
                 exists = true;
         } catch (error){
-            util.logError('Error looking up record in lists table:', error);
+            this.util.logError('Error looking up record in lists table:', error);
         }
         if(exists){
             // UPDATE record
@@ -1104,7 +1128,7 @@ class Database {
         try {
             let result = await db.query(query, args);
         } catch (error){
-            util.logError('Error trying to create record in lists table:', error);
+            this.util.logError('Error trying to create record in lists table:', error);
         }
         await this.releaseConnection();
     }
@@ -1119,7 +1143,7 @@ class Database {
             if(rows.length > 0)
                 id = rows[0].id;
         } catch (error) {
-            util.logError('Error looking up status record id in index_statuses table:', error);
+            this.util.logError('Error looking up status record id in index_statuses table:', error);
         }
         await this.releaseConnection();
         return id;
@@ -1137,7 +1161,7 @@ class Database {
                 if(result.insertId)
                     id = result.insertId;
             } catch (error) {
-                util.logError('Error trying to create status record in index_statuses table:', error);
+                this.util.logError('Error trying to create status record in index_statuses table:', error);
             }
             await this.releaseConnection();
         }
@@ -1163,7 +1187,7 @@ class Database {
                 delete data[lock];
         });
         // Unset DECIMALS if it is outside of the acceptable range
-        if(!util.isNull(data['DECIMALS']) && (data['DECIMALS'] < this.config.MIN_TOKEN_DECIMALS || data['DECIMALS'] > this.config.MAX_TOKEN_DECIMALS))
+        if(!this.util.isNull(data['DECIMALS']) && (data['DECIMALS'] < this.config.MIN_TOKEN_DECIMALS || data['DECIMALS'] > this.config.MAX_TOKEN_DECIMALS))
             delete data['DECIMALS'];
         // Make data safe for use in SQL queries
         let description        = String(data['DESCRIPTION']).substring(0,250); // Truncate description to 250 chars 
@@ -1205,7 +1229,7 @@ class Database {
             if(rows.length > 0)
                 exists = true;
         } catch (error) {
-            util.logError('Error looking up record issues table:', error);
+            this.util.logError('Error looking up record issues table:', error);
         }
         if(exists){
             // UPDATE record
@@ -1281,7 +1305,7 @@ class Database {
         try {
             let result = await db.query(query, args);
         } catch (error){
-            util.logError('Error trying to create record in issues table:', error);
+            this.util.logError('Error trying to create record in issues table:', error);
         }
         await this.releaseConnection();
     }
@@ -1289,22 +1313,22 @@ class Database {
     // Create/Update record in `tokens` table
     async createToken(data){
         // Normalize data
-        let supply             = (!util.isNull(data['SUPPLY']) &&               util.isNumeric(data['SUPPLY'])) ? data['SUPPLY'] : 0;
-        let max_supply         = (!util.isNull(data['MAX_SUPPLY']) &&           util.isNumeric(data['MAX_SUPPLY'])) ? data['MAX_SUPPLY'] : 0;
-        let max_mint           = (!util.isNull(data['MAX_MINT']) &&             util.isNumeric(data['MAX_MINT'])) ? data['MAX_MINT'] : 0;
-        let mint_supply        = (!util.isNull(data['MINT_SUPPLY']) &&          util.isNumeric(data['MINT_SUPPLY'])) ? data['MINT_SUPPLY'] : 0;
-        let mint_address_max   = (!util.isNull(data['MINT_ADDRESS_MAX']) &&     util.isNumeric(data['MINT_ADDRESS_MAX'])) ? data['MINT_ADDRESS_MAX'] : 0;
-        let mint_start_block   = (!util.isNull(data['MINT_START_BLOCK']) &&     util.isNumeric(data['MINT_START_BLOCK'])) ? data['MINT_START_BLOCK'] : 0;
-        let mint_stop_block    = (!util.isNull(data['MINT_STOP_BLOCK']) &&      util.isNumeric(data['MINT_STOP_BLOCK'])) ? data['MINT_STOP_BLOCK'] : 0;
-        let callback_amount    = (!util.isNull(data['CALLBACK_AMOUNT']) &&      util.isNumeric(data['CALLBACK_AMOUNT'])) ? data['CALLBACK_AMOUNT'] : 0;
-        let decimals           = (!util.isNull(data['DECIMALS']) &&             util.isNumeric(data['DECIMALS'])) ? parseInt(data['DECIMALS']) : 0;
+        let supply             = (!this.util.isNull(data['SUPPLY']) &&               this.util.isNumeric(data['SUPPLY'])) ? data['SUPPLY'] : 0;
+        let max_supply         = (!this.util.isNull(data['MAX_SUPPLY']) &&           this.util.isNumeric(data['MAX_SUPPLY'])) ? data['MAX_SUPPLY'] : 0;
+        let max_mint           = (!this.util.isNull(data['MAX_MINT']) &&             this.util.isNumeric(data['MAX_MINT'])) ? data['MAX_MINT'] : 0;
+        let mint_supply        = (!this.util.isNull(data['MINT_SUPPLY']) &&          this.util.isNumeric(data['MINT_SUPPLY'])) ? data['MINT_SUPPLY'] : 0;
+        let mint_address_max   = (!this.util.isNull(data['MINT_ADDRESS_MAX']) &&     this.util.isNumeric(data['MINT_ADDRESS_MAX'])) ? data['MINT_ADDRESS_MAX'] : 0;
+        let mint_start_block   = (!this.util.isNull(data['MINT_START_BLOCK']) &&     this.util.isNumeric(data['MINT_START_BLOCK'])) ? data['MINT_START_BLOCK'] : 0;
+        let mint_stop_block    = (!this.util.isNull(data['MINT_STOP_BLOCK']) &&      this.util.isNumeric(data['MINT_STOP_BLOCK'])) ? data['MINT_STOP_BLOCK'] : 0;
+        let callback_amount    = (!this.util.isNull(data['CALLBACK_AMOUNT']) &&      this.util.isNumeric(data['CALLBACK_AMOUNT'])) ? data['CALLBACK_AMOUNT'] : 0;
+        let decimals           = (!this.util.isNull(data['DECIMALS']) &&             this.util.isNumeric(data['DECIMALS'])) ? parseInt(data['DECIMALS']) : 0;
         // Force any amount values to the correct decimal precision
-        if(util.isNumeric(decimals) && decimals >= this.config.MIN_TOKEN_DECIMALS && decimals <= this.config.MAX_TOKEN_DECIMALS){
-            max_supply         = util.bcmul(max_supply, 1, decimals);
-            max_mint           = util.bcmul(max_mint, 1, decimals);
-            mint_supply        = util.bcmul(mint_supply, 1, decimals);
-            mint_address_max   = util.bcmul(mint_address_max, 1, decimals);
-            // callback_amount    = util.bcmul(callback_amount, 1, decimals);
+        if(this.util.isNumeric(decimals) && decimals >= this.config.MIN_TOKEN_DECIMALS && decimals <= this.config.MAX_TOKEN_DECIMALS){
+            max_supply         = this.util.bcmul(max_supply, 1, decimals);
+            max_mint           = this.util.bcmul(max_mint, 1, decimals);
+            mint_supply        = this.util.bcmul(mint_supply, 1, decimals);
+            mint_address_max   = this.util.bcmul(mint_address_max, 1, decimals);
+            // callback_amount    = this.util.bcmul(callback_amount, 1, decimals);
         }
         let description        = data['DESCRIPTION'];
         let block_index        = data['BLOCK_INDEX'];
@@ -1331,7 +1355,7 @@ class Database {
             if(rows.length > 0)
                 exists = true;
         } catch (error){
-            util.logError('Error looking up record in tokens table:', error);
+            this.util.logError('Error looking up record in tokens table:', error);
         }
         if(exists){
             // UPDATE record
@@ -1395,7 +1419,7 @@ class Database {
         try {
             let result = await db.query(query, args);
         } catch (error){
-            util.logError('Error trying to create record in tokens table:', error);
+            this.util.logError('Error trying to create record in tokens table:', error);
         }
         await this.releaseConnection();
     }
@@ -1424,7 +1448,7 @@ class Database {
             if(rows.length > 0)
                 exists = true;
         } catch (error){
-            util.logError('Error looking up record in credits table:', error);
+            this.util.logError('Error looking up record in credits table:', error);
         }
         if(exists){
             // UPDATE record
@@ -1447,7 +1471,7 @@ class Database {
         try {
             let result = await db.query(query, args);
         } catch (error){
-            util.logError('Error trying to create record in credits table:', error);
+            this.util.logError('Error trying to create record in credits table:', error);
         }
         await this.releaseConnection();
     }
@@ -1476,7 +1500,7 @@ class Database {
             if(rows.length > 0)
                 exists = true;
         } catch (error){
-            util.logError('Error looking up record in debits table:', error);
+            this.util.logError('Error looking up record in debits table:', error);
         }
         if(exists){
             // UPDATE record
@@ -1499,7 +1523,7 @@ class Database {
         try {
             let result = await db.query(query, args);
         } catch (error){
-            util.logError('Error trying to create record in debits table:', error);
+            this.util.logError('Error trying to create record in debits table:', error);
         }
         await this.releaseConnection();
     }
@@ -1515,7 +1539,7 @@ class Database {
         // Handle arrays and objects
         if(type==='object'){
             for(let addr of address){
-                if(!util.isNull(addr) && addr!='')
+                if(!this.util.isNull(addr) && addr!='')
                     addrs.push(addr);
             }
         }
@@ -1530,7 +1554,7 @@ class Database {
                 if(rows.length > 0)
                     addrs = rows;
             } catch (error){
-                util.logError('Error looking up list of all addresses from index_addresses table:', error);
+                this.util.logError('Error looking up list of all addresses from index_addresses table:', error);
             }
             await this.releaseConnection();
         }
@@ -1544,9 +1568,9 @@ class Database {
         let type       = typeof address;
         let address_id = null;
         let balance    = 0;
-        if(type==='number' && util.isNumeric(address))
+        if(type==='number' && this.util.isNumeric(address))
             address_id = address;
-        if(type==='string' && !util.isNumeric(address))
+        if(type==='string' && !this.util.isNumeric(address))
             address_id = await this.createAddress(address);
         // Get list of address balances based on credits/debits tables
         let balances = await this.getAddressBalances(address_id);
@@ -1561,7 +1585,7 @@ class Database {
                     if(rows.length > 0)
                         action = 'update';
                 } catch (error){
-                    util.logError('Error looking up address from balances table:', error);
+                    this.util.logError('Error looking up address from balances table:', error);
                 }
                 let args = [];
                 if(balance==0)
@@ -1579,7 +1603,7 @@ class Database {
                 try {
                     let result = await db.query(query, args);
                 } catch (error){
-                    util.logError('Error while trying to ' + action + ' balance record for address=' + address + ' tick_id=' + tick_id, error);
+                    this.util.logError('Error while trying to ' + action + ' balance record for address=' + address + ' tick_id=' + tick_id, error);
                 }                
             }
             // If this is a rollback, then handle detecting records in balances table which should not exist and delete them
@@ -1588,14 +1612,14 @@ class Database {
                 let old_balances = await this.getAddressTableBalances(address_id);
                 for(let tick_id of old_balances){
                     balance = balances[tick_id];
-                    if(!util.isNull(balance) || balance==0){
+                    if(!this.util.isNull(balance) || balance==0){
                         query = "DELETE FROM balances WHERE address_id=? AND tick_id=?";
                         try {
                             let rows = await db.query(query, [address_id, tick_id]);
                             if(rows.length > 0)
                                 action == 'update';
                         } catch (error){
-                            util.logError('Error deleting balance record address=' + address + ' tick_id=' + tick_id, error);
+                            this.util.logError('Error deleting balance record address=' + address + ' tick_id=' + tick_id, error);
                         }                        
                     }
                 }
@@ -1608,9 +1632,9 @@ class Database {
     async getAddressBalances(address, tick, block_index, tx_index){
         let type       = typeof address;
         let address_id = null;
-        if(type==='number' && util.isNumeric(address))
+        if(type==='number' && this.util.isNumeric(address))
             address_id = address;
-        if(type==='string' && !util.isNumeric(address))
+        if(type==='string' && !this.util.isNumeric(address))
             address_id = await this.createAddress(address);
         let credits  = await this.getAddressCreditDebit('credits', address_id, null, block_index, tx_index);
         let debits   = await this.getAddressCreditDebit('debits',  address_id, null, block_index, tx_index);
@@ -1621,16 +1645,16 @@ class Database {
         // Build out balances (credits - debits)
         for(let tick_id in credits){
             let credit  = credits[tick_id];
-            let debit   = (!util.isNull(debits[tick_id])) ? debits[tick_id] : 0;
+            let debit   = (!this.util.isNull(debits[tick_id])) ? debits[tick_id] : 0;
             let decimal = decimals[tick_id];
             let balance = null;
             try {
-                balance = util.bcsub(credit, debit, decimal);
+                balance = this.util.bcsub(credit, debit, decimal);
             } catch(err){
-                balance = util.bcadd(0, 0, decimal);
+                balance = this.util.bcadd(0, 0, decimal);
             }
             // Pass forward any numeric values (including 0 balance)
-            if(util.isNumeric(balance))
+            if(this.util.isNumeric(balance))
                 balances[tick_id] = balance;
         }
         return balances;
@@ -1642,23 +1666,23 @@ class Database {
         let type       = typeof address;
         let address_id = null;
         let action_id  = null;
-        if(type==='number' && util.isNumeric(address))
+        if(type==='number' && this.util.isNumeric(address))
             address_id = address;
-        if(type==='string' && !util.isNumeric(address))
+        if(type==='string' && !this.util.isNumeric(address))
             address_id = await this.createAddress(address);
-        if(!util.isNull(action))
+        if(!this.util.isNull(action))
             action_id = await this.createAction(action);
         let sql  = '';
         let args = [address_id];
-        if(!util.isNull(action)){
+        if(!this.util.isNull(action)){
             sql += " AND t1.action_id=?";
             args.push(action_id);
         }
         // Query using either block_index OR tx_index
-        if(!util.isNull(tx_index) && util.isNumeric(tx_index)){
+        if(!this.util.isNull(tx_index) && this.util.isNumeric(tx_index)){
             sql += " AND t3.tx_index < ?";
             args.push(tx_index);
-        } else if(!util.isNull(block_index) && util.isNumeric(block_index)){
+        } else if(!this.util.isNull(block_index) && this.util.isNumeric(block_index)){
             sql += " AND t1.block_index < ?";
             args.push(block_index);
         }
@@ -1679,14 +1703,14 @@ class Database {
             try {
                 let rows = await db.query(query, args);
                 if(rows.length > 0){
-                    rows.forEach(function(row){
+                    for(let row of rows){
                         if(!data[row.tick_id])
                             data[row.tick_id] = 0;
-                        data[row.tick_id] = util.bcadd(data[row.tick_id], row.amount, row.decimals);
-                    });
+                        data[row.tick_id] = this.util.bcadd(data[row.tick_id], row.amount, row.decimals);
+                    }
                 }
             } catch (error){
-                util.logError('Error looking up addresses ' + table + ' for ' + address + ':', error);
+                this.util.logError('Error looking up addresses ' + table + ' for ' + address + ':', error);
             }
             await this.releaseConnection();
         }
@@ -1723,7 +1747,7 @@ class Database {
             if(rows.length > 0)
                 tx_index = rows[0].tx_index;
         } catch (error) {
-            util.logError('Error looking up tx_index of first valid issue:', error);
+            this.util.logError('Error looking up tx_index of first valid issue:', error);
         }
         await this.releaseConnection();
         return tx_index;
@@ -1777,7 +1801,7 @@ class Database {
             if(rows.length > 0)
                 id = rows[0].id;
         } catch (error) {
-            util.logError('Error looking up ticker record id in index_memos table:', error);
+            this.util.logError('Error looking up ticker record id in index_memos table:', error);
         }
         await this.releaseConnection();
         return id;
@@ -1786,7 +1810,7 @@ class Database {
     // Create records in the 'index_memos' table and return record id
     async createMemo(memo){
         // Ignore empty memos and return hardcoded record id
-        if(util.isNull(memo) || memo=='')
+        if(this.util.isNull(memo) || memo=='')
             return 1;
         var id = await this.getMemoId(memo);
         // Handle creating record
@@ -1798,7 +1822,7 @@ class Database {
                 if(result.insertId)
                     id = result.insertId;
             } catch (error) {
-                util.logError('Error trying to create memo record in index_memos table:', error);
+                this.util.logError('Error trying to create memo record in index_memos table:', error);
             }
             await this.releaseConnection();
         }
@@ -1826,7 +1850,7 @@ class Database {
             if(rows.length > 0)
                 exists = true;
         } catch (error){
-            util.logError('Error looking up record in mints table:', error);
+            this.util.logError('Error looking up record in mints table:', error);
         }
         if(exists){
             // UPDATE record
@@ -1852,7 +1876,7 @@ class Database {
         try {
             let result = await db.query(query, args);
         } catch (error){
-            util.logError('Error trying to create record in mints table:', error);
+            this.util.logError('Error trying to create record in mints table:', error);
         }
         await this.releaseConnection();
     }
@@ -1876,7 +1900,7 @@ class Database {
             if(rows.length > 0)
                 exists = true;
         } catch (error){
-            util.logError('Error looking up record in list_edits table:', error);
+            this.util.logError('Error looking up record in list_edits table:', error);
         }
         // INSERT record
         if(!exists){
@@ -1884,7 +1908,7 @@ class Database {
             try {
                 let rows = await db.query(query, args);
             } catch (error){
-                util.logError('Error trying to create record in list_edits table:', error);
+                this.util.logError('Error trying to create record in list_edits table:', error);
             }
         }
         await this.releaseConnection();
@@ -1908,7 +1932,7 @@ class Database {
             if(rows.length > 0)
                 exists = true;
         } catch (error){
-            util.logError('Error looking up record in list_items table:', error);
+            this.util.logError('Error looking up record in list_items table:', error);
         }
         // INSERT record
         if(!exists){
@@ -1916,7 +1940,7 @@ class Database {
             try {
                 let rows = await db.query(query, args);
             } catch (error){
-                util.logError('Error trying to create record in list_items table:', error);
+                this.util.logError('Error trying to create record in list_items table:', error);
             }
         }
         await this.releaseConnection();
@@ -1925,7 +1949,7 @@ class Database {
     // Validate that token supplys match credits/debits/balances information
     async sanityCheck(block_index){
         // Ignore any calls without a block index
-        if(util.isNull(block_index))
+        if(this.util.isNull(block_index))
             return;
         let tickers = {};
         let supply  = {}; // Assoc array of supplys
@@ -1949,30 +1973,30 @@ class Database {
         try {
             let rows = await db.query(query, [block_index, block_index]);
             if(rows.length >0){
-                rows.forEach(function(row){
+                for(let row of rows){
                     // Add ticker and supply info to assoc arrays
                     tickers[row.tick] = row.tick_id;
-                    supply[row.tick]  = (!util.isNull(row.supply)) ? row.supply : "0";
-                });
+                    supply[row.tick]  = (!this.util.isNull(row.supply)) ? row.supply : "0";
+                };
             }
         } catch (error){
-            util.logError('Error looking up credits/debits in block:', error);
+            this.util.logError('Error looking up credits/debits in block:', error);
         }
         // Loop through the tickers and validate token supply match credits/debits/balances info
         for(let tick in tickers){
             let tick_id = tickers[tick];
-            let supplyA = util.bcnum(supply[tick]);                           // Supply from tokens table
-            let supplyB = util.bcnum(await this.getTokenSupplyBalance(tick)); // Supply from balances table
-            let supplyC = util.bcnum(await this.getTokenSupply(tick));        // Supply from credits/debits tables
+            let supplyA = this.util.bcnum(supply[tick]);                           // Supply from tokens table
+            let supplyB = this.util.bcnum(await this.getTokenSupplyBalance(tick)); // Supply from balances table
+            let supplyC = this.util.bcnum(await this.getTokenSupply(tick));        // Supply from credits/debits tables
             // DEBUG
             // console.log("Tick,       tick_id =", tick, tick_id);
             // console.log("token        supply =", supplyA);
             // console.log("balances     supply =", supplyB);
             // console.log("credit/debit supply =", supplyC);
             if(supplyA!=supplyB)
-                util.throwError("SanityError: balances table supply does not match token supply : " + tick + " (" + supplyB + " != " + supplyA + ")");
+                this.util.throwError("SanityError: balances table supply does not match token supply : " + tick + " (" + supplyB + " != " + supplyA + ")");
             if(supplyA!=supplyC)
-                util.throwError("SanityError: credits/debits table supply does not match token supply : " + tick + " (" + supplyC + " != " + supplyA + ")");
+                this.util.throwError("SanityError: credits/debits table supply does not match token supply : " + tick + " (" + supplyC + " != " + supplyA + ")");
         }
         await this.releaseConnection();
     }
@@ -1995,7 +2019,7 @@ class Database {
             if(rows.length > 0)
                 exists = true;
         } catch (error){
-            util.logError('Error looking up record in addresses table:', error);
+            this.util.logError('Error looking up record in addresses table:', error);
         }
         if(exists){
             query = `UPDATE
@@ -2015,7 +2039,7 @@ class Database {
         try {
             let rows = await db.query(query, [tx_index, source_id, block_index, fee_preference, require_memo, status_id, tx_hash_id]);
         } catch (error){
-            util.logError('Error trying to create record in addresses table:', error);
+            this.util.logError('Error trying to create record in addresses table:', error);
         }
         await this.releaseConnection();
     }

@@ -3,6 +3,7 @@
 const database = require('./db.js');
 const actions  = require('./actions.js');
 const util     = require('./util.js');
+const rollback = require('./rollback.js');
 
 class XChainIndexer {
 
@@ -50,18 +51,24 @@ class XChainIndexer {
     async start(){
         console.log('Starting up ' + this.name + ' v' + this.version + '...');
 
+        // Create instance of the utility class
+        this.util = new util();
+
         // Establish database connections
-        this.decoderDb = new database(this.decoderDbHost, this.decoderDbPort, this.decoderDbName, this.decoderDbUser, this.decoderDbPass);
-        this.indexerDb = new database(this.indexerDbHost, this.indexerDbPort, this.indexerDbName, this.indexerDbUser, this.indexerDbPass);
+        this.decoderDb = new database(this.decoderDbHost, this.decoderDbPort, this.decoderDbName, this.decoderDbUser, this.decoderDbPass, this.util);
+        this.indexerDb = new database(this.indexerDbHost, this.indexerDbPort, this.indexerDbName, this.indexerDbUser, this.indexerDbPass, this.util);
 
         // Create instance of the actions class and pass database connection instances to it
-        this.actions = new actions(this.decoderDb, this.indexerDb);
+        this.actions = new actions(this.decoderDb, this.indexerDb, this.util);
         
+        // Create instance of the rollback class and pass database connection instances to it
+        this.rollback = new rollback(this.decoderDb, this.indexerDb, this.util);
+
         // Verify the Decoder database exists
         let decoderDbStatus   = await this.decoderDb.createDatabase();
         let decoderDbVerified = await this.decoderDb.verifyDatabase();
         if(!decoderDbVerified){
-            util.throwError("Database " + this.decoderDbName + " doesn't exist!");
+            this.util.throwError("Database " + this.decoderDbName + " doesn't exist!");
         } else {
             // Add optional code here to verify decoder database tables exist (Blocks / Transactions)
         }
@@ -70,12 +77,12 @@ class XChainIndexer {
         let indexerDbStatus   = await this.indexerDb.createDatabase();
         let indexerDbVerified = await this.indexerDb.verifyDatabase();
         if(!indexerDbVerified){
-            util.throwError("Database " + this.indexerDbName + " doesn't exist!");
+            this.util.throwError("Database " + this.indexerDbName + " doesn't exist!");
         } else {
             // Verify the Indexer tables exists
             let indexerTablesVerified = await this.indexerDb.verifyTables();
             if(!indexerTablesVerified)
-                util.throwError("Database " + this.decoderDbName + " tables don't exist!");
+                this.util.throwError("Database " + this.decoderDbName + " tables don't exist!");
         }
 
         // Define placeholders for block parsing status
@@ -119,11 +126,11 @@ class XChainIndexer {
             while( (!lastIndexerBlock || lastIndexerBlock < lastDecoderBlock )){
 
                 // If we have no blocks from the decoder stop parsing loop
-                if(util.isNull(lastDecoderBlock))
+                if(this.util.isNull(lastDecoderBlock))
                     break;
 
                 // Start tracking time to parse block
-                var debugTimer = util.startTimer();
+                var debugTimer = this.util.startTimer();
 
                 // If indexer has no parsed blocks, set block to first Decoder block -1
                 if(!lastIndexerBlock)
@@ -149,17 +156,21 @@ class XChainIndexer {
                 await this.indexerDb.sanityCheck(lastIndexerBlock);
 
                 // Log the debug time
-                util.logTimer(debugTimer, 'Block Parsed');
+                this.util.logTimer(debugTimer, 'Block Parsed');
 
                 // DEBUG: counter to enable stopping parsing after a set number of blocks
-                // cnt++;
+                cnt++;
                 // if(cnt>=1)
                 //     break;
+                // if(cnt>=10){
+                //     this.rollback.rollback(lastIndexerBlock-5);
+                // }
+
             }
 
             console.log('sleeping for 5 seconds');
             // Sleep for 5 seconds before checking for new transaction data
-            await util.sleep(5000);
+            await this.util.sleep(5000);
         }      
     }
 
