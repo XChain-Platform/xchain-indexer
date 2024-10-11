@@ -14,18 +14,19 @@
  * 
  ********************************************************************/
 
-const util = require('../util.js');
-
 class List {
 
     // Handle constructing a class instance
-    constructor(config, decoderDb, indexerDb){
+    constructor(config, decoderDb, indexerDb, util){
         // Parse in indexer configuration
         this.config    = config;
 
         // Setup alias to the indexer database connections
         this.decoderDb = decoderDb;
         this.indexerDb = indexerDb;
+
+        // Setup alias to utility class
+        this.util = util;
 
         // Define list of known FORMATS
         this.formats = {};
@@ -57,20 +58,20 @@ class List {
         // params = String(str).split('|');
 
         // Validate that format is known
-        let format = util.getFormatVersion(params[0]);
+        let format = this.util.getFormatVersion(params[0]);
         if(!error && (format===null || this.formats[format] === undefined ))
             error = 'invalid: VERSION (unknown)';
 
         // Parse PARAMS using given VERSION format and update transaction data object
         if(!error)
-            data = util.setActionParams(data, params, this.formats[format]);
+            data = this.util.setActionParams(data, params, this.formats[format]);
 
         // Convert NUMBER fields from string value to number value so comparisons are mathematical 
-        this.fieldList['NUMBER'].forEach(function(name){
+        for(let name of this.fieldList['NUMBER']){
             let value = data[name];
-            if(!util.isNull(value))
-                data[name] = util.bcnum(value);
-        });
+            if(!this.util.isNull(value))
+                data[name] = this.util.bcnum(value);
+        }
 
         // Define some placeholders
         let type = null;
@@ -129,7 +130,7 @@ class List {
                     }
 
                     // Verify ADDRESS
-                    if(data['TYPE']==2 && !util.isCryptoAddress(item))
+                    if(data['TYPE']==2 && !this.util.isCryptoAddress(item))
                         status = 'invalid: ADDRESS (format)';
 
                     // Add item and status to edits array

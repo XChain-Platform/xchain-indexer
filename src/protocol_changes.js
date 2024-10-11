@@ -1,11 +1,9 @@
 /* XChain Indexer Protocol Changes */
 
-const util    = require('./util.js');
-
 class ProtocolChanges {
 
     // Handle constructing a class instance
-    constructor(decoderDb, indexerDb){
+    constructor(decoderDb, indexerDb, util){
         // Setup alias to the indexer database connection
         this.decoderDb = decoderDb;
         this.indexerDb = indexerDb;
@@ -13,6 +11,9 @@ class ProtocolChanges {
         // XChain Indexer Version and network
         this.version = process.env.npm_package_version;
         this.network = process.env.INDEXER_NETWORK;
+
+        // Setup alias to the utility class
+        this.util = util;
 
         // Protocol Changes object
         this.changes = {};
@@ -87,7 +88,7 @@ class ProtocolChanges {
             error = 'protocol change regtest_block must be integer!';
         // Throw error on any protocol change parsing issue
         if(error){
-            util.throwError(error);
+            this.util.throwError(error);
         } else {
             // Parse the protocol change into this.changes
             var change = {};

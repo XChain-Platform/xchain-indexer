@@ -2,7 +2,6 @@
 
 const config  = require('./config.js');
 const changes = require('./protocol_changes.js');
-const util    = require('./util.js');
 
 /* XChain Indexer Actions */
 const address   = require('./actions/address.js');
@@ -24,33 +23,36 @@ const mint      = require('./actions/mint.js');
 class Actions {
 
     // Handle constructing a class instance
-    constructor(decoderDb, indexerDb){
+    constructor(decoderDb, indexerDb, util){
         // Setup alias to the indexer database connection
         this.decoderDb = decoderDb;
         this.indexerDb = indexerDb;
 
+        // Setup alias to the utility class
+        this.util = util;
+
         // Parse in indexer configuration
-        this.config    = config.getConfig();
+        this.config = config.getConfig();
 
         // Create instance of the protocol changes class
-        this.protocolChanges = new changes(this.decoderDb, this.indexerDb);
+        this.protocolChanges = new changes(this.decoderDb, this.indexerDb, this.util);
 
         // Create action instances and pass database connections
-        this.actionAddress      = new address(this.config, this.decoderDb, this.indexerDb);
-        // this.actionAirdrop   = new airdrop(this.config, this.decoderDb, this.indexerDb);
-        // this.actionBatch     = new batch(this.config, this.decoderDb, this.indexerDb);
-        // this.actionBet       = new bet(this.config, this.decoderDb, this.indexerDb);
-        // this.actionCallback  = new callback(this.config, this.decoderDb, this.indexerDb);
-        // this.actionDestroy   = new destroy(this.config, this.decoderDb, this.indexerDb);
-        // this.actionDispenser = new dispenser(this.config, this.decoderDb, this.indexerDb);
-        // this.actionDividend  = new dividend(this.config, this.decoderDb, this.indexerDb);
-        this.actionIssue     = new issue(this.config, this.decoderDb, this.indexerDb);
-        this.actionList      = new list(this.config, this.decoderDb, this.indexerDb);
-        this.actionMint      = new mint(this.config, this.decoderDb, this.indexerDb);
-        // this.actionRug       = new rug(this.config, this.decoderDb, this.indexerDb);
-        // this.actionSleep     = new sleep(this.config, this.decoderDb, this.indexerDb);
-        // this.actionSend      = new send(this.config, this.decoderDb, this.indexerDb);
-        // this.actionSweep     = new sweep(this.config, this.decoderDb, this.indexerDb);
+        this.actionAddress      = new address(this.config, this.decoderDb, this.indexerDb, this.util);
+        // this.actionAirdrop   = new airdrop(this.config, this.decoderDb, this.indexerDb, this.util);
+        // this.actionBatch     = new batch(this.config, this.decoderDb, this.indexerDb, this.util);
+        // this.actionBet       = new bet(this.config, this.decoderDb, this.indexerDb, this.util);
+        // this.actionCallback  = new callback(this.config, this.decoderDb, this.indexerDb, this.util);
+        // this.actionDestroy   = new destroy(this.config, this.decoderDb, this.indexerDb, this.util);
+        // this.actionDispenser = new dispenser(this.config, this.decoderDb, this.indexerDb, this.util);
+        // this.actionDividend  = new dividend(this.config, this.decoderDb, this.indexerDb, this.util);
+        this.actionIssue     = new issue(this.config, this.decoderDb, this.indexerDb, this.util);
+        this.actionList      = new list(this.config, this.decoderDb, this.indexerDb, this.util);
+        this.actionMint      = new mint(this.config, this.decoderDb, this.indexerDb, this.util);
+        // this.actionRug       = new rug(this.config, this.decoderDb, this.indexerDb, this.util);
+        // this.actionSleep     = new sleep(this.config, this.decoderDb, this.indexerDb, this.util);
+        // this.actionSend      = new send(this.config, this.decoderDb, this.indexerDb, this.util);
+        // this.actionSweep     = new sweep(this.config, this.decoderDb, this.indexerDb, this.util);
 
         // Define ACTION aliases
         this.actionAliases = {};
@@ -93,7 +95,7 @@ class Actions {
         }
 
         // Support legacy ACTION format with no VERSION (default to VERSION 0)
-        if(['ISSUE','MINT','SEND'].includes(action) && util.isLegacyActionFormat(params))
+        if(['ISSUE','MINT','SEND'].includes(action) && this.util.isLegacyActionFormat(params))
             params.splice(0,0,0);
 
         // Define basic ACTION transaction data object

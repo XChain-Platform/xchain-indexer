@@ -36,18 +36,19 @@
  * 
  ********************************************************************/
 
-const util = require('../util.js');
-
 class Issue {
 
     // Handle constructing a class instance
-    constructor(config, decoderDb, indexerDb){
+    constructor(config, decoderDb, indexerDb, util){
         // Parse in indexer configuration
         this.config    = config;
 
         // Setup alias to the indexer database connections
         this.decoderDb = decoderDb;
         this.indexerDb = indexerDb;
+
+        // Setup alias to utility class
+        this.util = util;
 
         // Define list of known FORMATS
         this.formats = {};
@@ -78,27 +79,27 @@ class Issue {
         // data['SOURCE'] = this.config['ADDRESS']['BURN'];
 
         // Validate that format is known
-        let format = util.getFormatVersion(params[0]);
+        let format = this.util.getFormatVersion(params[0]);
         if(!error && (format===null || this.formats[format] === undefined ))
             error = 'invalid: VERSION (unknown)';
 
         // Parse PARAMS using given VERSION format and update transaction data object
         if(!error)
-            data = util.setActionParams(data, params, this.formats[format]);
+            data = this.util.setActionParams(data, params, this.formats[format]);
 
         // TODO: Decode any base64 tickers
-        // if(util.isBase64(data['TICK']))
-        //     $data['TICK'] = util.base64Decode(data['TICK']);
+        // if(this.util.isBase64(data['TICK']))
+        //     $data['TICK'] = this.util.base64Decode(data['TICK']);
 
         // Clone the raw data for storage in issues table
         let issue = structuredClone(data);
 
         // Convert NUMBER fields from string value to number value so comparisons are mathematical 
-        this.fieldList['NUMBER'].forEach(function(name){
+        for(let name of this.fieldList['NUMBER']){
             let value = data[name];
-            if(!util.isNull(value))
-                data[name] = util.bcnum(value);
-        });
+            if(!this.util.isNull(value))
+                data[name] = this.util.bcnum(value);
+        }
 
         /*****************************************************************
          * TICK Validations
@@ -157,19 +158,19 @@ class Issue {
         let callback_divisible = (cbInfo && cbInfo['DECIMALS']>0) ? 1 : 0;
 
         // Verify AMOUNT field formats
-        this.fieldList['AMOUNT'].forEach(function(name){
+        for(let name of this.fieldList['AMOUNT']){
             let value = issue[name],
                 div   = (name=='CALLBACK_AMOUNT') ? callback_divisible : tick_divisible;
-            if(!error && !util.isNull(value) && !util.isValidAmountFormat(div, value))
+            if(!error && !this.util.isNull(value) && !this.util.isValidAmountFormat(div, value))
                 error = "invalid: " + name + " (format)";
-        });
+        }
 
         // Verify LOCK field formats
-        this.fieldList['LOCK'].forEach(function(name){
+        for(let name of this.fieldList['LOCK']){
             let value = issue[name];
-            if(!error && !util.isNull(value) && !util.isValidLockValue(value))
+            if(!error && !this.util.isNull(value) && !this.util.isValidLockValue(value))
                 error = "invalid: " + name + " (format)";
-        });
+        };
 
         /*****************************************************************
          * General Validations
@@ -180,18 +181,18 @@ class Issue {
             error = 'invalid: issued by another address';
 
         // Verify LOCK fields cannot be changed once enabled/locked
-        this.fieldList['LOCK'].forEach(function(name){
+        for(let name of this.fieldList['LOCK']){
             let value = issue[name];
-            if(!error && !util.isNull(value) && !util.isValidLock(tokenInfo, issue, name))
+            if(!error && !this.util.isNull(value) && !this.util.isValidLock(tokenInfo, issue, name))
                 error = "invalid: " + name + " (locked)";
-        });
+        }
 
         // Verify MAX_SUPPLY min/max
-        if(!error && !util.isNull(data['MAX_SUPPLY']) && data['MAX_SUPPLY'] > 0 && (data['MAX_SUPPLY'] < this.config.MIN_TOKEN_SUPPLY || data['MAX_SUPPLY'] > this.config.MAX_TOKEN_SUPPLY))
+        if(!error && !this.util.isNull(data['MAX_SUPPLY']) && data['MAX_SUPPLY'] > 0 && (data['MAX_SUPPLY'] < this.config.MIN_TOKEN_SUPPLY || data['MAX_SUPPLY'] > this.config.MAX_TOKEN_SUPPLY))
             $error = 'invalid: MAX_SUPPLY (min/max)';
 
         // Verify MAX_SUPPLY is not set below current SUPPLY
-        if(!error && !util.isNull(data['MAX_SUPPLY']) && data['MAX_SUPPLY'] > 0 && data['MAX_SUPPLY'] < await this.indexerDb.getTokenSupply(data['TICK'], null, data['BLOCK_INDEX'], data['TX_INDEX']))
+        if(!error && !this.util.isNull(data['MAX_SUPPLY']) && data['MAX_SUPPLY'] > 0 && data['MAX_SUPPLY'] < await this.indexerDb.getTokenSupply(data['TICK'], null, data['BLOCK_INDEX'], data['TX_INDEX']))
             error = 'invalid: MAX_SUPPLY < SUPPLY';
 
         // Verify SUPPLY is at least MIN_TOKEN_SUPPLY before allowing LOCK_MAX_SUPPLY
@@ -199,15 +200,15 @@ class Issue {
             error = 'invalid: LOCK_MAX_SUPPLY (no supply)';
 
         // Verify DECIMAL min/max
-        if(!error && !util.isNull(data['DECIMALS']) && (data['DECIMALS'] < this.config.MIN_TOKEN_DECIMALS || data['DECIMALS'] > this.config.MAX_TOKEN_DECIMALS))
+        if(!error && !this.util.isNull(data['DECIMALS']) && (data['DECIMALS'] < this.config.MIN_TOKEN_DECIMALS || data['DECIMALS'] > this.config.MAX_TOKEN_DECIMALS))
             error = 'invalid: DECIMALS (min/max)';
 
         // Verify DECIMALS cannot be changed after supply has been issued
-        if(!error && !util.isNull(data['DECIMALS']) && tokenInfo['SUPPLY'] > 0 && data['DECIMALS']!=tokenInfo['DECIMALS'])
+        if(!error && !this.util.isNull(data['DECIMALS']) && tokenInfo['SUPPLY'] > 0 && data['DECIMALS']!=tokenInfo['DECIMALS'])
             error = 'invalid: DECIMALS (locked)';
 
         // Verify TRANSFER addresses
-        if(!error && !util.isNull(data['TRANSFER']) && !util.isCryptoAddress(data['TRANSFER']))
+        if(!error && !this.util.isNull(data['TRANSFER']) && !this.util.isCryptoAddress(data['TRANSFER']))
             error = 'invalid: TRANSFER (bad address)';
 
         // Verify TRANSFER_SUPPLY and SOURCE are different
@@ -215,31 +216,31 @@ class Issue {
             delete data['TRANSFER_SUPPLY'];
 
         // Verify TRANSFER_SUPPLY addresses
-        if(!error && !util.isNull(data['TRANSFER_SUPPLY']) && !util.isCryptoAddress(data['TRANSFER_SUPPLY']))
+        if(!error && !this.util.isNull(data['TRANSFER_SUPPLY']) && !this.util.isCryptoAddress(data['TRANSFER_SUPPLY']))
             error = 'invalid: TRANSFER_SUPPLY (bad address)';
 
         // Verify MINT_SUPPLY is allowed and LOCK_MINT_SUPPLY is not set
-        if(!error && !util.isNull(data['MINT_SUPPLY']) && tokenInfo && tokenInfo['LOCK_MINT_SUPPLY']==1)
+        if(!error && !this.util.isNull(data['MINT_SUPPLY']) && tokenInfo && tokenInfo['LOCK_MINT_SUPPLY']==1)
             error = 'invalid: MINT_SUPPLY (locked)';
 
         // Verify MINT_SUPPLY is less than MAX_SUPPLY
-        if(!error && !util.isNull(data['MINT_SUPPLY']) && data['MINT_SUPPLY'] > data['MAX_SUPPLY'])
+        if(!error && !this.util.isNull(data['MINT_SUPPLY']) && data['MINT_SUPPLY'] > data['MAX_SUPPLY'])
             error = 'invalid: MINT_SUPPLY > MAX_SUPPLY';
 
         // Verify MINT_ADDRESS_MAX is less than MAX_SUPPLY
-        if(!error && !util.isNull(data['MINT_ADDRESS_MAX']) && data['MINT_ADDRESS_MAX'] > 0 && data['MINT_ADDRESS_MAX'] > data['MAX_SUPPLY'])
+        if(!error && !this.util.isNull(data['MINT_ADDRESS_MAX']) && data['MINT_ADDRESS_MAX'] > 0 && data['MINT_ADDRESS_MAX'] > data['MAX_SUPPLY'])
             error = 'invalid: MINT_ADDRESS_MAX > MAX_SUPPLY';
 
         // Verify MINT_ADDRESS_MAX is greater than than MAX_MINT
-        if(!error && !util.isNull(data['MINT_ADDRESS_MAX']) && data['MINT_ADDRESS_MAX'] > 0 && data['MINT_ADDRESS_MAX'] < data['MAX_MINT'])
+        if(!error && !this.util.isNull(data['MINT_ADDRESS_MAX']) && data['MINT_ADDRESS_MAX'] > 0 && data['MINT_ADDRESS_MAX'] < data['MAX_MINT'])
             error = 'invalid: MINT_ADDRESS_MAX < MAX_MINT';
 
         // Verify MAX_SUPPLY can not be changed if LOCK_MAX_SUPPLY is enabled
-        if(!error && tokenInfo && tokenInfo['LOCK_MAX_SUPPLY'] && !util.isNull(data['MAX_SUPPLY']) && data['MAX_SUPPLY'] != tokenInfoInfo['MAX_SUPPLY'])
+        if(!error && tokenInfo && tokenInfo['LOCK_MAX_SUPPLY'] && !this.util.isNull(data['MAX_SUPPLY']) && data['MAX_SUPPLY'] != tokenInfoInfo['MAX_SUPPLY'])
             error = 'invalid: MAX_SUPPLY (locked)';
 
         // Verify MAX_MINT can not be changed if LOCK_MAX_MINT is enabled
-        if(!error && tokenInfo && tokenInfo['LOCK_MAX_MINT'] && !util.isNull(data['MAX_MINT']) && data['MAX_MINT'] != tokenInfo['MAX_MINT'])
+        if(!error && tokenInfo && tokenInfo['LOCK_MAX_MINT'] && !this.util.isNull(data['MAX_MINT']) && data['MAX_MINT'] != tokenInfo['MAX_MINT'])
             error = 'invalid: MAX_MINT (locked)';
 
         // Verify DESCRIPTION is less than or equal to MAX_TOKEN_DESCRIPTION
@@ -247,55 +248,55 @@ class Issue {
             error = 'invalid: DESCRIPTION (length)';
 
         // Verify DESCRIPTION can not be changed if LOCK_DESCRIPTION is enabled
-        if(!error && tokenInfo && tokenInfo['LOCK_DESCRIPTION'] && !util.isNull(data['DESCRIPTION']) && data['DESCRIPTION'] != tokenInfo['DESCRIPTION'])
+        if(!error && tokenInfo && tokenInfo['LOCK_DESCRIPTION'] && !this.util.isNull(data['DESCRIPTION']) && data['DESCRIPTION'] != tokenInfo['DESCRIPTION'])
             error = 'invalid: DESCRIPTION (locked)';
 
         // Verify CALLBACK_BLOCK can not be changed if LOCK_CALLBACK is enabled
-        if(!error && tokenInfo && tokenInfo['LOCK_CALLBACK'] && !util.isNull(data['CALLBACK_BLOCK']) && data['CALLBACK_BLOCK'] != tokenInfo['CALLBACK_BLOCK'])
+        if(!error && tokenInfo && tokenInfo['LOCK_CALLBACK'] && !this.util.isNull(data['CALLBACK_BLOCK']) && data['CALLBACK_BLOCK'] != tokenInfo['CALLBACK_BLOCK'])
             error = 'invalid: CALLBACK_BLOCK (locked)';
 
         // Verify CALLBACK_TICK can not be changed if LOCK_CALLBACK is enabled
-        if(!error && tokenInfo && tokenInfo['LOCK_CALLBACK'] && !util.isNull(data['CALLBACK_TICK']) && data['CALLBACK_TICK'] != tokenInfo['CALLBACK_TICK'])
+        if(!error && tokenInfo && tokenInfo['LOCK_CALLBACK'] && !this.util.isNull(data['CALLBACK_TICK']) && data['CALLBACK_TICK'] != tokenInfo['CALLBACK_TICK'])
             error = 'invalid: CALLBACK_TICK (locked)';
 
         // Verify CALLBACK_TICK can not be changed if LOCK_CALLBACK is enabled
-        if(!error && tokenInfo && tokenInfo['LOCK_CALLBACK'] && !util.isNull(data['CALLBACK_AMOUNT']) && data['CALLBACK_AMOUNT'] != tokenInfo['CALLBACK_AMOUNT'])
+        if(!error && tokenInfo && tokenInfo['LOCK_CALLBACK'] && !this.util.isNull(data['CALLBACK_AMOUNT']) && data['CALLBACK_AMOUNT'] != tokenInfo['CALLBACK_AMOUNT'])
             error = 'invalid: CALLBACK_AMOUNT (locked)';
 
         // Verify CALLBACK_BLOCK is greater than current block index
-        if(!error && tokenInfo && !util.isNull(issue['CALLBACK_BLOCK']) && data['CALLBACK_BLOCK'] < data['BLOCK_INDEX'])
+        if(!error && tokenInfo && !this.util.isNull(issue['CALLBACK_BLOCK']) && data['CALLBACK_BLOCK'] < data['BLOCK_INDEX'])
             error = 'invalid: CALLBACK_BLOCK (block index)';
 
         // Verify CALLBACK_BLOCK can not be changed if supply is distributed
-        if(!error && !util.isNull(issue['CALLBACK_BLOCK']) && data['CALLBACK_BLOCK'] != tokenInfo['CALLBACK_BLOCK'] && isDistributed)
+        if(!error && !this.util.isNull(issue['CALLBACK_BLOCK']) && data['CALLBACK_BLOCK'] != tokenInfo['CALLBACK_BLOCK'] && isDistributed)
             error = 'invalid: CALLBACK_BLOCK (supply distributed)';
 
         // Verify CALLBACK_TICK can not be changed if supply is distributed
-        if(!error && !util.isNull(issue['CALLBACK_TICK']) && data['CALLBACK_TICK'] != tokenInfo['CALLBACK_TICK'] && isDistributed)
+        if(!error && !this.util.isNull(issue['CALLBACK_TICK']) && data['CALLBACK_TICK'] != tokenInfo['CALLBACK_TICK'] && isDistributed)
             error = 'invalid: CALLBACK_TICK (supply distributed)';
 
         // // Verify CALLBACK_AMOUNT can not be changed if supply is distributed
-        if(!error && !util.isNull(issue['CALLBACK_AMOUNT']) && data['CALLBACK_AMOUNT'] != tokenInfo['CALLBACK_AMOUNT'] && isDistributed)
+        if(!error && !this.util.isNull(issue['CALLBACK_AMOUNT']) && data['CALLBACK_AMOUNT'] != tokenInfo['CALLBACK_AMOUNT'] && isDistributed)
             error = 'invalid: CALLBACK_AMOUNT (supply distributed)';
 
         // Verify ALLOW_LIST is a valid list of addresses
-        if(!error && !util.isNull(data['ALLOW_LIST']) && !this.indexerDb.isValidList(data['ALLOW_LIST'],3))
+        if(!error && !this.util.isNull(data['ALLOW_LIST']) && !this.indexerDb.isValidList(data['ALLOW_LIST'],3))
             error = 'invalid: ALLOW_LIST (bad list)';
 
         // // Verify BLOCK_LIST is a valid list of addresses
-        if(!error && !util.isNull(data['BLOCK_LIST']) && !this.indexerDb.isValidList(data['BLOCK_LIST'],3))
+        if(!error && !this.util.isNull(data['BLOCK_LIST']) && !this.indexerDb.isValidList(data['BLOCK_LIST'],3))
             error = 'invalid: BLOCK_LIST (bad list)';
 
         // Verify MINT_START_BLOCK is greater than or equal to current block
-        if(!error && !util.isNull(issue['MINT_START_BLOCK']) && issue['MINT_START_BLOCK'] > 0 && issue['MINT_START_BLOCK'] < issue['BLOCK_INDEX'])
+        if(!error && !this.util.isNull(issue['MINT_START_BLOCK']) && issue['MINT_START_BLOCK'] > 0 && issue['MINT_START_BLOCK'] < issue['BLOCK_INDEX'])
             error = 'invalid: MINT_START_BLOCK < BLOCK_INDEX';
 
         // Verify MINT_STOP_BLOCK is greater than or equal to current block
-        if(!error && !util.isNull(issue['MINT_STOP_BLOCK']) && issue['MINT_STOP_BLOCK'] > 0 && issue['MINT_STOP_BLOCK'] < issue['BLOCK_INDEX'])
+        if(!error && !this.util.isNull(issue['MINT_STOP_BLOCK']) && issue['MINT_STOP_BLOCK'] > 0 && issue['MINT_STOP_BLOCK'] < issue['BLOCK_INDEX'])
             error = 'invalid: MINT_STOP_BLOCK < BLOCK_INDEX';
 
         // Verify MINT_STOP_BLOCK is greater than or equal to MINT_START_BLOCK
-        if(!error && !util.isNull(issue['MINT_STOP_BLOCK']) && issue['MINT_START_BLOCK'] > 0 && issue['MINT_STOP_BLOCK'] > 0 && issue['MINT_STOP_BLOCK'] < issue['MINT_START_BLOCK'])
+        if(!error && !this.util.isNull(issue['MINT_STOP_BLOCK']) && issue['MINT_START_BLOCK'] > 0 && issue['MINT_STOP_BLOCK'] > 0 && issue['MINT_STOP_BLOCK'] < issue['MINT_START_BLOCK'])
             error = 'invalid: MINT_STOP_BLOCK < MINT_START_BLOCK';
 
         // Determine final status
@@ -312,7 +313,7 @@ class Issue {
         if(status=='valid'){
 
             // Support token ownership transfers
-            data['OWNER']  = (!util.isNull(data['TRANSFER'])) ? data['TRANSFER'] : data['SOURCE'];
+            data['OWNER']  = (!this.util.isNull(data['TRANSFER'])) ? data['TRANSFER'] : data['SOURCE'];
 
             // Create/Update record in tokens table
             await this.indexerDb.createToken(data);
