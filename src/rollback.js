@@ -3,13 +3,19 @@
 class Rollback {
 
     // Handle constructing a class instance
-    constructor(decoderDb, indexerDb, util){
+    constructor(indexer){
+        // Parse in indexer configuration
+        this.config    = indexer.config;
+
         // Setup alias to the indexer database connection
-        this.decoderDb = decoderDb;
-        this.indexerDb = indexerDb;
+        this.decoderDb = indexer.decoderDb;
+        this.indexerDb = indexer.indexerDb;
 
         // Setup alias to the utility class
-        this.util = util;
+        this.util      = indexer.util;
+
+        // Setup alias to the indexer protocol changes instance
+        this.protocolChanges = indexer.protocolChanges;
 
         // Define list of database tables to do rollback on
         this.dataTables = [

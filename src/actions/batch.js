@@ -14,22 +14,22 @@
 class Batch {
 
     // Handle constructing a class instance
-    constructor(config, decoderDb, indexerDb, util, changes, actions){
+    constructor(action){
         // Parse in indexer configuration
-        this.config    = config;
+        this.config    = action.config;
 
         // Setup alias to the indexer database connections
-        this.decoderDb = decoderDb;
-        this.indexerDb = indexerDb;
+        this.decoderDb = action.decoderDb;
+        this.indexerDb = action.indexerDb;
 
         // Setup alias to utility class
-        this.util = util;
+        this.util     = action.util;
 
-        // Setup alias to utility class
-        this.actions = actions;
+        // Setup alias to actions class
+        this.actions  = action;
 
         // Setup alias to protocol changes class
-        this.protocolChanges = changes;
+        this.protocolChanges = action.changes;
 
         // Define list of known FORMATS
         this.formats = {};

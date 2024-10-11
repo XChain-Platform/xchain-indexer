@@ -2,17 +2,16 @@
 
 const mariadb = require('mariadb');
 const fs      = require('fs');
-const config  = require('./config.js');
 
 class Database {
 
     // Handle constructing a class instance
-    constructor(host, port, dbName, user, pass, util) {
+    constructor(host, port, dbName, user, pass, indexer) {
         // Parse in indexer configuration
-        this.config = config.getConfig();
+        this.config = indexer.config
 
         // Create instance of the utility class
-        this.util = util;
+        this.util   = indexer.util;
 
         // Database connection information
         this.host   = host;
