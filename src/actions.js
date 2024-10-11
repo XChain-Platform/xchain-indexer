@@ -6,7 +6,7 @@ const changes = require('./protocol_changes.js');
 /* XChain Indexer Actions */
 const address   = require('./actions/address.js');
 // const airdrop   = require('./actions/airdrop.js');
-// const batch     = require('./actions/batch.js');
+const batch     = require('./actions/batch.js');
 // const bet       = require('./actions/bet.js');
 // const callback  = require('./actions/callback.js');
 // const destroy   = require('./actions/destroy.js');
@@ -40,7 +40,7 @@ class Actions {
         // Create action instances and pass database connections
         this.actionAddress      = new address(this.config, this.decoderDb, this.indexerDb, this.util);
         // this.actionAirdrop   = new airdrop(this.config, this.decoderDb, this.indexerDb, this.util);
-        // this.actionBatch     = new batch(this.config, this.decoderDb, this.indexerDb, this.util);
+        this.actionBatch     = new batch(this.config, this.decoderDb, this.indexerDb, this.util, this.protocolChanges, this);
         // this.actionBet       = new bet(this.config, this.decoderDb, this.indexerDb, this.util);
         // this.actionCallback  = new callback(this.config, this.decoderDb, this.indexerDb, this.util);
         // this.actionDestroy   = new destroy(this.config, this.decoderDb, this.indexerDb, this.util);
@@ -69,6 +69,8 @@ class Actions {
     // @param tx.tx_hash     string     Transaction hash
     // @param tx.block_index integer    Block index of tx
     async processTransaction(tx){
+        // DEBUG : Force batch
+        tx.data         = 'BATCH|0|MINT|0|GAS|60;ISSUE|0|JDOGTEST';
         let error       = false;
         let params      = String(tx.data).split('|');
         let source      = tx.source;
@@ -127,7 +129,7 @@ class Actions {
     async processAction(action, params, data, error){
         if(action=='ADDRESS')   await this.actionAddress.parse(params, data, error);
         // if(action=='AIRDROP')   await this.actionAirdrop.parse(params, data, error);
-        // if(action=='BATCH')     await this.actionBatch.parse(params, data, error);
+        if(action=='BATCH')     await this.actionBatch.parse(params, data, error);
         // if(action=='BET')       await this.actionBet.parse(params, data, error);
         // if(action=='CALLBACK')  await this.actionCallback.parse(params, data, error);
         // if(action=='DESTROY')   await this.actionDestroy.parse(params, data, error);
