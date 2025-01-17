@@ -753,6 +753,7 @@ class Database {
                     // Define object of values for this ISSUE tx
                     let arr  = {};
                     arr['TICK']              = row.tick;
+                    arr['TICK_ID']           = tick_id;
                     arr['OWNER']             = (row.transfer) ? row.transfer : row.owner;
                     arr['MAX_SUPPLY']        = row.max_supply;
                     arr['MAX_MINT']          = row.max_mint;
@@ -2171,6 +2172,57 @@ class Database {
         await this.releaseConnection();
     }
 
+    // Create/Update record in `sends` table
+    async createSend(data){
+        // Normalize data
+        let tick_id        = await this.createTicker(data['TICK']);
+        let source_id      = await this.createAddress(data['SOURCE']);
+        let destination_id = await this.createAddress(data['DESTINATION']);
+        let tx_hash_id     = await this.createTransaction(data['TX_HASH']);
+        let memo_id        = await this.createMemo(data['MEMO']);
+        let status_id      = await this.createStatus(data['STATUS']);
+        let tx_index       = data['TX_INDEX'];
+        let amount         = data['AMOUNT'];
+        let block_index    = data['BLOCK_INDEX'];
+        // Check if record already exists for this send
+        let db     = await this.getConnection();
+        let query  = "SELECT tx_index FROM sends WHERE tx_hash_id=? LIMIT 1";
+        let exists = false;
+        try {
+            let rows = await db.query(query, [tx_hash_id]);
+            if(rows.length > 0)
+                exists = true;
+        } catch (error){
+            this.util.logError('Error looking up record in sends table:', error);
+        }
+        if(exists){
+            // UPDATE record
+            query = `UPDATE
+                        sends
+                    SET
+                        tx_index=?,
+                        tick_id=?,
+                        amount=?,
+                        source_id=?,
+                        destination_id=?,
+                        block_index=?,
+                        memo_id=?,
+                        status_id=?
+                    WHERE 
+                        tx_hash_id=?`;
+        } else {
+            // INSERT record
+            query = `INSERT INTO sends (tx_index, tick_id, amount, source_id, destination_id, block_index, memo_id, status_id, tx_hash_id) values (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+        }
+        let args = [tx_index, tick_id, amount, source_id, destination_id, block_index, memo_id, status_id, tx_hash_id];
+        // Create or Update the record in the sends table
+        try {
+            let result = await db.query(query, args);
+        } catch (error){
+            this.util.logError('Error trying to create record in sends table:', error);
+        }
+        await this.releaseConnection();
+    }
 }
 
 module.exports = Database

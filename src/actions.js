@@ -14,7 +14,7 @@ const list      = require('./actions/list.js');
 const mint      = require('./actions/mint.js');
 // const rug       = require('./actions/rug.js');
 // const sleep     = require('./actions/sleep.js');
-// const send      = require('./actions/send.js');
+const send      = require('./actions/send.js');
 // const sweep     = require('./actions/sweep.js');
 
 class Actions {
@@ -48,7 +48,7 @@ class Actions {
         this.actionMint      = new mint(this);
         // this.actionRug       = new rug(this);
         // this.actionSleep     = new sleep(this);
-        // this.actionSend      = new send(this);
+        this.actionSend      = new send(this);
         // this.actionSweep     = new sweep(this);
 
         // Define ACTION aliases
@@ -121,6 +121,7 @@ class Actions {
     }
 
     // Generalized function to handle parsing and processing a specific ACTION
+    // NOTE: If the action is UNKNOWN, fail silently (prevent crashing indexer on unsupported actions)
     async processAction(action, params, data, error){
         if(action=='ADDRESS')   await this.actionAddress.parse(params, data, error);
         // if(action=='AIRDROP')   await this.actionAirdrop.parse(params, data, error);
@@ -135,7 +136,7 @@ class Actions {
         if(action=='MINT')      await this.actionMint.parse(params, data, error);
         // if(action=='RUG')       await this.actionRug.parse(params, data, error);
         // if(action=='SLEEP')     await this.actionSleep.parse(params, data, error);
-        // if(action=='SEND')      await this.actionSend.parse(params, data, error);
+        if(action=='SEND')      await this.actionSend.parse(params, data, error);
         // if(action=='SWEEP')     await this.actionSweep.parse(params, data, error);
     }
 
