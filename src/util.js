@@ -41,6 +41,7 @@ class Util {
     }
 
     // Return list of addresses
+    // FORMAT : address = [tick, tick, tick]
     getAddressesList(){
         return this.addresses;
     }
@@ -307,6 +308,43 @@ class Util {
     addTransaction(tx_hash){
         if(!this.transactions.includes(tx_hash))
             this.transactions.push(tx_hash);
+    }
+
+    // Validate if a balances array holds a certain amount of a tick token
+    hasBalance(balances, tick_id, amount){
+        let balance = (!this.isNull(balances[tick_id])) ? balances[tick_id] : 0;
+        if(balance >= amount)
+            return true;
+        return false;
+    }
+
+    // Handle deducting TICK AMOUNT from balances and return updated balances array
+    debitBalances(balances, tick_id, amount){
+        let balance = (!this.isNull(balances[tick_id])) ? balances[tick_id] : 0;
+        balances[tick_id] = this.bcnum(balance) - this.bcnum(amount);
+        return balances;
+    }
+
+    // Consolidate Credit and Debit records
+    consolidateCreditDebitRecords(type, records){
+        let arr  = [],
+            data = [];
+        for(let idx in records){
+            let [key, amount, destination] = records[idx];
+            if(type=='credits')
+                key += '-' + destination;
+            arr[key] = (arr[key]) ? String(this.bcnum(arr[key]) + this.bcnum(amount)) : amount; 
+        }
+        for(let key in arr){
+            let amount = arr[key];
+            let info = [key, amount];
+            if(type=='credits'){
+                let [tick, destination] = String(key).split('-');
+                info = [tick, amount, destination];
+            }
+            data.push(info);
+        }
+        return data;
     }
 
 }
