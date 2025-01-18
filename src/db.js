@@ -1079,7 +1079,8 @@ class Database {
             try {
                 let rows = await db.query(query, [id]);
                 if(rows.length > 0)
-                    list = rows;
+                    for(let row of rows)
+                        list.push(row['item']);
             } catch (error) {
                 this.util.logError('Error looking up list data in lists table:', error);
             }
