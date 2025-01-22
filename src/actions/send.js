@@ -233,21 +233,8 @@ class Send {
             }
         }
 
-        // Consolidate the credit and debit records to write as few records as possible
-        debits  = this.util.consolidateCreditDebitRecords('debits', debits);
-        credits = this.util.consolidateCreditDebitRecords('credits', credits);
-
-        // Create records in debits table
-        for(let idx in debits){
-            let [tick, amount] = debits[idx];
-            await this.indexerDb.createDebit('SEND', data['BLOCK_INDEX'], data['TX_HASH'], tick, amount, data['SOURCE']);
-        }
-
-        // Create records in credits table
-        for(let idx in credits){
-            let [tick, amount, destination] = credits[idx];
-            await this.indexerDb.createCredit('SEND', data['BLOCK_INDEX'], data['TX_HASH'], tick, amount, destination);
-        }
+        // Process any transaction credit/debit records
+        await this.util.processTransactionCreditsDebits(this.indexerDb, credits, debits, 'SEND', data);
 
         // TODO: If this is a reparse, bail out before updating balances and token information
         // if(reparse)
