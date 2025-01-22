@@ -8,3 +8,4 @@ CREATE INDEX tick on index_tickers (tick);
 
 -- Create record for blank/empty transaction
 INSERT INTO index_tickers (id,tick) values (1,'');
+INSERT INTO index_tickers (id,tick) values (2,'GAS');
