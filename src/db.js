@@ -1056,7 +1056,7 @@ class Database {
         try {
             let rows = await db.query(query, [id]);
             if(rows.length > 0)
-                type = rows[0].type;
+                type = parseInt(rows[0].type);
         } catch (error) {
             this.util.logError('Error looking up list type in lists table:', error);
         }
@@ -2224,6 +2224,172 @@ class Database {
         }
         await this.releaseConnection();
     }
+
+    // Get address preferences for a given address
+    async getAddressPreferences(address, block_index, tx_index){
+        let id   = await this.createAddress(address);
+        // Set default address preferences
+        let data = {};
+        data['FEE_PREFERENCE'] = 2; // 2=Donate FEES to development
+        data['REQUIRE_MEMO']   = 0; // 0=Do NOT Require memo on SENDs to this address
+        // Build out the SQL query and arguments
+        let sql  = '';
+        let args = [id, 'valid'];
+        // Query using either block_index OR tx_index
+        if(!this.util.isNull(tx_index) && this.util.isNumeric(tx_index)){
+            sql += " AND a.tx_index < ?";
+            args.push(tx_index);
+        } else if(!this.util.isNull(block_index) && this.util.isNumeric(block_index)){
+            sql += " AND a.block_index < ?";
+            args.push(block_index);
+        }
+        // Lookup the address preferences
+        let db    = await this.getConnection();
+        let query = `SELECT 
+                a.fee_preference,
+                a.require_memo
+            FROM
+                addresses a,
+                index_statuses s
+            WHERE 
+                s.id=a.status_id AND
+                a.source_id=? AND 
+                s.status=?` + sql + `
+            ORDER BY 
+                a.tx_index`;
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0){
+                for(let row of rows){
+                    data['FEE_PREFERENCE'] = row.fee_preference;
+                    data['REQUIRE_MEMO']   = row.require_memo;
+                }
+            }
+        } catch (error){
+            this.util.logError('Error looking up address preferences in the addresses table:', error);
+        }
+        await this.releaseConnection();
+        return data;
+    }
+
+    // Create/Update record in `airdrops` table
+    async createAirdrop(data){
+        // Normalize data
+        let tick_id        = await this.createTicker(data['TICK']);
+        let source_id      = await this.createAddress(data['SOURCE']);
+        let tx_hash_id     = await this.createTransaction(data['TX_HASH']);
+        let list_id        = await this.createTransaction(data['LIST']);
+        let memo_id        = await this.createMemo(data['MEMO']);
+        let status_id      = await this.createStatus(data['STATUS']);
+        let tx_index       = data['TX_INDEX'];
+        let amount         = data['AMOUNT'];
+        let block_index    = data['BLOCK_INDEX'];
+        // Check if record already exists for this airdrop
+        let db     = await this.getConnection();
+        let query  = `SELECT
+                    tx_index
+                FROM
+                    airdrops
+                WHERE
+                    tick_id=? AND
+                    source_id=? AND
+                    list_id=? AND
+                    amount=? AND
+                    tx_hash_id=?`;
+        let args = [tick_id, source_id, list_id, amount, tx_hash_id];
+        let exists = false;
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0)
+                exists = true;
+        } catch (error){
+            this.util.logError('Error looking up record in airdrops table:', error);
+        }
+        // Define list of arguments for sql insert/update
+        args = [tx_index, block_index, memo_id, status_id, tick_id, source_id, list_id, amount, tx_hash_id];
+        if(exists){
+            // UPDATE record
+            query = `UPDATE
+                        airdrops
+                    SET
+                        tx_index=?,
+                        block_index=?,
+                        memo_id=?,
+                        status_id=?
+                    WHERE
+                        tick_id=? AND
+                        source_id=? AND
+                        list_id=? AND
+                        amount=? AND
+                        tx_hash_id=?`;
+        } else {
+            // INSERT record
+            query = `INSERT INTO airdrops (tx_index, block_index, memo_id, status_id, tick_id, source_id, list_id, amount, tx_hash_id) values (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+        }
+        // Create or Update the record in the sends table
+        try {
+            let result = await db.query(query, args);
+        } catch (error){
+            this.util.logError('Error trying to create record in airdrops table:', error);
+        }
+        await this.releaseConnection();
+    }
+
+    // Create/Update record in `fees` table
+    async createFeeRecord(data){
+        // Normalize data
+        let tick_id        = await this.createTicker(data['TICK']);
+        let source_id      = await this.createAddress(data['SOURCE']);
+        let destination_id = await this.createAddress(data['DESTINATION']);
+        let tx_index       = data['TX_INDEX'];
+        let amount         = data['AMOUNT'];
+        let method         = data['METHOD'];
+        let block_index    = data['BLOCK_INDEX'];
+        // Check if record already exists for this airdrop
+        let db     = await this.getConnection();
+        let query  = `SELECT
+                    tx_index
+                FROM
+                    fees
+                WHERE
+                    tx_index=?`;
+        let args = [tx_index];
+        let exists = false;
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0)
+                exists = true;
+        } catch (error){
+            this.util.logError('Error looking up record in fees table:', error);
+        }
+        // Define list of arguments for sql insert/update
+        args = [tick_id, source_id, destination_id, amount, method, block_index, tx_index];
+        if(exists){
+            // UPDATE record
+            query = `UPDATE
+                        fees
+                    SET
+                        tick_id=?,
+                        source_id=?,
+                        destination_id=?,
+                        amount=?,
+                        method=?,
+                        block_index=?
+                    WHERE 
+                        tx_index=?`;
+        } else {
+            // INSERT record
+            query = `INSERT INTO fees (tick_id, source_id, destination_id, amount, method, block_index, tx_index) values (?, ?, ?, ?, ?, ?, ?)`;
+        }
+        // Create or Update the record in the fees table
+        try {
+            let result = await db.query(query, args);
+        } catch (error){
+            this.util.logError('Error trying to create record in fees table:', error);
+        }
+        await this.releaseConnection();
+    }
+
 }
 
 module.exports = Database
