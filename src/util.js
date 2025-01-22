@@ -1,5 +1,6 @@
 /* XChain Indexer Utility Functions */
 
+const config = require('./config.js');
 const crypto = require('crypto');
 const mathjs = require('mathjs');
 const fs     = require('fs');
@@ -12,6 +13,9 @@ class Util {
         this.addresses    = {}; // this.addresses[address] = [tick, tick, tick]
         this.tickers      = [];
         this.transactions = []; 
+
+        // Get indexer configuration
+        this.config = config.getConfig();
     }
 
     /*
@@ -346,6 +350,87 @@ class Util {
         }
         return data;
     }
+
+    // Create the basic fees object used to calculate platform transaction fees
+    createFeesObject(data, preferences){
+        // clone transaction data object into fees object
+        let fees = JSON.parse(JSON.stringify(data));
+        fees['TICK_ID'] = 2;     // Hardcoded id for platform gas token (GAS/XCHAIN)
+        fees['TICK']    = 'GAS';
+        // TODO: Change TICK and TICK_ID from GAS to XCHAIN (also do so in index_tickers.sql file)
+        // fees['TICK']    = 'XCHAIN';
+        fees['AMOUNT']  = 0;
+        fees['METHOD']  = (preferences['FEE_PREFERENCE']==1) ? 1 : 2; // 1=Destroy, 2=Donate
+        return fees;
+    }
+
+    // Calculate Transaction fee based on number of database hits
+    // TODO: Make this code modular, so we can configure fees on actions on a per-chain basis
+    getTransactionFee(db_hits, tick){
+        let cost = 1000,                              // Cost in sats per DB hit
+            sats = this.bcmul(db_hits, cost , 0),     // FEE in sats (integer)
+            fee  = this.bcmul(sats, '0.00000001', 8); // FEE in decimal (divisible)
+        return fee;
+    }
+
+    // Determine if a tx hash is valid or not
+    // TODO: clean this up to verify it is an actual tx hash
+    isValidTransactionHash(hash){
+        if(String(hash).length==64)
+            return 1;
+        return 0;
+    }
+
+    // Process any transaction FEE according the user's ADDRESS preferences
+    async processTransactionFees(db, credits, debits, action, fees){
+        let immediate = true;
+        // Define list of actions that require immediate 
+        if(['AIRDROP'].includes(action))
+            immediate = false;
+        // Debit FEE from SOURCE
+        if(immediate){
+            await db.createDebit(action, fees['BLOCK_INDEX'], fees['TX_HASH'], fees['TICK'], fees['AMOUNT'], fees['SOURCE']);
+        } else {
+            debits.push([fees['TICK'], fees['AMOUNT']]);
+        }
+        // Handle using FEE according the the users ADDRESS preferences
+        if(fees['METHOD']>1){
+            // Short alias to config addresses
+            let address = this.config['ADDRESS'];
+            // Determine what address to donate to
+            fees['DESTINATION'] = (fees['METHOD']==2) ? address['DONATE1'] : address['DONATE2'];
+            // Store the donation ADDRESS and TICK in addresses list
+            this.addAddressTicker(fees['DESTINATION'], fees['TICK']);
+            // Credit donation address with FEE
+            if(immediate){
+                await db.createCredit(action, fees['BLOCK_INDEX'], fees['TX_HASH'], fees['TICK'], fees['AMOUNT'], fees['DESTINATION']);
+            } else {
+                credits.push([fees['TICK'], fees['AMOUNT'], fees['DESTINATION']]);
+            }
+        } 
+        // Create record of FEE in `fees` table
+        await db.createFeeRecord(fees);
+        // Return updated list of credits and debits
+        return [credits, debits];
+    }
+
+    // Process any transaction credit/debit records
+    async processTransactionCreditsDebits(db, credits, debits, action, data){
+        // Consolidate the credit and debit records to write as few records as possible
+        debits  = this.consolidateCreditDebitRecords('debits', debits);
+        credits = this.consolidateCreditDebitRecords('credits', credits);
+        // Create records in debits table
+        for(let idx in debits){
+            let [tick, amount] = debits[idx];
+            await db.createDebit(action, data['BLOCK_INDEX'], data['TX_HASH'], tick, amount, data['SOURCE']);
+        }
+
+        // Create records in credits table
+        for(let idx in credits){
+            let [tick, amount, destination] = credits[idx];
+            await db.createCredit(action, data['BLOCK_INDEX'], data['TX_HASH'], tick, amount, destination);
+        }
+    }    
 
 }
 
