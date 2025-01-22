@@ -101,6 +101,10 @@ class Issue {
                 data[name] = this.util.bcnum(value);
         }
 
+        // Array of credits and debits
+        let credits = [],
+            debits  = [];
+
         /*****************************************************************
          * TICK Validations
          ****************************************************************/
@@ -320,13 +324,16 @@ class Issue {
 
             // Credit MINT_SUPPLY to source address
             if(data['MINT_SUPPLY'])
-                await this.indexerDb.createCredit('ISSUE', data['BLOCK_INDEX'], data['TX_HASH'], data['TICK'], data['MINT_SUPPLY'], data['SOURCE']);
+                credits.push([data['TICK'], data['MINT_SUPPLY'], data['SOURCE']]);
 
             // Transfer MINT_SUPPLY to TRANSFER_SUPPLY address
             if(data['MINT_SUPPLY'] && data['TRANSFER_SUPPLY']){
-                await this.indexerDb.createDebit('ISSUE', data['BLOCK_INDEX'], data['TX_HASH'], data['TICK'], data['MINT_SUPPLY'], data['SOURCE']);
-                await this.indexerDb.createCredit('ISSUE',data['BLOCK_INDEX'], data['TX_HASH'], data['TICK'], data['MINT_SUPPLY'], data['TRANSFER_SUPPLY']);
+                debits.push([data['TICK'],  data['MINT_SUPPLY'], data['SOURCE']]);
+                credits.push([data['TICK'], data['MINT_SUPPLY'], data['TRANSFER_SUPPLY']]);
             }
+
+            // Process any transaction credit/debit records
+            await this.util.processTransactionCreditsDebits(this.indexerDb, credits, debits, 'ISSUE', data);
 
             // TODO: If this is a reparse, bail out before updating balances and token information
             // if(reparse)
