@@ -2,7 +2,7 @@
 
 /* XChain Indexer Actions */
 const address   = require('./actions/address.js');
-// const airdrop   = require('./actions/airdrop.js');
+const airdrop   = require('./actions/airdrop.js');
 const batch     = require('./actions/batch.js');
 // const bet       = require('./actions/bet.js');
 // const callback  = require('./actions/callback.js');
@@ -35,8 +35,8 @@ class Actions {
         this.protocolChanges = indexer.protocolChanges;
 
         // Create action instances and pass database connections
-        this.actionAddress      = new address(this);
-        // this.actionAirdrop   = new airdrop(this);
+        this.actionAddress   = new address(this);
+        this.actionAirdrop   = new airdrop(this);
         this.actionBatch     = new batch(this);
         // this.actionBet       = new bet(this;
         // this.actionCallback  = new callback(this);
@@ -124,7 +124,7 @@ class Actions {
     // NOTE: If the action is UNKNOWN, fail silently (prevent crashing indexer on unsupported actions)
     async processAction(action, params, data, error){
         if(action=='ADDRESS')   await this.actionAddress.parse(params, data, error);
-        // if(action=='AIRDROP')   await this.actionAirdrop.parse(params, data, error);
+        if(action=='AIRDROP')   await this.actionAirdrop.parse(params, data, error);
         if(action=='BATCH')     await this.actionBatch.parse(params, data, error);
         // if(action=='BET')       await this.actionBet.parse(params, data, error);
         // if(action=='CALLBACK')  await this.actionCallback.parse(params, data, error);
