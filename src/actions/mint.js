@@ -94,6 +94,10 @@ class Mint {
             data['MINT_STOP_BLOCK']  = (tokenInfo && !this.util.isNull(tokenInfo['MINT_STOP_BLOCK']))  ? this.util.bcnum(tokenInfo['MINT_STOP_BLOCK']) : 0;
         }
 
+        // Array of credits and debits
+        let credits = [],
+            debits  = [];
+
         /*****************************************************************
          * ACTION Validations
          ****************************************************************/
@@ -169,14 +173,17 @@ class Mint {
 
             // Credit MINT_SUPPLY to source address
             if(data['AMOUNT']){
-                await this.indexerDb.createCredit('MINT', data['BLOCK_INDEX'], data['TX_HASH'], data['TICK'], data['AMOUNT'], data['SOURCE']);
+                credits.push([data['TICK'], data['AMOUNT'], data['SOURCE']]);
 
                 // Transfer AMOUNT to DESTINATION address
                 if(data['DESTINATION']){
-                    await this.indexerDb.createDebit('MINT',  data['BLOCK_INDEX'], data['TX_HASH'], data['TICK'], data['AMOUNT'], data['SOURCE']);
-                    await this.indexerDb.createCredit('MINT', data['BLOCK_INDEX'], data['TX_HASH'], data['TICK'], data['AMOUNT'], data['DESTINATION']);
+                    debits.push([data['TICK'],  data['AMOUNT'], data['SOURCE']]);
+                    credits.push([data['TICK'], data['AMOUNT'], data['DESTINATION']]);
                 }
             }
+
+            // Process any transaction credit/debit records
+            await this.util.processTransactionCreditsDebits(this.indexerDb, credits, debits, 'MINT', data);
 
             // If this is a reparse, bail out before updating balances and token information
             // if(reparse)
