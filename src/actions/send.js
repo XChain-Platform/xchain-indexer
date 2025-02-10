@@ -45,7 +45,7 @@ class Send {
 
     }
 
-    // Handle parsing the MINT transaction
+    // Handle parsing the SEND transaction
     async parse(params, data, error){
         /*****************************************************************
          * DEBUGGING - Force params
