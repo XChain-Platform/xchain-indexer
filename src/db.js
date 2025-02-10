@@ -94,6 +94,7 @@ class Database {
                 databaseCreated = true;
             } catch(e){
                 // console.log('e=',e);
+                console.log("SQL Error: ", e.sqlMessage);
                 console.log("There was an error trying to connect to the " + this.dbName + " database. Trying again in a few seconds...");
                 await this.util.sleep(5000); // Waiting 5 seconds
             }
