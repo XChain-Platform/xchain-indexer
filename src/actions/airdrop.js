@@ -48,7 +48,7 @@ class Airdrop {
 
     }
 
-    // Handle parsing the MINT transaction
+    // Handle parsing the AIRDROP transaction
     async parse(params, data, error){
         /*****************************************************************
          * DEBUGGING - Force params

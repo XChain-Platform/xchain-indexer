@@ -42,7 +42,7 @@ class Batch {
         this.actionLimits['ISSUE'] = 1;
     }
 
-    // Handle parsing the ADDRESS transaction
+    // Handle parsing the BATCH transaction
     async parse(params, data, error){
 
         // Clone the raw data for storage in batches table
