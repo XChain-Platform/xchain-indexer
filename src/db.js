@@ -2188,10 +2188,20 @@ class Database {
         let block_index    = data['BLOCK_INDEX'];
         // Check if record already exists for this send
         let db     = await this.getConnection();
-        let query  = "SELECT tx_index FROM sends WHERE tx_hash_id=? LIMIT 1";
+        let query  = `SELECT
+                            tx_index
+                        FROM
+                            sends
+                        WHERE
+                            tick_id=? AND
+                            source_id=? AND
+                            destination_id=? AND
+                            amount=? AND
+                            tx_hash_id=?`;
+        let args = [tick_id, source_id, destination_id, amount, tx_hash_id];
         let exists = false;
         try {
-            let rows = await db.query(query, [tx_hash_id]);
+            let rows = await db.query(query, args);
             if(rows.length > 0)
                 exists = true;
         } catch (error){
@@ -2203,20 +2213,20 @@ class Database {
                         sends
                     SET
                         tx_index=?,
-                        tick_id=?,
-                        amount=?,
-                        source_id=?,
-                        destination_id=?,
                         block_index=?,
                         memo_id=?,
                         status_id=?
                     WHERE 
+                        tick_id=? AND
+                        source_id=? AND
+                        destination_id=? AND
+                        amount=? AND
                         tx_hash_id=?`;
         } else {
             // INSERT record
-            query = `INSERT INTO sends (tx_index, tick_id, amount, source_id, destination_id, block_index, memo_id, status_id, tx_hash_id) values (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+            query = `INSERT INTO sends (tx_index, block_index, memo_id, status_id, tick_id, source_id, destination_id, amount, tx_hash_id) values (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
         }
-        let args = [tx_index, tick_id, amount, source_id, destination_id, block_index, memo_id, status_id, tx_hash_id];
+        args = [tx_index, block_index, memo_id, status_id, tick_id, source_id, destination_id, amount, tx_hash_id];
         // Create or Update the record in the sends table
         try {
             let result = await db.query(query, args);
