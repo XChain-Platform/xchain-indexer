@@ -81,6 +81,10 @@ class Send {
             if(idx==last && ((format==0 && idx==4) || (format==1 && idx%2==0) || (format==2 && idx%3==1)))
                 memo = params[idx];
 
+        // If we encountered an invalid version error add it to the sends list so we create a record of it in sends
+        if(error)
+            sends.push([params[0], params[1], memo]);
+
         // Build out array of sends
         let lastIdx = params.length - 1;        
         for(let idx in params){
