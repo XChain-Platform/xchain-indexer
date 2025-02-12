@@ -1557,8 +1557,10 @@ class Database {
             let query = "SELECT address FROM index_addresses";
             try {
                 let rows = await db.query(query);
-                if(rows.length > 0)
-                    addrs = rows;
+                if(rows.length > 0){
+                    for(let row of rows)
+                        addrs.push(row.address);
+                }
             } catch (error){
                 this.util.logError('Error looking up list of all addresses from index_addresses table:', error);
             }
@@ -1574,62 +1576,65 @@ class Database {
         let type       = typeof address;
         let address_id = null;
         let balance    = 0;
+        let query      = false;
+        let db         = await this.getConnection();
         if(type==='number' && this.util.isNumeric(address))
             address_id = address;
         if(type==='string' && !this.util.isNumeric(address))
             address_id = await this.createAddress(address);
         // Get list of address balances based on credits/debits tables
         let balances = await this.getAddressBalances(address_id);
-        if(balances.length > 0){
-            let db    = await this.getConnection();
-            for(let tick_id in balances){
-                balance = balances[tick_id];
-                let action  = 'insert';
-                let query = "SELECT id FROM balances WHERE address_id=? AND tick_id=? LIMIT 1";
-                try {
-                    let rows = await db.query(query, [address_id, tick_id]);
-                    if(rows.length > 0)
-                        action = 'update';
-                } catch (error){
-                    this.util.logError('Error looking up address from balances table:', error);
-                }
-                let args = [];
-                if(balance==0)
-                    action = 'delete';
-                if(action=='delete'){
-                    query = "DELETE FROM balances WHERE address_id=? AND tick_id=? ";
-                    args.push(address_id, tick_id);
-                } else if(action=='update'){
-                    query = "UPDATE balances SET amount=? WHERE address_id=? AND tick_id=? ";
-                    args.push(balance, address_id, tick_id);
-                } else if(action=='insert'){
-                    query = "INSERT INTO balances (tick_id, address_id, amount) values (?, ?, ?)";
-                    args.push(tick_id, address_id, balance);
-                }
-                try {
-                    let result = await db.query(query, args);
-                } catch (error){
-                    this.util.logError('Error while trying to ' + action + ' balance record for address=' + address + ' tick_id=' + tick_id, error);
-                }                
+        // Handle updating any current balances based on credits/debits table records
+        for(let tick_id in balances){
+            balance = balances[tick_id];
+            let action  = 'insert';
+            query = "SELECT id FROM balances WHERE address_id=? AND tick_id=? LIMIT 1";
+            try {
+                let rows = await db.query(query, [address_id, tick_id]);
+                if(rows.length > 0)
+                    action = 'update';
+            } catch (error){
+                this.util.logError('Error looking up address from balances table:', error);
             }
-            // If this is a rollback, then handle detecting records in balances table which should not exist and delete them
-            if(rollback){
-                // Get list of address balances based on balances table
-                let old_balances = await this.getAddressTableBalances(address_id);
-                for(let tick_id of old_balances){
-                    balance = balances[tick_id];
-                    if(!this.util.isNull(balance) || balance==0){
-                        query = "DELETE FROM balances WHERE address_id=? AND tick_id=?";
-                        try {
-                            let rows = await db.query(query, [address_id, tick_id]);
-                        } catch (error){
-                            this.util.logError('Error deleting balance record address=' + address + ' tick_id=' + tick_id, error);
-                        }                        
-                    }
-                }
+            let args = [];
+            if(balance==0)
+                action = 'delete';
+            if(action=='delete'){
+                query = "DELETE FROM balances WHERE address_id=? AND tick_id=? ";
+                args.push(address_id, tick_id);
+            } else if(action=='update'){
+                query = "UPDATE balances SET amount=? WHERE address_id=? AND tick_id=? ";
+                args.push(balance, address_id, tick_id);
+            } else if(action=='insert'){
+                query = "INSERT INTO balances (tick_id, address_id, amount) values (?, ?, ?)";
+                args.push(tick_id, address_id, balance);
             }
-            await this.releaseConnection();
+            try {
+                let result = await db.query(query, args);
+            } catch (error){
+                this.util.logError('Error while trying to ' + action + ' balance record for address=' + address + ' tick_id=' + tick_id, error);
+            }                
         }
+        // If this is a rollback, then handle detecting records in balances table which should not exist and delete them
+        if(rollback){
+            // Get list of address balances based on balances table
+            let old_balances = await this.getAddressTableBalances(address_id);
+            let old_balance  = 0;
+            for(let tick_id in old_balances){
+                old_balance = old_balances[tick_id];
+                balance     = balances[tick_id];
+                // console.log('tick_id, balance=',tick_id, balance, old_balance);
+                if(!this.util.isNull(old_balance) || balance==0){
+                    query = "DELETE FROM balances WHERE address_id=? AND tick_id=?";
+                    try {
+                        let rows = await db.query(query, [address_id, tick_id]);
+                    } catch (error){
+                        this.util.logError('Error deleting balance record address=' + address + ' tick_id=' + tick_id, error);
+                    }                        
+                }
+            }
+        }
+        await this.releaseConnection();
     }
 
     // Get address balances using credits/debits table data
@@ -1642,8 +1647,8 @@ class Database {
             address_id = await this.createAddress(address);
         let credits  = await this.getAddressCreditDebit('credits', address_id, null, block_index, tx_index);
         let debits   = await this.getAddressCreditDebit('debits',  address_id, null, block_index, tx_index);
-        let decimals = []; // Assoc array to store tick/decimals
-        let balances = []; // Assoc array to store tick/balance
+        let decimals = {}; // Object to store tick_id/decimals
+        let balances = {}; // Object to store tick_id/balance
         for(let tick_id in credits)
             decimals[tick_id] = await this.getTokenDecimalPrecision(tick_id);
         // Build out balances (credits - debits)
@@ -1668,7 +1673,7 @@ class Database {
     async getAddressTableBalances(address){
         let type       = typeof address;
         let address_id = null;
-        let balances   = []; // Assoc array to store tick/balance
+        let balances   = {}; // Object to store tick/balance
         if(type==='number' && this.util.isNumeric(address))
             address_id = address;
         if(type==='string' && !this.util.isNumeric(address))
