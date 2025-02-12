@@ -6,7 +6,7 @@ const airdrop   = require('./actions/airdrop.js');
 const batch     = require('./actions/batch.js');
 // const bet       = require('./actions/bet.js');
 // const callback  = require('./actions/callback.js');
-// const destroy   = require('./actions/destroy.js');
+const destroy   = require('./actions/destroy.js');
 // const dispenser = require('./actions/dispenser.js');
 // const dividend  = require('./actions/dividend.js');
 const issue     = require('./actions/issue.js');
@@ -40,7 +40,7 @@ class Actions {
         this.actionBatch     = new batch(this);
         // this.actionBet       = new bet(this;
         // this.actionCallback  = new callback(this);
-        // this.actionDestroy   = new destroy(this);
+        this.actionDestroy   = new destroy(this);
         // this.actionDispenser = new dispenser(this);
         // this.actionDividend  = new dividend(this);
         this.actionIssue     = new issue(this);
@@ -92,6 +92,7 @@ class Actions {
         }
 
         // Support legacy ACTION format with no VERSION (default to VERSION 0)
+        // TODO: Disable this hack before release (LEGACY version is only in BTNS)
         if(['ISSUE','MINT','SEND'].includes(action) && this.util.isLegacyActionFormat(params))
             params.splice(0,0,0);
 
@@ -128,7 +129,7 @@ class Actions {
         if(action=='BATCH')     await this.actionBatch.parse(params, data, error);
         // if(action=='BET')       await this.actionBet.parse(params, data, error);
         // if(action=='CALLBACK')  await this.actionCallback.parse(params, data, error);
-        // if(action=='DESTROY')   await this.actionDestroy.parse(params, data, error);
+        if(action=='DESTROY')   await this.actionDestroy.parse(params, data, error);
         // if(action=='DISPENSER') await this.actionDispenser.parse(params, data, error);
         // if(action=='DIVIDEND')  await this.actionDividend.parse(params, data, error);
         if(action=='ISSUE')     await this.actionIssue.parse(params, data, error);

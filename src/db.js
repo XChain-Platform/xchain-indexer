@@ -2406,6 +2406,65 @@ class Database {
         await this.releaseConnection();
     }
 
+    // Create/Update record in `destroys` table
+    async createDestroy(data){
+        // Normalize data
+        let tick_id        = await this.createTicker(data['TICK']);
+        let source_id      = await this.createAddress(data['SOURCE']);
+        let tx_hash_id     = await this.createTransaction(data['TX_HASH']);
+        let memo_id        = await this.createMemo(data['MEMO']);
+        let status_id      = await this.createStatus(data['STATUS']);
+        let tx_index       = data['TX_INDEX'];
+        let amount         = data['AMOUNT'];
+        let block_index    = data['BLOCK_INDEX'];
+        // Check if record already exists for this destroy
+        let db     = await this.getConnection();
+        let query  = `SELECT
+                            tx_index
+                        FROM
+                            destroys
+                        WHERE
+                            tick_id=? AND
+                            source_id=? AND
+                            amount=? AND
+                            tx_hash_id=?`;
+        let args = [tick_id, source_id, amount, tx_hash_id];
+        let exists = false;
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0)
+                exists = true;
+        } catch (error){
+            this.util.logError('Error looking up record in destroys table:', error);
+        }
+        if(exists){
+            // UPDATE record
+            query = `UPDATE
+                        destroys
+                    SET
+                        tx_index=?,
+                        block_index=?,
+                        memo_id=?,
+                        status_id=?
+                    WHERE 
+                        tick_id=? AND
+                        source_id=? AND
+                        amount=? AND
+                        tx_hash_id=?`;
+        } else {
+            // INSERT record
+            query = `INSERT INTO destroys (tx_index, block_index, memo_id, status_id, tick_id, source_id, amount, tx_hash_id) values (?, ?, ?, ?, ?, ?, ?, ?)`;
+        }
+        args = [tx_index, block_index, memo_id, status_id, tick_id, source_id, amount, tx_hash_id];
+        // Create or Update the record in the destroys table
+        try {
+            let result = await db.query(query, args);
+        } catch (error){
+            this.util.logError('Error trying to create record in destroys table:', error);
+        }
+        await this.releaseConnection();
+    }
+    
 }
 
 module.exports = Database
