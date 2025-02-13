@@ -98,15 +98,23 @@ class Util {
         return now;
     }
 
-    // Log a timer using a given name
-    logTimer(timer, timeName){
+    // get a timer using a given name
+    getTimer(timer){
         let now = Date.now();
         let ms  = now - timer;
-        var timeString = this.millisecondsToTimeString(ms);
-        var niceString = (timeName!=null) ? timeName : 'Time';
-        niceString += "\t: " + ms + 'ms';
+        let timeString = this.millisecondsToTimeString(ms);
+        let niceString = ms + 'ms';
         if(timeString!='')
-            niceString += ' (' + timeString + ')';
+            niceString = timeString;
+        return niceString;
+    }
+
+    // Log a timer using a given name (timeName : (timeString))
+    logTimer(timer, timeName){
+        var timeString = this.getTimer(timer);
+        var niceString = (timeName!=null) ? timeName : 'Time';
+        if(timeString!='')
+            niceString += '\t: (' + timeString + ')';
         console.log(niceString);
     }
 

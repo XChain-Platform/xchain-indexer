@@ -150,6 +150,13 @@ class XChainIndexer {
                 // DEBUG
                 // lastIndexerBlock = startBlock;
 
+                // DEBUG : Rollback to a specific block
+                // let rollbackBlock = 823133;
+                // if(lastIndexerBlock >= rollbackBlock){
+                //     await this.rollback.rollback(rollbackBlock);
+                //     this.util.throwError('Rolled back to ' + rollbackBlock);
+                // }
+
                 // Get a list of any transactions in this block from the decoder database
                 let blockTransactions = await this.decoderDb.getBlockData(lastIndexerBlock);
 
@@ -158,16 +165,21 @@ class XChainIndexer {
                     await this.actions.processTransaction(tx);
 
                 // Create record in `blocks` table with hashes of the credits/debits/transactions tables
-                await this.indexerDb.createBlock(lastIndexerBlock);
+                let [credits, debits, txlist] = await this.indexerDb.createBlock(lastIndexerBlock);
 
                 // Do a sanity check to verify that token supplys match data in credits/debits/balances tables 
                 await this.indexerDb.sanityCheck(lastIndexerBlock);
 
-                // Log the debug time
-                this.util.logTimer(debugTimer, 'Block Parsed');
+                // Log the total parse time for this block
+                let parseTime = this.util.getTimer(debugTimer);
+                console.log('Block Parsed' + "\t: " + lastIndexerBlock + ' [credits:' + credits + ' debits:' + debits + ' txlist:' + txlist + '] (' + parseTime + ')');
 
                 // DEBUG: counter to enable stopping parsing after a set number of blocks
                 cnt++;
+
+                // DEBUG : Exit processing at a select block
+                // if(lastIndexerBlock >= 828302)
+                //     this.util.throwError('Exiting on target block');
 
                 // DEBUG: Delay processing after X blocks
                 // if(cnt>=1)
@@ -175,7 +187,7 @@ class XChainIndexer {
 
                 // DEBUG: Test some rollbacks
                 // if(cnt>=3){
-                //     this.rollback.rollback(lastIndexerBlock-1);
+                //     await this.rollback.rollback(lastIndexerBlock-1);
                 //     break;
                 // }
 

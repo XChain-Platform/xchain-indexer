@@ -542,7 +542,7 @@ class Database {
         let credits = String(hashes.credits.hash).substring(0,5);
         let debits  = String(hashes.debits.hash).substring(0,5);
         let txlist  = String(hashes.txlist.hash).substring(0,5);
-        console.log('Block Created' + "\t: " + block_index + ' [credits:' + credits + ' debits:' + debits + ' txlist:' + txlist + ']');
+        return [credits, debits, txlist];
     }
 
     // Lookup a record in the `index_actions` table and return record id
