@@ -240,7 +240,7 @@ class Issue {
             error = 'invalid: MINT_ADDRESS_MAX < MAX_MINT';
 
         // Verify MAX_SUPPLY can not be changed if LOCK_MAX_SUPPLY is enabled
-        if(!error && tokenInfo && tokenInfo['LOCK_MAX_SUPPLY'] && !this.util.isNull(data['MAX_SUPPLY']) && data['MAX_SUPPLY'] != tokenInfoInfo['MAX_SUPPLY'])
+        if(!error && tokenInfo && tokenInfo['LOCK_MAX_SUPPLY'] && !this.util.isNull(data['MAX_SUPPLY']) && data['MAX_SUPPLY'] != tokenInfo['MAX_SUPPLY'])
             error = 'invalid: MAX_SUPPLY (locked)';
 
         // Verify MAX_MINT can not be changed if LOCK_MAX_MINT is enabled
