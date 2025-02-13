@@ -1187,8 +1187,13 @@ class Database {
             'LOCK_SLEEP',
             'LOCK_CALLBACK'
         ];
-        // Unset any LOCK fields with invalid values
+        // Standardize lock values to explicitly unlocked (0) or locked (1)
         locks.forEach(function(lock){
+            let value = data[lock];
+            // Initialize null/undefined/empty locks to unlocked (0)
+            if(value === null || value === undefined || value==='')
+                data[lock] = 0;
+            // Unset any LOCK fields with invalid values
             if([0,1].indexOf(data[lock]) == -1)
                 delete data[lock];
         });
