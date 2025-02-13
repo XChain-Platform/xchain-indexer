@@ -1201,7 +1201,10 @@ class Database {
         if(!this.util.isNull(data['DECIMALS']) && (data['DECIMALS'] < this.config.MIN_TOKEN_DECIMALS || data['DECIMALS'] > this.config.MAX_TOKEN_DECIMALS))
             delete data['DECIMALS'];
         // Make data safe for use in SQL queries
-        let description        = String(data['DESCRIPTION']).substring(0,250); // Truncate description to 250 chars 
+        let description       = data['DESCRIPTION'];
+        // Truncate description to MAX_TOKEN_DESCRIPTION characters
+        if(!this.util.isNull(description) && description.length > this.config['MAX_TOKEN_DESCRIPTION'])
+            description = description.substring(0,this.config['MAX_TOKEN_DESCRIPTION']); 
         let max_supply         = data['MAX_SUPPLY'];
         let max_mint           = data['MAX_MINT'];
         let mint_supply        = data['MINT_SUPPLY'];
