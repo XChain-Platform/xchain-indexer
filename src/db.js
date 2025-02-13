@@ -789,7 +789,7 @@ class Database {
                         if(key=='DECIMALS' && data[key] > value)
                             continue;
                         // Skip setting value if value is null or empty (use last explicit value)
-                        if(this.util.isNull(value) || value=='')
+                        if(this.util.isNull(value) || value==='')
                             continue;
                         // Update data object with value from this ISSUE tx
                         data[key] = value;
@@ -1553,6 +1553,7 @@ class Database {
             addrs.push(address);
         // Dump full list of addresses
         if(type==='boolean' && address===true){
+            console.log('Updating all balances...');
             let db    = await this.getConnection();
             let query = "SELECT address FROM index_addresses";
             try {
@@ -1573,17 +1574,20 @@ class Database {
 
     // Create/Update/Delete records in the 'balances' table
     async updateAddressBalance(address, rollback){
-        let type       = typeof address;
-        let address_id = null;
-        let balance    = 0;
-        let query      = false;
-        let db         = await this.getConnection();
+        let type        = typeof address;
+        let address_id  = null;
+        let balance     = 0;
+        let old_balance = 0;
+        let query       = false;
+        let db          = await this.getConnection();
         if(type==='number' && this.util.isNumeric(address))
             address_id = address;
         if(type==='string' && !this.util.isNumeric(address))
             address_id = await this.createAddress(address);
         // Get list of address balances based on credits/debits tables
         let balances = await this.getAddressBalances(address_id);
+        // Get list of address balances based on balances table
+        let old_balances = await this.getAddressTableBalances(address_id);
         // Handle updating any current balances based on credits/debits table records
         for(let tick_id in balances){
             balance = balances[tick_id];
@@ -1610,21 +1614,19 @@ class Database {
                 args.push(tick_id, address_id, balance);
             }
             try {
+                // console.log('updateAddressBalance query=',query,args);
                 let result = await db.query(query, args);
             } catch (error){
                 this.util.logError('Error while trying to ' + action + ' balance record for address=' + address + ' tick_id=' + tick_id, error);
             }                
         }
         // If this is a rollback, then handle detecting records in balances table which should not exist and delete them
+        // TODO: Test this code a bit better with various random rollbacks and verify all is working without any sanity check issues
         if(rollback){
-            // Get list of address balances based on balances table
-            let old_balances = await this.getAddressTableBalances(address_id);
-            let old_balance  = 0;
             for(let tick_id in old_balances){
                 old_balance = old_balances[tick_id];
                 balance     = balances[tick_id];
-                // console.log('tick_id, balance=',tick_id, balance, old_balance);
-                if(!this.util.isNull(old_balance) || balance==0){
+                if(!this.util.isNull(old_balance) && (this.util.isNull(balance) || balance==0 )){
                     query = "DELETE FROM balances WHERE address_id=? AND tick_id=?";
                     try {
                         let rows = await db.query(query, [address_id, tick_id]);
@@ -1765,7 +1767,8 @@ class Database {
         if(type==='string')
             tokens.push(tickers);
         // Dump full list of tokens
-        if(type==='boolean' &&$tickers===true){
+        if(type==='boolean' && tickers===true){
+            console.log('Updating all tokens...');
             let db    = await this.getConnection();
             let query = "SELECT t2.tick FROM tokens t1, index_tickers t2 WHERE t1.tick_id=t2.id";
             try {
