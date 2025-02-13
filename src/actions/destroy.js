@@ -155,7 +155,7 @@ class Destroy {
                 error = 'invalid: TICK (unknown)';
 
             // Determine token divisibility
-            let divisible = (tokenInfo && tokenInfo['DECIMALS']==1) ? 1 : 0;
+            let divisible = (tokenInfo && tokenInfo['DECIMALS']>=1) ? 1 : 0;
 
             /*************************************************************
              * FORMAT Validations
