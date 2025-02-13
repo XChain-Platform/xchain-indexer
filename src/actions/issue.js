@@ -187,7 +187,7 @@ class Issue {
         // Verify LOCK fields cannot be changed once enabled/locked
         for(let name of this.fieldList['LOCK']){
             let value = issue[name];
-            if(!error && !this.util.isNull(value) && !this.util.isValidLock(tokenInfo, issue, name))
+            if(!error && tokenInfo && !this.util.isNull(value) && !this.util.isValidLock(tokenInfo, issue, name))
                 error = "invalid: " + name + " (locked)";
         }
 
