@@ -159,8 +159,9 @@ class Rollback {
         let tickers      = this.util.getTickersList();
         let transactions = this.util.getTransactionsList();
 
-        // DEBUG : Full balances update
+        // DEBUG : Full balances and token updates
         // await this.indexerDb.updateBalances(true, true);
+        // await this.indexerDb.updateTokens(true, true);
 
         // Update address balances to get back to sane balances based on credits/debits
         await this.indexerDb.updateBalances(Object.keys(addresses), true);
