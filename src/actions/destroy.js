@@ -227,6 +227,9 @@ class Destroy {
         // Update balances for addresses
         await this.indexerDb.updateBalances(addresses);
 
+        // Update supplies for tokens
+        await this.indexerDb.updateTokenInfo(tickers);
+
     }
 }
 
