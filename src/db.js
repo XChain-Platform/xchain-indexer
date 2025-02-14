@@ -1189,10 +1189,6 @@ class Database {
         ];
         // Standardize lock values to explicitly unlocked (0) or locked (1)
         locks.forEach(function(lock){
-            let value = data[lock];
-            // Initialize null/undefined/empty locks to unlocked (0)
-            if(value === null || value === undefined || value==='')
-                data[lock] = 0;
             // Unset any LOCK fields with invalid values
             if([0,1].indexOf(data[lock]) == -1)
                 delete data[lock];
@@ -1201,10 +1197,7 @@ class Database {
         if(!this.util.isNull(data['DECIMALS']) && (data['DECIMALS'] < this.config.MIN_TOKEN_DECIMALS || data['DECIMALS'] > this.config.MAX_TOKEN_DECIMALS))
             delete data['DECIMALS'];
         // Make data safe for use in SQL queries
-        let description       = data['DESCRIPTION'];
-        // Truncate description to MAX_TOKEN_DESCRIPTION characters
-        if(!this.util.isNull(description) && description.length > this.config['MAX_TOKEN_DESCRIPTION'])
-            description = description.substring(0,this.config['MAX_TOKEN_DESCRIPTION']); 
+        let description        = data['DESCRIPTION'];
         let max_supply         = data['MAX_SUPPLY'];
         let max_mint           = data['MAX_MINT'];
         let mint_supply        = data['MINT_SUPPLY'];
@@ -1234,6 +1227,9 @@ class Database {
         let allow_list_id      = await this.createTransaction(data['ALLOW_LIST']);
         let block_list_id      = await this.createTransaction(data['BLOCK_LIST']);
         let status_id          = await this.createStatus(data['STATUS']);
+        // Truncate description to MAX_TOKEN_DESCRIPTION characters
+        if(!this.util.isNull(description) && description.length > this.config['MAX_TOKEN_DESCRIPTION'])
+            description = description.substring(0,this.config['MAX_TOKEN_DESCRIPTION']); 
         // Check if record already exists for this ISSUE action
         let db     = await this.getConnection();
         let query  = "SELECT tx_index FROM issues WHERE tx_hash_id=? LIMIT 1";
