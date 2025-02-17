@@ -234,6 +234,24 @@ class Util {
         return this.bcnum(mathjs.format(mathjs.multiply(mathjs.bignumber(a),mathjs.bignumber(b)),{notation: 'fixed', precision: d}));
     }
 
+    // Validate if a given value is considered valid
+    // @value = string or integer
+    // @valid = string or array of values
+    isValidValue(value, valid){
+        let valueType = typeof value,
+            validType = typeof valid;
+        // Convert any numeric string values to integer value
+        if(valueType=='string' && this.isNumeric(value))
+            value = parseInt(value);
+        // Convert a valid string to an array
+        if(validType=='string')
+            valid = [valid];
+        // Only return true for valid values
+        if(valid.indexOf(value)!=-1)
+            return true;
+        return false;
+    }
+
     // Handle validating amount format
     isValidAmountFormat(divisible, amount){
         let [int, sats] = String(amount).split('.');
@@ -256,7 +274,6 @@ class Util {
             return true;
         return false;
     }
-
 
     // Handle validating lock status
     isValidLock(tokenInfo, data, lock){
@@ -391,16 +408,8 @@ class Util {
 
     // Process any transaction FEE according the user's ADDRESS preferences
     async processTransactionFees(db, credits, debits, action, fees){
-        let immediate = true;
-        // Define list of actions that require immediate 
-        if(['AIRDROP'].includes(action))
-            immediate = false;
         // Debit FEE from SOURCE
-        if(immediate){
-            await db.createDebit(action, fees['BLOCK_INDEX'], fees['TX_HASH'], fees['TICK'], fees['AMOUNT'], fees['SOURCE']);
-        } else {
-            debits.push([fees['TICK'], fees['AMOUNT']]);
-        }
+        debits.push([fees['TICK'], fees['AMOUNT']]);
         // Handle using FEE according the the users ADDRESS preferences
         if(fees['METHOD']>1){
             // Short alias to config addresses
@@ -410,11 +419,7 @@ class Util {
             // Store the donation ADDRESS and TICK in addresses list
             this.addAddressTicker(fees['DESTINATION'], fees['TICK']);
             // Credit donation address with FEE
-            if(immediate){
-                await db.createCredit(action, fees['BLOCK_INDEX'], fees['TX_HASH'], fees['TICK'], fees['AMOUNT'], fees['DESTINATION']);
-            } else {
-                credits.push([fees['TICK'], fees['AMOUNT'], fees['DESTINATION']]);
-            }
+            credits.push([fees['TICK'], fees['AMOUNT'], fees['DESTINATION']]);
         } 
         // Create record of FEE in `fees` table
         await db.createFeeRecord(fees);
