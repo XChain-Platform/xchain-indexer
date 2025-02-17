@@ -38,8 +38,8 @@ class Sweep {
         /*****************************************************************
          * DEBUGGING - Force params
          ****************************************************************/
-        let str = '0|1BoogrfDADPLQpq8LMASmWQUVYDp4t2hF9|1|1|memo';
-        params = String(str).split('|');
+        // let str = '0|1BoogrfDADPLQpq8LMASmWQUVYDp4t2hF9|1|1|memo';
+        // params = String(str).split('|');
 
         // Reset the address/tickers/transactions list on each parse
         this.util.resetLists();
