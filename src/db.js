@@ -636,6 +636,22 @@ class Database {
         return tx_index;
     }
 
+    // Lookup a record in the `index_tickers` table and return record tick
+    async getTicker(tick_id){
+        let tick  = null;
+        let db    = await this.getConnection();
+        let query = "SELECT tick FROM index_tickers WHERE id=? LIMIT 1";
+        try {
+            let rows = await db.query(query, [tick_id]);
+            if(rows.length > 0)
+                tick = rows[0].tick;
+        } catch (error){
+            this.util.logError('Error looking up ticker using tick_id in index_tickers table:', error);
+        }
+        await this.releaseConnection();
+        return tick;
+    }
+
     // Lookup a record in the `index_tickers` table and return record id
     async getTickerId(tick){
         let id    = null;
@@ -2468,6 +2484,97 @@ class Database {
             let result = await db.query(query, args);
         } catch (error){
             this.util.logError('Error trying to create record in destroys table:', error);
+        }
+        await this.releaseConnection();
+    }
+
+    // Get tokens owned by a given address
+    async getAddressOwnerships(address){
+        let id   = await this.createAddress(address);
+        let data = {};
+        // Lookup the address preferences
+        let db    = await this.getConnection();
+        let query = `SELECT 
+                t1.tick_id,
+                t2.tick
+            FROM
+                tokens t1,
+                index_tickers t2
+            WHERE 
+                t2.id=t1.tick_id AND
+                t1.owner_id=? 
+            ORDER BY 
+                t2.tick`;
+        try {
+            let rows = await db.query(query, [id]);
+            if(rows.length > 0){
+                for(let row of rows){
+                    data[row.tick_id] = row.tick;
+                }
+            }
+        } catch (error){
+            this.util.logError('Error looking up tokens owned by address in the tokens table:', error);
+        }
+        await this.releaseConnection();
+        return data;
+    }
+
+    // Create/Update record in `sweeps` table
+    async createSweep(data){
+        // Normalize data
+        let tick_id        = await this.createTicker(data['TICK']);
+        let source_id      = await this.createAddress(data['SOURCE']);
+        let destination_id = await this.createAddress(data['DESTINATION']);
+        let tx_hash_id     = await this.createTransaction(data['TX_HASH']);
+        let memo_id        = await this.createMemo(data['MEMO']);
+        let status_id      = await this.createStatus(data['STATUS']);
+        let tx_index       = data['TX_INDEX'];
+        let block_index    = data['BLOCK_INDEX'];
+        let balances       = data['BALANCES'];
+        let ownerships     = data['OWNERSHIPS'];
+        // Check if record already exists for this sweep
+        let db     = await this.getConnection();
+        let query  = `SELECT
+                            tx_index
+                        FROM
+                            sweeps
+                        WHERE
+                            source_id=? AND
+                            tx_hash_id=?`;
+        let args = [source_id, tx_hash_id];
+        let exists = false;
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0)
+                exists = true;
+        } catch (error){
+            this.util.logError('Error looking up record in sweeps table:', error);
+        }
+        if(exists){
+            // UPDATE record
+            query = `UPDATE
+                        sweeps
+                    SET
+                        tx_index=?,
+                        block_index=?,
+                        destination_id=?,
+                        balances=?,
+                        ownerships=?,
+                        memo_id=?,
+                        status_id=?
+                    WHERE 
+                        source_id=? AND
+                        tx_hash_id=?`;
+        } else {
+            // INSERT record
+            query = `INSERT INTO sweeps (tx_index, block_index, destination_id, balances, ownerships, memo_id, status_id, source_id, tx_hash_id) values (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+        }
+        args = [tx_index, block_index,  destination_id, balances, ownerships, memo_id, status_id, source_id, tx_hash_id];
+        // Create or Update the record in the sweeps table
+        try {
+            let result = await db.query(query, args);
+        } catch (error){
+            this.util.logError('Error trying to create record in sweeps table:', error);
         }
         await this.releaseConnection();
     }
