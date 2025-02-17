@@ -247,7 +247,7 @@ class Airdrop {
 
             // Calculate total number of database hits for this AIRDROP
             let db_hits  = recipients.length * 2; // 1 credits, 1 balances
-                db_hits += 4;                     // 1 debits,  1 balances, 1 airdrops
+                db_hits += 3;                     // 1 debits,  1 balances, 1 airdrops
 
             // Determine total transaction FEE based on database hits
             fees['AMOUNT'] = this.util.getTransactionFee(db_hits, fees['TICK']);
