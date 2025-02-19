@@ -33,7 +33,7 @@ class Sweep {
 
     }
 
-    // Handle parsing the DESTROY transaction
+    // Handle parsing the SWEEP transaction
     async parse(params, data, error){
         /*****************************************************************
          * DEBUGGING - Force params
