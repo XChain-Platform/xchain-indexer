@@ -996,7 +996,8 @@ class Database {
                 WHERE 
                     m.event_id=t.tx_hash_id AND
                     m.address_id=a.id AND
-                    m.tick_id=?` + sql;
+                    m.tick_id=?` + sql + `
+                GROUP by a.address    `;
         try {
             let rows = await db.query(query, args);
             if(rows.length > 0){
@@ -1018,7 +1019,8 @@ class Database {
                 WHERE 
                     m.event_id=t.tx_hash_id AND
                     m.address_id=a.id AND
-                    m.tick_id=?` + sql;
+                    m.tick_id=?` + sql + `
+                GROUP BY a.address`;
         try {
             let rows = await db.query(query, args);
             if(rows.length > 0){
