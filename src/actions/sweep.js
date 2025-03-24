@@ -96,6 +96,8 @@ class Sweep {
         if(!error && !this.util.isNull(data['MEMO']) && String(data['MEMO']).indexOf(';')!=-1)
             error = 'invalid: MEMO (semicolon)';
 
+        // TODO: Verify sweep is allowed to new address (ALLOW_LIST & BLOCK_LIST)
+
         // Calculate total number of database hits for this SWEEP
         let db_hits = 1;                                                                               // 1 sweeps
             db_hits += (data['BALANCES']) ? this.util.bcmul(Object.keys(balances).length,4,0) : 0;     // 1 debits, 1 credits, 2 balances
