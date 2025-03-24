@@ -8,7 +8,7 @@ const batch     = require('./actions/batch.js');
 // const callback  = require('./actions/callback.js');
 const destroy   = require('./actions/destroy.js');
 // const dispenser = require('./actions/dispenser.js');
-// const dividend  = require('./actions/dividend.js');
+const dividend  = require('./actions/dividend.js');
 const issue     = require('./actions/issue.js');
 const list      = require('./actions/list.js');
 const mint      = require('./actions/mint.js');
@@ -42,7 +42,7 @@ class Actions {
         // this.actionCallback  = new callback(this);
         this.actionDestroy   = new destroy(this);
         // this.actionDispenser = new dispenser(this);
-        // this.actionDividend  = new dividend(this);
+        this.actionDividend  = new dividend(this);
         this.actionIssue     = new issue(this);
         this.actionList      = new list(this);
         this.actionMint      = new mint(this);
@@ -118,7 +118,7 @@ class Actions {
         data['TX_INDEX'] = await this.indexerDb.createTxIndex(data);
 
         // DEBUG : Force a specific action
-        // action = 'SWEEP';
+        // action = 'DIVIDEND';
 
         // Process the specific ACTION commands
         await this.processAction(action, params, data, error);
@@ -134,7 +134,7 @@ class Actions {
         // if(action=='CALLBACK')  await this.actionCallback.parse(params, data, error);
         if(action=='DESTROY')   await this.actionDestroy.parse(params, data, error);
         // if(action=='DISPENSER') await this.actionDispenser.parse(params, data, error);
-        // if(action=='DIVIDEND')  await this.actionDividend.parse(params, data, error);
+        if(action=='DIVIDEND')  await this.actionDividend.parse(params, data, error);
         if(action=='ISSUE')     await this.actionIssue.parse(params, data, error);
         if(action=='LIST')      await this.actionList.parse(params, data, error);
         if(action=='MINT')      await this.actionMint.parse(params, data, error);
