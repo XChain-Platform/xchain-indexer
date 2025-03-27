@@ -46,9 +46,6 @@ class Dividend {
         // let str = '0|SAT|SAT|1|testing dividends';
         // params = String(str).split('|');
 
-        // DEBUG
-        // data['SOURCE'] = '1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev';
-
         // Reset the address/tickers/transactions list on each parse
         this.util.resetLists();
 
@@ -91,16 +88,6 @@ class Dividend {
         let allowList = (dividendTokenInfo['ALLOW_LIST']) ? await this.indexerDb.getList(dividendTokenInfo['ALLOW_LIST']) : false;
         let blockList = [dividendTokenInfo['BLOCK_LIST']] ? await this.indexerDb.getList(dividendTokenInfo['BLOCK_LIST']) : false;
 
-        // DEBUG - Remove when done 
-        // data['AMOUNT'] = 1;
-        // balances['2']  = 1000;
-        // balances['15']  = 60000;
-        // holders = {};
-        // holders['1BWqakMyDLgXgMJb7XJrWfBPM7f7chkVFa']         = 13000;
-        // holders['bc1qh7rhwlhpnj7cx5fa39j0ngpfaaxf27ucuqgxdq'] = 42000;
-        // allowList = [];
-        // blockList = [];
-
         // Loop through list of holders and build out valid recipients list 
         for(let address in holders){
             let valid = true;
@@ -117,9 +104,8 @@ class Dividend {
 
         // Determine total DEBIT for this dividend using recipient list
         let totalDebit = 0;
-        for(let address in recipients){
+        for(let address in recipients)
             totalDebit = this.util.bcadd(totalDebit, recipients[address], dividendTokenInfo['DECIMALS'])
-        }
         dividend['DEBIT'] = totalDebit;
 
         /*****************************************************************
@@ -165,17 +151,6 @@ class Dividend {
 
         // Determine total transaction FEE based on database hits
         fees['AMOUNT'] = this.util.getTransactionFee(db_hits, fees['TICK']);
-
-        // DEBUG
-        // console.log('source=',data['SOURCE']);
-        // console.log('balances=',balances);
-        // console.log('holders=',holders);
-        // console.log('recipients=',recipients)
-        // console.log('total debit=',dividend['DEBIT']);
-        // console.log('preferences=',preferences);
-        // console.log('db_hits=',db_hits);
-        // console.log('fees=',fees);
-
 
         // Verify SOURCE has enough balances to cover DIVIDEND_TICK total DEBIT amount
         if(!error && !this.util.hasBalance(balances, dividendTokenInfo['TICK_ID'], dividend['DEBIT']))
@@ -225,7 +200,7 @@ class Dividend {
                 // Store the recipient ADDRESS and TICK in addresses list
                 this.util.addAddressTicker(address, dividend['DIVIDEND_TICK']);
     
-                // Credit address with TICK AMOUNT
+                // Credit address with DIVIDEND_TICK AMOUNT
                 credits.push([dividend['DIVIDEND_TICK'], recipients[address], address]);
             }
 
