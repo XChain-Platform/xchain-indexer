@@ -961,6 +961,7 @@ class Database {
     // @param {block_index}     integer Block Index 
     // @param {tx_index}        integer tx_index of transaction
     // TODO: Add support for 'escrowed' tokens (dispensers, orders, bets)
+    // TODO: Can optimize this function to allow getting list of holders from balances table instead of credits/debits
     async getHolders(tick, block_index, tx_index){
         let holders = {};
         let db      = await this.getConnection(),
@@ -2580,7 +2581,70 @@ class Database {
         }
         await this.releaseConnection();
     }
-    
+
+    // Create/Update record in `dividends` table
+    async createDividend(data){
+        // Normalize data
+        let tick_id          = await this.createTicker(data['TICK']);
+        let dividend_tick_id = await this.createTicker(data['DIVIDEND_TICK']);
+        let source_id        = await this.createAddress(data['SOURCE']);
+        let tx_hash_id       = await this.createTransaction(data['TX_HASH']);
+        let memo_id          = await this.createMemo(data['MEMO']);
+        let status_id        = await this.createStatus(data['STATUS']);
+        let tx_index         = data['TX_INDEX'];
+        let block_index      = data['BLOCK_INDEX'];
+        let amount           = data['AMOUNT'];
+        // Check if record already exists for this sweep
+        let db     = await this.getConnection();
+        let query  = `SELECT
+                            tx_index
+                        FROM
+                            dividends
+                        WHERE
+                            tick_id=? AND
+                            dividend_tick_id=? AND
+                            amount=? AND
+                            source_id=? AND
+                            tx_hash_id=?`;
+        let args = [tick_id, dividend_tick_id, amount, source_id, tx_hash_id];
+        let exists = false;
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0)
+                exists = true;
+        } catch (error){
+            this.util.logError('Error looking up record in sweeps table:', error);
+        }
+        if(exists){
+            // UPDATE record
+            query = `UPDATE
+                        dividends
+                    SET
+                        tx_index=?,
+                        block_index=?,
+                        memo_id=?,
+                        status_id=?
+                    WHERE 
+                        tick_id=? AND
+                        dividend_tick_id=? AND
+                        amount=? AND
+                        source_id=? AND
+                        tx_hash_id=?`;
+
+        } else {
+            // INSERT record
+            query = `INSERT INTO dividends (tx_index, block_index, memo_id, status_id, tick_id, dividend_tick_id, amount, source_id, tx_hash_id) values (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+        }
+        args = [tx_index, block_index, memo_id, status_id, tick_id, dividend_tick_id, amount, source_id, tx_hash_id];
+        // Create or Update the record in the dividends table
+        try {
+            let result = await db.query(query, args);
+        } catch (error){
+            this.util.logError('Error trying to create record in dividends table:', error);
+        }
+        await this.releaseConnection();
+    }
+
 }
 
 module.exports = Database
