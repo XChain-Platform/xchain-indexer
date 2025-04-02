@@ -434,14 +434,16 @@ class Util {
         credits = this.consolidateCreditDebitRecords('credits', credits);
         // Create records in debits table
         for(let idx in debits){
-            let [tick, amount] = debits[idx];
-            await db.createDebit(action, data['BLOCK_INDEX'], data['TX_HASH'], tick, amount, data['SOURCE']);
+            let [tick, amount, address] = debits[idx];
+            // default to SOURCE address if none is given
+            address = (this.isNull(source)) ? data['SOURCE'] : address;
+            await db.createDebit(action, data['BLOCK_INDEX'], data['TX_HASH'], tick, amount, address);
         }
 
         // Create records in credits table
         for(let idx in credits){
-            let [tick, amount, destination] = credits[idx];
-            await db.createCredit(action, data['BLOCK_INDEX'], data['TX_HASH'], tick, amount, destination);
+            let [tick, amount, address] = credits[idx];
+            await db.createCredit(action, data['BLOCK_INDEX'], data['TX_HASH'], tick, amount, address);
         }
     }    
 
