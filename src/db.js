@@ -2594,7 +2594,7 @@ class Database {
         let tx_index         = data['TX_INDEX'];
         let block_index      = data['BLOCK_INDEX'];
         let amount           = data['AMOUNT'];
-        // Check if record already exists for this sweep
+        // Check if record already exists for this dividend
         let db     = await this.getConnection();
         let query  = `SELECT
                             tx_index
@@ -2613,7 +2613,7 @@ class Database {
             if(rows.length > 0)
                 exists = true;
         } catch (error){
-            this.util.logError('Error looking up record in sweeps table:', error);
+            this.util.logError('Error looking up record in dividends table:', error);
         }
         if(exists){
             // UPDATE record

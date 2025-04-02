@@ -178,7 +178,7 @@ class Dividend {
         // Create record in dividends table
         await this.indexerDb.createDividend(dividend);
 
-        // If this was a valid transaction, then mint any actual supply
+        // If this was a valid transaction, then create the credit and debit records
         if(status=='valid'){
 
             // Array of credits and debits
