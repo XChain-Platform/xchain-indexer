@@ -206,7 +206,7 @@ class Destroy {
                 this.util.addAddressTicker(destroy['SOURCE'], destroy['TICK']);
 
                 // Add ticker and amount to debits array
-                debits.push([destroy['TICK'], destroy['AMOUNT']]);
+                debits.push([destroy['TICK'], destroy['AMOUNT'], destroy['SOURCE']]);
 
             }
         }

@@ -284,8 +284,8 @@ class Airdrop {
                 // Store the DESTINATION and TICK in addresses list
                 this.util.addAddressTicker(data['SOURCE'], [airdrop['TICK'], fees['TICK']]);
 
-                // Add ticker and amount to debits array
-                debits.push([airdrop['TICK'], airdrop['DEBIT']]);
+                // Add ticker, amount, and address to debits array
+                debits.push([airdrop['TICK'], airdrop['DEBIT'], data['SOURCE']]);
 
                 // Handle any transaction FEE according the users's ADDRESS preferences
                 [credits, debits] = await this.util.processTransactionFees(this.indexerDb, credits, debits, 'AIRDROP', fees);

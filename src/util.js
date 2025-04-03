@@ -355,22 +355,20 @@ class Util {
     }
 
     // Consolidate Credit and Debit records
-    consolidateCreditDebitRecords(type, records){
+    consolidateCreditDebitRecords(records){
         let arr  = [],
             data = [];
+        // Consolidate amount using TICK-ADDRESS as key
         for(let idx in records){
-            let [key, amount, destination] = records[idx];
-            if(type=='credits')
-                key += '-' + destination;
+            let [tick, amount, address] = records[idx];
+            let key = tick + '-' + address;
             arr[key] = (arr[key]) ? String(this.bcnum(arr[key]) + this.bcnum(amount)) : amount; 
         }
+        // Build out array of consolidated records
         for(let key in arr){
             let amount = arr[key];
-            let info = [key, amount];
-            if(type=='credits'){
-                let [tick, destination] = String(key).split('-');
-                info = [tick, amount, destination];
-            }
+            let [tick, address] = String(key).split('-');
+            let info = [tick, amount, address];
             data.push(info);
         }
         return data;
@@ -428,22 +426,23 @@ class Util {
     }
 
     // Process any transaction credit/debit records
+    // TODO : Update to always pass tick / amount / address in credit/debit arrays
     async processTransactionCreditsDebits(db, credits, debits, action, data){
         // Consolidate the credit and debit records to write as few records as possible
-        debits  = this.consolidateCreditDebitRecords('debits', debits);
-        credits = this.consolidateCreditDebitRecords('credits', credits);
+        debits  = this.consolidateCreditDebitRecords(debits);
+        credits = this.consolidateCreditDebitRecords(credits);
+        // Aliases to block index, tx_hash
+        let block_index = data['BLOCK_INDEX'],
+            tx_hash     = data['TX_HASH'];
         // Create records in debits table
         for(let idx in debits){
             let [tick, amount, address] = debits[idx];
-            // default to SOURCE address if none is given
-            address = (this.isNull(source)) ? data['SOURCE'] : address;
-            await db.createDebit(action, data['BLOCK_INDEX'], data['TX_HASH'], tick, amount, address);
+            await db.createDebit(action, block_index, tx_hash, tick, amount, address);
         }
-
         // Create records in credits table
         for(let idx in credits){
             let [tick, amount, address] = credits[idx];
-            await db.createCredit(action, data['BLOCK_INDEX'], data['TX_HASH'], tick, amount, address);
+            await db.createCredit(action, block_index, tx_hash, tick, amount, address);
         }
     }    
 
