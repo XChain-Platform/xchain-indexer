@@ -152,8 +152,8 @@ class Sweep {
                     let tick   = await this.indexerDb.getTicker(tick_id);
 
                     // Debit token amount from SOURCE and credit to DESTINATION
-                    debits.push([tick,  amount]);
-                    credits.push([tick, amount, sweep['DESTINATION']]);
+                    debits.push([tick,  amount, data['SOURCE']]);
+                    credits.push([tick, amount, data['DESTINATION']]);
 
                     // Store the SOURCE, DESTINATION and TICK in addresses and tickers lists
                     this.util.addAddressTicker(data['SOURCE'], tick);

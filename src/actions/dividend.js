@@ -189,7 +189,7 @@ class Dividend {
             this.util.addAddressTicker(data['SOURCE'], fees['TICK']);
 
             // Add DIVIDEND_TICK and DEBIT to debits array
-            debits.push([dividend['DIVIDEND_TICK'], dividend['DEBIT']]);
+            debits.push([dividend['DIVIDEND_TICK'], dividend['DEBIT'], dividend['SOURCE']]);
 
             // Handle any transaction FEE according the users's ADDRESS preferences
             [credits, debits] = await this.util.processTransactionFees(this.indexerDb, credits, debits, 'DIVIDEND', fees);

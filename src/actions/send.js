@@ -230,7 +230,7 @@ class Send {
                 this.util.addAddressTicker(send['DESTINATION'], send['TICK']);
 
                 // Add ticker and amount to debits array
-                debits.push([send['TICK'], send['AMOUNT']]);
+                debits.push([send['TICK'], send['AMOUNT'], send['SOURCE']]);
 
                 // Add ticker, amount, and destination to credits array
                 credits.push([send['TICK'], send['AMOUNT'], send['DESTINATION']]);
