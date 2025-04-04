@@ -183,7 +183,7 @@ class Mint {
             }
 
             // Process any transaction credit/debit records
-            await this.util.processTransactionCreditsDebits(this.indexerDb, credits, debits, 'MINT', data);
+            await this.util.processTransactionCreditsDebits(this.indexerDb, credits, debits, data);
 
             // If this is a reparse, bail out before updating balances and token information
             // if(reparse)

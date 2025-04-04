@@ -1,15 +1,11 @@
 DROP TABLE IF EXISTS debits;
 CREATE TABLE debits (
-    block_index INTEGER UNSIGNED, -- Block index that credit happened
-    address_id  INTEGER UNSIGNED, -- id of record in index_addresses table
-    tick_id     INTEGER UNSIGNED, -- id of record in index_tickers table
-    amount      VARCHAR(250),     -- AMOUNT of credit
-    action_id   INTEGER UNSIGNED, -- id of record in index_actions table
-    event_id    INTEGER UNSIGNED  -- id of record in index_transactions table
+    action_index INTEGER UNSIGNED NOT NULL, -- Unique action index
+    address_id   INTEGER UNSIGNED,          -- id of record in index_addresses table
+    tick_id      INTEGER UNSIGNED,          -- id of record in index_tickers table
+    amount       VARCHAR(250)               -- AMOUNT of debit
 ) ENGINE=MyISAM DEFAULT  CHARSET=utf8 COLLATE=utf8_general_ci;
 
-CREATE INDEX block_index   ON debits (block_index);
-CREATE INDEX address_id    ON debits (address_id);
-CREATE INDEX action_id     ON debits (action_id);
-CREATE INDEX tick_id       ON debits (tick_id);
-CREATE INDEX event_id      ON debits (event_id);
+CREATE INDEX action_index ON debits (action_index);
+CREATE INDEX address_id   ON debits (address_id);
+CREATE INDEX tick_id      ON debits (tick_id);

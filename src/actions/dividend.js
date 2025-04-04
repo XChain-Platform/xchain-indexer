@@ -205,7 +205,7 @@ class Dividend {
             }
 
             // Process any transaction credit/debit records
-            await this.util.processTransactionCreditsDebits(this.indexerDb, credits, debits, 'DIVIDEND', data);
+            await this.util.processTransactionCreditsDebits(this.indexerDb, credits, debits, data);
 
             // Get a list of tickers from this dividend
             let tickers = this.util.getTickersList();

@@ -1534,108 +1534,60 @@ class Database {
         await this.releaseConnection();
     }
 
-    // Create/Update record in `credits` table
-    async createCredit(action, block_index, event, tick, amount, address){
+    // Create / Update record in `credits` or `debits` table
+    async createCreditDebitRecord(table, action_index, tick, amount, address){
         let tick_id    = await this.createTicker(tick);
         let address_id = await this.createAddress(address);
-        let event_id   = await this.createTransaction(event);
-        let action_id  = await this.createAction(action);
         // Check if record already exists for this token
         let db    = await this.getConnection();
         let query = `SELECT
-                        event_id
+                        action_index
                     FROM
-                        credits
+                        ` + table + `
                     WHERE
+                        action_index=? AND
                         address_id=? AND 
-                        tick_id=? AND
-                        amount=? AND
-                        action_id=? AND
-                        event_id=?`;
+                        tick_id=?`;
         let exists = false;
         try {
-            let rows = await db.query(query, [address_id, tick_id, amount, action_id, event_id]);
+            let rows = await db.query(query, [action_index, address_id, tick_id]);
             if(rows.length > 0)
                 exists = true;
         } catch (error){
-            this.util.logError('Error looking up record in credits table:', error);
+            this.util.logError('Error looking up record in ' + table + ' table:', error);
         }
         if(exists){
             // UPDATE record
             query = `UPDATE
-                        credits
+                        ` + table + `
                     SET
-                        block_index=?
+                        amount=?
                     WHERE 
+                        action_index=? AND
                         address_id=? AND 
-                        tick_id=? AND
-                        amount=? AND
-                        action_id=? AND
-                        event_id=?`;
+                        tick_id=?`;
         } else {
             // INSERT record
-            query = `INSERT INTO credits (block_index, address_id, tick_id, amount, action_id, event_id) values (?, ?, ?, ?, ?, ?)`;
+            query = `INSERT INTO ` + table + ` (amount, action_index, address_id, tick_id) values (?, ?, ?, ?)`;
         }
-        let args = [block_index, address_id, tick_id, amount, action_id, event_id];
-        // Create or Update the record in the credits table
+        let args = [amount, action_index, address_id, tick_id];
+        // Create or Update the record in the table
         try {
             let result = await db.query(query, args);
         } catch (error){
-            this.util.logError('Error trying to create record in credits table:', error);
+            this.util.logError('Error trying to create record in ' + table + ' table:', error);
         }
-        await this.releaseConnection();
+        await this.releaseConnection();        
     }
 
     // Create/Update record in `credits` table
-    async createDebit(action, block_index, event, tick, amount, address){
-        let tick_id    = await this.createTicker(tick);
-        let address_id = await this.createAddress(address);
-        let event_id   = await this.createTransaction(event);
-        let action_id  = await this.createAction(action);
-        // Check if record already exists for this token
-        let db    = await this.getConnection();
-        let query = `SELECT
-                        event_id
-                    FROM
-                        debits
-                    WHERE
-                        address_id=? AND 
-                        tick_id=? AND
-                        amount=? AND
-                        action_id=? AND
-                        event_id=?`;
-        let exists = false;
-        try {
-            let rows = await db.query(query, [address_id, tick_id, amount, action_id, event_id]);
-            if(rows.length > 0)
-                exists = true;
-        } catch (error){
-            this.util.logError('Error looking up record in debits table:', error);
-        }
-        if(exists){
-            // UPDATE record
-            query = `UPDATE
-                        debits
-                    SET
-                        block_index=?
-                    WHERE 
-                        address_id=? AND 
-                        tick_id=? AND
-                        amount=? AND
-                        action_id=? AND
-                        event_id=?`;
-        } else {
-            // INSERT record
-            query = `INSERT INTO debits (block_index, address_id, tick_id, amount, action_id, event_id) values (?, ?, ?, ?, ?, ?)`;
-        }
-        let args = [block_index, address_id, tick_id, amount, action_id, event_id];
-        // Create or Update the record in the credits table
-        try {
-            let result = await db.query(query, args);
-        } catch (error){
-            this.util.logError('Error trying to create record in debits table:', error);
-        }
-        await this.releaseConnection();
+    async createCredit(action_index, tick, amount, address){
+        await this.createCreditDebitRecord('credits', action_index, tick, amount, address);
+    }
+
+    // Create/Update record in `debits` table
+    async createDebit(action_index, tick, amount, address){
+        await this.createCreditDebitRecord('debits', action_index, tick, amount, address);
     }
 
     // Handle updating address balances (credits-debits=balance)

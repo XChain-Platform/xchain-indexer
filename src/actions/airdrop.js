@@ -304,7 +304,7 @@ class Airdrop {
         }
 
         // Process any transaction credit/debit records
-        await this.util.processTransactionCreditsDebits(this.indexerDb, credits, debits, 'AIRDROP', data);
+        await this.util.processTransactionCreditsDebits(this.indexerDb, credits, debits, data);
 
         // TODO: If this is a reparse, bail out before updating balances and token information
         // if(reparse)
