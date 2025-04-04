@@ -348,14 +348,38 @@ class Database {
         let info    = [];
         let hashes  = [];
         // Get data from credits table
-        query  = `SELECT * FROM credits WHERE block_index=? ORDER BY block_index ASC, tick_id ASC, address_id ASC, amount DESC`;
+        query = `SELECT
+                    c.action_index,
+                    c.address_id,
+                    c.tick_id,
+                    c.amount
+                FROM
+                    credits c
+                    INNER JOIN actions      a ON (a.action_index=c.action_index)
+                    INNER JOIN transactions t ON (t.tx_index=a.tx_index)
+                WHERE
+                    t.block_index=?
+                ORDER BY 
+                    c.action_index ASC`;
         try {
             credits = await db.query(query, [block_index]);
         } catch (error){
             this.util.logError('Error getting data from the credits table:', error);
         }
         // Get data from debits table
-        query  = `SELECT * FROM debits WHERE block_index=? ORDER BY block_index ASC, tick_id ASC, address_id ASC, amount DESC`;
+        query = `SELECT
+                    d.action_index,
+                    d.address_id,
+                    d.tick_id,
+                    d.amount
+                FROM
+                    debits d
+                    INNER JOIN actions      a ON (a.action_index=d.action_index)
+                    INNER JOIN transactions t ON (t.tx_index=a.tx_index)
+                WHERE
+                    t.block_index=?
+                ORDER BY 
+                    d.action_index ASC`;
         try {
             debits = await db.query(query, [block_index]);
         } catch (error){
@@ -368,12 +392,12 @@ class Database {
                     a.tx_action_index,
                     a.action_id
                 FROM
-                    actions a,
-                    transactions t
+                    actions a
+                    INNER JOIN transactions t ON (t.tx_index=a.tx_index)
                 WHERE
-                    t.tx_index=a.tx_index AND
                     t.block_index=?
-                ORDER BY action_index ASC`;
+                ORDER BY 
+                    a.action_index ASC`;
         try {
             actions = await db.query(query, [block_index]);
         } catch (error){
@@ -775,13 +799,11 @@ class Database {
     // @param {tick}            string  Ticker name
     // @param {tick_id}         integer Ticker database record id
     // @param {block_index}     integer Block Index 
-    // @param {tx_index}        integer tx_index of transaction
-    async getTokenInfo(tick, tick_id, block_index, tx_index){
+    // @param {action_index}    integer action_index of action
+    async getTokenInfo(tick, tick_id, block_index, action_index){
         let data = false,
             sql  = '',
             args = [];
-        // Setup alias for utility class;
-        let util = this.util;
         // Get the tick_id for the given ticker
         if(!this.util.isNull(tick) && this.util.isNull(tick_id))
             tick_id = await this.createTicker(tick);
@@ -792,53 +814,54 @@ class Database {
             sql += " AND t1.block_index <= ?";
             args.push(parseInt(block_index));
         }
-        // If a tx_index was given, only lookup tokens created before given tx_index
-        if(!this.util.isNull(tx_index) && this.util.isNumeric(tx_index)){
-            sql += " AND t1.tx_index < ?";
-            args.push(parseInt(tx_index));
+        // If a action_index was given, only lookup tokens created before given action_index
+        if(!this.util.isNull(action_index) && this.util.isNumeric(action_index)){
+            sql += " AND a1.action_index < ?";
+            args.push(parseInt(action_index));
         }
         // Build out SQL query based on search params
         let query = `SELECT 
-                        t2.tick,
-                        t1.max_supply,
-                        t1.max_mint,
-                        t1.decimals,
-                        t1.description,
+                        i.max_supply,
+                        i.max_mint,
+                        i.decimals,
+                        i.description,
+                        i.lock_max_supply,
+                        i.lock_mint_supply,
+                        i.lock_mint,
+                        i.lock_max_mint,
+                        i.lock_description,
+                        i.lock_rug,
+                        i.lock_sleep,
+                        i.lock_callback,
+                        i.callback_block,
+                        i.callback_amount,
+                        i.mint_address_max,
+                        i.mint_start_block,
+                        i.mint_stop_block,
+                        a1.action_index,
                         t1.block_index,
-                        t1.lock_max_supply,
-                        t1.lock_mint_supply,
-                        t1.lock_mint,
-                        t1.lock_max_mint,
-                        t1.lock_description,
-                        t1.lock_rug,
-                        t1.lock_sleep,
-                        t1.lock_callback,
-                        t1.callback_block,
+                        t2.tick,
                         t3.tick as callback_tick,            
-                        t1.callback_amount,
                         t4.hash as allow_list,
                         t5.hash as block_list,
-                        t1.mint_address_max,
-                        t1.mint_start_block,
-                        t1.mint_stop_block,
-                        a1.address as owner,
-                        a2.address as transfer
+                        a2.address as owner,
+                        a3.address as transfer
                     FROM 
-                        issues t1
-                        LEFT JOIN index_addresses a2 on (a2.id=t1.transfer_id)
-                        LEFT JOIN index_tickers t3 on (t3.id=t1.callback_tick_id)
-                        LEFT JOIN index_transactions t4 on (t4.id=t1.allow_list_id)
-                        LEFT JOIN index_transactions t5 on (t5.id=t1.block_list_id),
-                        index_tickers t2,
-                        index_addresses a1,
-                        index_statuses s1
-                    WHERE 
-                        t2.id=t1.tick_id AND
-                        a1.id=t1.source_id AND
-                        s1.id=t1.status_id AND
+                        issues i
+                        INNER JOIN actions            a1 on (a1.action_index=i.action_index)
+                        INNER JOIN transactions       t1 on (t1.tx_index=a1.tx_index)
+                        INNER JOIN index_tickers      t2 on (t2.id=i.tick_id)
+                        INNER JOIN index_addresses    a2 on (a2.id=i.source_id)
+                        INNER JOIN index_statuses     s1 on (s1.id=i.status_id)
+                        LEFT  JOIN index_addresses    a3 on (a3.id=i.transfer_id)
+                        LEFT  JOIN index_tickers      t3 on (t3.id=i.callback_tick_id)
+                        LEFT  JOIN index_transactions t4 on (t4.id=i.allow_list_id)
+                        LEFT  JOIN index_transactions t5 on (t5.id=i.block_list_id)
+                    WHERE
                         s1.status='valid' AND
-                        t1.tick_id=?` + sql + `
-                    ORDER BY tx_index ASC`;
+                        i.tick_id=?` + sql + `
+                    ORDER BY 
+                        action_index ASC`;
         try {
             let db   = await this.getConnection();
             let rows = await db.query(query, args);
@@ -899,7 +922,7 @@ class Database {
         await this.releaseConnection();
         // Get token supply at the given tx_index
         if(data)
-            data['SUPPLY'] = await this.getTokenSupply(tick, tick_id, null, tx_index); 
+            data['SUPPLY'] = await this.getTokenSupply(tick, tick_id, null, action_index); 
         return data;
     }
 
@@ -938,8 +961,8 @@ class Database {
     // @param {tick}            string  Ticker name
     // @param {tick_id}         integer Ticker database record id
     // @param {block_index}     integer Block Index 
-    // @param {tx_index}        integer tx_index of transaction
-    async getTokenSupply(tick, tick_id, block_index, tx_index){
+    // @param {action_index}    integer action_index of action
+    async getTokenSupply(tick, tick_id, block_index, action_index){
         let credits = 0;
         let debits  = 0;
         let escrow  = 0;
@@ -957,22 +980,22 @@ class Database {
         args.push(tick_id);
         // If a block_index was given, only lookup tokens created before or in given block_index
         if(!this.util.isNull(block_index) && this.util.isNumeric(block_index)){
-            sql += " AND m.block_index <= ?";
+            sql += " AND t.block_index <= ?";
             args.push(parseInt(block_index));
         }
-        // If a tx_index was given, only lookup tokens created before given tx_index
-        if(!this.util.isNull(tx_index) && this.util.isNumeric(tx_index)){
-            sql += " AND t.tx_index < ?";
-            args.push(parseInt(tx_index));
+        // If a action_index was given, only lookup tokens created before given action_index
+        if(!this.util.isNull(action_index) && this.util.isNumeric(action_index)){
+            sql += " AND m.action_index < ?";
+            args.push(parseInt(action_index));
         }
         // Get Credits 
         query = `SELECT 
                     CAST(SUM(m.amount) AS DECIMAL(60,` + decimals + `)) as credits 
                 FROM 
-                    credits m,
-                    transactions t
+                    credits m
+                    INNER JOIN actions      a on (a.action_index=m.action_index)
+                    INNER JOIN transactions t on (t.tx_index=a.tx_index)
                 WHERE 
-                    m.event_id=t.tx_hash_id AND
                     m.tick_id=?` + sql;
         try {
             let rows = await db.query(query, args);
@@ -985,10 +1008,10 @@ class Database {
         query = `SELECT 
                     CAST(SUM(m.amount) AS DECIMAL(60,` + decimals + `)) as debits 
                 FROM 
-                    debits m,
-                    transactions t
+                    debits m
+                    INNER JOIN actions      a on (a.action_index=m.action_index)
+                    INNER JOIN transactions t on (t.tx_index=a.tx_index)
                 WHERE 
-                    m.event_id=t.tx_hash_id AND
                     m.tick_id=?` + sql;
         try {
             let rows = await db.query(query, args);
@@ -998,21 +1021,6 @@ class Database {
             this.util.logError('Error while trying to get list of debits:', error);
         }
         // TODO: Get Escrowed supply
-        // query = `SELECT 
-        //             CAST(SUM(m.amount) AS DECIMAL(60,` + decimals + `)) as escrow 
-        //         FROM 
-        //             debits m,
-        //             transactions t
-        //         WHERE 
-        //             m.event_id=t.tx_hash_id AND
-        //             m.tick_id=?` + sql;
-        // try {
-        //     let rows = await db.query(query, args);
-        //     if(rows.length > 0)
-        //         escrow = rows[0].escrow;
-        // } catch (error) {
-        //     this.util.logError('Error while trying to get list of escrowed supply:', error);
-        // }
         await this.releaseConnection();
         // Determine total supply (credits - debits)
         supply = this.util.bcsub(credits, debits, decimals);
@@ -1297,6 +1305,7 @@ class Database {
         if(!this.util.isNull(data['DECIMALS']) && (data['DECIMALS'] < this.config.MIN_TOKEN_DECIMALS || data['DECIMALS'] > this.config.MAX_TOKEN_DECIMALS))
             delete data['DECIMALS'];
         // Make data safe for use in SQL queries
+        let action_index       = data['ACTION_INDEX'];
         let description        = data['DESCRIPTION'];
         let max_supply         = data['MAX_SUPPLY'];
         let max_mint           = data['MAX_MINT'];
@@ -1305,8 +1314,6 @@ class Database {
         let mint_start_block   = data['MINT_START_BLOCK'];
         let mint_stop_block    = data['MINT_STOP_BLOCK'];
         let decimals           = data['DECIMALS'];
-        let block_index        = data['BLOCK_INDEX'];
-        let tx_index           = data['TX_INDEX'];
         let status             = data['STATUS'];
         let lock_max_supply    = data['LOCK_MAX_SUPPLY'];
         let lock_mint          = data['LOCK_MINT'];
@@ -1323,7 +1330,6 @@ class Database {
         let source_id          = await this.createAddress(data['SOURCE']);
         let transfer_id        = await this.createAddress(data['TRANSFER']);
         let transfer_supply_id = await this.createAddress(data['TRANSFER_SUPPLY']);
-        let tx_hash_id         = await this.createTransaction(data['TX_HASH']);
         let allow_list_id      = await this.createTransaction(data['ALLOW_LIST']);
         let block_list_id      = await this.createTransaction(data['BLOCK_LIST']);
         let status_id          = await this.createStatus(data['STATUS']);
@@ -1331,15 +1337,16 @@ class Database {
         if(!this.util.isNull(description) && description.length > this.config['MAX_TOKEN_DESCRIPTION'])
             description = description.substring(0,this.config['MAX_TOKEN_DESCRIPTION']); 
         // Check if record already exists for this ISSUE action
-        let db     = await this.getConnection();
-        let query  = "SELECT tx_index FROM issues WHERE tx_hash_id=? LIMIT 1";
+        let db    = await this.getConnection();
+        let query = `SELECT action_index FROM issues WHERE action_index=?`;
+        let args  = [action_index]
         let exists = false;
         try {
-            let rows = await db.query(query, [tx_hash_id]);
+            let rows = await db.query(query, args);
             if(rows.length > 0)
                 exists = true;
         } catch (error) {
-            this.util.logError('Error looking up record issues table:', error);
+            this.util.logError('Error looking up record in sissues table:', error);
         }
         if(exists){
             // UPDATE record
@@ -1371,11 +1378,9 @@ class Database {
                         mint_start_block=?,
                         mint_stop_block=?,
                         source_id=?,
-                        block_index=?,
-                        tx_index=?,
                         status_id=?
                     WHERE 
-                        tx_hash_id=?`;
+                        action_index=?`;
         } else {
             // INSERT record
             query = `INSERT INTO issues (
@@ -1404,13 +1409,11 @@ class Database {
                         mint_start_block, 
                         mint_stop_block, 
                         source_id, 
-                        block_index, 
-                        tx_index, 
                         status_id,
-                        tx_hash_id
-                    ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+                        action_index
+                    ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
         }
-        let args = [tick_id, max_supply, max_mint, decimals, description, mint_supply, transfer_id, transfer_supply_id, lock_max_supply, lock_mint, lock_mint_supply, lock_max_mint, lock_description, lock_rug, lock_sleep, lock_callback, callback_block, callback_tick_id, callback_amount, allow_list_id, block_list_id, mint_address_max, mint_start_block, mint_stop_block, source_id, block_index,  tx_index,  status_id, tx_hash_id];
+        args = [tick_id, max_supply, max_mint, decimals, description, mint_supply, transfer_id, transfer_supply_id, lock_max_supply, lock_mint, lock_mint_supply, lock_max_mint, lock_description, lock_rug, lock_sleep, lock_callback, callback_block, callback_tick_id, callback_amount, allow_list_id, block_list_id, mint_address_max, mint_start_block, mint_stop_block, source_id, status_id, action_index ];
         // Create or Update the record in the issues table
         try {
             let result = await db.query(query, args);
@@ -1751,45 +1754,44 @@ class Database {
     }
 
     // Handle getting credits or debits records for a given address
-    async getAddressCreditDebit(table, address, action, block_index, tx_index){
+    async getAddressCreditDebit(table, address, action, block_index, action_index){
         let data       = [];
         let type       = typeof address;
         let address_id = null;
-        let action_id  = null;
         if(type==='number' && this.util.isNumeric(address))
             address_id = address;
         if(type==='string' && !this.util.isNumeric(address))
             address_id = await this.createAddress(address);
-        if(!this.util.isNull(action))
-            action_id = await this.createAction(action);
         let sql  = '';
         let args = [address_id];
-        if(!this.util.isNull(action)){
-            sql += " AND t1.action_id=?";
-            args.push(action_id);
-        }
-        // Query using either block_index OR tx_index
-        if(!this.util.isNull(tx_index) && this.util.isNumeric(tx_index)){
-            sql += " AND t3.tx_index < ?";
+        // Query using either block_index OR action_index
+        if(!this.util.isNull(action_index) && this.util.isNumeric(action_index)){
+            sql += " AND m.action_index < ?";
             args.push(tx_index);
         } else if(!this.util.isNull(block_index) && this.util.isNumeric(block_index)){
             sql += " AND t1.block_index < ?";
             args.push(block_index);
         }
+        // Support querying using action
+        if(!this.util.isNull(action)){
+            let action_id  = await this.createAction(action);
+            sql += " AND a1.action_id=?";
+            args.push(action_id);
+        }
         if(['credits','debits'].indexOf(table) != -1){
             let db    = await this.getConnection();
             let query = `SELECT 
-                    t1.tick_id,
-                    t1.amount,
+                    m.tick_id,
+                    m.amount,
                     t2.decimals
                 FROM
-                    ` + table + ` t1,
-                    tokens t2,
-                    transactions t3
+                    ` + table + ` m
+                    INNER JOIN actions       a1 ON (a1.action_index=m.action_index)
+                    INNER JOIN transactions  t1 ON (t1.tx_index=a1.tx_index)
+                    INNER JOIN tokens        t2 ON (t2.tick_id=m.tick_id)
+                    INNER JOIN index_actions a2 ON (a2.id=a1.action_id)
                 WHERE 
-                    t2.tick_id=t1.tick_id AND
-                    t3.tx_hash_id=t1.event_id AND
-                    t1.address_id=?` + sql;
+                    m.address_id=?` + sql;
             try {
                 let rows = await db.query(query, args);
                 if(rows.length > 0){
