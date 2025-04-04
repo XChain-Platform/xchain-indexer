@@ -601,7 +601,7 @@ class Database {
             if(rows.length > 0)
                 idx = rows[0].tx_index;
         } catch (error) {
-            this.util.logError('Error looking up action record id in index_actions table:', error);
+            this.util.logError('Error looking up tx_index record in transactions table:', error);
         }
         // Increase current tx_index by 1 to get the next tx_index
         idx++;
@@ -634,17 +634,87 @@ class Database {
             tx_index        = await this.getNextTxIndex();
             let block_index = data.BLOCK_INDEX;
             let tx_hash_id  = await this.createTransaction(data.TX_HASH);
-            let action_id   = await this.createAction(data.ACTION);
             let db          = await this.getConnection();
-            let query       = "INSERT INTO transactions (tx_index, block_index, tx_hash_id, action_id) values (?, ?, ?, ?)";
+            let query       = "INSERT INTO transactions (tx_index, block_index, tx_hash_id) values (?, ?, ?)";
             try {
-                let result = await db.query(query, [tx_index, block_index, tx_hash_id, action_id]);
+                let result = await db.query(query, [tx_index, block_index, tx_hash_id]);
             } catch (error) {
                 this.util.logError('Error while trying to create record in transactions table:', error);
             }
             await this.releaseConnection();
         }
         return tx_index;
+    }
+
+    // Handles returning the highest action_index from `actions` table
+    async getNextActionIndex(){
+        let idx   = 0;
+        let db    = await this.getConnection();
+        let query = "SELECT action_index FROM actions ORDER BY action_index DESC LIMIT 1";
+        try {
+            let rows = await db.query(query);
+            if(rows.length > 0)
+                idx = rows[0].action_index;
+        } catch (error) {
+            this.util.logError('Error looking up action_index in actions table:', error);
+        }
+        // Increase current action__index by 1 to get the next action_index
+        idx++;
+        await this.releaseConnection();
+        return idx;
+    }
+
+    // Lookup action_index records in the `actions` table and return them
+    async getActionIndex(data){
+        let action_index    = null;
+        let block_index     = data.BLOCK_INDEX;
+        let tx_index        = data.TX_INDEX;
+        let tx_action_index = data.TX_ACTION_INDEX;
+        let action_id       = await this.createAction(data.ACTION);
+        let db              = await this.getConnection();
+        let query = `SELECT
+                        a.action_index
+                    FROM
+                        actions a,
+                        transactions t
+                    WHERE
+                        t.tx_index=a.tx_index AND
+                        t.block_index=? AND 
+                        a.tx_index=? AND 
+                        a.tx_action_index=? AND 
+                        a.action_id=?`;
+        let args = [block_index, tx_index, tx_action_index, action_id];
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0)
+                idx = rows[0].action_index;
+        } catch (error) {
+            this.util.logError('Error looking up action_index in actions table:', error);
+        }
+        await this.releaseConnection();
+        return action_index;
+    }
+
+    // Create records in the 'actions' table and return record id
+    async createActionIndex(data){
+        let action_index = await this.getActionIndex(data);
+        // Handle creating record
+        if(action_index==null){
+            action_index        = await this.getNextActionIndex();
+            let tx_index        = data.TX_INDEX;
+            let tx_action_index = data.TX_ACTION_INDEX;
+            let action_id       = await this.createAction(data.ACTION);
+            let db              = await this.getConnection();
+            let query           = "INSERT INTO actions (action_index, tx_index, tx_action_index, action_id) values (?, ?, ?, ?)";
+            let args            = [action_index, tx_index, tx_action_index, action_id];
+            try {
+                let result = await db.query(query, args);
+            } catch (error) {
+                this.util.logError('Error while trying to create record in actions table:', error);
+            }
+            await this.releaseConnection();
+        }
+        return action_index;
     }
 
     // Lookup a record in the `index_tickers` table and return record tick
