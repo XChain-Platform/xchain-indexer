@@ -699,10 +699,9 @@ class Database {
         let query = `SELECT
                         a.action_index
                     FROM
-                        actions a,
-                        transactions t
+                        actions a
+                        INNER JOIN transactions t ON (t.tx_index=a.tx_index)
                     WHERE
-                        t.tx_index=a.tx_index AND
                         t.block_index=? AND 
                         a.tx_index=? AND 
                         a.tx_action_index=? AND 
@@ -711,7 +710,7 @@ class Database {
         try {
             let rows = await db.query(query, args);
             if(rows.length > 0)
-                idx = rows[0].action_index;
+                action_index = rows[0].action_index;
         } catch (error) {
             this.util.logError('Error looking up action_index in actions table:', error);
         }
@@ -2679,6 +2678,66 @@ class Database {
         }
         await this.releaseConnection();
     }
+
+    // // Create/Update record in `callbacks` table
+    // async createCallback(data){
+    //     // Normalize data
+    //     let tick_id          = await this.createTicker(data['TICK']);
+    //     let callback_tick_id = await this.createTicker(data['CALLBACK_TICK']);
+    //     let source_id        = await this.createAddress(data['SOURCE']);
+    //     let tx_hash_id       = await this.createTransaction(data['TX_HASH']);
+    //     let memo_id          = await this.createMemo(data['MEMO']);
+    //     let status_id        = await this.createStatus(data['STATUS']);
+    //     let tx_index         = data['TX_INDEX'];
+    //     let block_index      = data['BLOCK_INDEX'];
+    //     let callback_amount  = data['CALLBACK_AMOUNT'];
+    //     // Check if record already exists for this callback
+    //     let db     = await this.getConnection();
+    //     let query  = `SELECT
+    //                         tx_index
+    //                     FROM
+    //                         callbacks
+    //                     WHERE
+    //                         source_id=? AND
+    //                         tx_hash_id=?`; Error looking up addresses credits for
+    //     let args = [source_id, tx_hash_id];
+    //     let exists = false;
+    //     try {
+    //         let rows = await db.query(query, args);
+    //         if(rows.length > 0)
+    //             exists = true;
+    //     } catch (error){
+    //         this.util.logError('Error looking up record in callbacks table:', error);
+    //     }
+    //     if(exists){
+    //         // UPDATE record
+    //         query = `UPDATE
+    //                     callbacks
+    //                 SET
+    //                     tx_index=?,
+    //                     block_index=?,
+    //                     tick_id=?,
+    //                     callback_tick_id=?,
+    //                     callback_amount=?,
+    //                     memo_id=?,
+    //                     status_id=?
+    //                 WHERE 
+    //                     source_id=? AND
+    //                     tx_hash_id=?`;
+
+    //     } else {
+    //         // INSERT record
+    //         query = `INSERT INTO callbacks (tx_index, block_index, tick_id, callback_tick_id, callback_amount, memo_id, status_id, source_id, tx_hash_id) values (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+    //     }
+    //     args = [tx_index, block_index, tick_id, callback_tick_id, callback_amount, memo_id, status_id, source_id, tx_hash_id];
+    //     // Create or Update the record in the callbacks table
+    //     try {
+    //         let result = await db.query(query, args);
+    //     } catch (error){
+    //         this.util.logError('Error trying to create record in callbacks table:', error);
+    //     }
+    //     await this.releaseConnection();
+    // }
 
 }
 
