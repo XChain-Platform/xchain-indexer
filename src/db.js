@@ -1764,7 +1764,7 @@ class Database {
         // Query using either block_index OR action_index
         if(!this.util.isNull(action_index) && this.util.isNumeric(action_index)){
             sql += " AND m.action_index < ?";
-            args.push(tx_index);
+            args.push(action_index);
         } else if(!this.util.isNull(block_index) && this.util.isNumeric(block_index)){
             sql += " AND t1.block_index < ?";
             args.push(block_index);
