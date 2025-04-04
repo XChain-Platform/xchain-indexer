@@ -111,12 +111,12 @@ class Airdrop {
         for(let airdrop of airdrops){
             let tick = airdrop[0];
             if(!ticks[tick])
-                ticks[tick] = await this.indexerDb.getTokenInfo(tick, null, data['BLOCK_INDEX'], data['TX_INDEX']);
+                ticks[tick] = await this.indexerDb.getTokenInfo(tick, null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
         }
 
         // Get source address balances and preferences
-        let balances    = await this.indexerDb.getAddressBalances(data['SOURCE'], null, data['BLOCK_INDEX'], data['TX_INDEX']);
-        let preferences = await this.indexerDb.getAddressPreferences(data['SOURCE'], data['BLOCK_INDEX'], data['TX_INDEX']);
+        let balances    = await this.indexerDb.getAddressBalances(data['SOURCE'], null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
+        let preferences = await this.indexerDb.getAddressPreferences(data['SOURCE'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
 
         // Create the fees object 
         let fees = this.util.createFeesObject(data, preferences);
@@ -210,7 +210,7 @@ class Airdrop {
                 let holders = [];
                 for(let tick in list){
                     if(type==1)
-                        holders = await this.indexerDb.getHolders(tick, data['BLOCK_INDEX'], data['TX_INDEX']);
+                        holders = await this.indexerDb.getHolders(tick, data['BLOCK_INDEX'], data['ACTION_INDEX']);
                     for(let address of holders){
                         if(recipients.indexOf(address)==-1)
                             recipients.push(address);

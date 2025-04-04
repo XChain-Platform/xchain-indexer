@@ -54,8 +54,8 @@ class Sweep {
             data = this.util.setActionParams(data, params, this.formats[format]);
 
         // Get source address balances, preferences, and token ownerships
-        let balances    = await this.indexerDb.getAddressBalances(data['SOURCE'], null, data['BLOCK_INDEX'], data['TX_INDEX']);
-        let preferences = await this.indexerDb.getAddressPreferences(data['SOURCE'], data['BLOCK_INDEX'], data['TX_INDEX']);
+        let balances    = await this.indexerDb.getAddressBalances(data['SOURCE'], null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
+        let preferences = await this.indexerDb.getAddressPreferences(data['SOURCE'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
         let ownerships  = await this.indexerDb.getAddressOwnerships(data['SOURCE']);
 
         // Create the fees object 
