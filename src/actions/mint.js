@@ -68,6 +68,9 @@ class Mint {
         // Get information on token
         let tokenInfo = await this.indexerDb.getTokenInfo(data['TICK'], null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
 
+        // Get total token minted from this address
+        let minted = await this.indexerDb.getActionCreditDebitAmount('credits', 'MINT', data['TICK'], data['SOURCE'], data['ACTION_INDEX']);
+
         // Verify TICK is valid before MINT
         if(tokenInfo['BLOCK_INDEX']==data['BLOCK_INDEX'] && !(await this.indexerDb.validTickerBeforeTxIndex(data['TICK'], data['ACTION_INDEX'])))
             tokenInfo = null;
@@ -147,7 +150,7 @@ class Mint {
             error = 'invalid: DESTINATION (not authorized)';
 
         // Verify minting AMOUNT will not exceed MINT_ADDRESS_MAX
-        if(!error && !this.util.isNull(data['MINT_ADDRESS_MAX']) && data['MINT_ADDRESS_MAX'] > 0 && (this.util.bcadd(await this.indexerDb.getActionCreditDebitAmount('credits', 'MINT', data['TICK'], data['SOURCE'], data['ACTION_INDEX']),data['AMOUNT'],data['DECIMALS']) > data['MINT_ADDRESS_MAX']))
+        if(!error && !this.util.isNull(data['MINT_ADDRESS_MAX']) && data['MINT_ADDRESS_MAX'] > 0 && this.util.bcadd(minted, data['AMOUNT'], data['DECIMALS']) > data['MINT_ADDRESS_MAX'])
             error = 'invalid: mint exceeds MINT_ADDRESS_MAX';
 
         // Verify minting begins at MINT_START_BLOCK
