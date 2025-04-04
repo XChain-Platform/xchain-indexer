@@ -69,13 +69,13 @@ class Dividend {
         }
 
         // Get source address balances and preferences, as well as TICK holders list
-        let balances    = await this.indexerDb.getAddressBalances(data['SOURCE'], null, data['BLOCK_INDEX'], data['TX_INDEX']);
-        let preferences = await this.indexerDb.getAddressPreferences(data['SOURCE'], data['BLOCK_INDEX'], data['TX_INDEX']);
-        let holders     = await this.indexerDb.getHolders(data['TICK'], data['BLOCK_INDEX'], data['TX_INDEX']);
+        let balances    = await this.indexerDb.getAddressBalances(data['SOURCE'], null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
+        let preferences = await this.indexerDb.getAddressPreferences(data['SOURCE'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
+        let holders     = await this.indexerDb.getHolders(data['TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
 
         // Get token information on TICK and DIVIDEND_TICK
-        let tokenInfo         = await this.indexerDb.getTokenInfo(data['TICK'], null, data['BLOCK_INDEX'], data['TX_INDEX']);
-        let dividendTokenInfo = await this.indexerDb.getTokenInfo(data['DIVIDEND_TICK'], null, data['BLOCK_INDEX'], data['TX_INDEX']);
+        let tokenInfo         = await this.indexerDb.getTokenInfo(data['TICK'], null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
+        let dividendTokenInfo = await this.indexerDb.getTokenInfo(data['DIVIDEND_TICK'], null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
 
         // Create the fees object 
         let fees = this.util.createFeesObject(data, preferences);

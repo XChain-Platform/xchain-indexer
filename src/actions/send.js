@@ -113,7 +113,7 @@ class Send {
         for(let send of sends){
             let tick = send[0];
             if(!ticks[tick])
-                ticks[tick] = await this.indexerDb.getTokenInfo(tick, null, data['BLOCK_INDEX'], data['TX_INDEX']);
+                ticks[tick] = await this.indexerDb.getTokenInfo(tick, null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
         }
 
         // Consolidate sends by DESTINATION and TICK
@@ -132,7 +132,7 @@ class Send {
             sends.push(keys[key]);
 
         // Get source address balances
-        let balances = await this.indexerDb.getAddressBalances(data['SOURCE'], null, data['BLOCK_INDEX'], data['TX_INDEX']);
+        let balances = await this.indexerDb.getAddressBalances(data['SOURCE'], null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
 
         // Store original error value
         let origError = error;
