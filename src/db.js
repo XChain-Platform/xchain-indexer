@@ -1047,10 +1047,10 @@ class Database {
     // Handle getting a list of TICK holders and amounts
     // @param {tick}            string  Ticker name
     // @param {block_index}     integer Block Index 
-    // @param {tx_index}        integer tx_index of transaction
+    // @param {action_index}    integer action_index of action
     // TODO: Add support for 'escrowed' tokens (dispensers, orders, bets)
     // TODO: Can optimize this function to allow getting list of holders from balances table instead of credits/debits
-    async getHolders(tick, block_index, tx_index){
+    async getHolders(tick, block_index, action_index){
         let holders = {};
         let db      = await this.getConnection(),
             sql     = '',
@@ -1066,27 +1066,26 @@ class Database {
         args.push(tick_id);
         // If a block_index was given, only lookup tokens created before or in given block_index
         if(!this.util.isNull(block_index) && this.util.isNumeric(block_index)){
-            sql += " AND m.block_index <= ?";
+            sql += " AND t1.block_index <= ?";
             args.push(parseInt(block_index));
         }
-        // If a tx_index was given, only lookup tokens created before given tx_index
-        if(!this.util.isNull(tx_index) && this.util.isNumeric(tx_index)){
-            sql += " AND t.tx_index < ?";
-            args.push(parseInt(tx_index));
+        // If a action_index was given, only lookup tokens created before given action_index
+        if(!this.util.isNull(action_index) && this.util.isNumeric(action_index)){
+            sql += " AND m.action_index < ?";
+            args.push(parseInt(action_index));
         }
         // Get Credits 
         query = `SELECT 
                     CAST(SUM(m.amount) AS DECIMAL(60,` + decimals + `)) as credits,
-                    a.address
+                    a2.address
                 FROM 
-                    credits m,
-                    transactions t,
-                    index_addresses a
+                    credits m
+                    INNER JOIN actions         a1 ON (a1.action_index=m.action_index)
+                    INNER JOIN transactions    t1 ON (t1.tx_index=a1.tx_index)
+                    INNER JOIN index_addresses a2 ON (a2.id=m.address_id)
                 WHERE 
-                    m.event_id=t.tx_hash_id AND
-                    m.address_id=a.id AND
                     m.tick_id=?` + sql + `
-                GROUP by a.address    `;
+                GROUP BY a2.address`;
         try {
             let rows = await db.query(query, args);
             if(rows.length > 0){
@@ -1100,16 +1099,15 @@ class Database {
         // Get Debits 
         query = `SELECT 
                     CAST(SUM(m.amount) AS DECIMAL(60,` + decimals + `)) as debits,
-                    a.address
+                    a2.address
                 FROM 
-                    debits m,
-                    transactions t,
-                    index_addresses a
+                    debits m
+                    INNER JOIN actions         a1 ON (a1.action_index=m.action_index)
+                    INNER JOIN transactions    t1 ON (t1.tx_index=a1.tx_index)
+                    INNER JOIN index_addresses a2 ON (a2.id=m.address_id)
                 WHERE 
-                    m.event_id=t.tx_hash_id AND
-                    m.address_id=a.id AND
                     m.tick_id=?` + sql + `
-                GROUP BY a.address`;
+                GROUP BY a2.address`;
         try {
             let rows = await db.query(query, args);
             if(rows.length > 0){
@@ -1345,7 +1343,7 @@ class Database {
             if(rows.length > 0)
                 exists = true;
         } catch (error) {
-            this.util.logError('Error looking up record in sissues table:', error);
+            this.util.logError('Error looking up record in issues table:', error);
         }
         if(exists){
             // UPDATE record
@@ -1698,15 +1696,15 @@ class Database {
     }
 
     // Get address balances using credits/debits table data
-    async getAddressBalances(address, tick, block_index, tx_index){
+    async getAddressBalances(address, tick, block_index, action_index){
         let type       = typeof address;
         let address_id = null;
         if(type==='number' && this.util.isNumeric(address))
             address_id = address;
         if(type==='string' && !this.util.isNumeric(address))
             address_id = await this.createAddress(address);
-        let credits  = await this.getAddressCreditDebit('credits', address_id, null, block_index, tx_index);
-        let debits   = await this.getAddressCreditDebit('debits',  address_id, null, block_index, tx_index);
+        let credits  = await this.getAddressCreditDebit('credits', address_id, null, block_index, action_index);
+        let debits   = await this.getAddressCreditDebit('debits',  address_id, null, block_index, action_index);
         let decimals = {}; // Object to store tick_id/decimals
         let balances = {}; // Object to store tick_id/balance
         for(let tick_id in credits)
@@ -1907,11 +1905,11 @@ class Database {
     }
 
     // Get total amount of credit or debit records for a given address, ticker, and action
-    async getActionCreditDebitAmount(table, action, tick, address, tx_index){
+    async getActionCreditDebitAmount(table, action, tick, address, action_index){
         let total   = 0;
         let tick_id = await this.createTicker(tick);
         let addr_id = await this.createAddress(address);
-        let data    = await this.getAddressCreditDebit(table, addr_id, action, null, tx_index);
+        let data    = await this.getAddressCreditDebit(table, addr_id, action, null, action_index);
         if(data[tick_id])
             total = data[tick_id];
         return total;
@@ -1961,18 +1959,16 @@ class Database {
         let tick_id        = await this.createTicker(data['TICK']);
         let source_id      = await this.createAddress(data['SOURCE']);
         let destination_id = await this.createAddress(data['DESTINATION']);
-        let tx_hash_id     = await this.createTransaction(data['TX_HASH']);
         let memo_id        = await this.createMemo(data['MEMO']);
         let status_id      = await this.createStatus(data['STATUS']);
-        let tx_index       = data['TX_INDEX'];
+        let action_index   = data['ACTION_INDEX'];
         let amount         = data['AMOUNT'];
-        let block_index    = data['BLOCK_INDEX'];
         // Check if record already exists for this mint
         let db     = await this.getConnection();
-        let query  = "SELECT tx_index FROM mints WHERE tx_hash_id=? LIMIT 1";
+        let query  = "SELECT action_index FROM mints WHERE action_index=? LIMIT 1";
         let exists = false;
         try {
-            let rows = await db.query(query, [tx_hash_id]);
+            let rows = await db.query(query, [action_index]);
             if(rows.length > 0)
                 exists = true;
         } catch (error){
@@ -1983,21 +1979,19 @@ class Database {
             query = `UPDATE
                         mints
                     SET
-                        tx_index=?,
                         tick_id=?,
                         amount=?,
                         source_id=?,
                         destination_id=?,
-                        block_index=?,
                         memo_id=?,
                         status_id=?
                     WHERE 
-                        tx_hash_id=?`;
+                        action_index=?`;
         } else {
             // INSERT record
-            query = `INSERT INTO mints (tx_index, tick_id, amount, source_id, destination_id, block_index, memo_id, status_id, tx_hash_id) values (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+            query = `INSERT INTO mints (tick_id, amount, source_id, destination_id, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?, ?)`;
         }
-        let args = [tx_index, tick_id, amount, source_id, destination_id, block_index, memo_id, status_id, tx_hash_id];
+        let args = [tick_id, amount, source_id, destination_id, memo_id, status_id, action_index];
         // Create or Update the record in the mints table
         try {
             let result = await db.query(query, args);
