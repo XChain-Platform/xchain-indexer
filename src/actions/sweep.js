@@ -180,7 +180,7 @@ class Sweep {
             }
 
             // Process any transaction credit/debit records
-            await this.util.processTransactionCreditsDebits(this.indexerDb, credits, debits, 'SWEEP', data);
+            await this.util.processTransactionCreditsDebits(this.indexerDb, credits, debits, data);
 
             // Get a list of tickers from this sweep
             let tickers = this.util.getTickersList();

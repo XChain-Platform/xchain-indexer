@@ -427,22 +427,20 @@ class Util {
 
     // Process any transaction credit/debit records
     // TODO : Update to always pass tick / amount / address in credit/debit arrays
-    async processTransactionCreditsDebits(db, credits, debits, action, data){
+    async processTransactionCreditsDebits(db, credits, debits, data){
         // Consolidate the credit and debit records to write as few records as possible
         debits  = this.consolidateCreditDebitRecords(debits);
         credits = this.consolidateCreditDebitRecords(credits);
-        // Aliases to block index, tx_hash
-        let block_index = data['BLOCK_INDEX'],
-            tx_hash     = data['TX_HASH'];
+        let action_index = data['ACTION_INDEX'];
         // Create records in debits table
         for(let idx in debits){
             let [tick, amount, address] = debits[idx];
-            await db.createDebit(action, block_index, tx_hash, tick, amount, address);
+            await db.createDebit(action_index, tick, amount, address);
         }
         // Create records in credits table
         for(let idx in credits){
             let [tick, amount, address] = credits[idx];
-            await db.createCredit(action, block_index, tx_hash, tick, amount, address);
+            await db.createCredit(action_index, tick, amount, address);
         }
     }    
 
