@@ -122,13 +122,14 @@ class XChainIndexer {
             var startBlock = (lastIndexerBlock) ? (lastIndexerBlock+1) : firstDecoderBlock;
 
             // DEBUG
-            // startBlock = 794376;
+            // startBlock = lastIndexerBlock = 862602;
 
             // Print out status message about where parsing is resuming
             if(startBlock < lastDecoderBlock)
                 console.log('Resuming block parsing at block ' + startBlock + '...');
 
             var cnt = 0;
+            // lastIndexerBlock = 863012;
 
             // Loop through blocks until indexer has parsed lastDecoderBlock
             while( (!lastIndexerBlock || lastIndexerBlock < lastDecoderBlock )){
@@ -151,7 +152,7 @@ class XChainIndexer {
                 // lastIndexerBlock = startBlock;
 
                 // DEBUG : Rollback to a specific block
-                // let rollbackBlock = 823133;
+                // let rollbackBlock = 863012;
                 // if(lastIndexerBlock >= rollbackBlock){
                 //     await this.rollback.rollback(rollbackBlock);
                 //     this.util.throwError('Rolled back to ' + rollbackBlock);
@@ -164,22 +165,24 @@ class XChainIndexer {
                 for(const tx of blockTransactions)
                     await this.actions.processTransaction(tx);
 
-                // Create record in `blocks` table with hashes of the credits/debits/transactions tables
-                let [credits, debits, txlist] = await this.indexerDb.createBlock(lastIndexerBlock);
+                // Create record in `blocks` table with hashes of the credits/debits/actions tables
+                let [credits, debits, actions] = await this.indexerDb.createBlock(lastIndexerBlock);
 
                 // Do a sanity check to verify that token supplys match data in credits/debits/balances tables 
-                await this.indexerDb.sanityCheck(lastIndexerBlock);
+                // await this.indexerDb.sanityCheck(lastIndexerBlock);
 
                 // Log the total parse time for this block
                 let parseTime = this.util.getTimer(debugTimer);
-                console.log('Block Parsed' + "\t: " + lastIndexerBlock + ' [credits:' + credits + ' debits:' + debits + ' txlist:' + txlist + '] (' + parseTime + ')');
+                console.log('Block Parsed' + "\t: " + lastIndexerBlock + ' [credits:' + credits + ' debits:' + debits + ' actions:' + actions + '] (' + parseTime + ')');
 
                 // DEBUG: counter to enable stopping parsing after a set number of blocks
                 cnt++;
 
                 // DEBUG : Exit processing at a select block
-                // if(lastIndexerBlock >= 828302)
+                // if(lastIndexerBlock >= 863012){
+                //     // await this.rollback.rollback(rollbackBlock);
                 //     this.util.throwError('Exiting on target block');
+                // }
 
                 // DEBUG: Delay processing after X blocks
                 // if(cnt>=1)

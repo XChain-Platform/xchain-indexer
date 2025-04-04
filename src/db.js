@@ -338,13 +338,13 @@ class Database {
         await this.releaseConnection();
     }
 
-    // Get block hashes using credits/debits/transactions table data and previous hash
+    // Get block hashes using credits/debits/actions table data and previous hash
     async getBlockHashes(block_index){
         let db      = await this.getConnection();
         let query   = null;
         let credits = [];
         let debits  = [];
-        let txlist  = [];
+        let actions = [];
         let info    = [];
         let hashes  = [];
         // Get data from credits table
@@ -361,12 +361,23 @@ class Database {
         } catch (error){
             this.util.logError('Error getting data from the debits table:', error);
         }
-        // Get data from transactions table
-        query  = `SELECT * FROM transactions WHERE block_index=? ORDER BY tx_index ASC`;
+        // Get data from actions table
+        query = `SELECT
+                    a.action_index,
+                    a.tx_index,
+                    a.tx_action_index,
+                    a.action_id
+                FROM
+                    actions a,
+                    transactions t
+                WHERE
+                    t.tx_index=a.tx_index AND
+                    t.block_index=?
+                ORDER BY action_index ASC`;
         try {
-            txlist = await db.query(query, [block_index]);
+            actions = await db.query(query, [block_index]);
         } catch (error){
-            this.util.logError('Error getting data from the txlist table:', error);
+            this.util.logError('Error getting data from the actions table:', error);
         }
         // Subtract one block from current block
         let prev_block_index = block_index -1;
@@ -374,7 +385,7 @@ class Database {
         query = `SELECT
                 t1.hash as credits,
                 t2.hash as debits,
-                t3.hash as txlist
+                t3.hash as actions
             FROM
                 blocks b,
                 index_transactions t1,
@@ -383,26 +394,26 @@ class Database {
             WHERE
                 t1.id=b.credits_hash_id AND
                 t2.id=b.debits_hash_id AND
-                t3.id=b.txlist_hash_id AND
+                t3.id=b.actions_hash_id AND
                 b.block_index=?`;
         try {
             let rows = await db.query(query, [prev_block_index]);
             if(rows.length >0){
                 hashes['credits'] = rows[0].credits;
                 hashes['debits']  = rows[0].debits;
-                hashes['txlist']  = rows[0].txlist;
+                hashes['actions'] = rows[0].actions;
             }
         } catch (error) {
             this.util.logError('Error getting data on the previous block hashes:', error);
         }
         // Define list of tables with data to hash
-        let tables = ['credits','debits','txlist'];
+        let tables = ['credits','debits','actions'];
         // Loop through the tables, add previous hash to data, then create new block hash
         tables.forEach(table => {
             var data = null;
             if(table=='credits') data = credits;
             if(table=='debits')  data = debits;
-            if(table=='txlist')  data = txlist;
+            if(table=='actions') data = actions;
             // Include the block_index and previous block hash in the hash calculation for this block hash
             data['block_index']   = block_index;
             data['previous_hash'] = hashes[table];
@@ -514,13 +525,13 @@ class Database {
         let block_id   = await this.getBlockId(block_index);
         let block_time = await this.getBlockTime(block_index);
         let hashes     = await this.getBlockHashes(block_index);
-        // Create transaction hashes in the `transaction` table and get the hash id
+        // Create transaction hashes in the `index_transactions` table and get the hash id
         let credits_hash_id = await this.createTransaction(hashes.credits.hash);
         let debits_hash_id  = await this.createTransaction(hashes.debits.hash);
-        let txlist_hash_id  = await this.createTransaction(hashes.txlist.hash);
+        let actions_hash_id = await this.createTransaction(hashes.actions.hash);
         // Create data
         let db    = await this.getConnection();
-        let query = "INSERT INTO blocks (block_time, credits_hash_id, debits_hash_id, txlist_hash_id, block_index) values (?, ?, ?, ?, ?)";
+        let query = "INSERT INTO blocks (block_time, credits_hash_id, debits_hash_id, actions_hash_id, block_index) values (?, ?, ?, ?, ?)";
         if(block_id!=null){
             query = `UPDATE
                         blocks
@@ -528,12 +539,12 @@ class Database {
                         block_time=?,
                         credits_hash_id=?,
                         debits_hash_id=?,
-                        txlist_hash_id=?
+                        actions_hash_id=?
                     WHERE 
                         block_index=?`;
         }
         try {
-            let result = await db.query(query, [block_time, credits_hash_id, debits_hash_id, txlist_hash_id, block_index]);
+            let result = await db.query(query, [block_time, credits_hash_id, debits_hash_id, actions_hash_id, block_index]);
         } catch (error) {
             this.util.logError('Error trying to create record in blocks table:', error);
         }
@@ -541,8 +552,8 @@ class Database {
         // Display status message
         let credits = String(hashes.credits.hash).substring(0,5);
         let debits  = String(hashes.debits.hash).substring(0,5);
-        let txlist  = String(hashes.txlist.hash).substring(0,5);
-        return [credits, debits, txlist];
+        let actions = String(hashes.actions.hash).substring(0,5);
+        return [credits, debits, actions];
     }
 
     // Lookup a record in the `index_actions` table and return record id
