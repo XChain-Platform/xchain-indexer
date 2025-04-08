@@ -20,8 +20,8 @@ CREATE TABLE issues (
     callback_block      VARCHAR(15),               -- block_index after which CALLBACK cand be used
     callback_tick_id    INTEGER UNSIGNED,          -- id of record in index_tickers table
     callback_amount     VARCHAR(250),              -- AMOUNT users get if CALLBACK
-    allow_list_id       INTEGER UNSIGNED,          -- id of record in index_transactions table
-    block_list_id       INTEGER UNSIGNED,          -- id of record in index_transactions table
+    allow_list          INTEGER UNSIGNED,          -- action_index of a list from the lists table
+    block_list          INTEGER UNSIGNED,          -- action_index of a list from the lists table
     mint_address_max    VARCHAR(250),              -- Maximum amount of supply an address can MINT
     mint_start_block    VARCHAR(15),               -- block_index when MINT transactions are allowed (begin mint)
     mint_stop_block     VARCHAR(15),               -- BLOCK_INDEX when MINT transactions are NOT allowed (end mint)
@@ -36,7 +36,7 @@ CREATE        INDEX transfer_id        ON issues (transfer_id);
 CREATE        INDEX transfer_supply_id ON issues (transfer_supply_id);
 CREATE        INDEX status_id          ON issues (status_id);
 CREATE        INDEX callback_tick_id   ON issues (callback_tick_id);
-CREATE        INDEX allow_list_id      ON issues (allow_list_id);
-CREATE        INDEX block_list_id      ON issues (block_list_id);
+CREATE        INDEX allow_list         ON issues (allow_list);
+CREATE        INDEX block_list         ON issues (block_list);
 
 
