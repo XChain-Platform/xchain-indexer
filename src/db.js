@@ -838,7 +838,7 @@ class Database {
                         i.mint_stop_block,
                         i.allow_list,
                         i.block_list,
-                        a1.action_index,
+                        i.action_index,
                         t1.block_index,
                         t2.tick,
                         t3.tick as callback_tick,            
@@ -857,7 +857,7 @@ class Database {
                         s1.status='valid' AND
                         i.tick_id=?` + sql + `
                     ORDER BY 
-                        action_index ASC`;
+                        i.action_index ASC`;
         try {
             let db   = await this.getConnection();
             let rows = await db.query(query, args);
@@ -869,6 +869,7 @@ class Database {
                 for(let row of rows){
                     // Define object of values for this ISSUE tx
                     let arr  = {};
+                    arr['ACTION_INDEX']      = row.action_index;
                     arr['TICK']              = row.tick;
                     arr['TICK_ID']           = tick_id;
                     arr['OWNER']             = (row.transfer) ? row.transfer : row.owner;
@@ -897,6 +898,9 @@ class Database {
                     // TODO: will need to massage the data a bit more to build out accurate token state... this is quick and dirty
                     for(let key in arr){
                         let value = arr[key];
+                        // Only set the ACTION_INDEX on the first valid issuance
+                        if(key=='ACTION_INDEX' && this.util.isNull(data[key]))
+                            data[key] = value;
                         // Disallow unsetting of LOCK flags
                         if(String(key).substr(0,5)=='LOCK_')
                             if(data[key]==1)
@@ -1460,7 +1464,7 @@ class Database {
             // callback_amount    = this.util.bcmul(callback_amount, 1, decimals);
         }
         let description        = data['DESCRIPTION'];
-        let block_index        = data['BLOCK_INDEX'];
+        let action_index       = data['ACTION_INDEX'];
         // Force lock fields to integer values 
         let lock_max_supply    = (data['LOCK_MAX_SUPPLY']==1) ? 1 : 0;
         let lock_mint          = (data['LOCK_MINT']==1) ? 1 : 0;
@@ -1510,7 +1514,7 @@ class Database {
                         mint_stop_block=?,
                         supply=?,
                         owner_id=?,
-                        block_index=?
+                        action_index=?
                     WHERE 
                         tick_id=?`;
         } else {
@@ -1537,11 +1541,11 @@ class Database {
                         mint_stop_block, 
                         supply, 
                         owner_id, 
-                        block_index,
+                        action_index,
                         tick_id 
                     ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
         }
-        let args = [max_supply, max_mint, decimals, description, lock_max_supply, lock_mint, lock_max_mint,lock_description, lock_rug, lock_sleep, lock_callback, callback_block, callback_tick_id, callback_amount, allow_list, block_list, mint_address_max, mint_start_block, mint_stop_block, supply, owner_id, block_index, tick_id];
+        let args = [max_supply, max_mint, decimals, description, lock_max_supply, lock_mint, lock_max_mint,lock_description, lock_rug, lock_sleep, lock_callback, callback_block, callback_tick_id, callback_amount, allow_list, block_list, mint_address_max, mint_start_block, mint_stop_block, supply, owner_id, action_index, tick_id];
         // Create or Update the record in the tokens table
         try {
             let result = await db.query(query, args);
