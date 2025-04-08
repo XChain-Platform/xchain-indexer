@@ -2,11 +2,11 @@
  * XChain Indexer ACTION - AIRDROP
  * 
  * PARAMS:
- * - VERSION - Broadcast Format Version
- * - TICK    - 1 to 250 characters in length
- * - AMOUNT  - Amount of tokens to airdrop
- * - LIST    - `TX_HASH` of a BTNS `LIST`
- * - MEMO    - An optional memo to include
+ * - VERSION           - Broadcast Format Version
+ * - TICK              - 1 to 250 characters in length
+ * - AMOUNT            - Amount of tokens to airdrop
+ * - LIST_ACTION_INDEX - `ACTION_INDEX` of a `LIST`
+ * - MEMO              - An optional memo to include
  * 
  * FORMATS:
  * - 0 = Single Airdrop
@@ -32,10 +32,10 @@ class Airdrop {
 
         // Define list of known FORMATS
         this.formats = {};
-        this.formats[0] = 'VERSION|TICK|AMOUNT|LIST|MEMO';
-        this.formats[1] = 'VERSION|LIST|TICK|AMOUNT|TICK|AMOUNT|MEMO';
-        this.formats[2] = 'VERSION|TICK|AMOUNT|LIST|TICK|AMOUNT|LIST|MEMO';
-        this.formats[3] = 'VERSION|TICK|AMOUNT|LIST|MEMO|TICK|AMOUNT|LIST|MEMO';
+        this.formats[0] = 'VERSION|TICK|AMOUNT|LIST_ACTION_INDEX|MEMO';
+        this.formats[1] = 'VERSION|LIST_ACTION_INDEX|TICK|AMOUNT|TICK|AMOUNT|MEMO';
+        this.formats[2] = 'VERSION|TICK|AMOUNT|LIST_ACTION_INDEX|TICK|AMOUNT|LIST_ACTION_INDEX|MEMO';
+        this.formats[3] = 'VERSION|TICK|AMOUNT|LIST_ACTION_INDEX|MEMO|TICK|AMOUNT|LIST_ACTION_INDEX|MEMO';
 
         // Define array of list types (1=Tick, 2=Address)
         this.listTypes = [1,2];
@@ -44,7 +44,7 @@ class Airdrop {
         this.fieldList = {};
 
         // Define list of NUMBER fields (used to convert values from string to number)
-        this.fieldList['NUMBER'] = ['AMOUNT'];
+        this.fieldList['NUMBER'] = ['AMOUNT', 'LIST_ACTION_INDEX'];
 
     }
 
@@ -54,15 +54,14 @@ class Airdrop {
          * DEBUGGING - Force params
          ****************************************************************/
         // Single Airdrop
-        // let str = '0|AIRDROPTEST1|1|fbe2a4946dfefb232571d56ed1c84dd85299736ba356dc300296d65d59991362|test'; // ADDRESS LIST
-        // let str = '0|AIRDROPTEST2|1|55cd98493c0fe46aed95225d909a82793a9ba7b480dccdb3170a9cd1ce081093|test'; // TICK LIST
-        // let str = '0|AIRDROPTEST3|1|afd33c2042cd43b229a44c406f03bcc940702f9736f5a222dfa53295b641a00d|test'; // ASSET LIST
+        // let str = '0|AIRDROPTEST1|1|1257|test'; // ADDRESS LIST
+        // let str = '0|AIRDROPTEST2|1|1191|test'; // TICK LIST
         // Multi-Airdrop (brief)
-        // let str = '1|fbe2a4946dfefb232571d56ed1c84dd85299736ba356dc300296d65d59991362|AIRDROPTEST1|1|AIRDROPTEST2|2|test brief';
+        // let str = '1|1257|AIRDROPTEST1|1|AIRDROPTEST2|2|test brief';
         // Multi-Airdrop (Full)
-        // let str = '2|AIRDROPTEST1|1|fbe2a4946dfefb232571d56ed1c84dd85299736ba356dc300296d65d59991362|AIRDROPTEST2|2|55cd98493c0fe46aed95225d909a82793a9ba7b480dccdb3170a9cd1ce081093|test full';
+        // let str = '2|AIRDROPTEST1|1|1257|AIRDROPTEST2|2|1191|test full';
         // Multi-Airdrop (Full) w multiple memos
-        // let str = '3|AIRDROPTEST1|1|fbe2a4946dfefb232571d56ed1c84dd85299736ba356dc300296d65d59991362|memo1|AIRDROPTEST2|2|55cd98493c0fe46aed95225d909a82793a9ba7b480dccdb3170a9cd1ce081093|memo2|AIRDROPTEST3|3|afd33c2042cd43b229a44c406f03bcc940702f9736f5a222dfa53295b641a00d|memo3';
+        // let str = '3|AIRDROPTEST1|1|1257|memo1|AIRDROPTEST2|2|1191|memo2';
         // params = String(str).split('|');
 
         // Reset the address/tickers/transactions list on each parse
@@ -148,13 +147,20 @@ class Airdrop {
                 list = null;
 
             // Update BTNS transaction data object with airdrop values
-            airdrop['TICK']   = info[0];
-            airdrop['AMOUNT'] = info[1];
-            airdrop['LIST']   = info[2];
-            airdrop['MEMO']   = info[3];
+            airdrop['TICK']              = info[0];
+            airdrop['AMOUNT']            = info[1];
+            airdrop['LIST_ACTION_INDEX'] = info[2];
+            airdrop['MEMO']              = info[3];
 
             // Get information on token
             let tokenInfo = ticks[airdrop['TICK']];
+
+            // Convert NUMBER fields from string value to number value so comparisons are mathematical 
+            for(let name of this.fieldList['NUMBER']){
+                let value = data[name];
+                if(!this.util.isNull(value) && this.util.isNumeric(value))
+                    data[name] = this.util.bcnum(value);
+            }
 
             /*****************************************************************
              * TICK Validations
@@ -176,8 +182,8 @@ class Airdrop {
                 error = "invalid: AMOUNT (format)";
 
             // Verify LIST format
-            if(!error && !this.util.isNull(airdrop['LIST']) && !this.util.isValidTransactionHash(airdrop['LIST']))
-                error = "invalid: LIST (format)";
+            if(!error && !this.util.isNull(airdrop['LIST_ACTION_INDEX']) && !this.util.isNumeric(airdrop['LIST_ACTION_INDEX']))
+                error = "invalid: LIST_ACTION_INDEX (format)";
 
             /*************************************************************
              * General Validations
@@ -193,8 +199,8 @@ class Airdrop {
 
             // Lookup list information
             if(!error){
-                type = await this.indexerDb.getListType(airdrop['LIST']);
-                list = await this.indexerDb.getList(airdrop['LIST']);
+                type = await this.indexerDb.getListType(airdrop['LIST_ACTION_INDEX']);
+                list = await this.indexerDb.getList(airdrop['LIST_ACTION_INDEX']);
             }
 
             // Verify LIST exist
@@ -273,7 +279,7 @@ class Airdrop {
             data['STATUS'] = airdrop['STATUS'] = status;
     
             // Print status message 
-            console.log("\t AIRDROP : " + airdrop['TICK'] + ' : ' + airdrop['AMOUNT'] + ' : ' + airdrop['LIST'] + ' : '+ airdrop['STATUS']);
+            console.log("\t AIRDROP : " + airdrop['TICK'] + ' : ' + airdrop['AMOUNT'] + ' : '+ airdrop['STATUS']);
     
             // Create record in airdrop table
             await this.indexerDb.createAirdrop(airdrop);
