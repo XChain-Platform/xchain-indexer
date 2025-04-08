@@ -387,9 +387,9 @@ class Util {
     }
 
     // Process any transaction FEE according the user's ADDRESS preferences
-    async processTransactionFees(db, credits, debits, action, fees){
+    async processTransactionFees(db, credits, debits, fees){
         // Debit FEE from SOURCE
-        debits.push([fees['TICK'], fees['AMOUNT']]);
+        debits.push([fees['TICK'], fees['AMOUNT'], fees['SOURCE']]);
         // Handle using FEE according the the users ADDRESS preferences
         if(fees['METHOD']>1){
             // Short alias to config addresses

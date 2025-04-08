@@ -192,7 +192,7 @@ class Dividend {
             debits.push([dividend['DIVIDEND_TICK'], dividend['DEBIT'], dividend['SOURCE']]);
 
             // Handle any transaction FEE according the users's ADDRESS preferences
-            [credits, debits] = await this.util.processTransactionFees(this.indexerDb, credits, debits, 'DIVIDEND', fees);
+            [credits, debits] = await this.util.processTransactionFees(this.indexerDb, credits, debits, fees);
 
             // Loop through recipient addresses
             for(let address in recipients){
