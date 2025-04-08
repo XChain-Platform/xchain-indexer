@@ -2233,34 +2233,6 @@ class Database {
         await this.releaseConnection();
     }
 
-    // Delete records in lists, list_items, and list_edits tables
-    async deleteLists(list, rollback){
-        if(!this.util.isNull(list) && list.length > 0){
-            let db     = await this.getConnection();
-            let tables = ['list_items', 'list_edits'];
-            let query  = '';
-            for(let list_id of list){
-                // Delete item from lists table
-                query = `DELETE FROM lists WHERE tx_hash_id=?`;
-                try {
-                    let rows = await db.query(query, list_id);
-                } catch (error){
-                    this.util.logError('Error while trying to delete data from lists table:', error);
-                }
-                // Deletes item from list_items and list_edits tables
-                for(let table of tables){
-                    query = `DELETE FROM ` + table + ` WHERE list_id=?`;
-                    try {
-                        let rows = await db.query(query, list_id);
-                    } catch (error){
-                        this.util.logError('Error while trying to delete data from ' + table + ' table:', error);
-                    }
-                }
-            }
-            await this.releaseConnection();
-        }
-    }
-
     // Create record in `batches` table
     async createBatch(data){
         let source_id      = await this.createAddress(data['SOURCE']);

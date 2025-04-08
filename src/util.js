@@ -10,9 +10,8 @@ class Util {
     // Handle constructing a class instance
     constructor(){
         // Setup placeholders to keep track of addresses/tickers/transactions 
-        this.addresses    = {}; // this.addresses[address] = [tick, tick, tick]
-        this.tickers      = [];
-        this.transactions = []; 
+        this.addresses = {}; // this.addresses[address] = [tick, tick, tick];
+        this.tickers   = [];
 
         // Get indexer configuration
         this.config = config.getConfig();
@@ -32,16 +31,10 @@ class Util {
         this.tickers = [];
     }
 
-    // Reset the transactions list
-    resetTransactionsList(){
-        this.transactions = [];
-    }
-
     // Reset all the lists
     resetLists(){
         this.resetAddressesList();
         this.resetTickersList();
-        this.resetTransactionsList();
     }
 
     // Return list of addresses
@@ -53,11 +46,6 @@ class Util {
     // Return list of tickers
     getTickersList(){
         return this.tickers;
-    }
-
-    // Return list of transactions
-    getTransactionsList(){
-        return this.transactions;
     }
 
     /* 
@@ -331,12 +319,6 @@ class Util {
         }
         // Update address list with updated list of tickers
         this.addresses[address] = list;
-    }
-
-    // Handle adding a transaction hash (or id) to the transactions list
-    addTransaction(tx_hash){
-        if(!this.transactions.includes(tx_hash))
-            this.transactions.push(tx_hash);
     }
 
     // Validate if a balances array holds a certain amount of a tick token

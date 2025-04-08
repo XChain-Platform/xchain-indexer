@@ -17,30 +17,41 @@ class Rollback {
         // Setup alias to the indexer protocol changes instance
         this.protocolChanges = indexer.protocolChanges;
 
-        // Define list of database tables to do rollback on
+        // List of tables that store data using block_index
+        this.blockTables = [
+            'blocks',
+            'transactions'
+        ];
+
+        // List of tables that store data using action_index
         this.dataTables = [
+            'actions',
             'addresses',
             'airdrops',
             'batches',
-            'blocks',
             'callbacks',
             'credits',
             'debits',
             'destroys',
-            'dividends',
             'dispensers',
+            'dispenser_refills',
             'dispenses',
+            'dividends',
             'fees',
             'issues',
             'lists',
+            'list_edits',
+            'list_items',
+            'list_items_invalid',
             'mints',
             'sends',
             'sweeps',
-            'tokens',
-            'transactions'
+            'tokens'
         ];
+
     }
 
+    // Handle rolling back data to a specific block
     async rollback(block_index){
         // Start tracking time of rollback
         var rollbackTimer = this.util.startTimer();
@@ -51,95 +62,97 @@ class Rollback {
         // Reset the address/tickers/transactions lists
         this.util.resetLists();
 
-        // Loop through all database tables
-        for(let table of this.dataTables){
+        // Placeholder for the first action_index
+        let firstActionIndex = false;
 
-            // Build out the correct SQL to pull data from the various tables
-            let query = false;
+        // Get the first action_index after the given block
+        let query = `SELECT 
+                        a.action_index
+                    FROM
+                        actions a
+                        INNER JOIN transactions t ON (t.tx_index=a.tx_index)
+                    WHERE
+                        t.block_index > ?
+                    ORDER BY
+                        a.action_index ASC
+                    LIMIT 1`;
+        let args = [block_index];
+        let rows = await this.indexerDb.doQuery(query, args);
+        if(rows.length > 0)
+            firstActionIndex = rows[0].action_index;
 
-            // Credits / Debits
-            if(['credits','debits'].includes(table)){
-                query = `SELECT 
-                            a.address, 
-                            t2.tick
-                        FROM 
-                            ` + table + ` t1, 
-                            index_tickers t2,
-                            index_addresses a
-                        WHERE 
-                            t2.id=t1.tick_id AND 
-                            a.id=t1.address_id AND
-                            t1.block_index > ?`;
-            }
+        // Handle looking up data for any action_indexes in the rollback
+        if(firstActionIndex){
 
-            // AIRDROP / DESTROY
-            if(['airdrops','destroys'].includes(table)){
-                query = `SELECT 
-                            a.address, 
-                            t2.tick
-                        FROM 
-                            ` + table + ` t1, 
-                            index_tickers t2,
-                            index_addresses a
-                        WHERE 
-                            t2.id=t1.tick_id AND 
-                            a.id=t1.source_id AND
-                            t1.block_index > ?`;
-            }
+            // Loop through the data tables
+            for(let table of this.dataTables){
 
-            // MINT / SEND / FEE
-            if(['mints','sends','fees'].includes(table)){
-                query = `SELECT 
-                            t2.tick,
-                            a.address,
-                            a2.address as address2
-                        FROM 
-                            ` + table + ` t1
-                            LEFT JOIN index_addresses a2 on (t1.destination_id=a2.id),
-                            index_tickers t2,
-                            index_addresses a
-                        WHERE 
-                            t2.id=t1.tick_id AND 
-                            a.id=t1.source_id AND
-                            t1.block_index > ?`;
-            }
+                // Build out the correct SQL to pull data from the various tables
+                query = false;
+                args  = [firstActionIndex];
 
-            // ISSUE
-            if(table=='issues'){
-                query = `SELECT 
-                            t2.tick,
-                            a.address,
-                            a2.address as address2,
-                            a3.address as address3
-                        FROM 
-                            ` + table + ` t1
-                            LEFT JOIN index_addresses a2 on (t1.transfer_id=a2.id)
-                            LEFT JOIN index_addresses a3 on (t1.transfer_supply_id=a3.id),
-                            index_tickers t2,
-                            index_addresses a
-                        WHERE 
-                            t2.id=t1.tick_id AND 
-                            a.id=t1.source_id AND
-                            t1.block_index > ?`;
-            }
+                // Credits / Debits
+                if(['credits','debits'].includes(table)){
+                    query = `SELECT 
+                                t1.tick,
+                                a1.address
+                            FROM 
+                                ` + table + ` m
+                                INNER JOIN index_tickers   t1 ON (t1.id=m.tick_id)
+                                INNER JOIN index_addresses a1 ON (a1.id=m.address_id)
+                            WHERE 
+                                m.action_index >= ?`;
+                }
 
-            // Get list of transactions associated with the rollback blocks
-            if(table=='transactions'){
-                query = `SELECT 
-                            tx_hash_id 
-                        FROM 
-                            transactions 
-                        WHERE 
-                            block_index > ?`;
-            }
+                // AIRDROP / DESTROY
+                if(['airdrops','destroys'].includes(table)){
+                    query = `SELECT 
+                                t1.tick,
+                                a1.address
+                            FROM 
+                                ` + table + ` m
+                                INNER JOIN index_tickers   t1 ON (t1.id=m.tick_id)
+                                INNER JOIN index_addresses a1 ON (a1.id=m.source_id)
+                            WHERE 
+                                m.action_index >= ?`;
+                }
 
-            // Run the query and populate the addresses, tickers, and transactions arrays
-            if(query){
-                let rows = await this.indexerDb.doQuery(query, block_index);
-                for(let row of rows){
-                    if(table=='transactions'){
-                        this.util.addTransaction(row.tx_hash_id);
-                    } else {
+                // MINT / SEND / FEE
+                if(['mints','sends','fees'].includes(table)){
+                    query = `SELECT 
+                                t1.tick,
+                                a1.address,
+                                a2.address as address2
+                            FROM 
+                                ` + table + ` m
+                                INNER JOIN index_tickers   t1 ON (t1.id=m.tick_id)
+                                INNER JOIN index_addresses a1 ON (a1.id=m.source_id)
+                                LEFT  JOIN index_addresses a2 ON (a2.id=m.destination_id)
+                            WHERE 
+                                m.action_index >= ?`;
+                }
+
+                // ISSUE
+                if(table=='issues'){
+                    query = `SELECT 
+                                t1.tick,
+                                a1.address,
+                                a2.address as address2,
+                                a3.address as address3
+                            FROM 
+                                ` + table + ` m
+                                INNER JOIN index_tickers   t1 ON (t1.id=m.tick_id)
+                                INNER JOIN index_addresses a1 ON (a1.id=m.source_id)
+                                LEFT  JOIN index_addresses a2 ON (a2.id=m.transfer_id)
+                                LEFT  JOIN index_addresses a3 ON (a3.id=m.transfer_supply_id)
+                            WHERE 
+                                m.action_index >= ?`;
+                }
+
+                // Run the query and populate the addresses and tickers arrays
+                if(query){
+                    let rows = await this.indexerDb.doQuery(query, args);
+                    for(let row of rows){
                         this.util.addAddressTicker(row.address, row.tick);
                         if(!this.util.isNull(row.address2))
                             this.util.addAddressTicker(row.address2, row.tick);
@@ -147,17 +160,25 @@ class Rollback {
                             this.util.addAddressTicker(row.address3, row.tick);
                     }
                 }
-            }
 
-            // Delete data from rollback blocks
+                // Delete data from tables using action_index
+                query = `DELETE FROM ` + table + ` WHERE action_index >= ?`;
+                args  = [firstActionIndex];
+                let result = await this.indexerDb.doQuery(query, args);
+
+            } 
+        }
+
+        // Delete data from tables using block_index
+        for(let table of this.blockTables){
             query = `DELETE FROM ` + table + ` WHERE block_index > ?`;
-            let result = await this.indexerDb.doQuery(query, block_index);
-        } 
+            args  = [block_index];
+            let result = await this.indexerDb.doQuery(query, args);
+        }
 
         // Get lists of addresses, tickers, and transactions
-        let addresses    = this.util.getAddressesList();
-        let tickers      = this.util.getTickersList();
-        let transactions = this.util.getTransactionsList();
+        let addresses = this.util.getAddressesList();
+        let tickers   = this.util.getTickersList();
 
         // DEBUG : Full balances and token updates
         // await this.indexerDb.updateBalances(true, true);
@@ -168,9 +189,6 @@ class Rollback {
 
         // Update token information
         await this.indexerDb.updateTokens(tickers, true);
-
-        // Delete items from list_{items,edits} tables
-        await this.indexerDb.deleteLists(transactions, true);
 
         // Log the rollback time
         this.util.logTimer(rollbackTimer, 'Rollback Done');
