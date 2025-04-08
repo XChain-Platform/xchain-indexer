@@ -21,8 +21,8 @@
  * - CALLBACK_BLOCK   - Enable `CALLBACK` command after `CALLBACK_BLOCK` 
  * - CALLBACK_TICK    - `TICK` `token` users get when `CALLBACK` command is used
  * - CALLBACK_AMOUNT  - `TICK` `token` amount that users get when `CALLBACK` command is used
- * - ALLOW_LIST       - `TX_HASH` of a LIST of addresses allowed to interact with this token
- * - BLOCK_LIST       - `TX_HASH` of a LIST of addresses NOT allowed to interact with this token
+ * - ALLOW_LIST       - `ACTION_INDEX` of a LIST of addresses allowed to interact with this token
+ * - BLOCK_LIST       - `ACTION_INDEX` of a LIST of addresses NOT allowed to interact with this token
  * - MINT_ADDRESS_MAX - Maximum amount of supply any address can mint via `MINT` transactions
  * - MINT_START_BLOCK - `BLOCK_INDEX` when `MINT` transactions are allowed (begin mint)
  * - MINT_STOP_BLOCK` - `BLOCK_INDEX` when `MINT` transactions are NOT allowed (end mint)
@@ -62,7 +62,7 @@ class Issue {
         this.fieldList = {};
 
         // Define list of NUMBER fields (used to convert values from string to number)
-        this.fieldList['NUMBER'] = ['MAX_SUPPLY', 'MAX_MINT', 'DECIMALS', 'MINT_SUPPLY', 'TRANSFER_SUPPLY', 'CALLBACK_BLOCK', 'CALLBACK_AMOUNT', 'MINT_ADDRESS_MAX', 'MINT_START_BLOCK', 'MINT_STOP_BLOCK'];
+        this.fieldList['NUMBER'] = ['MAX_SUPPLY', 'MAX_MINT', 'DECIMALS', 'MINT_SUPPLY', 'TRANSFER_SUPPLY', 'CALLBACK_BLOCK', 'CALLBACK_AMOUNT', 'MINT_ADDRESS_MAX', 'MINT_START_BLOCK', 'MINT_STOP_BLOCK', 'ALLOW_LIST', 'BLOCK_LIST'];
 
         // Define list of AMOUNT, LOCK fields (used in validations)
         this.fieldList['AMOUNT'] = ['MAX_SUPPLY', 'MAX_MINT', 'MINT_SUPPLY', 'CALLBACK_AMOUNT', 'MINT_ADDRESS_MAX', 'MINT_START_BLOCK', 'MINT_STOP_BLOCK'];
@@ -284,11 +284,11 @@ class Issue {
             error = 'invalid: CALLBACK_AMOUNT (supply distributed)';
 
         // Verify ALLOW_LIST is a valid list of addresses
-        if(!error && !this.util.isNull(data['ALLOW_LIST']) && !this.indexerDb.isValidList(data['ALLOW_LIST'],3))
+        if(!error && !this.util.isNull(data['ALLOW_LIST']) && !this.indexerDb.isValidList(data['ALLOW_LIST'],2))
             error = 'invalid: ALLOW_LIST (bad list)';
 
-        // // Verify BLOCK_LIST is a valid list of addresses
-        if(!error && !this.util.isNull(data['BLOCK_LIST']) && !this.indexerDb.isValidList(data['BLOCK_LIST'],3))
+        // Verify BLOCK_LIST is a valid list of addresses
+        if(!error && !this.util.isNull(data['BLOCK_LIST']) && !this.indexerDb.isValidList(data['BLOCK_LIST'],2))
             error = 'invalid: BLOCK_LIST (bad list)';
 
         // Verify MINT_START_BLOCK is greater than or equal to current block

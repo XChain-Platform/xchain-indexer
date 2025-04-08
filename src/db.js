@@ -837,12 +837,12 @@ class Database {
                         i.mint_address_max,
                         i.mint_start_block,
                         i.mint_stop_block,
+                        i.allow_list,
+                        i.block_list,
                         a1.action_index,
                         t1.block_index,
                         t2.tick,
                         t3.tick as callback_tick,            
-                        t4.hash as allow_list,
-                        t5.hash as block_list,
                         a2.address as owner,
                         a3.address as transfer
                     FROM 
@@ -854,8 +854,6 @@ class Database {
                         INNER JOIN index_statuses     s1 on (s1.id=i.status_id)
                         LEFT  JOIN index_addresses    a3 on (a3.id=i.transfer_id)
                         LEFT  JOIN index_tickers      t3 on (t3.id=i.callback_tick_id)
-                        LEFT  JOIN index_transactions t4 on (t4.id=i.allow_list_id)
-                        LEFT  JOIN index_transactions t5 on (t5.id=i.block_list_id)
                     WHERE
                         s1.status='valid' AND
                         i.tick_id=?` + sql + `
@@ -1144,10 +1142,10 @@ class Database {
     }
 
     // Validate if a list is a valid type
-    // @param {tx_hash}  string   TX_HASH to a list
-    // @param {type}     string   List Type (1=TICK, 2=ASSET, 3=ADDRESS)
-    async isValidList(tx_hash, type){
-        let list_type = this.getListType(tx_hash);
+    // @param {action_index}  integer  ACTION_INDEX to a list
+    // @param {type}          string   List Type (1=TICK, 2=ADDRESS)
+    async isValidList(action_index, type){
+        let list_type = this.getListType(action_index);
         if(list_type==type)
             return true;
         return false;
@@ -1303,12 +1301,21 @@ class Database {
             'LOCK_SLEEP',
             'LOCK_CALLBACK'
         ];
+        // Define list of LIST fields
+        let lists = [
+            'ALLOW_LIST',
+            'BLOCK_LIST'
+        ];
         // Standardize lock values to explicitly unlocked (0) or locked (1)
-        locks.forEach(function(lock){
-            // Unset any LOCK fields with invalid values
+        for(let lock of locks){
             if([0,1].indexOf(data[lock]) == -1)
                 delete data[lock];
-        });
+        }
+        // Standardize list values to numeric or NULL
+        for(let list of lists){
+            if(this.util.isNull(data[list]) || !this.util.isNumeric(data[list]))
+                delete data[list];
+        }
         // Unset DECIMALS if it is outside of the acceptable range
         if(!this.util.isNull(data['DECIMALS']) && (data['DECIMALS'] < this.config.MIN_TOKEN_DECIMALS || data['DECIMALS'] > this.config.MAX_TOKEN_DECIMALS))
             delete data['DECIMALS'];
@@ -1333,13 +1340,13 @@ class Database {
         let lock_callback      = data['LOCK_CALLBACK'];
         let callback_block     = data['CALLBACK_BLOCK'];
         let callback_amount    = data['CALLBACK_AMOUNT'];
+        let allow_list         = data['ALLOW_LIST'];
+        let block_list         = data['BLOCK_LIST'];
         let callback_tick_id   = await this.createTicker(data['CALLBACK_TICK']);
         let tick_id            = await this.createTicker(data['TICK']);
         let source_id          = await this.createAddress(data['SOURCE']);
         let transfer_id        = await this.createAddress(data['TRANSFER']);
         let transfer_supply_id = await this.createAddress(data['TRANSFER_SUPPLY']);
-        let allow_list_id      = await this.createTransaction(data['ALLOW_LIST']);
-        let block_list_id      = await this.createTransaction(data['BLOCK_LIST']);
         let status_id          = await this.createStatus(data['STATUS']);
         // Truncate description to MAX_TOKEN_DESCRIPTION characters
         if(!this.util.isNull(description) && description.length > this.config['MAX_TOKEN_DESCRIPTION'])
@@ -1380,8 +1387,8 @@ class Database {
                         callback_block=?,
                         callback_tick_id=?,
                         callback_amount=?,
-                        allow_list_id=?,
-                        block_list_id=?,
+                        allow_list=?,
+                        block_list=?,
                         mint_address_max=?,
                         mint_start_block=?,
                         mint_stop_block=?,
@@ -1411,8 +1418,8 @@ class Database {
                         callback_block, 
                         callback_tick_id, 
                         callback_amount, 
-                        allow_list_id, 
-                        block_list_id, 
+                        allow_list, 
+                        block_list, 
                         mint_address_max, 
                         mint_start_block, 
                         mint_stop_block, 
@@ -1421,7 +1428,7 @@ class Database {
                         action_index
                     ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
         }
-        args = [tick_id, max_supply, max_mint, decimals, description, mint_supply, transfer_id, transfer_supply_id, lock_max_supply, lock_mint, lock_mint_supply, lock_max_mint, lock_description, lock_rug, lock_sleep, lock_callback, callback_block, callback_tick_id, callback_amount, allow_list_id, block_list_id, mint_address_max, mint_start_block, mint_stop_block, source_id, status_id, action_index ];
+        args = [tick_id, max_supply, max_mint, decimals, description, mint_supply, transfer_id, transfer_supply_id, lock_max_supply, lock_mint, lock_mint_supply, lock_max_mint, lock_description, lock_rug, lock_sleep, lock_callback, callback_block, callback_tick_id, callback_amount, allow_list, block_list, mint_address_max, mint_start_block, mint_stop_block, source_id, status_id, action_index ];
         // Create or Update the record in the issues table
         try {
             let result = await db.query(query, args);
@@ -1442,6 +1449,8 @@ class Database {
         let mint_start_block   = (!this.util.isNull(data['MINT_START_BLOCK']) &&     this.util.isNumeric(data['MINT_START_BLOCK'])) ? data['MINT_START_BLOCK'] : 0;
         let mint_stop_block    = (!this.util.isNull(data['MINT_STOP_BLOCK']) &&      this.util.isNumeric(data['MINT_STOP_BLOCK'])) ? data['MINT_STOP_BLOCK'] : 0;
         let callback_amount    = (!this.util.isNull(data['CALLBACK_AMOUNT']) &&      this.util.isNumeric(data['CALLBACK_AMOUNT'])) ? data['CALLBACK_AMOUNT'] : 0;
+        let allow_list         = (!this.util.isNull(data['ALLOW_LIST']) &&           this.util.isNumeric(data['ALLOW_LIST'])) ? parseInt(data['ALLOW_LIST']) : null;
+        let block_list         = (!this.util.isNull(data['BLOCK_LIST']) &&           this.util.isNumeric(data['BLOCK_LIST'])) ? parseInt(data['BLOCK_LIST']) : null;
         let decimals           = (!this.util.isNull(data['DECIMALS']) &&             this.util.isNumeric(data['DECIMALS'])) ? parseInt(data['DECIMALS']) : 0;
         // Force any amount values to the correct decimal precision
         if(this.util.isNumeric(decimals) && decimals >= this.config.MIN_TOKEN_DECIMALS && decimals <= this.config.MAX_TOKEN_DECIMALS){
@@ -1465,8 +1474,6 @@ class Database {
         let callback_tick_id   = await this.createTicker(data['CALLBACK_TICK']);
         let tick_id            = await this.createTicker(data['TICK']);
         let owner_id           = await this.createAddress(data['OWNER']);
-        let allow_list_id      = await this.createTransaction(data['ALLOW_LIST']);
-        let block_list_id      = await this.createTransaction(data['BLOCK_LIST']);
         // Check if record already exists for this token
         let db     = await this.getConnection();
         let query  = "SELECT id FROM tokens WHERE tick_id=? LIMIT 1";
@@ -1497,8 +1504,8 @@ class Database {
                         callback_block=?,
                         callback_tick_id=?,
                         callback_amount=?,
-                        allow_list_id=?,
-                        block_list_id=?,
+                        allow_list=?,
+                        block_list=?,
                         mint_address_max=?,
                         mint_start_block=?,
                         mint_stop_block=?,
@@ -1524,8 +1531,8 @@ class Database {
                         callback_block, 
                         callback_tick_id, 
                         callback_amount, 
-                        allow_list_id, 
-                        block_list_id, 
+                        allow_list, 
+                        block_list, 
                         mint_address_max, 
                         mint_start_block, 
                         mint_stop_block, 
@@ -1535,7 +1542,7 @@ class Database {
                         tick_id 
                     ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
         }
-        let args = [max_supply, max_mint, decimals, description, lock_max_supply, lock_mint, lock_max_mint,lock_description, lock_rug, lock_sleep, lock_callback, callback_block, callback_tick_id, callback_amount, allow_list_id, block_list_id, mint_address_max, mint_start_block, mint_stop_block, supply, owner_id, block_index, tick_id];
+        let args = [max_supply, max_mint, decimals, description, lock_max_supply, lock_mint, lock_max_mint,lock_description, lock_rug, lock_sleep, lock_callback, callback_block, callback_tick_id, callback_amount, allow_list, block_list, mint_address_max, mint_start_block, mint_stop_block, supply, owner_id, block_index, tick_id];
         // Create or Update the record in the tokens table
         try {
             let result = await db.query(query, args);
@@ -1901,13 +1908,13 @@ class Database {
         let info = await this.getTokenInfo(tick);
         let list = null;
         // False if we have an ALLOW_LIST and user is NOT on it
-        if(info['ALLOW_LIST']){
+        if(!this.util.isNull(info['ALLOW_LIST']) && this.util.isNumeric(info['ALLOW_LIST'])){
             list = await this.getList(info['ALLOW_LIST']);
             if(!list.includes(address))
                 return false;
         }
         // False if we have an BLOCK_LIST and user IS on it
-        if(info['BLOCK_LIST']){
+        if(!this.util.isNull(info['BLOCK_LIST']) && this.util.isNumeric(info['BLOCK_LIST'])){
             list = await this.getList(info['BLOCK_LIST']);
             if(list.includes(address))
                 return false;

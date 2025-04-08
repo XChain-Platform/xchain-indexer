@@ -19,8 +19,8 @@ CREATE TABLE tokens (
     callback_block     INTEGER UNSIGNED,                     -- block_index after which CALLBACK cand be used
     callback_tick_id   INTEGER UNSIGNED,                     -- id of record in index_tickers table
     callback_amount    VARCHAR(250),                         -- AMOUNT users get if CALLBACK
-    allow_list_id      INTEGER UNSIGNED NOT NULL default 0,  -- id of record in index_transactions table
-    block_list_id      INTEGER UNSIGNED NOT NULL default 0,  -- id of record in index_transactions table
+    allow_list         INTEGER UNSIGNED,                     -- action_index of list in lists table
+    block_list         INTEGER UNSIGNED,                     -- action_index of list in lists table
     mint_address_max   VARCHAR(250),                         -- Maximum amount of supply an address can MINT
     mint_start_block   INTEGER UNSIGNED,                     -- block_index when MINT transactions are allowed (begin mint)
     mint_stop_block    INTEGER UNSIGNED,                     -- BLOCK_INDEX when MINT transactions are NOT allowed (end mint)
@@ -28,16 +28,16 @@ CREATE TABLE tokens (
     btc_price          VARCHAR(250) NOT NULL default 0       -- last price of BTC purchase of 1 token
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
-CREATE        INDEX tick_id            ON tokens (tick_id);
-CREATE        INDEX owner_id           ON tokens (owner_id);
-CREATE        INDEX lock_max_supply    ON tokens (lock_max_supply);
-CREATE        INDEX lock_mint          ON tokens (lock_mint);
-CREATE        INDEX lock_max_mint      ON tokens (lock_max_mint);
-CREATE        INDEX lock_mint_supply   ON tokens (lock_mint_supply);
-CREATE        INDEX lock_description   ON tokens (lock_description);
-CREATE        INDEX lock_rug           ON tokens (lock_rug);
-CREATE        INDEX lock_sleep         ON tokens (lock_sleep);
-CREATE        INDEX lock_callback      ON tokens (lock_callback);
-CREATE        INDEX callback_tick_id   ON tokens (callback_tick_id);
-CREATE        INDEX allow_list_id      ON tokens (allow_list_id);
-CREATE        INDEX block_list_id      ON tokens (block_list_id);
+CREATE        INDEX tick_id          ON tokens (tick_id);
+CREATE        INDEX owner_id         ON tokens (owner_id);
+CREATE        INDEX lock_max_supply  ON tokens (lock_max_supply);
+CREATE        INDEX lock_mint        ON tokens (lock_mint);
+CREATE        INDEX lock_max_mint    ON tokens (lock_max_mint);
+CREATE        INDEX lock_mint_supply ON tokens (lock_mint_supply);
+CREATE        INDEX lock_description ON tokens (lock_description);
+CREATE        INDEX lock_rug         ON tokens (lock_rug);
+CREATE        INDEX lock_sleep       ON tokens (lock_sleep);
+CREATE        INDEX lock_callback    ON tokens (lock_callback);
+CREATE        INDEX callback_tick_id ON tokens (callback_tick_id);
+CREATE        INDEX allow_list       ON tokens (allow_list);
+CREATE        INDEX block_list       ON tokens (block_list);
