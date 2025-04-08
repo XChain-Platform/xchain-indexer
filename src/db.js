@@ -290,24 +290,23 @@ class Database {
         await this.releaseConnection();
     }
 
-    // Handle getting block transaction for a given block from the Decoder
-    async getBlockData(block_index){
+    // Handle getting block transaction data for a given block from the Decoder
+    async getDecoderBlockData(block_index){
         let db = await this.getConnection();
         // XChain-decoder SQL
-        let query  = `SELECT
-                t1.data,
-                t2.hash as tx_hash,
-                a.address as source,
-                t1.block_index
-            FROM
-                transactions t1,
-                index_transactions t2,
-                index_addresses a
-            WHERE 
-                t2.id=t1.tx_hash_id AND
-                a.id=t1.source_id AND
-                t1.block_index=? 
-            ORDER BY t1.tx_index ASC`;
+        let query = `SELECT
+                        t1.data,
+                        t2.hash as tx_hash,
+                        a1.address as source,
+                        t1.block_index
+                    FROM
+                        transactions t1
+                        INNER JOIN index_transactions t2 ON (t2.id=t1.tx_hash_id)
+                        INNER JOIN index_addresses    a1 ON (a1.id=t1.source_id)
+                    WHERE 
+                        t1.block_index=? 
+                    ORDER BY 
+                        t1.tx_index ASC`;
         try {
             const rows = await db.query(query, [block_index]);
             await db.end();
@@ -847,13 +846,13 @@ class Database {
                         a3.address as transfer
                     FROM 
                         issues i
-                        INNER JOIN actions            a1 on (a1.action_index=i.action_index)
-                        INNER JOIN transactions       t1 on (t1.tx_index=a1.tx_index)
-                        INNER JOIN index_tickers      t2 on (t2.id=i.tick_id)
-                        INNER JOIN index_addresses    a2 on (a2.id=i.source_id)
-                        INNER JOIN index_statuses     s1 on (s1.id=i.status_id)
-                        LEFT  JOIN index_addresses    a3 on (a3.id=i.transfer_id)
-                        LEFT  JOIN index_tickers      t3 on (t3.id=i.callback_tick_id)
+                        INNER JOIN actions            a1 ON (a1.action_index=i.action_index)
+                        INNER JOIN transactions       t1 ON (t1.tx_index=a1.tx_index)
+                        INNER JOIN index_tickers      t2 ON (t2.id=i.tick_id)
+                        INNER JOIN index_addresses    a2 ON (a2.id=i.source_id)
+                        INNER JOIN index_statuses     s1 ON (s1.id=i.status_id)
+                        LEFT  JOIN index_addresses    a3 ON (a3.id=i.transfer_id)
+                        LEFT  JOIN index_tickers      t3 ON (t3.id=i.callback_tick_id)
                     WHERE
                         s1.status='valid' AND
                         i.tick_id=?` + sql + `
@@ -917,7 +916,7 @@ class Database {
             this.util.logError('Error looking up token info : ', error);
         }
         await this.releaseConnection();
-        // Get token supply at the given tx_index
+        // Get token supply at the given action_index
         if(data)
             data['SUPPLY'] = await this.getTokenSupply(tick, tick_id, null, action_index); 
         return data;
@@ -990,8 +989,8 @@ class Database {
                     CAST(SUM(m.amount) AS DECIMAL(60,` + decimals + `)) as credits 
                 FROM 
                     credits m
-                    INNER JOIN actions      a on (a.action_index=m.action_index)
-                    INNER JOIN transactions t on (t.tx_index=a.tx_index)
+                    INNER JOIN actions      a ON (a.action_index=m.action_index)
+                    INNER JOIN transactions t ON (t.tx_index=a.tx_index)
                 WHERE 
                     m.tick_id=?` + sql;
         try {
@@ -1006,8 +1005,8 @@ class Database {
                     CAST(SUM(m.amount) AS DECIMAL(60,` + decimals + `)) as debits 
                 FROM 
                     debits m
-                    INNER JOIN actions      a on (a.action_index=m.action_index)
-                    INNER JOIN transactions t on (t.tx_index=a.tx_index)
+                    INNER JOIN actions      a ON (a.action_index=m.action_index)
+                    INNER JOIN transactions t ON (t.tx_index=a.tx_index)
                 WHERE 
                     m.tick_id=?` + sql;
         try {
@@ -1127,10 +1126,10 @@ class Database {
     // Determine if an ticker is distributed to users (held by more than owner)
     // @param {tick}            string  Ticker name
     // @param {block_index}     integer Block Index 
-    // @param {tx_index}        integer tx_index of transaction
-    async isDistributed(tick, block_index, tx_index){
-        let info    = await this.getTokenInfo(tick, null, block_index, tx_index);
-        let holders = (info) ? await this.getHolders(tick, block_index, tx_index) : [];
+    // @param {action_index}    integer action_index of action
+    async isDistributed(tick, block_index, action_index){
+        let info    = await this.getTokenInfo(tick, null, block_index, action_index);
+        let holders = (info) ? await this.getHolders(tick, block_index, action_index) : [];
         // More than one holder
         if(Object.keys(holders).length>1)
             return true;
@@ -1190,7 +1189,7 @@ class Database {
                             a.address as item 
                         FROM
                             list_items l
-                            INNER JOIN index_addresses a on (l.item_id=a.id)
+                            INNER JOIN index_addresses a ON (l.item_id=a.id)
                         WHERE 
                             l.action_index=?`;
             }
@@ -1869,36 +1868,38 @@ class Database {
             await this.createToken(data);
     }
 
-    // Get tx_index of the first valid ISSUE action for a given ticker
-    async getFirstIssueTxIndex(tick){
-        let tick_id  = await this.createTicker(tick);
-        let tx_index = false;
-        let db       = await this.getConnection();
-        let query    = `SELECT 
-                            tx_index 
-                        FROM 
-                            issues i,
-                            index_statuses s
-                        WHERE 
-                            i.tick_id=? AND 
-                            s.id=i.status_id AND
-                            s.status='valid'
-                        ORDER BY tx_index ASC LIMIT 1`;
+    // Get action_index of the first valid ISSUE action for a given ticker
+    async getFirstIssueActionIndex(tick){
+        let tick_id      = await this.createTicker(tick);
+        let action_index = false;
+        let db    = await this.getConnection();
+        let query = `SELECT 
+                        i.action_index 
+                    FROM 
+                        issues i,
+                        INNER JOIN index_statuses s ON (s.id=i.status_id)
+                    WHERE 
+                        i.tick_id=? AND 
+                        s.status='valid'
+                    ORDER BY 
+                        action_index ASC 
+                    LIMIT 1`;
+        let args = [tick_id];
         try {
-            let rows = await db.query(query, [tick_id]);
+            let rows = await db.query(query, args);
             if(rows.length > 0)
-                tx_index = rows[0].tx_index;
+                action_index = rows[0].action_index;
         } catch (error) {
-            this.util.logError('Error looking up tx_index of first valid issue:', error);
+            this.util.logError('Error looking up action_index of first valid issue:', error);
         }
         await this.releaseConnection();
-        return tx_index;
+        return action_index;
     }
 
-    // Validate if a ticker exists before before a given tx_index
-    async validTickerBeforeTxIndex(tick, tx_index){
-        let issue_index = await this.getFirstIssueTxIndex(tick);
-        if(issue_index < tx_index)
+    // Validate if a ticker exists before before a given action_index
+    async validTickerBeforeTxIndex(tick, action_index){
+        let issue_index = await this.getFirstIssueActionIndex(tick);
+        if(issue_index < action_index)
             return true;
         return false;
     }
@@ -2178,18 +2179,17 @@ class Database {
     // Create record in `addresses` table
     async createAddressOption(data){
         let source_id      = await this.createAddress(data['SOURCE']);
-        let tx_hash_id     = await this.createTransaction(data['TX_HASH']);
         let status_id      = await this.createStatus(data['STATUS']);
-        let block_index    = data['BLOCK_INDEX'];
-        let tx_index       = data['TX_INDEX'];
+        let action_index   = data['ACTION_INDEX'];
         let fee_preference = data['FEE_PREFERENCE'];
         let require_memo   = data['REQUIRE_MEMO'];
         // Check if record already exists for this address
         let db     = await this.getConnection();
-        let query  = "SELECT tx_index FROM addresses WHERE tx_hash_id=? LIMIT 1";
+        let query  = "SELECT action_index FROM addresses WHERE action_index=? LIMIT 1";
+        let args   = [action_index];
         let exists = false;
         try {
-            let rows = await db.query(query, tx_hash_id);
+            let rows = await db.query(query, args);
             if(rows.length > 0)
                 exists = true;
         } catch (error){
@@ -2199,19 +2199,17 @@ class Database {
             query = `UPDATE
                         addresses
                     SET
-                        tx_index=?,
                         source_id=?,
-                        block_index=?,
                         fee_preference=?,
                         require_memo=?,
                         status_id=?
                     WHERE 
-                        tx_hash_id=?`;
+                        action_index=?`;
         } else {
-            query = "INSERT INTO addresses (tx_index, source_id, block_index, fee_preference, require_memo, status_id, tx_hash_id) values (?, ?, ?, ?, ?, ?, ?)";
+            query = "INSERT INTO addresses (source_id, fee_preference, require_memo, status_id, action_index) values (?, ?, ?, ?, ?)";
         }
         try {
-            let rows = await db.query(query, [tx_index, source_id, block_index, fee_preference, require_memo, status_id, tx_hash_id]);
+            let rows = await db.query(query, [source_id, fee_preference, require_memo, status_id, action_index]);
         } catch (error){
             this.util.logError('Error trying to create record in addresses table:', error);
         }
@@ -2291,16 +2289,14 @@ class Database {
         let tick_id        = await this.createTicker(data['TICK']);
         let source_id      = await this.createAddress(data['SOURCE']);
         let destination_id = await this.createAddress(data['DESTINATION']);
-        let tx_hash_id     = await this.createTransaction(data['TX_HASH']);
         let memo_id        = await this.createMemo(data['MEMO']);
         let status_id      = await this.createStatus(data['STATUS']);
-        let tx_index       = data['TX_INDEX'];
+        let action_index   = data['ACTION_INDEX'];
         let amount         = data['AMOUNT'];
-        let block_index    = data['BLOCK_INDEX'];
         // Check if record already exists for this send
         let db     = await this.getConnection();
         let query  = `SELECT
-                            tx_index
+                            action_index
                         FROM
                             sends
                         WHERE
@@ -2308,8 +2304,8 @@ class Database {
                             source_id=? AND
                             destination_id=? AND
                             amount=? AND
-                            tx_hash_id=?`;
-        let args = [tick_id, source_id, destination_id, amount, tx_hash_id];
+                            action_index=?`;
+        let args = [tick_id, source_id, destination_id, amount, action_index];
         let exists = false;
         try {
             let rows = await db.query(query, args);
@@ -2323,21 +2319,19 @@ class Database {
             query = `UPDATE
                         sends
                     SET
-                        tx_index=?,
-                        block_index=?,
+                        tick_id=?,
+                        source_id=?,
+                        destination_id=?,
+                        amount=?,
                         memo_id=?,
                         status_id=?
                     WHERE 
-                        tick_id=? AND
-                        source_id=? AND
-                        destination_id=? AND
-                        amount=? AND
-                        tx_hash_id=?`;
+                        action_index=?`;
         } else {
             // INSERT record
-            query = `INSERT INTO sends (tx_index, block_index, memo_id, status_id, tick_id, source_id, destination_id, amount, tx_hash_id) values (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+            query = `INSERT INTO sends (tick_id, source_id, destination_id, amount, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?, ?)`;
         }
-        args = [tx_index, block_index, memo_id, status_id, tick_id, source_id, destination_id, amount, tx_hash_id];
+        args = [tick_id, source_id, destination_id, amount, memo_id, status_id, action_index];
         // Create or Update the record in the sends table
         try {
             let result = await db.query(query, args);
@@ -2348,7 +2342,7 @@ class Database {
     }
 
     // Get address preferences for a given address
-    async getAddressPreferences(address, block_index, tx_index){
+    async getAddressPreferences(address, block_index, action_index){
         let id   = await this.createAddress(address);
         // Set default address preferences
         let data = {};
@@ -2357,28 +2351,29 @@ class Database {
         // Build out the SQL query and arguments
         let sql  = '';
         let args = [id, 'valid'];
-        // Query using either block_index OR tx_index
-        if(!this.util.isNull(tx_index) && this.util.isNumeric(tx_index)){
-            sql += " AND a.tx_index < ?";
-            args.push(tx_index);
+        // Query using either block_index OR action_index
+        if(!this.util.isNull(action_index) && this.util.isNumeric(action_index)){
+            sql += " AND a1.action_index < ?";
+            args.push(action_index);
         } else if(!this.util.isNull(block_index) && this.util.isNumeric(block_index)){
-            sql += " AND a.block_index < ?";
+            sql += " AND t1.block_index < ?";
             args.push(block_index);
         }
         // Lookup the address preferences
         let db    = await this.getConnection();
         let query = `SELECT 
-                a.fee_preference,
-                a.require_memo
+                a1.fee_preference,
+                a1.require_memo
             FROM
-                addresses a,
-                index_statuses s
+                addresses                 a1
+                INNER JOIN actions        a2 ON (a1.action_index=a2.action_index)
+                INNER JOIN transactions   t1 ON (t1.tx_index=a2.tx_index)
+                INNER JOIN index_statuses s1 ON (s1.id=a1.status_id)
             WHERE 
-                s.id=a.status_id AND
-                a.source_id=? AND 
-                s.status=?` + sql + `
+                a1.source_id=? AND 
+                s1.status=?` + sql + `
             ORDER BY 
-                a.tx_index`;
+                a.action_index ASC`;
         try {
             let rows = await db.query(query, args);
             if(rows.length > 0){
@@ -2463,19 +2458,18 @@ class Database {
         let tick_id        = await this.createTicker(data['TICK']);
         let source_id      = await this.createAddress(data['SOURCE']);
         let destination_id = await this.createAddress(data['DESTINATION']);
-        let tx_index       = data['TX_INDEX'];
+        let action_index   = data['ACTION_INDEX'];
         let amount         = data['AMOUNT'];
         let method         = data['METHOD'];
-        let block_index    = data['BLOCK_INDEX'];
         // Check if record already exists for this airdrop
         let db     = await this.getConnection();
-        let query  = `SELECT
-                    tx_index
-                FROM
-                    fees
-                WHERE
-                    tx_index=?`;
-        let args = [tx_index];
+        let query = `SELECT
+                        action_index
+                    FROM
+                        fees
+                    WHERE
+                        action_index=?`;
+        let args = [action_index];
         let exists = false;
         try {
             let rows = await db.query(query, args);
@@ -2485,7 +2479,7 @@ class Database {
             this.util.logError('Error looking up record in fees table:', error);
         }
         // Define list of arguments for sql insert/update
-        args = [tick_id, source_id, destination_id, amount, method, block_index, tx_index];
+        args = [tick_id, source_id, destination_id, amount, method, action_index];
         if(exists){
             // UPDATE record
             query = `UPDATE
@@ -2495,13 +2489,12 @@ class Database {
                         source_id=?,
                         destination_id=?,
                         amount=?,
-                        method=?,
-                        block_index=?
+                        method=?
                     WHERE 
-                        tx_index=?`;
+                        action_index=?`;
         } else {
             // INSERT record
-            query = `INSERT INTO fees (tick_id, source_id, destination_id, amount, method, block_index, tx_index) values (?, ?, ?, ?, ?, ?, ?)`;
+            query = `INSERT INTO fees (tick_id, source_id, destination_id, amount, method, action_index) values (?, ?, ?, ?, ?, ?)`;
         }
         // Create or Update the record in the fees table
         try {
@@ -2517,24 +2510,19 @@ class Database {
         // Normalize data
         let tick_id        = await this.createTicker(data['TICK']);
         let source_id      = await this.createAddress(data['SOURCE']);
-        let tx_hash_id     = await this.createTransaction(data['TX_HASH']);
         let memo_id        = await this.createMemo(data['MEMO']);
         let status_id      = await this.createStatus(data['STATUS']);
-        let tx_index       = data['TX_INDEX'];
+        let action_index   = data['ACTION_INDEX'];
         let amount         = data['AMOUNT'];
-        let block_index    = data['BLOCK_INDEX'];
         // Check if record already exists for this destroy
         let db     = await this.getConnection();
         let query  = `SELECT
-                            tx_index
+                            action_index
                         FROM
                             destroys
                         WHERE
-                            tick_id=? AND
-                            source_id=? AND
-                            amount=? AND
-                            tx_hash_id=?`;
-        let args = [tick_id, source_id, amount, tx_hash_id];
+                            action_index=?`;
+        let args = [action_index];
         let exists = false;
         try {
             let rows = await db.query(query, args);
@@ -2548,20 +2536,18 @@ class Database {
             query = `UPDATE
                         destroys
                     SET
-                        tx_index=?,
-                        block_index=?,
+                        tick_id=?,
+                        source_id=?,
+                        amount=?,
                         memo_id=?,
                         status_id=?
                     WHERE 
-                        tick_id=? AND
-                        source_id=? AND
-                        amount=? AND
-                        tx_hash_id=?`;
+                        action_index=?`;
         } else {
             // INSERT record
-            query = `INSERT INTO destroys (tx_index, block_index, memo_id, status_id, tick_id, source_id, amount, tx_hash_id) values (?, ?, ?, ?, ?, ?, ?, ?)`;
+            query = `INSERT INTO destroys (tick_id, source_id, amount, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?)`;
         }
-        args = [tx_index, block_index, memo_id, status_id, tick_id, source_id, amount, tx_hash_id];
+        args = [tick_id, source_id, amount, memo_id, status_id, action_index];
         // Create or Update the record in the destroys table
         try {
             let result = await db.query(query, args);
@@ -2578,16 +2564,15 @@ class Database {
         // Lookup the address preferences
         let db    = await this.getConnection();
         let query = `SELECT 
-                t1.tick_id,
-                t2.tick
-            FROM
-                tokens t1,
-                index_tickers t2
-            WHERE 
-                t2.id=t1.tick_id AND
-                t1.owner_id=? 
-            ORDER BY 
-                t2.tick`;
+                        t1.tick_id,
+                        t2.tick
+                    FROM
+                        tokens t1
+                        INNER JOIN index_tickers t2 ON (t2.id=t1.tick_id)
+                    WHERE 
+                        t1.owner_id=? 
+                    ORDER BY 
+                        t2.tick`;
         try {
             let rows = await db.query(query, [id]);
             if(rows.length > 0){
@@ -2608,23 +2593,20 @@ class Database {
         let tick_id        = await this.createTicker(data['TICK']);
         let source_id      = await this.createAddress(data['SOURCE']);
         let destination_id = await this.createAddress(data['DESTINATION']);
-        let tx_hash_id     = await this.createTransaction(data['TX_HASH']);
         let memo_id        = await this.createMemo(data['MEMO']);
         let status_id      = await this.createStatus(data['STATUS']);
-        let tx_index       = data['TX_INDEX'];
-        let block_index    = data['BLOCK_INDEX'];
+        let action_index   = data['ACTION_INDEX'];
         let balances       = data['BALANCES'];
         let ownerships     = data['OWNERSHIPS'];
         // Check if record already exists for this sweep
-        let db     = await this.getConnection();
-        let query  = `SELECT
-                            tx_index
-                        FROM
-                            sweeps
-                        WHERE
-                            source_id=? AND
-                            tx_hash_id=?`;
-        let args = [source_id, tx_hash_id];
+        let db    = await this.getConnection();
+        let query = `SELECT
+                        action_index
+                    FROM
+                        sweeps
+                    WHERE
+                        action_index=?`;
+        let args = [action_index];
         let exists = false;
         try {
             let rows = await db.query(query, args);
@@ -2638,21 +2620,19 @@ class Database {
             query = `UPDATE
                         sweeps
                     SET
-                        tx_index=?,
-                        block_index=?,
+                        source_id=?,
                         destination_id=?,
                         balances=?,
                         ownerships=?,
                         memo_id=?,
                         status_id=?
                     WHERE 
-                        source_id=? AND
-                        tx_hash_id=?`;
+                        action_index=?`;
         } else {
             // INSERT record
-            query = `INSERT INTO sweeps (tx_index, block_index, destination_id, balances, ownerships, memo_id, status_id, source_id, tx_hash_id) values (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+            query = `INSERT INTO sweeps (source_id, destination_id, balances, ownerships, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?, ?)`;
         }
-        args = [tx_index, block_index,  destination_id, balances, ownerships, memo_id, status_id, source_id, tx_hash_id];
+        args = [source_id, destination_id, balances, ownerships, memo_id, status_id, action_index];
         // Create or Update the record in the sweeps table
         try {
             let result = await db.query(query, args);
@@ -2668,25 +2648,19 @@ class Database {
         let tick_id          = await this.createTicker(data['TICK']);
         let dividend_tick_id = await this.createTicker(data['DIVIDEND_TICK']);
         let source_id        = await this.createAddress(data['SOURCE']);
-        let tx_hash_id       = await this.createTransaction(data['TX_HASH']);
         let memo_id          = await this.createMemo(data['MEMO']);
         let status_id        = await this.createStatus(data['STATUS']);
-        let tx_index         = data['TX_INDEX'];
-        let block_index      = data['BLOCK_INDEX'];
+        let action_index     = data['ACTION_INDEX'];
         let amount           = data['AMOUNT'];
         // Check if record already exists for this dividend
         let db     = await this.getConnection();
         let query  = `SELECT
-                            tx_index
+                            action_index
                         FROM
                             dividends
                         WHERE
-                            tick_id=? AND
-                            dividend_tick_id=? AND
-                            amount=? AND
-                            source_id=? AND
-                            tx_hash_id=?`;
-        let args = [tick_id, dividend_tick_id, amount, source_id, tx_hash_id];
+                            action_index=?`;
+        let args = [action_index];
         let exists = false;
         try {
             let rows = await db.query(query, args);
@@ -2700,22 +2674,20 @@ class Database {
             query = `UPDATE
                         dividends
                     SET
-                        tx_index=?,
-                        block_index=?,
+                        tick_id=?,
+                        dividend_tick_id=?,
+                        amount=?,
+                        source_id=?,
                         memo_id=?,
                         status_id=?
                     WHERE 
-                        tick_id=? AND
-                        dividend_tick_id=? AND
-                        amount=? AND
-                        source_id=? AND
-                        tx_hash_id=?`;
+                        action_index=?`;
 
         } else {
             // INSERT record
-            query = `INSERT INTO dividends (tx_index, block_index, memo_id, status_id, tick_id, dividend_tick_id, amount, source_id, tx_hash_id) values (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+            query = `INSERT INTO dividends (tick_id, dividend_tick_id, amount, source_id, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?, ?)`;
         }
-        args = [tx_index, block_index, memo_id, status_id, tick_id, dividend_tick_id, amount, source_id, tx_hash_id];
+        args = [tick_id, dividend_tick_id, amount, source_id, memo_id, status_id, action_index];
         // Create or Update the record in the dividends table
         try {
             let result = await db.query(query, args);
