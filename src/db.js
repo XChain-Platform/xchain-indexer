@@ -2362,7 +2362,7 @@ class Database {
                 a1.source_id=? AND 
                 s1.status=?` + sql + `
             ORDER BY 
-                a.action_index ASC`;
+                a1.action_index ASC`;
         try {
             let rows = await db.query(query, args);
             if(rows.length > 0){
@@ -2381,28 +2381,27 @@ class Database {
     // Create/Update record in `airdrops` table
     async createAirdrop(data){
         // Normalize data
-        let tick_id        = await this.createTicker(data['TICK']);
-        let source_id      = await this.createAddress(data['SOURCE']);
-        let tx_hash_id     = await this.createTransaction(data['TX_HASH']);
-        let list_id        = await this.createTransaction(data['LIST']);
-        let memo_id        = await this.createMemo(data['MEMO']);
-        let status_id      = await this.createStatus(data['STATUS']);
-        let tx_index       = data['TX_INDEX'];
-        let amount         = data['AMOUNT'];
-        let block_index    = data['BLOCK_INDEX'];
+        let tick_id           = await this.createTicker(data['TICK']);
+        let source_id         = await this.createAddress(data['SOURCE']);
+        let memo_id           = await this.createMemo(data['MEMO']);
+        let status_id         = await this.createStatus(data['STATUS']);
+        let action_index      = data['ACTION_INDEX'];
+        let amount            = data['AMOUNT'];
+        let list_action_index = (!this.util.isNumeric(data['LIST_ACTION_INDEX'])) ? null : data['LIST_ACTION_INDEX'];
         // Check if record already exists for this airdrop
-        let db     = await this.getConnection();
-        let query  = `SELECT
-                    tx_index
-                FROM
-                    airdrops
-                WHERE
-                    tick_id=? AND
-                    source_id=? AND
-                    list_id=? AND
-                    amount=? AND
-                    tx_hash_id=?`;
-        let args = [tick_id, source_id, list_id, amount, tx_hash_id];
+        let db    = await this.getConnection();
+        let query = `SELECT
+                        action_index
+                    FROM
+                        airdrops
+                    WHERE
+                        tick_id=? AND
+                        source_id=? AND
+                        memo_id=? AND
+                        list_action_index=? AND
+                        amount=? AND
+                        action_index=?`;
+        let args  = [tick_id, source_id, memo_id, list_action_index, amount, action_index];
         let exists = false;
         try {
             let rows = await db.query(query, args);
@@ -2412,27 +2411,25 @@ class Database {
             this.util.logError('Error looking up record in airdrops table:', error);
         }
         // Define list of arguments for sql insert/update
-        args = [tx_index, block_index, memo_id, status_id, tick_id, source_id, list_id, amount, tx_hash_id];
+        args = [tick_id, source_id, list_action_index, amount, memo_id, status_id, action_index];
         if(exists){
             // UPDATE record
             query = `UPDATE
                         airdrops
                     SET
-                        tx_index=?,
-                        block_index=?,
+                        tick_id=?,
+                        source_id=?,
+                        list_action_index=?,
+                        amount=?,
                         memo_id=?,
                         status_id=?
                     WHERE
-                        tick_id=? AND
-                        source_id=? AND
-                        list_id=? AND
-                        amount=? AND
-                        tx_hash_id=?`;
+                        action_index=?`;
         } else {
             // INSERT record
-            query = `INSERT INTO airdrops (tx_index, block_index, memo_id, status_id, tick_id, source_id, list_id, amount, tx_hash_id) values (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+            query = `INSERT INTO airdrops (tick_id, source_id, list_action_index, amount, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?, ?)`;
         }
-        // Create or Update the record in the sends table
+        // Create or Update the record in the airdrops table
         try {
             let result = await db.query(query, args);
         } catch (error){
