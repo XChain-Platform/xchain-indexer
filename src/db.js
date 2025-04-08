@@ -2134,15 +2134,28 @@ class Database {
                         t1.supply 
                     FROM 
                         (
-                            SELECT tick_id FROM credits WHERE block_index=? UNION
-                            SELECT tick_id FROM debits  WHERE block_index=?
-                        ) as x,
-                        tokens t1,
-                        index_tickers t2
-                    WHERE
-                        t1.tick_id=x.tick_id AND
-                        t2.id=x.tick_id
-                    ORDER BY t2.tick ASC`;
+                            SELECT 
+                                c.tick_id 
+                            FROM 
+                                credits c
+                                INNER JOIN actions      a ON (c.action_index=a.action_index)
+                                INNER JOIN transactions t ON (t.tx_index=a.tx_index)
+                            WHERE 
+                                t.block_index=? 
+                            UNION
+                            SELECT 
+                                d.tick_id 
+                            FROM 
+                                debits d
+                                INNER JOIN actions      a ON (d.action_index=a.action_index)
+                                INNER JOIN transactions t ON (t.tx_index=a.tx_index)
+                            WHERE 
+                                t.block_index=? 
+                        ) as x
+                        INNER JOIN tokens        t1 ON (t1.tick_id=x.tick_id)
+                        INNER JOIN index_tickers t2 ON (t2.id=x.tick_id)
+                    ORDER BY 
+                        t2.tick ASC`;
         try {
             let rows = await db.query(query, [block_index, block_index]);
             if(rows.length >0){

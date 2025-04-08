@@ -152,14 +152,14 @@ class XChainIndexer {
                 // lastIndexerBlock = startBlock;
 
                 // DEBUG : Rollback to a specific block
-                // let rollbackBlock = 863012;
+                // let rollbackBlock = 799303;
                 // if(lastIndexerBlock >= rollbackBlock){
                 //     await this.rollback.rollback(rollbackBlock);
                 //     this.util.throwError('Rolled back to ' + rollbackBlock);
                 // }
 
                 // Get a list of any transactions in this block from the decoder database
-                let blockTransactions = await this.decoderDb.getBlockData(lastIndexerBlock);
+                let blockTransactions = await this.decoderDb.getDecoderBlockData(lastIndexerBlock);
 
                 // Loop through any block transactions and process them
                 for(const tx of blockTransactions)
@@ -169,7 +169,7 @@ class XChainIndexer {
                 let [credits, debits, actions] = await this.indexerDb.createBlock(lastIndexerBlock);
 
                 // Do a sanity check to verify that token supplys match data in credits/debits/balances tables 
-                // await this.indexerDb.sanityCheck(lastIndexerBlock);
+                await this.indexerDb.sanityCheck(lastIndexerBlock);
 
                 // Log the total parse time for this block
                 let parseTime = this.util.getTimer(debugTimer);
@@ -179,7 +179,7 @@ class XChainIndexer {
                 cnt++;
 
                 // DEBUG : Exit processing at a select block
-                // if(lastIndexerBlock >= 863012){
+                // if(lastIndexerBlock >= 802144){
                 //     // await this.rollback.rollback(rollbackBlock);
                 //     this.util.throwError('Exiting on target block');
                 // }
