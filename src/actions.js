@@ -117,10 +117,6 @@ class Actions {
         // Create a record of this transaction in the transactions table
         data['TX_INDEX'] = await this.indexerDb.createTxIndex(data);
 
-        // Initialize TX_ACTION_INDEX action count at 1
-        // Note: Used to track multiple actions in a single transaction, like in BATCH actions
-        data['TX_ACTION_INDEX'] = 1;
-
         // Create a record of this action in the actions table
         data['ACTION_INDEX'] = await this.indexerDb.createActionIndex(data);
 
