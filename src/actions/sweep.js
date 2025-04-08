@@ -163,7 +163,7 @@ class Sweep {
 
             // Transfer token ownerships
             if(data['OWNERSHIPS']==1){
-                // Copy base BTNS transaction data object into issue object
+                // Copy base transaction data object into issue object
                 let issue = sweep;
                 issue['TRANSFER'] = sweep['DESTINATION'];
                 for(let tick_id in ownerships){

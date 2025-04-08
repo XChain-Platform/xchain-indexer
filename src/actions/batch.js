@@ -3,7 +3,7 @@
  * 
  * PARAMS:
  * - VERSION - Broadcast Format Version
- * - COMMAND - Any valid BTNS ACTION with PARAMS
+ * - COMMAND - Any valid ACTION with PARAMS
  * 
  * FORMATS:
  * - 0 = Full (VERSION|COMMAND;COMMAND)
