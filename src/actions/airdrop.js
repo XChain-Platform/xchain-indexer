@@ -146,7 +146,7 @@ class Airdrop {
             let type = false,
                 list = null;
 
-            // Update BTNS transaction data object with airdrop values
+            // Update transaction data object with airdrop values
             airdrop['TICK']              = info[0];
             airdrop['AMOUNT']            = info[1];
             airdrop['LIST_ACTION_INDEX'] = info[2];
