@@ -143,7 +143,7 @@ class Sweep {
             this.util.addAddressTicker(data['SOURCE'], fees['TICK']);
 
             // Handle any transaction FEE according the users's ADDRESS preferences
-            [credits, debits] = await this.util.processTransactionFees(this.indexerDb, credits, debits, 'SWEEP', fees);
+            [credits, debits] = await this.util.processTransactionFees(this.indexerDb, credits, debits, fees);
 
             // Transfer any balances
             if(data['BALANCES']==1){

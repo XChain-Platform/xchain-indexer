@@ -294,7 +294,7 @@ class Airdrop {
                 debits.push([airdrop['TICK'], airdrop['DEBIT'], data['SOURCE']]);
 
                 // Handle any transaction FEE according the users's ADDRESS preferences
-                [credits, debits] = await this.util.processTransactionFees(this.indexerDb, credits, debits, 'AIRDROP', fees);
+                [credits, debits] = await this.util.processTransactionFees(this.indexerDb, credits, debits, fees);
 
                 // Loop through recipient addresses
                 for(let address of recipients){
