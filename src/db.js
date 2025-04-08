@@ -2231,17 +2231,16 @@ class Database {
 
     // Create record in `batches` table
     async createBatch(data){
-        let source_id      = await this.createAddress(data['SOURCE']);
-        let tx_hash_id     = await this.createTransaction(data['TX_HASH']);
-        let status_id      = await this.createStatus(data['STATUS']);
-        let block_index    = data['BLOCK_INDEX'];
-        let tx_index       = data['TX_INDEX'];
+        let source_id    = await this.createAddress(data['SOURCE']);
+        let status_id    = await this.createStatus(data['STATUS']);
+        let action_index = data['ACTION_INDEX'];
         // Check if record already exists for this address
-        let db     = await this.getConnection();
-        let query  = "SELECT tx_index FROM batches WHERE tx_hash_id=? LIMIT 1";
+        let db    = await this.getConnection();
+        let query = "SELECT action_index FROM batches WHERE action_index=? LIMIT 1";
+        let args  = [action_index];
         let exists = false;
         try {
-            let rows = await db.query(query, tx_hash_id);
+            let rows = await db.query(query, args);
             if(rows.length > 0)
                 exists = true;
         } catch (error){
@@ -2251,17 +2250,16 @@ class Database {
             query = `UPDATE
                         batches
                     SET
-                        tx_index=?,
                         source_id=?,
-                        block_index=?,
                         status_id=?
                     WHERE 
-                        tx_hash_id=?`;
+                        action_index=?`;
         } else {
-            query = "INSERT INTO batches (tx_index, source_id, block_index, status_id, tx_hash_id) values (?, ?, ?, ?, ?)";
+            query = "INSERT INTO batches (source_id, status_id, action_index) values (?, ?, ?)";
         }
+        args = [source_id, status_id, action_index];
         try {
-            let rows = await db.query(query, [tx_index, source_id, block_index, status_id, tx_hash_id]);
+            let rows = await db.query(query, args);
         } catch (error){
             this.util.logError('Error trying to create record in batches table:', error);
         }
