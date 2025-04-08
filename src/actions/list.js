@@ -2,7 +2,7 @@
  * XChain Indexer ACTION - LIST
  * 
  * PARAMS:
- * - VERSION            -  Broadcast Format Version
+ * - VERSION            -  Format Version
  * - TYPE               -  List type (1=TICK, 2=ADDRESS)
  * - ITEM               -  Any valid `TICK` or address
  * - EDIT               -  Edit action (1=ADD, 2=REMOVE)

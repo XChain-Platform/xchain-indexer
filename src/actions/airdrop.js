@@ -2,7 +2,7 @@
  * XChain Indexer ACTION - AIRDROP
  * 
  * PARAMS:
- * - VERSION           - Broadcast Format Version
+ * - VERSION           - Format Version
  * - TICK              - 1 to 250 characters in length
  * - AMOUNT            - Amount of tokens to airdrop
  * - LIST_ACTION_INDEX - `ACTION_INDEX` of a `LIST`

@@ -2,7 +2,7 @@
  * XChain Indexer ACTION - DIVIDEND
  * 
  * PARAMS:
- * - VERSION        - Broadcast Format Version
+ * - VERSION        - Format Version
  * - TICK           - 1 to 250 characters in length
  * - DIVIDEND_TICK  - 1 to 250 characters in length
  * - AMOUNT         - The quantity of DIVIDEND_TICK rewarded per UNIT

@@ -2,7 +2,7 @@
  * XChain Indexer ACTION - DESTROY
  * 
  * PARAMS:
- * - VERSION - Broadcast Format Version
+ * - VERSION - Format Version
  * - TICK    - 1 to 250 characters in length
  * - AMOUNT  - Amount of tokens to destroy
  * - MEMO    - An optional memo to include     

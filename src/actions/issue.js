@@ -2,7 +2,7 @@
  * XChain Indexer ACTION - ISSUE
  * 
  * PARAMS:
- * - VERSION          - Broadcast Format Version
+ * - VERSION          - Format Version
  * - TICK             - 1 to 250 characters in length
  * - MAX_SUPPLY       - Maximum token supply 
  * - MAX_MINT         - Maximum amount of supply a `MINT` transaction can issue

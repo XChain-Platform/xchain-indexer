@@ -2,7 +2,7 @@
  * XChain Indexer ACTION - SEND
  * 
  * PARAMS:
- * - VERSION     - Broadcast Format Version        
+ * - VERSION     - Format Version        
  * - TICK        - 1 to 250 characters in length   
  * - AMOUNT      - Amount of `tokens` to send      
  * - DESTINATION - Address to transfer `tokens` to 

@@ -2,7 +2,7 @@
  * XChain Indexer ACTION - SWEEP
  * 
  * PARAMS:
- * - VERSION     - Broadcast Format Version
+ * - VERSION     - Format Version
  * - DESTINATION - address where `token` shall be swept
  * - BALANCES    - Indicates if address `token` balances should be swept (default=1)
  * - OWNERSHIPS  - Indicates if address `token` ownerships should be swept (default=1)
