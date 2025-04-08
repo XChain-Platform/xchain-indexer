@@ -26,8 +26,8 @@ module.exports = {
         config['MIN_TICK_LENGTH'] = 1;
         config["MAX_TICK_LENGTH"] = 250;
 
-        // Reserved BTNS TICK names
-        config['RESERVED_TICKS'] = [coin];
+        // Reserved TICK names
+        config['RESERVED_TICKS'] = [coin, gas];
 
         // Min/Max DECIMALS
         config['MIN_TOKEN_DECIMALS'] = 0;
