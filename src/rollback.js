@@ -190,6 +190,9 @@ class Rollback {
         // Update token information
         await this.indexerDb.updateTokens(tickers, true);
 
+        // Do a sanity check to verify that token supplies match data in credits/debits/balances tables 
+        await this.indexerDb.sanityCheck(block_index);
+
         // Log the rollback time
         this.util.logTimer(rollbackTimer, 'Rollback Done');
     }
