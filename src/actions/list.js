@@ -2,11 +2,11 @@
  * XChain Indexer ACTION - LIST
  * 
  * PARAMS:
- * - VERSION       -  Broadcast Format Version
- * - TYPE          -  List type (1=TICK, 2=ADDRESS)
- * - ITEM          -  Any valid `TICK` or address
- * - EDIT          -  Edit action (1=ADD, 2=REMOVE)
- * - LIST_TX_HASH  -  `TX_HASH` of existing `LIST`
+ * - VERSION            -  Broadcast Format Version
+ * - TYPE               -  List type (1=TICK, 2=ADDRESS)
+ * - ITEM               -  Any valid `TICK` or address
+ * - EDIT               -  Edit action (1=ADD, 2=REMOVE)
+ * - LIST_ACTION_INDEX  -  `ACTION_INDEX` of existing `LIST`
  * 
  * FORMATS:
  * - 0 = Create LIST
@@ -31,7 +31,7 @@ class List {
         // Define list of known FORMATS
         this.formats = {};
         this.formats[0] = 'VERSION|TYPE|ITEM';
-        this.formats[1] = 'VERSION|EDIT|LIST_TX_HASH|ITEM';
+        this.formats[1] = 'VERSION|EDIT|LIST_ACTION_INDEX|ITEM';
 
         // Define array of list types (1=Tick, 2=Address)
         this.listTypes = [1,2];
@@ -43,7 +43,7 @@ class List {
         this.fieldList = {};
 
         // Define list of NUMBER fields (used to convert values from string to number)
-        this.fieldList['NUMBER'] = ['TYPE', 'EDIT'];
+        this.fieldList['NUMBER'] = ['TYPE', 'EDIT', 'LIST_ACTION_INDEX'];
     }
 
     // Handle parsing the LIST transaction
@@ -74,9 +74,10 @@ class List {
         }
 
         // Define some placeholders
-        let type = null;
-        let edit = {};
-        let list = [];
+        let type    = null;
+        let edit    = {};
+        let list    = [];
+        let invalid = {};
 
         // DEBUG : Translate TYPE 3 (BTNS address) to 2 (XChain address)
         // TODO  : Remove this when done testing using old BTNS data
@@ -97,16 +98,16 @@ class List {
 
         // Parse in the list type (if any)
         if(!error && format==1)
-            type = await this.indexerDb.getListType(data['LIST_TX_HASH']);
+            type = await this.indexerDb.getListType(data['LIST_ACTION_INDEX']);
 
-        // Validate LIST_TX_HASH
+        // Validate LIST_ACTION_INDEX
         if(!error && format==1 && type===false)
-            error = 'invalid: LIST_TX_HASH (unknown)';
+            error = 'invalid: LIST_ACTION_INDEX (unknown)';
 
         // Lookup list information
         if(!error && format==1){
             data['TYPE'] = type;
-            list         = await this.indexerDb.getList(data['LIST_TX_HASH']);
+            list         = await this.indexerDb.getList(data['LIST_ACTION_INDEX']);
         }
 
         /*****************************************************************
@@ -141,13 +142,22 @@ class List {
             // Build out final array of list items
             for(let item in edit){
                 let status = edit[item];
-                // ADD items
-                if(status=='valid' && (format==0 || (format==1 && data['EDIT']==1)) && !list.includes(item))
-                    list.push(item);
 
-                // REMOVE items
-                if(status=='valid' && format==1 && data['EDIT']==2 && list.includes(item))
-                    list.splice(list.indexOf(item),1);
+                // VALID items
+                if(status=='valid'){
+
+                    // ADD items
+                    if((format==0 || (format==1 && data['EDIT']==1)) && !list.includes(item))
+                        list.push(item);
+
+                    // REMOVE items
+                    if(format==1 && data['EDIT']==2 && list.includes(item))
+                        list.splice(list.indexOf(item),1);
+
+                } else {
+                    // INVALID items
+                    invalid[item] = status;
+                }
             }
 
         }
@@ -172,6 +182,10 @@ class List {
             // Create record of items on list
             for(let item of list)
                 await this.indexerDb.createListItem(data, item);
+
+            // Create record of invalid list items
+            for(let item in invalid)
+                await this.indexerDb.createListItemInvalid(data, item, invalid[item]);
         }
 
     }
