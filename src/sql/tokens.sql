@@ -2,7 +2,7 @@ DROP TABLE IF EXISTS tokens;
 CREATE TABLE tokens (
     id                 INTEGER UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
     tick_id            INTEGER UNSIGNED,                     -- id of record in index_ticks table
-    block_index        INTEGER UNSIGNED,                     -- block index of ISSUE transaction (used in rollbacks)
+    action_index       INTEGER UNSIGNED,                     -- action_index of ISSUE transaction (used in rollbacks)
     supply             VARCHAR(250),                         -- Current supply
     max_supply         VARCHAR(250),                         -- Maximum Supply
     max_mint           VARCHAR(250),                         -- Supply minted
