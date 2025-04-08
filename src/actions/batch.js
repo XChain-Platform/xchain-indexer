@@ -29,7 +29,7 @@ class Batch {
         this.actions  = action;
 
         // Setup alias to protocol changes class
-        this.protocolChanges = action.changes;
+        this.protocolChanges = action.protocolChanges;
 
         // Define list of known FORMATS
         this.formats = {};
@@ -107,11 +107,16 @@ class Batch {
 
         // Handle processing the specific ACTION commands
         if(status=='valid'){
+            let action_index = parseInt(data['ACTION_INDEX']);
             for(let command of commands){
-                params     = String(command).split('|');
+                params = String(command).split('|');
+                // Extract ACTION from PARAMS
                 let action = String(params.shift()).toUpperCase();
-                data['ACTION']  = action;
-                data['TX_DATA'] = command;
+                // Increase the action index for every command
+                action_index++;
+                data['ACTION']       = action;
+                data['ACTION_INDEX'] = action_index;
+                data['TX_DATA']      = command;
                 await this.actions.processAction(action, params, data, error);
             }
         }
