@@ -2,7 +2,7 @@
  * XChain Indexer ACTION - MINT
  * 
  * PARAMS:
- * - VERSION     - Broadcast Format Version
+ * - VERSION     - Format Version
  * - TICK        - 1 to 250 characters in length
  * - AMOUNT      - Amount of tokens to mint
  * - DESTINATION - Address to transfer tokens to

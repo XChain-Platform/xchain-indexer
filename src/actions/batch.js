@@ -2,7 +2,7 @@
  * XChain Indexer ACTION - BATCH
  * 
  * PARAMS:
- * - VERSION - Broadcast Format Version
+ * - VERSION - Format Version
  * - COMMAND - Any valid ACTION with PARAMS
  * 
  * FORMATS:

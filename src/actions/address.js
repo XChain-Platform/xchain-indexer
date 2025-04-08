@@ -2,7 +2,7 @@
  * XChain Indexer ACTION - ADDRESS
  * 
  * PARAMS:
- * - VERSION        - Broadcast Format Version
+ * - VERSION        - Format Version
  * - FEE_PREFERENCE - Set preference for how `FEE` is used
  * - REQUIRE_MEMO   - Require a `MEMO` on any received `SEND`
  * 
