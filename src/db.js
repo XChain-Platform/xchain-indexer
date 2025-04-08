@@ -388,7 +388,6 @@ class Database {
         query = `SELECT
                     a.action_index,
                     a.tx_index,
-                    a.tx_action_index,
                     a.action_id
                 FROM
                     actions a
@@ -692,7 +691,6 @@ class Database {
         let action_index    = null;
         let block_index     = data.BLOCK_INDEX;
         let tx_index        = data.TX_INDEX;
-        let tx_action_index = data.TX_ACTION_INDEX;
         let action_id       = await this.createAction(data.ACTION);
         let db              = await this.getConnection();
         let query = `SELECT
@@ -703,9 +701,8 @@ class Database {
                     WHERE
                         t.block_index=? AND 
                         a.tx_index=? AND 
-                        a.tx_action_index=? AND 
                         a.action_id=?`;
-        let args = [block_index, tx_index, tx_action_index, action_id];
+        let args = [block_index, tx_index, action_id];
         try {
             let rows = await db.query(query, args);
             if(rows.length > 0)
@@ -722,13 +719,12 @@ class Database {
         let action_index = await this.getActionIndex(data);
         // Handle creating record
         if(action_index==null){
-            action_index        = await this.getNextActionIndex();
-            let tx_index        = data.TX_INDEX;
-            let tx_action_index = data.TX_ACTION_INDEX;
-            let action_id       = await this.createAction(data.ACTION);
-            let db              = await this.getConnection();
-            let query           = "INSERT INTO actions (action_index, tx_index, tx_action_index, action_id) values (?, ?, ?, ?)";
-            let args            = [action_index, tx_index, tx_action_index, action_id];
+            action_index  = await this.getNextActionIndex();
+            let tx_index  = data.TX_INDEX;
+            let action_id = await this.createAction(data.ACTION);
+            let db        = await this.getConnection();
+            let query     = "INSERT INTO actions (action_index, tx_index, action_id) values (?, ?, ?)";
+            let args      = [action_index, tx_index, action_id];
             try {
                 let result = await db.query(query, args);
             } catch (error) {
