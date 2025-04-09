@@ -107,16 +107,25 @@ class Batch {
 
         // Handle processing the specific ACTION commands
         if(status=='valid'){
-            let action_index = parseInt(data['ACTION_INDEX']);
             for(let command of commands){
+
+                // Parse command into params
                 params = String(command).split('|');
-                // Extract ACTION from PARAMS
+
+                // Extract ACTION from params
                 let action = String(params.shift()).toUpperCase();
+
+                // Update ACTION transaction data object
+                data['ACTION']  = action;
+                data['TX_DATA'] = command;
+
                 // Increase the action index for every command
-                action_index++;
-                data['ACTION']       = action;
-                data['ACTION_INDEX'] = action_index;
-                data['TX_DATA']      = command;
+                data['ACTION_INDEX']++
+
+                // Create a record of this action in the actions table
+                data['ACTION_INDEX'] = await this.indexerDb.createActionIndex(data);
+
+                // Process the specific ACTION commands
                 await this.actions.processAction(action, params, data, error);
             }
         }
