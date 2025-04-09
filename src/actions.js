@@ -5,7 +5,7 @@ const address   = require('./actions/address.js');
 const airdrop   = require('./actions/airdrop.js');
 const batch     = require('./actions/batch.js');
 // const bet       = require('./actions/bet.js');
-// const callback  = require('./actions/callback.js');
+const callback  = require('./actions/callback.js');
 const destroy   = require('./actions/destroy.js');
 // const dispenser = require('./actions/dispenser.js');
 const dividend  = require('./actions/dividend.js');
@@ -39,7 +39,7 @@ class Actions {
         this.actionAirdrop   = new airdrop(this);
         this.actionBatch     = new batch(this);
         // this.actionBet       = new bet(this;
-        // this.actionCallback  = new callback(this);
+        this.actionCallback  = new callback(this);
         this.actionDestroy   = new destroy(this);
         // this.actionDispenser = new dispenser(this);
         this.actionDividend  = new dividend(this);
@@ -134,7 +134,7 @@ class Actions {
         if(action=='AIRDROP')   await this.actionAirdrop.parse(params, data, error);
         if(action=='BATCH')     await this.actionBatch.parse(params, data, error);
         // if(action=='BET')       await this.actionBet.parse(params, data, error);
-        // if(action=='CALLBACK')  await this.actionCallback.parse(params, data, error);
+        if(action=='CALLBACK')  await this.actionCallback.parse(params, data, error);
         if(action=='DESTROY')   await this.actionDestroy.parse(params, data, error);
         // if(action=='DISPENSER') await this.actionDispenser.parse(params, data, error);
         if(action=='DIVIDEND')  await this.actionDividend.parse(params, data, error);
