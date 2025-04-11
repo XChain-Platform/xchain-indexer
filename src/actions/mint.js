@@ -1,5 +1,5 @@
 /*********************************************************************
- * XChain Indexer ACTION - MINT
+ * XChain Platform Action - MINT
  * 
  * PARAMS:
  * - VERSION     - Format Version

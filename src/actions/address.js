@@ -1,5 +1,5 @@
 /*********************************************************************
- * XChain Indexer ACTION - ADDRESS
+ * XChain Platform Action - ADDRESS
  * 
  * PARAMS:
  * - VERSION        - Format Version
