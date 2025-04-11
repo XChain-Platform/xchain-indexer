@@ -1,6 +1,8 @@
 /*********************************************************************
  * XChain Platform Action - DESTROY
  * 
+ * This action destroys `TICK` supply.
+ * 
  * PARAMS:
  * - VERSION - Format Version
  * - TICK    - 1 to 250 characters in length
