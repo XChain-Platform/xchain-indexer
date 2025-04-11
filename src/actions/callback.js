@@ -1,5 +1,5 @@
 /*********************************************************************
- * XChain Indexer ACTION - CALLBACK
+ * XChain Platform Action - CALLBACK
  * 
  * PARAMS:
  * - VERSION - Format Version

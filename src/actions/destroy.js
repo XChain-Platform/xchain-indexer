@@ -1,5 +1,5 @@
 /*********************************************************************
- * XChain Indexer ACTION - DESTROY
+ * XChain Platform Action - DESTROY
  * 
  * PARAMS:
  * - VERSION - Format Version

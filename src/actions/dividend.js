@@ -1,5 +1,5 @@
 /*********************************************************************
- * XChain Indexer ACTION - DIVIDEND
+ * XChain Platform Action - DIVIDEND
  * 
  * PARAMS:
  * - VERSION        - Format Version

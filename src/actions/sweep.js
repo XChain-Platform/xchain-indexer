@@ -1,5 +1,5 @@
 /*********************************************************************
- * XChain Indexer ACTION - SWEEP
+ * XChain Platform Action - SWEEP
  * 
  * PARAMS:
  * - VERSION     - Format Version

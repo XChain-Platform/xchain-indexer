@@ -1,5 +1,5 @@
 /*********************************************************************
- * XChain Indexer ACTION - AIRDROP
+ * XChain Platform Action - AIRDROP
  * 
  * PARAMS:
  * - VERSION           - Format Version

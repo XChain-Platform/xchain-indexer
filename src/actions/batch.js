@@ -1,5 +1,5 @@
 /*********************************************************************
- * XChain Indexer ACTION - BATCH
+ * XChain Platform Action - BATCH
  * 
  * PARAMS:
  * - VERSION - Format Version
