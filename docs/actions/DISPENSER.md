@@ -46,6 +46,7 @@ This example closes the dispenser in example 3 and credits any escrowed BRRR to 
 ## Rules
 - Dispensers can be closed by the `DISPENSER` address or `ORIGIN` address which first opened the dispenser
 - `TRIGGER_TICK` defaults to native `COIN` (BTC, LTC, DOGE, etc)
+- `TRIGGER_TICK` must be set to native `COIN` if `FIAT_CODE` is specified
 
 ## Notes
 - Can create a dispenser on any valid address (no new/empty address limitation like CP)
