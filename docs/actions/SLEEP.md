@@ -1,5 +1,5 @@
 # XChain Platform Action - SLEEP
-This actions pauses actions on `TICK` until `RESUME_BLOCK` is reached.
+This action pauses actions on `TICK` until `RESUME_BLOCK` is reached.
 
 ## PARAMS
 | Name           | Type   | Description                   |
