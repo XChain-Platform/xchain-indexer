@@ -38,6 +38,7 @@ This example airdops 1 GAS to every holder on a list with ACTION_INDEX 1234 and 
 ## Rules
 
 ## Notes
+- `AIRDROP` requires an `XCHAIN` fee based on number of database hits
 - `DROP` `ACTION` can be used for shorter reference to `AIRDROP` `ACTION`
 - `AIRDROP` to `ADDRESS` `LIST` sends `AMOUNT` of `TICK` to each address on the list
 - `AIRDROP` to `TICK` `LIST` sends `AMOUNT` of `TICK` to holders of each `TICK` on the list
