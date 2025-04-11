@@ -1,6 +1,8 @@
 /*********************************************************************
  * XChain Platform Action - AIRDROP
  * 
+ * This action airdrops `TICK` supply to one or more lists.
+ * 
  * PARAMS:
  * - VERSION           - Format Version
  * - TICK              - 1 to 250 characters in length
