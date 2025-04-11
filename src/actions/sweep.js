@@ -1,6 +1,8 @@
 /*********************************************************************
  * XChain Platform Action - SWEEP
  * 
+ * This action transfers all `TICK` balances and/or ownerships to a `DESTINATION` address.
+ * 
  * PARAMS:
  * - VERSION     - Format Version
  * - DESTINATION - address where `token` shall be swept
