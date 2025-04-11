@@ -1,11 +1,18 @@
 /*********************************************************************
  * XChain Platform Action - ADDRESS
  * 
+ * This action configures address specific options.
+ * 
  * PARAMS:
  * - VERSION        - Format Version
  * - FEE_PREFERENCE - Set preference for how `FEE` is used
  * - REQUIRE_MEMO   - Require a `MEMO` on any received `SEND`
  * 
+ * FEE_PREFERENCE Options :
+ * - 1 = `FEE` is destroyed, lowering supply
+ * - 2 = `FEE` to donated to protocol development (default)
+ * - 3 = `FEE` to donated to community development
+ *
  * FORMATS:
  * - 0 = Full
  * 
