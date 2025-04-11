@@ -1,6 +1,8 @@
 /*********************************************************************
  * XChain Platform Action - MINT
  * 
+ * This action mints `TICK` supply.
+ * 
  * PARAMS:
  * - VERSION     - Format Version
  * - TICK        - 1 to 250 characters in length
