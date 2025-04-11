@@ -1,6 +1,8 @@
 /*********************************************************************
  * XChain Platform Action - SEND
  * 
+ * This action sends one or more `TICK` to an `ADDRESS`.
+ * 
  * PARAMS:
  * - VERSION     - Format Version        
  * - TICK        - 1 to 250 characters in length   
