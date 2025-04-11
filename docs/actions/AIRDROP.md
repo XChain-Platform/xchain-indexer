@@ -32,7 +32,7 @@ This example airdops 1 GAS to every holder on a list with ACTION_INDEX 1234
 
 ```
 AIRDROP|1|GAS|1|1234|BRRR|2|4321
-This example airdops 1 GAS to every holder on a list with ACTION_INDEX 1234 and 2 BRRR to every holder on a list with ACTION_INDEX
+This example airdops 1 GAS to every holder on a list with ACTION_INDEX 1234 and 2 BRRR to every holder on a list with ACTION_INDEX 4321
 ```
 
 ## Rules
