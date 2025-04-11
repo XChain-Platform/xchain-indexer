@@ -1,10 +1,12 @@
 /*********************************************************************
  * XChain Platform Action - LIST
  * 
+ * This action creates a list of items for use in actions.
+ * 
  * PARAMS:
  * - VERSION            -  Format Version
  * - TYPE               -  List type (1=TICK, 2=ADDRESS)
- * - ITEM               -  Any valid `TICK` or address
+ * - ITEM               -  Any valid `TICK` or `ADDRESS`
  * - EDIT               -  Edit action (1=ADD, 2=REMOVE)
  * - LIST_ACTION_INDEX  -  `ACTION_INDEX` of existing `LIST`
  * 
