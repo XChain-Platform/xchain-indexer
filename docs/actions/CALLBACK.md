@@ -22,9 +22,9 @@ This example calls back the JDOG token to the token owner address
 ## Rules
 - `TICK` can only be called back after `CALLBACK_BLOCK`
 - All `TICK` supply will be returned to `TICK` owner address
-- All `TICK` supply holders will receive `CALLBACK_AMOUNT` of `CALLBACK_TICK` per unit
+- All `TICK` supply holders will receive `CALLBACK_AMOUNT` of `CALLBACK_TICK` per `UNIT`
 
 ## Notes
 - `CALLBACK` requires an `XCHAIN` fee based on number of database hits
-- A unit is set as 1 token
+- `UNIT` - A specific unit of measure (1 or 1.0)
 - `CALLBACKS` respect `CALLBACK_TICK` `ALLOW_LIST` and `BLOCK_LIST` and will only distribute `CALLBACK_TICK` to authorized holders
