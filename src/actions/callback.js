@@ -1,6 +1,8 @@
 /*********************************************************************
  * XChain Platform Action - CALLBACK
  * 
+ * This action performs a callback on a `TICK`. 
+ * 
  * PARAMS:
  * - VERSION - Format Version
  * - TICK    - 1 to 250 characters in length
