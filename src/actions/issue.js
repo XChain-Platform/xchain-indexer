@@ -1,6 +1,8 @@
 /*********************************************************************
  * XChain Platform Action - ISSUE
  * 
+ * This command creates or updates a `TICK`
+ * 
  * PARAMS:
  * - VERSION          - Format Version
  * - TICK             - 1 to 250 characters in length
@@ -33,6 +35,7 @@
  * - 2 = Edit MINT PARAMS
  * - 3 = Edit LOCK PARAMS
  * - 4 = Edit CALLBACK PARAMS
+ * - 5 = Edit LIST PARAMS
  * 
  ********************************************************************/
 
@@ -57,6 +60,7 @@ class Issue {
         this.formats[2] = 'VERSION|TICK|MAX_MINT|MINT_SUPPLY|TRANSFER_SUPPLY|MINT_ADDRESS_MAX|MINT_START_BLOCK|MINT_STOP_BLOCK';
         this.formats[3] = 'VERSION|TICK|LOCK_MAX_SUPPLY|LOCK_MAX_MINT|LOCK_DESCRIPTION|LOCK_RUG|LOCK_SLEEP|LOCK_CALLBACK|LOCK_MINT|LOCK_MINT_SUPPLY';
         this.formats[4] = 'VERSION|TICK|CALLBACK_BLOCK|CALLBACK_TICK|CALLBACK_AMOUNT';
+        this.formats[5] = 'VERSION|TICK|ALLOW_LIST|BLOCK_LIST';
 
         // Define lists of various fields
         this.fieldList = {};
