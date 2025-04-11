@@ -56,6 +56,7 @@ class Actions {
         this.actionAliases['TRANSFER'] = 'SEND';    // Legacy BRC20 format
         this.actionAliases['DEPLOY']   = 'ISSUE';   // Legacy BRC20 format
         this.actionAliases['ADDR']     = 'ADDRESS'; // Short alias
+        this.actionAliases['DROP']     = 'AIRDROP'; // Short alias
 
     }
 
