@@ -1,6 +1,8 @@
 /*********************************************************************
  * XChain Platform Action - DIVIDEND
  * 
+ * This action pays a dividend to holders of `TICK`.
+ * 
  * PARAMS:
  * - VERSION        - Format Version
  * - TICK           - 1 to 250 characters in length
