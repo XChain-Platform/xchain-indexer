@@ -1,9 +1,11 @@
 /*********************************************************************
  * XChain Platform Action - BATCH
  * 
+ * This action batch executes multiple `ACTION` commands in a single transaction
+ * 
  * PARAMS:
  * - VERSION - Format Version
- * - COMMAND - Any valid ACTION with PARAMS
+ * - COMMAND - Any valid `ACTION` with `PARAMS`
  * 
  * FORMATS:
  * - 0 = Full (VERSION|COMMAND;COMMAND)
