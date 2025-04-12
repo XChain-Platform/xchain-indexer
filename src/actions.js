@@ -60,9 +60,10 @@ class Actions {
         this.actionAliases['TRANSFER'] = 'SEND';
 
         // Short aliases
-        this.actionAliases['ADDR']     = 'ADDRESS';
-        this.actionAliases['DROP']     = 'AIRDROP';
-        this.actionAliases['CAST']     = 'BROADCAST';
+        this.actionAliases['ADDR'] = 'ADDRESS';
+        this.actionAliases['DROP'] = 'AIRDROP';
+        this.actionAliases['CAST'] = 'BROADCAST';
+        this.actionAliases['MSG']  = 'MESSAGE';
 
     }
 
