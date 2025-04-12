@@ -19,9 +19,10 @@ This example mints 100 XCHAIN tokens and issues the JDOG token
 ```
 
 ## Rules
-- Can only use one `MINT` command in a `BATCH` command
-- Can only use one `ISSUE` command in a `BATCH` command
-- Can not use `BATCH` as a command in a `BATCH` command
+- Can only use one `MINT` action in a `BATCH` action
+- Can only use one `ISSUE` action in a `BATCH` action
+- Can not use `BATCH` as a action in a `BATCH` action
+- Can not use `FILE` as a action in a `BATCH`
 
 ## Notes
 - `COMMANDS` are separated by a semi-colon `;`
