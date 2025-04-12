@@ -53,10 +53,16 @@ class Actions {
 
         // Define ACTION aliases
         this.actionAliases = {};
-        this.actionAliases['TRANSFER'] = 'SEND';    // Legacy BRC20 format
-        this.actionAliases['DEPLOY']   = 'ISSUE';   // Legacy BRC20 format
-        this.actionAliases['ADDR']     = 'ADDRESS'; // Short alias
-        this.actionAliases['DROP']     = 'AIRDROP'; // Short alias
+
+        // Legacy BRC20 formats
+        // TODO: Remove legacy formats before launch (only used in testing using BTNS data)
+        this.actionAliases['DEPLOY']   = 'ISSUE';
+        this.actionAliases['TRANSFER'] = 'SEND';
+
+        // Short aliases
+        this.actionAliases['ADDR']     = 'ADDRESS';
+        this.actionAliases['DROP']     = 'AIRDROP';
+        this.actionAliases['CAST']     = 'BROADCAST';
 
     }
 
