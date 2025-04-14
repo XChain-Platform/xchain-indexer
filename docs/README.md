@@ -1,6 +1,6 @@
 # XChain Platform - Documentation
 
-This directory contains basic information on the XChain Platformm and the various ACTIONS that are allowed on the platform.
+This directory contains information on the XChain Platform and the various `ACTIONS` that are supported on the platform.
 
 ## `ACTION` commands
 Below is a list of the defined `ACTION` commands and the function of each:
