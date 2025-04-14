@@ -1,5 +1,5 @@
 # XChain Platform Action - BATCH
-This action batch executes multiple `ACTION` commands in a single transaction
+This action batch executes multiple `ACTION` commands in a single transaction.
 
 ## PARAMS
 | Name      | Type   | Description                       |
