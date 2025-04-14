@@ -1,5 +1,5 @@
 # XChain Platform Action - ISSUE 
-This action creates or updates a `TICK`
+This action creates or updates a `TICK`.
 
 ## PARAMS
 | Name               | Type   | Description                                                                                |

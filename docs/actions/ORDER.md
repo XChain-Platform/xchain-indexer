@@ -1,5 +1,5 @@
 #  XChain Platform Action - ORDER
-This action creates a order to sell an item on the Decentralized Exchange (DEX)
+This action creates a order to sell an item on the Decentralized Exchange (DEX).
 
 ## PARAMS
 | Name                 | Type   | Description                                                        |

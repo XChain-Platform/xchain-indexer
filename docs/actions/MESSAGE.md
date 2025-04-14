@@ -1,5 +1,5 @@
 #  XChain Platform Action - MESSAGE
-This action allows for the sending of plaintext and encrypted messages between addresses
+This action allows for the sending of plaintext and encrypted messages between addresses.
 
 ## PARAMS
 | Name                | Type   | Description                                |
