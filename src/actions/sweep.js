@@ -98,6 +98,10 @@ class Sweep {
         if(!error && !this.util.isNull(data['MEMO']) && String(data['MEMO']).indexOf(';')!=-1)
             error = 'invalid: MEMO (semicolon)';
 
+        // Verify MEMO is shorter than MAX_MEMO_LENGTH
+        if(!error && String(data['MEMO']).length > this.config['MAX_MEMO_LENGTH'])
+            error = 'invalid: MEMO (length)';
+
         // TODO: Verify sweep is allowed to new address (ALLOW_LIST & BLOCK_LIST)
 
         // Calculate total number of database hits for this SWEEP

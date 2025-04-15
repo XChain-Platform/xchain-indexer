@@ -180,6 +180,10 @@ class Callback {
         if(!error && !this.util.isNull(data['MEMO']) && String(data['MEMO']).indexOf(';')!=-1)
             error = 'invalid: MEMO (semicolon)';
 
+        // Verify MEMO is shorter than MAX_MEMO_LENGTH
+        if(!error && String(data['MEMO']).length > this.config['MAX_MEMO_LENGTH'])
+            error = 'invalid: MEMO (length)';
+
         // Verify SOURCE has enough balances to cover CALLBACK_TICK total amount
         if(!error && !this.util.hasBalance(balances, callbackTokenInfo['TICK_ID'], totalCallbackTickAmount))
             error = 'invalid: insufficient funds (CALLBACK_TICK)';

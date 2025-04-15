@@ -109,6 +109,10 @@ class Address {
         if(!error && String(data['MEMO']).indexOf(';')!=-1)
             error = 'invalid: MEMO (semicolon)';
 
+        // Verify MEMO is shorter than MAX_MEMO_LENGTH
+        if(!error && String(data['MEMO']).length > this.config['MAX_MEMO_LENGTH'])
+            error = 'invalid: MEMO (length)';
+
         // Determine final status
         let status = (error) ? error : 'valid';
         data['STATUS'] = status;

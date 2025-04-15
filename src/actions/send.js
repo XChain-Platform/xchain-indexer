@@ -199,6 +199,10 @@ class Send {
             if(!error && String(send['MEMO']).indexOf(';')!=-1)
                 error = 'invalid: MEMO (semicolon)';
 
+            // Verify MEMO is shorter than MAX_MEMO_LENGTH
+            if(!error && String(send['MEMO']).length > this.config['MAX_MEMO_LENGTH'])
+                error = 'invalid: MEMO (length)';
+
             // Verify action is allowed from SOURCE (ALLOW_LIST & BLOCK_LIST)
             if(!error && !this.indexerDb.isActionAllowed(send['TICK'], send['SOURCE']))
                 error = 'invalid: SOURCE (not authorized)';
