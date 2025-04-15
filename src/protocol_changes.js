@@ -40,6 +40,7 @@ class ProtocolChanges {
         this.addChange('DIVIDEND',   '1.0.0',0,0,0,0,0,0);
         this.addChange('FILE',       '1.0.0',0,0,0,0,0,0);
         this.addChange('ISSUE',      '1.0.0',0,0,0,0,0,0);
+        this.addChange('LINK',       '1.0.0',0,0,0,0,0,0);
         this.addChange('LIST',       '1.0.0',0,0,0,0,0,0);
         this.addChange('MINT',       '1.0.0',0,0,0,0,0,0);
         this.addChange('RUG',        '1.0.0',0,0,0,0,0,0);

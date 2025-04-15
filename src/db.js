@@ -2830,6 +2830,156 @@ class Database {
         await this.releaseConnection();
     }
 
+    // Lookup a record in the `index_coins` table and return record id
+    async getCoinId(coin){
+        let id    = null;
+        let db    = await this.getConnection();
+        let query = "SELECT id FROM index_coins WHERE `coin`=? LIMIT 1";
+        let args  = [coin];
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0)
+                id = rows[0].id;
+        } catch (error) {
+            this.util.logError('Error looking up coin record id in index_coins table:', error);
+        }
+        await this.releaseConnection();
+        return id;
+    }
+
+    // Create records in the 'index_coins' table and return record id
+    async createCoin(coin){
+        // Ignore empty coin and return hardcoded record id
+        if(coin==null||coin=='')
+            return 1;
+        var id = await this.getCoinId(coin);
+        // Handle creating record
+        if(id==null){
+            let db    = await this.getConnection();
+            let query = "INSERT INTO index_coins (`coin`) values (?)";
+            let args  = [coin];
+            try {
+                let result = await db.query(query, args);
+                if(result.insertId)
+                    id = result.insertId;
+            } catch (error) {
+                this.util.logError('Error trying to create coin record in index_coins table:', error);
+            }
+            await this.releaseConnection();
+        }
+        return id;
+    }    
+
+    // Lookup table associated with an action
+    async getActionIndexTable(action_index){
+        let table  = null;
+        let db     = await this.getConnection();
+        let query  = `SELECT 
+                        LCASE(a2.action) as action
+                    FROM 
+                        actions a1
+                        INNER JOIN index_actions a2 ON (a2.id=a1.action_id)
+                    WHERE
+                        a1.action_index=?
+                    LIMIT 1`;
+        let args   = [action_index];
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0){
+                let action = rows[0].action;
+                if(['address','batch','dispense'].includes(action)){
+                    table = action + 'es';
+                } else {
+                    table = action + 's';
+                }
+            }
+        } catch (error) {
+            this.util.logError('Error trying to lookup action table name from index_actions table:', error);
+        }
+        await this.releaseConnection();
+        return table;
+    }
+
+    // Verify that a given action_index is associated with a `valid` transaction
+    async isActionIndexValid(action_index){
+        let valid = false;
+        let table = await this.getActionIndexTable(action_index);
+        if(!this.util.isNull(table)){
+            let db    = await this.getConnection();
+            let query = `SELECT 
+                            m.action_index
+                        FROM 
+                            ` + table + ` m
+                            LEFT JOIN index_statuses s ON (s.id=m.status_id)
+                        WHERE
+                            m.action_index=? AND
+                            s.status='valid'`;
+            let args = [action_index];
+            try {
+                let rows = await db.query(query, args);
+                if(rows.length > 0)
+                    valid = true;
+            } catch (error) {
+                this.util.logError('Error looking up if action_index is valid :', error);
+            }
+            await this.releaseConnection();
+        }
+        return valid;
+    }
+
+    // Create/Update record in `links` table
+    async createLink(data){
+        // Normalize data
+        let coin_id           = await this.createCoin(data['COIN']);
+        let source_id         = await this.createAddress(data['SOURCE']);
+        let memo_id           = await this.createMemo(data['MEMO']);
+        let status_id         = await this.createStatus(data['STATUS']);
+        let action_index      = data['ACTION_INDEX'];
+        let link_action_index = data['LINK_ACTION_INDEX'];
+        let coin_action_index = data['COIN_ACTION_INDEX'];
+        // Check if record already exists for this file
+        let db     = await this.getConnection();
+        let query  = `SELECT
+                            action_index
+                        FROM
+                            links
+                        WHERE
+                            action_index=?`;
+        let args = [action_index];
+        let exists = false;
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0)
+                exists = true;
+        } catch (error){
+            this.util.logError('Error looking up record in links table:', error);
+        }
+        if(exists){
+            // UPDATE record
+            query = `UPDATE
+                        links
+                    SET
+                        link_action_index=?,
+                        coin_id=?,
+                        coin_action_index=?,
+                        source_id=?,
+                        memo_id=?,
+                        status_id=?
+                    WHERE 
+                        action_index=?`;
+        } else {
+            // INSERT record
+            query = `INSERT INTO links (link_action_index, coin_id, coin_action_index, source_id, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?, ?)`;
+        }
+        args = [link_action_index, coin_id, coin_action_index, source_id, memo_id, status_id, action_index];
+        // Create or Update the record in the files table
+        try {
+            let result = await db.query(query, args);
+        } catch (error){
+            this.util.logError('Error trying to create record in links table:', error);
+        }
+        await this.releaseConnection();
+    }
 }
 
 module.exports = Database

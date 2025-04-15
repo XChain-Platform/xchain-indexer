@@ -11,6 +11,7 @@ const destroy   = require('./actions/destroy.js');
 const dividend  = require('./actions/dividend.js');
 const file      = require('./actions/file.js');
 const issue     = require('./actions/issue.js');
+const link      = require('./actions/link.js');
 const list      = require('./actions/list.js');
 const mint      = require('./actions/mint.js');
 // const rug       = require('./actions/rug.js');
@@ -46,6 +47,7 @@ class Actions {
         this.actionFile      = new file(this);
         this.actionDividend  = new dividend(this);
         this.actionIssue     = new issue(this);
+        this.actionLink      = new link(this);
         this.actionList      = new list(this);
         this.actionMint      = new mint(this);
         // this.actionRug       = new rug(this);
@@ -151,6 +153,7 @@ class Actions {
         if(action=='FILE')      await this.actionFile.parse(params, data, error);
         if(action=='ISSUE')     await this.actionIssue.parse(params, data, error);
         if(action=='LIST')      await this.actionList.parse(params, data, error);
+        if(action=='LINK')      await this.actionLink.parse(params, data, error);
         if(action=='MINT')      await this.actionMint.parse(params, data, error);
         // if(action=='RUG')       await this.actionRug.parse(params, data, error);
         // if(action=='SLEEP')     await this.actionSleep.parse(params, data, error);
