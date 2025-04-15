@@ -1,20 +1,20 @@
 DROP TABLE IF EXISTS dispensers;
 CREATE TABLE dispensers (
-    action_index     INTEGER UNSIGNED NOT NULL, -- Unique action index
-    source_id        INTEGER UNSIGNED,          -- id of record in index_addresses (source/origin)
-    address_id       INTEGER UNSIGNED,          -- id of record in index_addresses
-    dispense_tick_id INTEGER UNSIGNED,          -- id of record in index_tickers table
+    action_index     BIGINT UNSIGNED NOT NULL, -- Unique action index
+    source_id        BIGINT UNSIGNED,          -- id of record in index_addresses (source/origin)
+    address_id       BIGINT UNSIGNED,          -- id of record in index_addresses
+    dispense_tick_id BIGINT UNSIGNED,          -- id of record in index_tickers table
     dispense_amount  VARCHAR(250),              -- Tokens to vend per dispense
     escrow_amount    VARCHAR(250),              -- Tokens to escrow in dispenser
-    trigger_tick_id  INTEGER UNSIGNED,          -- id of record in index_tickers table
+    trigger_tick_id  BIGINT UNSIGNED,          -- id of record in index_tickers table
     trigger_amount   VARCHAR(250),              -- Amount required to trigger a dispense
-    allow_list_id    INTEGER UNSIGNED,          -- id of record in index_transactions table
-    block_list_id    INTEGER UNSIGNED,          -- id of record in index_transactions table
-    action           INTEGER UNSIGNED,          -- Dispenser action (0=Open, 1=Refill, 2=Close, 3=List Edit)
-    memo_id          INTEGER UNSIGNED,          -- id of record in index_memos table 
-    status_id        INTEGER UNSIGNED,          -- id of record in index_statuses table
+    allow_list_id    BIGINT UNSIGNED,          -- id of record in index_transactions table
+    block_list_id    BIGINT UNSIGNED,          -- id of record in index_transactions table
+    action           BIGINT UNSIGNED,          -- Dispenser action (0=Open, 1=Refill, 2=Close, 3=List Edit)
+    memo_id          BIGINT UNSIGNED,          -- id of record in index_memos table 
+    status_id        BIGINT UNSIGNED,          -- id of record in index_statuses table
     -- State fields
-    status           INTEGER UNSIGNED,          -- dispenser status (1=Open, 2=Closing, 3=Closed)    
+    status           BIGINT UNSIGNED,          -- dispenser status (1=Open, 2=Closing, 3=Closed)    
     escrow_remaining VARCHAR(250)               -- Tokens escrowed in the dispensers (state field)
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 

@@ -1,12 +1,12 @@
 DROP TABLE IF EXISTS sends;
 CREATE TABLE sends (
-    action_index   INTEGER UNSIGNED NOT NULL, -- Unique action index
-    tick_id        INTEGER UNSIGNED,          -- id of record in index_ticks table
-    source_id      INTEGER UNSIGNED,          -- id of record in index_addresses table
-    destination_id INTEGER UNSIGNED,          -- id of record in index_addresses table
+    action_index   BIGINT UNSIGNED NOT NULL, -- Unique action index
+    tick_id        BIGINT UNSIGNED,          -- id of record in index_ticks table
+    source_id      BIGINT UNSIGNED,          -- id of record in index_addresses table
+    destination_id BIGINT UNSIGNED,          -- id of record in index_addresses table
     amount         VARCHAR(250),              -- Amount of token in send
-    memo_id        INTEGER UNSIGNED,          -- id of record in index_memos table 
-    status_id      INTEGER UNSIGNED           -- id of record in index_statuses table
+    memo_id        BIGINT UNSIGNED,          -- id of record in index_memos table 
+    status_id      BIGINT UNSIGNED           -- id of record in index_statuses table
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
 CREATE        INDEX action_index   ON sends (action_index);

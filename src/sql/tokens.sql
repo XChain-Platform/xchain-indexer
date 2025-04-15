@@ -1,8 +1,8 @@
 DROP TABLE IF EXISTS tokens;
 CREATE TABLE tokens (
-    id                 INTEGER UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-    tick_id            INTEGER UNSIGNED,                     -- id of record in index_ticks table
-    action_index       INTEGER UNSIGNED,                     -- action_index of ISSUE transaction (used in rollbacks)
+    id                 BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    tick_id            BIGINT UNSIGNED,                     -- id of record in index_ticks table
+    action_index       BIGINT UNSIGNED,                     -- action_index of ISSUE transaction (used in rollbacks)
     supply             VARCHAR(250),                         -- Current supply
     max_supply         VARCHAR(250),                         -- Maximum Supply
     max_mint           VARCHAR(250),                         -- Supply minted
@@ -16,15 +16,15 @@ CREATE TABLE tokens (
     lock_rug           TINYINT(1) NOT NULL DEFAULT 0,        -- Locks RUG
     lock_sleep         TINYINT(1) NOT NULL DEFAULT 0,        -- Locks SLEEP
     lock_callback      TINYINT(1) NOT NULL DEFAULT 0,        -- Locks CALLBACK_BLOCK/TICK/AMOUNT
-    callback_block     INTEGER UNSIGNED,                     -- block_index after which CALLBACK cand be used
-    callback_tick_id   INTEGER UNSIGNED,                     -- id of record in index_tickers table
+    callback_block     BIGINT UNSIGNED,                     -- block_index after which CALLBACK cand be used
+    callback_tick_id   BIGINT UNSIGNED,                     -- id of record in index_tickers table
     callback_amount    VARCHAR(250),                         -- AMOUNT users get if CALLBACK
-    allow_list         INTEGER UNSIGNED,                     -- action_index of list in lists table
-    block_list         INTEGER UNSIGNED,                     -- action_index of list in lists table
+    allow_list         BIGINT UNSIGNED,                     -- action_index of list in lists table
+    block_list         BIGINT UNSIGNED,                     -- action_index of list in lists table
     mint_address_max   VARCHAR(250),                         -- Maximum amount of supply an address can MINT
-    mint_start_block   INTEGER UNSIGNED,                     -- block_index when MINT transactions are allowed (begin mint)
-    mint_stop_block    INTEGER UNSIGNED,                     -- BLOCK_INDEX when MINT transactions are NOT allowed (end mint)
-    owner_id           INTEGER UNSIGNED,                     -- id of record in index_addresses table
+    mint_start_block   BIGINT UNSIGNED,                     -- block_index when MINT transactions are allowed (begin mint)
+    mint_stop_block    BIGINT UNSIGNED,                     -- BLOCK_INDEX when MINT transactions are NOT allowed (end mint)
+    owner_id           BIGINT UNSIGNED,                     -- id of record in index_addresses table
     coin_price         VARCHAR(250) NOT NULL default 0       -- last price of 1 token in the native coin (BTC, LTC, DOGE, etc)
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
