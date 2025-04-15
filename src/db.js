@@ -455,7 +455,7 @@ class Database {
         try {
             let rows = await db.query(query, [hash]);
             if(rows.length > 0)
-                id = rows[0].id;
+                id = Number(rows[0].id);
         } catch (error) {
             this.util.logError('Error looking up hash record id in index_transactions table:', error);
         }
@@ -476,7 +476,7 @@ class Database {
             try {
                 let result = await db.query(query, [hash]);
                 if(result.insertId)
-                    id = result.insertId;
+                    id = Number(result.insertId);
             } catch (error) {
                 this.util.logError('Error trying to create hash record in index_transactions table:', error);
             }
@@ -493,7 +493,7 @@ class Database {
         try {
             let rows = await db.query(query, [address]);
             if(rows.length > 0)
-                id = rows[0].id;
+                id = Number(rows[0].id);
         } catch (error) {
             this.util.logError('Error looking up address record id in index_addresses table:', error);
         }
@@ -514,7 +514,7 @@ class Database {
             try {
                 let result = await db.query(query, [address]);
                 if(result.insertId)
-                    id = result.insertId;
+                    id = Number(result.insertId);
             } catch (error) {
                 this.util.logError('Error trying to create address record in index_addresses table:', error);
             }
@@ -531,7 +531,7 @@ class Database {
         try {
             let rows = await db.query(query, [block_index]);
             if(rows.length > 0)
-                id = rows[0].id;
+                id = Number(rows[0].id);
         } catch (error) {
             this.util.logError('Error looking up block record id in blocks table:', error);
         }
@@ -586,7 +586,7 @@ class Database {
         try {
             let rows = await db.query(query, [action]);
             if(rows.length > 0)
-                id = rows[0].id;
+                id = Number(rows[0].id);
         } catch (error) {
             this.util.logError('Error looking up action record id in index_actions table:', error);
         }
@@ -604,7 +604,7 @@ class Database {
             try {
                 let result = await db.query(query, [action]);
                 if(result.insertId)
-                    id = result.insertId;
+                    id = Number(result.insertId);
             } catch (error) {
                 this.util.logError('Error trying to create action record in index_actions table:', error);
             }
@@ -759,7 +759,7 @@ class Database {
         try {
             let rows = await db.query(query, [tick]);
             if(rows.length > 0)
-                id = rows[0].id;
+                id = Number(rows[0].id);
         } catch (error) {
             this.util.logError('Error looking up ticker record id in index_tickers table:', error);
         }
@@ -780,7 +780,7 @@ class Database {
             try {
                 let result = await db.query(query, [tick]);
                 if(result.insertId)
-                    id = result.insertId;
+                    id = Number(result.insertId);
             } catch (error) {
                 this.util.logError('Error trying to create ticker record in index_tickers table:', error);
             }
@@ -1262,7 +1262,7 @@ class Database {
         try {
             let rows = await db.query(query, [status]);
             if(rows.length > 0)
-                id = rows[0].id;
+                id = Number(rows[0].id);
         } catch (error) {
             this.util.logError('Error looking up status record id in index_statuses table:', error);
         }
@@ -1280,7 +1280,7 @@ class Database {
             try {
                 let result = await db.query(query, [status]);
                 if(result.insertId)
-                    id = result.insertId;
+                    id = Number(result.insertId);
             } catch (error) {
                 this.util.logError('Error trying to create status record in index_statuses table:', error);
             }
@@ -1944,7 +1944,7 @@ class Database {
         try {
             let rows = await db.query(query, [memo]);
             if(rows.length > 0)
-                id = rows[0].id;
+                id = Number(rows[0].id);
         } catch (error) {
             this.util.logError('Error looking up ticker record id in index_memos table:', error);
         }
@@ -1965,7 +1965,7 @@ class Database {
             try {
                 let result = await db.query(query, [memo]);
                 if(result.insertId)
-                    id = result.insertId;
+                    id = Number(result.insertId);
             } catch (error) {
                 this.util.logError('Error trying to create memo record in index_memos table:', error);
             }
@@ -2745,7 +2745,7 @@ class Database {
         try {
             let rows = await db.query(query, args);
             if(rows.length > 0)
-                id = rows[0].id;
+                id = Number(rows[0].id);
         } catch (error) {
             this.util.logError('Error looking up MIME type record id in index_mime_types table:', error);
         }
@@ -2767,7 +2767,7 @@ class Database {
             try {
                 let result = await db.query(query, args);
                 if(result.insertId)
-                    id = result.insertId;
+                    id = Number(result.insertId);
             } catch (error) {
                 this.util.logError('Error trying to create MIME type record in index_mime_types table:', error);
             }
@@ -2839,7 +2839,7 @@ class Database {
         try {
             let rows = await db.query(query, args);
             if(rows.length > 0)
-                id = rows[0].id;
+                id = Number(rows[0].id);
         } catch (error) {
             this.util.logError('Error looking up coin record id in index_coins table:', error);
         }
@@ -2861,7 +2861,7 @@ class Database {
             try {
                 let result = await db.query(query, args);
                 if(result.insertId)
-                    id = result.insertId;
+                    id = Number(result.insertId);
             } catch (error) {
                 this.util.logError('Error trying to create coin record in index_coins table:', error);
             }
