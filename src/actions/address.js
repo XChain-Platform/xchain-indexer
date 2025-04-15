@@ -7,6 +7,7 @@
  * - VERSION        - Format Version
  * - FEE_PREFERENCE - Set preference for how `FEE` is used
  * - REQUIRE_MEMO   - Require a `MEMO` on any received `SEND`
+ * - MEMO           - An optional memo to include     
  * 
  * FEE_PREFERENCE Options :
  * - 1 = `FEE` is destroyed, lowering supply
@@ -34,7 +35,7 @@ class Address {
 
         // Define list of known FORMATS
         this.formats = {};
-        this.formats[0] = 'VERSION|FEE_PREFERENCE|REQUIRE_MEMO';
+        this.formats[0] = 'VERSION|FEE_PREFERENCE|REQUIRE_MEMO|MEMO';
 
         // Define lists of various fields
         this.fieldList = {};
@@ -57,7 +58,7 @@ class Address {
         /*****************************************************************
          * DEBUGGING - Force params
          ****************************************************************/
-        // let str    = "0|1|1";
+        // let str    = "0|1|1|my address update";
         // params = String(str).split('|');
 
         // Validate that format is known
@@ -99,6 +100,14 @@ class Address {
         // Verify REQUIRE_MEMO value is valid
         if(!error && !this.util.isNull(data['REQUIRE_MEMO']) && !this.validValues['REQUIRE_MEMO'].includes(data['REQUIRE_MEMO']))
             error = 'invalid: REQUIRE_MEMO (value)';
+
+        // Verify no pipe in MEMO (pipe is field delimiter)
+        if(!error && String(data['MEMO']).indexOf('|')!=-1)
+            error = 'invalid: MEMO (pipe)';
+
+        // Verify no semicolon in MEMO (semicolon is action delimiter)
+        if(!error && String(data['MEMO']).indexOf(';')!=-1)
+            error = 'invalid: MEMO (semicolon)';
 
         // Determine final status
         let status = (error) ? error : 'valid';

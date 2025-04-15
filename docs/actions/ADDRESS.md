@@ -7,11 +7,12 @@ This action configures address specific options.
 | `VERSION`        | String | Format Version                          |
 | `FEE_PREFERENCE` | String | Set preference for how `FEE` is used    |
 | `REQUIRE_MEMO`   | String | Require a `MEMO` on any received `SEND` |
+| `MEMO`           | String | An optional memo to include             |
 
 ## Formats
 
 ### Version `0`
-- `VERSION|FEE_PREFERENCE|REQUIRE_MEMO`
+- `VERSION|FEE_PREFERENCE|REQUIRE_MEMO|MEMO`
 
 ## Examples
 ```

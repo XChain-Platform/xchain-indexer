@@ -2195,6 +2195,7 @@ class Database {
     async createAddressOption(data){
         let source_id      = await this.createAddress(data['SOURCE']);
         let status_id      = await this.createStatus(data['STATUS']);
+        let memo_id        = await this.createMemo(data['MEMO']);
         let action_index   = data['ACTION_INDEX'];
         let fee_preference = data['FEE_PREFERENCE'];
         let require_memo   = data['REQUIRE_MEMO'];
@@ -2217,14 +2218,15 @@ class Database {
                         source_id=?,
                         fee_preference=?,
                         require_memo=?,
+                        memo_id=?,
                         status_id=?
                     WHERE 
                         action_index=?`;
         } else {
-            query = "INSERT INTO addresses (source_id, fee_preference, require_memo, status_id, action_index) values (?, ?, ?, ?, ?)";
+            query = "INSERT INTO addresses (source_id, fee_preference, require_memo, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?)";
         }
         try {
-            let rows = await db.query(query, [source_id, fee_preference, require_memo, status_id, action_index]);
+            let rows = await db.query(query, [source_id, fee_preference, require_memo, memo_id, status_id, action_index]);
         } catch (error){
             this.util.logError('Error trying to create record in addresses table:', error);
         }
