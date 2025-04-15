@@ -1,12 +1,12 @@
 DROP TABLE IF EXISTS links;
 CREATE TABLE links (
-    action_index        INTEGER UNSIGNED NOT NULL, -- Unique action index
-    link_action_index   INTEGER UNSIGNED,          -- id of record in index_mime_types table
-    coin_id             INTEGER UNSIGNED,          -- id of record in index_coins table
-    coin_action_index   INTEGER UNSIGNED,          -- id of record in index_mime_types table
-    source_id           INTEGER UNSIGNED,          -- id of record in index_addresses table
-    memo_id             INTEGER UNSIGNED,          -- id of record in index_memos table
-    status_id           INTEGER UNSIGNED           -- id of record in index_statuses table
+    action_index        BIGINT UNSIGNED NOT NULL, -- Unique action index
+    link_action_index   BIGINT UNSIGNED,          -- id of record in index_mime_types table
+    coin_id             BIGINT UNSIGNED,          -- id of record in index_coins table
+    coin_action_index   BIGINT UNSIGNED,          -- id of record in index_mime_types table
+    source_id           BIGINT UNSIGNED,          -- id of record in index_addresses table
+    memo_id             BIGINT UNSIGNED,          -- id of record in index_memos table
+    status_id           BIGINT UNSIGNED           -- id of record in index_statuses table
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
 CREATE UNIQUE INDEX action_index      ON links (action_index);

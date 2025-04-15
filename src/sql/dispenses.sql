@@ -1,14 +1,14 @@
 DROP TABLE IF EXISTS dispenses;
 CREATE TABLE dispenses (
-    action_index    INTEGER UNSIGNED NOT NULL, -- Unique action index
-    dispense_index  INTEGER UNSIGNED, 
-    source_id       INTEGER UNSIGNED,          -- id of record in index_addresses (dispenser address)
-    destination_id  INTEGER UNSIGNED,          -- id of record in index_addresses (purchasing address)
-    tick_id         INTEGER UNSIGNED,          -- id of record in index_tickers table
+    action_index    BIGINT UNSIGNED NOT NULL, -- Unique action index
+    dispense_index  BIGINT UNSIGNED, 
+    source_id       BIGINT UNSIGNED,          -- id of record in index_addresses (dispenser address)
+    destination_id  BIGINT UNSIGNED,          -- id of record in index_addresses (purchasing address)
+    tick_id         BIGINT UNSIGNED,          -- id of record in index_tickers table
     amount          VARCHAR(250),              -- Tokens to vend per dispense
-    trigger_tick_id INTEGER UNSIGNED,          -- id of record in index_tickers table
+    trigger_tick_id BIGINT UNSIGNED,          -- id of record in index_tickers table
     trigger_amount  VARCHAR(250),              -- Amount of trigger_tick_id paid in this dispense
-    status_id       INTEGER UNSIGNED           -- id of record in index_statuses table
+    status_id       BIGINT UNSIGNED           -- id of record in index_statuses table
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
 CREATE UNIQUE INDEX action_index     ON dispenses (action_index);

@@ -1,10 +1,10 @@
 DROP TABLE IF EXISTS dispenser_refills;
 CREATE TABLE dispenser_refills (
-    action_index           INTEGER UNSIGNED NOT NULL, -- Unique action index
-    source_id              INTEGER UNSIGNED,          -- id of record in index_addresses
-    destination_id         INTEGER UNSIGNED,          -- id of record in index_addresses
-    asset_id               INTEGER UNSIGNED,          -- id of record in assets table
-    dispenser_action_index INTEGER UNSIGNED,          -- dispenser action_index
+    action_index           BIGINT UNSIGNED NOT NULL, -- Unique action index
+    source_id              BIGINT UNSIGNED,          -- id of record in index_addresses
+    destination_id         BIGINT UNSIGNED,          -- id of record in index_addresses
+    asset_id               BIGINT UNSIGNED,          -- id of record in assets table
+    dispenser_action_index BIGINT UNSIGNED,          -- dispenser action_index
     dispense_quantity      BIGINT
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 

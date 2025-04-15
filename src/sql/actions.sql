@@ -2,9 +2,9 @@
 
 DROP TABLE IF EXISTS actions;
 CREATE TABLE actions (
-  action_index    INTEGER UNSIGNED NOT NULL, -- Unique index for every action
-  tx_index        INTEGER UNSIGNED NOT NULL, -- tx_index from the transactions table
-  action_id       INTEGER UNSIGNED NOT NULL  -- id of record in index_actions table
+  action_index    BIGINT UNSIGNED NOT NULL, -- Unique index for every action
+  tx_index        BIGINT UNSIGNED NOT NULL, -- tx_index from the transactions table
+  action_id       BIGINT UNSIGNED NOT NULL  -- id of record in index_actions table
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
 CREATE UNIQUE INDEX action_index    on actions (action_index);

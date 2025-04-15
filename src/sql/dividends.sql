@@ -1,12 +1,12 @@
 DROP TABLE IF EXISTS dividends;
 CREATE TABLE dividends (
-    action_index     INTEGER UNSIGNED NOT NULL, -- Unique action index
-    source_id        INTEGER UNSIGNED,          -- id of record in index_addresses table
-    tick_id          INTEGER UNSIGNED,          -- id of record in index_ticks
-    dividend_tick_id INTEGER UNSIGNED,          -- id of record in index_ticks
+    action_index     BIGINT UNSIGNED NOT NULL, -- Unique action index
+    source_id        BIGINT UNSIGNED,          -- id of record in index_addresses table
+    tick_id          BIGINT UNSIGNED,          -- id of record in index_ticks
+    dividend_tick_id BIGINT UNSIGNED,          -- id of record in index_ticks
     amount           VARCHAR(250),              -- Amount of token per unit
-    memo_id          INTEGER UNSIGNED,          -- id of record in index_memos table 
-    status_id        INTEGER UNSIGNED           -- id of record in index_statuses table
+    memo_id          BIGINT UNSIGNED,          -- id of record in index_memos table 
+    status_id        BIGINT UNSIGNED           -- id of record in index_statuses table
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
 CREATE UNIQUE INDEX action_index     ON dividends (action_index);

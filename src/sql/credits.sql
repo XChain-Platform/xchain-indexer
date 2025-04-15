@@ -1,8 +1,8 @@
 DROP TABLE IF EXISTS credits;
 CREATE TABLE credits (
-    action_index INTEGER UNSIGNED NOT NULL, -- Unique action index
-    address_id   INTEGER UNSIGNED,          -- id of record in index_addresses table
-    tick_id      INTEGER UNSIGNED,          -- id of record in index_tickers table
+    action_index BIGINT UNSIGNED NOT NULL, -- Unique action index
+    address_id   BIGINT UNSIGNED,          -- id of record in index_addresses table
+    tick_id      BIGINT UNSIGNED,          -- id of record in index_tickers table
     amount       VARCHAR(250)               -- AMOUNT of credit
 ) ENGINE=MyISAM DEFAULT  CHARSET=utf8 COLLATE=utf8_general_ci;
 

@@ -1,11 +1,11 @@
 DROP TABLE IF EXISTS blocks;
 CREATE TABLE blocks (
-    id               INTEGER UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-    block_index      INTEGER UNSIGNED,
-    block_time       INTEGER UNSIGNED,
-    credits_hash_id  INTEGER UNSIGNED,  -- id of record in index_transactions table (sha256 hash of credits data)
-    debits_hash_id   INTEGER UNSIGNED,  -- id of record in index_transactions table (sha256 hash of debits data)
-    actions_hash_id  INTEGER UNSIGNED   -- id of record in index_transactions table (sha256 hash of actions data)
+    id               BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    block_index      BIGINT UNSIGNED,
+    block_time       BIGINT UNSIGNED,
+    credits_hash_id  BIGINT UNSIGNED,  -- id of record in index_transactions table (sha256 hash of credits data)
+    debits_hash_id   BIGINT UNSIGNED,  -- id of record in index_transactions table (sha256 hash of debits data)
+    actions_hash_id  BIGINT UNSIGNED   -- id of record in index_transactions table (sha256 hash of actions data)
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
 CREATE INDEX block_index       ON blocks (block_index);
