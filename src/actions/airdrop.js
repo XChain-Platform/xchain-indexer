@@ -199,6 +199,10 @@ class Airdrop {
             if(!error && String(airdrop['MEMO']).indexOf(';')!=-1)
                 error = 'invalid: MEMO (semicolon)';
 
+            // Verify MEMO is shorter than MAX_MEMO_LENGTH
+            if(!error && String(airdrop['MEMO']).length > this.config['MAX_MEMO_LENGTH'])
+                error = 'invalid: MEMO (length)';
+
             // Lookup list information
             if(!error){
                 type = await this.indexerDb.getListType(airdrop['LIST_ACTION_INDEX']);

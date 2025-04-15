@@ -135,6 +135,10 @@ class Mint {
         if(!error && !this.util.isNull(data['MEMO']) && String(data['MEMO']).indexOf(';')!=-1)
             error = 'invalid: MEMO (semicolon)';
 
+        // Verify MEMO is shorter than MAX_MEMO_LENGTH
+        if(!error && String(data['MEMO']).length > this.config['MAX_MEMO_LENGTH'])
+            error = 'invalid: MEMO (length)';
+
         // Verify AMOUNT is less than MAX_MINT
         if(!error && !this.util.isNull(data['AMOUNT']) && data['AMOUNT'] > data['MAX_MINT'])
             error = 'invalid: AMOUNT > MAX_MINT';

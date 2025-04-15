@@ -147,6 +147,10 @@ class Dividend {
         if(!error && !this.util.isNull(data['MEMO']) && String(data['MEMO']).indexOf(';')!=-1)
             error = 'invalid: MEMO (semicolon)';
 
+        // Verify MEMO is shorter than MAX_MEMO_LENGTH
+        if(!error && String(data['MEMO']).length > this.config['MAX_MEMO_LENGTH'])
+            error = 'invalid: MEMO (length)';
+
         // Calculate total number of database hits for this DIVIDEND
         let db_hits = 3;                                                                       // 1 dividend, 1 debit, 1 balance 
             db_hits += (recipients) ? this.util.bcmul(Object.keys(recipients).length,2,0) : 0; // 1 credits, 1 balance

@@ -62,6 +62,9 @@ module.exports = {
         // Max DESCRIPTION length
         config['MAX_TOKEN_DESCRIPTION'] = 250;
 
+        // Max MEMO length
+        config['MAX_MEMO_LENGTH'] = 250;
+
         // Merge indexer config and COIN config into a single config object
         let fullConfig = Object.assign({}, config, coinConfig);
 
