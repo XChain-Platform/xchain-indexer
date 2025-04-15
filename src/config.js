@@ -1,4 +1,13 @@
-/* XChain Indexer Configuration */
+/*********************************************************************
+ * XChain Indexer Configuration
+ * 
+ * This config file contains indexer specific configuration data
+ * 
+ * COIN specific configuration data is loaded from configs/<COIN>.js
+ *
+ ********************************************************************/
+
+const fs = require('fs');
 
 module.exports = {
 
@@ -10,8 +19,21 @@ module.exports = {
         let coin    = process.env.INDEXER_COIN;     // BTC / LTC / DOGE
         let network = process.env.INDEXER_NETWORK;  // mainnet / testnet / regtest
 
-        // Define basic config object
-        let config = {};
+        // Define indexer and COIN config objects
+        let config     = {};
+        let coinConfig = {};
+
+        // Define COIN specific configuration file
+        let coinFile   = '/XChainIndexer/src/configs/' + coin + '.js';
+
+        // Load COIN specific configuration file, or throw error
+        if(fs.existsSync(coinFile)){
+            let cfg    = require(coinFile);
+            coinConfig = cfg.getConfig(network);
+        } else {
+            let error = 'Missing COIN config file : ' + coinFile;
+            throw new Error(error);
+        }
 
         // Parse in the gas / coin / network information
         config['GAS']     = gas;
@@ -40,71 +62,10 @@ module.exports = {
         // Max DESCRIPTION length
         config['MAX_TOKEN_DESCRIPTION'] = 250;
 
-        // Address configurations
-        // TODO : Generate BURN/GAS/DONATE addresses before launching XChain platform
-        var coinNet = coin + '-' +  network,
-            address = {};
-        switch(coinNet){
-            // Bitcoin
-            case 'BTC-mainnet':
-                address['BURN']    = "1Muhahahahhahahahahahhahahauxh9QX";
-                address['GAS']     = "1BTNSGASK5En7rFurDJ79LQ8CVYo2ecLC8";
-                address['DONATE1'] = "1BTNSGASK5En7rFurDJ79LQ8CVYo2ecLC8"; // Protocol Development
-                address['DONATE2'] = "1BTNSGASK5En7rFurDJ79LQ8CVYo2ecLC8"; // Community Develoment
-                break;
-            case 'BTC-testnet':
-                address['BURN']    = "mvCounterpartyXXXXXXXXXXXXXXW24Hef";
-                address['GAS']     = "mvThcDEbeqog2aJ7JNj1FefUPaNdYYGqHt";
-                address['DONATE1'] = "mvThcDEbeqog2aJ7JNj1FefUPaNdYYGqHt"; // Protocol Development
-                address['DONATE2'] = "mvThcDEbeqog2aJ7JNj1FefUPaNdYYGqHt"; // Community Develoment
-                break;
-            case 'BTC-regtest':
-                address['BURN']    = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
-                address['GAS']     = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
-                address['DONATE1'] = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // Protocol Development
-                address['DONATE2'] = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // Community Develoment
-                break;
-            // Litecoin
-            case 'LTC-mainnet':
-                address['BURN']    = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
-                address['GAS']     = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
-                address['DONATE1'] = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // Protocol Development
-                address['DONATE2'] = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // Community Develoment
-                break;
-            case 'LTC-testnet':
-                address['BURN']    = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
-                address['GAS']     = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
-                address['DONATE1'] = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // Protocol Development
-                address['DONATE2'] = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // Community Develoment
-                break;
-            case 'LTC-regtest':
-                address['BURN']    = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
-                address['GAS']     = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
-                address['DONATE1'] = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // Protocol Development
-                address['DONATE2'] = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // Community Develoment
-                break;
-            // Dogecoin
-            case 'DOGE-mainnet':
-                address['BURN']    = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
-                address['GAS']     = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
-                address['DONATE1'] = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // Protocol Development
-                address['DONATE2'] = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // Community Develoment
-                break;
-            case 'DOGE-testnet':
-                address['BURN']    = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
-                address['GAS']     = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
-                address['DONATE1'] = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // Protocol Development
-                address['DONATE2'] = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // Community Develoment
-                break;
-            case 'DOGE-regtest':
-                address['BURN']    = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
-                address['GAS']     = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
-                address['DONATE1'] = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // Protocol Development
-                address['DONATE2'] = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // Community Develoment
-        }
-        config['ADDRESS'] = address;
+        // Merge indexer config and COIN config into a single config object
+        let fullConfig = Object.assign({}, config, coinConfig);
 
-        return config;
+        return fullConfig;
     },
 
 }
