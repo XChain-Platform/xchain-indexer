@@ -65,6 +65,11 @@ module.exports = {
         // Max MEMO length
         config['MAX_MEMO_LENGTH'] = 250;
 
+        // MAX FILE lengths
+        config['MAX_FILE_NAME_LENGTH']  = 250;
+        config['MAX_FILE_TYPE_LENGTH']  = 255; // MAX MIME type length according to RFC 4288
+        config['MAX_FILE_TITLE_LENGTH'] = 250;
+
         // Merge indexer config and COIN config into a single config object
         let fullConfig = Object.assign({}, config, coinConfig);
 
