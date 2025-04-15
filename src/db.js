@@ -2736,6 +2736,100 @@ class Database {
         await this.releaseConnection();
     }
 
+    // Lookup a record in the `index_mime_types` table and return record id
+    async getMimeTypeId(type){
+        let id    = null;
+        let db    = await this.getConnection();
+        let query = "SELECT id FROM index_mime_types WHERE `type`=? LIMIT 1";
+        let args  = [type];
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0)
+                id = rows[0].id;
+        } catch (error) {
+            this.util.logError('Error looking up MIME type record id in index_mime_types table:', error);
+        }
+        await this.releaseConnection();
+        return id;
+    }
+
+    // Create records in the 'index_mime_types' table and return record id
+    async createMimeType(type){
+        // Ignore empty mime type and return hardcoded record id
+        if(type==null||type=='')
+            return 1;
+        var id = await this.getMimeTypeId(type);
+        // Handle creating record
+        if(id==null){
+            let db    = await this.getConnection();
+            let query = "INSERT INTO index_mime_types (`type`) values (?)";
+            let args  = [type];
+            try {
+                let result = await db.query(query, args);
+                if(result.insertId)
+                    id = result.insertId;
+            } catch (error) {
+                this.util.logError('Error trying to create MIME type record in index_mime_types table:', error);
+            }
+            await this.releaseConnection();
+        }
+        return id;
+    }
+
+    // Create/Update record in `files` table
+    async createFile(data){
+        // Normalize data
+        let type_id      = await this.createMimeType(data['TYPE']);
+        let source_id    = await this.createAddress(data['SOURCE']);
+        let memo_id      = await this.createMemo(data['MEMO']);
+        let status_id    = await this.createStatus(data['STATUS']);
+        let action_index = data['ACTION_INDEX'];
+        let name         = data['NAME'];
+        let title        = data['TITLE'];
+        // Check if record already exists for this file
+        let db     = await this.getConnection();
+        let query  = `SELECT
+                            action_index
+                        FROM
+                            files
+                        WHERE
+                            action_index=?`;
+        let args = [action_index];
+        let exists = false;
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0)
+                exists = true;
+        } catch (error){
+            this.util.logError('Error looking up record in files table:', error);
+        }
+        if(exists){
+            // UPDATE record
+            query = `UPDATE
+                        files
+                    SET
+                        name=?,
+                        title=?,
+                        type_id=?,
+                        source_id=?,
+                        memo_id=?,
+                        status_id=?
+                    WHERE 
+                        action_index=?`;
+        } else {
+            // INSERT record
+            query = `INSERT INTO files (name, title, type_id, source_id, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?, ?)`;
+        }
+        args = [name, title, type_id, source_id, memo_id, status_id, action_index];
+        // Create or Update the record in the files table
+        try {
+            let result = await db.query(query, args);
+        } catch (error){
+            this.util.logError('Error trying to create record in files table:', error);
+        }
+        await this.releaseConnection();
+    }
+
 }
 
 module.exports = Database

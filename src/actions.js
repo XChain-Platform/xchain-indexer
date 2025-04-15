@@ -9,6 +9,7 @@ const callback  = require('./actions/callback.js');
 const destroy   = require('./actions/destroy.js');
 // const dispenser = require('./actions/dispenser.js');
 const dividend  = require('./actions/dividend.js');
+const file      = require('./actions/file.js');
 const issue     = require('./actions/issue.js');
 const list      = require('./actions/list.js');
 const mint      = require('./actions/mint.js');
@@ -42,6 +43,7 @@ class Actions {
         this.actionCallback  = new callback(this);
         this.actionDestroy   = new destroy(this);
         // this.actionDispenser = new dispenser(this);
+        this.actionFile      = new file(this);
         this.actionDividend  = new dividend(this);
         this.actionIssue     = new issue(this);
         this.actionList      = new list(this);
@@ -146,6 +148,7 @@ class Actions {
         if(action=='DESTROY')   await this.actionDestroy.parse(params, data, error);
         // if(action=='DISPENSER') await this.actionDispenser.parse(params, data, error);
         if(action=='DIVIDEND')  await this.actionDividend.parse(params, data, error);
+        if(action=='FILE')      await this.actionFile.parse(params, data, error);
         if(action=='ISSUE')     await this.actionIssue.parse(params, data, error);
         if(action=='LIST')      await this.actionList.parse(params, data, error);
         if(action=='MINT')      await this.actionMint.parse(params, data, error);
