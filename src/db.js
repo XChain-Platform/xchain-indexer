@@ -279,7 +279,7 @@ class Database {
         try {
             const rows = await db.query(query);
             if(rows.length > 0){
-                return rows[0]["block_index"];
+                return Number(rows[0]["block_index"]);
             } else {
                 return -1   
             }
