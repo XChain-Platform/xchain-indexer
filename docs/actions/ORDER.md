@@ -9,7 +9,7 @@ This action creates a order to sell an item on the Decentralized Exchange (DEX).
 | `GIVE_AMOUNT`        | String | Quantity of `GIVE_TICK` to escrow in the orde                      |
 | `GET_TICK`           | String | 1 to 250 characters in length                                      |
 | `GET_AMOUNT`         | String | Quantity of `GET_TICK` requested in return                         |
-| `EXPIRATION`         | String | The number of blocks for which the order should be valid           |
+| `EXPIRATION`         | String | Timestamp of when order should expire, in Unix time                |
 | `ALLOW_LIST`         | String | `ACTION_INDEX` of a `LIST` of addresses allowed to match order     |
 | `BLOCK_LIST`         | String | `ACTION_INDEX` of a `LIST` of addresses NOT allowed to match order |
 | `MEMO`               | String | An optional memo to include                                        |
@@ -24,8 +24,8 @@ This action creates a order to sell an item on the Decentralized Exchange (DEX).
 ### Version `1` - Cancel Order
 - `VERSION|ORDER_ACTION_INDEX|MEMO`
 
-### Version `2` - Edit Order `LIST` `PARAMS`
-- `VERSION|ORDER_ACTION_INDEX|ALLOW_LIST|BLOCK_LIST|MEMO`
+### Version `2` - Edit Order 
+- `VERSION|ORDER_ACTION_INDEX|ALLOW_LIST|BLOCK_LIST|EXPIRATION|MEMO`
 
 
 ## Examples
@@ -40,7 +40,7 @@ This example cancels the existing ORDER with `ACTION_INDEX` 1234 and includes a 
 ```
 
 ```
-ORDER|2|1234|4321||Updating order to only sell to club member addresses
+ORDER|2|1234|4321|||Updating order to only sell to club member addresses
 This example updates an existing `ORDER` with `ACTION_INDEX` 1234 and adds an `ACTION_INDEX` to `ALLOW_LIST` 4321 and includes a memo
 ```
 
