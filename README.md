@@ -7,24 +7,24 @@ This indexer was born from the Broadcast Token Naming System (BTNS) project foun
 ## `ACTION` commands
 Below is a list of the defined `ACTION` commands and the function of each:
 
-| ACTION                                    | Description                                                                                   | 
-| ----------------------------------------- | --------------------------------------------------------------------------------------------- |
-| [`ADDRESS`](./src/actions/ADDRESS.md)     | This action configures address specific options.                                              |
-| [`AIRDROP`](./src/actions/AIRDROP.md)     | This action airdrops `TICK` supply to one or more lists.                                      |
-| [`BATCH`](./src/actions/BATCH.md)         | This action batch executes multiple `ACTION` commands in a single transaction.                |
-| [`BROADCAST`](./src/actions/BROADCAST.md) | This action broadcasts a message, and can also be used to create oracles and betting feeds.   |
-| [`CALLBACK`](./src/actions/CALLBACK.md)   | This action performs a callback on a `TICK`.                                                  |
-| [`DESTROY`](./src/actions/DESTROY.md)     | This action destroys `TICK` supply.                                                           |
-| [`DISPENSER`](./src/actions/DISPENSER.md) | This action creates a dispenser (vending machine) to dispense `TICK` when triggered.          |
-| [`DIVIDEND`](./src/actions/DIVIDEND.md)   | This action pays a dividend to holders of `TICK`.                                             |
-| [`FILE`](./src/actions/FILE.md)           | This action uploads a file including file metadata.                                           |
-| [`ISSUE`](./src/actions/ISSUE.md)         | This action creates or updates a `TICK`.                                                      |
-| [`LINK`](./src/actions/LINK.md)           | This action links actions using `ACTION_INDEX`, including linking actions across blockchains. |
-| [`LIST`](./src/actions/LIST.md)           | This action creates a list of items for use in actions.                                       |
-| [`MESSAGE`](./src/actions/MESSAGE.md)     | This action allows for the sending of plaintext and encrypted messages between addresses.     |
-| [`MINT`](./src/actions/MINT.md)           | This action mints `TICK` supply.                                                              |
-| [`ORDER`](./src/actions/ORDER.md)         | This action creates a order to sell an item on the Decentralized Exchange (DEX).              |
-| [`SEND`](./src/actions/SEND.md)           | This action sends one or more `TICK` to an `ADDRESS`.                                         |
-| [`SLEEP`](./src/actions/SLEEP.md)         | This action pauses actions on `TICK` until `RESUME_BLOCK` is reached.                         |
-| [`SWAP`](./src/actions/SWAP.md)           | This action allows for swapping tokens across XChain platform supported blockchains.          |
-| [`SWEEP`](./src/actions/SWEEP.md)         | This action transfers all `TICK` balances and/or ownerships to an `DESTINATION` address.      |
+| ACTION                                     | Description                                                                                   | 
+| ------------------------------------------ | --------------------------------------------------------------------------------------------- |
+| [`ADDRESS`](./docs/actions/ADDRESS.md)     | This action configures address specific options.                                              |
+| [`AIRDROP`](./docs/actions/AIRDROP.md)     | This action airdrops `TICK` supply to one or more lists.                                      |
+| [`BATCH`](./docs/actions/BATCH.md)         | This action batch executes multiple `ACTION` commands in a single transaction.                |
+| [`BROADCAST`](./docs/actions/BROADCAST.md) | This action broadcasts a message, and can also be used to create oracles and betting feeds.   |
+| [`CALLBACK`](./docs/actions/CALLBACK.md)   | This action performs a callback on a `TICK`.                                                  |
+| [`DESTROY`](./docs/actions/DESTROY.md)     | This action destroys `TICK` supply.                                                           |
+| [`DISPENSER`](./docs/actions/DISPENSER.md) | This action creates a dispenser (vending machine) to dispense `TICK` when triggered.          |
+| [`DIVIDEND`](./docs/actions/DIVIDEND.md)   | This action pays a dividend to holders of `TICK`.                                             |
+| [`FILE`](./docs/actions/FILE.md)           | This action uploads a file including file metadata.                                           |
+| [`ISSUE`](./docs/actions/ISSUE.md)         | This action creates or updates a `TICK`.                                                      |
+| [`LINK`](./docs/actions/LINK.md)           | This action links actions using `ACTION_INDEX`, including linking actions across blockchains. |
+| [`LIST`](./docs/actions/LIST.md)           | This action creates a list of items for use in actions.                                       |
+| [`MESSAGE`](./docs/actions/MESSAGE.md)     | This action allows for the sending of plaintext and encrypted messages between addresses.     |
+| [`MINT`](./docs/actions/MINT.md)           | This action mints `TICK` supply.                                                              |
+| [`ORDER`](./docs/actions/ORDER.md)         | This action creates a order to sell an item on the Decentralized Exchange (DEX).              |
+| [`SEND`](./docs/actions/SEND.md)           | This action sends one or more `TICK` to an `ADDRESS`.                                         |
+| [`SLEEP`](./docs/actions/SLEEP.md)         | This action pauses actions on `TICK` until `RESUME_BLOCK` is reached.                         |
+| [`SWAP`](./docs/actions/SWAP.md)           | This action allows for swapping tokens across XChain platform supported blockchains.          |
+| [`SWEEP`](./docs/actions/SWEEP.md)         | This action transfers all `TICK` balances and/or ownerships to an `DESTINATION` address.      |
