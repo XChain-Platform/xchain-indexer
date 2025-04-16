@@ -24,6 +24,7 @@ Below is a list of the defined `ACTION` commands and the function of each:
 | [`ORDER`](./actions/ORDER.md)         | This action creates a order to sell an item on the Decentralized Exchange (DEX).              |
 | [`SEND`](./actions/SEND.md)           | This action sends one or more `TICK` to an `ADDRESS`.                                         |
 | [`SLEEP`](./actions/SLEEP.md)         | This action pauses actions on `TICK` until `RESUME_BLOCK` is reached.                         |
+| [`SWAP`](./actions/SWAP.md)           | This action allows for swapping tokens across XChain platform supported blockchains.          |
 | [`SWEEP`](./actions/SWEEP.md)         | This action transfers all `TICK` balances and/or ownerships to an `DESTINATION` address.      |
 
 # Copyright
