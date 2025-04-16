@@ -2163,7 +2163,7 @@ class Database {
             if(rows.length >0){
                 for(let row of rows){
                     // Add ticker and supply info to assoc arrays
-                    tickers[row.tick] = row.tick_id;
+                    tickers[row.tick] = Number(row.tick_id);
                     supply[row.tick]  = (!this.util.isNull(row.supply)) ? row.supply : "0";
                 };
             }
