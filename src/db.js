@@ -621,7 +621,7 @@ class Database {
         try {
             let rows = await db.query(query);
             if(rows.length > 0)
-                idx = rows[0].tx_index;
+                idx = Number(rows[0].tx_index);
         } catch (error) {
             this.util.logError('Error looking up tx_index record in transactions table:', error);
         }
@@ -640,7 +640,7 @@ class Database {
         try {
             let rows = await db.query(query, [hash_id]);
             if(rows.length > 0)
-                tx_index = rows[0].tx_index;
+                tx_index = Number(rows[0].tx_index);
         } catch (error) {
             this.util.logError('Error looking up tx_index in transactions table:', error);
         }
@@ -676,7 +676,7 @@ class Database {
         try {
             let rows = await db.query(query);
             if(rows.length > 0)
-                idx = rows[0].action_index;
+                idx = Number(rows[0].action_index);
         } catch (error) {
             this.util.logError('Error looking up action_index in actions table:', error);
         }
@@ -706,7 +706,7 @@ class Database {
         try {
             let rows = await db.query(query, args);
             if(rows.length > 0)
-                action_index = rows[0].action_index;
+                action_index = Number(rows[0].action_index);
         } catch (error) {
             this.util.logError('Error looking up action_index in actions table:', error);
         }
@@ -1890,7 +1890,7 @@ class Database {
         try {
             let rows = await db.query(query, args);
             if(rows.length > 0)
-                action_index = rows[0].action_index;
+                action_index = Number(rows[0].action_index);
         } catch (error) {
             this.util.logError('Error looking up action_index of first valid issue:', error);
         }
