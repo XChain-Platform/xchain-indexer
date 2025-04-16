@@ -30,7 +30,7 @@ This action creates a order to sell an item on the Decentralized Exchange (DEX).
 
 ## Examples
 ```
-ORDER|0|RAREPEPE|1|PEPECASH|10,000,000.00000000||||Selling my RAREPEPE cuz mom in hospital
+ORDER|0|RAREPEPE|1|PEPECASH|10000000.00000000||||Selling my RAREPEPE cuz mom in hospital
 This example creates an order to sell 1 RAREPEPE for 10,000,000.00000000 PEPECASH and includes a memo
 ```
 
