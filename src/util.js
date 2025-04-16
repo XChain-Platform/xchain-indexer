@@ -5,6 +5,11 @@ const crypto = require('crypto');
 const mathjs = require('mathjs');
 const fs     = require('fs');
 
+// Support BigInt in JSON stringify()
+BigInt.prototype.toJSON = function(){
+    return JSON.rawJSON(this.toString());
+};
+
 class Util {
 
     // Handle constructing a class instance
@@ -128,7 +133,7 @@ class Util {
 
     // Determine if a value is numeric
     isNumeric(value){
-        return !isNaN(parseFloat(value)) && isFinite(value);
+        return typeof value === 'bigint' || (!isNaN(parseFloat(value)) && isFinite(value));
     }
 
     // Determine if value is floating point
