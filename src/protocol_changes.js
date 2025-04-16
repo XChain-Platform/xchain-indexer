@@ -34,6 +34,7 @@ class ProtocolChanges {
         this.addChange('AIRDROP',    '1.0.0',0,0,0,0,0,0);
         this.addChange('BATCH',      '1.0.0',0,0,0,0,0,0);
         this.addChange('BET',        '1.0.0',0,0,0,0,0,0);
+        this.addChange('BROADCAST',  '1.0.0',0,0,0,0,0,0);
         this.addChange('CALLBACK',   '1.0.0',0,0,0,0,0,0);
         this.addChange('DESTROY',    '1.0.0',0,0,0,0,0,0);
         this.addChange('DISPENSER',  '1.0.0',0,0,0,0,0,0);

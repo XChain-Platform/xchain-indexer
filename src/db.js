@@ -2937,7 +2937,7 @@ class Database {
         let action_index      = data['ACTION_INDEX'];
         let link_action_index = data['LINK_ACTION_INDEX'];
         let coin_action_index = data['COIN_ACTION_INDEX'];
-        // Check if record already exists for this file
+        // Check if record already exists for this link
         let db     = await this.getConnection();
         let query  = `SELECT
                             action_index
@@ -2972,7 +2972,7 @@ class Database {
             query = `INSERT INTO links (link_action_index, coin_id, coin_action_index, source_id, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?, ?)`;
         }
         args = [link_action_index, coin_id, coin_action_index, source_id, memo_id, status_id, action_index];
-        // Create or Update the record in the files table
+        // Create or Update the record in the links table
         try {
             let result = await db.query(query, args);
         } catch (error){
@@ -2980,6 +2980,62 @@ class Database {
         }
         await this.releaseConnection();
     }
+
+    // Create/Update record in `broadcasts` table
+    async createBroadcast(data){
+        // Normalize data
+        let source_id              = await this.createAddress(data['SOURCE']);
+        let memo_id                = await this.createMemo(data['MEMO']);
+        let status_id              = await this.createStatus(data['STATUS']);
+        let action_index           = data['ACTION_INDEX'];
+        let broadcast_action_index = data['BROADCAST_ACTION_INDEX'];
+        let message                = data['MESSAGE'];
+        let value                  = data['VALUE'];
+        let fee                    = data['FEE'];
+        // Check if record already exists for this broadcast
+        let db     = await this.getConnection();
+        let query  = `SELECT
+                            action_index
+                        FROM
+                            broadcasts
+                        WHERE
+                            action_index=?`;
+        let args = [action_index];
+        let exists = false;
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0)
+                exists = true;
+        } catch (error){
+            this.util.logError('Error looking up record in broadcasts table:', error);
+        }
+        if(exists){
+            // UPDATE record
+            query = `UPDATE
+                        broadcasts
+                    SET
+                        message=?,
+                        value=?,
+                        fee=?,
+                        broadcast_action_index=?,
+                        source_id=?,
+                        memo_id=?,
+                        status_id=?
+                    WHERE 
+                        action_index=?`;
+        } else {
+            // INSERT record
+            query = `INSERT INTO broadcasts (message, value, fee, broadcast_action_index, source_id, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?, ?, ?)`;
+        }
+        args = [message, value, fee, broadcast_action_index, source_id, memo_id, status_id, action_index];
+        // Create or Update the record in the broadcasts table
+        try {
+            let result = await db.query(query, args);
+        } catch (error){
+            this.util.logError('Error trying to create record in broadcasts table:', error);
+        }
+        await this.releaseConnection();
+    }    
 }
 
 module.exports = Database

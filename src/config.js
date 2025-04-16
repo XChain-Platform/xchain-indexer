@@ -70,6 +70,10 @@ module.exports = {
         config['MAX_FILE_TYPE_LENGTH']  = 255; // MAX MIME type length according to RFC 4288
         config['MAX_FILE_TITLE_LENGTH'] = 250;
 
+        // BROADCAST lengths
+        config['MAX_BROADCAST_MESSAGE_LENGTH']  = 250;
+        config['MAX_BROADCAST_VALUE_LENGTH']    = 25; 
+
         // Merge indexer config and COIN config into a single config object
         let fullConfig = Object.assign({}, config, coinConfig);
 
