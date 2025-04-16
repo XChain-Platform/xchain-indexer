@@ -15,7 +15,7 @@
  * 
  ********************************************************************/
 
-class File {
+class Link {
 
     // Handle constructing a class instance
     constructor(action){
@@ -83,7 +83,7 @@ class File {
          ****************************************************************/
 
         // Verify LINK_ACTION_INDEX is valid
-        if(!error && !this.indexerDb.isActionIndexValid(data['LINK_ACTION_INDEX']))
+        if(!error && !await this.indexerDb.isActionIndexValid(data['LINK_ACTION_INDEX']))
             error = 'invalid: LINK_ACTION_INDEX (status)';
 
         // Verify no pipe in MEMO (pipe is field delimiter)
@@ -111,4 +111,4 @@ class File {
     }
 }
 
-module.exports = File;
+module.exports = Link;
