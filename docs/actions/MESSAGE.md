@@ -5,8 +5,8 @@ This action allows for the sending of plaintext and encrypted messages between a
 | Name                | Type   | Description                                |
 | ------------------- | ------ | ------------------------------------------ |
 | `VERSION`           | String | Broadcast Format Version                   |
-| `TYPE`              | String | Encryption Type (0=ECDH, 1=AES)            |
-| `ADDRESS`           | String | Address of the message or key recipient    |
+| `TYPE`              | String | Encryption Type (1=ECDH, 2=AES)            |
+| `DESTINATION`       | String | Address of the message or key recipient    |
 | `KEY`               | String | public key to be used to exchange messages |
 | `PLAINTEXT_MESSAGE` | String | Plaintext message (visible to all!)        |
 | `ENCRYPTED_MESSAGE` | String | Message encryted with shared key           |
@@ -14,16 +14,16 @@ This action allows for the sending of plaintext and encrypted messages between a
 ## Formats
 
 ### Version `0` - Sender Key
-- `VERSION|TYPE|ADDRESS|KEY`
+- `VERSION|TYPE|DESTINATION|KEY`
 
 ### Version `1` - Receiver Key
-- `VERSION|TYPE|ADDRESS|KEY`
+- `VERSION|TYPE|DESTINATION|KEY`
 
 ### Version `2` - Encrypted Message
-- `VERSION|ADDRESS|ENCRYPTED_MESSAGE`
+- `VERSION|DESTINATION|ENCRYPTED_MESSAGE`
 
 ### Version `3` - Plaintext Message
-- `VERSION|ADDRESS|PLAINTEXT_MESSAGE`
+- `VERSION|DESTINATION|PLAINTEXT_MESSAGE`
 
 ## Examples
 ```
