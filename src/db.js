@@ -3035,7 +3035,63 @@ class Database {
             this.util.logError('Error trying to create record in broadcasts table:', error);
         }
         await this.releaseConnection();
-    }    
+    }
+
+    // Create/Update record in `messages` table
+    async createMessage(data){
+        // Normalize data
+        let source_id         = await this.createAddress(data['SOURCE']);
+        let destination_id    = await this.createAddress(data['DESTINATION']);
+        let status_id         = await this.createStatus(data['STATUS']);
+        let action_index      = data['ACTION_INDEX'];
+        let encryption_method = data['ENCRYPTION_METHOD'];
+        let encryption_key    = data['ENCRYPTION_KEY'];
+        let encrypted_message = data['ENCRYPTED_MESSAGE'];
+        let plaintext_message = data['PLAINTEXT_MESSAGE'];
+        // Check if record already exists for this message
+        let db     = await this.getConnection();
+        let query  = `SELECT
+                            action_index
+                        FROM
+                            messages
+                        WHERE
+                            action_index=?`;
+        let args = [action_index];
+        let exists = false;
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0)
+                exists = true;
+        } catch (error){
+            this.util.logError('Error looking up record in messages table:', error);
+        }
+        if(exists){
+            // UPDATE record
+            query = `UPDATE
+                        messages
+                    SET
+                        encryption_method=?,
+                        encryption_key=?,
+                        encrypted_message=?,
+                        plaintext_message=?,
+                        source_id=?,
+                        destination_id=?,
+                        status_id=?
+                    WHERE 
+                        action_index=?`;
+        } else {
+            // INSERT record
+            query = `INSERT INTO messages (encryption_method, encryption_key, encrypted_message, plaintext_message, source_id, destination_id, status_id, action_index) values (?, ?, ?, ?, ?, ?, ?, ?)`;
+        }
+        args = [encryption_method, encryption_key, encrypted_message, plaintext_message, source_id, destination_id, status_id, action_index];
+        // Create or Update the record in the messages table
+        try {
+            let result = await db.query(query, args);
+        } catch (error){
+            this.util.logError('Error trying to create record in messages table:', error);
+        }
+        await this.releaseConnection();
+    }        
 }
 
 module.exports = Database
