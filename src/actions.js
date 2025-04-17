@@ -14,6 +14,7 @@ const file      = require('./actions/file.js');
 const issue     = require('./actions/issue.js');
 const link      = require('./actions/link.js');
 const list      = require('./actions/list.js');
+const message   = require('./actions/message.js');
 const mint      = require('./actions/mint.js');
 // const rug       = require('./actions/rug.js');
 // const sleep     = require('./actions/sleep.js');
@@ -51,6 +52,7 @@ class Actions {
         this.actionIssue     = new issue(this);
         this.actionLink      = new link(this);
         this.actionList      = new list(this);
+        this.actionMessage   = new message(this);
         this.actionMint      = new mint(this);
         // this.actionRug       = new rug(this);
         // this.actionSleep     = new sleep(this);
@@ -158,6 +160,7 @@ class Actions {
         if(action=='LIST')      await this.actionList.parse(params, data, error);
         if(action=='LINK')      await this.actionLink.parse(params, data, error);
         if(action=='MINT')      await this.actionMint.parse(params, data, error);
+        if(action=='MESSAGE')   await this.actionMessage.parse(params, data, error);
         // if(action=='RUG')       await this.actionRug.parse(params, data, error);
         // if(action=='SLEEP')     await this.actionSleep.parse(params, data, error);
         if(action=='SEND')      await this.actionSend.parse(params, data, error);

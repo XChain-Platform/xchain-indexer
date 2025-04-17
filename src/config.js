@@ -74,6 +74,17 @@ module.exports = {
         config['MAX_BROADCAST_MESSAGE_LENGTH']  = 250;
         config['MAX_BROADCAST_VALUE_LENGTH']    = 25; 
 
+        // MESSAGE encryption methods
+        config['MESSAGE_ENCRYPTION_METHODS'] = [
+            1, // Elliptic-curve Diffie–Hellman (ECDH) 
+            2, // Advanced Encryption Standard (AES)
+        ];
+
+        // Max MESSAGE lengths
+        config['MAX_MESSAGE_LENGTH']     = 1048576; // 1 MB = 1,048,576 Characters
+        config['MAX_MESSAGE_KEY_LENGTH'] = 1048576; // 1 MB = 1,048,576 Characters
+
+
         // Merge indexer config and COIN config into a single config object
         let fullConfig = Object.assign({}, config, coinConfig);
 
