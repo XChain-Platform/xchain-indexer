@@ -798,124 +798,127 @@ class Database {
         let data = false,
             sql  = '',
             args = [];
-        // Get the tick_id for the given ticker
-        if(!this.util.isNull(tick) && this.util.isNull(tick_id))
-            tick_id = await this.createTicker(tick);
-        // Add tick_id to SQL query arguments
-        args.push(tick_id);
-        // If a block_index was given, only lookup tokens created before or in given block_index
-        if(!this.util.isNull(block_index) && this.util.isNumeric(block_index)){
-            sql += " AND t1.block_index <= ?";
-            args.push(parseInt(block_index));
-        }
-        // If a action_index was given, only lookup tokens created before given action_index
-        if(!this.util.isNull(action_index) && this.util.isNumeric(action_index)){
-            sql += " AND a1.action_index < ?";
-            args.push(parseInt(action_index));
-        }
-        // Build out SQL query based on search params
-        let query = `SELECT 
-                        i.max_supply,
-                        i.max_mint,
-                        i.decimals,
-                        i.description,
-                        i.lock_max_supply,
-                        i.lock_mint_supply,
-                        i.lock_mint,
-                        i.lock_max_mint,
-                        i.lock_description,
-                        i.lock_rug,
-                        i.lock_sleep,
-                        i.lock_callback,
-                        i.callback_block,
-                        i.callback_amount,
-                        i.mint_address_max,
-                        i.mint_start_block,
-                        i.mint_stop_block,
-                        i.allow_list,
-                        i.block_list,
-                        i.action_index,
-                        t1.block_index,
-                        t2.tick,
-                        t3.tick as callback_tick,            
-                        a2.address as owner,
-                        a3.address as transfer
-                    FROM 
-                        issues i
-                        INNER JOIN actions            a1 ON (a1.action_index=i.action_index)
-                        INNER JOIN transactions       t1 ON (t1.tx_index=a1.tx_index)
-                        INNER JOIN index_tickers      t2 ON (t2.id=i.tick_id)
-                        INNER JOIN index_addresses    a2 ON (a2.id=i.source_id)
-                        INNER JOIN index_statuses     s1 ON (s1.id=i.status_id)
-                        LEFT  JOIN index_addresses    a3 ON (a3.id=i.transfer_id)
-                        LEFT  JOIN index_tickers      t3 ON (t3.id=i.callback_tick_id)
-                    WHERE
-                        s1.status='valid' AND
-                        i.tick_id=?` + sql + `
-                    ORDER BY 
-                        i.action_index ASC`;
-        try {
-            let db   = await this.getConnection();
-            let rows = await db.query(query, args);
-            if(rows.length > 0){
-                // Define data object
-                if(!data)
-                    data = {};
-                // Loop through ISSUE transactions for the given ticker
-                for(let row of rows){
-                    // Define object of values for this ISSUE tx
-                    let arr  = {};
-                    arr['ACTION_INDEX']      = row.action_index;
-                    arr['TICK']              = row.tick;
-                    arr['TICK_ID']           = tick_id;
-                    arr['OWNER']             = (row.transfer) ? row.transfer : row.owner;
-                    arr['MAX_SUPPLY']        = row.max_supply;
-                    arr['MAX_MINT']          = row.max_mint;
-                    // Force decimal precision to a integer value
-                    arr['DECIMALS']          = (!this.util.isNull(row.decimals)) ? parseInt(row.decimals) : 0;
-                    arr['DESCRIPTION']       = row.description;
-                    arr['LOCK_MAX_SUPPLY']   = row.lock_max_supply;
-                    arr['LOCK_MINT_SUPPLY']  = row.lock_mint_supply;
-                    arr['LOCK_MINT']         = row.lock_mint;
-                    arr['LOCK_MAX_MINT']     = row.lock_max_mint;
-                    arr['LOCK_DESCRIPTION']  = row.lock_description;
-                    arr['LOCK_RUG']          = row.lock_rug;
-                    arr['LOCK_SLEEP']        = row.lock_sleep;
-                    arr['LOCK_CALLBACK']     = row.lock_callback;
-                    arr['CALLBACK_TICK']     = row.callback_tick;
-                    arr['CALLBACK_BLOCK']    = row.callback_block;
-                    arr['CALLBACK_AMOUNT']   = row.callback_amount;
-                    arr['ALLOW_LIST']        = row.allow_list;
-                    arr['BLOCK_LIST']        = row.block_list;
-                    arr['MINT_ADDRESS_MAX']  = row.mint_address_max;
-                    arr['MINT_START_BLOCK']  = row.mint_start_block;
-                    arr['MINT_STOP_BLOCK']   = row.mint_stop_block;
-                    // build out token state
-                    // TODO: will need to massage the data a bit more to build out accurate token state... this is quick and dirty
-                    for(let key in arr){
-                        let value = arr[key];
-                        // Only set the ACTION_INDEX on the first valid issuance
-                        if(key=='ACTION_INDEX' && this.util.isNull(data[key]))
-                            data[key] = value;
-                        // Disallow unsetting of LOCK flags
-                        if(String(key).substr(0,5)=='LOCK_')
-                            if(data[key]==1)
+        // Only query database if we actually have a tick or tick_id passed
+        if(!this.util.isNull(tick) || !this.util.isNull(tick_id)){
+            // Get the tick_id for the given ticker
+            if(!this.util.isNull(tick) && this.util.isNull(tick_id))
+                tick_id = await this.createTicker(tick);
+            // Add tick_id to SQL query arguments
+            args.push(tick_id);
+            // If a block_index was given, only lookup tokens created before or in given block_index
+            if(!this.util.isNull(block_index) && this.util.isNumeric(block_index)){
+                sql += " AND t1.block_index <= ?";
+                args.push(parseInt(block_index));
+            }
+            // If a action_index was given, only lookup tokens created before given action_index
+            if(!this.util.isNull(action_index) && this.util.isNumeric(action_index)){
+                sql += " AND a1.action_index < ?";
+                args.push(parseInt(action_index));
+            }
+            // Build out SQL query based on search params
+            let query = `SELECT 
+                            i.max_supply,
+                            i.max_mint,
+                            i.decimals,
+                            i.description,
+                            i.lock_max_supply,
+                            i.lock_mint_supply,
+                            i.lock_mint,
+                            i.lock_max_mint,
+                            i.lock_description,
+                            i.lock_rug,
+                            i.lock_sleep,
+                            i.lock_callback,
+                            i.callback_block,
+                            i.callback_amount,
+                            i.mint_address_max,
+                            i.mint_start_block,
+                            i.mint_stop_block,
+                            i.allow_list,
+                            i.block_list,
+                            i.action_index,
+                            t1.block_index,
+                            t2.tick,
+                            t3.tick as callback_tick,            
+                            a2.address as owner,
+                            a3.address as transfer
+                        FROM 
+                            issues i
+                            INNER JOIN actions            a1 ON (a1.action_index=i.action_index)
+                            INNER JOIN transactions       t1 ON (t1.tx_index=a1.tx_index)
+                            INNER JOIN index_tickers      t2 ON (t2.id=i.tick_id)
+                            INNER JOIN index_addresses    a2 ON (a2.id=i.source_id)
+                            INNER JOIN index_statuses     s1 ON (s1.id=i.status_id)
+                            LEFT  JOIN index_addresses    a3 ON (a3.id=i.transfer_id)
+                            LEFT  JOIN index_tickers      t3 ON (t3.id=i.callback_tick_id)
+                        WHERE
+                            s1.status='valid' AND
+                            i.tick_id=?` + sql + `
+                        ORDER BY 
+                            i.action_index ASC`;
+            try {
+                let db   = await this.getConnection();
+                let rows = await db.query(query, args);
+                if(rows.length > 0){
+                    // Define data object
+                    if(!data)
+                        data = {};
+                    // Loop through ISSUE transactions for the given ticker
+                    for(let row of rows){
+                        // Define object of values for this ISSUE tx
+                        let arr  = {};
+                        arr['ACTION_INDEX']      = row.action_index;
+                        arr['TICK']              = row.tick;
+                        arr['TICK_ID']           = tick_id;
+                        arr['OWNER']             = (row.transfer) ? row.transfer : row.owner;
+                        arr['MAX_SUPPLY']        = row.max_supply;
+                        arr['MAX_MINT']          = row.max_mint;
+                        // Force decimal precision to a integer value
+                        arr['DECIMALS']          = (!this.util.isNull(row.decimals)) ? parseInt(row.decimals) : 0;
+                        arr['DESCRIPTION']       = row.description;
+                        arr['LOCK_MAX_SUPPLY']   = row.lock_max_supply;
+                        arr['LOCK_MINT_SUPPLY']  = row.lock_mint_supply;
+                        arr['LOCK_MINT']         = row.lock_mint;
+                        arr['LOCK_MAX_MINT']     = row.lock_max_mint;
+                        arr['LOCK_DESCRIPTION']  = row.lock_description;
+                        arr['LOCK_RUG']          = row.lock_rug;
+                        arr['LOCK_SLEEP']        = row.lock_sleep;
+                        arr['LOCK_CALLBACK']     = row.lock_callback;
+                        arr['CALLBACK_TICK']     = row.callback_tick;
+                        arr['CALLBACK_BLOCK']    = row.callback_block;
+                        arr['CALLBACK_AMOUNT']   = row.callback_amount;
+                        arr['ALLOW_LIST']        = row.allow_list;
+                        arr['BLOCK_LIST']        = row.block_list;
+                        arr['MINT_ADDRESS_MAX']  = row.mint_address_max;
+                        arr['MINT_START_BLOCK']  = row.mint_start_block;
+                        arr['MINT_STOP_BLOCK']   = row.mint_stop_block;
+                        // build out token state
+                        // TODO: will need to massage the data a bit more to build out accurate token state... this is quick and dirty
+                        for(let key in arr){
+                            let value = arr[key];
+                            // Only set the ACTION_INDEX on the first valid issuance
+                            if(key=='ACTION_INDEX' && this.util.isNull(data[key]))
+                                data[key] = value;
+                            // Disallow unsetting of LOCK flags
+                            if(String(key).substr(0,5)=='LOCK_')
+                                if(data[key]==1)
+                                    continue;
+                            // Prevent changing decimal precision 
+                            if(key=='DECIMALS' && data[key] > value)
                                 continue;
-                        // Prevent changing decimal precision 
-                        if(key=='DECIMALS' && data[key] > value)
-                            continue;
-                        // Skip setting value if value is null or empty (use last explicit value)
-                        if(this.util.isNull(value) || value==='')
-                            continue;
-                        // Update data object with value from this ISSUE tx
-                        data[key] = value;
+                            // Skip setting value if value is null or empty (use last explicit value)
+                            if(this.util.isNull(value) || value==='')
+                                continue;
+                            // Update data object with value from this ISSUE tx
+                            data[key] = value;
+                        }
                     }
                 }
+            } catch (error) {
+                this.util.logError('Error looking up token info : ', error);
             }
-        } catch (error) {
-            this.util.logError('Error looking up token info : ', error);
+            await this.releaseConnection();
         }
-        await this.releaseConnection();
         // Get token supply at the given action_index
         if(data)
             data['SUPPLY'] = await this.getTokenSupply(tick, tick_id, null, action_index); 
