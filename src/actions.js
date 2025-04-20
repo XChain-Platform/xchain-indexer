@@ -17,7 +17,7 @@ const list      = require('./actions/list.js');
 const message   = require('./actions/message.js');
 const mint      = require('./actions/mint.js');
 // const rug       = require('./actions/rug.js');
-// const sleep     = require('./actions/sleep.js');
+const sleep     = require('./actions/sleep.js');
 const send      = require('./actions/send.js');
 const sweep     = require('./actions/sweep.js');
 
@@ -55,7 +55,7 @@ class Actions {
         this.actionMessage   = new message(this);
         this.actionMint      = new mint(this);
         // this.actionRug       = new rug(this);
-        // this.actionSleep     = new sleep(this);
+        this.actionSleep     = new sleep(this);
         this.actionSend      = new send(this);
         this.actionSweep     = new sweep(this);
 
@@ -162,7 +162,7 @@ class Actions {
         if(action=='MINT')      await this.actionMint.parse(params, data, error);
         if(action=='MESSAGE')   await this.actionMessage.parse(params, data, error);
         // if(action=='RUG')       await this.actionRug.parse(params, data, error);
-        // if(action=='SLEEP')     await this.actionSleep.parse(params, data, error);
+        if(action=='SLEEP')     await this.actionSleep.parse(params, data, error);
         if(action=='SEND')      await this.actionSend.parse(params, data, error);
         if(action=='SWEEP')     await this.actionSweep.parse(params, data, error);
     }

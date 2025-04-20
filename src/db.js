@@ -3095,6 +3095,60 @@ class Database {
         }
         await this.releaseConnection();
     }        
+
+    // Create/Update record in `sleeps` table
+    async createSleep(data){
+        // Normalize data
+        let source_id    = await this.createAddress(data['SOURCE']);
+        let tick_id      = await this.createTicker(data['TICK']);
+        let memo_id      = await this.createMemo(data['MEMO']);
+        let status_id    = await this.createStatus(data['STATUS']);
+        let action_index = data['ACTION_INDEX'];
+        let resume_block = data['RESUME_BLOCK'];
+        let type         = (data['TYPE']=='TICK') ? 2 : 1;
+        // Check if record already exists for this sleep
+        let db     = await this.getConnection();
+        let query  = `SELECT
+                            action_index
+                        FROM
+                            sleeps
+                        WHERE
+                            action_index=?`;
+        let args = [action_index];
+        let exists = false;
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0)
+                exists = true;
+        } catch (error){
+            this.util.logError('Error looking up record in sleeps table:', error);
+        }
+        if(exists){
+            // UPDATE record
+            query = `UPDATE
+                        sleeps
+                    SET
+                        type=?,
+                        source_id=?,
+                        tick_id=?,
+                        memo_id=?,
+                        status_id=?
+                    WHERE 
+                        action_index=?`;
+        } else {
+            // INSERT record
+            query = `INSERT INTO sleeps (type, source_id, tick_id, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?)`;
+        }
+        args = [type, source_id, tick_id, memo_id, status_id, action_index];
+        // Create or Update the record in the sleeps table
+        try {
+            let result = await db.query(query, args);
+        } catch (error){
+            this.util.logError('Error trying to create record in sleeps table:', error);
+        }
+        await this.releaseConnection();
+    }        
+
 }
 
 module.exports = Database

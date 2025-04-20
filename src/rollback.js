@@ -45,6 +45,7 @@ class Rollback {
             'list_items_invalid',
             'mints',
             'sends',
+            'sleeps',
             'sweeps',
             'tokens'
         ];
@@ -79,7 +80,7 @@ class Rollback {
         let args = [block_index];
         let rows = await this.indexerDb.doQuery(query, args);
         if(rows.length > 0)
-            firstActionIndex = rows[0].action_index;
+            firstActionIndex = Number(rows[0].action_index);
 
         // Handle looking up data for any action_indexes in the rollback
         if(firstActionIndex){
