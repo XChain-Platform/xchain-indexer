@@ -1,7 +1,7 @@
 /*********************************************************************
  * XChain Platform Action - SLEEP
  * 
- * This action pauses actions on a `TICK` until `RESUME_BLOCK` is reached.
+ * This action pauses actions on an `ADDRESS` or a `TICK` until `RESUME_BLOCK` is reached.
  * 
  * PARAMS:
  * - VERSION      - Format Version
@@ -48,6 +48,7 @@ class Sleep {
          * DEBUGGING - Force params
          ****************************************************************/
         // let str = "0|791495|Pausing actions until block 791495";
+        // let str = "1|791495|JDOG|Pausing actions on JDOG until block 791495";
         // params = String(str).split('|');
 
         // Validate that format is known
