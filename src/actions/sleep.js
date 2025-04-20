@@ -97,6 +97,10 @@ class Sleep {
         if(!error && !this.util.isNull(data['RESUME_BLOCK']) && !this.config['SLEEP_IMMEDIATE_METHODS'].includes(data['RESUME_BLOCK']) && data['RESUME_BLOCK'] < data['BLOCK_INDEX'])
             error = 'invalid: RESUME_BLOCK (block_index)';
 
+        // Verify TICK sleep is being done by current TICK owner
+        if(!error && data['TYPE']=='TICK' && data['SOURCE']!=tokenInfo['OWNER'])
+            error = 'invalid: TICK (not authorized)';
+
         // Verify no pipe in MEMO (pipe is field delimiter)
         if(!error && String(data['MEMO']).indexOf('|')!=-1)
             error = 'invalid: MEMO (pipe)';
