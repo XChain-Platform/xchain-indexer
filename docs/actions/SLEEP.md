@@ -20,12 +20,12 @@ This action pauses actions on an `ADDRESS` or a `TICK` until `RESUME_BLOCK` is r
 ## Examples
 
 ```
-SLEEP|0|791495|Pausing actions until block 791495`
+SLEEP|0|791495|Pausing actions until block 791495
 This example sleeps / pauses all actions on the `SOURCE` address until block 791495
 ```
 
 ```
-SLEEP|1|791495|JDOG|Pausing actions on JDOG until block 791495`
+SLEEP|1|791495|JDOG|Pausing actions on JDOG until block 791495
 This example sleeps / pauses all actions on JDOG `TICK` until block 791495
 ```
 
