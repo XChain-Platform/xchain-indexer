@@ -3119,7 +3119,7 @@ class Database {
         let memo_id      = await this.createMemo(data['MEMO']);
         let status_id    = await this.createStatus(data['STATUS']);
         let action_index = data['ACTION_INDEX'];
-        let resume_block = data['RESUME_BLOCK'];
+        let resume_block = String(data['RESUME_BLOCK']).substring(0,25);
         let type         = (data['TYPE']=='TICK') ? 2 : 1;
         // Check if record already exists for this sleep
         let db     = await this.getConnection();
