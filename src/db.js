@@ -468,6 +468,8 @@ class Database {
         // Ignore empty hashes and return hardcoded record id
         if(hash==null||hash=='')
             return 1;
+        // Truncate to 250 characters
+        hash = String(hash).substring(0,250);
         var id = await this.getTransactionId(hash);
         // Handle creating record
         if(id==null){
@@ -506,6 +508,8 @@ class Database {
         // Ignore empty address and return hardcoded record id
         if(address==null||address=='')
             return 1;
+        // Truncate to 120 characters
+        address = String(address).substring(0,120);
         var id = await this.getAddressId(address);
         // Handle creating record
         if(id==null){
@@ -767,11 +771,13 @@ class Database {
         return id;
     }
 
-    // Create records in the 'index_actions' table and return record id
+    // Create records in the 'index_tickers' table and return record id
     async createTicker(tick){
         // Ignore empty tickers and return hardcoded record id
         if(this.util.isNull(tick) || tick=='')
             return 1;
+        // Truncate ticker to 250 characters
+        tick = String(tick).substring(0,250);
         var id = await this.getTickerId(tick);
         // Handle creating record
         if(id==null){
@@ -1960,6 +1966,8 @@ class Database {
         // Ignore empty memos and return hardcoded record id
         if(this.util.isNull(memo) || memo=='')
             return 1;
+        // Truncate memos to 250 characters
+        memo = String(memo).substring(0,250);
         var id = await this.getMemoId(memo);
         // Handle creating record
         if(id==null){
@@ -2787,8 +2795,8 @@ class Database {
         let memo_id      = await this.createMemo(data['MEMO']);
         let status_id    = await this.createStatus(data['STATUS']);
         let action_index = data['ACTION_INDEX'];
-        let name         = data['NAME'];
-        let title        = data['TITLE'];
+        let name         = String(data['NAME']).substring(0,250);
+        let title        = String(data['TITLE']).substring(0,250);
         // Check if record already exists for this file
         let db     = await this.getConnection();
         let query  = `SELECT
@@ -2992,9 +3000,9 @@ class Database {
         let status_id              = await this.createStatus(data['STATUS']);
         let action_index           = data['ACTION_INDEX'];
         let broadcast_action_index = data['BROADCAST_ACTION_INDEX'];
-        let message                = data['MESSAGE'];
-        let value                  = data['VALUE'];
-        let fee                    = data['FEE'];
+        let message                = String(data['MESSAGE']).substring(0,250);
+        let value                  = String(data['VALUE']).substring(0,25);
+        let fee                    = String(data['FEE']).substring(0,11);
         // Check if record already exists for this broadcast
         let db     = await this.getConnection();
         let query  = `SELECT
@@ -3047,7 +3055,7 @@ class Database {
         let destination_id    = await this.createAddress(data['DESTINATION']);
         let status_id         = await this.createStatus(data['STATUS']);
         let action_index      = data['ACTION_INDEX'];
-        let encryption_method = data['ENCRYPTION_METHOD'];
+        let encryption_method = String(data['ENCRYPTION_METHOD']).substring(0,1);
         let encryption_key    = data['ENCRYPTION_KEY'];
         let encrypted_message = data['ENCRYPTED_MESSAGE'];
         let plaintext_message = data['PLAINTEXT_MESSAGE'];
