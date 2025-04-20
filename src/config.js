@@ -80,6 +80,12 @@ module.exports = {
             2, // Advanced Encryption Standard (AES)
         ];
 
+        // SLEEP Immediate methods
+        config['SLEEP_IMMEDIATE_METHODS'] = [
+            -1, // Sleep actions indefinitely
+             0, // Resume actions immediately
+        ];
+
         // Max MESSAGE lengths
         config['MAX_MESSAGE_LENGTH']     = 1048576; // 1 MB = 1,048,576 Characters
         config['MAX_MESSAGE_KEY_LENGTH'] = 1048576; // 1 MB = 1,048,576 Characters
