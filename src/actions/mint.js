@@ -147,12 +147,12 @@ class Mint {
         if(!error && (this.util.bcadd(data['SUPPLY'],data['AMOUNT'],data['DECIMALS']) > this.util.bcadd(data['MAX_SUPPLY'],0,data['DECIMALS'])))
             error = 'invalid: mint exceeds MAX_SUPPLY';
 
-        // Verify action is allowed from SOURCE (ALLOW_LIST & BLOCK_LIST)
-        if(!error && !await this.indexerDb.isActionAllowed(data['TICK'], data['SOURCE']))
+        // Verify TICK action is allowed from SOURCE (allow/block lists)
+        if(!error && !await this.indexerDb.isActionAllowed(data['SOURCE'], data['TICK']))
             error = 'invalid: SOURCE (not authorized)';
 
-        // Verify action is allowed to DESTINATION (ALLOW_LIST & BLOCK_LIST)
-        if(!error && !this.util.isNull(data['DESTINATION']) && !await this.indexerDb.isActionAllowed(data['TICK'], data['DESTINATION']))
+        // Verify TICK action is allowed to DESTINATION (ALLOW_LIST & BLOCK_LIST)
+        if(!error && !this.util.isNull(data['DESTINATION']) && !await this.indexerDb.isActionAllowed(data['DESTINATION'], data['TICK']))
             error = 'invalid: DESTINATION (not authorized)';
 
         // Verify minting AMOUNT will not exceed MINT_ADDRESS_MAX
