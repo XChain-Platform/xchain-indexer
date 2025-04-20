@@ -3146,15 +3146,16 @@ class Database {
                         type=?,
                         source_id=?,
                         tick_id=?,
+                        resume_block=?,
                         memo_id=?,
                         status_id=?
                     WHERE 
                         action_index=?`;
         } else {
             // INSERT record
-            query = `INSERT INTO sleeps (type, source_id, tick_id, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?)`;
+            query = `INSERT INTO sleeps (type, source_id, tick_id, resume_block, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?, ?)`;
         }
-        args = [type, source_id, tick_id, memo_id, status_id, action_index];
+        args = [type, source_id, tick_id, resume_block, memo_id, status_id, action_index];
         // Create or Update the record in the sleeps table
         try {
             let result = await db.query(query, args);
@@ -3162,7 +3163,7 @@ class Database {
             this.util.logError('Error trying to create record in sleeps table:', error);
         }
         await this.releaseConnection();
-    }        
+    }
 
 }
 
