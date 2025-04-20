@@ -203,12 +203,12 @@ class Send {
             if(!error && String(send['MEMO']).length > this.config['MAX_MEMO_LENGTH'])
                 error = 'invalid: MEMO (length)';
 
-            // Verify action is allowed from SOURCE (ALLOW_LIST & BLOCK_LIST)
-            if(!error && !this.indexerDb.isActionAllowed(send['TICK'], send['SOURCE']))
+            // Verify TICK action is allowed from SOURCE (allow/block lists)
+            if(!error && !this.indexerDb.isActionAllowed(send['SOURCE'], send['TICK']))
                 error = 'invalid: SOURCE (not authorized)';
 
-            // Verify action is allowed to DESTINATION (ALLOW_LIST & BLOCK_LIST)
-            if(!error && !this.indexerDb.isActionAllowed(send['TICK'], send['DESTINATION']))
+            // Verify TICK action is allowed to DESTINATION (allow/block lists)
+            if(!error && !this.indexerDb.isActionAllowed(send['DESTINATION'], send['TICK']))
                 error = 'invalid: DESTINATION (not authorized)';
 
             // Verify SOURCE has enough balances to cover send AMOUNT

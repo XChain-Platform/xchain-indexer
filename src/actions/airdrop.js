@@ -234,8 +234,8 @@ class Airdrop {
             if(!error && type==2)
                 recipients = list;
 
-            // Verify action is allowed from SOURCE (ALLOW_LIST & BLOCK_LIST)
-            if(!error && !(await this.indexerDb.isActionAllowed(airdrop['TICK'], airdrop['SOURCE'])))
+            // Verify TICK action is allowed from SOURCE (allow/block lists)
+            if(!error && !(await this.indexerDb.isActionAllowed(airdrop['SOURCE'], airdrop['TICK'])))
                 error = 'invalid: SOURCE (not authorized)';
 
             // Verify SOURCE has enough balances to cover airdrop AMOUNT
@@ -245,9 +245,9 @@ class Airdrop {
             // Build out array of recipient addresses that are allowed to receive the airdrop
             let approved = [];
 
-            // Verify airdrop is allowed to recipient (ALLOW_LIST & BLOCK_LIST)
+            // Verify airdrop is allowed to recipient (allow/block lists)
             for(let address of recipients){
-                if(approved.indexOf(address)==-1 && await this.indexerDb.isActionAllowed(airdrop['TICK'], address))
+                if(approved.indexOf(address)==-1 && await this.indexerDb.isActionAllowed(address, airdrop['TICK']))
                     approved.push(address);
             }
 

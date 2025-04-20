@@ -1915,23 +1915,30 @@ class Database {
         return false;
     }
 
-    // Check if an address is allowed to perform an action on a token (ALLOW/BLOCK list)
-    async isActionAllowed(tick, address){
-        let info = await this.getTokenInfo(tick);
-        let list = null;
-        // False if we have an ALLOW_LIST and user is NOT on it
-        if(!this.util.isNull(info['ALLOW_LIST']) && this.util.isNumeric(info['ALLOW_LIST'])){
-            list = await this.getList(info['ALLOW_LIST']);
-            if(!list.includes(address))
-                return false;
+    // Check if an address is allowed to perform an action
+    // Validations: 
+    // - Address is allowed to hold tick (allow/block lists)
+    // - Address is allowed to perform actions (sleep)
+    async isActionAllowed(address, tick){
+        let allow = true;
+        // Validate address against any tick allow/block lists
+        if(!this.util.isNull(address) && !this.util.isNull(tick)){
+            let info = await this.getTokenInfo(tick);
+            let list = null;
+            // False if we have an ALLOW_LIST and address is NOT on it
+            if(allow && !this.util.isNull(info['ALLOW_LIST']) && this.util.isNumeric(info['ALLOW_LIST'])){
+                list = await this.getList(info['ALLOW_LIST']);
+                if(!list.includes(address))
+                    allow = false;
+            }
+            // False if we have an BLOCK_LIST and address IS on it
+            if(allow && !this.util.isNull(info['BLOCK_LIST']) && this.util.isNumeric(info['BLOCK_LIST'])){
+                list = await this.getList(info['BLOCK_LIST']);
+                if(list.includes(address))
+                    allow = false;
+            }
         }
-        // False if we have an BLOCK_LIST and user IS on it
-        if(!this.util.isNull(info['BLOCK_LIST']) && this.util.isNumeric(info['BLOCK_LIST'])){
-            list = await this.getList(info['BLOCK_LIST']);
-            if(list.includes(address))
-                return false;
-        }
-        return true;
+        return allow;
     }
 
     // Get total amount of credit or debit records for a given address, ticker, and action

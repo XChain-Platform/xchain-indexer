@@ -183,8 +183,8 @@ class Destroy {
             if(!error && String(destroy['MEMO']).length > this.config['MAX_MEMO_LENGTH'])
                 error = 'invalid: MEMO (length)';
 
-            // Verify action is allowed from SOURCE (ALLOW_LIST & BLOCK_LIST)
-            if(!error && !this.indexerDb.isActionAllowed(destroy['TICK'], destroy['SOURCE']))
+            // Verify TICK action is allowed from SOURCE (allow/block lists)
+            if(!error && !this.indexerDb.isActionAllowed(destroy['SOURCE'], destroy['TICK']))
                 error = 'invalid: SOURCE (not authorized)';
 
             // Verify SOURCE has enough balances to cover destroy
