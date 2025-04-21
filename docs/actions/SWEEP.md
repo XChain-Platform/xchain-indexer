@@ -2,13 +2,13 @@
 This action transfers all `TICK` balances and/or ownerships to an `DESTINATION` address.
 
 ## PARAMS
-| Name          | Type   | Description              			                              |
-| ------------- | ------ | ------------------------------------------------------------------ |
-| `VERSION`     | String | Format Version                                                     |
-| `DESTINATION` | String | address where `token` shall be swept                               |
-| `BALANCES` 	| String | Indicates if address `TICK` balances should be swept (default=1)  |
+| Name          | Type   | Description              			                                 |
+| ------------- | ------ | ----------------------------------------------------------------- |
+| `VERSION`     | String | Format Version                                                    |
+| `DESTINATION` | String | address where `token` shall be swept                              |
+| `BALANCES` 	 | String | Indicates if address `TICK` balances should be swept (default=1)  |
 | `OWNERSHIPS`  | String | Indicates if address `TICK` ownership should be swept (default=1) |
-| `MEMO` 		| String | Optional memo to include                                           |
+| `MEMO` 		 | String | Optional memo to include                                          |
 
 ## Formats
 

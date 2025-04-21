@@ -5,9 +5,9 @@ This action creates a order to sell an item on the Decentralized Exchange (DEX).
 | Name                 | Type   | Description                                                        |
 | -------------------- | ------ | ------------------------------------------------------------------ |
 | `VERSION`            | String | Format Version                                                     |
-| `GIVE_TICK`          | String | 1 to 250 characters in length                                      |
+| `GIVE_TICK`          | String | Ticker name or Ticker ID                                           |
 | `GIVE_AMOUNT`        | String | Quantity of `GIVE_TICK` to escrow in the orde                      |
-| `GET_TICK`           | String | 1 to 250 characters in length                                      |
+| `GET_TICK`           | String | Ticker name or Ticker ID                                           |
 | `GET_AMOUNT`         | String | Quantity of `GET_TICK` requested in return                         |
 | `EXPIRATION`         | String | Timestamp of when order should expire, in Unix time                |
 | `ALLOW_LIST`         | String | `ACTION_INDEX` of a `LIST` of addresses allowed to match order     |
@@ -47,3 +47,4 @@ This example updates an existing `ORDER` with `ACTION_INDEX` 1234 and adds an `A
 ## Rules
 
 ## Notes
+- Use `^` (caret) as prefix when passing `TICK_ID` for `TICK` field (^1234 = `TICK_ID` 1234)
