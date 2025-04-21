@@ -1915,14 +1915,92 @@ class Database {
         return false;
     }
 
+    // Validate if ADDRESS is in SLEEP mode
+    async isAddressSleeping(address, block_index){
+        let sleep = false;
+        if(!this.util.isNull(address) && this.util.isCryptoAddress(address) && !this.util.isNull(block_index) && this.util.isNumeric(block_index)){
+            let id    = await this.createAddress(address);
+            let db    = await this.getConnection();
+            let query = `SELECT 
+                            s1.resume_block 
+                        FROM 
+                            sleeps s1
+                            INNER JOIN index_statuses s2 ON (s2.id=s1.status_id)
+                        WHERE 
+                            s1.type=? AND
+                            s1.source_id=? AND
+                            s2.status=?
+                        ORDER BY 
+                            s1.action_index DESC
+                        LIMIT 1`;
+            let args = [1, id, 'valid'];
+            try {
+                let rows = await db.query(query, args);
+                if(rows.length > 0){
+                    let resume_block = Number(rows[0].resume_block);
+                    if(resume_block ==  -1 || resume_block > block_index)
+                        sleep = true;
+                }
+            } catch (error) {
+                this.util.logError('Error looking up resume_block record for address in sleeps table:', error);
+            }
+            await this.releaseConnection();
+        }
+        return sleep;
+    }
+
+    // Validate if TICK is in SLEEP mode
+    async isTickSleeping(tick, block_index){
+        let sleep = false;
+        if(!this.util.isNull(tick) && !this.util.isNull(block_index) && this.util.isNumeric(block_index)){
+            let id    = await this.createTicker(tick);
+            let db    = await this.getConnection();
+            let query = `SELECT 
+                            s1.resume_block 
+                        FROM 
+                            sleeps s1
+                            INNER JOIN index_statuses s2 ON (s2.id=s1.status_id)
+                        WHERE 
+                            s1.type=? AND
+                            s1.tick_id=? AND
+                            s2.status=?
+                        ORDER BY 
+                            s1.action_index DESC
+                        LIMIT 1`;
+            let args = [2, id, 'valid'];
+            try {
+                let rows = await db.query(query, args);
+                if(rows.length > 0){
+                    let resume_block = Number(rows[0].resume_block);
+                    if(resume_block ==  -1 || resume_block > block_index)
+                        sleep = true;
+                }
+            } catch (error) {
+                this.util.logError('Error looking up resume_block record for tick in sleeps table:', error);
+            }
+            await this.releaseConnection();
+        }
+        return sleep;
+    }
+
     // Check if an address is allowed to perform an action
     // Validations: 
-    // - Address is allowed to hold tick (allow/block lists)
+    // - Ticker  is allowed to perform actions (sleep)
     // - Address is allowed to perform actions (sleep)
-    async isActionAllowed(address, tick){
+    // - Address is allowed to hold tick (allow/block lists)
+    async isActionAllowed(address, tick, block_index){
         let allow = true;
+        // Validate block_index is good
+        if(allow && !this.util.isNull(block_index) && this.util.isNumeric(block_index)){
+            // Validate TICK is not in SLEEP mode
+            if(allow && !this.util.isNull(tick) && await this.isTickSleeping(tick, block_index))
+                allow = false;
+            // Validate ADDRESS is not in a SLEEP mode
+            if(allow && !this.util.isNull(address) && await this.isAddressSleeping(address, block_index))
+                allow = false;
+        }
         // Validate address against any tick allow/block lists
-        if(!this.util.isNull(address) && !this.util.isNull(tick)){
+        if(allow && !this.util.isNull(address) && !this.util.isNull(tick)){
             let info = await this.getTokenInfo(tick);
             let list = null;
             // False if we have an ALLOW_LIST and address is NOT on it
