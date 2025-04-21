@@ -51,3 +51,4 @@ This example creates a new list from an existing list (4321) and removes 2 addre
 - Format version `1` allows for creating a list from an existing list via `LIST_ACTION_INDEX` and `EDIT`
 - `ITEM` can be repeated many times in a `LIST` request
 - `ITEM` values should be unique
+- Use `^` (caret) as prefix when passing `TICK_ID` for `TICK` items (^1234 = `TICK_ID` 1234)
