@@ -171,6 +171,14 @@ class Destroy {
              * General Validations
              ************************************************************/
 
+            // Verify SOURCE is allowed to perform action
+            if(!error && !await this.indexerDb.isActionAllowed(destroy['SOURCE'], null, destroy['BLOCK_INDEX']))
+                error = 'invalid: SOURCE (sleeping)';
+
+            // Verify TICK is allowed to perform action
+            if(!error && !await this.indexerDb.isActionAllowed(null, destroy['TICK'], destroy['BLOCK_INDEX']))
+                error = 'invalid: TICK (sleeping)';
+
             // Verify no pipe in MEMO (pipe is field delimiter)
             if(!error && String(destroy['MEMO']).indexOf('|')!=-1)
                 error = 'invalid: MEMO (pipe)';

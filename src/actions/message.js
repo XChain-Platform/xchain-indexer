@@ -91,6 +91,10 @@ class Message {
          * General Validations
          ****************************************************************/
 
+        // Verify SOURCE is allowed to perform action
+        if(!error && !await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']))
+            error = 'invalid: SOURCE (sleeping)';
+        
         // Verify ENCRYPTION_METHOD format
         if(!error && !this.util.isNull(data['ENCRYPTION_METHOD']) && !this.config['MESSAGE_ENCRYPTION_METHODS'].includes(data['ENCRYPTION_METHOD']))
             error = 'invalid: ENCRYPTION_METHOD (value)';
