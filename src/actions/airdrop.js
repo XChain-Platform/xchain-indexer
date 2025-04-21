@@ -5,7 +5,7 @@
  * 
  * PARAMS:
  * - VERSION           - Format Version
- * - TICK              - 1 to 250 characters in length
+ * - TICK              - Ticker name or Ticker ID
  * - AMOUNT            - Amount of tokens to airdrop
  * - LIST_ACTION_INDEX - `ACTION_INDEX` of a `LIST`
  * - MEMO              - An optional memo to include
@@ -112,7 +112,7 @@ class Airdrop {
         for(let airdrop of airdrops){
             let tick = airdrop[0];
             if(!ticks[tick])
-                ticks[tick] = await this.indexerDb.getTokenInfo(tick, null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
+                ticks[tick] = await this.indexerDb.getTokenInfo(tick, data['BLOCK_INDEX'], data['ACTION_INDEX']);
         }
 
         // Get source address balances and preferences

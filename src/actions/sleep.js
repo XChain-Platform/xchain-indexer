@@ -5,7 +5,7 @@
  * 
  * PARAMS:
  * - VERSION      - Format Version
- * - TICK         - 1 to 250 characters in length
+ * - TICK         - Ticker name or Ticker ID
  * - RESUME_BLOCK - Block index to resume actions
  * - MEMO         - An optional memo to include  
  *
@@ -68,7 +68,7 @@ class Sleep {
         }
 
         // Get information on token (if any)
-        let tokenInfo = await this.indexerDb.getTokenInfo(data['TICK'], null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
+        let tokenInfo = await this.indexerDb.getTokenInfo(data['TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
 
         // Set sleep type based off data format
         data['TYPE'] = (format==1) ? 'TICK' : 'ADDRESS';

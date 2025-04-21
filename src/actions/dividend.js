@@ -5,8 +5,8 @@
  * 
  * PARAMS:
  * - VERSION        - Format Version
- * - TICK           - 1 to 250 characters in length
- * - DIVIDEND_TICK  - 1 to 250 characters in length
+ * - TICK           - Ticker name or Ticker ID
+ * - DIVIDEND_TICK  - Ticker name or Ticker ID
  * - AMOUNT         - The quantity of DIVIDEND_TICK rewarded per UNIT
  * - MEMO           - An optional memo to include
  * 
@@ -76,8 +76,8 @@ class Dividend {
         let holders     = await this.indexerDb.getHolders(data['TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
 
         // Get token information on TICK and DIVIDEND_TICK
-        let tokenInfo         = await this.indexerDb.getTokenInfo(data['TICK'], null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
-        let dividendTokenInfo = await this.indexerDb.getTokenInfo(data['DIVIDEND_TICK'], null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
+        let tokenInfo         = await this.indexerDb.getTokenInfo(data['TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
+        let dividendTokenInfo = await this.indexerDb.getTokenInfo(data['DIVIDEND_TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
 
         // Create the fees object 
         let fees = this.util.createFeesObject(data, preferences);

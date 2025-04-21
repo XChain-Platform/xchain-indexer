@@ -5,7 +5,7 @@
  * 
  * PARAMS:
  * - VERSION          - Format Version
- * - TICK             - 1 to 250 characters in length
+ * - TICK             - Ticker name or Ticker ID
  * - MAX_SUPPLY       - Maximum token supply 
  * - MAX_MINT         - Maximum amount of supply a `MINT` transaction can issue
  * - DECIMALS         - Number of decimal places token should have (max: 18, default: 0)
@@ -137,7 +137,7 @@ class Issue {
             error = 'invalid: GAS Address';
 
         // Get information on token
-        let tokenInfo     = await this.indexerDb.getTokenInfo(data['TICK'], null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
+        let tokenInfo     = await this.indexerDb.getTokenInfo(data['TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
         let isDistributed = await this.indexerDb.isDistributed(data['TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
 
         // Populate empty PARAMS with current setting
@@ -151,7 +151,7 @@ class Issue {
         // Get information on CALLBACK_TICK
         let cbInfo = false;
         if(data['CALLBACK_TICK'])
-            cbInfo = await this.indexerDb.getTokenInfo(data['CALLBACK_TICK'], null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
+            cbInfo = await this.indexerDb.getTokenInfo(data['CALLBACK_TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
 
         /*****************************************************************
          * FORMAT Validations
@@ -204,7 +204,7 @@ class Issue {
             $error = 'invalid: MAX_SUPPLY (min/max)';
 
         // Verify MAX_SUPPLY is not set below current SUPPLY
-        if(!error && !this.util.isNull(data['MAX_SUPPLY']) && data['MAX_SUPPLY'] > 0 && data['MAX_SUPPLY'] < await this.indexerDb.getTokenSupply(data['TICK'], null, data['BLOCK_INDEX'], data['ACTION_INDEX']))
+        if(!error && !this.util.isNull(data['MAX_SUPPLY']) && data['MAX_SUPPLY'] > 0 && data['MAX_SUPPLY'] < await this.indexerDb.getTokenSupply(data['TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']))
             error = 'invalid: MAX_SUPPLY < SUPPLY';
 
         // Verify SUPPLY is at least MIN_TOKEN_SUPPLY before allowing LOCK_MAX_SUPPLY

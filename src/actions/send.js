@@ -5,7 +5,7 @@
  * 
  * PARAMS:
  * - VERSION     - Format Version        
- * - TICK        - 1 to 250 characters in length   
+ * - TICK        - Ticker name or Ticker ID
  * - AMOUNT      - Amount of `tokens` to send      
  * - DESTINATION - Address to transfer `tokens` to 
  * - MEMO        - An optional memo to include     
@@ -115,7 +115,7 @@ class Send {
         for(let send of sends){
             let tick = send[0];
             if(!ticks[tick])
-                ticks[tick] = await this.indexerDb.getTokenInfo(tick, null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
+                ticks[tick] = await this.indexerDb.getTokenInfo(tick, data['BLOCK_INDEX'], data['ACTION_INDEX']);
         }
 
         // Consolidate sends by DESTINATION and TICK
