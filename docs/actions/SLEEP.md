@@ -5,7 +5,7 @@ This action pauses actions on an `ADDRESS` or a `TICK` until `RESUME_BLOCK` is r
 | Name           | Type   | Description                   |
 | -------------  | ------ | ----------------------------- |
 | `VERSION`      | String | Format Version                |
-| `TICK`         | String | 1 to 250 characters in length |
+| `TICK`         | String | Ticker name or Ticker ID      |
 | `RESUME_BLOCK` | String | Block index to resume actions |
 | `MEMO`         | String | An optional memo to include   |
 
@@ -54,3 +54,4 @@ This example uses BATCH action to resume actions, perform some actions on JDOG t
 - `SLEEP` on a `TICK` with `RESUME_BLOCK` set to `-1` value, will pause `TICK` actions indefinitely.
 - `ISSUE` `TICK` with `LOCK_SLEEP` set to `1` to permanently prevent use of the `SLEEP` command
 - Can use `BATCH` commands to stop `SLEEP`, execute `ACTION` commands, and then resume `SLEEP`, when used on a `TICK`
+- Use `^` (caret) as prefix when passing `TICK_ID` for `TICK` field (^1234 = `TICK_ID` 1234)

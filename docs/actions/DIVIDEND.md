@@ -5,7 +5,7 @@ This action pays a dividend to holders of `TICK`.
 | Name            | Type   | Description                            |
 | --------------- | ------ | -------------------------------------- |
 | `VERSION`       | String | Format Version                         |
-| `TICK`          | String | 1 to 250 characters in length          |
+| `TICK`          | String | Ticker name or Ticker ID               |
 | `DIVIDEND_TICK` | String | The `TICK` that dividends are paid in  |
 | `AMOUNT`        | String | Amount of `TICK` to pay out per `UNIT` |
 | `MEMO`          | String | An optional memo to include            |
@@ -35,3 +35,4 @@ This example pays a dividend of 0.5 BACON token to every holder of 1 TEST token
 - If `TICK` is divisible and `DIVIDEND_TICK` is non-divisble, quantities under 1.0 will receive no `DIVIDEND_TICK`
 - `SOURCE` address is excluded from receiving dividends
 - Any `ADDRESS` may pay out a `DIVIDEND` on any `TICK`
+- Use `^` (caret) as prefix when passing `TICK_ID` for `TICK` field (^1234 = `TICK_ID` 1234)

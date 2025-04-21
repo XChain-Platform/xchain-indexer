@@ -2,13 +2,13 @@
 This action airdrops `TICK` supply to one or more lists.
 
 ## PARAMS
-| Name                | Type   | Description                   |
-| ------------------- | ------ | ------------------------------|
-| `VERSION`           | String | Format Version                |
-| `TICK`              | String | 1 to 250 characters in length |
-| `AMOUNT`            | String | Amount of `TICK` to airdrop   |
-| `LIST_ACTION_INDEX` | String | `ACTION_INDEX` of a `LIST`    |
-| `MEMO`              | String | An optional memo to include   |
+| Name                | Type   | Description                 |
+| ------------------- | ------ | --------------------------- |
+| `VERSION`           | String | Format Version              |
+| `TICK`              | String | Ticker name or Ticker ID    |
+| `AMOUNT`            | String | Amount of `TICK` to airdrop |
+| `LIST_ACTION_INDEX` | String | `ACTION_INDEX` of a `LIST`  |
+| `MEMO`              | String | An optional memo to include |
 
 ## Formats
 
@@ -47,3 +47,4 @@ This example airdops 1 GAS to every holder on a list with ACTION_INDEX 1234 and 
 - Format version `2` allows for repeating `TICK`, `AMOUNT` and `LIST` params to enable multiple airdrops to multiple lists
 - Format version `3` allows for repeating `TICK`, `AMOUNT`, `LIST`, and `MEMO` params to enable multiple airdrops to multiple lists with multiple memos
 - Format version `0`, `1`, and `2` allow for a single optional `MEMO` field to be included as the last PARAM
+- Use `^` (caret) as prefix when passing `TICK_ID` for `TICK` field (^1234 = `TICK_ID` 1234)

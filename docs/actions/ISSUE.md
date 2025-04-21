@@ -5,7 +5,7 @@ This action creates or updates a `TICK`.
 | Name               | Type   | Description                                                                                |
 | ------------------ | ------ | ------------------------------------------------------------------------------------------ |
 | `VERSION`          | String | Format Version                                                                             |
-| `TICK`             | String | 1 to 250 characters in length                                                              |
+| `TICK`             | String | Ticker name or Ticker ID                                                                   |
 | `MAX_SUPPLY`       | String | Maximum token supply                                                                       |
 | `MAX_MINT`         | String | Maximum amount of supply a `MINT` transaction can issue                                    |
 | `DECIMALS`         | String | Number of decimal places token should have (max: 18, default: 0)                           |
@@ -100,7 +100,8 @@ This example issues a TEST token with a max supply of 100, and a maximum mint of
 - `TICK` characters **NOT** allowed are :
    - pipe `|` (used as field separator)
    - semicolon `;` (used as command separator)
-   - period `.` (used as parent/child separator)
+   - period `.` (used as parent/child indicator)
+   - `^` (caret) cannot be used as first character in a `TICK` name (used as ticker id indicator)
 - First `ISSUE` with `valid` status will be the owner of the `TICK`
 - Additional `ISSUE` transactions after first valid `ISSUE`, will be considered invalid and ignored, unless broadcast from `TICK` owners address
 - `DECIMALS` can not be changed after `TICK` supply is issued and/or minted
@@ -126,3 +127,4 @@ This example issues a TEST token with a max supply of 100, and a maximum mint of
 - `MINT_ADDRESS_MAX` can be used to limit the maximum `TICK` `AMOUNT` that a single address can `MINT`
 - `MINT_START_BLOCK` and `MINT_STOP_BLOCK` can be used to determine period(s) when `MINT` transactions are allowed
 - `MIN_TOKEN_SUPPLY` value is 0.000000000000000001
+- Use `^` (caret) as prefix when passing `TICK_ID` for `TICK` fields (^1234 = `TICK_ID` 1234)

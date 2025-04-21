@@ -2,12 +2,12 @@
 This action destroys `TICK` supply.
 
 ## PARAMS
-| Name      | Type   | Description                   |
-| --------- | ------ | ----------------------------- |
-| `VERSION` | String | Format Version                |
-| `TICK`    | String | 1 to 250 characters in length |
-| `AMOUNT`  | String | Amount of `TICK` to destroy   |
-| `MEMO`    | String | An optional memo to include   |
+| Name      | Type   | Description                 |
+| --------- | ------ | --------------------------- |
+| `VERSION` | String | Format Version              |
+| `TICK`    | String | Ticker name or Ticker ID    |
+| `AMOUNT`  | String | Amount of `TICK` to destroy |
+| `MEMO`    | String | An optional memo to include |
 
 ## Formats
 
@@ -45,3 +45,4 @@ This example destroys 1 BRRR token with the memo `foo`, and 10 GAS tokens with t
 - Format version `1` allows for repeating `TICK` and `AMOUNT` params to enable multiple destroys
 - Format version `2` allows for repeating `TICK`, `AMOUNT`, and `MEMO` params to enable multiple destroys
 - Format version `0` and `1` allow for a single optional `MEMO` field to be included as the last PARAM
+- Use `^` (caret) as prefix when passing `TICK_ID` for `TICK` field (^1234 = `TICK_ID` 1234)

@@ -5,7 +5,7 @@ This action creates a dispenser (vending machine) to dispense `TICK` when trigge
 | Name                     | Type   | Description                                                                |
 | ------------------------ | ------ | -------------------------------------------------------------------------- |
 | `VERSION`                | String | Format Version                                                             |
-| `GIVE_TICK`              | String | 1 to 250 characters in length                                              |
+| `GIVE_TICK`              | String | Ticker name or Ticker ID                                                   |
 | `GIVE_AMOUNT`            | String | Quantity of `GIVE_TICK` to dispense when triggered                         |
 | `ESCROW_AMOUNT`          | String | Quantity of `GIVE_TICK` to escrow in dispenser                             |
 | `TRIGGER_TICK`           | String | `TICK` or native `COIN` to trigger a dispense                              |
@@ -75,3 +75,4 @@ This example updates the allow and block lists for dispenser with `ACTION_INDEX`
   - `BRL` = Brazillian Real
   - `INR` = Indian Rupee
 - `EXPIRATION` begins the process of closing a dispenser after a set block delay
+- Use `^` (caret) as prefix when passing `TICK_ID` for `TICK` field (^1234 = `TICK_ID` 1234)s

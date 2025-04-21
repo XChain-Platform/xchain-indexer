@@ -2,13 +2,13 @@
 This action sends one or more `TICK` to an `ADDRESS`.
 
 ## PARAMS
-| Name          | Type   | Description                   |
-| ------------- | ------ | ----------------------------- |
-| `VERSION`     | String | Format Version                |
-| `TICK`        | String | 1 to 250 characters in length |
-| `AMOUNT`      | String | Amount of `TICK` to send      |
-| `DESTINATION` | String | Address to send `TICK` to     |
-| `MEMO`        | String | An optional memo to include   |
+| Name          | Type   | Description                 |
+| ------------- | ------ | --------------------------- |
+| `VERSION`     | String | Format Version              |
+| `TICK`        | String | Ticker name or Ticker ID    |
+| `AMOUNT`      | String | Amount of `TICK` to send    |
+| `DESTINATION` | String | Address to send `TICK` to   |
+| `MEMO`        | String | An optional memo to include |
 
 ## Formats
 
@@ -62,4 +62,4 @@ This example sends 5 BRRR tokens to 1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev and 1 TES
 - Format version `2` allows for repeating `TICK`, `AMOUNT` and `DESTINATION` params to enable multiple transfers
 - Format version `3` allows for repeating `TICK`, `AMOUNT`, `DESTINATION`, and `MEMO` params to enable multiple transfers
 - Format version `0`, `1`, and `2` allow for a single optional `MEMO` field to be included as the last PARAM
-
+- Use `^` (caret) as prefix when passing `TICK_ID` for `TICK` field (^1234 = `TICK_ID` 1234)

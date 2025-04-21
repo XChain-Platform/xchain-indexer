@@ -5,10 +5,10 @@ This action allows for swapping tokens across XChain platform supported blockcha
 | Name                | Type   | Description                                        |
 | ------------------- | ------ | -------------------------------------------------- |
 | `VERSION`           | String | Format Version                                     |
-| `GIVE_TICK`         | String | 1 to 250 characters in length                      |
+| `GIVE_TICK`         | String | Ticker name or Ticker ID                           |
 | `GIVE_AMOUNT`       | String | Quantity of `GIVE_TICK` to escrow in the swap      |
 | `GET_COIN`          | String | `COIN` name (BTC, LTC, DOGE, etc)                  |
-| `GET_TICK`          | String | 1 to 250 characters in length                      |
+| `GET_TICK`          | String | Ticker name or Ticker ID                           |
 | `GET_AMOUNT`        | String | Quantity of `GET_TICK` requested in return         |
 | `EXPIRATION`        | String | Timestamp of when swap should expire, in Unix time |
 | `MEMO`              | String | An optional memo to include                        |
@@ -48,3 +48,4 @@ This example updates an existing SWAP with `ACTION_INDEX` 1234, extends the `EXP
 ## Notes
 - `SWAP` DOES NOT work with native `COIN` (BTC, LTC, DOGE)
 - Use a `DISPENSER` if you want to sell a `TICK` for `COIN` (BTC, LTC, DOGE)
+- Use `^` (caret) as prefix when passing `TICK_ID` for `TICK` field (^1234 = `TICK_ID` 1234)
