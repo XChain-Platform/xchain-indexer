@@ -48,7 +48,7 @@ This example uses BATCH action to resume actions, perform some actions on JDOG t
 - `SLEEP` does _NOT_ prevent `DISPENSER` dispenses, as that could result in a loss of user funds.
 - `SLEEP` does _NOT_ prevent `ORDER` matches, as that could result in unmatched orders.
 - `SLEEP` does _NOT_ prevent `SWAP` matches, as that could result in unmatched swaps.
-- `SLEEP` does _NOT_ prevent usage of the `SLEEP` command when used on a `TICK`
+- `SLEEP` does _NOT_ prevent usage of the `SLEEP` action when used on a `TICK`
 - `SLEEP` does prevent usage of the `SLEEP` action and all other actions when used on an address until `RESUME_BLOCK` has passed
 - `SLEEP` on a `TICK` with `RESUME_BLOCK` set to `0` value, will unpause `TICK` actions immediately.
 - `SLEEP` on a `TICK` with `RESUME_BLOCK` set to `-1` value, will pause `TICK` actions indefinitely.
