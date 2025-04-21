@@ -5,7 +5,7 @@
  * 
  * PARAMS:
  * - VERSION     - Format Version
- * - TICK        - 1 to 250 characters in length
+ * - TICK        - Ticker name or Ticker ID
  * - AMOUNT      - Amount of tokens to mint
  * - DESTINATION - Address to transfer tokens to
  * 
@@ -68,7 +68,7 @@ class Mint {
         }
 
         // Get information on token
-        let tokenInfo = await this.indexerDb.getTokenInfo(data['TICK'], null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
+        let tokenInfo = await this.indexerDb.getTokenInfo(data['TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
 
         // Get total token minted from this address
         let minted = await this.indexerDb.getActionCreditDebitAmount('credits', 'MINT', data['TICK'], data['SOURCE'], data['ACTION_INDEX']);

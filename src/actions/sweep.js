@@ -107,6 +107,7 @@ class Sweep {
             error = 'invalid: MEMO (length)';
 
         // TODO: Verify sweep is allowed to new address (ALLOW_LIST & BLOCK_LIST)
+        // TODO: Verify sweep is allowed on each TICK (SLEEP)
 
         // Calculate total number of database hits for this SWEEP
         let db_hits = 1;                                                                               // 1 sweeps

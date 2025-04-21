@@ -757,34 +757,47 @@ class Database {
 
     // Lookup a record in the `index_tickers` table and return record id
     async getTickerId(tick){
-        let id    = null;
-        let db    = await this.getConnection();
-        let query = "SELECT id FROM index_tickers WHERE tick=? LIMIT 1";
-        try {
-            let rows = await db.query(query, [tick]);
-            if(rows.length > 0)
-                id = Number(rows[0].id);
-        } catch (error) {
-            this.util.logError('Error looking up ticker record id in index_tickers table:', error);
+        let id  = null;
+        let str = String(tick);
+        let pid = str.substring(1,str.length-1); // Possible TICK ID
+        // Determine if TICK is actually a TICK ID
+        if(str.substring(0,1)=='^' && this.util.isNumeric(pid))
+            id = pid;
+        // TODO : Handle passing full parent->child asset name and decode to correct TICK ID
+        //        example: BACON.is.delicious (period is parent/child indicator character)
+        // Try to lookup id using tick passed
+        if(!id){
+            let db    = await this.getConnection();
+            let query = "SELECT id FROM index_tickers WHERE tick=? LIMIT 1";
+            try {
+                let rows = await db.query(query, [tick]);
+                if(rows.length > 0)
+                    id = Number(rows[0].id);
+            } catch (error) {
+                this.util.logError('Error looking up ticker record id in index_tickers table:', error);
+            }
+            await this.releaseConnection();
         }
-        await this.releaseConnection();
         return id;
     }
 
     // Create records in the 'index_tickers' table and return record id
     async createTicker(tick){
-        // Ignore empty tickers and return hardcoded record id
-        if(this.util.isNull(tick) || tick=='')
+        // Ignore empty ticker and return hardcoded record id
+        if(this.util.isNull(tick))
             return 1;
-        // Truncate ticker to 250 characters
-        tick = String(tick).substring(0,250);
-        var id = await this.getTickerId(tick);
+        // Get the tick id using tick
+        let id = await this.getTickerId(tick);
         // Handle creating record
         if(id==null){
+            // Truncate ticker to 250 characters
+            tick = String(tick).substring(0,250);
             let db    = await this.getConnection();
             let query = "INSERT INTO index_tickers (tick) values (?)";
+            let args  = [tick];
+            // Truncate ticker to 250 characters
             try {
-                let result = await db.query(query, [tick]);
+                let result = await db.query(query, args);
                 if(result.insertId)
                     id = Number(result.insertId);
             } catch (error) {
@@ -796,19 +809,17 @@ class Database {
     }
 
     // Handle getting token information using issues table
-    // @param {tick}            string  Ticker name
-    // @param {tick_id}         integer Ticker database record id
+    // @param {tick}            string  Ticker name or Ticker ID
     // @param {block_index}     integer Block Index 
     // @param {action_index}    integer action_index of action
-    async getTokenInfo(tick, tick_id, block_index, action_index){
+    async getTokenInfo(tick, block_index, action_index){
         let data = false,
             sql  = '',
             args = [];
         // Only query database if we actually have a tick or tick_id passed
-        if(!this.util.isNull(tick) || !this.util.isNull(tick_id)){
+        if(!this.util.isNull(tick)){
             // Get the tick_id for the given ticker
-            if(!this.util.isNull(tick) && this.util.isNull(tick_id))
-                tick_id = await this.createTicker(tick);
+            let tick_id = await this.createTicker(tick);
             // Add tick_id to SQL query arguments
             args.push(tick_id);
             // If a block_index was given, only lookup tokens created before or in given block_index
@@ -927,7 +938,7 @@ class Database {
         }
         // Get token supply at the given action_index
         if(data)
-            data['SUPPLY'] = await this.getTokenSupply(tick, tick_id, null, action_index); 
+            data['SUPPLY'] = await this.getTokenSupply(tick, block_index, action_index); 
         return data;
     }
 
@@ -964,10 +975,9 @@ class Database {
 
     // Get token supply from credits/debits table (credits - debits = supply)
     // @param {tick}            string  Ticker name
-    // @param {tick_id}         integer Ticker database record id
     // @param {block_index}     integer Block Index 
     // @param {action_index}    integer action_index of action
-    async getTokenSupply(tick, tick_id, block_index, action_index){
+    async getTokenSupply(tick, block_index, action_index){
         let credits = 0;
         let debits  = 0;
         let escrow  = 0;
@@ -975,9 +985,7 @@ class Database {
         let db      = await this.getConnection(),
             sql     = '',
             query   = '',
-            args    = [];
-        // Get the tick_id for the given ticker
-        if(!this.util.isNull(tick) && this.util.isNull(tick_id))
+            args    = [],
             tick_id = await this.createTicker(tick);
         // Get info on decimal precision
         let decimals = await this.getTokenDecimalPrecision(tick_id);

@@ -5,7 +5,7 @@
  * 
  * PARAMS:
  * - VERSION - Format Version
- * - TICK    - 1 to 250 characters in length
+ * - TICK    - Ticker name or Ticker ID
  * - AMOUNT  - Amount of tokens to destroy
  * - MEMO    - An optional memo to include     
  * 
@@ -100,7 +100,7 @@ class Destroy {
         for(let destroy of destroys){
             let tick = destroy[0];
             if(!ticks[tick])
-                ticks[tick] = await this.indexerDb.getTokenInfo(tick, null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
+                ticks[tick] = await this.indexerDb.getTokenInfo(tick, data['BLOCK_INDEX'], data['ACTION_INDEX']);
         }
 
         // Consolidate destroys by TICK and MEMO

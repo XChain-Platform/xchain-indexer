@@ -5,7 +5,7 @@
  * 
  * PARAMS:
  * - VERSION - Format Version
- * - TICK    - 1 to 250 characters in length
+ * - TICK    - Ticker name or Ticker ID
  * - MEMO    - An optional memo to include
  * 
  * FORMATS:
@@ -59,8 +59,8 @@ class Callback {
         let callback = structuredClone(data);
 
         // Get information on token and callback token
-        let tokenInfo         = await this.indexerDb.getTokenInfo(data['TICK'], null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
-        let callbackTokenInfo = await this.indexerDb.getTokenInfo(tokenInfo['CALLBACK_TICK'], null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
+        let tokenInfo         = await this.indexerDb.getTokenInfo(data['TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
+        let callbackTokenInfo = await this.indexerDb.getTokenInfo(tokenInfo['CALLBACK_TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
 
         // Get source address balances and preferences, as well as TICK holders list
         let balances    = await this.indexerDb.getAddressBalances(data['SOURCE'], null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
