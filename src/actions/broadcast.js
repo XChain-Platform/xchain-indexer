@@ -95,6 +95,10 @@ class Broadcast {
          * General Validations
          ****************************************************************/
 
+        // Verify SOURCE is allowed to perform action
+        if(!error && !await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']))
+            error = 'invalid: SOURCE (sleeping)';
+
         // Verify BROADCAST_ACTION_INDEX is valid
         if(!error && !this.util.isNull(data['BROADCAST_ACTION_INDEX']) && !await this.indexerDb.isActionIndexValid(data['BROADCAST_ACTION_INDEX']))
             error = 'invalid: BROADCAST_ACTION_INDEX (status)';

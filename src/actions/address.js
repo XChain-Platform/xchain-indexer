@@ -101,6 +101,10 @@ class Address {
         if(!error && !this.util.isNull(data['REQUIRE_MEMO']) && !this.validValues['REQUIRE_MEMO'].includes(data['REQUIRE_MEMO']))
             error = 'invalid: REQUIRE_MEMO (value)';
 
+        // Verify SOURCE is allowed to perform action
+        if(!error && !await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']))
+            error = 'invalid: SOURCE (sleeping)';
+
         // Verify no pipe in MEMO (pipe is field delimiter)
         if(!error && String(data['MEMO']).indexOf('|')!=-1)
             error = 'invalid: MEMO (pipe)';

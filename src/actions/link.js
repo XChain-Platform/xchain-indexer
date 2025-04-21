@@ -82,6 +82,10 @@ class Link {
          * General Validations
          ****************************************************************/
 
+        // Verify SOURCE is allowed to perform action
+        if(!error && !await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']))
+            error = 'invalid: SOURCE (sleeping)';
+
         // Verify LINK_ACTION_INDEX is valid
         if(!error && !await this.indexerDb.isActionIndexValid(data['LINK_ACTION_INDEX']))
             error = 'invalid: LINK_ACTION_INDEX (status)';

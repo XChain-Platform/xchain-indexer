@@ -191,6 +191,22 @@ class Send {
              * General Validations
              ************************************************************/
 
+            // Verify SOURCE is allowed to perform action
+            if(!error && !await this.indexerDb.isActionAllowed(send['SOURCE'], null, send['BLOCK_INDEX']))
+                error = 'invalid: SOURCE (sleeping)';
+
+            // Verify TICK is allowed to perform action
+            if(!error && !await this.indexerDb.isActionAllowed(null, send['TICK'], send['BLOCK_INDEX']))
+                error = 'invalid: TICK (sleeping)';
+
+            // Verify TICK action is allowed from SOURCE (allow/block lists)
+            if(!error && !this.indexerDb.isActionAllowed(send['SOURCE'], send['TICK']))
+                error = 'invalid: SOURCE (not authorized)';
+
+            // Verify TICK action is allowed to DESTINATION (allow/block lists)
+            if(!error && !this.indexerDb.isActionAllowed(send['DESTINATION'], send['TICK']))
+                error = 'invalid: DESTINATION (not authorized)';
+
             // Verify no pipe in MEMO (pipe is field delimiter)
             if(!error && String(send['MEMO']).indexOf('|')!=-1)
                 error = 'invalid: MEMO (pipe)';
@@ -202,14 +218,6 @@ class Send {
             // Verify MEMO is shorter than MAX_MEMO_LENGTH
             if(!error && String(send['MEMO']).length > this.config['MAX_MEMO_LENGTH'])
                 error = 'invalid: MEMO (length)';
-
-            // Verify TICK action is allowed from SOURCE (allow/block lists)
-            if(!error && !this.indexerDb.isActionAllowed(send['SOURCE'], send['TICK']))
-                error = 'invalid: SOURCE (not authorized)';
-
-            // Verify TICK action is allowed to DESTINATION (allow/block lists)
-            if(!error && !this.indexerDb.isActionAllowed(send['DESTINATION'], send['TICK']))
-                error = 'invalid: DESTINATION (not authorized)';
 
             // Verify SOURCE has enough balances to cover send AMOUNT
             if(!error && !this.util.hasBalance(balances, tokenInfo['TICK_ID'], send['AMOUNT']))

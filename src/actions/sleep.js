@@ -97,6 +97,10 @@ class Sleep {
         if(!error && !this.util.isNull(data['RESUME_BLOCK']) && !this.config['SLEEP_IMMEDIATE_METHODS'].includes(data['RESUME_BLOCK']) && data['RESUME_BLOCK'] < data['BLOCK_INDEX'])
             error = 'invalid: RESUME_BLOCK (block_index)';
 
+        // Verify SOURCE is allowed to perform action
+        if(!error && !await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']))
+            error = 'invalid: SOURCE (sleeping)';
+
         // Verify TICK sleep is being done by current TICK owner
         if(!error && data['TYPE']=='TICK' && data['SOURCE']!=tokenInfo['OWNER'])
             error = 'invalid: TICK (not authorized)';

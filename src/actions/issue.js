@@ -184,6 +184,10 @@ class Issue {
          * General Validations
          ****************************************************************/
 
+        // Verify SOURCE is allowed to perform action
+        if(!error && !await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']))
+            error = 'invalid: SOURCE (sleeping)';
+
         // Verify ISSUE is coming from TICK owner
         if(!error && tokenInfo && tokenInfo['OWNER']!=data['SOURCE'])
             error = 'invalid: issued by another address';

@@ -116,6 +116,11 @@ class List {
          * General Validations
          ****************************************************************/
 
+        // Verify SOURCE is allowed to perform action
+        if(!error && !await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']))
+            error = 'invalid: SOURCE (sleeping)';
+
+        // Handle building out some data arrays using list items
         if(!error){
 
             // Build out array of edit items and status for each

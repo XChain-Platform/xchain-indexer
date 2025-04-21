@@ -97,6 +97,10 @@ class Batch {
                 error = 'invalid: ' + action  + ' (limit)';
         }
 
+        // Verify SOURCE is allowed to perform action
+        if(!error && !await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']))
+            error = 'invalid: SOURCE (sleeping)';
+
         // Determine final status
         let status = (error) ? error : 'valid';
         data['STATUS'] = batch['STATUS'] = status;

@@ -191,6 +191,14 @@ class Airdrop {
              * General Validations
              ************************************************************/
 
+            // Verify SOURCE is allowed to perform action
+            if(!error && !await this.indexerDb.isActionAllowed(airdrop['SOURCE'], null, airdrop['BLOCK_INDEX']))
+                error = 'invalid: SOURCE (sleeping)';
+
+            // Verify TICK is allowed to perform action
+            if(!error && !await this.indexerDb.isActionAllowed(null, airdrop['TICK'], airdrop['BLOCK_INDEX']))
+                error = 'invalid: TICK (sleeping)';
+
             // Verify no pipe in MEMO (pipe is field delimiter)
             if(!error && String(airdrop['MEMO']).indexOf('|')!=-1)
                 error = 'invalid: MEMO (pipe)';

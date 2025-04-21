@@ -127,6 +127,14 @@ class Mint {
          * General Validations
          ****************************************************************/
 
+        // Verify SOURCE is allowed to perform action
+        if(!error && !await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']))
+            error = 'invalid: SOURCE (sleeping)';
+
+        // Verify TICK is allowed to perform action
+        if(!error && !await this.indexerDb.isActionAllowed(null, data['TICK'], data['BLOCK_INDEX']))
+            error = 'invalid: TICK (sleeping)';
+
         // Verify no pipe in MEMO (pipe is field delimiter)
         if(!error && !this.util.isNull(data['MEMO']) && String(data['MEMO']).indexOf('|')!=-1)
             error = 'invalid: MEMO (pipe)';
