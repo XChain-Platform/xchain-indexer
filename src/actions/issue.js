@@ -131,6 +131,7 @@ class Issue {
             // Get information on parent TICK
             let parentTokenInfo = await this.indexerDb.getTokenInfo(parent, data['BLOCK_INDEX'], data['ACTION_INDEX']);
 
+            // Verify parent TICK exists
             if(!error && !parentTokenInfo)
                 error = 'invalid: TICK (parent unknown)';
 
