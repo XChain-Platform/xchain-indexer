@@ -109,9 +109,25 @@ class Issue {
         let credits = [],
             debits  = [];
 
+        // Build out arrays of allowed characters and tick characters
+        let allowedCharacters = String(this.config['TICK_CHARACTERS']).split('');
+        let tickCharacters    = String(data['TICK']).split('');
+
         /*****************************************************************
          * TICK Validations
          ****************************************************************/
+
+        // Verify TICK contains only allowed characters
+        for(let char of tickCharacters){
+            if(!error && !allowedCharacters.includes(char))
+                 error = 'invalid: TICK (character)';
+        }
+
+        // Verify any TICK ID given is valid tick ID
+        let str = String(data['TICK']);
+        let tid = str.substring(1,str.length-1); // Possible TICK ID
+        if(!error && str.substring(0,1)=='^' && !this.util.isNumeric(tid))
+            error = 'invalid: TICK (id)';
 
         // Verify TICK length is within acceptable range
         let len = String(data['TICK']).length,
