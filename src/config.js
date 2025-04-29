@@ -49,7 +49,7 @@ module.exports = {
         config["MAX_TICK_LENGTH"] = 250;
 
         // TICK characters allowed
-        config['TICK_CHARACTERS'] = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789~!@#$%^&*()_+-={}[]:<>?\/';
+        config['TICK_CHARACTERS'] = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789~!@#$%^&*()_+-={}[]:<>.?\/';
 
         // Reserved TICK names
         config['RESERVED_TICKS'] = [coin, gas];

@@ -790,12 +790,9 @@ class Database {
         let id = await this.getTickerId(tick);
         // Handle creating record
         if(id==null){
-            // Truncate ticker to 250 characters
-            tick = String(tick).substring(0,250);
             let db    = await this.getConnection();
             let query = "INSERT INTO index_tickers (tick) values (?)";
             let args  = [tick];
-            // Truncate ticker to 250 characters
             try {
                 let result = await db.query(query, args);
                 if(result.insertId)
