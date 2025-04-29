@@ -117,14 +117,35 @@ class Issue {
          * TICK Validations
          ****************************************************************/
 
+        // Verify TICK does not begin or end with period (.)
+        let str = String(data['TICK']);
+        if(!error && (str.substring(0,1)=='.' || str.slice(-1)=='.'))
+            error = 'invalid: TICK (period)';
+
+        // Determine if this is a parent/child issuance using full TICK name
+        let parts  = String(data['TICK']).split('.');
+        let parent = false;
+        if(parts.length>1){
+            parent = parts.slice(0,-1).join('.');
+
+            // Get information on parent TICK
+            let parentTokenInfo = await this.indexerDb.getTokenInfo(parent, data['BLOCK_INDEX'], data['ACTION_INDEX']);
+
+            if(!error && !parentTokenInfo)
+                error = 'invalid: TICK (parent unknown)';
+
+            // Verify ISSUE is coming from PARENT TICK owner
+            if(!error && parentTokenInfo && parentTokenInfo['OWNER']!=data['SOURCE'])
+                error = 'invalid: TICK (parent issued by another address)';
+        }
+
         // Verify TICK contains only allowed characters
         for(let char of tickCharacters){
             if(!error && !allowedCharacters.includes(char))
-                 error = 'invalid: TICK (character)';
+                error = 'invalid: TICK (character)';
         }
 
         // Verify any TICK ID given is valid tick ID
-        let str = String(data['TICK']);
         let tid = str.substring(1,str.length-1); // Possible TICK ID
         if(!error && str.substring(0,1)=='^' && !this.util.isNumeric(tid))
             error = 'invalid: TICK (id)';

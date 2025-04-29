@@ -96,7 +96,7 @@ This example issues a TEST token with a max supply of 100, and a maximum mint of
 - `TICK` must be 1 to 250 characters in length
 - `TICK` characters allowed are :
    - Alphanumeric characters : a-zA-Z0-9
-   - Special characters: ~!@#$%^&*()_+\-={}[\]\\:<>?/
+   - Special characters: ~!@#$%^&*()_+\-={}[\]\\:<>.?/
 - `TICK` characters **NOT** allowed are :
    - pipe `|` (used as field separator)
    - semicolon `;` (used as command separator)
