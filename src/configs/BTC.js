@@ -13,6 +13,10 @@ module.exports = {
         let config  = {};
 		let address = {};
 
+        // Set XCHAIN fee required for token issuances
+        config['ISSUANCE_FEE_TOKEN']    = '1.00000000';
+        config['ISSUANCE_FEE_SUBTOKEN'] = '0.50000000';
+
 		// Set network specific addresses
         switch(network){
             case 'mainnet':

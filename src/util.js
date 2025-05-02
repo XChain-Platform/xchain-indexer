@@ -393,21 +393,23 @@ class Util {
 
     // Process any transaction FEE according the user's ADDRESS preferences
     async processTransactionFees(db, credits, debits, fees){
-        // Debit FEE from SOURCE
-        debits.push([fees['TICK'], fees['AMOUNT'], fees['SOURCE']]);
-        // Handle using FEE according the the users ADDRESS preferences
-        if(fees['METHOD']>1){
-            // Short alias to config addresses
-            let address = this.config['ADDRESS'];
-            // Determine what address to donate to
-            fees['DESTINATION'] = (fees['METHOD']==2) ? address['DONATE1'] : address['DONATE2'];
-            // Store the donation ADDRESS and TICK in addresses list
-            this.addAddressTicker(fees['DESTINATION'], fees['TICK']);
-            // Credit donation address with FEE
-            credits.push([fees['TICK'], fees['AMOUNT'], fees['DESTINATION']]);
-        } 
-        // Create record of FEE in `fees` table
-        await db.createFeeRecord(fees);
+        if(fees['AMOUNT']>0){
+            // Debit FEE from SOURCE
+            debits.push([fees['TICK'], fees['AMOUNT'], fees['SOURCE']]);
+            // Handle using FEE according the the users ADDRESS preferences
+            if(fees['METHOD']>1){
+                // Short alias to config addresses
+                let address = this.config['ADDRESS'];
+                // Determine what address to donate to
+                fees['DESTINATION'] = (fees['METHOD']==2) ? address['DONATE1'] : address['DONATE2'];
+                // Store the donation ADDRESS and TICK in addresses list
+                this.addAddressTicker(fees['DESTINATION'], fees['TICK']);
+                // Credit donation address with FEE
+                credits.push([fees['TICK'], fees['AMOUNT'], fees['DESTINATION']]);
+            } 
+            // Create record of FEE in `fees` table
+            await db.createFeeRecord(fees);
+        }
         // Return updated list of credits and debits
         return [credits, debits];
     }
