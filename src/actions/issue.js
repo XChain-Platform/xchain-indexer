@@ -82,6 +82,9 @@ class Issue {
         // params = String(str).split('|');
         // data['SOURCE'] = this.config['ADDRESS']['BURN'];
 
+        // Reset the address/tickers/transactions list on each parse
+        this.util.resetLists();
+
         // Validate that format is known
         let format = this.util.getFormatVersion(params[0]);
         if(!error && (format===null || this.formats[format] === undefined ))
@@ -105,13 +108,16 @@ class Issue {
                 data[name] = this.util.bcnum(value);
         }
 
-        // Array of credits and debits
-        let credits = [],
-            debits  = [];
-
         // Build out arrays of allowed characters and tick characters
         let allowedCharacters = String(this.config['TICK_CHARACTERS']).split('');
         let tickCharacters    = String(data['TICK']).split('');
+
+        // Get source address balances and preferences
+        let balances    = await this.indexerDb.getAddressBalances(data['SOURCE'], null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
+        let preferences = await this.indexerDb.getAddressPreferences(data['SOURCE'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
+
+        // Create the fees object 
+        let fees = this.util.createFeesObject(data, preferences);
 
         /*****************************************************************
          * TICK Validations
@@ -123,20 +129,21 @@ class Issue {
             error = 'invalid: TICK (period)';
 
         // Determine if this is a parent/child issuance using full TICK name
-        let parts  = String(data['TICK']).split('.');
-        let parent = false;
+        let parts      = String(data['TICK']).split('.');
+        let parent     = false;
+        let parentInfo = false;
         if(parts.length>1){
             parent = parts.slice(0,-1).join('.');
 
             // Get information on parent TICK
-            let parentTokenInfo = await this.indexerDb.getTokenInfo(parent, data['BLOCK_INDEX'], data['ACTION_INDEX']);
+            parentInfo = await this.indexerDb.getTokenInfo(parent, data['BLOCK_INDEX'], data['ACTION_INDEX']);
 
             // Verify parent TICK exists
-            if(!error && !parentTokenInfo)
+            if(!error && !parentInfo)
                 error = 'invalid: TICK (parent unknown)';
 
             // Verify ISSUE is coming from PARENT TICK owner
-            if(!error && parentTokenInfo && parentTokenInfo['OWNER']!=data['SOURCE'])
+            if(!error && parentInfo && parentInfo['OWNER']!=data['SOURCE'])
                 error = 'invalid: TICK (parent issued by another address)';
         }
 
@@ -349,6 +356,23 @@ class Issue {
         if(!error && !this.util.isNull(issue['MINT_STOP_BLOCK']) && issue['MINT_START_BLOCK'] > 0 && issue['MINT_STOP_BLOCK'] > 0 && issue['MINT_STOP_BLOCK'] < issue['MINT_START_BLOCK'])
             error = 'invalid: MINT_STOP_BLOCK < MINT_START_BLOCK';
 
+        // Determine if an issuance FEE is required, and what that fee is using COIN config information
+        // TODO: Remove the block activation index (used for testing)
+        if(!error && !tokenInfo && data['BLOCK_INDEX']>=862633){
+            if(parentInfo)
+                fees['AMOUNT'] = this.config['ISSUANCE_FEE_SUBTOKEN'];
+            else
+                fees['AMOUNT'] = this.config['ISSUANCE_FEE_TOKEN'];
+        }
+
+        // Verify SOURCE has enough balances to cover FEE AMOUNT
+        if(!error && !this.util.hasBalance(balances, fees['TICK_ID'], fees['AMOUNT']))
+            error = 'invalid: insufficient funds (FEE)';
+
+        // Adjust balances to reduce by FEE AMOUNT
+        if(!error)
+            balances = this.util.debitBalances(balances, fees['TICK_ID'], fees['AMOUNT']);
+
         // Determine final status
         let status = (error) ? error : 'valid';
         data['STATUS'] = issue['STATUS'] = status;
@@ -361,6 +385,16 @@ class Issue {
 
         // If this was a valid transaction, then create the token record, and perform any additional actions
         if(status=='valid'){
+
+            // Array of credits and debits
+            let credits = [],
+                debits  = [];
+
+            // Store the SOURCE and TICK in addresses list
+            this.util.addAddressTicker(data['SOURCE'], [data['TICK'], fees['TICK']]);
+
+            // Handle any transaction FEE according the users's ADDRESS preferences
+            [credits, debits] = await this.util.processTransactionFees(this.indexerDb, credits, debits, fees);
 
             // Support token ownership transfers
             data['OWNER']  = (!this.util.isNull(data['TRANSFER'])) ? data['TRANSFER'] : data['SOURCE'];
@@ -381,15 +415,25 @@ class Issue {
             // Process any transaction credit/debit records
             await this.util.processTransactionCreditsDebits(this.indexerDb, credits, debits, data);
 
-            // TODO: If this is a reparse, bail out before updating balances and token information
-            // if(reparse)
-            //     return;
+            // Store the TRANSFER_SUPPLY and TICK in addresses list
+            this.util.addAddressTicker(data['TRANSFER_SUPPLY'], data['TICK']);
+
+            // Get a list of tickers from this sweep
+            let tickers = this.util.getTickersList();
+
+            // Get a list of addresses associated with this sweep
+            let addresses = Object.keys(this.util.getAddressesList());
 
             // Update balances for addresses
-            await this.indexerDb.updateBalances([data['SOURCE'], data['TRANSFER_SUPPLY']]);
+            await this.indexerDb.updateBalances(addresses);
 
-            // Update supply for token
+            // Update supplies for tokens
+            // TODO : Figure out whay this is failing to update token supplies, yet updateTokenInfo is working as expected
+            // await this.indexerDb.updateTokens(tickers);
+
+            // Update supplies for tokens
             await this.indexerDb.updateTokenInfo(data['TICK']);
+            await this.indexerDb.updateTokenInfo(fees['TICK']);
 
         }    
     }
