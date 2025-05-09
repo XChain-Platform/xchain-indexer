@@ -349,8 +349,8 @@ class Util {
         return balances;
     }
 
-    // Consolidate Credit and Debit records
-    consolidateCreditDebitRecords(records){
+    // Consolidate ledger records (credits / debits / escrows)
+    consolidateLedgerRecords(records){
         let arr  = [],
             data = [];
         // Consolidate amount using TICK-ADDRESS as key
@@ -422,12 +422,12 @@ class Util {
         return [credits, debits];
     }
 
-    // Process any transaction credit/debit records
-    // TODO : Update to always pass tick / amount / address in credit/debit arrays
-    async processTransactionCreditsDebits(db, credits, debits, data){
-        // Consolidate the credit and debit records to write as few records as possible
-        debits  = this.consolidateCreditDebitRecords(debits);
-        credits = this.consolidateCreditDebitRecords(credits);
+    // Process any transaction ledger changes (credits / debits / escrows)
+    async processTransactionLedgerChanges(db, data, credits, debits, escrows){
+        // Consolidate the credit / debit / escrow records to write as few records as possible
+        debits  = this.consolidateLedgerRecords(debits);
+        credits = this.consolidateLedgerRecords(credits);
+        escrows = this.consolidateLedgerRecords(escrows);
         let action_index = data['ACTION_INDEX'];
         // Create records in debits table
         for(let idx in debits){
@@ -438,6 +438,11 @@ class Util {
         for(let idx in credits){
             let [tick, amount, address] = credits[idx];
             await db.createCredit(action_index, tick, amount, address);
+        }
+        // Create records in escrows table
+        for(let idx in escrows){
+            let [tick, amount, address] = escrows[idx];
+            await db.createEscrow(action_index, tick, amount, address);
         }
     }    
 

@@ -251,8 +251,8 @@ class Send {
             }
         }
 
-        // Process any transaction credit/debit records
-        await this.util.processTransactionCreditsDebits(this.indexerDb, credits, debits, data);
+        // Process any transaction ledger changes (credits / debits)
+        await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits);
 
         // TODO: If this is a reparse, bail out before updating balances and token information
         // if(reparse)

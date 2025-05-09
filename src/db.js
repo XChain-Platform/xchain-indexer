@@ -1570,8 +1570,8 @@ class Database {
         await this.releaseConnection();
     }
 
-    // Create / Update record in `credits` or `debits` table
-    async createCreditDebitRecord(table, action_index, tick, amount, address){
+    // Create / Update ledger change records (credits / debits / escrows)
+    async createLedgerChangeRecord(table, action_index, tick, amount, address){
         let tick_id    = await this.createTicker(tick);
         let address_id = await this.createAddress(address);
         // Check if record already exists for this token
@@ -1616,14 +1616,19 @@ class Database {
         await this.releaseConnection();        
     }
 
-    // Create/Update record in `credits` table
+    // Create / Update record in `credits` table
     async createCredit(action_index, tick, amount, address){
-        await this.createCreditDebitRecord('credits', action_index, tick, amount, address);
+        await this.createLedgerChangeRecord('credits', action_index, tick, amount, address);
     }
 
-    // Create/Update record in `debits` table
+    // Create / Update record in `debits` table
     async createDebit(action_index, tick, amount, address){
-        await this.createCreditDebitRecord('debits', action_index, tick, amount, address);
+        await this.createLedgerChangeRecord('debits', action_index, tick, amount, address);
+    }
+
+    // Create / Update record in `escrows` table
+    async createEscrow(action_index, tick, amount, address){
+        await this.createLedgerChangeRecord('escrows', action_index, tick, amount, address);
     }
 
     // Handle updating address balances (credits-debits=balance)

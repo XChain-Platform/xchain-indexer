@@ -265,8 +265,8 @@ class Callback {
                 credits.push([callback['CALLBACK_TICK'], recipients[address], address]);
             }
 
-            // Process any transaction credit/debit records
-            await this.util.processTransactionCreditsDebits(this.indexerDb, credits, debits, data);
+            // Process any transaction ledger changes (credits / debits)
+            await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits);
 
             // Get a list of tickers from this callback
             let tickers = this.util.getTickersList();
