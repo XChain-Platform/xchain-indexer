@@ -217,15 +217,12 @@ class Swap {
             // Escrow GIVE_AMOUNT of GIVE_TICK from SOURCE
             escrows.push([data['GIVE_TICK'], data['GIVE_AMOUNT'], data['SOURCE']]);
 
-            // Process any transaction credit/debit records
-            // await this.util.processTransactionCreditsDebits(this.indexerDb, credits, debits, data);
+            // Process any transaction ledger changes (credits / debits / escrows)
+            // await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits, escrows);
 
-            // Process any transaction escrow records
-            // await this.util.processTransactionEscrows(this.indexerDb, escrows, data);
-
-            // // If this is a reparse, bail out before updating balances and token information
-            // // if(reparse)
-            // //     return;
+            // If this is a reparse, bail out before updating balances and token information
+            // if(reparse)
+            //     return;
 
             // // Update balances for addresses
             // await this.indexerDb.updateBalances([data['SOURCE'], data['DESTINATION']]);

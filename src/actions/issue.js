@@ -412,8 +412,8 @@ class Issue {
                 credits.push([data['TICK'], data['MINT_SUPPLY'], data['TRANSFER_SUPPLY']]);
             }
 
-            // Process any transaction credit/debit records
-            await this.util.processTransactionCreditsDebits(this.indexerDb, credits, debits, data);
+            // Process any transaction ledger changes (credits / debits)
+            await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits);
 
             // Store the TRANSFER_SUPPLY and TICK in addresses list
             this.util.addAddressTicker(data['TRANSFER_SUPPLY'], data['TICK']);
