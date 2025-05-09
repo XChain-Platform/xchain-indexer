@@ -35,6 +35,9 @@ module.exports = {
             throw new Error(error);
         }
 
+        // Define list of acceptable COIN networks
+        config['COINS'] = ['BTC', 'LTC', 'DOGE'];
+
         // Parse in the gas / coin / network information
         config['GAS']     = gas;
         config['COIN']    = coin;
@@ -51,8 +54,8 @@ module.exports = {
         // TICK characters allowed
         config['TICK_CHARACTERS'] = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789~!@#$%^&*()_+-={}[]:<>.?\/';
 
-        // Reserved TICK names
-        config['RESERVED_TICKS'] = [coin, gas];
+        // Reserved TICK names (COIN names and GAS token)
+        config['RESERVED_TICKS'] = config['COINS'].concat([gas]);
 
         // Min/Max DECIMALS
         config['MIN_TOKEN_DECIMALS'] = 0;
