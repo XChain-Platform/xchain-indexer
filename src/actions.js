@@ -19,6 +19,7 @@ const mint      = require('./actions/mint.js');
 // const rug       = require('./actions/rug.js');
 const sleep     = require('./actions/sleep.js');
 const send      = require('./actions/send.js');
+const swap      = require('./actions/swap.js');
 const sweep     = require('./actions/sweep.js');
 
 class Actions {
@@ -57,6 +58,7 @@ class Actions {
         // this.actionRug       = new rug(this);
         this.actionSleep     = new sleep(this);
         this.actionSend      = new send(this);
+        this.actionSwap      = new swap(this);
         this.actionSweep     = new sweep(this);
 
         // Define ACTION aliases
@@ -88,6 +90,7 @@ class Actions {
         let tx_hash     = tx.tx_hash;
         let tx_data     = tx.data;
         let block_index = tx.block_index;
+        let block_time  = tx.block_time;
 
         // Create database records and get ids for tx_hash and source address
         let source_id  = await this.indexerDb.createAddress(source);
@@ -116,6 +119,7 @@ class Actions {
         let data = {};
         data['ACTION']      = action;      // Action (ISSUE, MINT, SEND, etc)
         data['BLOCK_INDEX'] = block_index; // Block index 
+        data['BLOCK_TIME']  = block_time ; // Block time (seconds since epoch) 
         data['SOURCE']      = source;      // Source address
         data['TX_HASH']     = tx_hash;     // Transaction Hash
         data['TX_DATA']     = tx_data;     // Raw tx data string
@@ -164,6 +168,7 @@ class Actions {
         // if(action=='RUG')       await this.actionRug.parse(params, data, error);
         if(action=='SLEEP')     await this.actionSleep.parse(params, data, error);
         if(action=='SEND')      await this.actionSend.parse(params, data, error);
+        if(action=='SWAP')      await this.actionSwap.parse(params, data, error);
         if(action=='SWEEP')     await this.actionSweep.parse(params, data, error);
     }
 

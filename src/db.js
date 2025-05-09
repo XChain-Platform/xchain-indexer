@@ -298,9 +298,11 @@ class Database {
                         t1.data,
                         t2.hash as tx_hash,
                         a1.address as source,
-                        t1.block_index
+                        t1.block_index,
+                        b1.block_time
                     FROM
                         transactions t1
+                        INNER JOIN blocks             b1 ON (b1.block_index=t1.block_index)
                         INNER JOIN index_transactions t2 ON (t2.id=t1.tx_hash_id)
                         INNER JOIN index_addresses    a1 ON (a1.id=t1.source_id)
                     WHERE 
@@ -768,6 +770,7 @@ class Database {
         // Try to lookup id using tick passed
         if(!id){
             let db    = await this.getConnection();
+            // let query = "SELECT id FROM index_tickers WHERE tick COLLATE utf8mb4_bin LIKE ? LIMIT 1";
             let query = "SELECT id FROM index_tickers WHERE tick=? LIMIT 1";
             try {
                 let rows = await db.query(query, [tick]);
@@ -3248,6 +3251,67 @@ class Database {
         await this.releaseConnection();
     }
 
+    // Create/Update record in `swap` table
+    async createSwap(data){
+        // Normalize data
+        let source_id      = await this.createAddress(data['SOURCE']);
+        let give_tick_id   = await this.createTicker(data['GIVE_TICK']);
+        let get_coin_id    = await this.createCoin(data['GET_COIN']);
+        let get_tick_id    = await this.createTicker(data['GET_TICK']);
+        let memo_id        = await this.createMemo(data['MEMO']);
+        let status_id      = await this.createStatus(data['STATUS']);
+        let swap_status_id = await this.createStatus(data['SWAP_STATUS']);
+        let action_index   = data['ACTION_INDEX'];
+        let give_amount    = data['GIVE_AMOUNT'];
+        let get_amount     = data['GET_AMOUNT'];
+        let expiration     = data['EXPIRATION'];
+        // Check if record already exists for this swap
+        let db     = await this.getConnection();
+        let query  = `SELECT
+                            action_index
+                        FROM
+                            swaps
+                        WHERE
+                            action_index=?`;
+        let args = [action_index];
+        let exists = false;
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0)
+                exists = true;
+        } catch (error){
+            this.util.logError('Error looking up record in swaps table:', error);
+        }
+        if(exists){
+            // UPDATE record
+            query = `UPDATE
+                        swaps
+                    SET
+                        source_id=?,
+                        give_tick_id=?,
+                        give_amount=?,
+                        get_coin_id=?,
+                        get_tick_id=?,
+                        get_amount=?,
+                        expiration=?,
+                        memo_id=?,
+                        status_id=?,
+                        swap_status_id=?
+                    WHERE 
+                        action_index=?`;
+        } else {
+            // INSERT record
+            query = `INSERT INTO swaps (source_id, give_tick_id, give_amount, get_coin_id, get_tick_id, get_amount, expiration, memo_id, status_id, swap_status_id, action_index) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+        }
+        args = [source_id, give_tick_id, give_amount, get_coin_id, get_tick_id, get_amount, expiration, memo_id, status_id, swap_status_id, action_index];
+        // Create or Update the record in the swaps table
+        try {
+            let result = await db.query(query, args);
+        } catch (error){
+            this.util.logError('Error trying to create record in swaps table:', error);
+        }
+        await this.releaseConnection();
+    }
 }
 
 module.exports = Database

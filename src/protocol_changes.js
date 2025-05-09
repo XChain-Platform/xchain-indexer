@@ -48,6 +48,7 @@ class ProtocolChanges {
         this.addChange('RUG',        '1.0.0',0,0,0,0,0,0);
         this.addChange('SEND',       '1.0.0',0,0,0,0,0,0);
         this.addChange('SLEEP',      '1.0.0',0,0,0,0,0,0);
+        this.addChange('SWAP',       '1.0.0',0,0,0,0,0,0);
         this.addChange('SWEEP',      '1.0.0',0,0,0,0,0,0);
 
         // Define protocol changes (ALL LOWER Case)

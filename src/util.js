@@ -227,6 +227,14 @@ class Util {
         return this.bcnum(mathjs.format(mathjs.multiply(mathjs.bignumber(a),mathjs.bignumber(b)),{notation: 'fixed', precision: d}));
     }
 
+    // Handle dividing 2 big numbers
+    bcdiv(numA, numB, decimals){
+        let a = (!this.isNull(numA)) ? numA : 0;
+        let b = (!this.isNull(numB)) ? numB : 0;
+        let d = (!this.isNull(decimals)) ? parseInt(decimals) : 0;
+        return this.bcnum(mathjs.format(mathjs.divide(mathjs.bignumber(a),mathjs.bignumber(b)),{notation: 'fixed', precision: d}));
+    }
+
     // Validate if a given value is considered valid
     // @value = string or integer
     // @valid = string or array of values

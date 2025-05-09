@@ -37,6 +37,7 @@ class Rollback {
             'dispenser_refills',
             'dispenses',
             'dividends',
+            'escrows',
             'fees',
             'issues',
             'lists',
@@ -46,6 +47,8 @@ class Rollback {
             'mints',
             'sends',
             'sleeps',
+            'swaps',
+            'swap_matches',
             'sweeps',
             'tokens'
         ];
@@ -88,12 +91,12 @@ class Rollback {
             // Loop through the data tables
             for(let table of this.dataTables){
 
-                // Build out the correct SQL to pull data from the various tables
+                // Build out the correct SQL to pull address and ticker data from the various tables
                 query = false;
                 args  = [firstActionIndex];
 
-                // Credits / Debits
-                if(['credits','debits'].includes(table)){
+                // Credits / Debits / Escrows
+                if(['credits','debits','escrows'].includes(table)){
                     query = `SELECT 
                                 t1.tick,
                                 a1.address
@@ -146,6 +149,19 @@ class Rollback {
                                 INNER JOIN index_addresses a1 ON (a1.id=m.source_id)
                                 LEFT  JOIN index_addresses a2 ON (a2.id=m.transfer_id)
                                 LEFT  JOIN index_addresses a3 ON (a3.id=m.transfer_supply_id)
+                            WHERE 
+                                m.action_index >= ?`;
+                }
+
+                // SWAPS
+                if(table=='swaps'){
+                    query = `SELECT 
+                                t1.tick,
+                                a1.address
+                            FROM 
+                                ` + table + ` m
+                                INNER JOIN index_tickers   t1 ON (t1.id=m.give_tick_id)
+                                INNER JOIN index_addresses a1 ON (a1.id=m.source_id)
                             WHERE 
                                 m.action_index >= ?`;
                 }
