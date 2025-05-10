@@ -428,13 +428,7 @@ class Issue {
             await this.indexerDb.updateBalances(addresses);
 
             // Update supplies for tokens
-            // TODO : Figure out whay this is failing to update token supplies, yet updateTokenInfo is working as expected
-            // await this.indexerDb.updateTokens(tickers);
-
-            // Update supplies for tokens
-            await this.indexerDb.updateTokenInfo(data['TICK']);
-            await this.indexerDb.updateTokenInfo(fees['TICK']);
-
+            await this.indexerDb.updateTokens(tickers);
         }    
     }
 }
