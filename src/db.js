@@ -1905,7 +1905,7 @@ class Database {
     // @param {tickers} array   Array of Tickers
     async updateTokens(tickers, rollback){
         let tokens = [];
-        let type  = typeof tickers;
+        let type   = typeof tickers;
         if(type==='object'){
             for(let tick of tickers){
                 if(!this.util.isNull(tick))
@@ -2343,7 +2343,6 @@ class Database {
         // Loop through the tickers and validate token supply match credits/debits/balances info
         for(let tick in tickers){
             let tick_id = tickers[tick];
-            // let token   = this.util.bcnum(supply[tick]);                           // Supply from tokens
             let ledger  = this.util.bcnum(await this.getTokenSupply(tick));        // Supply from ledger (credits - debits + escrows)
             let token   = this.util.bcnum(await this.getTokenSupplyToken(tick));   // Supply from tokens
             let balance = this.util.bcnum(await this.getTokenSupplyBalance(tick)); // Supply from balances
