@@ -973,14 +973,14 @@ class Database {
         return decimals;
     }
 
-    // Get token supply from credits/debits table (credits - debits = supply)
+    // Get token supply from credits/debits table (credits - debits + escrows = supply)
     // @param {tick}            string  Ticker name
     // @param {block_index}     integer Block Index 
     // @param {action_index}    integer action_index of action
     async getTokenSupply(tick, block_index, action_index){
         let credits = 0;
         let debits  = 0;
-        let escrow  = 0;
+        let escrows = 0;
         let supply  = 0;
         let db      = await this.getConnection(),
             sql     = '',
@@ -1012,7 +1012,7 @@ class Database {
                     m.tick_id=?` + sql;
         try {
             let rows = await db.query(query, args);
-            if(rows.length > 0)
+            if(rows.length > 0 && !this.util.isNull(rows[0].credits))
                 credits = rows[0].credits;
         } catch (error) {
             this.util.logError('Error while trying to get list of credits:', error);
@@ -1028,15 +1028,48 @@ class Database {
                     m.tick_id=?` + sql;
         try {
             let rows = await db.query(query, args);
-            if(rows.length > 0)
+            if(rows.length > 0 && !this.util.isNull(rows[0].debits))
                 debits = rows[0].debits;
         } catch (error) {
             this.util.logError('Error while trying to get list of debits:', error);
         }
-        // TODO: Get Escrowed supply
+        // Get Escrows 
+        query = `SELECT 
+                    CAST(SUM(m.amount) AS DECIMAL(60,` + decimals + `)) as escrows 
+                FROM 
+                    escrows m
+                    INNER JOIN actions      a ON (a.action_index=m.action_index)
+                    INNER JOIN transactions t ON (t.tx_index=a.tx_index)
+                WHERE 
+                    m.tick_id=?` + sql;
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0 && !this.util.isNull(rows[0].escrows))
+                escrows = rows[0].escrows;
+        } catch (error) {
+            this.util.logError('Error while trying to get list of escrows:', error);
+        }
         await this.releaseConnection();
-        // Determine total supply (credits - debits)
-        supply = this.util.bcsub(credits, debits, decimals);
+        // Determine total supply ((credits - debits) + escrows)
+        supply = this.util.bcadd(this.util.bcsub(credits, debits, decimals), escrows, decimals);
+        return supply;
+    }
+
+    // Get token supply for a given ticker from tokens table
+    async getTokenSupplyToken(tick){
+        let supply   = 0;
+        let tick_id  = await this.createTicker(tick);
+        let decimals = await this.getTokenDecimalPrecision(tick_id);
+        let db       = await this.getConnection();
+        let query = `SELECT supply FROM tokens WHERE tick_id=? LIMIT 1`;
+        try {
+            let rows = await db.query(query, [tick_id]);
+            if(rows.length > 0 && !this.util.isNull(rows[0].supply))
+                supply = rows[0].supply;
+        } catch (error) {
+            this.util.logError('Error looking up token supply from tokens table:', error);
+        }
+        await this.releaseConnection();
         return supply;
     }
 
@@ -1049,7 +1082,7 @@ class Database {
         let query = `SELECT CAST(SUM(amount) AS DECIMAL(60, ` + decimals + `)) as supply FROM balances WHERE tick_id=? LIMIT 1`;
         try {
             let rows = await db.query(query, [tick_id]);
-            if(rows.length > 0)
+            if(rows.length > 0 && !this.util.isNull(rows[0].supply))
                 supply = rows[0].supply;
         } catch (error) {
             this.util.logError('Error looking up token supply from balances table:', error);
@@ -1057,6 +1090,25 @@ class Database {
         await this.releaseConnection();
         return supply;
     }
+
+    // Get escrowed token supply for a given ticker from escrows table
+    async getTokenSupplyEscrow(tick){
+        let supply   = 0;
+        let tick_id  = await this.createTicker(tick);
+        let decimals = await this.getTokenDecimalPrecision(tick_id);
+        let db       = await this.getConnection();
+        let query = `SELECT CAST(SUM(amount) AS DECIMAL(60, ` + decimals + `)) as supply FROM escrows WHERE tick_id=? LIMIT 1`;
+        try {
+            let rows = await db.query(query, [tick_id]);
+            if(rows.length > 0 && !this.util.isNull(rows[0].supply))
+                supply = rows[0].supply;
+        } catch (error) {
+            this.util.logError('Error looking up token supply from escrows table:', error);
+        }
+        await this.releaseConnection();
+        return supply;
+    }
+
 
     // Handle getting a list of TICK holders and amounts
     // @param {tick}            string  Ticker name
@@ -1879,7 +1931,7 @@ class Database {
         }
         // Loop through tokens and update basic info
         for(let tick of tokens)
-            this.updateTokenInfo(tick);
+            await this.updateTokenInfo(tick);
     }
 
     // Handle getting token info (supply, price, etc) and updating the `tokens` table
@@ -2235,14 +2287,14 @@ class Database {
         // Ignore any calls without a block index
         if(this.util.isNull(block_index))
             return;
-        let tickers = {};
-        let supply  = {}; // Assoc array of supplys
-        let db      = await this.getConnection();
-        // Get list of tickers and supply from credits/debits/tokens tables using block_index
+        let tickers  = {};
+        let decimals = {};
+        let db       = await this.getConnection();
+        // Get list of tickers and supply from credits/debits/escrows/tokens tables using block_index
         let query   = `SELECT
                         DISTINCT(x.tick_id),
                         t2.tick,
-                        t1.supply 
+                        t1.decimals
                     FROM 
                         (
                             SELECT 
@@ -2262,18 +2314,27 @@ class Database {
                                 INNER JOIN transactions t ON (t.tx_index=a.tx_index)
                             WHERE 
                                 t.block_index=? 
+                            UNION
+                            SELECT 
+                                e.tick_id 
+                            FROM 
+                                escrows e
+                                INNER JOIN actions      a ON (e.action_index=a.action_index)
+                                INNER JOIN transactions t ON (t.tx_index=a.tx_index)
+                            WHERE 
+                                t.block_index=? 
                         ) as x
                         INNER JOIN tokens        t1 ON (t1.tick_id=x.tick_id)
                         INNER JOIN index_tickers t2 ON (t2.id=x.tick_id)
                     ORDER BY 
                         t2.tick ASC`;
         try {
-            let rows = await db.query(query, [block_index, block_index]);
+            let rows = await db.query(query, [block_index, block_index, block_index]);
             if(rows.length >0){
                 for(let row of rows){
-                    // Add ticker and supply info to assoc arrays
-                    tickers[row.tick] = Number(row.tick_id);
-                    supply[row.tick]  = (!this.util.isNull(row.supply)) ? row.supply : "0";
+                    // Add ticker, decimal, and supply info to assoc arrays
+                    tickers[row.tick]  = Number(row.tick_id);
+                    decimals[row.tick] = row.decimals;
                 };
             }
         } catch (error){
@@ -2282,20 +2343,25 @@ class Database {
         // Loop through the tickers and validate token supply match credits/debits/balances info
         for(let tick in tickers){
             let tick_id = tickers[tick];
-            let supplyA = this.util.bcnum(supply[tick]);                           // Supply from tokens table
-            let supplyB = this.util.bcnum(await this.getTokenSupplyBalance(tick)); // Supply from balances table
-            let supplyC = this.util.bcnum(await this.getTokenSupply(tick));        // Supply from credits/debits tables
+            // let token   = this.util.bcnum(supply[tick]);                           // Supply from tokens
+            let ledger  = this.util.bcnum(await this.getTokenSupply(tick));        // Supply from ledger (credits - debits + escrows)
+            let token   = this.util.bcnum(await this.getTokenSupplyToken(tick));   // Supply from tokens
+            let balance = this.util.bcnum(await this.getTokenSupplyBalance(tick)); // Supply from balances
+            let escrow  = this.util.bcnum(await this.getTokenSupplyEscrow(tick));  // Supply from escrows
+            let total   = this.util.bcadd(balance, escrow, decimals[tick]);        // Total (balances + escrows)
             // DEBUG : Dump information on the sanity check failure
-            if(supplyA!=supplyB || supplyA!=supplyC){
-                console.log("Tick,       tick_id =", tick, tick_id);
-                console.log("token        supply =", supplyA);
-                console.log("balances     supply =", supplyB);
-                console.log("credit/debit supply =", supplyC);
+            if(token!=ledger || token!=total){
+                console.log("Tick,   tick_id =", tick, tick_id);
+                console.log("token   supply =", token);
+                console.log("ledger  supply =", ledger);  // Credits / Debits / Escrows
+                console.log("balance supply =", balance); // balances table
+                console.log("escrow  supply =", escrow);  // Escrows
+                console.log("total   supply =", total);   // balance + escrow
             }
-            if(supplyA!=supplyB)
-                this.util.throwError("SanityError: balances table supply does not match token supply : " + tick + " (" + supplyB + " != " + supplyA + ")");
-            if(supplyA!=supplyC)
-                this.util.throwError("SanityError: credits/debits table supply does not match token supply : " + tick + " (" + supplyC + " != " + supplyA + ")");
+            if(token!=ledger)
+                this.util.throwError("SanityError: ledger supply does not match token supply : " + tick + " (" + ledger + " != " + token + ")");
+            if(token!=total)
+                this.util.throwError("SanityError: total supply does not match token supply : " + tick + " (" + total + " != " + token + ")");
         }
         await this.releaseConnection();
     }
