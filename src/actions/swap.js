@@ -179,7 +179,7 @@ class Swap {
         //     db_hits += (data['OWNERSHIPS']) ? this.util.bcmul(Object.keys(ownerships).length,2,0) : 0; // 1 issue, 1 tokens
 
         // Determine total transaction FEE based on database hits
-        fees['AMOUNT'] = 0;
+        fees['AMOUNT'] = 1;
 
         // Verify SOURCE has enough balances to cover FEE AMOUNT
         if(!error && !this.util.hasBalance(balances, fees['TICK_ID'], fees['AMOUNT']))
@@ -210,25 +210,36 @@ class Swap {
                 debits  = [],
                 escrows = [];
 
-            // TODO 
+            // Store the SOURCE, GIVE_TICK, and fees TICK in addresses list
+            this.util.addAddressTicker(data['SOURCE'], [data['GIVE_TICK'], fees['TICK']]);
+
             // Debit GIVE_AMOUNT of GIVE_TICK from SOURCE
             debits.push([data['GIVE_TICK'], data['GIVE_AMOUNT'], data['SOURCE']]);
 
             // Escrow GIVE_AMOUNT of GIVE_TICK from SOURCE
             escrows.push([data['GIVE_TICK'], data['GIVE_AMOUNT'], data['SOURCE']]);
 
+            // Handle any transaction FEE according the users's ADDRESS preferences
+            [credits, debits] = await this.util.processTransactionFees(this.indexerDb, credits, debits, fees);
+
             // Process any transaction ledger changes (credits / debits / escrows)
-            // await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits, escrows);
+            await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits, escrows);
 
             // If this is a reparse, bail out before updating balances and token information
             // if(reparse)
             //     return;
 
-            // // Update balances for addresses
-            // await this.indexerDb.updateBalances([data['SOURCE'], data['DESTINATION']]);
+            // Get a list of tickers from this swap
+            let tickers = this.util.getTickersList();
 
-            // // Update supply for token
-            // await this.indexerDb.updateTokenInfo(data['TICK']);
+            // Get a list of addresses associated with this dividend
+            let addresses = Object.keys(this.util.getAddressesList());
+
+            // Update balances for addresses
+            await this.indexerDb.updateBalances(addresses);
+
+            // Update supplies for tokens
+            await this.indexerDb.updateTokens(tickers);
 
             // TODO: Handle SWAP matching code
             // Verify both addresses are allowed to hold ticks (allow/block lists)
