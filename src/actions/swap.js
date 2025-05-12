@@ -173,13 +173,7 @@ class Swap {
         // Calculate total fee for this swap based on EXPIRATION timestamp
         let expire_seconds = this.util.bcsub(data['EXPIRATION'],data['BLOCK_TIME'], 0); // expiration - current time = expire in X seconds
         let expire_days    = this.util.bcdiv(expire_seconds, 86400, 0);                 // 86400 seconds in a day
-        console.log('expire_days=',expire_days);
-        // let db_hits = 1;                                                                               // 1 swa
-        //     db_hits += (data['BALANCES']) ? this.util.bcmul(Object.keys(balances).length,4,0) : 0;     // 1 debits, 1 credits, 2 balances
-        //     db_hits += (data['OWNERSHIPS']) ? this.util.bcmul(Object.keys(ownerships).length,2,0) : 0; // 1 issue, 1 tokens
-
-        // Determine total transaction FEE based on database hits
-        fees['AMOUNT'] = 1;
+        fees['AMOUNT']     = (expire_days > this.config['EXPIRATION_FEE_FREE_DAYS']) ? (this.util.bcmul(expire_days, this.config['EXPIRATION_FEE_PER_DAY'],8)) : 0;
 
         // Verify SOURCE has enough balances to cover FEE AMOUNT
         if(!error && !this.util.hasBalance(balances, fees['TICK_ID'], fees['AMOUNT']))
