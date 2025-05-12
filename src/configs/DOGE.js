@@ -17,6 +17,10 @@ module.exports = {
         config['ISSUANCE_FEE_TOKEN']    = '0.25000000';
         config['ISSUANCE_FEE_SUBTOKEN'] = '0.10000000';
 
+        // Set XCHAIN fee required per day for EXPIRATION items (orders, swaps, dispensers)
+        config['EXPIRATION_FEE_FREE_DAYS'] = 182;          // 6 month listing is free (182 days)
+        config['EXPIRATION_FEE_PER_DAY']   = '0.00136986'; // 0.5 XCHAIN / 365 days = 0.00136986 XCHAIN per day
+
 		// Set network specific addresses
         switch(network){
             case 'mainnet':
