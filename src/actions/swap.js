@@ -10,6 +10,7 @@
  * - GET_COIN          -  `COIN` name (BTC, LTC, DOGE, etc)
  * - GET_TICK          -  Ticker name or Ticker ID
  * - GET_AMOUNT        -  Quantity of `GET_TICK` requested in return
+ * - GET_ADDRESS       -  Address to receive `GET_TICK` on `GET_COIN` network
  * - EXPIRATION        -  Timestamp of when swap should expire, in Unix time
  * - MEMO              -  An optional memo to include
  * - SWAP_ACTION_INDEX -  `ACTION_INDEX` of existing `SWAP`
@@ -37,7 +38,7 @@ class Swap {
 
         // Define list of known FORMATS
         this.formats = {};
-        this.formats[0] = 'VERSION|GIVE_TICK|GIVE_AMOUNT|GET_COIN|GET_TICK|GET_AMOUNT|EXPIRATION|MEMO';
+        this.formats[0] = 'VERSION|GIVE_TICK|GIVE_AMOUNT|GET_COIN|GET_TICK|GET_AMOUNT|GET_ADDRESS|EXPIRATION|MEMO';
         this.formats[1] = 'VERSION|SWAP_ACTION_INDEX|MEMO';
         this.formats[2] = 'VERSION|SWAP_ACTION_INDEX|EXPIRATION|MEMO';
 
@@ -153,6 +154,14 @@ class Swap {
         // Verify MEMO is shorter than MAX_MEMO_LENGTH
         if(!error && String(data['MEMO']).length > this.config['MAX_MEMO_LENGTH'])
             error = 'invalid: MEMO (length)';
+
+        // Verify GET_ADDRESS is given if COIN network differs from GET_COIN network
+        if(!error && this.config['COIN']!=data['GET_COIN'] && this.util.isNull(data['GET_ADDRESS']))
+            error = "invalid: GET_ADDRESS (required)";
+
+        // Verify GET_ADDRESS is valid for the given `GET_COIN` network
+        if(!error && !this.util.isNull(data['GET_ADDRESS']) && !this.util.isCryptoAddress(data['GET_ADDRESS']))
+            error = "invalid: GET_ADDRESS (format)";
 
         // Verify TICK action is allowed from SOURCE (allow/block lists)
         if(!error && !await this.indexerDb.isActionAllowed(data['SOURCE'], data['GIVE_TICK']))

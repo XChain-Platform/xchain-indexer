@@ -6,6 +6,7 @@ CREATE TABLE swaps (
     get_coin_id      BIGINT UNSIGNED,          -- id of record in index_coins table
     get_tick_id      BIGINT UNSIGNED,          -- id of record in index_tickers table
     get_amount       VARCHAR(250),             -- Amount of GET_TICK in swap
+    get_address_id   BIGINT UNSIGNED,          -- id of record in index_addresses table
     source_id        BIGINT UNSIGNED,          -- id of record in index_addresses table
     expiration       BIGINT UNSIGNED,          -- unix timestamp of swap expiration date/time
     memo_id          BIGINT UNSIGNED,          -- id of record in index_memos table 
@@ -18,6 +19,7 @@ CREATE        INDEX give_tick_id   ON swaps (give_tick_id);
 CREATE        INDEX get_coin_id    ON swaps (get_coin_id);
 CREATE        INDEX get_tick_id    ON swaps (get_tick_id);
 CREATE        INDEX expiration     ON swaps (expiration);
+CREATE        INDEX get_address_id ON swaps (get_address_id);
 CREATE        INDEX source_id      ON swaps (source_id);
 CREATE        INDEX memo_id        ON swaps (memo_id);
 CREATE        INDEX status_id      ON swaps (status_id);
