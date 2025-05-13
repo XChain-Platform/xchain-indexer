@@ -127,6 +127,14 @@ class Swap {
         if(!error && !this.util.isNull(data['GET_AMOUNT']) && !this.util.isValidAmountFormat(getTickDivisible, data['GET_AMOUNT']))
             error = "invalid: GET_AMOUNT (format)";
 
+        // Verify GET_ADDRESS is given if COIN network differs from GET_COIN network
+        if(!error && this.config['COIN']!=data['GET_COIN'] && this.util.isNull(data['GET_ADDRESS']))
+            error = "invalid: GET_ADDRESS";
+
+        // Verify GET_ADDRESS is valid for the given GET_COIN network
+        if(!error && !this.util.isNull(data['GET_ADDRESS']) && !this.util.isCryptoAddress(data['GET_ADDRESS']))
+            error = "invalid: GET_ADDRESS (format)";
+
         // Validate that EXPIRATION is an integer
         if(!error && (this.util.isNull(data['EXPIRATION']) || !this.util.isNumeric(data['EXPIRATION']) || !this.util.isInteger(data['EXPIRATION'])))
             error = "invalid: EXPIRATION (format)";
@@ -154,14 +162,6 @@ class Swap {
         // Verify MEMO is shorter than MAX_MEMO_LENGTH
         if(!error && String(data['MEMO']).length > this.config['MAX_MEMO_LENGTH'])
             error = 'invalid: MEMO (length)';
-
-        // Verify GET_ADDRESS is given if COIN network differs from GET_COIN network
-        if(!error && this.config['COIN']!=data['GET_COIN'] && this.util.isNull(data['GET_ADDRESS']))
-            error = "invalid: GET_ADDRESS (required)";
-
-        // Verify GET_ADDRESS is valid for the given `GET_COIN` network
-        if(!error && !this.util.isNull(data['GET_ADDRESS']) && !this.util.isCryptoAddress(data['GET_ADDRESS']))
-            error = "invalid: GET_ADDRESS (format)";
 
         // Verify TICK action is allowed from SOURCE (allow/block lists)
         if(!error && !await this.indexerDb.isActionAllowed(data['SOURCE'], data['GIVE_TICK']))
