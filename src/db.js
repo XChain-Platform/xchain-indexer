@@ -3328,6 +3328,7 @@ class Database {
         let give_tick_id   = await this.createTicker(data['GIVE_TICK']);
         let get_coin_id    = await this.createCoin(data['GET_COIN']);
         let get_tick_id    = await this.createTicker(data['GET_TICK']);
+        let get_address_id = await this.createAddress(data['GET_ADDRESS']);
         let memo_id        = await this.createMemo(data['MEMO']);
         let status_id      = await this.createStatus(data['STATUS']);
         let swap_status_id = await this.createStatus(data['SWAP_STATUS']);
@@ -3363,6 +3364,7 @@ class Database {
                         get_coin_id=?,
                         get_tick_id=?,
                         get_amount=?,
+                        get_address_id=?,
                         expiration=?,
                         memo_id=?,
                         status_id=?,
@@ -3371,9 +3373,9 @@ class Database {
                         action_index=?`;
         } else {
             // INSERT record
-            query = `INSERT INTO swaps (source_id, give_tick_id, give_amount, get_coin_id, get_tick_id, get_amount, expiration, memo_id, status_id, swap_status_id, action_index) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+            query = `INSERT INTO swaps (source_id, give_tick_id, give_amount, get_coin_id, get_tick_id, get_amount, get_address_id, expiration, memo_id, status_id, swap_status_id, action_index) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?)`;
         }
-        args = [source_id, give_tick_id, give_amount, get_coin_id, get_tick_id, get_amount, expiration, memo_id, status_id, swap_status_id, action_index];
+        args = [source_id, give_tick_id, give_amount, get_coin_id, get_tick_id, get_amount, get_address_id, expiration, memo_id, status_id, swap_status_id, action_index];
         // Create or Update the record in the swaps table
         try {
             let result = await db.query(query, args);
