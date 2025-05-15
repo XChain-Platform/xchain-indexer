@@ -5,6 +5,7 @@ This action allows for swapping tokens across XChain platform supported blockcha
 | Name                | Type   | Description                                         |
 | ------------------- | ------ | --------------------------------------------------- |
 | `VERSION`           | String | Format Version                                      |
+| `GIVE_COIN`         | String | `COIN` name (BTC, LTC, DOGE, etc)                   |
 | `GIVE_TICK`         | String | Ticker name or Ticker ID                            |
 | `GIVE_AMOUNT`       | String | Quantity of `GIVE_TICK` to escrow in the swap       |
 | `GET_COIN`          | String | `COIN` name (BTC, LTC, DOGE, etc)                   |
@@ -18,7 +19,7 @@ This action allows for swapping tokens across XChain platform supported blockcha
 ## Formats
 
 ### Version `0` - Create Swap
-- `VERSION|GIVE_TICK|GIVE_AMOUNT|GET_COIN|GET_TICK|GET_AMOUNT|GET_ADDRESS|EXPIRATION|MEMO`
+- `VERSION|GIVE_COIN|GIVE_TICK|GIVE_AMOUNT|GET_COIN|GET_TICK|GET_AMOUNT|GET_ADDRESS|EXPIRATION|MEMO`
 
 ### Version `1` - Cancel Swap
 - `VERSION|SWAP_ACTION_INDEX|MEMO`
@@ -28,7 +29,7 @@ This action allows for swapping tokens across XChain platform supported blockcha
 
 ## Examples
 ```
-SWAP|0|RAREPEPE|1|BTC|PEPECASH|10000000.00000000|1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev|Swapping my RAREPEPE for 10M PEPECASH
+SWAP|0|BTC|RAREPEPE|1|BTC|PEPECASH|10000000.00000000|1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev|Swapping my RAREPEPE for 10M PEPECASH
 This example creates a swap 1 RAREPEPE for 10,000,000.00000000 PEPECASH and includes a memo
 ```
 
