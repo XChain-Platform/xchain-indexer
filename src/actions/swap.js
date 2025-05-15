@@ -5,6 +5,7 @@
  * 
  * PARAMS:
  * - VERSION           -  Format Version
+ * - GIVE_COIN         -  `COIN` name (BTC, LTC, DOGE, etc)
  * - GIVE_TICK         -  Ticker name or Ticker ID
  * - GIVE_AMOUNT       -  Quantity of `GIVE_TICK` to escrow in the swap
  * - GET_COIN          -  `COIN` name (BTC, LTC, DOGE, etc)
@@ -38,7 +39,7 @@ class Swap {
 
         // Define list of known FORMATS
         this.formats = {};
-        this.formats[0] = 'VERSION|GIVE_TICK|GIVE_AMOUNT|GET_COIN|GET_TICK|GET_AMOUNT|GET_ADDRESS|EXPIRATION|MEMO';
+        this.formats[0] = 'VERSION|GIVE_COIN|GIVE_TICK|GIVE_AMOUNT|GET_COIN|GET_TICK|GET_AMOUNT|GET_ADDRESS|EXPIRATION|MEMO';
         this.formats[1] = 'VERSION|SWAP_ACTION_INDEX|MEMO';
         this.formats[2] = 'VERSION|SWAP_ACTION_INDEX|EXPIRATION|MEMO';
 
@@ -77,16 +78,22 @@ class Swap {
                 data[name] = this.util.bcnum(value);
         }
 
-        // Get information on the GIVE token
-        let giveTokenInfo = await this.indexerDb.getTokenInfo(data['GIVE_TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
-
-        // Get information on the GET token
-        let getTokenInfo = false;
-        if(data['GET_COIN']==this.config['COIN']){
-            getTokenInfo = await this.indexerDb.getTokenInfo(data['GET_TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
-        } else {
-            // TODO : Add code here to get GET token from different COIN network
+        // Get information on the GIVE and GET tokens
+        let giveTokenInfo = false;
+        let getTokenInfo  = false;
+        if(format==0){
+            giveTokenInfo = await this.indexerDb.getTokenInfo(data['GIVE_TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
+            if(data['GET_COIN']==this.config['COIN']){
+                getTokenInfo = await this.indexerDb.getTokenInfo(data['GET_TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
+            } else {
+                // TODO : add code to xchain-hub to validate that GET_TICK is valid on GET_COIN, and if not, mark as invalid
+            }
         }
+
+        // Get information on a swap given the COIN network and SWAP_ACTION_INDEX
+        var swapInfo = false;
+        if(format==1 || format==2)
+            swapInfo = await this.indexerDb.getSwapInfo(this.config['COIN'], data['SWAP_ACTION_INDEX'])
 
         // Get source address balances and preferences
         let balances    = await this.indexerDb.getAddressBalances(data['SOURCE'], null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
@@ -95,20 +102,32 @@ class Swap {
         // Create the fees object 
         let fees = this.util.createFeesObject(data, preferences);
 
+        // Default GET_ADDRESS to SOURCE address if COIN networks are the same and GET_ADDRESS is not given
+        if(this.config['COIN']==data['GET_COIN'] && this.util.isNull(data['GET_ADDRESS']))
+            data['GET_ADDRESS'] = data['SOURCE'];
+
         /*****************************************************************
          * TICK & COIN Validations
          ****************************************************************/
 
-        // Validate GET_COIN is valid
-        if(!error && !this.config['COINS'].includes(data['GET_COIN']))
+        // Validate GIVE_COIN is valid
+        if(!error && format==0 && !this.config['COINS'].includes(data['GIVE_COIN']))
             error = 'invalid: GIVE_COIN (unsupported COIN network)';
 
+        // Validate GET_COIN is valid
+        if(!error && format==0 && !this.config['COINS'].includes(data['GET_COIN']))
+            error = 'invalid: GET_COIN (unsupported COIN network)';
+
+        // validate GIVE_COIN network is current COIN network
+        if(!error && format==0 && this.config['COIN']!=data['GIVE_COIN'])
+            error = "invalid: GIVE_COIN (network)";
+
         // Validate GIVE_TICK exists
-        if(!error && !giveTokenInfo)
+        if(!error && format==0 && !giveTokenInfo)
             error = 'invalid: GIVE_TICK (unknown)';
 
         // Validate GET_TICK exists
-        if(!error && !getTokenInfo)
+        if(!error && format==0 && !getTokenInfo)
             error = 'invalid: GET_TICK (unknown)';
 
         /*****************************************************************
@@ -120,23 +139,23 @@ class Swap {
         let getTickDivisible  = (getTokenInfo['DECIMALS]']==0) ? 0 : 1;
 
         // Verify GIVE_AMOUNT format
-        if(!error && !this.util.isNull(data['GIVE_AMOUNT']) && !this.util.isValidAmountFormat(giveTickDivisible, data['GIVE_AMOUNT']))
+        if(!error && format==0 && !this.util.isNull(data['GIVE_AMOUNT']) && !this.util.isValidAmountFormat(giveTickDivisible, data['GIVE_AMOUNT']))
             error = "invalid: GIVE_AMOUNT (format)";
 
         // Verify GET_AMOUNT format
-        if(!error && !this.util.isNull(data['GET_AMOUNT']) && !this.util.isValidAmountFormat(getTickDivisible, data['GET_AMOUNT']))
+        if(!error && format==0 && !this.util.isNull(data['GET_AMOUNT']) && !this.util.isValidAmountFormat(getTickDivisible, data['GET_AMOUNT']))
             error = "invalid: GET_AMOUNT (format)";
 
         // Verify GET_ADDRESS is given if COIN network differs from GET_COIN network
-        if(!error && this.config['COIN']!=data['GET_COIN'] && this.util.isNull(data['GET_ADDRESS']))
+        if(!error && format==0 && this.config['COIN']!=data['GET_COIN'] && this.util.isNull(data['GET_ADDRESS']))
             error = "invalid: GET_ADDRESS";
 
         // Verify GET_ADDRESS is valid for the given GET_COIN network
-        if(!error && !this.util.isNull(data['GET_ADDRESS']) && !this.util.isCryptoAddress(data['GET_ADDRESS']))
+        if(!error && format==0 && !this.util.isNull(data['GET_ADDRESS']) && !this.util.isCryptoAddress(data['GET_ADDRESS']))
             error = "invalid: GET_ADDRESS (format)";
 
         // Validate that EXPIRATION is an integer
-        if(!error && (this.util.isNull(data['EXPIRATION']) || !this.util.isNumeric(data['EXPIRATION']) || !this.util.isInteger(data['EXPIRATION'])))
+        if(!error && (format==0 || format==2) && (this.util.isNull(data['EXPIRATION']) || !this.util.isNumeric(data['EXPIRATION']) || !this.util.isInteger(data['EXPIRATION'])))
             error = "invalid: EXPIRATION (format)";
 
         /*****************************************************************
@@ -148,7 +167,7 @@ class Swap {
             error = 'invalid: SOURCE (sleeping)';
 
         // Verify TICK is allowed to perform action
-        if(!error && !await this.indexerDb.isActionAllowed(null, data['GIVE_TICK'], data['BLOCK_INDEX']))
+        if(!error && format==0 && !await this.indexerDb.isActionAllowed(null, data['GIVE_TICK'], data['BLOCK_INDEX']))
             error = 'invalid: TICK (sleeping)';
 
         // Verify no pipe in MEMO (pipe is field delimiter)
@@ -164,25 +183,47 @@ class Swap {
             error = 'invalid: MEMO (length)';
 
         // Verify TICK action is allowed from SOURCE (allow/block lists)
-        if(!error && !await this.indexerDb.isActionAllowed(data['SOURCE'], data['GIVE_TICK']))
+        if(!error && format==0 && !await this.indexerDb.isActionAllowed(data['SOURCE'], data['GIVE_TICK']))
             error = 'invalid: SOURCE (not authorized)';
+
+        // Validate SWAP_ACTION_INDEX is valid SWAP
+        if(!error && (format==1 || format==2) && !swapInfo)
+            error = 'invalid: SWAP_ACTION_INDEX (unknown)';
+
+        // Verify SOURCE address is owner of the SWAP_ACTION_INDEX swap
+        if(!error && (format==1 || format==2) && data['SOURCE']!=swapInfo['SOURCE'])
+            error = 'invalid: SOURCE (not owner)';
 
         // Validate that EXPIRATION is in the future (unixtime is in seconds, not milliseconds)
         if(!error && !this.util.isNull(data['EXPIRATION']) && data['EXPIRATION'] <= Math.floor(Date.now() / 1000))
             error = "invalid: EXPIRATION (past)";
 
         // Verify SOURCE has enough balances to cover GIVE_AMOUNT
-        if(!error && !this.util.hasBalance(balances, giveTokenInfo['TICK_ID'], data['GIVE_AMOUNT']))
+        if(!error && format==0 && !this.util.hasBalance(balances, giveTokenInfo['TICK_ID'], data['GIVE_AMOUNT']))
             error = 'invalid: insufficient funds (GIVE_AMOUNT)';
-    
+
         // Adjust balances to reduce by SWAP GIVE_AMOUNT
-        if(!error)
+        if(!error && format==0)
             balances = this.util.debitBalances(balances, giveTokenInfo['TICK_ID'], data['GIVE_AMOUNT']);
 
         // Calculate total fee for this swap based on EXPIRATION timestamp
-        let expire_seconds = this.util.bcsub(data['EXPIRATION'],data['BLOCK_TIME'], 0); // expiration - current time = expire in X seconds
-        let expire_days    = this.util.bcdiv(expire_seconds, 86400, 0);                 // 86400 seconds in a day
-        fees['AMOUNT']     = (expire_days > this.config['EXPIRATION_FEE_FREE_DAYS']) ? (this.util.bcmul(expire_days, this.config['EXPIRATION_FEE_PER_DAY'],8)) : 0;
+        let expire_seconds = 0;
+        let expire_days    = 0;
+        fees['AMOUNT']     = 0;
+        if(!error && (format==0 || format==2) && !this.util.isNull(data['EXPIRATION'])){
+            expire_seconds = this.util.bcsub(data['EXPIRATION'],data['BLOCK_TIME'], 0); // expiration - current time = expire in X seconds
+            expire_days    = this.util.bcdiv(expire_seconds, 86400, 0);                 // 86400 seconds in a day
+        }
+
+        // Handle calculating fees based on EXPIRATION and number of days
+        if(format==0){
+            // Calculate fee to create swap
+            fees['AMOUNT'] = (expire_days > this.config['EXPIRATION_FEE_FREE_DAYS']) ? (this.util.bcmul(expire_days, this.config['EXPIRATION_FEE_PER_DAY'],8)) : 0;
+        } else if (format==2){
+            // Calculate fee to edit swap
+            // TODO: new expiration - old expiration = 
+
+        }
 
         // Verify SOURCE has enough balances to cover FEE AMOUNT
         if(!error && !this.util.hasBalance(balances, fees['TICK_ID'], fees['AMOUNT']))
@@ -199,11 +240,25 @@ class Swap {
         // Set SWAP status to 'open' when creating a valid swap
         swap['SWAP_STATUS'] = (status=='valid') ? 'open' : 'invalid';
 
-        // Print status message (1 BTC:RAREPEPE = 3 DOGE:BACON)
-        console.log("\t SWAP : " + data['GIVE_AMOUNT'] + ' ' + this.config['COIN'] + ':' + data['GIVE_TICK'] + ' = '  +  data['GET_AMOUNT'] + ' ' + data['GET_COIN'] + ':' + data['GET_TICK'] + ' : ' + data['STATUS']);
+        // Print status message
+        if(format==0)
+            console.log("\t SWAP : " + data['GIVE_AMOUNT'] + ' ' + this.config['COIN'] + ':' + data['GIVE_TICK'] + ' = '  +  data['GET_AMOUNT'] + ' ' + data['GET_COIN'] + ':' + data['GET_TICK'] + ' : ' + data['STATUS']);
+        if(format==1)
+            console.log("\t SWAP (cancel): " + this.config['COIN'] + ':' + data['SWAP_ACTION_INDEX'] + ' : ' + data['STATUS']);
+        if(format==2)
+            console.log("\t SWAP (edit): " + this.config['COIN'] + ':' + data['SWAP_ACTION_INDEX'] + ' : ' + data['EXPIRATION'] + ' : ' + data['STATUS']);
 
         // Create record in swaps table
-        await this.indexerDb.createSwap(swap);
+        if(format==0)
+            await this.indexerDb.createSwap(swap);
+
+        // Create record in swap_cancels table
+        if(format==1)
+            await this.indexerDb.createSwapCancel(swap);
+
+        // Create record in swap_edits table
+        if(format==2)
+            await this.indexerDb.createSwapEdit(swap);
 
         // If this was a valid transaction, add GIVE_AMOUNT to escrow
         if(status=='valid'){
@@ -213,20 +268,95 @@ class Swap {
                 debits  = [],
                 escrows = [];
 
-            // Store the SOURCE, GIVE_TICK, and fees TICK in addresses list
-            this.util.addAddressTicker(data['SOURCE'], [data['GIVE_TICK'], fees['TICK']]);
+            // Format 0 - Create Swap
+            if(format==0){
+                // Store the SOURCE, GIVE_TICK, and fees TICK in addresses list
+                this.util.addAddressTicker(data['SOURCE'], [data['GIVE_TICK'], fees['TICK']]);
 
-            // Debit GIVE_AMOUNT of GIVE_TICK from SOURCE
-            debits.push([data['GIVE_TICK'], data['GIVE_AMOUNT'], data['SOURCE']]);
+                // Debit GIVE_AMOUNT of GIVE_TICK from SOURCE
+                debits.push([data['GIVE_TICK'], data['GIVE_AMOUNT'], data['SOURCE']]);
 
-            // Escrow GIVE_AMOUNT of GIVE_TICK from SOURCE
-            escrows.push([data['GIVE_TICK'], data['GIVE_AMOUNT'], data['SOURCE']]);
+                // Escrow GIVE_AMOUNT of GIVE_TICK from SOURCE
+                escrows.push([data['GIVE_TICK'], data['GIVE_AMOUNT'], data['SOURCE']]);
+
+                // Create record in the swaps_statuses table
+                await this.indexerDb.createSwapStatus(data['ACTION_INDEX'], data['ACTION_INDEX'], 'open');
+            }
+
+            // Format 1 - Cancel Swap
+            if(format==1){
+                // Store the SOURCE and GIVE_TICK in addresses list
+                this.util.addAddressTicker(swapInfo['SOURCE'], swapInfo['GIVE_TICK']);
+
+                // Debit GIVE_AMOUNT of GIVE_TICK from escrow
+                await this.indexerDb.removeEscrowRecord(swapInfo['ACTION_INDEX']);
+
+                // Credit GIVE_AMOUNT of GIVE_TICK to SOURCE
+                credits.push([swapInfo['GIVE_TICK'], swapInfo['GIVE_AMOUNT'], swapInfo['SOURCE']]);
+
+                // Create record in the swaps_statuses table
+                await this.indexerDb.createSwapStatus(data['ACTION_INDEX'], swapInfo['ACTION_INDEX'], 'cancelled');
+            }
+
+            // Format 2 - Edit swap (EXPIRATION)
+            if(format==2){
+                // TODO : update swap EXPIRATION value (open->cancelled)
+            }
 
             // Handle any transaction FEE according the users's ADDRESS preferences
             [credits, debits] = await this.util.processTransactionFees(this.indexerDb, credits, debits, fees);
 
             // Process any transaction ledger changes (credits / debits / escrows)
             await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits, escrows);
+
+
+            // /*****************************************************************
+            //  * SWAP Matching Validations
+            //  ****************************************************************/
+
+            // // Get a list of any matching open swaps
+            // let matches = await this.indexerDb.getSwapMatches(this.config['COIN'], data['GIVE_TICK'], data['GIVE_AMOUNT'], data['GET_COIN'], data['GET_TICK'], data['GET_AMOUNT']);
+
+            // // Loop through matches and determine if we have a valid match
+            // let match = false;
+            // for(let info in matches){
+            //     // Verify both addresses are allowed to hold ticks (allow/block lists)
+
+            // }
+
+            // // TODO : Rework this code to add multi-chain support once xchain-core component is functional
+            // if(match){
+            //     // Reset credits, debits, and escrow arrays
+            //     credits = [],
+            //     debits  = [],
+            //     escrows = [];
+
+            //     // Store the SOURCE and GET_TICK in addresses list
+            //     this.util.addAddressTicker(match['SOURCE'], match['GET_TICK']);
+
+            //     // Credit SOURCE with GET_AMOUNT of GET_TICK
+            //     credits.push([match['GET_TICK'], match['GET_AMOUNT'], match['SOURCE']]);
+
+            //     // Debit GET_AMOUNT of GET_TICK from escrows table 
+            //     escrows.push([match['GET_TICK'], -match['GET_AMOUNT'], match['SOURCE']]);
+
+            //     // Store the DESTINATION and GIVE_TICK in addresses list
+            //     this.util.addAddressTicker(match['DESTINATION'], match['GIVE_TICK']);
+
+            //     // Credit DESTINATION with GIVE_AMOUNT of GIVE_TICK
+            //     credits.push([match['GIVE_TICK'], match['GIVE_AMOUNT'], match['DESTINATION']]);
+
+            //     // Debit GIVE_AMOUNT of GIVE_TICK from escrows table 
+            //     escrows.push([match['GIVE_TICK'], -match['GIVE_AMOUNT'], match['DESTINATION']]);
+
+            //     // Process any transaction ledger changes (credits / debits / escrows)
+            //     await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits, escrows);
+
+            //     // Create record of match in swap_matches table
+            //     await this.indexerDb.createSwapMatch(match);
+
+            //     // Update record in swaps table to change status (open->closed)
+            // }
 
             // If this is a reparse, bail out before updating balances and token information
             // if(reparse)

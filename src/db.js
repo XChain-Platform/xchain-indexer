@@ -3321,10 +3321,11 @@ class Database {
         await this.releaseConnection();
     }
 
-    // Create/Update record in `swap` table
+    // Create/Update record in `swaps` table
     async createSwap(data){
         // Normalize data
         let source_id      = await this.createAddress(data['SOURCE']);
+        let give_coin_id   = await this.createCoin(data['GIVE_COIN']);
         let give_tick_id   = await this.createTicker(data['GIVE_TICK']);
         let get_coin_id    = await this.createCoin(data['GET_COIN']);
         let get_tick_id    = await this.createTicker(data['GET_TICK']);
@@ -3359,6 +3360,7 @@ class Database {
                         swaps
                     SET
                         source_id=?,
+                        give_coin_id=?,
                         give_tick_id=?,
                         give_amount=?,
                         get_coin_id=?,
@@ -3367,15 +3369,14 @@ class Database {
                         get_address_id=?,
                         expiration=?,
                         memo_id=?,
-                        status_id=?,
-                        swap_status_id=?
+                        status_id=?
                     WHERE 
                         action_index=?`;
         } else {
             // INSERT record
-            query = `INSERT INTO swaps (source_id, give_tick_id, give_amount, get_coin_id, get_tick_id, get_amount, get_address_id, expiration, memo_id, status_id, swap_status_id, action_index) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?)`;
+            query = `INSERT INTO swaps (source_id, give_coin_id, give_tick_id, give_amount, get_coin_id, get_tick_id, get_amount, get_address_id, expiration, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
         }
-        args = [source_id, give_tick_id, give_amount, get_coin_id, get_tick_id, get_amount, get_address_id, expiration, memo_id, status_id, swap_status_id, action_index];
+        args = [source_id, give_coin_id, give_tick_id, give_amount, get_coin_id, get_tick_id, get_amount, get_address_id, expiration, memo_id, status_id, action_index];
         // Create or Update the record in the swaps table
         try {
             let result = await db.query(query, args);
@@ -3384,6 +3385,196 @@ class Database {
         }
         await this.releaseConnection();
     }
+
+    // Create/Update record in `swap_statuses` table
+    // @param {action_index}     integer Action index of action
+    // @param {swap_action_tick} integer Action index of swap
+    // @param {status}           string  Status of the referenced swap (open/complete/cancelled/expired)
+    async createSwapStatus(action_index, swap_action_index, status){
+        // Normalize data
+        let status_id = await this.createStatus(status);
+        // Check if record already exists for this in swap_statuses table
+        let db     = await this.getConnection();
+        let query  = `SELECT
+                            action_index
+                        FROM
+                            swap_statuses
+                        WHERE
+                            action_index=?`;
+        let args = [action_index];
+        let exists = false;
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0)
+                exists = true;
+        } catch (error){
+            this.util.logError('Error looking up record in swap_statuses table:', error);
+        }
+        if(exists){
+            // UPDATE record
+            query = `UPDATE
+                        swap_statuses
+                    SET
+                        swap_action_index=?,
+                        status_id=?
+                    WHERE 
+                        action_index=?`;
+        } else {
+            // INSERT record
+            query = `INSERT INTO swap_statuses (swap_action_index, status_id, action_index) values (?, ?, ?)`;
+        }
+        args = [swap_action_index, status_id, action_index];
+        // Create or Update the record in the swap_statuses table
+        try {
+            let result = await db.query(query, args);
+        } catch (error){
+            this.util.logError('Error trying to create record in swap_statuses table:', error);
+        }
+        await this.releaseConnection();
+    }    
+
+    // Create/Update record in `swap_cancels` table
+    async createSwapCancel(data){
+        // Normalize data
+        let source_id         = await this.createAddress(data['SOURCE']);
+        let memo_id           = await this.createMemo(data['MEMO']);
+        let status_id         = await this.createStatus(data['STATUS']);
+        let action_index      = data['ACTION_INDEX'];
+        let swap_action_index = data['SWAP_ACTION_INDEX'];
+        // Check if record already exists for this swap_cancel
+        let db     = await this.getConnection();
+        let query  = `SELECT
+                            action_index
+                        FROM
+                            swap_cancels
+                        WHERE
+                            action_index=?`;
+        let args = [action_index];
+        let exists = false;
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0)
+                exists = true;
+        } catch (error){
+            this.util.logError('Error looking up record in swap_cancels table:', error);
+        }
+        if(exists){
+            // UPDATE record
+            query = `UPDATE
+                        swap_cancels
+                    SET
+                        source_id=?,
+                        memo_id=?,
+                        status_id=?,
+                        swap_action_index=?
+                    WHERE 
+                        action_index=?`;
+        } else {
+            // INSERT record
+            query = `INSERT INTO swap_cancels (source_id, memo_id, status_id, swap_action_index, action_index) values (?, ?, ?, ?, ?)`;
+        }
+        args = [source_id, memo_id, status_id, swap_action_index, action_index];
+        // Create or Update the record in the swap_cancels table
+        try {
+            let result = await db.query(query, args);
+        } catch (error){
+            this.util.logError('Error trying to create record in swap_cancels table:', error);
+        }
+        await this.releaseConnection();
+    }
+
+
+    // Return swap info for given action_index
+    async getSwapInfo(coin, action_index){
+        let swap = false;
+        let db    = await this.getConnection();
+        let query = `SELECT 
+                        s.action_index,
+                        t1.tick as give_tick,
+                        s.give_amount,
+                        c1.coin as get_coin,
+                        t2.tick as get_tick,
+                        s.get_amount,
+                        a2.address as get_address,
+                        a1.address as source,
+                        s.expiration,
+                        m1.memo,
+                        s1.status
+                    FROM 
+                        swaps s
+                        INNER JOIN index_addresses a1 ON (a1.id=s.source_id)
+                        INNER JOIN index_addresses a2 ON (a2.id=s.get_address_id)
+                        INNER JOIN index_tickers   t1 ON (t1.id=s.give_tick_id)
+                        INNER JOIN index_tickers   t2 ON (t2.id=s.get_tick_id)
+                        INNER JOIN index_coins     c1 ON (c1.id=s.get_coin_id)
+                        INNER JOIN index_memos     m1 ON (m1.id=s.memo_id)
+                        INNER JOIN index_statuses  s1 ON (s1.id=s.status_id)
+                    WHERE 
+                        c1.coin=? AND
+                        s.action_index=? 
+                    LIMIT 1`;
+        let args  = [coin, action_index];
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0){
+                swap = {};
+                swap['GIVE_COIN'] = this.config['COIN'];
+                for(let key in rows[0]){
+                    let name  = String(key).toUpperCase()
+                    let value = rows[0][key];
+                    if(name=='ACTION_INDEX')
+                        value = Number(value);
+                    swap[name] = value;
+                }
+                swap['SWAP_STATUS'] = await this.getSwapStatus(coin, action_index);
+            }
+        } catch (error) {
+            this.util.logError('Error looking up swap using swaps table:', error);
+        }
+        await this.releaseConnection();
+        return swap;
+    }
+
+    // Return swap info for given action_index
+    async getSwapStatus(action_index){
+        let status = false;
+        let db     = await this.getConnection();
+        let query  = `SELECT 
+                        s2.status
+                    FROM 
+                        swap_statuses s1
+                        INNER JOIN index_statuses s2 ON (s2.id=s1.status_id)
+                    WHERE 
+                        s1.swap_action_index=?
+                    ORDER BY
+                        s1.action_index DESC
+                    LIMIT 1`;
+        let args  = [action_index];
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0)
+                status = rows[0].status;
+        } catch (error) {
+            this.util.logError('Error looking up swap status using swap_statuses table:', error);
+        }
+        await this.releaseConnection();
+        return status;
+    }
+
+
+    // Handle removing an escrow record for a given ACTION_INDEX
+    async removeEscrowRecord(action_index){
+        let db    = await this.getConnection();
+        let query = `DELETE FROM escrows WHERE action_index=?`;
+        let args  = [action_index];
+        try {
+            let result = await db.query(query, args);
+        } catch (error) {
+            this.util.logError('Error deleting record from the escrows table:', error);
+        }
+        await this.releaseConnection();
+    }
+
 }
 
 module.exports = Database

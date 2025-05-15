@@ -48,7 +48,10 @@ class Rollback {
             'sends',
             'sleeps',
             'swaps',
+            'swap_cancels',
+            'swap_edits',
             'swap_matches',
+            'swap_statuses',
             'sweeps',
             'tokens'
         ];
