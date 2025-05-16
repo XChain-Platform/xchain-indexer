@@ -320,7 +320,7 @@ class Database {
         await this.releaseConnection();
     }
 
-    // Handle getting block time for a given block from the Decoder
+    // Handle getting block time for a given block
     async getBlockTime(block_index){
         let db = await this.getConnection();
         let query  = `SELECT block_time from blocks where block_index=?`; 
@@ -333,7 +333,7 @@ class Database {
                 return null;
             }            
         } catch (error) {
-            this.util.logError('Error getting decoder block time:', error);
+            this.util.logError('Error getting block time:', error);
             return false;
         }
         await this.releaseConnection();
@@ -550,8 +550,8 @@ class Database {
         // Ignore empty hashes and return hardcoded record id
         if(block_index==null||block_index=='')
             return false;
-        let block_id   = await this.getBlockId(block_index);
-        let hashes     = await this.getBlockHashes(block_index);
+        let block_id = await this.getBlockId(block_index);
+        let hashes   = await this.getBlockHashes(block_index);
         // Create transaction hashes in the `index_transactions` table and get the hash id
         let credits_hash_id = await this.createTransaction(hashes.credits.hash);
         let debits_hash_id  = await this.createTransaction(hashes.debits.hash);
@@ -3498,7 +3498,9 @@ class Database {
                         a1.address as source,
                         s.expiration,
                         m1.memo,
-                        s1.status
+                        s1.status,
+                        b1.block_index,
+                        b1.block_time
                     FROM 
                         swaps s
                         INNER JOIN index_addresses a1 ON (a1.id=s.source_id)
@@ -3508,6 +3510,9 @@ class Database {
                         INNER JOIN index_coins     c1 ON (c1.id=s.get_coin_id)
                         INNER JOIN index_memos     m1 ON (m1.id=s.memo_id)
                         INNER JOIN index_statuses  s1 ON (s1.id=s.status_id)
+                        INNER JOIN actions         a3 ON (a3.action_index=s.action_index)
+                        INNER JOIN transactions    t3 ON (t3.tx_index=a3.tx_index)
+                        INNER JOIN blocks          b1 ON (b1.block_index=t3.block_index)
                     WHERE 
                         c1.coin=? AND
                         s.action_index=? 
@@ -3521,11 +3526,16 @@ class Database {
                 for(let key in rows[0]){
                     let name  = String(key).toUpperCase()
                     let value = rows[0][key];
-                    if(name=='ACTION_INDEX')
+                    if(['ACTION_INDEX', 'BLOCK_INDEX', 'BLOCK_TIME', 'EXPIRATION'].includes(name))
                         value = Number(value);
                     swap[name] = value;
                 }
-                swap['SWAP_STATUS'] = await this.getSwapStatus(coin, action_index);
+                // Get SWAP_STATUS from the swap_statuses table
+                swap['SWAP_STATUS'] = await this.getSwapStatus(action_index);
+                // Check for any EXPIRATION edits in swap_edits table
+                let expires = await this.getSwapExpiration(action_index);
+                if(expires)
+                    swap['EXPIRATION'] = expires;
             }
         } catch (error) {
             this.util.logError('Error looking up swap using swaps table:', error);
@@ -3560,6 +3570,32 @@ class Database {
         return status;
     }
 
+    // Return swap expiration for given action_index
+    async getSwapExpiration(action_index){
+        let expiration = false;
+        let db     = await this.getConnection();
+        let query  = `SELECT 
+                        s1.expiration
+                    FROM 
+                        swap_edits s1
+                        INNER JOIN index_statuses s2 ON (s2.id=s1.status_id)
+                    WHERE 
+                        s1.swap_action_index=? AND
+                        s2.status=?
+                    ORDER BY
+                        s1.action_index DESC
+                    LIMIT 1`;
+        let args  = [action_index, 'valid'];
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0)
+                expiration = Number(rows[0].expiration);
+        } catch (error) {
+            this.util.logError('Error looking up swap expiration using swap_edits table:', error);
+        }
+        await this.releaseConnection();
+        return expiration;
+    }
 
     // Handle removing an escrow record for a given ACTION_INDEX
     async removeEscrowRecord(action_index){
@@ -3570,6 +3606,58 @@ class Database {
             let result = await db.query(query, args);
         } catch (error) {
             this.util.logError('Error deleting record from the escrows table:', error);
+        }
+        await this.releaseConnection();
+    }
+
+    // Create/Update record in `swap_edits` table
+    async createSwapEdit(data){
+        // Normalize data
+        let source_id         = await this.createAddress(data['SOURCE']);
+        let memo_id           = await this.createMemo(data['MEMO']);
+        let status_id         = await this.createStatus(data['STATUS']);
+        let action_index      = data['ACTION_INDEX'];
+        let swap_action_index = data['SWAP_ACTION_INDEX'];
+        let expiration        = data['EXPIRATION'];
+        // Check if record already exists for this swap_edits
+        let db     = await this.getConnection();
+        let query  = `SELECT
+                            action_index
+                        FROM
+                            swap_edits
+                        WHERE
+                            action_index=?`;
+        let args = [action_index];
+        let exists = false;
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0)
+                exists = true;
+        } catch (error){
+            this.util.logError('Error looking up record in swap_edits table:', error);
+        }
+        if(exists){
+            // UPDATE record
+            query = `UPDATE
+                        swap_edits
+                    SET
+                        expiration=?,
+                        source_id=?,
+                        memo_id=?,
+                        status_id=?,
+                        swap_action_index=?
+                    WHERE 
+                        action_index=?`;
+        } else {
+            // INSERT record
+            query = `INSERT INTO swap_edits (expiration, source_id, memo_id, status_id, swap_action_index, action_index) values (?, ?, ?, ?, ?, ?)`;
+        }
+        args = [expiration, source_id, memo_id, status_id, swap_action_index, action_index];
+        // Create or Update the record in the swap_edits table
+        try {
+            let result = await db.query(query, args);
+        } catch (error){
+            this.util.logError('Error trying to create record in swap_edits table:', error);
         }
         await this.releaseConnection();
     }
