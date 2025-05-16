@@ -8,8 +8,8 @@ CREATE TABLE swap_edits (
     status_id         BIGINT UNSIGNED           -- id of record in index_statuses table (valid / invalid)
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
-CREATE UNIQUE INDEX action_index      ON swap_cancels (action_index);
-CREATE        INDEX swap_action_index ON swap_cancels (swap_action_index);
-CREATE        INDEX source_id         ON swap_cancels (source_id);
-CREATE        INDEX memo_id           ON swap_cancels (memo_id);
-CREATE        INDEX status_id         ON swap_cancels (status_id);
+CREATE UNIQUE INDEX action_index      ON swap_edits (action_index);
+CREATE        INDEX swap_action_index ON swap_edits (swap_action_index);
+CREATE        INDEX source_id         ON swap_edits (source_id);
+CREATE        INDEX memo_id           ON swap_edits (memo_id);
+CREATE        INDEX status_id         ON swap_edits (status_id);

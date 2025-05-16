@@ -68,9 +68,6 @@ class Swap {
         if(!error)
             data = this.util.setActionParams(data, params, this.formats[format]);
 
-        // Clone the raw data for storage in swap table
-        let swap = structuredClone(data);
-
         // Convert NUMBER fields from string value to number value so comparisons are mathematical 
         for(let name of this.fieldList['NUMBER']){
             let value = data[name];
@@ -105,6 +102,9 @@ class Swap {
         // Default GET_ADDRESS to SOURCE address if COIN networks are the same and GET_ADDRESS is not given
         if(this.config['COIN']==data['GET_COIN'] && this.util.isNull(data['GET_ADDRESS']))
             data['GET_ADDRESS'] = data['SOURCE'];
+
+        // Clone the raw data for storage in swap table
+        let swap = structuredClone(data);
 
         /*****************************************************************
          * TICK & COIN Validations
@@ -194,6 +194,10 @@ class Swap {
         if(!error && (format==1 || format==2) && data['SOURCE']!=swapInfo['SOURCE'])
             error = 'invalid: SOURCE (not owner)';
 
+        // Validate SWAP_ACTION_INDEX is valid SWAP with a status of open
+        if(!error && (format==1 || format==2) && swapInfo['SWAP_STATUS']!='open')
+            error = 'invalid: SWAP_ACTION_INDEX (swap not open)';
+
         // Validate that EXPIRATION is in the future (unixtime is in seconds, not milliseconds)
         if(!error && !this.util.isNull(data['EXPIRATION']) && data['EXPIRATION'] <= Math.floor(Date.now() / 1000))
             error = "invalid: EXPIRATION (past)";
@@ -207,22 +211,28 @@ class Swap {
             balances = this.util.debitBalances(balances, giveTokenInfo['TICK_ID'], data['GIVE_AMOUNT']);
 
         // Calculate total fee for this swap based on EXPIRATION timestamp
-        let expire_seconds = 0;
-        let expire_days    = 0;
-        fees['AMOUNT']     = 0;
+        fees['AMOUNT'] = 0;
+
+        // Calculate the fee to charge based on the EXPIRATION
         if(!error && (format==0 || format==2) && !this.util.isNull(data['EXPIRATION'])){
-            expire_seconds = this.util.bcsub(data['EXPIRATION'],data['BLOCK_TIME'], 0); // expiration - current time = expire in X seconds
-            expire_days    = this.util.bcdiv(expire_seconds, 86400, 0);                 // 86400 seconds in a day
-        }
-
-        // Handle calculating fees based on EXPIRATION and number of days
-        if(format==0){
-            // Calculate fee to create swap
-            fees['AMOUNT'] = (expire_days > this.config['EXPIRATION_FEE_FREE_DAYS']) ? (this.util.bcmul(expire_days, this.config['EXPIRATION_FEE_PER_DAY'],8)) : 0;
-        } else if (format==2){
-            // Calculate fee to edit swap
-            // TODO: new expiration - old expiration = 
-
+            // Create Swap
+            if(format==0){
+                let expire_seconds = this.util.bcsub(data['EXPIRATION'],data['BLOCK_TIME'], 0);
+                let expire_days    = this.util.bcdiv(expire_seconds, 86400, 0);
+                fees['AMOUNT'] = (expire_days > this.config['EXPIRATION_FEE_FREE_DAYS']) ? (this.util.bcmul(expire_days, this.config['EXPIRATION_FEE_PER_DAY'],8)) : 0;
+            }
+            // Edit Swap
+            if(format==2 && data['EXPIRATION'] > swapInfo['EXPIRATION']){
+                let orig_expire_seconds = this.util.bcsub(swapInfo['EXPIRATION'],swapInfo['BLOCK_TIME'], 0);
+                let orig_expire_days    = this.util.bcdiv(orig_expire_seconds, 86400, 0);
+                let edit_expire_seconds = this.util.bcsub(data['EXPIRATION'],swapInfo['BLOCK_TIME'], 0);
+                let edit_expire_days    = this.util.bcdiv(edit_expire_seconds, 86400, 0);
+                // Only calculate FEE if increasing EXPIRATION date and greater than EXPIRATION_FEE_FREE_DAYS
+                if(data['EXPIRATION'] > swapInfo['EXPIRATION'] && edit_expire_days > this.config['EXPIRATION_FEE_FREE_DAYS']){
+                    let expire_days = this.util.bcsub(edit_expire_days, orig_expire_days, 0);
+                    fees['AMOUNT']  = this.util.bcmul(expire_days, this.config['EXPIRATION_FEE_PER_DAY'],8);
+                }
+            }
         }
 
         // Verify SOURCE has enough balances to cover FEE AMOUNT
@@ -300,7 +310,8 @@ class Swap {
 
             // Format 2 - Edit swap (EXPIRATION)
             if(format==2){
-                // TODO : update swap EXPIRATION value (open->cancelled)
+                // Store the SOURCE and fees TICK in addresses list
+                this.util.addAddressTicker(data['SOURCE'], fees['TICK']);
             }
 
             // Handle any transaction FEE according the users's ADDRESS preferences
