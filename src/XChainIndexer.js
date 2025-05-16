@@ -129,7 +129,7 @@ class XChainIndexer {
                 console.log('Resuming block parsing at block ' + startBlock + '...');
 
             var cnt = 0;
-            // lastIndexerBlock = 863012;
+            // lastIndexerBlock = 862605;
 
             // Loop through blocks until indexer has parsed lastDecoderBlock
             while( (!lastIndexerBlock || lastIndexerBlock < lastDecoderBlock )){
@@ -152,7 +152,8 @@ class XChainIndexer {
                 // lastIndexerBlock = startBlock;
 
                 // DEBUG : Rollback to a specific block
-                // let rollbackBlock = 799303;
+                // let rollbackBlock = 862000;
+                let rollbackBlock = 862630;
                 // if(lastIndexerBlock >= rollbackBlock){
                 //     await this.rollback.rollback(rollbackBlock);
                 //     this.util.throwError('Rolled back to ' + rollbackBlock);
@@ -165,10 +166,15 @@ class XChainIndexer {
                 for(const tx of blockTransactions)
                     await this.actions.processTransaction(tx);
 
-                // Create record in `blocks` table with hashes of the credits/debits/actions tables
-                let [credits, debits, actions] = await this.indexerDb.createBlock(lastIndexerBlock);
+                // TODO : Look for swaps/orders/dispensers that are past EXPIRATION
 
-                // Do a sanity check to verify that token supplys match data in credits/debits/balances tables 
+                // Lookup the block time for a given block
+                let blockTime = await this.decoderDb.getBlockTime(lastIndexerBlock);
+
+                // Create record in `blocks` table with hashes of the credits/debits/actions tables
+                let [credits, debits, actions] = await this.indexerDb.createBlock(lastIndexerBlock, blockTime);
+
+                // Do a sanity check to verify that token supplies match data in credits/debits/balances tables 
                 await this.indexerDb.sanityCheck(lastIndexerBlock);
 
                 // Log the total parse time for this block
@@ -179,10 +185,10 @@ class XChainIndexer {
                 cnt++;
 
                 // DEBUG : Exit processing at a select block
-                // if(lastIndexerBlock >= 802144){
-                //     // await this.rollback.rollback(rollbackBlock);
-                //     this.util.throwError('Exiting on target block');
-                // }
+                if(lastIndexerBlock >= 862636){
+                    // await this.rollback.rollback(rollbackBlock);
+                    this.util.throwError('Exiting on target block');
+                }
 
                 // DEBUG: Delay processing after X blocks
                 // if(cnt>=1)

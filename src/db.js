@@ -546,12 +546,11 @@ class Database {
     }
 
     // Handle creating/updating a block in the `blocks` table
-    async createBlock(block_index){
+    async createBlock(block_index, block_time){
         // Ignore empty hashes and return hardcoded record id
         if(block_index==null||block_index=='')
             return false;
         let block_id   = await this.getBlockId(block_index);
-        let block_time = await this.getBlockTime(block_index);
         let hashes     = await this.getBlockHashes(block_index);
         // Create transaction hashes in the `index_transactions` table and get the hash id
         let credits_hash_id = await this.createTransaction(hashes.credits.hash);
