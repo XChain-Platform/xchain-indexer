@@ -359,8 +359,8 @@ class Swap {
                     }
                 }
 
-                // Process the order match
-                // TODO : Revisit this code once multi-chain support is added to xchain-hub component
+                // Process the swap match
+                // TODO : Revisit this code once multi-chain swap support is added to xchain-hub component
                 if(match){
                     // Reset credits, debits, and escrow arrays
                     credits = [],
