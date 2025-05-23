@@ -373,7 +373,7 @@ class Swap {
                     action['TX_INDEX']    = data['TX_INDEX']
                     action['ACTION']      = 'SWAP_MATCH';
 
-                    // Create a record of this action in the actions table
+                    // Create a record of this SWAP_MATCH action in the actions table
                     data['ACTION_INDEX'] = await this.indexerDb.createActionIndex(action);
 
                     // Store the SOURCE and GET_TICK in addresses list
@@ -401,9 +401,7 @@ class Swap {
                     await this.indexerDb.createSwapStatus(data['ACTION_INDEX'], swap['ACTION_INDEX'],  'complete');
                     await this.indexerDb.createSwapStatus(data['ACTION_INDEX'], match['ACTION_INDEX'], 'complete');
                 }
-
             }
-
 
             // If this is a reparse, bail out before updating balances and token information
             // if(reparse)
