@@ -320,54 +320,90 @@ class Swap {
             // Process any transaction ledger changes (credits / debits / escrows)
             await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits, escrows);
 
+            /*****************************************************************
+             * SWAP Matching Validations
+             ****************************************************************/
 
-            // /*****************************************************************
-            //  * SWAP Matching Validations
-            //  ****************************************************************/
+            // Get a list of any matching open swaps
+            let matches = await this.indexerDb.getSwapMatches(data);
+            if(matches){
+                // Get information on the tokens involved in the swap
+                let getTokenInfo  = await this.indexerDb.getTokenInfo(data['GET_TICK'],  data['BLOCK_INDEX'], data['ACTION_INDEX']);
+                let giveTokenInfo = await this.indexerDb.getTokenInfo(data['GIVE_TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
 
-            // // Get a list of any matching open swaps
-            // let matches = await this.indexerDb.getSwapMatches(this.config['COIN'], data['GIVE_TICK'], data['GIVE_AMOUNT'], data['GET_COIN'], data['GET_TICK'], data['GET_AMOUNT']);
+                // List of addresses allowed or blocked from holding GET_TICK
+                let getTokenAllowList = (getTokenInfo['ALLOW_LIST']) ? await this.indexerDb.getList(getTokenInfo['ALLOW_LIST']) : false;
+                let getTokenBlockList = [getTokenInfo['BLOCK_LIST']] ? await this.indexerDb.getList(getTokenInfo['BLOCK_LIST']) : false;
 
-            // // Loop through matches and determine if we have a valid match
-            // let match = false;
-            // for(let info in matches){
-            //     // Verify both addresses are allowed to hold ticks (allow/block lists)
+                // List of addresses allowed or blocked from holding GIVE_TICK
+                let giveTokenAllowList = (giveTokenInfo['ALLOW_LIST']) ? await this.indexerDb.getList(giveTokenInfo['ALLOW_LIST']) : false;
+                let giveTokenBlockList = [giveTokenInfo['BLOCK_LIST']] ? await this.indexerDb.getList(giveTokenInfo['BLOCK_LIST']) : false;
 
-            // }
+                // Loop through matches and determine if we have a valid match
+                let match = false;
+                for(let swap of matches){
+                    let valid = true;
 
-            // // TODO : Rework this code to add multi-chain support once xchain-core component is functional
-            // if(match){
-            //     // Reset credits, debits, and escrow arrays
-            //     credits = [],
-            //     debits  = [],
-            //     escrows = [];
+                    // Check if GET_ADDRESS for both sides of swap are allowed (ALLOW/BLOCK list support)
+                    if((getTokenAllowList.length  && (!getTokenAllowList.includes(data['GET_ADDRESS'])  || !getTokenAllowList.includes(swap['GET_ADDRESS'])))  ||
+                       (getTokenBlockList.length  && ( getTokenBlockList.includes(data['GET_ADDRESS'])  ||  getTokenBlockList.includes(swap['GET_ADDRESS'])))  ||
+                       (giveTokenAllowList.length && (!giveTokenAllowList.includes(data['GET_ADDRESS']) || !giveTokenAllowList.includes(swap['GET_ADDRESS']))) ||
+                       (giveTokenBlockList.length && ( giveTokenBlockList.includes(data['GET_ADDRESS']) ||  giveTokenBlockList.includes(swap['GET_ADDRESS'])))){
+                        valid = false;
+                    }
 
-            //     // Store the SOURCE and GET_TICK in addresses list
-            //     this.util.addAddressTicker(match['SOURCE'], match['GET_TICK']);
+                    // If we found a valid match, stop looking for additional matches
+                    if(valid){
+                        match = swap;
+                        break;
+                    }
+                }
 
-            //     // Credit SOURCE with GET_AMOUNT of GET_TICK
-            //     credits.push([match['GET_TICK'], match['GET_AMOUNT'], match['SOURCE']]);
+                // Process the order match
+                // TODO : Revisit this code once multi-chain support is added to xchain-hub component
+                if(match){
+                    // Reset credits, debits, and escrow arrays
+                    credits = [],
+                    debits  = [],
+                    escrows = [];
 
-            //     // Debit GET_AMOUNT of GET_TICK from escrows table 
-            //     escrows.push([match['GET_TICK'], -match['GET_AMOUNT'], match['SOURCE']]);
+                    // Define SWAP_MATCH action
+                    let action = {}
+                    action['BLOCK_INDEX'] = data['BLOCK_INDEX'];
+                    action['TX_INDEX']    = data['TX_INDEX']
+                    action['ACTION']      = 'SWAP_MATCH';
 
-            //     // Store the DESTINATION and GIVE_TICK in addresses list
-            //     this.util.addAddressTicker(match['DESTINATION'], match['GIVE_TICK']);
+                    // Create a record of this action in the actions table
+                    data['ACTION_INDEX'] = await this.indexerDb.createActionIndex(action);
 
-            //     // Credit DESTINATION with GIVE_AMOUNT of GIVE_TICK
-            //     credits.push([match['GIVE_TICK'], match['GIVE_AMOUNT'], match['DESTINATION']]);
+                    // Store the SOURCE and GET_TICK in addresses list
+                    this.util.addAddressTicker(match['SOURCE'], match['GET_TICK']);
 
-            //     // Debit GIVE_AMOUNT of GIVE_TICK from escrows table 
-            //     escrows.push([match['GIVE_TICK'], -match['GIVE_AMOUNT'], match['DESTINATION']]);
+                    // Credit tokens to GET_ADDRESS in swaps
+                    credits.push([match['GET_TICK'], match['GET_AMOUNT'], match['GET_ADDRESS']]);
+                    credits.push([data['GET_TICK'],  data['GET_AMOUNT'],  data['GET_ADDRESS']]);
 
-            //     // Process any transaction ledger changes (credits / debits / escrows)
-            //     await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits, escrows);
+                    // Debit tokens from escrows table 
+                    escrows.push([match['GET_TICK'], -match['GET_AMOUNT'], data['SOURCE']]);
+                    escrows.push([data['GET_TICK'],  -data['GET_AMOUNT'],  match['SOURCE']]);
 
-            //     // Create record of match in swap_matches table
-            //     await this.indexerDb.createSwapMatch(match);
+                    // Store the GET_ADDRESS and TICK in addresses list
+                    this.util.addAddressTicker(match['GET_ADDRESS'], match['GET_TICK']);
+                    this.util.addAddressTicker(data['GET_ADDRESS'],  data['GET_TICK']);
 
-            //     // Update record in swaps table to change status (open->closed)
-            // }
+                    // Process any transaction ledger changes (credits / debits / escrows)
+                    await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits, escrows);
+
+                    // Create record of match in swap_matches table
+                    await this.indexerDb.createSwapMatch(data['ACTION_INDEX'], swap, match, 'valid');
+
+                    // Update record in swaps table to change status (open->complete)
+                    await this.indexerDb.createSwapStatus(data['ACTION_INDEX'], swap['ACTION_INDEX'],  'complete');
+                    await this.indexerDb.createSwapStatus(data['ACTION_INDEX'], match['ACTION_INDEX'], 'complete');
+                }
+
+            }
+
 
             // If this is a reparse, bail out before updating balances and token information
             // if(reparse)
@@ -384,9 +420,6 @@ class Swap {
 
             // Update supplies for tokens
             await this.indexerDb.updateTokens(tickers);
-
-            // TODO: Handle SWAP matching code
-            // Verify both addresses are allowed to hold ticks (allow/block lists)
 
         }
 
