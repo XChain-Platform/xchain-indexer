@@ -96,6 +96,23 @@ module.exports = {
         config['MAX_MESSAGE_LENGTH']     = 1048576; // 1 MB = 1,048,576 Characters
         config['MAX_MESSAGE_KEY_LENGTH'] = 1048576; // 1 MB = 1,048,576 Characters
 
+        // Define list of LOCK fields
+        config['LOCK_FIELDS'] = [
+            'LOCK_MAX_SUPPLY',
+            'LOCK_MINT',
+            'LOCK_MINT_SUPPLY',
+            'LOCK_MAX_MINT',
+            'LOCK_DESCRIPTION',
+            'LOCK_RUG',
+            'LOCK_SLEEP',
+            'LOCK_CALLBACK'
+        ];        
+
+        // Define list of LIST fields
+        config['LIST_FIELDS'] = [
+            'ALLOW_LIST',
+            'BLOCK_LIST'
+        ];
 
         // Merge indexer config and COIN config into a single config object
         let fullConfig = Object.assign({}, config, coinConfig);

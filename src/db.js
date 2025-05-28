@@ -1359,29 +1359,13 @@ class Database {
 
     // Create/Update record in `issues` table
     async createIssue(data){
-        // Define list of LOCK fields
-        let locks = [
-            'LOCK_MAX_SUPPLY',
-            'LOCK_MINT',
-            'LOCK_MINT_SUPPLY',
-            'LOCK_MAX_MINT',
-            'LOCK_DESCRIPTION',
-            'LOCK_RUG',
-            'LOCK_SLEEP',
-            'LOCK_CALLBACK'
-        ];
-        // Define list of LIST fields
-        let lists = [
-            'ALLOW_LIST',
-            'BLOCK_LIST'
-        ];
-        // Standardize lock values to explicitly unlocked (0) or locked (1)
-        for(let lock of locks){
+        // Standardize LOCK values to explicitly unlocked (0) or locked (1)
+        for(let lock of this.config['LOCK_FIELDS']){
             if([0,1].indexOf(data[lock]) == -1)
                 delete data[lock];
         }
-        // Standardize list values to numeric or NULL
-        for(let list of lists){
+        // Standardize LIST values to numeric or NULL
+        for(let list of this.config['LIST_FIELDS']){
             if(this.util.isNull(data[list]) || !this.util.isNumeric(data[list]))
                 delete data[list];
         }
@@ -3322,6 +3306,11 @@ class Database {
 
     // Create/Update record in `swaps` table
     async createSwap(data){
+        // Standardize LIST values to numeric or NULL
+        for(let list of this.config['LIST_FIELDS'] ){
+            if(this.util.isNull(data[list]) || !this.util.isNumeric(data[list]))
+                delete data[list];
+        }
         // Normalize data
         let source_id      = await this.createAddress(data['SOURCE']);
         let give_coin_id   = await this.createCoin(data['GIVE_COIN']);
@@ -3336,6 +3325,8 @@ class Database {
         let give_amount    = data['GIVE_AMOUNT'];
         let get_amount     = data['GET_AMOUNT'];
         let expiration     = data['EXPIRATION'];
+        let allow_list     = data['ALLOW_LIST'];
+        let block_list     = data['BLOCK_LIST'];
         // Check if record already exists for this swap
         let db     = await this.getConnection();
         let query  = `SELECT
@@ -3367,15 +3358,17 @@ class Database {
                         get_amount=?,
                         get_address_id=?,
                         expiration=?,
+                        allow_list=?,
+                        block_list=?,
                         memo_id=?,
                         status_id=?
                     WHERE 
                         action_index=?`;
         } else {
             // INSERT record
-            query = `INSERT INTO swaps (source_id, give_coin_id, give_tick_id, give_amount, get_coin_id, get_tick_id, get_amount, get_address_id, expiration, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+            query = `INSERT INTO swaps (source_id, give_coin_id, give_tick_id, give_amount, get_coin_id, get_tick_id, get_amount, get_address_id, expiration, allow_list, block_list, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
         }
-        args = [source_id, give_coin_id, give_tick_id, give_amount, get_coin_id, get_tick_id, get_amount, get_address_id, expiration, memo_id, status_id, action_index];
+        args = [source_id, give_coin_id, give_tick_id, give_amount, get_coin_id, get_tick_id, get_amount, get_address_id, expiration, allow_list, block_list, memo_id, status_id, action_index];
         // Create or Update the record in the swaps table
         try {
             let result = await db.query(query, args);
@@ -3533,10 +3526,14 @@ class Database {
                 }
                 // Get SWAP_STATUS from the swap_statuses table
                 swap['SWAP_STATUS'] = await this.getSwapStatus(action_index);
-                // Check for any EXPIRATION edits in swap_edits table
-                let expires = await this.getSwapExpiration(action_index);
-                if(expires)
-                    swap['EXPIRATION'] = expires;
+                // Get updated swap properties from the swap_edits table
+                let edit = await this.getSwapEdits(action_index);
+                if(edit.expiration)
+                    swap['EXPIRATION'] = edit.expiration;
+                if(edit.allow_list)
+                    swap['ALLOW_LIST'] = edit.allow_list;
+                if(edit.block_list)
+                    swap['BLOCK_LIST'] = edit.block_list;
             }
         } catch (error) {
             this.util.logError('Error looking up swap using swaps table:', error);
@@ -3571,12 +3568,19 @@ class Database {
         return status;
     }
 
-    // Return swap expiration for given action_index
-    async getSwapExpiration(action_index){
-        let expiration = false;
+    // Return swap edit information for given action_index
+    async getSwapEdits(action_index){
+        // Define empty edit object
+        let edit  = {
+            expiration: false,
+            allow_list: false,
+            block_list: false
+        };
         let db     = await this.getConnection();
         let query  = `SELECT 
-                        s1.expiration
+                        s1.expiration,
+                        s1.allow_list,
+                        s1.block_list
                     FROM 
                         swap_edits s1
                         INNER JOIN index_statuses s2 ON (s2.id=s1.status_id)
@@ -3584,18 +3588,22 @@ class Database {
                         s1.swap_action_index=? AND
                         s2.status=?
                     ORDER BY
-                        s1.action_index DESC
-                    LIMIT 1`;
+                        s1.action_index ASC`;
         let args  = [action_index, 'valid'];
         try {
             let rows = await db.query(query, args);
-            if(rows.length > 0)
-                expiration = Number(rows[0].expiration);
+            if(rows.length > 0){
+                for(let row of rows){
+                    if(!this.util.isNull(row.expiration) && this.util.isNumeric(row.expiration)) edit.expiration = row.expiration
+                    if(!this.util.isNull(row.allow_list) && this.util.isNumeric(row.allow_list)) edit.allow_list = row.allow_list
+                    if(!this.util.isNull(row.block_list) && this.util.isNumeric(row.block_list)) edit.block_list = row.block_list
+                }
+            }
         } catch (error) {
-            this.util.logError('Error looking up swap expiration using swap_edits table:', error);
+            this.util.logError('Error looking up swap edits using swap_edits table:', error);
         }
         await this.releaseConnection();
-        return expiration;
+        return edit;
     }
 
     // Handle removing an escrow record for a given ACTION_INDEX
@@ -3613,6 +3621,11 @@ class Database {
 
     // Create/Update record in `swap_edits` table
     async createSwapEdit(data){
+        // Standardize LIST values to numeric or NULL
+        for(let list of this.config['LIST_FIELDS']){
+            if(this.util.isNull(data[list]) || !this.util.isNumeric(data[list]))
+                delete data[list];
+        }
         // Normalize data
         let source_id         = await this.createAddress(data['SOURCE']);
         let memo_id           = await this.createMemo(data['MEMO']);
@@ -3620,6 +3633,8 @@ class Database {
         let action_index      = data['ACTION_INDEX'];
         let swap_action_index = data['SWAP_ACTION_INDEX'];
         let expiration        = data['EXPIRATION'];
+        let allow_list        = data['ALLOW_LIST'];
+        let block_list        = data['BLOCK_LIST'];
         // Check if record already exists for this swap_edits
         let db     = await this.getConnection();
         let query  = `SELECT
@@ -3643,6 +3658,8 @@ class Database {
                         swap_edits
                     SET
                         expiration=?,
+                        allow_list=?,
+                        block_list=?,
                         source_id=?,
                         memo_id=?,
                         status_id=?,
@@ -3651,9 +3668,9 @@ class Database {
                         action_index=?`;
         } else {
             // INSERT record
-            query = `INSERT INTO swap_edits (expiration, source_id, memo_id, status_id, swap_action_index, action_index) values (?, ?, ?, ?, ?, ?)`;
+            query = `INSERT INTO swap_edits (expiration, allow_list, block_list,source_id, memo_id, status_id, swap_action_index, action_index) values (?, ?, ?, ?, ?, ?, ?, ?)`;
         }
-        args = [expiration, source_id, memo_id, status_id, swap_action_index, action_index];
+        args = [expiration, allow_list, block_list, source_id, memo_id, status_id, swap_action_index, action_index];
         // Create or Update the record in the swap_edits table
         try {
             let result = await db.query(query, args);
