@@ -13,6 +13,8 @@
  * - GET_AMOUNT        -  Quantity of `GET_TICK` requested in return
  * - GET_ADDRESS       -  Address to receive `GET_TICK` on `GET_COIN` network
  * - EXPIRATION        -  Timestamp of when swap should expire, in Unix time
+ * - ALLOW_LIST        - `ACTION_INDEX` of a `LIST` of addresses allowed to match swap
+ * - BLOCK_LIST        - `ACTION_INDEX` of a `LIST` of addresses NOT allowed to match swap
  * - MEMO              -  An optional memo to include
  * - SWAP_ACTION_INDEX -  `ACTION_INDEX` of existing `SWAP`
  * 
@@ -39,15 +41,15 @@ class Swap {
 
         // Define list of known FORMATS
         this.formats = {};
-        this.formats[0] = 'VERSION|GIVE_COIN|GIVE_TICK|GIVE_AMOUNT|GET_COIN|GET_TICK|GET_AMOUNT|GET_ADDRESS|EXPIRATION|MEMO';
+        this.formats[0] = 'VERSION|GIVE_COIN|GIVE_TICK|GIVE_AMOUNT|GET_COIN|GET_TICK|GET_AMOUNT|GET_ADDRESS|EXPIRATION|ALLOW_LIST|BLOCK_LIST|MEMO';
         this.formats[1] = 'VERSION|SWAP_ACTION_INDEX|MEMO';
-        this.formats[2] = 'VERSION|SWAP_ACTION_INDEX|EXPIRATION|MEMO';
+        this.formats[2] = 'VERSION|SWAP_ACTION_INDEX|EXPIRATION|ALLOW_LIST|BLOCK_LIST|MEMO';
 
         // Define lists of various fields
         this.fieldList = {};
 
         // Define list of NUMBER fields (used to convert values from string to number)
-        this.fieldList['NUMBER'] = ['GIVE_AMOUNT', 'GET_AMOUNT', 'EXPIRATION', 'SWAP_ACTION_INDEX'];
+        this.fieldList['NUMBER'] = ['GIVE_AMOUNT', 'GET_AMOUNT', 'EXPIRATION', 'ALLOW_LIST', 'BLOCK_LIST', 'SWAP_ACTION_INDEX'];
 
     }
 
@@ -201,6 +203,8 @@ class Swap {
         // Validate that EXPIRATION is in the future (unixtime is in seconds, not milliseconds)
         if(!error && !this.util.isNull(data['EXPIRATION']) && data['EXPIRATION'] <= Math.floor(Date.now() / 1000))
             error = "invalid: EXPIRATION (past)";
+
+        // TODO: Add checks to validate ALLOW_LIST and BLOCK_LIST
 
         // Verify SOURCE has enough balances to cover GIVE_AMOUNT
         if(!error && format==0 && !this.util.hasBalance(balances, giveTokenInfo['TICK_ID'], data['GIVE_AMOUNT']))
