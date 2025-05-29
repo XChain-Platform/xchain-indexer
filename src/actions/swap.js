@@ -45,6 +45,9 @@ class Swap {
         this.formats[1] = 'VERSION|SWAP_ACTION_INDEX|MEMO';
         this.formats[2] = 'VERSION|SWAP_ACTION_INDEX|EXPIRATION|ALLOW_LIST|BLOCK_LIST|MEMO';
 
+        // Define array of acceptable list types (2=Address)
+        this.listTypes = [2];
+
         // Define lists of various fields
         this.fieldList = {};
 
@@ -204,7 +207,23 @@ class Swap {
         if(!error && !this.util.isNull(data['EXPIRATION']) && data['EXPIRATION'] <= Math.floor(Date.now() / 1000))
             error = "invalid: EXPIRATION (past)";
 
-        // TODO: Add checks to validate ALLOW_LIST and BLOCK_LIST
+        // Validate LIST fields (ALLOW_LIST / BLOCK_LIST)
+        if(!error){
+            for(let name of this.config['LIST_FIELDS']){
+                if(!error && !this.util.isNull(data[name]) && this.util.isNumeric(data[name])){
+                    // Get LIST type and information
+                    let type = await this.indexerDb.getListType(data[name]);
+
+                    // Verify LIST exist
+                    if(!error && type===false)
+                        error = 'invalid: ' + name + ' (unknown)';
+
+                    // Verify LIST type is supported
+                    if(!error && !this.listTypes.includes(type))
+                        error = 'invalid: ' + name + ' (unsupported)';
+                }
+            }
+        }
 
         // Verify SOURCE has enough balances to cover GIVE_AMOUNT
         if(!error && format==0 && !this.util.hasBalance(balances, giveTokenInfo['TICK_ID'], data['GIVE_AMOUNT']))
@@ -343,16 +362,28 @@ class Swap {
                 let giveTokenAllowList = (giveTokenInfo['ALLOW_LIST']) ? await this.indexerDb.getList(giveTokenInfo['ALLOW_LIST']) : false;
                 let giveTokenBlockList = [giveTokenInfo['BLOCK_LIST']] ? await this.indexerDb.getList(giveTokenInfo['BLOCK_LIST']) : false;
 
+                // List of addresses allowed or blocked from matching with this SWAP
+                let swapInfoAllowList = (swapInfo['ALLOW_LIST']) ? await this.indexerDb.getList(swapInfo['ALLOW_LIST']) : false;
+                let swapInfoBlockList = [swapInfo['BLOCK_LIST']] ? await this.indexerDb.getList(swapInfo['BLOCK_LIST']) : false;
+
                 // Loop through matches and determine if we have a valid match
                 let match = false;
                 for(let swap of matches){
                     let valid = true;
 
+                    // List of addresses allowed or blocked from matching with this matching SWAP
+                    let matchInfoAllowList = (swap['ALLOW_LIST']) ? await this.indexerDb.getList(swap['ALLOW_LIST']) : false;
+                    let matchInfoBlockList = [swap['BLOCK_LIST']] ? await this.indexerDb.getList(swap['BLOCK_LIST']) : false;
+
                     // Check if GET_ADDRESS for both sides of swap are allowed (ALLOW/BLOCK list support)
                     if((getTokenAllowList.length  && (!getTokenAllowList.includes(data['GET_ADDRESS'])  || !getTokenAllowList.includes(swap['GET_ADDRESS'])))  ||
                        (getTokenBlockList.length  && ( getTokenBlockList.includes(data['GET_ADDRESS'])  ||  getTokenBlockList.includes(swap['GET_ADDRESS'])))  ||
                        (giveTokenAllowList.length && (!giveTokenAllowList.includes(data['GET_ADDRESS']) || !giveTokenAllowList.includes(swap['GET_ADDRESS']))) ||
-                       (giveTokenBlockList.length && ( giveTokenBlockList.includes(data['GET_ADDRESS']) ||  giveTokenBlockList.includes(swap['GET_ADDRESS'])))){
+                       (giveTokenBlockList.length && ( giveTokenBlockList.includes(data['GET_ADDRESS']) ||  giveTokenBlockList.includes(swap['GET_ADDRESS']))) ||
+                       (swapInfoAllowList.length  && !swapInfoAllowList.includes(swap['GET_ADDRESS']))  ||
+                       (swapInfoBlockList.length  &&  swapInfoBlockList.includes(swap['GET_ADDRESS']))  || 
+                       (matchInfoAllowList.length && !matchInfoAllowList.includes(data['GET_ADDRESS'])) ||
+                       (matchInfoBlockList.length &&  matchInfoBlockList.includes(data['GET_ADDRESS']))){
                         valid = false;
                     }
 
