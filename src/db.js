@@ -3320,7 +3320,6 @@ class Database {
         let get_address_id = await this.createAddress(data['GET_ADDRESS']);
         let memo_id        = await this.createMemo(data['MEMO']);
         let status_id      = await this.createStatus(data['STATUS']);
-        let swap_status_id = await this.createStatus(data['SWAP_STATUS']);
         let action_index   = data['ACTION_INDEX'];
         let give_amount    = data['GIVE_AMOUNT'];
         let get_amount     = data['GET_AMOUNT'];
