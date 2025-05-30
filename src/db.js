@@ -3423,7 +3423,7 @@ class Database {
             this.util.logError('Error trying to create record in swap_statuses table:', error);
         }
         await this.releaseConnection();
-    }    
+    }
 
     // Create/Update record in `swap_cancels` table
     async createSwapCancel(data){
@@ -3490,6 +3490,8 @@ class Database {
                         a2.address as get_address,
                         a1.address as source,
                         s.expiration,
+                        s.allow_list,
+                        s.block_list,
                         m1.memo,
                         s1.status,
                         b1.block_index,
@@ -3519,7 +3521,7 @@ class Database {
                 for(let key in rows[0]){
                     let name  = String(key).toUpperCase()
                     let value = rows[0][key];
-                    if(['ACTION_INDEX', 'BLOCK_INDEX', 'BLOCK_TIME', 'EXPIRATION'].includes(name))
+                    if(['ACTION_INDEX', 'BLOCK_INDEX', 'BLOCK_TIME', 'EXPIRATION', 'ALLOW_LIST', 'BLOCK_LIST'].includes(name))
                         value = Number(value);
                     swap[name] = value;
                 }
