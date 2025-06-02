@@ -1,0 +1,29 @@
+DROP TABLE IF EXISTS orders;
+CREATE TABLE orders (
+    action_index     BIGINT UNSIGNED NOT NULL, -- Unique action index
+    give_coin_id     BIGINT UNSIGNED,          -- id of record in index_coins table
+    give_tick_id     BIGINT UNSIGNED,          -- id of record in index_tickers table
+    give_amount      VARCHAR(250),             -- Amount of GIVE_TICK in order
+    get_coin_id      BIGINT UNSIGNED,          -- id of record in index_coins table
+    get_tick_id      BIGINT UNSIGNED,          -- id of record in index_tickers table
+    get_amount       VARCHAR(250),             -- Amount of GET_TICK in order
+    get_address_id   BIGINT UNSIGNED,          -- id of record in index_addresses table
+    source_id        BIGINT UNSIGNED,          -- id of record in index_addresses table
+    expiration       BIGINT UNSIGNED,          -- unix timestamp of order expiration date/time
+    allow_list       BIGINT UNSIGNED,          -- action_index of a list from the lists table
+    block_list       BIGINT UNSIGNED,          -- action_index of a list from the lists table
+    memo_id          BIGINT UNSIGNED,          -- id of record in index_memos table 
+    status_id        BIGINT UNSIGNED           -- id of record in index_statuses table (status of open order tx)
+) ENGINE=MyISAM DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
+
+CREATE UNIQUE INDEX action_index   ON orders (action_index);
+CREATE        INDEX give_coin_id   ON orders (give_coin_id);
+CREATE        INDEX give_tick_id   ON orders (give_tick_id);
+CREATE        INDEX get_coin_id    ON orders (get_coin_id);
+CREATE        INDEX get_tick_id    ON orders (get_tick_id);
+CREATE        INDEX allow_list     ON orders (allow_list);
+CREATE        INDEX block_list     ON orders (block_list);
+CREATE        INDEX get_address_id ON orders (get_address_id);
+CREATE        INDEX source_id      ON orders (source_id);
+CREATE        INDEX memo_id        ON orders (memo_id);
+CREATE        INDEX status_id      ON orders (status_id);

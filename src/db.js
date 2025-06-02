@@ -3777,6 +3777,415 @@ class Database {
         await this.releaseConnection();
     }
 
+    // Create/Update record in `orders` table
+    async createOrder(data){
+        // Standardize LIST values to numeric or NULL
+        for(let list of this.config['LIST_FIELDS'] ){
+            if(this.util.isNull(data[list]) || !this.util.isNumeric(data[list]))
+                delete data[list];
+        }
+        // Normalize data
+        let source_id      = await this.createAddress(data['SOURCE']);
+        let give_coin_id   = await this.createCoin(data['GIVE_COIN']);
+        let give_tick_id   = await this.createTicker(data['GIVE_TICK']);
+        let get_coin_id    = await this.createCoin(data['GET_COIN']);
+        let get_tick_id    = await this.createTicker(data['GET_TICK']);
+        let get_address_id = await this.createAddress(data['GET_ADDRESS']);
+        let memo_id        = await this.createMemo(data['MEMO']);
+        let status_id      = await this.createStatus(data['STATUS']);
+        let action_index   = data['ACTION_INDEX'];
+        let give_amount    = data['GIVE_AMOUNT'];
+        let get_amount     = data['GET_AMOUNT'];
+        let expiration     = data['EXPIRATION'];
+        let allow_list     = data['ALLOW_LIST'];
+        let block_list     = data['BLOCK_LIST'];
+        // Check if record already exists for this order
+        let db     = await this.getConnection();
+        let query  = `SELECT
+                            action_index
+                        FROM
+                            orders
+                        WHERE
+                            action_index=?`;
+        let args = [action_index];
+        let exists = false;
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0)
+                exists = true;
+        } catch (error){
+            this.util.logError('Error looking up record in orders table:', error);
+        }
+        if(exists){
+            // UPDATE record
+            query = `UPDATE
+                        orders
+                    SET
+                        source_id=?,
+                        give_coin_id=?,
+                        give_tick_id=?,
+                        give_amount=?,
+                        get_coin_id=?,
+                        get_tick_id=?,
+                        get_amount=?,
+                        get_address_id=?,
+                        expiration=?,
+                        allow_list=?,
+                        block_list=?,
+                        memo_id=?,
+                        status_id=?
+                    WHERE 
+                        action_index=?`;
+        } else {
+            // INSERT record
+            query = `INSERT INTO orders (source_id, give_coin_id, give_tick_id, give_amount, get_coin_id, get_tick_id, get_amount, get_address_id, expiration, allow_list, block_list, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+        }
+        args = [source_id, give_coin_id, give_tick_id, give_amount, get_coin_id, get_tick_id, get_amount, get_address_id, expiration, allow_list, block_list, memo_id, status_id, action_index];
+        // Create or Update the record in the orders table
+        try {
+            let result = await db.query(query, args);
+        } catch (error){
+            this.util.logError('Error trying to create record in orders table:', error);
+        }
+        await this.releaseConnection();
+    }
+
+    // Create/Update record in `order_statuses` table
+    // @param {action_index}      integer Action index of action
+    // @param {order_action_tick} integer Action index of order
+    // @param {status}            string  Status of the referenced order (open/complete/cancelled/expired)
+    async createOrderStatus(action_index, order_action_index, status){
+        // Normalize data
+        let status_id = await this.createStatus(status);
+        // Check if record already exists for this in order_statuses table
+        let db     = await this.getConnection();
+        let query  = `SELECT
+                            action_index
+                        FROM
+                            order_statuses
+                        WHERE
+                            action_index=? AND
+                            order_action_index=?`;
+        let args = [action_index, order_action_index];
+        let exists = false;
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0)
+                exists = true;
+        } catch (error){
+            this.util.logError('Error looking up record in order_statuses table:', error);
+        }
+        if(exists){
+            // UPDATE record
+            query = `UPDATE
+                        order_statuses
+                    SET
+                        status_id=?
+                    WHERE 
+                        action_index=? AND
+                        order_action_index=?`;
+        } else {
+            // INSERT record
+            query = `INSERT INTO order_statuses (status_id, action_index, order_action_index) values (?, ?, ?)`;
+        }
+        args = [status_id, action_index, order_action_index];
+        // Create or Update the record in the order_statuses table
+        try {
+            let result = await db.query(query, args);
+        } catch (error){
+            this.util.logError('Error trying to create record in order_statuses table:', error);
+        }
+        await this.releaseConnection();
+    }
+
+    // Handle looking up potential order matches
+    async getOrderMatches(data){
+        let matches = false;
+        // Normalize data
+        let source_id    = await this.createAddress(data['SOURCE']);
+        let action_index = data['ACTION_INDEX'];
+        // Lookup any matching orders from different addresses (not SOURCE)
+        // TODO: Add support for looking up orders which are not EXACT matches (Javier)
+        let db    = await this.getConnection();
+        let query = `SELECT
+                        c1.coin as match_coin,
+                        o2.action_index as match_action_index
+                    FROM
+                        orders o1,
+                        orders o2
+                        INNER JoIN index_coins c1 ON (c1.id=o2.get_coin_id)
+                    WHERE
+                        o1.give_coin_id=o2.get_coin_id AND
+                        o1.give_tick_id=o2.get_tick_id AND
+                        o1.give_amount=o2.get_amount AND
+                        o1.get_amount=o2.give_amount AND
+                        o1.action_index=? AND
+                        o2.source_id!=?
+                    ORDER BY
+                        o2.action_index ASC`;
+        let args = [action_index, source_id];
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0){
+                // Loop through possible matches and get full information on the order match
+                for(let row of rows){
+                    let orderInfo = await this.getOrderInfo(row.match_coin, row.match_action_index);
+                    if(orderInfo['ORDER_STATUS']=='open'){
+                        if(!matches)
+                            matches = [];
+                        matches.push(orderInfo);
+                    }
+                }
+            }
+        } catch (error){
+            this.util.logError('Error looking up potential order matches in orders table:', error);
+        }
+        await this.releaseConnection();
+        return matches;
+    }
+
+    // Return order info for given action_index
+    async getOrderInfo(coin, action_index){
+        let order = false;
+        let db    = await this.getConnection();
+        let query = `SELECT 
+                        o.action_index,
+                        t1.tick as give_tick,
+                        o.give_amount,
+                        c1.coin as get_coin,
+                        t2.tick as get_tick,
+                        o.get_amount,
+                        a2.address as get_address,
+                        a1.address as source,
+                        o.expiration,
+                        o.allow_list,
+                        o.block_list,
+                        m1.memo,
+                        s1.status,
+                        b1.block_index,
+                        b1.block_time
+                    FROM 
+                        orders o
+                        INNER JOIN index_addresses a1 ON (a1.id=o.source_id)
+                        INNER JOIN index_addresses a2 ON (a2.id=o.get_address_id)
+                        INNER JOIN index_tickers   t1 ON (t1.id=o.give_tick_id)
+                        INNER JOIN index_tickers   t2 ON (t2.id=o.get_tick_id)
+                        INNER JOIN index_coins     c1 ON (c1.id=o.get_coin_id)
+                        INNER JOIN index_memos     m1 ON (m1.id=o.memo_id)
+                        INNER JOIN index_statuses  s1 ON (s1.id=o.status_id)
+                        INNER JOIN actions         a3 ON (a3.action_index=o.action_index)
+                        INNER JOIN transactions    t3 ON (t3.tx_index=a3.tx_index)
+                        INNER JOIN blocks          b1 ON (b1.block_index=t3.block_index)
+                    WHERE 
+                        c1.coin=? AND
+                        o.action_index=? 
+                    LIMIT 1`;
+        let args  = [coin, action_index];
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0){
+                order = {};
+                order['GIVE_COIN'] = this.config['COIN'];
+                for(let key in rows[0]){
+                    let name  = String(key).toUpperCase()
+                    let value = rows[0][key];
+                    if(['ACTION_INDEX', 'BLOCK_INDEX', 'BLOCK_TIME', 'EXPIRATION', 'ALLOW_LIST', 'BLOCK_LIST'].includes(name))
+                        value = Number(value);
+                    order[name] = value;
+                }
+                // Get ORDER_STATUS from the order_statuses table
+                order['ORDER_STATUS'] = await this.getOrderStatus(action_index);
+                // Get updated order properties from the order_edits table
+                let edit = await this.getOrderEdits(action_index);
+                if(edit.expiration)
+                    order['EXPIRATION'] = edit.expiration;
+                if(edit.allow_list)
+                    order['ALLOW_LIST'] = edit.allow_list;
+                if(edit.block_list)
+                    order['BLOCK_LIST'] = edit.block_list;
+            }
+        } catch (error) {
+            this.util.logError('Error looking up order using orders table:', error);
+        }
+        await this.releaseConnection();
+        return order;
+    }
+
+    // Return order info for given action_index
+    async getOrderStatus(action_index){
+        let status = false;
+        let db     = await this.getConnection();
+        let query  = `SELECT 
+                        s2.status
+                    FROM 
+                        order_statuses s1
+                        INNER JOIN index_statuses s2 ON (s2.id=s1.status_id)
+                    WHERE 
+                        s1.order_action_index=?
+                    ORDER BY
+                        s1.action_index DESC
+                    LIMIT 1`;
+        let args  = [action_index];
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0)
+                status = rows[0].status;
+        } catch (error) {
+            this.util.logError('Error looking up order status using order_statuses table:', error);
+        }
+        await this.releaseConnection();
+        return status;
+    }
+
+    // Return order edit information for given action_index
+    async getOrderEdits(action_index){
+        // Define empty edit object
+        let edit  = {
+            expiration: false,
+            allow_list: false,
+            block_list: false
+        };
+        let db     = await this.getConnection();
+        let query  = `SELECT 
+                        o.expiration,
+                        o.allow_list,
+                        o.block_list
+                    FROM 
+                        order_edits o
+                        INNER JOIN index_statuses s ON (s.id=o.status_id)
+                    WHERE 
+                        o.order_action_index=? AND
+                        s.status=?
+                    ORDER BY
+                        o.action_index ASC`;
+        let args  = [action_index, 'valid'];
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0){
+                for(let row of rows){
+                    if(!this.util.isNull(row.expiration) && this.util.isNumeric(row.expiration)) edit.expiration = row.expiration
+                    if(!this.util.isNull(row.allow_list) && this.util.isNumeric(row.allow_list)) edit.allow_list = row.allow_list
+                    if(!this.util.isNull(row.block_list) && this.util.isNumeric(row.block_list)) edit.block_list = row.block_list
+                }
+            }
+        } catch (error) {
+            this.util.logError('Error looking up order edits using order_edits table:', error);
+        }
+        await this.releaseConnection();
+        return edit;
+    }
+
+    // Create/Update record in `order_edits` table
+    async createOrderEdit(data){
+        // Standardize LIST values to numeric or NULL
+        for(let list of this.config['LIST_FIELDS']){
+            if(this.util.isNull(data[list]) || !this.util.isNumeric(data[list]))
+                delete data[list];
+        }
+        // Normalize data
+        let source_id          = await this.createAddress(data['SOURCE']);
+        let memo_id            = await this.createMemo(data['MEMO']);
+        let status_id          = await this.createStatus(data['STATUS']);
+        let action_index       = data['ACTION_INDEX'];
+        let order_action_index = data['ORDER_ACTION_INDEX'];
+        let expiration         = data['EXPIRATION'];
+        let allow_list         = data['ALLOW_LIST'];
+        let block_list         = data['BLOCK_LIST'];
+        // Check if record already exists for this order_edits
+        let db     = await this.getConnection();
+        let query  = `SELECT
+                            action_index
+                        FROM
+                            order_edits
+                        WHERE
+                            action_index=?`;
+        let args = [action_index];
+        let exists = false;
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0)
+                exists = true;
+        } catch (error){
+            this.util.logError('Error looking up record in order_edits table:', error);
+        }
+        if(exists){
+            // UPDATE record
+            query = `UPDATE
+                        order_edits
+                    SET
+                        expiration=?,
+                        allow_list=?,
+                        block_list=?,
+                        source_id=?,
+                        memo_id=?,
+                        status_id=?,
+                        order_action_index=?
+                    WHERE 
+                        action_index=?`;
+        } else {
+            // INSERT record
+            query = `INSERT INTO order_edits (expiration, allow_list, block_list,source_id, memo_id, status_id, order_action_index, action_index) values (?, ?, ?, ?, ?, ?, ?, ?)`;
+        }
+        args = [expiration, allow_list, block_list, source_id, memo_id, status_id, order_action_index, action_index];
+        // Create or Update the record in the order_edits table
+        try {
+            let result = await db.query(query, args);
+        } catch (error){
+            this.util.logError('Error trying to create record in order_edits table:', error);
+        }
+        await this.releaseConnection();
+    }
+
+    // Create/Update record in `order_matches` table
+    async createOrderMatch(action_index, data, match, status){
+        // Normalize data
+        let give_coin_id      = await this.createCoin(data['GIVE_COIN']);
+        let get_coin_id       = await this.createCoin(data['GET_COIN']);
+        let status_id         = await this.createStatus(data['STATUS']);
+        let give_action_index = data['ACTION_INDEX'];
+        let get_action_index  = match['ACTION_INDEX'];
+        // Check if record already exists for this order_matches
+        let db     = await this.getConnection();
+        let query  = `SELECT
+                            action_index
+                        FROM
+                            order_matches
+                        WHERE
+                            action_index=?`;
+        let args = [action_index];
+        let exists = false;
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0)
+                exists = true;
+        } catch (error){
+            this.util.logError('Error looking up record in order_matches table:', error);
+        }
+        if(exists){
+            // UPDATE record
+            query = `UPDATE
+                        order_matches
+                    SET
+                        give_coin_id=?,
+                        give_action_index=?,
+                        get_coin_id=?,
+                        get_action_index=?,
+                        status_id=?
+                    WHERE 
+                        action_index=?`;
+        } else {
+            // INSERT record
+            query = `INSERT INTO order_matches (give_coin_id, give_action_index, get_coin_id, get_action_index, status_id, action_index) values (?, ?, ?, ?, ?, ?)`;
+        }
+        args = [give_coin_id, give_action_index, get_coin_id, get_action_index, status_id, action_index];
+        // Create or Update the record in the order_matches table
+        try {
+            let result = await db.query(query, args);
+        } catch (error){
+            this.util.logError('Error trying to create record in order_matches table:', error);
+        }
+        await this.releaseConnection();
+    }
 }
 
 module.exports = Database
