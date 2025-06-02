@@ -45,7 +45,7 @@ class ProtocolChanges {
         this.addChange('LIST',       '1.0.0',0,0,0,0,0,0);
         this.addChange('MESSAGE',    '1.0.0',0,0,0,0,0,0);
         this.addChange('MINT',       '1.0.0',0,0,0,0,0,0);
-        this.addChange('RUG',        '1.0.0',0,0,0,0,0,0);
+        this.addChange('ORDER',      '1.0.0',0,0,0,0,0,0);
         this.addChange('SEND',       '1.0.0',0,0,0,0,0,0);
         this.addChange('SLEEP',      '1.0.0',0,0,0,0,0,0);
         this.addChange('SWAP',       '1.0.0',0,0,0,0,0,0);

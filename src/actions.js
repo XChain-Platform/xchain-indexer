@@ -16,7 +16,7 @@ const link      = require('./actions/link.js');
 const list      = require('./actions/list.js');
 const message   = require('./actions/message.js');
 const mint      = require('./actions/mint.js');
-// const rug       = require('./actions/rug.js');
+const order     = require('./actions/order.js');
 const sleep     = require('./actions/sleep.js');
 const send      = require('./actions/send.js');
 const swap      = require('./actions/swap.js');
@@ -55,7 +55,7 @@ class Actions {
         this.actionList      = new list(this);
         this.actionMessage   = new message(this);
         this.actionMint      = new mint(this);
-        // this.actionRug       = new rug(this);
+        this.actionOrder     = new order(this);
         this.actionSleep     = new sleep(this);
         this.actionSend      = new send(this);
         this.actionSwap      = new swap(this);
@@ -165,7 +165,7 @@ class Actions {
         if(action=='LINK')      await this.actionLink.parse(params, data, error);
         if(action=='MINT')      await this.actionMint.parse(params, data, error);
         if(action=='MESSAGE')   await this.actionMessage.parse(params, data, error);
-        // if(action=='RUG')       await this.actionRug.parse(params, data, error);
+        if(action=='ORDER')     await this.actionOrder.parse(params, data, error);
         if(action=='SLEEP')     await this.actionSleep.parse(params, data, error);
         if(action=='SEND')      await this.actionSend.parse(params, data, error);
         if(action=='SWAP')      await this.actionSwap.parse(params, data, error);
