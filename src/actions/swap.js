@@ -281,19 +281,21 @@ class Swap {
         if(format==2)
             console.log("\t SWAP (edit): " + this.config['COIN'] + ':' + data['SWAP_ACTION_INDEX'] + ' : ' + data['EXPIRATION'] + ' : ' + data['STATUS']);
 
-        // TODO: Add code that changes the ACTION from SWAP to SWAP_EDIT or SWAP_CANCEL when necessary... pain.. but cleaner
-
         // Create record in swaps table
         if(format==0)
             await this.indexerDb.createSwap(swap);
 
-        // Create record in swap_cancels table
-        if(format==1)
+        // Update action from SWAP to SWAP_CANCEL and create record in swap_cancels table
+        if(format==1){
+            await this.indexerDb.updateActionIndex(data['ACTION_INDEX'], 'SWAP_CANCEL');
             await this.indexerDb.createSwapCancel(swap);
+        }
 
-        // Create record in swap_edits table
-        if(format==2)
+        // Update action from SWAP to SWAP_EDIT and create record in swap_edits table
+        if(format==2){
+            await this.indexerDb.updateActionIndex(data['ACTION_INDEX'], 'SWAP_EDIT');
             await this.indexerDb.createSwapEdit(swap);
+        }
 
         // If this was a valid transaction, add GIVE_AMOUNT to escrow
         if(status=='valid'){

@@ -285,19 +285,21 @@ class Order {
         if(format==2)
             console.log("\t ORDER (edit): " + this.config['COIN'] + ':' + data['ORDER_ACTION_INDEX'] + ' : ' + data['EXPIRATION'] + ' : ' + data['STATUS']);
 
-        // TODO: Add code that changes the ACTION from ORDER to ORDER_EDIT or ORDER_CANCEL when necessary... pain.. but cleaner
-
         // Create record in orders table
         if(format==0)
             await this.indexerDb.createOrder(order);
 
-        // Create record in order_cancels table
-        if(format==1)
+        // Update action from ORDER to ORDER_CANCEL and create record in order_cancels table
+        if(format==1){
+            await this.indexerDb.updateActionIndex(data['ACTION_INDEX'], 'ORDER_CANCEL');
             await this.indexerDb.createOrderCancel(order);
+        }
 
-        // Create record in order_edits table
-        if(format==2)
+        // Update action from ORDER to ORDER_EDIT and create record in order_edits table
+        if(format==2){
+            await this.indexerDb.updateActionIndex(data['ACTION_INDEX'], 'ORDER_EDIT');
             await this.indexerDb.createOrderEdit(order);
+        }
 
         // If this was a valid transaction, add GIVE_AMOUNT to escrow
         if(status=='valid'){

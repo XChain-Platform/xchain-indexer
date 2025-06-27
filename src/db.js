@@ -740,6 +740,23 @@ class Database {
         return action_index;
     }
 
+    // Update records in the 'actions' table and return record id
+    async updateActionIndex(action_index, action){
+        if(action_index){
+            let action_id = await this.createAction(action);
+            let db        = await this.getConnection();
+            let query     = "UPDATE actions SET action_id=? WHERE action_index=?";
+            let args      = [action_id, action_index];
+            try {
+                let result = await db.query(query, args);
+            } catch (error) {
+                this.util.logError('Error while trying to update record in actions table:', error);
+            }
+            await this.releaseConnection();
+        }
+    }
+
+
     // Lookup a record in the `index_tickers` table and return record tick
     async getTicker(tick_id){
         let tick  = null;
