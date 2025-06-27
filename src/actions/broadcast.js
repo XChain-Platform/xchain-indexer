@@ -19,6 +19,8 @@
  * 
  ********************************************************************/
 
+// TODO: fix issue where fee shows up in database as 'undefined';
+
 class Broadcast {
 
     // Handle constructing a class instance

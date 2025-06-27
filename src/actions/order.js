@@ -321,6 +321,7 @@ class Order {
             }
 
             // Format 1 - Cancel Order
+            // TODO: Update code to only credit back what remains escrowed, not entire amount (will cause sanity error in current format)
             if(format==1){
                 // Store the SOURCE and GIVE_TICK in addresses list
                 this.util.addAddressTicker(orderInfo['SOURCE'], orderInfo['GIVE_TICK']);
@@ -396,7 +397,7 @@ class Order {
                     // TODO : Revisit this code once multi-chain order support is added to xchain-hub component
                     if(valid){
 
-                        // TODO: That both orders still have GIVE_AMOUNT and GET_AMOUNT greater than 0
+                        // TODO: verify that both orders still have GIVE_AMOUNT and GET_AMOUNT greater than 0
                         // Get initial Escrowed balance using ORDER, then deduct any ORDER_MATCH balances
 
                         // Pass forward information on this order match
@@ -437,7 +438,7 @@ class Order {
                         // Create record of match in order_matches table
                         await this.indexerDb.createOrderMatch(data['ACTION_INDEX'], order, match, 'valid');
 
-                        // TODO verify if order still has some GET_TICK and GIVE_TICK quantity.. if not, change status to filled
+                        // TODO verify if order still has some GET_TICK and GIVE_TICK quantity. if not, change status to filled
                         // Update record in orders table to change status (open->filled)
                         await this.indexerDb.createOrderStatus(data['ACTION_INDEX'], order['ACTION_INDEX'], 'filled');
                         await this.indexerDb.createOrderStatus(data['ACTION_INDEX'], match['ACTION_INDEX'], 'filled');

@@ -1,9 +1,9 @@
 DROP TABLE IF EXISTS links;
 CREATE TABLE links (
     action_index        BIGINT UNSIGNED NOT NULL, -- Unique action index
-    link_action_index   BIGINT UNSIGNED,          -- id of record in index_mime_types table
+    link_action_index   BIGINT UNSIGNED,          -- action_index to link to coin_action_index
     coin_id             BIGINT UNSIGNED,          -- id of record in index_coins table
-    coin_action_index   BIGINT UNSIGNED,          -- id of record in index_mime_types table
+    coin_action_index   BIGINT UNSIGNED,          -- action_index on coin network
     source_id           BIGINT UNSIGNED,          -- id of record in index_addresses table
     memo_id             BIGINT UNSIGNED,          -- id of record in index_memos table
     status_id           BIGINT UNSIGNED           -- id of record in index_statuses table

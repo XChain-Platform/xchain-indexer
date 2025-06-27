@@ -181,6 +181,8 @@ class Sweep {
                     let tick = ownerships[tick_id];
                     issue['TICK'] = tick;
 
+                    // TODO: Increase the action_index for every issuance in a sweep
+
                     // Create issue record for transfer of ownership
                     await this.indexerDb.createIssue(issue);
 
