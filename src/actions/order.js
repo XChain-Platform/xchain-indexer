@@ -285,6 +285,8 @@ class Order {
         if(format==2)
             console.log("\t ORDER (edit): " + this.config['COIN'] + ':' + data['ORDER_ACTION_INDEX'] + ' : ' + data['EXPIRATION'] + ' : ' + data['STATUS']);
 
+        // TODO: Add code that changes the ACTION from ORDER to ORDER_EDIT or ORDER_CANCEL when necessary... pain.. but cleaner
+
         // Create record in orders table
         if(format==0)
             await this.indexerDb.createOrder(order);
