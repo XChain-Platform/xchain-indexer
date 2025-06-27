@@ -281,6 +281,8 @@ class Swap {
         if(format==2)
             console.log("\t SWAP (edit): " + this.config['COIN'] + ':' + data['SWAP_ACTION_INDEX'] + ' : ' + data['EXPIRATION'] + ' : ' + data['STATUS']);
 
+        // TODO: Add code that changes the ACTION from SWAP to SWAP_EDIT or SWAP_CANCEL when necessary... pain.. but cleaner
+
         // Create record in swaps table
         if(format==0)
             await this.indexerDb.createSwap(swap);
