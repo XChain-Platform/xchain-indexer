@@ -1,4 +1,5 @@
 DROP TABLE IF EXISTS lists;
+-- TODO : Convert type and edit fields to INTEGER UNSIGNED and force value to 0-9 (0=null)
 CREATE TABLE lists (
     action_index        BIGINT UNSIGNED NOT NULL, -- Unique action index
     type                VARCHAR(1),                -- List type (1=TICK, 2=ASSET, 3=ADDRESS)

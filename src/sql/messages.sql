@@ -1,4 +1,5 @@
 DROP TABLE IF EXISTS messages;
+-- TODO : Convert encryption_method field to INTEGER UNSIGNED and force value to 0-9 (0=null)
 CREATE TABLE messages (
     action_index        BIGINT UNSIGNED NOT NULL, -- Unique action index
     destination_id      BIGINT UNSIGNED,          -- id of record in index_addresses table

@@ -317,6 +317,7 @@ class Swap {
             }
 
             // Format 1 - Cancel Swap
+            // TODO: Update code to only credit back what remains escrowed, not entire amount (will cause sanity error in current format)
             if(format==1){
                 // Store the SOURCE and GIVE_TICK in addresses list
                 this.util.addAddressTicker(swapInfo['SOURCE'], swapInfo['GIVE_TICK']);
