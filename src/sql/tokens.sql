@@ -1,8 +1,9 @@
 DROP TABLE IF EXISTS tokens;
 CREATE TABLE tokens (
     id                 BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-    tick_id            BIGINT UNSIGNED,                     -- id of record in index_ticks table
-    action_index       BIGINT UNSIGNED,                     -- action_index of ISSUE transaction (used in rollbacks)
+    tick_id            BIGINT UNSIGNED,                      -- id of record in index_ticks table
+    action_index       BIGINT UNSIGNED,                      -- action_index of first ISSUE transaction (used in rollbacks)
+    last_action_index  BIGINT UNSIGNED,                      -- action index of last  ISSUE transaction
     supply             VARCHAR(250),                         -- Current supply
     max_supply         VARCHAR(250),                         -- Maximum Supply
     max_mint           VARCHAR(250),                         -- Supply minted
