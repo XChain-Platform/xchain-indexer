@@ -1555,6 +1555,7 @@ class Database {
         } catch (error){
             this.util.logError('Error looking up record in tokens table:', error);
         }
+        let args = [];
         if(exists){
             // UPDATE record
             query = `UPDATE
@@ -1581,9 +1582,10 @@ class Database {
                         mint_stop_block=?,
                         supply=?,
                         owner_id=?,
-                        action_index=?
+                        last_action_index=?
                     WHERE 
                         tick_id=?`;
+            args = [max_supply, max_mint, decimals, description, lock_max_supply, lock_mint, lock_max_mint,lock_description, lock_rug, lock_sleep, lock_callback, callback_block, callback_tick_id, callback_amount, allow_list, block_list, mint_address_max, mint_start_block, mint_stop_block, supply, owner_id, action_index, tick_id];
         } else {
             // INSERT record
             query = `INSERT INTO tokens (
@@ -1609,10 +1611,11 @@ class Database {
                         supply, 
                         owner_id, 
                         action_index,
+                        last_action_index,
                         tick_id 
-                    ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+                    ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+            args = [max_supply, max_mint, decimals, description, lock_max_supply, lock_mint, lock_max_mint,lock_description, lock_rug, lock_sleep, lock_callback, callback_block, callback_tick_id, callback_amount, allow_list, block_list, mint_address_max, mint_start_block, mint_stop_block, supply, owner_id, action_index, action_index, tick_id];
         }
-        let args = [max_supply, max_mint, decimals, description, lock_max_supply, lock_mint, lock_max_mint,lock_description, lock_rug, lock_sleep, lock_callback, callback_block, callback_tick_id, callback_amount, allow_list, block_list, mint_address_max, mint_start_block, mint_stop_block, supply, owner_id, action_index, tick_id];
         // Create or Update the record in the tokens table
         try {
             let result = await db.query(query, args);
