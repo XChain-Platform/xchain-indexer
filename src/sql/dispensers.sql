@@ -1,31 +1,31 @@
 DROP TABLE IF EXISTS dispensers;
 CREATE TABLE dispensers (
     action_index     BIGINT UNSIGNED NOT NULL, -- Unique action index
-    source_id        BIGINT UNSIGNED,          -- id of record in index_addresses (source/origin)
-    address_id       BIGINT UNSIGNED,          -- id of record in index_addresses
-    dispense_tick_id BIGINT UNSIGNED,          -- id of record in index_tickers table
-    dispense_amount  VARCHAR(250),              -- Tokens to vend per dispense
-    escrow_amount    VARCHAR(250),              -- Tokens to escrow in dispenser
-    trigger_tick_id  BIGINT UNSIGNED,          -- id of record in index_tickers table
-    trigger_amount   VARCHAR(250),              -- Amount required to trigger a dispense
-    allow_list_id    BIGINT UNSIGNED,          -- id of record in index_transactions table
-    block_list_id    BIGINT UNSIGNED,          -- id of record in index_transactions table
-    action           BIGINT UNSIGNED,          -- Dispenser action (0=Open, 1=Refill, 2=Close, 3=List Edit)
+    give_coin_id     BIGINT UNSIGNED,          -- id of record in index_coins table
+    give_tick_id     BIGINT UNSIGNED,          -- id of record in index_tickers table
+    give_escrow      VARCHAR(250),             -- Amount of GIVE_TICK to escrow in dispenser
+    give_amount      VARCHAR(250),             -- Amount of GIVE_TICK to dispense when triggered
+    get_coin_id      BIGINT UNSIGNED,          -- id of record in index_coins table
+    get_tick_id      BIGINT UNSIGNED,          -- id of record in index_tickers table
+    get_amount       VARCHAR(250),             -- Amount of GET_TICK required to trigger dispenser
+    get_address_id   BIGINT UNSIGNED,          -- id of record in index_addresses table (dispenser address)
+    source_id        BIGINT UNSIGNED,          -- id of record in index_addresses table
+    expiration       BIGINT UNSIGNED,          -- unix timestamp of dispenser expiration date/time
+    allow_list       BIGINT UNSIGNED,          -- action_index of a list from the lists table
+    block_list       BIGINT UNSIGNED,          -- action_index of a list from the lists table
     memo_id          BIGINT UNSIGNED,          -- id of record in index_memos table 
-    status_id        BIGINT UNSIGNED,          -- id of record in index_statuses table
-    -- State fields
-    status           BIGINT UNSIGNED,          -- dispenser status (1=Open, 2=Closing, 3=Closed)    
-    escrow_remaining VARCHAR(250)               -- Tokens escrowed in the dispensers (state field)
+    status_id        BIGINT UNSIGNED           -- id of record in index_statuses table (status of open dispenser tx)
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
-CREATE UNIQUE INDEX action_index     ON dispensers (action_index);
-CREATE        INDEX source_id        ON dispensers (source_id);
-CREATE        INDEX address_id       ON dispensers (address_id);
-CREATE        INDEX dispense_tick_id ON dispensers (dispense_tick_id);
-CREATE        INDEX trigger_tick_id  ON dispensers (trigger_tick_id);
-CREATE        INDEX allow_list_id    ON dispensers (allow_list_id);
-CREATE        INDEX block_list_id    ON dispensers (block_list_id);
-CREATE        INDEX action           ON dispensers (action);
-CREATE        INDEX memo_id          ON dispensers (memo_id);
-CREATE        INDEX status_id        ON dispensers (status_id);
-CREATE        INDEX status           ON dispensers (status);
+
+CREATE UNIQUE INDEX action_index   ON dispensers (action_index);
+CREATE        INDEX give_coin_id   ON dispensers (give_coin_id);
+CREATE        INDEX give_tick_id   ON dispensers (give_tick_id);
+CREATE        INDEX get_coin_id    ON dispensers (get_coin_id);
+CREATE        INDEX get_tick_id    ON dispensers (get_tick_id);
+CREATE        INDEX allow_list     ON dispensers (allow_list);
+CREATE        INDEX block_list     ON dispensers (block_list);
+CREATE        INDEX get_address_id ON dispensers (get_address_id);
+CREATE        INDEX source_id      ON dispensers (source_id);
+CREATE        INDEX memo_id        ON dispensers (memo_id);
+CREATE        INDEX status_id      ON dispensers (status_id);
