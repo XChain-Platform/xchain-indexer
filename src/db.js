@@ -548,7 +548,7 @@ class Database {
     // Handle creating/updating a block in the `blocks` table
     async createBlock(block_index, block_time){
         // Ignore empty hashes and return hardcoded record id
-        if(block_index==null||block_index=='')
+        if(block_index==null||block_index==='')
             return false;
         let block_id = await this.getBlockId(block_index);
         let hashes   = await this.getBlockHashes(block_index);
