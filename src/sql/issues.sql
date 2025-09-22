@@ -14,7 +14,6 @@ CREATE TABLE issues (
     lock_mint_supply    VARCHAR(1),                -- Locks MINT_SUPPLY
     lock_max_mint       VARCHAR(1),                -- Locks MAX_MINT
     lock_description    VARCHAR(1),                -- Locks DESCRIPTION
-    lock_rug            VARCHAR(1),                -- Locks RUG
     lock_sleep          VARCHAR(1),                -- Locks SLEEP
     lock_callback       VARCHAR(1),                -- Locks CALLBACK_BLOCK/TICK/AMOUNT
     callback_block      VARCHAR(15),               -- block_index after which CALLBACK cand be used
