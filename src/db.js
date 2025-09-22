@@ -859,7 +859,6 @@ class Database {
                             i.lock_mint,
                             i.lock_max_mint,
                             i.lock_description,
-                            i.lock_rug,
                             i.lock_sleep,
                             i.lock_callback,
                             i.callback_block,
@@ -914,7 +913,6 @@ class Database {
                         arr['LOCK_MINT']         = row.lock_mint;
                         arr['LOCK_MAX_MINT']     = row.lock_max_mint;
                         arr['LOCK_DESCRIPTION']  = row.lock_description;
-                        arr['LOCK_RUG']          = row.lock_rug;
                         arr['LOCK_SLEEP']        = row.lock_sleep;
                         arr['LOCK_CALLBACK']     = row.lock_callback;
                         arr['CALLBACK_TICK']     = row.callback_tick;
@@ -1405,7 +1403,6 @@ class Database {
         let lock_mint_supply   = data['LOCK_MINT_SUPPLY'];
         let lock_max_mint      = data['LOCK_MAX_MINT'];
         let lock_description   = data['LOCK_DESCRIPTION'];
-        let lock_rug           = data['LOCK_RUG'];
         let lock_sleep         = data['LOCK_SLEEP'];
         let lock_callback      = data['LOCK_CALLBACK'];
         let callback_block     = data['CALLBACK_BLOCK'];
@@ -1451,7 +1448,6 @@ class Database {
                         lock_mint_supply=?,
                         lock_max_mint=?,
                         lock_description=?,
-                        lock_rug=?,
                         lock_sleep=?,
                         lock_callback=?,
                         callback_block=?,
@@ -1482,7 +1478,6 @@ class Database {
                         lock_mint_supply, 
                         lock_max_mint, 
                         lock_description, 
-                        lock_rug, 
                         lock_sleep, 
                         lock_callback, 
                         callback_block, 
@@ -1496,9 +1491,9 @@ class Database {
                         source_id, 
                         status_id,
                         action_index
-                    ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+                    ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
         }
-        args = [tick_id, max_supply, max_mint, decimals, description, mint_supply, transfer_id, transfer_supply_id, lock_max_supply, lock_mint, lock_mint_supply, lock_max_mint, lock_description, lock_rug, lock_sleep, lock_callback, callback_block, callback_tick_id, callback_amount, allow_list, block_list, mint_address_max, mint_start_block, mint_stop_block, source_id, status_id, action_index ];
+        args = [tick_id, max_supply, max_mint, decimals, description, mint_supply, transfer_id, transfer_supply_id, lock_max_supply, lock_mint, lock_mint_supply, lock_max_mint, lock_description, lock_sleep, lock_callback, callback_block, callback_tick_id, callback_amount, allow_list, block_list, mint_address_max, mint_start_block, mint_stop_block, source_id, status_id, action_index ];
         // Create or Update the record in the issues table
         try {
             let result = await db.query(query, args);
@@ -1537,7 +1532,6 @@ class Database {
         let lock_mint          = (data['LOCK_MINT']==1) ? 1 : 0;
         let lock_max_mint      = (data['LOCK_MAX_MINT']==1) ? 1 : 0;
         let lock_description   = (data['LOCK_DESCRIPTION']==1) ? 1 : 0;
-        let lock_rug           = (data['LOCK_RUG']==1) ? 1 : 0;
         let lock_sleep         = (data['LOCK_SLEEP']==1) ? 1 : 0;
         let lock_callback      = (data['LOCK_CALLBACK']==1) ? 1 : 0;
         let callback_block     = (data['CALLBACK_BLOCK']>0) ? data['CALLBACK_BLOCK'] : 0;
@@ -1569,7 +1563,6 @@ class Database {
                         lock_mint=?,
                         lock_max_mint=?,
                         lock_description=?,
-                        lock_rug=?,
                         lock_sleep=?,
                         lock_callback=?,
                         callback_block=?,
@@ -1585,7 +1578,7 @@ class Database {
                         last_action_index=?
                     WHERE 
                         tick_id=?`;
-            args = [max_supply, max_mint, decimals, description, lock_max_supply, lock_mint, lock_max_mint,lock_description, lock_rug, lock_sleep, lock_callback, callback_block, callback_tick_id, callback_amount, allow_list, block_list, mint_address_max, mint_start_block, mint_stop_block, supply, owner_id, action_index, tick_id];
+            args = [max_supply, max_mint, decimals, description, lock_max_supply, lock_mint, lock_max_mint,lock_description, lock_sleep, lock_callback, callback_block, callback_tick_id, callback_amount, allow_list, block_list, mint_address_max, mint_start_block, mint_stop_block, supply, owner_id, action_index, tick_id];
         } else {
             // INSERT record
             query = `INSERT INTO tokens (
@@ -1597,7 +1590,6 @@ class Database {
                         lock_mint, 
                         lock_max_mint,
                         lock_description, 
-                        lock_rug, 
                         lock_sleep, 
                         lock_callback, 
                         callback_block, 
@@ -1613,8 +1605,8 @@ class Database {
                         action_index,
                         last_action_index,
                         tick_id 
-                    ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
-            args = [max_supply, max_mint, decimals, description, lock_max_supply, lock_mint, lock_max_mint,lock_description, lock_rug, lock_sleep, lock_callback, callback_block, callback_tick_id, callback_amount, allow_list, block_list, mint_address_max, mint_start_block, mint_stop_block, supply, owner_id, action_index, action_index, tick_id];
+                    ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+            args = [max_supply, max_mint, decimals, description, lock_max_supply, lock_mint, lock_max_mint,lock_description, lock_sleep, lock_callback, callback_block, callback_tick_id, callback_amount, allow_list, block_list, mint_address_max, mint_start_block, mint_stop_block, supply, owner_id, action_index, action_index, tick_id];
         }
         // Create or Update the record in the tokens table
         try {

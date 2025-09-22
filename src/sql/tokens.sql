@@ -26,7 +26,8 @@ CREATE TABLE tokens (
     mint_start_block   BIGINT UNSIGNED,                     -- block_index when MINT transactions are allowed (begin mint)
     mint_stop_block    BIGINT UNSIGNED,                     -- BLOCK_INDEX when MINT transactions are NOT allowed (end mint)
     owner_id           BIGINT UNSIGNED,                     -- id of record in index_addresses table
-    coin_price         VARCHAR(250) NOT NULL default 0       -- last price of 1 token in the native coin (BTC, LTC, DOGE, etc)
+    coin_price         VARCHAR(250) NOT NULL default 0,     -- last  price of 1 token in native coin (BTC, LTC, DOGE, etc)
+    coin_floor         VARCHAR(250) NOT NULL default 0      -- floor price of 1 token in native coin (BTC, LTC, DOGE, etc)
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
 CREATE        INDEX tick_id          ON tokens (tick_id);
@@ -36,7 +37,6 @@ CREATE        INDEX lock_mint        ON tokens (lock_mint);
 CREATE        INDEX lock_max_mint    ON tokens (lock_max_mint);
 CREATE        INDEX lock_mint_supply ON tokens (lock_mint_supply);
 CREATE        INDEX lock_description ON tokens (lock_description);
-CREATE        INDEX lock_rug         ON tokens (lock_rug);
 CREATE        INDEX lock_sleep       ON tokens (lock_sleep);
 CREATE        INDEX lock_callback    ON tokens (lock_callback);
 CREATE        INDEX callback_tick_id ON tokens (callback_tick_id);
