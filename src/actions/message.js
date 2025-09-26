@@ -23,6 +23,9 @@ class Message {
 
     // Handle constructing a class instance
     constructor(action){
+        // Setup alias to actions instance
+        this.actions  = action;
+
         // Parse in indexer configuration
         this.config    = action.config;
 
@@ -68,12 +71,14 @@ class Message {
         if(!error)
             data = this.util.setActionParams(data, params, this.formats[format]);
 
-        // Convert NUMBER fields from string value to number value so comparisons are mathematical 
+        // Convert NUMBER fields from string value to number value so comparisons are mathematical
         for(let name of this.fieldList['NUMBER']){
             let value = data[name];
             if(!this.util.isNull(value) && this.util.isNumeric(value))
                 data[name] = this.util.bcnum(value);
         }
+
+        // TODO : Make sure that ENCRYPTION_METHOD is a numeric value or null (stop storing 'u' in database when undefined)
 
         /*****************************************************************
          * FORMAT Validations

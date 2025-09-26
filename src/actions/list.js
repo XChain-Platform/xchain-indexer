@@ -20,6 +20,9 @@ class List {
 
     // Handle constructing a class instance
     constructor(action){
+        // Setup alias to actions instance
+        this.actions  = action;
+
         // Parse in indexer configuration
         this.config    = action.config;
 

@@ -17,6 +17,9 @@ class Batch {
 
     // Handle constructing a class instance
     constructor(action){
+        // Setup alias to actions instance
+        this.actions  = action;
+
         // Parse in indexer configuration
         this.config    = action.config;
 
@@ -26,9 +29,6 @@ class Batch {
 
         // Setup alias to utility class
         this.util     = action.util;
-
-        // Setup alias to actions class
-        this.actions  = action;
 
         // Setup alias to protocol changes class
         this.protocolChanges = action.protocolChanges;
