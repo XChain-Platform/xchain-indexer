@@ -1,8 +1,8 @@
 DROP TABLE IF EXISTS files;
 CREATE TABLE files (
     action_index        BIGINT UNSIGNED NOT NULL, -- Unique action index
-    name                VARCHAR(250),              -- File Name (filename.ext)
-    title               VARCHAR(250),              -- File Title (My Spreadsheet)
+    name                VARCHAR(250),             -- File Name (filename.ext)
+    title               VARCHAR(250),             -- File Title (My Spreadsheet)
     type_id             BIGINT UNSIGNED,          -- id of record in index_mime_types table
     source_id           BIGINT UNSIGNED,          -- id of record in index_addresses table
     memo_id             BIGINT UNSIGNED,          -- id of record in index_memos table
