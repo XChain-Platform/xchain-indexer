@@ -20,19 +20,14 @@ class Destroy {
 
     // Handle constructing a class instance
     constructor(action){
-        // Setup alias to actions instance
-        this.actions  = action;
-
-        // Parse in indexer configuration
+        // Setup short aliases
+        this.actions   = action;
         this.config    = action.config;
-
-        // Setup alias to the indexer database connections
         this.decoderDb = action.decoderDb;
         this.indexerDb = action.indexerDb;
-
-        // Setup alias to utility class
         this.util      = action.util;
-
+        this.mapper    = action.mapper;
+        
         // Define list of known FORMATS
         this.formats = {};
         this.formats[0] = 'VERSION|TICK|AMOUNT|MEMO';
@@ -56,9 +51,6 @@ class Destroy {
         // let str = '1|BRRR|1|GAS|10|bar';
         // let str = '2|BRRR|1|foo|GAS|10|bar';
         // params = String(str).split('|');
-
-        // Reset the address/tickers/transactions list on each parse
-        this.util.resetLists();
 
         // Validate that format is known
         let format = this.util.getFormatVersion(params[0]);
@@ -216,11 +208,11 @@ class Destroy {
             // Create record in destroys table
             await this.indexerDb.createDestroy(destroy);
     
+            // Store the SOURCE and TICK in addresses list
+            this.util.addAddressTicker(destroy['SOURCE'], destroy['TICK']);
+
             // If this was a valid transaction, then add records to the credits and debits array
             if(status=='valid'){
-
-                // Store the SOURCE and TICK in addresses list
-                this.util.addAddressTicker(destroy['SOURCE'], destroy['TICK']);
 
                 // Add ticker and amount to debits array
                 debits.push([destroy['TICK'], destroy['AMOUNT'], destroy['SOURCE']]);
@@ -231,22 +223,16 @@ class Destroy {
         // Process any transaction ledger changes (credits / debits)
         await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits);
 
-        // TODO: If this is a reparse, bail out before updating balances and token information
-        // if(reparse)
-        //     return;
+        // Get a list of tickers & addresses
+        let tickers   = this.util.getTickersList(),
+            addresses = Object.keys(this.util.getAddressesList());
 
-        // Get a list of tickers from this destroy
-        let tickers = Object.keys(ticks);
-
-        // Get a list of addresses associated with this destroy
-        let addresses = Object.keys(this.util.getAddressesList());
-
-        // Update balances for addresses
+        // Update address balances and token supply
         await this.indexerDb.updateBalances(addresses);
+        await this.indexerDb.updateTokens(tickers);
 
-        // Update supplies for tokens
-        await this.indexerDb.updateTokenInfo(tickers);
-
+        // Create action mappings
+        await this.mapper.createMappings(data);
     }
 }
 

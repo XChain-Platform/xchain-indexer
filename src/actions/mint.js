@@ -18,18 +18,13 @@ class Mint {
 
     // Handle constructing a class instance
     constructor(action){
-        // Setup alias to actions instance
-        this.actions  = action;
-
-        // Parse in indexer configuration
+        // Setup short aliases
+        this.actions   = action;
         this.config    = action.config;
-
-        // Setup alias to the indexer database connections
         this.decoderDb = action.decoderDb;
         this.indexerDb = action.indexerDb;
-
-        // Setup alias to utility class
         this.util      = action.util;
+        this.mapper    = action.mapper;
 
         // Define list of known FORMATS
         this.formats = {};
@@ -101,10 +96,6 @@ class Mint {
             data['MINT_START_BLOCK'] = (tokenInfo && !this.util.isNull(tokenInfo['MINT_START_BLOCK'])) ? this.util.bcnum(tokenInfo['MINT_START_BLOCK']) : 0;
             data['MINT_STOP_BLOCK']  = (tokenInfo && !this.util.isNull(tokenInfo['MINT_STOP_BLOCK']))  ? this.util.bcnum(tokenInfo['MINT_STOP_BLOCK']) : 0;
         }
-
-        // Array of credits and debits
-        let credits = [],
-            debits  = [];
 
         /*****************************************************************
          * ACTION Validations
@@ -188,8 +179,19 @@ class Mint {
         // Create record in mints table
         await this.indexerDb.createMint(mint);
 
+        // Store the SOURCE and TICK in addresses list
+        this.util.addAddressTicker(data['SOURCE'], data['TICK']);
+
+        // Store the DESTINATION and TICK in addresses list
+        if(!this.util.isNull(data['DESTINATION']))
+            this.util.addAddressTicker(data['DESTINATION'], data['TICK']);
+
         // If this was a valid transaction, then mint any actual supply
         if(status=='valid'){
+
+            // Array of credits and debits
+            let credits = [],
+                debits  = [];
 
             // Credit MINT_SUPPLY to source address
             if(data['AMOUNT']){
@@ -205,16 +207,17 @@ class Mint {
             // Process any transaction ledger changes (credits / debits)
             await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits);
 
-            // If this is a reparse, bail out before updating balances and token information
-            // if(reparse)
-            //     return;
+            // Get a list of tickers & addresses
+            let tickers   = this.util.getTickersList(),
+                addresses = Object.keys(this.util.getAddressesList());
 
-            // Update balances for addresses
-            await this.indexerDb.updateBalances([data['SOURCE'], data['DESTINATION']]);
-
-            // Update supply for token
-            await this.indexerDb.updateTokenInfo(data['TICK']);
+            // Update address balances and token supply
+            await this.indexerDb.updateBalances(addresses);
+            await this.indexerDb.updateTokens(tickers);
         }
+
+        // Create action mappings
+        await this.mapper.createMappings(data);
 
     }
 }

@@ -22,19 +22,14 @@ class Airdrop {
 
     // Handle constructing a class instance
     constructor(action){
-        // Setup alias to actions instance
-        this.actions  = action;
-
-        // Parse in indexer configuration
+        // Setup short aliases
+        this.actions   = action;
         this.config    = action.config;
-
-        // Setup alias to the indexer database connections
         this.decoderDb = action.decoderDb;
         this.indexerDb = action.indexerDb;
-
-        // Setup alias to utility class
         this.util      = action.util;
-
+        this.mapper    = action.mapper;
+        
         // Define list of known FORMATS
         this.formats = {};
         this.formats[0] = 'VERSION|TICK|AMOUNT|LIST_ACTION_INDEX|MEMO';
@@ -68,9 +63,6 @@ class Airdrop {
         // Multi-Airdrop (Full) w multiple memos
         // let str = '3|AIRDROPTEST1|1|1257|memo1|AIRDROPTEST2|2|1191|memo2';
         // params = String(str).split('|');
-
-        // Reset the address/tickers/transactions list on each parse
-        this.util.resetLists();
 
         // Validate that format is known
         let format = this.util.getFormatVersion(params[0]);
@@ -301,11 +293,15 @@ class Airdrop {
             // Create record in airdrop table
             await this.indexerDb.createAirdrop(airdrop);
     
+            // Store the SOURCE and TICK in addresses list
+            this.util.addAddressTicker(data['SOURCE'], airdrop['TICK']);
+
+            // If we are charging a fee, store the SOURCE and fees TICK in addresses list
+            if(fees['AMOUNT']>0)
+                this.util.addAddressTicker(data['SOURCE'], fees['TICK']);
+
             // If this was a valid transaction, then add records to the credits and debits array
             if(status=='valid'){
-
-                // Store the DESTINATION and TICK in addresses list
-                this.util.addAddressTicker(data['SOURCE'], [airdrop['TICK'], fees['TICK']]);
 
                 // Add ticker, amount, and address to debits array
                 debits.push([airdrop['TICK'], airdrop['DEBIT'], data['SOURCE']]);
@@ -323,30 +319,21 @@ class Airdrop {
                     credits.push([airdrop['TICK'], airdrop['AMOUNT'], address]);
                 }
             }
-
         }
 
         // Process any transaction ledger changes (credits / debits)
         await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits);
 
-        // TODO: If this is a reparse, bail out before updating balances and token information
-        // if(reparse)
-        //     return;
+        // Get a list of tickers & addresses
+        let tickers   = this.util.getTickersList(),
+            addresses = Object.keys(this.util.getAddressesList());
 
-        // Get a list of tickers from this airdrop
-        let tickers = Object.keys(ticks);
-
-        // Store the SOURCE and TICKERS in addresses list
-        this.util.addAddressTicker(data['SOURCE'], tickers);
-
-        // Get a list of addresses associated with this airdrop
-        let addresses = Object.keys(this.util.getAddressesList());
-
-        // Update balances for addresses
+        // Update address balances and token supply
         await this.indexerDb.updateBalances(addresses);
-
-        // Update supply for tokens
         await this.indexerDb.updateTokens(tickers);
+
+        // Create action mappings
+        await this.mapper.createMappings(data);
 
     }
 }

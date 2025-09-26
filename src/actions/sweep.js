@@ -19,19 +19,14 @@ class Sweep {
 
     // Handle constructing a class instance
     constructor(action){
-        // Setup alias to actions instance
-        this.actions  = action;
-
-        // Parse in indexer configuration
+        // Setup short aliases
+        this.actions   = action;
         this.config    = action.config;
-
-        // Setup alias to the indexer database connections
         this.decoderDb = action.decoderDb;
         this.indexerDb = action.indexerDb;
-
-        // Setup alias to utility class
         this.util      = action.util;
-
+        this.mapper    = action.mapper;
+        
         // Define list of known FORMATS
         this.formats = {};
         this.formats[0] = 'VERSION|DESTINATION|BALANCES|OWNERSHIPS|MEMO';
@@ -45,9 +40,6 @@ class Sweep {
          ****************************************************************/
         // let str = '0|1BoogrfDADPLQpq8LMASmWQUVYDp4t2hF9|1|1|memo';
         // params = String(str).split('|');
-
-        // Reset the address/tickers/transactions list on each parse
-        this.util.resetLists();
 
         // Validate that format is known
         let format = this.util.getFormatVersion(params[0]);
@@ -146,6 +138,9 @@ class Sweep {
         // Create record in sweeps table
         await this.indexerDb.createSweep(sweep);
 
+        // Store the SOURCE to the addresses list
+        this.util.addAddressTicker(data['SOURCE']);
+
         // If this was a valid transaction, then mint any actual supply
         if(status=='valid'){
 
@@ -153,8 +148,9 @@ class Sweep {
             let credits = [],
                 debits  = [];
 
-            // Store the SOURCE and TICK in addresses list
-            this.util.addAddressTicker(data['SOURCE'], fees['TICK']);
+            // If we are charging a fee, store the SOURCE and fees TICK in addresses list
+            if(fees['AMOUNT']>0)
+                this.util.addAddressTicker(data['SOURCE'], fees['TICK']);
 
             // Handle any transaction FEE according the users's ADDRESS preferences
             [credits, debits] = await this.util.processTransactionFees(this.indexerDb, credits, debits, fees);
@@ -198,19 +194,18 @@ class Sweep {
             // Process any transaction ledger changes (credits / debits)
             await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits);
 
-            // Get a list of tickers from this sweep
-            let tickers = this.util.getTickersList();
+            // Get a list of tickers & addresses
+            let tickers   = this.util.getTickersList(),
+                addresses = Object.keys(this.util.getAddressesList());
 
-            // Get a list of addresses associated with this sweep
-            let addresses = Object.keys(this.util.getAddressesList());
-
-            // Update balances for addresses
+            // Update address balances and token supply
             await this.indexerDb.updateBalances(addresses);
-
-            // Update supplies for tokens
             await this.indexerDb.updateTokens(tickers);
-
         }
+
+        // Create action mappings
+        await this.mapper.createMappings(data);
+
     }
 }
 

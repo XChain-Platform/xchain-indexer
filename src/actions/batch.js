@@ -17,18 +17,13 @@ class Batch {
 
     // Handle constructing a class instance
     constructor(action){
-        // Setup alias to actions instance
-        this.actions  = action;
-
-        // Parse in indexer configuration
+        // Setup short aliases
+        this.actions   = action;
         this.config    = action.config;
-
-        // Setup alias to the indexer database connections
         this.decoderDb = action.decoderDb;
         this.indexerDb = action.indexerDb;
-
-        // Setup alias to utility class
-        this.util     = action.util;
+        this.util      = action.util;
+        this.mapper    = action.mapper;
 
         // Setup alias to protocol changes class
         this.protocolChanges = action.protocolChanges;
@@ -46,7 +41,6 @@ class Batch {
 
     // Handle parsing the BATCH transaction
     async parse(params, data, error){
-
         // Clone the raw data for storage in batches table
         let batch = structuredClone(data);
 
@@ -111,6 +105,12 @@ class Batch {
         // Create record in batches table
         await this.indexerDb.createBatch(batch);
 
+        // Store the SOURCE in addresses list
+        this.util.addAddressTicker(data['SOURCE']);
+
+        // Create action mappings
+        await this.mapper.createMappings(data);
+        
         // Handle processing the specific ACTION commands
         if(status=='valid'){
             for(let command of commands){

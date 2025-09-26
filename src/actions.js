@@ -32,6 +32,9 @@ class Actions {
         // Setup alias to the utility class instance
         this.util      = indexer.util;
 
+        // Setup alias to the mapper class instance
+        this.mapper    =  indexer.mapper;
+
         // Setup alias to the indexer database connection
         this.decoderDb = indexer.decoderDb;
         this.indexerDb = indexer.indexerDb;
@@ -149,7 +152,11 @@ class Actions {
 
     // Generalized function to handle parsing and processing a specific ACTION
     // NOTE: If the action is UNKNOWN, fail silently (prevent crashing indexer on unsupported actions)
-    async processAction(action, params, data, error){
+    async processAction(action, params, data, error, batch){
+        // Reset the address/tickers/transactions list on each parse
+        this.util.resetLists();
+
+        // Process the action with the correct handler
         if(action=='ADDRESS')   await this.actionAddress.parse(params, data, error);
         if(action=='AIRDROP')   await this.actionAirdrop.parse(params, data, error);
         if(action=='BATCH')     await this.actionBatch.parse(params, data, error);
@@ -171,7 +178,6 @@ class Actions {
         if(action=='SWAP')      await this.actionSwap.parse(params, data, error);
         if(action=='SWEEP')     await this.actionSweep.parse(params, data, error);
     }
-
 }
 
 module.exports = Actions;

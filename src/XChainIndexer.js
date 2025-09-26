@@ -6,6 +6,7 @@ const database = require('./db.js');
 const actions  = require('./actions.js');
 const util     = require('./util.js');
 const rollback = require('./rollback.js');
+const mapper   = require('./mapper.js');
 
 class XChainIndexer {
 
@@ -65,6 +66,9 @@ class XChainIndexer {
 
         // Create instance of the protocol changes class
         this.protocolChanges = new changes(this);
+
+        // Create instance of the mapper class
+        this.mapper = new mapper(this);
 
         // Create instance of the actions class and pass database connection instances to it
         this.actions = new actions(this);
@@ -153,7 +157,7 @@ class XChainIndexer {
 
                 // DEBUG : Rollback to a specific block
                 // let rollbackBlock = 862000;
-                let rollbackBlock = 862630;
+                let rollbackBlock = 862600;
                 // if(lastIndexerBlock >= rollbackBlock){
                 //     await this.rollback.rollback(rollbackBlock);
                 //     this.util.throwError('Rolled back to ' + rollbackBlock);
@@ -185,7 +189,7 @@ class XChainIndexer {
                 cnt++;
 
                 // DEBUG : Exit processing at a select block
-                if(lastIndexerBlock >= 862636){
+                if(lastIndexerBlock >= 862600){
                     // await this.rollback.rollback(rollbackBlock);
                     this.util.throwError('Exiting on target block');
                 }

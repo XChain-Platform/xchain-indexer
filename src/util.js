@@ -322,7 +322,7 @@ class Util {
                 if(!this.tickers.includes(t))
                     this.tickers.push(t);
             }
-        } else {
+        } else if(type!='undefined'){
             // Add ticker to addresses list 
             if(!list.includes(tick))
                 list.push(tick);
