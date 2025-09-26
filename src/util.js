@@ -381,6 +381,7 @@ class Util {
             AMOUNT       : 0,
             METHOD       : (preferences['FEE_PREFERENCE']==1) ? 1 : 2 // 1=Destroy, 2=Donate
         };
+        return fees;
     }
 
     // Calculate Transaction fee based on number of database hits
