@@ -371,15 +371,16 @@ class Util {
 
     // Create the basic fees object used to calculate platform transaction fees
     createFeesObject(data, preferences){
-        // clone transaction data object into fees object
-        let fees = JSON.parse(JSON.stringify(data));
-        fees['TICK_ID'] = 2;     // Hardcoded id for platform gas token (GAS/XCHAIN)
-        fees['TICK']    = 'GAS';
-        // TODO: Change TICK and TICK_ID from GAS to XCHAIN (also do so in index_tickers.sql file)
-        // fees['TICK']    = 'XCHAIN';
-        fees['AMOUNT']  = 0;
-        fees['METHOD']  = (preferences['FEE_PREFERENCE']==1) ? 1 : 2; // 1=Destroy, 2=Donate
-        return fees;
+        let fees = {
+            ACTION_INDEX : data['ACTION_INDEX'], 
+            SOURCE       : data['SOURCE'],            
+            // TODO: Change TICK and TICK_ID from GAS to XCHAIN (also do so in index_tickers.sql file)
+            // TICK      : 'XCHAIN',
+            TICK         : 'GAS',
+            TICK_ID      : 2,
+            AMOUNT       : 0,
+            METHOD       : (preferences['FEE_PREFERENCE']==1) ? 1 : 2 // 1=Destroy, 2=Donate
+        };
     }
 
     // Calculate Transaction fee based on number of database hits
