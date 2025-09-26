@@ -29,6 +29,9 @@ class Swap {
 
     // Handle constructing a class instance
     constructor(action){
+        // Setup alias to actions instance
+        this.actions  = action;
+
         // Parse in indexer configuration
         this.config    = action.config;
 
@@ -327,6 +330,7 @@ class Swap {
                 this.util.addAddressTicker(swapInfo['SOURCE'], swapInfo['GIVE_TICK']);
 
                 // Debit GIVE_AMOUNT of GIVE_TICK from escrow
+                // TODO: DO NOT remove escrow record... instead debit remaining amount from escrows instead (delete `removeEscrowRecord()` function entirely)
                 await this.indexerDb.removeEscrowRecord(swapInfo['ACTION_INDEX']);
 
                 // Credit GIVE_AMOUNT of GIVE_TICK to SOURCE
