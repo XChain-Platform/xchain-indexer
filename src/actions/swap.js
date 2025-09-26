@@ -29,19 +29,14 @@ class Swap {
 
     // Handle constructing a class instance
     constructor(action){
-        // Setup alias to actions instance
-        this.actions  = action;
-
-        // Parse in indexer configuration
+        // Setup short aliases
+        this.actions   = action;
         this.config    = action.config;
-
-        // Setup alias to the indexer database connections
         this.decoderDb = action.decoderDb;
         this.indexerDb = action.indexerDb;
-
-        // Setup alias to utility class
         this.util      = action.util;
-
+        this.mapper    = action.mapper;
+        
         // Define list of known FORMATS
         this.formats = {};
         this.formats[0] = 'VERSION|GIVE_COIN|GIVE_TICK|GIVE_AMOUNT|GET_COIN|GET_TICK|GET_AMOUNT|GET_ADDRESS|EXPIRATION|ALLOW_LIST|BLOCK_LIST|MEMO';
@@ -300,6 +295,13 @@ class Swap {
             await this.indexerDb.createSwapEdit(swap);
         }
 
+        // Store the SOURCE, GIVE_TICK, and GET_TICK in addresses list
+        if(format==0){
+            this.util.addAddressTicker(data['SOURCE'], [data['GIVE_TICK'], data['GET_TICK']]);
+        } else {
+            this.util.addAddressTicker(swapInfo['SOURCE'], swapInfo['GIVE_TICK'], swapInfo['GET_TICK']);
+        }
+
         // If this was a valid transaction, add GIVE_AMOUNT to escrow
         if(status=='valid'){
 
@@ -310,9 +312,6 @@ class Swap {
 
             // Format 0 - Create Swap
             if(format==0){
-                // Store the SOURCE, GIVE_TICK, and fees TICK in addresses list
-                this.util.addAddressTicker(data['SOURCE'], [data['GIVE_TICK'], fees['TICK']]);
-
                 // Debit GIVE_AMOUNT of GIVE_TICK from SOURCE
                 debits.push([data['GIVE_TICK'], data['GIVE_AMOUNT'], data['SOURCE']]);
 
@@ -326,9 +325,6 @@ class Swap {
             // Format 1 - Cancel Swap
             // TODO: Update code to only credit back what remains escrowed, not entire amount (will cause sanity error in current format)
             if(format==1){
-                // Store the SOURCE and GIVE_TICK in addresses list
-                this.util.addAddressTicker(swapInfo['SOURCE'], swapInfo['GIVE_TICK']);
-
                 // Debit GIVE_AMOUNT of GIVE_TICK from escrow
                 // TODO: DO NOT remove escrow record... instead debit remaining amount from escrows instead (delete `removeEscrowRecord()` function entirely)
                 await this.indexerDb.removeEscrowRecord(swapInfo['ACTION_INDEX']);
@@ -340,21 +336,31 @@ class Swap {
                 await this.indexerDb.createSwapStatus(data['ACTION_INDEX'], swapInfo['ACTION_INDEX'], 'cancelled');
             }
 
-            // Format 2 - Edit swap (EXPIRATION)
-            if(format==2){
-                // Store the SOURCE and fees TICK in addresses list
-                this.util.addAddressTicker(data['SOURCE'], fees['TICK']);
-            }
-
             // Handle any transaction FEE according the users's ADDRESS preferences
             [credits, debits] = await this.util.processTransactionFees(this.indexerDb, credits, debits, fees);
 
             // Process any transaction ledger changes (credits / debits / escrows)
             await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits, escrows);
 
-            /*****************************************************************
-             * SWAP Matching Validations
-             ****************************************************************/
+            // Get a list of addresses
+            let addresses = Object.keys(this.util.getAddressesList());
+
+            // Update address balances
+            await this.indexerDb.updateBalances(addresses);
+
+        }
+
+        // Create action mappings
+        await this.mapper.createMappings(data);
+
+        // Reset the address/tickers/transactions list on each parse
+        this.util.resetLists();
+
+        /*****************************************************************
+         * SWAP Matching Validations
+         ****************************************************************/
+        // TODO : move this to actions/order_match.js
+        if(status=='valid'){
 
             // Get a list of any matching open swaps
             let matches = await this.indexerDb.getSwapMatches(data);
@@ -444,24 +450,17 @@ class Swap {
                     // Update record in swaps table to change status (open->complete)
                     await this.indexerDb.createSwapStatus(data['ACTION_INDEX'], swap['ACTION_INDEX'],  'complete');
                     await this.indexerDb.createSwapStatus(data['ACTION_INDEX'], match['ACTION_INDEX'], 'complete');
+
+                    // Get a list of addresses
+                    let addresses = Object.keys(this.util.getAddressesList());
+
+                    // Update address balances
+                    await this.indexerDb.updateBalances(addresses);
+
+                    // Create action mappings
+                    await this.mapper.createMappings(data);
                 }
             }
-
-            // If this is a reparse, bail out before updating balances and token information
-            // if(reparse)
-            //     return;
-
-            // Get a list of tickers from this swap
-            let tickers = this.util.getTickersList();
-
-            // Get a list of addresses associated with this dividend
-            let addresses = Object.keys(this.util.getAddressesList());
-
-            // Update balances for addresses
-            await this.indexerDb.updateBalances(addresses);
-
-            // Update supplies for tokens
-            await this.indexerDb.updateTokens(tickers);
 
         }
 

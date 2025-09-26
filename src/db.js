@@ -4198,6 +4198,48 @@ class Database {
         }
         await this.releaseConnection();
     }
-}
 
+    // Create records in the 'mappings_actions' table
+    async createActionMapping(action_index, type, value){
+        let type_id = null,
+            id      = null;
+        if(type=='tick'){
+            type_id = 1;
+            id      = await this.createTicker(value);
+        }
+        if(type=='address'){
+            type_id = 2;
+            id      = await this.createAddress(value);
+        }
+        // Check if record already exists
+        let db     = await this.getConnection();
+        let query  = `SELECT
+                            action_index
+                        FROM
+                            mappings_actions
+                        WHERE
+                            action_index=? AND
+                            type_id=? AND
+                            id=?`;
+        let args = [action_index, type_id, id];
+        let exists = false;
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0)
+                exists = true;
+        } catch (error){
+            this.util.logError('Error looking up record in mappings_actions table:', error);
+        }
+        // Create record if it does not already exist
+        if(!exists){
+            query = `INSERT INTO mappings_actions (action_index, type_id, id) values (?, ?, ?)`;
+            try {
+                let result = await db.query(query, args);
+            } catch (error) {
+                this.util.logError('Error trying to create record in mappings_actions table:', error);
+            }
+        }
+        await this.releaseConnection();
+    }
+}
 module.exports = Database

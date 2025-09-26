@@ -20,19 +20,14 @@ class List {
 
     // Handle constructing a class instance
     constructor(action){
-        // Setup alias to actions instance
-        this.actions  = action;
-
-        // Parse in indexer configuration
+        // Setup short aliases
+        this.actions   = action;
         this.config    = action.config;
-
-        // Setup alias to the indexer database connections
         this.decoderDb = action.decoderDb;
         this.indexerDb = action.indexerDb;
-
-        // Setup alias to utility class
         this.util      = action.util;
-
+        this.mapper    = action.mapper;
+        
         // Define list of known FORMATS
         this.formats = {};
         this.formats[0] = 'VERSION|TYPE|ITEM';
@@ -182,6 +177,9 @@ class List {
         // Create record in lists table
         await this.indexerDb.createList(data);
 
+        // Store the SOURCE in addresses list
+        this.util.addAddressTicker(data['SOURCE']);
+
         // If this was a valid transaction, then create the list and edit records
         if(status=='valid'){
 
@@ -197,6 +195,9 @@ class List {
             for(let item in invalid)
                 await this.indexerDb.createListItemInvalid(data, item, invalid[item]);
         }
+
+        // Create action mappings
+        await this.mapper.createMappings(data);
 
     }
 }

@@ -19,18 +19,13 @@ class Dividend {
 
     // Handle constructing a class instance
     constructor(action){
-        // Setup alias to actions instance
-        this.actions  = action;
-
-        // Parse in indexer configuration
+        // Setup short aliases
+        this.actions   = action;
         this.config    = action.config;
-
-        // Setup alias to the indexer database connections
         this.decoderDb = action.decoderDb;
         this.indexerDb = action.indexerDb;
-
-        // Setup alias to utility class
         this.util      = action.util;
+        this.mapper    = action.mapper;
 
         // Define list of known FORMATS
         this.formats = {};
@@ -50,9 +45,6 @@ class Dividend {
          ****************************************************************/
         // let str = '0|SAT|SAT|1|testing dividends';
         // params = String(str).split('|');
-
-        // Reset the address/tickers/transactions list on each parse
-        this.util.resetLists();
 
         // Validate that format is known
         let format = this.util.getFormatVersion(params[0]);
@@ -198,15 +190,15 @@ class Dividend {
         // Create record in dividends table
         await this.indexerDb.createDividend(dividend);
 
+        // Store the SOURCE and TICK in addresses list
+        this.util.addAddressTicker(data['SOURCE'], fees['TICK']);
+
         // If this was a valid transaction, then create the credit and debit records
         if(status=='valid'){
 
             // Array of credits and debits
             let credits = [],
                 debits  = [];
-
-            // Store the SOURCE and TICK in addresses list
-            this.util.addAddressTicker(data['SOURCE'], fees['TICK']);
 
             // Add DIVIDEND_TICK and DEBIT to debits array
             debits.push([dividend['DIVIDEND_TICK'], dividend['DEBIT'], dividend['SOURCE']]);
@@ -227,16 +219,16 @@ class Dividend {
             // Process any transaction ledger changes (credits / debits)
             await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits);
 
-            // Get a list of tickers from this dividend
-            let tickers = this.util.getTickersList();
-
-            // Get a list of addresses associated with this dividend
+            // Get a list of addresses
             let addresses = Object.keys(this.util.getAddressesList());
 
-            // Update balances for addresses
+            // Update address balances
             await this.indexerDb.updateBalances(addresses);
 
         }
+
+        // Create action mappings
+        await this.mapper.createMappings(data);
     }
 }
 

@@ -43,18 +43,13 @@ class Issue {
 
     // Handle constructing a class instance
     constructor(action){
-        // Setup alias to actions instance
-        this.actions  = action;
-
-        // Parse in indexer configuration
+        // Setup short aliases
+        this.actions   = action;
         this.config    = action.config;
-
-        // Setup alias to the indexer database connections
         this.decoderDb = action.decoderDb;
         this.indexerDb = action.indexerDb;
-
-        // Setup alias to utility class
         this.util      = action.util;
+        this.mapper    = action.mapper;
 
         // Define list of known FORMATS
         this.formats = {};
@@ -84,9 +79,6 @@ class Issue {
         // let str    = "0|JDOG|1000||18";
         // params = String(str).split('|');
         // data['SOURCE'] = this.config['ADDRESS']['BURN'];
-
-        // Reset the address/tickers/transactions list on each parse
-        this.util.resetLists();
 
         // Validate that format is known
         let format = this.util.getFormatVersion(params[0]);
@@ -386,6 +378,13 @@ class Issue {
         // Create record in issues table
         await this.indexerDb.createIssue(issue);
 
+        // Store the SOURCE and TICK in addresses list
+        this.util.addAddressTicker(data['SOURCE'], data['TICK']);
+
+        // Store the TRANSFER_SUPPLY and TICK in addresses list
+        if(!this.util.isNull(data['TRANSFER_SUPPLY']))
+            this.util.addAddressTicker(data['TRANSFER_SUPPLY'], data['TICK']);
+
         // If this was a valid transaction, then create the token record, and perform any additional actions
         if(status=='valid'){
 
@@ -393,8 +392,9 @@ class Issue {
             let credits = [],
                 debits  = [];
 
-            // Store the SOURCE and TICK in addresses list
-            this.util.addAddressTicker(data['SOURCE'], [data['TICK'], fees['TICK']]);
+            // If we are charging a fee, store the SOURCE and fees TICK in addresses list
+            if(fees['AMOUNT']>0)
+                this.util.addAddressTicker(data['SOURCE'], fees['TICK']);
 
             // Handle any transaction FEE according the users's ADDRESS preferences
             [credits, debits] = await this.util.processTransactionFees(this.indexerDb, credits, debits, fees);
@@ -418,21 +418,18 @@ class Issue {
             // Process any transaction ledger changes (credits / debits)
             await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits);
 
-            // Store the TRANSFER_SUPPLY and TICK in addresses list
-            this.util.addAddressTicker(data['TRANSFER_SUPPLY'], data['TICK']);
+            // Get a list of tickers & addresses
+            let tickers   = this.util.getTickersList(),
+                addresses = Object.keys(this.util.getAddressesList());
 
-            // Get a list of tickers from this sweep
-            let tickers = this.util.getTickersList();
-
-            // Get a list of addresses associated with this sweep
-            let addresses = Object.keys(this.util.getAddressesList());
-
-            // Update balances for addresses
+            // Update address balances and token supply
             await this.indexerDb.updateBalances(addresses);
-
-            // Update supplies for tokens
             await this.indexerDb.updateTokens(tickers);
-        }    
+        }
+
+        // Create action mappings
+        await this.mapper.createMappings(data);
+
     }
 }
 

@@ -19,19 +19,14 @@ class Link {
 
     // Handle constructing a class instance
     constructor(action){
-        // Setup alias to actions instance
-        this.actions  = action;
-
-        // Parse in indexer configuration
+        // Setup short aliases
+        this.actions   = action;
         this.config    = action.config;
-
-        // Setup alias to the indexer database connections
         this.decoderDb = action.decoderDb;
         this.indexerDb = action.indexerDb;
-
-        // Setup alias to utility class
-        this.util = action.util;
-
+        this.util      = action.util;
+        this.mapper    = action.mapper;
+        
         // Define list of known FORMATS
         this.formats = {};
         this.formats[0] = 'VERSION|LINK_ACTION_INDEX|COIN|COIN_ACTION_INDEX|MEMO';
@@ -114,6 +109,12 @@ class Link {
 
         // Create record in links table
         await this.indexerDb.createLink(data);
+
+        // Store the SOURCE in addresses list
+        this.util.addAddressTicker(data['SOURCE']);
+
+        // Create action mappings
+        await this.mapper.createMappings(data);
 
     }
 }
