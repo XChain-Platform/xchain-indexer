@@ -312,8 +312,8 @@ class Util {
     addAddressTicker(address, tick){
         let type = typeof tick;
         let list = (!this.isNull(this.addresses[address])) ? this.addresses[address] : [];
-        // If tick is an object, use the array
-        if(type=="object"){
+        // If tick is not null and type is an object, loop through tickers
+        if(type=="object" && !this.isNull(tick)){
             for(let t of tick){
                 // Add ticker to addresses list 
                 if(!list.includes(t))
