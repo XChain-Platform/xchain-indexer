@@ -306,13 +306,13 @@ class Order {
             this.util.addAddressTicker(orderInfo['SOURCE'], orderInfo['GIVE_TICK'], orderInfo['GET_TICK']);
         }
 
+        // Array of credits, debits, and escrows
+        let credits = [],
+            debits  = [],
+            escrows = [];
+
         // If this was a valid transaction, add GIVE_AMOUNT to escrow
         if(status=='valid'){
-
-            // Array of credits, debits, and escrows
-            let credits = [],
-                debits  = [],
-                escrows = [];
 
             // If we are charging a fee, store the SOURCE and fees TICK in addresses list
             if(fees['AMOUNT']>0)
