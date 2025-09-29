@@ -302,13 +302,13 @@ class Swap {
             this.util.addAddressTicker(swapInfo['SOURCE'], swapInfo['GIVE_TICK'], swapInfo['GET_TICK']);
         }
 
+        // Array of credits, debits, and escrows
+        let credits = [],
+            debits  = [],
+            escrows = [];
+
         // If this was a valid transaction, add GIVE_AMOUNT to escrow
         if(status=='valid'){
-
-            // Array of credits, debits, and escrows
-            let credits = [],
-                debits  = [],
-                escrows = [];
 
             // Format 0 - Create Swap
             if(format==0){
