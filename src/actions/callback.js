@@ -274,9 +274,9 @@ class Callback {
             let tickers   = this.util.getTickersList(),
                 addresses = Object.keys(this.util.getAddressesList());
 
-            // Update address balances 
+            // Update address balances and token supply
             await this.indexerDb.updateBalances(addresses);
-
+            await this.indexerDb.updateTokens(tickers);
         }
 
         // Create action mappings

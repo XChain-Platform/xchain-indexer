@@ -350,11 +350,14 @@ class Order {
             // Process any transaction ledger changes (credits / debits / escrows)
             await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits, escrows);
 
-            // Get a list of addresses
-            let addresses = Object.keys(this.util.getAddressesList());
+            // Get a list of tickers & addresses
+            let tickers   = this.util.getTickersList(),
+                addresses = Object.keys(this.util.getAddressesList());
 
-            // Update address balances
+            // Update address balances and token supply
             await this.indexerDb.updateBalances(addresses);
+            await this.indexerDb.updateTokens(tickers);
+
         }
 
         // Create action mappings
