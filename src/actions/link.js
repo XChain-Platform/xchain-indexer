@@ -1,14 +1,15 @@
 /*********************************************************************
  * XChain Platform Action - LINK
  * 
- * This action uploads a file including file metadata.
+ * This action links actions using `ACTION_INDEX`, including linking actions across blockchains
  * 
  * PARAMS:
- * - VERSION           - Format Version
- * - LINK_ACTION_INDEX - `ACTION_INDEX` of action
- * - COIN              - `COIN` name (BTC, LTC, DOGE, etc)
- * - COIN_ACTION_INDEX - `ACTION_INDEX` of action on `COIN` network
- * - MEMO              - An optional memo to include
+ * - VERSION            - Format Version
+ * - COIN1              - `COIN` name (BTC, LTC, DOGE, etc)
+ * - COIN1_ACTION_INDEX - `ACTION_INDEX` of action on `COIN1` network
+ * - COIN2              - `COIN` name (BTC, LTC, DOGE, etc)
+ * - COIN2_ACTION_INDEX - `ACTION_INDEX` of action on `COIN2` network
+ * - MEMO               - An optional memo to include
  *
  * FORMATS:
  * - 0 = Full
@@ -29,13 +30,13 @@ class Link {
         
         // Define list of known FORMATS
         this.formats = {};
-        this.formats[0] = 'VERSION|LINK_ACTION_INDEX|COIN|COIN_ACTION_INDEX|MEMO';
+        this.formats[0] = 'VERSION|COIN1|COIN1_ACTION_INDEX|COIN2|COIN2_ACTION_INDEX|MEMO';
 
         // Define lists of various fields
         this.fieldList = {};
 
         // Define list of NUMBER fields (used to convert values from string to number)
-        this.fieldList['NUMBER'] = ['LINK_ACTION_INDEX', 'COIN_ACTION_INDEX'];
+        this.fieldList['NUMBER'] = ['COIN1_ACTION_INDEX','COIN2_ACTION_INDEX'];
 
     }
 
@@ -65,16 +66,28 @@ class Link {
         }
 
         /*****************************************************************
+         * COIN Validations
+         ****************************************************************/
+
+        // Validate COIN1 is valid
+        if(!error && format==0 && !this.config['COINS'].includes(data['COIN1']))
+            error = 'invalid: COIN1 (unsupported COIN network)';
+
+        // Validate COIN2 is valid
+        if(!error && format==0 && !this.config['COINS'].includes(data['COIN2']))
+            error = 'invalid: COIN2 (unsupported COIN network)';
+
+        /*****************************************************************
          * FORMAT Validations
          ****************************************************************/
 
-        // Verify LINK_ACTION_INDEX format
-        if(!error && (this.util.isNull(data['LINK_ACTION_INDEX']) || !this.util.isNumeric(data['LINK_ACTION_INDEX'])))
-            error = 'invalid: LINK_ACTION_INDEX (format)';
+        // Verify COIN1_ACTION_INDEX format
+        if(!error && (this.util.isNull(data['COIN1_ACTION_INDEX']) || !this.util.isNumeric(data['COIN1_ACTION_INDEX'])))
+            error = 'invalid: COIN1_ACTION_INDEX (format)';
 
-        // Verify COIN_ACTION_INDEX format
-        if(!error && (this.util.isNull(data['COIN_ACTION_INDEX']) || !this.util.isNumeric(data['COIN_ACTION_INDEX'])))
-            error = 'invalid: COIN_ACTION_INDEX (format)';
+        // Verify COIN2_ACTION_INDEX format
+        if(!error && (this.util.isNull(data['COIN2_ACTION_INDEX']) || !this.util.isNumeric(data['COIN2_ACTION_INDEX'])))
+            error = 'invalid: COIN2_ACTION_INDEX (format)';
 
         /*****************************************************************
          * General Validations
@@ -84,9 +97,13 @@ class Link {
         if(!error && !await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']))
             error = 'invalid: SOURCE (sleeping)';
 
-        // Verify LINK_ACTION_INDEX is valid
-        if(!error && !await this.indexerDb.isActionIndexValid(data['LINK_ACTION_INDEX']))
-            error = 'invalid: LINK_ACTION_INDEX (status)';
+        // Verify COIN1_ACTION_INDEX is valid (only validate links on current COIN network)
+        if(!error && data['COIN1']==this.config['COIN'] && !await this.indexerDb.isActionIndexValid(data['COIN1_ACTION_INDEX']))
+            error = 'invalid: COIN1_ACTION_INDEX (status)';
+
+        // Verify COIN2_ACTION_INDEX is valid (only validate links on current COIN network)
+        if(!error && data['COIN2']==this.config['COIN'] && !await this.indexerDb.isActionIndexValid(data['COIN2_ACTION_INDEX']))
+            error = 'invalid: COIN2_ACTION_INDEX (status)';
 
         // Verify no pipe in MEMO (pipe is field delimiter)
         if(!error && String(data['MEMO']).indexOf('|')!=-1)
@@ -105,7 +122,7 @@ class Link {
         data['STATUS'] = status;
 
         // Print status message 
-        console.log("\t LINK : " + data['LINK_ACTION_INDEX'] + '->' + data['COIN_ACTION_INDEX'] + ' : ' + data['STATUS']);
+        console.log("\t LINK : " + data['COIN1'] + ':' + data['COIN1_ACTION_INDEX'] + '->' + data['COIN2'] + ':' + data['COIN2_ACTION_INDEX'] + ' : ' + data['STATUS']);
 
         // Create record in links table
         await this.indexerDb.createLink(data);
