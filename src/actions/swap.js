@@ -310,6 +310,10 @@ class Swap {
         // If this was a valid transaction, add GIVE_AMOUNT to escrow
         if(status=='valid'){
 
+            // If we are charging a fee, store the SOURCE and fees TICK in addresses list
+            if(fees['AMOUNT']>0)
+                this.util.addAddressTicker(data['SOURCE'], fees['TICK']);
+
             // Format 0 - Create Swap
             if(format==0){
                 // Debit GIVE_AMOUNT of GIVE_TICK from SOURCE
