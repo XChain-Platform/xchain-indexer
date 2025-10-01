@@ -3099,13 +3099,14 @@ class Database {
     // Create/Update record in `links` table
     async createLink(data){
         // Normalize data
-        let coin_id           = await this.createCoin(data['COIN']);
-        let source_id         = await this.createAddress(data['SOURCE']);
-        let memo_id           = await this.createMemo(data['MEMO']);
-        let status_id         = await this.createStatus(data['STATUS']);
-        let action_index      = data['ACTION_INDEX'];
-        let link_action_index = data['LINK_ACTION_INDEX'];
-        let coin_action_index = data['COIN_ACTION_INDEX'];
+        let coin1_id           = await this.createCoin(data['COIN1']);
+        let coin2_id           = await this.createCoin(data['COIN2']);
+        let source_id          = await this.createAddress(data['SOURCE']);
+        let memo_id            = await this.createMemo(data['MEMO']);
+        let status_id          = await this.createStatus(data['STATUS']);
+        let action_index       = data['ACTION_INDEX'];
+        let coin1_action_index = data['COIN1_ACTION_INDEX'];
+        let coin2_action_index = data['COIN2_ACTION_INDEX'];
         // Check if record already exists for this link
         let db     = await this.getConnection();
         let query  = `SELECT
@@ -3128,9 +3129,10 @@ class Database {
             query = `UPDATE
                         links
                     SET
-                        link_action_index=?,
-                        coin_id=?,
-                        coin_action_index=?,
+                        coin1_id=?,
+                        coin1_action_index=?,
+                        coin2_id=?,
+                        coin2_action_index=?,
                         source_id=?,
                         memo_id=?,
                         status_id=?
@@ -3138,9 +3140,9 @@ class Database {
                         action_index=?`;
         } else {
             // INSERT record
-            query = `INSERT INTO links (link_action_index, coin_id, coin_action_index, source_id, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?, ?)`;
+            query = `INSERT INTO links (coin1_id, coin1_action_index, coin2_id, coin2_action_index, source_id, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?, ?, ?)`;
         }
-        args = [link_action_index, coin_id, coin_action_index, source_id, memo_id, status_id, action_index];
+        args = [coin1_id, coin1_action_index, coin2_id, coin2_action_index, source_id, memo_id, status_id, action_index];
         // Create or Update the record in the links table
         try {
             let result = await db.query(query, args);
@@ -4241,5 +4243,830 @@ class Database {
         }
         await this.releaseConnection();
     }
+
+    // Create records in the 'mappings_files' table
+    async createFileMapping(action_index, type, value){
+        let type_id = null,
+            id      = null;
+        if(type=='tick'){
+            type_id = 1;
+            id      = await this.createTicker(value);
+        }
+        // Check if record already exists
+        let db     = await this.getConnection();
+        let query  = `SELECT
+                            action_index
+                        FROM
+                            mappings_files
+                        WHERE
+                            action_index=? AND
+                            type_id=? AND
+                            id=?`;
+        let args = [action_index, type_id, id];
+        let exists = false;
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0)
+                exists = true;
+        } catch (error){
+            this.util.logError('Error looking up record in mappings_files table:', error);
+        }
+        // Create record if it does not already exist
+        if(!exists){
+            query = `INSERT INTO mappings_files (action_index, type_id, id) values (?, ?, ?)`;
+            try {
+                let result = await db.query(query, args);
+            } catch (error) {
+                this.util.logError('Error trying to create record in mappings_files table:', error);
+            }
+        }
+        await this.releaseConnection();
+    }
+
+
+
+
+    // Get action type for a given action_index
+    async getActionType(action_index){
+        let type = null;
+        // Lookup the ACTION based on the action_index
+        let db     = await this.getConnection();
+        let args = [action_index];
+        let sql  = `SELECT 
+                        a2.action
+                    FROM
+                        actions a1
+                        INNER JOIN index_actions a2 ON (a2.id=a1.action_id)
+                    WHERE
+                        a1.action_index=?`;
+        let results = await db.query(sql, args);
+        if(results && results.length)
+            type = results[0].action;
+        await this.releaseConnection();
+        return type;
+    }
+
+    // Get action information for a given action_index
+    async getActionData(action_index){
+        let data = null;
+        let sql  = null;
+        let type = await this.getActionType(action_index);
+        if(type){
+            // Placeholders for queries and arguments
+            // ADDRESS action
+            if(type=='ADDRESS'){
+                sql = `SELECT
+                            a3.action,
+                            a1.action_index,
+                            a4.address as source,
+                            a1.fee_preference,
+                            a1.require_memo,
+                            b1.block_index,
+                            b1.block_time as timestamp,
+                            t2.hash as tx_hash,
+                            t1.tx_index,
+                            m1.memo,
+                            s1.status
+                        FROM
+                            addresses a1
+                            INNER JOIN actions            a2 ON (a2.action_index=a1.action_index)
+                            INNER JOIN transactions       t1 ON (t1.tx_index=a2.tx_index)
+                            INNER JOIN blocks             b1 ON (b1.block_index=t1.block_index)
+                            INNER JOIN index_actions      a3 ON (a3.id=a2.action_id)
+                            INNER JOIN index_addresses    a4 ON (a4.id=a1.source_id)
+                            INNER JOIN index_memos        m1 ON (m1.id=a1.memo_id)
+                            INNER JOIN index_statuses     s1 ON (s1.id=a1.status_id)
+                            INNER JOIN index_transactions t2 ON (t2.id=t1.tx_hash_id)
+                        WHERE 
+                            a1.action_index=?
+                        LIMIT 1`;
+            }
+            // AIRDROP action
+            if(type=='AIRDROP'){
+                sql = `SELECT
+                            a3.action,
+                            a1.action_index,
+                            a4.address as source,
+                            t3.tick,
+                            a1.list_action_index,
+                            a1.amount,
+                            b1.block_index,
+                            b1.block_time as timestamp,
+                            t2.hash as tx_hash,
+                            t1.tx_index,
+                            m1.memo,
+                            s1.status
+                        FROM
+                            airdrops a1
+                            INNER JOIN actions            a2 ON (a2.action_index=a1.action_index)
+                            INNER JOIN transactions       t1 ON (t1.tx_index=a2.tx_index)
+                            INNER JOIN blocks             b1 ON (b1.block_index=t1.block_index)
+                            INNER JOIN index_actions      a3 ON (a3.id=a2.action_id)
+                            INNER JOIN index_addresses    a4 ON (a4.id=a1.source_id)
+                            INNER JOIN index_memos        m1 ON (m1.id=a1.memo_id)
+                            INNER JOIN index_statuses     s1 ON (s1.id=a1.status_id)
+                            INNER JOIN index_transactions t2 ON (t2.id=t1.tx_hash_id)
+                            INNER JOIN index_tickers      t3 ON (t3.id=a1.tick_id)
+                        WHERE 
+                            a1.action_index=?
+                        LIMIT 1`;
+            }
+            // BATCH action
+            if(type=='BATCH'){
+                sql = `SELECT
+                            a3.action,
+                            b1.action_index,
+                            a4.address as source,
+                            b2.block_index,
+                            b2.block_time as timestamp,
+                            t2.hash as tx_hash,
+                            t1.tx_index,
+                            s1.status
+                        FROM
+                            batches b1
+                            INNER JOIN actions            a2 ON (a2.action_index=b1.action_index)
+                            INNER JOIN transactions       t1 ON (t1.tx_index=a2.tx_index)
+                            INNER JOIN blocks             b2 ON (b2.block_index=t1.block_index)
+                            INNER JOIN index_actions      a3 ON (a3.id=a2.action_id)
+                            INNER JOIN index_addresses    a4 ON (a4.id=b1.source_id)
+                            INNER JOIN index_statuses     s1 ON (s1.id=b1.status_id)
+                            INNER JOIN index_transactions t2 ON (t2.id=t1.tx_hash_id)
+                        WHERE 
+                            b1.action_index=?
+                        LIMIT 1`;
+            }
+            // BROADCAST action
+            if(type=='BROADCAST'){
+                sql = `SELECT
+                            a2.action,
+                            b1.action_index,
+                            b1.message,
+                            b1.value,
+                            b1.fee,
+                            b1.broadcast_action_index,
+                            a3.address as source,
+                            b2.block_index,
+                            b2.block_time as timestamp,
+                            t2.hash as tx_hash,
+                            t1.tx_index,
+                            m1.memo,
+                            s1.status
+                        FROM
+                            broadcasts b1
+                            INNER JOIN actions            a1 ON (a1.action_index=b1.action_index)
+                            INNER JOIN transactions       t1 ON (t1.tx_index=a1.tx_index)
+                            INNER JOIN blocks             b2 ON (b2.block_index=t1.block_index)
+                            INNER JOIN index_actions      a2 ON (a2.id=a1.action_id)
+                            INNER JOIN index_addresses    a3 ON (a3.id=b1.source_id)
+                            INNER JOIN index_memos        m1 ON (m1.id=b1.memo_id)
+                            INNER JOIN index_statuses     s1 ON (s1.id=b1.status_id)
+                            INNER JOIN index_transactions t2 ON (t2.id=t1.tx_hash_id)
+                        WHERE 
+                            b1.action_index=?
+                        LIMIT 1`;
+            }
+            // CALLBACK action
+            if(type=='CALLBACK'){
+                sql = `SELECT
+                            a2.action,
+                            c1.action_index,
+                            a3.address as source,
+                            t3.tick,
+                            t4.tick as callback_tick,
+                            c1.callback_amount,
+                            b1.block_index,
+                            b1.block_time as timestamp,
+                            t2.hash as tx_hash,
+                            t1.tx_index,
+                            m1.memo,
+                            s1.status
+                        FROM
+                            callbacks c1
+                            INNER JOIN actions            a1 ON (a1.action_index=c1.action_index)
+                            INNER JOIN transactions       t1 ON (t1.tx_index=a1.tx_index)
+                            INNER JOIN blocks             b1 ON (b1.block_index=t1.block_index)
+                            INNER JOIN index_actions      a2 ON (a2.id=a1.action_id)
+                            INNER JOIN index_addresses    a3 ON (a3.id=c1.source_id)
+                            INNER JOIN index_memos        m1 ON (m1.id=c1.memo_id)
+                            INNER JOIN index_statuses     s1 ON (s1.id=c1.status_id)
+                            INNER JOIN index_transactions t2 ON (t2.id=t1.tx_hash_id)
+                            INNER JOIN index_tickers      t3 ON (t3.id=c1.tick_id)
+                            INNER JOIN index_tickers      t4 ON (t4.id=c1.callback_tick_id)
+                        WHERE 
+                            c1.action_index=?
+                        LIMIT 1`;
+            }
+            // DESTROY action
+            if(type=='DESTROY'){
+                sql = `SELECT
+                            a2.action,
+                            d1.action_index,
+                            a3.address as source,
+                            t3.tick,
+                            d1.amount,
+                            b1.block_index,
+                            b1.block_time as timestamp,
+                            t2.hash as tx_hash,
+                            t1.tx_index,
+                            m1.memo,
+                            s1.status
+                        FROM
+                            destroys d1
+                            INNER JOIN actions            a1 ON (a1.action_index=d1.action_index)
+                            INNER JOIN transactions       t1 ON (t1.tx_index=a1.tx_index)
+                            INNER JOIN blocks             b1 ON (b1.block_index=t1.block_index)
+                            INNER JOIN index_actions      a2 ON (a2.id=a1.action_id)
+                            INNER JOIN index_addresses    a3 ON (a3.id=d1.source_id)
+                            INNER JOIN index_memos        m1 ON (m1.id=d1.memo_id)
+                            INNER JOIN index_statuses     s1 ON (s1.id=d1.status_id)
+                            INNER JOIN index_transactions t2 ON (t2.id=t1.tx_hash_id)
+                            INNER JOIN index_tickers      t3 ON (t3.id=d1.tick_id)
+                        WHERE 
+                            d1.action_index=?
+                        LIMIT 1`;
+            }
+            // DISPENSER action
+            if(type=='DISPENSER'){
+                // TODO
+            }
+            // DISPENSE action
+            if(type=='DISPENSE'){
+                // TODO
+            }
+            // FILE action
+            if(type=='FILE'){
+                sql = `SELECT
+                            a2.action,
+                            f1.action_index,
+                            f1.name,
+                            f1.title,
+                            t3.type as type,
+                            a3.address as source,
+                            b1.block_index,
+                            b1.block_time as timestamp,
+                            t2.hash as tx_hash,
+                            t1.tx_index,
+                            m1.memo,
+                            s1.status
+                        FROM
+                            files f1
+                            INNER JOIN actions            a1 ON (a1.action_index=f1.action_index)
+                            INNER JOIN transactions       t1 ON (t1.tx_index=a1.tx_index)
+                            INNER JOIN blocks             b1 ON (b1.block_index=t1.block_index)
+                            INNER JOIN index_actions      a2 ON (a2.id=a1.action_id)
+                            INNER JOIN index_addresses    a3 ON (a3.id=f1.source_id)
+                            INNER JOIN index_memos        m1 ON (m1.id=f1.memo_id)
+                            INNER JOIN index_statuses     s1 ON (s1.id=f1.status_id)
+                            INNER JOIN index_transactions t2 ON (t2.id=t1.tx_hash_id)
+                            INNER JOIN index_mime_types   t3 ON (t3.id=f1.type_id)
+                        WHERE 
+                            f1.action_index=?
+                        LIMIT 1`;
+                // TODO: Add code to lookup actual file data from transactions and return an `data` item
+            }
+            // ISSUE action
+            if(type=='ISSUE'){
+                sql = `SELECT
+                            a2.action,
+                            i1.action_index,
+                            t3.tick,
+                            i1.max_supply,
+                            i1.max_mint,
+                            i1.decimals,
+                            i1.description,
+                            i1.mint_supply,
+                            a4.address as transfer,
+                            a5.address as transfer_supply,
+                            i1.lock_max_supply,
+                            i1.lock_mint,
+                            i1.lock_mint_supply,
+                            i1.lock_max_mint,
+                            i1.lock_description,
+                            i1.lock_sleep,
+                            i1.lock_callback,
+                            i1.callback_block,
+                            t4.tick as callback_tick,
+                            i1.callback_amount,
+                            i1.allow_list,
+                            i1.block_list,
+                            i1.mint_address_max,
+                            i1.mint_start_block,
+                            i1.mint_stop_block,
+                            a3.address as source,
+                            b1.block_index,
+                            b1.block_time as timestamp,
+                            t2.hash as tx_hash,
+                            t1.tx_index,
+                            s1.status
+                        FROM
+                            issues i1
+                            INNER JOIN actions            a1 ON (a1.action_index=i1.action_index)
+                            INNER JOIN transactions       t1 ON (t1.tx_index=a1.tx_index)
+                            INNER JOIN blocks             b1 ON (b1.block_index=t1.block_index)
+                            INNER JOIN index_actions      a2 ON (a2.id=a1.action_id)
+                            INNER JOIN index_addresses    a3 ON (a3.id=i1.source_id)
+                            LEFT  JOIN index_addresses    a4 ON (a4.id=i1.transfer_id)
+                            LEFT  JOIN index_addresses    a5 ON (a5.id=i1.transfer_supply_id)
+                            INNER JOIN index_statuses     s1 ON (s1.id=i1.status_id)
+                            INNER JOIN index_transactions t2 ON (t2.id=t1.tx_hash_id)
+                            INNER JOIN index_tickers      t3 ON (t3.id=i1.tick_id)
+                            LEFT  JOIN index_tickers      t4 ON (t4.id=i1.callback_tick_id)
+                        WHERE 
+                            i1.action_index=?
+                        LIMIT 1`;
+            }
+            // LINK action
+            if(type=='LINK'){
+                sql = `SELECT
+                            a2.action,
+                            l1.action_index,
+                            c1.coin as coin1,
+                            c2.coin as coin2,
+                            l1.coin1_action_index,
+                            l1.coin2_action_index,
+                            a3.address as source,
+                            b1.block_index,
+                            b1.block_time as timestamp,
+                            t2.hash as tx_hash,
+                            t1.tx_index,
+                            m1.memo,
+                            s1.status
+                        FROM
+                            links l1
+                            INNER JOIN actions            a1 ON (a1.action_index=l1.action_index)
+                            INNER JOIN transactions       t1 ON (t1.tx_index=a1.tx_index)
+                            INNER JOIN blocks             b1 ON (b1.block_index=t1.block_index)
+                            INNER JOIN index_actions      a2 ON (a2.id=a1.action_id)
+                            INNER JOIN index_addresses    a3 ON (a3.id=l1.source_id)
+                            INNER JOIN index_memos        m1 ON (m1.id=l1.memo_id)
+                            INNER JOIN index_statuses     s1 ON (s1.id=l1.status_id)
+                            INNER JOIN index_transactions t2 ON (t2.id=t1.tx_hash_id)
+                            INNER JOIN index_coins        c1 ON (c1.id=l1.coin1_id)
+                            INNER JOIN index_coins        c2 ON (c2.id=l1.coin2_id)
+                        WHERE 
+                            l1.action_index=?
+                        LIMIT 1`;
+            }
+            // LIST action
+            if(type=='LIST'){
+                sql = `SELECT
+                            a2.action,
+                            l1.action_index,
+                            l1.type,
+                            l1.edit,
+                            l1.list_action_index,
+                            a3.address as source,
+                            b1.block_index,
+                            b1.block_time as timestamp,
+                            t2.hash as tx_hash,
+                            t1.tx_index,
+                            s1.status
+                        FROM
+                            lists l1
+                            INNER JOIN actions            a1 ON (a1.action_index=l1.action_index)
+                            INNER JOIN transactions       t1 ON (t1.tx_index=a1.tx_index)
+                            INNER JOIN blocks             b1 ON (b1.block_index=t1.block_index)
+                            INNER JOIN index_actions      a2 ON (a2.id=a1.action_id)
+                            INNER JOIN index_addresses    a3 ON (a3.id=l1.source_id)
+                            INNER JOIN index_statuses     s1 ON (s1.id=l1.status_id)
+                            INNER JOIN index_transactions t2 ON (t2.id=t1.tx_hash_id)
+                        WHERE 
+                            l1.action_index=?
+                        LIMIT 1`;
+            }
+            // MESSAGE action
+            if(type=='MESSAGE'){
+                sql = `SELECT
+                            a2.action,
+                            m1.action_index,
+                            a3.address as source,
+                            a4.address as destination,
+                            m1.encryption_method,
+                            m1.encryption_key,
+                            m1.encrypted_message,
+                            m1.plaintext_message,
+                            b1.block_index,
+                            b1.block_time as timestamp,
+                            t2.hash as tx_hash,
+                            t1.tx_index,
+                            s1.status
+                        FROM
+                            messages m1
+                            INNER JOIN actions            a1 ON (a1.action_index=m1.action_index)
+                            INNER JOIN transactions       t1 ON (t1.tx_index=a1.tx_index)
+                            INNER JOIN blocks             b1 ON (b1.block_index=t1.block_index)
+                            INNER JOIN index_actions      a2 ON (a2.id=a1.action_id)
+                            INNER JOIN index_addresses    a3 ON (a3.id=m1.source_id)
+                            INNER JOIN index_addresses    a4 ON (a4.id=m1.destination_id)
+                            INNER JOIN index_statuses     s1 ON (s1.id=m1.status_id)
+                            INNER JOIN index_transactions t2 ON (t2.id=t1.tx_hash_id)
+                        WHERE 
+                            m1.action_index=?
+                        LIMIT 1`;
+            }
+            // MINT action
+            if(type=='MINT'){
+                sql = `SELECT
+                            a2.action,
+                            m1.action_index,
+                            a3.address as source,
+                            a4.address as destination,
+                            t3.tick,
+                            m1.amount,
+                            b1.block_index,
+                            b1.block_time as timestamp,
+                            t2.hash as tx_hash,
+                            t1.tx_index,
+                            m2.memo,
+                            s1.status
+                        FROM
+                            mints m1
+                            INNER JOIN actions            a1 ON (a1.action_index=m1.action_index)
+                            INNER JOIN transactions       t1 ON (t1.tx_index=a1.tx_index)
+                            INNER JOIN blocks             b1 ON (b1.block_index=t1.block_index)
+                            INNER JOIN index_actions      a2 ON (a2.id=a1.action_id)
+                            INNER JOIN index_addresses    a3 ON (a3.id=m1.source_id)
+                            INNER JOIN index_addresses    a4 ON (a4.id=m1.destination_id)
+                            INNER JOIN index_memos        m2 ON (m2.id=m1.memo_id)
+                            INNER JOIN index_statuses     s1 ON (s1.id=m1.status_id)
+                            INNER JOIN index_transactions t2 ON (t2.id=t1.tx_hash_id)
+                            INNER JOIN index_tickers      t3 ON (t3.id=m1.tick_id)
+                        WHERE 
+                            m1.action_index=?
+                        LIMIT 1`;
+            }
+            // ORDER action
+            if(type=='ORDER'){
+                sql = `SELECT
+                            a2.action,
+                            o1.action_index,
+                            c1.coin as give_coin,
+                            t3.tick as give_tick,
+                            o1.give_amount,
+                            c2.coin as get_coin,
+                            t4.tick as get_tick,
+                            o1.get_amount,
+                            a3.address as source,
+                            a4.address as get_address,
+                            o1.expiration,
+                            o1.allow_list,
+                            o1.block_list,
+                            b1.block_index,
+                            b1.block_time as timestamp,
+                            t2.hash as tx_hash,
+                            t1.tx_index,
+                            m2.memo,
+                            s1.status
+                        FROM
+                            orders o1
+                            INNER JOIN actions            a1 ON (a1.action_index=o1.action_index)
+                            INNER JOIN transactions       t1 ON (t1.tx_index=a1.tx_index)
+                            INNER JOIN blocks             b1 ON (b1.block_index=t1.block_index)
+                            INNER JOIN index_actions      a2 ON (a2.id=a1.action_id)
+                            INNER JOIN index_addresses    a3 ON (a3.id=o1.source_id)
+                            INNER JOIN index_addresses    a4 ON (a4.id=o1.get_address_id)
+                            INNER JOIN index_memos        m2 ON (m2.id=o1.memo_id)
+                            INNER JOIN index_statuses     s1 ON (s1.id=o1.status_id)
+                            INNER JOIN index_transactions t2 ON (t2.id=t1.tx_hash_id)
+                            INNER JOIN index_coins        c1 ON (c1.id=o1.give_coin_id)
+                            INNER JOIN index_coins        c2 ON (c2.id=o1.get_coin_id)
+                            INNER JOIN index_tickers      t3 ON (t3.id=o1.give_tick_id)
+                            INNER JOIN index_tickers      t4 ON (t4.id=o1.get_tick_id)
+                        WHERE 
+                            o1.action_index=?
+                        LIMIT 1`;
+            }
+            // ORDER_CANCEL action
+            if(type=='ORDER_CANCEL'){
+                sql = `SELECT
+                        a2.action,
+                        o1.action_index,
+                        o1.order_action_index,
+                        a3.address as source,
+                        b1.block_index,
+                        b1.block_time as timestamp,
+                        t2.hash as tx_hash,
+                        t1.tx_index,
+                        m2.memo,
+                        s1.status
+                    FROM
+                        order_cancels o1
+                        INNER JOIN actions            a1 ON (a1.action_index=o1.action_index)
+                        INNER JOIN transactions       t1 ON (t1.tx_index=a1.tx_index)
+                        INNER JOIN blocks             b1 ON (b1.block_index=t1.block_index)
+                        INNER JOIN index_actions      a2 ON (a2.id=a1.action_id)
+                        INNER JOIN index_addresses    a3 ON (a3.id=o1.source_id)
+                        INNER JOIN index_memos        m2 ON (m2.id=o1.memo_id)
+                        INNER JOIN index_statuses     s1 ON (s1.id=o1.status_id)
+                        INNER JOIN index_transactions t2 ON (t2.id=t1.tx_hash_id)
+                    WHERE 
+                        o1.action_index=?
+                    LIMIT 1`;
+            }
+            // ORDER_EDIT action
+            if(type=='ORDER_EDIT'){
+                sql = `SELECT
+                        a2.action,
+                        o1.action_index,
+                        o1.order_action_index,
+                        a3.address as source,
+                        o1.expiration,
+                        o1.allow_list,
+                        o1.block_list,
+                        b1.block_index,
+                        b1.block_time as timestamp,
+                        t2.hash as tx_hash,
+                        t1.tx_index,
+                        m2.memo,
+                        s1.status
+                    FROM
+                        order_edits o1
+                        INNER JOIN actions            a1 ON (a1.action_index=o1.action_index)
+                        INNER JOIN transactions       t1 ON (t1.tx_index=a1.tx_index)
+                        INNER JOIN blocks             b1 ON (b1.block_index=t1.block_index)
+                        INNER JOIN index_actions      a2 ON (a2.id=a1.action_id)
+                        INNER JOIN index_addresses    a3 ON (a3.id=o1.source_id)
+                        INNER JOIN index_memos        m2 ON (m2.id=o1.memo_id)
+                        INNER JOIN index_statuses     s1 ON (s1.id=o1.status_id)
+                        INNER JOIN index_transactions t2 ON (t2.id=t1.tx_hash_id)
+                    WHERE 
+                        o1.action_index=?
+                    LIMIT 1`;
+            }
+            // ORDER_MATCH action
+            if(type=='ORDER_MATCH'){
+                sql = `SELECT
+                            a2.action,
+                            m1.action_index,
+                            c1.coin as give_coin,
+                            m1.give_action_index,
+                            c2.coin as get_coin,
+                            m1.get_action_index,
+                            b1.block_index,
+                            b1.block_time as timestamp,
+                            s1.status
+                        FROM
+                            order_matches m1
+                            INNER JOIN actions            a1 ON (a1.action_index=m1.action_index)
+                            INNER JOIN transactions       t1 ON (t1.tx_index=a1.tx_index)
+                            INNER JOIN blocks             b1 ON (b1.block_index=t1.block_index)
+                            INNER JOIN index_actions      a2 ON (a2.id=a1.action_id)
+                            INNER JOIN index_statuses     s1 ON (s1.id=m1.status_id)
+                            INNER JOIN index_transactions t2 ON (t2.id=t1.tx_hash_id)
+                            INNER JOIN index_coins        c1 ON (c1.id=m1.give_coin_id)
+                            INNER JOIN index_coins        c2 ON (c2.id=m1.get_coin_id)
+                        WHERE 
+                            m1.action_index=?
+                        LIMIT 1`;
+            }
+            // SEND action
+            // TODO: Revisit this code and optimize it to support Multi-sends (right now shows first send status instead of every send status as it should)
+            if(type=='SEND'){
+                sql = `SELECT
+                            a2.action,
+                            s1.action_index,
+                            a3.address as source,
+                            a4.address as destination,
+                            t3.tick,
+                            s1.amount,
+                            b1.block_index,
+                            b1.block_time as timestamp,
+                            t2.hash as tx_hash,
+                            t1.tx_index,
+                            m2.memo,
+                            s2.status
+                        FROM
+                            sends s1
+                            INNER JOIN actions            a1 ON (a1.action_index=s1.action_index)
+                            INNER JOIN transactions       t1 ON (t1.tx_index=a1.tx_index)
+                            INNER JOIN blocks             b1 ON (b1.block_index=t1.block_index)
+                            INNER JOIN index_actions      a2 ON (a2.id=a1.action_id)
+                            INNER JOIN index_addresses    a3 ON (a3.id=s1.source_id)
+                            INNER JOIN index_addresses    a4 ON (a4.id=s1.destination_id)
+                            INNER JOIN index_memos        m2 ON (m2.id=s1.memo_id)
+                            INNER JOIN index_statuses     s2 ON (s2.id=s1.status_id)
+                            INNER JOIN index_transactions t2 ON (t2.id=t1.tx_hash_id)
+                            INNER JOIN index_tickers      t3 ON (t3.id=s1.tick_id)
+                        WHERE 
+                            s1.action_index=?
+                        LIMIT 1`;                  
+            }
+            // SLEEP action
+            if(type=='SLEEP'){
+                sql = `SELECT
+                            a2.action,
+                            s1.action_index,
+                            s1.type,
+                            a3.address as source,
+                            t3.tick,
+                            s1.resume_block,
+                            b1.block_index,
+                            b1.block_time as timestamp,
+                            t2.hash as tx_hash,
+                            t1.tx_index,
+                            m2.memo,
+                            s2.status
+                        FROM
+                            sleeps s1
+                            INNER JOIN actions            a1 ON (a1.action_index=s1.action_index)
+                            INNER JOIN transactions       t1 ON (t1.tx_index=a1.tx_index)
+                            INNER JOIN blocks             b1 ON (b1.block_index=t1.block_index)
+                            INNER JOIN index_actions      a2 ON (a2.id=a1.action_id)
+                            INNER JOIN index_addresses    a3 ON (a3.id=s1.source_id)
+                            INNER JOIN index_memos        m2 ON (m2.id=s1.memo_id)
+                            INNER JOIN index_statuses     s2 ON (s2.id=s1.status_id)
+                            INNER JOIN index_transactions t2 ON (t2.id=t1.tx_hash_id)
+                            LEFT JOIN index_tickers       t3 ON (t3.id=s1.tick_id)
+                        WHERE 
+                            s1.action_index=?
+                        LIMIT 1`;
+            }
+            // SWAP action
+            if(type=='SWAP'){
+                sql = `SELECT
+                            a2.action,
+                            s1.action_index,
+                            c1.coin as give_coin,
+                            t3.tick as give_tick,
+                            s1.give_amount,
+                            c2.coin as get_coin,
+                            t4.tick as get_tick,
+                            s1.get_amount,
+                            a3.address as source,
+                            a4.address as get_address,
+                            s1.expiration,
+                            s1.allow_list,
+                            s1.block_list,
+                            b1.block_index,
+                            b1.block_time as timestamp,
+                            t2.hash as tx_hash,
+                            t1.tx_index,
+                            m2.memo,
+                            s2.status
+                        FROM
+                            swaps s1
+                            INNER JOIN actions            a1 ON (a1.action_index=s1.action_index)
+                            INNER JOIN transactions       t1 ON (t1.tx_index=a1.tx_index)
+                            INNER JOIN blocks             b1 ON (b1.block_index=t1.block_index)
+                            INNER JOIN index_actions      a2 ON (a2.id=a1.action_id)
+                            INNER JOIN index_addresses    a3 ON (a3.id=s1.source_id)
+                            INNER JOIN index_addresses    a4 ON (a4.id=s1.get_address_id)
+                            INNER JOIN index_memos        m2 ON (m2.id=s1.memo_id)
+                            INNER JOIN index_statuses     s2 ON (s2.id=s1.status_id)
+                            INNER JOIN index_transactions t2 ON (t2.id=t1.tx_hash_id)
+                            INNER JOIN index_coins        c1 ON (c1.id=s1.give_coin_id)
+                            INNER JOIN index_coins        c2 ON (c2.id=s1.get_coin_id)
+                            INNER JOIN index_tickers      t3 ON (t3.id=s1.give_tick_id)
+                            INNER JOIN index_tickers      t4 ON (t4.id=s1.get_tick_id)
+                        WHERE 
+                            s1.action_index=?
+                        LIMIT 1`;
+            }
+            // SWAP_CANCEL action
+            if(type=='SWAP_CANCEL'){
+                sql = `SELECT
+                        a2.action,
+                        s1.action_index,
+                        s1.swap_action_index,
+                        a3.address as source,
+                        b1.block_index,
+                        b1.block_time as timestamp,
+                        t2.hash as tx_hash,
+                        t1.tx_index,
+                        m2.memo,
+                        s2.status
+                    FROM
+                        swap_cancels s1
+                        INNER JOIN actions            a1 ON (a1.action_index=s1.action_index)
+                        INNER JOIN transactions       t1 ON (t1.tx_index=a1.tx_index)
+                        INNER JOIN blocks             b1 ON (b1.block_index=t1.block_index)
+                        INNER JOIN index_actions      a2 ON (a2.id=a1.action_id)
+                        INNER JOIN index_addresses    a3 ON (a3.id=s1.source_id)
+                        INNER JOIN index_memos        m2 ON (m2.id=s1.memo_id)
+                        INNER JOIN index_statuses     s2 ON (s2.id=s1.status_id)
+                        INNER JOIN index_transactions t2 ON (t2.id=t1.tx_hash_id)
+                    WHERE 
+                        s1.action_index=?
+                    LIMIT 1`;
+            }
+            // SWAP_EDIT action
+            if(type=='SWAP_EDIT'){
+                sql = `SELECT
+                        a2.action,
+                        s1.action_index,
+                        s1.swap_action_index,
+                        a3.address as source,
+                        s1.expiration,
+                        s1.allow_list,
+                        s1.block_list,
+                        b1.block_index,
+                        b1.block_time as timestamp,
+                        t2.hash as tx_hash,
+                        t1.tx_index,
+                        m2.memo,
+                        s2.status
+                    FROM
+                        swap_edits s1
+                        INNER JOIN actions            a1 ON (a1.action_index=s1.action_index)
+                        INNER JOIN transactions       t1 ON (t1.tx_index=a1.tx_index)
+                        INNER JOIN blocks             b1 ON (b1.block_index=t1.block_index)
+                        INNER JOIN index_actions      a2 ON (a2.id=a1.action_id)
+                        INNER JOIN index_addresses    a3 ON (a3.id=s1.source_id)
+                        INNER JOIN index_memos        m2 ON (m2.id=s1.memo_id)
+                        INNER JOIN index_statuses     s2 ON (s2.id=s1.status_id)
+                        INNER JOIN index_transactions t2 ON (t2.id=t1.tx_hash_id)
+                    WHERE 
+                        s1.action_index=?
+                    LIMIT 1`;
+            }
+            // SWAP_MATCH action
+            if(type=='SWAP_MATCH'){
+                sql = `SELECT
+                            a2.action,
+                            m1.action_index,
+                            c1.coin as give_coin,
+                            m1.give_action_index,
+                            c2.coin as get_coin,
+                            m1.get_action_index,
+                            b1.block_index,
+                            b1.block_time as timestamp,
+                            s1.status
+                        FROM
+                            swap_matches m1
+                            INNER JOIN actions            a1 ON (a1.action_index=m1.action_index)
+                            INNER JOIN transactions       t1 ON (t1.tx_index=a1.tx_index)
+                            INNER JOIN blocks             b1 ON (b1.block_index=t1.block_index)
+                            INNER JOIN index_actions      a2 ON (a2.id=a1.action_id)
+                            INNER JOIN index_statuses     s1 ON (s1.id=m1.status_id)
+                            INNER JOIN index_transactions t2 ON (t2.id=t1.tx_hash_id)
+                            INNER JOIN index_coins        c1 ON (c1.id=m1.give_coin_id)
+                            INNER JOIN index_coins        c2 ON (c2.id=m1.get_coin_id)
+                        WHERE 
+                            m1.action_index=?
+                        LIMIT 1`;
+            }
+            // SWEEP
+            if(type=='SWEEP'){
+                sql = `SELECT
+                            a2.action,
+                            s1.action_index,
+                            a3.address as source,
+                            a4.address as destination,
+                            s1.balances,
+                            s1.ownerships,
+                            b1.block_index,
+                            b1.block_time as timestamp,
+                            t2.hash as tx_hash,
+                            t1.tx_index,
+                            m2.memo,
+                            s2.status
+                        FROM
+                            sweeps s1
+                            INNER JOIN actions            a1 ON (a1.action_index=s1.action_index)
+                            INNER JOIN transactions       t1 ON (t1.tx_index=a1.tx_index)
+                            INNER JOIN blocks             b1 ON (b1.block_index=t1.block_index)
+                            INNER JOIN index_actions      a2 ON (a2.id=a1.action_id)
+                            INNER JOIN index_addresses    a3 ON (a3.id=s1.source_id)
+                            INNER JOIN index_addresses    a4 ON (a4.id=s1.destination_id)
+                            INNER JOIN index_memos        m2 ON (m2.id=s1.memo_id)
+                            INNER JOIN index_statuses     s2 ON (s2.id=s1.status_id)
+                            INNER JOIN index_transactions t2 ON (t2.id=t1.tx_hash_id)
+                        WHERE 
+                            s1.action_index=?
+                        LIMIT 1`;
+            }
+            // UNKNOWN
+            if(type=='UNKNOWN'){
+                sql = `SELECT
+                            a2.action,
+                            a1.action_index,
+                            b1.block_index,
+                            b1.block_time as timestamp,
+                            t2.hash as tx_hash,
+                            t1.tx_index
+                        FROM
+                            actions                       a1
+                            INNER JOIN transactions       t1 ON (t1.tx_index=a1.tx_index)
+                            INNER JOIN blocks             b1 ON (b1.block_index=t1.block_index)
+                            INNER JOIN index_actions      a2 ON (a2.id=a1.action_id)
+                            INNER JOIN index_transactions t2 ON (t2.id=t1.tx_hash_id)
+                        WHERE 
+                            a1.action_index=?
+                        LIMIT 1`;
+            }
+            // Run the SQL query to get the information on the action_index
+            if(sql){
+                let db = await this.getConnection();
+                try {
+                    let results = await db.query(sql, [action_index]);
+                    if(results && results.length)
+                        data = results[0];
+                } catch (error){
+                    this.util.logError('Error trying to run sql query in getActionData:', error);
+                }
+            }
+        }
+        return data;
+    }    
 }
 module.exports = Database

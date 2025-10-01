@@ -44,6 +44,8 @@ class Rollback {
             'list_edits',
             'list_items',
             'list_items_invalid',
+            'mappings_actions',
+            'mappings_files',
             'mints',
             'orders',
             'order_cancels',

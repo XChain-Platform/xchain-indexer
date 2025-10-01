@@ -15,7 +15,8 @@ class Mapper {
     async createMappings(data){
         // Setup alias to action
         let action       = data['ACTION'],
-            action_index = data['ACTION_INDEX'];
+            action_index = data['ACTION_INDEX'],
+            status       = data['STATUS'];
 
         // Get a list of address->tickers mappings
         let list = this.util.getAddressesList();
@@ -45,9 +46,24 @@ class Mapper {
 
         }
 
-        // Handle creating link mappings
-        if(action=='LINK'){
-            // TODO : write code to allow linking files to tokens (only create mapping if link is done by current token owner)
+        // Handle creating link mappings 
+        // TODO : Add support for verifying links across multiple COIN networks in xchain-hub
+        if(action=='LINK' && status=='valid'){
+            // Get information on the actions if it is on the local COIN network
+            let action1 = (data['COIN1']==this.config['COIN']) ? await this.indexerDb.getActionData(data['COIN1_ACTION_INDEX']) : false;
+            let action2 = (data['COIN2']==this.config['COIN']) ? await this.indexerDb.getActionData(data['COIN2_ACTION_INDEX']) : false;
+            if(action1 && action2){
+                // Process any FILE->ISSUE links
+                if((action1.action=='FILE' && action2.action=='ISSUE')||(action2.action=='FILE' && action1.action=='ISSUE')){
+                    // Get ACTION_INDEX of FILE we are linking as well as TICK and current token information
+                    let tick  = (action1.action=='ISSUE') ? action1.tick : action2.tick;
+                    let index = (action1.action=='FILE') ? action1.action_index : action2.action_index;
+                    let token = await this.indexerDb.getTokenInfo(tick);
+                    // Create TICK<->FILE mapping if LINK action was created by current token owner address
+                    if(data['SOURCE']==token['OWNER'])
+                        await this.indexerDb.createFileMapping(index, 'tick', tick);
+                }
+            }
         }
 
     }
