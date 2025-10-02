@@ -1,26 +1,27 @@
 /* XChain Indexer Actions Class */
 
 /* XChain Indexer Actions */
-const address   = require('./actions/address.js');
-const airdrop   = require('./actions/airdrop.js');
-const batch     = require('./actions/batch.js');
+const address    = require('./actions/address.js');
+const airdrop    = require('./actions/airdrop.js');
+const batch      = require('./actions/batch.js');
 // const bet       = require('./actions/bet.js');
-const broadcast = require('./actions/broadcast.js');
-const callback  = require('./actions/callback.js');
-const destroy   = require('./actions/destroy.js');
+const broadcast  = require('./actions/broadcast.js');
+const callback   = require('./actions/callback.js');
+const destroy    = require('./actions/destroy.js');
 // const dispenser = require('./actions/dispenser.js');
-const dividend  = require('./actions/dividend.js');
-const file      = require('./actions/file.js');
-const issue     = require('./actions/issue.js');
-const link      = require('./actions/link.js');
-const list      = require('./actions/list.js');
-const message   = require('./actions/message.js');
-const mint      = require('./actions/mint.js');
-const order     = require('./actions/order.js');
-const sleep     = require('./actions/sleep.js');
-const send      = require('./actions/send.js');
-const swap      = require('./actions/swap.js');
-const sweep     = require('./actions/sweep.js');
+const dividend   = require('./actions/dividend.js');
+const file       = require('./actions/file.js');
+const issue      = require('./actions/issue.js');
+const link       = require('./actions/link.js');
+const list       = require('./actions/list.js');
+const message    = require('./actions/message.js');
+const mint       = require('./actions/mint.js');
+const order      = require('./actions/order.js');
+const sleep      = require('./actions/sleep.js');
+const send       = require('./actions/send.js');
+const swap       = require('./actions/swap.js');
+const swap_match = require('./actions/swap_match.js');
+const sweep      = require('./actions/sweep.js');
 
 class Actions {
 
@@ -43,26 +44,27 @@ class Actions {
         this.protocolChanges = indexer.protocolChanges;
 
         // Create action instances and pass database connections
-        this.actionAddress   = new address(this);
-        this.actionAirdrop   = new airdrop(this);
-        this.actionBatch     = new batch(this);
-        // this.actionBet       = new bet(this);
-        this.actionBroadcast = new broadcast(this);
-        this.actionCallback  = new callback(this);
-        this.actionDestroy   = new destroy(this);
-        // this.actionDispenser = new dispenser(this);
-        this.actionFile      = new file(this);
-        this.actionDividend  = new dividend(this);
-        this.actionIssue     = new issue(this);
-        this.actionLink      = new link(this);
-        this.actionList      = new list(this);
-        this.actionMessage   = new message(this);
-        this.actionMint      = new mint(this);
-        this.actionOrder     = new order(this);
-        this.actionSleep     = new sleep(this);
-        this.actionSend      = new send(this);
-        this.actionSwap      = new swap(this);
-        this.actionSweep     = new sweep(this);
+        this.actionAddress    = new address(this);
+        this.actionAirdrop    = new airdrop(this);
+        this.actionBatch      = new batch(this);
+        // this.actionBet        = new bet(this);
+        this.actionBroadcast  = new broadcast(this);
+        this.actionCallback   = new callback(this);
+        this.actionDestroy    = new destroy(this);
+        // this.actionDispenser  = new dispenser(this);
+        this.actionFile       = new file(this);
+        this.actionDividend   = new dividend(this);
+        this.actionIssue      = new issue(this);
+        this.actionLink       = new link(this);
+        this.actionList       = new list(this);
+        this.actionMessage    = new message(this);
+        this.actionMint       = new mint(this);
+        this.actionOrder      = new order(this);
+        this.actionSleep      = new sleep(this);
+        this.actionSend       = new send(this);
+        this.actionSwap       = new swap(this);
+        this.actionSwapMatch  = new swap_match(this);
+        this.actionSweep      = new sweep(this);
 
         // Define ACTION aliases
         this.actionAliases = {};
@@ -152,31 +154,32 @@ class Actions {
 
     // Generalized function to handle parsing and processing a specific ACTION
     // NOTE: If the action is UNKNOWN, fail silently (prevent crashing indexer on unsupported actions)
-    async processAction(action, params, data, error, batch){
+    async processAction(action, params, data, error){
         // Reset the address/tickers/transactions list on each parse
         this.util.resetLists();
 
         // Process the action with the correct handler
-        if(action=='ADDRESS')   await this.actionAddress.parse(params, data, error);
-        if(action=='AIRDROP')   await this.actionAirdrop.parse(params, data, error);
-        if(action=='BATCH')     await this.actionBatch.parse(params, data, error);
-        // if(action=='BET')       await this.actionBet.parse(params, data, error);
-        if(action=='BROADCAST') await this.actionBroadcast.parse(params, data, error);
-        if(action=='CALLBACK')  await this.actionCallback.parse(params, data, error);
-        if(action=='DESTROY')   await this.actionDestroy.parse(params, data, error);
-        // if(action=='DISPENSER') await this.actionDispenser.parse(params, data, error);
-        if(action=='DIVIDEND')  await this.actionDividend.parse(params, data, error);
-        if(action=='FILE')      await this.actionFile.parse(params, data, error);
-        if(action=='ISSUE')     await this.actionIssue.parse(params, data, error);
-        if(action=='LIST')      await this.actionList.parse(params, data, error);
-        if(action=='LINK')      await this.actionLink.parse(params, data, error);
-        if(action=='MINT')      await this.actionMint.parse(params, data, error);
-        if(action=='MESSAGE')   await this.actionMessage.parse(params, data, error);
-        if(action=='ORDER')     await this.actionOrder.parse(params, data, error);
-        if(action=='SLEEP')     await this.actionSleep.parse(params, data, error);
-        if(action=='SEND')      await this.actionSend.parse(params, data, error);
-        if(action=='SWAP')      await this.actionSwap.parse(params, data, error);
-        if(action=='SWEEP')     await this.actionSweep.parse(params, data, error);
+        if(action=='ADDRESS')    await this.actionAddress.parse(params, data, error);
+        if(action=='AIRDROP')    await this.actionAirdrop.parse(params, data, error);
+        if(action=='BATCH')      await this.actionBatch.parse(params, data, error);
+        // if(action=='BET')        await this.actionBet.parse(params, data, error);
+        if(action=='BROADCAST')  await this.actionBroadcast.parse(params, data, error);
+        if(action=='CALLBACK')   await this.actionCallback.parse(params, data, error);
+        if(action=='DESTROY')    await this.actionDestroy.parse(params, data, error);
+        // if(action=='DISPENSER')  await this.actionDispenser.parse(params, data, error);
+        if(action=='DIVIDEND')   await this.actionDividend.parse(params, data, error);
+        if(action=='FILE')       await this.actionFile.parse(params, data, error);
+        if(action=='ISSUE')      await this.actionIssue.parse(params, data, error);
+        if(action=='LIST')       await this.actionList.parse(params, data, error);
+        if(action=='LINK')       await this.actionLink.parse(params, data, error);
+        if(action=='MINT')       await this.actionMint.parse(params, data, error);
+        if(action=='MESSAGE')    await this.actionMessage.parse(params, data, error);
+        if(action=='ORDER')      await this.actionOrder.parse(params, data, error);
+        if(action=='SLEEP')      await this.actionSleep.parse(params, data, error);
+        if(action=='SEND')       await this.actionSend.parse(params, data, error);
+        if(action=='SWAP')       await this.actionSwap.parse(params, data, error);
+        if(action=='SWAP_MATCH') await this.actionSwapMatch.parse(params, data, error);
+        if(action=='SWEEP')      await this.actionSweep.parse(params, data, error);
     }
 }
 
