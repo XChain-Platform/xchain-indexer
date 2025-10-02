@@ -156,8 +156,7 @@ class XChainIndexer {
                 // lastIndexerBlock = startBlock;
 
                 // DEBUG : Rollback to a specific block
-                // let rollbackBlock = 862000;
-                let rollbackBlock = 862600;
+                let rollbackBlock = 862640;
                 // if(lastIndexerBlock >= rollbackBlock){
                 //     await this.rollback.rollback(rollbackBlock);
                 //     this.util.throwError('Rolled back to ' + rollbackBlock);
@@ -170,7 +169,7 @@ class XChainIndexer {
                 for(const tx of blockTransactions)
                     await this.actions.processTransaction(tx);
 
-                // TODO : Look for swaps/orders/dispensers that are past EXPIRATION
+                // TODO: Look for swaps/orders/dispensers that are past EXPIRATION and expire them
 
                 // Lookup the block time for a given block
                 let blockTime = await this.decoderDb.getBlockTime(lastIndexerBlock);
@@ -189,7 +188,7 @@ class XChainIndexer {
                 cnt++;
 
                 // DEBUG : Exit processing at a select block
-                if(lastIndexerBlock >= 862600){
+                if(lastIndexerBlock >=  862642){
                     // await this.rollback.rollback(rollbackBlock);
                     this.util.throwError('Exiting on target block');
                 }
