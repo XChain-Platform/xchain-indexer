@@ -167,7 +167,7 @@ class Util {
     // Handle returning integer format version
     getFormatVersion(format){
         let type = typeof format;
-        if(type=='number' && this.isInteger(format))
+        if(type=='number' && this.isInteger(format) && format <= 255)
             return format;
         // Default to format 0 if none is given
         if(type=='undefined' || (type=='string' && format==''))
@@ -176,7 +176,7 @@ class Util {
         if(type=='string')
             format = format.replace(/\"|\'/g,'');
         // Convert any numeric strings to integers
-        if(this.isNumeric(format) && !this.isFloat(format))
+        if(this.isNumeric(format) && !this.isFloat(format) && format <= 255)
             return parseInt(format);
         // Return NULL if not able to identify format version
         return null;

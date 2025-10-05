@@ -79,9 +79,10 @@ class Issue {
         // let str    = "0|JDOG|1000||18";
         // params = String(str).split('|');
         // data['SOURCE'] = this.config['ADDRESS']['BURN'];
+        // data['FORMAT'] = this.util.getFormatVersion(params[0]);
 
         // Validate that format is known
-        let format = this.util.getFormatVersion(params[0]);
+        let format = data['FORMAT'];
         if(!error && (format===null || this.formats[format] === undefined ))
             error = 'invalid: VERSION (unknown)';
 

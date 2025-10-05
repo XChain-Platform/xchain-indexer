@@ -51,9 +51,11 @@ class Batch {
          * DEBUGGING - Force params
          ****************************************************************/
         // data['TX_DATA'] = "BATCH|0|MINT|0|GAS|60;ISSUE|0|JDOGTEST";
+        // params = String(str).split('|');
+        // data['FORMAT'] = this.util.getFormatVersion(params[0]);
 
         // Validate that format is known
-        let format = this.util.getFormatVersion(params[0]);
+        let format = data['FORMAT'];
         if(!error && (format===null || this.formats[format] === undefined ))
             error = 'invalid: VERSION (unknown)';
 
