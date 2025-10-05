@@ -56,9 +56,10 @@ class Message {
         // let str = "2|1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev|ENCRYPTED_MESSAGE_GOES_HERE;
         // let str = "3|1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev|Hello";
         // params = String(str).split('|');
+        // data['FORMAT'] = this.util.getFormatVersion(params[0]);
 
         // Validate that format is known
-        let format = this.util.getFormatVersion(params[0]);
+        let format = data['FORMAT'];
         if(!error && (format===null || this.formats[format] === undefined ))
             error = 'invalid: VERSION (unknown)';
 

@@ -56,9 +56,10 @@ class List {
         // let str = "1|2|860dc04b2b59657005a0955f282043c04bc9d5520562d317119722956043ffee|1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev|1FWDonkMbC6hL64JiysuggHnUAw2CKWszs";
         // let str = "1|1|b21f92568cf4f892fdf9adf432bfe1900ec41f16a1514c851b54926bd2828950|1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev|1FWDonkMbC6hL64JiysuggHnUAw2CKWszs|1FwkKA9cqpNRFTpVaokdRjT9Xamvebrwcu|bc1q50kxp76j9l0k9jgwasvcz4mcz0v03fv2y5pdxx|1Lfm6jXgCQi8LvjpgFHa2F4hdr1uJVa5t4";
         // params = String(str).split('|');
+        // data['FORMAT'] = this.util.getFormatVersion(params[0]);
 
         // Validate that format is known
-        let format = this.util.getFormatVersion(params[0]);
+        let format = data['FORMAT'];
         if(!error && (format===null || this.formats[format] === undefined ))
             error = 'invalid: VERSION (unknown)';
 

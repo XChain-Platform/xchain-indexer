@@ -56,11 +56,12 @@ class Address {
         /*****************************************************************
          * DEBUGGING - Force params
          ****************************************************************/
-        // let str    = "0|1|1|my address update";
-        // params = String(str).split('|');
+        // let str = "0|1|1|my address update";
+        // params  = String(str).split('|');
+        // data['FORMAT'] = this.util.getFormatVersion(params[0]);
 
         // Validate that format is known
-        let format = this.util.getFormatVersion(params[0]);
+        let format = data['FORMAT'];
         if(!error && (format===null || this.formats[format] === undefined ))
             error = 'invalid: VERSION (unknown)';
 

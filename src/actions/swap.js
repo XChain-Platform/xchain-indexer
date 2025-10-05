@@ -61,9 +61,10 @@ class Swap {
          ****************************************************************/
         // let str    = "0|JDOG|1|";
         // params = String(str).split('|');
+        // data['FORMAT'] = this.util.getFormatVersion(params[0]);
 
         // Validate that format is known
-        let format = this.util.getFormatVersion(params[0]);
+        let format = data['FORMAT'];
         if(!error && (format===null || this.formats[format] === undefined ))
             error = 'invalid: VERSION (unknown)';
 

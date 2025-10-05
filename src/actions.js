@@ -122,9 +122,13 @@ class Actions {
         if(['ISSUE','MINT','SEND'].includes(action) && this.util.isLegacyActionFormat(params))
             params.splice(0,0,0);
 
+        // Extract FORMAT from PARAMS
+        let format = this.util.getFormatVersion(params[0]);
+
         // Define basic ACTION transaction data object
         let data = {};
         data['ACTION']      = action;      // Action (ISSUE, MINT, SEND, etc)
+        data['FORMAT']      = format;      // Action FORMAT (0-255)
         data['BLOCK_INDEX'] = block_index; // Block index 
         data['BLOCK_TIME']  = block_time ; // Block time (seconds since epoch) 
         data['SOURCE']      = source;      // Source address

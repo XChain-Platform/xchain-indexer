@@ -60,9 +60,10 @@ class Order {
         // let str    = "1|1234|Closing order, no buyers, much disappoint";
         // let str    = "2|1234|4321|||Updating order to only sell to club member addresses";
         // params = String(str).split('|');
+        // data['FORMAT'] = this.util.getFormatVersion(params[0]);
 
         // Validate that format is known
-        let format = this.util.getFormatVersion(params[0]);
+        let format = data['FORMAT'];
         if(!error && (format===null || this.formats[format] === undefined ))
             error = 'invalid: VERSION (unknown)';
 

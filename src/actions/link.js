@@ -48,9 +48,10 @@ class Link {
         // let str = "0|1234|BTC|4321|Linking FILE upload to TICK";
         // let str = "0|1234|DOGE|6666|Linking TICK with FILE upload on DOGE";
         // params = String(str).split('|');
+        // data['FORMAT'] = this.util.getFormatVersion(params[0]);
 
         // Validate that format is known
-        let format = this.util.getFormatVersion(params[0]);
+        let format = data['FORMAT'];
         if(!error && (format===null || this.formats[format] === undefined ))
             error = 'invalid: VERSION (unknown)';
 

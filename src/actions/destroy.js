@@ -51,9 +51,10 @@ class Destroy {
         // let str = '1|BRRR|1|GAS|10|bar';
         // let str = '2|BRRR|1|foo|GAS|10|bar';
         // params = String(str).split('|');
+        // data['FORMAT'] = this.util.getFormatVersion(params[0]);
 
         // Validate that format is known
-        let format = this.util.getFormatVersion(params[0]);
+        let format = data['FORMAT'];
         if(!error && (format===null || this.formats[format] === undefined ))
             error = 'invalid: VERSION (unknown)';
 

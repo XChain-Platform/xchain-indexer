@@ -58,9 +58,10 @@ class Broadcast {
         // let str = "2|https://oracle-betting-site.com/superbowl-2025.json|1|Bet on the 2025 Superbowl!;
         // let str = "3|1234|2|Superbowl Results on Tue Aug 19 2025 01:55:00 UTC";
         // params = String(str).split('|');
+        // data['FORMAT'] = this.util.getFormatVersion(params[0]);
 
         // Validate that format is known
-        let format = this.util.getFormatVersion(params[0]);
+        let format = data['FORMAT'];
         if(!error && (format===null || this.formats[format] === undefined ))
             error = 'invalid: VERSION (unknown)';
 
