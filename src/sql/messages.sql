@@ -3,7 +3,6 @@ DROP TABLE IF EXISTS messages;
 CREATE TABLE messages (
     action_index        BIGINT UNSIGNED NOT NULL, -- Unique action index
     destination_id      BIGINT UNSIGNED,          -- id of record in index_addresses table
-    source_id           BIGINT UNSIGNED,          -- id of record in index_addresses table
     encryption_method   VARCHAR(1),               -- Encryption Method (1=ECDH, 2=AES)
     encryption_key      MEDIUMTEXT,               -- Public key to be used to exchange messages
     encrypted_message   MEDIUMTEXT,               -- Encrypted Message
@@ -13,6 +12,5 @@ CREATE TABLE messages (
 
 CREATE UNIQUE INDEX action_index      ON messages (action_index);
 CREATE        INDEX encryption_method ON messages (encryption_method);
-CREATE        INDEX source_id         ON messages (source_id);
 CREATE        INDEX destination_id    ON messages (destination_id);
 CREATE        INDEX status_id         ON messages (status_id);

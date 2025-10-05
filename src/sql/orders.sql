@@ -8,7 +8,6 @@ CREATE TABLE orders (
     get_tick_id      BIGINT UNSIGNED,          -- id of record in index_tickers table
     get_amount       VARCHAR(250),             -- Amount of GET_TICK in order
     get_address_id   BIGINT UNSIGNED,          -- id of record in index_addresses table
-    source_id        BIGINT UNSIGNED,          -- id of record in index_addresses table
     expiration       BIGINT UNSIGNED,          -- unix timestamp of order expiration date/time
     allow_list       BIGINT UNSIGNED,          -- action_index of a list from the lists table
     block_list       BIGINT UNSIGNED,          -- action_index of a list from the lists table
@@ -24,6 +23,5 @@ CREATE        INDEX get_tick_id    ON orders (get_tick_id);
 CREATE        INDEX allow_list     ON orders (allow_list);
 CREATE        INDEX block_list     ON orders (block_list);
 CREATE        INDEX get_address_id ON orders (get_address_id);
-CREATE        INDEX source_id      ON orders (source_id);
 CREATE        INDEX memo_id        ON orders (memo_id);
 CREATE        INDEX status_id      ON orders (status_id);

@@ -3,7 +3,6 @@ CREATE TABLE mints (
     action_index   BIGINT UNSIGNED NOT NULL, -- Unique action index
     tick_id        BIGINT UNSIGNED,          -- id of record in index_ticks table
     amount         VARCHAR(250),              -- Amount of token to mint
-    source_id      BIGINT UNSIGNED,          -- id of record in index_addresses table (address that did MINT)
     destination_id BIGINT UNSIGNED,          -- id of record in index_addresses table (optional, mint and transfer)
     memo_id        BIGINT UNSIGNED,          -- id of record in index_memos table 
     status_id      BIGINT UNSIGNED           -- id of record in index_statuses table
@@ -11,7 +10,6 @@ CREATE TABLE mints (
 
 CREATE UNIQUE INDEX action_index   ON mints (action_index);
 CREATE        INDEX tick_id        ON mints (tick_id);
-CREATE        INDEX source_id      ON mints (source_id);
 CREATE        INDEX destination_id ON mints (destination_id);
 CREATE        INDEX memo_id        ON mints (memo_id);
 CREATE        INDEX status_id      ON mints (status_id);

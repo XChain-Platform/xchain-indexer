@@ -660,11 +660,12 @@ class Database {
         if(tx_index==null){
             tx_index        = await this.getNextTxIndex();
             let block_index = data.BLOCK_INDEX;
+            let source_id   = await this.createAddress(data.SOURCE);
             let tx_hash_id  = await this.createTransaction(data.TX_HASH);
             let db          = await this.getConnection();
-            let query       = "INSERT INTO transactions (tx_index, block_index, tx_hash_id) values (?, ?, ?)";
+            let query       = "INSERT INTO transactions (tx_index, block_index, tx_hash_id, source_id) values (?, ?, ?, ?)";
             try {
-                let result = await db.query(query, [tx_index, block_index, tx_hash_id]);
+                let result = await db.query(query, [tx_index, block_index, tx_hash_id, source_id]);
             } catch (error) {
                 this.util.logError('Error while trying to create record in transactions table:', error);
             }
@@ -882,7 +883,7 @@ class Database {
                             INNER JOIN actions            a1 ON (a1.action_index=i.action_index)
                             INNER JOIN transactions       t1 ON (t1.tx_index=a1.tx_index)
                             INNER JOIN index_tickers      t2 ON (t2.id=i.tick_id)
-                            INNER JOIN index_addresses    a2 ON (a2.id=i.source_id)
+                            INNER JOIN index_addresses    a2 ON (a2.id=t1.source_id)
                             INNER JOIN index_statuses     s1 ON (s1.id=i.status_id)
                             LEFT  JOIN index_addresses    a3 ON (a3.id=i.transfer_id)
                             LEFT  JOIN index_tickers      t3 ON (t3.id=i.callback_tick_id)
@@ -1297,7 +1298,6 @@ class Database {
     // Create record in `lists` table
     async createList(data){
         let action_index      = data['ACTION_INDEX'];
-        let source_id         = await this.createAddress(data['SOURCE']);
         let status_id         = await this.createStatus(data['STATUS']);
         let list_type         = data['TYPE'];
         let list_edit         = data['EDIT'];
@@ -1321,16 +1321,15 @@ class Database {
                         SET
                             type=?,
                             edit=?,
-                            source_id=?,
                             list_action_index=?,
                             status_id=?
                         WHERE 
                             action_index=?`;
         } else {
             // INSERT record
-            query = `INSERT INTO lists (type, edit, source_id, list_action_index, status_id, action_index) values (?, ?, ?, ?, ?, ?)`;
+            query = `INSERT INTO lists (type, edit, list_action_index, status_id, action_index) values (?, ?, ?, ?, ?)`;
         }
-        args = [list_type, list_edit, source_id, list_action_index, status_id, action_index];
+        args = [list_type, list_edit, list_action_index, status_id, action_index];
         // Create or Update the record in the lists table
         try {
             let result = await db.query(query, args);
@@ -1414,7 +1413,6 @@ class Database {
         let block_list         = data['BLOCK_LIST'];
         let callback_tick_id   = await this.createTicker(data['CALLBACK_TICK']);
         let tick_id            = await this.createTicker(data['TICK']);
-        let source_id          = await this.createAddress(data['SOURCE']);
         let transfer_id        = await this.createAddress(data['TRANSFER']);
         let transfer_supply_id = await this.createAddress(data['TRANSFER_SUPPLY']);
         let status_id          = await this.createStatus(data['STATUS']);
@@ -1461,7 +1459,6 @@ class Database {
                         mint_address_max=?,
                         mint_start_block=?,
                         mint_stop_block=?,
-                        source_id=?,
                         status_id=?
                     WHERE 
                         action_index=?`;
@@ -1491,12 +1488,11 @@ class Database {
                         mint_address_max, 
                         mint_start_block, 
                         mint_stop_block, 
-                        source_id, 
                         status_id,
                         action_index
-                    ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+                    ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
         }
-        args = [tick_id, max_supply, max_mint, decimals, description, mint_supply, transfer_id, transfer_supply_id, lock_max_supply, lock_mint, lock_mint_supply, lock_max_mint, lock_description, lock_sleep, lock_callback, callback_block, callback_tick_id, callback_amount, allow_list, block_list, mint_address_max, mint_start_block, mint_stop_block, source_id, status_id, action_index ];
+        args = [tick_id, max_supply, max_mint, decimals, description, mint_supply, transfer_id, transfer_supply_id, lock_max_supply, lock_mint, lock_mint_supply, lock_max_mint, lock_description, lock_sleep, lock_callback, callback_block, callback_tick_id, callback_amount, allow_list, block_list, mint_address_max, mint_start_block, mint_stop_block, status_id, action_index ];
         // Create or Update the record in the issues table
         try {
             let result = await db.query(query, args);
@@ -1988,10 +1984,12 @@ class Database {
                             s1.resume_block 
                         FROM 
                             sleeps s1
+                            INNER JOIN actions        a1 ON (a1.action_index=s1.action_index)
+                            INNER JOIN transactions   t1 ON (t1.tx_index=a1.tx_index)
                             INNER JOIN index_statuses s2 ON (s2.id=s1.status_id)
                         WHERE 
                             s1.type=? AND
-                            s1.source_id=? AND
+                            t1.source_id=? AND
                             s2.status=?
                         ORDER BY 
                             s1.action_index DESC
@@ -2137,7 +2135,6 @@ class Database {
     async createMint(data){
         // Normalize data
         let tick_id        = await this.createTicker(data['TICK']);
-        let source_id      = await this.createAddress(data['SOURCE']);
         let destination_id = await this.createAddress(data['DESTINATION']);
         let memo_id        = await this.createMemo(data['MEMO']);
         let status_id      = await this.createStatus(data['STATUS']);
@@ -2161,7 +2158,6 @@ class Database {
                     SET
                         tick_id=?,
                         amount=?,
-                        source_id=?,
                         destination_id=?,
                         memo_id=?,
                         status_id=?
@@ -2169,9 +2165,9 @@ class Database {
                         action_index=?`;
         } else {
             // INSERT record
-            query = `INSERT INTO mints (tick_id, amount, source_id, destination_id, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?, ?)`;
+            query = `INSERT INTO mints (tick_id, amount, destination_id, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?)`;
         }
-        let args = [tick_id, amount, source_id, destination_id, memo_id, status_id, action_index];
+        let args = [tick_id, amount, destination_id, memo_id, status_id, action_index];
         // Create or Update the record in the mints table
         try {
             let result = await db.query(query, args);
@@ -2365,7 +2361,6 @@ class Database {
 
     // Create record in `addresses` table
     async createAddressOption(data){
-        let source_id      = await this.createAddress(data['SOURCE']);
         let status_id      = await this.createStatus(data['STATUS']);
         let memo_id        = await this.createMemo(data['MEMO']);
         let action_index   = data['ACTION_INDEX'];
@@ -2387,7 +2382,6 @@ class Database {
             query = `UPDATE
                         addresses
                     SET
-                        source_id=?,
                         fee_preference=?,
                         require_memo=?,
                         memo_id=?,
@@ -2395,10 +2389,10 @@ class Database {
                     WHERE 
                         action_index=?`;
         } else {
-            query = "INSERT INTO addresses (source_id, fee_preference, require_memo, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?)";
+            query = "INSERT INTO addresses (fee_preference, require_memo, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?)";
         }
         try {
-            let rows = await db.query(query, [source_id, fee_preference, require_memo, memo_id, status_id, action_index]);
+            let rows = await db.query(query, [fee_preference, require_memo, memo_id, status_id, action_index]);
         } catch (error){
             this.util.logError('Error trying to create record in addresses table:', error);
         }
@@ -2407,7 +2401,6 @@ class Database {
 
     // Create record in `batches` table
     async createBatch(data){
-        let source_id    = await this.createAddress(data['SOURCE']);
         let status_id    = await this.createStatus(data['STATUS']);
         let action_index = data['ACTION_INDEX'];
         // Check if record already exists for this address
@@ -2426,14 +2419,13 @@ class Database {
             query = `UPDATE
                         batches
                     SET
-                        source_id=?,
                         status_id=?
                     WHERE 
                         action_index=?`;
         } else {
-            query = "INSERT INTO batches (source_id, status_id, action_index) values (?, ?, ?)";
+            query = "INSERT INTO batches (status_id, action_index) values (?, ?, ?)";
         }
-        args = [source_id, status_id, action_index];
+        args = [status_id, action_index];
         try {
             let rows = await db.query(query, args);
         } catch (error){
@@ -2446,7 +2438,6 @@ class Database {
     async createSend(data){
         // Normalize data
         let tick_id        = await this.createTicker(data['TICK']);
-        let source_id      = await this.createAddress(data['SOURCE']);
         let destination_id = await this.createAddress(data['DESTINATION']);
         let memo_id        = await this.createMemo(data['MEMO']);
         let status_id      = await this.createStatus(data['STATUS']);
@@ -2460,11 +2451,10 @@ class Database {
                             sends
                         WHERE
                             tick_id=? AND
-                            source_id=? AND
                             destination_id=? AND
                             amount=? AND
                             action_index=?`;
-        let args = [tick_id, source_id, destination_id, amount, action_index];
+        let args = [tick_id, destination_id, amount, action_index];
         let exists = false;
         try {
             let rows = await db.query(query, args);
@@ -2479,7 +2469,6 @@ class Database {
                         sends
                     SET
                         tick_id=?,
-                        source_id=?,
                         destination_id=?,
                         amount=?,
                         memo_id=?,
@@ -2488,9 +2477,9 @@ class Database {
                         action_index=?`;
         } else {
             // INSERT record
-            query = `INSERT INTO sends (tick_id, source_id, destination_id, amount, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?, ?)`;
+            query = `INSERT INTO sends (tick_id, destination_id, amount, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?)`;
         }
-        args = [tick_id, source_id, destination_id, amount, memo_id, status_id, action_index];
+        args = [tick_id, destination_id, amount, memo_id, status_id, action_index];
         // Create or Update the record in the sends table
         try {
             let result = await db.query(query, args);
@@ -2529,7 +2518,7 @@ class Database {
                 INNER JOIN transactions   t1 ON (t1.tx_index=a2.tx_index)
                 INNER JOIN index_statuses s1 ON (s1.id=a1.status_id)
             WHERE 
-                a1.source_id=? AND 
+                t1.source_id=? AND 
                 s1.status=?` + sql + `
             ORDER BY 
                 a1.action_index ASC`;
@@ -2552,7 +2541,6 @@ class Database {
     async createAirdrop(data){
         // Normalize data
         let tick_id           = await this.createTicker(data['TICK']);
-        let source_id         = await this.createAddress(data['SOURCE']);
         let memo_id           = await this.createMemo(data['MEMO']);
         let status_id         = await this.createStatus(data['STATUS']);
         let action_index      = data['ACTION_INDEX'];
@@ -2566,12 +2554,11 @@ class Database {
                         airdrops
                     WHERE
                         tick_id=? AND
-                        source_id=? AND
                         memo_id=? AND
                         list_action_index=? AND
                         amount=? AND
                         action_index=?`;
-        let args  = [tick_id, source_id, memo_id, list_action_index, amount, action_index];
+        let args  = [tick_id, memo_id, list_action_index, amount, action_index];
         let exists = false;
         try {
             let rows = await db.query(query, args);
@@ -2581,14 +2568,13 @@ class Database {
             this.util.logError('Error looking up record in airdrops table:', error);
         }
         // Define list of arguments for sql insert/update
-        args = [tick_id, source_id, list_action_index, amount, memo_id, status_id, action_index];
+        args = [tick_id, list_action_index, amount, memo_id, status_id, action_index];
         if(exists){
             // UPDATE record
             query = `UPDATE
                         airdrops
                     SET
                         tick_id=?,
-                        source_id=?,
                         list_action_index=?,
                         amount=?,
                         memo_id=?,
@@ -2597,7 +2583,7 @@ class Database {
                         action_index=?`;
         } else {
             // INSERT record
-            query = `INSERT INTO airdrops (tick_id, source_id, list_action_index, amount, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?, ?)`;
+            query = `INSERT INTO airdrops (tick_id, list_action_index, amount, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?)`;
         }
         // Create or Update the record in the airdrops table
         try {
@@ -2612,7 +2598,6 @@ class Database {
     async createFeeRecord(data){
         // Normalize data
         let tick_id        = await this.createTicker(data['TICK']);
-        let source_id      = await this.createAddress(data['SOURCE']);
         let destination_id = await this.createAddress(data['DESTINATION']);
         let action_index   = data['ACTION_INDEX'];
         let amount         = data['AMOUNT'];
@@ -2635,14 +2620,13 @@ class Database {
             this.util.logError('Error looking up record in fees table:', error);
         }
         // Define list of arguments for sql insert/update
-        args = [tick_id, source_id, destination_id, amount, method, action_index];
+        args = [tick_id, destination_id, amount, method, action_index];
         if(exists){
             // UPDATE record
             query = `UPDATE
                         fees
                     SET
                         tick_id=?,
-                        source_id=?,
                         destination_id=?,
                         amount=?,
                         method=?
@@ -2650,7 +2634,7 @@ class Database {
                         action_index=?`;
         } else {
             // INSERT record
-            query = `INSERT INTO fees (tick_id, source_id, destination_id, amount, method, action_index) values (?, ?, ?, ?, ?, ?)`;
+            query = `INSERT INTO fees (tick_id, destination_id, amount, method, action_index) values (?, ?, ?, ?, ?, ?)`;
         }
         // Create or Update the record in the fees table
         try {
@@ -2665,7 +2649,6 @@ class Database {
     async createDestroy(data){
         // Normalize data
         let tick_id        = await this.createTicker(data['TICK']);
-        let source_id      = await this.createAddress(data['SOURCE']);
         let memo_id        = await this.createMemo(data['MEMO']);
         let status_id      = await this.createStatus(data['STATUS']);
         let action_index   = data['ACTION_INDEX'];
@@ -2693,7 +2676,6 @@ class Database {
                         destroys
                     SET
                         tick_id=?,
-                        source_id=?,
                         amount=?,
                         memo_id=?,
                         status_id=?
@@ -2701,9 +2683,9 @@ class Database {
                         action_index=?`;
         } else {
             // INSERT record
-            query = `INSERT INTO destroys (tick_id, source_id, amount, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?)`;
+            query = `INSERT INTO destroys (tick_id, amount, memo_id, status_id, action_index) values (?, ?, ?, ?, ?)`;
         }
-        args = [tick_id, source_id, amount, memo_id, status_id, action_index];
+        args = [tick_id, amount, memo_id, status_id, action_index];
         // Create or Update the record in the destroys table
         try {
             let result = await db.query(query, args);
@@ -2747,7 +2729,6 @@ class Database {
     async createSweep(data){
         // Normalize data
         let tick_id        = await this.createTicker(data['TICK']);
-        let source_id      = await this.createAddress(data['SOURCE']);
         let destination_id = await this.createAddress(data['DESTINATION']);
         let memo_id        = await this.createMemo(data['MEMO']);
         let status_id      = await this.createStatus(data['STATUS']);
@@ -2776,7 +2757,6 @@ class Database {
             query = `UPDATE
                         sweeps
                     SET
-                        source_id=?,
                         destination_id=?,
                         balances=?,
                         ownerships=?,
@@ -2786,9 +2766,9 @@ class Database {
                         action_index=?`;
         } else {
             // INSERT record
-            query = `INSERT INTO sweeps (source_id, destination_id, balances, ownerships, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?, ?)`;
+            query = `INSERT INTO sweeps (destination_id, balances, ownerships, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?)`;
         }
-        args = [source_id, destination_id, balances, ownerships, memo_id, status_id, action_index];
+        args = [destination_id, balances, ownerships, memo_id, status_id, action_index];
         // Create or Update the record in the sweeps table
         try {
             let result = await db.query(query, args);
@@ -2803,7 +2783,6 @@ class Database {
         // Normalize data
         let tick_id          = await this.createTicker(data['TICK']);
         let dividend_tick_id = await this.createTicker(data['DIVIDEND_TICK']);
-        let source_id        = await this.createAddress(data['SOURCE']);
         let memo_id          = await this.createMemo(data['MEMO']);
         let status_id        = await this.createStatus(data['STATUS']);
         let action_index     = data['ACTION_INDEX'];
@@ -2833,7 +2812,6 @@ class Database {
                         tick_id=?,
                         dividend_tick_id=?,
                         amount=?,
-                        source_id=?,
                         memo_id=?,
                         status_id=?
                     WHERE 
@@ -2841,9 +2819,9 @@ class Database {
 
         } else {
             // INSERT record
-            query = `INSERT INTO dividends (tick_id, dividend_tick_id, amount, source_id, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?, ?)`;
+            query = `INSERT INTO dividends (tick_id, dividend_tick_id, amount, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?)`;
         }
-        args = [tick_id, dividend_tick_id, amount, source_id, memo_id, status_id, action_index];
+        args = [tick_id, dividend_tick_id, amount, memo_id, status_id, action_index];
         // Create or Update the record in the dividends table
         try {
             let result = await db.query(query, args);
@@ -2858,7 +2836,6 @@ class Database {
         // Normalize data
         let tick_id          = await this.createTicker(data['TICK']);
         let callback_tick_id = await this.createTicker(data['CALLBACK_TICK']);
-        let source_id        = await this.createAddress(data['SOURCE']);
         let memo_id          = await this.createMemo(data['MEMO']);
         let status_id        = await this.createStatus(data['STATUS']);
         let action_index     = data['ACTION_INDEX'];
@@ -2888,7 +2865,6 @@ class Database {
                         tick_id=?,
                         callback_tick_id=?,
                         callback_amount=?,
-                        source_id=?,
                         memo_id=?,
                         status_id=?
                     WHERE 
@@ -2896,9 +2872,9 @@ class Database {
 
         } else {
             // INSERT record
-            query = `INSERT INTO callbacks (tick_id, callback_tick_id, callback_amount, source_id, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?, ?)`;
+            query = `INSERT INTO callbacks (tick_id, callback_tick_id, callback_amount, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?)`;
         }
-        args = [tick_id, callback_tick_id, callback_amount, source_id, memo_id, status_id,  action_index];
+        args = [tick_id, callback_tick_id, callback_amount, memo_id, status_id,  action_index];
         // Create or Update the record in the callbacks table
         try {
             let result = await db.query(query, args);
@@ -2952,7 +2928,6 @@ class Database {
     async createFile(data){
         // Normalize data
         let type_id      = await this.createMimeType(data['TYPE']);
-        let source_id    = await this.createAddress(data['SOURCE']);
         let memo_id      = await this.createMemo(data['MEMO']);
         let status_id    = await this.createStatus(data['STATUS']);
         let action_index = data['ACTION_INDEX'];
@@ -2983,16 +2958,15 @@ class Database {
                         name=?,
                         title=?,
                         type_id=?,
-                        source_id=?,
                         memo_id=?,
                         status_id=?
                     WHERE 
                         action_index=?`;
         } else {
             // INSERT record
-            query = `INSERT INTO files (name, title, type_id, source_id, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?, ?)`;
+            query = `INSERT INTO files (name, title, type_id, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?)`;
         }
-        args = [name, title, type_id, source_id, memo_id, status_id, action_index];
+        args = [name, title, type_id, memo_id, status_id, action_index];
         // Create or Update the record in the files table
         try {
             let result = await db.query(query, args);
@@ -3104,7 +3078,6 @@ class Database {
         // Normalize data
         let coin1_id           = await this.createCoin(data['COIN1']);
         let coin2_id           = await this.createCoin(data['COIN2']);
-        let source_id          = await this.createAddress(data['SOURCE']);
         let memo_id            = await this.createMemo(data['MEMO']);
         let status_id          = await this.createStatus(data['STATUS']);
         let action_index       = data['ACTION_INDEX'];
@@ -3136,16 +3109,15 @@ class Database {
                         coin1_action_index=?,
                         coin2_id=?,
                         coin2_action_index=?,
-                        source_id=?,
                         memo_id=?,
                         status_id=?
                     WHERE 
                         action_index=?`;
         } else {
             // INSERT record
-            query = `INSERT INTO links (coin1_id, coin1_action_index, coin2_id, coin2_action_index, source_id, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?, ?, ?)`;
+            query = `INSERT INTO links (coin1_id, coin1_action_index, coin2_id, coin2_action_index, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?, ?)`;
         }
-        args = [coin1_id, coin1_action_index, coin2_id, coin2_action_index, source_id, memo_id, status_id, action_index];
+        args = [coin1_id, coin1_action_index, coin2_id, coin2_action_index, memo_id, status_id, action_index];
         // Create or Update the record in the links table
         try {
             let result = await db.query(query, args);
@@ -3158,7 +3130,6 @@ class Database {
     // Create/Update record in `broadcasts` table
     async createBroadcast(data){
         // Normalize data
-        let source_id              = await this.createAddress(data['SOURCE']);
         let memo_id                = await this.createMemo(data['MEMO']);
         let status_id              = await this.createStatus(data['STATUS']);
         let action_index           = data['ACTION_INDEX'];
@@ -3192,16 +3163,15 @@ class Database {
                         value=?,
                         fee=?,
                         broadcast_action_index=?,
-                        source_id=?,
                         memo_id=?,
                         status_id=?
                     WHERE 
                         action_index=?`;
         } else {
             // INSERT record
-            query = `INSERT INTO broadcasts (message, value, fee, broadcast_action_index, source_id, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?, ?, ?)`;
+            query = `INSERT INTO broadcasts (message, value, fee, broadcast_action_index, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?, ?)`;
         }
-        args = [message, value, fee, broadcast_action_index, source_id, memo_id, status_id, action_index];
+        args = [message, value, fee, broadcast_action_index, memo_id, status_id, action_index];
         // Create or Update the record in the broadcasts table
         try {
             let result = await db.query(query, args);
@@ -3214,7 +3184,6 @@ class Database {
     // Create/Update record in `messages` table
     async createMessage(data){
         // Normalize data
-        let source_id         = await this.createAddress(data['SOURCE']);
         let destination_id    = await this.createAddress(data['DESTINATION']);
         let status_id         = await this.createStatus(data['STATUS']);
         let action_index      = data['ACTION_INDEX'];
@@ -3248,16 +3217,15 @@ class Database {
                         encryption_key=?,
                         encrypted_message=?,
                         plaintext_message=?,
-                        source_id=?,
                         destination_id=?,
                         status_id=?
                     WHERE 
                         action_index=?`;
         } else {
             // INSERT record
-            query = `INSERT INTO messages (encryption_method, encryption_key, encrypted_message, plaintext_message, source_id, destination_id, status_id, action_index) values (?, ?, ?, ?, ?, ?, ?, ?)`;
+            query = `INSERT INTO messages (encryption_method, encryption_key, encrypted_message, plaintext_message, destination_id, status_id, action_index) values (?, ?, ?, ?, ?, ?, ?)`;
         }
-        args = [encryption_method, encryption_key, encrypted_message, plaintext_message, source_id, destination_id, status_id, action_index];
+        args = [encryption_method, encryption_key, encrypted_message, plaintext_message, destination_id, status_id, action_index];
         // Create or Update the record in the messages table
         try {
             let result = await db.query(query, args);
@@ -3270,7 +3238,6 @@ class Database {
     // Create/Update record in `sleeps` table
     async createSleep(data){
         // Normalize data
-        let source_id    = await this.createAddress(data['SOURCE']);
         let tick_id      = await this.createTicker(data['TICK']);
         let memo_id      = await this.createMemo(data['MEMO']);
         let status_id    = await this.createStatus(data['STATUS']);
@@ -3300,7 +3267,6 @@ class Database {
                         sleeps
                     SET
                         type=?,
-                        source_id=?,
                         tick_id=?,
                         resume_block=?,
                         memo_id=?,
@@ -3309,9 +3275,9 @@ class Database {
                         action_index=?`;
         } else {
             // INSERT record
-            query = `INSERT INTO sleeps (type, source_id, tick_id, resume_block, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?, ?)`;
+            query = `INSERT INTO sleeps (type, tick_id, resume_block, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?)`;
         }
-        args = [type, source_id, tick_id, resume_block, memo_id, status_id, action_index];
+        args = [type, tick_id, resume_block, memo_id, status_id, action_index];
         // Create or Update the record in the sleeps table
         try {
             let result = await db.query(query, args);
@@ -3329,7 +3295,6 @@ class Database {
                 delete data[list];
         }
         // Normalize data
-        let source_id      = await this.createAddress(data['SOURCE']);
         let give_coin_id   = await this.createCoin(data['GIVE_COIN']);
         let give_tick_id   = await this.createTicker(data['GIVE_TICK']);
         let get_coin_id    = await this.createCoin(data['GET_COIN']);
@@ -3365,7 +3330,6 @@ class Database {
             query = `UPDATE
                         swaps
                     SET
-                        source_id=?,
                         give_coin_id=?,
                         give_tick_id=?,
                         give_amount=?,
@@ -3382,9 +3346,9 @@ class Database {
                         action_index=?`;
         } else {
             // INSERT record
-            query = `INSERT INTO swaps (source_id, give_coin_id, give_tick_id, give_amount, get_coin_id, get_tick_id, get_amount, get_address_id, expiration, allow_list, block_list, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+            query = `INSERT INTO swaps (give_coin_id, give_tick_id, give_amount, get_coin_id, get_tick_id, get_amount, get_address_id, expiration, allow_list, block_list, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
         }
-        args = [source_id, give_coin_id, give_tick_id, give_amount, get_coin_id, get_tick_id, get_amount, get_address_id, expiration, allow_list, block_list, memo_id, status_id, action_index];
+        args = [give_coin_id, give_tick_id, give_amount, get_coin_id, get_tick_id, get_amount, get_address_id, expiration, allow_list, block_list, memo_id, status_id, action_index];
         // Create or Update the record in the swaps table
         try {
             let result = await db.query(query, args);
@@ -3445,7 +3409,6 @@ class Database {
     // Create/Update record in `swap_cancels` table
     async createSwapCancel(data){
         // Normalize data
-        let source_id         = await this.createAddress(data['SOURCE']);
         let memo_id           = await this.createMemo(data['MEMO']);
         let status_id         = await this.createStatus(data['STATUS']);
         let action_index      = data['ACTION_INDEX'];
@@ -3472,7 +3435,6 @@ class Database {
             query = `UPDATE
                         swap_cancels
                     SET
-                        source_id=?,
                         memo_id=?,
                         status_id=?,
                         swap_action_index=?
@@ -3480,9 +3442,9 @@ class Database {
                         action_index=?`;
         } else {
             // INSERT record
-            query = `INSERT INTO swap_cancels (source_id, memo_id, status_id, swap_action_index, action_index) values (?, ?, ?, ?, ?)`;
+            query = `INSERT INTO swap_cancels (memo_id, status_id, swap_action_index, action_index) values (?, ?, ?, ?)`;
         }
-        args = [source_id, memo_id, status_id, swap_action_index, action_index];
+        args = [memo_id, status_id, swap_action_index, action_index];
         // Create or Update the record in the swap_cancels table
         try {
             let result = await db.query(query, args);
@@ -3515,7 +3477,7 @@ class Database {
                         b1.block_time
                     FROM 
                         swaps s
-                        INNER JOIN index_addresses a1 ON (a1.id=s.source_id)
+                        INNER JOIN index_addresses a1 ON (a1.id=t3.source_id)
                         INNER JOIN index_addresses a2 ON (a2.id=s.get_address_id)
                         INNER JOIN index_tickers   t1 ON (t1.id=s.give_tick_id)
                         INNER JOIN index_tickers   t2 ON (t2.id=s.get_tick_id)
@@ -3645,7 +3607,6 @@ class Database {
                 delete data[list];
         }
         // Normalize data
-        let source_id         = await this.createAddress(data['SOURCE']);
         let memo_id           = await this.createMemo(data['MEMO']);
         let status_id         = await this.createStatus(data['STATUS']);
         let action_index      = data['ACTION_INDEX'];
@@ -3678,7 +3639,6 @@ class Database {
                         expiration=?,
                         allow_list=?,
                         block_list=?,
-                        source_id=?,
                         memo_id=?,
                         status_id=?,
                         swap_action_index=?
@@ -3686,9 +3646,9 @@ class Database {
                         action_index=?`;
         } else {
             // INSERT record
-            query = `INSERT INTO swap_edits (expiration, allow_list, block_list,source_id, memo_id, status_id, swap_action_index, action_index) values (?, ?, ?, ?, ?, ?, ?, ?)`;
+            query = `INSERT INTO swap_edits (expiration, allow_list, block_list, memo_id, status_id, swap_action_index, action_index) values (?, ?, ?, ?, ?, ?, ?)`;
         }
-        args = [expiration, allow_list, block_list, source_id, memo_id, status_id, swap_action_index, action_index];
+        args = [expiration, allow_list, block_list, memo_id, status_id, swap_action_index, action_index];
         // Create or Update the record in the swap_edits table
         try {
             let result = await db.query(query, args);
@@ -3712,14 +3672,16 @@ class Database {
                     FROM
                         swaps s1,
                         swaps s2
-                        INNER JOIN index_coins c1 ON (c1.id=s2.get_coin_id)
+                        INNER JOIN index_coins  c1 ON (c1.id=s2.get_coin_id)
+                        INNER JOIN actions      a1 ON (a1.action_index=s2.action_index)
+                        INNER JOIN transactions t1 ON (t1.tx_index=a1.tx_index)
                     WHERE
                         s1.give_coin_id=s2.get_coin_id AND
                         s1.give_tick_id=s2.get_tick_id AND
                         s1.give_amount=s2.get_amount AND
                         s1.get_amount=s2.give_amount AND
                         s1.action_index=? AND
-                        s2.source_id!=?
+                        t1.source_id!=?
                     ORDER BY
                         s2.action_index ASC`;
         let args = [action_index, source_id];
@@ -3802,7 +3764,6 @@ class Database {
                 delete data[list];
         }
         // Normalize data
-        let source_id      = await this.createAddress(data['SOURCE']);
         let give_coin_id   = await this.createCoin(data['GIVE_COIN']);
         let give_tick_id   = await this.createTicker(data['GIVE_TICK']);
         let get_coin_id    = await this.createCoin(data['GET_COIN']);
@@ -3838,7 +3799,6 @@ class Database {
             query = `UPDATE
                         orders
                     SET
-                        source_id=?,
                         give_coin_id=?,
                         give_tick_id=?,
                         give_amount=?,
@@ -3855,9 +3815,9 @@ class Database {
                         action_index=?`;
         } else {
             // INSERT record
-            query = `INSERT INTO orders (source_id, give_coin_id, give_tick_id, give_amount, get_coin_id, get_tick_id, get_amount, get_address_id, expiration, allow_list, block_list, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+            query = `INSERT INTO orders (give_coin_id, give_tick_id, give_amount, get_coin_id, get_tick_id, get_amount, get_address_id, expiration, allow_list, block_list, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
         }
-        args = [source_id, give_coin_id, give_tick_id, give_amount, get_coin_id, get_tick_id, get_amount, get_address_id, expiration, allow_list, block_list, memo_id, status_id, action_index];
+        args = [give_coin_id, give_tick_id, give_amount, get_coin_id, get_tick_id, get_amount, get_address_id, expiration, allow_list, block_list, memo_id, status_id, action_index];
         // Create or Update the record in the orders table
         try {
             let result = await db.query(query, args);
@@ -3930,14 +3890,17 @@ class Database {
                     FROM
                         orders o1,
                         orders o2
-                        INNER JoIN index_coins c1 ON (c1.id=o2.get_coin_id)
+                        INNER JOIN index_coins  c1 ON (c1.id=o2.get_coin_id)
+                        INNER JOIN actions      a1 ON (a1.action_index=o2.action_index)
+                        INNER JOIN transactions t1 ON (t1.tx_index=a1.tx_index)
+
                     WHERE
                         o1.give_coin_id=o2.get_coin_id AND
                         o1.give_tick_id=o2.get_tick_id AND
                         o1.give_amount=o2.get_amount AND
                         o1.get_amount=o2.give_amount AND
                         o1.action_index=? AND
-                        o2.source_id!=?
+                        t1.source_id!=?
                     ORDER BY
                         o2.action_index ASC`;
         let args = [action_index, source_id];
@@ -3983,7 +3946,7 @@ class Database {
                         b1.block_time
                     FROM 
                         orders o
-                        INNER JOIN index_addresses a1 ON (a1.id=o.source_id)
+                        INNER JOIN index_addresses a1 ON (a1.id=t3.source_id)
                         INNER JOIN index_addresses a2 ON (a2.id=o.get_address_id)
                         INNER JOIN index_tickers   t1 ON (t1.id=o.give_tick_id)
                         INNER JOIN index_tickers   t2 ON (t2.id=o.get_tick_id)
@@ -4100,7 +4063,6 @@ class Database {
                 delete data[list];
         }
         // Normalize data
-        let source_id          = await this.createAddress(data['SOURCE']);
         let memo_id            = await this.createMemo(data['MEMO']);
         let status_id          = await this.createStatus(data['STATUS']);
         let action_index       = data['ACTION_INDEX'];
@@ -4133,7 +4095,6 @@ class Database {
                         expiration=?,
                         allow_list=?,
                         block_list=?,
-                        source_id=?,
                         memo_id=?,
                         status_id=?,
                         order_action_index=?
@@ -4141,9 +4102,9 @@ class Database {
                         action_index=?`;
         } else {
             // INSERT record
-            query = `INSERT INTO order_edits (expiration, allow_list, block_list,source_id, memo_id, status_id, order_action_index, action_index) values (?, ?, ?, ?, ?, ?, ?, ?)`;
+            query = `INSERT INTO order_edits (expiration, allow_list, block_list, memo_id, status_id, order_action_index, action_index) values (?, ?, ?, ?, ?, ?, ?)`;
         }
-        args = [expiration, allow_list, block_list, source_id, memo_id, status_id, order_action_index, action_index];
+        args = [expiration, allow_list, block_list, memo_id, status_id, order_action_index, action_index];
         // Create or Update the record in the order_edits table
         try {
             let result = await db.query(query, args);
@@ -4336,7 +4297,7 @@ class Database {
                             INNER JOIN transactions       t1 ON (t1.tx_index=a2.tx_index)
                             INNER JOIN blocks             b1 ON (b1.block_index=t1.block_index)
                             INNER JOIN index_actions      a3 ON (a3.id=a2.action_id)
-                            INNER JOIN index_addresses    a4 ON (a4.id=a1.source_id)
+                            INNER JOIN index_addresses    a4 ON (a4.id=t1.source_id)
                             INNER JOIN index_memos        m1 ON (m1.id=a1.memo_id)
                             INNER JOIN index_statuses     s1 ON (s1.id=a1.status_id)
                             INNER JOIN index_transactions t2 ON (t2.id=t1.tx_hash_id)
@@ -4365,7 +4326,7 @@ class Database {
                             INNER JOIN transactions       t1 ON (t1.tx_index=a2.tx_index)
                             INNER JOIN blocks             b1 ON (b1.block_index=t1.block_index)
                             INNER JOIN index_actions      a3 ON (a3.id=a2.action_id)
-                            INNER JOIN index_addresses    a4 ON (a4.id=a1.source_id)
+                            INNER JOIN index_addresses    a4 ON (a4.id=t1.source_id)
                             INNER JOIN index_memos        m1 ON (m1.id=a1.memo_id)
                             INNER JOIN index_statuses     s1 ON (s1.id=a1.status_id)
                             INNER JOIN index_transactions t2 ON (t2.id=t1.tx_hash_id)
@@ -4391,7 +4352,7 @@ class Database {
                             INNER JOIN transactions       t1 ON (t1.tx_index=a2.tx_index)
                             INNER JOIN blocks             b2 ON (b2.block_index=t1.block_index)
                             INNER JOIN index_actions      a3 ON (a3.id=a2.action_id)
-                            INNER JOIN index_addresses    a4 ON (a4.id=b1.source_id)
+                            INNER JOIN index_addresses    a4 ON (a4.id=t1.source_id)
                             INNER JOIN index_statuses     s1 ON (s1.id=b1.status_id)
                             INNER JOIN index_transactions t2 ON (t2.id=t1.tx_hash_id)
                         WHERE 
@@ -4420,7 +4381,7 @@ class Database {
                             INNER JOIN transactions       t1 ON (t1.tx_index=a1.tx_index)
                             INNER JOIN blocks             b2 ON (b2.block_index=t1.block_index)
                             INNER JOIN index_actions      a2 ON (a2.id=a1.action_id)
-                            INNER JOIN index_addresses    a3 ON (a3.id=b1.source_id)
+                            INNER JOIN index_addresses    a3 ON (a3.id=t1.source_id)
                             INNER JOIN index_memos        m1 ON (m1.id=b1.memo_id)
                             INNER JOIN index_statuses     s1 ON (s1.id=b1.status_id)
                             INNER JOIN index_transactions t2 ON (t2.id=t1.tx_hash_id)
@@ -4449,7 +4410,7 @@ class Database {
                             INNER JOIN transactions       t1 ON (t1.tx_index=a1.tx_index)
                             INNER JOIN blocks             b1 ON (b1.block_index=t1.block_index)
                             INNER JOIN index_actions      a2 ON (a2.id=a1.action_id)
-                            INNER JOIN index_addresses    a3 ON (a3.id=c1.source_id)
+                            INNER JOIN index_addresses    a3 ON (a3.id=t1.source_id)
                             INNER JOIN index_memos        m1 ON (m1.id=c1.memo_id)
                             INNER JOIN index_statuses     s1 ON (s1.id=c1.status_id)
                             INNER JOIN index_transactions t2 ON (t2.id=t1.tx_hash_id)
@@ -4479,7 +4440,7 @@ class Database {
                             INNER JOIN transactions       t1 ON (t1.tx_index=a1.tx_index)
                             INNER JOIN blocks             b1 ON (b1.block_index=t1.block_index)
                             INNER JOIN index_actions      a2 ON (a2.id=a1.action_id)
-                            INNER JOIN index_addresses    a3 ON (a3.id=d1.source_id)
+                            INNER JOIN index_addresses    a3 ON (a3.id=t1.source_id)
                             INNER JOIN index_memos        m1 ON (m1.id=d1.memo_id)
                             INNER JOIN index_statuses     s1 ON (s1.id=d1.status_id)
                             INNER JOIN index_transactions t2 ON (t2.id=t1.tx_hash_id)
@@ -4517,7 +4478,7 @@ class Database {
                             INNER JOIN transactions       t1 ON (t1.tx_index=a1.tx_index)
                             INNER JOIN blocks             b1 ON (b1.block_index=t1.block_index)
                             INNER JOIN index_actions      a2 ON (a2.id=a1.action_id)
-                            INNER JOIN index_addresses    a3 ON (a3.id=f1.source_id)
+                            INNER JOIN index_addresses    a3 ON (a3.id=t1.source_id)
                             INNER JOIN index_memos        m1 ON (m1.id=f1.memo_id)
                             INNER JOIN index_statuses     s1 ON (s1.id=f1.status_id)
                             INNER JOIN index_transactions t2 ON (t2.id=t1.tx_hash_id)
@@ -4567,7 +4528,7 @@ class Database {
                             INNER JOIN transactions       t1 ON (t1.tx_index=a1.tx_index)
                             INNER JOIN blocks             b1 ON (b1.block_index=t1.block_index)
                             INNER JOIN index_actions      a2 ON (a2.id=a1.action_id)
-                            INNER JOIN index_addresses    a3 ON (a3.id=i1.source_id)
+                            INNER JOIN index_addresses    a3 ON (a3.id=t1.source_id)
                             LEFT  JOIN index_addresses    a4 ON (a4.id=i1.transfer_id)
                             LEFT  JOIN index_addresses    a5 ON (a5.id=i1.transfer_supply_id)
                             INNER JOIN index_statuses     s1 ON (s1.id=i1.status_id)
@@ -4600,7 +4561,7 @@ class Database {
                             INNER JOIN transactions       t1 ON (t1.tx_index=a1.tx_index)
                             INNER JOIN blocks             b1 ON (b1.block_index=t1.block_index)
                             INNER JOIN index_actions      a2 ON (a2.id=a1.action_id)
-                            INNER JOIN index_addresses    a3 ON (a3.id=l1.source_id)
+                            INNER JOIN index_addresses    a3 ON (a3.id=t1.source_id)
                             INNER JOIN index_memos        m1 ON (m1.id=l1.memo_id)
                             INNER JOIN index_statuses     s1 ON (s1.id=l1.status_id)
                             INNER JOIN index_transactions t2 ON (t2.id=t1.tx_hash_id)
@@ -4630,7 +4591,7 @@ class Database {
                             INNER JOIN transactions       t1 ON (t1.tx_index=a1.tx_index)
                             INNER JOIN blocks             b1 ON (b1.block_index=t1.block_index)
                             INNER JOIN index_actions      a2 ON (a2.id=a1.action_id)
-                            INNER JOIN index_addresses    a3 ON (a3.id=l1.source_id)
+                            INNER JOIN index_addresses    a3 ON (a3.id=t1.source_id)
                             INNER JOIN index_statuses     s1 ON (s1.id=l1.status_id)
                             INNER JOIN index_transactions t2 ON (t2.id=t1.tx_hash_id)
                         WHERE 
@@ -4659,7 +4620,7 @@ class Database {
                             INNER JOIN transactions       t1 ON (t1.tx_index=a1.tx_index)
                             INNER JOIN blocks             b1 ON (b1.block_index=t1.block_index)
                             INNER JOIN index_actions      a2 ON (a2.id=a1.action_id)
-                            INNER JOIN index_addresses    a3 ON (a3.id=m1.source_id)
+                            INNER JOIN index_addresses    a3 ON (a3.id=t1.source_id)
                             INNER JOIN index_addresses    a4 ON (a4.id=m1.destination_id)
                             INNER JOIN index_statuses     s1 ON (s1.id=m1.status_id)
                             INNER JOIN index_transactions t2 ON (t2.id=t1.tx_hash_id)
@@ -4688,7 +4649,7 @@ class Database {
                             INNER JOIN transactions       t1 ON (t1.tx_index=a1.tx_index)
                             INNER JOIN blocks             b1 ON (b1.block_index=t1.block_index)
                             INNER JOIN index_actions      a2 ON (a2.id=a1.action_id)
-                            INNER JOIN index_addresses    a3 ON (a3.id=m1.source_id)
+                            INNER JOIN index_addresses    a3 ON (a3.id=t1.source_id)
                             INNER JOIN index_addresses    a4 ON (a4.id=m1.destination_id)
                             INNER JOIN index_memos        m2 ON (m2.id=m1.memo_id)
                             INNER JOIN index_statuses     s1 ON (s1.id=m1.status_id)
@@ -4726,7 +4687,7 @@ class Database {
                             INNER JOIN transactions       t1 ON (t1.tx_index=a1.tx_index)
                             INNER JOIN blocks             b1 ON (b1.block_index=t1.block_index)
                             INNER JOIN index_actions      a2 ON (a2.id=a1.action_id)
-                            INNER JOIN index_addresses    a3 ON (a3.id=o1.source_id)
+                            INNER JOIN index_addresses    a3 ON (a3.id=t1.source_id)
                             INNER JOIN index_addresses    a4 ON (a4.id=o1.get_address_id)
                             INNER JOIN index_memos        m2 ON (m2.id=o1.memo_id)
                             INNER JOIN index_statuses     s1 ON (s1.id=o1.status_id)
@@ -4758,7 +4719,7 @@ class Database {
                         INNER JOIN transactions       t1 ON (t1.tx_index=a1.tx_index)
                         INNER JOIN blocks             b1 ON (b1.block_index=t1.block_index)
                         INNER JOIN index_actions      a2 ON (a2.id=a1.action_id)
-                        INNER JOIN index_addresses    a3 ON (a3.id=o1.source_id)
+                        INNER JOIN index_addresses    a3 ON (a3.id=t1.source_id)
                         INNER JOIN index_memos        m2 ON (m2.id=o1.memo_id)
                         INNER JOIN index_statuses     s1 ON (s1.id=o1.status_id)
                         INNER JOIN index_transactions t2 ON (t2.id=t1.tx_hash_id)
@@ -4788,7 +4749,7 @@ class Database {
                         INNER JOIN transactions       t1 ON (t1.tx_index=a1.tx_index)
                         INNER JOIN blocks             b1 ON (b1.block_index=t1.block_index)
                         INNER JOIN index_actions      a2 ON (a2.id=a1.action_id)
-                        INNER JOIN index_addresses    a3 ON (a3.id=o1.source_id)
+                        INNER JOIN index_addresses    a3 ON (a3.id=t1.source_id)
                         INNER JOIN index_memos        m2 ON (m2.id=o1.memo_id)
                         INNER JOIN index_statuses     s1 ON (s1.id=o1.status_id)
                         INNER JOIN index_transactions t2 ON (t2.id=t1.tx_hash_id)
@@ -4844,7 +4805,7 @@ class Database {
                             INNER JOIN transactions       t1 ON (t1.tx_index=a1.tx_index)
                             INNER JOIN blocks             b1 ON (b1.block_index=t1.block_index)
                             INNER JOIN index_actions      a2 ON (a2.id=a1.action_id)
-                            INNER JOIN index_addresses    a3 ON (a3.id=s1.source_id)
+                            INNER JOIN index_addresses    a3 ON (a3.id=t1.source_id)
                             INNER JOIN index_addresses    a4 ON (a4.id=s1.destination_id)
                             INNER JOIN index_memos        m2 ON (m2.id=s1.memo_id)
                             INNER JOIN index_statuses     s2 ON (s2.id=s1.status_id)
@@ -4875,7 +4836,7 @@ class Database {
                             INNER JOIN transactions       t1 ON (t1.tx_index=a1.tx_index)
                             INNER JOIN blocks             b1 ON (b1.block_index=t1.block_index)
                             INNER JOIN index_actions      a2 ON (a2.id=a1.action_id)
-                            INNER JOIN index_addresses    a3 ON (a3.id=s1.source_id)
+                            INNER JOIN index_addresses    a3 ON (a3.id=t1.source_id)
                             INNER JOIN index_memos        m2 ON (m2.id=s1.memo_id)
                             INNER JOIN index_statuses     s2 ON (s2.id=s1.status_id)
                             INNER JOIN index_transactions t2 ON (t2.id=t1.tx_hash_id)
@@ -4912,7 +4873,7 @@ class Database {
                             INNER JOIN transactions       t1 ON (t1.tx_index=a1.tx_index)
                             INNER JOIN blocks             b1 ON (b1.block_index=t1.block_index)
                             INNER JOIN index_actions      a2 ON (a2.id=a1.action_id)
-                            INNER JOIN index_addresses    a3 ON (a3.id=s1.source_id)
+                            INNER JOIN index_addresses    a3 ON (a3.id=t1.source_id)
                             INNER JOIN index_addresses    a4 ON (a4.id=s1.get_address_id)
                             INNER JOIN index_memos        m2 ON (m2.id=s1.memo_id)
                             INNER JOIN index_statuses     s2 ON (s2.id=s1.status_id)
@@ -4944,7 +4905,7 @@ class Database {
                         INNER JOIN transactions       t1 ON (t1.tx_index=a1.tx_index)
                         INNER JOIN blocks             b1 ON (b1.block_index=t1.block_index)
                         INNER JOIN index_actions      a2 ON (a2.id=a1.action_id)
-                        INNER JOIN index_addresses    a3 ON (a3.id=s1.source_id)
+                        INNER JOIN index_addresses    a3 ON (a3.id=t1.source_id)
                         INNER JOIN index_memos        m2 ON (m2.id=s1.memo_id)
                         INNER JOIN index_statuses     s2 ON (s2.id=s1.status_id)
                         INNER JOIN index_transactions t2 ON (t2.id=t1.tx_hash_id)
@@ -4974,7 +4935,7 @@ class Database {
                         INNER JOIN transactions       t1 ON (t1.tx_index=a1.tx_index)
                         INNER JOIN blocks             b1 ON (b1.block_index=t1.block_index)
                         INNER JOIN index_actions      a2 ON (a2.id=a1.action_id)
-                        INNER JOIN index_addresses    a3 ON (a3.id=s1.source_id)
+                        INNER JOIN index_addresses    a3 ON (a3.id=t1.source_id)
                         INNER JOIN index_memos        m2 ON (m2.id=s1.memo_id)
                         INNER JOIN index_statuses     s2 ON (s2.id=s1.status_id)
                         INNER JOIN index_transactions t2 ON (t2.id=t1.tx_hash_id)
@@ -5029,7 +4990,7 @@ class Database {
                             INNER JOIN transactions       t1 ON (t1.tx_index=a1.tx_index)
                             INNER JOIN blocks             b1 ON (b1.block_index=t1.block_index)
                             INNER JOIN index_actions      a2 ON (a2.id=a1.action_id)
-                            INNER JOIN index_addresses    a3 ON (a3.id=s1.source_id)
+                            INNER JOIN index_addresses    a3 ON (a3.id=t1.source_id)
                             INNER JOIN index_addresses    a4 ON (a4.id=s1.destination_id)
                             INNER JOIN index_memos        m2 ON (m2.id=s1.memo_id)
                             INNER JOIN index_statuses     s2 ON (s2.id=s1.status_id)
@@ -5053,6 +5014,7 @@ class Database {
                             INNER JOIN blocks             b1 ON (b1.block_index=t1.block_index)
                             INNER JOIN index_actions      a2 ON (a2.id=a1.action_id)
                             INNER JOIN index_transactions t2 ON (t2.id=t1.tx_hash_id)
+                            INNER JOIN index_addresses    a3 ON (a3.id=t1.source_id)
                         WHERE 
                             a1.action_index=?
                         LIMIT 1`;
