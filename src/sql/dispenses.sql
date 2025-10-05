@@ -8,7 +8,6 @@ CREATE TABLE dispenses (
     get_tick_id     BIGINT UNSIGNED,          -- id of record in index_tickers table
     get_amount      VARCHAR(250),             -- Amount of GET_TICK required to trigger dispenser
     get_address_id  BIGINT UNSIGNED,          -- id of record in index_addresses table (dispenser address)
-    source_id       BIGINT UNSIGNED,          -- id of record in index_addresses table (purchasing address)
     status_id       BIGINT UNSIGNED           -- id of record in index_statuses table
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
@@ -19,5 +18,4 @@ CREATE        INDEX give_tick_id    ON dispenses (give_tick_id);
 CREATE        INDEX get_coin_id     ON dispenses (get_coin_id);
 CREATE        INDEX get_tick_id     ON dispenses (get_tick_id);
 CREATE        INDEX get_address_id  ON dispenses (get_address_id);
-CREATE        INDEX source_id       ON dispenses (source_id);
 CREATE        INDEX status_id       ON dispenses (status_id);
