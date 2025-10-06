@@ -2634,7 +2634,7 @@ class Database {
                         action_index=?`;
         } else {
             // INSERT record
-            query = `INSERT INTO fees (tick_id, destination_id, amount, method, action_index) values (?, ?, ?, ?, ?, ?)`;
+            query = `INSERT INTO fees (tick_id, destination_id, amount, method, action_index) values (?, ?, ?, ?, ?)`;
         }
         // Create or Update the record in the fees table
         try {
