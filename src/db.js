@@ -2389,7 +2389,7 @@ class Database {
                     WHERE 
                         action_index=?`;
         } else {
-            query = "INSERT INTO addresses (fee_preference, require_memo, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?)";
+            query = "INSERT INTO addresses (fee_preference, require_memo, memo_id, status_id, action_index) values (?, ?, ?, ?, ?)";
         }
         try {
             let rows = await db.query(query, [fee_preference, require_memo, memo_id, status_id, action_index]);
@@ -2423,7 +2423,7 @@ class Database {
                     WHERE 
                         action_index=?`;
         } else {
-            query = "INSERT INTO batches (status_id, action_index) values (?, ?, ?)";
+            query = "INSERT INTO batches (status_id, action_index) values (?, ?)";
         }
         args = [status_id, action_index];
         try {
@@ -3461,13 +3461,13 @@ class Database {
         let db    = await this.getConnection();
         let query = `SELECT 
                         s.action_index,
-                        t1.tick as give_tick,
+                        t2.tick as give_tick,
                         s.give_amount,
                         c1.coin as get_coin,
-                        t2.tick as get_tick,
+                        t3.tick as get_tick,
                         s.get_amount,
-                        a2.address as get_address,
-                        a1.address as source,
+                        a2.address as source,
+                        a3.address as get_address,
                         s.expiration,
                         s.allow_list,
                         s.block_list,
@@ -3477,16 +3477,16 @@ class Database {
                         b1.block_time
                     FROM 
                         swaps s
-                        INNER JOIN index_addresses a1 ON (a1.id=t3.source_id)
-                        INNER JOIN index_addresses a2 ON (a2.id=s.get_address_id)
-                        INNER JOIN index_tickers   t1 ON (t1.id=s.give_tick_id)
-                        INNER JOIN index_tickers   t2 ON (t2.id=s.get_tick_id)
+                        INNER JOIN actions         a1 ON (a1.action_index=s.action_index)
+                        INNER JOIN transactions    t1 ON (t1.tx_index=a1.tx_index)
+                        INNER JOIN blocks          b1 ON (b1.block_index=t1.block_index)
+                        INNER JOIN index_addresses a2 ON (a2.id=t1.source_id)
+                        INNER JOIN index_addresses a3 ON (a3.id=s.get_address_id)
+                        INNER JOIN index_tickers   t2 ON (t2.id=s.give_tick_id)
+                        INNER JOIN index_tickers   t3 ON (t3.id=s.get_tick_id)
                         INNER JOIN index_coins     c1 ON (c1.id=s.get_coin_id)
                         INNER JOIN index_memos     m1 ON (m1.id=s.memo_id)
                         INNER JOIN index_statuses  s1 ON (s1.id=s.status_id)
-                        INNER JOIN actions         a3 ON (a3.action_index=s.action_index)
-                        INNER JOIN transactions    t3 ON (t3.tx_index=a3.tx_index)
-                        INNER JOIN blocks          b1 ON (b1.block_index=t3.block_index)
                     WHERE 
                         c1.coin=? AND
                         s.action_index=? 
@@ -3930,13 +3930,13 @@ class Database {
         let db    = await this.getConnection();
         let query = `SELECT 
                         o.action_index,
-                        t1.tick as give_tick,
+                        t2.tick as give_tick,
                         o.give_amount,
                         c1.coin as get_coin,
-                        t2.tick as get_tick,
+                        t3.tick as get_tick,
                         o.get_amount,
-                        a2.address as get_address,
-                        a1.address as source,
+                        a2.address as source,
+                        a3.address as get_address,
                         o.expiration,
                         o.allow_list,
                         o.block_list,
@@ -3946,16 +3946,16 @@ class Database {
                         b1.block_time
                     FROM 
                         orders o
-                        INNER JOIN index_addresses a1 ON (a1.id=t3.source_id)
-                        INNER JOIN index_addresses a2 ON (a2.id=o.get_address_id)
-                        INNER JOIN index_tickers   t1 ON (t1.id=o.give_tick_id)
-                        INNER JOIN index_tickers   t2 ON (t2.id=o.get_tick_id)
+                        INNER JOIN actions         a1 ON (a1.action_index=o.action_index)
+                        INNER JOIN transactions    t1 ON (t1.tx_index=a1.tx_index)
+                        INNER JOIN blocks          b1 ON (b1.block_index=t1.block_index)
+                        INNER JOIN index_addresses a2 ON (a2.id=t1.source_id)
+                        INNER JOIN index_addresses a3 ON (a3.id=o.get_address_id)
+                        INNER JOIN index_tickers   t2 ON (t2.id=o.give_tick_id)
+                        INNER JOIN index_tickers   t3 ON (t3.id=o.get_tick_id)
                         INNER JOIN index_coins     c1 ON (c1.id=o.get_coin_id)
                         INNER JOIN index_memos     m1 ON (m1.id=o.memo_id)
                         INNER JOIN index_statuses  s1 ON (s1.id=o.status_id)
-                        INNER JOIN actions         a3 ON (a3.action_index=o.action_index)
-                        INNER JOIN transactions    t3 ON (t3.tx_index=a3.tx_index)
-                        INNER JOIN blocks          b1 ON (b1.block_index=t3.block_index)
                     WHERE 
                         c1.coin=? AND
                         o.action_index=? 
