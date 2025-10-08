@@ -121,12 +121,14 @@ class Rollback {
                 // AIRDROP / DESTROY
                 if(['airdrops','destroys'].includes(table)){
                     query = `SELECT 
-                                t1.tick,
-                                a1.address
+                                t2.tick,
+                                a2.address
                             FROM 
                                 ` + table + ` m
-                                INNER JOIN index_tickers   t1 ON (t1.id=m.tick_id)
-                                INNER JOIN index_addresses a1 ON (a1.id=m.source_id)
+                                INNER JOIN actions         a1 ON (a1.action_index=m.action_index)
+                                INNER JOIN transactions    t1 ON (t1.tx_index=a1.tx_index)
+                                INNER JOIN index_tickers   t2 ON (t2.id=m.tick_id)
+                                INNER JOIN index_addresses a2 ON (a2.id=t1.source_id)
                             WHERE 
                                 m.action_index >= ?`;
                 }
@@ -134,14 +136,16 @@ class Rollback {
                 // MINT / SEND / FEE
                 if(['mints','sends','fees'].includes(table)){
                     query = `SELECT 
-                                t1.tick,
-                                a1.address,
-                                a2.address as address2
+                                t2.tick,
+                                a2.address,
+                                a3.address as address2
                             FROM 
                                 ` + table + ` m
-                                INNER JOIN index_tickers   t1 ON (t1.id=m.tick_id)
-                                INNER JOIN index_addresses a1 ON (a1.id=m.source_id)
-                                LEFT  JOIN index_addresses a2 ON (a2.id=m.destination_id)
+                                INNER JOIN actions         a1 ON (a1.action_index=m.action_index)
+                                INNER JOIN transactions    t1 ON (t1.tx_index=a1.tx_index)
+                                INNER JOIN index_tickers   t2 ON (t2.id=m.tick_id)
+                                INNER JOIN index_addresses a2 ON (a2.id=t1.source_id)
+                                LEFT  JOIN index_addresses a3 ON (a3.id=m.destination_id)
                             WHERE 
                                 m.action_index >= ?`;
                 }
@@ -149,16 +153,18 @@ class Rollback {
                 // ISSUE
                 if(table=='issues'){
                     query = `SELECT 
-                                t1.tick,
-                                a1.address,
-                                a2.address as address2,
-                                a3.address as address3
+                                t2.tick,
+                                a2.address,
+                                a3.address as address2,
+                                a4.address as address3
                             FROM 
                                 ` + table + ` m
-                                INNER JOIN index_tickers   t1 ON (t1.id=m.tick_id)
-                                INNER JOIN index_addresses a1 ON (a1.id=m.source_id)
-                                LEFT  JOIN index_addresses a2 ON (a2.id=m.transfer_id)
-                                LEFT  JOIN index_addresses a3 ON (a3.id=m.transfer_supply_id)
+                                INNER JOIN actions         a1 ON (a1.action_index=m.action_index)
+                                INNER JOIN transactions    t1 ON (t1.tx_index=a1.tx_index)
+                                INNER JOIN index_tickers   t2 ON (t2.id=m.tick_id)
+                                INNER JOIN index_addresses a2 ON (a2.id=t1.source_id)
+                                LEFT  JOIN index_addresses a3 ON (a3.id=m.transfer_id)
+                                LEFT  JOIN index_addresses a4 ON (a4.id=m.transfer_supply_id)
                             WHERE 
                                 m.action_index >= ?`;
                 }
@@ -166,12 +172,14 @@ class Rollback {
                 // SWAPS
                 if(table=='swaps'){
                     query = `SELECT 
-                                t1.tick,
-                                a1.address
+                                t2.tick,
+                                a2.address
                             FROM 
                                 ` + table + ` m
-                                INNER JOIN index_tickers   t1 ON (t1.id=m.give_tick_id)
-                                INNER JOIN index_addresses a1 ON (a1.id=m.source_id)
+                                INNER JOIN actions         a1 ON (a1.action_index=m.action_index)
+                                INNER JOIN transactions    t1 ON (t1.tx_index=a1.tx_index)
+                                INNER JOIN index_tickers   t2 ON (t2.id=m.give_tick_id)
+                                INNER JOIN index_addresses a2 ON (a2.id=t1.source_id)
                             WHERE 
                                 m.action_index >= ?`;
                 }
