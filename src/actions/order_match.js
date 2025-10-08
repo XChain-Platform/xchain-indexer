@@ -50,9 +50,9 @@ class Order_Match {
             for(let order of matches){
                 let valid = true;
 
-                   // List of addresses allowed or blocked from matching with this matching SWAP
-                   let matchInfoAllowList = (order['ALLOW_LIST']) ? await this.indexerDb.getList(order['ALLOW_LIST']) : false;
-                   let matchInfoBlockList = [order['BLOCK_LIST']] ? await this.indexerDb.getList(order['BLOCK_LIST']) : false;
+               // List of addresses allowed or blocked from matching with this matching SWAP
+               let matchInfoAllowList = (order['ALLOW_LIST']) ? await this.indexerDb.getList(order['ALLOW_LIST']) : false;
+               let matchInfoBlockList = [order['BLOCK_LIST']] ? await this.indexerDb.getList(order['BLOCK_LIST']) : false;
 
                 // Check if GET_ADDRESS for both sides of order are allowed (ALLOW/BLOCK list support)
                 if( (getTokenAllowList.length  && (!getTokenAllowList.includes(data['GET_ADDRESS'])   || !getTokenAllowList.includes(order['GET_ADDRESS'])))  ||
