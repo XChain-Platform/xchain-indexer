@@ -1,10 +1,30 @@
-/* XChain Indexer Class */
+/*********************************************************************
+ * 
+ * Copyright © 2025 Dankest, LLC
+ * Based on XChain Platform by Dankest, LLC – https://dankest.llc
+ *
+ * Licensed under the Dankest Community License (Apache License 2.0 + Additional Terms).
+ * You may not use this file except in compliance with that License.
+ * 
+ * A copy of the License is available at:
+ *     https://dankest.llc/license
+ *
+ * This software is provided “AS IS”, without warranties or conditions of any kind.
+ * 
+ **********************************************************************
+ *
+ * XChain Indexer - Indexer Class
+ * 
+ * This file handles starting the indexer and parsing blocks and actions
+ *
+ ********************************************************************/
 
+// Load required libraries
 const config   = require('./config.js');
 const changes  = require('./protocol_changes.js');
 const database = require('./db.js');
 const actions  = require('./actions.js');
-const util     = require('./util.js');
+const util     = require('./utility.js');
 const rollback = require('./rollback.js');
 const mapper   = require('./mapper.js');
 
@@ -156,7 +176,7 @@ class XChainIndexer {
                 // lastIndexerBlock = startBlock;
 
                 // DEBUG : Rollback to a specific block
-                let rollbackBlock = 862640;
+                // let rollbackBlock = 862600;
                 // if(lastIndexerBlock >= rollbackBlock){
                 //     await this.rollback.rollback(rollbackBlock);
                 //     this.util.throwError('Rolled back to ' + rollbackBlock);
@@ -188,10 +208,10 @@ class XChainIndexer {
                 cnt++;
 
                 // DEBUG : Exit processing at a select block
-                if(lastIndexerBlock >=  862642){
-                    // await this.rollback.rollback(rollbackBlock);
-                    this.util.throwError('Exiting on target block');
-                }
+                // if(lastIndexerBlock >=  862646){
+                //     // await this.rollback.rollback(rollbackBlock);
+                //     this.util.throwError('Exiting on target block');
+                // }
 
                 // DEBUG: Delay processing after X blocks
                 // if(cnt>=1)
