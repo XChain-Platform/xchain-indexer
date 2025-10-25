@@ -1,5 +1,25 @@
-/* XChain Indexer Database Connector */
+/*********************************************************************
+ * 
+ * Copyright © 2025 Dankest, LLC
+ * Based on XChain Platform by Dankest, LLC – https://dankest.llc
+ *
+ * Licensed under the Dankest Community License (Apache License 2.0 + Additional Terms).
+ * You may not use this file except in compliance with that License.
+ * 
+ * A copy of the License is available at:
+ *     https://dankest.llc/license
+ *
+ * This software is provided “AS IS”, without warranties or conditions of any kind.
+ * 
+ **********************************************************************
+ *
+ * XChain Indexer - Database Class
+ * 
+ * This file handles connecting to databases and running SQL queries
+ *
+ ********************************************************************/
 
+// Load required libraries
 const mariadb = require('mariadb');
 const fs      = require('fs');
 
@@ -68,7 +88,7 @@ class Database {
                     return true;
                 return false;
             } catch (e){
-                // console.log('e=',e);
+                console.log('e=',e);
                 console.log("There was an error trying to check if the " + this.dbName + " database exists. Trying again in a few seconds...");
                 await this.util.sleep(5000); // Wait 5 seconds
             }
@@ -3960,7 +3980,9 @@ class Database {
                         c1.coin=? AND
                         o.action_index=? 
                     LIMIT 1`;
+        console.log('query=',query);
         let args  = [coin, action_index];
+        console.log('args=',args);
         try {
             let rows = await db.query(query, args);
             if(rows.length > 0){
