@@ -28,3 +28,17 @@ Below is a list of the defined `ACTION` commands and the function of each:
 | [`SLEEP`](https://github.com/XChain-platform/xchain-documentation/blob/master/actions/SLEEP.md)         | This action pauses actions on `TICK` until `RESUME_BLOCK` is reached.                         |
 | [`SWAP`](https://github.com/XChain-platform/xchain-documentation/blob/master/actions/SWAP.md)           | This action allows for swapping tokens across XChain platform supported blockchains.          |
 | [`SWEEP`](https://github.com/XChain-platform/xchain-documentation/blob/master/actions/SWEEP.md)         | This action transfers all `TICK` balances and/or ownerships to an `DESTINATION` address.      |
+
+---
+
+**Copyright © 2025 Dankest, LLC**
+
+**Based on XChain Platform by Dankest, LLC – https://dankest.llc**  
+
+Licensed under the **Dankest Community License**  
+(based on the Apache License 2.0 with additional non-commercial and network-disclosure terms).  
+
+You may not use, modify, or distribute this material except in compliance with the License.  
+A full copy of the License is available at: [https://dankest.llc/license](https://dankest.llc/license)
+
+---
