@@ -68,7 +68,7 @@ class Dividend {
 
         // Parse PARAMS using given VERSION format and update transaction data object
         if(!error)
-            data = this.util.setActionParams(data, params, this.formats[format]);
+            data = this.util.setActionParams(data, params, this.formats, format);
 
         // Clone the raw data for storage in dividends table
         let dividend = structuredClone(data);

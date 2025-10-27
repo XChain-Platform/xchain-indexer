@@ -68,7 +68,7 @@ class Mint {
 
         // Parse PARAMS using given VERSION format and update transaction data object
         if(!error)
-            data = this.util.setActionParams(data, params, this.formats[format]);
+            data = this.util.setActionParams(data, params, this.formats, format);
 
         // Clone the raw data for storage in mints table
         let mint = structuredClone(data);

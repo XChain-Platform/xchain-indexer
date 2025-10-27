@@ -81,7 +81,7 @@ class Address {
 
         // Parse PARAMS using given VERSION format and update transaction data object
         if(!error)
-            data = this.util.setActionParams(data, params, this.formats[format]);
+            data = this.util.setActionParams(data, params, this.formats, format);
 
         // Convert NUMBER fields from string value to number value so comparisons are mathematical 
         for(let name of this.fieldList['NUMBER']){

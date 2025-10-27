@@ -202,8 +202,24 @@ class Utility {
         return null;
     }
 
+    // Handle getting a list of all possible fields from the formats object
+    getFormatFieldList(formats){
+        let list = [];
+        for(let format in formats){
+            let fields = String(formats[format]).split('|');
+            for(let field in fields){
+                let name = fields[field];
+                if(!list.includes(name))
+                    list.push(name);
+            }
+        }
+        return list;
+    }
+
     // Handle setting ACTION PARAMS based on format VERSION (updates ACTION transaction data object)
-    setActionParams(data, params, format){
+    setActionParams(data, params, fieldFormats, formatVersion){
+        // Set the params based on the given formatVersion
+        let format = fieldFormats[formatVersion];
         let fields = String(format).split('|');
         for(let idx in fields){
             let field = fields[idx];
@@ -211,6 +227,13 @@ class Utility {
             if(typeof params[idx] !== 'undefined')
                 value = String(params[idx]).trim();
             data[field] = value;
+        }
+        // Loop through all possible field names and set to null if we don't have a value
+        // Note: This keeps the database clean of "undefined" values
+        let formatFields = this.getFormatFieldList(fieldFormats);
+        for(let field of formatFields){
+            if(this.isNull(data[field]))
+                data[field] = null;
         }
         return data;
     }
