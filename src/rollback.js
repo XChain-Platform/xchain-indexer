@@ -48,6 +48,7 @@ class Rollback {
             'addresses',
             'airdrops',
             'batches',
+            'broadcasts',
             'callbacks',
             'credits',
             'debits',
