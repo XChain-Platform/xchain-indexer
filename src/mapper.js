@@ -50,14 +50,14 @@ class Mapper {
         for(let address in list){
 
             // Create action_index->address mappings
-            if(!mapped.address.includes(address)){
+            if(!this.util.isNull(address) && !mapped.address.includes(address)){
                 mapped.address.push(address);
                 await this.indexerDb.createActionMapping(action_index, 'address', address);
             }
 
             // Create action_index->tick mappings
             for(let tick of list[address]){
-                if(!mapped.tick.includes(tick)){
+                if(!this.util.isNull(tick) && !mapped.tick.includes(tick)){
                     mapped.tick.push(tick);
                     await this.indexerDb.createActionMapping(action_index, 'tick', tick);
                 }
