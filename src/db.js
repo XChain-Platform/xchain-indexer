@@ -399,9 +399,14 @@ class Database {
     async getBlockHashes(block_index){
         let db      = await this.getConnection();
         let query   = null;
-        let credits = [];
-        let debits  = [];
+        // Placeholders for actions data
         let actions = [];
+        // Placeholer for ledger data (credits + debits + escrows)
+        let ledger  = {
+            credits:  [],
+            debits:   [],
+            escrows:  []
+        };
         let info    = [];
         let hashes  = [];
         // Get data from credits table
@@ -419,7 +424,7 @@ class Database {
                 ORDER BY 
                     c.action_index ASC`;
         try {
-            credits = await db.query(query, [block_index]);
+            ledger.credits = await db.query(query, [block_index]);
         } catch (error){
             this.util.logError('Error getting data from the credits table:', error);
         }
@@ -438,9 +443,28 @@ class Database {
                 ORDER BY 
                     d.action_index ASC`;
         try {
-            debits = await db.query(query, [block_index]);
+            ledger.debits = await db.query(query, [block_index]);
         } catch (error){
             this.util.logError('Error getting data from the debits table:', error);
+        }
+        // Get data from escrows table
+        query = `SELECT
+                    e.action_index,
+                    e.address_id,
+                    e.tick_id,
+                    e.amount
+                FROM
+                    escrows e
+                    INNER JOIN actions      a ON (a.action_index=e.action_index)
+                    INNER JOIN transactions t ON (t.tx_index=a.tx_index)
+                WHERE
+                    t.block_index=?
+                ORDER BY 
+                    e.action_index ASC`;
+        try {
+            ledger.escrows = await db.query(query, [block_index]);
+        } catch (error){
+            this.util.logError('Error getting data from the escrows table:', error);
         }
         // Get data from actions table
         query = `SELECT
@@ -463,43 +487,35 @@ class Database {
         let prev_block_index = block_index -1;
         // Get hashes from the previous block to include in this blocks hash
         query = `SELECT
-                t1.hash as credits,
-                t2.hash as debits,
-                t3.hash as actions
+                t1.hash as ledger,
+                t2.hash as actions
             FROM
-                blocks b,
-                index_transactions t1,
-                index_transactions t2,
-                index_transactions t3
+                blocks b
+                LEFT JOIN index_transactions t1 ON (t1.id=b.ledger_hash_id)
+                LEFT JOIN index_transactions t2 ON (t2.id=b.actions_hash_id)
             WHERE
-                t1.id=b.credits_hash_id AND
-                t2.id=b.debits_hash_id AND
-                t3.id=b.actions_hash_id AND
                 b.block_index=?`;
         try {
             let rows = await db.query(query, [prev_block_index]);
             if(rows.length >0){
-                hashes['credits'] = rows[0].credits;
-                hashes['debits']  = rows[0].debits;
+                hashes['ledger']  = rows[0].ledger;
                 hashes['actions'] = rows[0].actions;
             }
         } catch (error) {
             this.util.logError('Error getting data on the previous block hashes:', error);
         }
-        // Define list of tables with data to hash
-        let tables = ['credits','debits','actions'];
+        // Define list of data to hash
+        let tables = ['ledger','actions'];
         // Loop through the tables, add previous hash to data, then create new block hash
         tables.forEach(table => {
             var data = null;
-            if(table=='credits') data = credits;
-            if(table=='debits')  data = debits;
+            if(table=='ledger')  data = ledger;
             if(table=='actions') data = actions;
             // Include the block_index and previous block hash in the hash calculation for this block hash
             data['block_index']   = block_index;
             data['previous_hash'] = hashes[table];
             info[table] = [];
             info[table]['hash'] = this.util.getDataHash(data);
-            // info[table]['data'] = data;
         });
         await this.releaseConnection();
         return info;
@@ -609,34 +625,31 @@ class Database {
         let block_id = await this.getBlockId(block_index);
         let hashes   = await this.getBlockHashes(block_index);
         // Create transaction hashes in the `index_transactions` table and get the hash id
-        let credits_hash_id = await this.createTransaction(hashes.credits.hash);
-        let debits_hash_id  = await this.createTransaction(hashes.debits.hash);
+        let ledger_hash_id  = await this.createTransaction(hashes.ledger.hash);
         let actions_hash_id = await this.createTransaction(hashes.actions.hash);
         // Create data
         let db    = await this.getConnection();
-        let query = "INSERT INTO blocks (block_time, credits_hash_id, debits_hash_id, actions_hash_id, block_index) values (?, ?, ?, ?, ?)";
+        let query = "INSERT INTO blocks (block_time, ledger_hash_id, actions_hash_id, block_index) values (?, ?, ?, ?)";
         if(block_id!=null){
             query = `UPDATE
                         blocks
                     SET
                         block_time=?,
-                        credits_hash_id=?,
-                        debits_hash_id=?,
+                        ledger_hash_id=?,
                         actions_hash_id=?
                     WHERE 
                         block_index=?`;
         }
         try {
-            let result = await db.query(query, [block_time, credits_hash_id, debits_hash_id, actions_hash_id, block_index]);
+            let result = await db.query(query, [block_time, ledger_hash_id, actions_hash_id, block_index]);
         } catch (error) {
             this.util.logError('Error trying to create record in blocks table:', error);
         }
         await this.releaseConnection();
         // Display status message
-        let credits = String(hashes.credits.hash).substring(0,5);
-        let debits  = String(hashes.debits.hash).substring(0,5);
+        let ledger  = String(hashes.ledger.hash).substring(0,5);
         let actions = String(hashes.actions.hash).substring(0,5);
-        return [credits, debits, actions];
+        return [ledger, actions];
     }
 
     // Lookup a record in the `index_actions` table and return record id
