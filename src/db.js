@@ -4033,9 +4033,7 @@ class Database {
                         c1.coin=? AND
                         o.action_index=? 
                     LIMIT 1`;
-        console.log('query=',query);
         let args  = [coin, action_index];
-        console.log('args=',args);
         try {
             let rows = await db.query(query, args);
             if(rows.length > 0){
