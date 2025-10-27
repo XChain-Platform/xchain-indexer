@@ -266,10 +266,46 @@ class Database {
         return result;
     }
 
-
     /* 
      * General database functions
      */
+
+    // Handle Truncating certain data values to fit in database columns 
+    truncateDataValues(data){
+        let action = (!this.util.isNull(data['ACTION'])) ? data['ACTION'] : 'UNKNOWN';
+        // Truncate all memos to 250 characters
+        if(!this.util.isNull(data['MEMO']))
+            data['MEMO'] = String(data['MEMO']).substring(0,250);
+        // Standardize LIST values to numeric value or NULL
+        if(['ISSUE','ORDERS','SWAP'].includes(action)){
+            for(let list of this.config['LIST_FIELDS'] ){
+                if(!this.util.isNull(data[list]) && !this.util.isNumeric(data[list]))
+                    data[list] = null;
+            }
+        }
+        // Handle ACTION specific customization
+        if(action=='BROADCAST'){
+            if(!this.util.isNull(data['MESSSAGE']))  data['MESSAGE'] = String(data['MESSAGE']).substring(0,250);
+            if(!this.util.isNull(data['VALUE']))     data['VALUE']   = String(data['VALUE']).substring(0,25);
+            if(!this.util.isNull(data['FEE']))       data['FEE']     = String(data['FEE']).substring(0,11);
+        } else if(action=='FILE'){
+            if(!this.util.isNull(data['NAME']))      data['NAME']    = String(data['NAME']).substring(0,250);
+            if(!this.util.isNull(data['TITLE']))     data['TITLE']   = String(data['TITLE']).substring(0,250);
+        } else if(action=='ISSUE'){
+            // Truncate DESCRIPTION to MAX_TOKEN_DESCRIPTION
+            if(!this.util.isNull(data['DESCRIPTION']))  
+                data['DESCRIPTION'] = String(data['DESCRIPTION']).substring(0,this.config['MAX_TOKEN_DESCRIPTION']);
+        } else if(action=='MESSAGE'){
+            // Truncate ENCRYPTION_METHOD to be just 1 character
+            if(!this.util.isNull(data['ENCRYPTION_METHOD']))  
+                data['ENCRYPTION_METHOD'] = String(data['ENCRYPTION_METHOD']).substring(0,1);
+        } else if(action=='SLEEP'){
+            // Truncate RESUME_BLOCK to be up to 25 characters
+            if(!this.util.isNull(data['RESUME_BLOCK'])) 
+                data['RESUME_BLOCK'] = String(data['RESUME_BLOCK']).substring(0,25);
+        }
+        return data;
+    }
 
     // Handle getting block index for a given component and request type
     async getBlockIndex(component, type){
@@ -1317,6 +1353,8 @@ class Database {
 
     // Create record in `lists` table
     async createList(data){
+        // Normalize data
+        data                  = this.truncateDataValues(data);
         let action_index      = data['ACTION_INDEX'];
         let status_id         = await this.createStatus(data['STATUS']);
         let list_type         = data['TYPE'];
@@ -1396,6 +1434,8 @@ class Database {
 
     // Create/Update record in `issues` table
     async createIssue(data){
+        // Normalize data
+        data = this.truncateDataValues(data);
         // Standardize LOCK values to explicitly unlocked (0) or locked (1)
         for(let lock of this.config['LOCK_FIELDS']){
             if([0,1].indexOf(data[lock]) == -1)
@@ -1436,9 +1476,6 @@ class Database {
         let transfer_id        = await this.createAddress(data['TRANSFER']);
         let transfer_supply_id = await this.createAddress(data['TRANSFER_SUPPLY']);
         let status_id          = await this.createStatus(data['STATUS']);
-        // Truncate description to MAX_TOKEN_DESCRIPTION characters
-        if(!this.util.isNull(description) && description.length > this.config['MAX_TOKEN_DESCRIPTION'])
-            description = description.substring(0,this.config['MAX_TOKEN_DESCRIPTION']); 
         // Check if record already exists for this ISSUE action
         let db    = await this.getConnection();
         let query = `SELECT action_index FROM issues WHERE action_index=?`;
@@ -2154,6 +2191,7 @@ class Database {
     // Create/Update record in `mints` table
     async createMint(data){
         // Normalize data
+        data               = this.truncateDataValues(data);
         let tick_id        = await this.createTicker(data['TICK']);
         let destination_id = await this.createAddress(data['DESTINATION']);
         let memo_id        = await this.createMemo(data['MEMO']);
@@ -2381,6 +2419,8 @@ class Database {
 
     // Create record in `addresses` table
     async createAddressOption(data){
+        // Normalize data
+        data               = this.truncateDataValues(data);
         let status_id      = await this.createStatus(data['STATUS']);
         let memo_id        = await this.createMemo(data['MEMO']);
         let action_index   = data['ACTION_INDEX'];
@@ -2421,6 +2461,8 @@ class Database {
 
     // Create record in `batches` table
     async createBatch(data){
+        // Normalize data
+        data             = this.truncateDataValues(data);
         let status_id    = await this.createStatus(data['STATUS']);
         let action_index = data['ACTION_INDEX'];
         // Check if record already exists for this address
@@ -2457,6 +2499,7 @@ class Database {
     // Create/Update record in `sends` table
     async createSend(data){
         // Normalize data
+        data               = this.truncateDataValues(data);
         let tick_id        = await this.createTicker(data['TICK']);
         let destination_id = await this.createAddress(data['DESTINATION']);
         let memo_id        = await this.createMemo(data['MEMO']);
@@ -2560,6 +2603,7 @@ class Database {
     // Create/Update record in `airdrops` table
     async createAirdrop(data){
         // Normalize data
+        data                  = this.truncateDataValues(data);
         let tick_id           = await this.createTicker(data['TICK']);
         let memo_id           = await this.createMemo(data['MEMO']);
         let status_id         = await this.createStatus(data['STATUS']);
@@ -2668,6 +2712,7 @@ class Database {
     // Create/Update record in `destroys` table
     async createDestroy(data){
         // Normalize data
+        data               = this.truncateDataValues(data);
         let tick_id        = await this.createTicker(data['TICK']);
         let memo_id        = await this.createMemo(data['MEMO']);
         let status_id      = await this.createStatus(data['STATUS']);
@@ -2748,6 +2793,7 @@ class Database {
     // Create/Update record in `sweeps` table
     async createSweep(data){
         // Normalize data
+        data               = this.truncateDataValues(data);
         let tick_id        = await this.createTicker(data['TICK']);
         let destination_id = await this.createAddress(data['DESTINATION']);
         let memo_id        = await this.createMemo(data['MEMO']);
@@ -2801,6 +2847,7 @@ class Database {
     // Create/Update record in `dividends` table
     async createDividend(data){
         // Normalize data
+        data                 = this.truncateDataValues(data);
         let tick_id          = await this.createTicker(data['TICK']);
         let dividend_tick_id = await this.createTicker(data['DIVIDEND_TICK']);
         let memo_id          = await this.createMemo(data['MEMO']);
@@ -2854,6 +2901,7 @@ class Database {
     // Create/Update record in `callbacks` table
     async createCallback(data){
         // Normalize data
+        data                 = this.truncateDataValues(data);
         let tick_id          = await this.createTicker(data['TICK']);
         let callback_tick_id = await this.createTicker(data['CALLBACK_TICK']);
         let memo_id          = await this.createMemo(data['MEMO']);
@@ -2947,12 +2995,13 @@ class Database {
     // Create/Update record in `files` table
     async createFile(data){
         // Normalize data
+        data             = this.truncateDataValues(data);
         let type_id      = await this.createMimeType(data['TYPE']);
         let memo_id      = await this.createMemo(data['MEMO']);
         let status_id    = await this.createStatus(data['STATUS']);
         let action_index = data['ACTION_INDEX'];
-        let name         = String(data['NAME']).substring(0,250);
-        let title        = String(data['TITLE']).substring(0,250);
+        let name         = data['NAME'];
+        let title        = data['TITLE'];
         // Check if record already exists for this file
         let db     = await this.getConnection();
         let query  = `SELECT
@@ -3096,6 +3145,7 @@ class Database {
     // Create/Update record in `links` table
     async createLink(data){
         // Normalize data
+        data                   = this.truncateDataValues(data);
         let coin1_id           = await this.createCoin(data['COIN1']);
         let coin2_id           = await this.createCoin(data['COIN2']);
         let memo_id            = await this.createMemo(data['MEMO']);
@@ -3150,13 +3200,14 @@ class Database {
     // Create/Update record in `broadcasts` table
     async createBroadcast(data){
         // Normalize data
+        data                       = this.truncateDataValues(data);
         let memo_id                = await this.createMemo(data['MEMO']);
         let status_id              = await this.createStatus(data['STATUS']);
         let action_index           = data['ACTION_INDEX'];
         let broadcast_action_index = data['BROADCAST_ACTION_INDEX'];
-        let message                = String(data['MESSAGE']).substring(0,250);
-        let value                  = String(data['VALUE']).substring(0,25);
-        let fee                    = String(data['FEE']).substring(0,11);
+        let message                = data['MESSAGE'];
+        let value                  = data['VALUE'];
+        let fee                    = data['FEE'];
         // Check if record already exists for this broadcast
         let db     = await this.getConnection();
         let query  = `SELECT
@@ -3204,10 +3255,11 @@ class Database {
     // Create/Update record in `messages` table
     async createMessage(data){
         // Normalize data
+        data                  = this.truncateDataValues(data);
         let destination_id    = await this.createAddress(data['DESTINATION']);
         let status_id         = await this.createStatus(data['STATUS']);
         let action_index      = data['ACTION_INDEX'];
-        let encryption_method = String(data['ENCRYPTION_METHOD']).substring(0,1);
+        let encryption_method = data['ENCRYPTION_METHOD'];
         let encryption_key    = data['ENCRYPTION_KEY'];
         let encrypted_message = data['ENCRYPTED_MESSAGE'];
         let plaintext_message = data['PLAINTEXT_MESSAGE'];
@@ -3258,11 +3310,12 @@ class Database {
     // Create/Update record in `sleeps` table
     async createSleep(data){
         // Normalize data
+        data             = this.truncateDataValues(data);
         let tick_id      = await this.createTicker(data['TICK']);
         let memo_id      = await this.createMemo(data['MEMO']);
         let status_id    = await this.createStatus(data['STATUS']);
         let action_index = data['ACTION_INDEX'];
-        let resume_block = String(data['RESUME_BLOCK']).substring(0,25);
+        let resume_block = data['RESUME_BLOCK'];
         let type         = (data['TYPE']=='TICK') ? 2 : 1;
         // Check if record already exists for this sleep
         let db     = await this.getConnection();
@@ -3309,12 +3362,8 @@ class Database {
 
     // Create/Update record in `swaps` table
     async createSwap(data){
-        // Standardize LIST values to numeric or NULL
-        for(let list of this.config['LIST_FIELDS'] ){
-            if(this.util.isNull(data[list]) || !this.util.isNumeric(data[list]))
-                delete data[list];
-        }
         // Normalize data
+        data               = this.truncateDataValues(data);
         let give_coin_id   = await this.createCoin(data['GIVE_COIN']);
         let give_tick_id   = await this.createTicker(data['GIVE_TICK']);
         let get_coin_id    = await this.createCoin(data['GET_COIN']);
@@ -3429,6 +3478,7 @@ class Database {
     // Create/Update record in `swap_cancels` table
     async createSwapCancel(data){
         // Normalize data
+        data                  = this.truncateDataValues(data);
         let memo_id           = await this.createMemo(data['MEMO']);
         let status_id         = await this.createStatus(data['STATUS']);
         let action_index      = data['ACTION_INDEX'];
@@ -3728,6 +3778,7 @@ class Database {
     // Create/Update record in `swap_matches` table
     async createSwapMatch(action_index, data, match, status){
         // Normalize data
+        data                  = this.truncateDataValues(data);
         let give_coin_id      = await this.createCoin(data['GIVE_COIN']);
         let get_coin_id       = await this.createCoin(data['GET_COIN']);
         let status_id         = await this.createStatus(data['STATUS']);
@@ -3778,6 +3829,8 @@ class Database {
 
     // Create/Update record in `orders` table
     async createOrder(data){
+        // Normalize data
+        data = this.truncateDataValues(data);
         // Standardize LIST values to numeric or NULL
         for(let list of this.config['LIST_FIELDS'] ){
             if(this.util.isNull(data[list]) || !this.util.isNumeric(data[list]))
@@ -4079,12 +4132,8 @@ class Database {
 
     // Create/Update record in `order_edits` table
     async createOrderEdit(data){
-        // Standardize LIST values to numeric or NULL
-        for(let list of this.config['LIST_FIELDS']){
-            if(this.util.isNull(data[list]) || !this.util.isNumeric(data[list]))
-                delete data[list];
-        }
         // Normalize data
+        data                   = this.truncateDataValues(data);
         let memo_id            = await this.createMemo(data['MEMO']);
         let status_id          = await this.createStatus(data['STATUS']);
         let action_index       = data['ACTION_INDEX'];
@@ -4139,6 +4188,7 @@ class Database {
     // Create/Update record in `order_matches` table
     async createOrderMatch(action_index, data, match, status){
         // Normalize data
+        data                  = this.truncateDataValues(data);
         let give_coin_id      = await this.createCoin(data['GIVE_COIN']);
         let get_coin_id       = await this.createCoin(data['GET_COIN']);
         let status_id         = await this.createStatus(data['STATUS']);
