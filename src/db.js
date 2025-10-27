@@ -523,9 +523,9 @@ class Database {
 
     // Create records in the 'index_transactions' table and return record id
     async createTransaction(hash){
-        // Ignore empty hashes and return hardcoded record id
-        if(hash==null||hash=='')
-            return 1;
+        // Ignore empty hash and return NULL
+        if(this.util.isNull(hash))
+            return null;
         // Truncate to 250 characters
         hash = String(hash).substring(0,250);
         var id = await this.getTransactionId(hash);
@@ -563,9 +563,9 @@ class Database {
 
     // Create records in the 'index_addresses' table and return record id
     async createAddress(address){
-        // Ignore empty address and return hardcoded record id
-        if(address==null||address=='')
-            return 1;
+        // Ignore empty address and return NULL
+        if(this.util.isNull(address))
+            return null;
         // Truncate to 120 characters
         address = String(address).substring(0,120);
         var id = await this.getAddressId(address);
@@ -862,9 +862,9 @@ class Database {
 
     // Create records in the 'index_tickers' table and return record id
     async createTicker(tick){
-        // Ignore empty ticker and return hardcoded record id
+        // Ignore empty tick and return NULL
         if(this.util.isNull(tick))
-            return 1;
+            return null;
         // Get the tick id using tick
         let id = await this.getTickerId(tick);
         // Handle creating record
@@ -1415,6 +1415,9 @@ class Database {
 
     // Create records in the 'index_statuses' table and return record id
     async createStatus(status){
+        // Ignore empty status and return NULL
+        if(this.util.isNull(status))
+            return null;
         var id = await this.getStatusId(status);
         // Handle creating record
         if(id==null){
@@ -2166,9 +2169,9 @@ class Database {
 
     // Create records in the 'index_memos' table and return record id
     async createMemo(memo){
-        // Ignore empty memos and return hardcoded record id
-        if(this.util.isNull(memo) || memo=='')
-            return 1;
+        // Ignore empty memo and return NULL
+        if(this.util.isNull(memo))
+            return null;
         // Truncate memos to 250 characters
         memo = String(memo).substring(0,250);
         var id = await this.getMemoId(memo);
@@ -2971,9 +2974,9 @@ class Database {
 
     // Create records in the 'index_mime_types' table and return record id
     async createMimeType(type){
-        // Ignore empty mime type and return hardcoded record id
-        if(type==null||type=='')
-            return 1;
+        // Ignore empty mime type and return NULL
+        if(this.util.isNull(type))
+            return null;
         var id = await this.getMimeTypeId(type);
         // Handle creating record
         if(id==null){
@@ -3064,10 +3067,10 @@ class Database {
 
     // Create records in the 'index_coins' table and return record id
     async createCoin(coin){
-        // Ignore empty coin and return hardcoded record id
-        if(coin==null||coin=='')
-            return 1;
-        var id = await this.getCoinId(coin);
+        // Ignore empty coin and return NULL
+        if(this.util.isNull(coin))
+            return null;
+       var id = await this.getCoinId(coin);
         // Handle creating record
         if(id==null){
             let db    = await this.getConnection();
