@@ -66,7 +66,7 @@ class Callback {
 
         // Parse PARAMS using given VERSION format and update transaction data object
         if(!error)
-            data = this.util.setActionParams(data, params, this.formats[format]);
+            data = this.util.setActionParams(data, params, this.formats, format);
 
         // Clone the raw data for storage in callbacks table
         let callback = structuredClone(data);

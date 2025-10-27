@@ -63,7 +63,7 @@ class Sweep {
 
         // Parse PARAMS using given VERSION format and update transaction data object
         if(!error)
-            data = this.util.setActionParams(data, params, this.formats[format]);
+            data = this.util.setActionParams(data, params, this.formats, format);
 
         // Get source address balances, preferences, and token ownerships
         let balances    = await this.indexerDb.getAddressBalances(data['SOURCE'], null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
