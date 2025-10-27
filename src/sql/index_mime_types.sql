@@ -5,7 +5,3 @@ CREATE TABLE index_mime_types (
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
 CREATE INDEX type on index_mime_types (type);
-
--- Create record for blank/empty transaction
-INSERT INTO index_mime_types (id,type) values (1,'');
-

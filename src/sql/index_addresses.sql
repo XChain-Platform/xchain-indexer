@@ -5,6 +5,3 @@ CREATE TABLE index_addresses (
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
 CREATE INDEX address on index_addresses (address(10));
-
--- Create record for blank/empty address
-INSERT INTO index_addresses (id,address) values (1,'');

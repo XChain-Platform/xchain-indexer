@@ -5,6 +5,3 @@ CREATE TABLE index_coins (
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
 CREATE INDEX coin on index_coins (coin);
-
--- Create record for blank/empty transaction
-INSERT INTO index_coins (id,coin) values (1,'');
