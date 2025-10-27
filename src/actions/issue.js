@@ -188,7 +188,7 @@ class Issue {
             error = 'invalid: TICK (reserved)';
 
         // Verify only GAS address can issue on GAS token
-        if(!error && String(data['TICK'].toUpperCase())==this.config['GAS'] && data['SOURCE']!=this.config['ADDRESS']['GAS'])        
+        if(!error && String(data['TICK']).toUpperCase()==this.config['GAS'] && data['SOURCE']!=this.config['ADDRESS']['GAS'])        
             error = 'invalid: GAS Address';
 
         // Get information on token
