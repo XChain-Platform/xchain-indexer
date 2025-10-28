@@ -39,7 +39,7 @@ class Swap_Match {
         let swap = structuredClone(data);
 
         // Get information on a swap given the COIN network and SWAP_ACTION_INDEX
-        let swapIndex = (data['SWAP_ACTION_INDEX']) ? data['SWAP_ACTION_INDEX'] : data['ACTION_INDEX'];
+        let swapIndex = (!this.util.isNull(data['SWAP_ACTION_INDEX'])) ? data['SWAP_ACTION_INDEX'] : data['ACTION_INDEX'];
         let swapInfo  = await this.indexerDb.getSwapInfo(this.config['COIN'], swapIndex)
 
         // Get a list of any matching open swaps
@@ -118,21 +118,21 @@ class Swap_Match {
 
                 // Credit tokens to GET_ADDRESS in swaps
                 credits.push([match['GET_TICK'], match['GET_AMOUNT'], match['GET_ADDRESS']]);
-                credits.push([data['GET_TICK'],  data['GET_AMOUNT'],  data['GET_ADDRESS']]);
+                credits.push([swap['GET_TICK'],  swap['GET_AMOUNT'],  swap['GET_ADDRESS']]);
 
                 // Debit tokens from escrows table 
-                escrows.push([match['GET_TICK'], -match['GET_AMOUNT'], data['SOURCE']]);
-                escrows.push([data['GET_TICK'],  -data['GET_AMOUNT'],  match['SOURCE']]);
+                escrows.push([match['GET_TICK'], -match['GET_AMOUNT'], match['SOURCE']]);
+                escrows.push([swap['GET_TICK'],  -swap['GET_AMOUNT'],  swap['SOURCE']]);
 
                 // Store the GET_ADDRESS and TICK in addresses list
                 this.util.addAddressTicker(match['GET_ADDRESS'], match['GET_TICK']);
-                this.util.addAddressTicker(data['GET_ADDRESS'],  data['GET_TICK']);
+                this.util.addAddressTicker(swap['GET_ADDRESS'],  swap['GET_TICK']);
 
                 // Process any transaction ledger changes (credits / debits / escrows)
                 await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits, escrows);
 
                 // Create record of match in swap_matches table
-                await this.indexerDb.createSwapMatch(data['ACTION_INDEX'], data, match, data['STATUS']);
+                await this.indexerDb.createSwapMatch(data, swap, match);
 
                 // Update record in swaps table to change status (open->complete)
                 await this.indexerDb.createSwapStatus(data['ACTION_INDEX'], swap['ACTION_INDEX'],  'complete');
