@@ -331,10 +331,10 @@ class Swap {
 
             // Format 0 - Create Swap
             if(format==0){
-                // Debit GIVE_AMOUNT of GIVE_TICK from SOURCE
+                // Debit token from SOURCE
                 debits.push([data['GIVE_TICK'], data['GIVE_AMOUNT'], data['SOURCE']]);
 
-                // Escrow GIVE_AMOUNT of GIVE_TICK from SOURCE
+                // Escrow token from SOURCE
                 escrows.push([data['GIVE_TICK'], data['GIVE_AMOUNT'], data['SOURCE']]);
 
                 // Create record in the swaps_statuses table
@@ -342,13 +342,11 @@ class Swap {
             }
 
             // Format 1 - Cancel Swap
-            // TODO: Update code to only credit back what remains escrowed, not entire amount (will cause sanity error in current format)
             if(format==1){
-                // Debit GIVE_AMOUNT of GIVE_TICK from escrow
-                // TODO: DO NOT remove escrow record... instead debit remaining amount from escrows instead (delete `removeEscrowRecord()` function entirely)
-                await this.indexerDb.removeEscrowRecord(swapInfo['ACTION_INDEX']);
+                // Debit token from escrows
+                escrows.push([swapInfo['GIVE_TICK'],  -swapInfo['GIVE_AMOUNT'],  swapInfo['SOURCE']]);
 
-                // Credit GIVE_AMOUNT of GIVE_TICK to SOURCE
+                // Credit token to SOURCE
                 credits.push([swapInfo['GIVE_TICK'], swapInfo['GIVE_AMOUNT'], swapInfo['SOURCE']]);
 
                 // Create record in the swaps_statuses table
