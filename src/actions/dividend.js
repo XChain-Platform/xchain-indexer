@@ -90,7 +90,7 @@ class Dividend {
         let dividendTokenInfo = await this.indexerDb.getTokenInfo(data['DIVIDEND_TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
 
         // Create the fees object 
-        let fees = this.util.createFeesObject(data, preferences);
+        let fees = await this.util.createFeesObject(this.indexerDb, data, preferences);
 
         // List of recipients which will receive this DIVIDEND
         // Format: recipients['address'] = amount;

@@ -85,7 +85,7 @@ class Callback {
         let blockList = [callbackTokenInfo['BLOCK_LIST']] ? await this.indexerDb.getList(callbackTokenInfo['BLOCK_LIST']) : false;
 
         // Create the fees object 
-        let fees = this.util.createFeesObject(data, preferences);
+        let fees = await this.util.createFeesObject(this.indexerDb, data, preferences);
 
         // List of recipients which will receive CALLBACK_TICK
         // Format: recipients['address'] = amount;

@@ -115,7 +115,7 @@ class Swap {
         let preferences = await this.indexerDb.getAddressPreferences(data['SOURCE'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
 
         // Create the fees object 
-        let fees = this.util.createFeesObject(data, preferences);
+        let fees = await this.util.createFeesObject(this.indexerDb, data, preferences);
 
         // Default GET_ADDRESS to SOURCE address if COIN networks are the same and GET_ADDRESS is not given
         if(this.config['COIN']==data['GET_COIN'] && this.util.isNull(data['GET_ADDRESS']))
