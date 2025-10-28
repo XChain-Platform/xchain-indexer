@@ -413,14 +413,15 @@ class Utility {
     }
 
     // Create the basic fees object used to calculate platform transaction fees
-    createFeesObject(data, preferences){
+    async createFeesObject(db, data, preferences){
+        // TODO: Change TICK from GAS to XCHAIN
+        let tick    = 'GAS';
+        let tick_id = await db.getTickerId(tick);
         let fees = {
-            ACTION_INDEX : data['ACTION_INDEX'], 
-            SOURCE       : data['SOURCE'],            
-            // TODO: Change TICK and TICK_ID from GAS to XCHAIN (also do so in index_tickers.sql file)
-            // TICK      : 'XCHAIN',
-            TICK         : 'GAS',
-            TICK_ID      : 2,
+            ACTION_INDEX : data['ACTION_INDEX'],
+            SOURCE       : data['SOURCE'],
+            TICK         : tick,
+            TICK_ID      : tick_id,
             AMOUNT       : 0,
             METHOD       : (preferences['FEE_PREFERENCE']==1) ? 1 : 2 // 1=Destroy, 2=Donate
         };

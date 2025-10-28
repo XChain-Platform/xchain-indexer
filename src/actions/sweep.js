@@ -71,7 +71,7 @@ class Sweep {
         let ownerships  = await this.indexerDb.getAddressOwnerships(data['SOURCE']);
 
         // Create the fees object 
-        let fees = this.util.createFeesObject(data, preferences);
+        let fees = await this.util.createFeesObject(this.indexerDb, data, preferences);
 
         /*****************************************************************
          * FORMAT Validations
