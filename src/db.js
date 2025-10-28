@@ -3792,14 +3792,15 @@ class Database {
     }
 
     // Create/Update record in `swap_matches` table
-    async createSwapMatch(action_index, data, match, status){
+    async createSwapMatch(data, swap, match){
         // Normalize data
         data                  = this.truncateDataValues(data);
-        let give_coin_id      = await this.createCoin(data['GIVE_COIN']);
-        let get_coin_id       = await this.createCoin(data['GET_COIN']);
+        let give_coin_id      = await this.createCoin(match['GIVE_COIN']);
+        let get_coin_id       = await this.createCoin(match['GET_COIN']);
         let status_id         = await this.createStatus(data['STATUS']);
-        let give_action_index = data['ACTION_INDEX'];
-        let get_action_index  = match['ACTION_INDEX'];
+        let action_index      = data['ACTION_INDEX'];
+        let give_action_index = match['ACTION_INDEX']
+        let get_action_index  = swap['ACTION_INDEX'];
         // Check if record already exists for this swap_edits
         let db     = await this.getConnection();
         let query  = `SELECT
