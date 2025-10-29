@@ -121,6 +121,14 @@ class Swap {
         if(this.config['COIN']==data['GET_COIN'] && this.util.isNull(data['GET_ADDRESS']))
             data['GET_ADDRESS'] = data['SOURCE'];
 
+        // Set EXPIRATION value if none is given
+        if(this.util.isNull(data['EXPIRATION'])){
+            if(format==0)
+                data['EXPIRATION'] = this.util.getDefaultExpiration();
+            if(format==2)
+                data['EXPIRATION'] = swapInfo['EXPIRATION'];
+        }
+
         // Clone the raw data for storage in swap table
         let swap = structuredClone(data);
 
@@ -173,7 +181,7 @@ class Swap {
             error = "invalid: GET_ADDRESS (format)";
 
         // Validate that EXPIRATION is an integer
-        if(!error && (format==0 || format==2) && (this.util.isNull(data['EXPIRATION']) || !this.util.isNumeric(data['EXPIRATION']) || !this.util.isInteger(data['EXPIRATION'])))
+        if(!error && !this.util.isNull(data['EXPIRATION']) && (!this.util.isNumeric(data['EXPIRATION']) || !this.util.isInteger(data['EXPIRATION'])))
             error = "invalid: EXPIRATION (format)";
 
         /*****************************************************************
@@ -217,7 +225,7 @@ class Swap {
             error = 'invalid: SWAP_ACTION_INDEX (swap not open)';
 
         // Validate that EXPIRATION is in the future (unixtime is in seconds, not milliseconds)
-        if(!error && !this.util.isNull(data['EXPIRATION']) && data['EXPIRATION'] <= Math.floor(Date.now() / 1000))
+        if(!error && !this.util.isNull(data['EXPIRATION']) && data['EXPIRATION'] <= this.util.bcdiv(Date.now(),1000))
             error = "invalid: EXPIRATION (past)";
 
         // Validate LIST fields (ALLOW_LIST / BLOCK_LIST)

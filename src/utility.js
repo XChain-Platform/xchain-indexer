@@ -412,6 +412,15 @@ class Utility {
         return data;
     }
 
+    // Handle getting the default EXPIRATION 
+    getDefaultExpiration(){
+        // Get current time in seconds
+        let now = this.bcdiv(Date.now(), 1000, 0);
+        // Get number of seconds in EXPIRATION_FEE_DEFAULT_DAYS
+        let sec = this.bcmul(this.config['EXPIRATION_FEE_DEFAULT_DAYS'], 86400, 0);
+        return this.bcadd(now, sec, 0);
+    }
+
     // Create the basic fees object used to calculate platform transaction fees
     async createFeesObject(db, data, preferences){
         // TODO: Change TICK from GAS to XCHAIN
