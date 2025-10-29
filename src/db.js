@@ -4145,6 +4145,41 @@ class Database {
         return edit;
     }
 
+    // Handle getting total amount of GIVE_TICK escrowed for a given ORDER
+    async getOrderAmountEscrowed(action_index){
+        // Placeholders for amount escrowed and amount matched
+        let escrowed = 0;
+        let matched  = 0;
+        let tick_id  = null;
+        // Get initial amount escrowed from the orders table
+        let db     = await this.getConnection();
+        let query  = `SELECT 
+                        o.give_tick_id,
+                        o.give_amount
+                    FROM 
+                        orders o
+                        INNER JOIN index_statuses s ON (s.id=o.status_id)
+                    WHERE 
+                        o.action_index=? AND
+                        s.status=?`;
+        let args  = [action_index, 'valid'];
+        try {
+            let rows = await db.query(query, args);
+            if(rows && rows.length>0){
+                escrowed = rows[0].give_amount;
+                tick_id  = rows[0].tick_id;
+            }
+        } catch (error) {
+            this.util.logError('Error looking up escrowed order amount :', error);
+        }
+        // Lookup amount removed from escrow in order matches
+
+        // return total (inital - matches = remaining)
+        let total = this.util.bcsub(escrowed, matched);
+        return total;
+    }
+
+
     // Create/Update record in `order_edits` table
     async createOrderEdit(data){
         // Normalize data
@@ -4200,16 +4235,67 @@ class Database {
         await this.releaseConnection();
     }
 
-    // Create/Update record in `order_matches` table
-    async createOrderMatch(action_index, data, match, status){
+    // Create/Update record in `order_cancels` table
+    async createOrderCancel(data){
         // Normalize data
         data                  = this.truncateDataValues(data);
-        let give_coin_id      = await this.createCoin(data['GIVE_COIN']);
-        let get_coin_id       = await this.createCoin(data['GET_COIN']);
+        let memo_id           = await this.createMemo(data['MEMO']);
         let status_id         = await this.createStatus(data['STATUS']);
-        let give_action_index = data['ACTION_INDEX'];
-        let get_action_index  = match['ACTION_INDEX'];
-        // Check if record already exists for this order_matches
+        let action_index      = data['ACTION_INDEX'];
+        let order_action_index = data['ORDER_ACTION_INDEX'];
+        // Check if record already exists for this swap_cancel
+        let db     = await this.getConnection();
+        let query  = `SELECT
+                            action_index
+                        FROM
+                            order_cancels
+                        WHERE
+                            action_index=?`;
+        let args = [action_index];
+        let exists = false;
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0)
+                exists = true;
+        } catch (error){
+            this.util.logError('Error looking up record in order_cancels table:', error);
+        }
+        if(exists){
+            // UPDATE record
+            query = `UPDATE
+                        order_cancels
+                    SET
+                        memo_id=?,
+                        status_id=?,
+                        order_action_index=?
+                    WHERE 
+                        action_index=?`;
+        } else {
+            // INSERT record
+            query = `INSERT INTO order_cancels (memo_id, status_id, order_action_index, action_index) values (?, ?, ?, ?)`;
+        }
+        args = [memo_id, status_id, order_action_index, action_index];
+        // Create or Update the record in the swap_cancels table
+        try {
+            let result = await db.query(query, args);
+        } catch (error){
+            this.util.logError('Error trying to create record in order_cancels table:', error);
+        }
+        await this.releaseConnection();
+    }
+
+
+    // Create/Update record in `swap_matches` table
+    async createOrderMatch(data, order, match){
+        // Normalize data
+        data                  = this.truncateDataValues(data);
+        let give_coin_id      = await this.createCoin(match['GIVE_COIN']);
+        let get_coin_id       = await this.createCoin(match['GET_COIN']);
+        let status_id         = await this.createStatus(data['STATUS']);
+        let action_index      = data['ACTION_INDEX'];
+        let give_action_index = match['ACTION_INDEX']
+        let get_action_index  = order['ACTION_INDEX'];
+        // Check if record already exists for this swap_edits
         let db     = await this.getConnection();
         let query  = `SELECT
                             action_index
@@ -4243,7 +4329,7 @@ class Database {
             query = `INSERT INTO order_matches (give_coin_id, give_action_index, get_coin_id, get_action_index, status_id, action_index) values (?, ?, ?, ?, ?, ?)`;
         }
         args = [give_coin_id, give_action_index, get_coin_id, get_action_index, status_id, action_index];
-        // Create or Update the record in the order_matches table
+        // Create or Update the record in the swap_matches table
         try {
             let result = await db.query(query, args);
         } catch (error){
