@@ -3660,9 +3660,9 @@ class Database {
             let rows = await db.query(query, args);
             if(rows.length > 0){
                 for(let row of rows){
-                    if(!this.util.isNull(row.expiration) && this.util.isNumeric(row.expiration)) edit.expiration = row.expiration
-                    if(!this.util.isNull(row.allow_list) && this.util.isNumeric(row.allow_list)) edit.allow_list = row.allow_list
-                    if(!this.util.isNull(row.block_list) && this.util.isNumeric(row.block_list)) edit.block_list = row.block_list
+                    if(!this.util.isNull(row.expiration) && this.util.isNumeric(row.expiration)) edit.expiration = Number(row.expiration);
+                    if(!this.util.isNull(row.allow_list) && this.util.isNumeric(row.allow_list)) edit.allow_list = Number(row.allow_list);
+                    if(!this.util.isNull(row.block_list) && this.util.isNumeric(row.block_list)) edit.block_list = Number(row.block_list);
                 }
             }
         } catch (error) {
