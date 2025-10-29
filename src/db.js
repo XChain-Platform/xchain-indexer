@@ -3565,7 +3565,7 @@ class Database {
                         swaps s
                         INNER JOIN actions         a1 ON (a1.action_index=s.action_index)
                         INNER JOIN transactions    t1 ON (t1.tx_index=a1.tx_index)
-                        INNER JOIN blocks          b1 ON (b1.block_index=t1.block_index)
+                        LEFT  JOIN blocks          b1 ON (b1.block_index=t1.block_index)
                         INNER JOIN index_addresses a2 ON (a2.id=t1.source_id)
                         INNER JOIN index_addresses a3 ON (a3.id=s.get_address_id)
                         INNER JOIN index_tickers   t2 ON (t2.id=s.give_tick_id)
@@ -4038,7 +4038,7 @@ class Database {
                         orders o
                         INNER JOIN actions         a1 ON (a1.action_index=o.action_index)
                         INNER JOIN transactions    t1 ON (t1.tx_index=a1.tx_index)
-                        INNER JOIN blocks          b1 ON (b1.block_index=t1.block_index)
+                        LEFT  JOIN blocks          b1 ON (b1.block_index=t1.block_index)
                         INNER JOIN index_addresses a2 ON (a2.id=t1.source_id)
                         INNER JOIN index_addresses a3 ON (a3.id=o.get_address_id)
                         INNER JOIN index_tickers   t2 ON (t2.id=o.give_tick_id)
