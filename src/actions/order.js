@@ -63,6 +63,8 @@ class Order {
         // Define list of NUMBER fields (used to convert values from string to number)
         this.fieldList['NUMBER'] = ['GIVE_AMOUNT', 'GET_AMOUNT', 'EXPIRATION', 'ALLOW_LIST', 'BLOCK_LIST', 'ORDER_ACTION_INDEX'];
 
+        // Define array of list types (1=Tick, 2=Address)
+        this.listTypes = [1,2];
     }
 
     // Handle parsing the ORDER transaction
@@ -282,7 +284,7 @@ class Order {
         if(format==1)
             console.log("\t ORDER (cancel): " + this.config['COIN'] + ':' + data['ORDER_ACTION_INDEX'] + ' : ' + data['STATUS']);
         if(format==2)
-            console.log("\t ORDER (edit): " + this.config['COIN'] + ':' + data['ORDER_ACTION_INDEX'] + ' : ' + data['EXPIRATION'] + ' : ' + data['STATUS']);
+            console.log("\t ORDER (edit): " + this.config['COIN'] + ':' + data['ORDER_ACTION_INDEX'] + ' : ' + data['STATUS']);
  
         // Create record in orders table
         if(format==0)
