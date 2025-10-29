@@ -446,6 +446,31 @@ class Utility {
         return fee;
     }
 
+    // Calculate Transaction fee based on number of database hits
+    getExpirationFee(data, info){
+        let fee    = 0,
+            format = data['FORMAT'];
+        // Create Order / Swap / Dispenser
+        if(format==0){
+            let expire_seconds = this.bcsub(data['EXPIRATION'], data['BLOCK_TIME'], 0);
+            let expire_days    = this.bcdiv(expire_seconds, 86400, 0);
+            fee                = (expire_days > this.config['EXPIRATION_FEE_FREE_DAYS']) ? (this.bcmul(expire_days, this.config['EXPIRATION_FEE_PER_DAY'],8)) : 0;
+        }
+        // Edit Order / Swap /Dispenser
+        if(format==2 && data['EXPIRATION'] > info['EXPIRATION']){
+            let orig_expire_seconds = this.bcsub(info['EXPIRATION'], info['BLOCK_TIME'], 0);
+            let orig_expire_days    = this.bcdiv(orig_expire_seconds, 86400, 0);
+            let edit_expire_seconds = this.bcsub(data['EXPIRATION'], info['BLOCK_TIME'], 0);
+            let edit_expire_days    = this.bcdiv(edit_expire_seconds, 86400, 0);
+            // Only calculate FEE if increasing EXPIRATION date and greater than EXPIRATION_FEE_FREE_DAYS
+            if(data['EXPIRATION'] > info['EXPIRATION'] && edit_expire_days > this.config['EXPIRATION_FEE_FREE_DAYS']){
+                let expire_days = this.bcsub(edit_expire_days, orig_expire_days, 0);
+                fee             = this.bcmul(expire_days, this.config['EXPIRATION_FEE_PER_DAY'],8);
+            }
+        }
+        return fee;
+    }
+
     // Determine if a tx hash is valid or not
     // TODO: clean this up to verify it is an actual tx hash
     isValidTransactionHash(hash){
