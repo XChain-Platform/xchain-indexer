@@ -220,8 +220,8 @@ class Swap {
         if(!error && (format==1 || format==2) && swapInfo['SWAP_STATUS']!='open')
             error = 'invalid: SWAP_ACTION_INDEX (swap not open)';
 
-        // Validate that EXPIRATION is in the future (unixtime is in seconds, not milliseconds)
-        if(!error && !this.util.isNull(data['EXPIRATION']) && data['EXPIRATION'] <= this.util.bcdiv(Date.now(),1000))
+        // Validate that EXPIRATION is greater than current BLOCK_TIME
+        if(!error && !this.util.isNull(data['EXPIRATION']) && data['EXPIRATION'] <= data['BLOCK_TIME'])
             error = "invalid: EXPIRATION (past)";
 
         // Validate LIST fields (ALLOW_LIST / BLOCK_LIST)
