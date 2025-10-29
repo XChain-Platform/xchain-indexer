@@ -120,6 +120,10 @@ class Order {
         if(this.config['COIN']==data['GET_COIN'] && this.util.isNull(data['GET_ADDRESS']))
             data['GET_ADDRESS'] = data['SOURCE'];
 
+        // Set EXPIRATION value if none is given
+        if(format==0 && this.util.isNull(data['EXPIRATION']))
+            data['EXPIRATION'] = this.util.getDefaultExpiration();
+
         // Clone the raw data for storage in orders table
         let order = structuredClone(data);
 
@@ -177,7 +181,7 @@ class Order {
             error = "invalid: GET_ADDRESS (format)";
 
         // Validate that EXPIRATION is an integer
-        if(!error && (format==0 || format==2) && (this.util.isNull(data['EXPIRATION']) || !this.util.isNumeric(data['EXPIRATION']) || !this.util.isInteger(data['EXPIRATION'])))
+        if(!error && !this.util.isNull(data['EXPIRATION']) && (!this.util.isNumeric(data['EXPIRATION']) || !this.util.isInteger(data['EXPIRATION'])))
             error = "invalid: EXPIRATION (format)";
 
         /*****************************************************************
@@ -216,12 +220,12 @@ class Order {
         if(!error && (format==1 || format==2) && data['SOURCE']!=orderInfo['SOURCE'])
             error = 'invalid: SOURCE (not owner)';
 
-        // Validate ORDER_ACTION_INDEX is valid SWAP with a status of open
-        if(!error && (format==1 || format==2) && orderInfo['SWAP_STATUS']!='open')
+        // Validate ORDER_ACTION_INDEX is valid ORDER with a status of open
+        if(!error && (format==1 || format==2) && orderInfo['ORDER_STATUS']!='open')
             error = 'invalid: ORDER_ACTION_INDEX (order not open)';
 
-        // Validate that EXPIRATION is in the future (unixtime is in seconds, not milliseconds)
-        if(!error && !this.util.isNull(data['EXPIRATION']) && data['EXPIRATION'] <= Math.floor(Date.now() / 1000))
+        // Validate that EXPIRATION is greater than current BLOCK_TIME
+        if(!error && !this.util.isNull(data['EXPIRATION']) && data['EXPIRATION'] <= data['BLOCK_TIME'])
             error = "invalid: EXPIRATION (past)";
 
         // Validate LIST fields (ALLOW_LIST / BLOCK_LIST)
@@ -254,26 +258,8 @@ class Order {
         fees['AMOUNT'] = 0;
 
         // Calculate the fee to charge based on the EXPIRATION
-        if(!error && (format==0 || format==2) && !this.util.isNull(data['EXPIRATION'])){
-            // Create Order
-            if(format==0){
-                let expire_seconds = this.util.bcsub(data['EXPIRATION'],data['BLOCK_TIME'], 0);
-                let expire_days    = this.util.bcdiv(expire_seconds, 86400, 0);
-                fees['AMOUNT'] = (expire_days > this.config['EXPIRATION_FEE_FREE_DAYS']) ? (this.util.bcmul(expire_days, this.config['EXPIRATION_FEE_PER_DAY'],8)) : 0;
-            }
-            // Edit Order
-            if(format==2 && data['EXPIRATION'] > orderInfo['EXPIRATION']){
-                let orig_expire_seconds = this.util.bcsub(orderInfo['EXPIRATION'],orderInfo['BLOCK_TIME'], 0);
-                let orig_expire_days    = this.util.bcdiv(orig_expire_seconds, 86400, 0);
-                let edit_expire_seconds = this.util.bcsub(data['EXPIRATION'],orderInfo['BLOCK_TIME'], 0);
-                let edit_expire_days    = this.util.bcdiv(edit_expire_seconds, 86400, 0);
-                // Only calculate FEE if increasing EXPIRATION date and greater than EXPIRATION_FEE_FREE_DAYS
-                if(data['EXPIRATION'] > orderInfo['EXPIRATION'] && edit_expire_days > this.config['EXPIRATION_FEE_FREE_DAYS']){
-                    let expire_days = this.util.bcsub(edit_expire_days, orig_expire_days, 0);
-                    fees['AMOUNT']  = this.util.bcmul(expire_days, this.config['EXPIRATION_FEE_PER_DAY'],8);
-                }
-            }
-        }
+        if(!error && (format==0 || format==2) && !this.util.isNull(data['EXPIRATION']))
+            fees['AMOUNT'] = this.util.getExpirationFee(data, orderInfo);
 
         // Verify SOURCE has enough balances to cover FEE AMOUNT
         if(!error && !this.util.hasBalance(balances, fees['TICK_ID'], fees['AMOUNT']))
@@ -346,17 +332,20 @@ class Order {
             }
 
             // Format 1 - Cancel Order
-            // TODO: Update code to only credit back what remains escrowed, not entire amount (will cause sanity error in current format)
             if(format==1){
-                // Debit GIVE_AMOUNT of GIVE_TICK from escrow
-                // TODO: DO NOT remove escrow record... instead debit remaining amount from escrows instead (delete `removeEscrowRecord()` function entirely)
-                await this.indexerDb.removeEscrowRecord(orderInfo['ACTION_INDEX']);
 
-                // Credit GIVE_AMOUNT of GIVE_TICK to SOURCE
-                credits.push([orderInfo['GIVE_TICK'], orderInfo['GIVE_AMOUNT'], orderInfo['SOURCE']]);
+                // Get total amount of GIVE_TICK still in escrow
+                orderInfo['ESCROW_AMOUNT'] = await this.indexerDb.getOrderAmountEscrowed(orderInfo['ACTION_INDEX']);
+
+                // Debit token from escrows
+                escrows.push([orderInfo['GIVE_TICK'],  -orderInfo['ESCROW_AMOUNT'], orderInfo['SOURCE']]);
+
+                // Credit token to SOURCE
+                credits.push([orderInfo['GIVE_TICK'], orderInfo['ESCROW_AMOUNT'], orderInfo['SOURCE']]);
 
                 // Create record in the orders_statuses table
                 await this.indexerDb.createOrderStatus(data['ACTION_INDEX'], orderInfo['ACTION_INDEX'], 'cancelled');
+
             }
 
             // Handle any transaction FEE according the users's ADDRESS preferences

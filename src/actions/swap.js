@@ -254,26 +254,8 @@ class Swap {
         fees['AMOUNT'] = 0;
 
         // Calculate the fee to charge based on the EXPIRATION
-        if(!error && (format==0 || format==2) && !this.util.isNull(data['EXPIRATION'])){
-            // Create Swap
-            if(format==0){
-                let expire_seconds = this.util.bcsub(data['EXPIRATION'],data['BLOCK_TIME'], 0);
-                let expire_days    = this.util.bcdiv(expire_seconds, 86400, 0);
-                fees['AMOUNT'] = (expire_days > this.config['EXPIRATION_FEE_FREE_DAYS']) ? (this.util.bcmul(expire_days, this.config['EXPIRATION_FEE_PER_DAY'],8)) : 0;
-            }
-            // Edit Swap
-            if(format==2 && data['EXPIRATION'] > swapInfo['EXPIRATION']){
-                let orig_expire_seconds = this.util.bcsub(swapInfo['EXPIRATION'],swapInfo['BLOCK_TIME'], 0);
-                let orig_expire_days    = this.util.bcdiv(orig_expire_seconds, 86400, 0);
-                let edit_expire_seconds = this.util.bcsub(data['EXPIRATION'],swapInfo['BLOCK_TIME'], 0);
-                let edit_expire_days    = this.util.bcdiv(edit_expire_seconds, 86400, 0);
-                // Only calculate FEE if increasing EXPIRATION date and greater than EXPIRATION_FEE_FREE_DAYS
-                if(data['EXPIRATION'] > swapInfo['EXPIRATION'] && edit_expire_days > this.config['EXPIRATION_FEE_FREE_DAYS']){
-                    let expire_days = this.util.bcsub(edit_expire_days, orig_expire_days, 0);
-                    fees['AMOUNT']  = this.util.bcmul(expire_days, this.config['EXPIRATION_FEE_PER_DAY'],8);
-                }
-            }
-        }
+        if(!error && (format==0 || format==2) && !this.util.isNull(data['EXPIRATION']))
+            fees['AMOUNT'] = this.util.getExpirationFee(data, swapInfo);
 
         // Verify SOURCE has enough balances to cover FEE AMOUNT
         if(!error && !this.util.hasBalance(balances, fees['TICK_ID'], fees['AMOUNT']))
