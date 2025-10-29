@@ -122,12 +122,8 @@ class Swap {
             data['GET_ADDRESS'] = data['SOURCE'];
 
         // Set EXPIRATION value if none is given
-        if(this.util.isNull(data['EXPIRATION'])){
-            if(format==0)
-                data['EXPIRATION'] = this.util.getDefaultExpiration();
-            if(format==2)
-                data['EXPIRATION'] = swapInfo['EXPIRATION'];
-        }
+        if(format==0 && this.util.isNull(data['EXPIRATION']))
+            data['EXPIRATION'] = this.util.getDefaultExpiration();
 
         // Clone the raw data for storage in swap table
         let swap = structuredClone(data);
@@ -300,7 +296,7 @@ class Swap {
         if(format==1)
             console.log("\t SWAP (cancel): " + this.config['COIN'] + ':' + data['SWAP_ACTION_INDEX'] + ' : ' + data['STATUS']);
         if(format==2)
-            console.log("\t SWAP (edit): " + this.config['COIN'] + ':' + data['SWAP_ACTION_INDEX'] + ' : ' + data['EXPIRATION'] + ' : ' + data['STATUS']);
+            console.log("\t SWAP (edit): " + this.config['COIN'] + ':' + data['SWAP_ACTION_INDEX'] + ' : ' + data['STATUS']);
 
         // Create record in swaps table
         if(format==0)
