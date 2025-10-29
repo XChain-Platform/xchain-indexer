@@ -97,7 +97,7 @@ class Swap_Match {
                 data['STATUS'] = 'valid';
 
                 // Print status message
-                console.log("\t SWAP_MATCH : " + data['GIVE_AMOUNT'] + ' ' + this.config['COIN'] + ':' + data['GIVE_TICK'] + ' = '  +  data['GET_AMOUNT'] + ' ' + data['GET_COIN'] + ':' + data['GET_TICK'] + ' : ' + data['STATUS']);
+                console.log("\t SWAP_MATCH : " + swapInfo['GIVE_AMOUNT'] + ' ' + swapInfo['GIVE_COIN'] + ':' + swapInfo['GIVE_TICK'] + ' = '  +  swapInfo['GET_AMOUNT'] + ' ' + swapInfo['GET_COIN'] + ':' + swapInfo['GET_TICK'] + ' : ' + data['STATUS']);
 
                 // Array of credits, debits, and escrows
                 let credits = [],
