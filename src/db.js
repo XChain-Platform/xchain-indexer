@@ -3805,7 +3805,7 @@ class Database {
         let action_index      = data['ACTION_INDEX'];
         let give_action_index = match['ACTION_INDEX']
         let get_action_index  = swap['ACTION_INDEX'];
-        // Check if record already exists for this swap_edits
+        // Check if record already exists for this swap_matches
         let db     = await this.getConnection();
         let query  = `SELECT
                             action_index
@@ -4291,23 +4291,26 @@ class Database {
         await this.releaseConnection();
     }
 
-
-    // Create/Update record in `swap_matches` table
+    // Create/Update record in `order_matches` table
     async createOrderMatch(data, order, match){
         // Normalize data
         data                  = this.truncateDataValues(data);
         let give_coin_id      = await this.createCoin(match['GIVE_COIN']);
         let get_coin_id       = await this.createCoin(match['GET_COIN']);
+        let give_tick_id      = await this.createTicker(match['GIVE_TICK']);
+        let get_tick_id       = await this.createTicker(match['GET_TICK']);
         let status_id         = await this.createStatus(data['STATUS']);
+        let give_amount       = match['GIVE_AMOUNT']
+        let get_amount        = match['GET_AMOUNT']
         let action_index      = data['ACTION_INDEX'];
         let give_action_index = match['ACTION_INDEX']
         let get_action_index  = order['ACTION_INDEX'];
-        // Check if record already exists for this swap_edits
+        // Check if record already exists for this order_matches
         let db     = await this.getConnection();
         let query  = `SELECT
                             action_index
                         FROM
-                            order_matches
+                            swap_matches
                         WHERE
                             action_index=?`;
         let args = [action_index];
@@ -4325,18 +4328,22 @@ class Database {
                         order_matches
                     SET
                         give_coin_id=?,
+                        give_tick_id=?,
+                        give_amount=?,
                         give_action_index=?,
                         get_coin_id=?,
+                        get_tick_id=?,
+                        get_amount=?,
                         get_action_index=?,
                         status_id=?
                     WHERE 
                         action_index=?`;
         } else {
             // INSERT record
-            query = `INSERT INTO order_matches (give_coin_id, give_action_index, get_coin_id, get_action_index, status_id, action_index) values (?, ?, ?, ?, ?, ?)`;
+            query = `INSERT INTO order_matches (give_coin_id, give_tick_id, give_amount, give_action_index, get_coin_id, get_tick_id, get_amount, get_action_index, status_id, action_index) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
         }
-        args = [give_coin_id, give_action_index, get_coin_id, get_action_index, status_id, action_index];
-        // Create or Update the record in the swap_matches table
+        args = [give_coin_id, give_tick_id, give_amount, give_action_index, get_coin_id, get_tick_id, get_amount, get_action_index, status_id, action_index];
+        // Create or Update the record in the order_matches table
         try {
             let result = await db.query(query, args);
         } catch (error){
