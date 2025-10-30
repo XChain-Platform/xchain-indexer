@@ -3797,7 +3797,11 @@ class Database {
         data                  = this.truncateDataValues(data);
         let give_coin_id      = await this.createCoin(match['GIVE_COIN']);
         let get_coin_id       = await this.createCoin(match['GET_COIN']);
+        let give_tick_id      = await this.createTicker(match['GIVE_TICK']);
+        let get_tick_id       = await this.createTicker(match['GET_TICK']);
         let status_id         = await this.createStatus(data['STATUS']);
+        let give_amount       = match['GIVE_AMOUNT']
+        let get_amount        = match['GET_AMOUNT']
         let action_index      = data['ACTION_INDEX'];
         let give_action_index = match['ACTION_INDEX']
         let get_action_index  = swap['ACTION_INDEX'];
@@ -3824,17 +3828,21 @@ class Database {
                         swap_matches
                     SET
                         give_coin_id=?,
+                        give_tick_id=?,
+                        give_amount=?,
                         give_action_index=?,
                         get_coin_id=?,
+                        get_tick_id=?,
+                        get_amount=?,
                         get_action_index=?,
                         status_id=?
                     WHERE 
                         action_index=?`;
         } else {
             // INSERT record
-            query = `INSERT INTO swap_matches (give_coin_id, give_action_index, get_coin_id, get_action_index, status_id, action_index) values (?, ?, ?, ?, ?, ?)`;
+            query = `INSERT INTO swap_matches (give_coin_id, give_tick_id, give_amount, give_action_index, get_coin_id, get_tick_id, get_amount, get_action_index, status_id, action_index) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
         }
-        args = [give_coin_id, give_action_index, get_coin_id, get_action_index, status_id, action_index];
+        args = [give_coin_id, give_tick_id, give_amount, give_action_index, get_coin_id, get_tick_id, get_amount, get_action_index, status_id, action_index];
         // Create or Update the record in the swap_matches table
         try {
             let result = await db.query(query, args);
@@ -4172,7 +4180,7 @@ class Database {
         } catch (error) {
             this.util.logError('Error looking up escrowed order amount :', error);
         }
-        // Lookup amount removed from escrow in order matches
+        // TODO: Lookup amount removed from escrow in order matches
 
         // return total (inital - matches = remaining)
         let total = this.util.bcsub(escrowed, matched);
