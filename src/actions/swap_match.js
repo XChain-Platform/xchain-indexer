@@ -43,7 +43,7 @@ class Swap_Match {
         let swapInfo  = await this.indexerDb.getSwapInfo(this.config['COIN'], swapIndex)
 
         // Get a list of any matching open swaps
-        let matches = await this.indexerDb.getSwapMatches(data);
+        let matches = await this.indexerDb.findSwapMatches(data);
         if(matches){
             // Get information on the tokens involved in the swap
             let getTokenInfo  = await this.indexerDb.getTokenInfo(swapInfo['GET_TICK'],  swap['BLOCK_INDEX'], swap['ACTION_INDEX']);

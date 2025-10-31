@@ -3745,7 +3745,7 @@ class Database {
     }
 
     // Handle looking up potential swap matches
-    async getSwapMatches(data){
+    async findSwapMatches(data){
         let matches = false;
         // Normalize data
         let source_id    = await this.createAddress(data['SOURCE']);
@@ -3974,7 +3974,7 @@ class Database {
     }
 
     // Handle looking up potential order matches
-    async getOrderMatches(data){
+    async findOrderMatches(data){
         let matches = false;
         // Normalize data
         let source_id    = await this.createAddress(data['SOURCE']);
@@ -3991,7 +3991,6 @@ class Database {
                         INNER JOIN index_coins  c1 ON (c1.id=o2.get_coin_id)
                         INNER JOIN actions      a1 ON (a1.action_index=o2.action_index)
                         INNER JOIN transactions t1 ON (t1.tx_index=a1.tx_index)
-
                     WHERE
                         o1.give_coin_id=o2.get_coin_id AND
                         o1.give_tick_id=o2.get_tick_id AND
@@ -4081,6 +4080,10 @@ class Database {
                     order['ALLOW_LIST'] = edit.allow_list;
                 if(edit.block_list)
                     order['BLOCK_LIST'] = edit.block_list;
+                // Determine ORDER_PRICE (GET_AMOUNT / GIVE_AMOUNT)
+                order['GIVE_PRICE'] = this.util.getPrice(order['GET_AMOUNT'],  order['GIVE_AMOUNT']);
+                order['GET_PRICE']  = this.util.getPrice(order['GIVE_AMOUNT'], order['GET_AMOUNT']);
+
             }
         } catch (error) {
             this.util.logError('Error looking up order using orders table:', error);
