@@ -3978,8 +3978,8 @@ class Database {
         // Lookup any matching orders from different addresses (not SOURCE)
         let db    = await this.getConnection();
         let query = `SELECT
-                        c1.coin as match_coin,
-                        o2.action_index as match_action_index
+                        c1.coin,
+                        o2.action_index
                     FROM
                         orders o1,
                         orders o2
@@ -4090,21 +4090,27 @@ class Database {
                         value = Number(value);
                     order[name] = value;
                 }
-                // Get updated order properties from the order_edits table
-                let edit = await this.getOrderEdits(action_index);
-                if(edit.expiration)
-                    order['EXPIRATION'] = edit.expiration;
-                if(edit.allow_list)
-                    order['ALLOW_LIST'] = edit.allow_list;
-                if(edit.block_list)
-                    order['BLOCK_LIST'] = edit.block_list;
-                // Determine ORDER_PRICE (GET_AMOUNT / GIVE_AMOUNT)
-                order['GIVE_PRICE'] = this.util.getPrice(order['GET_AMOUNT'],  order['GIVE_AMOUNT']);
-                order['GET_PRICE']  = this.util.getPrice(order['GIVE_AMOUNT'], order['GET_AMOUNT']);
-
             }
         } catch (error) {
             this.util.logError('Error looking up order using orders table:', error);
+        }
+        // Get additional information on this order 
+        if(order){
+            // Get updated order properties from the order_edits table
+            let edit = await this.getOrderEdits(action_index);
+            if(edit.expiration)
+                order['EXPIRATION'] = edit.expiration;
+            if(edit.allow_list)
+                order['ALLOW_LIST'] = edit.allow_list;
+            if(edit.block_list)
+                order['BLOCK_LIST'] = edit.block_list;
+            // Determine order get/give prices
+            order['GIVE_PRICE'] = this.util.getPrice(order['GET_AMOUNT'],  order['GIVE_AMOUNT']);
+            order['GET_PRICE']  = this.util.getPrice(order['GIVE_AMOUNT'], order['GET_AMOUNT']);
+            // Determine order amounts remaining
+            let [give_remaining, get_remaining] = await this.getOrderAmountsRemaining(action_index);
+            order['GIVE_REMAINING'] = give_remaining;
+            order['GET_REMAINING']  = get_remaining;
         }
         await this.releaseConnection();
         return order;
@@ -4148,17 +4154,24 @@ class Database {
         return edit;
     }
 
-    // Handle getting total amount of GIVE_TICK escrowed for a given ORDER
-    async getOrderAmountEscrowed(action_index){
+    // Handle getting total amounts remaining for a given order
+    async getOrderAmountsRemaining(action_index){
         // Placeholders for amount escrowed and amount matched
-        let escrowed = 0;
-        let matched  = 0;
-        let tick_id  = null;
-        // Get initial amount escrowed from the orders table
+        let give_coin_id   = 0,
+            give_tick_id   = 0,
+            give_remaining = 0,
+            get_coin_id    = 0,
+            get_tick_id    = 0,
+            get_remaining  = 0;
+        // Get initial amounts from the orders table
         let db     = await this.getConnection();
         let query  = `SELECT 
+                        o.give_coin_id,
                         o.give_tick_id,
-                        o.give_amount
+                        o.give_amount,
+                        o.get_coin_id,
+                        o.get_tick_id,
+                        o.get_amount
                     FROM 
                         orders o
                         INNER JOIN index_statuses s ON (s.id=o.status_id)
@@ -4169,17 +4182,46 @@ class Database {
         try {
             let rows = await db.query(query, args);
             if(rows && rows.length>0){
-                escrowed = rows[0].give_amount;
-                tick_id  = rows[0].tick_id;
+                let info = rows[0];
+                    give_coin_id   = info.give_coin_id;
+                    give_tick_id   = info.give_tick_id;  
+                    give_remaining = info.give_amount;
+                    get_coin_id    = info.get_coin_id;
+                    get_tick_id    = info.get_tick_id;  
+                    get_remaining  = info.get_amount;
             }
         } catch (error) {
-            this.util.logError('Error looking up escrowed order amount :', error);
+            this.util.logError('Error looking up order amounts from orders table :', error);
         }
-        // TODO: Lookup amount removed from escrow in order matches
-
-        // return total (inital - matches = remaining)
-        let total = this.util.bcsub(escrowed, matched);
-        return total;
+        // Lookup amounts matched in order_matches
+        query = `SELECT
+                    m.give_action_index,
+                    m.get_action_index,
+                    m.give_amount,
+                    m.get_amount
+                FROM
+                    order_matches m
+                    INNER JOIN index_statuses s ON (s.id=m.status_id)
+                WHERE
+                    (m.give_action_index=? OR m.get_action_index=?) AND
+                    s.status=?
+                ORDER BY action_index ASC`;
+        try {
+            args = [action_index, action_index, 'valid'];
+            let rows = await db.query(query, args);
+            if(rows && rows.length>0){
+                // Loop through each order match and deduct amount from remaining
+                for(let row of rows){
+                    let give_amount = (row.give_action_index==action_index) ? row.give_amount : row.get_amount;
+                    let get_amount  = (row.give_action_index==action_index) ? row.get_amount  : row.give_amount;
+                    give_remaining  = this.util.bcsub(give_remaining, give_amount);
+                    get_remaining   = this.util.bcsub(get_remaining,  get_amount);
+                }
+            }
+        } catch (error) {
+            this.util.logError('Error looking up order amounts from order_matches table :', error);
+        }
+        return [give_remaining, get_remaining];
     }
 
     // Create/Update record in `order_edits` table
