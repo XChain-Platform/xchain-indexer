@@ -3559,6 +3559,7 @@ class Database {
                         s.block_list,
                         m1.memo,
                         s1.status,
+                        s2.status as swap_status,
                         b1.block_index,
                         b1.block_time
                     FROM 
@@ -3573,6 +3574,18 @@ class Database {
                         INNER JOIN index_coins     c1 ON (c1.id=s.get_coin_id)
                         INNER JOIN index_memos     m1 ON (m1.id=s.memo_id)
                         INNER JOIN index_statuses  s1 ON (s1.id=s.status_id)
+                        LEFT  JOIN LATERAL (
+                            SELECT
+                                s4.status
+                            FROM
+                                swap_statuses s3
+                                INNER JOIN index_statuses s4 ON (s4.id=s3.status_id)
+                            WHERE
+                                s3.swap_action_index=s.action_index
+                            ORDER BY 
+                                s3.action_index DESC
+                            LIMIT 1
+                        ) s2 ON TRUE
                     WHERE 
                         c1.coin=? AND
                         s.action_index=? 
@@ -3590,8 +3603,6 @@ class Database {
                         value = Number(value);
                     swap[name] = value;
                 }
-                // Get SWAP_STATUS from the swap_statuses table
-                swap['SWAP_STATUS'] = await this.getSwapStatus(action_index);
                 // Get updated swap properties from the swap_edits table
                 let edit = await this.getSwapEdits(action_index);
                 if(edit.expiration)
@@ -3606,32 +3617,6 @@ class Database {
         }
         await this.releaseConnection();
         return swap;
-    }
-
-    // Return swap info for given action_index
-    async getSwapStatus(action_index){
-        let status = false;
-        let db     = await this.getConnection();
-        let query  = `SELECT 
-                        s2.status
-                    FROM 
-                        swap_statuses s1
-                        INNER JOIN index_statuses s2 ON (s2.id=s1.status_id)
-                    WHERE 
-                        s1.swap_action_index=?
-                    ORDER BY
-                        s1.action_index DESC
-                    LIMIT 1`;
-        let args  = [action_index];
-        try {
-            let rows = await db.query(query, args);
-            if(rows.length > 0)
-                status = rows[0].status;
-        } catch (error) {
-            this.util.logError('Error looking up swap status using swap_statuses table:', error);
-        }
-        await this.releaseConnection();
-        return status;
     }
 
     // Return swap edit information for given action_index
@@ -3753,21 +3738,34 @@ class Database {
         // Lookup any matching swaps from different addresses (not SOURCE)
         let db    = await this.getConnection();
         let query = `SELECT
-                        c1.coin as match_coin,
-                        s2.action_index as match_action_index
+                        c1.coin,
+                        s2.action_index
                     FROM
                         swaps s1,
                         swaps s2
                         INNER JOIN index_coins  c1 ON (c1.id=s2.get_coin_id)
                         INNER JOIN actions      a1 ON (a1.action_index=s2.action_index)
                         INNER JOIN transactions t1 ON (t1.tx_index=a1.tx_index)
+                        LEFT  JOIN LATERAL (
+                            SELECT
+                                s5.status
+                            FROM
+                                swap_statuses s4
+                                INNER JOIN index_statuses s5 ON (s5.id=s4.status_id)
+                            WHERE
+                                s4.swap_action_index=s2.action_index
+                            ORDER BY 
+                                s4.action_index DESC
+                            LIMIT 1
+                        ) s3 ON TRUE
                     WHERE
                         s1.give_coin_id=s2.get_coin_id AND
                         s1.give_tick_id=s2.get_tick_id AND
                         s1.give_amount=s2.get_amount AND
                         s1.get_amount=s2.give_amount AND
                         s1.action_index=? AND
-                        t1.source_id!=?
+                        t1.source_id!=? AND
+                        s3.status='open'
                     ORDER BY
                         s2.action_index ASC`;
         let args = [action_index, source_id];
@@ -3776,12 +3774,10 @@ class Database {
             if(rows.length > 0){
                 // Loop through possible matches and get full information on the swap match
                 for(let row of rows){
-                    let swapInfo = await this.getSwapInfo(row.match_coin, row.match_action_index);
-                    if(swapInfo['SWAP_STATUS']=='open'){
-                        if(!matches)
-                            matches = [];
-                        matches.push(swapInfo);
-                    }
+                    let swapInfo = await this.getSwapInfo(row.coin, row.action_index);
+                    if(!matches)
+                        matches = [];
+                    matches.push(swapInfo);
                 }
             }
         } catch (error){
@@ -3980,7 +3976,6 @@ class Database {
         let source_id    = await this.createAddress(data['SOURCE']);
         let action_index = data['ACTION_INDEX'];
         // Lookup any matching orders from different addresses (not SOURCE)
-        // TODO: Add support for looking up orders which are not EXACT matches (Javier)
         let db    = await this.getConnection();
         let query = `SELECT
                         c1.coin as match_coin,
@@ -3991,13 +3986,24 @@ class Database {
                         INNER JOIN index_coins  c1 ON (c1.id=o2.get_coin_id)
                         INNER JOIN actions      a1 ON (a1.action_index=o2.action_index)
                         INNER JOIN transactions t1 ON (t1.tx_index=a1.tx_index)
+                        LEFT  JOIN LATERAL (
+                            SELECT
+                                s2.status
+                            FROM
+                                order_statuses s1
+                                INNER JOIN index_statuses s2 ON (s2.id=s1.status_id)
+                            WHERE
+                                s1.order_action_index=o2.action_index
+                            ORDER BY 
+                                s1.action_index DESC
+                            LIMIT 1
+                        ) s1 ON TRUE
                     WHERE
                         o1.give_coin_id=o2.get_coin_id AND
                         o1.give_tick_id=o2.get_tick_id AND
-                        o1.give_amount=o2.get_amount AND
-                        o1.get_amount=o2.give_amount AND
                         o1.action_index=? AND
-                        t1.source_id!=?
+                        t1.source_id!=? AND
+                        s1.status='open'
                     ORDER BY
                         o2.action_index ASC`;
         let args = [action_index, source_id];
@@ -4006,18 +4012,19 @@ class Database {
             if(rows.length > 0){
                 // Loop through possible matches and get full information on the order match
                 for(let row of rows){
-                    let orderInfo = await this.getOrderInfo(row.match_coin, row.match_action_index);
-                    if(orderInfo['ORDER_STATUS']=='open'){
-                        if(!matches)
-                            matches = [];
-                        matches.push(orderInfo);
-                    }
+                    let orderInfo = await this.getOrderInfo(row.coin, row.action_index);
+                    if(!matches)
+                        matches = [];
+                    matches.push(orderInfo);
                 }
             }
         } catch (error){
             this.util.logError('Error looking up potential order matches in orders table:', error);
         }
         await this.releaseConnection();
+        // Sort matches by price, then by action_index
+        if(matches)
+            matches = this.util.sortPriceActionIndex(matches);
         return matches;
     }
 
@@ -4039,6 +4046,7 @@ class Database {
                         o.block_list,
                         m1.memo,
                         s1.status,
+                        s2.order_status,
                         b1.block_index,
                         b1.block_time
                     FROM 
@@ -4053,6 +4061,18 @@ class Database {
                         INNER JOIN index_coins     c1 ON (c1.id=o.get_coin_id)
                         INNER JOIN index_memos     m1 ON (m1.id=o.memo_id)
                         INNER JOIN index_statuses  s1 ON (s1.id=o.status_id)
+                        LEFT  JOIN LATERAL (
+                            SELECT
+                                s4.status as order_status
+                            FROM
+                                order_statuses s3
+                                INNER JOIN index_statuses s4 ON (s4.id=s3.status_id)
+                            WHERE
+                                s3.order_action_index=o.action_index
+                            ORDER BY 
+                                s3.action_index DESC
+                            LIMIT 1
+                        ) s2 ON TRUE
                     WHERE 
                         c1.coin=? AND
                         o.action_index=? 
@@ -4070,8 +4090,6 @@ class Database {
                         value = Number(value);
                     order[name] = value;
                 }
-                // Get ORDER_STATUS from the order_statuses table
-                order['ORDER_STATUS'] = await this.getOrderStatus(action_index);
                 // Get updated order properties from the order_edits table
                 let edit = await this.getOrderEdits(action_index);
                 if(edit.expiration)
@@ -4090,32 +4108,6 @@ class Database {
         }
         await this.releaseConnection();
         return order;
-    }
-
-    // Return order info for given action_index
-    async getOrderStatus(action_index){
-        let status = false;
-        let db     = await this.getConnection();
-        let query  = `SELECT 
-                        s2.status
-                    FROM 
-                        order_statuses s1
-                        INNER JOIN index_statuses s2 ON (s2.id=s1.status_id)
-                    WHERE 
-                        s1.order_action_index=?
-                    ORDER BY
-                        s1.action_index DESC
-                    LIMIT 1`;
-        let args  = [action_index];
-        try {
-            let rows = await db.query(query, args);
-            if(rows.length > 0)
-                status = rows[0].status;
-        } catch (error) {
-            this.util.logError('Error looking up order status using order_statuses table:', error);
-        }
-        await this.releaseConnection();
-        return status;
     }
 
     // Return order edit information for given action_index
