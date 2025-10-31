@@ -336,14 +336,11 @@ class Order {
             // Format 1 - Cancel Order
             if(format==1){
 
-                // Get total amount of GIVE_TICK still in escrow
-                orderInfo['ESCROW_AMOUNT'] = await this.indexerDb.getOrderAmountEscrowed(orderInfo['ACTION_INDEX']);
-
                 // Debit token from escrows
-                escrows.push([orderInfo['GIVE_TICK'],  -orderInfo['ESCROW_AMOUNT'], orderInfo['SOURCE']]);
+                escrows.push([orderInfo['GIVE_TICK'], -orderInfo['GIVE_REMAINING'], orderInfo['SOURCE']]);
 
                 // Credit token to SOURCE
-                credits.push([orderInfo['GIVE_TICK'], orderInfo['ESCROW_AMOUNT'], orderInfo['SOURCE']]);
+                credits.push([orderInfo['GIVE_TICK'], orderInfo['GIVE_REMAINING'], orderInfo['SOURCE']]);
 
                 // Create record in the orders_statuses table
                 await this.indexerDb.createOrderStatus(data['ACTION_INDEX'], orderInfo['ACTION_INDEX'], 'cancelled');
