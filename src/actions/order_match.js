@@ -31,7 +31,7 @@ class Order_Match {
         this.util      = action.util;
         this.mapper    = action.mapper;
 
-        // Flag to make debugging code easier
+        // Flag to print debugging messages to the console
         this.debug = true;
     }
 
@@ -40,6 +40,9 @@ class Order_Match {
 
         // Clone the raw data into a order object
         let order = structuredClone(data);
+
+        // Placeholder to store match info (get/give remaining amounts)
+        let match = {};
 
         // Get information on a order given the COIN network and ORDER_ACTION_INDEX
         let orderIndex = (data['ORDER_ACTION_INDEX']) ? data['ORDER_ACTION_INDEX'] : data['ACTION_INDEX'];
@@ -76,17 +79,21 @@ class Order_Match {
             // Loop through matches and determine if we have a valid match
             for(let matchInfo of matches){
 
+                // Set get/give remaining amounts for this order match
+                match['GIVE_REMAINING'] = matchInfo['GIVE_REMAINING'];
+                match['GET_REMAINING']  = matchInfo['GET_REMAINING'];
+
                 // Ignore if we have nothing left to GIVE
-                if(matchInfo['GIVE_REMAINING'] <= 0 || order['GIVE_REMAINING'] <= 0){
+                if(match['GIVE_REMAINING'] <= 0 || order['GIVE_REMAINING'] <= 0){
                     if(this.debug)
-                        console.log('Skipping: negative GIVE quantity remaining ', matchInfo['GIVE_REMAINING'], order['GIVE_REMAINING']);
+                        console.log('Skipping: negative GIVE quantity remaining ', match['GIVE_REMAINING'], order['GIVE_REMAINING']);
                     continue;
                 }
 
                 // Ignore if we have nothing left to GET
-                if(matchInfo['GET_REMAINING'] <= 0 || order['GET_REMAINING'] <= 0){
+                if(match['GET_REMAINING'] <= 0 || order['GET_REMAINING'] <= 0){
                     if(this.debug)
-                        console.log('Skipping: negative GET quantity remaining ', matchInfo['GET_REMAINING'], order['GET_REMAINING']);
+                        console.log('Skipping: negative GET quantity remaining ', match['GET_REMAINING'], order['GET_REMAINING']);
                     continue;
                 }
 
@@ -100,9 +107,8 @@ class Order_Match {
                 // TODO: Pay attention to divisible and non-divisible tokens
 
                 // Calculate the give and get amounts for this order match
-                let give_possible = this.util.bcmul(order['GIVE_REMAINING'], matchInfo['GET_PRICE']),
-                    give_amount   = give_possible,
-                    get_amount    = this.util.bcmul(give_possible, matchInfo['GIVE_PRICE']);
+                let give_amount = this.util.bcmul(matchInfo['GIVE_REMAINING'], orderInfo['GET_PRICE']),
+                    get_amount  = this.util.bcmul(give_amount, orderInfo['GIVE_PRICE']);
 
                 // Ignore zero quantity GIVE
                 if(give_amount <= 0){
@@ -132,13 +138,15 @@ class Order_Match {
                    (matchInfoAllowList.length && !matchInfoAllowList.includes(orderInfo['GET_ADDRESS'])) ||
                    (matchInfoBlockList.length &&  matchInfoBlockList.includes(orderInfo['GET_ADDRESS']))){
                     if(this.debug)
-                        console.log('Skipping match due to allow/block list')
+                        console.log('Skipping match due to allow/block list');
                     continue;
                 }
 
-                // Update GET_REMAINING and GIVE_REMAINING in the order
-                order['GIVE_REMAINING'] = this.util.bcsub(order['GIVE_REMAINING'], get_amount);
-                order['GET_REMAINING']  = this.util.bcsub(order['GET_REMAINING'], give_amount);
+                // Update GET_REMAINING and GIVE_REMAINING in the orders
+                order['GIVE_REMAINING'] = this.util.bcsub(order['GIVE_REMAINING'], give_amount);
+                order['GET_REMAINING']  = this.util.bcsub(order['GET_REMAINING'],  get_amount);
+                match['GIVE_REMAINING'] = this.util.bcsub(match['GIVE_REMAINING'], get_amount);
+                match['GET_REMAINING']  = this.util.bcsub(match['GET_REMAINING'],  give_amount);
 
                 // Display get/give remaining amounts
                 if(this.debug)
@@ -149,7 +157,7 @@ class Order_Match {
                 data['STATUS'] = 'valid';
 
                 // Print status message
-                console.log("\t ORDER_MATCH : " + orderInfo['GIVE_AMOUNT'] + ' ' + orderInfo['GIVE_COIN'] + ':' + orderInfo['GIVE_TICK'] + ' = '  +  data['GET_AMOUNT'] + ' ' + data['GET_COIN'] + ':' + data['GET_TICK'] + ' : ' + data['STATUS']);
+                console.log("\t ORDER_MATCH : " + give_amount + ' ' + orderInfo['GIVE_COIN'] + ':' + orderInfo['GIVE_TICK'] + ' = '  + get_amount + ' ' + data['GET_COIN'] + ':' + data['GET_TICK'] + ' : ' + data['STATUS']);
 
                 // Array of credits, debits, and escrows
                 let credits = [],
@@ -183,10 +191,13 @@ class Order_Match {
                 // Create record of match in order_matches table
                 await this.indexerDb.createOrderMatch(data, orderInfo, matchInfo);
 
-                // TODO verify if order still has some GET_TICK and GIVE_TICK quantity. if not, change status to filled
-                // Update record in orders table to change status (open->filled)
-                await this.indexerDb.createOrderStatus(data['ACTION_INDEX'], orderInfo['ACTION_INDEX'], 'filled');
-                await this.indexerDb.createOrderStatus(data['ACTION_INDEX'], matchInfo['ACTION_INDEX'], 'filled');
+                // Handle marking the orders as 'complete' if we have nothing left to give or get
+                if(order['GET_REMAINING'] <= 0 || order['GIVE_REMAINING'] <= 0)
+                    await this.indexerDb.createOrderStatus(data['ACTION_INDEX'], orderInfo['ACTION_INDEX'], 'complete');
+                if(match['GET_REMAINING'] <= 0 || match['GIVE_REMAINING'] <= 0)
+                    await this.indexerDb.createOrderStatus(data['ACTION_INDEX'], matchInfo['ACTION_INDEX'], 'complete');
+
+
             }
 
             // Get a list of addresses
