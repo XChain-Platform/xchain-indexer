@@ -30,6 +30,9 @@ class Order_Match {
         this.indexerDb = action.indexerDb;
         this.util      = action.util;
         this.mapper    = action.mapper;
+
+        // Flag to make debugging code easier
+        this.debug = true;
     }
 
     // Handle looking for matching orders
@@ -45,6 +48,7 @@ class Order_Match {
         // Get a list of any matching open orders
         let matches = await this.indexerDb.findOrderMatches(orderInfo);
         if(matches){
+
             // Get information on the tokens involved in the order
             let getTokenInfo  = await this.indexerDb.getTokenInfo(orderInfo['GET_TICK'],  order['BLOCK_INDEX'], order['ACTION_INDEX']);
             let giveTokenInfo = await this.indexerDb.getTokenInfo(orderInfo['GIVE_TICK'], order['BLOCK_INDEX'], order['ACTION_INDEX']);
@@ -61,84 +65,128 @@ class Order_Match {
             let orderInfoAllowList = (!this.util.isNull(orderInfo['ALLOW_LIST'])) ? await this.indexerDb.getList(orderInfo['ALLOW_LIST']) : false;
             let orderInfoBlockList = (!this.util.isNull(orderInfo['BLOCK_LIST'])) ? await this.indexerDb.getList(orderInfo['BLOCK_LIST']) : false;
 
+            // Set get/give remaining amounts for this order
+            order['GIVE_REMAINING'] = orderInfo['GIVE_REMAINING'];
+            order['GET_REMAINING']  = orderInfo['GET_REMAINING'];
+
+            // Display initial get/give remaining amounts
+            if(this.debug)
+                console.log('ORDER - GET / GIVE remaining=',order['GIVE_REMAINING'],order['GET_REMAINING'])
+
             // Loop through matches and determine if we have a valid match
-            for(let match of matches){
-                let valid = true;
+            for(let matchInfo of matches){
+
+                // Ignore if we have nothing left to GIVE
+                if(matchInfo['GIVE_REMAINING'] <= 0 || order['GIVE_REMAINING'] <= 0){
+                    if(this.debug)
+                        console.log('Skipping: negative GIVE quantity remaining ', matchInfo['GIVE_REMAINING'], order['GIVE_REMAINING']);
+                    continue;
+                }
+
+                // Ignore if we have nothing left to GET
+                if(matchInfo['GET_REMAINING'] <= 0 || order['GET_REMAINING'] <= 0){
+                    if(this.debug)
+                        console.log('Skipping: negative GET quantity remaining ', matchInfo['GET_REMAINING'], order['GET_REMAINING']);
+                    continue;
+                }
+
+                // Ignore price mismatches
+                if(matchInfo['GET_PRICE'] > orderInfo['GIVE_PRICE']){
+                    if(this.debug)
+                        console.log('Skipping due to price mismatch ', matchInfo['GET_PRICE'], orderInfo['GIVE_PRICE']);
+                    continue;
+                }
+
+                // TODO: Pay attention to divisible and non-divisible tokens
+
+                // Calculate the give and get amounts for this order match
+                let give_possible = this.util.bcmul(order['GIVE_REMAINING'], matchInfo['GET_PRICE']),
+                    give_amount   = give_possible,
+                    get_amount    = this.util.bcmul(give_possible, matchInfo['GIVE_PRICE']);
+
+                // Ignore zero quantity GIVE
+                if(give_amount <= 0){
+                    if(this.debug)
+                        console.log('Skipping zero quantity GIVE amount ', give_amount);
+                    continue;
+                }
+
+                // Ignore zero quantity GET
+                if(give_amount <= 0){
+                    if(this.debug)
+                        console.log('Skipping zero quantity GET amount ', get_amount);
+                    continue;
+                }
 
                 // List of addresses allowed or blocked from matching with this matching ORDER
-                let matchInfoAllowList = (!this.util.isNull(match['ALLOW_LIST'])) ? await this.indexerDb.getList(match['ALLOW_LIST']) : false;
-                let matchInfoBlockList = (!this.util.isNull(match['BLOCK_LIST'])) ? await this.indexerDb.getList(match['BLOCK_LIST']) : false;
+                let matchInfoAllowList = (!this.util.isNull(matchInfo['ALLOW_LIST'])) ? await this.indexerDb.getList(matchInfo['ALLOW_LIST']) : false;
+                let matchInfoBlockList = (!this.util.isNull(matchInfo['BLOCK_LIST'])) ? await this.indexerDb.getList(matchInfo['BLOCK_LIST']) : false;
 
                 // Check if GET_ADDRESS for both sides of swap are allowed (ALLOW/BLOCK list support)
-                if((getTokenAllowList.length  && (!getTokenAllowList.includes(orderInfo['GET_ADDRESS'])  || !getTokenAllowList.includes(match['GET_ADDRESS'])))  ||
-                   (getTokenBlockList.length  && ( getTokenBlockList.includes(orderInfo['GET_ADDRESS'])  ||  getTokenBlockList.includes(match['GET_ADDRESS'])))  ||
-                   (giveTokenAllowList.length && (!giveTokenAllowList.includes(orderInfo['GET_ADDRESS']) || !giveTokenAllowList.includes(match['GET_ADDRESS']))) ||
-                   (giveTokenBlockList.length && ( giveTokenBlockList.includes(orderInfo['GET_ADDRESS']) ||  giveTokenBlockList.includes(match['GET_ADDRESS']))) ||
-                   (orderInfoAllowList.length && !orderInfoAllowList.includes(match['GET_ADDRESS']))     ||
-                   (orderInfoBlockList.length &&  orderInfoBlockList.includes(match['GET_ADDRESS']))     || 
+                if((getTokenAllowList.length  && (!getTokenAllowList.includes(orderInfo['GET_ADDRESS'])  || !getTokenAllowList.includes(matchInfo['GET_ADDRESS'])))  ||
+                   (getTokenBlockList.length  && ( getTokenBlockList.includes(orderInfo['GET_ADDRESS'])  ||  getTokenBlockList.includes(matchInfo['GET_ADDRESS'])))  ||
+                   (giveTokenAllowList.length && (!giveTokenAllowList.includes(orderInfo['GET_ADDRESS']) || !giveTokenAllowList.includes(matchInfo['GET_ADDRESS']))) ||
+                   (giveTokenBlockList.length && ( giveTokenBlockList.includes(orderInfo['GET_ADDRESS']) ||  giveTokenBlockList.includes(matchInfo['GET_ADDRESS']))) ||
+                   (orderInfoAllowList.length && !orderInfoAllowList.includes(matchInfo['GET_ADDRESS'])) ||
+                   (orderInfoBlockList.length &&  orderInfoBlockList.includes(matchInfo['GET_ADDRESS'])) || 
                    (matchInfoAllowList.length && !matchInfoAllowList.includes(orderInfo['GET_ADDRESS'])) ||
                    (matchInfoBlockList.length &&  matchInfoBlockList.includes(orderInfo['GET_ADDRESS']))){
-                    valid = false;
+                    if(this.debug)
+                        console.log('Skipping match due to allow/block list')
+                    continue;
                 }
 
-                // TODO : Determine what the remaining amounts in escrow are
+                // Update GET_REMAINING and GIVE_REMAINING in the order
+                order['GIVE_REMAINING'] = this.util.bcsub(order['GIVE_REMAINING'], get_amount);
+                order['GET_REMAINING']  = this.util.bcsub(order['GET_REMAINING'], give_amount);
 
-                // TODO: Add support for partial matches... currently only support exact matches
+                // Display get/give remaining amounts
+                if(this.debug)
+                    console.log('MATCH - GET / GIVE remaining=',order['GIVE_REMAINING'],order['GET_REMAINING'])
 
-                // If we found a valid match, process the order match and update the escrowed amounts
                 // TODO : Revisit this code once multi-chain order support is added to xchain-hub component
-                if(valid){
+                // Set the status to valid
+                data['STATUS'] = 'valid';
 
-                    // Create  alias for current matching order info
-                    let matchInfo = match;
+                // Print status message
+                console.log("\t ORDER_MATCH : " + orderInfo['GIVE_AMOUNT'] + ' ' + orderInfo['GIVE_COIN'] + ':' + orderInfo['GIVE_TICK'] + ' = '  +  data['GET_AMOUNT'] + ' ' + data['GET_COIN'] + ':' + data['GET_TICK'] + ' : ' + data['STATUS']);
 
-                    // Set the status to valid
-                    data['STATUS'] = 'valid';
+                // Array of credits, debits, and escrows
+                let credits = [],
+                    debits  = [],
+                    escrows = [];
 
-                    // Print status message
-                    console.log("\t ORDER_MATCH : " + orderInfo['GIVE_AMOUNT'] + ' ' + orderInfo['GIVE_COIN'] + ':' + orderInfo['GIVE_TICK'] + ' = '  +  data['GET_AMOUNT'] + ' ' + data['GET_COIN'] + ':' + data['GET_TICK'] + ' : ' + data['STATUS']);
+                // Define ORDER_MATCH action
+                let action = {}
+                action['BLOCK_INDEX'] = data['BLOCK_INDEX'];
+                action['TX_INDEX']    = data['TX_INDEX']
+                action['ACTION']      = 'ORDER_MATCH';
 
-                    // Pass forward information on this order match
-                    match = order;
+                // Create a record of this ORDER_MATCH action in the actions table
+                data['ACTION_INDEX'] = await this.indexerDb.createActionIndex(action);
 
-                    // Array of credits, debits, and escrows
-                    let credits = [],
-                        debits  = [],
-                        escrows = [];
+                // Credit tokens to GET_ADDRESS in orders
+                credits.push([matchInfo['GET_TICK'], get_amount, matchInfo['GET_ADDRESS']]);
+                credits.push([orderInfo['GET_TICK'], give_amount,  orderInfo['GET_ADDRESS']]);
 
+                // // Debit tokens from escrows orders 
+                escrows.push([matchInfo['GET_TICK'], -get_amount, orderInfo['SOURCE']]);
+                escrows.push([orderInfo['GET_TICK'], -give_amount, matchInfo['SOURCE']]);
 
-                    // Define ORDER_MATCH action
-                    let action = {}
-                    action['BLOCK_INDEX'] = data['BLOCK_INDEX'];
-                    action['TX_INDEX']    = data['TX_INDEX']
-                    action['ACTION']      = 'ORDER_MATCH';
+                // Store the GET_ADDRESS and TICK in addresses list
+                this.util.addAddressTicker(matchInfo['GET_ADDRESS'], matchInfo['GET_TICK']);
+                this.util.addAddressTicker(orderInfo['GET_ADDRESS'], orderInfo['GET_TICK']);
 
-                    // Create a record of this ORDER_MATCH action in the actions table
-                    data['ACTION_INDEX'] = await this.indexerDb.createActionIndex(action);
+                // Process any transaction ledger changes (credits / debits / escrows)
+                await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits, escrows);
 
-                    // Credit tokens to GET_ADDRESS in orders
-                    credits.push([matchInfo['GET_TICK'], matchInfo['GET_AMOUNT'], matchInfo['GET_ADDRESS']]);
-                    credits.push([orderInfo['GET_TICK'], orderInfo['GET_AMOUNT'], orderInfo['GET_ADDRESS']]);
+                // Create record of match in order_matches table
+                await this.indexerDb.createOrderMatch(data, orderInfo, matchInfo);
 
-                    // Debit tokens from escrows orders 
-                    escrows.push([matchInfo['GET_TICK'], -matchInfo['GET_AMOUNT'], orderInfo['SOURCE']]);
-                    escrows.push([orderInfo['GET_TICK'], -orderInfo['GET_AMOUNT'], matchInfo['SOURCE']]);
-
-                    // Store the GET_ADDRESS and TICK in addresses list
-                    this.util.addAddressTicker(matchInfo['GET_ADDRESS'], matchInfo['GET_TICK']);
-                    this.util.addAddressTicker(orderInfo['GET_ADDRESS'], orderInfo['GET_TICK']);
-
-                    // Process any transaction ledger changes (credits / debits / escrows)
-                    await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits, escrows);
-
-                    // Create record of match in order_matches table
-                    await this.indexerDb.createOrderMatch(data, orderInfo, matchInfo);
-
-                    // TODO verify if order still has some GET_TICK and GIVE_TICK quantity. if not, change status to filled
-                    // Update record in orders table to change status (open->filled)
-                    await this.indexerDb.createOrderStatus(data['ACTION_INDEX'], orderInfo['ACTION_INDEX'], 'filled');
-                    await this.indexerDb.createOrderStatus(data['ACTION_INDEX'], matchInfo['ACTION_INDEX'], 'filled');
-                }
+                // TODO verify if order still has some GET_TICK and GIVE_TICK quantity. if not, change status to filled
+                // Update record in orders table to change status (open->filled)
+                await this.indexerDb.createOrderStatus(data['ACTION_INDEX'], orderInfo['ACTION_INDEX'], 'filled');
+                await this.indexerDb.createOrderStatus(data['ACTION_INDEX'], matchInfo['ACTION_INDEX'], 'filled');
             }
 
             // Get a list of addresses
