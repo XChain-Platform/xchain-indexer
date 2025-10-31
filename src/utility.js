@@ -479,6 +479,12 @@ class Utility {
         return 0;
     }
 
+    // Determine price of an item (numerator / denominator)
+    // Note : Use precision up to 64 decimals points for very precise prices
+    getPrice(numerator, denominator, precision=64){
+        return this.bcdiv(numerator, denominator, precision);
+    }
+
     // Process any transaction FEE according the user's ADDRESS preferences
     async processTransactionFees(db, credits, debits, fees){
         if(fees['AMOUNT']>0){
@@ -525,7 +531,6 @@ class Utility {
             await db.createEscrow(action_index, tick, amount, address);
         }
     }    
-
 }
 
 module.exports = Utility;

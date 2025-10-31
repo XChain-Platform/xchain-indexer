@@ -43,7 +43,7 @@ class Order_Match {
         let orderInfo  = await this.indexerDb.getOrderInfo(this.config['COIN'], orderIndex)
 
         // Get a list of any matching open orders
-        let matches = await this.indexerDb.getOrderMatches(orderInfo);
+        let matches = await this.indexerDb.findOrderMatches(orderInfo);
         if(matches){
             // Get information on the tokens involved in the order
             let getTokenInfo  = await this.indexerDb.getTokenInfo(orderInfo['GET_TICK'],  order['BLOCK_INDEX'], order['ACTION_INDEX']);
