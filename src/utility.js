@@ -485,6 +485,25 @@ class Utility {
         return this.bcdiv(numerator, denominator, precision);
     }
 
+    // Handle sorting an array of objects by price, then by action_index
+    sortPriceActionIndex(data){
+        data.sort((a, b) => {
+            // First, sort by 'GET_PRICE' in ascending order
+            if(a['GET_PRICE'] > b['GET_PRICE'])
+                return -1;
+            if(a['GET_PRICE'] < b['GET_PRICE'])
+                return 1;
+            // Second, sort by 'ACTION_INDEX' in ascending order
+            if(a['ACTION_INDEX'] > b['ACTION_INDEX'])
+                return -1;
+            if(a['ACTION_INDEX'] < b['ACTION_INDEX'])
+                return 1;
+            // If GET_PRICE and ACTION_INDEX are equal, maintain original order
+            return 0;
+        });
+        return data;
+    }
+
     // Process any transaction FEE according the user's ADDRESS preferences
     async processTransactionFees(db, credits, debits, fees){
         if(fees['AMOUNT']>0){
