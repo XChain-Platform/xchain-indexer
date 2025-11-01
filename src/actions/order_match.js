@@ -32,7 +32,7 @@ class Order_Match {
         this.mapper    = action.mapper;
 
         // Flag to print debugging messages to the console
-        this.debug = true;
+        this.debug = false;
     }
 
     // Handle looking for matching orders
@@ -78,6 +78,9 @@ class Order_Match {
 
             // Loop through matches and determine if we have a valid match
             for(let matchInfo of matches){
+
+                // Reset the address/tickers/transactions list on each match
+                this.util.resetLists();
 
                 // Set get/give remaining amounts for this order match
                 match['GIVE_REMAINING'] = matchInfo['GIVE_REMAINING'];
@@ -166,12 +169,16 @@ class Order_Match {
 
                 // Define ORDER_MATCH action
                 let action = {}
-                action['BLOCK_INDEX'] = data['BLOCK_INDEX'];
-                action['TX_INDEX']    = data['TX_INDEX']
-                action['ACTION']      = 'ORDER_MATCH';
+                action['BLOCK_INDEX']  = data['BLOCK_INDEX'];
+                action['TX_INDEX']     = data['TX_INDEX']
+                action['ACTION']       = 'ORDER_MATCH';
+                action['STATUS']       = 'valid';
 
                 // Create a record of this ORDER_MATCH action in the actions table
-                data['ACTION_INDEX'] = await this.indexerDb.createActionIndex(action);
+                action['ACTION_INDEX'] = await this.indexerDb.createActionIndex(action);
+
+                // Update the data object
+                data['ACTION_INDEX'] = action['ACTION_INDEX'];
 
                 // Credit tokens to GET_ADDRESS in orders
                 credits.push([matchInfo['GET_TICK'], get_amount, matchInfo['GET_ADDRESS']]);
@@ -197,17 +204,18 @@ class Order_Match {
                 if(match['GET_REMAINING'] <= 0 || match['GIVE_REMAINING'] <= 0)
                     await this.indexerDb.createOrderStatus(data['ACTION_INDEX'], matchInfo['ACTION_INDEX'], 'complete');
 
+                // Create action mappings
+                await this.mapper.createMappings(action);
+
+                // Get a list of addresses
+                let addresses = Object.keys(this.util.getAddressesList());
+
+                // Update address balances
+                await this.indexerDb.updateBalances(addresses);
+
 
             }
 
-            // Get a list of addresses
-            let addresses = Object.keys(this.util.getAddressesList());
-
-            // Update address balances
-            await this.indexerDb.updateBalances(addresses);
-
-            // Create action mappings
-            await this.mapper.createMappings(data);
 
         }
     }
