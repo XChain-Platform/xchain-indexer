@@ -4183,12 +4183,12 @@ class Database {
             let rows = await db.query(query, args);
             if(rows && rows.length>0){
                 let info = rows[0];
-                    give_coin_id   = info.give_coin_id;
-                    give_tick_id   = info.give_tick_id;  
-                    give_remaining = info.give_amount;
-                    get_coin_id    = info.get_coin_id;
-                    get_tick_id    = info.get_tick_id;  
-                    get_remaining  = info.get_amount;
+                give_coin_id   = info.give_coin_id;
+                give_tick_id   = info.give_tick_id;  
+                give_remaining = info.give_amount;
+                get_coin_id    = info.get_coin_id;
+                get_tick_id    = info.get_tick_id;  
+                get_remaining  = info.get_amount;
             }
         } catch (error) {
             this.util.logError('Error looking up order amounts from orders table :', error);
@@ -4212,8 +4212,8 @@ class Database {
             if(rows && rows.length>0){
                 // Loop through each order match and deduct amount from remaining
                 for(let row of rows){
-                    let give_amount = (row.give_action_index==action_index) ? row.give_amount : row.get_amount;
-                    let get_amount  = (row.give_action_index==action_index) ? row.get_amount  : row.give_amount;
+                    let give_amount = (row.get_action_index==action_index) ? row.give_amount : row.get_amount;
+                    let get_amount  = (row.get_action_index==action_index) ? row.get_amount  : row.give_amount;
                     give_remaining  = this.util.bcsub(give_remaining, give_amount);
                     get_remaining   = this.util.bcsub(get_remaining,  get_amount);
                 }
@@ -4337,8 +4337,8 @@ class Database {
         let give_tick_id      = await this.createTicker(match['GIVE_TICK']);
         let get_tick_id       = await this.createTicker(match['GET_TICK']);
         let status_id         = await this.createStatus(data['STATUS']);
-        let give_amount       = match['GIVE_AMOUNT']
-        let get_amount        = match['GET_AMOUNT']
+        let give_amount       = data['MATCH_GIVE_AMOUNT'];
+        let get_amount        = data['MATCH_GET_AMOUNT'];
         let action_index      = data['ACTION_INDEX'];
         let give_action_index = match['ACTION_INDEX']
         let get_action_index  = order['ACTION_INDEX'];
