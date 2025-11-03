@@ -119,7 +119,7 @@ class Order_Match {
                 }
 
                 // Ignore zero quantity GET
-                if(give_amount <= 0){
+                if(get_amount <= 0){
                     if(this.debug)
                         console.log('Skipping zero quantity GET amount ', get_amount);
                     continue;
