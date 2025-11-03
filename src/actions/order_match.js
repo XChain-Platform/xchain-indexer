@@ -38,11 +38,9 @@ class Order_Match {
     // Handle looking for matching orders
     async parse(params, data, error){
 
-        // Clone the raw data into a order object
-        let order = structuredClone(data);
-
-        // Placeholder to store match info (get/give remaining amounts)
+        // Placeholder to store match and order info (get/give remaining amounts)
         let match = {};
+        let order = {};
 
         // Get information on a order given the COIN network and ORDER_ACTION_INDEX
         let orderIndex = (data['ORDER_ACTION_INDEX']) ? data['ORDER_ACTION_INDEX'] : data['ACTION_INDEX'];
@@ -53,8 +51,8 @@ class Order_Match {
         if(matches){
 
             // Get information on the tokens involved in the order
-            let getTokenInfo  = await this.indexerDb.getTokenInfo(orderInfo['GET_TICK'],  order['BLOCK_INDEX'], order['ACTION_INDEX']);
-            let giveTokenInfo = await this.indexerDb.getTokenInfo(orderInfo['GIVE_TICK'], order['BLOCK_INDEX'], order['ACTION_INDEX']);
+            let getTokenInfo  = await this.indexerDb.getTokenInfo(orderInfo['GET_TICK'],  data['BLOCK_INDEX'], data['ACTION_INDEX']);
+            let giveTokenInfo = await this.indexerDb.getTokenInfo(orderInfo['GIVE_TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
 
             // List of addresses allowed or blocked from holding GET_TICK
             let getTokenAllowList = (!this.util.isNull(getTokenInfo['ALLOW_LIST'])) ? await this.indexerDb.getList(getTokenInfo['ALLOW_LIST']) : false;
@@ -72,10 +70,6 @@ class Order_Match {
             order['GIVE_REMAINING'] = orderInfo['GIVE_REMAINING'];
             order['GET_REMAINING']  = orderInfo['GET_REMAINING'];
 
-            // Display initial get/give remaining amounts
-            if(this.debug)
-                console.log('ORDER - GET / GIVE remaining=',order['GIVE_REMAINING'],order['GET_REMAINING'])
-
             // Loop through matches and determine if we have a valid match
             for(let matchInfo of matches){
 
@@ -85,6 +79,12 @@ class Order_Match {
                 // Set get/give remaining amounts for this order match
                 match['GIVE_REMAINING'] = matchInfo['GIVE_REMAINING'];
                 match['GET_REMAINING']  = matchInfo['GET_REMAINING'];
+
+                // Display get/give remaining amounts
+                if(this.debug){
+                    console.log('ORDER - GET / GIVE remaining=', order['GIVE_REMAINING'], order['GET_REMAINING'])
+                    console.log('MATCH - GIVE / GET remaining=', match['GET_REMAINING'],  match['GIVE_REMAINING'])
+                }
 
                 // Ignore if we have nothing left to GIVE
                 if(match['GIVE_REMAINING'] <= 0 || order['GIVE_REMAINING'] <= 0){
@@ -106,8 +106,6 @@ class Order_Match {
                         console.log('Skipping due to price mismatch ', matchInfo['GET_PRICE'], orderInfo['GIVE_PRICE']);
                     continue;
                 }
-
-                // TODO: Pay attention to divisible and non-divisible tokens
 
                 // Calculate the give and get amounts for this order match
                 let give_amount = this.util.bcmul(matchInfo['GIVE_REMAINING'], orderInfo['GET_PRICE']),
@@ -153,7 +151,7 @@ class Order_Match {
 
                 // Display get/give remaining amounts
                 if(this.debug)
-                    console.log('MATCH - GET / GIVE remaining=',order['GIVE_REMAINING'],order['GET_REMAINING'])
+                    console.log('FINAL - GET / GIVE remaining=',order['GIVE_REMAINING'],order['GET_REMAINING'])
 
                 // TODO : Revisit this code once multi-chain order support is added to xchain-hub component
                 // Set the status to valid
@@ -179,6 +177,8 @@ class Order_Match {
 
                 // Update the data object
                 data['ACTION_INDEX'] = action['ACTION_INDEX'];
+                data['MATCH_GIVE_AMOUNT'] = give_amount;
+                data['MATCH_GET_AMOUNT']  = get_amount;
 
                 // Credit tokens to GET_ADDRESS in orders
                 credits.push([matchInfo['GET_TICK'], get_amount, matchInfo['GET_ADDRESS']]);
