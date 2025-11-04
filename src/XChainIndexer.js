@@ -147,6 +147,7 @@ class XChainIndexer {
 
             // DEBUG
             // startBlock = lastIndexerBlock = 862602;
+            let rollbackBlock = 862657;
 
             // Print out status message about where parsing is resuming
             if(startBlock < lastDecoderBlock)
@@ -166,21 +167,11 @@ class XChainIndexer {
                 var debugTimer = this.util.startTimer();
 
                 // If indexer has no parsed blocks, set block to first Decoder block -1
-                if(this.util.isNull(lastIndexerBlock))
+                if(this.util.isNull(lastIndexerBlock) || lastIndexerBlock===0 )
                     lastIndexerBlock = firstDecoderBlock - 1;
 
                 // Increase lastIndexerBlock to next block
                 lastIndexerBlock++;
-
-                // DEBUG
-                // lastIndexerBlock = startBlock;
-
-                // DEBUG : Rollback to a specific block
-                // let rollbackBlock = 862600;
-                // if(lastIndexerBlock >= rollbackBlock){
-                //     await this.rollback.rollback(rollbackBlock);
-                //     this.util.throwError('Rolled back to ' + rollbackBlock);
-                // }
 
                 // Get a list of any transactions in this block from the decoder database
                 let blockTransactions = await this.decoderDb.getDecoderBlockData(lastIndexerBlock);
@@ -189,27 +180,28 @@ class XChainIndexer {
                 for(const tx of blockTransactions)
                     await this.actions.processTransaction(tx);
 
-                // TODO: Look for swaps/orders/dispensers that are past EXPIRATION and expire them
-
                 // Lookup the block time for a given block
                 let blockTime = await this.decoderDb.getBlockTime(lastIndexerBlock);
 
-                // Create record in `blocks` table with hashes of the credits/debits/actions tables
-                let [credits, debits, actions] = await this.indexerDb.createBlock(lastIndexerBlock, blockTime);
+                // Check for any expired items
+                // await this.actions.processExpirations(lastIndexerBlock, blockTime);
+
+                // Create record in `blocks` table with hashes of the credits/debits/escrows (ledger) and /actions tables
+                let [ledger, actions] = await this.indexerDb.createBlock(lastIndexerBlock, blockTime);
 
                 // Do a sanity check to verify that token supplies match data in credits/debits/balances tables 
                 await this.indexerDb.sanityCheck(lastIndexerBlock);
 
                 // Log the total parse time for this block
                 let parseTime = this.util.getTimer(debugTimer);
-                console.log('Block Parsed' + "\t: " + lastIndexerBlock + ' [credits:' + credits + ' debits:' + debits + ' actions:' + actions + '] (' + parseTime + ')');
+                console.log('Block Parsed' + "\t: " + lastIndexerBlock + ' [ledger:' + ledger + ' actions:' + actions + '] (' + parseTime + ')');
 
                 // DEBUG: counter to enable stopping parsing after a set number of blocks
                 cnt++;
 
                 // DEBUG : Exit processing at a select block
-                // if(lastIndexerBlock >=  862646){
-                //     // await this.rollback.rollback(rollbackBlock);
+                // if(lastIndexerBlock >=  862658){
+                //     await this.rollback.rollback(rollbackBlock);
                 //     this.util.throwError('Exiting on target block');
                 // }
 
