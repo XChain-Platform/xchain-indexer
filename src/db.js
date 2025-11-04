@@ -764,18 +764,17 @@ class Database {
     // Lookup action_index records in the `actions` table and return them
     async getActionIndex(data){
         let action_index  = null;
-        let block_index   = data.BLOCK_INDEX;
-        let tx_index      = data.TX_INDEX;
-        let action_format = data.FORMAT;
-        let action_id     = await this.createAction(data.ACTION);
+        let block_index   = data['BLOCK_INDEX'];
+        let tx_index      = data['TX_INDEX'];
+        let action_format = data['FORMAT'];
+        let action_id     = await this.createAction(data['ACTION']);
         let db            = await this.getConnection();
         let query = `SELECT
                         a.action_index
                     FROM
                         actions a
-                        INNER JOIN transactions t ON (t.tx_index=a.tx_index)
                     WHERE
-                        t.block_index=? AND 
+                        a.block_index=? AND 
                         a.tx_index=? AND 
                         a.action_id=? AND
                         a.action_format=?`;
@@ -793,16 +792,22 @@ class Database {
 
     // Create records in the 'actions' table and return record id
     async createActionIndex(data){
+        // Set values to NULL if it is not already set
+        data['BLOCK_INDEX'] = (!this.util.isNull(data['BLOCK_INDEX'])) ? data['BLOCK_INDEX'] : null;
+        data['TX_INDEX']    = (!this.util.isNull(data['TX_INDEX'])) ? data['TX_INDEX'] : null;
+        data['FORMAT']      = (!this.util.isNull(data['FORMAT'])) ? data['FORMAT'] : null;
+        // Check if the action index already exists for this action
         let action_index = await this.getActionIndex(data);
         // Handle creating record
         if(action_index==null){
             action_index      = await this.getNextActionIndex();
-            let tx_index      = data.TX_INDEX;
-            let action_format = data.FORMAT;
-            let action_id     = await this.createAction(data.ACTION);
+            let block_index   = data['BLOCK_INDEX'];
+            let tx_index      = data['TX_INDEX'];
+            let action_format = data['FORMAT'];
+            let action_id     = await this.createAction(data['ACTION']);
             let db            = await this.getConnection();
-            let query         = "INSERT INTO actions (action_index, tx_index, action_id, action_format) values (?, ?, ?, ?)";
-            let args          = [action_index, tx_index, action_id, action_format];
+            let query         = "INSERT INTO actions (action_index, block_index, tx_index, action_id, action_format) values (?, ?, ?, ?, ?)";
+            let args          = [action_index, block_index, tx_index, action_id, action_format];
             try {
                 let result = await db.query(query, args);
             } catch (error) {
