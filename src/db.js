@@ -3657,19 +3657,6 @@ class Database {
         return edit;
     }
 
-    // Handle removing an escrow record for a given ACTION_INDEX
-    async removeEscrowRecord(action_index){
-        let db    = await this.getConnection();
-        let query = `DELETE FROM escrows WHERE action_index=?`;
-        let args  = [action_index];
-        try {
-            let result = await db.query(query, args);
-        } catch (error) {
-            this.util.logError('Error deleting record from the escrows table:', error);
-        }
-        await this.releaseConnection();
-    }
-
     // Create/Update record in `swap_edits` table
     async createSwapEdit(data){
         // Standardize LIST values to numeric or NULL
