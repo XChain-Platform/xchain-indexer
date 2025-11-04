@@ -1949,7 +1949,7 @@ class Database {
                 FROM
                     ` + table + ` m
                     INNER JOIN actions       a1 ON (a1.action_index=m.action_index)
-                    INNER JOIN transactions  t1 ON (t1.tx_index=a1.tx_index)
+                    LEFT  JOIN transactions  t1 ON (t1.tx_index=a1.tx_index)
                     INNER JOIN tokens        t2 ON (t2.tick_id=m.tick_id)
                     INNER JOIN index_actions a2 ON (a2.id=a1.action_id)
                 WHERE 
