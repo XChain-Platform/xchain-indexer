@@ -106,9 +106,9 @@ class Swap_Match {
 
                 // Define SWAP_MATCH action
                 let action = {}
-                action['BLOCK_INDEX'] = data['BLOCK_INDEX'];
-                action['TX_INDEX']    = data['TX_INDEX']
                 action['ACTION']      = 'SWAP_MATCH';
+                action['STATUS']      = 'valid';
+                action['BLOCK_INDEX'] = data['BLOCK_INDEX'];
 
                 // Create a record of this SWAP_MATCH action in the actions table
                 data['ACTION_INDEX'] = await this.indexerDb.createActionIndex(action);

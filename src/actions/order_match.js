@@ -167,10 +167,9 @@ class Order_Match {
 
                 // Define ORDER_MATCH action
                 let action = {}
-                action['BLOCK_INDEX']  = data['BLOCK_INDEX'];
-                action['TX_INDEX']     = data['TX_INDEX']
-                action['ACTION']       = 'ORDER_MATCH';
-                action['STATUS']       = 'valid';
+                action['ACTION']      = 'ORDER_MATCH';
+                action['STATUS']      = 'valid';
+                action['BLOCK_INDEX'] = data['BLOCK_INDEX'];
 
                 // Create a record of this ORDER_MATCH action in the actions table
                 action['ACTION_INDEX'] = await this.indexerDb.createActionIndex(action);
