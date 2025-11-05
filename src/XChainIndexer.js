@@ -185,7 +185,7 @@ class XChainIndexer {
                 let blockTime = await this.decoderDb.getBlockTime(lastIndexerBlock);
 
                 // Check for any expired items (orders, swaps, dispensers)
-                await this.actions.processExpirations(lastIndexerBlock, blockTime);
+                await this.util.processExpirations(this.actions, this.indexerDb, lastIndexerBlock, blockTime);
 
                 // Create record in `blocks` table with hashes of the credits/debits/escrows (ledger) and /actions tables
                 let [ledger, actions] = await this.indexerDb.createBlock(lastIndexerBlock, blockTime);
