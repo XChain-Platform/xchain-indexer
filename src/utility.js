@@ -549,6 +549,23 @@ class Utility {
             let [tick, amount, address] = escrows[idx];
             await db.createEscrow(action_index, tick, amount, address);
         }
+    }
+
+    // Process any orders, swaps, or dispensers which are past expiration 
+    // NOTE: We currently use block_time to expire items... not ideal as block times can be manipulated
+    // TODO: Revisit this code and handle calculating block time more elegantly
+    async processExpirations(actions, db, block_index, block_time){
+        let expired = await db.getExpiredItems(block_time);
+        for(let info of expired){
+            // Define basic ACTION transaction data object
+            let action = String(info.type + '_EXPIRE').toUpperCase();
+            let data = {};
+            data['ACTION']       = action;
+            data['BLOCK_INDEX']  = block_index;
+            data['BLOCK_TIME']   = block_time;
+            data['ACTION_INDEX'] = info.action_index;
+            await actions.processAction(action, null, data, null);
+        }
     }    
 }
 

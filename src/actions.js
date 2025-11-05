@@ -218,26 +218,8 @@ class Actions {
         if(action=='SWAP_EXPIRE')        await this.actionSwapExpire.parse(params, data, error);
         if(action=='SWAP_MATCH')         await this.actionSwapMatch.parse(params, data, error);
         if(action=='SWEEP')              await this.actionSweep.parse(params, data, error);
-
     }
 
-    // Generalized function to handle checking for any items which are past EXPIRATION
-    // NOTE: We currently use block_time to expire items... not ideal as block times can be manipulated
-    // TODO: Revisit this code and handle calculating block time more elegantly
-    async processExpirations(block_index, block_time){
-        let expired = await this.indexerDb.getExpiredItems(block_time);
-        for(let info of expired){
-            // Define basic ACTION transaction data object
-            let action = String(info.type + '_EXPIRE').toUpperCase();
-            let data = {};
-            data['ACTION']       = action;
-            data['BLOCK_INDEX']  = block_index;
-            data['BLOCK_TIME']   = block_time;
-            data['ACTION_INDEX'] = info.action_index;
-            await this.processAction(action, null, data, null);
-        }
-
-    }
 }
 
 module.exports = Actions;
