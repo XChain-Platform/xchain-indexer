@@ -3545,6 +3545,53 @@ class Database {
         await this.releaseConnection();
     }
 
+    // Create/Update record in `swap_statuses` table
+    // @param {action_index}     integer Action index of action
+    // @param {swap_action_tick} integer Action index of swap
+    // @param {status}           string  Status of the expire (valid/invalid)
+    async createSwapExpire(action_index, swap_action_index, status){
+        // Normalize data
+        let status_id = await this.createStatus(status);
+        // Check if record already exists for this in swap_expires table
+        let db     = await this.getConnection();
+        let query  = `SELECT
+                            action_index
+                        FROM
+                            swap_expires
+                        WHERE
+                            action_index=? AND
+                            swap_action_index=?`;
+        let args = [action_index, swap_action_index];
+        let exists = false;
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0)
+                exists = true;
+        } catch (error){
+            this.util.logError('Error looking up record in swap_expires table:', error);
+        }
+        if(exists){
+            // UPDATE record
+            query = `UPDATE
+                        swap_expires
+                    SET
+                        status_id=?
+                    WHERE 
+                        action_index=? AND
+                        swap_action_index=?`;
+        } else {
+            // INSERT record
+            query = `INSERT INTO swap_expires (status_id, action_index, swap_action_index) values (?, ?, ?)`;
+        }
+        args = [status_id, action_index, swap_action_index];
+        // Create or Update the record in the swap_expires table
+        try {
+            let result = await db.query(query, args);
+        } catch (error){
+            this.util.logError('Error trying to create record in swap_expires table:', error);
+        }
+        await this.releaseConnection();
+    }
 
     // Return swap info for given action_index
     async getSwapInfo(coin, action_index){
@@ -3960,6 +4007,55 @@ class Database {
         }
         await this.releaseConnection();
     }
+
+    // Create/Update record in `order_expires` table
+    // @param {action_index}      integer Action index of action
+    // @param {order_action_tick} integer Action index of order
+    // @param {status}            string  Status of the expire (valid/invalid)
+    async createOrderExpire(action_index, order_action_index, status){
+        // Normalize data
+        let status_id = await this.createStatus(status);
+        // Check if record already exists for this in order_expires table
+        let db     = await this.getConnection();
+        let query  = `SELECT
+                            action_index
+                        FROM
+                            order_expires
+                        WHERE
+                            action_index=? AND
+                            order_action_index=?`;
+        let args = [action_index, order_action_index];
+        let exists = false;
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0)
+                exists = true;
+        } catch (error){
+            this.util.logError('Error looking up record in order_expires table:', error);
+        }
+        if(exists){
+            // UPDATE record
+            query = `UPDATE
+                        order_expires
+                    SET
+                        status_id=?
+                    WHERE 
+                        action_index=? AND
+                        order_action_index=?`;
+        } else {
+            // INSERT record
+            query = `INSERT INTO order_expires (status_id, action_index, order_action_index) values (?, ?, ?)`;
+        }
+        args = [status_id, action_index, order_action_index];
+        // Create or Update the record in the order_expires table
+        try {
+            let result = await db.query(query, args);
+        } catch (error){
+            this.util.logError('Error trying to create record in order_expires table:', error);
+        }
+        await this.releaseConnection();
+    }
+
 
     // Handle looking up potential order matches
     async findOrderMatches(data){
@@ -5248,6 +5344,83 @@ class Database {
             }
         }
         return data;
-    }    
+    }
+
+    // Lookup items that need to be expired and return a list
+    async getExpiredItems(block_time){
+        let expired = [];
+        let db      = await this.getConnection();
+        let types   = ['order','swap','dispenser'];
+        let query   = '';
+        let args    = [];
+        let results = false;
+        // Build out the query for each of the table types to get 'open' items
+        for(let type of types){
+            if(query!='')
+                query += 'UNION ';
+            query += `SELECT 
+                        m.action_index, 
+                        m.expiration,
+                        '` + type + `' as type
+                    FROM 
+                        ` + type + `s m
+                        LEFT JOIN LATERAL (
+                            SELECT
+                                s2.status
+                            FROM
+                                ` + type + `_statuses s1
+                                INNER JOIN index_statuses s2 ON (s2.id=s1.status_id)
+                            WHERE
+                                s1.` + type + `_action_index=m.action_index
+                            ORDER BY 
+                                s1.action_index DESC
+                            LIMIT 1
+                        ) s ON TRUE        
+                    WHERE 
+                        s.status='open'`
+        }
+        try {
+            results = await db.query(query);
+        } catch (error) {
+            this.util.logError('Error looking up open items in getExpirations:', error);
+        }
+        // Get the current expiration for each item
+        if(results){
+            for(let info of results){
+                // Get list of any `valid` edits and set expiration
+                query  = `SELECT 
+                            s1.expiration
+                        FROM 
+                            ` + info.type + `_edits s1
+                            INNER JOIN index_statuses s2 ON (s2.id=s1.status_id)
+                        WHERE 
+                            s1.` + info.type + `_action_index=? AND
+                            s2.status=?
+                        ORDER BY
+                            s1.action_index ASC`;
+                args  = [info.action_index, 'valid'];
+                try {
+                    let rows = await db.query(query, args);
+                    for(let row of rows){
+                        if(!this.util.isNull(row.expiration))
+                            info.expiration = row.expiration;
+                    }
+                } catch (error) {
+                    this.util.logError('Error looking up item expiration in getExpirations:', error);
+                }
+                // If the item expiration is less than the current block_time, expire the item
+                if(info.expiration < block_time){
+                    expired.push({
+                        type:         info.type,
+                        action_index: Number(info.action_index),
+                        expiration:   Number(info.expiration)
+                    });
+                }
+            }
+        }
+        await this.releaseConnection();
+        return expired;
+    }
+
 }
 module.exports = Database
