@@ -5408,5 +5408,200 @@ class Database {
         return expired;
     }
 
+    // Lookup market pairs by block
+    // TODO: Circle back and add support for cross-chain market data (different coin_id)
+    async getMarketsByBlock(block_index){
+        let markets  = [];
+        let db       = await this.getConnection();
+        let args     = [block_index];
+        let counts   = false;
+        let query    = '';
+        // Quickly check if we have any ORDER, ORDER_MATCH, ORDER_EXPIRE, or ORDER_CANCEL events for the given block
+        query = `SELECT
+                    count(*) as count,
+                    a2.action as type
+                FROM
+                    actions a1
+                    INNER JOIN index_actions a2 ON (a2.id=a1.action_id)
+                WHERE
+                    a1.block_index=? AND
+                    a2.action IN ('ORDER','ORDER_MATCH','ORDER_EXPIRE','ORDER_CANCEL')
+                GROUP BY a2.action
+                ORDER BY a2.action`;
+        try {
+            counts = await db.query(query, args);
+        } catch (error) {
+            this.util.logError('Error looking up order actions in getMarketsByBlock:', error);
+        }
+        // Loop through order action types and get list of market pairs
+        for(let info of counts){
+            let pairs = [],
+                query = false,
+                type  = info.type,
+                table = String(type).toLowerCase() + ((type.includes('_MATCH')) ? 'es' : 's');
+            if(['ORDER','ORDER_MATCH'].includes(type)){
+                args = [this.config['COIN'], block_index, 'valid'];
+                query = `SELECT 
+                            o1.action_index,
+                            o1.get_tick_id  as tick1_id,
+                            o1.give_tick_id as tick2_id
+                        FROM
+                            ` + table + ` o1
+                            INNER JOIN actions        a1 ON (a1.action_index=o1.action_index)
+                            INNER JOIN blocks         b1 ON (b1.block_index=a1.block_index)
+                            INNER JOIN index_coins    c1 ON (c1.id=o1.give_coin_id)
+                            INNER JOIN index_statuses s1 ON (s1.id=o1.status_id)
+                        WHERE
+                            o1.give_coin_id=o1.get_coin_id AND
+                            c1.coin=? AND
+                            b1.block_index=? AND
+                            s1.status=?
+                        ORDER BY o1.action_index ASC`;
+            } else if(['ORDER_CANCEL','ORDER_EXPIRE'].includes(type)){
+                args = [block_index, 'valid'];
+                query = `SELECT 
+                            o1.action_index,
+                            o2.get_tick_id  as tick1_id,
+                            o2.give_tick_id as tick2_id
+                        FROM
+                            ` + table + ` o1
+                            INNER JOIN orders         o2 ON (o2.action_index=o1.order_action_index)
+                            INNER JOIN actions        a1 ON (a1.action_index=o1.action_index)
+                            INNER JOIN blocks         b1 ON (b1.block_index=a1.block_index)
+                            INNER JOIN index_statuses s1 ON (s1.id=o1.status_id)
+                        WHERE
+                            b1.block_index=? AND
+                            s1.status=?
+                        ORDER BY o1.action_index ASC`;
+            }
+            if(query){
+                let rows = await db.query(query, args);
+                for(let row of rows){
+                    // Check if this pair already exists
+                    let found = false;
+                    for(let pair of markets){
+                        if((pair.tick1_id == row.tick1_id && pair.tick2_id == row.tick2_id) || (pair.tick1_id == row.tick2_id && pair.tick2_id == row.tick1_id))
+                            found = true;
+                    }
+                    if(!found){
+                        markets.push({
+                            tick1_id: Number(row.tick1_id),
+                            tick2_id: Number(row.tick2_id)
+                        });
+                    }
+                }
+           }
+        }
+        return markets;
+    }
+
+    // Get market_id for given ticker ids
+    async getMarketId(tick1_id, tick2_id){
+        let id     = null;
+        let db     = await this.getConnection();
+        let query  = `SELECT
+                            id
+                        FROM
+                            markets m
+                        WHERE
+                            (m.tick1_id=? AND m.tick2_id=?) OR
+                            (m.tick1_id=? AND m.tick2_id=?)`;
+        let args = [tick1_id, tick2_id, tick2_id, tick1_id];
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0)
+                id = rows[0].id;
+        } catch (error){
+            this.util.logError('Error looking up record in markets table:', error);
+        }
+        return id;
+    }
+
+    // Create record in `markets` table
+    async createMarket(tick1_id, tick2_id){
+        let id = await this.getMarketId(tick1_id, tick2_id);
+        if(id==null){
+            let db = await this.getConnection();
+            let query = `INSERT INTO markets (tick1_id, tick2_id) values (?, ?)`;
+            let args  = [tick1_id, tick2_id];
+            // Create or Update the record in the markets table
+            try {
+                let result = await db.query(query, args);
+                if(result.insertId)
+                    id = Number(result.insertId);
+            } catch (error){
+                this.util.logError('Error trying to create record in markets table:', error);
+            }
+            await this.releaseConnection();
+        }
+        return id;
+    }
+
+    // Handle getting information on a given market
+    async getMarketInfo(market_id){
+        // Define response object
+        let data = {
+            tick1_last   : 0,
+            tick1_ask    : 0,
+            tick1_bid    : 0,
+            tick1_high   : 0,
+            tick1_low    : 0,
+            tick1_24hr   : 0,
+            tick1_volume : 0,
+            tick1_change : 0,
+            tick2_last   : 0,
+            tick2_ask    : 0,
+            tick2_bid    : 0,
+            tick2_high   : 0,
+            tick2_low    : 0,
+            tick2_24hr   : 0,
+            tick2_volume : 0,
+            tick2_change : 0
+        };
+
+        // Lookup basic information on this market (tick, tick_id, decimals)
+        let db = await this.getConnection();
+        let query = `SELECT
+                            m1.id       as market_id,
+                            t3.tick     as tick1,
+                            t1.tick_id  as tick1_id,
+                            t1.decimals as tick1_decimals,
+                            t4.tick     as tick2,
+                            t2.tick_id  as tick2_id,
+                            t2.decimals as tick2_decimals
+                        FROM
+                            markets m1
+                            INNER JOIN tokens        t1 ON (t1.tick_id=m1.tick1_id)
+                            INNER JOIN tokens        t2 ON (t2.tick_id=m1.tick2_id)
+                            INNER JOIN index_tickers t3 ON (t3.id=t1.tick_id)
+                            INNER JOIN index_tickers t4 ON (t4.id=t2.tick_id)
+                        WHERE 
+                            m1.id=?`;
+        let args  = [market_id];
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0){
+                let row = rows[0];
+                // Convert the ids from BIGINT to Number
+                row.market_id = Number(row.market_id);
+                row.tick1_id  = Number(row.tick1_id);
+                row.tick2_id  = Number(row.tick2_id);
+                Object.assign(data, row);
+            }
+        } catch (error){
+            this.util.logError('Error trying to create record in markets table:', error);
+        }
+        // Sort the market data object 
+        data = this.util.ksort(data);
+        return data;
+    }
+
+    // Update market information on a giv
+    async updateMarketInfo(data){
+        // Coming soon
+    }
+
+
+
 }
 module.exports = Database
