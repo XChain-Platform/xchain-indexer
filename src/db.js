@@ -5538,7 +5538,7 @@ class Database {
             let db = await this.getConnection();
             let query = `INSERT INTO markets (tick1_id, tick2_id) values (?, ?)`;
             let args  = [tick1_id, tick2_id];
-            // Create or Update the record in the markets table
+            // Create a record in the markets table
             try {
                 let result = await db.query(query, args);
                 if(result.insertId)
@@ -5552,27 +5552,31 @@ class Database {
     }
 
     // Handle getting information on a given market
-    async getMarketInfo(market_id){
+    async getMarketInfo(market_id, block_time){
         // Define response object
         let data = {
-            tick1_last   : 0,
-            tick1_ask    : 0,
-            tick1_bid    : 0,
-            tick1_high   : 0,
-            tick1_low    : 0,
-            tick1_24hr   : 0,
-            tick1_volume : 0,
-            tick1_change : 0,
-            tick2_last   : 0,
-            tick2_ask    : 0,
-            tick2_bid    : 0,
-            tick2_high   : 0,
-            tick2_low    : 0,
-            tick2_24hr   : 0,
-            tick2_volume : 0,
-            tick2_change : 0
+            tick1_price       : 0,
+            tick1_bid         : 0,
+            tick1_ask         : 0,
+            tick1_24hr_price  : 0,
+            tick1_24hr_high   : 0,
+            tick1_24hr_low    : 0,
+            tick1_24hr_change : 0,
+            tick1_24hr_volume : 0,
+            tick2_price       : 0,
+            tick2_bid         : 0,
+            tick2_ask         : 0,
+            tick2_24hr_price  : 0,
+            tick2_24hr_high   : 0,
+            tick2_24hr_low    : 0,
+            tick2_24hr_change : 0,
+            tick2_24hr_volume : 0,
         };
-
+        // Get the time right now and the time 24 hours ago
+        let time_now  = block_time,
+            time_24hr = this.util.bcsub(time_now, 86400);
+        // Set the last time this info was updated to now
+        data.last_updated = time_now;
         // Lookup basic information on this market (tick, tick_id, decimals)
         let db = await this.getConnection();
         let query = `SELECT
@@ -5593,9 +5597,9 @@ class Database {
                             m1.id=?`;
         let args  = [market_id];
         try {
-            let rows = await db.query(query, args);
-            if(rows.length > 0){
-                let row = rows[0];
+            let results = await db.query(query, args);
+            if(results.length > 0){
+                let row = results[0];
                 // Convert the ids from BIGINT to Number
                 row.market_id = Number(row.market_id);
                 row.tick1_id  = Number(row.tick1_id);
@@ -5605,14 +5609,290 @@ class Database {
         } catch (error){
             this.util.logError('Error trying to create record in markets table:', error);
         }
+        // Lookup last trade prices
+        query = `SELECT
+                m1.give_tick_id,
+                m1.give_amount,
+                m1.get_tick_id,
+                m1.get_amount
+            FROM 
+                order_matches m1
+                INNER JOIN index_statuses s1 ON (s1.id=m1.status_id)
+            WHERE
+                m1.give_coin_id=m1.get_coin_id AND 
+                ((m1.give_tick_id=? AND m1.get_tick_id=?) OR (m1.give_tick_id=? AND m1.get_tick_id=?))  AND
+                s1.status=?
+            ORDER BY m1.action_index DESC 
+            LIMIT 1`;
+        args  = [data.tick1_id, data.tick2_id, data.tick2_id, data.tick1_id, 'valid'];
+        try {
+            let results = await db.query(query, args);
+            if(results.length > 0){
+                let row = results[0];
+                let give_amount = (row.give_tick_id==data.tick1_id) ? row.give_amount : row.get_amount;
+                let get_amount  = (row.give_tick_id==data.tick1_id) ? row.get_amount  : row.give_amount;
+                data.tick1_price = this.util.getPrice(give_amount, get_amount);
+                data.tick2_price = this.util.getPrice(get_amount, give_amount);
+            }
+        } catch (error){
+            this.util.logError('Error trying to lookup last trade prices:', error);
+        }
+        // Lookup trade prices 24-hours ago
+        query = `SELECT
+                m1.give_tick_id,
+                m1.give_amount,
+                m1.get_tick_id,
+                m1.get_amount
+            FROM 
+                order_matches m1
+                INNER JOIN index_statuses s1 ON (s1.id=m1.status_id)
+                INNER JOIN actions        a1 ON (a1.action_index=m1.action_index)
+                INNER JOIN blocks         b1 ON (b1.block_index=a1.block_index)
+            WHERE
+                m1.give_coin_id=m1.get_coin_id AND 
+                ((m1.give_tick_id=? AND m1.get_tick_id=?) OR (m1.give_tick_id=? AND m1.get_tick_id=?))  AND
+                s1.status=? AND
+                b1.block_time <= ?
+            ORDER BY m1.action_index DESC 
+            LIMIT 1`;
+        args  = [data.tick1_id, data.tick2_id, data.tick2_id, data.tick1_id, 'valid', time_24hr];
+        try {
+            let results = await db.query(query, args);
+            if(results.length > 0){
+                let row = results[0];
+                let give_amount = (row.give_tick_id==data.tick1_id) ? row.give_amount : row.get_amount;
+                let get_amount  = (row.give_tick_id==data.tick1_id) ? row.get_amount  : row.give_amount;
+                data.tick1_24hr_price  = this.util.getPrice(give_amount, get_amount);
+                data.tick2_24hr_price = this.util.getPrice(get_amount, give_amount);
+            }
+        } catch (error){
+            this.util.logError('Error trying to lookup 24-hour trade prices:', error);
+        }
+        // Lookup 'bid' prices
+        query = `SELECT
+                o1.give_tick_id,
+                o1.give_amount,
+                o1.get_tick_id,
+                o1.get_amount
+            FROM 
+                orders o1
+                INNER JOIN order_statuses s1 ON (s1.order_action_index=o1.action_index)
+                INNER JOIN index_statuses s2 ON (s2.id=o1.status_id)
+                INNER JOIN index_statuses s3 ON (s3.id=s1.status_id)
+            WHERE
+                o1.give_coin_id=o1.get_coin_id AND 
+                ((o1.give_tick_id=? AND o1.get_tick_id=?) OR (o1.give_tick_id=? AND o1.get_tick_id=?))  AND
+                s2.status=? AND
+                s3.status=? AND
+                s1.action_index = (
+                    SELECT
+                        MAX(s4.action_index)
+                    FROM
+                        order_statuses s4
+                    WHERE
+                        s4.order_action_index = o1.action_index
+                )
+            ORDER BY o1.action_index DESC`;
+        args = [data.tick1_id, data.tick2_id, data.tick2_id, data.tick1_id, 'valid', 'open'];
+        try {
+            let results = await db.query(query, args);
+            if(results.length > 0){
+                let tick1_bid = 0,
+                    tick2_bid = 0;
+                for(let row of results){
+                    let give_amount = (row.give_tick_id==data.tick1_id) ? row.give_amount : row.get_amount;
+                    let get_amount  = (row.give_tick_id==data.tick1_id) ? row.get_amount : row.give_amount;
+                    let price1      = this.util.getPrice(give_amount, get_amount);
+                    let price2      = this.util.getPrice(get_amount, give_amount);
+                    if(price1==0||price2==0)
+                        continue;
+                    if(tick1_bid==0) tick1_bid = price1;
+                    if(tick2_bid==0) tick2_bid = price2;
+                    if(price1 > tick1_bid) tick1_bid = price1;
+                    if(price2 > tick2_bid) tick2_bid = price2;
+                }
+                data.tick1_bid  = tick1_bid;
+                data.tick2_bid  = tick2_bid;
+            }
+        } catch (error){
+            this.util.logError('Error trying to lookup bid prices:', error);
+        }
+        // Lookup 'ask' prices
+        query = `SELECT
+                o1.give_tick_id,
+                o1.give_amount,
+                o1.get_tick_id,
+                o1.get_amount
+            FROM 
+                orders o1
+                INNER JOIN order_statuses s1 ON (s1.order_action_index=o1.action_index)
+                INNER JOIN index_statuses s2 ON (s2.id=o1.status_id)
+                INNER JOIN index_statuses s3 ON (s3.id=s1.status_id)
+            WHERE
+                o1.give_coin_id=o1.get_coin_id AND 
+                ((o1.give_tick_id=? AND o1.get_tick_id=?) OR (o1.give_tick_id=? AND o1.get_tick_id=?))  AND
+                s2.status=? AND
+                s3.status=? AND
+                s1.action_index = (
+                    SELECT
+                        MAX(s4.action_index)
+                    FROM
+                        order_statuses s4
+                    WHERE
+                        s4.order_action_index = o1.action_index
+                )
+            ORDER BY o1.action_index DESC`;
+        args  = [data.tick1_id, data.tick2_id, data.tick2_id, data.tick1_id, 'valid', 'open'];
+        try {
+            let results = await db.query(query, args);
+            if(results.length > 0){
+                let tick1_ask = 0,
+                    tick2_ask = 0;
+                for(let row of results){
+                    let give_amount = (row.give_tick_id==data.tick1_id) ? row.give_amount : row.get_amount;
+                    let get_amount  = (row.give_tick_id==data.tick1_id) ? row.get_amount : row.give_amount;
+                    let price1      = this.util.getPrice(give_amount, get_amount);
+                    let price2      = this.util.getPrice(get_amount, give_amount);
+                    if(price1==0||price2==0)
+                        continue;
+                    if(tick1_ask==0) tick1_ask = price1;
+                    if(tick2_ask==0) tick2_ask = price2;
+                    if(price1 < tick1_ask) tick1_ask = price1;
+                    if(price2 < tick2_ask) tick2_ask = price2;
+                }
+                data.tick1_ask = tick1_ask;
+                data.tick2_ask = tick2_ask;
+            }
+        } catch (error){
+            this.util.logError('Error trying to lookup ask prices:', error);
+        }
+        // Lookup all order matches in the last 24-hours
+        query = `SELECT
+                m1.give_tick_id,
+                m1.give_amount,
+                m1.get_tick_id,
+                m1.get_amount
+            FROM 
+                order_matches m1
+                INNER JOIN index_statuses s1 ON (s1.id=m1.status_id)
+                INNER JOIN actions        a1 ON (a1.action_index=m1.action_index)
+                INNER JOIN blocks         b1 ON (b1.block_index=a1.block_index)
+            WHERE
+                m1.give_coin_id=m1.get_coin_id AND 
+                ((m1.give_tick_id=? AND m1.get_tick_id=?) OR (m1.give_tick_id=? AND m1.get_tick_id=?))  AND
+                s1.status=? AND
+                b1.block_time >= ?
+            ORDER BY m1.action_index DESC`;
+        args  = [data.tick1_id, data.tick2_id, data.tick2_id, data.tick1_id, 'valid', time_24hr];
+        // console.log('query,args=',query,args);
+        try {
+            let results = await db.query(query, args);
+            if(results.length > 0){
+                let tick1_high   = 0,
+                    tick1_low    = 0,
+                    tick1_volume = 0,
+                    tick2_high   = 0,
+                    tick2_low    = 0,
+                    tick2_volume = 0;
+                for(let row of results){
+                    let give_amount = (row.give_tick_id==data.tick1_id) ? row.give_amount : row.get_amount;
+                    let get_amount  = (row.give_tick_id==data.tick1_id) ? row.get_amount : row.give_amount;
+                    let price1      = this.util.getPrice(give_amount, get_amount);
+                    let price2      = this.util.getPrice(get_amount, give_amount);
+                    // Set tick high/low prices
+                    if(tick1_high==0 && tick1_low==0){
+                        tick1_high = price1;
+                        tick1_low  = price1;
+                    }
+                    if(tick2_high==0 && tick2_low==0){
+                        tick2_high = price2;
+                        tick2_low  = price2;
+                    }
+                    // 24-hour high
+                    if(price1 > tick1_high) tick1_high = price1;
+                    if(price2 > tick2_high) tick2_high = price2;
+                    // 24-hour low
+                    if(price1 < tick1_low) tick1_low = price1;
+                    if(price2 < tick2_low) tick2_low = price2;
+                    // 24-hour volumes
+                    tick1_volume = this.util.bcadd(tick1_volume, give_amount);
+                    tick2_volume = this.util.bcadd(tick2_volume, get_amount);
+                }
+                data.tick1_24hr_high   = tick1_high;
+                data.tick1_24hr_low    = tick1_low;
+                data.tick1_24hr_volume = tick1_volume;
+                data.tick2_24hr_high   = tick2_high;
+                data.tick2_24hr_low    = tick2_low;
+                data.tick2_24hr_volume = tick2_volume;
+            }
+        } catch (error){
+            this.util.logError('Error trying to lookup 24-hour high/low prices:', error);
+        }
+        // Calculate 24-hour price change percentage
+        let tick1_change = 0.00;
+        let tick2_change = 0.00;
+        if(data.tick1_price > 0 && data.tick1_24hr_price > 0)
+            tick1_change = this.util.bcmul(this.util.bcdiv(this.util.bcsub(data.tick1_price, data.tick1_24hr_price,8), data.tick1_24hr_price,8), 100, 2);
+        if(data.tick2_price > 0 && data.tick2_24hr_price > 0)
+            tick2_change = this.util.bcmul(this.util.bcdiv(this.util.bcsub(data.tick2_price, data.tick2_24hr_price,8), data.tick2_24hr_price,8), 100, 2);
+        data.tick1_24hr_change = tick1_change;
+        data.tick2_24hr_change = tick2_change;
         // Sort the market data object 
         data = this.util.ksort(data);
         return data;
     }
 
-    // Update market information on a giv
+    // Update market information for a given market_id
     async updateMarketInfo(data){
-        // Coming soon
+        let market_id    = data.market_id;
+        let tick1_price       = data.tick1_price;
+        let tick1_bid         = data.tick1_bid;
+        let tick1_ask         = data.tick1_ask;
+        let tick1_24hr_price  = data.tick1_24hr_price;
+        let tick1_24hr_high   = data.tick1_24hr_high;
+        let tick1_24hr_low    = data.tick1_24hr_low;
+        let tick1_24hr_change = data.tick1_24hr_change;
+        let tick1_24hr_volume = data.tick1_24hr_volume;
+        let tick2_price       = data.tick2_price;
+        let tick2_bid         = data.tick2_bid;
+        let tick2_ask         = data.tick2_ask;
+        let tick2_24hr_price  = data.tick2_24hr_price;
+        let tick2_24hr_high   = data.tick2_24hr_high;
+        let tick2_24hr_low    = data.tick2_24hr_low;
+        let tick2_24hr_change = data.tick2_24hr_change;
+        let tick2_24hr_volume = data.tick2_24hr_volume;
+        let last_updated = data.last_updated;
+        let db = await this.getConnection();
+        let query = `UPDATE 
+                        markets
+                    SET
+                        tick1_price=?,
+                        tick1_bid=?,
+                        tick1_ask=?,
+                        tick1_24hr_price=?,
+                        tick1_24hr_high=?,
+                        tick1_24hr_low=?,
+                        tick1_24hr_change=?,
+                        tick1_24hr_volume=?,
+                        tick2_price=?,
+                        tick2_bid=?,
+                        tick2_ask=?,
+                        tick2_24hr_price=?,
+                        tick2_24hr_high=?,
+                        tick2_24hr_low=?,
+                        tick2_24hr_change=?,
+                        tick2_24hr_volume=?,
+                        last_updated=?
+                    WHERE
+                        id=?`;
+        let args = [tick1_price, tick1_bid, tick1_ask, tick1_24hr_price, tick1_24hr_high, tick1_24hr_low, tick1_24hr_change, tick1_24hr_volume, tick2_price, tick2_bid, tick2_ask, tick2_24hr_price, tick2_24hr_high, tick2_24hr_low, tick2_24hr_change, tick2_24hr_volume, last_updated, market_id];
+        // Update the markets table
+        try {
+            let result = await db.query(query, args);
+        } catch (error){
+            this.util.logError('Error trying to update record in markets table:', error);
+        }
+        await this.releaseConnection();
     }
 
 

@@ -412,10 +412,15 @@ class Utility {
         return data;
     }
 
+    // Handle getting the current time in seconds
+    getCurrentTime(){
+        return this.bcdiv(Date.now(), 1000, 0);
+    }
+
     // Handle getting the default EXPIRATION 
     getDefaultExpiration(){
         // Get current time in seconds
-        let now = this.bcdiv(Date.now(), 1000, 0);
+        let now = this.getCurrentTime();
         // Get number of seconds in EXPIRATION_FEE_DEFAULT_DAYS
         let sec = this.bcmul(this.config['EXPIRATION_FEE_DEFAULT_DAYS'], 86400, 0);
         return this.bcadd(now, sec, 0);
@@ -579,7 +584,7 @@ class Utility {
     }
 
     // Handle creating and updating DEX market information
-    async processMarketUpdates(db, block_index){
+    async processMarketUpdates(db, block_index, block_time){
         // Get list of market orders for the given block
         let markets = await db.getMarketsByBlock(block_index);
         // Loop through markets
@@ -589,7 +594,7 @@ class Utility {
             let market_id = await db.createMarket(pair.tick1_id, pair.tick2_id);
 
             // Get the market data
-            let data = await db.getMarketInfo(market_id);
+            let data = await db.getMarketInfo(market_id, block_time);
 
             // Update Market with the updated data
             await db.updateMarketInfo(data);
