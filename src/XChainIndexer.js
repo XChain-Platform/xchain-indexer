@@ -190,6 +190,9 @@ class XChainIndexer {
                 // Create record in `blocks` table with hashes of the credits/debits/escrows (ledger) and /actions tables
                 let [ledger, actions] = await this.indexerDb.createBlock(lastIndexerBlock, blockTime);
 
+                // Create / Update DEX market information
+                await this.util.processMarketUpdates(this.indexerDb, lastIndexerBlock);
+
                 // Do a sanity check to verify that token supplies match data in credits/debits/balances tables 
                 await this.indexerDb.sanityCheck(lastIndexerBlock);
 
