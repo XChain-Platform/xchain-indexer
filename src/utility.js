@@ -485,6 +485,16 @@ class Utility {
         return this.bcdiv(numerator, denominator, precision);
     }
 
+    // Sort an object by key values
+    ksort(obj){
+        const sortedKeys = Object.keys(obj).sort();
+        const sortedObj = sortedKeys.reduce((acc, key) => {
+            acc[key] = obj[key];
+            return acc;
+        }, {});
+        return sortedObj;
+    }
+
     // Handle sorting an array of objects by price, then by action_index
     sortPriceActionIndex(data){
         data.sort((a, b) => {
@@ -566,7 +576,29 @@ class Utility {
             data['ACTION_INDEX'] = info.action_index;
             await actions.processAction(action, null, data, null);
         }
-    }    
+    }
+
+    // Handle creating and updating DEX market information
+    async processMarketUpdates(db, block_index){
+        // Get list of market orders for the given block
+        let markets = await db.getMarketsByBlock(block_index);
+        // Loop through markets
+        for(let pair of markets){
+
+            // Create market 
+            let market_id = await db.createMarket(pair.tick1_id, pair.tick2_id);
+
+            // Get the market data
+            let data = await db.getMarketInfo(market_id);
+
+            // Update Market with the updated data
+            await db.updateMarketInfo(data);
+
+        }
+        // Create Market
+        // Update Market
+    }
+
 }
 
 module.exports = Utility;
