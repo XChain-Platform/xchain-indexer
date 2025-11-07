@@ -586,7 +586,8 @@ class Utility {
     // Handle creating and updating DEX market information
     async processMarketUpdates(db, block_index, block_time){
         // Get list of market orders for the given block
-        let markets = await db.getMarketsByBlock(block_index);
+        // Note: this also gets a list of any markets that have not had an update in the past 24 hours
+        let markets = await db.getMarkets(block_index, true);
         // Loop through markets
         for(let pair of markets){
             // Create market 
