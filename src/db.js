@@ -3011,21 +3011,18 @@ class Database {
                         INNER JOIN index_coins     c1 ON (c1.id=s.get_coin_id)
                         INNER JOIN index_memos     m1 ON (m1.id=s.memo_id)
                         INNER JOIN index_statuses  s1 ON (s1.id=s.status_id)
-                        LEFT  JOIN LATERAL (
-                            SELECT
-                                s4.status
-                            FROM
-                                swap_statuses s3
-                                INNER JOIN index_statuses s4 ON (s4.id=s3.status_id)
-                            WHERE
-                                s3.swap_action_index=s.action_index
-                            ORDER BY 
-                                s3.action_index DESC
-                            LIMIT 1
-                        ) s2 ON TRUE
+                        INNER JOIN swap_statuses   s2 ON (s2.swap_action_index = s.action_index)
                     WHERE 
-                        c1.coin=? AND
-                        s.action_index=? 
+                        s2.action_index = (
+                            SELECT
+                                MAX(s_inner.action_index)
+                            FROM
+                                swap_statuses s_inner
+                            WHERE
+                                s_inner.swap_action_index = s.action_index
+                        )
+                        AND c1.coin=? 
+                        AND s.action_index=? 
                     LIMIT 1`;
         let args    = [coin, action_index];
         let results = await this.doQuery(query, args);
@@ -3147,19 +3144,16 @@ class Database {
                         INNER JOIN index_coins  c1 ON (c1.id=s2.get_coin_id)
                         INNER JOIN actions      a1 ON (a1.action_index=s2.action_index)
                         INNER JOIN transactions t1 ON (t1.tx_index=a1.tx_index)
-                        LEFT  JOIN LATERAL (
-                            SELECT
-                                s5.status
-                            FROM
-                                swap_statuses s4
-                                INNER JOIN index_statuses s5 ON (s5.id=s4.status_id)
-                            WHERE
-                                s4.swap_action_index=s2.action_index
-                            ORDER BY 
-                                s4.action_index DESC
-                            LIMIT 1
-                        ) s3 ON TRUE
+                        INNER JOIN swap_statuses s3 ON s3.swap_action_index = s2.action_index
                     WHERE
+                        s3.action_index = (
+                            SELECT
+                                MAX(s_inner.action_index)
+                            FROM
+                                swap_statuses s_inner
+                            WHERE
+                                s_inner.swap_action_index = s2.action_index
+                        ) AND
                         s1.give_coin_id=s2.get_coin_id AND
                         s1.give_tick_id=s2.get_tick_id AND
                         s1.give_amount=s2.get_amount AND
@@ -3386,19 +3380,16 @@ class Database {
                         INNER JOIN index_coins  c1 ON (c1.id=o2.get_coin_id)
                         INNER JOIN actions      a1 ON (a1.action_index=o2.action_index)
                         INNER JOIN transactions t1 ON (t1.tx_index=a1.tx_index)
-                        LEFT  JOIN LATERAL (
-                            SELECT
-                                s2.status
-                            FROM
-                                order_statuses s1
-                                INNER JOIN index_statuses s2 ON (s2.id=s1.status_id)
-                            WHERE
-                                s1.order_action_index=o2.action_index
-                            ORDER BY 
-                                s1.action_index DESC
-                            LIMIT 1
-                        ) s1 ON TRUE
+                        INNER JOIN order_statuses s1 ON s1.order_action_index = o2.action_index
                     WHERE
+                        s1.action_index = (
+                            SELECT
+                                MAX(s_inner.action_index)
+                            FROM
+                                order_statuses s_inner
+                            WHERE
+                                s_inner.order_action_index = o2.action_index
+                        ) AND
                         o1.give_coin_id=o2.get_coin_id AND
                         o1.give_tick_id=o2.get_tick_id AND
                         o1.action_index=? AND
@@ -3455,19 +3446,16 @@ class Database {
                         INNER JOIN index_coins     c1 ON (c1.id=o.get_coin_id)
                         INNER JOIN index_memos     m1 ON (m1.id=o.memo_id)
                         INNER JOIN index_statuses  s1 ON (s1.id=o.status_id)
-                        LEFT  JOIN LATERAL (
-                            SELECT
-                                s4.status as order_status
-                            FROM
-                                order_statuses s3
-                                INNER JOIN index_statuses s4 ON (s4.id=s3.status_id)
-                            WHERE
-                                s3.order_action_index=o.action_index
-                            ORDER BY 
-                                s3.action_index DESC
-                            LIMIT 1
-                        ) s2 ON TRUE
+                        INNER JOIN order_statuses  s2 ON (s2.order_action_index=o.action_index)
                     WHERE 
+                        s2.action_index = (
+                            SELECT
+                                MAX(s_inner.action_index)
+                            FROM
+                                order_statuses s_inner
+                            WHERE
+                                s_inner.order_action_index = o.action_index
+                        ) AND
                         c1.coin=? AND
                         o.action_index=? 
                     LIMIT 1`;
@@ -4590,20 +4578,18 @@ class Database {
                         '` + type + `' as type
                     FROM 
                         ` + type + `s m
-                        LEFT JOIN LATERAL (
+                    INNER JOIN ` + type + `_statuses s1 ON (s1.` + type + `_action_index = m.action_index)
+                    INNER JOIN index_statuses        s2 ON (s2.id = s1.status_id)
+                    WHERE
+                        s1.action_index = (
                             SELECT
-                                s2.status
+                                MAX(s_inner.action_index)
                             FROM
-                                ` + type + `_statuses s1
-                                INNER JOIN index_statuses s2 ON (s2.id=s1.status_id)
+                                ` + type + `_statuses s_inner
                             WHERE
-                                s1.` + type + `_action_index=m.action_index
-                            ORDER BY 
-                                s1.action_index DESC
-                            LIMIT 1
-                        ) s ON TRUE        
-                    WHERE 
-                        s.status='open'`
+                                s_inner.` + type + `_action_index = m.action_index
+                        ) AND
+                        s2.status = 'open'`
         }
         results = await this.doQuery(query, args);
         // Get the current expiration for each item
