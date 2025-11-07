@@ -107,6 +107,9 @@ class Rollback {
         // Placeholder for the first action_index
         let firstActionIndex = false;
 
+        // Placeholder for market pairs
+        let markets = [];
+
         // Get the first action_index after the given block
         let query = `SELECT 
                         a.action_index
@@ -212,15 +215,54 @@ class Rollback {
                                 m.action_index >= ?`;
                 }
 
-                // Run the query and populate the addresses and tickers arrays
+                // ORDERS / ORDER_MATCHES
+                if(['orders','order_matches'].includes(table)){
+                    query = `SELECT 
+                                m.give_tick_id as tick1_id,
+                                m.get_tick_id  as tick2_id
+                            FROM 
+                                ` + table + ` m
+                            WHERE 
+                                m.action_index >= ?`;
+                }
+
+                // ORDER_CANCELS / ORDER_EDITS / ORDER_EXPIRES
+                if(['order_cancels','order_edits','order_expires'].includes(table)){
+                    query = `SELECT 
+                                o1.give_tick_id as tick1_id,
+                                o1.get_tick_id  as tick2_id
+                            FROM 
+                                ` + table + ` m
+                                INNER JOIN orders o1 ON (o1.action_index=m.order_action_index)
+                            WHERE 
+                                m.action_index >= ?`;
+                }
+
+                // Run the query and populate the addresses, tickers, and markets arrays
                 if(query){
                     let rows = await this.indexerDb.doQuery(query, args);
                     for(let row of rows){
-                        this.util.addAddressTicker(row.address, row.tick);
+                        // Populate addresses and tickers arrays
+                        if(!this.util.isNull(row.address))
+                            this.util.addAddressTicker(row.address, row.tick);
                         if(!this.util.isNull(row.address2))
                             this.util.addAddressTicker(row.address2, row.tick);
                         if(!this.util.isNull(row.address3))
                             this.util.addAddressTicker(row.address3, row.tick);
+                        // Build out list of DEX market pairs
+                        if(!this.util.isNull(row.tick1_id) && !this.util.isNull(row.tick2_id)){
+                            let found = false;
+                            for(let pair of markets){
+                                if((pair.tick1_id == row.tick1_id && pair.tick2_id == row.tick2_id) || (pair.tick1_id == row.tick2_id && pair.tick2_id == row.tick1_id))
+                                    found = true;
+                            }
+                            if(!found){
+                                markets.push({
+                                    tick1_id: Number(row.tick1_id),
+                                    tick2_id: Number(row.tick2_id)
+                                });
+                            }
+                        }
                     }
                 }
 
@@ -252,6 +294,9 @@ class Rollback {
 
         // Update token information
         await this.indexerDb.updateTokens(tickers, true);
+
+        // Update market information
+        await this.indexerDb.updateMarkets(markets, block_index);
 
         // Do a sanity check to verify that token supplies match data in credits/debits/balances tables 
         await this.indexerDb.sanityCheck(block_index);

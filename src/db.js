@@ -5895,7 +5895,17 @@ class Database {
         await this.releaseConnection();
     }
 
-
+    // Handle finding and updating markets 
+    async updateMarkets(markets, block_index){
+        let block_time = await this.getBlockTime(block_index);
+        for(let pair of markets){
+            let market_id = await this.getMarketId(pair.tick1_id, pair.tick2_id);
+            if(market_id){
+                let data = await this.getMarketInfo(market_id, block_time);
+                await this.updateMarketInfo(data);
+            }
+        }
+    }
 
 }
 module.exports = Database
