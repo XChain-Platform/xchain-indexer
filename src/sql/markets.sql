@@ -19,7 +19,7 @@ CREATE TABLE markets (
     tick2_24hr_low     VARCHAR(250) NOT NULL default 0, -- tick2 - 24-hour low price
     tick2_24hr_change  VARCHAR(250) NOT NULL default 0, -- tick2 - 24-hour percentage change
     tick2_24hr_volume  VARCHAR(250) NOT NULL default 0, -- tick2 - 24-hour volume
-    last_updated  BIGINT UNSIGNED                  -- Last updated
+    last_updated  BIGINT UNSIGNED                       -- Last updated
 ) ENGINE=MyISAM;
 
 CREATE INDEX tick1_id on markets (tick1_id);
