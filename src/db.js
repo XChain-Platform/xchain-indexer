@@ -3015,11 +3015,11 @@ class Database {
                     WHERE 
                         s2.action_index = (
                             SELECT
-                                MAX(s_inner.action_index)
+                                MAX(s3.action_index)
                             FROM
-                                swap_statuses s_inner
+                                swap_statuses s3
                             WHERE
-                                s_inner.swap_action_index = s.action_index
+                                s3.swap_action_index = s.action_index
                         )
                         AND c1.coin=? 
                         AND s.action_index=? 
@@ -3141,18 +3141,18 @@ class Database {
                     FROM
                         swaps s1,
                         swaps s2
-                        INNER JOIN index_coins  c1 ON (c1.id=s2.get_coin_id)
-                        INNER JOIN actions      a1 ON (a1.action_index=s2.action_index)
-                        INNER JOIN transactions t1 ON (t1.tx_index=a1.tx_index)
-                        INNER JOIN swap_statuses s3 ON s3.swap_action_index = s2.action_index
+                        INNER JOIN index_coins   c1 ON (c1.id=s2.get_coin_id)
+                        INNER JOIN actions       a1 ON (a1.action_index=s2.action_index)
+                        INNER JOIN transactions  t1 ON (t1.tx_index=a1.tx_index)
+                        INNER JOIN swap_statuses s3 ON (s3.swap_action_index=s2.action_index)
                     WHERE
                         s3.action_index = (
                             SELECT
-                                MAX(s_inner.action_index)
+                                MAX(s4.action_index)
                             FROM
-                                swap_statuses s_inner
+                                swap_statuses s4
                             WHERE
-                                s_inner.swap_action_index = s2.action_index
+                                s4.swap_action_index = s2.action_index
                         ) AND
                         s1.give_coin_id=s2.get_coin_id AND
                         s1.give_tick_id=s2.get_tick_id AND
@@ -3377,18 +3377,18 @@ class Database {
                     FROM
                         orders o1,
                         orders o2
-                        INNER JOIN index_coins  c1 ON (c1.id=o2.get_coin_id)
-                        INNER JOIN actions      a1 ON (a1.action_index=o2.action_index)
-                        INNER JOIN transactions t1 ON (t1.tx_index=a1.tx_index)
-                        INNER JOIN order_statuses s1 ON s1.order_action_index = o2.action_index
+                        INNER JOIN index_coins    c1 ON (c1.id=o2.get_coin_id)
+                        INNER JOIN actions        a1 ON (a1.action_index=o2.action_index)
+                        INNER JOIN transactions   t1 ON (t1.tx_index=a1.tx_index)
+                        INNER JOIN order_statuses s1 ON (s1.order_action_index=o2.action_index)
                     WHERE
                         s1.action_index = (
                             SELECT
-                                MAX(s_inner.action_index)
+                                MAX(s2.action_index)
                             FROM
-                                order_statuses s_inner
+                                order_statuses s2
                             WHERE
-                                s_inner.order_action_index = o2.action_index
+                                s2.order_action_index = o2.action_index
                         ) AND
                         o1.give_coin_id=o2.get_coin_id AND
                         o1.give_tick_id=o2.get_tick_id AND
@@ -3450,11 +3450,11 @@ class Database {
                     WHERE 
                         s2.action_index = (
                             SELECT
-                                MAX(s_inner.action_index)
+                                MAX(s3.action_index)
                             FROM
-                                order_statuses s_inner
+                                order_statuses s3
                             WHERE
-                                s_inner.order_action_index = o.action_index
+                                s3.order_action_index = o.action_index
                         ) AND
                         c1.coin=? AND
                         o.action_index=? 
@@ -4583,11 +4583,11 @@ class Database {
                     WHERE
                         s1.action_index = (
                             SELECT
-                                MAX(s_inner.action_index)
+                                MAX(s3.action_index)
                             FROM
-                                ` + type + `_statuses s_inner
+                                ` + type + `_statuses s3
                             WHERE
-                                s_inner.` + type + `_action_index = m.action_index
+                                s3.` + type + `_action_index = m.action_index
                         ) AND
                         s2.status = 'open'`
         }
