@@ -589,19 +589,13 @@ class Utility {
         let markets = await db.getMarketsByBlock(block_index);
         // Loop through markets
         for(let pair of markets){
-
             // Create market 
             let market_id = await db.createMarket(pair.tick1_id, pair.tick2_id);
-
             // Get the market data
             let data = await db.getMarketInfo(market_id, block_time);
-
             // Update Market with the updated data
             await db.updateMarketInfo(data);
-
         }
-        // Create Market
-        // Update Market
     }
 
 }
