@@ -127,22 +127,28 @@ class Database {
         let path  = '/XChainIndexer/src/sql';
         let files = fs.readdirSync(path);
         let file  = null;
+        let db    = await this.getConnection();
         // Loop through SQL files
         for (file of files){
             var isSql = file.indexOf('.sql');
             if(isSql){
                 let table   = file.substring(0, file.indexOf('.sql'));
                 console.log('Verifying ' + table + ' table exists...');
-                let query   = `SELECT * FROM information_schema.tables WHERE table_schema = ? AND table_name = ?`;
-                let args    = [this.dbName, table];
-                let results = await this.doQuery(query, args);
-                if(results.length > 0){
-                    continue;
-                } else {
-                    await this.createTable(file);
+                try {
+                    let result = await db.query("SELECT * FROM information_schema.tables WHERE table_schema = ? AND table_name = ?",[this.dbName, table]);
+                    if(result.length > 0){
+                        continue;
+                    } else {
+                        await this.createTable(file);
+                    }
+                } catch(e){
+                    // console.log('e=',e);
+                    this.util.throwError('Error while trying to verify ' + table + ' table exists!');
+                    return false;
                 }
             }
         }
+        await this.releaseConnection();
         return true;
     }
 
@@ -151,6 +157,7 @@ class Database {
         let path    = '/XChainIndexer/src/sql';
         let data    = fs.readFileSync(path + '/' + file, "utf8");
         let table   = file.substring(0, file.indexOf('.sql'));
+        let db      = await this.getConnection();
         let queries = data.split(';');
         let query   = null;
         console.log('Creating ' + table + ' table and indexes...');
@@ -160,10 +167,17 @@ class Database {
             // Ignore empty queries
             if(query=='')
                 continue;
-            let results = await this.doQuery(query);
-            if(results.length > 0)
-                continue;
+            try {
+                let result = await db.query(query);
+                if(result.length > 0)
+                    continue;
+            } catch(e){
+                // console.log('e=',e);
+                this.util.throwError('Error while trying to create ' + table + ' table!');
+            }
         }
+        // Dont release connection after each table is created, connection released in verifyTables() after ALL tables created and verified
+        // await this.releaseConnection();
     }
 
     /* 
@@ -238,17 +252,18 @@ class Database {
 
     // Handle running a query and returning the results
     async doQuery(query, args){
-        let results = false;
+        let result = false;
         if(!this.util.isNull(query)){
-            let db = await this.getConnection();
+            let db     = await this.getConnection();
+            let exists = false;
             try {
-                results = await db.query(query, args);
+                result = await db.query(query, args);
             } catch (error){
                 this.util.logError('Error running database query :', error);
             }
             await this.releaseConnection();
         }
-        return results;
+        return result;
     }
 
     /* 
@@ -306,6 +321,7 @@ class Database {
             this.util.logError('Invalid type');
             return false;
         }
+        let db    = await this.getConnection();
         // Define SQL query function to run based on type
         let func  = (type=='first') ? 'MIN' : 'MAX';
         let query = 'SELECT ' + func + '(block_index) AS block_index FROM blocks';
@@ -316,16 +332,23 @@ class Database {
         if(component=='indexer' && type=='rollback'){
             // Rollback query here
         }
-        let results = await this.doQuery(query);
-        if(results.length > 0){
-            return Number(results[0]["block_index"]);
-        } else {
-            return -1   
+        try {
+            const rows = await db.query(query);
+            if(rows.length > 0){
+                return Number(rows[0]["block_index"]);
+            } else {
+                return -1   
+            }
+        } catch (error){
+            this.util.logError('Error getting block height:', error);
+            return false;
         }
+        await this.releaseConnection();
     }
 
     // Handle getting block transaction data for a given block from the Decoder
     async getDecoderBlockData(block_index){
+        let db = await this.getConnection();
         // XChain-decoder SQL
         let query = `SELECT
                         t1.data,
@@ -342,27 +365,40 @@ class Database {
                         t1.block_index=? 
                     ORDER BY 
                         t1.tx_index ASC`;
-        let args    = [block_index];
-        let results = await this.doQuery(query, args);
-        return results;
+        try {
+            const rows = await db.query(query, [block_index]);
+            await db.end();
+            return rows;
+        } catch (error) {
+            this.util.logError('Error getting decoder block data:', error);
+            return false;
+        }
+        await this.releaseConnection();
     }
 
     // Handle getting block time for a given block
     async getBlockTime(block_index){
+        let db = await this.getConnection();
         let query  = `SELECT block_time from blocks where block_index=?`; 
-        let args    = [block_index];
-        let results = await this.doQuery(query, args);
-        if(results.length > 0){
-            return results[0]['block_time'];
-        } else {
-            return null;
-        }         
+        try {
+            const rows = await db.query(query, [block_index]);
+            await db.end();
+            if(rows.length > 0){
+                return rows[0]['block_time'];
+            } else {
+                return null;
+            }            
+        } catch (error) {
+            this.util.logError('Error getting block time:', error);
+            return false;
+        }
+        await this.releaseConnection();
     }
 
     // Get block hashes using credits/debits/actions table data and previous hash
     async getBlockHashes(block_index){
+        let db      = await this.getConnection();
         let query   = null;
-        let args    = [block_index];
         // Placeholders for actions data
         let actions = [];
         // Placeholer for ledger data (credits + debits + escrows)
@@ -387,7 +423,11 @@ class Database {
                     t.block_index=?
                 ORDER BY 
                     c.action_index ASC`;
-        ledger.credits = await this.doQuery(query, args);
+        try {
+            ledger.credits = await db.query(query, [block_index]);
+        } catch (error){
+            this.util.logError('Error getting data from the credits table:', error);
+        }
         // Get data from debits table
         query = `SELECT
                     d.action_index,
@@ -402,7 +442,11 @@ class Database {
                     t.block_index=?
                 ORDER BY 
                     d.action_index ASC`;
-        ledger.debits = await this.doQuery(query, args);
+        try {
+            ledger.debits = await db.query(query, [block_index]);
+        } catch (error){
+            this.util.logError('Error getting data from the debits table:', error);
+        }
         // Get data from escrows table
         query = `SELECT
                     e.action_index,
@@ -417,7 +461,11 @@ class Database {
                     t.block_index=?
                 ORDER BY 
                     e.action_index ASC`;
-        ledger.escrows = await this.doQuery(query, args);
+        try {
+            ledger.escrows = await db.query(query, [block_index]);
+        } catch (error){
+            this.util.logError('Error getting data from the escrows table:', error);
+        }
         // Get data from actions table
         query = `SELECT
                     a.action_index,
@@ -430,11 +478,14 @@ class Database {
                     t.block_index=?
                 ORDER BY 
                     a.action_index ASC`;
-        actions = await this.doQuery(query, args);
+        try {
+            actions = await db.query(query, [block_index]);
+        } catch (error){
+            this.util.logError('Error getting data from the actions table:', error);
+        }
         // Subtract one block from current block
         let prev_block_index = block_index -1;
         // Get hashes from the previous block to include in this blocks hash
-        args  = [prev_block_index];
         query = `SELECT
                 t1.hash as ledger,
                 t2.hash as actions
@@ -444,10 +495,14 @@ class Database {
                 LEFT JOIN index_transactions t2 ON (t2.id=b.actions_hash_id)
             WHERE
                 b.block_index=?`;
-        let results = await this.doQuery(query, args);
-        if(results.length > 0){
-            hashes['ledger']  = results[0].ledger;
-            hashes['actions'] = results[0].actions;
+        try {
+            let rows = await db.query(query, [prev_block_index]);
+            if(rows.length >0){
+                hashes['ledger']  = rows[0].ledger;
+                hashes['actions'] = rows[0].actions;
+            }
+        } catch (error) {
+            this.util.logError('Error getting data on the previous block hashes:', error);
         }
         // Define list of data to hash
         let tables = ['ledger','actions'];
@@ -462,17 +517,23 @@ class Database {
             info[table] = [];
             info[table]['hash'] = this.util.getDataHash(data);
         });
+        await this.releaseConnection();
         return info;
     }
 
     // Lookup a record in the `index_transactions` table and return record id
     async getTransactionId(hash){
-        let id      = null;
-        let query   = "SELECT id FROM index_transactions WHERE `hash`=? LIMIT 1"
-        let args    = [hash];
-        let results = await this.doQuery(query, args);
-        if(results.length > 0)
-            id = Number(results[0].id);
+        let id    = null;
+        let db    = await this.getConnection();
+        let query = "SELECT id FROM index_transactions WHERE `hash`=? LIMIT 1"
+        try {
+            let rows = await db.query(query, [hash]);
+            if(rows.length > 0)
+                id = Number(rows[0].id);
+        } catch (error) {
+            this.util.logError('Error looking up hash record id in index_transactions table:', error);
+        }
+        await this.releaseConnection();
         return id;
     }
 
@@ -486,23 +547,33 @@ class Database {
         var id = await this.getTransactionId(hash);
         // Handle creating record
         if(id==null){
-            let query   = "INSERT INTO index_transactions (`hash`) values (?)";
-            let args    = [hash];
-            let results = await this.doQuery(query, args);
-            if(results.insertId)
-                id = Number(results.insertId);
+            let db    = await this.getConnection();
+            let query = "INSERT INTO index_transactions (`hash`) values (?)"
+            try {
+                let result = await db.query(query, [hash]);
+                if(result.insertId)
+                    id = Number(result.insertId);
+            } catch (error) {
+                this.util.logError('Error trying to create hash record in index_transactions table:', error);
+            }
+            await this.releaseConnection();
         }
         return id;
     }
 
     // Lookup a record in the `index_addresses` table and return record id
     async getAddressId(address){
-        let id      = null;
-        let query   = "SELECT id FROM index_addresses WHERE `address`=? LIMIT 1"
-        let args    = [address];
-        let results = await this.doQuery(query, args);
-        if(results.length > 0)
-            id = Number(results[0].id);
+        let id    = null;
+        let db    = await this.getConnection();
+        let query = "SELECT id FROM index_addresses WHERE `address`=? LIMIT 1"
+        try {
+            let rows = await db.query(query, [address]);
+            if(rows.length > 0)
+                id = Number(rows[0].id);
+        } catch (error) {
+            this.util.logError('Error looking up address record id in index_addresses table:', error);
+        }
+        await this.releaseConnection();
         return id;
     }
 
@@ -516,23 +587,33 @@ class Database {
         var id = await this.getAddressId(address);
         // Handle creating record
         if(id==null){
-            let query   = "INSERT INTO index_addresses (`address`) values (?)";
-            let args    = [address];
-            let results = await this.doQuery(query, args);
-            if(results.insertId)
-                id = Number(results.insertId);
+            let db    = await this.getConnection();
+            let query = "INSERT INTO index_addresses (`address`) values (?)"
+            try {
+                let result = await db.query(query, [address]);
+                if(result.insertId)
+                    id = Number(result.insertId);
+            } catch (error) {
+                this.util.logError('Error trying to create address record in index_addresses table:', error);
+            }
+            await this.releaseConnection();
         }
         return id;
     }
 
     // Lookup a record in the `blocks` table and return record id
     async getBlockId(block_index){
-        let id      = null;
-        let query   = "SELECT id FROM blocks WHERE block_index=? LIMIT 1"
-        let args    = [block_index];
-        let results = await this.doQuery(query, args);
-        if(results.length > 0)
-            id = Number(results[0].id);
+        let id    = null;
+        let db    = await this.getConnection();
+        let query = "SELECT id FROM blocks WHERE block_index=? LIMIT 1"
+        try {
+            let rows = await db.query(query, [block_index]);
+            if(rows.length > 0)
+                id = Number(rows[0].id);
+        } catch (error) {
+            this.util.logError('Error looking up block record id in blocks table:', error);
+        }
+        await this.releaseConnection();
         return id;
     }
 
@@ -547,8 +628,8 @@ class Database {
         let ledger_hash_id  = await this.createTransaction(hashes.ledger.hash);
         let actions_hash_id = await this.createTransaction(hashes.actions.hash);
         // Create data
+        let db    = await this.getConnection();
         let query = "INSERT INTO blocks (block_time, ledger_hash_id, actions_hash_id, block_index) values (?, ?, ?, ?)";
-        let args  = [block_time, ledger_hash_id, actions_hash_id, block_index];
         if(block_id!=null){
             query = `UPDATE
                         blocks
@@ -559,8 +640,13 @@ class Database {
                     WHERE 
                         block_index=?`;
         }
-        let results = await this.doQuery(query, args);
-        // Shorten up hashes to the first 5 characters
+        try {
+            let result = await db.query(query, [block_time, ledger_hash_id, actions_hash_id, block_index]);
+        } catch (error) {
+            this.util.logError('Error trying to create record in blocks table:', error);
+        }
+        await this.releaseConnection();
+        // Display status message
         let ledger  = String(hashes.ledger.hash).substring(0,5);
         let actions = String(hashes.actions.hash).substring(0,5);
         return [ledger, actions];
@@ -569,11 +655,16 @@ class Database {
     // Lookup a record in the `index_actions` table and return record id
     async getActionId(action){
         let id    = null;
+        let db    = await this.getConnection();
         let query = "SELECT id FROM index_actions WHERE action=? LIMIT 1";
-        let args  = [action];
-        let results = await this.doQuery(query, args);
-        if(results.length > 0)
-            id = Number(results[0].id);
+        try {
+            let rows = await db.query(query, [action]);
+            if(rows.length > 0)
+                id = Number(rows[0].id);
+        } catch (error) {
+            this.util.logError('Error looking up action record id in index_actions table:', error);
+        }
+        await this.releaseConnection();
         return id;
     }
 
@@ -582,24 +673,35 @@ class Database {
         var id = await this.getActionId(action);
         // Handle creating record
         if(id==null){
+            let db    = await this.getConnection();
             let query = "INSERT INTO index_actions (action) values (?)";
-            let args  = [action];
-            let results = await this.doQuery(query, args);
-            if(results.length > 0)
-                id = Number(results[0].id);
+            try {
+                let result = await db.query(query, [action]);
+                if(result.insertId)
+                    id = Number(result.insertId);
+            } catch (error) {
+                this.util.logError('Error trying to create action record in index_actions table:', error);
+            }
+            await this.releaseConnection();
         }
         return id;
     }
 
     // Handles returning the highest tx_index from transactions table
     async getNextTxIndex(){
-        let idx     = 0;
-        let query   = "SELECT tx_index FROM transactions ORDER BY tx_index DESC LIMIT 1";
-        let results = await this.doQuery(query);
-        if(results.length > 0)
-            idx = Number(results[0].tx_index);
+        let idx   = 0;
+        let db    = await this.getConnection();
+        let query = "SELECT tx_index FROM transactions ORDER BY tx_index DESC LIMIT 1";
+        try {
+            let rows = await db.query(query);
+            if(rows.length > 0)
+                idx = Number(rows[0].tx_index);
+        } catch (error) {
+            this.util.logError('Error looking up tx_index record in transactions table:', error);
+        }
         // Increase current tx_index by 1 to get the next tx_index
         idx++;
+        await this.releaseConnection();
         return idx;
     }
 
@@ -607,11 +709,16 @@ class Database {
     async getTxIndex(hash){
         let tx_index = null;
         let hash_id  = await this.createTransaction(hash);
-        let query    = "SELECT tx_index FROM transactions WHERE tx_hash_id=? LIMIT 1";
-        let args     = [hash];
-        let results  = await this.doQuery(query, args);
-        if(results.length > 0)
-            tx_index = Number(results[0].tx_index);
+        let db       = await this.getConnection();
+        let query = "SELECT tx_index FROM transactions WHERE tx_hash_id=? LIMIT 1";
+        try {
+            let rows = await db.query(query, [hash_id]);
+            if(rows.length > 0)
+                tx_index = Number(rows[0].tx_index);
+        } catch (error) {
+            this.util.logError('Error looking up tx_index in transactions table:', error);
+        }
+        await this.releaseConnection();
         return tx_index;
     }
 
@@ -624,9 +731,14 @@ class Database {
             let block_index = data.BLOCK_INDEX;
             let source_id   = await this.createAddress(data.SOURCE);
             let tx_hash_id  = await this.createTransaction(data.TX_HASH);
+            let db          = await this.getConnection();
             let query       = "INSERT INTO transactions (tx_index, block_index, tx_hash_id, source_id) values (?, ?, ?, ?)";
-            let args        = [tx_index, block_index, tx_hash_id, source_id];
-            let results     = await this.doQuery(query, args);
+            try {
+                let result = await db.query(query, [tx_index, block_index, tx_hash_id, source_id]);
+            } catch (error) {
+                this.util.logError('Error while trying to create record in transactions table:', error);
+            }
+            await this.releaseConnection();
         }
         return tx_index;
     }
@@ -634,12 +746,18 @@ class Database {
     // Handles returning the highest action_index from `actions` table
     async getNextActionIndex(){
         let idx   = 0;
+        let db    = await this.getConnection();
         let query = "SELECT action_index FROM actions ORDER BY action_index DESC LIMIT 1";
-        let results  = await this.doQuery(query);
-        if(results.length > 0)
-            idx = Number(results[0].action_index);
+        try {
+            let rows = await db.query(query);
+            if(rows.length > 0)
+                idx = Number(rows[0].action_index);
+        } catch (error) {
+            this.util.logError('Error looking up action_index in actions table:', error);
+        }
         // Increase current action__index by 1 to get the next action_index
         idx++;
+        await this.releaseConnection();
         return idx;
     }
 
@@ -650,6 +768,7 @@ class Database {
         let tx_index      = data['TX_INDEX'];
         let action_format = data['FORMAT'];
         let action_id     = await this.createAction(data['ACTION']);
+        let db            = await this.getConnection();
         let query = `SELECT
                         a.action_index
                     FROM
@@ -660,9 +779,14 @@ class Database {
                         a.action_id=? AND
                         a.action_format=?`;
         let args = [block_index, tx_index, action_id, action_format];
-        let results  = await this.doQuery(query, args);
-        if(results.length > 0)
-            action_index = Number(results[0].action_index);
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0)
+                action_index = Number(rows[0].action_index);
+        } catch (error) {
+            this.util.logError('Error looking up action_index in actions table:', error);
+        }
+        await this.releaseConnection();
         return action_index;
     }
 
@@ -681,9 +805,15 @@ class Database {
             let tx_index      = data['TX_INDEX'];
             let action_format = data['FORMAT'];
             let action_id     = await this.createAction(data['ACTION']);
+            let db            = await this.getConnection();
             let query         = "INSERT INTO actions (action_index, block_index, tx_index, action_id, action_format) values (?, ?, ?, ?, ?)";
             let args          = [action_index, block_index, tx_index, action_id, action_format];
-            let results       = await this.doQuery(query, args);
+            try {
+                let result = await db.query(query, args);
+            } catch (error) {
+                this.util.logError('Error while trying to create record in actions table:', error);
+            }
+            await this.releaseConnection();
         }
         return action_index;
     }
@@ -692,21 +822,32 @@ class Database {
     async updateActionIndex(action_index, action){
         if(action_index){
             let action_id = await this.createAction(action);
+            let db        = await this.getConnection();
             let query     = "UPDATE actions SET action_id=? WHERE action_index=?";
             let args      = [action_id, action_index];
-            let results   = await this.doQuery(query, args);
+            try {
+                let result = await db.query(query, args);
+            } catch (error) {
+                this.util.logError('Error while trying to update record in actions table:', error);
+            }
+            await this.releaseConnection();
         }
     }
 
 
     // Lookup a record in the `index_tickers` table and return record tick
     async getTicker(tick_id){
-        let tick      = null;
-        let query     = "SELECT tick FROM index_tickers WHERE id=? LIMIT 1";
-        let args      = [tick_id];
-        let results   = await this.doQuery(query, args);
-        if(results.length > 0)
-            tick = results[0].tick;
+        let tick  = null;
+        let db    = await this.getConnection();
+        let query = "SELECT tick FROM index_tickers WHERE id=? LIMIT 1";
+        try {
+            let rows = await db.query(query, [tick_id]);
+            if(rows.length > 0)
+                tick = rows[0].tick;
+        } catch (error){
+            this.util.logError('Error looking up ticker using tick_id in index_tickers table:', error);
+        }
+        await this.releaseConnection();
         return tick;
     }
 
@@ -722,11 +863,17 @@ class Database {
         //        example: BACON.is.delicious (period is parent/child indicator character)
         // Try to lookup id using tick passed
         if(!id){
-            let query   = "SELECT id FROM index_tickers WHERE tick=? LIMIT 1";
-            let args    = [tick];
-            let results = await this.doQuery(query, args);
-            if(results.length > 0)
-                id = Number(results[0].id);
+            let db    = await this.getConnection();
+            // let query = "SELECT id FROM index_tickers WHERE tick COLLATE utf8mb4_bin LIKE ? LIMIT 1";
+            let query = "SELECT id FROM index_tickers WHERE tick=? LIMIT 1";
+            try {
+                let rows = await db.query(query, [tick]);
+                if(rows.length > 0)
+                    id = Number(rows[0].id);
+            } catch (error) {
+                this.util.logError('Error looking up ticker record id in index_tickers table:', error);
+            }
+            await this.releaseConnection();
         }
         return id;
     }
@@ -740,11 +887,17 @@ class Database {
         let id = await this.getTickerId(tick);
         // Handle creating record
         if(id==null){
-            let query   = "INSERT INTO index_tickers (tick) values (?)";
-            let args    = [tick];
-            let results = await this.doQuery(query, args);
-            if(results.insertId)
-                    id = Number(results.insertId);
+            let db    = await this.getConnection();
+            let query = "INSERT INTO index_tickers (tick) values (?)";
+            let args  = [tick];
+            try {
+                let result = await db.query(query, args);
+                if(result.insertId)
+                    id = Number(result.insertId);
+            } catch (error) {
+                this.util.logError('Error trying to create ticker record in index_tickers table:', error);
+            }
+            await this.releaseConnection();
         }
         return id;
     }
@@ -813,61 +966,67 @@ class Database {
                             i.tick_id=?` + sql + `
                         ORDER BY 
                             i.action_index ASC`;
-            let results = await this.doQuery(query, args);
-            if(results.length > 0){
-                // Define data object
-                if(!data)
-                    data = {};
-                // Loop through ISSUE transactions for the given ticker
-                for(let row of results){
-                    // Define object of values for this ISSUE tx
-                    let arr  = {};
-                    arr['ACTION_INDEX']      = row.action_index;
-                    arr['TICK']              = row.tick;
-                    arr['TICK_ID']           = tick_id;
-                    arr['OWNER']             = (row.transfer) ? row.transfer : row.owner;
-                    arr['MAX_SUPPLY']        = row.max_supply;
-                    arr['MAX_MINT']          = row.max_mint;
-                    // Force decimal precision to a integer value
-                    arr['DECIMALS']          = (!this.util.isNull(row.decimals)) ? parseInt(row.decimals) : 0;
-                    arr['DESCRIPTION']       = row.description;
-                    arr['LOCK_MAX_SUPPLY']   = row.lock_max_supply;
-                    arr['LOCK_MINT_SUPPLY']  = row.lock_mint_supply;
-                    arr['LOCK_MINT']         = row.lock_mint;
-                    arr['LOCK_MAX_MINT']     = row.lock_max_mint;
-                    arr['LOCK_DESCRIPTION']  = row.lock_description;
-                    arr['LOCK_SLEEP']        = row.lock_sleep;
-                    arr['LOCK_CALLBACK']     = row.lock_callback;
-                    arr['CALLBACK_TICK']     = row.callback_tick;
-                    arr['CALLBACK_BLOCK']    = row.callback_block;
-                    arr['CALLBACK_AMOUNT']   = row.callback_amount;
-                    arr['ALLOW_LIST']        = row.allow_list;
-                    arr['BLOCK_LIST']        = row.block_list;
-                    arr['MINT_ADDRESS_MAX']  = row.mint_address_max;
-                    arr['MINT_START_BLOCK']  = row.mint_start_block;
-                    arr['MINT_STOP_BLOCK']   = row.mint_stop_block;
-                    // build out token state
-                    // TODO: will need to massage the data a bit more to build out accurate token state... this is quick and dirty
-                    for(let key in arr){
-                        let value = arr[key];
-                        // Only set the ACTION_INDEX on the first valid issuance
-                        if(key=='ACTION_INDEX' && this.util.isNull(data[key]))
-                            data[key] = value;
-                        // Disallow unsetting of LOCK flags
-                        if(String(key).substr(0,5)=='LOCK_')
-                            if(data[key]==1)
+            try {
+                let db   = await this.getConnection();
+                let rows = await db.query(query, args);
+                if(rows.length > 0){
+                    // Define data object
+                    if(!data)
+                        data = {};
+                    // Loop through ISSUE transactions for the given ticker
+                    for(let row of rows){
+                        // Define object of values for this ISSUE tx
+                        let arr  = {};
+                        arr['ACTION_INDEX']      = row.action_index;
+                        arr['TICK']              = row.tick;
+                        arr['TICK_ID']           = tick_id;
+                        arr['OWNER']             = (row.transfer) ? row.transfer : row.owner;
+                        arr['MAX_SUPPLY']        = row.max_supply;
+                        arr['MAX_MINT']          = row.max_mint;
+                        // Force decimal precision to a integer value
+                        arr['DECIMALS']          = (!this.util.isNull(row.decimals)) ? parseInt(row.decimals) : 0;
+                        arr['DESCRIPTION']       = row.description;
+                        arr['LOCK_MAX_SUPPLY']   = row.lock_max_supply;
+                        arr['LOCK_MINT_SUPPLY']  = row.lock_mint_supply;
+                        arr['LOCK_MINT']         = row.lock_mint;
+                        arr['LOCK_MAX_MINT']     = row.lock_max_mint;
+                        arr['LOCK_DESCRIPTION']  = row.lock_description;
+                        arr['LOCK_SLEEP']        = row.lock_sleep;
+                        arr['LOCK_CALLBACK']     = row.lock_callback;
+                        arr['CALLBACK_TICK']     = row.callback_tick;
+                        arr['CALLBACK_BLOCK']    = row.callback_block;
+                        arr['CALLBACK_AMOUNT']   = row.callback_amount;
+                        arr['ALLOW_LIST']        = row.allow_list;
+                        arr['BLOCK_LIST']        = row.block_list;
+                        arr['MINT_ADDRESS_MAX']  = row.mint_address_max;
+                        arr['MINT_START_BLOCK']  = row.mint_start_block;
+                        arr['MINT_STOP_BLOCK']   = row.mint_stop_block;
+                        // build out token state
+                        // TODO: will need to massage the data a bit more to build out accurate token state... this is quick and dirty
+                        for(let key in arr){
+                            let value = arr[key];
+                            // Only set the ACTION_INDEX on the first valid issuance
+                            if(key=='ACTION_INDEX' && this.util.isNull(data[key]))
+                                data[key] = value;
+                            // Disallow unsetting of LOCK flags
+                            if(String(key).substr(0,5)=='LOCK_')
+                                if(data[key]==1)
+                                    continue;
+                            // Prevent changing decimal precision 
+                            if(key=='DECIMALS' && data[key] > value)
                                 continue;
-                        // Prevent changing decimal precision 
-                        if(key=='DECIMALS' && data[key] > value)
-                            continue;
-                        // Skip setting value if value is null or empty (use last explicit value)
-                        if(this.util.isNull(value) || value==='')
-                            continue;
-                        // Update data object with value from this ISSUE tx
-                        data[key] = value;
+                            // Skip setting value if value is null or empty (use last explicit value)
+                            if(this.util.isNull(value) || value==='')
+                                continue;
+                            // Update data object with value from this ISSUE tx
+                            data[key] = value;
+                        }
                     }
                 }
+            } catch (error) {
+                this.util.logError('Error looking up token info : ', error);
             }
+            await this.releaseConnection();
         }
         // Get token supply at the given action_index
         if(data)
@@ -880,6 +1039,7 @@ class Database {
         let decimals = 0;
         // Lookup decimal precision using the issues table 
         // DO NOT lookup precision using getTokenInfo() (avoid recursive queries)
+        let db      = await this.getConnection();
         let query = `SELECT
                         i.decimals
                     FROM
@@ -889,15 +1049,19 @@ class Database {
                         i.status_id=s.id AND
                         i.tick_id=? AND
                         s.status='valid'`;
-        let args    = [tick_id];
-        let results = await this.doQuery(query, args);
-        if(results.length > 0){
-            // Loop through ISSUE transactions for the given ticker
-            for(let row of results){
-                if(!this.util.isNull(row.decimals) && row.decimals > decimals)
-                    decimals = row.decimals;
+        try {
+            let rows = await db.query(query, [tick_id]);
+            if(rows.length > 0){
+                // Loop through ISSUE transactions for the given ticker
+                for(let row of rows){
+                    if(!this.util.isNull(row.decimals) && row.decimals > decimals)
+                        decimals = row.decimals;
+                }
             }
+        } catch (error) {
+            this.util.logError('Error looking up decimal precision from the issues table:', error);
         }
+        await this.releaseConnection();
         return decimals;
     }
 
@@ -910,10 +1074,10 @@ class Database {
         let debits  = 0;
         let escrows = 0;
         let supply  = 0;
-        let sql     = '',
+        let db      = await this.getConnection(),
+            sql     = '',
             query   = '',
             args    = [],
-            results = null,
             tick_id = await this.createTicker(tick);
         // Get info on decimal precision
         let decimals = await this.getTokenDecimalPrecision(tick_id);
@@ -938,9 +1102,13 @@ class Database {
                     INNER JOIN transactions t ON (t.tx_index=a.tx_index)
                 WHERE 
                     m.tick_id=?` + sql;
-        results = await this.doQuery(query, args);
-        if(results.length > 0 && !this.util.isNull(results[0].credits))
-            credits = results[0].credits;
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0 && !this.util.isNull(rows[0].credits))
+                credits = rows[0].credits;
+        } catch (error) {
+            this.util.logError('Error while trying to get list of credits:', error);
+        }
         // Get Debits 
         query = `SELECT 
                     CAST(SUM(m.amount) AS DECIMAL(60,` + decimals + `)) as debits 
@@ -950,9 +1118,13 @@ class Database {
                     INNER JOIN transactions t ON (t.tx_index=a.tx_index)
                 WHERE 
                     m.tick_id=?` + sql;
-        results = await this.doQuery(query, args);
-        if(results.length > 0 && !this.util.isNull(results[0].debits))
-            debits = results[0].debits;
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0 && !this.util.isNull(rows[0].debits))
+                debits = rows[0].debits;
+        } catch (error) {
+            this.util.logError('Error while trying to get list of debits:', error);
+        }
         // Get Escrows 
         query = `SELECT 
                     CAST(SUM(m.amount) AS DECIMAL(60,` + decimals + `)) as escrows 
@@ -962,9 +1134,14 @@ class Database {
                     INNER JOIN transactions t ON (t.tx_index=a.tx_index)
                 WHERE 
                     m.tick_id=?` + sql;
-        results = await this.doQuery(query, args);
-        if(results.length > 0 && !this.util.isNull(results[0].escrows))
-            escrows = results[0].escrows;
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0 && !this.util.isNull(rows[0].escrows))
+                escrows = rows[0].escrows;
+        } catch (error) {
+            this.util.logError('Error while trying to get list of escrows:', error);
+        }
+        await this.releaseConnection();
         // Determine total supply ((credits - debits) + escrows)
         supply = this.util.bcadd(this.util.bcsub(credits, debits, decimals), escrows, decimals);
         return supply;
@@ -975,11 +1152,16 @@ class Database {
         let supply   = 0;
         let tick_id  = await this.createTicker(tick);
         let decimals = await this.getTokenDecimalPrecision(tick_id);
+        let db       = await this.getConnection();
         let query = `SELECT supply FROM tokens WHERE tick_id=? LIMIT 1`;
-        let args    = [tick_id];
-        let results = await this.doQuery(query, args);
-        if(results.length > 0 && !this.util.isNull(results[0].supply))
-            supply = Number(results[0].supply);
+        try {
+            let rows = await db.query(query, [tick_id]);
+            if(rows.length > 0 && !this.util.isNull(rows[0].supply))
+                supply = rows[0].supply;
+        } catch (error) {
+            this.util.logError('Error looking up token supply from tokens table:', error);
+        }
+        await this.releaseConnection();
         return supply;
     }
 
@@ -988,11 +1170,16 @@ class Database {
         let supply   = 0;
         let tick_id  = await this.createTicker(tick);
         let decimals = await this.getTokenDecimalPrecision(tick_id);
+        let db       = await this.getConnection();
         let query = `SELECT CAST(SUM(amount) AS DECIMAL(60, ` + decimals + `)) as supply FROM balances WHERE tick_id=? LIMIT 1`;
-        let args    = [tick_id];
-        let results = await this.doQuery(query, args);
-        if(results.length > 0 && !this.util.isNull(results[0].supply))
-            supply = Number(results[0].supply);
+        try {
+            let rows = await db.query(query, [tick_id]);
+            if(rows.length > 0 && !this.util.isNull(rows[0].supply))
+                supply = rows[0].supply;
+        } catch (error) {
+            this.util.logError('Error looking up token supply from balances table:', error);
+        }
+        await this.releaseConnection();
         return supply;
     }
 
@@ -1001,11 +1188,16 @@ class Database {
         let supply   = 0;
         let tick_id  = await this.createTicker(tick);
         let decimals = await this.getTokenDecimalPrecision(tick_id);
+        let db       = await this.getConnection();
         let query = `SELECT CAST(SUM(amount) AS DECIMAL(60, ` + decimals + `)) as supply FROM escrows WHERE tick_id=? LIMIT 1`;
-        let args    = [tick_id];
-        let results = await this.doQuery(query, args);
-        if(results.length > 0 && !this.util.isNull(results[0].supply))
-            supply = Number(results[0].supply);
+        try {
+            let rows = await db.query(query, [tick_id]);
+            if(rows.length > 0 && !this.util.isNull(rows[0].supply))
+                supply = rows[0].supply;
+        } catch (error) {
+            this.util.logError('Error looking up token supply from escrows table:', error);
+        }
+        await this.releaseConnection();
         return supply;
     }
 
@@ -1018,10 +1210,10 @@ class Database {
     // TODO: Can optimize this function to allow getting list of holders from balances table instead of credits/debits
     async getHolders(tick, block_index, action_index){
         let holders = {};
-        let sql     = '',
+        let db      = await this.getConnection(),
+            sql     = '',
             query   = '',
             args    = [],
-            results = null,
             tick_id = null;
         // Get the tick_id for the given ticker
         if(!this.util.isNull(tick) && this.util.isNull(tick_id))
@@ -1052,10 +1244,15 @@ class Database {
                 WHERE 
                     m.tick_id=?` + sql + `
                 GROUP BY a2.address`;
-        results = await this.doQuery(query, args);
-        if(results.length > 0){
-            for(let row in results)
-                holders[row.address] = row.credits;
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0){
+                rows.forEach(function(row){
+                    holders[row.address] = row.credits;
+                });
+            }
+        } catch (error) {
+            this.util.logError('Error while trying to get list of holders from credits table:', error);
         }
         // Get Debits 
         query = `SELECT 
@@ -1069,16 +1266,21 @@ class Database {
                 WHERE 
                     m.tick_id=?` + sql + `
                 GROUP BY a2.address`;
-        results = await this.doQuery(query, args);
-        if(results.length > 0){
-            for(let row of results){
-                let balance = this.util.bcsub(holders[row.address], row.debits, decimals);
-                if(balance > 0)
-                    holders[row.address] = balance;
-                else
-                   delete holders[row.address];
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0){
+                for(let row of rows){
+                    let balance = this.util.bcsub(holders[row.address], row.debits, decimals);
+                    if(balance > 0)
+                        holders[row.address] = balance;
+                    else
+                       delete holders[row.address];
+                }
             }
+        } catch (error) {
+            this.util.logError('Error while trying to get list of holders from debits table:', error);
         }
+        await this.releaseConnection();
         // Sort holders list from biggest to smallest
         holders = Object.fromEntries(Object.entries(holders).sort(([, a], [, b]) => b - a));
         return holders;
@@ -1113,12 +1315,18 @@ class Database {
 
     // Return a list type given a tx_hash
     async getListType(action_index){
-        let type    = false;
-        let query   = "SELECT type FROM lists WHERE action_index=? LIMIT 1";
-        let args    = [action_index];
-        let results = await this.doQuery(query, args);
-        if(results.length > 0)
-            type = Number(results[0].type);
+        let type  = false;
+        let db    = await this.getConnection();
+        let query = "SELECT type FROM lists WHERE action_index=? LIMIT 1";
+        let args  = [action_index];
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0)
+                type = parseInt(rows[0].type);
+        } catch (error) {
+            this.util.logError('Error looking up list type in lists table:', error);
+        }
+        await this.releaseConnection();
         return type;
     }
 
@@ -1127,6 +1335,7 @@ class Database {
         let type = await this.getListType(action_index);
         let list = [];
         if(type){
+            let db    = await this.getConnection();
             let query = '';
             let args  = [action_index];
             if(type==1){
@@ -1147,11 +1356,15 @@ class Database {
                         WHERE 
                             l.action_index=?`;
             }
-            let results = await this.doQuery(query, args);
-            if(results.length > 0){
-                for(let row of results)
-                    list.push(row['item']);
+            try {
+                let rows = await db.query(query, args);
+                if(rows.length > 0)
+                    for(let row of rows)
+                        list.push(row['item']);
+            } catch (error) {
+                this.util.logError('Error looking up list data in lists table:', error);
             }
+            await this.releaseConnection();
         }
         return list;
     }
@@ -1166,12 +1379,17 @@ class Database {
         let list_edit         = data['EDIT'];
         let list_action_index = data['LIST_ACTION_INDEX'];
         // Check if record already exists for this token
-        let exists  = false;
-        let query   = "SELECT action_index FROM lists WHERE action_index=? LIMIT 1";
-        let args    = [action_index];
-        let results = await this.doQuery(query, args);
-        if(results.length > 0)
-            exists = true;
+        let db     = await this.getConnection();
+        let query  = "SELECT action_index FROM lists WHERE action_index=? LIMIT 1";
+        let args   = [action_index];
+        let exists = false;
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0)
+                exists = true;
+        } catch (error){
+            this.util.logError('Error looking up record in lists table:', error);
+        }
         if(exists){
             // UPDATE record
             query = `UPDATE
@@ -1187,18 +1405,29 @@ class Database {
             // INSERT record
             query = `INSERT INTO lists (type, edit, list_action_index, status_id, action_index) values (?, ?, ?, ?, ?)`;
         }
-        args    = [list_type, list_edit, list_action_index, status_id, action_index];
-        results = await this.doQuery(query, args);
+        args = [list_type, list_edit, list_action_index, status_id, action_index];
+        // Create or Update the record in the lists table
+        try {
+            let result = await db.query(query, args);
+        } catch (error){
+            this.util.logError('Error trying to create record in lists table:', error);
+        }
+        await this.releaseConnection();
     }
 
     // Lookup a record in the `index_statuses` table and return record id
     async getStatusId(status){
-        let id      = null;
-        let query   = "SELECT id FROM index_statuses WHERE status=? LIMIT 1";
-        let args    = [status];
-        let results = await this.doQuery(query, args);
-        if(results.length > 0)
-            id = Number(results[0].id);
+        let id    = null;
+        let db    = await this.getConnection();
+        let query = "SELECT id FROM index_statuses WHERE status=? LIMIT 1";
+        try {
+            let rows = await db.query(query, [status]);
+            if(rows.length > 0)
+                id = Number(rows[0].id);
+        } catch (error) {
+            this.util.logError('Error looking up status record id in index_statuses table:', error);
+        }
+        await this.releaseConnection();
         return id;
     }
 
@@ -1210,11 +1439,16 @@ class Database {
         var id = await this.getStatusId(status);
         // Handle creating record
         if(id==null){
-            let query   = "INSERT INTO index_statuses (status) values (?)";
-            let args    = [status];
-            let results = await this.doQuery(query, args);
-            if(results.insertId)
-                id = Number(results.insertId);
+            let db    = await this.getConnection();
+            let query = "INSERT INTO index_statuses (status) values (?)";
+            try {
+                let result = await db.query(query, [status]);
+                if(result.insertId)
+                    id = Number(result.insertId);
+            } catch (error) {
+                this.util.logError('Error trying to create status record in index_statuses table:', error);
+            }
+            await this.releaseConnection();
         }
         return id;
     }
@@ -1264,12 +1498,17 @@ class Database {
         let transfer_supply_id = await this.createAddress(data['TRANSFER_SUPPLY']);
         let status_id          = await this.createStatus(data['STATUS']);
         // Check if record already exists for this ISSUE action
+        let db    = await this.getConnection();
         let query = `SELECT action_index FROM issues WHERE action_index=?`;
         let args  = [action_index]
         let exists = false;
-        let results = await this.doQuery(query, args);
-        if(results.length > 0)
-            exists = true;
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0)
+                exists = true;
+        } catch (error) {
+            this.util.logError('Error looking up record in issues table:', error);
+        }
         if(exists){
             // UPDATE record
             query = `UPDATE
@@ -1331,8 +1570,14 @@ class Database {
                         action_index
                     ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
         }
-        args    = [tick_id, max_supply, max_mint, decimals, description, mint_supply, transfer_id, transfer_supply_id, lock_max_supply, lock_mint, lock_mint_supply, lock_max_mint, lock_description, lock_sleep, lock_callback, callback_block, callback_tick_id, callback_amount, allow_list, block_list, mint_address_max, mint_start_block, mint_stop_block, status_id, action_index ];
-        results = await this.doQuery(query, args);
+        args = [tick_id, max_supply, max_mint, decimals, description, mint_supply, transfer_id, transfer_supply_id, lock_max_supply, lock_mint, lock_mint_supply, lock_max_mint, lock_description, lock_sleep, lock_callback, callback_block, callback_tick_id, callback_amount, allow_list, block_list, mint_address_max, mint_start_block, mint_stop_block, status_id, action_index ];
+        // Create or Update the record in the issues table
+        try {
+            let result = await db.query(query, args);
+        } catch (error){
+            this.util.logError('Error trying to create record in issues table:', error);
+        }
+        await this.releaseConnection();
     }
 
     // Create/Update record in `tokens` table
@@ -1371,13 +1616,17 @@ class Database {
         let tick_id            = await this.createTicker(data['TICK']);
         let owner_id           = await this.createAddress(data['OWNER']);
         // Check if record already exists for this token
-        let exists = false;
+        let db     = await this.getConnection();
         let query  = "SELECT id FROM tokens WHERE tick_id=? LIMIT 1";
-        let args   = [tick_id];
-        let results = await this.doQuery(query, args);
-        if(results.length > 0)
-            exists = true;
-        args = [];
+        let exists = false;
+        try {
+            let rows = await db.query(query, [tick_id]);
+            if(rows.length > 0)
+                exists = true;
+        } catch (error){
+            this.util.logError('Error looking up record in tokens table:', error);
+        }
+        let args = [];
         if(exists){
             // UPDATE record
             query = `UPDATE
@@ -1437,7 +1686,12 @@ class Database {
             args = [max_supply, max_mint, decimals, description, lock_max_supply, lock_mint, lock_max_mint,lock_description, lock_sleep, lock_callback, callback_block, callback_tick_id, callback_amount, allow_list, block_list, mint_address_max, mint_start_block, mint_stop_block, supply, owner_id, action_index, action_index, tick_id];
         }
         // Create or Update the record in the tokens table
-        results = await this.doQuery(query, args);
+        try {
+            let result = await db.query(query, args);
+        } catch (error){
+            this.util.logError('Error trying to create record in tokens table:', error);
+        }
+        await this.releaseConnection();
     }
 
     // Create / Update ledger change records (credits / debits / escrows)
@@ -1445,6 +1699,7 @@ class Database {
         let tick_id    = await this.createTicker(tick);
         let address_id = await this.createAddress(address);
         // Check if record already exists for this token
+        let db    = await this.getConnection();
         let query = `SELECT
                         action_index
                     FROM
@@ -1453,11 +1708,14 @@ class Database {
                         action_index=? AND
                         address_id=? AND 
                         tick_id=?`;
-        let args    = [action_index, address_id, tick_id];
-        let exists  = false;
-        let results = await this.doQuery(query, args);
-        if(results.length > 0)
-            exists = true;
+        let exists = false;
+        try {
+            let rows = await db.query(query, [action_index, address_id, tick_id]);
+            if(rows.length > 0)
+                exists = true;
+        } catch (error){
+            this.util.logError('Error looking up record in ' + table + ' table:', error);
+        }
         if(exists){
             // UPDATE record
             query = `UPDATE
@@ -1472,8 +1730,14 @@ class Database {
             // INSERT record
             query = `INSERT INTO ` + table + ` (amount, action_index, address_id, tick_id) values (?, ?, ?, ?)`;
         }
-        args = [amount, action_index, address_id, tick_id];
-        results = await this.doQuery(query, args);
+        let args = [amount, action_index, address_id, tick_id];
+        // Create or Update the record in the table
+        try {
+            let result = await db.query(query, args);
+        } catch (error){
+            this.util.logError('Error trying to create record in ' + table + ' table:', error);
+        }
+        await this.releaseConnection();        
     }
 
     // Create / Update record in `credits` table
@@ -1511,12 +1775,18 @@ class Database {
         // Dump full list of addresses
         if(type==='boolean' && address===true){
             console.log('Updating all balances...');
-            let query   = "SELECT address FROM index_addresses";
-            let results = await this.doQuery(query);            
-            if(results.length > 0){
-                for(let row of results)
-                    addrs.push(row.address);
+            let db    = await this.getConnection();
+            let query = "SELECT address FROM index_addresses";
+            try {
+                let rows = await db.query(query);
+                if(rows.length > 0){
+                    for(let row of rows)
+                        addrs.push(row.address);
+                }
+            } catch (error){
+                this.util.logError('Error looking up list of all addresses from index_addresses table:', error);
             }
+            await this.releaseConnection();
         }
         // Loop through addresses and update balance list
         for(address of addrs)
@@ -1530,8 +1800,7 @@ class Database {
         let balance     = 0;
         let old_balance = 0;
         let query       = false;
-        let args        = [];
-        let results     = null;
+        let db          = await this.getConnection();
         if(type==='number' && this.util.isNumeric(address))
             address_id = address;
         if(type==='string' && !this.util.isNumeric(address))
@@ -1544,12 +1813,15 @@ class Database {
         for(let tick_id in balances){
             balance = balances[tick_id];
             let action  = 'insert';
-            query   = "SELECT id FROM balances WHERE address_id=? AND tick_id=? LIMIT 1";
-            args    = [address_id, tick_id];
-            results = await this.doQuery(query, args);
-            if(results.length > 0)
-                action = 'update';
-            args = [];
+            query = "SELECT id FROM balances WHERE address_id=? AND tick_id=? LIMIT 1";
+            try {
+                let rows = await db.query(query, [address_id, tick_id]);
+                if(rows.length > 0)
+                    action = 'update';
+            } catch (error){
+                this.util.logError('Error looking up address from balances table:', error);
+            }
+            let args = [];
             if(balance==0)
                 action = 'delete';
             if(action=='delete'){
@@ -1562,7 +1834,12 @@ class Database {
                 query = "INSERT INTO balances (tick_id, address_id, amount) values (?, ?, ?)";
                 args.push(tick_id, address_id, balance);
             }
-            results = await this.doQuery(query, args);
+            try {
+                // console.log('updateAddressBalance query=',query,args);
+                let result = await db.query(query, args);
+            } catch (error){
+                this.util.logError('Error while trying to ' + action + ' balance record for address=' + address + ' tick_id=' + tick_id, error);
+            }                
         }
         // If this is a rollback, then handle detecting records in balances table which should not exist and delete them
         // TODO: Test this code a bit better with various random rollbacks and verify all is working without any sanity check issues
@@ -1571,12 +1848,16 @@ class Database {
                 old_balance = old_balances[tick_id];
                 balance     = balances[tick_id];
                 if(!this.util.isNull(old_balance) && (this.util.isNull(balance) || balance==0 )){
-                    query   = "DELETE FROM balances WHERE address_id=? AND tick_id=?";
-                    args    = [address_id, tick_id];
-                    results = await this.doQuery(query, args);
+                    query = "DELETE FROM balances WHERE address_id=? AND tick_id=?";
+                    try {
+                        let rows = await db.query(query, [address_id, tick_id]);
+                    } catch (error){
+                        this.util.logError('Error deleting balance record address=' + address + ' tick_id=' + tick_id, error);
+                    }                        
                 }
             }
         }
+        await this.releaseConnection();
     }
 
     // Get address balances using credits/debits table data
@@ -1620,12 +1901,17 @@ class Database {
             address_id = address;
         if(type==='string' && !this.util.isNumeric(address))
             address_id = await this.createAddress(address);
-        let query   = "SELECT tick_id, amount FROM balances WHERE address_id=?";
-        let args    = [address_id];
-        let results = await this.doQuery(query, args);
-        if(results.length > 0)
-            for(let row of results)
-                balances[row.tick_id] = row.amount;
+        let db    = await this.getConnection();
+        let query = "SELECT tick_id, amount FROM balances WHERE address_id=?";
+        try {
+            let rows = await db.query(query, address_id);
+            if(rows.length > 0)
+                for(let row of rows)
+                    balances[row.tick_id] = row.amount;
+        } catch (error){
+            this.util.logError('Error while trying to get list of all tokens:', error);
+        }
+        await this.releaseConnection();
         return balances;
     }
 
@@ -1655,6 +1941,7 @@ class Database {
             args.push(action_id);
         }
         if(['credits','debits'].indexOf(table) != -1){
+            let db    = await this.getConnection();
             let query = `SELECT 
                     m.tick_id,
                     m.amount,
@@ -1667,14 +1954,19 @@ class Database {
                     INNER JOIN index_actions a2 ON (a2.id=a1.action_id)
                 WHERE 
                     m.address_id=?` + sql;
-            let results = await this.doQuery(query, args);
-            if(results.length > 0){
-                for(let row of results){
-                    if(!data[row.tick_id])
-                        data[row.tick_id] = 0;
-                    data[row.tick_id] = this.util.bcadd(data[row.tick_id], row.amount, row.decimals);
+            try {
+                let rows = await db.query(query, args);
+                if(rows.length > 0){
+                    for(let row of rows){
+                        if(!data[row.tick_id])
+                            data[row.tick_id] = 0;
+                        data[row.tick_id] = this.util.bcadd(data[row.tick_id], row.amount, row.decimals);
+                    }
                 }
+            } catch (error){
+                this.util.logError('Error looking up addresses ' + table + ' for ' + address + ':', error);
             }
+            await this.releaseConnection();
         }
         return data;
     }
@@ -1697,11 +1989,17 @@ class Database {
         // Dump full list of tokens
         if(type==='boolean' && tickers===true){
             console.log('Updating all tokens...');
-            let query   = "SELECT t2.tick FROM tokens t1, index_tickers t2 WHERE t1.tick_id=t2.id";
-            let results = await this.doQuery(query);
-            if(results.length > 0)
-                for(let row of results)
-                    tokens.push(row.tick);
+            let db    = await this.getConnection();
+            let query = "SELECT t2.tick FROM tokens t1, index_tickers t2 WHERE t1.tick_id=t2.id";
+            try {
+                let rows = await db.query(query);
+                if(rows.length > 0)
+                    for(let row of rows)
+                        tokens.push(row.tick);
+            } catch (error){
+                this.util.logError('Error while trying to get list of all tokens:', error);
+            }
+            await this.releaseConnection();
         }
         // Loop through tokens and update basic info
         for(let tick of tokens)
@@ -1720,8 +2018,9 @@ class Database {
 
     // Get action_index of the first valid ISSUE action for a given ticker
     async getFirstIssueActionIndex(tick){
-        let idx      = 0;
-        let tick_id  = await this.createTicker(tick);
+        let tick_id      = await this.createTicker(tick);
+        let action_index = false;
+        let db    = await this.getConnection();
         let query = `SELECT 
                         i.action_index 
                     FROM 
@@ -1733,11 +2032,16 @@ class Database {
                     ORDER BY 
                         action_index ASC 
                     LIMIT 1`;
-        let args    = [tick_id];
-        let results = await this.doQuery(query, args);
-        if(results.length > 0)
-            idx = Number(results[0].action_index);
-        return idx;
+        let args = [tick_id];
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0)
+                action_index = Number(rows[0].action_index);
+        } catch (error) {
+            this.util.logError('Error looking up action_index of first valid issue:', error);
+        }
+        await this.releaseConnection();
+        return action_index;
     }
 
     // Validate if a ticker exists before before a given action_index
@@ -1753,6 +2057,7 @@ class Database {
         let sleep = false;
         if(!this.util.isNull(address) && this.util.isCryptoAddress(address) && !this.util.isNull(block_index) && this.util.isNumeric(block_index)){
             let id    = await this.createAddress(address);
+            let db    = await this.getConnection();
             let query = `SELECT 
                             s1.resume_block 
                         FROM 
@@ -1768,12 +2073,17 @@ class Database {
                             s1.action_index DESC
                         LIMIT 1`;
             let args = [1, id, 'valid'];
-            let results = await this.doQuery(query, args);
-            if(results.length > 0){
-                let resume_block = Number(results[0].resume_block);
-                if(resume_block ==  -1 || resume_block > block_index)
-                    sleep = true;
+            try {
+                let rows = await db.query(query, args);
+                if(rows.length > 0){
+                    let resume_block = Number(rows[0].resume_block);
+                    if(resume_block ==  -1 || resume_block > block_index)
+                        sleep = true;
+                }
+            } catch (error) {
+                this.util.logError('Error looking up resume_block record for address in sleeps table:', error);
             }
+            await this.releaseConnection();
         }
         return sleep;
     }
@@ -1783,6 +2093,7 @@ class Database {
         let sleep = false;
         if(!this.util.isNull(tick) && !this.util.isNull(block_index) && this.util.isNumeric(block_index)){
             let id    = await this.createTicker(tick);
+            let db    = await this.getConnection();
             let query = `SELECT 
                             s1.resume_block 
                         FROM 
@@ -1795,13 +2106,18 @@ class Database {
                         ORDER BY 
                             s1.action_index DESC
                         LIMIT 1`;
-            let args    = [2, id, 'valid'];
-            let results = await this.doQuery(query, args);
-            if(results.length > 0){
-                let resume_block = Number(results[0].resume_block);
-                if(resume_block ==  -1 || resume_block > block_index)
-                    sleep = true;
+            let args = [2, id, 'valid'];
+            try {
+                let rows = await db.query(query, args);
+                if(rows.length > 0){
+                    let resume_block = Number(rows[0].resume_block);
+                    if(resume_block ==  -1 || resume_block > block_index)
+                        sleep = true;
+                }
+            } catch (error) {
+                this.util.logError('Error looking up resume_block record for tick in sleeps table:', error);
             }
+            await this.releaseConnection();
         }
         return sleep;
     }
@@ -1856,11 +2172,16 @@ class Database {
     // Lookup a record in the `index_memos` table and return record id
     async getMemoId(memo){
         let id    = null;
+        let db    = await this.getConnection();
         let query = "SELECT id FROM index_memos WHERE memo=? LIMIT 1";
-        let args    = [memo];
-        let results = await this.doQuery(query, args);
-        if(results.length > 0)
-            id = Number(results[0].id);
+        try {
+            let rows = await db.query(query, [memo]);
+            if(rows.length > 0)
+                id = Number(rows[0].id);
+        } catch (error) {
+            this.util.logError('Error looking up ticker record id in index_memos table:', error);
+        }
+        await this.releaseConnection();
         return id;
     }
 
@@ -1874,11 +2195,16 @@ class Database {
         var id = await this.getMemoId(memo);
         // Handle creating record
         if(id==null){
+            let db    = await this.getConnection();
             let query = "INSERT INTO index_memos (memo) values (?)";
-            let args    = [memo];
-            let results = await this.doQuery(query, args);
-            if(results.insertId)
-                id = Number(results.insertId);
+            try {
+                let result = await db.query(query, [memo]);
+                if(result.insertId)
+                    id = Number(result.insertId);
+            } catch (error) {
+                this.util.logError('Error trying to create memo record in index_memos table:', error);
+            }
+            await this.releaseConnection();
         }
         return id;
     }
@@ -1894,12 +2220,16 @@ class Database {
         let action_index   = data['ACTION_INDEX'];
         let amount         = data['AMOUNT'];
         // Check if record already exists for this mint
-        let exists  = false;
-        let query   = "SELECT action_index FROM mints WHERE action_index=? LIMIT 1";
-        let args    = [action_index];
-        let results = await this.doQuery(query, args);
-        if(results.length > 0)
-            exists = true;
+        let db     = await this.getConnection();
+        let query  = "SELECT action_index FROM mints WHERE action_index=? LIMIT 1";
+        let exists = false;
+        try {
+            let rows = await db.query(query, [action_index]);
+            if(rows.length > 0)
+                exists = true;
+        } catch (error){
+            this.util.logError('Error looking up record in mints table:', error);
+        }
         if(exists){
             // UPDATE record
             query = `UPDATE
@@ -1916,8 +2246,14 @@ class Database {
             // INSERT record
             query = `INSERT INTO mints (tick_id, amount, destination_id, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?)`;
         }
-        args    = [tick_id, amount, destination_id, memo_id, status_id, action_index];
-        results = await this.doQuery(query, args);
+        let args = [tick_id, amount, destination_id, memo_id, status_id, action_index];
+        // Create or Update the record in the mints table
+        try {
+            let result = await db.query(query, args);
+        } catch (error){
+            this.util.logError('Error trying to create record in mints table:', error);
+        }
+        await this.releaseConnection();
     }
 
     // Create record in `list_edits` table
@@ -1930,17 +2266,27 @@ class Database {
         if(data['TYPE']==2)
             item_id = await this.createAddress(item);
         // Check if record already exists for this list
-        let exists  = false;
-        let query   = "SELECT item_id FROM list_edits WHERE action_index=? AND item_id=? AND status_id=? LIMIT 1";
-        let args    = [action_index, item_id, status_id];
-        let results = await this.doQuery(query, args);
-        if(results.length > 0)
-            exists = true;
+        let db     = await this.getConnection();
+        let query  = "SELECT item_id FROM list_edits WHERE action_index=? AND item_id=? AND status_id=? LIMIT 1";
+        let args   = [action_index, item_id, status_id];
+        let exists = false;
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0)
+                exists = true;
+        } catch (error){
+            this.util.logError('Error looking up record in list_edits table:', error);
+        }
         // INSERT record
         if(!exists){
             query = "INSERT INTO list_edits (action_index, item_id, status_id) values (?, ?, ?)";
-            results = await this.doQuery(query, args);
+            try {
+                let rows = await db.query(query, args);
+            } catch (error){
+                this.util.logError('Error trying to create record in list_edits table:', error);
+            }
         }
+        await this.releaseConnection();
     }
 
     // Create record in `list_items` table
@@ -1952,17 +2298,27 @@ class Database {
         if(data['TYPE']==2)
             item_id = await this.createAddress(item);
         // Check if record already exists for this list
-        let exists  = false;
-        let query   = "SELECT item_id FROM list_items WHERE action_index=? AND item_id=? LIMIT 1";
-        let args    = [action_index, item_id];
-        let results = await this.doQuery(query, args);
-        if(results.length > 0)
-            exists = true;
+        let db     = await this.getConnection();
+        let query  = "SELECT item_id FROM list_items WHERE action_index=? AND item_id=? LIMIT 1";
+        let args   = [action_index, item_id];
+        let exists = false;
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0)
+                exists = true;
+        } catch (error){
+            this.util.logError('Error looking up record in list_items table:', error);
+        }
         // INSERT record
         if(!exists){
-            query   = "INSERT INTO list_items (action_index, item_id) values (?, ?)";
-            results = await this.doQuery(query, args);
+            query = "INSERT INTO list_items (action_index, item_id) values (?, ?)";
+            try {
+                let rows = await db.query(query, args);
+            } catch (error){
+                this.util.logError('Error trying to create record in list_items table:', error);
+            }
         }
+        await this.releaseConnection();
     }
 
     // Create record in `list_items_invalid` table
@@ -1975,17 +2331,27 @@ class Database {
         if(data['TYPE']==2)
             item_id = await this.createAddress(item);
         // Check if record already exists for this list
-        let exists  = false;
-        let query   = "SELECT item_id FROM list_items_invalid WHERE action_index=? AND item_id=? AND status_id=? LIMIT 1";
-        let args    = [action_index, item_id, status_id];
-        let results = await this.doQuery(query, args);
-        if(results.length > 0)
-            exists = true;
+        let db     = await this.getConnection();
+        let query  = "SELECT item_id FROM list_items_invalid WHERE action_index=? AND item_id=? AND status_id=? LIMIT 1";
+        let args   = [action_index, item_id, status_id];
+        let exists = false;
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0)
+                exists = true;
+        } catch (error){
+            this.util.logError('Error looking up record in list_items_invalid table:', error);
+        }
         // INSERT record
         if(!exists){
-            query   = "INSERT INTO list_items_invalid (action_index, item_id, status_id) values (?, ?, ?)";
-            results = await this.doQuery(query, args);
+            query = "INSERT INTO list_items_invalid (action_index, item_id, status_id) values (?, ?, ?)";
+            try {
+                let rows = await db.query(query, args);
+            } catch (error){
+                this.util.logError('Error trying to create record in list_items_invalid table:', error);
+            }
         }
+        await this.releaseConnection();
     }
 
 
@@ -1996,6 +2362,7 @@ class Database {
             return;
         let tickers  = {};
         let decimals = {};
+        let db       = await this.getConnection();
         // Get list of tickers and supply from credits/debits/escrows/tokens tables using block_index
         let query   = `SELECT
                         DISTINCT(x.tick_id),
@@ -2034,14 +2401,17 @@ class Database {
                         INNER JOIN index_tickers t2 ON (t2.id=x.tick_id)
                     ORDER BY 
                         t2.tick ASC`;
-        let args    = [block_index, block_index, block_index];
-        let results = await this.doQuery(query, args);
-        if(results.length >0){
-            for(let row of results){
-                // Add ticker, decimal, and supply info to assoc arrays
-                tickers[row.tick]  = Number(row.tick_id);
-                decimals[row.tick] = row.decimals;
-            };
+        try {
+            let rows = await db.query(query, [block_index, block_index, block_index]);
+            if(rows.length >0){
+                for(let row of rows){
+                    // Add ticker, decimal, and supply info to assoc arrays
+                    tickers[row.tick]  = Number(row.tick_id);
+                    decimals[row.tick] = row.decimals;
+                };
+            }
+        } catch (error){
+            this.util.logError('Error looking up credits/debits in block:', error);
         }
         // Loop through the tickers and validate token supply match credits/debits/balances info
         for(let tick in tickers){
@@ -2065,6 +2435,7 @@ class Database {
             if(token!=total)
                 this.util.throwError("SanityError: total supply does not match token supply : " + tick + " (" + total + " != " + token + ")");
         }
+        await this.releaseConnection();
     }
 
     // Create record in `addresses` table
@@ -2077,12 +2448,17 @@ class Database {
         let fee_preference = data['FEE_PREFERENCE'];
         let require_memo   = data['REQUIRE_MEMO'];
         // Check if record already exists for this address
-        let exists  = false;
-        let query   = "SELECT action_index FROM addresses WHERE action_index=? LIMIT 1";
-        let args    = [action_index];
-        let results = await this.doQuery(query, args);
-        if(results.length > 0)
-            exists = true;
+        let db     = await this.getConnection();
+        let query  = "SELECT action_index FROM addresses WHERE action_index=? LIMIT 1";
+        let args   = [action_index];
+        let exists = false;
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0)
+                exists = true;
+        } catch (error){
+            this.util.logError('Error looking up record in addresses table:', error);
+        }
         if(exists){
             query = `UPDATE
                         addresses
@@ -2096,8 +2472,12 @@ class Database {
         } else {
             query = "INSERT INTO addresses (fee_preference, require_memo, memo_id, status_id, action_index) values (?, ?, ?, ?, ?)";
         }
-        args    = [fee_preference, require_memo, memo_id, status_id, action_index];
-        results = await this.doQuery(query, args);
+        try {
+            let rows = await db.query(query, [fee_preference, require_memo, memo_id, status_id, action_index]);
+        } catch (error){
+            this.util.logError('Error trying to create record in addresses table:', error);
+        }
+        await this.releaseConnection();
     }
 
     // Create record in `batches` table
@@ -2107,12 +2487,17 @@ class Database {
         let status_id    = await this.createStatus(data['STATUS']);
         let action_index = data['ACTION_INDEX'];
         // Check if record already exists for this address
-        let exists  = false;
-        let query   = "SELECT action_index FROM batches WHERE action_index=? LIMIT 1";
-        let args    = [action_index];
-        let results = await this.doQuery(query, args);
-        if(results.length > 0)
-            exists = true;
+        let db    = await this.getConnection();
+        let query = "SELECT action_index FROM batches WHERE action_index=? LIMIT 1";
+        let args  = [action_index];
+        let exists = false;
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0)
+                exists = true;
+        } catch (error){
+            this.util.logError('Error looking up record in batches table:', error);
+        }
         if(exists){
             query = `UPDATE
                         batches
@@ -2123,8 +2508,13 @@ class Database {
         } else {
             query = "INSERT INTO batches (status_id, action_index) values (?, ?)";
         }
-        args    = [status_id, action_index];
-        results = await this.doQuery(query, args);
+        args = [status_id, action_index];
+        try {
+            let rows = await db.query(query, args);
+        } catch (error){
+            this.util.logError('Error trying to create record in batches table:', error);
+        }
+        await this.releaseConnection();
     }
 
     // Create/Update record in `sends` table
@@ -2138,7 +2528,7 @@ class Database {
         let action_index   = data['ACTION_INDEX'];
         let amount         = data['AMOUNT'];
         // Check if record already exists for this send
-        let exists = false;
+        let db     = await this.getConnection();
         let query  = `SELECT
                             action_index
                         FROM
@@ -2148,10 +2538,15 @@ class Database {
                             destination_id=? AND
                             amount=? AND
                             action_index=?`;
-        let args    = [tick_id, destination_id, amount, action_index];
-        let results = await this.doQuery(query, args);
-        if(results.length > 0)
-            exists = true;
+        let args = [tick_id, destination_id, amount, action_index];
+        let exists = false;
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0)
+                exists = true;
+        } catch (error){
+            this.util.logError('Error looking up record in sends table:', error);
+        }
         if(exists){
             // UPDATE record
             query = `UPDATE
@@ -2168,8 +2563,14 @@ class Database {
             // INSERT record
             query = `INSERT INTO sends (tick_id, destination_id, amount, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?)`;
         }
-        args    = [tick_id, destination_id, amount, memo_id, status_id, action_index];
-        results = await this.doQuery(query, args);
+        args = [tick_id, destination_id, amount, memo_id, status_id, action_index];
+        // Create or Update the record in the sends table
+        try {
+            let result = await db.query(query, args);
+        } catch (error){
+            this.util.logError('Error trying to create record in sends table:', error);
+        }
+        await this.releaseConnection();
     }
 
     // Get address preferences for a given address
@@ -2191,6 +2592,7 @@ class Database {
             args.push(block_index);
         }
         // Lookup the address preferences
+        let db    = await this.getConnection();
         let query = `SELECT 
                 a1.fee_preference,
                 a1.require_memo
@@ -2204,13 +2606,18 @@ class Database {
                 s1.status=?` + sql + `
             ORDER BY 
                 a1.action_index ASC`;
-        let results = await this.doQuery(query, args);
-        if(results.length > 0){
-            for(let row of results){
-                data['FEE_PREFERENCE'] = row.fee_preference;
-                data['REQUIRE_MEMO']   = row.require_memo;
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0){
+                for(let row of rows){
+                    data['FEE_PREFERENCE'] = row.fee_preference;
+                    data['REQUIRE_MEMO']   = row.require_memo;
+                }
             }
+        } catch (error){
+            this.util.logError('Error looking up address preferences in the addresses table:', error);
         }
+        await this.releaseConnection();
         return data;
     }
 
@@ -2225,8 +2632,8 @@ class Database {
         let amount            = data['AMOUNT'];
         let list_action_index = (!this.util.isNumeric(data['LIST_ACTION_INDEX'])) ? null : data['LIST_ACTION_INDEX'];
         // Check if record already exists for this airdrop
-        let exists = false;
-        let query  = `SELECT
+        let db    = await this.getConnection();
+        let query = `SELECT
                         action_index
                     FROM
                         airdrops
@@ -2236,10 +2643,15 @@ class Database {
                         list_action_index=? AND
                         amount=? AND
                         action_index=?`;
-        let args    = [tick_id, memo_id, list_action_index, amount, action_index];
-        let results = await this.doQuery(query, args);
-        if(results.length > 0)
-            exists = true;
+        let args  = [tick_id, memo_id, list_action_index, amount, action_index];
+        let exists = false;
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0)
+                exists = true;
+        } catch (error){
+            this.util.logError('Error looking up record in airdrops table:', error);
+        }
         // Define list of arguments for sql insert/update
         args = [tick_id, list_action_index, amount, memo_id, status_id, action_index];
         if(exists){
@@ -2259,7 +2671,12 @@ class Database {
             query = `INSERT INTO airdrops (tick_id, list_action_index, amount, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?)`;
         }
         // Create or Update the record in the airdrops table
-        results = await this.doQuery(query, args);
+        try {
+            let result = await db.query(query, args);
+        } catch (error){
+            this.util.logError('Error trying to create record in airdrops table:', error);
+        }
+        await this.releaseConnection();
     }
 
     // Create/Update record in `fees` table
@@ -2271,17 +2688,22 @@ class Database {
         let amount         = data['AMOUNT'];
         let method         = data['METHOD'];
         // Check if record already exists for this airdrop
-        let exists = false;
+        let db     = await this.getConnection();
         let query = `SELECT
                         action_index
                     FROM
                         fees
                     WHERE
                         action_index=?`;
-        let args    = [action_index];
-        let results = await this.doQuery(query, args);
-        if(results.length > 0)
-            exists = true;
+        let args = [action_index];
+        let exists = false;
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0)
+                exists = true;
+        } catch (error){
+            this.util.logError('Error looking up record in fees table:', error);
+        }
         // Define list of arguments for sql insert/update
         args = [tick_id, destination_id, amount, method, action_index];
         if(exists){
@@ -2300,7 +2722,12 @@ class Database {
             query = `INSERT INTO fees (tick_id, destination_id, amount, method, action_index) values (?, ?, ?, ?, ?)`;
         }
         // Create or Update the record in the fees table
-        results = await this.doQuery(query, args);
+        try {
+            let result = await db.query(query, args);
+        } catch (error){
+            this.util.logError('Error trying to create record in fees table:', error);
+        }
+        await this.releaseConnection();
     }
 
     // Create/Update record in `destroys` table
@@ -2313,17 +2740,22 @@ class Database {
         let action_index   = data['ACTION_INDEX'];
         let amount         = data['AMOUNT'];
         // Check if record already exists for this destroy
-        let exists = false;
+        let db     = await this.getConnection();
         let query  = `SELECT
                             action_index
                         FROM
                             destroys
                         WHERE
                             action_index=?`;
-        let args    = [action_index];
-        let results = await this.doQuery(query, args);
-        if(results.length > 0)
-            exists = true;
+        let args = [action_index];
+        let exists = false;
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0)
+                exists = true;
+        } catch (error){
+            this.util.logError('Error looking up record in destroys table:', error);
+        }
         if(exists){
             // UPDATE record
             query = `UPDATE
@@ -2339,8 +2771,14 @@ class Database {
             // INSERT record
             query = `INSERT INTO destroys (tick_id, amount, memo_id, status_id, action_index) values (?, ?, ?, ?, ?)`;
         }
-        args    = [tick_id, amount, memo_id, status_id, action_index];
-        results = await this.doQuery(query, args);        
+        args = [tick_id, amount, memo_id, status_id, action_index];
+        // Create or Update the record in the destroys table
+        try {
+            let result = await db.query(query, args);
+        } catch (error){
+            this.util.logError('Error trying to create record in destroys table:', error);
+        }
+        await this.releaseConnection();
     }
 
     // Get tokens owned by a given address
@@ -2348,6 +2786,7 @@ class Database {
         let id   = await this.createAddress(address);
         let data = {};
         // Lookup the address preferences
+        let db    = await this.getConnection();
         let query = `SELECT 
                         t1.tick_id,
                         t2.tick
@@ -2358,11 +2797,17 @@ class Database {
                         t1.owner_id=? 
                     ORDER BY 
                         t2.tick`;
-        let args    = [id];
-        let results = await this.doQuery(query, args);
-        if(results.length > 0)
-            for(let row of results)
-                data[row.tick_id] = row.tick;
+        try {
+            let rows = await db.query(query, [id]);
+            if(rows.length > 0){
+                for(let row of rows){
+                    data[row.tick_id] = row.tick;
+                }
+            }
+        } catch (error){
+            this.util.logError('Error looking up tokens owned by address in the tokens table:', error);
+        }
+        await this.releaseConnection();
         return data;
     }
 
@@ -2378,17 +2823,22 @@ class Database {
         let balances       = data['BALANCES'];
         let ownerships     = data['OWNERSHIPS'];
         // Check if record already exists for this sweep
-        let exists = false;
+        let db    = await this.getConnection();
         let query = `SELECT
                         action_index
                     FROM
                         sweeps
                     WHERE
                         action_index=?`;
-        let args    = [action_index];
-        let results = await this.doQuery(query, args);
-        if(results.length > 0)
-            exists = true;
+        let args = [action_index];
+        let exists = false;
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0)
+                exists = true;
+        } catch (error){
+            this.util.logError('Error looking up record in sweeps table:', error);
+        }
         if(exists){
             // UPDATE record
             query = `UPDATE
@@ -2405,8 +2855,14 @@ class Database {
             // INSERT record
             query = `INSERT INTO sweeps (destination_id, balances, ownerships, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?)`;
         }
-        args    = [destination_id, balances, ownerships, memo_id, status_id, action_index];
-        results = await this.doQuery(query, args);
+        args = [destination_id, balances, ownerships, memo_id, status_id, action_index];
+        // Create or Update the record in the sweeps table
+        try {
+            let result = await db.query(query, args);
+        } catch (error){
+            this.util.logError('Error trying to create record in sweeps table:', error);
+        }
+        await this.releaseConnection();
     }
 
     // Create/Update record in `dividends` table
@@ -2420,7 +2876,7 @@ class Database {
         let action_index     = data['ACTION_INDEX'];
         let amount           = data['AMOUNT'];
         // Check if record already exists for this dividend
-        let exists = false;
+        let db     = await this.getConnection();
         let query  = `SELECT
                             action_index
                         FROM
@@ -2428,9 +2884,14 @@ class Database {
                         WHERE
                             action_index=?`;
         let args = [action_index];
-        let results = await this.doQuery(query, args);
-        if(results.length > 0)
-            exists = true;
+        let exists = false;
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0)
+                exists = true;
+        } catch (error){
+            this.util.logError('Error looking up record in dividends table:', error);
+        }
         if(exists){
             // UPDATE record
             query = `UPDATE
@@ -2449,7 +2910,13 @@ class Database {
             query = `INSERT INTO dividends (tick_id, dividend_tick_id, amount, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?)`;
         }
         args = [tick_id, dividend_tick_id, amount, memo_id, status_id, action_index];
-        results = await this.doQuery(query, args);
+        // Create or Update the record in the dividends table
+        try {
+            let result = await db.query(query, args);
+        } catch (error){
+            this.util.logError('Error trying to create record in dividends table:', error);
+        }
+        await this.releaseConnection();
     }
 
     // Create/Update record in `callbacks` table
@@ -2463,17 +2930,22 @@ class Database {
         let action_index     = data['ACTION_INDEX'];
         let callback_amount  = data['CALLBACK_AMOUNT'];
         // Check if record already exists for this callback
-        let exists = false;
+        let db     = await this.getConnection();
         let query = `SELECT
                         action_index
                     FROM
                         callbacks
                     WHERE
                         action_index=?`; 
-        let args    = [action_index];
-        let results = await this.doQuery(query, args);
-        if(results.length > 0)
-            exists = true;
+        let args = [action_index];
+        let exists = false;
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0)
+                exists = true;
+        } catch (error){
+            this.util.logError('Error looking up record in callbacks table:', error);
+        }
         if(exists){
             // UPDATE record
             query = `UPDATE
@@ -2491,18 +2963,30 @@ class Database {
             // INSERT record
             query = `INSERT INTO callbacks (tick_id, callback_tick_id, callback_amount, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?)`;
         }
-        args    = [tick_id, callback_tick_id, callback_amount, memo_id, status_id,  action_index];
-        results = await this.doQuery(query, args);
+        args = [tick_id, callback_tick_id, callback_amount, memo_id, status_id,  action_index];
+        // Create or Update the record in the callbacks table
+        try {
+            let result = await db.query(query, args);
+        } catch (error){
+            this.util.logError('Error trying to create record in callbacks table:', error);
+        }
+        await this.releaseConnection();
     }
 
     // Lookup a record in the `index_mime_types` table and return record id
     async getMimeTypeId(type){
-        let id      = null;
-        let query   = "SELECT id FROM index_mime_types WHERE `type`=? LIMIT 1";
-        let args    = [type];
-        let results = await this.doQuery(query, args);
-        if(results.length > 0)
-            id = Number(results[0].id);
+        let id    = null;
+        let db    = await this.getConnection();
+        let query = "SELECT id FROM index_mime_types WHERE `type`=? LIMIT 1";
+        let args  = [type];
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0)
+                id = Number(rows[0].id);
+        } catch (error) {
+            this.util.logError('Error looking up MIME type record id in index_mime_types table:', error);
+        }
+        await this.releaseConnection();
         return id;
     }
 
@@ -2514,11 +2998,17 @@ class Database {
         var id = await this.getMimeTypeId(type);
         // Handle creating record
         if(id==null){
-            let query   = "INSERT INTO index_mime_types (`type`) values (?)";
-            let args    = [type];
-            let results = await this.doQuery(query, args);
-            if(results.insertId)
-                id = Number(results.insertId);
+            let db    = await this.getConnection();
+            let query = "INSERT INTO index_mime_types (`type`) values (?)";
+            let args  = [type];
+            try {
+                let result = await db.query(query, args);
+                if(result.insertId)
+                    id = Number(result.insertId);
+            } catch (error) {
+                this.util.logError('Error trying to create MIME type record in index_mime_types table:', error);
+            }
+            await this.releaseConnection();
         }
         return id;
     }
@@ -2534,17 +3024,22 @@ class Database {
         let name         = data['NAME'];
         let title        = data['TITLE'];
         // Check if record already exists for this file
-        let exists = false;
+        let db     = await this.getConnection();
         let query  = `SELECT
                             action_index
                         FROM
                             files
                         WHERE
                             action_index=?`;
-        let args    = [action_index];
-        let results = await this.doQuery(query, args);
-        if(results.length > 0)
-            exists = true;
+        let args = [action_index];
+        let exists = false;
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0)
+                exists = true;
+        } catch (error){
+            this.util.logError('Error looking up record in files table:', error);
+        }
         if(exists){
             // UPDATE record
             query = `UPDATE
@@ -2561,18 +3056,30 @@ class Database {
             // INSERT record
             query = `INSERT INTO files (name, title, type_id, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?)`;
         }
-        args    = [name, title, type_id, memo_id, status_id, action_index];
-        results = await this.doQuery(query, args);
+        args = [name, title, type_id, memo_id, status_id, action_index];
+        // Create or Update the record in the files table
+        try {
+            let result = await db.query(query, args);
+        } catch (error){
+            this.util.logError('Error trying to create record in files table:', error);
+        }
+        await this.releaseConnection();
     }
 
     // Lookup a record in the `index_coins` table and return record id
     async getCoinId(coin){
         let id    = null;
+        let db    = await this.getConnection();
         let query = "SELECT id FROM index_coins WHERE `coin`=? LIMIT 1";
         let args  = [coin];
-        let results = await this.doQuery(query, args);
-        if(results.length > 0)
-            id = Number(results[0].id);
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0)
+                id = Number(rows[0].id);
+        } catch (error) {
+            this.util.logError('Error looking up coin record id in index_coins table:', error);
+        }
+        await this.releaseConnection();
         return id;
     }
 
@@ -2584,11 +3091,17 @@ class Database {
        var id = await this.getCoinId(coin);
         // Handle creating record
         if(id==null){
-            let query   = "INSERT INTO index_coins (`coin`) values (?)";
-            let args    = [coin];
-            let results = await this.doQuery(query, args);
-            if(results.insertId)
-                id = Number(results.insertId);
+            let db    = await this.getConnection();
+            let query = "INSERT INTO index_coins (`coin`) values (?)";
+            let args  = [coin];
+            try {
+                let result = await db.query(query, args);
+                if(result.insertId)
+                    id = Number(result.insertId);
+            } catch (error) {
+                this.util.logError('Error trying to create coin record in index_coins table:', error);
+            }
+            await this.releaseConnection();
         }
         return id;
     }    
@@ -2596,6 +3109,7 @@ class Database {
     // Lookup table associated with an action
     async getActionIndexTable(action_index){
         let table  = null;
+        let db     = await this.getConnection();
         let query  = `SELECT 
                         LCASE(a2.action) as action
                     FROM 
@@ -2604,16 +3118,21 @@ class Database {
                     WHERE
                         a1.action_index=?
                     LIMIT 1`;
-        let args    = [action_index];
-        let results = await this.doQuery(query, args);
-        if(results.length > 0){
-            let action = results[0].action;
-            if(['address','batch','dispense'].includes(action)){
-                table = action + 'es';
-            } else {
-                table = action + 's';
+        let args   = [action_index];
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0){
+                let action = rows[0].action;
+                if(['address','batch','dispense'].includes(action)){
+                    table = action + 'es';
+                } else {
+                    table = action + 's';
+                }
             }
+        } catch (error) {
+            this.util.logError('Error trying to lookup action table name from index_actions table:', error);
         }
+        await this.releaseConnection();
         return table;
     }
 
@@ -2622,6 +3141,7 @@ class Database {
         let valid = false;
         let table = await this.getActionIndexTable(action_index);
         if(!this.util.isNull(table)){
+            let db    = await this.getConnection();
             let query = `SELECT 
                             m.action_index
                         FROM 
@@ -2630,10 +3150,15 @@ class Database {
                         WHERE
                             m.action_index=? AND
                             s.status='valid'`;
-            let args    = [action_index];
-            let results = await this.doQuery(query, args);
-            if(results.length > 0)
-                valid = true;
+            let args = [action_index];
+            try {
+                let rows = await db.query(query, args);
+                if(rows.length > 0)
+                    valid = true;
+            } catch (error) {
+                this.util.logError('Error looking up if action_index is valid :', error);
+            }
+            await this.releaseConnection();
         }
         return valid;
     }
@@ -2650,17 +3175,22 @@ class Database {
         let coin1_action_index = data['COIN1_ACTION_INDEX'];
         let coin2_action_index = data['COIN2_ACTION_INDEX'];
         // Check if record already exists for this link
-        let exists = false;
+        let db     = await this.getConnection();
         let query  = `SELECT
                             action_index
                         FROM
                             links
                         WHERE
                             action_index=?`;
-        let args    = [action_index];
-        let results = await this.doQuery(query, args);
-        if(results.length > 0)
-            exists = true;
+        let args = [action_index];
+        let exists = false;
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0)
+                exists = true;
+        } catch (error){
+            this.util.logError('Error looking up record in links table:', error);
+        }
         if(exists){
             // UPDATE record
             query = `UPDATE
@@ -2679,7 +3209,13 @@ class Database {
             query = `INSERT INTO links (coin1_id, coin1_action_index, coin2_id, coin2_action_index, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?, ?)`;
         }
         args = [coin1_id, coin1_action_index, coin2_id, coin2_action_index, memo_id, status_id, action_index];
-        results = await this.doQuery(query, args);
+        // Create or Update the record in the links table
+        try {
+            let result = await db.query(query, args);
+        } catch (error){
+            this.util.logError('Error trying to create record in links table:', error);
+        }
+        await this.releaseConnection();
     }
 
     // Create/Update record in `broadcasts` table
@@ -2694,17 +3230,22 @@ class Database {
         let value                  = data['VALUE'];
         let fee                    = data['FEE'];
         // Check if record already exists for this broadcast
-        let exists = false;
+        let db     = await this.getConnection();
         let query  = `SELECT
                             action_index
                         FROM
                             broadcasts
                         WHERE
                             action_index=?`;
-        let args    = [action_index];
-        let results = await this.doQuery(query, args);
-        if(results.length > 0)
-            exists = true;
+        let args = [action_index];
+        let exists = false;
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0)
+                exists = true;
+        } catch (error){
+            this.util.logError('Error looking up record in broadcasts table:', error);
+        }
         if(exists){
             // UPDATE record
             query = `UPDATE
@@ -2722,8 +3263,14 @@ class Database {
             // INSERT record
             query = `INSERT INTO broadcasts (message, value, fee, broadcast_action_index, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?, ?)`;
         }
-        args    = [message, value, fee, broadcast_action_index, memo_id, status_id, action_index];
-        results = await this.doQuery(query, args);
+        args = [message, value, fee, broadcast_action_index, memo_id, status_id, action_index];
+        // Create or Update the record in the broadcasts table
+        try {
+            let result = await db.query(query, args);
+        } catch (error){
+            this.util.logError('Error trying to create record in broadcasts table:', error);
+        }
+        await this.releaseConnection();
     }
 
     // Create/Update record in `messages` table
@@ -2738,17 +3285,22 @@ class Database {
         let encrypted_message = data['ENCRYPTED_MESSAGE'];
         let plaintext_message = data['PLAINTEXT_MESSAGE'];
         // Check if record already exists for this message
-        let exists = false;
+        let db     = await this.getConnection();
         let query  = `SELECT
                             action_index
                         FROM
                             messages
                         WHERE
                             action_index=?`;
-        let args    = [action_index];
-        let results = await this.doQuery(query, args);
-        if(results.length > 0)
-            exists = true;
+        let args = [action_index];
+        let exists = false;
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0)
+                exists = true;
+        } catch (error){
+            this.util.logError('Error looking up record in messages table:', error);
+        }
         if(exists){
             // UPDATE record
             query = `UPDATE
@@ -2767,7 +3319,13 @@ class Database {
             query = `INSERT INTO messages (encryption_method, encryption_key, encrypted_message, plaintext_message, destination_id, status_id, action_index) values (?, ?, ?, ?, ?, ?, ?)`;
         }
         args = [encryption_method, encryption_key, encrypted_message, plaintext_message, destination_id, status_id, action_index];
-        results = await this.doQuery(query, args);
+        // Create or Update the record in the messages table
+        try {
+            let result = await db.query(query, args);
+        } catch (error){
+            this.util.logError('Error trying to create record in messages table:', error);
+        }
+        await this.releaseConnection();
     }        
 
     // Create/Update record in `sleeps` table
@@ -2781,17 +3339,22 @@ class Database {
         let resume_block = data['RESUME_BLOCK'];
         let type         = (data['TYPE']=='TICK') ? 2 : 1;
         // Check if record already exists for this sleep
-        let exists = false;
+        let db     = await this.getConnection();
         let query  = `SELECT
                             action_index
                         FROM
                             sleeps
                         WHERE
                             action_index=?`;
-        let args    = [action_index];
-        let results = await this.doQuery(query, args);
-        if(results.length > 0)
-            exists = true;
+        let args = [action_index];
+        let exists = false;
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0)
+                exists = true;
+        } catch (error){
+            this.util.logError('Error looking up record in sleeps table:', error);
+        }
         if(exists){
             // UPDATE record
             query = `UPDATE
@@ -2808,8 +3371,14 @@ class Database {
             // INSERT record
             query = `INSERT INTO sleeps (type, tick_id, resume_block, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?)`;
         }
-        args    = [type, tick_id, resume_block, memo_id, status_id, action_index];
-        results = await this.doQuery(query, args);
+        args = [type, tick_id, resume_block, memo_id, status_id, action_index];
+        // Create or Update the record in the sleeps table
+        try {
+            let result = await db.query(query, args);
+        } catch (error){
+            this.util.logError('Error trying to create record in sleeps table:', error);
+        }
+        await this.releaseConnection();
     }
 
     // Create/Update record in `swaps` table
@@ -2830,7 +3399,7 @@ class Database {
         let allow_list     = data['ALLOW_LIST'];
         let block_list     = data['BLOCK_LIST'];
         // Check if record already exists for this swap
-        let exists = false;
+        let db     = await this.getConnection();
         let query  = `SELECT
                             action_index
                         FROM
@@ -2838,9 +3407,14 @@ class Database {
                         WHERE
                             action_index=?`;
         let args = [action_index];
-        let results = await this.doQuery(query, args);
-        if(results.length > 0)
-            exists = true;
+        let exists = false;
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0)
+                exists = true;
+        } catch (error){
+            this.util.logError('Error looking up record in swaps table:', error);
+        }
         if(exists){
             // UPDATE record
             query = `UPDATE
@@ -2864,8 +3438,14 @@ class Database {
             // INSERT record
             query = `INSERT INTO swaps (give_coin_id, give_tick_id, give_amount, get_coin_id, get_tick_id, get_amount, get_address_id, expiration, allow_list, block_list, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
         }
-        args    = [give_coin_id, give_tick_id, give_amount, get_coin_id, get_tick_id, get_amount, get_address_id, expiration, allow_list, block_list, memo_id, status_id, action_index];
-        results = await this.doQuery(query, args);
+        args = [give_coin_id, give_tick_id, give_amount, get_coin_id, get_tick_id, get_amount, get_address_id, expiration, allow_list, block_list, memo_id, status_id, action_index];
+        // Create or Update the record in the swaps table
+        try {
+            let result = await db.query(query, args);
+        } catch (error){
+            this.util.logError('Error trying to create record in swaps table:', error);
+        }
+        await this.releaseConnection();
     }
 
     // Create/Update record in `swap_statuses` table
@@ -2876,7 +3456,7 @@ class Database {
         // Normalize data
         let status_id = await this.createStatus(status);
         // Check if record already exists for this in swap_statuses table
-        let exists = false;
+        let db     = await this.getConnection();
         let query  = `SELECT
                             action_index
                         FROM
@@ -2884,10 +3464,15 @@ class Database {
                         WHERE
                             action_index=? AND
                             swap_action_index=?`;
-        let args    = [action_index, swap_action_index];
-        let results = await this.doQuery(query, args);
-        if(results.length > 0)
-            exists = true;
+        let args = [action_index, swap_action_index];
+        let exists = false;
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0)
+                exists = true;
+        } catch (error){
+            this.util.logError('Error looking up record in swap_statuses table:', error);
+        }
         if(exists){
             // UPDATE record
             query = `UPDATE
@@ -2901,8 +3486,14 @@ class Database {
             // INSERT record
             query = `INSERT INTO swap_statuses (status_id, action_index, swap_action_index) values (?, ?, ?)`;
         }
-        args    = [status_id, action_index, swap_action_index];
-        results = await this.doQuery(query, args);
+        args = [status_id, action_index, swap_action_index];
+        // Create or Update the record in the swap_statuses table
+        try {
+            let result = await db.query(query, args);
+        } catch (error){
+            this.util.logError('Error trying to create record in swap_statuses table:', error);
+        }
+        await this.releaseConnection();
     }
 
     // Create/Update record in `swap_cancels` table
@@ -2914,17 +3505,22 @@ class Database {
         let action_index      = data['ACTION_INDEX'];
         let swap_action_index = data['SWAP_ACTION_INDEX'];
         // Check if record already exists for this swap_cancel
-        let exists = false;
+        let db     = await this.getConnection();
         let query  = `SELECT
                             action_index
                         FROM
                             swap_cancels
                         WHERE
                             action_index=?`;
-        let args    = [action_index];
-        let results = await this.doQuery(query, args);
-        if(results.length > 0)
-            exists = true;
+        let args = [action_index];
+        let exists = false;
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0)
+                exists = true;
+        } catch (error){
+            this.util.logError('Error looking up record in swap_cancels table:', error);
+        }
         if(exists){
             // UPDATE record
             query = `UPDATE
@@ -2939,8 +3535,14 @@ class Database {
             // INSERT record
             query = `INSERT INTO swap_cancels (memo_id, status_id, swap_action_index, action_index) values (?, ?, ?, ?)`;
         }
-        args    = [memo_id, status_id, swap_action_index, action_index];
-        results = await this.doQuery(query, args);
+        args = [memo_id, status_id, swap_action_index, action_index];
+        // Create or Update the record in the swap_cancels table
+        try {
+            let result = await db.query(query, args);
+        } catch (error){
+            this.util.logError('Error trying to create record in swap_cancels table:', error);
+        }
+        await this.releaseConnection();
     }
 
     // Create/Update record in `swap_statuses` table
@@ -2951,6 +3553,7 @@ class Database {
         // Normalize data
         let status_id = await this.createStatus(status);
         // Check if record already exists for this in swap_expires table
+        let db     = await this.getConnection();
         let query  = `SELECT
                             action_index
                         FROM
@@ -2959,9 +3562,14 @@ class Database {
                             action_index=? AND
                             swap_action_index=?`;
         let args = [action_index, swap_action_index];
-        let results = await this.doQuery(query, args);
-        if(results.length > 0)
-            exists = true;
+        let exists = false;
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0)
+                exists = true;
+        } catch (error){
+            this.util.logError('Error looking up record in swap_expires table:', error);
+        }
         if(exists){
             // UPDATE record
             query = `UPDATE
@@ -2975,13 +3583,20 @@ class Database {
             // INSERT record
             query = `INSERT INTO swap_expires (status_id, action_index, swap_action_index) values (?, ?, ?)`;
         }
-        args    = [status_id, action_index, swap_action_index];
-        results = await this.doQuery(query, args);
+        args = [status_id, action_index, swap_action_index];
+        // Create or Update the record in the swap_expires table
+        try {
+            let result = await db.query(query, args);
+        } catch (error){
+            this.util.logError('Error trying to create record in swap_expires table:', error);
+        }
+        await this.releaseConnection();
     }
 
     // Return swap info for given action_index
     async getSwapInfo(coin, action_index){
         let swap = false;
+        let db    = await this.getConnection();
         let query = `SELECT 
                         s.action_index,
                         t2.tick as give_tick,
@@ -3011,40 +3626,48 @@ class Database {
                         INNER JOIN index_coins     c1 ON (c1.id=s.get_coin_id)
                         INNER JOIN index_memos     m1 ON (m1.id=s.memo_id)
                         INNER JOIN index_statuses  s1 ON (s1.id=s.status_id)
-                        INNER JOIN swap_statuses   s2 ON (s2.swap_action_index = s.action_index)
-                    WHERE 
-                        s2.action_index = (
+                        LEFT  JOIN LATERAL (
                             SELECT
-                                MAX(s3.action_index)
+                                s4.status
                             FROM
                                 swap_statuses s3
+                                INNER JOIN index_statuses s4 ON (s4.id=s3.status_id)
                             WHERE
-                                s3.swap_action_index = s.action_index
-                        )
-                        AND c1.coin=? 
-                        AND s.action_index=? 
+                                s3.swap_action_index=s.action_index
+                            ORDER BY 
+                                s3.action_index DESC
+                            LIMIT 1
+                        ) s2 ON TRUE
+                    WHERE 
+                        c1.coin=? AND
+                        s.action_index=? 
                     LIMIT 1`;
-        let args    = [coin, action_index];
-        let results = await this.doQuery(query, args);
-        if(results.length > 0){
-            swap = {};
-            swap['GIVE_COIN'] = this.config['COIN'];
-            for(let key in results[0]){
-                let name  = String(key).toUpperCase()
-                let value = results[0][key];
-                if(['ACTION_INDEX', 'BLOCK_INDEX', 'BLOCK_TIME', 'EXPIRATION', 'ALLOW_LIST', 'BLOCK_LIST'].includes(name))
-                    value = Number(value);
-                swap[name] = value;
+        let args  = [coin, action_index];
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0){
+                swap = {};
+                swap['GIVE_COIN'] = this.config['COIN'];
+                for(let key in rows[0]){
+                    let name  = String(key).toUpperCase()
+                    let value = rows[0][key];
+                    if(['ACTION_INDEX', 'BLOCK_INDEX', 'BLOCK_TIME', 'EXPIRATION', 'ALLOW_LIST', 'BLOCK_LIST'].includes(name))
+                        value = Number(value);
+                    swap[name] = value;
+                }
+                // Get updated swap properties from the swap_edits table
+                let edit = await this.getSwapEdits(action_index);
+                if(edit.expiration)
+                    swap['EXPIRATION'] = edit.expiration;
+                if(edit.allow_list)
+                    swap['ALLOW_LIST'] = edit.allow_list;
+                if(edit.block_list)
+                    swap['BLOCK_LIST'] = edit.block_list;
             }
-            // Get updated swap properties from the swap_edits table
-            let edit = await this.getSwapEdits(action_index);
-            if(edit.expiration)
-                swap['EXPIRATION'] = edit.expiration;
-            if(edit.allow_list)
-                swap['ALLOW_LIST'] = edit.allow_list;
-            if(edit.block_list)
-                swap['BLOCK_LIST'] = edit.block_list;
+        } catch (error) {
+            this.util.logError('Error looking up swap using swaps table:', error);
         }
+        await this.releaseConnection();
         return swap;
     }
 
@@ -3056,6 +3679,7 @@ class Database {
             allow_list: false,
             block_list: false
         };
+        let db     = await this.getConnection();
         let query  = `SELECT 
                         s1.expiration,
                         s1.allow_list,
@@ -3068,15 +3692,20 @@ class Database {
                         s2.status=?
                     ORDER BY
                         s1.action_index ASC`;
-        let args    = [action_index, 'valid'];
-        let results = await this.doQuery(query, args);
-        if(results.length > 0){
-            for(let row of results){
-                if(!this.util.isNull(row.expiration) && this.util.isNumeric(row.expiration)) edit.expiration = Number(row.expiration);
-                if(!this.util.isNull(row.allow_list) && this.util.isNumeric(row.allow_list)) edit.allow_list = Number(row.allow_list);
-                if(!this.util.isNull(row.block_list) && this.util.isNumeric(row.block_list)) edit.block_list = Number(row.block_list);
+        let args  = [action_index, 'valid'];
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0){
+                for(let row of rows){
+                    if(!this.util.isNull(row.expiration) && this.util.isNumeric(row.expiration)) edit.expiration = Number(row.expiration);
+                    if(!this.util.isNull(row.allow_list) && this.util.isNumeric(row.allow_list)) edit.allow_list = Number(row.allow_list);
+                    if(!this.util.isNull(row.block_list) && this.util.isNumeric(row.block_list)) edit.block_list = Number(row.block_list);
+                }
             }
+        } catch (error) {
+            this.util.logError('Error looking up swap edits using swap_edits table:', error);
         }
+        await this.releaseConnection();
         return edit;
     }
 
@@ -3096,7 +3725,7 @@ class Database {
         let allow_list        = data['ALLOW_LIST'];
         let block_list        = data['BLOCK_LIST'];
         // Check if record already exists for this swap_edits
-        let exists = false;
+        let db     = await this.getConnection();
         let query  = `SELECT
                             action_index
                         FROM
@@ -3104,9 +3733,14 @@ class Database {
                         WHERE
                             action_index=?`;
         let args = [action_index];
-        let results = await this.doQuery(query, args);
-        if(results.length > 0)
-            exists = true;
+        let exists = false;
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0)
+                exists = true;
+        } catch (error){
+            this.util.logError('Error looking up record in swap_edits table:', error);
+        }
         if(exists){
             // UPDATE record
             query = `UPDATE
@@ -3124,8 +3758,14 @@ class Database {
             // INSERT record
             query = `INSERT INTO swap_edits (expiration, allow_list, block_list, memo_id, status_id, swap_action_index, action_index) values (?, ?, ?, ?, ?, ?, ?)`;
         }
-        args    = [expiration, allow_list, block_list, memo_id, status_id, swap_action_index, action_index];
-        results = await this.doQuery(query, args);        
+        args = [expiration, allow_list, block_list, memo_id, status_id, swap_action_index, action_index];
+        // Create or Update the record in the swap_edits table
+        try {
+            let result = await db.query(query, args);
+        } catch (error){
+            this.util.logError('Error trying to create record in swap_edits table:', error);
+        }
+        await this.releaseConnection();
     }
 
     // Handle looking up potential swap matches
@@ -3135,25 +3775,29 @@ class Database {
         let source_id    = await this.createAddress(data['SOURCE']);
         let action_index = data['ACTION_INDEX'];
         // Lookup any matching swaps from different addresses (not SOURCE)
+        let db    = await this.getConnection();
         let query = `SELECT
                         c1.coin,
                         s2.action_index
                     FROM
                         swaps s1,
                         swaps s2
-                        INNER JOIN index_coins   c1 ON (c1.id=s2.get_coin_id)
-                        INNER JOIN actions       a1 ON (a1.action_index=s2.action_index)
-                        INNER JOIN transactions  t1 ON (t1.tx_index=a1.tx_index)
-                        INNER JOIN swap_statuses s3 ON (s3.swap_action_index=s2.action_index)
-                    WHERE
-                        s3.action_index = (
+                        INNER JOIN index_coins  c1 ON (c1.id=s2.get_coin_id)
+                        INNER JOIN actions      a1 ON (a1.action_index=s2.action_index)
+                        INNER JOIN transactions t1 ON (t1.tx_index=a1.tx_index)
+                        LEFT  JOIN LATERAL (
                             SELECT
-                                MAX(s4.action_index)
+                                s5.status
                             FROM
                                 swap_statuses s4
+                                INNER JOIN index_statuses s5 ON (s5.id=s4.status_id)
                             WHERE
-                                s4.swap_action_index = s2.action_index
-                        ) AND
+                                s4.swap_action_index=s2.action_index
+                            ORDER BY 
+                                s4.action_index DESC
+                            LIMIT 1
+                        ) s3 ON TRUE
+                    WHERE
                         s1.give_coin_id=s2.get_coin_id AND
                         s1.give_tick_id=s2.get_tick_id AND
                         s1.give_amount=s2.get_amount AND
@@ -3163,17 +3807,22 @@ class Database {
                         s3.status='open'
                     ORDER BY
                         s2.action_index ASC`;
-        let args    = [action_index, source_id];
-        let results = await this.doQuery(query, args);
-        if(results.length > 0){
-            // Loop through possible matches and get full information on the swap match
-            for(let row of results){
-                let swapInfo = await this.getSwapInfo(row.coin, row.action_index);
-                if(!matches)
-                    matches = [];
-                matches.push(swapInfo);
+        let args = [action_index, source_id];
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0){
+                // Loop through possible matches and get full information on the swap match
+                for(let row of rows){
+                    let swapInfo = await this.getSwapInfo(row.coin, row.action_index);
+                    if(!matches)
+                        matches = [];
+                    matches.push(swapInfo);
+                }
             }
+        } catch (error){
+            this.util.logError('Error looking up potential swap matches in swaps table:', error);
         }
+        await this.releaseConnection();
         return matches;
     }
 
@@ -3192,17 +3841,22 @@ class Database {
         let give_action_index = match['ACTION_INDEX']
         let get_action_index  = swap['ACTION_INDEX'];
         // Check if record already exists for this swap_matches
-        let exists = false;
+        let db     = await this.getConnection();
         let query  = `SELECT
                             action_index
                         FROM
                             swap_matches
                         WHERE
                             action_index=?`;
-        let args    = [action_index];
-        let results = await this.doQuery(query, args);
-        if(results.length > 0)
-            exists = true;
+        let args = [action_index];
+        let exists = false;
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0)
+                exists = true;
+        } catch (error){
+            this.util.logError('Error looking up record in swap_matches table:', error);
+        }
         if(exists){
             // UPDATE record
             query = `UPDATE
@@ -3223,8 +3877,14 @@ class Database {
             // INSERT record
             query = `INSERT INTO swap_matches (give_coin_id, give_tick_id, give_amount, give_action_index, get_coin_id, get_tick_id, get_amount, get_action_index, status_id, action_index) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
         }
-        args    = [give_coin_id, give_tick_id, give_amount, give_action_index, get_coin_id, get_tick_id, get_amount, get_action_index, status_id, action_index];
-        results = await this.doQuery(query, args);
+        args = [give_coin_id, give_tick_id, give_amount, give_action_index, get_coin_id, get_tick_id, get_amount, get_action_index, status_id, action_index];
+        // Create or Update the record in the swap_matches table
+        try {
+            let result = await db.query(query, args);
+        } catch (error){
+            this.util.logError('Error trying to create record in swap_matches table:', error);
+        }
+        await this.releaseConnection();
     }
 
     // Create/Update record in `orders` table
@@ -3251,7 +3911,7 @@ class Database {
         let allow_list     = data['ALLOW_LIST'];
         let block_list     = data['BLOCK_LIST'];
         // Check if record already exists for this order
-        let exists = false;
+        let db     = await this.getConnection();
         let query  = `SELECT
                             action_index
                         FROM
@@ -3259,9 +3919,14 @@ class Database {
                         WHERE
                             action_index=?`;
         let args = [action_index];
-        let results = await this.doQuery(query, args);
-        if(results.length > 0)
-            exists = true;
+        let exists = false;
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0)
+                exists = true;
+        } catch (error){
+            this.util.logError('Error looking up record in orders table:', error);
+        }
         if(exists){
             // UPDATE record
             query = `UPDATE
@@ -3285,8 +3950,14 @@ class Database {
             // INSERT record
             query = `INSERT INTO orders (give_coin_id, give_tick_id, give_amount, get_coin_id, get_tick_id, get_amount, get_address_id, expiration, allow_list, block_list, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
         }
-        args    = [give_coin_id, give_tick_id, give_amount, get_coin_id, get_tick_id, get_amount, get_address_id, expiration, allow_list, block_list, memo_id, status_id, action_index];
-        results = await this.doQuery(query, args);
+        args = [give_coin_id, give_tick_id, give_amount, get_coin_id, get_tick_id, get_amount, get_address_id, expiration, allow_list, block_list, memo_id, status_id, action_index];
+        // Create or Update the record in the orders table
+        try {
+            let result = await db.query(query, args);
+        } catch (error){
+            this.util.logError('Error trying to create record in orders table:', error);
+        }
+        await this.releaseConnection();
     }
 
     // Create/Update record in `order_statuses` table
@@ -3297,7 +3968,7 @@ class Database {
         // Normalize data
         let status_id = await this.createStatus(status);
         // Check if record already exists for this in order_statuses table
-        let exists = false;
+        let db     = await this.getConnection();
         let query  = `SELECT
                             action_index
                         FROM
@@ -3305,10 +3976,15 @@ class Database {
                         WHERE
                             action_index=? AND
                             order_action_index=?`;
-        let args    = [action_index, order_action_index];
-        let results = await this.doQuery(query, args);
-        if(results.length > 0)
-            exists = true;
+        let args = [action_index, order_action_index];
+        let exists = false;
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0)
+                exists = true;
+        } catch (error){
+            this.util.logError('Error looking up record in order_statuses table:', error);
+        }
         if(exists){
             // UPDATE record
             query = `UPDATE
@@ -3322,8 +3998,14 @@ class Database {
             // INSERT record
             query = `INSERT INTO order_statuses (status_id, action_index, order_action_index) values (?, ?, ?)`;
         }
-        args    = [status_id, action_index, order_action_index];
-        results = await this.doQuery(query, args);
+        args = [status_id, action_index, order_action_index];
+        // Create or Update the record in the order_statuses table
+        try {
+            let result = await db.query(query, args);
+        } catch (error){
+            this.util.logError('Error trying to create record in order_statuses table:', error);
+        }
+        await this.releaseConnection();
     }
 
     // Create/Update record in `order_expires` table
@@ -3334,7 +4016,7 @@ class Database {
         // Normalize data
         let status_id = await this.createStatus(status);
         // Check if record already exists for this in order_expires table
-        let exists = false;
+        let db     = await this.getConnection();
         let query  = `SELECT
                             action_index
                         FROM
@@ -3343,9 +4025,14 @@ class Database {
                             action_index=? AND
                             order_action_index=?`;
         let args = [action_index, order_action_index];
-        let results = await this.doQuery(query, args);
-        if(results.length > 0)
-            exists = true;
+        let exists = false;
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0)
+                exists = true;
+        } catch (error){
+            this.util.logError('Error looking up record in order_expires table:', error);
+        }
         if(exists){
             // UPDATE record
             query = `UPDATE
@@ -3359,8 +4046,14 @@ class Database {
             // INSERT record
             query = `INSERT INTO order_expires (status_id, action_index, order_action_index) values (?, ?, ?)`;
         }
-        args    = [status_id, action_index, order_action_index];
-        results = await this.doQuery(query, args);        
+        args = [status_id, action_index, order_action_index];
+        // Create or Update the record in the order_expires table
+        try {
+            let result = await db.query(query, args);
+        } catch (error){
+            this.util.logError('Error trying to create record in order_expires table:', error);
+        }
+        await this.releaseConnection();
     }
 
 
@@ -3371,25 +4064,29 @@ class Database {
         let source_id    = await this.createAddress(data['SOURCE']);
         let action_index = data['ACTION_INDEX'];
         // Lookup any matching orders from different addresses (not SOURCE)
+        let db    = await this.getConnection();
         let query = `SELECT
                         c1.coin,
                         o2.action_index
                     FROM
                         orders o1,
                         orders o2
-                        INNER JOIN index_coins    c1 ON (c1.id=o2.get_coin_id)
-                        INNER JOIN actions        a1 ON (a1.action_index=o2.action_index)
-                        INNER JOIN transactions   t1 ON (t1.tx_index=a1.tx_index)
-                        INNER JOIN order_statuses s1 ON (s1.order_action_index=o2.action_index)
-                    WHERE
-                        s1.action_index = (
+                        INNER JOIN index_coins  c1 ON (c1.id=o2.get_coin_id)
+                        INNER JOIN actions      a1 ON (a1.action_index=o2.action_index)
+                        INNER JOIN transactions t1 ON (t1.tx_index=a1.tx_index)
+                        LEFT  JOIN LATERAL (
                             SELECT
-                                MAX(s2.action_index)
+                                s2.status
                             FROM
-                                order_statuses s2
+                                order_statuses s1
+                                INNER JOIN index_statuses s2 ON (s2.id=s1.status_id)
                             WHERE
-                                s2.order_action_index = o2.action_index
-                        ) AND
+                                s1.order_action_index=o2.action_index
+                            ORDER BY 
+                                s1.action_index DESC
+                            LIMIT 1
+                        ) s1 ON TRUE
+                    WHERE
                         o1.give_coin_id=o2.get_coin_id AND
                         o1.give_tick_id=o2.get_tick_id AND
                         o1.action_index=? AND
@@ -3398,16 +4095,21 @@ class Database {
                     ORDER BY
                         o2.action_index ASC`;
         let args = [action_index, source_id];
-        let results = await this.doQuery(query, args);
-        if(results.length > 0){
-            // Loop through possible matches and get full information on the order match
-            for(let row of results){
-                let orderInfo = await this.getOrderInfo(row.coin, row.action_index);
-                if(!matches)
-                    matches = [];
-                matches.push(orderInfo);
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0){
+                // Loop through possible matches and get full information on the order match
+                for(let row of rows){
+                    let orderInfo = await this.getOrderInfo(row.coin, row.action_index);
+                    if(!matches)
+                        matches = [];
+                    matches.push(orderInfo);
+                }
             }
+        } catch (error){
+            this.util.logError('Error looking up potential order matches in orders table:', error);
         }
+        await this.releaseConnection();
         // Sort matches by price, then by action_index
         if(matches)
             matches = this.util.sortPriceActionIndex(matches);
@@ -3417,6 +4119,7 @@ class Database {
     // Return order info for given action_index
     async getOrderInfo(coin, action_index){
         let order = false;
+        let db    = await this.getConnection();
         let query = `SELECT 
                         o.action_index,
                         t2.tick as give_tick,
@@ -3446,31 +4149,38 @@ class Database {
                         INNER JOIN index_coins     c1 ON (c1.id=o.get_coin_id)
                         INNER JOIN index_memos     m1 ON (m1.id=o.memo_id)
                         INNER JOIN index_statuses  s1 ON (s1.id=o.status_id)
-                        INNER JOIN order_statuses  s2 ON (s2.order_action_index=o.action_index)
-                    WHERE 
-                        s2.action_index = (
+                        LEFT  JOIN LATERAL (
                             SELECT
-                                MAX(s3.action_index)
+                                s4.status as order_status
                             FROM
                                 order_statuses s3
+                                INNER JOIN index_statuses s4 ON (s4.id=s3.status_id)
                             WHERE
-                                s3.order_action_index = o.action_index
-                        ) AND
+                                s3.order_action_index=o.action_index
+                            ORDER BY 
+                                s3.action_index DESC
+                            LIMIT 1
+                        ) s2 ON TRUE
+                    WHERE 
                         c1.coin=? AND
                         o.action_index=? 
                     LIMIT 1`;
         let args  = [coin, action_index];
-        let results = await this.doQuery(query, args);
-        if(results.length > 0){
-            order = {};
-            order['GIVE_COIN'] = this.config['COIN'];
-            for(let key in results[0]){
-                let name  = String(key).toUpperCase()
-                let value = results[0][key];
-                if(['ACTION_INDEX', 'BLOCK_INDEX', 'BLOCK_TIME', 'EXPIRATION', 'ALLOW_LIST', 'BLOCK_LIST'].includes(name))
-                    value = Number(value);
-                order[name] = value;
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0){
+                order = {};
+                order['GIVE_COIN'] = this.config['COIN'];
+                for(let key in rows[0]){
+                    let name  = String(key).toUpperCase()
+                    let value = rows[0][key];
+                    if(['ACTION_INDEX', 'BLOCK_INDEX', 'BLOCK_TIME', 'EXPIRATION', 'ALLOW_LIST', 'BLOCK_LIST'].includes(name))
+                        value = Number(value);
+                    order[name] = value;
+                }
             }
+        } catch (error) {
+            this.util.logError('Error looking up order using orders table:', error);
         }
         // Get additional information on this order 
         if(order){
@@ -3490,6 +4200,7 @@ class Database {
             order['GIVE_REMAINING'] = give_remaining;
             order['GET_REMAINING']  = get_remaining;
         }
+        await this.releaseConnection();
         return order;
     }
 
@@ -3501,6 +4212,7 @@ class Database {
             allow_list: false,
             block_list: false
         };
+        let db     = await this.getConnection();
         let query  = `SELECT 
                         o.expiration,
                         o.allow_list,
@@ -3513,15 +4225,20 @@ class Database {
                         s.status=?
                     ORDER BY
                         o.action_index ASC`;
-        let args    = [action_index, 'valid'];
-        let results = await this.doQuery(query, args);
-        if(results.length > 0){
-            for(let row of results){
-                if(!this.util.isNull(row.expiration) && this.util.isNumeric(row.expiration)) edit.expiration = Number(row.expiration);
-                if(!this.util.isNull(row.allow_list) && this.util.isNumeric(row.allow_list)) edit.allow_list = Number(row.allow_list);
-                if(!this.util.isNull(row.block_list) && this.util.isNumeric(row.block_list)) edit.block_list = Number(row.block_list);
+        let args  = [action_index, 'valid'];
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0){
+                for(let row of rows){
+                    if(!this.util.isNull(row.expiration) && this.util.isNumeric(row.expiration)) edit.expiration = Number(row.expiration);
+                    if(!this.util.isNull(row.allow_list) && this.util.isNumeric(row.allow_list)) edit.allow_list = Number(row.allow_list);
+                    if(!this.util.isNull(row.block_list) && this.util.isNumeric(row.block_list)) edit.block_list = Number(row.block_list);
+                }
             }
+        } catch (error) {
+            this.util.logError('Error looking up order edits using order_edits table:', error);
         }
+        await this.releaseConnection();
         return edit;
     }
 
@@ -3535,6 +4252,7 @@ class Database {
             get_tick_id    = 0,
             get_remaining  = 0;
         // Get initial amounts from the orders table
+        let db     = await this.getConnection();
         let query  = `SELECT 
                         o.give_coin_id,
                         o.give_tick_id,
@@ -3548,16 +4266,20 @@ class Database {
                     WHERE 
                         o.action_index=? AND
                         s.status=?`;
-        let args    = [action_index, 'valid'];
-        let results = await this.doQuery(query, args);
-        if(results.length > 0){
-            let info = results[0];
-            give_coin_id   = info.give_coin_id;
-            give_tick_id   = info.give_tick_id;  
-            give_remaining = info.give_amount;
-            get_coin_id    = info.get_coin_id;
-            get_tick_id    = info.get_tick_id;  
-            get_remaining  = info.get_amount;
+        let args  = [action_index, 'valid'];
+        try {
+            let rows = await db.query(query, args);
+            if(rows && rows.length>0){
+                let info = rows[0];
+                give_coin_id   = info.give_coin_id;
+                give_tick_id   = info.give_tick_id;  
+                give_remaining = info.give_amount;
+                get_coin_id    = info.get_coin_id;
+                get_tick_id    = info.get_tick_id;  
+                get_remaining  = info.get_amount;
+            }
+        } catch (error) {
+            this.util.logError('Error looking up order amounts from orders table :', error);
         }
         // Lookup amounts matched in order_matches
         query = `SELECT
@@ -3572,16 +4294,20 @@ class Database {
                     (m.give_action_index=? OR m.get_action_index=?) AND
                     s.status=?
                 ORDER BY action_index ASC`;
-        args    = [action_index, action_index, 'valid'];
-        results = await this.doQuery(query, args);
-        if(results.length > 0){
-            // Loop through each order match and deduct amount from remaining
-            for(let row of results){
-                let give_amount = (row.get_action_index==action_index) ? row.give_amount : row.get_amount;
-                let get_amount  = (row.get_action_index==action_index) ? row.get_amount  : row.give_amount;
-                give_remaining  = this.util.bcsub(give_remaining, give_amount);
-                get_remaining   = this.util.bcsub(get_remaining,  get_amount);
+        try {
+            args = [action_index, action_index, 'valid'];
+            let rows = await db.query(query, args);
+            if(rows && rows.length>0){
+                // Loop through each order match and deduct amount from remaining
+                for(let row of rows){
+                    let give_amount = (row.get_action_index==action_index) ? row.give_amount : row.get_amount;
+                    let get_amount  = (row.get_action_index==action_index) ? row.get_amount  : row.give_amount;
+                    give_remaining  = this.util.bcsub(give_remaining, give_amount);
+                    get_remaining   = this.util.bcsub(get_remaining,  get_amount);
+                }
             }
+        } catch (error) {
+            this.util.logError('Error looking up order amounts from order_matches table :', error);
         }
         return [give_remaining, get_remaining];
     }
@@ -3598,17 +4324,22 @@ class Database {
         let allow_list         = data['ALLOW_LIST'];
         let block_list         = data['BLOCK_LIST'];
         // Check if record already exists for this order_edits
-        let exists = false;
+        let db     = await this.getConnection();
         let query  = `SELECT
                             action_index
                         FROM
                             order_edits
                         WHERE
                             action_index=?`;
-        let args    = [action_index];
-        let results = await this.doQuery(query, args);
-        if(results.length > 0)
-            exists = true;
+        let args = [action_index];
+        let exists = false;
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0)
+                exists = true;
+        } catch (error){
+            this.util.logError('Error looking up record in order_edits table:', error);
+        }
         if(exists){
             // UPDATE record
             query = `UPDATE
@@ -3626,8 +4357,14 @@ class Database {
             // INSERT record
             query = `INSERT INTO order_edits (expiration, allow_list, block_list, memo_id, status_id, order_action_index, action_index) values (?, ?, ?, ?, ?, ?, ?)`;
         }
-        args   = [expiration, allow_list, block_list, memo_id, status_id, order_action_index, action_index];
-        results = await this.doQuery(query, args);
+        args = [expiration, allow_list, block_list, memo_id, status_id, order_action_index, action_index];
+        // Create or Update the record in the order_edits table
+        try {
+            let result = await db.query(query, args);
+        } catch (error){
+            this.util.logError('Error trying to create record in order_edits table:', error);
+        }
+        await this.releaseConnection();
     }
 
     // Create/Update record in `order_cancels` table
@@ -3639,17 +4376,22 @@ class Database {
         let action_index      = data['ACTION_INDEX'];
         let order_action_index = data['ORDER_ACTION_INDEX'];
         // Check if record already exists for this swap_cancel
-        let exists = false;
+        let db     = await this.getConnection();
         let query  = `SELECT
                             action_index
                         FROM
                             order_cancels
                         WHERE
                             action_index=?`;
-        let args    = [action_index];
-        let results = await this.doQuery(query, args);
-        if(results.length > 0)
-            exists = true;
+        let args = [action_index];
+        let exists = false;
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0)
+                exists = true;
+        } catch (error){
+            this.util.logError('Error looking up record in order_cancels table:', error);
+        }
         if(exists){
             // UPDATE record
             query = `UPDATE
@@ -3664,8 +4406,14 @@ class Database {
             // INSERT record
             query = `INSERT INTO order_cancels (memo_id, status_id, order_action_index, action_index) values (?, ?, ?, ?)`;
         }
-        args    = [memo_id, status_id, order_action_index, action_index];
-        results = await this.doQuery(query, args);
+        args = [memo_id, status_id, order_action_index, action_index];
+        // Create or Update the record in the swap_cancels table
+        try {
+            let result = await db.query(query, args);
+        } catch (error){
+            this.util.logError('Error trying to create record in order_cancels table:', error);
+        }
+        await this.releaseConnection();
     }
 
     // Create/Update record in `order_matches` table
@@ -3683,17 +4431,22 @@ class Database {
         let give_action_index = match['ACTION_INDEX']
         let get_action_index  = order['ACTION_INDEX'];
         // Check if record already exists for this order_matches
-        let exists = false;
+        let db     = await this.getConnection();
         let query  = `SELECT
                             action_index
                         FROM
                             swap_matches
                         WHERE
                             action_index=?`;
-        let args    = [action_index];
-        let results = await this.doQuery(query, args);
-        if(results.length > 0)
-            exists = true;
+        let args = [action_index];
+        let exists = false;
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0)
+                exists = true;
+        } catch (error){
+            this.util.logError('Error looking up record in order_matches table:', error);
+        }
         if(exists){
             // UPDATE record
             query = `UPDATE
@@ -3714,8 +4467,14 @@ class Database {
             // INSERT record
             query = `INSERT INTO order_matches (give_coin_id, give_tick_id, give_amount, give_action_index, get_coin_id, get_tick_id, get_amount, get_action_index, status_id, action_index) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
         }
-        args    = [give_coin_id, give_tick_id, give_amount, give_action_index, get_coin_id, get_tick_id, get_amount, get_action_index, status_id, action_index];
-        results = await this.doQuery(query, args);
+        args = [give_coin_id, give_tick_id, give_amount, give_action_index, get_coin_id, get_tick_id, get_amount, get_action_index, status_id, action_index];
+        // Create or Update the record in the order_matches table
+        try {
+            let result = await db.query(query, args);
+        } catch (error){
+            this.util.logError('Error trying to create record in order_matches table:', error);
+        }
+        await this.releaseConnection();
     }
 
     // Create records in the 'mappings_actions' table
@@ -3731,7 +4490,7 @@ class Database {
             id      = await this.createAddress(value);
         }
         // Check if record already exists
-        let exists = false;
+        let db     = await this.getConnection();
         let query  = `SELECT
                             action_index
                         FROM
@@ -3741,14 +4500,24 @@ class Database {
                             type_id=? AND
                             id=?`;
         let args = [action_index, type_id, id];
-        let results = await this.doQuery(query, args);
-        if(results.length > 0)
-            exists = true;
+        let exists = false;
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0)
+                exists = true;
+        } catch (error){
+            this.util.logError('Error looking up record in mappings_actions table:', error);
+        }
         // Create record if it does not already exist
         if(!exists){
-            query   = `INSERT INTO mappings_actions (action_index, type_id, id) values (?, ?, ?)`;
-            results = await this.doQuery(query, args);
+            query = `INSERT INTO mappings_actions (action_index, type_id, id) values (?, ?, ?)`;
+            try {
+                let result = await db.query(query, args);
+            } catch (error) {
+                this.util.logError('Error trying to create record in mappings_actions table:', error);
+            }
         }
+        await this.releaseConnection();
     }
 
     // Create records in the 'mappings_files' table
@@ -3760,7 +4529,7 @@ class Database {
             id      = await this.createTicker(value);
         }
         // Check if record already exists
-        let exists = false;
+        let db     = await this.getConnection();
         let query  = `SELECT
                             action_index
                         FROM
@@ -3769,15 +4538,25 @@ class Database {
                             action_index=? AND
                             type_id=? AND
                             id=?`;
-        let args    = [action_index, type_id, id];
-        let results = await this.doQuery(query, args);
-        if(results.length > 0)
-            exists = true;
+        let args = [action_index, type_id, id];
+        let exists = false;
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0)
+                exists = true;
+        } catch (error){
+            this.util.logError('Error looking up record in mappings_files table:', error);
+        }
         // Create record if it does not already exist
         if(!exists){
-            query   = `INSERT INTO mappings_files (action_index, type_id, id) values (?, ?, ?)`;
-            results = await this.doQuery(query, args);
+            query = `INSERT INTO mappings_files (action_index, type_id, id) values (?, ?, ?)`;
+            try {
+                let result = await db.query(query, args);
+            } catch (error) {
+                this.util.logError('Error trying to create record in mappings_files table:', error);
+            }
         }
+        await this.releaseConnection();
     }
 
 
@@ -3787,30 +4566,32 @@ class Database {
     async getActionType(action_index){
         let type = null;
         // Lookup the ACTION based on the action_index
-        let query = `SELECT 
+        let db     = await this.getConnection();
+        let args = [action_index];
+        let sql  = `SELECT 
                         a2.action
                     FROM
                         actions a1
                         INNER JOIN index_actions a2 ON (a2.id=a1.action_id)
                     WHERE
                         a1.action_index=?`;
-        let args    = [action_index];
-        let results = await this.doQuery(query, args);
-        if(results.length > 0)
+        let results = await db.query(sql, args);
+        if(results && results.length)
             type = results[0].action;
+        await this.releaseConnection();
         return type;
     }
 
     // Get action information for a given action_index
     async getActionData(action_index){
-        let data  = null;
-        let query = null;
-        let type  = await this.getActionType(action_index);
+        let data = null;
+        let sql  = null;
+        let type = await this.getActionType(action_index);
         if(type){
             // Placeholders for queries and arguments
             // ADDRESS action
             if(type=='ADDRESS'){
-                query = `SELECT
+                sql = `SELECT
                             a3.action,
                             a1.action_index,
                             a4.address as source,
@@ -3838,7 +4619,7 @@ class Database {
             }
             // AIRDROP action
             if(type=='AIRDROP'){
-                query = `SELECT
+                sql = `SELECT
                             a3.action,
                             a1.action_index,
                             a4.address as source,
@@ -3868,7 +4649,7 @@ class Database {
             }
             // BATCH action
             if(type=='BATCH'){
-                query = `SELECT
+                sql = `SELECT
                             a3.action,
                             b1.action_index,
                             a4.address as source,
@@ -3892,7 +4673,7 @@ class Database {
             }
             // BROADCAST action
             if(type=='BROADCAST'){
-                query = `SELECT
+                sql = `SELECT
                             a2.action,
                             b1.action_index,
                             b1.message,
@@ -3922,7 +4703,7 @@ class Database {
             }
             // CALLBACK action
             if(type=='CALLBACK'){
-                query = `SELECT
+                sql = `SELECT
                             a2.action,
                             c1.action_index,
                             a3.address as source,
@@ -3953,7 +4734,7 @@ class Database {
             }
             // DESTROY action
             if(type=='DESTROY'){
-                query = `SELECT
+                sql = `SELECT
                             a2.action,
                             d1.action_index,
                             a3.address as source,
@@ -3990,7 +4771,7 @@ class Database {
             }
             // FILE action
             if(type=='FILE'){
-                query = `SELECT
+                sql = `SELECT
                             a2.action,
                             f1.action_index,
                             f1.name,
@@ -4021,7 +4802,7 @@ class Database {
             }
             // ISSUE action
             if(type=='ISSUE'){
-                query = `SELECT
+                sql = `SELECT
                             a2.action,
                             i1.action_index,
                             t3.tick,
@@ -4072,7 +4853,7 @@ class Database {
             }
             // LINK action
             if(type=='LINK'){
-                query = `SELECT
+                sql = `SELECT
                             a2.action,
                             l1.action_index,
                             c1.coin as coin1,
@@ -4104,7 +4885,7 @@ class Database {
             }
             // LIST action
             if(type=='LIST'){
-                query = `SELECT
+                sql = `SELECT
                             a2.action,
                             l1.action_index,
                             l1.type,
@@ -4131,7 +4912,7 @@ class Database {
             }
             // MESSAGE action
             if(type=='MESSAGE'){
-                query = `SELECT
+                sql = `SELECT
                             a2.action,
                             m1.action_index,
                             a3.address as source,
@@ -4161,7 +4942,7 @@ class Database {
             }
             // MINT action
             if(type=='MINT'){
-                query = `SELECT
+                sql = `SELECT
                             a2.action,
                             m1.action_index,
                             a3.address as source,
@@ -4192,7 +4973,7 @@ class Database {
             }
             // ORDER action
             if(type=='ORDER'){
-                query = `SELECT
+                sql = `SELECT
                             a2.action,
                             o1.action_index,
                             c1.coin as give_coin,
@@ -4233,7 +5014,7 @@ class Database {
             }
             // ORDER_CANCEL action
             if(type=='ORDER_CANCEL'){
-                query = `SELECT
+                sql = `SELECT
                         a2.action,
                         o1.action_index,
                         o1.order_action_index,
@@ -4260,7 +5041,7 @@ class Database {
             }
             // ORDER_EDIT action
             if(type=='ORDER_EDIT'){
-                query = `SELECT
+                sql = `SELECT
                         a2.action,
                         o1.action_index,
                         o1.order_action_index,
@@ -4290,7 +5071,7 @@ class Database {
             }
             // ORDER_MATCH action
             if(type=='ORDER_MATCH'){
-                query = `SELECT
+                sql = `SELECT
                             a2.action,
                             m1.action_index,
                             c1.coin as give_coin,
@@ -4317,7 +5098,7 @@ class Database {
             // SEND action
             // TODO: Revisit this code and optimize it to support Multi-sends (right now shows first send status instead of every send status as it should)
             if(type=='SEND'){
-                query = `SELECT
+                sql = `SELECT
                             a2.action,
                             s1.action_index,
                             a3.address as source,
@@ -4348,7 +5129,7 @@ class Database {
             }
             // SLEEP action
             if(type=='SLEEP'){
-                query = `SELECT
+                sql = `SELECT
                             a2.action,
                             s1.action_index,
                             s1.type,
@@ -4378,7 +5159,7 @@ class Database {
             }
             // SWAP action
             if(type=='SWAP'){
-                query = `SELECT
+                sql = `SELECT
                             a2.action,
                             s1.action_index,
                             c1.coin as give_coin,
@@ -4419,7 +5200,7 @@ class Database {
             }
             // SWAP_CANCEL action
             if(type=='SWAP_CANCEL'){
-                query = `SELECT
+                sql = `SELECT
                         a2.action,
                         s1.action_index,
                         s1.swap_action_index,
@@ -4446,7 +5227,7 @@ class Database {
             }
             // SWAP_EDIT action
             if(type=='SWAP_EDIT'){
-                query = `SELECT
+                sql = `SELECT
                         a2.action,
                         s1.action_index,
                         s1.swap_action_index,
@@ -4476,7 +5257,7 @@ class Database {
             }
             // SWAP_MATCH action
             if(type=='SWAP_MATCH'){
-                query = `SELECT
+                sql = `SELECT
                             a2.action,
                             m1.action_index,
                             c1.coin as give_coin,
@@ -4502,7 +5283,7 @@ class Database {
             }
             // SWEEP
             if(type=='SWEEP'){
-                query = `SELECT
+                sql = `SELECT
                             a2.action,
                             s1.action_index,
                             a3.address as source,
@@ -4532,7 +5313,7 @@ class Database {
             }
             // UNKNOWN
             if(type=='UNKNOWN'){
-                query = `SELECT
+                sql = `SELECT
                             a2.action,
                             a1.action_index,
                             b1.block_index,
@@ -4551,11 +5332,15 @@ class Database {
                         LIMIT 1`;
             }
             // Run the SQL query to get the information on the action_index
-            if(query){
-                let args    = [action_index];
-                let results = await this.doQuery(query, args);
-                if(results.length > 0)
-                    data = results[0];
+            if(sql){
+                let db = await this.getConnection();
+                try {
+                    let results = await db.query(sql, [action_index]);
+                    if(results && results.length)
+                        data = results[0];
+                } catch (error){
+                    this.util.logError('Error trying to run sql query in getActionData:', error);
+                }
             }
         }
         return data;
@@ -4564,6 +5349,7 @@ class Database {
     // Lookup items that need to be expired and return a list
     async getExpiredItems(block_time){
         let expired = [];
+        let db      = await this.getConnection();
         let types   = ['order','swap','dispenser'];
         let query   = '';
         let args    = [];
@@ -4578,20 +5364,26 @@ class Database {
                         '` + type + `' as type
                     FROM 
                         ` + type + `s m
-                    INNER JOIN ` + type + `_statuses s1 ON (s1.` + type + `_action_index = m.action_index)
-                    INNER JOIN index_statuses        s2 ON (s2.id = s1.status_id)
-                    WHERE
-                        s1.action_index = (
+                        LEFT JOIN LATERAL (
                             SELECT
-                                MAX(s3.action_index)
+                                s2.status
                             FROM
-                                ` + type + `_statuses s3
+                                ` + type + `_statuses s1
+                                INNER JOIN index_statuses s2 ON (s2.id=s1.status_id)
                             WHERE
-                                s3.` + type + `_action_index = m.action_index
-                        ) AND
-                        s2.status = 'open'`
+                                s1.` + type + `_action_index=m.action_index
+                            ORDER BY 
+                                s1.action_index DESC
+                            LIMIT 1
+                        ) s ON TRUE        
+                    WHERE 
+                        s.status='open'`
         }
-        results = await this.doQuery(query, args);
+        try {
+            results = await db.query(query);
+        } catch (error) {
+            this.util.logError('Error looking up open items in getExpirations:', error);
+        }
         // Get the current expiration for each item
         if(results){
             for(let info of results){
@@ -4607,10 +5399,14 @@ class Database {
                         ORDER BY
                             s1.action_index ASC`;
                 args  = [info.action_index, 'valid'];
-                let results2 = await this.doQuery(query, args);
-                for(let row of results2){
-                    if(!this.util.isNull(row.expiration))
-                        info.expiration = row.expiration;
+                try {
+                    let rows = await db.query(query, args);
+                    for(let row of rows){
+                        if(!this.util.isNull(row.expiration))
+                            info.expiration = row.expiration;
+                    }
+                } catch (error) {
+                    this.util.logError('Error looking up item expiration in getExpirations:', error);
                 }
                 // If the item expiration is less than the current block_time, expire the item
                 if(info.expiration < block_time){
@@ -4622,6 +5418,7 @@ class Database {
                 }
             }
         }
+        await this.releaseConnection();
         return expired;
     }
 
@@ -4629,8 +5426,9 @@ class Database {
     // TODO: Circle back and add support for cross-chain market data (different coin_id)
     async getMarkets(block_index, update){
         let markets    = [];
+        let db         = await this.getConnection();
         let args       = [block_index];
-        let counts     = [];
+        let counts     = false;
         let query      = '';
         let where      = 'b1.block_index=? AND ';
         // Get the time right now and the time 24 hours ago
@@ -4648,9 +5446,11 @@ class Database {
                     a2.action IN ('ORDER','ORDER_MATCH','ORDER_EXPIRE','ORDER_CANCEL')
                 GROUP BY a2.action
                 ORDER BY a2.action`;
-        let results = await this.doQuery(query, args);
-        if(results.length > 0)
-            counts = results;
+        try {
+            counts = await db.query(query, args);
+        } catch (error) {
+            this.util.logError('Error looking up order actions in getMarkets', error);
+        }
         // Updates to find markets which have not been updated in the last 24 hours
         if(update){
             where = `(a1.block_index=? OR b1.block_time < ? ) AND `;
@@ -4707,21 +5507,19 @@ class Database {
                         ORDER BY o1.action_index ASC`;
             }
             if(query){
-                results = await this.doQuery(query, args);
-                if(results.length > 0){
-                    for(let row of results){
-                        // Check if this pair already exists
-                        let found = false;
-                        for(let pair of markets){
-                            if((pair.tick1_id == row.tick1_id && pair.tick2_id == row.tick2_id) || (pair.tick1_id == row.tick2_id && pair.tick2_id == row.tick1_id))
-                                found = true;
-                        }
-                        if(!found){
-                            markets.push({
-                                tick1_id: Number(row.tick1_id),
-                                tick2_id: Number(row.tick2_id)
-                            });
-                        }
+                let rows = await db.query(query, args);
+                for(let row of rows){
+                    // Check if this pair already exists
+                    let found = false;
+                    for(let pair of markets){
+                        if((pair.tick1_id == row.tick1_id && pair.tick2_id == row.tick2_id) || (pair.tick1_id == row.tick2_id && pair.tick2_id == row.tick1_id))
+                            found = true;
+                    }
+                    if(!found){
+                        markets.push({
+                            tick1_id: Number(row.tick1_id),
+                            tick2_id: Number(row.tick2_id)
+                        });
                     }
                 }
            }
@@ -4732,6 +5530,7 @@ class Database {
     // Get market_id for given ticker ids
     async getMarketId(tick1_id, tick2_id){
         let id     = null;
+        let db     = await this.getConnection();
         let query  = `SELECT
                             id
                         FROM
@@ -4739,10 +5538,14 @@ class Database {
                         WHERE
                             (m.tick1_id=? AND m.tick2_id=?) OR
                             (m.tick1_id=? AND m.tick2_id=?)`;
-        let args    = [tick1_id, tick2_id, tick2_id, tick1_id];
-        let results = await this.doQuery(query, args);        
-        if(results.length > 0)
-            id = results[0].id;
+        let args = [tick1_id, tick2_id, tick2_id, tick1_id];
+        try {
+            let rows = await db.query(query, args);
+            if(rows.length > 0)
+                id = rows[0].id;
+        } catch (error){
+            this.util.logError('Error looking up record in markets table:', error);
+        }
         return id;
     }
 
@@ -4750,11 +5553,18 @@ class Database {
     async createMarket(tick1_id, tick2_id){
         let id = await this.getMarketId(tick1_id, tick2_id);
         if(id==null){
+            let db = await this.getConnection();
             let query = `INSERT INTO markets (tick1_id, tick2_id) values (?, ?)`;
             let args  = [tick1_id, tick2_id];
-            let results = await this.doQuery(query, args);        
-            if(results.insertId)
-                id = Number(results.insertId);
+            // Create a record in the markets table
+            try {
+                let result = await db.query(query, args);
+                if(result.insertId)
+                    id = Number(result.insertId);
+            } catch (error){
+                this.util.logError('Error trying to create record in markets table:', error);
+            }
+            await this.releaseConnection();
         }
         return id;
     }
@@ -4786,6 +5596,7 @@ class Database {
         // Set the last time this info was updated to now
         data.last_updated = time_now;
         // Lookup basic information on this market (tick, tick_id, decimals)
+        let db = await this.getConnection();
         let query = `SELECT
                             m1.id       as market_id,
                             t3.tick     as tick1,
@@ -4802,15 +5613,19 @@ class Database {
                             INNER JOIN index_tickers t4 ON (t4.id=t2.tick_id)
                         WHERE 
                             m1.id=?`;
-        let args    = [market_id];
-        let results = await this.doQuery(query, args);        
-        if(results.length > 0){
-            let row = results[0];
-            // Convert the ids from BIGINT to Number
-            row.market_id = Number(row.market_id);
-            row.tick1_id  = Number(row.tick1_id);
-            row.tick2_id  = Number(row.tick2_id);
-            Object.assign(data, row);
+        let args  = [market_id];
+        try {
+            let results = await db.query(query, args);
+            if(results.length > 0){
+                let row = results[0];
+                // Convert the ids from BIGINT to Number
+                row.market_id = Number(row.market_id);
+                row.tick1_id  = Number(row.tick1_id);
+                row.tick2_id  = Number(row.tick2_id);
+                Object.assign(data, row);
+            }
+        } catch (error){
+            this.util.logError('Error trying to create record in markets table:', error);
         }
         // Lookup last trade prices
         query = `SELECT
@@ -4827,14 +5642,18 @@ class Database {
                 s1.status=?
             ORDER BY m1.action_index DESC 
             LIMIT 1`;
-        args    = [data.tick1_id, data.tick2_id, data.tick2_id, data.tick1_id, 'valid'];
-        results = await this.doQuery(query, args);  
-        if(results.length > 0){
-            let row = results[0];
-            let give_amount = (row.give_tick_id==data.tick1_id) ? row.give_amount : row.get_amount;
-            let get_amount  = (row.give_tick_id==data.tick1_id) ? row.get_amount  : row.give_amount;
-            data.tick1_price = this.util.getPrice(give_amount, get_amount);
-            data.tick2_price = this.util.getPrice(get_amount, give_amount);
+        args  = [data.tick1_id, data.tick2_id, data.tick2_id, data.tick1_id, 'valid'];
+        try {
+            let results = await db.query(query, args);
+            if(results.length > 0){
+                let row = results[0];
+                let give_amount = (row.give_tick_id==data.tick1_id) ? row.give_amount : row.get_amount;
+                let get_amount  = (row.give_tick_id==data.tick1_id) ? row.get_amount  : row.give_amount;
+                data.tick1_price = this.util.getPrice(give_amount, get_amount);
+                data.tick2_price = this.util.getPrice(get_amount, give_amount);
+            }
+        } catch (error){
+            this.util.logError('Error trying to lookup last trade prices:', error);
         }
         // Lookup trade prices 24-hours ago
         query = `SELECT
@@ -4854,14 +5673,18 @@ class Database {
                 b1.block_time <= ?
             ORDER BY m1.action_index DESC 
             LIMIT 1`;
-        args    = [data.tick1_id, data.tick2_id, data.tick2_id, data.tick1_id, 'valid', time_24hr];
-        results = await this.doQuery(query, args);
-        if(results.length > 0){
-            let row = results[0];
-            let give_amount = (row.give_tick_id==data.tick1_id) ? row.give_amount : row.get_amount;
-            let get_amount  = (row.give_tick_id==data.tick1_id) ? row.get_amount  : row.give_amount;
-            data.tick1_24hr_price  = this.util.getPrice(give_amount, get_amount);
-            data.tick2_24hr_price = this.util.getPrice(get_amount, give_amount);
+        args  = [data.tick1_id, data.tick2_id, data.tick2_id, data.tick1_id, 'valid', time_24hr];
+        try {
+            let results = await db.query(query, args);
+            if(results.length > 0){
+                let row = results[0];
+                let give_amount = (row.give_tick_id==data.tick1_id) ? row.give_amount : row.get_amount;
+                let get_amount  = (row.give_tick_id==data.tick1_id) ? row.get_amount  : row.give_amount;
+                data.tick1_24hr_price  = this.util.getPrice(give_amount, get_amount);
+                data.tick2_24hr_price = this.util.getPrice(get_amount, give_amount);
+            }
+        } catch (error){
+            this.util.logError('Error trying to lookup 24-hour trade prices:', error);
         }
         // Lookup 'bid' prices
         query = `SELECT
@@ -4888,25 +5711,29 @@ class Database {
                         s4.order_action_index = o1.action_index
                 )
             ORDER BY o1.action_index DESC`;
-        args    = [data.tick1_id, data.tick2_id, data.tick2_id, data.tick1_id, 'valid', 'open'];
-        results = await this.doQuery(query, args);
-        if(results.length > 0){
-            let tick1_bid = 0,
-                tick2_bid = 0;
-            for(let row of results){
-                let give_amount = (row.give_tick_id==data.tick1_id) ? row.give_amount : row.get_amount;
-                let get_amount  = (row.give_tick_id==data.tick1_id) ? row.get_amount : row.give_amount;
-                let price1      = this.util.getPrice(give_amount, get_amount);
-                let price2      = this.util.getPrice(get_amount, give_amount);
-                if(price1==0||price2==0)
-                    continue;
-                if(tick1_bid==0) tick1_bid = price1;
-                if(tick2_bid==0) tick2_bid = price2;
-                if(price1 > tick1_bid) tick1_bid = price1;
-                if(price2 > tick2_bid) tick2_bid = price2;
+        args = [data.tick1_id, data.tick2_id, data.tick2_id, data.tick1_id, 'valid', 'open'];
+        try {
+            let results = await db.query(query, args);
+            if(results.length > 0){
+                let tick1_bid = 0,
+                    tick2_bid = 0;
+                for(let row of results){
+                    let give_amount = (row.give_tick_id==data.tick1_id) ? row.give_amount : row.get_amount;
+                    let get_amount  = (row.give_tick_id==data.tick1_id) ? row.get_amount : row.give_amount;
+                    let price1      = this.util.getPrice(give_amount, get_amount);
+                    let price2      = this.util.getPrice(get_amount, give_amount);
+                    if(price1==0||price2==0)
+                        continue;
+                    if(tick1_bid==0) tick1_bid = price1;
+                    if(tick2_bid==0) tick2_bid = price2;
+                    if(price1 > tick1_bid) tick1_bid = price1;
+                    if(price2 > tick2_bid) tick2_bid = price2;
+                }
+                data.tick1_bid  = tick1_bid;
+                data.tick2_bid  = tick2_bid;
             }
-            data.tick1_bid  = tick1_bid;
-            data.tick2_bid  = tick2_bid;
+        } catch (error){
+            this.util.logError('Error trying to lookup bid prices:', error);
         }
         // Lookup 'ask' prices
         query = `SELECT
@@ -4933,25 +5760,29 @@ class Database {
                         s4.order_action_index = o1.action_index
                 )
             ORDER BY o1.action_index DESC`;
-        args    = [data.tick1_id, data.tick2_id, data.tick2_id, data.tick1_id, 'valid', 'open'];
-        results = await this.doQuery(query, args);
-        if(results.length > 0){
-            let tick1_ask = 0,
-                tick2_ask = 0;
-            for(let row of results){
-                let give_amount = (row.give_tick_id==data.tick1_id) ? row.give_amount : row.get_amount;
-                let get_amount  = (row.give_tick_id==data.tick1_id) ? row.get_amount : row.give_amount;
-                let price1      = this.util.getPrice(give_amount, get_amount);
-                let price2      = this.util.getPrice(get_amount, give_amount);
-                if(price1==0||price2==0)
-                    continue;
-                if(tick1_ask==0) tick1_ask = price1;
-                if(tick2_ask==0) tick2_ask = price2;
-                if(price1 < tick1_ask) tick1_ask = price1;
-                if(price2 < tick2_ask) tick2_ask = price2;
+        args  = [data.tick1_id, data.tick2_id, data.tick2_id, data.tick1_id, 'valid', 'open'];
+        try {
+            let results = await db.query(query, args);
+            if(results.length > 0){
+                let tick1_ask = 0,
+                    tick2_ask = 0;
+                for(let row of results){
+                    let give_amount = (row.give_tick_id==data.tick1_id) ? row.give_amount : row.get_amount;
+                    let get_amount  = (row.give_tick_id==data.tick1_id) ? row.get_amount : row.give_amount;
+                    let price1      = this.util.getPrice(give_amount, get_amount);
+                    let price2      = this.util.getPrice(get_amount, give_amount);
+                    if(price1==0||price2==0)
+                        continue;
+                    if(tick1_ask==0) tick1_ask = price1;
+                    if(tick2_ask==0) tick2_ask = price2;
+                    if(price1 < tick1_ask) tick1_ask = price1;
+                    if(price2 < tick2_ask) tick2_ask = price2;
+                }
+                data.tick1_ask = tick1_ask;
+                data.tick2_ask = tick2_ask;
             }
-            data.tick1_ask = tick1_ask;
-            data.tick2_ask = tick2_ask;
+        } catch (error){
+            this.util.logError('Error trying to lookup ask prices:', error);
         }
         // Lookup all order matches in the last 24-hours
         query = `SELECT
@@ -4970,45 +5801,50 @@ class Database {
                 s1.status=? AND
                 b1.block_time >= ?
             ORDER BY m1.action_index DESC`;
-        args    = [data.tick1_id, data.tick2_id, data.tick2_id, data.tick1_id, 'valid', time_24hr];
-        results = await this.doQuery(query, args);
-        if(results.length > 0){
-            let tick1_high   = 0,
-                tick1_low    = 0,
-                tick1_volume = 0,
-                tick2_high   = 0,
-                tick2_low    = 0,
-                tick2_volume = 0;
-            for(let row of results){
-                let give_amount = (row.give_tick_id==data.tick1_id) ? row.give_amount : row.get_amount;
-                let get_amount  = (row.give_tick_id==data.tick1_id) ? row.get_amount : row.give_amount;
-                let price1      = this.util.getPrice(give_amount, get_amount);
-                let price2      = this.util.getPrice(get_amount, give_amount);
-                // Set tick high/low prices
-                if(tick1_high==0 && tick1_low==0){
-                    tick1_high = price1;
-                    tick1_low  = price1;
+        args  = [data.tick1_id, data.tick2_id, data.tick2_id, data.tick1_id, 'valid', time_24hr];
+        // console.log('query,args=',query,args);
+        try {
+            let results = await db.query(query, args);
+            if(results.length > 0){
+                let tick1_high   = 0,
+                    tick1_low    = 0,
+                    tick1_volume = 0,
+                    tick2_high   = 0,
+                    tick2_low    = 0,
+                    tick2_volume = 0;
+                for(let row of results){
+                    let give_amount = (row.give_tick_id==data.tick1_id) ? row.give_amount : row.get_amount;
+                    let get_amount  = (row.give_tick_id==data.tick1_id) ? row.get_amount : row.give_amount;
+                    let price1      = this.util.getPrice(give_amount, get_amount);
+                    let price2      = this.util.getPrice(get_amount, give_amount);
+                    // Set tick high/low prices
+                    if(tick1_high==0 && tick1_low==0){
+                        tick1_high = price1;
+                        tick1_low  = price1;
+                    }
+                    if(tick2_high==0 && tick2_low==0){
+                        tick2_high = price2;
+                        tick2_low  = price2;
+                    }
+                    // 24-hour high
+                    if(price1 > tick1_high) tick1_high = price1;
+                    if(price2 > tick2_high) tick2_high = price2;
+                    // 24-hour low
+                    if(price1 < tick1_low) tick1_low = price1;
+                    if(price2 < tick2_low) tick2_low = price2;
+                    // 24-hour volumes
+                    tick1_volume = this.util.bcadd(tick1_volume, give_amount);
+                    tick2_volume = this.util.bcadd(tick2_volume, get_amount);
                 }
-                if(tick2_high==0 && tick2_low==0){
-                    tick2_high = price2;
-                    tick2_low  = price2;
-                }
-                // 24-hour high
-                if(price1 > tick1_high) tick1_high = price1;
-                if(price2 > tick2_high) tick2_high = price2;
-                // 24-hour low
-                if(price1 < tick1_low) tick1_low = price1;
-                if(price2 < tick2_low) tick2_low = price2;
-                // 24-hour volumes
-                tick1_volume = this.util.bcadd(tick1_volume, give_amount);
-                tick2_volume = this.util.bcadd(tick2_volume, get_amount);
+                data.tick1_24hr_high   = tick1_high;
+                data.tick1_24hr_low    = tick1_low;
+                data.tick1_24hr_volume = tick1_volume;
+                data.tick2_24hr_high   = tick2_high;
+                data.tick2_24hr_low    = tick2_low;
+                data.tick2_24hr_volume = tick2_volume;
             }
-            data.tick1_24hr_high   = tick1_high;
-            data.tick1_24hr_low    = tick1_low;
-            data.tick1_24hr_volume = tick1_volume;
-            data.tick2_24hr_high   = tick2_high;
-            data.tick2_24hr_low    = tick2_low;
-            data.tick2_24hr_volume = tick2_volume;
+        } catch (error){
+            this.util.logError('Error trying to lookup 24-hour high/low prices:', error);
         }
         // Calculate 24-hour price change percentage
         let tick1_change = 0.00;
@@ -5044,6 +5880,7 @@ class Database {
         let tick2_24hr_change = data.tick2_24hr_change;
         let tick2_24hr_volume = data.tick2_24hr_volume;
         let last_updated = data.last_updated;
+        let db = await this.getConnection();
         let query = `UPDATE 
                         markets
                     SET
@@ -5066,8 +5903,14 @@ class Database {
                         last_updated=?
                     WHERE
                         id=?`;
-        let args    = [tick1_price, tick1_bid, tick1_ask, tick1_24hr_price, tick1_24hr_high, tick1_24hr_low, tick1_24hr_change, tick1_24hr_volume, tick2_price, tick2_bid, tick2_ask, tick2_24hr_price, tick2_24hr_high, tick2_24hr_low, tick2_24hr_change, tick2_24hr_volume, last_updated, market_id];
-        let results = await this.doQuery(query, args);
+        let args = [tick1_price, tick1_bid, tick1_ask, tick1_24hr_price, tick1_24hr_high, tick1_24hr_low, tick1_24hr_change, tick1_24hr_volume, tick2_price, tick2_bid, tick2_ask, tick2_24hr_price, tick2_24hr_high, tick2_24hr_low, tick2_24hr_change, tick2_24hr_volume, last_updated, market_id];
+        // Update the markets table
+        try {
+            let result = await db.query(query, args);
+        } catch (error){
+            this.util.logError('Error trying to update record in markets table:', error);
+        }
+        await this.releaseConnection();
     }
 
     // Handle finding and updating markets 
