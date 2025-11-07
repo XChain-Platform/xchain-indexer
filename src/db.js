@@ -5424,12 +5424,16 @@ class Database {
 
     // Lookup market pairs by block
     // TODO: Circle back and add support for cross-chain market data (different coin_id)
-    async getMarketsByBlock(block_index){
-        let markets  = [];
-        let db       = await this.getConnection();
-        let args     = [block_index];
-        let counts   = false;
-        let query    = '';
+    async getMarkets(block_index, update){
+        let markets    = [];
+        let db         = await this.getConnection();
+        let args       = [block_index];
+        let counts     = false;
+        let query      = '';
+        let where      = 'b1.block_index=? AND ';
+        // Get the time right now and the time 24 hours ago
+        let time_now   = await this.getBlockTime(block_index),
+            time_24hr  = this.util.bcsub(time_now, 86400);
         // Quickly check if we have any ORDER, ORDER_MATCH, ORDER_EXPIRE, or ORDER_CANCEL events for the given block
         query = `SELECT
                     count(*) as count,
@@ -5445,7 +5449,18 @@ class Database {
         try {
             counts = await db.query(query, args);
         } catch (error) {
-            this.util.logError('Error looking up order actions in getMarketsByBlock:', error);
+            this.util.logError('Error looking up order actions in getMarkets', error);
+        }
+        // Updates to find markets which have not been updated in the last 24 hours
+        if(update){
+            where = `(a1.block_index=? OR b1.block_time < ? ) AND `;
+            let types = ['ORDER','ORDER_MATCH','ORDER_EXPIRE','ORDER_CANCEL'];
+            for(let type of types){
+                counts.push({
+                    count: 1,
+                    type: type
+                });
+            }
         }
         // Loop through order action types and get list of market pairs
         for(let info of counts){
@@ -5453,8 +5468,13 @@ class Database {
                 query = false,
                 type  = info.type,
                 table = String(type).toLowerCase() + ((type.includes('_MATCH')) ? 'es' : 's');
+            // Set the arguments
+            if(update){
+                args = [block_index, time_24hr, 'valid'];
+            } else {
+                args = [block_index, 'valid'];
+            }
             if(['ORDER','ORDER_MATCH'].includes(type)){
-                args = [this.config['COIN'], block_index, 'valid'];
                 query = `SELECT 
                             o1.action_index,
                             o1.get_tick_id  as tick1_id,
@@ -5466,13 +5486,11 @@ class Database {
                             INNER JOIN index_coins    c1 ON (c1.id=o1.give_coin_id)
                             INNER JOIN index_statuses s1 ON (s1.id=o1.status_id)
                         WHERE
+                            ` + where + `
                             o1.give_coin_id=o1.get_coin_id AND
-                            c1.coin=? AND
-                            b1.block_index=? AND
                             s1.status=?
                         ORDER BY o1.action_index ASC`;
             } else if(['ORDER_CANCEL','ORDER_EXPIRE'].includes(type)){
-                args = [block_index, 'valid'];
                 query = `SELECT 
                             o1.action_index,
                             o2.get_tick_id  as tick1_id,
@@ -5484,7 +5502,7 @@ class Database {
                             INNER JOIN blocks         b1 ON (b1.block_index=a1.block_index)
                             INNER JOIN index_statuses s1 ON (s1.id=o1.status_id)
                         WHERE
-                            b1.block_index=? AND
+                            ` + where + `
                             s1.status=?
                         ORDER BY o1.action_index ASC`;
             }
