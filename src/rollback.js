@@ -298,7 +298,7 @@ class Rollback {
         // Update market information
         await this.indexerDb.updateMarkets(markets, block_index);
 
-        // Do a sanity check to verify that token supplies match data in credits/debits/balances tables 
+        // Do a sanity check to verify that token supplies match data in credits/debits/escrows/balances tables 
         await this.indexerDb.sanityCheck(block_index);
 
         // Log the rollback time
