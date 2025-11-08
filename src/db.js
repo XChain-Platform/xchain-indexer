@@ -3646,10 +3646,10 @@ class Database {
     async createOrderMatch(data, order, match){
         // Normalize data
         data                  = this.truncateDataValues(data);
-        let give_coin_id      = await this.createCoin(match['GIVE_COIN']);
-        let get_coin_id       = await this.createCoin(match['GET_COIN']);
-        let give_tick_id      = await this.createTicker(match['GIVE_TICK']);
-        let get_tick_id       = await this.createTicker(match['GET_TICK']);
+        let give_coin_id      = await this.createCoin(order['GIVE_COIN']);
+        let give_tick_id      = await this.createTicker(order['GIVE_TICK']);
+        let get_coin_id       = await this.createCoin(order['GET_COIN']);
+        let get_tick_id       = await this.createTicker(order['GET_TICK']);
         let status_id         = await this.createStatus(data['STATUS']);
         let give_amount       = data['MATCH_GIVE_AMOUNT'];
         let get_amount        = data['MATCH_GET_AMOUNT'];
