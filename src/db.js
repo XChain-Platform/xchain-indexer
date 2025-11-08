@@ -847,8 +847,8 @@ class Database {
             let args  = [tick];
             try {
                 let results = await this.doQuery(query, args);
-                if(result.insertId)
-                    id = Number(result.insertId);
+                if(results.insertId)
+                    id = Number(results.insertId);
             } catch (error) {
                 this.util.logError('Error trying to create ticker record in index_tickers table:', error);
             }
