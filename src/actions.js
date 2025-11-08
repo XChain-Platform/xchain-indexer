@@ -48,6 +48,7 @@ const swap             = require('./actions/swap.js');
 const swap_expire      = require('./actions/swap_expire.js');
 const swap_match       = require('./actions/swap_match.js');
 const sweep            = require('./actions/sweep.js');
+const unknown          = require('./actions/unknown.js');
 
 class Actions {
 
@@ -95,6 +96,7 @@ class Actions {
         this.actionSwapExpire      = new swap_expire(this);
         this.actionSwapMatch       = new swap_match(this);
         this.actionSweep           = new sweep(this);
+        this.actionUnknown         = new unknown(this);
 
         // Define ACTION aliases
         this.actionAliases = {};
@@ -218,6 +220,7 @@ class Actions {
         if(action=='SWAP_EXPIRE')        await this.actionSwapExpire.parse(params, data, error);
         if(action=='SWAP_MATCH')         await this.actionSwapMatch.parse(params, data, error);
         if(action=='SWEEP')              await this.actionSweep.parse(params, data, error);
+        if(action=='UNKNOWN')            await this.actionUnknown.parse(params, data, error);
     }
 
 }
