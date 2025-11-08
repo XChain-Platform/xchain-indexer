@@ -4570,8 +4570,8 @@ class Database {
                     WHERE 
                         s.status='open'`
         }
-        let results = await this.doQuery(query);
-        if(results > 0){
+        let results = await this.doQuery(query, args);
+        if(results.length > 0){
             // Get the current expiration for each item
             for(let info of results){
                 // Get list of any `valid` edits and set expiration
