@@ -4625,10 +4625,17 @@ class Database {
             where = `(a1.block_index=? OR b1.block_time < ? ) AND `;
             let types = ['ORDER','ORDER_MATCH','ORDER_EXPIRE','ORDER_CANCEL'];
             for(let type of types){
-                counts.push({
-                    count: 1,
-                    type: type
-                });
+                let found = false;
+                for(let item of counts){
+                    if(item.type==type)
+                        found = true;
+                }
+                if(!found){
+                    counts.push({
+                        count: 1,
+                        type: type
+                    });
+                }
             }
         }
         // Loop through order action types and get list of market pairs
@@ -4677,7 +4684,7 @@ class Database {
             }
             if(query){
                 let results = await this.doQuery(query, args);
-                if(results > 0){
+                if(results.length > 0){
                     for(let row of results){
                         // Check if this pair already exists
                         let found = false;
