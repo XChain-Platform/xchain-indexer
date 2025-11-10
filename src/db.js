@@ -4809,8 +4809,8 @@ class Database {
             let row = results[0];
             let give_amount = (row.give_tick_id==data.tick1_id) ? row.give_amount : row.get_amount;
             let get_amount  = (row.give_tick_id==data.tick1_id) ? row.get_amount  : row.give_amount;
-            data.tick1_price = this.util.getPrice(give_amount, get_amount);
-            data.tick2_price = this.util.getPrice(get_amount, give_amount);
+            data.tick1_price = this.util.getPrice(get_amount, give_amount);
+            data.tick2_price = this.util.getPrice(give_amount, get_amount);
         }
         // Lookup trade prices 24-hours ago
         query = `SELECT
@@ -4836,8 +4836,8 @@ class Database {
             let row = results[0];
             let give_amount = (row.give_tick_id==data.tick1_id) ? row.give_amount : row.get_amount;
             let get_amount  = (row.give_tick_id==data.tick1_id) ? row.get_amount  : row.give_amount;
-            data.tick1_24hr_price  = this.util.getPrice(give_amount, get_amount);
-            data.tick2_24hr_price = this.util.getPrice(get_amount, give_amount);
+            data.tick1_24hr_price = this.util.getPrice(get_amount, give_amount);
+            data.tick2_24hr_price = this.util.getPrice(give_amount, get_amount);
         }
         // Lookup 'bid' prices
         query = `SELECT
@@ -4872,8 +4872,8 @@ class Database {
             for(let row of results){
                 let give_amount = (row.give_tick_id==data.tick1_id) ? row.give_amount : row.get_amount;
                 let get_amount  = (row.give_tick_id==data.tick1_id) ? row.get_amount : row.give_amount;
-                let price1      = this.util.getPrice(give_amount, get_amount);
-                let price2      = this.util.getPrice(get_amount, give_amount);
+                let price1      = this.util.getPrice(get_amount, give_amount);
+                let price2      = this.util.getPrice(give_amount, get_amount);
                 if(price1==0||price2==0)
                     continue;
                 if(tick1_bid==0) tick1_bid = price1;
@@ -4917,8 +4917,8 @@ class Database {
             for(let row of results){
                 let give_amount = (row.give_tick_id==data.tick1_id) ? row.give_amount : row.get_amount;
                 let get_amount  = (row.give_tick_id==data.tick1_id) ? row.get_amount : row.give_amount;
-                let price1      = this.util.getPrice(give_amount, get_amount);
-                let price2      = this.util.getPrice(get_amount, give_amount);
+                let price1      = this.util.getPrice(get_amount, give_amount);
+                let price2      = this.util.getPrice(give_amount, get_amount);
                 if(price1==0||price2==0)
                     continue;
                 if(tick1_ask==0) tick1_ask = price1;
@@ -4958,8 +4958,8 @@ class Database {
             for(let row of results){
                 let give_amount = (row.give_tick_id==data.tick1_id) ? row.give_amount : row.get_amount;
                 let get_amount  = (row.give_tick_id==data.tick1_id) ? row.get_amount : row.give_amount;
-                let price1      = this.util.getPrice(give_amount, get_amount);
-                let price2      = this.util.getPrice(get_amount, give_amount);
+                let price1      = this.util.getPrice(get_amount, give_amount);
+                let price2      = this.util.getPrice(give_amount, get_amount);
                 // Set tick high/low prices
                 if(tick1_high==0 && tick1_low==0){
                     tick1_high = price1;
@@ -4976,8 +4976,8 @@ class Database {
                 if(price1 < tick1_low) tick1_low = price1;
                 if(price2 < tick2_low) tick2_low = price2;
                 // 24-hour volumes
-                tick1_volume = this.util.bcadd(tick1_volume, give_amount);
-                tick2_volume = this.util.bcadd(tick2_volume, get_amount);
+                tick1_volume = this.util.bcadd(tick1_volume, get_amount);
+                tick2_volume = this.util.bcadd(tick2_volume, give_amount);
             }
             data.tick1_24hr_high   = tick1_high;
             data.tick1_24hr_low    = tick1_low;
