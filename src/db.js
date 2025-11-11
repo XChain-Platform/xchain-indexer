@@ -4976,8 +4976,8 @@ class Database {
                 if(price1 < tick1_low) tick1_low = price1;
                 if(price2 < tick2_low) tick2_low = price2;
                 // 24-hour volumes
-                tick1_volume = this.util.bcadd(tick1_volume, get_amount);
-                tick2_volume = this.util.bcadd(tick2_volume, give_amount);
+                tick1_volume = this.util.bcadd(tick1_volume, give_amount);
+                tick2_volume = this.util.bcadd(tick2_volume, get_amount);
             }
             data.tick1_24hr_high   = tick1_high;
             data.tick1_24hr_low    = tick1_low;
