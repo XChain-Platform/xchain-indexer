@@ -63,8 +63,8 @@ class Order {
         // Define list of NUMBER fields (used to convert values from string to number)
         this.fieldList['NUMBER'] = ['GIVE_AMOUNT', 'GET_AMOUNT', 'EXPIRATION', 'ALLOW_LIST', 'BLOCK_LIST', 'ORDER_ACTION_INDEX'];
 
-        // Define array of list types (1=Tick, 2=Address)
-        this.listTypes = [1,2];
+        // Define array of supported list types (1=Tick, 2=Address)
+        this.listTypes = [2];
     }
 
     // Handle parsing the ORDER transaction
