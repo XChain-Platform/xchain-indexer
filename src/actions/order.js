@@ -124,7 +124,7 @@ class Order {
 
         // Set EXPIRATION value if none is given
         if(format==0 && this.util.isNull(data['EXPIRATION']))
-            data['EXPIRATION'] = this.util.getDefaultExpiration();
+            data['EXPIRATION'] = this.util.getDefaultExpiration(data['BLOCK_TIME']);
 
         // Clone the raw data for storage in orders table
         let order = structuredClone(data);

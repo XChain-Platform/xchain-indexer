@@ -418,9 +418,9 @@ class Utility {
     }
 
     // Handle getting the default EXPIRATION 
-    getDefaultExpiration(){
+    getDefaultExpiration(block_time){
         // Get current time in seconds
-        let now = this.getCurrentTime();
+        let now = block_time;
         // Get number of seconds in EXPIRATION_FEE_DEFAULT_DAYS
         let sec = this.bcmul(this.config['EXPIRATION_FEE_DEFAULT_DAYS'], 86400, 0);
         return this.bcadd(now, sec, 0);
@@ -461,7 +461,7 @@ class Utility {
             let expire_days    = this.bcdiv(expire_seconds, 86400, 0);
             fee                = (expire_days > this.config['EXPIRATION_FEE_FREE_DAYS']) ? (this.bcmul(expire_days, this.config['EXPIRATION_FEE_PER_DAY'],8)) : 0;
         }
-        // Edit Order / Swap /Dispenser
+        // Edit Order / Swap / Dispenser
         if(format==2 && data['EXPIRATION'] > info['EXPIRATION']){
             let orig_expire_seconds = this.bcsub(info['EXPIRATION'], info['BLOCK_TIME'], 0);
             let orig_expire_days    = this.bcdiv(orig_expire_seconds, 86400, 0);
