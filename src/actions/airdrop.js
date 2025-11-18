@@ -237,11 +237,11 @@ class Airdrop {
 
             // Handle TICK LIST by looking up holders and adding to recipients list
             if(!error && this.listTypes.indexOf(type)!=-1){
-                let holders = [];
-                for(let tick in list){
+                let holders = {};
+                for(let tick of list){
                     if(type==1)
                         holders = await this.indexerDb.getHolders(tick, data['BLOCK_INDEX'], data['ACTION_INDEX']);
-                    for(let address of holders){
+                    for(let address in holders){
                         if(recipients.indexOf(address)==-1)
                             recipients.push(address);
                     }

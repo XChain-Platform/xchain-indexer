@@ -994,7 +994,6 @@ class Database {
         return supply;
     }
 
-
     // Handle getting a list of TICK holders and amounts
     // @param {tick}            string  Ticker name
     // @param {block_index}     integer Block Index 
@@ -1017,7 +1016,7 @@ class Database {
         args.push(tick_id);
         // If a block_index was given, only lookup tokens created before or in given block_index
         if(!this.util.isNull(block_index) && this.util.isNumeric(block_index)){
-            sql += " AND t1.block_index <= ?";
+            sql += " AND a1.block_index <= ?";
             args.push(parseInt(block_index));
         }
         // If a action_index was given, only lookup tokens created before given action_index
@@ -1032,14 +1031,13 @@ class Database {
                 FROM 
                     credits m
                     INNER JOIN actions         a1 ON (a1.action_index=m.action_index)
-                    INNER JOIN transactions    t1 ON (t1.tx_index=a1.tx_index)
                     INNER JOIN index_addresses a2 ON (a2.id=m.address_id)
                 WHERE 
                     m.tick_id=?` + sql + `
                 GROUP BY a2.address`;
         results = await this.doQuery(query, args);
         if(results.length > 0)
-            for(let row in results)
+            for(let row of results)
                 holders[row.address] = row.credits;
         // Get Debits 
         query = `SELECT 
@@ -1048,7 +1046,6 @@ class Database {
                 FROM 
                     debits m
                     INNER JOIN actions         a1 ON (a1.action_index=m.action_index)
-                    INNER JOIN transactions    t1 ON (t1.tx_index=a1.tx_index)
                     INNER JOIN index_addresses a2 ON (a2.id=m.address_id)
                 WHERE 
                     m.tick_id=?` + sql + `
