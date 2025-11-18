@@ -8,9 +8,8 @@ CREATE TABLE airdrops (
     status_id         BIGINT UNSIGNED           -- id of record in index_statuses table
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
-CREATE UNIQUE INDEX action_index      ON airdrops (action_index);
+CREATE        INDEX action_index      ON airdrops (action_index);
 CREATE        INDEX tick_id           ON airdrops (tick_id);
 CREATE        INDEX list_action_index ON airdrops (list_action_index);
 CREATE        INDEX memo_id           ON airdrops (memo_id);
 CREATE        INDEX status_id         ON airdrops (status_id);
-

@@ -106,7 +106,7 @@ class Airdrop {
 
             // Multi-Airdrop (brief)
             if(format==1 && idx>1 && idx%2==1)
-                airdrops.push([params[1], params[idx-1], params[idx], memo]);
+                airdrops.push([params[idx-1], params[idx], params[1], memo]);
 
             // Multi-Airdrop (Full)
             if(format==2 && idx>0 && idx%3==1 && idx < lastIdx)
