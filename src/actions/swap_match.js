@@ -113,13 +113,13 @@ class Swap_Match {
                 // Create a record of this SWAP_MATCH action in the actions table
                 data['ACTION_INDEX'] = await this.indexerDb.createActionIndex(action);
 
-                // Credit tokens to GET_ADDRESS in swaps
+                // Remove tokens from escrow
+                escrows.push([matchInfo['GET_TICK'], -matchInfo['GET_AMOUNT'], matchInfo['GET_ADDRESS']]);
+                escrows.push([swapInfo['GET_TICK'],  -swapInfo['GET_AMOUNT'],  swapInfo['GET_ADDRESS']]);
+
+                // Credit tokens to addresses
                 credits.push([matchInfo['GET_TICK'], matchInfo['GET_AMOUNT'], matchInfo['GET_ADDRESS']]);
                 credits.push([swapInfo['GET_TICK'],  swapInfo['GET_AMOUNT'],  swapInfo['GET_ADDRESS']]);
-
-                // Debit tokens from escrows table 
-                escrows.push([matchInfo['GET_TICK'], -matchInfo['GET_AMOUNT'], swapInfo['SOURCE']]);
-                escrows.push([swapInfo['GET_TICK'],  -swapInfo['GET_AMOUNT'],  matchInfo['SOURCE']]);
 
                 // Store the GET_ADDRESS and GET_TICK in addresses list
                 this.util.addAddressTicker(matchInfo['GET_ADDRESS'], matchInfo['GET_TICK']);
