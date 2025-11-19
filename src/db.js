@@ -5398,43 +5398,6 @@ class Database {
         results = await this.doQuery(query, args);
     }
 
-    // Create/Update record in `dispenser_expires` table
-    // @param {action_index}         integer Action index of action
-    // @param {dispenser_action_tick} integer Action index of dispenser
-    // @param {status}               string  Status of the expire (valid/invalid)
-    async createOrderExpire(action_index, dispenser_action_index, status){
-        // Normalize data
-        let status_id = await this.createStatus(status);
-        // Check if record already exists for this in order_expires table
-        let query  = `SELECT
-                            action_index
-                        FROM
-                            dispenser_expires
-                        WHERE
-                            action_index=? AND
-                            dispenser_action_index=?`;
-        let args = [action_index, dispenser_action_index];
-        let exists = false;
-        let results = await this.doQuery(query, args);
-        if(results.length > 0)
-            exists = true;
-        if(exists){
-            // UPDATE record
-            query = `UPDATE
-                        dispenser_expires
-                    SET
-                        status_id=?
-                    WHERE 
-                        action_index=? AND
-                        dispenser_action_index=?`;
-        } else {
-            // INSERT record
-            query = `INSERT INTO dispenser_expires (status_id, action_index, dispenser_action_index) values (?, ?, ?)`;
-        }
-        args    = [status_id, action_index, dispenser_action_index];
-        results = await this.doQuery(query, args);
-    }
-
     // Handle getting total escrowed and available in a dispenser for a given action_index
     async getDispenserAmountRemaining(action_index){
         let remaining = 0;
