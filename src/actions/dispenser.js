@@ -97,23 +97,19 @@ class Dispenser {
             if(!this.util.isNull(value))
                 data[name] = this.util.bcnum(value);
         }
-
-        // Get information on the GIVE and GET tokens
-        let giveTokenInfo = false;
-        let getTokenInfo  = false;
-        if(format==0){
-            giveTokenInfo = await this.indexerDb.getTokenInfo(data['GIVE_TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
-            if(data['GET_COIN']==this.config['COIN']){
-                getTokenInfo = await this.indexerDb.getTokenInfo(data['GET_TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
-            } else {
-                // TODO : add code to xchain-hub to validate that GET_TICK is valid on GET_COIN, and if not, mark as invalid
-            }
-        }
-
         // Get information on a dispenser given the COIN network and DISPENSER_ACTION_INDEX
         var dispenserInfo = false;
         if(format==1 || format==2)
             dispenserInfo = await this.indexerDb.getDispenserInfo(this.config['COIN'], data['DISPENSER_ACTION_INDEX'], data['BLOCK_TIME']);
+
+        // Get information on the GIVE and GET tokens
+        let info = (format==0) ? data : dispenserInfo;
+        let giveTokenInfo = await this.indexerDb.getTokenInfo(info['GIVE_TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
+        let getTokenInfo  = false;
+
+        // Get the GET token info if this is the correct COIN network
+        if(info['GET_COIN'] == this.config['COIN'] && !this.util.isNull(info['GIVE_TICK']))
+            getTokenInfo = await this.indexerDb.getTokenInfo(info['GET_TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
 
         // Get source address balances and preferences
         let balances    = await this.indexerDb.getAddressBalances(data['SOURCE'], null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
@@ -319,8 +315,8 @@ class Dispenser {
             this.util.addAddressTicker(data['SOURCE'], [data['GIVE_TICK'], data['GET_TICK']]);
             this.util.addAddressTicker(data['GET_ADDRESS'], [data['GIVE_TICK'], data['GET_TICK']]);
         } else {
-            this.util.addAddressTicker(dispenserInfo['SOURCE'], dispenserInfo['GIVE_TICK'], dispenserInfo['GET_TICK']);
-            this.util.addAddressTicker(dispenserInfo['GET_ADDRESS'], dispenserInfo['GIVE_TICK'], dispenserInfo['GET_TICK']);
+            this.util.addAddressTicker(dispenserInfo['SOURCE'], [dispenserInfo['GIVE_TICK'], dispenserInfo['GET_TICK']]);
+            this.util.addAddressTicker(dispenserInfo['GET_ADDRESS'], [dispenserInfo['GIVE_TICK'], dispenserInfo['GET_TICK']]);
         }
 
         // Array of credits, debits, and escrows
@@ -337,8 +333,8 @@ class Dispenser {
 
             // Debit GIVE_ESCROW GIVE_TICK from SOURCE and add to escrow
             if((format==0||format==2) && !this.util.isNull(data['GIVE_ESCROW'])){
-                debits.push([ data['GIVE_TICK'], data['GIVE_ESCROW'], data['SOURCE']]);
-                escrows.push([data['GIVE_TICK'], data['GIVE_ESCROW'], data['SOURCE']]);
+                debits.push([giveTokenInfo['TICK'], data['GIVE_ESCROW'], data['SOURCE']]);
+                escrows.push([giveTokenInfo['TICK'], data['GIVE_ESCROW'], data['SOURCE']]);
             }
 
             // Format 0 - Create Dispenser
