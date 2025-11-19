@@ -95,6 +95,9 @@ module.exports = {
         config['MAX_BROADCAST_MESSAGE_LENGTH']  = 250;
         config['MAX_BROADCAST_VALUE_LENGTH']    = 25; 
 
+        // MAX number of dispenses per dispenser
+        config['MAX_DISPENSES'] = 1000;
+
         // MESSAGE encryption methods
         config['MESSAGE_ENCRYPTION_METHODS'] = [
             1, // Elliptic-curve Diffie–Hellman (ECDH) 
@@ -106,6 +109,12 @@ module.exports = {
             -1, // Sleep actions indefinitely
              0, // Resume actions immediately
         ];
+
+        // Delay dispenser list updates by X seconds (1 hour)
+        config['DISPENSER_LIST_DELAY'] = 3600;
+
+        // Delay dispenser closing by X seconds (1 hour)
+        config['DISPENSER_CLOSE_DELAY'] = 3600;
 
         // Max MESSAGE lengths
         config['MAX_MESSAGE_LENGTH']     = 1048576; // 1 MB = 1,048,576 Characters

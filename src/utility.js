@@ -583,6 +583,25 @@ class Utility {
         }
     }
 
+    // Process any dispensers which have been cancelled and need to be closed
+    // NOTE: We currently use block_time to expire items... not ideal as block times can be manipulated
+    // TODO: Revisit this code and handle calculating block time more elegantly
+    async processCancellations(actions, db, block_index, block_time){
+        let cancels = await db.getCancelledItems(block_time);
+        for(let action_index of cancels){
+            // Define basic ACTION transaction data object
+            let action = 'DISPENSER_CLOSE';
+            let data = {};
+            data['ACTION']        = action;
+            data['BLOCK_INDEX']   = block_index;
+            data['BLOCK_TIME']    = block_time;
+            data['ACTION_INDEX']  = action_index;
+            data['ACTION_STATUS'] = 'cancelled';
+            await actions.processAction(action, null, data, null);
+        }
+    }
+
+
     // Handle creating and updating DEX market information
     async processMarketUpdates(db, block_index, block_time){
         // Get list of market orders for the given block
