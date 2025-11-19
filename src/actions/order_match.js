@@ -179,13 +179,13 @@ class Order_Match {
                 data['MATCH_GIVE_AMOUNT'] = give_amount;
                 data['MATCH_GET_AMOUNT']  = get_amount;
 
-                // Credit tokens to GET_ADDRESS in orders
-                credits.push([matchInfo['GET_TICK'], get_amount,  matchInfo['GET_ADDRESS']]);
-                credits.push([orderInfo['GET_TICK'], give_amount, orderInfo['GET_ADDRESS']]);
+                // Remove tokens from escrow
+                escrows.push([matchInfo['GET_TICK'], -give_amount, matchInfo['GET_ADDRESS']]);
+                escrows.push([orderInfo['GET_TICK'], -get_amount,  orderInfo['GET_ADDRESS']]);
 
-                // // Debit tokens from escrows orders 
-                escrows.push([orderInfo['GET_TICK'], -give_amount,  matchInfo['SOURCE']]);
-                escrows.push([matchInfo['GET_TICK'], -get_amount, orderInfo['SOURCE']]);
+                // Credit tokens to addresses
+                credits.push([matchInfo['GET_TICK'], give_amount, matchInfo['GET_ADDRESS']]);
+                credits.push([orderInfo['GET_TICK'], get_amount,  orderInfo['GET_ADDRESS']]);
 
                 // Store the GET_ADDRESS and TICK in addresses list
                 this.util.addAddressTicker(matchInfo['GET_ADDRESS'], matchInfo['GET_TICK']);
