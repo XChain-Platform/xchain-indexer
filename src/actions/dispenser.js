@@ -126,7 +126,7 @@ class Dispenser {
         if(this.config['COIN']==data['GET_COIN'] && this.util.isNull(data['GET_ADDRESS']))
             data['GET_ADDRESS'] = data['SOURCE'];
 
-        // Set EXPIRATION value if none is given
+        // Set default EXPIRATION value if none is given
         if(format==0 && this.util.isNull(data['EXPIRATION']))
             data['EXPIRATION'] = this.util.getDefaultExpiration(data['BLOCK_TIME']);
 
@@ -175,8 +175,8 @@ class Dispenser {
             error = "invalid: GIVE_AMOUNT (format)";
 
         // Verify GIVE_ESCROW format
-        if(!error && format==0 && !this.util.isNull(data['GIVE_AMOUNT']) && !this.util.isValidAmountFormat(giveTickDivisible, data['GIVE_ESCROW']))
-            error = "invalid: GIVE_AMOUNT (format)";
+        if(!error && format==0 && !this.util.isNull(data['GIVE_ESCROW']) && !this.util.isValidAmountFormat(giveTickDivisible, data['GIVE_ESCROW']))
+            error = "invalid: GIVE_ESCROW (format)";
 
         // Verify GET_AMOUNT format
         if(!error && format==0 && !this.util.isNull(data['GET_AMOUNT']) && !this.util.isValidAmountFormat(getTickDivisible, data['GET_AMOUNT']))
@@ -231,11 +231,11 @@ class Dispenser {
             error = 'invalid: DISPENSER_ACTION_INDEX (unknown)';
 
         // Verify SOURCE address is owner of the DISPENSER_ACTION_INDEX dispenser
-        if(!error && (format==1 || format==2) && data['SOURCE']!=dispenserInfo['SOURCE'] && data['SOURCE']!=dispenserInfo['GET_ADDRESS'])
+        if(!error && format!=0 && data['SOURCE']!=dispenserInfo['SOURCE'] && data['SOURCE']!=dispenserInfo['GET_ADDRESS'])
             error = 'invalid: SOURCE (not owner)';
 
         // Validate DISPENSER_ACTION_INDEX is valid dispenser with a status of open
-        if(!error && (format==1 || format==2) && dispenserInfo['DISPENSER_STATUS']!='open')
+        if(!error && format!=0 && dispenserInfo['DISPENSER_STATUS']!='open')
             error = 'invalid: DISPENSER_ACTION_INDEX (dispenser not open)';
 
         // Validate that EXPIRATION is greater than current BLOCK_TIME
@@ -261,18 +261,18 @@ class Dispenser {
         }
 
         // Verify SOURCE has enough balances to cover GIVE_ESCROW
-        if(!error && format==0 && !this.util.hasBalance(balances, giveTokenInfo['TICK_ID'], data['GIVE_ESCROW']))
+        if(!error && !this.util.isNull(data['GIVE_ESCROW']) && !this.util.hasBalance(balances, giveTokenInfo['TICK_ID'], data['GIVE_ESCROW']))
             error = 'invalid: insufficient funds (GIVE_ESCROW)';
 
         // Adjust balances to reduce by dispenser GIVE_ESCROW
-        if(!error && format==0)
+        if(!error && !this.util.isNull(data['GIVE_ESCROW']))
             balances = this.util.debitBalances(balances, giveTokenInfo['TICK_ID'], data['GIVE_ESCROW']);
 
         // Calculate total fee for this dispenser based on EXPIRATION timestamp
         fees['AMOUNT'] = 0;
 
         // Calculate the fee to charge based on the EXPIRATION
-        if(!error && (format==0 || format==2) && !this.util.isNull(data['EXPIRATION']))
+        if(!error && !this.util.isNull(data['EXPIRATION']))
             fees['AMOUNT'] = this.util.getExpirationFee(data, dispenserInfo);
 
         // Verify SOURCE has enough balances to cover FEE AMOUNT
@@ -335,17 +335,15 @@ class Dispenser {
             if(fees['AMOUNT']>0)
                 this.util.addAddressTicker(data['SOURCE'], fees['TICK']);
 
-            // Format 0 - Create Dispenser
-            if(format==0){
-                // Debit GIVE_AMOUNT of GIVE_TICK from SOURCE
-                debits.push([data['GIVE_TICK'], data['GIVE_ESCROW'], data['SOURCE']]);
-
-                // Escrow GIVE_AMOUNT of GIVE_TICK from SOURCE
+            // Debit GIVE_ESCROW GIVE_TICK from SOURCE and add to escrow
+            if((format==0||format==2) && !this.util.isNull(data['GIVE_ESCROW'])){
+                debits.push([ data['GIVE_TICK'], data['GIVE_ESCROW'], data['SOURCE']]);
                 escrows.push([data['GIVE_TICK'], data['GIVE_ESCROW'], data['SOURCE']]);
-
-                // Create record in the dispensers_statuses table
-                await this.indexerDb.createDispenserStatus(data['ACTION_INDEX'], data['ACTION_INDEX'], 'open');
             }
+
+            // Format 0 - Create Dispenser
+            if(format==0)
+                await this.indexerDb.createDispenserStatus(data['ACTION_INDEX'], data['ACTION_INDEX'], 'open');
 
             // Format 1 - Cancel Dispenser
             // Note: Dispenser remains open for a set amount of time (DISPENSER_CLOSE_DELAY) before being closed
