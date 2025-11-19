@@ -5342,13 +5342,17 @@ class Database {
         if(results.length > 0){
             for(let row of results){
                 // refilling dispensers and updating expiration are immediately active
-                if(!this.util.isNull(row.give_escrow)) edit.give_escrow = this.util.bcadd(edit.give_escrow, row.give_escrow);
-                if(!this.util.isNull(row.expiration) && this.util.isNumeric(row.expiration))   edit.expiration  = Number(row.expiration);
+                if(!this.util.isNull(row.give_escrow)) 
+                    edit.give_escrow = this.util.bcadd(edit.give_escrow, row.give_escrow);
+                if(!this.util.isNull(row.expiration) && this.util.isNumeric(row.expiration))   
+                    edit.expiration  = Number(row.expiration);
                 // Determine if the list edits are active or not
                 let active = (block_time > this.util.bcadd(row.block_time, this.config['DISPENSER_LIST_DELAY'])) ? true : false;
                 if(active){
-                    if(!this.util.isNull(row.allow_list) && this.util.isNumeric(row.allow_list))   edit.allow_list  = Number(row.allow_list);
-                    if(!this.util.isNull(row.block_list) && this.util.isNumeric(row.block_list))   edit.block_list  = Number(row.block_list);
+                    if(!this.util.isNull(row.allow_list) && this.util.isNumeric(row.allow_list))   
+                        edit.allow_list  = Number(row.allow_list);
+                    if(!this.util.isNull(row.block_list) && this.util.isNumeric(row.block_list))   
+                        edit.block_list  = Number(row.block_list);
                 }
             }
         }
