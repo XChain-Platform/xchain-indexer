@@ -147,7 +147,7 @@ class XChainIndexer {
 
             // DEBUG
             // startBlock = lastIndexerBlock = 862602;
-            // let rollbackBlock = 862644;
+            let rollbackBlock = 862660;
             // await this.rollback.rollback(rollbackBlock);
 
             // Print out status message about where parsing is resuming
@@ -187,13 +187,16 @@ class XChainIndexer {
                 // Check for any expired items (orders, swaps, dispensers)
                 await this.util.processExpirations(this.actions, this.indexerDb, lastIndexerBlock, blockTime);
 
+                // Check for any cancelled items (dispensers)
+                await this.util.processCancellations(this.actions, this.indexerDb, lastIndexerBlock, blockTime);
+
                 // Create record in `blocks` table with hashes of the credits/debits/escrows (ledger) and /actions tables
                 let [ledger, actions] = await this.indexerDb.createBlock(lastIndexerBlock, blockTime);
 
                 // Create / Update DEX market information
                 await this.util.processMarketUpdates(this.indexerDb, lastIndexerBlock, blockTime);
 
-                // Do a sanity check to verify that token supplies match data in credits/debits/balances tables 
+                // Do a sanity check to verify that token supplies match data in credits/debits/escrows/balances tables 
                 await this.indexerDb.sanityCheck(lastIndexerBlock);
 
                 // Log the total parse time for this block
@@ -204,8 +207,8 @@ class XChainIndexer {
                 cnt++;
 
                 // DEBUG : Exit processing at a select block
-                // if(lastIndexerBlock >=  862659){
-                //     // await this.rollback.rollback(rollbackBlock);
+                // if(lastIndexerBlock >=  862666){
+                //     await this.rollback.rollback(rollbackBlock);
                 //     this.util.throwError('Exiting on target block');
                 // }
 

@@ -994,6 +994,7 @@ class Database {
         return supply;
     }
 
+
     // Handle getting a list of TICK holders and amounts
     // @param {tick}            string  Ticker name
     // @param {block_index}     integer Block Index 
@@ -2557,7 +2558,36 @@ class Database {
                 id = Number(results.insertId);
         }
         return id;
+    }
+
+    // Lookup a record in the `index_fiats` table and return record id
+    async getFiatId(code){
+        let id    = null;
+        let query = "SELECT id FROM index_fiats WHERE `code`=? LIMIT 1";
+        let args  = [code];
+        let results = await this.doQuery(query, args);
+        if(results.length > 0)
+            id = Number(results[0].id);
+        return id;
+    }
+
+    // Create records in the 'index_fiats' table and return record id
+    async createFiat(code){
+        // Ignore empty fiat and return NULL
+        if(this.util.isNull(code))
+            return null;
+        var id = await this.getFiatId(code);
+        // Handle creating record
+        if(id==null){
+            let query = "INSERT INTO index_fiats (`code`) values (?)";
+            let args  = [code];
+            let results = await this.doQuery(query, args);
+            if(results.insertId)
+                id = Number(results.insertId);
+        }
+        return id;
     }    
+
 
     // Lookup table associated with an action
     async getActionIndexTable(action_index){
@@ -5053,6 +5083,477 @@ class Database {
                 await this.updateMarketInfo(data);
             }
         }
+    }
+
+    // Create/Update record in `dispensers` table
+    async createDispenser(data){
+        // Normalize data
+        data = this.truncateDataValues(data);
+        // Standardize LIST values to numeric or NULL
+        for(let list of this.config['LIST_FIELDS'] ){
+            if(this.util.isNull(data[list]) || !this.util.isNumeric(data[list]))
+                delete data[list];
+        }
+        // Normalize data
+        let give_coin_id   = await this.createCoin(data['GIVE_COIN']);
+        let give_tick_id   = await this.createTicker(data['GIVE_TICK']);
+        let get_coin_id    = await this.createCoin(data['GET_COIN']);
+        let get_tick_id    = await this.createTicker(data['GET_TICK']);
+        let get_address_id = await this.createAddress(data['GET_ADDRESS']);
+        let fiat_id        = await this.createFiat(data['FIAT']);
+        let memo_id        = await this.createMemo(data['MEMO']);
+        let status_id      = await this.createStatus(data['STATUS']);
+        let action_index   = data['ACTION_INDEX'];
+        let give_amount    = data['GIVE_AMOUNT'];
+        let get_amount     = data['GET_AMOUNT'];
+        let give_escrow    = data['GIVE_ESCROW'];
+        let fiat_amount    = data['FIAT_AMOUNT'];
+        let expiration     = data['EXPIRATION'];
+        let allow_list     = data['ALLOW_LIST'];
+        let block_list     = data['BLOCK_LIST'];
+        // Check if record already exists for this dispenser
+        let query  = `SELECT
+                            action_index
+                        FROM
+                            dispensers
+                        WHERE
+                            action_index=?`;
+        let args = [action_index];
+        let exists = false;
+        let results = await this.doQuery(query, args);
+        if(results.length > 0)
+            exists = true;
+        if(exists){
+            // UPDATE record
+            query = `UPDATE
+                        dispensers
+                    SET
+                        give_coin_id=?,
+                        give_tick_id=?,
+                        give_amount=?,
+                        give_escrow=?,
+                        get_coin_id=?,
+                        get_tick_id=?,
+                        get_amount=?,
+                        get_address_id=?,
+                        fiat_id=?,
+                        fiat_amount=?,
+                        expiration=?,
+                        allow_list=?,
+                        block_list=?,
+                        memo_id=?,
+                        status_id=?
+                    WHERE 
+                        action_index=?`;
+        } else {
+            // INSERT record
+            query = `INSERT INTO dispensers (give_coin_id, give_tick_id, give_amount, give_escrow, get_coin_id, get_tick_id, get_amount, get_address_id, fiat_id, fiat_amount, expiration, allow_list, block_list, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+        }
+        args    = [give_coin_id, give_tick_id, give_amount, give_escrow, get_coin_id, get_tick_id, get_amount, get_address_id, fiat_id, fiat_amount, expiration, allow_list, block_list, memo_id, status_id, action_index];
+        results = await this.doQuery(query, args);
+    }    
+
+    // Create/Update record in `dispenser_statuses` table
+    // @param {action_index}          integer Action index of action
+    // @param {dispenser_action_tick} integer Action index of dispenser
+    // @param {status}                string  Status of the referenced dispenser (open/complete/closing/cancelled/expired)
+    async createDispenserStatus(action_index, dispenser_action_index, status){
+        // Normalize data
+        let status_id = await this.createStatus(status);
+        // Check if record already exists for this in order_statuses table
+        let query  = `SELECT
+                            action_index
+                        FROM
+                            dispenser_statuses
+                        WHERE
+                            action_index=? AND
+                            dispenser_action_index=?`;
+        let args = [action_index, dispenser_action_index];
+        let exists = false;
+        let results = await this.doQuery(query, args);
+        if(results.length > 0)
+            exists = true;
+        if(exists){
+            // UPDATE record
+            query = `UPDATE
+                        dispenser_statuses
+                    SET
+                        status_id=?
+                    WHERE 
+                        action_index=? AND
+                        dispenser_action_index=?`;
+        } else {
+            // INSERT record
+            query = `INSERT INTO dispenser_statuses (status_id, action_index, dispenser_action_index) values (?, ?, ?)`;
+        }
+        args    = [status_id, action_index, dispenser_action_index];
+        results = await this.doQuery(query, args);
+    }
+
+    // Return dispenser info for given action_index
+    async getDispenserInfo(coin, action_index, block_time){
+        let dispenser = false;
+        let query = `SELECT 
+                        d1.action_index,
+                        t2.tick as give_tick,
+                        d1.give_amount,
+                        c1.coin as get_coin,
+                        t3.tick as get_tick,
+                        d1.get_amount,
+                        d1.give_escrow,
+                        a2.address as source,
+                        a3.address as get_address,
+                        d1.expiration,
+                        d1.allow_list,
+                        d1.block_list,
+                        m1.memo,
+                        s2.status,
+                        s3.status as dispenser_status,
+                        b1.block_index,
+                        b1.block_time
+                    FROM 
+                        dispensers d1
+                        INNER JOIN actions             a1 ON (a1.action_index=d1.action_index)
+                        INNER JOIN transactions        t1 ON (t1.tx_index=a1.tx_index)
+                        LEFT  JOIN blocks              b1 ON (b1.block_index=t1.block_index)
+                        INNER JOIN index_addresses     a2 ON (a2.id=t1.source_id)
+                        INNER JOIN index_addresses     a3 ON (a3.id=d1.get_address_id)
+                        INNER JOIN index_tickers       t2 ON (t2.id=d1.give_tick_id)
+                        LEFT  JOIN index_tickers       t3 ON (t3.id=d1.get_tick_id)
+                        INNER JOIN index_coins         c1 ON (c1.id=d1.get_coin_id)
+                        INNER JOIN index_memos         m1 ON (m1.id=d1.memo_id)
+                        INNER JOIN dispenser_statuses  s1 ON (s1.dispenser_action_index=d1.action_index)
+                        INNER JOIN index_statuses      s2 ON (s2.id=d1.status_id)
+                        INNER JOIN index_statuses      s3 ON (s3.id=s1.status_id)
+                    WHERE 
+                        s1.action_index = (
+                            SELECT
+                                MAX(s4.action_index)
+                            FROM
+                                dispenser_statuses s4
+                            WHERE
+                                s4.dispenser_action_index=d1.action_index
+                        ) AND
+                        c1.coin=? AND
+                        d1.action_index=? 
+                    LIMIT 1`;
+        let args  = [coin, action_index];
+        let results = await this.doQuery(query, args);
+        if(results.length > 0){
+            dispenser = {};
+            dispenser['GIVE_COIN'] = this.config['COIN'];
+            for(let key in results[0]){
+                let name  = String(key).toUpperCase()
+                let value = results[0][key];
+                if(['ACTION_INDEX', 'BLOCK_INDEX', 'BLOCK_TIME', 'EXPIRATION', 'ALLOW_LIST', 'BLOCK_LIST'].includes(name))
+                    value = Number(value);
+                dispenser[name] = value;
+            }
+        }
+        // Get additional information on this order 
+        if(dispenser){
+            // Get updated dispenser properties from the dispenser_edits table
+            let edit = await this.getDispenserEdits(action_index, block_time);
+            if(edit.expiration)
+                dispenser['EXPIRATION'] = edit.expiration;
+            if(edit.allow_list)
+                dispenser['ALLOW_LIST'] = edit.allow_list;
+            if(edit.block_list)
+                dispenser['BLOCK_LIST'] = edit.block_list;
+            // Determine dispenser amounts remaining
+            dispenser['GIVE_REMAINING'] = await this.getDispenserAmountRemaining(action_index);
+        }
+        return dispenser;
+    }
+
+    // Create/Update record in `dispenser_edits` table
+    async createDispenserEdit(data){
+        // Normalize data
+        data                       = this.truncateDataValues(data);
+        let memo_id                = await this.createMemo(data['MEMO']);
+        let status_id              = await this.createStatus(data['STATUS']);
+        let action_index           = data['ACTION_INDEX'];
+        let dispenser_action_index = data['DISPENSER_ACTION_INDEX'];
+        let give_escrow            = data['GIVE_ESCROW'];
+        let expiration             = data['EXPIRATION'];
+        let allow_list             = data['ALLOW_LIST'];
+        let block_list             = data['BLOCK_LIST'];
+        // Check if record already exists for this dispenser_edits
+        let query  = `SELECT
+                            action_index
+                        FROM
+                            dispenser_edits
+                        WHERE
+                            action_index=?`;
+        let args = [action_index];
+        let exists = false;
+        let results = await this.doQuery(query, args);
+        if(results.length > 0)
+            exists = true;
+        if(exists){
+            // UPDATE record
+            query = `UPDATE
+                        dispenser_edits
+                    SET
+                        give_escrow=?,
+                        expiration=?,
+                        allow_list=?,
+                        block_list=?,
+                        memo_id=?,
+                        status_id=?,
+                        dispenser_action_index=?
+                    WHERE 
+                        action_index=?`;
+        } else {
+            // INSERT record
+            query = `INSERT INTO dispenser_edits (give_escrow, expiration, allow_list, block_list, memo_id, status_id, dispenser_action_index, action_index) values (?, ?, ?, ?, ?, ?, ?, ?)`;
+        }
+        args    = [give_escrow, expiration, allow_list, block_list, memo_id, status_id, dispenser_action_index, action_index];
+        results = await this.doQuery(query, args);
+    }
+
+    // Return dispenser edit information for given action_index
+    async getDispenserEdits(action_index, block_time){
+        // Define empty edit object
+        let edit  = {
+            give_escrow: 0,
+            expiration: false,
+            allow_list: false,
+            block_list: false
+        };
+        let query  = `SELECT 
+                        e1.give_escrow,
+                        e1.expiration,
+                        e1.allow_list,
+                        e1.block_list,
+                        b1.block_time
+                    FROM 
+                        dispenser_edits e1
+                        INNER JOIN actions        a1 ON (a1.action_index=e1.action_index)
+                        INNER JOIN blocks         b1 ON (b1.block_index=a1.block_index)
+                        INNER JOIN index_statuses s1 ON (s1.id=e1.status_id)
+                    WHERE 
+                        e1.dispenser_action_index=? AND
+                        s1.status=?
+                    ORDER BY
+                        e1.action_index ASC`;
+        let args  = [action_index, 'valid'];
+        let results = await this.doQuery(query, args);
+        if(results.length > 0){
+            for(let row of results){
+                // refilling dispensers and updating expiration are immediately active
+                if(!this.util.isNull(row.give_escrow)) edit.give_escrow = this.util.bcadd(edit.give_escrow, row.give_escrow);
+                if(!this.util.isNull(row.expiration) && this.util.isNumeric(row.expiration))   edit.expiration  = Number(row.expiration);
+                // Determine if the list edits are active or not
+                let active = (block_time > this.util.bcadd(row.block_time, this.config['DISPENSER_LIST_DELAY'])) ? true : false;
+                if(active){
+                    if(!this.util.isNull(row.allow_list) && this.util.isNumeric(row.allow_list))   edit.allow_list  = Number(row.allow_list);
+                    if(!this.util.isNull(row.block_list) && this.util.isNumeric(row.block_list))   edit.block_list  = Number(row.block_list);
+                }
+            }
+        }
+        return edit;
+    }
+
+
+    // Create/Update record in `dispenser_cancels` table
+    async createDispenserCancel(data){
+        // Normalize data
+        data                       = this.truncateDataValues(data);
+        let memo_id                = await this.createMemo(data['MEMO']);
+        let status_id              = await this.createStatus(data['STATUS']);
+        let action_index           = data['ACTION_INDEX'];
+        let dispenser_action_index = data['DISPENSER_ACTION_INDEX'];
+        // Check if record already exists for this in dispenser_cancels
+        let query  = `SELECT
+                            action_index
+                        FROM
+                            dispenser_cancels
+                        WHERE
+                            action_index=?`;
+        let args = [action_index];
+        let exists = false;
+        let results = await this.doQuery(query, args);
+        if(results.length > 0)
+            exists = true;
+        if(exists){
+            // UPDATE record
+            query = `UPDATE
+                        dispenser_cancels
+                    SET
+                        memo_id=?,
+                        status_id=?,
+                        dispenser_action_index=?
+                    WHERE 
+                        action_index=?`;
+        } else {
+            // INSERT record
+            query = `INSERT INTO dispenser_cancels (memo_id, status_id, dispenser_action_index, action_index) values (?, ?, ?, ?)`;
+        }
+        args    = [memo_id, status_id, dispenser_action_index, action_index];
+        results = await this.doQuery(query, args);
+    }
+
+    // Create/Update record in `dispenser_expires` table
+    // @param {action_index}         integer Action index of action
+    // @param {dispenser_action_tick} integer Action index of dispenser
+    // @param {status}               string  Status of the expire (valid/invalid)
+    async createOrderExpire(action_index, dispenser_action_index, status){
+        // Normalize data
+        let status_id = await this.createStatus(status);
+        // Check if record already exists for this in order_expires table
+        let query  = `SELECT
+                            action_index
+                        FROM
+                            dispenser_expires
+                        WHERE
+                            action_index=? AND
+                            dispenser_action_index=?`;
+        let args = [action_index, dispenser_action_index];
+        let exists = false;
+        let results = await this.doQuery(query, args);
+        if(results.length > 0)
+            exists = true;
+        if(exists){
+            // UPDATE record
+            query = `UPDATE
+                        dispenser_expires
+                    SET
+                        status_id=?
+                    WHERE 
+                        action_index=? AND
+                        dispenser_action_index=?`;
+        } else {
+            // INSERT record
+            query = `INSERT INTO dispenser_expires (status_id, action_index, dispenser_action_index) values (?, ?, ?)`;
+        }
+        args    = [status_id, action_index, dispenser_action_index];
+        results = await this.doQuery(query, args);
+    }
+
+    // Handle getting total escrowed and available in a dispenser for a given action_index
+    async getDispenserAmountRemaining(action_index){
+        let remaining = 0;
+        // Get initial amounts from the dispensers table
+        let query  = `SELECT 
+                        d.give_escrow
+                    FROM 
+                        dispensers d
+                        INNER JOIN index_statuses s ON (s.id=d.status_id)
+                    WHERE 
+                        d.action_index=? AND
+                        s.status=?`;
+        let args  = [action_index, 'valid'];
+        let results = await this.doQuery(query, args);
+        if(results.length > 0)
+            remaining = results[0].give_escrow;
+        // Get any amounts added to escrow via edits and add to remaining
+        query = `SELECT 
+                    d.give_escrow
+                FROM 
+                    dispenser_edits d
+                    INNER JOIN index_statuses s ON (s.id=d.status_id)
+                WHERE 
+                    d.dispenser_action_index=? AND
+                    s.status=?
+                ORDER BY
+                    d.action_index ASC`;
+        results = await this.doQuery(query, args);
+        if(results.length > 0){
+            for(let row of results){
+                if(!this.util.isNull(row.give_escrow))
+                    remaining = this.util.bcadd(remaining, row.give_escrow);
+            }
+        }
+        // Lookup amounts paid out already from dispenses table
+        query = `SELECT
+                    d.give_amount
+                FROM
+                    dispenses d
+                    INNER JOIN index_statuses s ON (s.id=d.status_id)
+                WHERE
+                    d.dispenser_action_index=?  AND
+                    s.status=?
+                ORDER BY action_index ASC`;
+        args = [action_index, 'valid'];
+        results = await this.doQuery(query, args);
+        if(results.length > 0){
+            for(let row of results){
+                if(!this.util.isNull(row.give_escrow))
+                    remaining = this.util.bcsub(remaining, row.give_amount);
+            }
+        }
+        return remaining;
+    }
+
+    // Lookup items that need to be cancelled and return a list
+    async getCancelledItems(block_time){
+        let cancels = [];
+        // Find dispensers where latest status is 'cancelling`
+        let args  = [];
+        let query = `SELECT 
+                        m.action_index,
+                        b1.block_time
+                    FROM 
+                        dispensers m
+                        INNER JOIN dispenser_statuses s1 ON (s1.dispenser_action_index=m.action_index)
+                        INNER JOIN index_statuses     s2 ON (s2.id=s1.status_id)
+                        INNER JOIN actions            a1 ON (a1.action_index=s1.action_index)
+                        INNER JOIN blocks             b1 ON (b1.block_index=a1.block_index)
+                    WHERE 
+                        s1.action_index = (
+                            SELECT
+                                MAX(s3.action_index)
+                            FROM
+                                dispenser_statuses s3
+                            WHERE
+                                s3.dispenser_action_index=m.action_index
+                        ) AND
+                        s2.status='cancelling'`
+        let results = await this.doQuery(query, args);
+        if(results.length > 0){
+            for(let row of results)
+                if(block_time > this.util.bcadd(row.block_time, this.config['DISPENSER_CLOSE_DELAY']))
+                    cancels.push(Number(row.action_index));
+        }
+        return cancels;
+    }
+
+    // Create/Update record in `order_expires` table
+    // @param {action_index}          integer Action index of action
+    // @param {dispenser_action_tick} integer Action index of dispenser
+    // @param {status}                string  Status of the expire (valid/invalid)
+    async createDispenserExpire(action_index, dispenser_action_index, status){
+        // Normalize data
+        let status_id = await this.createStatus(status);
+        // Check if record already exists for this in order_expires table
+        let query  = `SELECT
+                            action_index
+                        FROM
+                            dispenser_expires
+                        WHERE
+                            action_index=? AND
+                            dispenser_action_index=?`;
+        let args = [action_index, dispenser_action_index];
+        let exists = false;
+        let results = await this.doQuery(query, args);
+        if(results.length > 0)
+            exists = true;
+        if(exists){
+            // UPDATE record
+            query = `UPDATE
+                        dispenser_expires
+                    SET
+                        status_id=?
+                    WHERE 
+                        action_index=? AND
+                        dispenser_action_index=?`;
+        } else {
+            // INSERT record
+            query = `INSERT INTO dispenser_expires (status_id, action_index, dispenser_action_index) values (?, ?, ?)`;
+        }
+        args    = [status_id, action_index, dispenser_action_index];
+        results = await this.doQuery(query, args);
     }
 
 }

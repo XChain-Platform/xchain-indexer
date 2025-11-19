@@ -1,7 +1,7 @@
 DROP TABLE IF EXISTS order_statuses;
 CREATE TABLE order_statuses (
     action_index       BIGINT UNSIGNED NOT NULL, -- Unique action index
-    order_action_index BIGINT UNSIGNED NOT NULL, -- Unique action index from swaps table
+    order_action_index BIGINT UNSIGNED NOT NULL, -- Unique action index from orders table
     status_id          BIGINT UNSIGNED           -- id of record in index_statuses table (status of order tx open/invalid/complete/cancelled/expired)
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
