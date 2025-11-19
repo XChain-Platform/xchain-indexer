@@ -65,8 +65,10 @@ async function startApi(){
     app.use(cors());
 
     const jsonRpcController = {
-        async ping() {
-            return {status:"success"};
+
+        // Handle returning a success response to ping requests
+        async ping(){
+            return { status: "success" };
         }
     
         /*
