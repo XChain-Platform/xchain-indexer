@@ -61,11 +61,9 @@ class Swap_Expire {
             debits  = [],
             escrows = [];
 
-        // Debit token from escrow
+        // Debit GIVE_TICK from escrows and credit it to the SOURCE address
         escrows.push([swapInfo['GIVE_TICK'], -swapInfo['GIVE_AMOUNT'], swapInfo['SOURCE']]);
-
-        // Credit token to SOURCE
-        credits.push([swapInfo['GIVE_TICK'], swapInfo['GIVE_AMOUNT'], swapInfo['SOURCE']]);
+        credits.push([swapInfo['GIVE_TICK'],  swapInfo['GIVE_AMOUNT'], swapInfo['SOURCE']]);
 
         // Create record in the swaps_expires table
         await this.indexerDb.createSwapExpire(data['ACTION_INDEX'], swapInfo['ACTION_INDEX'], data['STATUS']);

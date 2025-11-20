@@ -62,11 +62,9 @@ class Dispenser_Expire {
             debits  = [],
             escrows = [];
 
-        // Debit token from escrows
+        // Debit GIVE_TICK from escrows and credit it to the SOURCE address
         escrows.push([dispenserInfo['GIVE_TICK'], -dispenserInfo['GIVE_REMAINING'], dispenserInfo['SOURCE']]);
-
-        // Credit token to SOURCE
-        credits.push([dispenserInfo['GIVE_TICK'], dispenserInfo['GIVE_REMAINING'], dispenserInfo['SOURCE']]);
+        credits.push([dispenserInfo['GIVE_TICK'],  dispenserInfo['GIVE_REMAINING'], dispenserInfo['SOURCE']]);
 
         // Create record in the dispenser_expires table
         await this.indexerDb.createDispenserExpire(data['ACTION_INDEX'], dispenserInfo['ACTION_INDEX'], data['STATUS']);
