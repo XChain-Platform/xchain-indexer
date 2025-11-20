@@ -55,6 +55,7 @@ class Rollback {
             'destroys',
             'dispensers',
             'dispenser_cancels',
+            'dispenser_closes',
             'dispenser_edits',
             'dispenser_expires',
             'dispenser_statuses',

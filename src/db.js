@@ -5359,6 +5359,41 @@ class Database {
         return edit;
     }
 
+    // Create/Update record in `dispenser_closes` table
+    async createDispenserClose(data){
+        // Normalize data
+        data                       = this.truncateDataValues(data);
+        let status_id              = await this.createStatus(data['STATUS']);
+        let action_index           = data['ACTION_INDEX'];
+        let dispenser_action_index = data['DISPENSER_ACTION_INDEX'];
+        // Check if record already exists for this in dispenser_closes
+        let query  = `SELECT
+                            action_index
+                        FROM
+                            dispenser_closes
+                        WHERE
+                            action_index=?`;
+        let args = [action_index];
+        let exists = false;
+        let results = await this.doQuery(query, args);
+        if(results.length > 0)
+            exists = true;
+        if(exists){
+            // UPDATE record
+            query = `UPDATE
+                        dispenser_closes
+                    SET
+                        status_id=?,
+                        dispenser_action_index=?
+                    WHERE 
+                        action_index=?`;
+        } else {
+            // INSERT record
+            query = `INSERT INTO dispenser_closes (status_id, dispenser_action_index, action_index) values (?, ?, ?)`;
+        }
+        args    = [status_id, dispenser_action_index, action_index];
+        results = await this.doQuery(query, args);
+    }
 
     // Create/Update record in `dispenser_cancels` table
     async createDispenserCancel(data){
