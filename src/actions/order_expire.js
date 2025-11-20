@@ -61,11 +61,9 @@ class Order_Expire {
             debits  = [],
             escrows = [];
 
-        // Debit token from escrows
+        // Debit GIVE_TICK from escrows and credit it to the SOURCE address
         escrows.push([orderInfo['GIVE_TICK'], -orderInfo['GIVE_REMAINING'], orderInfo['SOURCE']]);
-
-        // Credit token to SOURCE
-        credits.push([orderInfo['GIVE_TICK'], orderInfo['GIVE_REMAINING'], orderInfo['SOURCE']]);
+        credits.push([orderInfo['GIVE_TICK'],  orderInfo['GIVE_REMAINING'], orderInfo['SOURCE']]);
 
         // Create record in the order_expires table
         await this.indexerDb.createOrderExpire(data['ACTION_INDEX'], orderInfo['ACTION_INDEX'], data['STATUS']);
