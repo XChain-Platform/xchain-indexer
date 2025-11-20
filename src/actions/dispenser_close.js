@@ -38,6 +38,9 @@ class Dispenser_Close {
         // Get info on the dispenser
         let dispenserInfo = await this.indexerDb.getDispenserInfo(this.config['COIN'], data['ACTION_INDEX']);
 
+        // Store the dispenser action index
+        data['DISPENSER_ACTION_INDEX'] = dispenserInfo['ACTION_INDEX'];
+
         // Add SOURCE and GET_ADDRESS addresses and GET_TICK to addresses list
         this.util.addAddressTicker(dispenserInfo['SOURCE'], dispenserInfo['GIVE_TICK']);
         this.util.addAddressTicker(dispenserInfo['GET_ADDRESS'], dispenserInfo['GIVE_TICK']);
@@ -48,7 +51,7 @@ class Dispenser_Close {
         action['STATUS']      = 'valid';
         action['BLOCK_INDEX'] = data['BLOCK_INDEX'];
 
-        // Create a record of this DISPENSER_CANCEL action in the actions table
+        // Create a record of this DISPENSER_CLOSE action in the actions table
         data['ACTION_INDEX'] = await this.indexerDb.createActionIndex(action);
 
         // Set a default ACTION_STATUS value of 'closed'
@@ -72,6 +75,9 @@ class Dispenser_Close {
 
         // Credit token to SOURCE
         credits.push([dispenserInfo['GIVE_TICK'], dispenserInfo['GIVE_REMAINING'], dispenserInfo['SOURCE']]);
+
+        // Create record in the dispenser_closes table
+        await this.indexerDb.createDispenserClose(data);
 
         // Create record in the dispenser_statuses table
         await this.indexerDb.createDispenserStatus(data['ACTION_INDEX'], dispenserInfo['ACTION_INDEX'], data['ACTION_STATUS']);
