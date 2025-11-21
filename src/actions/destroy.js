@@ -166,15 +166,12 @@ class Destroy {
             if(!error && !tokenInfo)
                 error = 'invalid: TICK (unknown)';
 
-            // Determine token divisibility
-            let divisible = (tokenInfo && tokenInfo['DECIMALS']>=1) ? 1 : 0;
-
             /*************************************************************
              * FORMAT Validations
              ************************************************************/
 
             // Verify AMOUNT format
-            if(!error && !this.util.isNull(destroy['AMOUNT']) && !this.util.isValidAmountFormat(divisible, destroy['AMOUNT']))
+            if(!error && !this.util.isNull(destroy['AMOUNT']) && !this.util.isValidAmountFormat(tokenInfo['DECIMALS'], destroy['AMOUNT']))
                 error = "invalid: AMOUNT (format)";
 
             /*************************************************************

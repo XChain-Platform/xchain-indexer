@@ -297,7 +297,9 @@ class Utility {
     }
 
     // Handle validating amount format
-    isValidAmountFormat(divisible, amount){
+    isValidAmountFormat(decimals, amount){
+        // Determine divisibility and default to true
+        let divisible   = (parseInt(decimals)==0) ? false : true;
         let [int, sats] = String(amount).split('.');
         if(!divisible && this.isNumeric(int) && int==amount)
             return true;

@@ -136,12 +136,8 @@ class Dividend {
          * FORMAT Validations
          ****************************************************************/
 
-        // Set TICK and DIVIDEND_TICK divisibility
-        let tick_divisible     = (tokenInfo && tokenInfo['DECIMALS]']>=1) ? 1 : 0;
-        let dividend_divisible = (dividendTokenInfo && dividendTokenInfo['DECIMALS']>=1) ? 1 : 0;
-
         // Verify AMOUNT format valid for DIVIDEND_TICK
-        if(!error && (this.util.isNull(data['AMOUNT']) || !this.util.isValidAmountFormat(dividend_divisible, data['AMOUNT'])))
+        if(!error && (this.util.isNull(data['AMOUNT']) || !this.util.isValidAmountFormat(dividendTokenInfo['DECIMALS'], data['AMOUNT'])))
             error = "invalid: AMOUNT (format)";
 
         /*****************************************************************
