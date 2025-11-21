@@ -174,7 +174,7 @@ class Callback {
             error = 'invalid: CALLBACK_BLOCK (format)';
 
         // Verify CALLBACK_AMOUNT format
-        if(!error && tokenInfo && !this.util.isNull(tokenInfo['CALLBACK_AMOUNT']) && !this.util.isValidAmountFormat(parseInt(callbackTokenInfo['DECIMALS']), tokenInfo['CALLBACK_AMOUNT']))
+        if(!error && tokenInfo && !this.util.isNull(tokenInfo['CALLBACK_AMOUNT']) && !this.util.isValidAmountFormat(callbackTokenInfo['DECIMALS'], tokenInfo['CALLBACK_AMOUNT']))
             error = 'invalid: CALLBACK_AMOUNT (format)';
 
         /*****************************************************************

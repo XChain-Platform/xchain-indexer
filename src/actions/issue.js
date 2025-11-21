@@ -212,19 +212,15 @@ class Issue {
          * FORMAT Validations
          ****************************************************************/
 
-        // Set divisible first based on if token exist, if not, use DECIMALS in request
-        let tick_divisible = (data['DECIMALS]']==0) ? 0 : 1;
-        if(tokenInfo)
-            tick_divisible = (tokenInfo['DECIMALS']==0) ? 0 : 1;
-
-        // Set CALLBACK_TICK divisibillity flag
-        let callback_divisible = (cbInfo && cbInfo['DECIMALS']>0) ? 1 : 0;
+        // Set decimal precision for TICK and CALLBACK_TICK 
+        let tick_decimals     = (!this.util.isNull(tokenInfo) && !this.util.isNull(tokenInfo['DECIMALS'])) ? tokenInfo['DECIMALS'] : data['DECIMALS]'],
+            callback_decimals = (!this.util.isNull(cbInfo) && !this.util.isNull(cbInfo['DECIMALS'])) ? cbInfo['DECIMALS'] : 0;
 
         // Verify AMOUNT field formats
         for(let name of this.fieldList['AMOUNT']){
-            let value = issue[name],
-                div   = (name=='CALLBACK_AMOUNT') ? callback_divisible : tick_divisible;
-            if(!error && !this.util.isNull(value) && !this.util.isValidAmountFormat(div, value))
+            let value    = issue[name],
+                decimals = (name=='CALLBACK_AMOUNT') ? callback_decimals : tick_decimals;
+            if(!error && !this.util.isNull(value) && !this.util.isValidAmountFormat(decimals, value))
                 error = "invalid: " + name + " (format)";
         }
 

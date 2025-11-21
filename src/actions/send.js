@@ -182,15 +182,12 @@ class Send {
             if(!error && !tokenInfo)
                 error = 'invalid: TICK (unknown)';
 
-            // Determine token divisibility
-            let divisible = (tokenInfo && tokenInfo['DECIMALS']==1) ? 1 : 0;
-
             /*************************************************************
              * FORMAT Validations
              ************************************************************/
 
             // Verify AMOUNT format
-            if(!error && !this.util.isNull(send['AMOUNT']) && !this.util.isValidAmountFormat(divisible, send['AMOUNT']))
+            if(!error && !this.util.isNull(send['AMOUNT']) && !this.util.isValidAmountFormat(tokenInfo['DECIMALS'], send['AMOUNT']))
                 error = "invalid: AMOUNT (format)";
 
             // Verify DESTINATION address format

@@ -90,9 +90,6 @@ class Mint {
         if(tokenInfo['BLOCK_INDEX']==data['BLOCK_INDEX'] && !(await this.indexerDb.validTickerBeforeTxIndex(data['TICK'], data['ACTION_INDEX'])))
             tokenInfo = null;
 
-        // Set divisible first based on if token exist, if not, use DECIMALS in request
-        let tick_divisible = (data['DECIMALS]']==0) ? 0 : 1;
-
         // Validate TICK exists
         if(!error && !tokenInfo)
             error = 'invalid: TICK (unknown)';
@@ -125,7 +122,7 @@ class Mint {
          ****************************************************************/
 
         // Verify AMOUNT format
-        if(!error && !this.util.isNull(data['AMOUNT']) && !this.util.isValidAmountFormat(tick_divisible, data['AMOUNT']))
+        if(!error && !this.util.isNull(data['AMOUNT']) && !this.util.isValidAmountFormat(tokenInfo['DECIMALS'], data['AMOUNT']))
             error = "invalid: AMOUNT (format)";
 
         // Verify DESTINATION address format
