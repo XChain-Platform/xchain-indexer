@@ -116,8 +116,10 @@ class List {
             type = await this.indexerDb.getListType(data['LIST_ACTION_INDEX']);
 
         // Validate LIST_ACTION_INDEX
-        if(!error && format==1 && type===false)
+        if(!error && format==1 && type===false){
             error = 'invalid: LIST_ACTION_INDEX (unknown)';
+            data['LIST_ACTION_INDEX'] = null;
+        }
 
         // Lookup list information
         if(!error && format==1){
