@@ -36,53 +36,57 @@ class Dispenser_Expire {
     async parse(params, data, error){
 
         // Get info on the dispenser
-        let dispenserInfo = await this.indexerDb.getDispenserInfo(this.config['COIN'], data['ACTION_INDEX']);
+        let dispenser = await this.indexerDb.getDispenserInfo(this.config['COIN'], data['DISPENSER_ACTION_INDEX']);
 
-        // Add SOURCE and GET_ADDRESS addresses and GET_TICK to addresses list
-        this.util.addAddressTicker(dispenserInfo['SOURCE'], dispenserInfo['GIVE_TICK']);
-        this.util.addAddressTicker(dispenserInfo['GET_ADDRESS'], dispenserInfo['GIVE_TICK']);
+        // Only proceed if we have a valid dispenser
+        if(dispenser){
 
-        // Define DISPENSER_CLOSE action
-        let action = {}
-        action['ACTION']      = 'DISPENSER_EXPIRE';
-        action['STATUS']      = 'valid';
-        action['BLOCK_INDEX'] = data['BLOCK_INDEX'];
+            // Add SOURCE and GET_ADDRESS addresses and GET_TICK to addresses list
+            this.util.addAddressTicker(dispenser['SOURCE'],      dispenser['GIVE_TICK']);
+            this.util.addAddressTicker(dispenser['GET_ADDRESS'], dispenser['GIVE_TICK']);
 
-        // Create a record of this DISPENSER_EXPIRE action in the actions table
-        data['ACTION_INDEX'] = await this.indexerDb.createActionIndex(action);
+            // Define DISPENSER_CLOSE action
+            let action = {}
+            action['ACTION']      = 'DISPENSER_EXPIRE';
+            action['STATUS']      = 'valid';
+            action['BLOCK_INDEX'] = data['BLOCK_INDEX'];
 
-        // Set the status to valid
-        data['STATUS'] = 'valid';
+            // Create a record of this DISPENSER_EXPIRE action in the actions table
+            data['ACTION_INDEX'] = await this.indexerDb.createActionIndex(action);
 
-        // Print status message
-        console.log("\t DISPENSER_EXPIRE : " + this.config['COIN'] + ':' + dispenserInfo['ACTION_INDEX'] + ' : ' + data['STATUS']);
+            // Set the status to valid
+            data['STATUS'] = 'valid';
 
-        // Array of credits, debits, and escrows
-        let credits = [],
-            debits  = [],
-            escrows = [];
+            // Print status message
+            console.log("\t DISPENSER_EXPIRE : " + this.config['COIN'] + ':' + dispenser['ACTION_INDEX'] + ' : ' + data['STATUS']);
 
-        // Debit GIVE_TICK from escrows and credit it to the SOURCE address
-        escrows.push([dispenserInfo['GIVE_TICK'], -dispenserInfo['GIVE_REMAINING'], dispenserInfo['SOURCE']]);
-        credits.push([dispenserInfo['GIVE_TICK'],  dispenserInfo['GIVE_REMAINING'], dispenserInfo['SOURCE']]);
+            // Array of credits, debits, and escrows
+            let credits = [],
+                debits  = [],
+                escrows = [];
 
-        // Create record in the dispenser_expires table
-        await this.indexerDb.createDispenserExpire(data['ACTION_INDEX'], dispenserInfo['ACTION_INDEX'], data['STATUS']);
+            // Debit GIVE_TICK from escrows and credit it to the SOURCE address
+            escrows.push([dispenser['GIVE_TICK'], -dispenser['GIVE_REMAINING'], dispenser['SOURCE']]);
+            credits.push([dispenser['GIVE_TICK'],  dispenser['GIVE_REMAINING'], dispenser['SOURCE']]);
 
-        // Create record in the dispenser_statuses table
-        await this.indexerDb.createDispenserStatus(data['ACTION_INDEX'], dispenserInfo['ACTION_INDEX'], 'expired');
+            // Create record in the dispenser_expires table
+            await this.indexerDb.createDispenserExpire(data['ACTION_INDEX'], dispenser['ACTION_INDEX'], data['STATUS']);
 
-        // Process any transaction ledger changes (credits / debits / escrows)
-        await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits, escrows);
+            // Create record in the dispenser_statuses table
+            await this.indexerDb.createDispenserStatus(data['ACTION_INDEX'], dispenser['ACTION_INDEX'], 'expired');
 
-        // Get a list of addresses
-        let addresses = Object.keys(this.util.getAddressesList());
+            // Process any transaction ledger changes (credits / debits / escrows)
+            await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits, escrows);
 
-        // Update address balances
-        await this.indexerDb.updateBalances(addresses);
+            // Get a list of addresses
+            let addresses = Object.keys(this.util.getAddressesList());
 
-        // Create action mappings
-        await this.mapper.createMappings(data);
+            // Update address balances
+            await this.indexerDb.updateBalances(addresses);
+
+            // Create action mappings
+            await this.mapper.createMappings(data);
+        }
     }
 }
 

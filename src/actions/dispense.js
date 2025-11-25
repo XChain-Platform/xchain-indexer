@@ -1,0 +1,256 @@
+/*********************************************************************
+ * 
+ * Copyright © 2025 Dankest, LLC
+ * Based on XChain Platform by Dankest, LLC – https://dankest.llc
+ *
+ * Licensed under the Dankest Community License (Apache License 2.0 + Additional Terms).
+ * You may not use this file except in compliance with that License.
+ * 
+ * A copy of the License is available at:
+ *     https://dankest.llc/license
+ *
+ * This software is provided “AS IS”, without warranties or conditions of any kind.
+ * 
+ **********************************************************************
+ *
+ * XChain Platform Action - DISPENSE
+ * 
+ * This action dispenses tokens from dispensers when they are triggered
+  *
+ ********************************************************************/
+
+class Dispense {
+
+    // Handle constructing a class instance
+    constructor(action){
+        // Setup short aliases
+        this.actions   = action;
+        this.config    = action.config;
+        this.decoderDb = action.decoderDb;
+        this.indexerDb = action.indexerDb;
+        this.util      = action.util;
+        this.mapper    = action.mapper;
+    }
+
+    // Handle parsing the DISPENSE transaction
+    async parse(params, data, error){
+
+        // Save some details from the dispense request
+        let block_index = data['BLOCK_INDEX'];
+        let block_time  = data['BLOCK_TIME'];
+        let tx_index    = data['TX_INDEX'];
+
+        // Placeholder for valid dispenses
+        let dispenses  = [];
+
+        // Placeholder for dispenser info
+        let dispenserInfo = {}; 
+
+        // Lookup any dispensers that are triggered by this action
+        let action_indexes = await this.indexerDb.findMatchingDispensers(data);
+
+        // Loop through dispensers and generate a list of valid DISPENSE actions
+        for(let action_index of action_indexes){
+
+            // Reset the error to false for each dispenser
+            let error = false;
+
+            // Get full dispenser info including GIVE_REMAINING
+            let dispenser = await this.indexerDb.getDispenserInfo(this.config['COIN'], action_index, data['BLOCK_TIME']);
+
+            // Only proceed if we have a valid dispenser 
+            if(!error && !dispenser)
+                error = 'invalid: Dispenser unknown'
+
+            // Store the dispenser info for easy reference
+            if(!error)
+                dispenserInfo[dispenser['ACTION_INDEX']] = dispenser;
+
+            // Verify COIN_AMOUNT is not less than GET_AMOUNT
+            if(!error && this.util.bcnum(data['COIN_AMOUNT']) < this.util.bcnum(dispenser['GET_AMOUNT']))
+                error = 'invalid: GET_AMOUNT (insufficient funds)';
+
+            // Ignore if DISPENSE is being triggered by GET_ADDRESS (dispenser can't trigger itself)
+            if(!error && data['SOURCE']==dispenser['GET_ADDRESS'])
+                error = 'invalid: SOURCE and GET_ADDRESS can not be same';
+
+            // Determine the GIVE_AMOUNT multiplier based on Math.floor(COIN_AMOUNT / GET_AMOUNT)
+            let multiplier = Math.floor(this.util.bcdiv(data['COIN_AMOUNT'], dispenser['GET_AMOUNT'], 64));
+
+            // Calculate how much to dispense based on the payment amount
+            let give_amount = this.util.bcmul(multiplier, dispenser['GIVE_AMOUNT'], 64);
+
+            // Give out the maximum amount allowed by the dispenser and payment amount
+            while(multiplier > 0 && give_amount > dispenser['GIVE_REMAINING']){
+                multiplier--;
+                give_amount = this.util.bcmul(multiplier, dispenser['GIVE_AMOUNT'], 64);
+            }
+
+            // Verify that GIVE_AMOUNT 
+            if(!error && multiplier == 0)
+                error = 'invalid: insufficient funds ';
+
+            // Only create dispensee if we are able to dispense at least 1 GIVE_AMOUNT
+            if(!error){
+
+                // Get information on the tokens involved in the dispense
+                let getTokenInfo  = await this.indexerDb.getTokenInfo(dispenser['GET_TICK'],  data['BLOCK_INDEX'], data['ACTION_INDEX']);
+                let giveTokenInfo = await this.indexerDb.getTokenInfo(dispenser['GIVE_TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
+
+                // List of addresses allowed or blocked from holding GET_TICK
+                let getTokenAllowList = (!this.util.isNull(getTokenInfo['ALLOW_LIST'])) ? await this.indexerDb.getList(getTokenInfo['ALLOW_LIST']) : false;
+                let getTokenBlockList = (!this.util.isNull(getTokenInfo['BLOCK_LIST'])) ? await this.indexerDb.getList(getTokenInfo['BLOCK_LIST']) : false;
+
+                // List of addresses allowed or blocked from holding GIVE_TICK
+                let giveTokenAllowList = (!this.util.isNull(giveTokenInfo['ALLOW_LIST'])) ? await this.indexerDb.getList(giveTokenInfo['ALLOW_LIST']) : false;
+                let giveTokenBlockList = (!this.util.isNull(giveTokenInfo['BLOCK_LIST'])) ? await this.indexerDb.getList(giveTokenInfo['BLOCK_LIST']) : false;
+
+                // List of addresses allowed or blocked from matching with this ORDER
+                let dispenserAllowList = (!this.util.isNull(dispenser['ALLOW_LIST'])) ? await this.indexerDb.getList(dispenser['ALLOW_LIST']) : false;
+                let dispenserBlockList = (!this.util.isNull(dispenser['BLOCK_LIST'])) ? await this.indexerDb.getList(dispenser['BLOCK_LIST']) : false;
+
+                // Handle validating both sides of dispense are allowed (ALLOW/BLOCK list support)
+                if(!error){
+                    // Get Token Allow List
+                    if(getTokenAllowList.length){
+                        if(!error && !getTokenAllowList.includes(dispense['DESTINATION']))
+                            error = 'invalid: DESTINATION (GET_TOKEN allow list)';
+                        if(!error && !getTokenAllowList.includes(dispenser['GET_ADDRESS']))
+                            error = 'invalid: GET_ADDRESS (GET_TOKEN allow list)';
+                    }
+                    // Get Token Block List
+                    if(getTokenBlockList.length){
+                        if(!error && getTokenBlockList.includes(dispense['DESTINATION']))
+                            error = 'invalid: DESTINATION (GET_TOKEN block list)';
+                        if(!error && getTokenBlockList.includes(dispenser['GET_ADDRESS']))
+                            error = 'invalid: GET_ADDRESS (GET_TOKEN block list)';
+                    }
+                    // Give Token Allow List
+                    if(giveTokenAllowList.length){
+                        if(!error && !giveTokenAllowList.includes(dispense['DESTINATION']))
+                            error = 'invalid: DESTINATION (GIVE_TOKEN allow list)';
+                        if(!error && !giveTokenAllowList.includes(dispenser['GET_ADDRESS']))
+                            error = 'invalid: GET_ADDRESS (GIVE_TOKEN allow list)';
+                    }
+                    // Give Token Block List
+                    if(getTokenBlockList.length){
+                        if(!error && getTokenBlockList.includes(dispense['DESTINATION']))
+                            error = 'invalid: DESTINATION (GET_TOKEN block list)';
+                        if(!error && getTokenBlockList.includes(dispenser['GET_ADDRESS']))
+                            error = 'invalid: GET_ADDRESS (GET_TOKEN block list)';
+                    }
+                    // Dispenser Allow List
+                    if(dispenserAllowList.length){
+                        if(!error && !dispenserAllowList.includes(dispense['DESTINATION']))
+                            error = 'invalid: DESTINATION (dispenser allow list)';
+                        if(!error && !dispenserAllowList.includes(dispenser['GET_ADDRESS']))
+                            error = 'invalid: GET_ADDRESS (dispenser allow list)';
+                    }
+                    // Dispenser Block List
+                    if(dispenserBlockList.length){
+                        if(!error && dispenserBlockList.includes(dispense['DESTINATION']))
+                            error = 'invalid: DESTINATION (DISPENSER block list)';
+                        if(!error && dispenserBlockList.includes(dispenser['GET_ADDRESS']))
+                            error = 'invalid: GET_ADDRESS (DISPENSER block list)';
+                    }
+                }
+            }
+
+            // Add the dispense info to the dispenses array;
+            dispenses.push({
+                DISPENSER_ACTION_INDEX: action_index,
+                GIVE_COIN:              dispenser['GIVE_COIN'],
+                GIVE_TICK:              dispenser['GIVE_TICK'],
+                GIVE_AMOUNT:            give_amount,
+                GET_COIN:               dispenser['GET_COIN'],
+                GET_TICK:               dispenser['GET_TICK'],
+                GET_AMOUNT:             data['COIN_AMOUNT'],
+                DESTINATION:            data['COIN_DESTINATION'],
+                STATUS:                 error
+            });
+        }
+
+        // Only proceed if we have a valid dispense
+        if(dispenses){
+
+            // Loop through dispenses and process each
+            for(let idx in dispenses){
+
+                // Reset the address/tickers/transactions list on each parse
+                this.util.resetLists();
+
+                // Store info on the dispense and dispenser
+                let dispense  = dispenses[idx];
+                let dispenser = dispenserInfo[dispense['DISPENSER_ACTION_INDEX']];
+
+                // Add Addresses and ticks to the addresses list
+                this.util.addAddressTicker(dispense['DESTINATION'], dispenser['GIVE_TICK']);
+                this.util.addAddressTicker(dispenser['GET_ADDRESS'],dispenser['GET_TICK']);
+
+                // Set flag to determine if we create new ACTION_INDEX or use existing one
+                // Note: Use existing ACTION_INDEX for first DISPSENSE on a native COIN trigger (BTC, LTC. DOGE)
+                let createActionIndex = (idx==0 && !this.util.isNull(data['ACTION_INDEX'])) ? false : true;
+
+                // Create a record of this DISPENSE action in the actions table (if it does not already exist)
+                dispense['ACTION_INDEX'] = (createActionIndex) ? await this.indexerDb.createActionIndex(data, true) : data['ACTION_INDEX'];
+
+                // Update GIVE_REMAINING amount
+                dispenser['GIVE_REMAINING'] = this.util.bcsub(dispenser['GIVE_REMAINING'], dispense['GIVE_AMOUNT'], 64);
+
+                // Determine final status
+                let error  = (dispense['STATUS']) ? dispense['STATUS'] : false;
+                let status = (error) ? error : 'valid';
+                dispense['STATUS'] = status;
+
+                // Print status message
+                console.log("\t DISPENSE : " + dispense['GIVE_AMOUNT'] + ' ' + dispenser['GIVE_TICK'] + ' : ' + dispense['STATUS']);
+
+                // Create record in the dispenses table
+                await this.indexerDb.createDispense(dispense);
+
+                // Process the dispense
+                if(status=='valid'){
+
+                    // Array of credits, debits, and escrows
+                    let credits = [],
+                        debits  = [],
+                        escrows = [];
+
+                    // Debit GIVE_TICK from escrows and credit it to the SOURCE address
+                    if(dispense['GIVE_AMOUNT'] > 0){
+                        escrows.push([dispense['GIVE_TICK'], -dispense['GIVE_AMOUNT'], dispense['DESTINATION']]);
+                        credits.push([dispense['GIVE_TICK'],  dispense['GIVE_AMOUNT'], dispense['DESTINATION']]);
+                    }
+
+                    // Process any transaction ledger changes (credits / debits / escrows)
+                    await this.util.processTransactionLedgerChanges(this.indexerDb, dispense, credits, debits, escrows);
+
+                }
+
+                // Get a list of addresses
+                let addresses = Object.keys(this.util.getAddressesList());
+
+                // Update address balances
+                await this.indexerDb.updateBalances(addresses);
+
+                // Create action mappings
+                await this.mapper.createMappings(dispense);
+
+                // Close the dispenser if GIVE_REMAINING is less than GIVE_AMOUNT
+                if(status=='valid' && this.util.bcformat(dispenser['GIVE_REMAINING'],64) < this.util.bcformat(dispense['GIVE_AMOUNT'],64)){
+                    let action = 'DISPENSER_CLOSE';
+                    let data = {};
+                    data['ACTION']                 = action;
+                    data['BLOCK_INDEX']            = block_index;
+                    data['BLOCK_TIME']             = block_time;
+                    data['TX_INDEX']               = tx_index;
+                    data['DISPENSER_ACTION_INDEX'] = dispenser['ACTION_INDEX'];
+                    data['DISPENSER_STATUS']       = 'empty';
+                    await this.actions.processAction(action, null, data, null);
+                }                    
+            }
+        }
+    }
+}
+
+module.exports = Dispense;

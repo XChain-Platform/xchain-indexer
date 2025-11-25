@@ -273,6 +273,9 @@ class Send {
         // Create action mappings
         await this.mapper.createMappings(data);
 
+        // Check if any sends triggered dispensers
+        await this.util.processDispenserSends(this.actions, this.indexerDb, data);
+
     }
 }
 

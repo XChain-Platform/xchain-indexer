@@ -246,6 +246,12 @@ class Utility {
             return parseInt(num);
     }
 
+    // Handle returning a number to a given decimal point precision
+    bcformat(num, decimals){
+        let d = (!this.isNull(decimals)) ? parseInt(decimals) : 0;
+        return mathjs.format(this.bcnum(num),{notation: 'fixed', precision: d});
+    }
+
     // Handle subtracting 2 big numbers
     bcsub(numA, numB, decimals){
         let a = (!this.isNull(numA)) ? numA : 0;
@@ -589,20 +595,40 @@ class Utility {
     // NOTE: We currently use block_time to expire items... not ideal as block times can be manipulated
     // TODO: Revisit this code and handle calculating block time more elegantly
     async processCancellations(actions, db, block_index, block_time){
-        let cancels = await db.getCancelledItems(block_time);
+        let cancels = await db.findCancelledDispensers(block_time);
         for(let action_index of cancels){
             // Define basic ACTION transaction data object
             let action = 'DISPENSER_CLOSE';
             let data = {};
-            data['ACTION']        = action;
-            data['BLOCK_INDEX']   = block_index;
-            data['BLOCK_TIME']    = block_time;
-            data['ACTION_INDEX']  = action_index;
-            data['ACTION_STATUS'] = 'cancelled';
+            data['ACTION']                 = action;
+            data['BLOCK_INDEX']            = block_index;
+            data['BLOCK_TIME']             = block_time;
+            data['DISPENSER_ACTION_INDEX'] = action_index;
+            data['DISPENSER_STATUS']       = 'cancelled';
             await actions.processAction(action, null, data, null);
         }
     }
 
+    // Handle checking if any sends were to an active dispenser address
+    async processDispenserSends(actions, db, info){
+        let sends = await db.findDispenserSends(info['ACTION_INDEX']);
+        for(let send of sends){
+            // Define basic DISPENSE transaction data object
+            let action = 'DISPENSE';
+            let data = {};
+            data['ACTION']           = action;
+            data['SOURCE']           = send.source;
+            data['COIN']             = send.coin;
+            data['COIN_TICK']        = send.tick
+            data['COIN_AMOUNT']      = send.amount;
+            data['COIN_DESTINATION'] = send.destination;
+            data['BLOCK_INDEX']      = info['BLOCK_INDEX'];
+            data['BLOCK_TIME']       = info['BLOCK_TIME'];
+            data['TX_INDEX']         = info['TX_INDEX'];
+            data['DISPENSE_TYPE']    = 'SEND';
+            await actions.processAction(action, null, data, null);
+        }
+    }
 
     // Handle creating and updating DEX market information
     async processMarketUpdates(db, block_index, block_time){
@@ -619,6 +645,7 @@ class Utility {
             await db.updateMarketInfo(data);
         }
     }
+
 
 }
 
