@@ -48,7 +48,7 @@ class Dispenser_Close {
             // Define DISPENSER_CLOSE action
             let action = {}
             action['ACTION']      = 'DISPENSER_CLOSE';
-            action['STATUS']      = 'valid';
+            action['TX_INDEX']    = data['TX_INDEX'];
             action['BLOCK_INDEX'] = data['BLOCK_INDEX'];
 
             // Create a record of this DISPENSER_CLOSE action in the actions table
