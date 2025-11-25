@@ -36,7 +36,7 @@ class Dispenser_Expire {
     async parse(params, data, error){
 
         // Get info on the dispenser
-        let dispenser = await this.indexerDb.getDispenserInfo(this.config['COIN'], data['DISPENSER_ACTION_INDEX']);
+        let dispenser = await this.indexerDb.getDispenserInfo(this.config['COIN'], data['ACTION_INDEX']);
 
         // Only proceed if we have a valid dispenser
         if(dispenser){
