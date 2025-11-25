@@ -33,6 +33,7 @@ const destroy          = require('./actions/destroy.js');
 const dispenser        = require('./actions/dispenser.js');
 const dispenser_close  = require('./actions/dispenser_close.js');
 const dispenser_expire = require('./actions/dispenser_expire.js');
+const dispense         = require('./actions/dispense.js');
 const dividend         = require('./actions/dividend.js');
 const file             = require('./actions/file.js');
 const issue            = require('./actions/issue.js');
@@ -82,6 +83,7 @@ class Actions {
         this.actionDispenser       = new dispenser(this);
         this.actionDispenserClose  = new dispenser_close(this);
         this.actionDispenserExpire = new dispenser_expire(this);
+        this.actionDispense        = new dispense(this);
         this.actionFile            = new file(this);
         this.actionDividend        = new dividend(this);
         this.actionIssue           = new issue(this);
@@ -126,14 +128,19 @@ class Actions {
         let error       = false;
         let params      = String(tx.data).split('|');
         let source      = tx.source;
+        let destination = tx.destination;
+        let amount      = tx.amount;
         let tx_hash     = tx.tx_hash;
         let tx_data     = tx.data;
+        let tx_vout     = (this.util.isNull(tx.vout)) ? tx.vout : 0;
+        let coin        = this.config['COIN'];
         let block_index = tx.block_index;
         let block_time  = tx.block_time;
 
         // Create database records and get ids for tx_hash and source address
-        let source_id  = await this.indexerDb.createAddress(source);
-        let tx_hash_id = await this.indexerDb.createTransaction(tx_hash);
+        await this.indexerDb.createAddress(source);
+        await this.indexerDb.createAddress(destination);
+        await this.indexerDb.createTransaction(tx_hash);
 
         // Trim whitespace from any PARAMS
         params.forEach(function(value, idx){
@@ -159,13 +166,17 @@ class Actions {
 
         // Define basic ACTION transaction data object
         let data = {};
-        data['ACTION']      = action;      // Action (ISSUE, MINT, SEND, etc)
-        data['FORMAT']      = format;      // Action FORMAT (0-255)
-        data['BLOCK_INDEX'] = block_index; // Block index 
-        data['BLOCK_TIME']  = block_time ; // Block time (seconds since epoch) 
-        data['SOURCE']      = source;      // Source address
-        data['TX_HASH']     = tx_hash;     // Transaction Hash
-        data['TX_DATA']     = tx_data;     // Raw tx data string
+        data['ACTION']           = action;      // Action (ISSUE, MINT, SEND, etc)
+        data['FORMAT']           = format;      // Action FORMAT (0-255)
+        data['BLOCK_INDEX']      = block_index; // Block index 
+        data['BLOCK_TIME']       = block_time;  // Block time (seconds since epoch) 
+        data['SOURCE']           = source;      // Source address
+        data['COIN']             = coin;        // COIN network
+        data['COIN_DESTINATION'] = destination; // COIN Destination address
+        data['COIN_AMOUNT']      = amount;      // Amount of native COIN
+        data['TX_HASH']          = tx_hash;     // Transaction Hash
+        data['TX_VOUT']          = tx_vout;     // Transaction vout index
+        data['TX_DATA']          = tx_data;     // Raw tx data string
 
         // Validate Action is known
         if(!this.protocolChanges.isDefined(action)){
@@ -207,6 +218,7 @@ class Actions {
         if(action=='DISPENSER')          await this.actionDispenser.parse(params, data, error);
         if(action=='DISPENSER_CLOSE')    await this.actionDispenserClose.parse(params, data, error);
         if(action=='DISPENSER_EXPIRE')   await this.actionDispenserExpire.parse(params, data, error);
+        if(action=='DISPENSE')           await this.actionDispense.parse(params, data, error);
         if(action=='DIVIDEND')           await this.actionDividend.parse(params, data, error);
         if(action=='FILE')               await this.actionFile.parse(params, data, error);
         if(action=='ISSUE')              await this.actionIssue.parse(params, data, error);

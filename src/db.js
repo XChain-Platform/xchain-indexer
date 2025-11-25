@@ -337,6 +337,8 @@ class Database {
                         t1.data,
                         t2.hash as tx_hash,
                         a1.address as source,
+                        a1.address as destination,
+                        t1.amount,
                         t1.block_index,
                         b1.block_time
                     FROM
@@ -344,6 +346,7 @@ class Database {
                         INNER JOIN blocks             b1 ON (b1.block_index=t1.block_index)
                         INNER JOIN index_transactions t2 ON (t2.id=t1.tx_hash_id)
                         INNER JOIN index_addresses    a1 ON (a1.id=t1.source_id)
+                        LEFT  JOIN index_addresses    a2 ON (a2.id=t1.destination_id)
                     WHERE 
                         t1.block_index=? 
                     ORDER BY 
@@ -657,7 +660,7 @@ class Database {
     }
 
     // Create records in the 'actions' table and return record id
-    async createActionIndex(data){
+    async createActionIndex(data, force=false){
         // Set values to NULL if it is not already set
         data['BLOCK_INDEX'] = (!this.util.isNull(data['BLOCK_INDEX'])) ? data['BLOCK_INDEX'] : null;
         data['TX_INDEX']    = (!this.util.isNull(data['TX_INDEX'])) ? data['TX_INDEX'] : null;
@@ -665,7 +668,7 @@ class Database {
         // Check if the action index already exists for this action
         let action_index = await this.getActionIndex(data);
         // Handle creating record
-        if(action_index==null){
+        if(action_index==null || force==true){
             action_index      = await this.getNextActionIndex();
             let block_index   = data['BLOCK_INDEX'];
             let tx_index      = data['TX_INDEX'];
@@ -1096,11 +1099,14 @@ class Database {
     // Return a list type given a tx_hash
     async getListType(action_index){
         let type  = false;
-        let query = "SELECT type FROM lists WHERE action_index=? LIMIT 1";
-        let args  = [action_index];
-        let results = await this.doQuery(query, args);
-        if(results.length > 0)
-            type = parseInt(results[0].type);
+        if(!this.util.isNull(action_index) && this.util.isNumeric(action_index)){
+            let query = "SELECT type FROM lists WHERE action_index=? LIMIT 1";
+            let args  = [action_index];
+            let results = await this.doQuery(query, args);
+            if(results.length > 0)
+                type = parseInt(results[0].type);
+
+        }
         return type;
     }
 
@@ -3006,7 +3012,7 @@ class Database {
                         INNER JOIN index_tickers   t2 ON (t2.id=s1.give_tick_id)
                         INNER JOIN index_tickers   t3 ON (t3.id=s1.get_tick_id)
                         INNER JOIN index_coins     c1 ON (c1.id=s1.get_coin_id)
-                        INNER JOIN index_memos     m1 ON (m1.id=s1.memo_id)
+                        LEFT  JOIN index_memos     m1 ON (m1.id=s1.memo_id)
                         INNER JOIN swap_statuses   s2 ON (s2.swap_action_index=s1.action_index)
                         INNER JOIN index_statuses  s3 ON (s3.id=s1.status_id)
                         INNER JOIN index_statuses  s4 ON (s4.id=s2.status_id)
@@ -3444,7 +3450,7 @@ class Database {
                         INNER JOIN index_tickers   t2 ON (t2.id=o1.give_tick_id)
                         INNER JOIN index_tickers   t3 ON (t3.id=o1.get_tick_id)
                         INNER JOIN index_coins     c1 ON (c1.id=o1.get_coin_id)
-                        INNER JOIN index_memos     m1 ON (m1.id=o1.memo_id)
+                        LEFT  JOIN index_memos     m1 ON (m1.id=o1.memo_id)
                         INNER JOIN order_statuses  s1 ON (s1.order_action_index=o1.action_index)
                         INNER JOIN index_statuses  s2 ON (s2.id=o1.status_id)
                         INNER JOIN index_statuses  s3 ON (s3.id=s1.status_id)
@@ -3580,8 +3586,8 @@ class Database {
             for(let row of results){
                 let give_amount = (row.get_action_index==action_index) ? row.give_amount : row.get_amount;
                 let get_amount  = (row.get_action_index==action_index) ? row.get_amount  : row.give_amount;
-                give_remaining  = this.util.bcsub(give_remaining, give_amount);
-                get_remaining   = this.util.bcsub(get_remaining,  get_amount);
+                give_remaining  = this.util.bcsub(give_remaining, give_amount, 64);
+                get_remaining   = this.util.bcsub(get_remaining,  get_amount, 64);
             }
         }
         return [give_remaining, get_remaining];
@@ -3827,7 +3833,7 @@ class Database {
                             INNER JOIN blocks             b1 ON (b1.block_index=t1.block_index)
                             INNER JOIN index_actions      a3 ON (a3.id=a2.action_id)
                             INNER JOIN index_addresses    a4 ON (a4.id=t1.source_id)
-                            INNER JOIN index_memos        m1 ON (m1.id=a1.memo_id)
+                            LEFT  JOIN index_memos        m1 ON (m1.id=a1.memo_id)
                             INNER JOIN index_statuses     s1 ON (s1.id=a1.status_id)
                             INNER JOIN index_transactions t2 ON (t2.id=t1.tx_hash_id)
                         WHERE 
@@ -3856,7 +3862,7 @@ class Database {
                             INNER JOIN blocks             b1 ON (b1.block_index=t1.block_index)
                             INNER JOIN index_actions      a3 ON (a3.id=a2.action_id)
                             INNER JOIN index_addresses    a4 ON (a4.id=t1.source_id)
-                            INNER JOIN index_memos        m1 ON (m1.id=a1.memo_id)
+                            LEFT  JOIN index_memos        m1 ON (m1.id=a1.memo_id)
                             INNER JOIN index_statuses     s1 ON (s1.id=a1.status_id)
                             INNER JOIN index_transactions t2 ON (t2.id=t1.tx_hash_id)
                             INNER JOIN index_tickers      t3 ON (t3.id=a1.tick_id)
@@ -3911,7 +3917,7 @@ class Database {
                             INNER JOIN blocks             b2 ON (b2.block_index=t1.block_index)
                             INNER JOIN index_actions      a2 ON (a2.id=a1.action_id)
                             INNER JOIN index_addresses    a3 ON (a3.id=t1.source_id)
-                            INNER JOIN index_memos        m1 ON (m1.id=b1.memo_id)
+                            LEFT  JOIN index_memos        m1 ON (m1.id=b1.memo_id)
                             INNER JOIN index_statuses     s1 ON (s1.id=b1.status_id)
                             INNER JOIN index_transactions t2 ON (t2.id=t1.tx_hash_id)
                         WHERE 
@@ -3940,7 +3946,7 @@ class Database {
                             INNER JOIN blocks             b1 ON (b1.block_index=t1.block_index)
                             INNER JOIN index_actions      a2 ON (a2.id=a1.action_id)
                             INNER JOIN index_addresses    a3 ON (a3.id=t1.source_id)
-                            INNER JOIN index_memos        m1 ON (m1.id=c1.memo_id)
+                            LEFT  JOIN index_memos        m1 ON (m1.id=c1.memo_id)
                             INNER JOIN index_statuses     s1 ON (s1.id=c1.status_id)
                             INNER JOIN index_transactions t2 ON (t2.id=t1.tx_hash_id)
                             INNER JOIN index_tickers      t3 ON (t3.id=c1.tick_id)
@@ -3970,7 +3976,7 @@ class Database {
                             INNER JOIN blocks             b1 ON (b1.block_index=t1.block_index)
                             INNER JOIN index_actions      a2 ON (a2.id=a1.action_id)
                             INNER JOIN index_addresses    a3 ON (a3.id=t1.source_id)
-                            INNER JOIN index_memos        m1 ON (m1.id=d1.memo_id)
+                            LEFT  JOIN index_memos        m1 ON (m1.id=d1.memo_id)
                             INNER JOIN index_statuses     s1 ON (s1.id=d1.status_id)
                             INNER JOIN index_transactions t2 ON (t2.id=t1.tx_hash_id)
                             INNER JOIN index_tickers      t3 ON (t3.id=d1.tick_id)
@@ -4008,7 +4014,7 @@ class Database {
                             INNER JOIN blocks             b1 ON (b1.block_index=t1.block_index)
                             INNER JOIN index_actions      a2 ON (a2.id=a1.action_id)
                             INNER JOIN index_addresses    a3 ON (a3.id=t1.source_id)
-                            INNER JOIN index_memos        m1 ON (m1.id=f1.memo_id)
+                            LEFT  JOIN index_memos        m1 ON (m1.id=f1.memo_id)
                             INNER JOIN index_statuses     s1 ON (s1.id=f1.status_id)
                             INNER JOIN index_transactions t2 ON (t2.id=t1.tx_hash_id)
                             INNER JOIN index_mime_types   t3 ON (t3.id=f1.type_id)
@@ -4091,7 +4097,7 @@ class Database {
                             INNER JOIN blocks             b1 ON (b1.block_index=t1.block_index)
                             INNER JOIN index_actions      a2 ON (a2.id=a1.action_id)
                             INNER JOIN index_addresses    a3 ON (a3.id=t1.source_id)
-                            INNER JOIN index_memos        m1 ON (m1.id=l1.memo_id)
+                            LEFT  JOIN index_memos        m1 ON (m1.id=l1.memo_id)
                             INNER JOIN index_statuses     s1 ON (s1.id=l1.status_id)
                             INNER JOIN index_transactions t2 ON (t2.id=t1.tx_hash_id)
                             INNER JOIN index_coins        c1 ON (c1.id=l1.coin1_id)
@@ -4180,7 +4186,7 @@ class Database {
                             INNER JOIN index_actions      a2 ON (a2.id=a1.action_id)
                             INNER JOIN index_addresses    a3 ON (a3.id=t1.source_id)
                             INNER JOIN index_addresses    a4 ON (a4.id=m1.destination_id)
-                            INNER JOIN index_memos        m2 ON (m2.id=m1.memo_id)
+                            LEFT  JOIN index_memos        m2 ON (m2.id=m1.memo_id)
                             INNER JOIN index_statuses     s1 ON (s1.id=m1.status_id)
                             INNER JOIN index_transactions t2 ON (t2.id=t1.tx_hash_id)
                             INNER JOIN index_tickers      t3 ON (t3.id=m1.tick_id)
@@ -4218,7 +4224,7 @@ class Database {
                             INNER JOIN index_actions      a2 ON (a2.id=a1.action_id)
                             INNER JOIN index_addresses    a3 ON (a3.id=t1.source_id)
                             INNER JOIN index_addresses    a4 ON (a4.id=o1.get_address_id)
-                            INNER JOIN index_memos        m2 ON (m2.id=o1.memo_id)
+                            LEFT  JOIN index_memos        m2 ON (m2.id=o1.memo_id)
                             INNER JOIN index_statuses     s1 ON (s1.id=o1.status_id)
                             INNER JOIN index_transactions t2 ON (t2.id=t1.tx_hash_id)
                             INNER JOIN index_coins        c1 ON (c1.id=o1.give_coin_id)
@@ -4249,7 +4255,7 @@ class Database {
                         INNER JOIN blocks             b1 ON (b1.block_index=t1.block_index)
                         INNER JOIN index_actions      a2 ON (a2.id=a1.action_id)
                         INNER JOIN index_addresses    a3 ON (a3.id=t1.source_id)
-                        INNER JOIN index_memos        m2 ON (m2.id=o1.memo_id)
+                        LEFT  JOIN index_memos        m2 ON (m2.id=o1.memo_id)
                         INNER JOIN index_statuses     s1 ON (s1.id=o1.status_id)
                         INNER JOIN index_transactions t2 ON (t2.id=t1.tx_hash_id)
                     WHERE 
@@ -4279,7 +4285,7 @@ class Database {
                         INNER JOIN blocks             b1 ON (b1.block_index=t1.block_index)
                         INNER JOIN index_actions      a2 ON (a2.id=a1.action_id)
                         INNER JOIN index_addresses    a3 ON (a3.id=t1.source_id)
-                        INNER JOIN index_memos        m2 ON (m2.id=o1.memo_id)
+                        LEFT  JOIN index_memos        m2 ON (m2.id=o1.memo_id)
                         INNER JOIN index_statuses     s1 ON (s1.id=o1.status_id)
                         INNER JOIN index_transactions t2 ON (t2.id=t1.tx_hash_id)
                     WHERE 
@@ -4336,7 +4342,7 @@ class Database {
                             INNER JOIN index_actions      a2 ON (a2.id=a1.action_id)
                             INNER JOIN index_addresses    a3 ON (a3.id=t1.source_id)
                             INNER JOIN index_addresses    a4 ON (a4.id=s1.destination_id)
-                            INNER JOIN index_memos        m2 ON (m2.id=s1.memo_id)
+                            LEFT  JOIN index_memos        m2 ON (m2.id=s1.memo_id)
                             INNER JOIN index_statuses     s2 ON (s2.id=s1.status_id)
                             INNER JOIN index_transactions t2 ON (t2.id=t1.tx_hash_id)
                             INNER JOIN index_tickers      t3 ON (t3.id=s1.tick_id)
@@ -4366,7 +4372,7 @@ class Database {
                             INNER JOIN blocks             b1 ON (b1.block_index=t1.block_index)
                             INNER JOIN index_actions      a2 ON (a2.id=a1.action_id)
                             INNER JOIN index_addresses    a3 ON (a3.id=t1.source_id)
-                            INNER JOIN index_memos        m2 ON (m2.id=s1.memo_id)
+                            LEFT  JOIN index_memos        m2 ON (m2.id=s1.memo_id)
                             INNER JOIN index_statuses     s2 ON (s2.id=s1.status_id)
                             INNER JOIN index_transactions t2 ON (t2.id=t1.tx_hash_id)
                             LEFT JOIN index_tickers       t3 ON (t3.id=s1.tick_id)
@@ -4404,7 +4410,7 @@ class Database {
                             INNER JOIN index_actions      a2 ON (a2.id=a1.action_id)
                             INNER JOIN index_addresses    a3 ON (a3.id=t1.source_id)
                             INNER JOIN index_addresses    a4 ON (a4.id=s1.get_address_id)
-                            INNER JOIN index_memos        m2 ON (m2.id=s1.memo_id)
+                            LEFT  JOIN index_memos        m2 ON (m2.id=s1.memo_id)
                             INNER JOIN index_statuses     s2 ON (s2.id=s1.status_id)
                             INNER JOIN index_transactions t2 ON (t2.id=t1.tx_hash_id)
                             INNER JOIN index_coins        c1 ON (c1.id=s1.give_coin_id)
@@ -4435,7 +4441,7 @@ class Database {
                         INNER JOIN blocks             b1 ON (b1.block_index=t1.block_index)
                         INNER JOIN index_actions      a2 ON (a2.id=a1.action_id)
                         INNER JOIN index_addresses    a3 ON (a3.id=t1.source_id)
-                        INNER JOIN index_memos        m2 ON (m2.id=s1.memo_id)
+                        LEFT  JOIN index_memos        m2 ON (m2.id=s1.memo_id)
                         INNER JOIN index_statuses     s2 ON (s2.id=s1.status_id)
                         INNER JOIN index_transactions t2 ON (t2.id=t1.tx_hash_id)
                     WHERE 
@@ -4465,7 +4471,7 @@ class Database {
                         INNER JOIN blocks             b1 ON (b1.block_index=t1.block_index)
                         INNER JOIN index_actions      a2 ON (a2.id=a1.action_id)
                         INNER JOIN index_addresses    a3 ON (a3.id=t1.source_id)
-                        INNER JOIN index_memos        m2 ON (m2.id=s1.memo_id)
+                        LEFT  JOIN index_memos        m2 ON (m2.id=s1.memo_id)
                         INNER JOIN index_statuses     s2 ON (s2.id=s1.status_id)
                         INNER JOIN index_transactions t2 ON (t2.id=t1.tx_hash_id)
                     WHERE 
@@ -4521,7 +4527,7 @@ class Database {
                             INNER JOIN index_actions      a2 ON (a2.id=a1.action_id)
                             INNER JOIN index_addresses    a3 ON (a3.id=t1.source_id)
                             INNER JOIN index_addresses    a4 ON (a4.id=s1.destination_id)
-                            INNER JOIN index_memos        m2 ON (m2.id=s1.memo_id)
+                            LEFT  JOIN index_memos        m2 ON (m2.id=s1.memo_id)
                             INNER JOIN index_statuses     s2 ON (s2.id=s1.status_id)
                             INNER JOIN index_transactions t2 ON (t2.id=t1.tx_hash_id)
                         WHERE 
@@ -5085,6 +5091,58 @@ class Database {
         }
     }
 
+
+    // Create/Update record in `dispenses` table
+    async createDispense(data){
+        // Normalize data
+        data = this.truncateDataValues(data);
+        // Normalize data
+        let give_coin_id           = await this.createCoin(data['GIVE_COIN']);
+        let give_tick_id           = await this.createTicker(data['GIVE_TICK']);
+        let get_coin_id            = await this.createCoin(data['GET_COIN']);
+        let get_tick_id            = await this.createTicker(data['GET_TICK']);
+        let destination_id         = await this.createAddress(data['DESTINATION']);
+        let status_id              = await this.createStatus(data['STATUS']);
+        let action_index           = data['ACTION_INDEX'];
+        let give_amount            = data['GIVE_AMOUNT'];
+        let get_amount             = data['GET_AMOUNT'];
+        let dispenser_action_index = data['DISPENSER_ACTION_INDEX'];
+        // Check if record already exists for this dispenser
+        let query  = `SELECT
+                            action_index
+                        FROM
+                            dispenses
+                        WHERE
+                            action_index=?`;
+        let args = [action_index];
+        let exists = false;
+        let results = await this.doQuery(query, args);
+        if(results.length > 0)
+            exists = true;
+        if(exists){
+            // UPDATE record
+            query = `UPDATE
+                        dispenses
+                    SET
+                        dispenser_action_index=?,
+                        give_coin_id=?,
+                        give_tick_id=?,
+                        give_amount=?,
+                        get_coin_id=?,
+                        get_tick_id=?,
+                        get_amount=?,
+                        destination_id=?,
+                        status_id=?
+                    WHERE 
+                        action_index=?`;
+        } else {
+            // INSERT record
+            query = `INSERT INTO dispenses (dispenser_action_index, give_coin_id, give_tick_id, give_amount, get_coin_id, get_tick_id, get_amount, destination_id, status_id, action_index) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+        }
+        args    = [dispenser_action_index, give_coin_id, give_tick_id, give_amount, get_coin_id, get_tick_id, get_amount, destination_id, status_id, action_index];
+        results = await this.doQuery(query, args);
+    }    
+
     // Create/Update record in `dispensers` table
     async createDispenser(data){
         // Normalize data
@@ -5206,6 +5264,8 @@ class Database {
                         d1.expiration,
                         d1.allow_list,
                         d1.block_list,
+                        f1.code as fiat,
+                        d1.fiat_amount,
                         m1.memo,
                         s2.status,
                         s3.status as dispenser_status,
@@ -5221,7 +5281,8 @@ class Database {
                         INNER JOIN index_tickers       t2 ON (t2.id=d1.give_tick_id)
                         LEFT  JOIN index_tickers       t3 ON (t3.id=d1.get_tick_id)
                         INNER JOIN index_coins         c1 ON (c1.id=d1.get_coin_id)
-                        INNER JOIN index_memos         m1 ON (m1.id=d1.memo_id)
+                        LEFT  JOIN index_memos         m1 ON (m1.id=d1.memo_id)
+                        LEFT  JOIN index_fiats         f1 ON (f1.id=d1.fiat_id)
                         INNER JOIN dispenser_statuses  s1 ON (s1.dispenser_action_index=d1.action_index)
                         INNER JOIN index_statuses      s2 ON (s2.id=d1.status_id)
                         INNER JOIN index_statuses      s3 ON (s3.id=s1.status_id)
@@ -5464,7 +5525,7 @@ class Database {
         if(results.length > 0){
             for(let row of results){
                 if(!this.util.isNull(row.give_escrow))
-                    remaining = this.util.bcadd(remaining, row.give_escrow);
+                    remaining = this.util.bcadd(remaining, row.give_escrow, 64);
             }
         }
         // Lookup amounts paid out already from dispenses table
@@ -5481,15 +5542,15 @@ class Database {
         results = await this.doQuery(query, args);
         if(results.length > 0){
             for(let row of results){
-                if(!this.util.isNull(row.give_escrow))
-                    remaining = this.util.bcsub(remaining, row.give_amount);
+                if(!this.util.isNull(row.give_amount))
+                    remaining = this.util.bcsub(remaining, row.give_amount, 64);
             }
         }
         return remaining;
     }
 
     // Lookup items that need to be cancelled and return a list
-    async getCancelledItems(block_time){
+    async findCancelledDispensers(block_time){
         let cancels = [];
         // Find dispensers where latest status is 'cancelling`
         let args  = [];
@@ -5556,6 +5617,92 @@ class Database {
         }
         args    = [status_id, action_index, dispenser_action_index];
         results = await this.doQuery(query, args);
+    }
+
+    // Handle finding any sends to an address with active dispenser(s)
+    async findDispenserSends(action_index){
+        let sends = [];
+        let query  = `SELECT
+                            a2.address as source,
+                            a3.address as destination,
+                            c1.coin,
+                            t2.tick,
+                            s1.amount
+                        FROM
+                            sends s1
+                            INNER JOIN actions            a1 ON (a1.action_index=s1.action_index)
+                            INNER JOIN transactions       t1 ON (t1.tx_index=a1.tx_index)
+                            INNER JOIN dispensers         d1 ON (d1.get_address_id=s1.destination_id)
+                            INNER JOIN dispenser_statuses s2 ON (s2.dispenser_action_index=d1.action_index)
+                            INNER JOIN index_statuses     s3 ON (s3.id=s1.status_id)
+                            INNER JOIN index_statuses     s4 ON (s4.id=s2.status_id)
+                            INNER JOIN index_addresses    a2 ON (a2.id=t1.source_id)
+                            INNER JOIN index_addresses    a3 ON (a3.id=s1.destination_id)
+                            INNER JOIN index_tickers      t2 ON (t2.id=s1.tick_id)
+                            INNER JOIN index_coins        c1 ON (c1.id=d1.get_coin_id)
+                        WHERE
+                            s2.action_index = (
+                                SELECT
+                                    MAX(s5.action_index)
+                                FROM
+                                    dispenser_statuses s5
+                                WHERE
+                                    s5.dispenser_action_index=d1.action_index
+                            ) AND
+                            s3.status='valid' AND 
+                            s4.status IN ('open', 'cancelling') AND 
+                            s1.tick_id=d1.get_tick_id AND
+                            s1.amount >= d1.get_amount AND
+                            s1.action_index=?
+                        GROUP BY s1.action_index`;
+        let args = [action_index];
+        let results = await this.doQuery(query, args);
+        if(results.length > 0)
+            sends = results;
+        return sends;
+    }
+
+    // Handle finding any open dispensers for a given coin/tick/amount/destination combination
+    async findMatchingDispensers(data){
+        let dispensers = [];
+        // Normalize data
+        let coin_id        = await this.createCoin(data['COIN']);
+        let tick_id        = await this.createTicker(data['COIN_TICK']);
+        let destination_id = await this.createAddress(data['COIN_DESTINATION']);
+        let coin_amount    = this.util.bcnum(data['COIN_AMOUNT']);
+        let dispenses      = [];
+        let query  = `SELECT
+                            d1.action_index,
+                            d1.get_amount
+                        FROM
+                            dispensers d1
+                            INNER JOIN dispenser_statuses s1 ON (s1.dispenser_action_index=d1.action_index)
+                            INNER JOIN index_statuses     s2 ON (s2.id=d1.status_id)
+                            INNER JOIN index_statuses     s3 ON (s3.id=s1.status_id)
+                        WHERE
+                            s1.action_index = (
+                                SELECT
+                                    MAX(s4.action_index)
+                                FROM
+                                    dispenser_statuses s4
+                                WHERE
+                                    s4.dispenser_action_index=s1.action_index
+                            ) AND
+                            s2.status='valid' AND 
+                            s3.status IN ('open', 'cancelling') AND 
+                            d1.get_coin_id=? AND
+                            d1.get_tick_id=? AND
+                            d1.get_address_id=?`;
+        let args = [coin_id, tick_id, destination_id];
+        let results = await this.doQuery(query, args);
+        if(results.length > 0){
+            for(let row of results){
+                // Only add dispenser if amount is greater than or equal to COIN_AMOUNT
+                if(coin_amount >= this.util.bcnum(row.get_amount))
+                    dispensers.push(Number(row.action_index));
+            }
+        }
+        return dispensers;
     }
 
 }
