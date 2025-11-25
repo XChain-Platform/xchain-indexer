@@ -48,7 +48,6 @@ class Dispenser_Expire {
             // Define DISPENSER_CLOSE action
             let action = {}
             action['ACTION']      = 'DISPENSER_EXPIRE';
-            action['STATUS']      = 'valid';
             action['BLOCK_INDEX'] = data['BLOCK_INDEX'];
 
             // Create a record of this DISPENSER_EXPIRE action in the actions table

@@ -44,7 +44,6 @@ class Order_Expire {
         // Define ORDER_EXPIRE action
         let action = {}
         action['ACTION']      = 'ORDER_EXPIRE';
-        action['STATUS']      = 'valid';
         action['BLOCK_INDEX'] = data['BLOCK_INDEX'];
 
         // Create a record of this ORDER_EXPIRE action in the actions table

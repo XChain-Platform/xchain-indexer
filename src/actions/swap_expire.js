@@ -44,7 +44,6 @@ class Swap_Expire {
         // Define SWAP_EXPIRE action
         let action = {}
         action['ACTION']      = 'SWAP_EXPIRE';
-        action['STATUS']      = 'valid';
         action['BLOCK_INDEX'] = data['BLOCK_INDEX'];
 
         // Create a record of this SWAP_EXPIRE action in the actions table

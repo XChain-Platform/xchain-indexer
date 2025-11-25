@@ -168,7 +168,6 @@ class Order_Match {
                 // Define ORDER_MATCH action
                 let action = {}
                 action['ACTION']      = 'ORDER_MATCH';
-                action['STATUS']      = 'valid';
                 action['BLOCK_INDEX'] = data['BLOCK_INDEX'];
 
                 // Create a record of this ORDER_MATCH action in the actions table
