@@ -165,7 +165,7 @@ class Dispense {
                 GET_COIN:               dispenser['GET_COIN'],
                 GET_TICK:               dispenser['GET_TICK'],
                 GET_AMOUNT:             data['COIN_AMOUNT'],
-                DESTINATION:            data['COIN_DESTINATION'],
+                DESTINATION:            data['SOURCE'],
                 STATUS:                 error
             });
         }
