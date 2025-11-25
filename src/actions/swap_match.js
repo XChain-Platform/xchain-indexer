@@ -107,7 +107,6 @@ class Swap_Match {
                 // Define SWAP_MATCH action
                 let action = {}
                 action['ACTION']      = 'SWAP_MATCH';
-                action['STATUS']      = 'valid';
                 action['BLOCK_INDEX'] = data['BLOCK_INDEX'];
 
                 // Create a record of this SWAP_MATCH action in the actions table
