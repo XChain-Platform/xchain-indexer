@@ -263,40 +263,61 @@ class Database {
      * General database functions
      */
 
-    // Handle Truncating certain data values to fit in database columns 
-    truncateDataValues(data){
-        let action = (!this.util.isNull(data['ACTION'])) ? data['ACTION'] : 'UNKNOWN';
-        // Truncate all memos to 250 characters
-        if(!this.util.isNull(data['MEMO']))
-            data['MEMO'] = String(data['MEMO']).substring(0,250);
-        // Standardize LIST values to numeric value or NULL
-        if(['ISSUE','ORDERS','SWAP'].includes(action)){
-            for(let list of this.config['LIST_FIELDS'] ){
-                if(!this.util.isNull(data[list]) && !this.util.isNumeric(data[list]))
-                    data[list] = null;
-            }
+    // Handle normalizing data values before inserting in the database tables
+    normalizeDataValues(data){
+        // Set LIST field values to numeric value or NULL
+        for(let field of this.config['LIST_FIELDS'] ){
+            if(!this.util.isNull(data[field]) && !this.util.isNumeric(data[field]))
+                data[field] = null;
         }
-        // Handle ACTION specific customization
+        // Set NUMBER field values to numeric or NULL
+        for(let field of this.config['NUMBER_FIELDS'] ){
+            if(this.util.isNull(data[field]) || !this.util.isNumeric(data[field]))
+                data[field] = null;
+        }
+        // set LOCK field values to explicitly unlocked (0), locked (1), or null
+        for(let field of this.config['LOCK_FIELDS']){
+            if([0,1].indexOf(data[field]) == -1)
+                data[field] = null;
+        }
+        // Set DECIMALS to null if it is outside of the acceptable range
+        if(!this.util.isNull(data['DECIMALS']) && (data['DECIMALS'] < this.config.MIN_TOKEN_DECIMALS || data['DECIMALS'] > this.config.MAX_TOKEN_DECIMALS))
+            data['DECIMALS'] = null;
+        // Handle ACTION specific customizations
+        let action = (!this.util.isNull(data['ACTION'])) ? data['ACTION'] : 'UNKNOWN';
         if(action=='BROADCAST'){
-            if(!this.util.isNull(data['MESSSAGE']))  data['MESSAGE'] = String(data['MESSAGE']).substring(0,250);
-            if(!this.util.isNull(data['VALUE']))     data['VALUE']   = String(data['VALUE']).substring(0,25);
-            if(!this.util.isNull(data['FEE']))       data['FEE']     = String(data['FEE']).substring(0,11);
+            // Truncate MESSAGE value to 250 characters
+            if(!this.util.isNull(data['MESSSAGE']))
+                data['MESSAGE'] = String(data['MESSAGE']).substring(0,250);
+            // Truncate VALUE value to 25 characters
+            if(!this.util.isNull(data['VALUE']))
+                data['VALUE'] = String(data['VALUE']).substring(0,25);
+            // Truncate FEE value to 11 characters (0.00000000)
+            if(!this.util.isNull(data['FEE']))
+                data['FEE']  = String(data['FEE']).substring(0,11);
         } else if(action=='FILE'){
-            if(!this.util.isNull(data['NAME']))      data['NAME']    = String(data['NAME']).substring(0,250);
-            if(!this.util.isNull(data['TITLE']))     data['TITLE']   = String(data['TITLE']).substring(0,250);
+            // Truncate NAME value to 250 characters
+            if(!this.util.isNull(data['NAME']))
+                data['NAME'] = String(data['NAME']).substring(0,250);
+            // Truncate TITLE value to 250 characters
+            if(!this.util.isNull(data['TITLE']))
+                data['TITLE'] = String(data['TITLE']).substring(0,250);
         } else if(action=='ISSUE'){
             // Truncate DESCRIPTION to MAX_TOKEN_DESCRIPTION
             if(!this.util.isNull(data['DESCRIPTION']))  
                 data['DESCRIPTION'] = String(data['DESCRIPTION']).substring(0,this.config['MAX_TOKEN_DESCRIPTION']);
         } else if(action=='MESSAGE'){
-            // Truncate ENCRYPTION_METHOD to be just 1 character
+            // Truncate ENCRYPTION_METHOD to 1 character
             if(!this.util.isNull(data['ENCRYPTION_METHOD']))  
                 data['ENCRYPTION_METHOD'] = String(data['ENCRYPTION_METHOD']).substring(0,1);
         } else if(action=='SLEEP'){
-            // Truncate RESUME_BLOCK to be up to 25 characters
+            // Truncate RESUME_BLOCK to 25 characters
             if(!this.util.isNull(data['RESUME_BLOCK'])) 
                 data['RESUME_BLOCK'] = String(data['RESUME_BLOCK']).substring(0,25);
         }
+        // Truncate MEMO  to 250 characters
+        if(!this.util.isNull(data['MEMO']))
+            data['MEMO'] = String(data['MEMO']).substring(0,250);
         return data;
     }
 
@@ -1145,8 +1166,7 @@ class Database {
 
     // Create record in `lists` table
     async createList(data){
-        // Normalize data
-        data                  = this.truncateDataValues(data);
+        data                  = this.normalizeDataValues(data);
         let action_index      = data['ACTION_INDEX'];
         let status_id         = await this.createStatus(data['STATUS']);
         let list_type         = data['TYPE'];
@@ -1206,22 +1226,7 @@ class Database {
 
     // Create/Update record in `issues` table
     async createIssue(data){
-        // Normalize data
-        data = this.truncateDataValues(data);
-        // Standardize LOCK values to explicitly unlocked (0) or locked (1)
-        for(let lock of this.config['LOCK_FIELDS']){
-            if([0,1].indexOf(data[lock]) == -1)
-                delete data[lock];
-        }
-        // Standardize LIST values to numeric or NULL
-        for(let list of this.config['LIST_FIELDS']){
-            if(this.util.isNull(data[list]) || !this.util.isNumeric(data[list]))
-                delete data[list];
-        }
-        // Unset DECIMALS if it is outside of the acceptable range
-        if(!this.util.isNull(data['DECIMALS']) && (data['DECIMALS'] < this.config.MIN_TOKEN_DECIMALS || data['DECIMALS'] > this.config.MAX_TOKEN_DECIMALS))
-            delete data['DECIMALS'];
-        // Make data safe for use in SQL queries
+        data                   = this.normalizeDataValues(data);
         let action_index       = data['ACTION_INDEX'];
         let description        = data['DESCRIPTION'];
         let max_supply         = data['MAX_SUPPLY'];
@@ -1862,8 +1867,7 @@ class Database {
 
     // Create/Update record in `mints` table
     async createMint(data){
-        // Normalize data
-        data               = this.truncateDataValues(data);
+        data               = this.normalizeDataValues(data);
         let tick_id        = await this.createTicker(data['TICK']);
         let destination_id = await this.createAddress(data['DESTINATION']);
         let memo_id        = await this.createMemo(data['MEMO']);
@@ -2045,8 +2049,7 @@ class Database {
 
     // Create record in `addresses` table
     async createAddressOption(data){
-        // Normalize data
-        data               = this.truncateDataValues(data);
+        data               = this.normalizeDataValues(data);
         let status_id      = await this.createStatus(data['STATUS']);
         let memo_id        = await this.createMemo(data['MEMO']);
         let action_index   = data['ACTION_INDEX'];
@@ -2078,8 +2081,7 @@ class Database {
 
     // Create record in `batches` table
     async createBatch(data){
-        // Normalize data
-        data             = this.truncateDataValues(data);
+        data             = this.normalizeDataValues(data);
         let status_id    = await this.createStatus(data['STATUS']);
         let action_index = data['ACTION_INDEX'];
         // Check if record already exists for this address
@@ -2105,8 +2107,7 @@ class Database {
 
     // Create/Update record in `sends` table
     async createSend(data){
-        // Normalize data
-        data               = this.truncateDataValues(data);
+        data               = this.normalizeDataValues(data);
         let tick_id        = await this.createTicker(data['TICK']);
         let destination_id = await this.createAddress(data['DESTINATION']);
         let memo_id        = await this.createMemo(data['MEMO']);
@@ -2192,8 +2193,7 @@ class Database {
 
     // Create/Update record in `airdrops` table
     async createAirdrop(data){
-        // Normalize data
-        data                  = this.truncateDataValues(data);
+        data                  = this.normalizeDataValues(data);
         let tick_id           = await this.createTicker(data['TICK']);
         let memo_id           = await this.createMemo(data['MEMO']);
         let status_id         = await this.createStatus(data['STATUS']);
@@ -2279,8 +2279,7 @@ class Database {
 
     // Create/Update record in `destroys` table
     async createDestroy(data){
-        // Normalize data
-        data               = this.truncateDataValues(data);
+        data               = this.normalizeDataValues(data);
         let tick_id        = await this.createTicker(data['TICK']);
         let memo_id        = await this.createMemo(data['MEMO']);
         let status_id      = await this.createStatus(data['STATUS']);
@@ -2341,8 +2340,7 @@ class Database {
 
     // Create/Update record in `sweeps` table
     async createSweep(data){
-        // Normalize data
-        data               = this.truncateDataValues(data);
+        data               = this.normalizeDataValues(data);
         let tick_id        = await this.createTicker(data['TICK']);
         let destination_id = await this.createAddress(data['DESTINATION']);
         let memo_id        = await this.createMemo(data['MEMO']);
@@ -2384,8 +2382,7 @@ class Database {
 
     // Create/Update record in `dividends` table
     async createDividend(data){
-        // Normalize data
-        data                 = this.truncateDataValues(data);
+        data                 = this.normalizeDataValues(data);
         let tick_id          = await this.createTicker(data['TICK']);
         let dividend_tick_id = await this.createTicker(data['DIVIDEND_TICK']);
         let memo_id          = await this.createMemo(data['MEMO']);
@@ -2427,8 +2424,7 @@ class Database {
 
     // Create/Update record in `callbacks` table
     async createCallback(data){
-        // Normalize data
-        data                 = this.truncateDataValues(data);
+        data                 = this.normalizeDataValues(data);
         let tick_id          = await this.createTicker(data['TICK']);
         let callback_tick_id = await this.createTicker(data['CALLBACK_TICK']);
         let memo_id          = await this.createMemo(data['MEMO']);
@@ -2498,8 +2494,7 @@ class Database {
 
     // Create/Update record in `files` table
     async createFile(data){
-        // Normalize data
-        data             = this.truncateDataValues(data);
+        data             = this.normalizeDataValues(data);
         let type_id      = await this.createMimeType(data['TYPE']);
         let memo_id      = await this.createMemo(data['MEMO']);
         let status_id    = await this.createStatus(data['STATUS']);
@@ -2642,8 +2637,7 @@ class Database {
 
     // Create/Update record in `links` table
     async createLink(data){
-        // Normalize data
-        data                   = this.truncateDataValues(data);
+        data                   = this.normalizeDataValues(data);
         let coin1_id           = await this.createCoin(data['COIN1']);
         let coin2_id           = await this.createCoin(data['COIN2']);
         let memo_id            = await this.createMemo(data['MEMO']);
@@ -2686,8 +2680,7 @@ class Database {
 
     // Create/Update record in `broadcasts` table
     async createBroadcast(data){
-        // Normalize data
-        data                       = this.truncateDataValues(data);
+        data                       = this.normalizeDataValues(data);
         let memo_id                = await this.createMemo(data['MEMO']);
         let status_id              = await this.createStatus(data['STATUS']);
         let action_index           = data['ACTION_INDEX'];
@@ -2730,8 +2723,7 @@ class Database {
 
     // Create/Update record in `messages` table
     async createMessage(data){
-        // Normalize data
-        data                  = this.truncateDataValues(data);
+        data                  = this.normalizeDataValues(data);
         let destination_id    = await this.createAddress(data['DESTINATION']);
         let status_id         = await this.createStatus(data['STATUS']);
         let action_index      = data['ACTION_INDEX'];
@@ -2774,8 +2766,7 @@ class Database {
 
     // Create/Update record in `sleeps` table
     async createSleep(data){
-        // Normalize data
-        data             = this.truncateDataValues(data);
+        data             = this.normalizeDataValues(data);
         let tick_id      = await this.createTicker(data['TICK']);
         let memo_id      = await this.createMemo(data['MEMO']);
         let status_id    = await this.createStatus(data['STATUS']);
@@ -2816,8 +2807,7 @@ class Database {
 
     // Create/Update record in `swaps` table
     async createSwap(data){
-        // Normalize data
-        data               = this.truncateDataValues(data);
+        data               = this.normalizeDataValues(data);
         let give_coin_id   = await this.createCoin(data['GIVE_COIN']);
         let give_tick_id   = await this.createTicker(data['GIVE_TICK']);
         let get_coin_id    = await this.createCoin(data['GET_COIN']);
@@ -2909,8 +2899,7 @@ class Database {
 
     // Create/Update record in `swap_cancels` table
     async createSwapCancel(data){
-        // Normalize data
-        data                  = this.truncateDataValues(data);
+        data                  = this.normalizeDataValues(data);
         let memo_id           = await this.createMemo(data['MEMO']);
         let status_id         = await this.createStatus(data['STATUS']);
         let action_index      = data['ACTION_INDEX'];
@@ -3184,8 +3173,7 @@ class Database {
 
     // Create/Update record in `swap_matches` table
     async createSwapMatch(data, swap, match){
-        // Normalize data
-        data                  = this.truncateDataValues(data);
+        data                  = this.normalizeDataValues(data);
         let give_coin_id      = await this.createCoin(match['GIVE_COIN']);
         let get_coin_id       = await this.createCoin(match['GET_COIN']);
         let give_tick_id      = await this.createTicker(match['GIVE_TICK']);
@@ -3234,14 +3222,7 @@ class Database {
 
     // Create/Update record in `orders` table
     async createOrder(data){
-        // Normalize data
-        data = this.truncateDataValues(data);
-        // Standardize LIST values to numeric or NULL
-        for(let list of this.config['LIST_FIELDS'] ){
-            if(this.util.isNull(data[list]) || !this.util.isNumeric(data[list]))
-                delete data[list];
-        }
-        // Normalize data
+        data               = this.normalizeDataValues(data);
         let give_coin_id   = await this.createCoin(data['GIVE_COIN']);
         let give_tick_id   = await this.createTicker(data['GIVE_TICK']);
         let get_coin_id    = await this.createCoin(data['GET_COIN']);
@@ -3595,8 +3576,7 @@ class Database {
 
     // Create/Update record in `order_edits` table
     async createOrderEdit(data){
-        // Normalize data
-        data                   = this.truncateDataValues(data);
+        data                   = this.normalizeDataValues(data);
         let memo_id            = await this.createMemo(data['MEMO']);
         let status_id          = await this.createStatus(data['STATUS']);
         let action_index       = data['ACTION_INDEX'];
@@ -3639,8 +3619,7 @@ class Database {
 
     // Create/Update record in `order_cancels` table
     async createOrderCancel(data){
-        // Normalize data
-        data                  = this.truncateDataValues(data);
+        data                  = this.normalizeDataValues(data);
         let memo_id           = await this.createMemo(data['MEMO']);
         let status_id         = await this.createStatus(data['STATUS']);
         let action_index      = data['ACTION_INDEX'];
@@ -3677,8 +3656,7 @@ class Database {
 
     // Create/Update record in `order_matches` table
     async createOrderMatch(data, order, match){
-        // Normalize data
-        data                  = this.truncateDataValues(data);
+        data                  = this.normalizeDataValues(data);
         let give_coin_id      = await this.createCoin(order['GIVE_COIN']);
         let give_tick_id      = await this.createTicker(order['GIVE_TICK']);
         let get_coin_id       = await this.createCoin(order['GET_COIN']);
@@ -5094,9 +5072,7 @@ class Database {
 
     // Create/Update record in `dispenses` table
     async createDispense(data){
-        // Normalize data
-        data = this.truncateDataValues(data);
-        // Normalize data
+        data                       = this.normalizeDataValues(data);
         let give_coin_id           = await this.createCoin(data['GIVE_COIN']);
         let give_tick_id           = await this.createTicker(data['GIVE_TICK']);
         let get_coin_id            = await this.createCoin(data['GET_COIN']);
@@ -5145,14 +5121,7 @@ class Database {
 
     // Create/Update record in `dispensers` table
     async createDispenser(data){
-        // Normalize data
-        data = this.truncateDataValues(data);
-        // Standardize LIST values to numeric or NULL
-        for(let list of this.config['LIST_FIELDS'] ){
-            if(this.util.isNull(data[list]) || !this.util.isNumeric(data[list]))
-                delete data[list];
-        }
-        // Normalize data
+        data               = this.normalizeDataValues(data);
         let give_coin_id   = await this.createCoin(data['GIVE_COIN']);
         let give_tick_id   = await this.createTicker(data['GIVE_TICK']);
         let get_coin_id    = await this.createCoin(data['GET_COIN']);
@@ -5329,8 +5298,7 @@ class Database {
 
     // Create/Update record in `dispenser_edits` table
     async createDispenserEdit(data){
-        // Normalize data
-        data                       = this.truncateDataValues(data);
+        data                       = this.normalizeDataValues(data);
         let memo_id                = await this.createMemo(data['MEMO']);
         let status_id              = await this.createStatus(data['STATUS']);
         let action_index           = data['ACTION_INDEX'];
@@ -5422,8 +5390,7 @@ class Database {
 
     // Create/Update record in `dispenser_closes` table
     async createDispenserClose(data){
-        // Normalize data
-        data                       = this.truncateDataValues(data);
+        data                       = this.normalizeDataValues(data);
         let status_id              = await this.createStatus(data['STATUS']);
         let action_index           = data['ACTION_INDEX'];
         let dispenser_action_index = data['DISPENSER_ACTION_INDEX'];
@@ -5458,8 +5425,7 @@ class Database {
 
     // Create/Update record in `dispenser_cancels` table
     async createDispenserCancel(data){
-        // Normalize data
-        data                       = this.truncateDataValues(data);
+        data                       = this.normalizeDataValues(data);
         let memo_id                = await this.createMemo(data['MEMO']);
         let status_id              = await this.createStatus(data['STATUS']);
         let action_index           = data['ACTION_INDEX'];
