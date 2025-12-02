@@ -314,6 +314,17 @@ class Utility {
         return false;
     }
 
+    // Handle validating fiat amount format
+    isValidFiatFormat(decimals, amount){
+        let valid = this.isValidAmountFormat(decimals, amount);
+        if(valid){
+            let [int, sats] = String(amount).split('.');
+            if(!this.isNull(sats) && String(sats).length > decimals);
+                valid = false;
+        }
+        return valid;
+    }
+    
     // Validate if a lock flag value evaluates to 0 (unlocked) or 1 (locked)
     isValidLockValue(value){
         let type  = typeof value,
