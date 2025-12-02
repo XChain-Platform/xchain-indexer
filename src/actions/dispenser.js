@@ -60,12 +60,6 @@ class Dispenser {
         this.formats[1] = 'VERSION|DISPENSER_ACTION_INDEX|MEMO';
         this.formats[2] = 'VERSION|DISPENSER_ACTION_INDEX|GIVE_ESCROW|EXPIRATION|ALLOW_LIST|BLOCK_LIST|MEMO';
 
-        // Define lists of various fields
-        this.fieldList = {};
-
-        // Define list of NUMBER fields (used to convert values from string to number)
-        this.fieldList['NUMBER'] = ['GIVE_AMOUNT', 'GIVE_ESCROW', 'GET_AMOUNT', 'FIAT_AMOUNT', 'EXPIRATION', 'ALLOW_LIST', 'BLOCK_LIST', 'DISPENSER_ACTION_INDEX'];
-
         // Define array of supported list types (1=Tick, 2=Address)
         this.listTypes = [2];
     }
@@ -92,11 +86,9 @@ class Dispenser {
             data = this.util.setActionParams(data, params, this.formats, format);
 
         // Convert NUMBER fields from string value to number value so comparisons are mathematical 
-        for(let name of this.fieldList['NUMBER']){
-            let value = data[name];
-            if(!this.util.isNull(value))
-                data[name] = this.util.bcnum(value);
-        }
+        if(!error)
+            data = this.util.setNumberFormats(data);
+
         // Get information on a dispenser given the COIN network and DISPENSER_ACTION_INDEX
         var dispenserInfo = false;
         if(format==1 || format==2)
@@ -130,7 +122,7 @@ class Dispenser {
         let dispenser = structuredClone(data);
 
         /*****************************************************************
-         * TICK & COIN Validations
+         * TICK / COIN / FIAT Validations
          ****************************************************************/
 
         // Validate GIVE_COIN is valid
@@ -157,6 +149,10 @@ class Dispenser {
         // Validate GET_TICK exists
         if(!error && format==0 && !this.util.isNull(data['GET_TICK']) && !getTokenInfo)
             error = 'invalid: GET_TICK (unknown)';
+
+        // Validate FIAT_CODE is valid
+        if(!error && format==0 && !this.util.isNull(data['FIAT_CODE']) && this.util.isNull(this.config['FIATS'][data['FIAT_CODE']]))
+            error = 'invalid: FIAT_CODE (unsupported FIAT)';
 
         /*****************************************************************
          * FORMAT Validations
@@ -185,6 +181,11 @@ class Dispenser {
         // Validate that EXPIRATION is an integer
         if(!error && !this.util.isNull(data['EXPIRATION']) && (!this.util.isNumeric(data['EXPIRATION']) || !this.util.isInteger(data['EXPIRATION'])))
             error = "invalid: EXPIRATION (format)";
+
+        // Validate that FIAT_AMOUNT is in 0.00 format
+        if(!error && format==0 && !this.util.isNull(data['FIAT_CODE']) && !this.util.isNull(data['FIAT_AMOUNT']) && !this.util.isValidFiatFormat(2, data['FIAT_AMOUNT']))
+            error = 'invalid: FIAT_AMOUNT (format)';
+
 
         /*****************************************************************
          * General Validations
