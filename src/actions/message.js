@@ -51,13 +51,6 @@ class Message {
         this.formats[1] = 'VERSION|DESTINATION|ENCRYPTION_METHOD|ENCRYPTION_KEY';
         this.formats[2] = 'VERSION|DESTINATION|ENCRYPTED_MESSAGE';
         this.formats[3] = 'VERSION|DESTINATION|PLAINTEXT_MESSAGE';
-
-        // Define lists of various fields
-        this.fieldList = {};
-
-        // Define list of NUMBER fields (used to convert values from string to number)
-        this.fieldList['NUMBER'] = ['ENCRYPTION_METHOD'];
-
     }
 
     // Handle parsing the ADDRESS transaction
@@ -81,12 +74,9 @@ class Message {
         if(!error)
             data = this.util.setActionParams(data, params, this.formats, format);
 
-        // Convert NUMBER fields from string value to number value so comparisons are mathematical
-        for(let name of this.fieldList['NUMBER']){
-            let value = data[name];
-            if(!this.util.isNull(value) && this.util.isNumeric(value))
-                data[name] = this.util.bcnum(value);
-        }
+        // Convert NUMBER fields from string value to number value so comparisons are mathematical 
+        if(!error)
+            data = this.util.setNumberFormats(data);
 
         // TODO : Make sure that ENCRYPTION_METHOD is a numeric value or null (stop storing 'u' in database when undefined)
 

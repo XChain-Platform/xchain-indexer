@@ -45,13 +45,6 @@ class Sleep {
         this.formats = {};
         this.formats[0] = 'VERSION|RESUME_BLOCK|MEMO';
         this.formats[1] = 'VERSION|RESUME_BLOCK|TICK|MEMO';
-
-        // Define lists of various fields
-        this.fieldList = {};
-
-        // Define list of NUMBER fields (used to convert values from string to number)
-        this.fieldList['NUMBER'] = ['RESUME_BLOCK'];
-
     }
 
     // Handle parsing the ADDRESS transaction
@@ -74,11 +67,8 @@ class Sleep {
             data = this.util.setActionParams(data, params, this.formats, format);
 
         // Convert NUMBER fields from string value to number value so comparisons are mathematical 
-        for(let name of this.fieldList['NUMBER']){
-            let value = data[name];
-            if(!this.util.isNull(value) && this.util.isNumeric(value))
-                data[name] = this.util.bcnum(value);
-        }
+        if(!error)
+            data = this.util.setNumberFormats(data);
 
         // Get information on token (if any)
         let tokenInfo = await this.indexerDb.getTokenInfo(data['TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);

@@ -50,13 +50,6 @@ class Send {
         this.formats[1] = 'VERSION|TICK|AMOUNT|DESTINATION|AMOUNT|DESTINATION|MEMO';
         this.formats[2] = 'VERSION|TICK|AMOUNT|DESTINATION|TICK|AMOUNT|DESTINATION|MEMO';
         this.formats[3] = 'VERSION|TICK|AMOUNT|DESTINATION|MEMO|TICK|AMOUNT|DESTINATION|MEMO';
-
-        // Define lists of various fields
-        this.fieldList = {};
-
-        // Define list of NUMBER fields (used to convert values from string to number)
-        this.fieldList['NUMBER'] = ['AMOUNT'];
-
     }
 
     // Handle parsing the SEND transaction
@@ -170,6 +163,10 @@ class Send {
             send['AMOUNT']      = info[1];
             send['DESTINATION'] = info[2];
             send['MEMO']        = info[3];
+
+            // Convert NUMBER fields from string value to number value so comparisons are mathematical 
+            if(!error)
+                send = this.util.setNumberFormats(send);
 
             // Get information on token
             let tokenInfo = ticks[send['TICK']];

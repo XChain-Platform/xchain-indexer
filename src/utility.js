@@ -459,6 +459,16 @@ class Utility {
         return fee;
     }
 
+    // Convert NUMBER fields from string value to number value so comparisons are mathematical 
+    setNumberFormats(data){
+        for(let name of this.config['NUMBER_FIELDS']){
+            let value = data[name];
+            if(!this.isNull(value))
+                data[name] = this.bcnum(value);
+        }
+        return data;
+    }
+
     // Calculate Transaction fee based on number of database hits
     getExpirationFee(data, info){
         let fee    = 0,

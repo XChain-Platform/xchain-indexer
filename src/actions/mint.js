@@ -43,13 +43,6 @@ class Mint {
         // Define list of known FORMATS
         this.formats = {};
         this.formats[0] = 'VERSION|TICK|AMOUNT|DESTINATION|MEMO';
-
-        // Define lists of various fields
-        this.fieldList = {};
-
-        // Define list of NUMBER fields (used to convert values from string to number)
-        this.fieldList['NUMBER'] = ['AMOUNT'];
-
     }
 
     // Handle parsing the MINT transaction
@@ -70,15 +63,12 @@ class Mint {
         if(!error)
             data = this.util.setActionParams(data, params, this.formats, format);
 
+        // Convert NUMBER fields from string value to number value so comparisons are mathematical 
+        if(!error)
+            data = this.util.setNumberFormats(data);
+
         // Clone the raw data for storage in mints table
         let mint = structuredClone(data);
-
-        // Convert NUMBER fields from string value to number value so comparisons are mathematical 
-        for(let name of this.fieldList['NUMBER']){
-            let value = data[name];
-            if(!this.util.isNull(value))
-                data[name] = this.util.bcnum(value);
-        }
 
         // Get information on token
         let tokenInfo = await this.indexerDb.getTokenInfo(data['TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);

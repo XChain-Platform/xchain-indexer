@@ -53,13 +53,6 @@ class Airdrop {
 
         // Define array of list types (1=Tick, 2=Address)
         this.listTypes = [1,2];
-
-        // Define lists of various fields
-        this.fieldList = {};
-
-        // Define list of NUMBER fields (used to convert values from string to number)
-        this.fieldList['NUMBER'] = ['AMOUNT', 'LIST_ACTION_INDEX'];
-
     }
 
     // Handle parsing the AIRDROP transaction
@@ -168,11 +161,8 @@ class Airdrop {
             let tokenInfo = ticks[airdrop['TICK']];
 
             // Convert NUMBER fields from string value to number value so comparisons are mathematical 
-            for(let name of this.fieldList['NUMBER']){
-                let value = data[name];
-                if(!this.util.isNull(value) && this.util.isNumeric(value))
-                    data[name] = this.util.bcnum(value);
-            }
+            if(!error)
+                data = this.util.setNumberFormats(data);
 
             /*****************************************************************
              * TICK Validations

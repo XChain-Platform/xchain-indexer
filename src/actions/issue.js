@@ -77,9 +77,6 @@ class Issue {
         // Define lists of various fields
         this.fieldList = {};
 
-        // Define list of NUMBER fields (used to convert values from string to number)
-        this.fieldList['NUMBER'] = ['MAX_SUPPLY', 'MAX_MINT', 'DECIMALS', 'MINT_SUPPLY', 'TRANSFER_SUPPLY', 'CALLBACK_BLOCK', 'CALLBACK_AMOUNT', 'MINT_ADDRESS_MAX', 'MINT_START_BLOCK', 'MINT_STOP_BLOCK', 'ALLOW_LIST', 'BLOCK_LIST'];
-
         // Define list of AMOUNT, LOCK fields (used in validations)
         this.fieldList['AMOUNT'] = ['MAX_SUPPLY', 'MAX_MINT', 'MINT_SUPPLY', 'CALLBACK_AMOUNT', 'MINT_ADDRESS_MAX', 'MINT_START_BLOCK', 'MINT_STOP_BLOCK'];
         this.fieldList['LOCK']   = ['LOCK_MAX_SUPPLY', 'LOCK_MINT', 'LOCK_MINT_SUPPLY', 'LOCK_MAX_MINT', 'LOCK_DESCRIPTION', 'LOCK_RUG', 'LOCK_SLEEP', 'LOCK_CALLBACK'];
@@ -112,11 +109,8 @@ class Issue {
         let issue = structuredClone(data);
 
         // Convert NUMBER fields from string value to number value so comparisons are mathematical 
-        for(let name of this.fieldList['NUMBER']){
-            let value = data[name];
-            if(!this.util.isNull(value))
-                data[name] = this.util.bcnum(value);
-        }
+        if(!error)
+            data = this.util.setNumberFormats(data);
 
         // Build out arrays of allowed characters and tick characters
         let allowedCharacters = String(this.config['TICK_CHARACTERS']).split('');
