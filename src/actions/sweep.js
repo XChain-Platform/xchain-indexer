@@ -44,7 +44,6 @@ class Sweep {
         // Define list of known FORMATS
         this.formats = {};
         this.formats[0] = 'VERSION|DESTINATION|BALANCES|OWNERSHIPS|MEMO';
-
     }
 
     // Handle parsing the SWEEP transaction
@@ -64,6 +63,10 @@ class Sweep {
         // Parse PARAMS using given VERSION format and update transaction data object
         if(!error)
             data = this.util.setActionParams(data, params, this.formats, format);
+
+        // Convert NUMBER fields from string value to number value so comparisons are mathematical 
+        if(!error)
+            data = this.util.setNumberFormats(data);
 
         // Get source address balances, preferences, and token ownerships
         let balances    = await this.indexerDb.getAddressBalances(data['SOURCE'], null, data['BLOCK_INDEX'], data['ACTION_INDEX']);

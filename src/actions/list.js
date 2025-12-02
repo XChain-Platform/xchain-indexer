@@ -52,12 +52,6 @@ class List {
 
         // Define array of edit types (1=Add, 2=Remove)
         this.editTypes = [1,2];
-
-        // Define lists of various fields
-        this.fieldList = {};
-
-        // Define list of NUMBER fields (used to convert values from string to number)
-        this.fieldList['NUMBER'] = ['TYPE', 'EDIT', 'LIST_ACTION_INDEX'];
     }
 
     // Handle parsing the LIST transaction
@@ -82,11 +76,8 @@ class List {
             data = this.util.setActionParams(data, params, this.formats, format);
 
         // Convert NUMBER fields from string value to number value so comparisons are mathematical 
-        for(let name of this.fieldList['NUMBER']){
-            let value = data[name];
-            if(!this.util.isNull(value))
-                data[name] = this.util.bcnum(value);
-        }
+        if(!error)
+            data = this.util.setNumberFormats(data);
 
         // Define some placeholders
         let type    = null;

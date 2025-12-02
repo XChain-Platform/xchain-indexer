@@ -53,13 +53,6 @@ class Broadcast {
         this.formats[1] = 'VERSION|MESSAGE|VALUE|FEE|MEMO';
         this.formats[2] = 'VERSION|MESSAGE|FEE|MEMO';
         this.formats[3] = 'VERSION|BROADCAST_ACTION_INDEX|VALUE|MEMO';
-
-        // Define lists of various fields
-        this.fieldList = {};
-
-        // Define list of NUMBER fields (used to convert values from string to number)
-        this.fieldList['NUMBER'] = ['BROADCAST_ACTION_INDEX', 'VALUE', 'FEE'];
-
     }
 
     // Handle parsing the ADDRESS transaction
@@ -84,11 +77,8 @@ class Broadcast {
             data = this.util.setActionParams(data, params, this.formats, format);
 
         // Convert NUMBER fields from string value to number value so comparisons are mathematical 
-        for(let name of this.fieldList['NUMBER']){
-            let value = data[name];
-            if(!this.util.isNull(value) && this.util.isNumeric(value))
-                data[name] = this.util.bcnum(value);
-        }
+        if(!error)
+            data = this.util.setNumberFormats(data);
 
         /*****************************************************************
          * FORMAT Validations

@@ -59,13 +59,6 @@ class Swap {
 
         // Define array of acceptable list types (2=Address)
         this.listTypes = [2];
-
-        // Define lists of various fields
-        this.fieldList = {};
-
-        // Define list of NUMBER fields (used to convert values from string to number)
-        this.fieldList['NUMBER'] = ['GIVE_AMOUNT', 'GET_AMOUNT', 'EXPIRATION', 'ALLOW_LIST', 'BLOCK_LIST', 'SWAP_ACTION_INDEX'];
-
     }
 
     // Handle parsing the SWAP transaction
@@ -87,11 +80,8 @@ class Swap {
             data = this.util.setActionParams(data, params, this.formats, format);
 
         // Convert NUMBER fields from string value to number value so comparisons are mathematical 
-        for(let name of this.fieldList['NUMBER']){
-            let value = data[name];
-            if(!this.util.isNull(value))
-                data[name] = this.util.bcnum(value);
-        }
+        if(!error)
+            data = this.util.setNumberFormats(data);
 
         // Get information on the GIVE and GET tokens
         let giveTokenInfo = false;

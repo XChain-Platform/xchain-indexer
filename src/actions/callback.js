@@ -42,12 +42,6 @@ class Callback {
         // Define list of known FORMATS
         this.formats = {};
         this.formats[0] = 'VERSION|TICK|MEMO';
-
-        // Define lists of various fields
-        this.fieldList = {};
-
-        // Define list of NUMBER fields (used to convert values from string to number)
-        this.fieldList['NUMBER'] = ['CALLBACK_BLOCK','CALLBACK_AMOUNT'];
     }
 
     // Handle parsing the CALLBACK transaction
@@ -93,11 +87,7 @@ class Callback {
 
         // Convert NUMBER fields from string value to number value so comparisons are mathematical
         if(tokenInfo){
-            for(let name of this.fieldList['NUMBER']){
-                let value = tokenInfo[name];
-                if(!this.util.isNull(value))
-                    tokenInfo[name] = this.util.bcnum(value);
-            }
+            tokenInfo = this.util.setNumberFormats(tokenInfo);
             // Populate callback object with callback data
             callback['CALLBACK_TICK']   = tokenInfo['CALLBACK_TICK'];
             callback['CALLBACK_AMOUNT'] = tokenInfo['CALLBACK_AMOUNT'];

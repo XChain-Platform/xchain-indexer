@@ -120,6 +120,43 @@ module.exports = {
         config['MAX_MESSAGE_LENGTH']     = 1048576; // 1 MB = 1,048,576 Characters
         config['MAX_MESSAGE_KEY_LENGTH'] = 1048576; // 1 MB = 1,048,576 Characters
 
+        // Define list of NUMBER fields
+        config['NUMBER_FIELDS'] = [
+            'ALLOW_LIST', 
+            'AMOUNT', 
+            'BALANCES',
+            'BLOCK_LIST', 
+            'BROADCAST_ACTION_INDEX',
+            'CALLBACK_AMOUNT', 
+            'CALLBACK_BLOCK', 
+            'COIN1_ACTION_INDEX',
+            'COIN2_ACTION_INDEX',
+            'DECIMALS', 
+            'DISPENSER_ACTION_INDEX',
+            'EDIT',
+            'ENCRYPTION_METHOD',
+            'EXPIRATION', 
+            'FEE',
+            'FIAT_AMOUNT', 
+            'GET_AMOUNT', 
+            'GIVE_AMOUNT', 
+            'GIVE_ESCROW', 
+            'LIST_ACTION_INDEX',
+            'MAX_SUPPLY', 
+            'MAX_MINT', 
+            'MINT_ADDRESS_MAX', 
+            'MINT_START_BLOCK', 
+            'MINT_STOP_BLOCK',
+            'MINT_SUPPLY', 
+            'ORDER_ACTION_INDEX',
+            'OWNERSHIPS',
+            'RESUME_BLOCK',
+            'SWAP_ACTION_INDEX',
+            'TRANSFER_SUPPLY', 
+            'TYPE', 
+            'VALUE',
+        ];
+
         // Define list of LOCK fields
         config['LOCK_FIELDS'] = [
             'LOCK_MAX_SUPPLY',

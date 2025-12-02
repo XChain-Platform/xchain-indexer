@@ -44,12 +44,6 @@ class Dividend {
         // Define list of known FORMATS
         this.formats = {};
         this.formats[0] = 'VERSION|TICK|DIVIDEND_TICK|AMOUNT|MEMO';
-
-        // Define lists of various fields
-        this.fieldList = {};
-
-        // Define list of NUMBER fields (used to convert values from string to number)
-        this.fieldList['NUMBER'] = ['AMOUNT'];
     }
 
     // Handle parsing the DIVIDEND transaction
@@ -74,11 +68,8 @@ class Dividend {
         let dividend = structuredClone(data);
 
         // Convert NUMBER fields from string value to number value so comparisons are mathematical 
-        for(let name of this.fieldList['NUMBER']){
-            let value = data[name];
-            if(!this.util.isNull(value))
-                data[name] = this.util.bcnum(value);
-        }
+        if(!error)
+            data = this.util.setNumberFormats(data);
 
         // Get source address balances and preferences, as well as TICK holders list
         let balances    = await this.indexerDb.getAddressBalances(data['SOURCE'], null, data['BLOCK_INDEX'], data['ACTION_INDEX']);

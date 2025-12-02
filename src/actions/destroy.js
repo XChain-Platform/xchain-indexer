@@ -47,13 +47,6 @@ class Destroy {
         this.formats[0] = 'VERSION|TICK|AMOUNT|MEMO';
         this.formats[1] = 'VERSION|TICK|AMOUNT|TICK|AMOUNT|MEMO';
         this.formats[2] = 'VERSION|TICK|AMOUNT|MEMO|TICK|AMOUNT|MEMO';
-
-        // Define lists of various fields
-        this.fieldList = {};
-
-        // Define list of NUMBER fields (used to convert values from string to number)
-        this.fieldList['NUMBER'] = ['AMOUNT'];
-
     }
 
     // Handle parsing the DESTROY transaction
@@ -154,6 +147,10 @@ class Destroy {
             destroy['TICK']   = info[0];
             destroy['AMOUNT'] = info[1];
             destroy['MEMO']   = info[2];
+
+            // Convert NUMBER fields from string value to number value so comparisons are mathematical 
+            if(!error)
+                destroy = this.util.setNumberFormats(destroy);
 
             // Get information on token
             let tokenInfo = ticks[destroy['TICK']];
