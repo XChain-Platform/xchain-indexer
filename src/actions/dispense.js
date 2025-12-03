@@ -49,6 +49,10 @@ class Dispense {
         // Lookup any dispensers that are triggered by this action
         let action_indexes = await this.indexerDb.findMatchingDispensers(data);
 
+        // If we found no valid dispensers, delete the action_index that we created for this DISPENSE
+        if(action_indexes.length==0)
+            await this.indexerDb.deleteActionIndex(data['ACTION_INDEX']);
+
         // Loop through dispensers and generate a list of valid DISPENSE actions
         // Note: Dispense transactions which do not match an valid dispenser are ignored
         for(let action_index of action_indexes){
