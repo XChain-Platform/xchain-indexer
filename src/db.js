@@ -671,7 +671,7 @@ class Database {
         let results = await this.doQuery(query);
         if(results.length > 0)
             idx = Number(results[0].action_index);
-        // Increase current action__index by 1 to get the next action_index
+        // Increase current action_index by 1 to get the next action_index
         idx++;
         return idx;
     }
@@ -734,6 +734,14 @@ class Database {
         }
     }
 
+    // Delete records in the 'actions' table
+    async deleteActionIndex(action_index){
+        if(action_index){
+            let query   = "DELETE FROM actions WHERE action_index=?";
+            let args    = [action_index];
+            let results = await this.doQuery(query, args);
+        }
+    }
 
     // Lookup a record in the `index_tickers` table and return record tick
     async getTicker(tick_id){
