@@ -351,29 +351,48 @@ class Database {
         return false;
     }
 
-    // Handle getting block transaction data for a given block from the Decoder
+    // Handle getting block transaction data for a given block from xchain-decoder database
     async getDecoderBlockData(block_index){
-        // XChain-decoder SQL
+        let data = [];
         let query = `SELECT
                         t1.data,
                         t2.hash as tx_hash,
                         a1.address as source,
-                        a1.address as destination,
+                        a2.address as destination,
                         t1.amount,
                         t1.block_index,
-                        b1.block_time
+                        b1.block_time,
+                        t3.vout,
+                        t3.amount as output_amount,
+                        a3.address as output_destination
                     FROM
                         transactions t1
-                        INNER JOIN blocks             b1 ON (b1.block_index=t1.block_index)
-                        INNER JOIN index_transactions t2 ON (t2.id=t1.tx_hash_id)
-                        INNER JOIN index_addresses    a1 ON (a1.id=t1.source_id)
-                        LEFT  JOIN index_addresses    a2 ON (a2.id=t1.destination_id)
+                        INNER JOIN blocks              b1 ON (b1.block_index=t1.block_index)
+                        INNER JOIN index_transactions  t2 ON (t2.id=t1.tx_hash_id)
+                        LEFT  JOIN transaction_outputs t3 ON (t3.tx_index=t1.tx_index)
+                        LEFT  JOIN index_addresses     a1 ON (a1.id=t1.source_id)
+                        LEFT  JOIN index_addresses     a2 ON (a2.id=t1.destination_id)
+                        LEFT  JOIN index_addresses     a3 ON (a3.id=t3.destination_id)
                     WHERE 
-                        t1.block_index=? 
+                        t1.block_index=?
                     ORDER BY 
-                        t1.tx_index ASC`;
+                        t1.tx_index ASC, 
+                        t3.vout ASC`;
         let results = await this.doQuery(query, [block_index]);
-        return results;
+        if(results.length > 0){
+            for(let row of results){
+                if(!this.util.isNull(row.output_destination))
+                    row.destination = row.output_destination;
+                if(!this.util.isNull(row.output_amount))
+                    row.amount = row.output_amount;
+                if(this.util.isNull(row.vout))
+                    row.vout = 0;
+                delete row.output_destination;
+                delete row.output_amount;
+                data.push(row);
+            }
+        }
+        return data;
     }
 
     // Handle getting block time for a given block
@@ -662,6 +681,7 @@ class Database {
         let action_index  = null;
         let block_index   = data['BLOCK_INDEX'];
         let tx_index      = data['TX_INDEX'];
+        let tx_vout       = data['TX_VOUT'];
         let action_format = data['FORMAT'];
         let action_id     = await this.createAction(data['ACTION']);
         let query = `SELECT
@@ -671,9 +691,10 @@ class Database {
                     WHERE
                         a.block_index=? AND 
                         a.tx_index=? AND 
+                        a.tx_vout=? AND
                         a.action_id=? AND
                         a.action_format=?`;
-        let args = [block_index, tx_index, action_id, action_format];
+        let args = [block_index, tx_index, tx_vout, action_id, action_format];
         let results = await this.doQuery(query, args);
         if(results.length > 0)
             action_index = Number(results[0].action_index);
@@ -693,10 +714,11 @@ class Database {
             action_index      = await this.getNextActionIndex();
             let block_index   = data['BLOCK_INDEX'];
             let tx_index      = data['TX_INDEX'];
+            let tx_vout       = data['TX_VOUT'];
             let action_format = data['FORMAT'];
             let action_id     = await this.createAction(data['ACTION']);
-            let query         = "INSERT INTO actions (action_index, block_index, tx_index, action_id, action_format) values (?, ?, ?, ?, ?)";
-            let args          = [action_index, block_index, tx_index, action_id, action_format];
+            let query         = "INSERT INTO actions (action_index, block_index, tx_index, tx_vout, action_id, action_format) values (?, ?, ?, ?, ?, ?)";
+            let args          = [action_index, block_index, tx_index, tx_vout, action_id, action_format];
             let results       = await this.doQuery(query, args);
         }
         return action_index;
@@ -5636,7 +5658,14 @@ class Database {
         let tick_id        = await this.createTicker(data['COIN_TICK']);
         let destination_id = await this.createAddress(data['COIN_DESTINATION']);
         let coin_amount    = this.util.bcnum(data['COIN_AMOUNT']);
+        let args           = [coin_id, destination_id];
+        let where          = '';
         let dispenses      = [];
+        // Include the ticker in the query if we have one
+        if(!this.util.isNull(tick_id)){
+            where = ' AND d1.get_tick_id=?';
+            args.push(tick_id);
+        }
         let query  = `SELECT
                             d1.action_index,
                             d1.get_amount
@@ -5657,9 +5686,8 @@ class Database {
                             s2.status='valid' AND 
                             s3.status IN ('open', 'cancelling') AND 
                             d1.get_coin_id=? AND
-                            d1.get_tick_id=? AND
-                            d1.get_address_id=?`;
-        let args = [coin_id, tick_id, destination_id];
+                            d1.get_address_id=?` + where + `
+                        ORDER BY d1.action_index ASC`;
         let results = await this.doQuery(query, args);
         if(results.length > 0){
             for(let row of results){

@@ -132,7 +132,7 @@ class Actions {
         let amount      = tx.amount;
         let tx_hash     = tx.tx_hash;
         let tx_data     = tx.data;
-        let tx_vout     = (this.util.isNull(tx.vout)) ? tx.vout : 0;
+        let tx_vout     = tx.vout;
         let coin        = this.config['COIN'];
         let block_index = tx.block_index;
         let block_time  = tx.block_time;
