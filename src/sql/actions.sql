@@ -5,6 +5,7 @@ CREATE TABLE actions (
   action_index  BIGINT UNSIGNED NOT NULL, -- Unique index for every action
   block_index   BIGINT UNSIGNED NOT NULL, -- block_index from the blocks table
   tx_index      BIGINT UNSIGNED,          -- tx_index from the transactions table
+  tx_vout       BIGINT UNSIGNED,          -- transaction output index
   action_id     BIGINT UNSIGNED NOT NULL, -- id of record in index_actions table
   action_format TINYINT UNSIGNED          -- FORMAT of action data (0-255)
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;

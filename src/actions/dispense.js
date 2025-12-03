@@ -50,6 +50,7 @@ class Dispense {
         let action_indexes = await this.indexerDb.findMatchingDispensers(data);
 
         // Loop through dispensers and generate a list of valid DISPENSE actions
+        // Note: Dispense transactions which do not match an valid dispenser are ignored
         for(let action_index of action_indexes){
 
             // Reset the error to false for each dispenser
@@ -170,85 +171,81 @@ class Dispense {
             });
         }
 
-        // Only proceed if we have a valid dispense
-        if(dispenses){
+        // Loop through dispenses and process each
+        for(let idx in dispenses){
 
-            // Loop through dispenses and process each
-            for(let idx in dispenses){
+            // Reset the address/tickers/transactions list on each parse
+            this.util.resetLists();
 
-                // Reset the address/tickers/transactions list on each parse
-                this.util.resetLists();
+            // Store info on the dispense and dispenser
+            let dispense  = dispenses[idx];
+            let dispenser = dispenserInfo[dispense['DISPENSER_ACTION_INDEX']];
 
-                // Store info on the dispense and dispenser
-                let dispense  = dispenses[idx];
-                let dispenser = dispenserInfo[dispense['DISPENSER_ACTION_INDEX']];
+            // Add Addresses and ticks to the addresses list
+            this.util.addAddressTicker(dispense['DESTINATION'], dispenser['GIVE_TICK']);
+            this.util.addAddressTicker(dispenser['GET_ADDRESS'],dispenser['GET_TICK']);
 
-                // Add Addresses and ticks to the addresses list
-                this.util.addAddressTicker(dispense['DESTINATION'], dispenser['GIVE_TICK']);
-                this.util.addAddressTicker(dispenser['GET_ADDRESS'],dispenser['GET_TICK']);
+            // Set flag to determine if we create new ACTION_INDEX or use existing one
+            // Note: Use existing ACTION_INDEX for first DISPSENSE on a native COIN trigger (BTC, LTC. DOGE)
+            let createActionIndex = (idx==0 && !this.util.isNull(data['ACTION_INDEX'])) ? false : true;
 
-                // Set flag to determine if we create new ACTION_INDEX or use existing one
-                // Note: Use existing ACTION_INDEX for first DISPSENSE on a native COIN trigger (BTC, LTC. DOGE)
-                let createActionIndex = (idx==0 && !this.util.isNull(data['ACTION_INDEX'])) ? false : true;
+            // Create a record of this DISPENSE action in the actions table (if it does not already exist)
+            dispense['ACTION_INDEX'] = (createActionIndex) ? await this.indexerDb.createActionIndex(data, true) : data['ACTION_INDEX'];
 
-                // Create a record of this DISPENSE action in the actions table (if it does not already exist)
-                dispense['ACTION_INDEX'] = (createActionIndex) ? await this.indexerDb.createActionIndex(data, true) : data['ACTION_INDEX'];
+            // Update GIVE_REMAINING amount
+            dispenser['GIVE_REMAINING'] = this.util.bcsub(dispenser['GIVE_REMAINING'], dispense['GIVE_AMOUNT'], 64);
 
-                // Update GIVE_REMAINING amount
-                dispenser['GIVE_REMAINING'] = this.util.bcsub(dispenser['GIVE_REMAINING'], dispense['GIVE_AMOUNT'], 64);
+            // Determine final status
+            let error  = (dispense['STATUS']) ? dispense['STATUS'] : false;
+            let status = (error) ? error : 'valid';
+            dispense['STATUS'] = status;
 
-                // Determine final status
-                let error  = (dispense['STATUS']) ? dispense['STATUS'] : false;
-                let status = (error) ? error : 'valid';
-                dispense['STATUS'] = status;
+            // Print status message
+            console.log("\t DISPENSE : " + dispense['GIVE_AMOUNT'] + ' ' + dispenser['GIVE_TICK'] + ' : ' + dispense['STATUS']);
 
-                // Print status message
-                console.log("\t DISPENSE : " + dispense['GIVE_AMOUNT'] + ' ' + dispenser['GIVE_TICK'] + ' : ' + dispense['STATUS']);
+            // Create record in the dispenses table
+            await this.indexerDb.createDispense(dispense);
 
-                // Create record in the dispenses table
-                await this.indexerDb.createDispense(dispense);
+            // Process the dispense
+            if(status=='valid'){
 
-                // Process the dispense
-                if(status=='valid'){
+                // Array of credits, debits, and escrows
+                let credits = [],
+                    debits  = [],
+                    escrows = [];
 
-                    // Array of credits, debits, and escrows
-                    let credits = [],
-                        debits  = [],
-                        escrows = [];
-
-                    // Debit GIVE_TICK from escrows and credit it to the SOURCE address
-                    if(dispense['GIVE_AMOUNT'] > 0){
-                        escrows.push([dispense['GIVE_TICK'], -dispense['GIVE_AMOUNT'], dispense['DESTINATION']]);
-                        credits.push([dispense['GIVE_TICK'],  dispense['GIVE_AMOUNT'], dispense['DESTINATION']]);
-                    }
-
-                    // Process any transaction ledger changes (credits / debits / escrows)
-                    await this.util.processTransactionLedgerChanges(this.indexerDb, dispense, credits, debits, escrows);
-
+                // Debit GIVE_TICK from escrows and credit it to the SOURCE address
+                if(dispense['GIVE_AMOUNT'] > 0){
+                    escrows.push([dispense['GIVE_TICK'], -dispense['GIVE_AMOUNT'], dispense['DESTINATION']]);
+                    credits.push([dispense['GIVE_TICK'],  dispense['GIVE_AMOUNT'], dispense['DESTINATION']]);
                 }
 
-                // Get a list of addresses
-                let addresses = Object.keys(this.util.getAddressesList());
+                // Process any transaction ledger changes (credits / debits / escrows)
+                await this.util.processTransactionLedgerChanges(this.indexerDb, dispense, credits, debits, escrows);
 
-                // Update address balances
-                await this.indexerDb.updateBalances(addresses);
-
-                // Create action mappings
-                await this.mapper.createMappings(dispense);
-
-                // Close the dispenser if GIVE_REMAINING is less than GIVE_AMOUNT
-                if(status=='valid' && this.util.bcformat(dispenser['GIVE_REMAINING'],64) < this.util.bcformat(dispense['GIVE_AMOUNT'],64)){
-                    let action = 'DISPENSER_CLOSE';
-                    let data = {};
-                    data['ACTION']                 = action;
-                    data['BLOCK_INDEX']            = block_index;
-                    data['BLOCK_TIME']             = block_time;
-                    data['TX_INDEX']               = tx_index;
-                    data['DISPENSER_ACTION_INDEX'] = dispenser['ACTION_INDEX'];
-                    data['DISPENSER_STATUS']       = 'empty';
-                    await this.actions.processAction(action, null, data, null);
-                }                    
             }
+
+            // Get a list of addresses
+            let addresses = Object.keys(this.util.getAddressesList());
+
+            // Update address balances
+            await this.indexerDb.updateBalances(addresses);
+
+            // Create action mappings
+            await this.mapper.createMappings(dispense);
+
+            // Close the dispenser if GIVE_REMAINING is less than GIVE_AMOUNT
+            if(status=='valid' && this.util.bcformat(dispenser['GIVE_REMAINING'],64) < this.util.bcformat(dispense['GIVE_AMOUNT'],64)){
+                let action = 'DISPENSER_CLOSE';
+                let data = {};
+                data['ACTION']                 = action;
+                data['BLOCK_INDEX']            = block_index;
+                data['BLOCK_TIME']             = block_time;
+                data['TX_INDEX']               = tx_index;
+                data['DISPENSER_ACTION_INDEX'] = dispenser['ACTION_INDEX'];
+                data['DISPENSER_STATUS']       = 'empty';
+                await this.actions.processAction(action, null, data, null);
+            }                    
         }
     }
 }
