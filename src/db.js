@@ -2221,6 +2221,106 @@ class Database {
         return data;
     }
 
+    // Get escrowed tokens for a given address
+    async getAddressEscrows(address, block_index, action_index){
+        let id      = await this.createAddress(address);
+        let escrows = [];
+        let args    = [id];
+        // Get list of orders with escrowed tokens
+        let query = `SELECT 
+                        o1.action_index
+                    FROM
+                        orders                    o1
+                        INNER JOIN order_statuses s1 ON (s1.order_action_index=o1.action_index)
+                        INNER JOIN actions        a1 ON (a1.action_index=o1.action_index)        
+                        INNER JOIN transactions   t1 ON (t1.tx_index=a1.tx_index)
+                        INNER JOIN index_statuses s2 ON (s2.id=s1.status_id)
+                    WHERE 
+                        s1.action_index = (
+                            SELECT
+                                MAX(s3.action_index)
+                            FROM
+                                order_statuses s3
+                            WHERE
+                                s3.order_action_index=o1.action_index
+                        ) AND
+                        t1.source_id=? AND 
+                        s2.status='open'
+                    ORDER BY 
+                        a1.action_index ASC`;
+        let results = await this.doQuery(query, args);
+        if(results.length > 0){
+            for(let row of results)
+                escrows.push({
+                    type: 'dispenser',
+                    action_index: Number(row.action_index)
+                });
+        }
+        // Get list of swaps with escrowed tokens
+        query = `SELECT 
+                    s1.action_index
+                FROM
+                    swaps                     s1
+                    INNER JOIN swap_statuses  s2 ON (s2.swap_action_index=s1.action_index)
+                    INNER JOIN actions        a1 ON (a1.action_index=s1.action_index)        
+                    INNER JOIN transactions   t1 ON (t1.tx_index=a1.tx_index)
+                    INNER JOIN index_statuses s3 ON (s3.id=s2.status_id)
+                WHERE 
+                    s1.action_index = (
+                        SELECT
+                            MAX(s4.action_index)
+                        FROM
+                            swap_statuses s4
+                        WHERE
+                            s4.swap_action_index=s1.action_index
+                    ) AND
+                    t1.source_id=? AND 
+                    s3.status='open'
+                ORDER BY 
+                    a1.action_index ASC`;
+        results = await this.doQuery(query, args);
+        if(results.length > 0){
+            for(let row of results)
+                escrows.push({
+                    type: 'swap',
+                    action_index: Number(row.action_index)
+                });
+
+        } 
+        // Get list of dispensers with escrowed tokens
+        query = `SELECT 
+                    d1.action_index
+                FROM
+                    dispensers                    d1
+                    INNER JOIN dispenser_statuses s1 ON (s1.dispenser_action_index=d1.action_index)
+                    INNER JOIN actions            a1 ON (a1.action_index=d1.action_index)        
+                    INNER JOIN transactions       t1 ON (t1.tx_index=a1.tx_index)
+                    INNER JOIN index_statuses     s2 ON (s2.id=s1.status_id)
+                WHERE 
+                    s1.action_index = (
+                        SELECT
+                            MAX(s3.action_index)
+                        FROM
+                            dispenser_statuses s3
+                        WHERE
+                            s3.dispenser_action_index=d1.action_index
+                    ) AND
+                    t1.source_id=? AND 
+                    s2.status='open'
+                ORDER BY 
+                    a1.action_index ASC`;
+        results = await this.doQuery(query, args);
+        if(results.length > 0){
+            for(let row of results)
+                escrows.push({
+                    type: 'dispenser',
+                    action_index: Number(row.action_index)
+                });
+
+        } 
+        return escrows;
+    }
+
     // Create/Update record in `airdrops` table
     async createAirdrop(data){
         data                  = this.normalizeDataValues(data);
@@ -2378,6 +2478,7 @@ class Database {
         let action_index   = data['ACTION_INDEX'];
         let balances       = data['BALANCES'];
         let ownerships     = data['OWNERSHIPS'];
+        let escrows        = data['ESCROWS'];
         // Check if record already exists for this sweep
         let query = `SELECT
                         action_index
@@ -2398,15 +2499,16 @@ class Database {
                         destination_id=?,
                         balances=?,
                         ownerships=?,
+                        escrows=?,
                         memo_id=?,
                         status_id=?
                     WHERE 
                         action_index=?`;
         } else {
             // INSERT record
-            query = `INSERT INTO sweeps (destination_id, balances, ownerships, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?)`;
+            query = `INSERT INTO sweeps (destination_id, balances, ownerships, escrows, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?, ?)`;
         }
-        args    = [destination_id, balances, ownerships, memo_id, status_id, action_index];
+        args    = [destination_id, balances, ownerships, escrows, memo_id, status_id, action_index];
         results = await this.doQuery(query, args);
     }
 
@@ -5707,5 +5809,38 @@ class Database {
         return dispensers;
     }
 
+
+    // Handle getting the sweep destination address for a given dispenser action_index
+    async getSweepDestination(action_index){
+        let address = '';
+        // Normalize data
+        let query  = `SELECT
+                            a1.address
+                        FROM
+                            dispensers d1
+                            INNER JOIN dispenser_statuses s1 ON (s1.dispenser_action_index=d1.action_index)
+                            LEFT  JOIN sweeps             s2 ON (s2.action_index=s1.action_index)
+                            LEFT  JOIN index_addresses    a1 ON (a1.id=s2.destination_id)
+                        WHERE
+                            s1.action_index = (
+                                SELECT
+                                    MAX(s4.action_index)
+                                FROM
+                                    dispenser_statuses s4
+                                WHERE
+                                    s4.dispenser_action_index=d1.action_index
+                            ) AND
+                            d1.action_index=?
+                        ORDER BY 
+                            d1.action_index ASC
+                        LIMIT 1`;
+        let args = [action_index];
+        let results = await this.doQuery(query, args);
+        if(results.length > 0){
+            for(let row of results)
+                address = row.address;
+        }
+        return address;
+    }
 }
 module.exports = Database

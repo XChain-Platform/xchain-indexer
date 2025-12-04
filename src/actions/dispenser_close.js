@@ -65,10 +65,15 @@ class Dispenser_Close {
                 debits  = [],
                 escrows = [];
 
-            // Return any remaining GIVE_TICK escrowed in the dispenser to the SOURCE address
+            // Get address of sweep that cancelled the dispenser
+            let address = await this.indexerDb.getSweepDestination(data['DISPENSER_ACTION_INDEX']);
+
+            // Set the destinationaddress
+            let destination = (!this.util.isNull(address)) ? address : dispenser['SOURCE'];
+
             if(dispenser['GIVE_REMAINING'] > 0){
-                escrows.push([dispenser['GIVE_TICK'], -dispenser['GIVE_REMAINING'], dispenser['SOURCE']]);
-                credits.push([dispenser['GIVE_TICK'],  dispenser['GIVE_REMAINING'], dispenser['SOURCE']]);
+                escrows.push([dispenser['GIVE_TICK'], -dispenser['GIVE_REMAINING'], destination]);
+                credits.push([dispenser['GIVE_TICK'],  dispenser['GIVE_REMAINING'], destination]);
             }
 
             // Create record in the dispenser_closes table
