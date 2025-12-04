@@ -5812,7 +5812,7 @@ class Database {
 
     // Handle getting the sweep destination address for a given dispenser action_index
     async getSweepDestination(action_index){
-        let address = '';
+        let address = null;
         // Normalize data
         let query  = `SELECT
                             a1.address
@@ -5821,6 +5821,7 @@ class Database {
                             INNER JOIN dispenser_statuses s1 ON (s1.dispenser_action_index=d1.action_index)
                             LEFT  JOIN sweeps             s2 ON (s2.action_index=s1.action_index)
                             LEFT  JOIN index_addresses    a1 ON (a1.id=s2.destination_id)
+                            LEFT  JOIN index_statuses     s3 ON (s3.id=s2.status_id)
                         WHERE
                             s1.action_index = (
                                 SELECT
@@ -5830,7 +5831,8 @@ class Database {
                                 WHERE
                                     s4.dispenser_action_index=d1.action_index
                             ) AND
-                            d1.action_index=?
+                            d1.action_index=? AND
+                            s3.status='valid'
                         ORDER BY 
                             d1.action_index ASC
                         LIMIT 1`;
