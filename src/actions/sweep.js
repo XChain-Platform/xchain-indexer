@@ -22,6 +22,7 @@
  * - DESTINATION - address where `token` shall be swept
  * - BALANCES    - Indicates if address `token` balances should be swept (default=1)
  * - OWNERSHIPS  - Indicates if address `token` ownerships should be swept (default=1)
+ * - ESCROWS     - Indicates if escrowed tokens should be swept (default=0)
  * - MEMO        - Optional memo to include
  * 
  * FORMATS:
@@ -43,7 +44,7 @@ class Sweep {
         
         // Define list of known FORMATS
         this.formats = {};
-        this.formats[0] = 'VERSION|DESTINATION|BALANCES|OWNERSHIPS|MEMO';
+        this.formats[0] = 'VERSION|DESTINATION|BALANCES|OWNERSHIPS|ESCROWS|MEMO';
     }
 
     // Handle parsing the SWEEP transaction
@@ -72,6 +73,7 @@ class Sweep {
         let balances    = await this.indexerDb.getAddressBalances(data['SOURCE'], null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
         let preferences = await this.indexerDb.getAddressPreferences(data['SOURCE'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
         let ownerships  = await this.indexerDb.getAddressOwnerships(data['SOURCE']);
+        let escrowed    = await this.indexerDb.getAddressEscrows(data['SOURCE'], null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
 
         // Create the fees object 
         let fees = await this.util.createFeesObject(this.indexerDb, data, preferences);
@@ -92,9 +94,14 @@ class Sweep {
         if(!error && !this.util.isNull(data['OWNERSHIPS']) && !this.util.isValidLockValue(data['OWNERSHIPS'],[0,1]))
             error = "invalid: OWNERSHIP (format)";
 
-        // Set default values for BALANCES and OWNERSHIP (default = 1)
+        // Verify ESCROWS format is valid (0 or 1)
+        if(!error && !this.util.isNull(data['ESCROWS']) && !this.util.isValidLockValue(data['ESCROWS'],[0,1]))
+            error = "invalid: ESCROWS (format)";
+
+        // Set default values for BALANCES, OWNERSHIP, and ESCROWS
         data['BALANCES']   = (!this.util.isNull(data['BALANCES'])) ? data['BALANCES'] : 1;
         data['OWNERSHIPS'] = (!this.util.isNull(data['OWNERSHIPS'])) ? data['OWNERSHIPS'] : 1;
+        data['ESCROWS']    = (!this.util.isNull(data['ESCROWS'])) ? data['ESCROWS'] : 0;
 
         // Clone the raw data for storage in mints table
         let sweep = structuredClone(data);
@@ -125,6 +132,7 @@ class Sweep {
         // Calculate total number of database hits for this SWEEP
         let db_hits = 1;                                                                               // 1 sweeps
             db_hits += (data['BALANCES']) ? this.util.bcmul(Object.keys(balances).length,4,0) : 0;     // 1 debits, 1 credits, 2 balances
+            db_hits += (data['ESCROWS']) ? this.util.bcmul(Object.keys(escrowed).length,4,0) : 0;      // 1 escrows, 1 credits, 2 balances
             db_hits += (data['OWNERSHIPS']) ? this.util.bcmul(Object.keys(ownerships).length,2,0) : 0; // 1 issue, 1 tokens
 
         // Determine total transaction FEE based on database hits
@@ -164,6 +172,7 @@ class Sweep {
 
             // Array of credits and debits
             let credits = [],
+                escrows = [],
                 debits  = [];
 
             // If we are charging a fee, store the SOURCE and fees TICK in addresses list
@@ -173,8 +182,53 @@ class Sweep {
             // Handle any transaction FEE according the users's ADDRESS preferences
             [credits, debits] = await this.util.processTransactionFees(this.indexerDb, credits, debits, fees);
 
+
+            // Transfer escrowed tokens
+            if(data['ESCROWS']==1){
+
+                // Store the SOURCE addresses
+                this.util.addAddressTicker(data['SOURCE']);
+
+                // Get list of actions with escrowed tokens
+                for(let escrow of escrowed){
+
+                    // Handle closing orders
+                    if(escrow.type=='order'){
+                        let info = await this.indexerDb.getOrderInfo(this.config['COIN'], escrow.action_index);
+                        escrows.push([info['GIVE_TICK'], -info['GIVE_REMAINING'], info['SOURCE']]);
+                        credits.push([info['GIVE_TICK'], info['GIVE_REMAINING'], info['SOURCE']]);
+                        await this.indexerDb.createOrderStatus(data['ACTION_INDEX'], info['ACTION_INDEX'], 'cancelled');
+                    }
+
+                    // Handle closing swaps
+                    if(escrow.type=='swap'){
+                        let info = await this.indexerDb.getSwapInfo(this.config['COIN'], escrow.action_index);
+                        escrows.push([info['GIVE_TICK'], -info['GIVE_AMOUNT'], info['SOURCE']]);
+                        credits.push([info['GIVE_TICK'], info['GIVE_AMOUNT'], info['SOURCE']]);
+                        await this.indexerDb.createSwapStatus(data['ACTION_INDEX'], info['ACTION_INDEX'], 'cancelled');
+                    }
+
+                    // Handle canceling dispensers
+                    // Note: Dispensers close after a set block delay, and escrowed tokens are credited to destination address
+                    if(escrow.type=='dispenser')
+                        await this.indexerDb.createDispenserStatus(data['ACTION_INDEX'], escrow.action_index, 'cancelling');
+
+                }
+
+                // Process any transaction ledger changes (credits / debits)
+                await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits, escrows);
+
+                // Update address balances
+                await this.indexerDb.updateBalances(data['SOURCE']);
+
+                // get updated balances with newly credited escrow tokens
+                balances = await this.indexerDb.getAddressBalances(data['SOURCE'], null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
+            }
+
             // Transfer any balances
             if(data['BALANCES']==1){
+
+
                 for(let tick_id in balances){
                     let amount = balances[tick_id];
                     let tick   = await this.indexerDb.getTicker(tick_id);
