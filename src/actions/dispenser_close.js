@@ -65,10 +65,10 @@ class Dispenser_Close {
                 debits  = [],
                 escrows = [];
 
-            // Get address of sweep that cancelled the dispenser
+            // Get address of sweep that cancelled the dispenser (if any)
             let address = await this.indexerDb.getSweepDestination(data['DISPENSER_ACTION_INDEX']);
 
-            // Set the destinationaddress
+            // Set the destination address
             let destination = (!this.util.isNull(address)) ? address : dispenser['SOURCE'];
 
             if(dispenser['GIVE_REMAINING'] > 0){
