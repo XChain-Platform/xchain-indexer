@@ -127,6 +127,10 @@ class Issue {
          * TICK Validations
          ****************************************************************/
 
+        // Verify TICK is not null/empty
+        if(!error && this.util.isNull(data['TICK']))
+            error = 'invalid: TICK (null)';
+
         // Verify TICK does not begin or end with period (.)
         let str = String(data['TICK']);
         if(!error && (str.substring(0,1)=='.' || str.slice(-1)=='.'))
