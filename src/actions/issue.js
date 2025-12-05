@@ -67,12 +67,12 @@ class Issue {
 
         // Define list of known FORMATS
         this.formats = {};
-        this.formats[0] = 'VERSION|TICK|MAX_SUPPLY|MAX_MINT|DECIMALS|DESCRIPTION|MINT_SUPPLY|TRANSFER|TRANSFER_SUPPLY|LOCK_MAX_SUPPLY|LOCK_MAX_MINT|LOCK_DESCRIPTION|LOCK_RUG|LOCK_SLEEP|LOCK_CALLBACK|CALLBACK_BLOCK|CALLBACK_TICK|CALLBACK_AMOUNT|ALLOW_LIST|BLOCK_LIST|MINT_ADDRESS_MAX|MINT_START_BLOCK|MINT_STOP_BLOCK|LOCK_MINT|LOCK_MINT_SUPPLY';
-        this.formats[1] = 'VERSION|TICK|DESCRIPTION';
-        this.formats[2] = 'VERSION|TICK|MAX_MINT|MINT_SUPPLY|TRANSFER_SUPPLY|MINT_ADDRESS_MAX|MINT_START_BLOCK|MINT_STOP_BLOCK';
-        this.formats[3] = 'VERSION|TICK|LOCK_MAX_SUPPLY|LOCK_MAX_MINT|LOCK_DESCRIPTION|LOCK_RUG|LOCK_SLEEP|LOCK_CALLBACK|LOCK_MINT|LOCK_MINT_SUPPLY';
-        this.formats[4] = 'VERSION|TICK|CALLBACK_BLOCK|CALLBACK_TICK|CALLBACK_AMOUNT';
-        this.formats[5] = 'VERSION|TICK|ALLOW_LIST|BLOCK_LIST';
+        this.formats[0] = 'VERSION|TICK|MAX_SUPPLY|MAX_MINT|DECIMALS|DESCRIPTION|MINT_SUPPLY|TRANSFER|TRANSFER_SUPPLY|LOCK_MAX_SUPPLY|LOCK_MAX_MINT|LOCK_DESCRIPTION|LOCK_RUG|LOCK_SLEEP|LOCK_CALLBACK|CALLBACK_BLOCK|CALLBACK_TICK|CALLBACK_AMOUNT|ALLOW_LIST|BLOCK_LIST|MINT_ADDRESS_MAX|MINT_START_BLOCK|MINT_STOP_BLOCK|LOCK_MINT|LOCK_MINT_SUPPLY|MEMO';
+        this.formats[1] = 'VERSION|TICK|DESCRIPTION|MEMO';
+        this.formats[2] = 'VERSION|TICK|MAX_MINT|MINT_SUPPLY|TRANSFER_SUPPLY|MINT_ADDRESS_MAX|MINT_START_BLOCK|MINT_STOP_BLOCK|MEMO';
+        this.formats[3] = 'VERSION|TICK|LOCK_MAX_SUPPLY|LOCK_MAX_MINT|LOCK_DESCRIPTION|LOCK_RUG|LOCK_SLEEP|LOCK_CALLBACK|LOCK_MINT|LOCK_MINT_SUPPLY|MEMO';
+        this.formats[4] = 'VERSION|TICK|CALLBACK_BLOCK|CALLBACK_TICK|CALLBACK_AMOUNT|MEMO';
+        this.formats[5] = 'VERSION|TICK|ALLOW_LIST|BLOCK_LIST|MEMO';
 
         // Define lists of various fields
         this.fieldList = {};
@@ -359,6 +359,18 @@ class Issue {
         // Verify MINT_STOP_BLOCK is greater than or equal to MINT_START_BLOCK
         if(!error && !this.util.isNull(issue['MINT_STOP_BLOCK']) && issue['MINT_START_BLOCK'] > 0 && issue['MINT_STOP_BLOCK'] > 0 && issue['MINT_STOP_BLOCK'] < issue['MINT_START_BLOCK'])
             error = 'invalid: MINT_STOP_BLOCK < MINT_START_BLOCK';
+
+        // Verify no pipe in MEMO (pipe is field delimiter)
+        if(!error && String(data['MEMO']).indexOf('|')!=-1)
+            error = 'invalid: MEMO (pipe)';
+
+        // Verify no semicolon in MEMO (semicolon is action delimiter)
+        if(!error && String(data['MEMO']).indexOf(';')!=-1)
+            error = 'invalid: MEMO (semicolon)';
+
+        // Verify MEMO is shorter than MAX_MEMO_LENGTH
+        if(!error && String(data['MEMO']).length > this.config['MAX_MEMO_LENGTH'])
+            error = 'invalid: MEMO (length)';
 
         // Determine if an issuance FEE is required, and what that fee is using COIN config information
         // TODO: Remove the block activation index (used for testing)
