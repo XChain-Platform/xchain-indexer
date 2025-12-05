@@ -2252,7 +2252,7 @@ class Database {
         if(results.length > 0){
             for(let row of results)
                 escrows.push({
-                    type: 'dispenser',
+                    type: 'order',
                     action_index: Number(row.action_index)
                 });
         }
