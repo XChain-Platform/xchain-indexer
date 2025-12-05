@@ -2449,10 +2449,9 @@ class Database {
     // Get tokens owned by a given address
     async getAddressOwnerships(address){
         let id   = await this.createAddress(address);
-        let data = {};
+        let data = [];
         // Lookup the address preferences
         let query = `SELECT 
-                        t1.tick_id,
                         t2.tick
                     FROM
                         tokens t1
@@ -2464,7 +2463,7 @@ class Database {
         let results = await this.doQuery(query, [id]);
         if(results.length > 0)
             for(let row of results)
-                data[row.tick_id] = row.tick;
+                data.push(row.tick);
         return data;
     }
 
