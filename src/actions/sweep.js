@@ -52,7 +52,7 @@ class Sweep {
         /*****************************************************************
          * DEBUGGING - Force params
          ****************************************************************/
-        // let str = '0|1BoogrfDADPLQpq8LMASmWQUVYDp4t2hF9|1|1|memo';
+        // let str = '0|1BoogrfDADPLQpq8LMASmWQUVYDp4t2hF9|1|1|1|memo';
         // params = String(str).split('|');
         // data['FORMAT'] = this.util.getFormatVersion(params[0]);
 
@@ -210,12 +210,10 @@ class Sweep {
                 // Store the SOURCE and DESTINATION in the addresses list
                 this.util.addAddressTicker(data['SOURCE']);
                 this.util.addAddressTicker(data['DESTINATION']);
-
             }
 
             // Transfer any balances
             if(data['BALANCES']==1){
-
                 for(let tick_id in balances){
                     let amount = balances[tick_id];
                     let tick   = await this.indexerDb.getTicker(tick_id);
@@ -223,27 +221,6 @@ class Sweep {
                     // Debit token amount from SOURCE and credit to DESTINATION
                     debits.push([tick,  amount, data['SOURCE']]);
                     credits.push([tick, amount, data['DESTINATION']]);
-
-                    // Store the SOURCE, DESTINATION and TICK in addresses and tickers lists
-                    this.util.addAddressTicker(data['SOURCE'], tick);
-                    this.util.addAddressTicker(data['DESTINATION'], tick);
-                }
-
-            }
-
-            // Transfer token ownerships
-            if(data['OWNERSHIPS']==1){
-                // Copy base transaction data object into issue object
-                let issue = sweep;
-                issue['TRANSFER'] = sweep['DESTINATION'];
-                for(let tick_id in ownerships){
-                    let tick = ownerships[tick_id];
-                    issue['TICK'] = tick;
-
-                    // TODO: Increase the action_index for every issuance in a sweep
-
-                    // Create issue record for transfer of ownership
-                    await this.indexerDb.createIssue(issue);
 
                     // Store the SOURCE, DESTINATION and TICK in addresses and tickers lists
                     this.util.addAddressTicker(data['SOURCE'], tick);
@@ -261,11 +238,46 @@ class Sweep {
             // Update address balances and token supply
             await this.indexerDb.updateBalances(addresses);
             await this.indexerDb.updateTokens(tickers);
+
+            // Create action mappings for this sweep
+            await this.mapper.createMappings(data);
+
+            // Transfer token ownerships
+            if(data['OWNERSHIPS']==1){
+                for(let tick_id in ownerships){
+
+                    // Reset the address/tickers/transactions list on each parse
+                    this.util.resetLists();
+
+                    // Copy base transaction data object into issue object
+                    let issue = sweep,
+                        tick  = ownerships[tick_id];
+                    issue['ACTION']   = 'ISSUE';
+                    issue['TICK']     = tick;
+                    issue['TRANSFER'] = sweep['DESTINATION'];
+
+                    // Create a record of this action in the actions table
+                    issue['ACTION_INDEX'] = await this.indexerDb.createActionIndex(issue, true);
+
+                    // Create issue record for transfer of ownership
+                    await this.indexerDb.createIssue(issue);
+
+                    // Update tokens table to indicate new owner
+                    await this.indexerDb.updateTokens(tick);
+                    // console.log('creating issue for tick=',tick);
+
+                    // Store the SOURCE, DESTINATION and TICK in addresses and tickers lists
+                    this.util.addAddressTicker(issue['SOURCE'], tick);
+                    this.util.addAddressTicker(issue['DESTINATION'], tick);
+
+                    // Create action mappings for this ISSUE
+                    await this.mapper.createMappings(issue);
+
+
+                }
+            }
+
         }
-
-        // Create action mappings
-        await this.mapper.createMappings(data);
-
     }
 }
 
