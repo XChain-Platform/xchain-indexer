@@ -1282,6 +1282,7 @@ class Database {
         let tick_id            = await this.createTicker(data['TICK']);
         let transfer_id        = await this.createAddress(data['TRANSFER']);
         let transfer_supply_id = await this.createAddress(data['TRANSFER_SUPPLY']);
+        let memo_id            = await this.createMemo(data['MEMO']);
         let status_id          = await this.createStatus(data['STATUS']);
         // Check if record already exists for this ISSUE action
         let query = `SELECT action_index FROM issues WHERE action_index=?`;
@@ -1318,6 +1319,7 @@ class Database {
                         mint_address_max=?,
                         mint_start_block=?,
                         mint_stop_block=?,
+                        memo_id=?,
                         status_id=?
                     WHERE 
                         action_index=?`;
@@ -1347,11 +1349,12 @@ class Database {
                         mint_address_max, 
                         mint_start_block, 
                         mint_stop_block, 
+                        memo_id,
                         status_id,
                         action_index
-                    ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+                    ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
         }
-        args    = [tick_id, max_supply, max_mint, decimals, description, mint_supply, transfer_id, transfer_supply_id, lock_max_supply, lock_mint, lock_mint_supply, lock_max_mint, lock_description, lock_sleep, lock_callback, callback_block, callback_tick_id, callback_amount, allow_list, block_list, mint_address_max, mint_start_block, mint_stop_block, status_id, action_index ];
+        args    = [tick_id, max_supply, max_mint, decimals, description, mint_supply, transfer_id, transfer_supply_id, lock_max_supply, lock_mint, lock_mint_supply, lock_max_mint, lock_description, lock_sleep, lock_callback, callback_block, callback_tick_id, callback_amount, allow_list, block_list, mint_address_max, mint_start_block, mint_stop_block, memo_id, status_id, action_index ];
         results = await this.doQuery(query, args);
     }
 

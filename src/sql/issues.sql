@@ -2,28 +2,29 @@ DROP TABLE IF EXISTS issues;
 CREATE TABLE issues (
     action_index        BIGINT UNSIGNED NOT NULL, -- Unique action index
     tick_id             BIGINT UNSIGNED,          -- id of record in index_tickers table
-    max_supply          VARCHAR(250),              -- Maximum token supply (1000000000000000000000.000000000000000000 = 40 Characters)
-    max_mint            VARCHAR(250),              -- Maximum amount of supply a MINT transaction can issue
-    decimals            VARCHAR(2),                -- Number of decimal places token should have (max: 18, default: 0)
-    description         VARCHAR(250),              -- URL to a an icon to use for this token (48x48 standard size)
-    mint_supply         VARCHAR(250),              -- Maximum amount of supply a MINT transaction can issue
+    max_supply          VARCHAR(250),             -- Maximum token supply (1000000000000000000000.000000000000000000 = 40 Characters)
+    max_mint            VARCHAR(250),             -- Maximum amount of supply a MINT transaction can issue
+    decimals            VARCHAR(2),               -- Number of decimal places token should have (max: 18, default: 0)
+    description         VARCHAR(250),             -- URL to a an icon to use for this token (48x48 standard size)
+    mint_supply         VARCHAR(250),             -- Maximum amount of supply a MINT transaction can issue
     transfer_id         BIGINT UNSIGNED,          -- id of record in index_addresses table
     transfer_supply_id  BIGINT UNSIGNED,          -- id of record in index_addresses table
-    lock_max_supply     VARCHAR(1),                -- Locks MAX_SUPPLY
-    lock_mint           VARCHAR(1),                -- Locks MINT
-    lock_mint_supply    VARCHAR(1),                -- Locks MINT_SUPPLY
-    lock_max_mint       VARCHAR(1),                -- Locks MAX_MINT
-    lock_description    VARCHAR(1),                -- Locks DESCRIPTION
-    lock_sleep          VARCHAR(1),                -- Locks SLEEP
-    lock_callback       VARCHAR(1),                -- Locks CALLBACK_BLOCK/TICK/AMOUNT
-    callback_block      VARCHAR(15),               -- block_index after which CALLBACK cand be used
+    lock_max_supply     VARCHAR(1),               -- Locks MAX_SUPPLY
+    lock_mint           VARCHAR(1),               -- Locks MINT
+    lock_mint_supply    VARCHAR(1),               -- Locks MINT_SUPPLY
+    lock_max_mint       VARCHAR(1),               -- Locks MAX_MINT
+    lock_description    VARCHAR(1),               -- Locks DESCRIPTION
+    lock_sleep          VARCHAR(1),               -- Locks SLEEP
+    lock_callback       VARCHAR(1),               -- Locks CALLBACK_BLOCK/TICK/AMOUNT
+    callback_block      VARCHAR(15),              -- block_index after which CALLBACK cand be used
     callback_tick_id    BIGINT UNSIGNED,          -- id of record in index_tickers table
-    callback_amount     VARCHAR(250),              -- AMOUNT users get if CALLBACK
+    callback_amount     VARCHAR(250),             -- AMOUNT users get if CALLBACK
     allow_list          BIGINT UNSIGNED,          -- action_index of a list from the lists table
     block_list          BIGINT UNSIGNED,          -- action_index of a list from the lists table
-    mint_address_max    VARCHAR(250),              -- Maximum amount of supply an address can MINT
-    mint_start_block    VARCHAR(15),               -- block_index when MINT transactions are allowed (begin mint)
-    mint_stop_block     VARCHAR(15),               -- BLOCK_INDEX when MINT transactions are NOT allowed (end mint)
+    mint_address_max    VARCHAR(250),             -- Maximum amount of supply an address can MINT
+    mint_start_block    VARCHAR(15),              -- block_index when MINT transactions are allowed (begin mint)
+    mint_stop_block     VARCHAR(15),              -- BLOCK_INDEX when MINT transactions are NOT allowed (end mint)
+    memo_id             BIGINT UNSIGNED,          -- id of record in index_memos table 
     status_id           BIGINT UNSIGNED           -- id of record in index_statuses table
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
@@ -35,5 +36,4 @@ CREATE        INDEX status_id          ON issues (status_id);
 CREATE        INDEX callback_tick_id   ON issues (callback_tick_id);
 CREATE        INDEX allow_list         ON issues (allow_list);
 CREATE        INDEX block_list         ON issues (block_list);
-
-
+CREATE        INDEX memo_id            ON issues (memo_id);
