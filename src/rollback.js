@@ -116,9 +116,8 @@ class Rollback {
                         a.action_index
                     FROM
                         actions a
-                        INNER JOIN transactions t ON (t.tx_index=a.tx_index)
                     WHERE
-                        t.block_index > ?
+                        a.block_index > ?
                     ORDER BY
                         a.action_index ASC
                     LIMIT 1`;
@@ -130,7 +129,7 @@ class Rollback {
         // Handle looking up data for any action_indexes in the rollback
         if(firstActionIndex){
 
-            // Loop through the data tables
+            // Loop through the data tables and build out list of addresses and tickers
             for(let table of this.dataTables){
 
                 // Build out the correct SQL to pull address and ticker data from the various tables
@@ -216,6 +215,21 @@ class Rollback {
                                 m.action_index >= ?`;
                 }
 
+                // SWEEPS
+                if(table=='sweeps'){
+                    query = `SELECT 
+                                a2.address,
+                                a3.address as address2
+                            FROM 
+                                ` + table + ` m
+                                INNER JOIN actions         a1 ON (a1.action_index=m.action_index)
+                                INNER JOIN transactions    t1 ON (t1.tx_index=a1.tx_index)
+                                INNER JOIN index_addresses a2 ON (a2.id=t1.source_id)
+                                LEFT  JOIN index_addresses a3 ON (a3.id=m.destination_id)
+                            WHERE 
+                                m.action_index >= ?`;
+                }
+
                 // ORDERS / ORDER_MATCHES
                 if(['orders','order_matches'].includes(table)){
                     query = `SELECT 
@@ -267,11 +281,13 @@ class Rollback {
                     }
                 }
 
-                // Delete data from tables using action_index
+            }
+
+            // Loop through the data tables and delete records above the action_index
+            for(let table of this.dataTables){
                 query = `DELETE FROM ` + table + ` WHERE action_index >= ?`;
                 args  = [firstActionIndex];
                 let result = await this.indexerDb.doQuery(query, args);
-
             } 
         }
 
