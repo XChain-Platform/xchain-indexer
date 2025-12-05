@@ -164,8 +164,6 @@ class Sweep {
         // Create record in sweeps table
         await this.indexerDb.createSweep(sweep);
 
-
-
         // If this was a valid transaction, then mint any actual supply
         if(status=='valid'){
 
@@ -244,14 +242,13 @@ class Sweep {
 
             // Transfer token ownerships
             if(data['OWNERSHIPS']==1){
-                for(let tick_id in ownerships){
+                for(let tick of ownerships){
 
                     // Reset the address/tickers/transactions list on each parse
                     this.util.resetLists();
 
                     // Copy base transaction data object into issue object
-                    let issue = sweep,
-                        tick  = ownerships[tick_id];
+                    let issue = sweep;
                     issue['ACTION']   = 'ISSUE';
                     issue['TICK']     = tick;
                     issue['TRANSFER'] = sweep['DESTINATION'];
