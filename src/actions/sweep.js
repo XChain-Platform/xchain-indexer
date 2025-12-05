@@ -164,8 +164,7 @@ class Sweep {
         // Create record in sweeps table
         await this.indexerDb.createSweep(sweep);
 
-        // Store the SOURCE to the addresses list
-        this.util.addAddressTicker(data['SOURCE']);
+
 
         // If this was a valid transaction, then mint any actual supply
         if(status=='valid'){
@@ -182,13 +181,8 @@ class Sweep {
             // Handle any transaction FEE according the users's ADDRESS preferences
             [credits, debits] = await this.util.processTransactionFees(this.indexerDb, credits, debits, fees);
 
-
             // Transfer escrowed tokens
             if(data['ESCROWS']==1){
-
-                // Store the SOURCE addresses
-                this.util.addAddressTicker(data['SOURCE']);
-
                 // Get list of actions with escrowed tokens
                 for(let escrow of escrowed){
 
@@ -196,7 +190,6 @@ class Sweep {
                     if(escrow.type=='order'){
                         let info = await this.indexerDb.getOrderInfo(this.config['COIN'], escrow.action_index);
                         escrows.push([info['GIVE_TICK'], -info['GIVE_REMAINING'], info['SOURCE']]);
-                        credits.push([info['GIVE_TICK'], info['GIVE_REMAINING'], info['SOURCE']]);
                         await this.indexerDb.createOrderStatus(data['ACTION_INDEX'], info['ACTION_INDEX'], 'cancelled');
                     }
 
@@ -204,7 +197,6 @@ class Sweep {
                     if(escrow.type=='swap'){
                         let info = await this.indexerDb.getSwapInfo(this.config['COIN'], escrow.action_index);
                         escrows.push([info['GIVE_TICK'], -info['GIVE_AMOUNT'], info['SOURCE']]);
-                        credits.push([info['GIVE_TICK'], info['GIVE_AMOUNT'], info['SOURCE']]);
                         await this.indexerDb.createSwapStatus(data['ACTION_INDEX'], info['ACTION_INDEX'], 'cancelled');
                     }
 
@@ -215,19 +207,14 @@ class Sweep {
 
                 }
 
-                // Process any transaction ledger changes (credits / debits)
-                await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits, escrows);
+                // Store the SOURCE and DESTINATION in the addresses list
+                this.util.addAddressTicker(data['SOURCE']);
+                this.util.addAddressTicker(data['DESTINATION']);
 
-                // Update address balances
-                await this.indexerDb.updateBalances(data['SOURCE']);
-
-                // get updated balances with newly credited escrow tokens
-                balances = await this.indexerDb.getAddressBalances(data['SOURCE'], null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
             }
 
             // Transfer any balances
             if(data['BALANCES']==1){
-
 
                 for(let tick_id in balances){
                     let amount = balances[tick_id];
@@ -241,6 +228,7 @@ class Sweep {
                     this.util.addAddressTicker(data['SOURCE'], tick);
                     this.util.addAddressTicker(data['DESTINATION'], tick);
                 }
+
             }
 
             // Transfer token ownerships
@@ -264,7 +252,7 @@ class Sweep {
             }
 
             // Process any transaction ledger changes (credits / debits)
-            await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits);
+            await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits, escrows);
 
             // Get a list of tickers & addresses
             let tickers   = this.util.getTickersList(),

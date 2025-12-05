@@ -41,9 +41,6 @@ class Dispenser_Close {
         // Only proceed if we have a valid dispenser
         if(dispenser){
 
-            // Add SOURCE and GET_ADDRESS addresses and GET_TICK to addresses list
-            this.util.addAddressTicker(dispenser['SOURCE'],      dispenser['GIVE_TICK']);
-            this.util.addAddressTicker(dispenser['GET_ADDRESS'], dispenser['GIVE_TICK']);
 
             // Define DISPENSER_CLOSE action
             let action = {}
@@ -75,6 +72,10 @@ class Dispenser_Close {
                 escrows.push([dispenser['GIVE_TICK'], -dispenser['GIVE_REMAINING'], destination]);
                 credits.push([dispenser['GIVE_TICK'],  dispenser['GIVE_REMAINING'], destination]);
             }
+
+            // Add SOURCE and GET_ADDRESS addresses and GET_TICK to addresses list
+            this.util.addAddressTicker(dispenser['GET_ADDRESS'], dispenser['GIVE_TICK']);
+            this.util.addAddressTicker(destination,              dispenser['GIVE_TICK']);
 
             // Create record in the dispenser_closes table
             await this.indexerDb.createDispenserClose(data);
