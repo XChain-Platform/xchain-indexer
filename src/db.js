@@ -323,6 +323,7 @@ class Database {
 
     // Handle getting block index for a given component and request type
     async getBlockIndex(component, type){
+        let block_index = false;
         // Bail out on any invalid request type
         var componentTypes = ['decoder', 'indexer'];
         if(!componentTypes.includes(component)){
@@ -330,25 +331,56 @@ class Database {
             return false;
         }
         // Bail out on any invalid request type
-        var validTypes = ['first', 'last', 'rollback'];
+        var validTypes = ['first', 'last', 'reorg'];
         if(!validTypes.includes(type)){
             this.util.logError('Invalid type');
             return false;
         }
-        // Define SQL query function to run based on type
-        let func  = (type=='first') ? 'MIN' : 'MAX';
-        let query = 'SELECT ' + func + '(block_index) AS block_index FROM blocks';
-        // Determine SQL query
-        if(component=='decoder' && type=='rollback'){
-            // Rollback query here
+        // Handle reorgs
+        if(type=='reorg'){
+
+            // Handle getting reorg data from the decoder
+            if(component=='decoder'){
+                let query = `SELECT data FROM events WHERE code='REORG' ORDER BY id DESC LIMIT 1`;
+                let results = await this.doQuery(query);
+                if(results.length > 0){
+                    for(let row of results){
+                        let data = JSON.parse(row.data);
+                        if(typeof data === 'object'){
+                            for (let block of data){
+                                if(block < block_index || !block_index)
+                                    block_index = block;
+                            }
+                        }
+
+                    }
+                }
+
+            }
+
+            // Handle getting reorg data from the indexer
+            if(component=='indexer'){
+                let query = `SELECT data FROM events WHERE code='REORG' ORDER BY id DESC LIMIT 1`;
+                let results = await this.doQuery(query);
+                if(results.length > 0)
+                    block_index = Number(results[0]["data"]);
+            }
+
+        } else {
+            let func  = (type=='first') ? 'MIN' : 'MAX';
+            let query = 'SELECT ' + func + '(block_index) AS block_index FROM blocks';
+            let results = await this.doQuery(query);
+            if(results.length > 0)
+                block_index = Number(results[0]["block_index"]);
         }
-        if(component=='indexer' && type=='rollback'){
-            // Rollback query here
-        }
-        let results = await this.doQuery(query);
-        if(results.length > 0)
-            return Number(results[0]["block_index"]);
-        return false;
+        return block_index;
+    }
+
+    // Handle creating a record of a block reorg
+    async createReorg(block_index){
+        let query = `INSERT INTO events (time, code, data) values (now(), 'REORG', ?)`;
+        let args  = [block_index];
+        let results = await this.doQuery(query, args);
     }
 
     // Handle getting block transaction data for a given block from xchain-decoder database
