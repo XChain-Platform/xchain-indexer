@@ -118,11 +118,11 @@ class XChainIndexer {
         }
 
         // Define placeholders for block parsing status
-        let firstDecoderBlock        = null;
-        let lastIndexerBlock         = null; 
-        let lastDecoderBlock         = null;
-        let lastDecoderRollbackBlock = null;
-        let lastIndexerRollbackBlock = null;
+        let firstDecoderBlock     = null;
+        let lastIndexerBlock      = null; 
+        let lastDecoderBlock      = null;
+        let lastDecoderReorgBlock = null;
+        let lastIndexerReorgBlock = null;
 
         while (true){
             // Bail out if stop is requested
@@ -133,32 +133,33 @@ class XChainIndexer {
             lastDecoderBlock  = await this.decoderDb.getBlockIndex('decoder', 'last');
             lastIndexerBlock  = await this.indexerDb.getBlockIndex('indexer', 'last');
 
-            // TODO: Write rollback detection code
-            // Get last rollback block from Indexer and Decoder databases
-            // lastDecoderRollbackBlock = await this.indexerDb.getBlockIndex('decoder', 'rollback');
-            // lastIndexerRollbackBlock = await this.indexerDb.getBlockIndex('indexer', 'rollback');
-
             // If indexer has no parsed blocks, set firstDecoderBlock from Decoder database
             if(!lastIndexerBlock)
                 firstDecoderBlock = await this.decoderDb.getBlockIndex('decoder', 'first');
 
+            // Get last reorg block from Indexer and Decoder databases
+            lastDecoderReorgBlock = await this.decoderDb.getBlockIndex('decoder', 'reorg');
+            lastIndexerReorgBlock = await this.indexerDb.getBlockIndex('indexer', 'reorg');
+
+            // Handle block reorgs
+            if(lastDecoderReorgBlock && (!lastIndexerReorgBlock || lastDecoderReorgBlock < lastIndexerReorgBlock)){
+                console.log("Detected block reorganization at block #",lastDecoderReorgBlock);
+                await this.indexerDb.createReorg(lastDecoderReorgBlock);
+                await this.rollback.rollback(lastDecoderReorgBlock);
+            }
+
             // Log block parsing start
             var startBlock = (lastIndexerBlock) ? (lastIndexerBlock+1) : firstDecoderBlock;
-
-            // DEBUG
-            // startBlock = lastIndexerBlock = 862602;
-            let rollbackBlock = 862660;
-            // await this.rollback.rollback(rollbackBlock);
 
             // Print out status message about where parsing is resuming
             if(startBlock < lastDecoderBlock)
                 console.log('Resuming block parsing at block ' + startBlock + '...');
 
-            var cnt = 0;
-            // lastIndexerBlock = 862605;
-
             // Loop through blocks until indexer has parsed lastDecoderBlock
             while( (!lastIndexerBlock || lastIndexerBlock < lastDecoderBlock )){
+
+                // Set flag to indicate not fully synced
+                this.synced = false;
 
                 // If we have no blocks from the decoder stop parsing loop
                 if(this.util.isNull(lastDecoderBlock))
@@ -203,33 +204,22 @@ class XChainIndexer {
                 let parseTime = this.util.getTimer(debugTimer);
                 console.log('Block Parsed' + "\t: " + lastIndexerBlock + ' [ledger:' + ledger + ' actions:' + actions + '] (' + parseTime + ')');
 
-                // DEBUG: counter to enable stopping parsing after a set number of blocks
-                cnt++;
-
                 // DEBUG : Exit processing at a select block
-                // if(lastIndexerBlock >=  862666){
-                //     await this.rollback.rollback(rollbackBlock);
+                // if(lastIndexerBlock >=  862672){
+                //     await this.rollback.rollback(862663);
                 //     this.util.throwError('Exiting on target block');
-                // }
-
-                // DEBUG: Delay processing after X blocks
-                // if(cnt>=1)
-                //     break;
-
-                // DEBUG: Test some rollbacks
-                // if(cnt>=3){
-                //     await this.rollback.rollback(lastIndexerBlock-1);
-                //     break;
                 // }
 
             }
 
-            // Force a rollback when caught up
-            // await this.rollback.rollback(rollbackBlock);
+            // Set flag to indicate fully synced and listening for block
+            if(!this.synced){
+                this.synced = true;
+                console.log('Listening for blocks...');
+            }
 
-            console.log('sleeping for 5 seconds');
-            // Sleep for 5 seconds before checking for new transaction data
-            await this.util.sleep(5000);
+            // Sleep for BLOCK_CHECK_INTERVAL before checking for new transaction data
+            await this.util.sleep(this.config['BLOCK_CHECK_INTERVAL']);
         }      
     }
 

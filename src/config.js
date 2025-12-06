@@ -188,6 +188,9 @@ module.exports = {
             'BLOCK_LIST'
         ];
 
+        // Define block parsing interval (10 seconds)
+        config['BLOCK_CHECK_INTERVAL'] = 5000; 
+
         // Merge indexer config and COIN config into a single config object
         let fullConfig = Object.assign({}, config, coinConfig);
 
