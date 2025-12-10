@@ -2301,7 +2301,7 @@ class Database {
                     INNER JOIN transactions   t1 ON (t1.tx_index=a1.tx_index)
                     INNER JOIN index_statuses s3 ON (s3.id=s2.status_id)
                 WHERE 
-                    s1.action_index = (
+                    s2.action_index = (
                         SELECT
                             MAX(s4.action_index)
                         FROM
