@@ -324,7 +324,7 @@ class Utility {
         }
         return valid;
     }
-    
+
     // Validate if a lock flag value evaluates to 0 (unlocked) or 1 (locked)
     isValidLockValue(value){
         let type  = typeof value,
@@ -662,6 +662,8 @@ class Utility {
             let market_id = await db.createMarket(pair.tick1_id, pair.tick2_id);
             // Get the market data
             let data = await db.getMarketInfo(market_id, block_time);
+            // Set the last_updated time to the current block time
+            data.last_updated = block_time;
             // Update Market with the updated data
             await db.updateMarketInfo(data);
         }
