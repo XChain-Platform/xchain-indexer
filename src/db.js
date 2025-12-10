@@ -5196,7 +5196,7 @@ class Database {
         let tick2_24hr_low    = data.tick2_24hr_low;
         let tick2_24hr_change = data.tick2_24hr_change;
         let tick2_24hr_volume = data.tick2_24hr_volume;
-        let last_updated = data.last_updated;
+        let last_updated      = data.last_updated;
         let query = `UPDATE 
                         markets
                     SET
