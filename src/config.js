@@ -177,7 +177,6 @@ module.exports = {
             'LOCK_MINT_SUPPLY',
             'LOCK_MAX_MINT',
             'LOCK_DESCRIPTION',
-            'LOCK_RUG',
             'LOCK_SLEEP',
             'LOCK_CALLBACK'
         ];        
