@@ -169,7 +169,7 @@ class XChainIndexer {
                 var debugTimer = this.util.startTimer();
 
                 // If indexer has no parsed blocks, set block to first Decoder block -1
-                if(this.util.isNull(lastIndexerBlock) || lastIndexerBlock===0 )
+                if(this.util.isNull(lastIndexerBlock))
                     lastIndexerBlock = firstDecoderBlock - 1;
 
                 // Increase lastIndexerBlock to next block
