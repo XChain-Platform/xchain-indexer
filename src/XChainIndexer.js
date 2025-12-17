@@ -99,11 +99,8 @@ class XChainIndexer {
         // Verify the Decoder database exists
         let decoderDbStatus   = await this.decoderDb.createDatabase();
         let decoderDbVerified = await this.decoderDb.verifyDatabase();
-        if(!decoderDbVerified){
+        if(!decoderDbVerified)
             this.util.throwError("Database " + this.decoderDbName + " doesn't exist!");
-        } else {
-            // Add optional code here to verify decoder database tables exist (Blocks / Transactions)
-        }
 
         // Verify the Indexer database exists
         let indexerDbStatus   = await this.indexerDb.createDatabase();
@@ -125,52 +122,48 @@ class XChainIndexer {
         let lastIndexerReorgBlock = null;
 
         while (true){
+
             // Bail out if stop is requested
             if(this.stopFlag)
                 break;
-
-            // Get last processed block from Indexer and Decoder databases
-            lastDecoderBlock  = await this.decoderDb.getBlockIndex('decoder', 'last');
-            lastIndexerBlock  = await this.indexerDb.getBlockIndex('indexer', 'last');
-
-            // If indexer has no parsed blocks, set firstDecoderBlock from Decoder database
-            if(!lastIndexerBlock)
-                firstDecoderBlock = await this.decoderDb.getBlockIndex('decoder', 'first');
 
             // Get last reorg block from Indexer and Decoder databases
             lastDecoderReorgBlock = await this.decoderDb.getBlockIndex('decoder', 'reorg');
             lastIndexerReorgBlock = await this.indexerDb.getBlockIndex('indexer', 'reorg');
 
             // Handle block reorgs
-            if(lastDecoderReorgBlock && (!lastIndexerReorgBlock || lastDecoderReorgBlock < lastIndexerReorgBlock)){
+            if(!this.util.isNull(lastDecoderReorgBlock) && (this.util.isNull(lastIndexerReorgBlock) || lastDecoderReorgBlock < lastIndexerReorgBlock)){
                 console.log("Detected block reorganization at block #",lastDecoderReorgBlock);
                 await this.indexerDb.createReorg(lastDecoderReorgBlock);
                 await this.rollback.rollback(lastDecoderReorgBlock);
             }
 
-            // Log block parsing start
-            var startBlock = (lastIndexerBlock) ? (lastIndexerBlock+1) : firstDecoderBlock;
+            // Get last processed block from Indexer and Decoder databases
+            lastDecoderBlock  = await this.decoderDb.getBlockIndex('decoder', 'last');
+            lastIndexerBlock  = await this.indexerDb.getBlockIndex('indexer', 'last');
 
-            // Print out status message about where parsing is resuming
-            if(startBlock < lastDecoderBlock)
-                console.log('Resuming block parsing at block ' + startBlock + '...');
+            // If indexer has no parsed blocks, set last indexer block to first decoder block-1 
+            if(this.util.isNull(lastIndexerBlock)){
+                firstDecoderBlock = await this.decoderDb.getBlockIndex('decoder', 'first');
+                if(!this.util.isNull(firstDecoderBlock))
+                    lastIndexerBlock = this.util.bcsub(firstDecoderBlock,1);
+            }
+
+            // Print out status message about where parsing is resuming 
+            if(this.synced === false && !this.util.isNull(lastIndexerBlock)){
+                let startBlock = this.util.bcadd(lastIndexerBlock,1)
+                if(startBlock < lastDecoderBlock)
+                    console.log('Resuming block parsing at block ' + startBlock + '...');
+            }
 
             // Loop through blocks until indexer has parsed lastDecoderBlock
-            while( (!lastIndexerBlock || lastIndexerBlock < lastDecoderBlock )){
+            while( !this.util.isNull(lastIndexerBlock) && !this.util.isNull(lastDecoderBlock) && lastIndexerBlock < lastDecoderBlock ){
 
                 // Set flag to indicate not fully synced
                 this.synced = false;
 
-                // If we have no blocks from the decoder stop parsing loop
-                if(this.util.isNull(lastDecoderBlock))
-                    break;
-
                 // Start tracking time to parse block
                 var debugTimer = this.util.startTimer();
-
-                // If indexer has no parsed blocks, set block to first Decoder block -1
-                if(this.util.isNull(lastIndexerBlock))
-                    lastIndexerBlock = firstDecoderBlock - 1;
 
                 // Increase lastIndexerBlock to next block
                 lastIndexerBlock++;
