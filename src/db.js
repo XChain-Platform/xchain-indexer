@@ -323,18 +323,18 @@ class Database {
 
     // Handle getting block index for a given component and request type
     async getBlockIndex(component, type){
-        let block_index = false;
+        let block_index = null;
         // Bail out on any invalid request type
         var componentTypes = ['decoder', 'indexer'];
         if(!componentTypes.includes(component)){
             this.util.logError('Invalid component');
-            return false;
+            return null;
         }
         // Bail out on any invalid request type
         var validTypes = ['first', 'last', 'reorg'];
         if(!validTypes.includes(type)){
             this.util.logError('Invalid type');
-            return false;
+            return null;
         }
         // Handle reorgs
         if(type=='reorg'){
@@ -365,12 +365,11 @@ class Database {
                 if(results.length > 0)
                     block_index = Number(results[0]["data"]);
             }
-
         } else {
             let func  = (type=='first') ? 'MIN' : 'MAX';
             let query = 'SELECT ' + func + '(block_index) AS block_index FROM blocks';
             let results = await this.doQuery(query);
-            if(results.length > 0)
+            if(results.length > 0 && !this.util.isNull(results[0]["block_index"]))
                 block_index = Number(results[0]["block_index"]);
         }
         return block_index;
