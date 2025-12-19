@@ -121,6 +121,14 @@ class Send {
                 ticks[tick] = await this.indexerDb.getTokenInfo(tick, data['BLOCK_INDEX'], data['ACTION_INDEX']);
         }
 
+        // Get address preferences for all destination addresses (used in MEMO requirement check)
+        let preferences = {};
+        for(let send of sends){
+            let destination = send[2];
+            if(!preferences[destination])
+                preferences[destination] = await this.indexerDb.getAddressPreferences(destination, data['BLOCK_INDEX'], data['ACTION_INDEX']);
+        }
+
         // Consolidate sends by DESTINATION and TICK
         let keys = {};
         for(let info of sends){
@@ -222,6 +230,10 @@ class Send {
             // Verify MEMO is shorter than MAX_MEMO_LENGTH
             if(!error && String(send['MEMO']).length > this.config['MAX_MEMO_LENGTH'])
                 error = 'invalid: MEMO (length)';
+
+            // Verify MEMO if destination address preferences require a memo
+            if(!error && preferences[send['DESTINATION']]['REQUIRE_MEMO']==1 && this.util.isNull(send['MEMO']))
+                error = 'invalid: MEMO (required)';
 
             // Verify SOURCE has enough balances to cover send AMOUNT
             if(!error && !this.util.hasBalance(balances, tokenInfo['TICK_ID'], send['AMOUNT']))

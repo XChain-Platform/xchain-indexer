@@ -2246,8 +2246,8 @@ class Database {
         let results = await this.doQuery(query, args);
         if(results.length > 0){
             for(let row of results){
-                data['FEE_PREFERENCE'] = row.fee_preference;
-                data['REQUIRE_MEMO']   = row.require_memo;
+                data['FEE_PREFERENCE'] = Number(row.fee_preference);
+                data['REQUIRE_MEMO']   = Number(row.require_memo);
             }
         }
         return data;
