@@ -792,13 +792,11 @@ class Database {
         // Determine if TICK is actually a TICK ID
         if(str.substring(0,1)=='^' && this.util.isNumeric(pid))
             id = pid;
-        // TODO : Handle passing full parent->child asset name and decode to correct TICK ID
-        //        example: BACON.is.delicious (period is parent/child indicator character)
-        // Try to lookup id using tick passed
-        if(!id){
-            // let query = "SELECT id FROM index_tickers WHERE tick COLLATE utf8mb4_bin LIKE ? LIMIT 1";
-            let query   = "SELECT id FROM index_tickers WHERE tick=? LIMIT 1";
-            let results = await this.doQuery(query, [tick]);
+        // Try to lookup id using tick passed 
+        if(this.util.isNull(id)){
+            let query   = "SELECT id FROM index_tickers WHERE LOWER(tick)=? LIMIT 1";
+            let args    = [String(tick).toLowerCase()]
+            let results = await this.doQuery(query, args);
             if(results.length > 0)
                 id = Number(results[0].id);
         }
