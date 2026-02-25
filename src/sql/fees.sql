@@ -5,7 +5,7 @@ CREATE TABLE fees (
     amount         VARCHAR(250),              -- Amount of TICK
     method         BIGINT UNSIGNED NOT NULL, -- FEE Payment Method (1=Destroy, 2=Donate)
     destination_id BIGINT UNSIGNED           -- id of record in index_addresses table
-) ENGINE=MyISAM DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
 CREATE UNIQUE INDEX action_index   ON fees (action_index);
 CREATE        INDEX tick_id        ON fees (tick_id);

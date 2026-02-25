@@ -27,7 +27,7 @@ CREATE TABLE tokens (
     owner_id           BIGINT UNSIGNED,                     -- id of record in index_addresses table
     coin_price         VARCHAR(250) NOT NULL default 0,     -- last  price of 1 token in native coin (BTC, LTC, DOGE, etc)
     coin_floor         VARCHAR(250) NOT NULL default 0      -- floor price of 1 token in native coin (BTC, LTC, DOGE, etc)
-) ENGINE=MyISAM DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
 CREATE        INDEX tick_id          ON tokens (tick_id);
 CREATE        INDEX owner_id         ON tokens (owner_id);

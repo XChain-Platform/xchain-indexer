@@ -6,7 +6,7 @@ CREATE TABLE airdrops (
     amount            VARCHAR(250),              -- Amount of token in airdrop
     memo_id           BIGINT UNSIGNED,          -- id of record in index_memos table 
     status_id         BIGINT UNSIGNED           -- id of record in index_statuses table
-) ENGINE=MyISAM DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
 CREATE        INDEX action_index      ON airdrops (action_index);
 CREATE        INDEX tick_id           ON airdrops (tick_id);

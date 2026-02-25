@@ -6,7 +6,7 @@ CREATE TABLE mints (
     destination_id BIGINT UNSIGNED,          -- id of record in index_addresses table (optional, mint and transfer)
     memo_id        BIGINT UNSIGNED,          -- id of record in index_memos table 
     status_id      BIGINT UNSIGNED           -- id of record in index_statuses table
-) ENGINE=MyISAM DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
 CREATE UNIQUE INDEX action_index   ON mints (action_index);
 CREATE        INDEX tick_id        ON mints (tick_id);

@@ -10,7 +10,7 @@ CREATE TABLE order_matches (
     get_tick_id       BIGINT UNSIGNED NOT NULL, -- id of record in index_coins table
     get_amount        VARCHAR(250),             -- Amount of GET_TICK
     status_id         BIGINT UNSIGNED           -- id of record in index_statuses table (valid / invalid)
-) ENGINE=MyISAM DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
 CREATE UNIQUE INDEX action_index      ON order_matches (action_index);
 CREATE        INDEX give_coin_id      ON order_matches (give_coin_id);

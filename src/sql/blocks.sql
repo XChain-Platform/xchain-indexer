@@ -5,7 +5,7 @@ CREATE TABLE blocks (
     block_time       BIGINT UNSIGNED,
     ledger_hash_id   BIGINT UNSIGNED,  -- id of record in index_transactions table (sha256 hash of credits/debits/escrow/balances data)
     actions_hash_id  BIGINT UNSIGNED   -- id of record in index_transactions table (sha256 hash of actions data)
-) ENGINE=MyISAM DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
 CREATE INDEX block_index     ON blocks (block_index);
 CREATE INDEX ledger_hash_id  ON blocks (ledger_hash_id);

@@ -6,7 +6,7 @@ CREATE TABLE sleeps (
     resume_block     VARCHAR(25),              -- Block index of the resume block
     memo_id          BIGINT UNSIGNED,          -- id of record in index_memos table 
     status_id        BIGINT UNSIGNED           -- id of record in index_statuses table
-) ENGINE=MyISAM DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
 CREATE UNIQUE INDEX action_index   ON sleeps (action_index);
 CREATE        INDEX type           ON sleeps (type);

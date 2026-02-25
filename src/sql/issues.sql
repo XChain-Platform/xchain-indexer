@@ -26,7 +26,7 @@ CREATE TABLE issues (
     mint_stop_block     VARCHAR(15),              -- BLOCK_INDEX when MINT transactions are NOT allowed (end mint)
     memo_id             BIGINT UNSIGNED,          -- id of record in index_memos table 
     status_id           BIGINT UNSIGNED           -- id of record in index_statuses table
-) ENGINE=MyISAM DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
 CREATE UNIQUE INDEX action_index       ON issues (action_index);
 CREATE        INDEX tick_id            ON issues (tick_id);
