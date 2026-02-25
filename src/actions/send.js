@@ -212,11 +212,11 @@ class Send {
                 error = 'invalid: TICK (sleeping)';
 
             // Verify TICK action is allowed from SOURCE (allow/block lists)
-            if(!error && !this.indexerDb.isActionAllowed(send['SOURCE'], send['TICK']))
+            if(!error && await this.indexerDb.isActionAllowed(send['SOURCE'], send['TICK']) == false)
                 error = 'invalid: SOURCE (not authorized)';
 
             // Verify TICK action is allowed to DESTINATION (allow/block lists)
-            if(!error && !this.indexerDb.isActionAllowed(send['DESTINATION'], send['TICK']))
+            if(!error && await this.indexerDb.isActionAllowed(send['DESTINATION'], send['TICK']) == false)
                 error = 'invalid: DESTINATION (not authorized)';
 
             // Verify no pipe in MEMO (pipe is field delimiter)
