@@ -8,7 +8,7 @@ CREATE TABLE broadcasts (
     broadcast_action_index BIGINT UNSIGNED,          -- broadcast action_index
     status_id              BIGINT UNSIGNED           -- id of record in index_statuses table
 
-) ENGINE=MyISAM DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
 CREATE UNIQUE INDEX action_index           ON broadcasts (action_index);
 CREATE        INDEX broadcast_action_index ON broadcasts (broadcast_action_index);

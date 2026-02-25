@@ -16,7 +16,7 @@ CREATE TABLE dispensers (
     block_list         BIGINT UNSIGNED,          -- action_index of a list from the lists table
     memo_id            BIGINT UNSIGNED,          -- id of record in index_memos table 
     status_id          BIGINT UNSIGNED           -- id of record in index_statuses table (status of open dispenser tx)
-) ENGINE=MyISAM DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
 
 CREATE UNIQUE INDEX action_index   ON dispensers (action_index);

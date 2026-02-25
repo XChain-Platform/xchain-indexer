@@ -3,7 +3,7 @@ CREATE TABLE index_fiats (
     id   BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
     code VARCHAR(250) NOT NULL,
     name VARCHAR(250)
-) ENGINE=MyISAM DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
 CREATE INDEX code on index_fiats (code);
 

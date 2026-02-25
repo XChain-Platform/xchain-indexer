@@ -20,7 +20,7 @@ CREATE TABLE markets (
     tick2_24hr_change  VARCHAR(250) NOT NULL default 0, -- tick2 - 24-hour percentage change
     tick2_24hr_volume  VARCHAR(250) NOT NULL default 0, -- tick2 - 24-hour volume
     last_updated  BIGINT UNSIGNED                       -- Last updated
-) ENGINE=MyISAM CHARSET=utf8 COLLATE=utf8_general_ci;
+) ENGINE=InnoDB CHARSET=utf8 COLLATE=utf8_general_ci;
 
 CREATE INDEX tick1_id on markets (tick1_id);
 CREATE INDEX tick2_id on markets (tick2_id);

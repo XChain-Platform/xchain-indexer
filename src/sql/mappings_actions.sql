@@ -8,7 +8,7 @@ CREATE TABLE mappings_actions (
                                              -- 1 = tick    (id=tick_id)
                                              -- 2 = address (id=address_id)
     id            BIGINT UNSIGNED NOT NULL   -- id of record
-) ENGINE=MyISAM DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
 CREATE        INDEX action_index      ON mappings_actions (action_index);
 CREATE        INDEX type_id           ON mappings_actions (type_id);

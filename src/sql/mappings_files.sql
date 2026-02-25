@@ -7,7 +7,7 @@ CREATE TABLE mappings_files (
     type_id       TINYINT UNSIGNED,          -- Integer value for mapping type
                                              -- 1 = tick (id=tick_id)
     id            BIGINT UNSIGNED NOT NULL   -- id of record
-) ENGINE=MyISAM DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
 CREATE        INDEX action_index      ON mappings_files (action_index);
 CREATE        INDEX type_id           ON mappings_files (type_id);
