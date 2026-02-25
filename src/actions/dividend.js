@@ -89,7 +89,7 @@ class Dividend {
 
         // List of addresses allowed or blocked from holding DIVIDEND_TICK
         let allowList = (dividendTokenInfo['ALLOW_LIST']) ? await this.indexerDb.getList(dividendTokenInfo['ALLOW_LIST']) : false;
-        let blockList = [dividendTokenInfo['BLOCK_LIST']] ? await this.indexerDb.getList(dividendTokenInfo['BLOCK_LIST']) : false;
+        let blockList = (dividendTokenInfo['BLOCK_LIST']) ? await this.indexerDb.getList(dividendTokenInfo['BLOCK_LIST']) : false;
 
         // Loop through list of holders and build out valid recipients list 
         for(let address in holders){
