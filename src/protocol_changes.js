@@ -147,7 +147,7 @@ class ProtocolChanges {
     // Determine if a specific protocol change is enabled based on version, block_time, and block_index
     // @param {name}        string  Unique protocol change name
     // @param {block_index} string  Block index
-    isEnabled(name, block_index){
+    async isEnabled(name, block_index){
         let enabled = true;
         try {
             let change  = this.changes[name];
@@ -168,7 +168,7 @@ class ProtocolChanges {
                 // Get block information given a block_index
                 if(enabled){
                     // Get block time for a given block_index from the decoder database
-                    current.block_time  = this.decoderDb.getBlockTime(block_index);
+                    current.block_time  = await this.decoderDb.getBlockTime(block_index);
                     current.block_index = parseInt(block_index);
                     // Verify block_time
                     if(enabled && network=='mainnet' && change.mainnet_time > current.block_time)

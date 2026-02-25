@@ -185,7 +185,7 @@ class Actions {
         }
 
         // Verify ACTION is activated
-        if(!error && !this.protocolChanges.isEnabled(action, tx.block_index))
+        if(!error && await this.protocolChanges.isEnabled(action, tx.block_index) == false)
             error = 'invalid: ACTION is not yet activated';
 
         // Create a record of this transaction in the transactions table
