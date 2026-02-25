@@ -172,15 +172,15 @@ class Callback {
          ****************************************************************/
 
         // Verify SOURCE is allowed to perform action
-        if(!error && !await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']))
+        if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
             error = 'invalid: SOURCE (sleeping)';
 
         // Verify TICK is allowed to perform action
-        if(!error && !await this.indexerDb.isActionAllowed(null, tokenInfo['TICK'], data['BLOCK_INDEX']))
+        if(!error && await this.indexerDb.isActionAllowed(null, tokenInfo['TICK'], data['BLOCK_INDEX']) == false)
             error = 'invalid: TICK (sleeping)';
 
         // Verify CALLBACK_TICK is allowed to perform action
-        if(!error && !await this.indexerDb.isActionAllowed(null, tokenInfo['CALLBACK_TICK'], data['BLOCK_INDEX']))
+        if(!error && await this.indexerDb.isActionAllowed(null, tokenInfo['CALLBACK_TICK'], data['BLOCK_INDEX']) == false)
             error = 'invalid: CALLBACK_TICK (sleeping)';
 
         // Verify CALLBACK_BLOCK is less than or equal to current block index

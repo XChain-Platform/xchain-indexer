@@ -99,15 +99,15 @@ class Link {
          ****************************************************************/
 
         // Verify SOURCE is allowed to perform action
-        if(!error && !await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']))
+        if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
             error = 'invalid: SOURCE (sleeping)';
 
         // Verify COIN1_ACTION_INDEX is valid (only validate links on current COIN network)
-        if(!error && data['COIN1']==this.config['COIN'] && !await this.indexerDb.isActionIndexValid(data['COIN1_ACTION_INDEX']))
+        if(!error && data['COIN1']==this.config['COIN'] && await this.indexerDb.isActionIndexValid(data['COIN1_ACTION_INDEX']) == false)
             error = 'invalid: COIN1_ACTION_INDEX (status)';
 
         // Verify COIN2_ACTION_INDEX is valid (only validate links on current COIN network)
-        if(!error && data['COIN2']==this.config['COIN'] && !await this.indexerDb.isActionIndexValid(data['COIN2_ACTION_INDEX']))
+        if(!error && data['COIN2']==this.config['COIN'] && await this.indexerDb.isActionIndexValid(data['COIN2_ACTION_INDEX']) == false)
             error = 'invalid: COIN2_ACTION_INDEX (status)';
 
         // Verify no pipe in MEMO (pipe is field delimiter)

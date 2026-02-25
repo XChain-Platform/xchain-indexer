@@ -176,11 +176,11 @@ class Destroy {
              ************************************************************/
 
             // Verify SOURCE is allowed to perform action
-            if(!error && !await this.indexerDb.isActionAllowed(destroy['SOURCE'], null, destroy['BLOCK_INDEX']))
+            if(!error && await this.indexerDb.isActionAllowed(destroy['SOURCE'], null, destroy['BLOCK_INDEX']) == false)
                 error = 'invalid: SOURCE (sleeping)';
 
             // Verify TICK is allowed to perform action
-            if(!error && !await this.indexerDb.isActionAllowed(null, destroy['TICK'], destroy['BLOCK_INDEX']))
+            if(!error && await this.indexerDb.isActionAllowed(null, destroy['TICK'], destroy['BLOCK_INDEX']) == false)
                 error = 'invalid: TICK (sleeping)';
 
             // Verify no pipe in MEMO (pipe is field delimiter)

@@ -124,11 +124,11 @@ class Mint {
          ****************************************************************/
 
         // Verify SOURCE is allowed to perform action
-        if(!error && !await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']))
+        if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
             error = 'invalid: SOURCE (sleeping)';
 
         // Verify TICK is allowed to perform action
-        if(!error && !await this.indexerDb.isActionAllowed(null, data['TICK'], data['BLOCK_INDEX']))
+        if(!error && await this.indexerDb.isActionAllowed(null, data['TICK'], data['BLOCK_INDEX']) == false)
             error = 'invalid: TICK (sleeping)';
 
         // Verify no pipe in MEMO (pipe is field delimiter)
@@ -156,7 +156,7 @@ class Mint {
             error = 'invalid: SOURCE (not authorized)';
 
         // Verify TICK action is allowed to DESTINATION (ALLOW_LIST & BLOCK_LIST)
-        if(!error && !this.util.isNull(data['DESTINATION']) && !await this.indexerDb.isActionAllowed(data['DESTINATION'], data['TICK']))
+        if(!error && !this.util.isNull(data['DESTINATION']) && await this.indexerDb.isActionAllowed(data['DESTINATION'], data['TICK']) == false)
             error = 'invalid: DESTINATION (not authorized)';
 
         // Verify minting AMOUNT will not exceed MINT_ADDRESS_MAX
