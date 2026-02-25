@@ -233,7 +233,7 @@ class Issue {
          ****************************************************************/
 
         // Verify SOURCE is allowed to perform action
-        if(!error && !await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']))
+        if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
             error = 'invalid: SOURCE (sleeping)';
 
         // Verify ISSUE is coming from TICK owner

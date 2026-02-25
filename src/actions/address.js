@@ -115,7 +115,7 @@ class Address {
             error = 'invalid: REQUIRE_MEMO (value)';
 
         // Verify SOURCE is allowed to perform action
-        if(!error && !await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']))
+        if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
             error = 'invalid: SOURCE (sleeping)';
 
         // Verify no pipe in MEMO (pipe is field delimiter)

@@ -101,11 +101,11 @@ class Broadcast {
          ****************************************************************/
 
         // Verify SOURCE is allowed to perform action
-        if(!error && !await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']))
+        if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
             error = 'invalid: SOURCE (sleeping)';
 
         // Verify BROADCAST_ACTION_INDEX is valid
-        if(!error && !this.util.isNull(data['BROADCAST_ACTION_INDEX']) && !await this.indexerDb.isActionIndexValid(data['BROADCAST_ACTION_INDEX']))
+        if(!error && !this.util.isNull(data['BROADCAST_ACTION_INDEX']) && await this.indexerDb.isActionIndexValid(data['BROADCAST_ACTION_INDEX']) == false)
             error = 'invalid: BROADCAST_ACTION_INDEX (status)';
 
         // Verify MESSAGE is shorter than MAX_BROADCAST_MESSAGE_LENGTH

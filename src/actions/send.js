@@ -204,11 +204,11 @@ class Send {
              ************************************************************/
 
             // Verify SOURCE is allowed to perform action
-            if(!error && !await this.indexerDb.isActionAllowed(send['SOURCE'], null, send['BLOCK_INDEX']))
+            if(!error && await this.indexerDb.isActionAllowed(send['SOURCE'], null, send['BLOCK_INDEX']) == false)
                 error = 'invalid: SOURCE (sleeping)';
 
             // Verify TICK is allowed to perform action
-            if(!error && !await this.indexerDb.isActionAllowed(null, send['TICK'], send['BLOCK_INDEX']))
+            if(!error && await this.indexerDb.isActionAllowed(null, send['TICK'], send['BLOCK_INDEX']) == false)
                 error = 'invalid: TICK (sleeping)';
 
             // Verify TICK action is allowed from SOURCE (allow/block lists)

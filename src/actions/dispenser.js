@@ -192,11 +192,11 @@ class Dispenser {
          ****************************************************************/
 
         // Verify SOURCE is allowed to perform action
-        if(!error && !await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']))
+        if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
             error = 'invalid: SOURCE (sleeping)';
 
         // Verify TICK is allowed to perform action
-        if(!error && format==0 && !await this.indexerDb.isActionAllowed(null, data['GIVE_TICK'], data['BLOCK_INDEX']))
+        if(!error && format==0 && await this.indexerDb.isActionAllowed(null, data['GIVE_TICK'], data['BLOCK_INDEX']) == false)
             error = 'invalid: TICK (sleeping)';
 
         // Verify no pipe in MEMO (pipe is field delimiter)
@@ -212,11 +212,11 @@ class Dispenser {
             error = 'invalid: MEMO (length)';
 
         // Verify TICK action is allowed from SOURCE (allow/block lists)
-        if(!error && format==0 && !await this.indexerDb.isActionAllowed(data['SOURCE'], data['GIVE_TICK']))
+        if(!error && format==0 && await this.indexerDb.isActionAllowed(data['SOURCE'], data['GIVE_TICK']) == false)
             error = 'invalid: SOURCE (not authorized)';
 
         // Verify TICK action is allowed from GET_ADDRESS (allow/block lists)
-        if(!error && format==0 && !await this.indexerDb.isActionAllowed(data['GET_ADDRESS'], data['GIVE_TICK']))
+        if(!error && format==0 && await this.indexerDb.isActionAllowed(data['GET_ADDRESS'], data['GIVE_TICK']) == false)
             error = 'invalid: GET_ADDRESS (not authorized)';
 
         // Validate DISPENSER_ACTION_INDEX is valid dispenser

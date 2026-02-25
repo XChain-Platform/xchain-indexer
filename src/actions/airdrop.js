@@ -189,11 +189,11 @@ class Airdrop {
              ************************************************************/
 
             // Verify SOURCE is allowed to perform action
-            if(!error && !await this.indexerDb.isActionAllowed(airdrop['SOURCE'], null, airdrop['BLOCK_INDEX']))
+            if(!error && await this.indexerDb.isActionAllowed(airdrop['SOURCE'], null, airdrop['BLOCK_INDEX']) == false)
                 error = 'invalid: SOURCE (sleeping)';
 
             // Verify TICK is allowed to perform action
-            if(!error && !await this.indexerDb.isActionAllowed(null, airdrop['TICK'], airdrop['BLOCK_INDEX']))
+            if(!error && await this.indexerDb.isActionAllowed(null, airdrop['TICK'], airdrop['BLOCK_INDEX']) == false)
                 error = 'invalid: TICK (sleeping)';
 
             // Verify no pipe in MEMO (pipe is field delimiter)
@@ -240,11 +240,11 @@ class Airdrop {
                 recipients = list;
 
             // Verify TICK action is allowed from SOURCE (allow/block lists)
-            if(!error && !(await this.indexerDb.isActionAllowed(airdrop['SOURCE'], airdrop['TICK'])))
+            if(!error && await this.indexerDb.isActionAllowed(airdrop['SOURCE'], airdrop['TICK']) == false)
                 error = 'invalid: SOURCE (not authorized)';
 
             // Verify SOURCE has enough balances to cover airdrop AMOUNT
-            if(!error && !(await this.util.hasBalance(balances, tokenInfo['TICK_ID'], airdrop['AMOUNT'])))
+            if(!error && await this.util.hasBalance(balances, tokenInfo['TICK_ID'], airdrop['AMOUNT']) == false)
                 error = 'invalid: insufficient funds';
 
             // Build out array of recipient addresses that are allowed to receive the airdrop
