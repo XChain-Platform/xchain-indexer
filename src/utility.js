@@ -319,7 +319,7 @@ class Utility {
         let valid = this.isValidAmountFormat(decimals, amount);
         if(valid){
             let [int, sats] = String(amount).split('.');
-            if(!this.isNull(sats) && String(sats).length > decimals);
+            if(!this.isNull(sats) && String(sats).length > decimals)
                 valid = false;
         }
         return valid;
