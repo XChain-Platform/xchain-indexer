@@ -93,8 +93,8 @@ class Utility {
         // let file  = '/XChainIndexer/error.log';
         // fs.appendFileSync(file, error);
         console.error('logError: ' + error, info);
-        // DEBUG: Throw exception on any error
-        this.throwError(error);
+        // DEBUG: Throw exception on any error (remove this before production)
+        // this.throwError(error);
     }
 
     // Get a SHA256 hash of a given data object
