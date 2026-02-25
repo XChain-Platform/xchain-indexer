@@ -238,12 +238,9 @@ class Utility {
         return data;
     }
 
-    // Handle converting a string number to an integer or float
+    // Handle converting a string number to a mathjs bignumber for full precision
     bcnum(num){
-        if(String(num).indexOf('.')!=-1)
-            return parseFloat(num);
-        else
-            return parseInt(num);
+        return mathjs.bignumber(num);
     }
 
     // Handle returning a number to a given decimal point precision
@@ -399,7 +396,7 @@ class Utility {
     // Validate if a balances array holds a certain amount of a tick token
     hasBalance(balances, tick_id, amount){
         let balance = (!this.isNull(balances[tick_id])) ? balances[tick_id] : 0;
-        if(balance >= amount)
+        if(mathjs.largerEq(mathjs.bignumber(balance), mathjs.bignumber(amount)))
             return true;
         return false;
     }
@@ -407,7 +404,7 @@ class Utility {
     // Handle deducting TICK AMOUNT from balances and return updated balances array
     debitBalances(balances, tick_id, amount){
         let balance = (!this.isNull(balances[tick_id])) ? balances[tick_id] : 0;
-        balances[tick_id] = this.bcnum(balance) - this.bcnum(amount);
+        balances[tick_id] = this.bcsub(balance, amount, 18);
         return balances;
     }
 
@@ -419,7 +416,7 @@ class Utility {
         for(let idx in records){
             let [tick, amount, address] = records[idx];
             let key = tick + '-' + address;
-            arr[key] = (arr[key]) ? String(this.bcnum(arr[key]) + this.bcnum(amount)) : amount; 
+            arr[key] = (arr[key]) ? this.bcadd(arr[key], amount, 18) : amount;
         }
         // Build out array of consolidated records
         for(let key in arr){
