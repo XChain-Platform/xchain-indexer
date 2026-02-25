@@ -264,7 +264,7 @@ class Issue {
             error = 'invalid: DECIMALS (min/max)';
 
         // Verify DECIMALS cannot be changed after supply has been issued
-        if(!error && !this.util.isNull(data['DECIMALS']) && tokenInfo['SUPPLY'] > 0 && data['DECIMALS']!=tokenInfo['DECIMALS'])
+        if(!error && !this.util.isNull(data['DECIMALS']) && tokenInfo && tokenInfo['SUPPLY'] > 0 && data['DECIMALS']!=tokenInfo['DECIMALS'])
             error = 'invalid: DECIMALS (locked)';
 
         // Verify TRANSFER addresses
@@ -328,7 +328,7 @@ class Issue {
             error = 'invalid: CALLBACK_BLOCK (block index)';
 
         // Verify CALLBACK_BLOCK can not be changed if supply is distributed
-        if(!error && !this.util.isNull(issue['CALLBACK_BLOCK']) && data['CALLBACK_BLOCK'] != tokenInfo['CALLBACK_BLOCK'] && isDistributed)
+        if(!error && !this.util.isNull(issue['CALLBACK_BLOCK']) && tokenInfo && data['CALLBACK_BLOCK'] != tokenInfo['CALLBACK_BLOCK'] && isDistributed)
             error = 'invalid: CALLBACK_BLOCK (supply distributed)';
 
         // Verify CALLBACK_TICK can not be changed if supply is distributed
