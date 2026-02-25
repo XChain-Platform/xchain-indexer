@@ -293,7 +293,7 @@ class Order {
         if(format==0){
             this.util.addAddressTicker(data['SOURCE'], [data['GIVE_TICK'], data['GET_TICK']]);
         } else {
-            this.util.addAddressTicker(orderInfo['SOURCE'], orderInfo['GIVE_TICK'], orderInfo['GET_TICK']);
+            this.util.addAddressTicker(orderInfo['SOURCE'], [orderInfo['GIVE_TICK'], orderInfo['GET_TICK']]);
         }
 
         // Array of credits, debits, and escrows
