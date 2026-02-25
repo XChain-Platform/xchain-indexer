@@ -22,6 +22,7 @@
 // Load required libraries
 const mariadb = require('mariadb');
 const fs      = require('fs');
+const path    = require('path');
 
 class Database {
 
@@ -122,10 +123,10 @@ class Database {
         return true;
     }
     
-    // Handle verifying all database tables exist 
+    // Handle verifying all database tables exist
     async verifyTables(){
-        let path  = '/XChainIndexer/src/sql';
-        let files = fs.readdirSync(path);
+        let dir   = path.join(__dirname, 'sql');
+        let files = fs.readdirSync(dir);
         let file  = null;
         let db    = await this.getConnection();
         // Loop through SQL files
@@ -153,8 +154,8 @@ class Database {
 
     // Handle creating database tables
     async createTable(file){
-        let path    = '/XChainIndexer/src/sql';
-        let data    = fs.readFileSync(path + '/' + file, "utf8");
+        let dir     = path.join(__dirname, 'sql');
+        let data    = fs.readFileSync(dir + '/' + file, "utf8");
         let table   = file.substring(0, file.indexOf('.sql'));
         let db      = await this.getConnection();
         let queries = data.split(';');
