@@ -249,7 +249,7 @@ class Issue {
 
         // Verify MAX_SUPPLY min/max
         if(!error && !this.util.isNull(data['MAX_SUPPLY']) && data['MAX_SUPPLY'] > 0 && (data['MAX_SUPPLY'] < this.config.MIN_TOKEN_SUPPLY || data['MAX_SUPPLY'] > this.config.MAX_TOKEN_SUPPLY))
-            $error = 'invalid: MAX_SUPPLY (min/max)';
+            error = 'invalid: MAX_SUPPLY (min/max)';
 
         // Verify MAX_SUPPLY is not set below current SUPPLY
         if(!error && !this.util.isNull(data['MAX_SUPPLY']) && data['MAX_SUPPLY'] > 0 && data['MAX_SUPPLY'] < await this.indexerDb.getTokenSupply(data['TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']))
