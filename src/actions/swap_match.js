@@ -50,16 +50,16 @@ class Swap_Match {
             let giveTokenInfo = await this.indexerDb.getTokenInfo(swapInfo['GIVE_TICK'], swap['BLOCK_INDEX'], swap['ACTION_INDEX']);
 
             // List of addresses allowed or blocked from holding GET_TICK
-            let getTokenAllowList = (!this.util.isNull(getTokenInfo['ALLOW_LIST'])) ? await this.indexerDb.getList(getTokenInfo['ALLOW_LIST']) : false;
-            let getTokenBlockList = (!this.util.isNull(getTokenInfo['BLOCK_LIST'])) ? await this.indexerDb.getList(getTokenInfo['BLOCK_LIST']) : false;
+            let getTokenAllowList = (!this.util.isNull(getTokenInfo['ALLOW_LIST'])) ? await this.indexerDb.getList(getTokenInfo['ALLOW_LIST']) : [];
+            let getTokenBlockList = (!this.util.isNull(getTokenInfo['BLOCK_LIST'])) ? await this.indexerDb.getList(getTokenInfo['BLOCK_LIST']) : [];
 
             // List of addresses allowed or blocked from holding GIVE_TICK
-            let giveTokenAllowList = (!this.util.isNull(giveTokenInfo['ALLOW_LIST'])) ? await this.indexerDb.getList(giveTokenInfo['ALLOW_LIST']) : false;
-            let giveTokenBlockList = (!this.util.isNull(giveTokenInfo['BLOCK_LIST'])) ? await this.indexerDb.getList(giveTokenInfo['BLOCK_LIST']) : false;
+            let giveTokenAllowList = (!this.util.isNull(giveTokenInfo['ALLOW_LIST'])) ? await this.indexerDb.getList(giveTokenInfo['ALLOW_LIST']) : [];
+            let giveTokenBlockList = (!this.util.isNull(giveTokenInfo['BLOCK_LIST'])) ? await this.indexerDb.getList(giveTokenInfo['BLOCK_LIST']) : [];
 
             // List of addresses allowed or blocked from matching with this SWAP
-            let swapInfoAllowList = (!this.util.isNull(swapInfo['ALLOW_LIST'])) ? await this.indexerDb.getList(swapInfo['ALLOW_LIST']) : false;
-            let swapInfoBlockList = (!this.util.isNull(swapInfo['BLOCK_LIST'])) ? await this.indexerDb.getList(swapInfo['BLOCK_LIST']) : false;
+            let swapInfoAllowList = (!this.util.isNull(swapInfo['ALLOW_LIST'])) ? await this.indexerDb.getList(swapInfo['ALLOW_LIST']) : [];
+            let swapInfoBlockList = (!this.util.isNull(swapInfo['BLOCK_LIST'])) ? await this.indexerDb.getList(swapInfo['BLOCK_LIST']) : [];
 
             // Loop through matches and determine if we have a valid match
             let matchInfo = false;
@@ -67,8 +67,8 @@ class Swap_Match {
                 let valid = true;
 
                 // List of addresses allowed or blocked from matching with this matching SWAP
-                let matchInfoAllowList = (!this.util.isNull(match['ALLOW_LIST'])) ? await this.indexerDb.getList(match['ALLOW_LIST']) : false;
-                let matchInfoBlockList = (!this.util.isNull(match['BLOCK_LIST'])) ? await this.indexerDb.getList(match['BLOCK_LIST']) : false;
+                let matchInfoAllowList = (!this.util.isNull(match['ALLOW_LIST'])) ? await this.indexerDb.getList(match['ALLOW_LIST']) : [];
+                let matchInfoBlockList = (!this.util.isNull(match['BLOCK_LIST'])) ? await this.indexerDb.getList(match['BLOCK_LIST']) : [];
 
                 // Check if GET_ADDRESS for both sides of swap are allowed (ALLOW/BLOCK list support)
                 if((getTokenAllowList.length  && (!getTokenAllowList.includes(swapInfo['GET_ADDRESS'])  || !getTokenAllowList.includes(match['GET_ADDRESS'])))  ||
