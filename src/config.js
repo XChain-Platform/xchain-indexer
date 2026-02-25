@@ -54,7 +54,7 @@ module.exports = {
         config['COINS'] = ['BTC', 'LTC', 'DOGE'];
 
         // Define list of acceptable FIAT currencies
-        config['FIATS']        = [];
+        config['FIATS']        = {};
         config['FIATS']['USD'] = 'US Dollar';
         config['FIATS']['CAD'] = 'Canadian Dollar';
         config['FIATS']['AUD'] = 'Austrailian Dollar';
