@@ -131,16 +131,16 @@ class XChainIndexer {
             lastDecoderReorgBlock = await this.decoderDb.getBlockIndex('decoder', 'reorg');
             lastIndexerReorgBlock = await this.indexerDb.getBlockIndex('indexer', 'reorg');
 
-            // Handle block reorgs
-            if(!this.util.isNull(lastDecoderReorgBlock) && (this.util.isNull(lastIndexerReorgBlock) || lastDecoderReorgBlock < lastIndexerReorgBlock)){
+            // Get last processed block from Indexer and Decoder databases
+            lastDecoderBlock  = await this.decoderDb.getBlockIndex('decoder', 'last');
+            lastIndexerBlock  = await this.indexerDb.getBlockIndex('indexer', 'last');
+
+            // Handle block reorgs — only roll back if the indexer has already indexed past the reorg block
+            if(!this.util.isNull(lastDecoderReorgBlock) && !this.util.isNull(lastIndexerBlock) && lastIndexerBlock >= lastDecoderReorgBlock && (this.util.isNull(lastIndexerReorgBlock) || lastDecoderReorgBlock < lastIndexerReorgBlock)){
                 console.log("Detected block reorganization at block #",lastDecoderReorgBlock);
                 await this.indexerDb.createReorg(lastDecoderReorgBlock);
                 await this.rollback.rollback(lastDecoderReorgBlock);
             }
-
-            // Get last processed block from Indexer and Decoder databases
-            lastDecoderBlock  = await this.decoderDb.getBlockIndex('decoder', 'last');
-            lastIndexerBlock  = await this.indexerDb.getBlockIndex('indexer', 'last');
 
             // If indexer has no parsed blocks, set last indexer block to first decoder block-1 
             if(this.util.isNull(lastIndexerBlock)){
