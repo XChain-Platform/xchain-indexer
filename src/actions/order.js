@@ -118,7 +118,7 @@ class Order {
             data['EXPIRATION'] = this.util.getDefaultExpiration(data['BLOCK_TIME']);
 
         // Clone the raw data for storage in orders table
-        let order = structuredClone(data);
+        let order = Object.assign({}, data);
 
         /*****************************************************************
          * TICK & COIN Validations

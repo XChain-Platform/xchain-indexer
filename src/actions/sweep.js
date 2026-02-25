@@ -104,7 +104,7 @@ class Sweep {
         data['ESCROWS']    = (!this.util.isNull(data['ESCROWS'])) ? data['ESCROWS'] : 0;
 
         // Clone the raw data for storage in mints table
-        let sweep = structuredClone(data);
+        let sweep = Object.assign({}, data);
 
         /*****************************************************************
          * General Validations

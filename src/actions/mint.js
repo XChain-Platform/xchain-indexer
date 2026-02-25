@@ -68,7 +68,7 @@ class Mint {
             data = this.util.setNumberFormats(data);
 
         // Clone the raw data for storage in mints table
-        let mint = structuredClone(data);
+        let mint = Object.assign({}, data);
 
         // Get information on token
         let tokenInfo = await this.indexerDb.getTokenInfo(data['TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);

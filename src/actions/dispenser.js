@@ -119,7 +119,7 @@ class Dispenser {
             data['EXPIRATION'] = this.util.getDefaultExpiration(data['BLOCK_TIME']);
 
         // Clone the raw data for storage in dispensers table
-        let dispenser = structuredClone(data);
+        let dispenser = Object.assign({}, data);
 
         /*****************************************************************
          * TICK / COIN / FIAT Validations

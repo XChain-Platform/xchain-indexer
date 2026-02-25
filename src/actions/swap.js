@@ -116,7 +116,7 @@ class Swap {
             data['EXPIRATION'] = this.util.getDefaultExpiration(data['BLOCK_TIME']);
 
         // Clone the raw data for storage in swap table
-        let swap = structuredClone(data);
+        let swap = Object.assign({}, data);
 
         /*****************************************************************
          * TICK & COIN Validations
