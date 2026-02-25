@@ -1158,7 +1158,7 @@ class Database {
     // @param {block_index}     integer Block Index 
     // @param {action_index}    integer action_index of action
     async isDistributed(tick, block_index, action_index){
-        let info    = await this.getTokenInfo(tick, null, block_index, action_index);
+        let info    = await this.getTokenInfo(tick, block_index, action_index);
         let holders = (info) ? await this.getHolders(tick, block_index, action_index) : [];
         // More than one holder
         if(Object.keys(holders).length>1)
