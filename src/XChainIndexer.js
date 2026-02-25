@@ -171,31 +171,46 @@ class XChainIndexer {
                 // Get a list of any transactions in this block from the decoder database
                 let blockTransactions = await this.decoderDb.getDecoderBlockData(lastIndexerBlock);
 
-                // Loop through any block transactions and process them
-                for(const tx of blockTransactions)
-                    await this.actions.processTransaction(tx);
-
-                // Lookup the block time for a given block
+                // Lookup the block time for a given block (read from decoder DB before opening transaction)
                 let blockTime = await this.decoderDb.getBlockTime(lastIndexerBlock);
 
-                // Check for any expired items (orders, swaps, dispensers)
-                await this.util.processExpirations(this.actions, this.indexerDb, lastIndexerBlock, blockTime);
+                // Begin a transaction — all indexer DB writes for this block are atomic
+                await this.indexerDb.beginTransaction();
+                try {
 
-                // Check for any cancelled items (dispensers)
-                await this.util.processCancellations(this.actions, this.indexerDb, lastIndexerBlock, blockTime);
+                    // Loop through any block transactions and process them
+                    for(const tx of blockTransactions)
+                        await this.actions.processTransaction(tx);
 
-                // Create record in `blocks` table with hashes of the credits/debits/escrows (ledger) and /actions tables
-                let [ledger, actions] = await this.indexerDb.createBlock(lastIndexerBlock, blockTime);
+                    // Check for any expired items (orders, swaps, dispensers)
+                    await this.util.processExpirations(this.actions, this.indexerDb, lastIndexerBlock, blockTime);
 
-                // Create / Update DEX market information
-                await this.util.processMarketUpdates(this.indexerDb, lastIndexerBlock, blockTime);
+                    // Check for any cancelled items (dispensers)
+                    await this.util.processCancellations(this.actions, this.indexerDb, lastIndexerBlock, blockTime);
 
-                // Do a sanity check to verify that token supplies match data in credits/debits/escrows/balances tables 
-                await this.indexerDb.sanityCheck(lastIndexerBlock);
+                    // Create record in `blocks` table with hashes of the credits/debits/escrows (ledger) and /actions tables
+                    let [ledger, actions] = await this.indexerDb.createBlock(lastIndexerBlock, blockTime);
 
-                // Log the total parse time for this block
-                let parseTime = this.util.getTimer(debugTimer);
-                console.log('Block Parsed' + "\t: " + lastIndexerBlock + ' [ledger:' + ledger + ' actions:' + actions + '] (' + parseTime + ')');
+                    // Create / Update DEX market information
+                    await this.util.processMarketUpdates(this.indexerDb, lastIndexerBlock, blockTime);
+
+                    // Do a sanity check to verify that token supplies match data in credits/debits/escrows/balances tables
+                    await this.indexerDb.sanityCheck(lastIndexerBlock);
+
+                    // Commit the block data to the database
+                    await this.indexerDb.commitTransaction();
+
+                    // Log the total parse time for this block
+                    let parseTime = this.util.getTimer(debugTimer);
+                    console.log('Block Parsed' + "\t: " + lastIndexerBlock + ' [ledger:' + ledger + ' actions:' + actions + '] (' + parseTime + ')');
+
+                } catch(error){
+                    // Roll back all writes for this block so the DB stays at the end of the previous block
+                    await this.indexerDb.rollbackTransaction();
+
+                    // Bail out with an error
+                    this.util.logError('Error while parsing block data :', error);
+                }
 
                 // DEBUG : Exit processing at a select block
                 // if(lastIndexerBlock >=  862672){

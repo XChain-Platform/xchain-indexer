@@ -280,43 +280,57 @@ class Rollback {
                         }
                     }
                 }
-
             }
-
-            // Loop through the data tables and delete records above the action_index
-            for(let table of this.dataTables){
-                query = `DELETE FROM ` + table + ` WHERE action_index >= ?`;
-                args  = [firstActionIndex];
-                let result = await this.indexerDb.doQuery(query, args);
-            } 
         }
 
-        // Delete data from tables using block_index
-        for(let table of this.blockTables){
-            query = `DELETE FROM ` + table + ` WHERE block_index > ?`;
-            args  = [block_index];
-            let result = await this.indexerDb.doQuery(query, args);
-        }
-
-        // Get lists of addresses, tickers, and transactions
+        // Get lists of addresses, tickers, and transactions (collected during read phase above)
         let addresses = this.util.getAddressesList();
         let tickers   = this.util.getTickersList();
 
-        // DEBUG : Full balances and token updates
-        // await this.indexerDb.updateBalances(true, true);
-        // await this.indexerDb.updateTokens(true, true);
+        // Begin a transaction — all deletes and recalculations are atomic
+        await this.indexerDb.beginTransaction();
+        try {
 
-        // Update address balances to get back to sane balances based on credits/debits
-        await this.indexerDb.updateBalances(Object.keys(addresses), true);
+            if(firstActionIndex){
+                // Loop through the data tables and delete records above the action_index
+                for(let table of this.dataTables){
+                    query = `DELETE FROM ` + table + ` WHERE action_index >= ?`;
+                    args  = [firstActionIndex];
+                    await this.indexerDb.doQuery(query, args);
+                }
+            }
 
-        // Update token information
-        await this.indexerDb.updateTokens(tickers, true);
+            // Delete data from tables using block_index
+            for(let table of this.blockTables){
+                query = `DELETE FROM ` + table + ` WHERE block_index > ?`;
+                args  = [block_index];
+                await this.indexerDb.doQuery(query, args);
+            }
 
-        // Update market information
-        await this.indexerDb.updateMarkets(markets, block_index);
+            // DEBUG : Full balances and token updates
+            // await this.indexerDb.updateBalances(true, true);
+            // await this.indexerDb.updateTokens(true, true);
 
-        // Do a sanity check to verify that token supplies match data in credits/debits/escrows/balances tables 
-        await this.indexerDb.sanityCheck(block_index);
+            // Update address balances to get back to sane balances based on credits/debits
+            await this.indexerDb.updateBalances(Object.keys(addresses), true);
+
+            // Update token information
+            await this.indexerDb.updateTokens(tickers, true);
+
+            // Update market information
+            await this.indexerDb.updateMarkets(markets, block_index);
+
+            // Do a sanity check to verify that token supplies match data in credits/debits/escrows/balances tables
+            await this.indexerDb.sanityCheck(block_index);
+
+            // Commit — the rollback is now atomically applied
+            await this.indexerDb.commitTransaction();
+
+        } catch(e) {
+            // Roll back so the DB is left untouched rather than in a partial rollback state
+            await this.indexerDb.rollbackTransaction();
+            throw e;
+        }
 
         // Log the rollback time
         this.util.logTimer(rollbackTimer, 'Rollback Done');
