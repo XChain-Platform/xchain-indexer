@@ -38,6 +38,10 @@ class Swap_Expire {
         // Get info on the swap
         let swapInfo = await this.indexerDb.getSwapInfo(this.config['COIN'], data['ACTION_INDEX']);
 
+        // Bail out if swap no longer exists (already expired or rolled back)
+        if(!swapInfo)
+            return;
+
         // Add SOURCE address and GET_TICK to addresses list
         this.util.addAddressTicker(swapInfo['SOURCE'], swapInfo['GET_TICK']);
 
