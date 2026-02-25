@@ -136,10 +136,10 @@ class Order {
         if(!error && format==0 && this.config['COIN']!=data['GIVE_COIN'])
             error = "invalid: GIVE_COIN (network)";
 
-        // validate GIVE_COIN network is current COIN network
+        // validate GET_COIN network is current COIN network
         // TODO: Remove this and allow support for cross-chain orders once xchain-hub is finished and working properly
         if(!error && format==0 && this.config['COIN']!=data['GET_COIN'])
-            error = "invalid: GIVE_COIN (network)";
+            error = "invalid: GET_COIN (network)";
 
         // Validate GIVE_TICK exists
         if(!error && format==0 && !giveTokenInfo)
