@@ -118,42 +118,42 @@ class Dispense {
                 if(!error){
                     // Get Token Allow List
                     if(getTokenAllowList.length){
-                        if(!error && !getTokenAllowList.includes(dispense['DESTINATION']))
+                        if(!error && !getTokenAllowList.includes(data['SOURCE']))
                             error = 'invalid: DESTINATION (GET_TOKEN allow list)';
                         if(!error && !getTokenAllowList.includes(dispenser['GET_ADDRESS']))
                             error = 'invalid: GET_ADDRESS (GET_TOKEN allow list)';
                     }
                     // Get Token Block List
                     if(getTokenBlockList.length){
-                        if(!error && getTokenBlockList.includes(dispense['DESTINATION']))
+                        if(!error && getTokenBlockList.includes(data['SOURCE']))
                             error = 'invalid: DESTINATION (GET_TOKEN block list)';
                         if(!error && getTokenBlockList.includes(dispenser['GET_ADDRESS']))
                             error = 'invalid: GET_ADDRESS (GET_TOKEN block list)';
                     }
                     // Give Token Allow List
                     if(giveTokenAllowList.length){
-                        if(!error && !giveTokenAllowList.includes(dispense['DESTINATION']))
+                        if(!error && !giveTokenAllowList.includes(data['SOURCE']))
                             error = 'invalid: DESTINATION (GIVE_TOKEN allow list)';
                         if(!error && !giveTokenAllowList.includes(dispenser['GET_ADDRESS']))
                             error = 'invalid: GET_ADDRESS (GIVE_TOKEN allow list)';
                     }
                     // Give Token Block List
                     if(getTokenBlockList.length){
-                        if(!error && getTokenBlockList.includes(dispense['DESTINATION']))
+                        if(!error && getTokenBlockList.includes(data['SOURCE']))
                             error = 'invalid: DESTINATION (GET_TOKEN block list)';
                         if(!error && getTokenBlockList.includes(dispenser['GET_ADDRESS']))
                             error = 'invalid: GET_ADDRESS (GET_TOKEN block list)';
                     }
                     // Dispenser Allow List
                     if(dispenserAllowList.length){
-                        if(!error && !dispenserAllowList.includes(dispense['DESTINATION']))
+                        if(!error && !dispenserAllowList.includes(data['SOURCE']))
                             error = 'invalid: DESTINATION (dispenser allow list)';
                         if(!error && !dispenserAllowList.includes(dispenser['GET_ADDRESS']))
                             error = 'invalid: GET_ADDRESS (dispenser allow list)';
                     }
                     // Dispenser Block List
                     if(dispenserBlockList.length){
-                        if(!error && dispenserBlockList.includes(dispense['DESTINATION']))
+                        if(!error && dispenserBlockList.includes(data['SOURCE']))
                             error = 'invalid: DESTINATION (DISPENSER block list)';
                         if(!error && dispenserBlockList.includes(dispenser['GET_ADDRESS']))
                             error = 'invalid: GET_ADDRESS (DISPENSER block list)';
