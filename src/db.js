@@ -560,15 +560,10 @@ class Database {
             return null;
         // Truncate to 250 characters
         hash = String(hash).substring(0,250);
-        var id = await this.getTransactionId(hash);
-        // Handle creating record
-        if(id==null){
-            let query = "INSERT INTO index_transactions (`hash`) values (?)"
-            let results = await this.doQuery(query, [hash]);
-            if(results.insertId)
-                id = Number(results.insertId);
-        }
-        return id;
+        let query   = "INSERT IGNORE INTO index_transactions (`hash`) values (?)";
+        let results = await this.doQuery(query, [hash]);
+        let id      = (results.insertId) ? results.insertId : await this.getTransactionId(hash);
+        return Number(id);
     }
 
     // Lookup a record in the `index_addresses` table and return record id
@@ -588,15 +583,10 @@ class Database {
             return null;
         // Truncate to 120 characters
         address = String(address).substring(0,120);
-        var id = await this.getAddressId(address);
-        // Handle creating record
-        if(id==null){
-            let query = "INSERT INTO index_addresses (`address`) values (?)"
-            let results = await this.doQuery(query, [address]);
-            if(results.insertId)
-                id = Number(results.insertId);
-        }
-        return id;
+        let query   = "INSERT IGNORE INTO index_addresses (`address`) values (?)";
+        let results = await this.doQuery(query, [address]);
+        let id      = (results.insertId) ? results.insertId : await this.getAddressId(address);
+        return Number(id);
     }
 
     // Lookup a record in the `blocks` table and return record id
@@ -812,17 +802,10 @@ class Database {
         // Ignore empty tick and return NULL
         if(this.util.isNull(tick))
             return null;
-        // Get the tick id using tick
-        let id = await this.getTickerId(tick);
-        // Handle creating record
-        if(id==null){
-            let query = "INSERT INTO index_tickers (tick) values (?)";
-            let args  = [tick];
-            let results = await this.doQuery(query, args);
-            if(results.insertId)
-                id = Number(results.insertId);
-        }
-        return id;
+        let query   = "INSERT IGNORE INTO index_tickers (tick) values (?)";
+        let results = await this.doQuery(query, [tick]);
+        let id      = (results.insertId) ? results.insertId : await this.getTickerId(tick);
+        return Number(id);
     }
 
     // Handle getting token information using issues table
