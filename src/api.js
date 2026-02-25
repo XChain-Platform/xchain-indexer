@@ -93,9 +93,14 @@ async function startApi(){
       console.log('API listening on port ' + INDEXER_API_PORT);
     });
 
-    // Start the indexer
+    // Initialize the indexer
     const indexer = new XChainIndexer(DECODER_DB_HOST, DECODER_DB_PORT, DECODER_DB_NAME, DECODER_DB_USER, DECODER_DB_PASS, INDEXER_DB_HOST, INDEXER_DB_PORT, INDEXER_DB_NAME, INDEXER_DB_USER, INDEXER_DB_PASS);
-    indexer.start();
+
+    // Start the Indexer (trap any errors and log them before exiting the indexer)
+    indexer.start().catch((error) => {
+        console.error('Fatal indexer error:', error);
+        process.exit(1);
+    });
 
 }
 
