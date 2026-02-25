@@ -467,12 +467,17 @@ class Utility {
         return fee;
     }
 
-    // Convert NUMBER fields from string value to number value so comparisons are mathematical 
+    // Convert NUMBER fields from string value to number value so comparisons are mathematical
     setNumberFormats(data){
         for(let name of this.config['NUMBER_FIELDS']){
             let value = data[name];
-            if(!this.isNull(value))
-                data[name] = this.bcnum(value);
+            if(!this.isNull(value)){
+                try {
+                    data[name] = this.bcnum(value);
+                } catch(e) {
+                    // leave non-numeric value as-is; action validation will reject it
+                }
+            }
         }
         return data;
     }
