@@ -291,7 +291,7 @@ class Database {
         let action = (!this.util.isNull(data['ACTION'])) ? data['ACTION'] : 'UNKNOWN';
         if(action=='BROADCAST'){
             // Truncate MESSAGE value to 250 characters
-            if(!this.util.isNull(data['MESSSAGE']))
+            if(!this.util.isNull(data['MESSAGE']))
                 data['MESSAGE'] = String(data['MESSAGE']).substring(0,250);
             // Truncate VALUE value to 25 characters
             if(!this.util.isNull(data['VALUE']))
