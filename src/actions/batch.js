@@ -97,7 +97,7 @@ class Batch {
         // Verify all ACTION commands are valid
         for(let command of commands){
             let action = String(command).split('|')[0];
-            if(!error && !this.protocolChanges.isEnabled(action, data['BLOCK_INDEX']))
+            if(!error && await this.protocolChanges.isEnabled(action, data['BLOCK_INDEX']) == false)
                 error = 'invalid: ACTION (unknown)';
         }
 
