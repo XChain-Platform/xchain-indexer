@@ -232,12 +232,14 @@ class Database {
         if(this.transactionConnection != null){
             try {
                 await this.transactionConnection.commit();
-                this.transactionConnection.release();
+                await this.transactionConnection.release();
                 this.transactionConnection = null;
                 return true;
             } catch (e){
                 console.log("There was an error trying to commit a transaction");
-                this.transactionConnection = null; //the transaction is not valid anymore
+                await this.transactionConnection.rollback();
+                await this.transactionConnection.release();
+                this.transactionConnection = null;
             }
         }
         return false;
@@ -247,14 +249,16 @@ class Database {
     async doQuery(query, args){
         let results = false;
         if(!this.util.isNull(query)){
-            let db     = await this.getConnection();
-            let exists = false;
+            let tx = this.transactionConnection != null;
+            let db = await this.getConnection();
             try {
                 results = await db.query(query, args);
             } catch (error){
                 this.util.logError('Error running database query :', error);
             }
-            await this.releaseConnection();
+            // Release the connection if we are not in the middle of a ACID transaction
+            if(!tx)
+                await this.releaseConnection();
         }
         return results;
     }
