@@ -130,8 +130,7 @@ class Database {
         let db    = await this.getConnection();
         // Loop through SQL files
         for (file of files){
-            var isSql = file.indexOf('.sql');
-            if(isSql){
+            if(file.indexOf('.sql') !== -1){
                 let table   = file.substring(0, file.indexOf('.sql'));
                 console.log('Verifying ' + table + ' table exists...');
                 try {
