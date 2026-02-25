@@ -38,6 +38,10 @@ class Order_Expire {
         // Get info on the order
         let orderInfo = await this.indexerDb.getOrderInfo(this.config['COIN'], data['ACTION_INDEX']);
 
+        // Bail out if order no longer exists (already expired or rolled back)
+        if(!orderInfo)
+            return;
+
         // Add SOURCE address and GET_TICK to addresses list
         this.util.addAddressTicker(orderInfo['SOURCE'], orderInfo['GET_TICK']);
 
