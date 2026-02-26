@@ -91,11 +91,11 @@ class Sweep {
             error = "invalid: BALANCES (format)";
 
         // Verify OWNERSHIPS format is valid (0 or 1)
-        if(!error && !this.util.isNull(data['OWNERSHIPS']) && !this.util.isValidLockValue(data['OWNERSHIPS'],[0,1]))
+        if(!error && !this.util.isNull(data['OWNERSHIPS']) && !this.util.isValidValue(data['OWNERSHIPS'],[0,1]))
             error = "invalid: OWNERSHIP (format)";
 
         // Verify ESCROWS format is valid (0 or 1)
-        if(!error && !this.util.isNull(data['ESCROWS']) && !this.util.isValidLockValue(data['ESCROWS'],[0,1]))
+        if(!error && !this.util.isNull(data['ESCROWS']) && !this.util.isValidValue(data['ESCROWS'],[0,1]))
             error = "invalid: ESCROWS (format)";
 
         // Set default values for BALANCES, OWNERSHIP, and ESCROWS
