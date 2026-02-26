@@ -281,6 +281,26 @@ class Utility {
         return this.bcnum(mathjs.format(mathjs.divide(mathjs.bignumber(a),mathjs.bignumber(b)),{notation: 'fixed', precision: d}));
     }
 
+    // Handle comparing two big numbers: returns true if numA > numB
+    bcgt(numA, numB){
+        return mathjs.larger(mathjs.bignumber(numA), mathjs.bignumber(numB));
+    }
+
+    // Handle comparing two big numbers: returns true if numA < numB
+    bclt(numA, numB){
+        return mathjs.smaller(mathjs.bignumber(numA), mathjs.bignumber(numB));
+    }
+
+    // Handle comparing two big numbers: returns true if numA >= numB
+    bcgte(numA, numB){
+        return mathjs.largerEq(mathjs.bignumber(numA), mathjs.bignumber(numB));
+    }
+
+    // Handle comparing two big numbers: returns true if numA <= numB
+    bclte(numA, numB){
+        return mathjs.smallerEq(mathjs.bignumber(numA), mathjs.bignumber(numB));
+    }
+
     // Validate if a given value is considered valid
     // @value = string or integer
     // @valid = string or array of values

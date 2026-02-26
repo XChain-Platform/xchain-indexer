@@ -144,11 +144,11 @@ class Mint {
             error = 'invalid: MEMO (length)';
 
         // Verify AMOUNT is less than MAX_MINT
-        if(!error && !this.util.isNull(data['AMOUNT']) && data['AMOUNT'] > data['MAX_MINT'])
+        if(!error && !this.util.isNull(data['AMOUNT']) && this.util.bcgt(data['AMOUNT'], data['MAX_MINT']))
             error = 'invalid: AMOUNT > MAX_MINT';
 
         // Verify minting AMOUNT will not exceed MAX_SUPPLY
-        if(!error && (this.util.bcadd(data['SUPPLY'],data['AMOUNT'],data['DECIMALS']) > this.util.bcadd(data['MAX_SUPPLY'],0,data['DECIMALS'])))
+        if(!error && this.util.bcgt(this.util.bcadd(data['SUPPLY'],data['AMOUNT'],data['DECIMALS']), this.util.bcadd(data['MAX_SUPPLY'],0,data['DECIMALS'])))
             error = 'invalid: mint exceeds MAX_SUPPLY';
 
         // Verify TICK action is allowed from SOURCE (allow/block lists)
@@ -160,7 +160,7 @@ class Mint {
             error = 'invalid: DESTINATION (not authorized)';
 
         // Verify minting AMOUNT will not exceed MINT_ADDRESS_MAX
-        if(!error && !this.util.isNull(data['MINT_ADDRESS_MAX']) && data['MINT_ADDRESS_MAX'] > 0 && this.util.bcadd(minted, data['AMOUNT'], data['DECIMALS']) > data['MINT_ADDRESS_MAX'])
+        if(!error && !this.util.isNull(data['MINT_ADDRESS_MAX']) && this.util.bcgt(data['MINT_ADDRESS_MAX'], 0) && this.util.bcgt(this.util.bcadd(minted, data['AMOUNT'], data['DECIMALS']), data['MINT_ADDRESS_MAX']))
             error = 'invalid: mint exceeds MINT_ADDRESS_MAX';
 
         // Verify minting begins at MINT_START_BLOCK
