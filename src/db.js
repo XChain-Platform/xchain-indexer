@@ -1381,7 +1381,7 @@ class Database {
 
     // Create/Update record in `tokens` table
     async createToken(data){
-        // Normalize data
+        data                   = this.normalizeDataValues(data);
         let supply             = (!this.util.isNull(data['SUPPLY']) &&               this.util.isNumeric(data['SUPPLY'])) ? data['SUPPLY'] : 0;
         let max_supply         = (!this.util.isNull(data['MAX_SUPPLY']) &&           this.util.isNumeric(data['MAX_SUPPLY'])) ? data['MAX_SUPPLY'] : 0;
         let max_mint           = (!this.util.isNull(data['MAX_MINT']) &&             this.util.isNumeric(data['MAX_MINT'])) ? data['MAX_MINT'] : 0;
@@ -1395,11 +1395,11 @@ class Database {
         let decimals           = (!this.util.isNull(data['DECIMALS']) &&             this.util.isNumeric(data['DECIMALS'])) ? parseInt(data['DECIMALS']) : 0;
         // Force any amount values to the correct decimal precision
         if(this.util.isNumeric(decimals) && decimals >= this.config.MIN_TOKEN_DECIMALS && decimals <= this.config.MAX_TOKEN_DECIMALS){
-            max_supply         = this.util.bcmul(max_supply, 1, decimals);
-            max_mint           = this.util.bcmul(max_mint, 1, decimals);
-            mint_supply        = this.util.bcmul(mint_supply, 1, decimals);
-            mint_address_max   = this.util.bcmul(mint_address_max, 1, decimals);
-            // callback_amount    = this.util.bcmul(callback_amount, 1, decimals);
+            max_supply         = this.util.bcformat(max_supply, decimals);
+            max_mint           = this.util.bcformat(max_mint, decimals);
+            mint_supply        = this.util.bcformat(mint_supply, decimals);
+            mint_address_max   = this.util.bcformat(mint_address_max, decimals);
+            // callback_amount    = this.util.bcformat(callback_amount, decimals);
         }
         let description        = data['DESCRIPTION'];
         let action_index       = data['ACTION_INDEX'];
