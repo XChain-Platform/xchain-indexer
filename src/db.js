@@ -1162,7 +1162,7 @@ class Database {
     // @param {action_index}  integer  ACTION_INDEX to a list
     // @param {type}          string   List Type (1=TICK, 2=ADDRESS)
     async isValidList(action_index, type){
-        let list_type = this.getListType(action_index);
+        let list_type = await this.getListType(action_index);
         if(list_type==type)
             return true;
         return false;
