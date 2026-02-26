@@ -63,7 +63,7 @@ class Callback {
             data = this.util.setActionParams(data, params, this.formats, format);
 
         // Clone the raw data for storage in callbacks table
-        let callback = structuredClone(data);
+        let callback = Object.assign({}, data);
 
         // Get information on token and callback token
         let tokenInfo         = await this.indexerDb.getTokenInfo(data['TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
