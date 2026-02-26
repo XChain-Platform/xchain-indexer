@@ -181,12 +181,17 @@ class Database {
         if(this.transactionConnection)
             return this.transactionConnection;
         var connection = null;
+        var attempts   = 0;
+        var maxAttempts = 30;
         while(connection == null){
             try {
                 connection = await this.pool.getConnection();
                 // console.log("Connected to database!");
             } catch (e){
-                console.log("Can't connect to mariadb. Trying again...");
+                attempts++;
+                if(attempts >= maxAttempts)
+                    this.util.throwError('Could not connect to MariaDB after ' + maxAttempts + ' attempts. Giving up.');
+                console.log("Can't connect to mariadb. Trying again... (" + attempts + '/' + maxAttempts + ')');
                 connection = null;
                 await this.util.sleep(1000);
             }
