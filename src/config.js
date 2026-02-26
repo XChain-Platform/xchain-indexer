@@ -22,7 +22,8 @@
  ********************************************************************/
 
 // Load required libraries
-const fs = require('fs');
+const fs   = require('fs');
+const path = require('path');
 
 module.exports = {
 
@@ -39,7 +40,7 @@ module.exports = {
         let coinConfig = {};
 
         // Define COIN specific configuration file
-        let coinFile   = '/XChainIndexer/src/configs/' + coin + '.js';
+        let coinFile   = path.join(__dirname, 'configs', coin + '.js');
 
         // Load COIN specific configuration file, or throw error
         if(fs.existsSync(coinFile)){
