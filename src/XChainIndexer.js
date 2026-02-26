@@ -111,7 +111,7 @@ class XChainIndexer {
             // Verify the Indexer tables exists
             let indexerTablesVerified = await this.indexerDb.verifyTables();
             if(!indexerTablesVerified)
-                this.util.throwError("Database " + this.decoderDbName + " tables don't exist!");
+                this.util.throwError("Database " + this.indexerDbName + " tables don't exist!");
         }
 
         // Define placeholders for block parsing status
