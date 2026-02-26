@@ -141,11 +141,8 @@ class Batch {
                 data['ACTION']  = action;
                 data['TX_DATA'] = command;
 
-                // Increase the action index for every command
-                data['ACTION_INDEX']++
-
-                // Create a record of this action in the actions table
-                data['ACTION_INDEX'] = await this.indexerDb.createActionIndex(data);
+                // Increase the action index for every command and create a record of this action in the actions table
+                data['ACTION_INDEX'] = await this.indexerDb.createActionIndex(data, true);
 
                 // Process the specific ACTION commands
                 await this.actions.processAction(action, params, data, error);
