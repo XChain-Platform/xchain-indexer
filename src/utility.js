@@ -25,10 +25,6 @@ const crypto = require('crypto');
 const mathjs = require('mathjs');
 const fs     = require('fs');
 
-// Support BigInt in JSON stringify()
-BigInt.prototype.toJSON = function(){
-    return JSON.rawJSON(this.toString());
-};
 
 class Utility {
 
@@ -97,10 +93,15 @@ class Utility {
         this.throwError(error);
     }
 
+    // JSON.stringify with BigInt support
+    jsonStringify(obj){
+        return JSON.stringify(obj, (key, value) => typeof value === 'bigint' ? value.toString() : value);
+    }
+
     // Get a SHA256 hash of a given data object
     getDataHash(data){
         let obj  = Object.assign({}, data); // Convert data to object if not already
-        let json = JSON.stringify(obj);     // Convert object to JSON string
+        let json = this.jsonStringify(obj);
         let hash = crypto.createHash('sha256').update(json).digest('hex');
         return hash;
     }
