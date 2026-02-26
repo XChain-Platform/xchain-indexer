@@ -44,7 +44,11 @@ class Order_Match {
 
         // Get information on a order given the COIN network and ORDER_ACTION_INDEX
         let orderIndex = (data['ORDER_ACTION_INDEX']) ? data['ORDER_ACTION_INDEX'] : data['ACTION_INDEX'];
-        let orderInfo  = await this.indexerDb.getOrderInfo(this.config['COIN'], orderIndex)
+        let orderInfo  = await this.indexerDb.getOrderInfo(this.config['COIN'], orderIndex);
+
+        // Bail out if order no longer exists (already expired or rolled back)
+        if(!orderInfo)
+            return;
 
         // Get a list of any matching open orders
         let matches = await this.indexerDb.findOrderMatches(orderInfo);
