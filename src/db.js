@@ -148,7 +148,7 @@ class Database {
                 }
             }
         }
-        await this.releaseConnection();
+        await db.release();
         return true;
     }
 
@@ -157,7 +157,6 @@ class Database {
         let dir     = path.join(__dirname, 'sql');
         let data    = fs.readFileSync(dir + '/' + file, "utf8");
         let table   = file.substring(0, file.indexOf('.sql'));
-        let db      = await this.getConnection();
         let queries = data.split(';');
         let query   = null;
         console.log('Creating ' + table + ' table and indexes...');
@@ -177,12 +176,12 @@ class Database {
      * Common database connection functions (connect / rollback / commit / doQuery)
      */
 
-    // Handle getting a database Connection    
+    // Handle getting a database Connection
     async getConnection(){
         if(this.transactionConnection)
             return this.transactionConnection;
         var connection = null;
-        while(connection == null){        
+        while(connection == null){
             try {
                 connection = await this.pool.getConnection();
                 // console.log("Connected to database!");
@@ -192,7 +191,6 @@ class Database {
                 await this.util.sleep(1000);
             }
         }
-        this.transactionConnection = connection;
         return connection;
     }
 
@@ -259,7 +257,7 @@ class Database {
             }
             // Release the connection if we are not in the middle of a ACID transaction
             if(!tx)
-                await this.releaseConnection();
+                await db.release();
         }
         return results;
     }
