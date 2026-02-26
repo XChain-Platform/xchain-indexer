@@ -2393,7 +2393,7 @@ class Database {
 
     // Create/Update record in `fees` table
     async createFeeRecord(data){
-        // Normalize data
+        data               = this.normalizeDataValues(data);
         let tick_id        = await this.createTicker(data['TICK']);
         let destination_id = await this.createAddress(data['DESTINATION']);
         let action_index   = data['ACTION_INDEX'];
@@ -3230,6 +3230,7 @@ class Database {
 
     // Create/Update record in `swap_edits` table
     async createSwapEdit(data){
+        data = this.normalizeDataValues(data);
         // Standardize LIST values to numeric or NULL
         for(let list of this.config['LIST_FIELDS']){
             if(this.util.isNull(data[list]) || !this.util.isNumeric(data[list]))
