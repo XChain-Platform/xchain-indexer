@@ -1863,10 +1863,10 @@ class Database {
         }
         // Validate address against any tick allow/block lists
         if(allow && !this.util.isNull(address) && !this.util.isNull(tick)){
-            let info = await this.getTokenInfo(tick);
+            let info = await this.getTokenInfo(tick, block_index);
             let list = null;
             // False if we have an ALLOW_LIST and address is NOT on it
-            if(allow && !this.util.isNull(info['ALLOW_LIST']) && this.util.isNumeric(info['ALLOW_LIST'])){
+            if(allow && info && !this.util.isNull(info['ALLOW_LIST']) && this.util.isNumeric(info['ALLOW_LIST'])){
                 list = await this.getList(info['ALLOW_LIST']);
                 if(!list.includes(address))
                     allow = false;
