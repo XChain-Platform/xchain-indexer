@@ -1129,7 +1129,7 @@ class Database {
         if(results.length > 0){
             for(let row of results){
                 let balance = this.util.bcsub(holders[row.address], row.debits, decimals);
-                if(balance > 0)
+                if(this.util.bcgt(balance, 0))
                     holders[row.address] = balance;
                 else
                    delete holders[row.address];
@@ -5825,7 +5825,7 @@ class Database {
         if(results.length > 0){
             for(let row of results){
                 // Only add dispenser if amount is greater than or equal to COIN_AMOUNT
-                if(coin_amount >= this.util.bcnum(row.get_amount))
+                if(this.util.bcgte(coin_amount, row.get_amount))
                     dispensers.push(Number(row.action_index));
             }
         }

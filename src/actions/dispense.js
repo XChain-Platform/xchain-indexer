@@ -86,7 +86,7 @@ class Dispense {
             let give_amount = this.util.bcmul(multiplier, dispenser['GIVE_AMOUNT'], 64);
 
             // Give out the maximum amount allowed by the dispenser and payment amount
-            while(multiplier > 0 && give_amount > dispenser['GIVE_REMAINING']){
+            while(multiplier > 0 && this.util.bcgt(give_amount, dispenser['GIVE_REMAINING'])){
                 multiplier--;
                 give_amount = this.util.bcmul(multiplier, dispenser['GIVE_AMOUNT'], 64);
             }
@@ -219,7 +219,7 @@ class Dispense {
                     escrows = [];
 
                 // Debit GIVE_TICK from escrows and credit it to the SOURCE address
-                if(dispense['GIVE_AMOUNT'] > 0){
+                if(this.util.bcgt(dispense['GIVE_AMOUNT'], 0)){
                     escrows.push([dispense['GIVE_TICK'], -dispense['GIVE_AMOUNT'], dispense['DESTINATION']]);
                     credits.push([dispense['GIVE_TICK'],  dispense['GIVE_AMOUNT'], dispense['DESTINATION']]);
                 }
@@ -239,7 +239,7 @@ class Dispense {
             await this.mapper.createMappings(dispense);
 
             // Close the dispenser if GIVE_REMAINING is less than GIVE_AMOUNT
-            if(status=='valid' && this.util.bcformat(dispenser['GIVE_REMAINING'],64) < this.util.bcformat(dispense['GIVE_AMOUNT'],64)){
+            if(status=='valid' && this.util.bclt(dispenser['GIVE_REMAINING'], dispense['GIVE_AMOUNT'])){
                 let action = 'DISPENSER_CLOSE';
                 let data = {};
                 data['ACTION']                 = action;

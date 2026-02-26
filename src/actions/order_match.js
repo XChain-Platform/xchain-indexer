@@ -91,21 +91,21 @@ class Order_Match {
                 }
 
                 // Ignore if we have nothing left to GIVE
-                if(match['GIVE_REMAINING'] <= 0 || order['GIVE_REMAINING'] <= 0){
+                if(this.util.bclte(match['GIVE_REMAINING'], 0) || this.util.bclte(order['GIVE_REMAINING'], 0)){
                     if(this.debug)
                         console.log('Skipping: negative GIVE quantity remaining ', match['GIVE_REMAINING'], order['GIVE_REMAINING']);
                     continue;
                 }
 
                 // Ignore if we have nothing left to GET
-                if(match['GET_REMAINING'] <= 0 || order['GET_REMAINING'] <= 0){
+                if(this.util.bclte(match['GET_REMAINING'], 0) || this.util.bclte(order['GET_REMAINING'], 0)){
                     if(this.debug)
                         console.log('Skipping: negative GET quantity remaining ', match['GET_REMAINING'], order['GET_REMAINING']);
                     continue;
                 }
 
                 // Ignore price mismatches
-                if(matchInfo['GET_PRICE'] > orderInfo['GIVE_PRICE']){
+                if(this.util.bcgt(matchInfo['GET_PRICE'], orderInfo['GIVE_PRICE'])){
                     if(this.debug)
                         console.log('Skipping due to price mismatch ', matchInfo['GET_PRICE'], orderInfo['GIVE_PRICE']);
                     continue;
@@ -116,14 +116,14 @@ class Order_Match {
                     get_amount  = this.util.bcmul(give_amount, orderInfo['GIVE_PRICE']);
 
                 // Ignore zero quantity GIVE
-                if(give_amount <= 0){
+                if(this.util.bclte(give_amount, 0)){
                     if(this.debug)
                         console.log('Skipping zero quantity GIVE amount ', give_amount);
                     continue;
                 }
 
                 // Ignore zero quantity GET
-                if(get_amount <= 0){
+                if(this.util.bclte(get_amount, 0)){
                     if(this.debug)
                         console.log('Skipping zero quantity GET amount ', get_amount);
                     continue;
@@ -201,9 +201,9 @@ class Order_Match {
                 await this.indexerDb.createOrderMatch(data, orderInfo, matchInfo);
 
                 // Handle marking the orders as 'complete' if we have nothing left to give or get
-                if(order['GET_REMAINING'] <= 0 || order['GIVE_REMAINING'] <= 0)
+                if(this.util.bclte(order['GET_REMAINING'], 0) || this.util.bclte(order['GIVE_REMAINING'], 0))
                     await this.indexerDb.createOrderStatus(data['ACTION_INDEX'], orderInfo['ACTION_INDEX'], 'complete');
-                if(match['GET_REMAINING'] <= 0 || match['GIVE_REMAINING'] <= 0)
+                if(this.util.bclte(match['GET_REMAINING'], 0) || this.util.bclte(match['GIVE_REMAINING'], 0))
                     await this.indexerDb.createOrderStatus(data['ACTION_INDEX'], matchInfo['ACTION_INDEX'], 'complete');
 
                 // Create action mappings

@@ -248,15 +248,15 @@ class Issue {
         }
 
         // Verify MAX_SUPPLY min/max
-        if(!error && !this.util.isNull(data['MAX_SUPPLY']) && data['MAX_SUPPLY'] > 0 && (data['MAX_SUPPLY'] < this.config.MIN_TOKEN_SUPPLY || data['MAX_SUPPLY'] > this.config.MAX_TOKEN_SUPPLY))
+        if(!error && !this.util.isNull(data['MAX_SUPPLY']) && this.util.bcgt(data['MAX_SUPPLY'], 0) && (this.util.bclt(data['MAX_SUPPLY'], this.config.MIN_TOKEN_SUPPLY) || this.util.bcgt(data['MAX_SUPPLY'], this.config.MAX_TOKEN_SUPPLY)))
             error = 'invalid: MAX_SUPPLY (min/max)';
 
         // Verify MAX_SUPPLY is not set below current SUPPLY
-        if(!error && !this.util.isNull(data['MAX_SUPPLY']) && data['MAX_SUPPLY'] > 0 && data['MAX_SUPPLY'] < await this.indexerDb.getTokenSupply(data['TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']))
+        if(!error && !this.util.isNull(data['MAX_SUPPLY']) && this.util.bcgt(data['MAX_SUPPLY'], 0) && this.util.bclt(data['MAX_SUPPLY'], await this.indexerDb.getTokenSupply(data['TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX'])))
             error = 'invalid: MAX_SUPPLY < SUPPLY';
 
         // Verify SUPPLY is at least MIN_TOKEN_SUPPLY before allowing LOCK_MAX_SUPPLY
-        if(!error && data['LOCK_MAX_SUPPLY'] && ((tokenInfo && tokenInfo['SUPPLY'] < this.config.MIN_TOKEN_SUPPLY) || (!tokenInfo && data['MINT_SUPPLY'] < this.config.MIN_TOKEN_SUPPLY)))
+        if(!error && data['LOCK_MAX_SUPPLY'] && ((tokenInfo && this.util.bclt(tokenInfo['SUPPLY'], this.config.MIN_TOKEN_SUPPLY)) || (!tokenInfo && this.util.bclt(data['MINT_SUPPLY'], this.config.MIN_TOKEN_SUPPLY))))
             error = 'invalid: LOCK_MAX_SUPPLY (no supply)';
 
         // Verify DECIMAL min/max
@@ -264,7 +264,7 @@ class Issue {
             error = 'invalid: DECIMALS (min/max)';
 
         // Verify DECIMALS cannot be changed after supply has been issued
-        if(!error && !this.util.isNull(data['DECIMALS']) && tokenInfo && tokenInfo['SUPPLY'] > 0 && data['DECIMALS']!=tokenInfo['DECIMALS'])
+        if(!error && !this.util.isNull(data['DECIMALS']) && tokenInfo && this.util.bcgt(tokenInfo['SUPPLY'], 0) && data['DECIMALS']!=tokenInfo['DECIMALS'])
             error = 'invalid: DECIMALS (locked)';
 
         // Verify TRANSFER addresses
@@ -284,15 +284,15 @@ class Issue {
             error = 'invalid: MINT_SUPPLY (locked)';
 
         // Verify MINT_SUPPLY is less than MAX_SUPPLY
-        if(!error && !this.util.isNull(data['MINT_SUPPLY']) && data['MINT_SUPPLY'] > data['MAX_SUPPLY'])
+        if(!error && !this.util.isNull(data['MINT_SUPPLY']) && this.util.bcgt(data['MINT_SUPPLY'], data['MAX_SUPPLY']))
             error = 'invalid: MINT_SUPPLY > MAX_SUPPLY';
 
         // Verify MINT_ADDRESS_MAX is less than MAX_SUPPLY
-        if(!error && !this.util.isNull(data['MINT_ADDRESS_MAX']) && data['MINT_ADDRESS_MAX'] > 0 && data['MINT_ADDRESS_MAX'] > data['MAX_SUPPLY'])
+        if(!error && !this.util.isNull(data['MINT_ADDRESS_MAX']) && this.util.bcgt(data['MINT_ADDRESS_MAX'], 0) && this.util.bcgt(data['MINT_ADDRESS_MAX'], data['MAX_SUPPLY']))
             error = 'invalid: MINT_ADDRESS_MAX > MAX_SUPPLY';
 
         // Verify MINT_ADDRESS_MAX is greater than than MAX_MINT
-        if(!error && !this.util.isNull(data['MINT_ADDRESS_MAX']) && data['MINT_ADDRESS_MAX'] > 0 && data['MINT_ADDRESS_MAX'] < data['MAX_MINT'])
+        if(!error && !this.util.isNull(data['MINT_ADDRESS_MAX']) && this.util.bcgt(data['MINT_ADDRESS_MAX'], 0) && this.util.bclt(data['MINT_ADDRESS_MAX'], data['MAX_MINT']))
             error = 'invalid: MINT_ADDRESS_MAX < MAX_MINT';
 
         // Verify MAX_SUPPLY can not be changed if LOCK_MAX_SUPPLY is enabled

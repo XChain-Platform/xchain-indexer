@@ -68,7 +68,7 @@ class Dispenser_Close {
             // Set the destination address
             let destination = (!this.util.isNull(address)) ? address : dispenser['SOURCE'];
 
-            if(dispenser['GIVE_REMAINING'] > 0){
+            if(this.util.bcgt(dispenser['GIVE_REMAINING'], 0)){
                 escrows.push([dispenser['GIVE_TICK'], -dispenser['GIVE_REMAINING'], destination]);
                 credits.push([dispenser['GIVE_TICK'],  dispenser['GIVE_REMAINING'], destination]);
             }
