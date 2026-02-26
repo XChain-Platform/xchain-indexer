@@ -1872,7 +1872,7 @@ class Database {
                     allow = false;
             }
             // False if we have an BLOCK_LIST and address IS on it
-            if(allow && !this.util.isNull(info['BLOCK_LIST']) && this.util.isNumeric(info['BLOCK_LIST'])){
+            if(allow && info && !this.util.isNull(info['BLOCK_LIST']) && this.util.isNumeric(info['BLOCK_LIST'])){
                 list = await this.getList(info['BLOCK_LIST']);
                 if(list.includes(address))
                     allow = false;
