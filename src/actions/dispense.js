@@ -138,11 +138,11 @@ class Dispense {
                             error = 'invalid: GET_ADDRESS (GIVE_TOKEN allow list)';
                     }
                     // Give Token Block List
-                    if(getTokenBlockList.length){
-                        if(!error && getTokenBlockList.includes(data['SOURCE']))
-                            error = 'invalid: DESTINATION (GET_TOKEN block list)';
-                        if(!error && getTokenBlockList.includes(dispenser['GET_ADDRESS']))
-                            error = 'invalid: GET_ADDRESS (GET_TOKEN block list)';
+                    if(giveTokenBlockList.length){
+                        if(!error && giveTokenBlockList.includes(data['SOURCE']))
+                            error = 'invalid: DESTINATION (GIVE_TOKEN block list)';
+                        if(!error && giveTokenBlockList.includes(dispenser['GET_ADDRESS']))
+                            error = 'invalid: GET_ADDRESS (GIVE_TOKEN block list)';
                     }
                     // Dispenser Allow List
                     if(dispenserAllowList.length){
