@@ -240,6 +240,7 @@ class Database {
                 await this.transactionConnection.rollback();
                 await this.transactionConnection.release();
                 this.transactionConnection = null;
+                this.util.throwError('commitTransaction error=' + e);
             }
         }
         return false;
