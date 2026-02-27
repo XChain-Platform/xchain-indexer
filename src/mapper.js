@@ -79,7 +79,7 @@ class Mapper {
                     let index = (action1.action=='FILE') ? action1.action_index : action2.action_index;
                     let token = await this.indexerDb.getTokenInfo(tick);
                     // Create TICK<->FILE mapping if LINK action was created by current token owner address
-                    if(data['SOURCE']==token['OWNER'])
+                    if(token && data['SOURCE']==token['OWNER'])
                         await this.indexerDb.createFileMapping(index, 'tick', tick);
                 }
             }
