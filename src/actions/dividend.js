@@ -135,15 +135,15 @@ class Dividend {
          * General Validations
          ****************************************************************/
 
-        // Verify SOURCE is allowed to perform action
+        // Verify SOURCE is not sleeping
         if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
             error = 'invalid: SOURCE (sleeping)';
 
-        // Verify TICK is allowed to perform action
+        // Verify TICK is not sleeping
         if(!error && await this.indexerDb.isActionAllowed(null, data['TICK'], data['BLOCK_INDEX']) == false)
             error = 'invalid: TICK (sleeping)';
 
-        // Verify DIVIDEND_TICK is allowed to perform action
+        // Verify DIVIDEND_TICK is not sleeping
         if(!error && await this.indexerDb.isActionAllowed(null, data['DIVIDEND_TICK'], data['BLOCK_INDEX']) == false)
             error = 'invalid: DIVIDEND_TICK (sleeping)';
 

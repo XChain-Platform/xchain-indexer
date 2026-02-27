@@ -100,7 +100,7 @@ class Sleep {
         if(!error && !this.util.isNull(data['RESUME_BLOCK']) && !this.config['SLEEP_IMMEDIATE_METHODS'].includes(data['RESUME_BLOCK']) && data['RESUME_BLOCK'] < data['BLOCK_INDEX'])
             error = 'invalid: RESUME_BLOCK (block_index)';
 
-        // Verify SOURCE is allowed to perform action
+        // Verify SOURCE is not sleeping
         if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
             error = 'invalid: SOURCE (sleeping)';
 

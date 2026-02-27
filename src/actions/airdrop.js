@@ -188,11 +188,11 @@ class Airdrop {
              * General Validations
              ************************************************************/
 
-            // Verify SOURCE is allowed to perform action
+            // Verify SOURCE is not sleeping
             if(!error && await this.indexerDb.isActionAllowed(airdrop['SOURCE'], null, airdrop['BLOCK_INDEX']) == false)
                 error = 'invalid: SOURCE (sleeping)';
 
-            // Verify TICK is allowed to perform action
+            // Verify TICK is not sleeping
             if(!error && await this.indexerDb.isActionAllowed(null, airdrop['TICK'], airdrop['BLOCK_INDEX']) == false)
                 error = 'invalid: TICK (sleeping)';
 

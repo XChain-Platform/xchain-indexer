@@ -175,11 +175,11 @@ class Destroy {
              * General Validations
              ************************************************************/
 
-            // Verify SOURCE is allowed to perform action
+            // Verify SOURCE is not sleeping
             if(!error && await this.indexerDb.isActionAllowed(destroy['SOURCE'], null, destroy['BLOCK_INDEX']) == false)
                 error = 'invalid: SOURCE (sleeping)';
 
-            // Verify TICK is allowed to perform action
+            // Verify TICK is not sleeping
             if(!error && await this.indexerDb.isActionAllowed(null, destroy['TICK'], destroy['BLOCK_INDEX']) == false)
                 error = 'invalid: TICK (sleeping)';
 
@@ -196,7 +196,7 @@ class Destroy {
                 error = 'invalid: MEMO (length)';
 
             // Verify TICK action is allowed from SOURCE (allow/block lists)
-            if(!error && await this.indexerDb.isActionAllowed(destroy['SOURCE'], destroy['TICK'], destroy['BLOCK_INDEX']) == false)
+            if(!error && await this.indexerDb.isActionAllowed(destroy['SOURCE'], destroy['TICK']) == false)
                 error = 'invalid: SOURCE (not authorized)';
 
             // Verify SOURCE has enough balances to cover destroy

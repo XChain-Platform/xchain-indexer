@@ -110,7 +110,7 @@ class Sweep {
          * General Validations
          ****************************************************************/
 
-        // Verify SOURCE is allowed to perform action
+        // Verify SOURCE is not sleeping
         if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
             error = 'invalid: SOURCE (sleeping)';
 

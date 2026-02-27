@@ -172,15 +172,15 @@ class Callback {
          * General Validations
          ****************************************************************/
 
-        // Verify SOURCE is allowed to perform action
+        // Verify SOURCE is not sleeping
         if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
             error = 'invalid: SOURCE (sleeping)';
 
-        // Verify TICK is allowed to perform action
+        // Verify TICK is not sleeping
         if(!error && await this.indexerDb.isActionAllowed(null, tokenInfo['TICK'], data['BLOCK_INDEX']) == false)
             error = 'invalid: TICK (sleeping)';
 
-        // Verify CALLBACK_TICK is allowed to perform action
+        // Verify CALLBACK_TICK is not sleeping
         if(!error && await this.indexerDb.isActionAllowed(null, tokenInfo['CALLBACK_TICK'], data['BLOCK_INDEX']) == false)
             error = 'invalid: CALLBACK_TICK (sleeping)';
 
