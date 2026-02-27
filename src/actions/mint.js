@@ -152,11 +152,11 @@ class Mint {
             error = 'invalid: mint exceeds MAX_SUPPLY';
 
         // Verify TICK action is allowed from SOURCE (allow/block lists)
-        if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], data['TICK']) == false)
+        if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], data['TICK'], data['BLOCK_INDEX']) == false)
             error = 'invalid: SOURCE (not authorized)';
 
         // Verify TICK action is allowed to DESTINATION (ALLOW_LIST & BLOCK_LIST)
-        if(!error && !this.util.isNull(data['DESTINATION']) && await this.indexerDb.isActionAllowed(data['DESTINATION'], data['TICK']) == false)
+        if(!error && !this.util.isNull(data['DESTINATION']) && await this.indexerDb.isActionAllowed(data['DESTINATION'], data['TICK'], data['BLOCK_INDEX']) == false)
             error = 'invalid: DESTINATION (not authorized)';
 
         // Verify minting AMOUNT will not exceed MINT_ADDRESS_MAX
