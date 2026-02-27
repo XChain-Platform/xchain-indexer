@@ -133,18 +133,6 @@ class Callback {
         fees['AMOUNT'] = this.util.getTransactionFee(db_hits, fees['TICK']);
 
         /*****************************************************************
-         * ACTION Validations
-         ****************************************************************/
-
-        // Verify CALLBACK is allowed
-        if(!error && !this.util.isNull(tokenInfo['LOCK_CALLBACK']) && tokenInfo['LOCK_CALLBACK']==1)
-            error = "invalid: LOCK_CALLBACK";
-
-        // Verify only token OWNER can perform CALLBACK action
-        if(!error && data['SOURCE']!=tokenInfo['OWNER'])
-            error = "invalid: SOURCE (not authorized)";
-
-        /*****************************************************************
          * TICK Validations
          ****************************************************************/
 
@@ -155,6 +143,18 @@ class Callback {
         // Validate CALLBACK_TICK exists
         if(!error && !callbackTokenInfo)
             error = 'invalid: CALLBACK_TICK (unknown)';
+
+        /*****************************************************************
+         * ACTION Validations
+         ****************************************************************/
+
+        // Verify CALLBACK is allowed
+        if(!error && !this.util.isNull(tokenInfo['LOCK_CALLBACK']) && tokenInfo['LOCK_CALLBACK']==1)
+            error = "invalid: LOCK_CALLBACK";
+
+        // Verify only token OWNER can perform CALLBACK action
+        if(!error && data['SOURCE']!=tokenInfo['OWNER'])
+            error = "invalid: SOURCE (not authorized)";
 
         /*****************************************************************
          * FORMAT Validations
