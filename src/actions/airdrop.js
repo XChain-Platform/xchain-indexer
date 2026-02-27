@@ -260,7 +260,7 @@ class Airdrop {
             recipients = approved;
 
             // Determine total DEBIT
-            airdrop['DEBIT'] = this.util.bcmul(recipients.length,airdrop['AMOUNT'],tokenInfo['DECIMALS']);
+            airdrop['DEBIT'] = (!error) ? this.util.bcmul(recipients.length, airdrop['AMOUNT'], tokenInfo['DECIMALS']) : 0;
 
             // Calculate total number of database hits for this AIRDROP
             let db_hits  = recipients.length * 2; // 1 credits, 1 balances
