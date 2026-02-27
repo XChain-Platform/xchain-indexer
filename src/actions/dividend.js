@@ -91,25 +91,28 @@ class Dividend {
         let allowList = (dividendTokenInfo && dividendTokenInfo['ALLOW_LIST']) ? await this.indexerDb.getList(dividendTokenInfo['ALLOW_LIST']) : [];
         let blockList = (dividendTokenInfo && dividendTokenInfo['BLOCK_LIST']) ? await this.indexerDb.getList(dividendTokenInfo['BLOCK_LIST']) : [];
 
-        // Loop through list of holders and build out valid recipients list 
-        for(let address in holders){
-            let valid = true;
-            // Check if recipient is on the allow or block lists and only add valid addresses to the recipients list
-            if((allowList.length && !allowList.includes(address)) || (blockList.length && blockList.includes(address)))
-                valid = false;
-            // Ignore the source address so it is not added to recipients list
-            if(address==data['SOURCE'])
-                valid = false;
-            // Add address to the recipients list and calculate AMOUNT of the DIVIDEND_TICK the address should receive
-            if(valid)
-                recipients[address] = this.util.bcmul(holders[address], data['AMOUNT'], dividendTokenInfo['DECIMALS']);
-        }
+        // Loop through list of holders and build out valid recipients list
+        dividend['DEBIT'] = 0;
+        if(dividendTokenInfo){
+            for(let address in holders){
+                let valid = true;
+                // Check if recipient is on the allow or block lists and only add valid addresses to the recipients list
+                if((allowList.length && !allowList.includes(address)) || (blockList.length && blockList.includes(address)))
+                    valid = false;
+                // Ignore the source address so it is not added to recipients list
+                if(address==data['SOURCE'])
+                    valid = false;
+                // Add address to the recipients list and calculate AMOUNT of the DIVIDEND_TICK the address should receive
+                if(valid)
+                    recipients[address] = this.util.bcmul(holders[address], data['AMOUNT'], dividendTokenInfo['DECIMALS']);
+            }
 
-        // Determine total DEBIT for this dividend using recipient list
-        let totalDebit = 0;
-        for(let address in recipients)
-            totalDebit = this.util.bcadd(totalDebit, recipients[address], dividendTokenInfo['DECIMALS'])
-        dividend['DEBIT'] = totalDebit;
+            // Determine total DEBIT for this dividend using recipient list
+            let totalDebit = 0;
+            for(let address in recipients)
+                totalDebit = this.util.bcadd(totalDebit, recipients[address], dividendTokenInfo['DECIMALS'])
+            dividend['DEBIT'] = totalDebit;
+        }
 
         /*****************************************************************
          * TICK Validations
