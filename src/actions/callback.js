@@ -111,13 +111,14 @@ class Callback {
 
             if(valid){
                 // Calculate AMOUNT of CALLBACK_TICK this address should receive (BALANCE * CALLBACK_AMOUNT)
-                let amount = this.util.bcmul(holders[address], tokenInfo['CALLBACK_AMOUNT'], callbackTokenInfo['DECIMALS']);
+                let cbDecimals = callbackTokenInfo ? callbackTokenInfo['DECIMALS'] : 0;
+                let amount = this.util.bcmul(holders[address], tokenInfo['CALLBACK_AMOUNT'], cbDecimals);
 
                 // Add address and AMOUNT to the recipients list
                 recipients[address]  = amount;
 
                 // Add CALLBACK_TICK amount to totalCallbackTickAmount
-                totalCallbackTickAmount = this.util.bcadd(totalCallbackTickAmount, amount, callbackTokenInfo['DECIMALS'])
+                totalCallbackTickAmount = this.util.bcadd(totalCallbackTickAmount, amount, cbDecimals)
             }
 
             // Add TICK amount to totalTickAmount
