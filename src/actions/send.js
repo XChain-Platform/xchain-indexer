@@ -203,20 +203,20 @@ class Send {
              * General Validations
              ************************************************************/
 
-            // Verify SOURCE is allowed to perform action
+            // Verify SOURCE is not sleeping
             if(!error && await this.indexerDb.isActionAllowed(send['SOURCE'], null, send['BLOCK_INDEX']) == false)
                 error = 'invalid: SOURCE (sleeping)';
 
-            // Verify TICK is allowed to perform action
+            // Verify TICK is not sleeping
             if(!error && await this.indexerDb.isActionAllowed(null, send['TICK'], send['BLOCK_INDEX']) == false)
                 error = 'invalid: TICK (sleeping)';
 
             // Verify TICK action is allowed from SOURCE (allow/block lists)
-            if(!error && await this.indexerDb.isActionAllowed(send['SOURCE'], send['TICK'], send['BLOCK_INDEX']) == false)
+            if(!error && await this.indexerDb.isActionAllowed(send['SOURCE'], send['TICK']) == false)
                 error = 'invalid: SOURCE (not authorized)';
 
             // Verify TICK action is allowed to DESTINATION (allow/block lists)
-            if(!error && await this.indexerDb.isActionAllowed(send['DESTINATION'], send['TICK'], send['BLOCK_INDEX']) == false)
+            if(!error && await this.indexerDb.isActionAllowed(send['DESTINATION'], send['TICK']) == false)
                 error = 'invalid: DESTINATION (not authorized)';
 
             // Verify no pipe in MEMO (pipe is field delimiter)

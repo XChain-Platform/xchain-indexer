@@ -114,7 +114,7 @@ class Address {
         if(!error && !this.util.isNull(data['REQUIRE_MEMO']) && !this.validValues['REQUIRE_MEMO'].includes(data['REQUIRE_MEMO']))
             error = 'invalid: REQUIRE_MEMO (value)';
 
-        // Verify SOURCE is allowed to perform action
+        // Verify SOURCE is not sleeping
         if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
             error = 'invalid: SOURCE (sleeping)';
 
