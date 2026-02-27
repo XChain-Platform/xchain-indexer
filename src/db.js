@@ -216,6 +216,8 @@ class Database {
         try {
             await this.transactionConnection.beginTransaction();
         } catch(e){
+            await this.transactionConnection.release();
+            this.transactionConnection = null;
             this.util.throwError('beginTransaction error=' + e);
         }
     }
