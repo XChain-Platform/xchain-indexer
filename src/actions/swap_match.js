@@ -42,6 +42,10 @@ class Swap_Match {
         let swapIndex = (!this.util.isNull(data['SWAP_ACTION_INDEX'])) ? data['SWAP_ACTION_INDEX'] : data['ACTION_INDEX'];
         let swapInfo  = await this.indexerDb.getSwapInfo(this.config['COIN'], swapIndex)
 
+        // Bail out if swap no longer exists (already expired or rolled back)
+        if(!swapInfo)
+            return;
+
         // Get a list of any matching open swaps
         let matches = await this.indexerDb.findSwapMatches(data);
         if(matches){
