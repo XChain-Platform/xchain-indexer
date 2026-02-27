@@ -332,11 +332,11 @@ class Issue {
             error = 'invalid: CALLBACK_BLOCK (supply distributed)';
 
         // Verify CALLBACK_TICK can not be changed if supply is distributed
-        if(!error && !this.util.isNull(issue['CALLBACK_TICK']) && data['CALLBACK_TICK'] != tokenInfo['CALLBACK_TICK'] && isDistributed)
+        if(!error && !this.util.isNull(issue['CALLBACK_TICK']) && tokenInfo && data['CALLBACK_TICK'] != tokenInfo['CALLBACK_TICK'] && isDistributed)
             error = 'invalid: CALLBACK_TICK (supply distributed)';
 
         // // Verify CALLBACK_AMOUNT can not be changed if supply is distributed
-        if(!error && !this.util.isNull(issue['CALLBACK_AMOUNT']) && data['CALLBACK_AMOUNT'] != tokenInfo['CALLBACK_AMOUNT'] && isDistributed)
+        if(!error && !this.util.isNull(issue['CALLBACK_AMOUNT']) && tokenInfo && data['CALLBACK_AMOUNT'] != tokenInfo['CALLBACK_AMOUNT'] && isDistributed)
             error = 'invalid: CALLBACK_AMOUNT (supply distributed)';
 
         // Verify ALLOW_LIST is a valid list of addresses
