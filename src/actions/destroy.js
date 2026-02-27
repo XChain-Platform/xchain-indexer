@@ -196,7 +196,7 @@ class Destroy {
                 error = 'invalid: MEMO (length)';
 
             // Verify TICK action is allowed from SOURCE (allow/block lists)
-            if(!error && await this.indexerDb.isActionAllowed(destroy['SOURCE'], destroy['TICK']) == false)
+            if(!error && await this.indexerDb.isActionAllowed(destroy['SOURCE'], destroy['TICK'], destroy['BLOCK_INDEX']) == false)
                 error = 'invalid: SOURCE (not authorized)';
 
             // Verify SOURCE has enough balances to cover destroy
