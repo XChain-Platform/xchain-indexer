@@ -1787,7 +1787,7 @@ class Database {
     // Validate if a ticker exists before before a given action_index
     async validTickerBeforeTxIndex(tick, action_index){
         let issue_index = await this.getFirstIssueActionIndex(tick);
-        if(issue_index < action_index)
+        if(issue_index !== false && issue_index < action_index)
             return true;
         return false;
     }
