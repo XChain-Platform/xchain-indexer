@@ -42,8 +42,8 @@ class Swap_Expire {
         if(!swapInfo)
             return;
 
-        // Add SOURCE address and GET_TICK to addresses list
-        this.util.addAddressTicker(swapInfo['SOURCE'], swapInfo['GET_TICK']);
+        // Add SOURCE address and GIVE_TICK to addresses list
+        this.util.addAddressTicker(swapInfo['SOURCE'], swapInfo['GIVE_TICK']);
 
         // Define SWAP_EXPIRE action
         let action = {}
