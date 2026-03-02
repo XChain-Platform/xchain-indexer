@@ -100,7 +100,7 @@ class Dispenser {
         let getTokenInfo  = false;
 
         // Get the GET token info if this is the correct COIN network
-        if(info['GET_COIN'] == this.config['COIN'] && !this.util.isNull(info['GIVE_TICK']))
+        if(info['GET_COIN'] == this.config['COIN'] && !this.util.isNull(info['GET_TICK']))
             getTokenInfo = await this.indexerDb.getTokenInfo(info['GET_TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
 
         // Get source address balances and preferences
@@ -167,7 +167,7 @@ class Dispenser {
             error = "invalid: GIVE_ESCROW (format)";
 
         // Verify GET_AMOUNT format
-        if(!error && format==0 && !this.util.isNull(data['GET_AMOUNT']) && !this.util.isValidAmountFormat(getTokenInfo['DECIMALS'], data['GET_AMOUNT']))
+        if(!error && format==0 && !this.util.isNull(data['GET_AMOUNT']) && getTokenInfo && !this.util.isValidAmountFormat(getTokenInfo['DECIMALS'], data['GET_AMOUNT']))
             error = "invalid: GET_AMOUNT (format)";
 
         // Verify GET_ADDRESS is given if COIN network differs from GET_COIN network
