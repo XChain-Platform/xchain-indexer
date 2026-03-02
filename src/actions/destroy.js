@@ -90,8 +90,8 @@ class Destroy {
                 destroys.push([params[1], params[2], memo]);
 
             // Multi-Destroy (Full)
-            if(format==1 && idx>1 && idx%2==1)
-                destroys.push([params[1], params[idx-1], memo]);
+            if(format==1 && idx>1 && idx%2==0 && idx < lastIdx)
+                destroys.push([params[idx-1], params[idx], memo]);
 
             // Multi-Destroy (Full) with Multiple Memos
             if(format==2 && idx>0 && idx%3==1 && idx < lastIdx)
