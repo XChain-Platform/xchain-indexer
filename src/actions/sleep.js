@@ -97,7 +97,7 @@ class Sleep {
          ****************************************************************/
 
         // Verify RESUME_BLOCK is now, in the future, or a special immediate method 
-        if(!error && !this.util.isNull(data['RESUME_BLOCK']) && !this.config['SLEEP_IMMEDIATE_METHODS'].includes(data['RESUME_BLOCK']) && data['RESUME_BLOCK'] < data['BLOCK_INDEX'])
+        if(!error && !this.util.isNull(data['RESUME_BLOCK']) && !this.config['SLEEP_IMMEDIATE_METHODS'].includes(Number(data['RESUME_BLOCK'])) && this.util.bclt(data['RESUME_BLOCK'], data['BLOCK_INDEX']))
             error = 'invalid: RESUME_BLOCK (block_index)';
 
         // Verify SOURCE is not sleeping

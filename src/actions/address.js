@@ -107,11 +107,11 @@ class Address {
          ****************************************************************/
 
         // Verify FEE_PREFERENCE value is valid
-        if(!error && !this.util.isNull(data['FEE_PREFERENCE']) && !this.validValues['FEE_PREFERENCE'].includes(data['FEE_PREFERENCE']))
+        if(!error && !this.util.isNull(data['FEE_PREFERENCE']) && !this.validValues['FEE_PREFERENCE'].includes(Number(data['FEE_PREFERENCE'])))
             error = 'invalid: FEE_PREFERENCE (value)';
 
         // Verify REQUIRE_MEMO value is valid
-        if(!error && !this.util.isNull(data['REQUIRE_MEMO']) && !this.validValues['REQUIRE_MEMO'].includes(data['REQUIRE_MEMO']))
+        if(!error && !this.util.isNull(data['REQUIRE_MEMO']) && !this.validValues['REQUIRE_MEMO'].includes(Number(data['REQUIRE_MEMO'])))
             error = 'invalid: REQUIRE_MEMO (value)';
 
         // Verify SOURCE is not sleeping

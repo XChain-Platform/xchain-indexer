@@ -101,7 +101,7 @@ class Message {
             error = 'invalid: SOURCE (sleeping)';
         
         // Verify ENCRYPTION_METHOD format
-        if(!error && !this.util.isNull(data['ENCRYPTION_METHOD']) && !this.config['MESSAGE_ENCRYPTION_METHODS'].includes(data['ENCRYPTION_METHOD']))
+        if(!error && !this.util.isNull(data['ENCRYPTION_METHOD']) && !this.config['MESSAGE_ENCRYPTION_METHODS'].includes(Number(data['ENCRYPTION_METHOD'])))
             error = 'invalid: ENCRYPTION_METHOD (value)';
 
         // Verify ENCRYPTION_KEY is shorter than MAX_MESSAGE_KEY_LENGTH
