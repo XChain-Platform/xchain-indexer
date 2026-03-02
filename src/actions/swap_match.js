@@ -36,7 +36,7 @@ class Swap_Match {
     async parse(params, data, error){
 
         // Clone the raw data into a swap object
-        let swap = structuredClone(data);
+        let swap = Object.assign({}, data);
 
         // Get information on a swap given the COIN network and SWAP_ACTION_INDEX
         let swapIndex = (!this.util.isNull(data['SWAP_ACTION_INDEX'])) ? data['SWAP_ACTION_INDEX'] : data['ACTION_INDEX'];
