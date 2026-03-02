@@ -98,31 +98,33 @@ class Callback {
         let totalCallbackTickAmount = 0;
 
         // Loop through list of holders and build out valid recipients list and calculate total TICK and CALLBACK_TICK amounts
-        for(let address in holders){
-            let valid  = true;
+        if(tokenInfo){
+            for(let address in holders){
+                let valid  = true;
 
-            // Ignore the source address so it is not included in calculations
-            if(address==data['SOURCE'])
-               continue;
+                // Ignore the source address so it is not included in calculations
+                if(address==data['SOURCE'])
+                   continue;
 
-            // Check if recipient is on the allow or block lists and only add valid addresses to the recipients list
-            if((allowList.length && !allowList.includes(address)) || (blockList.length && blockList.includes(address)))
-                valid = false;
+                // Check if recipient is on the allow or block lists and only add valid addresses to the recipients list
+                if((allowList.length && !allowList.includes(address)) || (blockList.length && blockList.includes(address)))
+                    valid = false;
 
-            if(valid){
-                // Calculate AMOUNT of CALLBACK_TICK this address should receive (BALANCE * CALLBACK_AMOUNT)
-                let cbDecimals = callbackTokenInfo ? callbackTokenInfo['DECIMALS'] : 0;
-                let amount = this.util.bcmul(holders[address], tokenInfo['CALLBACK_AMOUNT'], cbDecimals);
+                if(valid){
+                    // Calculate AMOUNT of CALLBACK_TICK this address should receive (BALANCE * CALLBACK_AMOUNT)
+                    let cbDecimals = callbackTokenInfo ? callbackTokenInfo['DECIMALS'] : 0;
+                    let amount = this.util.bcmul(holders[address], tokenInfo['CALLBACK_AMOUNT'], cbDecimals);
 
-                // Add address and AMOUNT to the recipients list
-                recipients[address]  = amount;
+                    // Add address and AMOUNT to the recipients list
+                    recipients[address]  = amount;
 
-                // Add CALLBACK_TICK amount to totalCallbackTickAmount
-                totalCallbackTickAmount = this.util.bcadd(totalCallbackTickAmount, amount, cbDecimals)
+                    // Add CALLBACK_TICK amount to totalCallbackTickAmount
+                    totalCallbackTickAmount = this.util.bcadd(totalCallbackTickAmount, amount, cbDecimals)
+                }
+
+                // Add TICK amount to totalTickAmount
+                totalTickAmount = this.util.bcadd(totalTickAmount, holders[address], tokenInfo['DECIMALS'])
             }
-
-            // Add TICK amount to totalTickAmount
-            totalTickAmount = this.util.bcadd(totalTickAmount, holders[address], tokenInfo['DECIMALS'])
         }
 
         // Calculate total number of database hits for this CALLBACK
