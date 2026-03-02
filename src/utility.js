@@ -433,16 +433,16 @@ class Utility {
     consolidateLedgerRecords(records){
         let arr  = [],
             data = [];
-        // Consolidate amount using TICK-ADDRESS as key
+        // Consolidate amount using TICK\0ADDRESS as key (\0 cannot appear in tick names or addresses)
         for(let idx in records){
             let [tick, amount, address] = records[idx];
-            let key = tick + '-' + address;
+            let key = tick + '\0' + address;
             arr[key] = (arr[key]) ? this.bcadd(arr[key], amount, 18) : amount;
         }
         // Build out array of consolidated records
         for(let key in arr){
             let amount = arr[key];
-            let [tick, address] = String(key).split('-');
+            let [tick, address] = String(key).split('\0');
             let info = [tick, amount, address];
             data.push(info);
         }
