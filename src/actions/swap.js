@@ -285,7 +285,7 @@ class Swap {
         // Store the SOURCE, GIVE_TICK, and GET_TICK in addresses list
         if(format==0){
             this.util.addAddressTicker(data['SOURCE'], [data['GIVE_TICK'], data['GET_TICK']]);
-        } else {
+        } else if(swapInfo) {
             this.util.addAddressTicker(swapInfo['SOURCE'], [swapInfo['GIVE_TICK'], swapInfo['GET_TICK']]);
         }
 
