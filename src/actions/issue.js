@@ -195,7 +195,7 @@ class Issue {
         // Populate empty PARAMS with current setting
         if(tokenInfo){
             for(let key in tokenInfo){
-                if(!data[key])
+                if(this.util.isNull(data[key]))
                     data[key] = tokenInfo[key];
             }
         }
