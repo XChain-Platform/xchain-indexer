@@ -1143,7 +1143,7 @@ class Database {
             }
         }
         // Sort holders list from biggest to smallest
-        holders = Object.fromEntries(Object.entries(holders).sort(([, a], [, b]) => b - a));
+        holders = Object.fromEntries(Object.entries(holders).sort(([, a], [, b]) => this.util.bcgt(b, a) ? 1 : this.util.bclt(b, a) ? -1 : 0));
         return holders;
     }
 
