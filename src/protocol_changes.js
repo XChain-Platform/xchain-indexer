@@ -158,12 +158,12 @@ class ProtocolChanges {
                 current.version_major    = parseInt(semantic_version[0]);
                 current.version_minor    = parseInt(semantic_version[1]);
                 current.version_revision = parseInt(semantic_version[2]);
-                // Verify semantic versioning 
+                // Verify semantic versioning (compare major, then minor, then revision)
                 if(enabled && change.version_major > current.version_major)
                     enabled = false;
-                if(enabled && change.version_minor > current.version_minor)
+                if(enabled && change.version_major == current.version_major && change.version_minor > current.version_minor)
                     enabled = false;
-                if(enabled && change.version_revision > current.version_revision)
+                if(enabled && change.version_major == current.version_major && change.version_minor == current.version_minor && change.version_revision > current.version_revision)
                     enabled = false;
                 // Get block information given a block_index
                 if(enabled){
