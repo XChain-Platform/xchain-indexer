@@ -292,7 +292,7 @@ class Order {
         // Store the SOURCE, GIVE_TICK, and GET_TICK in addresses list
         if(format==0){
             this.util.addAddressTicker(data['SOURCE'], [data['GIVE_TICK'], data['GET_TICK']]);
-        } else {
+        } else if(orderInfo) {
             this.util.addAddressTicker(orderInfo['SOURCE'], [orderInfo['GIVE_TICK'], orderInfo['GET_TICK']]);
         }
 
