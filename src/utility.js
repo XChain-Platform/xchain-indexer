@@ -556,9 +556,9 @@ class Utility {
     sortPriceActionIndex(data){
         data.sort((a, b) => {
             // First, sort by 'GET_PRICE' in ascending order
-            if(a['GET_PRICE'] > b['GET_PRICE'])
+            if(this.bcgt(a['GET_PRICE'], b['GET_PRICE']))
                 return -1;
-            if(a['GET_PRICE'] < b['GET_PRICE'])
+            if(this.bclt(a['GET_PRICE'], b['GET_PRICE']))
                 return 1;
             // Second, sort by 'ACTION_INDEX' in ascending order
             if(a['ACTION_INDEX'] > b['ACTION_INDEX'])
