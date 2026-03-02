@@ -42,8 +42,8 @@ class Order_Expire {
         if(!orderInfo)
             return;
 
-        // Add SOURCE address and GET_TICK to addresses list
-        this.util.addAddressTicker(orderInfo['SOURCE'], orderInfo['GET_TICK']);
+        // Add SOURCE address and GIVE_TICK to addresses list
+        this.util.addAddressTicker(orderInfo['SOURCE'], orderInfo['GIVE_TICK']);
 
         // Define ORDER_EXPIRE action
         let action = {}
