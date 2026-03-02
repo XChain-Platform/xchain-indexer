@@ -114,7 +114,7 @@ class Airdrop {
         let ticks = {};
         for(let airdrop of airdrops){
             let tick = airdrop[0];
-            if(!ticks[tick])
+            if(ticks[tick] === undefined)
                 ticks[tick] = await this.indexerDb.getTokenInfo(tick, data['BLOCK_INDEX'], data['ACTION_INDEX']);
         }
 
