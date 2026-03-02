@@ -95,11 +95,11 @@ class List {
          ****************************************************************/
 
         // Validate TYPE
-        if(!error && format==0 && !this.listTypes.includes(data['TYPE']))
+        if(!error && format==0 && !this.listTypes.includes(Number(data['TYPE'])))
             error = 'invalid: TYPE (unknown)';
 
         // Validate EDIT
-        if(!error && format==1 && !this.editTypes.includes(data['EDIT']))
+        if(!error && format==1 && !this.editTypes.includes(Number(data['EDIT'])))
             error = 'invalid: EDIT (unknown)';
 
         // Parse in the list type (if any)
