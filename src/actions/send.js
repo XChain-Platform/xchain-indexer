@@ -117,7 +117,7 @@ class Send {
         let ticks = {};
         for(let send of sends){
             let tick = send[0];
-            if(!ticks[tick])
+            if(ticks[tick] === undefined)
                 ticks[tick] = await this.indexerDb.getTokenInfo(tick, data['BLOCK_INDEX'], data['ACTION_INDEX']);
         }
 
