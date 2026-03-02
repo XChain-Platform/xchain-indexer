@@ -1768,8 +1768,8 @@ class Database {
         let action_index = false;
         let query = `SELECT 
                         i.action_index 
-                    FROM 
-                        issues i,
+                    FROM
+                        issues i
                         INNER JOIN index_statuses s ON (s.id=i.status_id)
                     WHERE 
                         i.tick_id=? AND 
