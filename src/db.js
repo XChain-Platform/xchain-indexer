@@ -3833,7 +3833,7 @@ class Database {
         let query  = `SELECT
                             action_index
                         FROM
-                            swap_matches
+                            order_matches
                         WHERE
                             action_index=?`;
         let args = [action_index];
