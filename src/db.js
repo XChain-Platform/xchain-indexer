@@ -5162,9 +5162,9 @@ class Database {
         // Calculate 24-hour price change percentage
         let tick1_change = 0.00;
         let tick2_change = 0.00;
-        if(data.tick1_price > 0 && data.tick1_24hr_price > 0)
+        if(this.util.bcgt(data.tick1_price, 0) && this.util.bcgt(data.tick1_24hr_price, 0))
             tick1_change = this.util.bcmul(this.util.bcdiv(this.util.bcsub(data.tick1_price, data.tick1_24hr_price,8), data.tick1_24hr_price,8), 100, 2);
-        if(data.tick2_price > 0 && data.tick2_24hr_price > 0)
+        if(this.util.bcgt(data.tick2_price, 0) && this.util.bcgt(data.tick2_24hr_price, 0))
             tick2_change = this.util.bcmul(this.util.bcdiv(this.util.bcsub(data.tick2_price, data.tick2_24hr_price,8), data.tick2_24hr_price,8), 100, 2);
         data.tick1_24hr_change = tick1_change;
         data.tick2_24hr_change = tick2_change;
