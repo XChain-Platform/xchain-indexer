@@ -4750,7 +4750,7 @@ class Database {
                             s1.action_index ASC`;
                 args         = [info.action_index, 'valid'];
                 let results2 = await this.doQuery(query, args);
-                if(results2 > 0){
+                if(results2.length > 0){
                     for(let row of results2){
                         if(!this.util.isNull(row.expiration))
                             info.expiration = row.expiration;
