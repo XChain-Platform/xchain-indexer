@@ -2092,7 +2092,7 @@ class Database {
             let escrow  = this.util.bcnum(await this.getTokenSupplyEscrow(tick));  // Supply from escrows
             let total   = this.util.bcadd(balance, escrow, decimals[tick]);        // Total (balances + escrows)
             // DEBUG : Dump information on the sanity check failure
-            if(token!=ledger || token!=total){
+            if(String(token)!=String(ledger) || String(token)!=String(total)){
                 console.log("Tick,   tick_id =", tick, tick_id);
                 console.log("token   supply =", token);
                 console.log("ledger  supply =", ledger);  // Credits / Debits / Escrows
@@ -2100,9 +2100,9 @@ class Database {
                 console.log("escrow  supply =", escrow);  // Escrows
                 console.log("total   supply =", total);   // balance + escrow
             }
-            if(token!=ledger)
+            if(String(token)!=String(ledger))
                 this.util.throwError("SanityError: ledger supply does not match token supply : " + tick + " (" + ledger + " != " + token + ")");
-            if(token!=total)
+            if(String(token)!=String(total))
                 this.util.throwError("SanityError: total supply does not match token supply : " + tick + " (" + total + " != " + token + ")");
         }
     }
