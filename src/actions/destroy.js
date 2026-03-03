@@ -112,7 +112,7 @@ class Destroy {
             let [tick, amount, memo] = info;
             let key = tick + '|' + memo;
             if(!this.util.isNull(keys[key]))
-                amount = this.util.bcadd(amount, keys[key][1], ticks[tick]['DECIMALS']);
+                amount = this.util.bcadd(amount, keys[key][1], ticks[tick] && ticks[tick]['DECIMALS']);
             keys[key] = [tick, amount, memo];
         }
 
