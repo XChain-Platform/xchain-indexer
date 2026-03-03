@@ -173,7 +173,7 @@ class Sweep {
                 debits  = [];
 
             // If we are charging a fee, store the SOURCE and fees TICK in addresses list
-            if(fees['AMOUNT']>0)
+            if(this.util.bcgt(fees['AMOUNT'], 0))
                 this.util.addAddressTicker(data['SOURCE'], fees['TICK']);
 
             // Handle any transaction FEE according the users's ADDRESS preferences

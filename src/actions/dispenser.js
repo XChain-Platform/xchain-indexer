@@ -232,7 +232,7 @@ class Dispenser {
             error = 'invalid: DISPENSER_ACTION_INDEX (dispenser not open)';
 
         // Validate that EXPIRATION is greater than current BLOCK_TIME
-        if(!error && !this.util.isNull(data['EXPIRATION']) && data['EXPIRATION'] <= data['BLOCK_TIME'])
+        if(!error && !this.util.isNull(data['EXPIRATION']) && this.util.bclte(data['EXPIRATION'], data['BLOCK_TIME']))
             error = "invalid: EXPIRATION (past)";
 
         // Validate LIST fields (ALLOW_LIST / BLOCK_LIST)
@@ -325,7 +325,7 @@ class Dispenser {
         if(status=='valid'){
 
             // If we are charging a fee, store the SOURCE and fees TICK in addresses list
-            if(fees['AMOUNT']>0)
+            if(this.util.bcgt(fees['AMOUNT'], 0))
                 this.util.addAddressTicker(data['SOURCE'], fees['TICK']);
 
             // Debit GIVE_ESCROW GIVE_TICK from SOURCE and add to escrow

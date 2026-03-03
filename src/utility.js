@@ -511,16 +511,16 @@ class Utility {
         if(format==0){
             let expire_seconds = this.bcsub(data['EXPIRATION'], data['BLOCK_TIME'], 0);
             let expire_days    = this.bcdiv(expire_seconds, 86400, 0);
-            fee                = (expire_days > this.config['EXPIRATION_FEE_FREE_DAYS']) ? (this.bcmul(expire_days, this.config['EXPIRATION_FEE_PER_DAY'],8)) : 0;
+            fee                = this.bcgt(expire_days, this.config['EXPIRATION_FEE_FREE_DAYS']) ? (this.bcmul(expire_days, this.config['EXPIRATION_FEE_PER_DAY'],8)) : 0;
         }
         // Edit Order / Swap / Dispenser
-        if(format==2 && data['EXPIRATION'] > info['EXPIRATION']){
+        if(format==2 && this.bcgt(data['EXPIRATION'], info['EXPIRATION'])){
             let orig_expire_seconds = this.bcsub(info['EXPIRATION'], info['BLOCK_TIME'], 0);
             let orig_expire_days    = this.bcdiv(orig_expire_seconds, 86400, 0);
             let edit_expire_seconds = this.bcsub(data['EXPIRATION'], info['BLOCK_TIME'], 0);
             let edit_expire_days    = this.bcdiv(edit_expire_seconds, 86400, 0);
             // Only calculate FEE if increasing EXPIRATION date and greater than EXPIRATION_FEE_FREE_DAYS
-            if(data['EXPIRATION'] > info['EXPIRATION'] && edit_expire_days > this.config['EXPIRATION_FEE_FREE_DAYS']){
+            if(this.bcgt(data['EXPIRATION'], info['EXPIRATION']) && this.bcgt(edit_expire_days, this.config['EXPIRATION_FEE_FREE_DAYS'])){
                 let expire_days = this.bcsub(edit_expire_days, orig_expire_days, 0);
                 fee             = this.bcmul(expire_days, this.config['EXPIRATION_FEE_PER_DAY'],8);
             }
@@ -573,7 +573,7 @@ class Utility {
 
     // Process any transaction FEE according the user's ADDRESS preferences
     async processTransactionFees(db, credits, debits, fees){
-        if(fees['AMOUNT']>0){
+        if(this.bcgt(fees['AMOUNT'], 0)){
             // Debit FEE from SOURCE
             debits.push([fees['TICK'], fees['AMOUNT'], fees['SOURCE']]);
             // Handle using FEE according the the users ADDRESS preferences
