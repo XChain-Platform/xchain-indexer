@@ -150,15 +150,15 @@ class XChainIndexer {
                     lastIndexerBlock = this.util.bcsub(firstDecoderBlock,1);
             }
 
-            // Print out status message about where parsing is resuming 
+            // Print out status message about where parsing is resuming
             if(this.synced === false && !this.util.isNull(lastIndexerBlock)){
                 let startBlock = this.util.bcadd(lastIndexerBlock,1)
-                if(startBlock < lastDecoderBlock)
+                if(this.util.bclt(startBlock, lastDecoderBlock))
                     console.log('Resuming block parsing at block ' + startBlock + '...');
             }
 
             // Loop through blocks until indexer has parsed lastDecoderBlock
-            while( !this.util.isNull(lastIndexerBlock) && !this.util.isNull(lastDecoderBlock) && lastIndexerBlock < lastDecoderBlock ){
+            while( !this.util.isNull(lastIndexerBlock) && !this.util.isNull(lastDecoderBlock) && this.util.bclt(lastIndexerBlock, lastDecoderBlock) ){
 
                 // Set flag to indicate not fully synced
                 this.synced = false;
