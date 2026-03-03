@@ -1666,7 +1666,7 @@ class Database {
         if(type==='string' && !this.util.isNumeric(address))
             address_id = await this.createAddress(address);
         let query = "SELECT tick_id, amount FROM balances WHERE address_id=?";
-        let results = await this.doQuery(query, address_id);
+        let results = await this.doQuery(query, [address_id]);
         if(results.length > 0)
             for(let row of results)
                 balances[row.tick_id] = row.amount;
