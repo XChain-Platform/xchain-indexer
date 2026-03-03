@@ -164,11 +164,11 @@ class Mint {
             error = 'invalid: mint exceeds MINT_ADDRESS_MAX';
 
         // Verify minting begins at MINT_START_BLOCK
-        if(!error && !this.util.isNull(data['MINT_START_BLOCK']) && data['MINT_START_BLOCK'] > 0 && data['BLOCK_INDEX'] < data['MINT_START_BLOCK'])
+        if(!error && !this.util.isNull(data['MINT_START_BLOCK']) && this.util.bcgt(data['MINT_START_BLOCK'], 0) && this.util.bclt(data['BLOCK_INDEX'], data['MINT_START_BLOCK']))
             error = 'invalid: MINT_START_BLOCK';
 
         // Verify minting ends at MINT_STOP_BLOCK
-        if(!error && !this.util.isNull(data['MINT_STOP_BLOCK']) && data['MINT_STOP_BLOCK'] > 0 && data['BLOCK_INDEX'] > data['MINT_STOP_BLOCK'])
+        if(!error && !this.util.isNull(data['MINT_STOP_BLOCK']) && this.util.bcgt(data['MINT_STOP_BLOCK'], 0) && this.util.bcgt(data['BLOCK_INDEX'], data['MINT_STOP_BLOCK']))
             error = 'invalid: MINT_STOP_BLOCK';
 
         // Determine final status

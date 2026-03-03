@@ -260,11 +260,11 @@ class Issue {
             error = 'invalid: LOCK_MAX_SUPPLY (no supply)';
 
         // Verify DECIMAL min/max
-        if(!error && !this.util.isNull(data['DECIMALS']) && (data['DECIMALS'] < this.config.MIN_TOKEN_DECIMALS || data['DECIMALS'] > this.config.MAX_TOKEN_DECIMALS))
+        if(!error && !this.util.isNull(data['DECIMALS']) && (this.util.bclt(data['DECIMALS'], this.config.MIN_TOKEN_DECIMALS) || this.util.bcgt(data['DECIMALS'], this.config.MAX_TOKEN_DECIMALS)))
             error = 'invalid: DECIMALS (min/max)';
 
         // Verify DECIMALS cannot be changed after supply has been issued
-        if(!error && !this.util.isNull(data['DECIMALS']) && tokenInfo && this.util.bcgt(tokenInfo['SUPPLY'], 0) && data['DECIMALS']!=tokenInfo['DECIMALS'])
+        if(!error && !this.util.isNull(data['DECIMALS']) && tokenInfo && this.util.bcgt(tokenInfo['SUPPLY'], 0) && String(data['DECIMALS'])!=String(tokenInfo['DECIMALS']))
             error = 'invalid: DECIMALS (locked)';
 
         // Verify TRANSFER addresses
@@ -296,11 +296,11 @@ class Issue {
             error = 'invalid: MINT_ADDRESS_MAX < MAX_MINT';
 
         // Verify MAX_SUPPLY can not be changed if LOCK_MAX_SUPPLY is enabled
-        if(!error && tokenInfo && tokenInfo['LOCK_MAX_SUPPLY'] && !this.util.isNull(data['MAX_SUPPLY']) && data['MAX_SUPPLY'] != tokenInfo['MAX_SUPPLY'])
+        if(!error && tokenInfo && tokenInfo['LOCK_MAX_SUPPLY'] && !this.util.isNull(data['MAX_SUPPLY']) && String(data['MAX_SUPPLY']) != String(tokenInfo['MAX_SUPPLY']))
             error = 'invalid: MAX_SUPPLY (locked)';
 
         // Verify MAX_MINT can not be changed if LOCK_MAX_MINT is enabled
-        if(!error && tokenInfo && tokenInfo['LOCK_MAX_MINT'] && !this.util.isNull(data['MAX_MINT']) && data['MAX_MINT'] != tokenInfo['MAX_MINT'])
+        if(!error && tokenInfo && tokenInfo['LOCK_MAX_MINT'] && !this.util.isNull(data['MAX_MINT']) && String(data['MAX_MINT']) != String(tokenInfo['MAX_MINT']))
             error = 'invalid: MAX_MINT (locked)';
 
         // Verify DESCRIPTION is less than or equal to MAX_TOKEN_DESCRIPTION
@@ -312,7 +312,7 @@ class Issue {
             error = 'invalid: DESCRIPTION (locked)';
 
         // Verify CALLBACK_BLOCK can not be changed if LOCK_CALLBACK is enabled
-        if(!error && tokenInfo && tokenInfo['LOCK_CALLBACK'] && !this.util.isNull(data['CALLBACK_BLOCK']) && data['CALLBACK_BLOCK'] != tokenInfo['CALLBACK_BLOCK'])
+        if(!error && tokenInfo && tokenInfo['LOCK_CALLBACK'] && !this.util.isNull(data['CALLBACK_BLOCK']) && String(data['CALLBACK_BLOCK']) != String(tokenInfo['CALLBACK_BLOCK']))
             error = 'invalid: CALLBACK_BLOCK (locked)';
 
         // Verify CALLBACK_TICK can not be changed if LOCK_CALLBACK is enabled
@@ -320,15 +320,15 @@ class Issue {
             error = 'invalid: CALLBACK_TICK (locked)';
 
         // Verify CALLBACK_TICK can not be changed if LOCK_CALLBACK is enabled
-        if(!error && tokenInfo && tokenInfo['LOCK_CALLBACK'] && !this.util.isNull(data['CALLBACK_AMOUNT']) && data['CALLBACK_AMOUNT'] != tokenInfo['CALLBACK_AMOUNT'])
+        if(!error && tokenInfo && tokenInfo['LOCK_CALLBACK'] && !this.util.isNull(data['CALLBACK_AMOUNT']) && String(data['CALLBACK_AMOUNT']) != String(tokenInfo['CALLBACK_AMOUNT']))
             error = 'invalid: CALLBACK_AMOUNT (locked)';
 
         // Verify CALLBACK_BLOCK is greater than current block index
-        if(!error && tokenInfo && !this.util.isNull(issue['CALLBACK_BLOCK']) && data['CALLBACK_BLOCK'] < data['BLOCK_INDEX'])
+        if(!error && tokenInfo && !this.util.isNull(issue['CALLBACK_BLOCK']) && this.util.bclt(data['CALLBACK_BLOCK'], data['BLOCK_INDEX']))
             error = 'invalid: CALLBACK_BLOCK (block index)';
 
         // Verify CALLBACK_BLOCK can not be changed if supply is distributed
-        if(!error && !this.util.isNull(issue['CALLBACK_BLOCK']) && tokenInfo && data['CALLBACK_BLOCK'] != tokenInfo['CALLBACK_BLOCK'] && isDistributed)
+        if(!error && !this.util.isNull(issue['CALLBACK_BLOCK']) && tokenInfo && String(data['CALLBACK_BLOCK']) != String(tokenInfo['CALLBACK_BLOCK']) && isDistributed)
             error = 'invalid: CALLBACK_BLOCK (supply distributed)';
 
         // Verify CALLBACK_TICK can not be changed if supply is distributed
@@ -348,15 +348,15 @@ class Issue {
             error = 'invalid: BLOCK_LIST (bad list)';
 
         // Verify MINT_START_BLOCK is greater than or equal to current block
-        if(!error && !this.util.isNull(issue['MINT_START_BLOCK']) && issue['MINT_START_BLOCK'] > 0 && issue['MINT_START_BLOCK'] < issue['BLOCK_INDEX'])
+        if(!error && !this.util.isNull(data['MINT_START_BLOCK']) && this.util.bcgt(data['MINT_START_BLOCK'], 0) && this.util.bclt(data['MINT_START_BLOCK'], data['BLOCK_INDEX']))
             error = 'invalid: MINT_START_BLOCK < BLOCK_INDEX';
 
         // Verify MINT_STOP_BLOCK is greater than or equal to current block
-        if(!error && !this.util.isNull(issue['MINT_STOP_BLOCK']) && issue['MINT_STOP_BLOCK'] > 0 && issue['MINT_STOP_BLOCK'] < issue['BLOCK_INDEX'])
+        if(!error && !this.util.isNull(data['MINT_STOP_BLOCK']) && this.util.bcgt(data['MINT_STOP_BLOCK'], 0) && this.util.bclt(data['MINT_STOP_BLOCK'], data['BLOCK_INDEX']))
             error = 'invalid: MINT_STOP_BLOCK < BLOCK_INDEX';
 
         // Verify MINT_STOP_BLOCK is greater than or equal to MINT_START_BLOCK
-        if(!error && !this.util.isNull(issue['MINT_STOP_BLOCK']) && issue['MINT_START_BLOCK'] > 0 && issue['MINT_STOP_BLOCK'] > 0 && issue['MINT_STOP_BLOCK'] < issue['MINT_START_BLOCK'])
+        if(!error && !this.util.isNull(data['MINT_STOP_BLOCK']) && this.util.bcgt(data['MINT_START_BLOCK'], 0) && this.util.bcgt(data['MINT_STOP_BLOCK'], 0) && this.util.bclt(data['MINT_STOP_BLOCK'], data['MINT_START_BLOCK']))
             error = 'invalid: MINT_STOP_BLOCK < MINT_START_BLOCK';
 
         // Verify no pipe in MEMO (pipe is field delimiter)
@@ -413,7 +413,7 @@ class Issue {
                 debits  = [];
 
             // If we are charging a fee, store the SOURCE and fees TICK in addresses list
-            if(fees['AMOUNT']>0)
+            if(this.util.bcgt(fees['AMOUNT'], 0))
                 this.util.addAddressTicker(data['SOURCE'], fees['TICK']);
 
             // Handle any transaction FEE according the users's ADDRESS preferences

@@ -299,7 +299,7 @@ class Airdrop {
             this.util.addAddressTicker(data['SOURCE'], airdrop['TICK']);
 
             // If we are charging a fee, store the SOURCE and fees TICK in addresses list
-            if(fees['AMOUNT']>0)
+            if(this.util.bcgt(fees['AMOUNT'], 0))
                 this.util.addAddressTicker(data['SOURCE'], fees['TICK']);
 
             // If this was a valid transaction, then add records to the credits and debits array
