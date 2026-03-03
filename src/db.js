@@ -5538,7 +5538,7 @@ class Database {
                 if(!this.util.isNull(row.expiration) && this.util.isNumeric(row.expiration))   
                     edit.expiration  = Number(row.expiration);
                 // Determine if the list edits are active or not
-                let active = (block_time > this.util.bcadd(row.block_time, this.config['DISPENSER_LIST_DELAY'])) ? true : false;
+                let active = this.util.bcgt(block_time, this.util.bcadd(row.block_time, this.config['DISPENSER_LIST_DELAY']));
                 if(active){
                     if(!this.util.isNull(row.allow_list) && this.util.isNumeric(row.allow_list))   
                         edit.allow_list  = Number(row.allow_list);
@@ -5704,7 +5704,7 @@ class Database {
         let results = await this.doQuery(query, args);
         if(results.length > 0){
             for(let row of results)
-                if(block_time > this.util.bcadd(row.block_time, this.config['DISPENSER_CLOSE_DELAY']))
+                if(this.util.bcgt(block_time, this.util.bcadd(row.block_time, this.config['DISPENSER_CLOSE_DELAY'])))
                     cancels.push(Number(row.action_index));
         }
         return cancels;
