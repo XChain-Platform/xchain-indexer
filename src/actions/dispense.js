@@ -72,7 +72,7 @@ class Dispense {
                 dispenserInfo[dispenser['ACTION_INDEX']] = dispenser;
 
             // Verify COIN_AMOUNT is not less than GET_AMOUNT
-            if(!error && this.util.bcnum(data['COIN_AMOUNT']) < this.util.bcnum(dispenser['GET_AMOUNT']))
+            if(!error && this.util.bclt(data['COIN_AMOUNT'], dispenser['GET_AMOUNT']))
                 error = 'invalid: GET_AMOUNT (insufficient funds)';
 
             // Ignore if DISPENSE is being triggered by GET_ADDRESS (dispenser can't trigger itself)
