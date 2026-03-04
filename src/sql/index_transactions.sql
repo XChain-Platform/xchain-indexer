@@ -4,4 +4,4 @@ CREATE TABLE index_transactions (
     hash VARCHAR(250) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
-CREATE UNIQUE INDEX hash on index_transactions (hash(20));
+CREATE UNIQUE INDEX hash on index_transactions (hash(64));
