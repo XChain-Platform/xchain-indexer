@@ -162,7 +162,7 @@ class Utility {
 
     // Determine if value is integer
     isInteger(value){
-        return value === +value && value === (value|0);
+        return Number.isInteger(+value);
     }
 
     // Determine if value is null or undefined or empty
