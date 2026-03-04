@@ -1598,6 +1598,8 @@ class Database {
             let args = [];
             if(balance==0)
                 action = 'delete';
+            // Convert BigNumber to plain string so mariadb driver serializes it correctly
+            balance = String(balance);
             if(action=='delete'){
                 query = "DELETE FROM balances WHERE address_id=? AND tick_id=? ";
                 args.push(address_id, tick_id);
