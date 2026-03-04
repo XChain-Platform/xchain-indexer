@@ -188,9 +188,11 @@ class Issue {
         if(!error && String(data['TICK']).toUpperCase()==this.config['GAS'] && data['SOURCE']!=this.config['ADDRESS']['GAS'] && this.config['NETWORK']!='regtest')
             error = 'invalid: GAS Address';
 
-        // Get information on token
-        let tokenInfo     = await this.indexerDb.getTokenInfo(data['TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
-        let isDistributed = await this.indexerDb.isDistributed(data['TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
+        // Get information on token (parallel - both are independent read-only queries)
+        let [tokenInfo, isDistributed] = await Promise.all([
+            this.indexerDb.getTokenInfo(data['TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']),
+            this.indexerDb.isDistributed(data['TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX'])
+        ]);
 
         // Populate empty PARAMS with current setting
         if(tokenInfo){
