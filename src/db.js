@@ -577,7 +577,7 @@ class Database {
             return null;
         // Truncate to 250 characters
         hash = String(hash).substring(0,250);
-        let query   = "INSERT IGNORE INTO index_transactions (`hash`) values (?)";
+        let query   = "INSERT INTO index_transactions (`hash`) values (?) ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id)";
         let results = await this.doQuery(query, [hash]);
         let id      = (results.insertId) ? results.insertId : await this.getTransactionId(hash);
         return Number(id);
@@ -600,7 +600,7 @@ class Database {
             return null;
         // Truncate to 120 characters
         address = String(address).substring(0,120);
-        let query   = "INSERT IGNORE INTO index_addresses (`address`) values (?)";
+        let query   = "INSERT INTO index_addresses (`address`) values (?) ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id)";
         let results = await this.doQuery(query, [address]);
         let id      = (results.insertId) ? results.insertId : await this.getAddressId(address);
         return Number(id);
@@ -819,7 +819,7 @@ class Database {
         // Ignore empty tick and return NULL
         if(this.util.isNull(tick))
             return null;
-        let query   = "INSERT IGNORE INTO index_tickers (tick) values (?)";
+        let query   = "INSERT INTO index_tickers (tick) values (?) ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id)";
         let results = await this.doQuery(query, [tick]);
         let id      = (results.insertId) ? results.insertId : await this.getTickerId(tick);
         return Number(id);
