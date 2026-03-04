@@ -226,10 +226,13 @@ class Database {
     async rollbackTransaction(){
         if(this.transactionConnection != null){
             console.log("rolling back");
-            await this.transactionConnection.rollback();
-            await this.transactionConnection.release();
-            this.transactionConnection = null;
-        }  
+            try {
+                await this.transactionConnection.rollback();
+            } finally {
+                await this.transactionConnection.release();
+                this.transactionConnection = null;
+            }
+        }
     }
     
     // Handle commiting a SQL transaction and releasing the connection
