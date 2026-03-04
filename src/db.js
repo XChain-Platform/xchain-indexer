@@ -58,7 +58,7 @@ class Database {
             database: this.dbName,
             port:     this.port,
             // Connection options
-            connectionLimit:  5,
+            connectionLimit:  10,
             //connectTimeout: 0,
             insertIdAsNumber: true
         };
