@@ -138,9 +138,11 @@ class Actions {
         let block_time  = tx.block_time;
 
         // Create database records and get ids for tx_hash and source address
-        await this.indexerDb.createAddress(source);
-        await this.indexerDb.createAddress(destination);
-        await this.indexerDb.createTransaction(tx_hash);
+        await Promise.all([
+            this.indexerDb.createAddress(source),
+            this.indexerDb.createAddress(destination),
+            this.indexerDb.createTransaction(tx_hash)
+        ]);
 
         // Trim whitespace from any PARAMS
         params.forEach(function(value, idx){
