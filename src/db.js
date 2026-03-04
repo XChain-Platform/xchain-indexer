@@ -259,7 +259,7 @@ class Database {
 
     // Handle running a query and returning the results
     async doQuery(query, args){
-        let results = false;
+        let results = [];
         if(!this.util.isNull(query)){
             let tx = this.transactionConnection != null;
             let db = await this.getConnection();
