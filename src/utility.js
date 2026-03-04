@@ -89,8 +89,6 @@ class Utility {
         // let file  = '/XChainIndexer/error.log';
         // fs.appendFileSync(file, error);
         console.error('logError: ' + error, info);
-        // DEBUG: Throw exception on any error (remove this before production)
-        this.throwError(error);
     }
 
     // JSON.stringify with BigInt support
