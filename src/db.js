@@ -1493,6 +1493,8 @@ class Database {
     async createLedgerChangeRecord(table, action_index, tick, amount, address){
         let tick_id    = await this.createTicker(tick);
         let address_id = await this.createAddress(address);
+        // Convert any BigNumber amount to a plainstring before inserting into the database
+        amount = String(amount);
         // Check if record already exists for this token
         let query = `SELECT
                         action_index
