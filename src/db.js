@@ -1581,7 +1581,7 @@ class Database {
         let results     = null;
         if(type==='number' && this.util.isNumeric(address))
             address_id = address;
-        if(type==='string' && !this.util.isNumeric(address))
+        if(type==='string')
             address_id = await this.createAddress(address);
         // Get list of address balances based on credits/debits tables
         let balances = await this.getAddressBalances(address_id);
@@ -1632,7 +1632,7 @@ class Database {
         let address_id = null;
         if(type==='number' && this.util.isNumeric(address))
             address_id = address;
-        if(type==='string' && !this.util.isNumeric(address))
+        if(type==='string')
             address_id = await this.createAddress(address);
         let credits  = await this.getAddressCreditDebit('credits', address_id, null, block_index, action_index);
         let debits   = await this.getAddressCreditDebit('debits',  address_id, null, block_index, action_index);
@@ -1665,7 +1665,7 @@ class Database {
         let balances   = {}; // Object to store tick/balance
         if(type==='number' && this.util.isNumeric(address))
             address_id = address;
-        if(type==='string' && !this.util.isNumeric(address))
+        if(type==='string')
             address_id = await this.createAddress(address);
         let query = "SELECT tick_id, amount FROM balances WHERE address_id=?";
         let results = await this.doQuery(query, [address_id]);
@@ -1682,7 +1682,7 @@ class Database {
         let address_id = null;
         if(type==='number' && this.util.isNumeric(address))
             address_id = address;
-        if(type==='string' && !this.util.isNumeric(address))
+        if(type==='string')
             address_id = await this.createAddress(address);
         let sql  = '';
         let args = [address_id];
