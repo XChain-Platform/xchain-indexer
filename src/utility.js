@@ -677,17 +677,17 @@ class Utility {
         // Get list of market orders for the given block
         // Note: this also gets a list of any markets that have not had an update in the past 24 hours
         let markets = await db.getMarkets(block_index, true);
-        // Loop through markets
-        for(let pair of markets){
-            // Create market 
+        // Process all market pairs in parallel (each pair is independent)
+        await Promise.all(markets.map(async (pair) => {
+            // Create market
             let market_id = await db.createMarket(pair.tick1_id, pair.tick2_id);
             // Get the market data
             let data = await db.getMarketInfo(market_id, block_time);
             // Set the last_updated time to the current block time
             data.last_updated = block_time;
-            // Update Market with the updated data
+            // Update market with the updated data
             await db.updateMarketInfo(data);
-        }
+        }));
     }
 
 
