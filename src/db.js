@@ -1666,12 +1666,19 @@ class Database {
             address_id = address;
         if(type==='string')
             address_id = await this.createAddress(address);
-        let credits  = await this.getAddressCreditDebit('credits', address_id, null, block_index, action_index);
-        let debits   = await this.getAddressCreditDebit('debits',  address_id, null, block_index, action_index);
+        let [credits, debits] = await Promise.all([
+            this.getAddressCreditDebit('credits', address_id, null, block_index, action_index),
+            this.getAddressCreditDebit('debits',  address_id, null, block_index, action_index)
+        ]);
         let decimals = {}; // Object to store tick_id/decimals
         let balances = {}; // Object to store tick_id/balance
-        for(let tick_id in credits)
-            decimals[tick_id] = await this.getTokenDecimalPrecision(tick_id);
+        const decimalResults = await Promise.all(
+            Object.keys(credits).map(tick_id =>
+                this.getTokenDecimalPrecision(tick_id).then(d => [tick_id, d])
+            )
+        );
+        for(const [tick_id, d] of decimalResults)
+            decimals[tick_id] = d;
         // Build out balances (credits - debits)
         for(let tick_id in credits){
             let credit  = credits[tick_id];
