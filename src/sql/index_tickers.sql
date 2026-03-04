@@ -4,4 +4,4 @@ CREATE TABLE index_tickers (
     tick TEXT NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
-CREATE INDEX tick on index_tickers (tick(200));
+CREATE UNIQUE INDEX tick on index_tickers (tick(200));

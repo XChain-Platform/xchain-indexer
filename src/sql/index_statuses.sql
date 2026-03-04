@@ -4,4 +4,4 @@ CREATE TABLE index_statuses (
     status VARCHAR(250) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
-CREATE INDEX status on index_statuses (status);
+CREATE UNIQUE INDEX status on index_statuses (status);

@@ -4,4 +4,4 @@ CREATE TABLE index_mime_types (
     type VARCHAR(255) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
-CREATE INDEX type on index_mime_types (type);
+CREATE UNIQUE INDEX type on index_mime_types (type);
