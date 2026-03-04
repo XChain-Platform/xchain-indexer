@@ -5,7 +5,7 @@ CREATE TABLE index_fiats (
     name VARCHAR(250)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
-CREATE INDEX code on index_fiats (code);
+CREATE UNIQUE INDEX code on index_fiats (code);
 
 INSERT INTO index_fiats values (1,  'USD', 'US Dollar');
 INSERT INTO index_fiats values (2,  'CAD', 'Canadian Dollar');

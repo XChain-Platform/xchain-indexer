@@ -4,4 +4,4 @@ CREATE TABLE index_coins (
     coin VARCHAR(250) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
-CREATE INDEX coin on index_coins (coin);
+CREATE UNIQUE INDEX coin on index_coins (coin);
