@@ -242,9 +242,12 @@ class Database {
                 return true;
             } catch (e){
                 console.log("There was an error trying to commit a transaction");
-                await this.transactionConnection.rollback();
-                await this.transactionConnection.release();
-                this.transactionConnection = null;
+                try {
+                    await this.transactionConnection.rollback();
+                } finally {
+                    await this.transactionConnection.release();
+                    this.transactionConnection = null;
+                }
                 this.util.throwError('commitTransaction error=' + e);
             }
         }
