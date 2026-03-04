@@ -1900,29 +1900,30 @@ class Database {
         let allow = true;
         // Validate block_index is good
         if(allow && !this.util.isNull(block_index) && this.util.isNumeric(block_index)){
-            // Validate TICK is not in SLEEP mode
-            if(allow && !this.util.isNull(tick) && await this.isTickSleeping(tick, block_index))
-                allow = false;
-            // Validate ADDRESS is not in a SLEEP mode
-            if(allow && !this.util.isNull(address) && await this.isAddressSleeping(address, block_index))
+            // Validate TICK and ADDRESS sleep status in parallel
+            const [tickSleeping, addressSleeping] = await Promise.all([
+                (!this.util.isNull(tick))     ? this.isTickSleeping(tick, block_index)       : Promise.resolve(false),
+                (!this.util.isNull(address))  ? this.isAddressSleeping(address, block_index) : Promise.resolve(false)
+            ]);
+            if(tickSleeping || addressSleeping)
                 allow = false;
         }
         // Validate address against any tick allow/block lists
         if(allow && !this.util.isNull(address) && !this.util.isNull(tick)){
             let info = await this.getTokenInfo(tick, block_index);
-            let list = null;
+            // Fetch allow/block lists in parallel if both exist
+            const hasAllowList = info && !this.util.isNull(info['ALLOW_LIST']) && this.util.isNumeric(info['ALLOW_LIST']);
+            const hasBlockList = info && !this.util.isNull(info['BLOCK_LIST']) && this.util.isNumeric(info['BLOCK_LIST']);
+            const [allowList, blockList] = await Promise.all([
+                hasAllowList ? this.getList(info['ALLOW_LIST']) : Promise.resolve(null),
+                hasBlockList ? this.getList(info['BLOCK_LIST']) : Promise.resolve(null)
+            ]);
             // False if we have an ALLOW_LIST and address is NOT on it
-            if(allow && info && !this.util.isNull(info['ALLOW_LIST']) && this.util.isNumeric(info['ALLOW_LIST'])){
-                list = await this.getList(info['ALLOW_LIST']);
-                if(!list.includes(address))
-                    allow = false;
-            }
-            // False if we have an BLOCK_LIST and address IS on it
-            if(allow && info && !this.util.isNull(info['BLOCK_LIST']) && this.util.isNumeric(info['BLOCK_LIST'])){
-                list = await this.getList(info['BLOCK_LIST']);
-                if(list.includes(address))
-                    allow = false;
-            }
+            if(allow && allowList && !allowList.includes(address))
+                allow = false;
+            // False if we have a BLOCK_LIST and address IS on it
+            if(allow && blockList && blockList.includes(address))
+                allow = false;
         }
         return allow;
     }
