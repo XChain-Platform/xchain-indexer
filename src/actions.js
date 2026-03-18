@@ -247,6 +247,13 @@ class Actions {
         data['TX_VOUT']          = tx_vout;     // Transaction vout index
         data['TX_DATA']          = tx_data;     // Raw tx data string
 
+        // Treat plain BTC transactions (empty data) as DISPENSE triggers
+        // The decoder records these when the destination matches an active dispenser address
+        if(action == '' && !this.util.isNull(destination)){
+            action = 'DISPENSE';
+            data['ACTION'] = action;
+        }
+
         // Validate Action is known
         if(!this.protocolChanges.isDefined(action)){
             error = 'invalid: Unknown ACTION';
