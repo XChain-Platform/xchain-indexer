@@ -10,12 +10,24 @@
  */
 
 const mariadb = require('mariadb');
+const path    = require('path');
+const fs      = require('fs');
 
-// Defaults match: docker run -e MARIADB_ROOT_PASSWORD=test -p 3307:3306 mariadb:10.11
-const DB_HOST = process.env.TEST_DB_HOST || '127.0.0.1';
-const DB_PORT = parseInt(process.env.TEST_DB_PORT || '3306');
-const DB_USER = process.env.TEST_DB_USER || 'root';
-const DB_PASS = process.env.TEST_DB_PASS || 'test';
+// Read .env manually for DB credentials only — avoid polluting INDEXER_COIN/NETWORK
+const _envVars = {};
+const _envPath = path.resolve(__dirname, '../../../.env');
+if (fs.existsSync(_envPath)) {
+    for (const line of fs.readFileSync(_envPath, 'utf8').split('\n')) {
+        const m = line.match(/^\s*([\w]+)\s*=\s*(.*)$/);
+        if (m) _envVars[m[1]] = m[2].trim();
+    }
+}
+
+// TEST_DB_* env vars override; otherwise fall back to .env INDEXER_DB_* values
+const DB_HOST = process.env.TEST_DB_HOST || _envVars.INDEXER_DB_HOST || '127.0.0.1';
+const DB_PORT = parseInt(process.env.TEST_DB_PORT || _envVars.INDEXER_DB_PORT || '3306');
+const DB_USER = process.env.TEST_DB_USER || _envVars.INDEXER_DB_USER || 'root';
+const DB_PASS = process.env.TEST_DB_PASS || _envVars.INDEXER_DB_PASS || 'test';
 const DECODER_DB = process.env.TEST_DECODER_DB || 'xchain_test_decoder';
 const INDEXER_DB = process.env.TEST_INDEXER_DB || 'xchain_test_indexer';
 

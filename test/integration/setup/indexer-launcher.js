@@ -11,7 +11,7 @@
 const { getConnectionParams } = require('./db-connection');
 
 // Ensure env is set before requiring indexer modules
-process.env.INDEXER_COIN = process.env.INDEXER_COIN || 'BTC';
+process.env.INDEXER_COIN    = process.env.INDEXER_COIN    || 'BTC';
 process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
 process.env.npm_package_version = process.env.npm_package_version || '1.1.0';
 process.env.npm_package_name = process.env.npm_package_name || 'xchain-indexer';
