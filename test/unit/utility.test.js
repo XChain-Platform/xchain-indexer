@@ -7,7 +7,7 @@ process.env.INDEXER_NETWORK = 'regtest';
 
 const Utility = require('../../src/utility.js');
 
-describe('Utility', function () {
+describe('Utility @regression @tier1', function () {
     let util;
 
     beforeEach(function () {

@@ -1,7 +1,7 @@
 {
   "name": "xchain-indexer",
   "description": "xchain-indexer is a free open source token platform indexer for the XChain platform",
-  "version": "1.11.0",
+  "version": "1.12.0",
   "license": "SEE LICENSE IN LICENSE.md",
   "repository": {
     "type": "git",
@@ -39,7 +39,10 @@
     "test:chaos": "mocha --no-config --timeout 10000 --recursive 'test/chaos/suites/*.test.js'",
     "test:mutation": "mocha --no-config --timeout 10000 --recursive 'test/mutation/suites/*.test.js'",
     "test:mutation:tier1": "mocha --no-config --timeout 10000 --grep @tier1 'test/mutation/suites/*.test.js'",
-    "test:mutation:report": "MUTATION_REPORT=1 mocha --no-config --timeout 10000 --recursive 'test/mutation/suites/*.test.js'"
+    "test:mutation:report": "MUTATION_REPORT=1 mocha --no-config --timeout 10000 --recursive 'test/mutation/suites/*.test.js'",
+    "test:regression": "mocha --no-config --timeout 30000 --exit --grep @regression --recursive 'test/**/*.test.js'",
+    "test:regression:fast": "mocha --no-config --timeout 5000 --exit --grep '@regression.*(tier1|tier4)' --recursive 'test/unit/**/*.test.js'",
+    "test:regression:full": "mocha --no-config --timeout 60000 --exit --grep @regression --recursive 'test/**/*.test.js'"
   },
   "devDependencies": {
     "fast-check": "^4.6.0",

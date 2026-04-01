@@ -49,7 +49,7 @@ function makeIssueParams(overrides = {}) {
 const XCHAIN_TICK_ID = 99;
 const SOURCE = '1SourceAddressXXXXXXXXXXXXXXXYs6gYt';
 
-describe('Fee boundary tests', function () {
+describe('Fee boundary tests @regression @tier1', function () {
     let indexer, actionsCtx, handler;
 
     beforeEach(function () {

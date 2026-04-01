@@ -59,7 +59,7 @@ function makeBalances(tickId, amount) {
 // Suite
 // ---------------------------------------------------------------------------
 
-describe('Send handler', function () {
+describe('Send handler @regression @tier1', function () {
     let indexer, actionsCtx, handler;
 
     beforeEach(function () {

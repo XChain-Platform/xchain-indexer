@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.12.0] - 2026-04-01
+
+### Added
+- Regression testing suite with tiered tag-based execution across all existing test suites
+- @regression @tier1 tags on core state integrity tests (ISSUE, SEND, MINT, DESTROY, balance arithmetic, fees)
+- @regression @tier2 tags on lifecycle and matching tests (ORDER, DISPENSER, SWAP, AIRDROP, DIVIDEND)
+- @regression @tier3 tags on infrastructure tests (block discovery, reorg, rollback, routing, config, protocol changes)
+- @regression @tier4 tags on all security tests (SQL safety, input validation, arithmetic integrity, config validation)
+- npm scripts: test:regression (all tiers), test:regression:fast (tier1+tier4 only, <60s), test:regression:full (all tiers with extended timeout)
+- 958 unit-level regression tests passing across all four tiers
+- 442 fast regression tests (tier1+tier4) passing in ~2 seconds
+- Comprehensive regression testing plan in claude/reports/INDEXER_REGRESSION_TESTING_PLAN.md
+
 ## [1.11.0] - 2026-04-01
 
 ### Added

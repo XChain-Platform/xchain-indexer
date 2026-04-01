@@ -58,7 +58,7 @@ async function deleteDecoderBlocksFrom(blockIndex) {
 // Tests
 // ---------------------------------------------------------------------------
 
-describe('05 – Chain Reorganization', function () {
+describe('05 – Chain Reorganization @regression @tier3', function () {
     this.timeout(60000);
 
     before(async function () {

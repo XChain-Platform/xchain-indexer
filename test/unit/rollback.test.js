@@ -7,7 +7,7 @@ const { createMockIndexer } = require('../fixtures/mocks');
 
 const Rollback = require('../../src/rollback.js');
 
-describe('Rollback', function () {
+describe('Rollback @regression @tier3', function () {
     let indexer, rollback;
 
     beforeEach(function () {

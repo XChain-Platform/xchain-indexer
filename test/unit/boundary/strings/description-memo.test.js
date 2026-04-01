@@ -50,7 +50,7 @@ function makeIssueParams(overrides = {}) {
 // Valid BTC addresses used in Send tests
 const DESTINATION = '1BoogrfDADPLQpq8LMASmWQUVYDp4t2hF9';
 
-describe('Description & memo boundary tests', function () {
+describe('Description & memo boundary tests @regression @tier3', function () {
 
     // -------------------------------------------------------------------------
     // DESCRIPTION boundary (Issue handler)

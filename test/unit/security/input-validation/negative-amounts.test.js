@@ -63,7 +63,7 @@ function makeIssueParams(overrides = {}) {
 // Suite: isValidAmountFormat direct tests
 // ---------------------------------------------------------------------------
 
-describe('Security: negative amount rejection in isValidAmountFormat()', function () {
+describe('Security: negative amount rejection in isValidAmountFormat() @regression @tier4', function () {
     let util;
 
     before(function () {
@@ -104,7 +104,7 @@ describe('Security: negative amount rejection in isValidAmountFormat()', functio
 // Suite: negative amounts rejected by action handlers
 // ---------------------------------------------------------------------------
 
-describe('Security: negative amounts rejected by action handlers', function () {
+describe('Security: negative amounts rejected by action handlers @regression @tier4', function () {
     let indexer, actionsCtx;
 
     beforeEach(function () {

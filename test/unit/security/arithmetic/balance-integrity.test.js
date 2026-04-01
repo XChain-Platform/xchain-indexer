@@ -12,7 +12,7 @@ const { createMockIndexer } = require('../../../fixtures/mocks');
 // Suite: balance and arithmetic integrity
 // ---------------------------------------------------------------------------
 
-describe('Security: balance integrity and adversarial arithmetic', function () {
+describe('Security: balance integrity and adversarial arithmetic @regression @tier4', function () {
     let util;
 
     before(function () {

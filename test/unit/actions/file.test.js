@@ -7,7 +7,7 @@ const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
 
 const File = require('../../../src/actions/file.js');
 
-describe('File action handler', function () {
+describe('File action handler @regression @tier3', function () {
     let indexer, actionsCtx, handler;
 
     beforeEach(function () {

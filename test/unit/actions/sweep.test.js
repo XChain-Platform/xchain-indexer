@@ -7,7 +7,7 @@ const { createMockIndexer, createBaseData, createTokenInfo } = require('../../fi
 
 const Sweep = require('../../../src/actions/sweep.js');
 
-describe('Sweep', function () {
+describe('Sweep @regression @tier3', function () {
     let indexer, actionsCtx, handler;
 
     const SOURCE      = '1SourceAddressXXXXXXXXXXXXXXXYs6gYt';

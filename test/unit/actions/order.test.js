@@ -31,7 +31,7 @@ function makeParams(str) {
 
 // ─── Test suite ───────────────────────────────────────────────────────────────
 
-describe('Order action handler', function () {
+describe('Order action handler @regression @tier2', function () {
     let indexer;
     let actionsCtx;
     let order;

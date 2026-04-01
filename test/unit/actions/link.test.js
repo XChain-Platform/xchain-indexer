@@ -7,7 +7,7 @@ const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
 
 const Link = require('../../../src/actions/link.js');
 
-describe('Link action handler', function () {
+describe('Link action handler @regression @tier3', function () {
     let indexer, actionsCtx, handler;
 
     beforeEach(function () {

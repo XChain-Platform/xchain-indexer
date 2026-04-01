@@ -7,7 +7,7 @@ const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
 
 const Order_Expire = require('../../../src/actions/order_expire.js');
 
-describe('Order_Expire action handler', function () {
+describe('Order_Expire action handler @regression @tier2', function () {
     let indexer, actionsCtx, handler;
 
     function makeOrderInfo(overrides) {

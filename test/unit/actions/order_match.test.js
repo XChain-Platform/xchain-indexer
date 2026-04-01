@@ -68,7 +68,7 @@ function makeMatchInfo(overrides = {}) {
 
 // ─── Test suite ───────────────────────────────────────────────────────────────
 
-describe('Order_Match action handler', function () {
+describe('Order_Match action handler @regression @tier2', function () {
     let indexer;
     let actionsCtx;
     let orderMatch;

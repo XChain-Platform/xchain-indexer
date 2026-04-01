@@ -7,7 +7,7 @@ const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
 
 const Dispenser_Expire = require('../../../src/actions/dispenser_expire.js');
 
-describe('Dispenser_Expire action handler', function () {
+describe('Dispenser_Expire action handler @regression @tier2', function () {
     let indexer, actionsCtx, handler;
 
     function makeDispenser(overrides) {

@@ -7,7 +7,7 @@ const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
 
 const Swap_Expire = require('../../../src/actions/swap_expire.js');
 
-describe('Swap_Expire action handler', function () {
+describe('Swap_Expire action handler @regression @tier2', function () {
     let indexer, actionsCtx, handler;
 
     function makeSwapInfo(overrides) {

@@ -72,7 +72,7 @@ function makeIssueParams(overrides = {}) {
 // Suite
 // ---------------------------------------------------------------------------
 
-describe('Supply & amount boundary tests', function () {
+describe('Supply & amount boundary tests @regression @tier1', function () {
 
     // -----------------------------------------------------------------------
     // AMT-01 & AMT-02 & AMT-03 & AMT-04: ISSUE supply limits

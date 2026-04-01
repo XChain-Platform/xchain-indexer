@@ -12,7 +12,7 @@ const { createMockIndexer } = require('../../../fixtures/mocks');
 // Suite: getTokenDecimalPrecision clamping
 // ---------------------------------------------------------------------------
 
-describe('Security: decimal precision clamped to [0, 18]', function () {
+describe('Security: decimal precision clamped to [0, 18] @regression @tier4', function () {
     let indexer;
 
     beforeEach(function () {

@@ -82,7 +82,7 @@ function buildActions(protocolChangesOverrides = {}) {
 // ---------------------------------------------------------------------------
 // describe: processTransaction — action routing
 // ---------------------------------------------------------------------------
-describe('Actions.processTransaction()', function () {
+describe('Actions.processTransaction() @regression @tier3', function () {
     afterEach(function () {
         sinon.restore();
     });
@@ -405,7 +405,7 @@ describe('Actions.processTransaction()', function () {
 // ---------------------------------------------------------------------------
 // describe: processAction — handler dispatch + resetLists
 // ---------------------------------------------------------------------------
-describe('Actions.processAction()', function () {
+describe('Actions.processAction() @regression @tier3', function () {
     let actions;
     let stubs;
     let util;

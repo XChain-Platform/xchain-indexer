@@ -2,7 +2,7 @@ const assert = require('assert');
 const sinon = require('sinon');
 const { createMockIndexer } = require('../fixtures/mocks');
 
-describe('ProtocolChanges', function () {
+describe('ProtocolChanges @regression @tier3', function () {
     let ProtocolChanges, pc, indexer;
 
     beforeEach(function () {

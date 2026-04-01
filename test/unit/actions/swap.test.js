@@ -9,7 +9,7 @@ const Swap = require('../../../src/actions/swap.js');
 
 const VALID_GET_ADDRESS = '1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev';
 
-describe('Swap action handler', function () {
+describe('Swap action handler @regression @tier2', function () {
     let indexer, actionsCtx, handler;
 
     beforeEach(function () {

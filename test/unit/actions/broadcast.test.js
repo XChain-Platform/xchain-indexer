@@ -7,7 +7,7 @@ const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
 
 const Broadcast = require('../../../src/actions/broadcast.js');
 
-describe('Broadcast action handler', function () {
+describe('Broadcast action handler @regression @tier3', function () {
     let indexer, actionsCtx, handler;
 
     beforeEach(function () {

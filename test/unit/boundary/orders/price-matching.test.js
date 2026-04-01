@@ -95,7 +95,7 @@ function makeMatchInfo(overrides = {}) {
 // Suite
 // ---------------------------------------------------------------------------
 
-describe('ORDER_MATCH price-boundary tests', function () {
+describe('ORDER_MATCH price-boundary tests @regression @tier2', function () {
 
     // -----------------------------------------------------------------------
     // ORD-01: Exact price match → match succeeds

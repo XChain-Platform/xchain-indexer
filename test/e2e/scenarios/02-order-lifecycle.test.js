@@ -25,7 +25,7 @@ const BASE_TIME = 1700000000;
 const FAR_FUTURE = BASE_TIME + 90 * 86400 + 1; // 90 days ahead (within 182-day free window)
 const COIN = 'RBTC';
 
-describe('E2E: Order Lifecycle', function () {
+describe('E2E: Order Lifecycle @regression @tier2', function () {
     this.timeout(60000);
 
     let server, port, explorer, client;

@@ -24,7 +24,7 @@ const ADDR3 = 'mAddr3XXXXXXXXXXXXXXXXXXXXXXX3'; // 30 chars
 // A block time baseline (unix epoch seconds, ~2023)
 const BASE_TIME = 1700000000;
 
-describe('Block Discovery and Sync', function () {
+describe('Block Discovery and Sync @regression @tier3', function () {
     // Allow generous timeout for DB operations
     this.timeout(30000);
 

@@ -24,7 +24,7 @@ const ADDR3 = 'mAddr3XXXXXXXXXXXXXXXXXXXXXXX3';
 const BASE_TIME = 1700000000;
 const COIN = 'RBTC';
 
-describe('E2E: Explorer Query Patterns', function () {
+describe('E2E: Explorer Query Patterns @regression @tier3', function () {
     this.timeout(60000);
 
     let server, port, explorer, client;

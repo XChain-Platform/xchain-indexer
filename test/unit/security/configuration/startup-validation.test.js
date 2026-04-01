@@ -9,7 +9,7 @@ const assert = require('assert');
 // Suite: database name validation
 // ---------------------------------------------------------------------------
 
-describe('Security: database name validation', function () {
+describe('Security: database name validation @regression @tier4', function () {
     const validNamePattern = /^[A-Za-z0-9_]+$/;
 
     it('SEC-37: database name \'XChain_BTC_Regtest_Indexer\' → valid', function () {
@@ -41,7 +41,7 @@ describe('Security: database name validation', function () {
 // Suite: connection pool hardening
 // ---------------------------------------------------------------------------
 
-describe('Security: connection pool timeout configuration', function () {
+describe('Security: connection pool timeout configuration @regression @tier4', function () {
     const Database = require('../../../../src/db.js');
     const { createMockIndexer } = require('../../../fixtures/mocks');
 

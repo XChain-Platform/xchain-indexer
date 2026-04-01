@@ -7,7 +7,7 @@ const { createMockIndexer, createBaseData, createTokenInfo } = require('../../fi
 
 const Batch = require('../../../src/actions/batch.js');
 
-describe('Batch', function () {
+describe('Batch @regression @tier3', function () {
     let indexer, actionsCtx, handler;
 
     const SOURCE = '1SourceAddressXXXXXXXXXXXXXXXYs6gYt';

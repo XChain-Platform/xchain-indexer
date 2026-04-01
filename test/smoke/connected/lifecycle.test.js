@@ -76,7 +76,7 @@ async function waitFor(predicate, maxMs, intervalMs) {
 // ---------------------------------------------------------------------------
 // Test suite
 // ---------------------------------------------------------------------------
-describe('Smoke: indexer lifecycle', function () {
+describe('Smoke: indexer lifecycle @regression @tier3', function () {
 
     // -------------------------------------------------------------------------
     // SM-14: stop() causes start() to resolve cleanly
