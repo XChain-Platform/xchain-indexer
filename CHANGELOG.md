@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.8.0] - 2026-04-01
+
+### Added
+- Property-based fuzz testing suite with 123 tests across 8 test files using fast-check
+- Custom fast-check arbitraries for amounts, tick names, addresses, hashes, and ACTION data strings
+- Tier 1 suites: validation functions, BigNumber math, normalizeDataValues, processTransaction crash safety, BATCH handler invariants
+- Tier 2 suites: tick name handling through Issue handler, ISSUE+MINT lifecycle crash safety
+- Tier 3 suites: Send handler, balance operations, lock validation, ledger consolidation, getFormatVersion edge cases
+- Crash report logging in processTransaction fuzz suite documenting known error patterns
+- npm scripts: test:fuzz, test:fuzz:quick (@tier1 only), test:fuzz:full (10K runs)
+- fast-check devDependency for property-based testing
+
+### Discovered
+- getFormatVersion crashes on objects with null toString (utility.js:198)
+- isInteger crashes on objects with broken toString (utility.js:165)
+- bcnum silently accepts 'NaN' and 'Infinity' strings via mathjs
+- bcdiv returns Infinity on division by zero instead of throwing
+- structuredClone fails in Issue handler when data contains bignumber objects (issue.js:108)
+- normalizeDataValues MESSAGE truncation re-introduces strings after NUMBER_FIELDS nullification
+- Address handler calls bcnum on non-numeric data without validation (address.js:90)
+- getFormatVersion truncates decimal strings (e.g., '1.5' → 1) due to isFloat type mismatch
+
 ## [1.7.0] - 2026-04-01
 
 ### Added
