@@ -1,7 +1,7 @@
 {
   "name": "xchain-indexer",
   "description": "xchain-indexer is a free open source token platform indexer for the XChain platform",
-  "version": "1.7.0",
+  "version": "1.8.0",
   "license": "SEE LICENSE IN LICENSE.md",
   "repository": {
     "type": "git",
@@ -32,9 +32,13 @@
     "test:perf:benchmarks": "mocha --no-config --timeout 600000 --exit 'test/perf/scenarios/02-action-benchmarks.test.js'",
     "test:perf:sustained": "mocha --no-config --timeout 0 --exit 'test/perf/scenarios/03-sustained-load.test.js'",
     "test:perf:spike": "mocha --no-config --timeout 300000 --exit 'test/perf/scenarios/04-spike-load.test.js'",
-    "test:perf:scaling": "mocha --no-config --timeout 600000 --exit 'test/perf/scenarios/05-scaling.test.js'"
+    "test:perf:scaling": "mocha --no-config --timeout 600000 --exit 'test/perf/scenarios/05-scaling.test.js'",
+    "test:fuzz": "mocha --no-config --timeout 0 --exit 'test/fuzz/suites/*.fuzz.js'",
+    "test:fuzz:quick": "FUZZ_RUNS=1000 mocha --no-config --timeout 60000 --exit --grep @tier1 'test/fuzz/suites/*.fuzz.js'",
+    "test:fuzz:full": "FUZZ_RUNS=10000 mocha --no-config --timeout 0 --exit 'test/fuzz/suites/*.fuzz.js'"
   },
   "devDependencies": {
+    "fast-check": "^4.6.0",
     "mocha": "^11.7.5",
     "sinon": "^21.0.3"
   }
