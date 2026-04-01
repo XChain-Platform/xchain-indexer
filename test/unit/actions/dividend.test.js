@@ -7,7 +7,7 @@ const { createMockIndexer, createBaseData, createTokenInfo } = require('../../fi
 
 const Dividend = require('../../../src/actions/dividend.js');
 
-describe('Dividend', function () {
+describe('Dividend @regression @tier2', function () {
     let indexer, actionsCtx, handler;
 
     const SOURCE  = '1SourceAddressXXXXXXXXXXXXXXXYs6gYt';

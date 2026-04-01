@@ -26,7 +26,7 @@ function makeActionsCtx(indexer) {
 
 function makeParams(str) { return String(str).split('|'); }
 
-describe('ORDER and DISPENSER expiration boundary tests', function () {
+describe('ORDER and DISPENSER expiration boundary tests @regression @tier2', function () {
     let indexer, actionsCtx, handler;
 
     const BLOCK_TIME = 1700000000;

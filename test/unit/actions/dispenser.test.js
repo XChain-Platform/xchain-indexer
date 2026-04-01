@@ -30,7 +30,7 @@ function makeParams(str) {
 
 // ─── Test suite ───────────────────────────────────────────────────────────────
 
-describe('Dispenser action handler', function () {
+describe('Dispenser action handler @regression @tier2', function () {
     let indexer;
     let actionsCtx;
     let dispenser;

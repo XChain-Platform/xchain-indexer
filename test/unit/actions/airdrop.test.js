@@ -7,7 +7,7 @@ const { createMockIndexer, createBaseData, createTokenInfo } = require('../../fi
 
 const Airdrop = require('../../../src/actions/airdrop.js');
 
-describe('Airdrop', function () {
+describe('Airdrop @regression @tier2', function () {
     let indexer, actionsCtx, handler;
 
     beforeEach(function () {

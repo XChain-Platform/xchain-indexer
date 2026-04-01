@@ -27,7 +27,7 @@ const ADDR3 = 'mAddr3XXXXXXXXXXXXXXXXXXXXXXX3'; // 30 chars — recipient
 // Block time baseline
 const BASE_TIME = 1700000000;
 
-describe('ISSUE / MINT / SEND / DESTROY Token Lifecycle', function () {
+describe('ISSUE / MINT / SEND / DESTROY Token Lifecycle @regression @tier1', function () {
     this.timeout(30000);
 
     let seeder, indexer;

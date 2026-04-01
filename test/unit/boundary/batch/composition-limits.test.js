@@ -27,7 +27,7 @@ function makeActionsCtx(indexer) {
     };
 }
 
-describe('BATCH composition limit boundary tests', function () {
+describe('BATCH composition limit boundary tests @regression @tier3', function () {
     let indexer, actionsCtx, handler;
 
     beforeEach(function () {

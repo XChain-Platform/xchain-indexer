@@ -37,7 +37,7 @@ function makeMintableToken(overrides = {}) {
     }, overrides));
 }
 
-describe('MINT block window boundary tests', function () {
+describe('MINT block window boundary tests @regression @tier2', function () {
     let indexer, actionsCtx, handler;
 
     beforeEach(function () {
@@ -81,7 +81,7 @@ describe('MINT block window boundary tests', function () {
     });
 });
 
-describe('FORMAT_VERSION boundary tests (via ISSUE)', function () {
+describe('FORMAT_VERSION boundary tests (via ISSUE) @regression @tier2', function () {
     let indexer, actionsCtx, issueHandler;
 
     // Minimal Issue params for format 0 (enough fields to pass validation if format is known)

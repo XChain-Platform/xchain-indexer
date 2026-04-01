@@ -7,7 +7,7 @@ const { createMockIndexer, createBaseData, createTokenInfo } = require('../../fi
 
 const Swap_Match = require('../../../src/actions/swap_match.js');
 
-describe('Swap_Match action handler', function () {
+describe('Swap_Match action handler @regression @tier2', function () {
     let indexer, actionsCtx, handler;
 
     function makeSwapInfo(overrides) {

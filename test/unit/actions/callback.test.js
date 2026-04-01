@@ -7,7 +7,7 @@ const { createMockIndexer, createBaseData, createTokenInfo } = require('../../fi
 
 const Callback = require('../../../src/actions/callback.js');
 
-describe('Callback', function () {
+describe('Callback @regression @tier3', function () {
     let indexer, actionsCtx, handler;
 
     const OWNER   = '1SourceAddressXXXXXXXXXXXXXXXYs6gYt';

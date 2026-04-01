@@ -31,7 +31,7 @@ const DESTINATION = '1BoogrfDADPLQpq8LMASmWQUVYDp4t2hF9'; // 35 chars - valid P2
 // Utility-level isCryptoAddress() boundary tests
 // ---------------------------------------------------------------------------
 
-describe('Utility isCryptoAddress() boundary tests', function () {
+describe('Utility isCryptoAddress() boundary tests @regression @tier3', function () {
     let util;
 
     before(function () {
@@ -81,7 +81,7 @@ describe('Utility isCryptoAddress() boundary tests', function () {
 // SEND DESTINATION validation — end-to-end through the Send handler
 // ---------------------------------------------------------------------------
 
-describe('Address validation boundary tests via SEND handler', function () {
+describe('Address validation boundary tests via SEND handler @regression @tier3', function () {
     let indexer, actionsCtx, handler;
 
     beforeEach(function () {

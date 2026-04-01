@@ -7,7 +7,7 @@ const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
 
 const Unknown = require('../../../src/actions/unknown.js');
 
-describe('Unknown action handler', function () {
+describe('Unknown action handler @regression @tier3', function () {
     let indexer, actionsCtx, handler;
 
     beforeEach(function () {

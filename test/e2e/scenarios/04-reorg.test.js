@@ -23,7 +23,7 @@ const ADDR2 = 'mAddr2XXXXXXXXXXXXXXXXXXXXXXX2';
 const BASE_TIME = 1700000000;
 const COIN = 'RBTC';
 
-describe('E2E: Blockchain Reorganization', function () {
+describe('E2E: Blockchain Reorganization @regression @tier3', function () {
     this.timeout(60000);
 
     let server, port, explorer, client;

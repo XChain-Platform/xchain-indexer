@@ -10,7 +10,7 @@ const Message = require('../../../src/actions/message.js');
 // A valid BTC-format destination address (P2PKH on mainnet; util.isCryptoAddress accepts it)
 const VALID_DEST = '1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev';
 
-describe('Message action handler', function () {
+describe('Message action handler @regression @tier3', function () {
     let indexer, actionsCtx, handler;
 
     beforeEach(function () {

@@ -36,7 +36,7 @@ function makeDbLike() {
 // ---------------------------------------------------------------------------
 // describe: normalizeDataValues
 // ---------------------------------------------------------------------------
-describe('Database.normalizeDataValues()', function () {
+describe('Database.normalizeDataValues() @regression @tier1', function () {
     let normalize;
     let config;
     let util;
@@ -415,7 +415,7 @@ describe('Database.normalizeDataValues()', function () {
 // ---------------------------------------------------------------------------
 // describe: getBlockIndex — input validation only (mocked doQuery)
 // ---------------------------------------------------------------------------
-describe('Database.getBlockIndex() — input validation', function () {
+describe('Database.getBlockIndex() — input validation @regression @tier1', function () {
     let db;
 
     beforeEach(function () {

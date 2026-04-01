@@ -1,6 +1,6 @@
 const assert = require('assert');
 
-describe('Config', function () {
+describe('Config @regression @tier3', function () {
 
     beforeEach(function () {
         // Clear require cache so config reloads with new env

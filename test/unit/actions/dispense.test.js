@@ -46,7 +46,7 @@ function makeDispenserInfo(overrides = {}) {
 
 // ─── Test suite ───────────────────────────────────────────────────────────────
 
-describe('Dispense action handler', function () {
+describe('Dispense action handler @regression @tier2', function () {
     let indexer;
     let actionsCtx;
     let dispense;

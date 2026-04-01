@@ -60,7 +60,7 @@ function makeIssueParams(overrides = {}) {
 // Suite
 // ---------------------------------------------------------------------------
 
-describe('Security: malformed parameter injection', function () {
+describe('Security: malformed parameter injection @regression @tier4', function () {
     let indexer, actionsCtx;
 
     beforeEach(function () {

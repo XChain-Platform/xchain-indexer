@@ -86,7 +86,7 @@ after(async function () {
 // ===========================================================================
 // BATCH TESTS
 // ===========================================================================
-describe('04 complex actions – BATCH, SLEEP, SWEEP, DESTROY, LIST, AIRDROP', function () {
+describe('04 complex actions – BATCH, SLEEP, SWEEP, DESTROY, LIST, AIRDROP @regression @tier2', function () {
     this.timeout(60000);
 
     // -----------------------------------------------------------------------

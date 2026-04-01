@@ -56,7 +56,7 @@ function makeDispenserInfo(overrides = {}) {
 // Suite
 // ---------------------------------------------------------------------------
 
-describe('DISPENSE edge-case tests', function () {
+describe('DISPENSE edge-case tests @regression @tier2', function () {
 
     // -----------------------------------------------------------------------
     // DSP-01: Payment exactly equal to GET_AMOUNT → multiplier=1, valid

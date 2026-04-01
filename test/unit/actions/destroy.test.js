@@ -7,7 +7,7 @@ const { createMockIndexer, createBaseData, createTokenInfo } = require('../../fi
 
 const Destroy = require('../../../src/actions/destroy.js');
 
-describe('Destroy', function () {
+describe('Destroy @regression @tier1', function () {
     let indexer, actionsCtx, handler;
 
     const SOURCE = '1SourceAddressXXXXXXXXXXXXXXXYs6gYt';

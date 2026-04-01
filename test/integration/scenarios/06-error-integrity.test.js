@@ -33,7 +33,7 @@ const BLK = 600;
 // Tests
 // ---------------------------------------------------------------------------
 
-describe('06 – Error Handling and Integrity', function () {
+describe('06 – Error Handling and Integrity @regression @tier3', function () {
     this.timeout(60000);
 
     before(async function () {

@@ -64,7 +64,7 @@ function makeMintableToken(overrides = {}) {
 // Suite
 // ---------------------------------------------------------------------------
 
-describe('Mint handler', function () {
+describe('Mint handler @regression @tier1', function () {
     let indexer, actionsCtx, handler;
 
     beforeEach(function () {

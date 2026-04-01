@@ -24,7 +24,7 @@ function makeActionsCtx(indexer) {
     };
 }
 
-describe('SLEEP RESUME_BLOCK boundary tests', function () {
+describe('SLEEP RESUME_BLOCK boundary tests @regression @tier2', function () {
     let indexer, actionsCtx, handler;
 
     const SOURCE = '1SourceAddressXXXXXXXXXXXXXXXYs6gYt';

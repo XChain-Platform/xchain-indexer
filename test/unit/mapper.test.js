@@ -7,7 +7,7 @@ const { createMockIndexer, createBaseData, createTokenInfo } = require('../fixtu
 
 const Mapper = require('../../src/mapper.js');
 
-describe('Mapper', function () {
+describe('Mapper @regression @tier3', function () {
     let indexer, mapper;
 
     beforeEach(function () {

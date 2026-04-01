@@ -66,7 +66,7 @@ after(async function () {
 // ===========================================================================
 // ORDER TESTS
 // ===========================================================================
-describe('03 ORDER / DISPENSER integration', function () {
+describe('03 ORDER / DISPENSER integration @regression @tier2', function () {
     this.timeout(60000);
 
     // -----------------------------------------------------------------------

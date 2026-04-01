@@ -60,7 +60,7 @@ const LOW_BLOCK = 100; // below fee activation (862633)
 // Suite
 // ---------------------------------------------------------------------------
 
-describe('Token state machine boundary tests', function () {
+describe('Token state machine boundary tests @regression @tier2', function () {
 
     let indexer, actionsCtx, issueHandler;
 

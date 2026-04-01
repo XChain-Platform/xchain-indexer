@@ -46,7 +46,7 @@ const POOL_OPTS = {
 let decoderPool = null;
 let indexerPool = null;
 
-describe('Smoke: database connectivity', function () {
+describe('Smoke: database connectivity @regression @tier3', function () {
     this.timeout(5000);
 
     before(function () {

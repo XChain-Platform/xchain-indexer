@@ -46,7 +46,7 @@ function makeIssueParams(overrides = {}) {
         m.MEMO];
 }
 
-describe('Tick name boundary tests', function () {
+describe('Tick name boundary tests @regression @tier3', function () {
     let indexer, actionsCtx, handler;
 
     beforeEach(function () {

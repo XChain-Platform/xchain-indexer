@@ -97,7 +97,7 @@ const LOW_BLOCK = 100; // below 862633 → no fee required for new token
 // Suite
 // ---------------------------------------------------------------------------
 
-describe('Issue handler', function () {
+describe('Issue handler @regression @tier1', function () {
     let indexer, actionsCtx, handler;
 
     beforeEach(function () {

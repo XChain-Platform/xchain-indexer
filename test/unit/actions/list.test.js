@@ -7,7 +7,7 @@ const { createMockIndexer, createBaseData, createTokenInfo } = require('../../fi
 
 const List = require('../../../src/actions/list.js');
 
-describe('List', function () {
+describe('List @regression @tier3', function () {
     let indexer, actionsCtx, handler;
 
     const SOURCE  = '1SourceAddressXXXXXXXXXXXXXXXYs6gYt';

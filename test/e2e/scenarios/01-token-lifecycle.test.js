@@ -25,7 +25,7 @@ const ADDR3 = 'mAddr3XXXXXXXXXXXXXXXXXXXXXXX3'; // recipient
 const BASE_TIME = 1700000000;
 const COIN = 'RBTC'; // regtest BTC prefix
 
-describe('E2E: Token Lifecycle', function () {
+describe('E2E: Token Lifecycle @regression @tier3', function () {
     this.timeout(60000);
 
     let server, port, explorer, client;
