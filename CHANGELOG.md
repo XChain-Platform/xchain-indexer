@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.11.0] - 2026-04-01
+
+### Added
+- Mutation testing suite with 125 tests across 5 suites assessing test suite effectiveness
+- Custom mutation testing engine with runtime monkey-patching via sinon stubs
+- 12 mutation operator types: AOR, ROR, LCR, UOI, SVR, SDL, BCR, SBR, EMR, ACR, PRM, EHR
+- Tier 1 math mutations (36 tests): bcadd/bcsub/bcmul/bcdiv operator swaps, boundary conditions, parameter reorder
+- Tier 1 validation mutations (28 tests): isValidAmountFormat, isCryptoAddress, hasBalance, isNull negation and boundary
+- Tier 1 action mutations (32 tests): Send/Destroy/Issue parse() guard deletion, value replacement, logical connector bypass
+- Tier 2 balance mutations (18 tests): getTokenSupply formula mutations, createLedgerChangeRecord whitelist, SQL filter verification
+- Tier 2 state mutations (11 tests): consolidateLedgerRecords array/separator mutations, debitBalances arithmetic, rollback boundary
+- MutationRegistry singleton for cross-suite result accumulation and reporting
+- Console mutation report with per-operator breakdown and survived mutant identification
+- JSON report generation via MUTATION_REPORT=1 environment variable
+- npm scripts: test:mutation, test:mutation:tier1, test:mutation:report
+- Mutation score: 90.4% (113/125 killed; 12 survived are confirmed equivalent mutants)
+
 ## [1.10.0] - 2026-04-01
 
 ### Added
