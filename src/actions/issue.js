@@ -105,7 +105,7 @@ class Issue {
         //     $data['TICK'] = this.util.base64Decode(data['TICK']);
 
         // Clone the raw data for storage in issues table
-        let issue = structuredClone(data);
+        let issue = Object.assign({}, data);
 
         // Convert NUMBER fields from string value to number value so comparisons are mathematical 
         if(!error)

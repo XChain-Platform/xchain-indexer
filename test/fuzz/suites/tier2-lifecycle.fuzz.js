@@ -39,12 +39,9 @@ describe('Tier 2 - Token lifecycle (ISSUE + MINT) @tier2', function () {
         sinon.restore();
     });
 
-    // Known errors that are code bugs, not test bugs
+    // Remaining known errors from null property access in complex handler paths
     function isKnownCrash(err) {
-        return err.message.includes('could not be cloned') ||
-               err.message.includes('DecimalError') ||
-               err.message.includes('Invalid argument') ||
-               err.message.includes('Cannot read properties');
+        return err.message.includes('Cannot read properties');
     }
 
     describe('Issue.parse() crash safety', function () {

@@ -229,8 +229,10 @@ describe('Tier 1 - Validation functions @tier1', function () {
             ), { numRuns: NUM_RUNS });
         });
 
-        it('throws for objects with broken toString (known edge case)', function () {
-            assert.throws(() => util.isInteger({ toString: false }));
+        it('returns false for objects (no longer crashes)', function () {
+            assert.strictEqual(util.isInteger({ toString: false }), false);
+            assert.strictEqual(util.isInteger({}), false);
+            assert.strictEqual(util.isInteger(null), false);
         });
 
         it('returns true for integer values', function () {
@@ -299,8 +301,10 @@ describe('Tier 1 - Validation functions @tier1', function () {
             ), { numRuns: NUM_RUNS });
         });
 
-        it('throws for objects with null toString (known edge case)', function () {
-            assert.throws(() => util.getFormatVersion({ toString: null }));
+        it('returns null for objects (no longer crashes)', function () {
+            assert.strictEqual(util.getFormatVersion({ toString: null }), null);
+            assert.strictEqual(util.getFormatVersion({}), null);
+            assert.strictEqual(util.getFormatVersion([]), null);
         });
 
         it('returns an integer, 0, or null — never NaN or undefined', function () {

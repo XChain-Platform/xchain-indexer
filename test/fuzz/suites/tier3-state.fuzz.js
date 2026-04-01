@@ -44,10 +44,7 @@ describe('Tier 3 - State transition edge cases @tier3', function () {
     });
 
     function isKnownCrash(err) {
-        return err.message.includes('could not be cloned') ||
-               err.message.includes('DecimalError') ||
-               err.message.includes('Invalid argument') ||
-               err.message.includes('Cannot read properties');
+        return err.message.includes('Cannot read properties');
     }
 
     describe('Send handler crash safety', function () {
@@ -276,13 +273,11 @@ describe('Tier 3 - State transition edge cases @tier3', function () {
             assert.strictEqual(util.getFormatVersion(undefined), 0);
         });
 
-        it('truncates decimal strings to integer (isFloat check only works on numbers)', function () {
-            // String '1.5' passes isNumeric but isFloat('1.5') is false
-            // because isFloat uses strict === which fails for string vs number
-            // So parseInt('1.5') = 1 is returned
-            assert.strictEqual(util.getFormatVersion('1.5'), 1);
+        it('returns null for decimal strings (fixed: no longer truncates)', function () {
+            assert.strictEqual(util.getFormatVersion('1.5'), null);
+            assert.strictEqual(util.getFormatVersion('2.9'), null);
+            // '1.0' is not float (1.0|0 === 1.0), so it's treated as integer
             assert.strictEqual(util.getFormatVersion('1.0'), 1);
-            assert.strictEqual(util.getFormatVersion('2.9'), 2);
         });
 
         it('returns null for numbers > 255', function () {

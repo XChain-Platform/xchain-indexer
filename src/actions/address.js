@@ -83,10 +83,10 @@ class Address {
         if(!error)
             data = this.util.setActionParams(data, params, this.formats, format);
 
-        // Convert NUMBER fields from string value to number value so comparisons are mathematical 
+        // Convert NUMBER fields from string value to number value so comparisons are mathematical
         for(let name of this.fieldList['NUMBER']){
             let value = data[name];
-            if(!this.util.isNull(value))
+            if(!this.util.isNull(value) && this.util.isNumeric(value))
                 data[name] = this.util.bcnum(value);
         }
 

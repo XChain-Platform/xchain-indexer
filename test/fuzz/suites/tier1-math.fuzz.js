@@ -41,19 +41,13 @@ describe('Tier 1 - BigNumber math operations @tier1', function () {
             ), { numRuns: NUM_RUNS });
         });
 
-        it('throws for non-parseable strings', function () {
-            const nonParseable = ['abc', '', 'null', '{}', '[]'];
-            for (const val of nonParseable) {
-                assert.throws(() => util.bcnum(val), Error);
+        it('returns bignumber(0) for non-parseable and special strings (safe fallback)', function () {
+            const zero = util.bcformat(util.bcnum('0'), 0);
+            const invalid = ['abc', '', 'null', '{}', '[]', 'NaN', 'Infinity', '-Infinity'];
+            for (const val of invalid) {
+                assert.strictEqual(util.bcformat(util.bcnum(val), 0), zero,
+                    `bcnum('${val}') should return bignumber(0)`);
             }
-        });
-
-        it('does NOT throw for NaN/Infinity strings (mathjs accepts them)', function () {
-            // Documenting actual behavior — mathjs.bignumber('NaN') returns NaN bignumber
-            const result1 = util.bcnum('NaN');
-            assert.ok(result1 !== undefined);
-            const result2 = util.bcnum('Infinity');
-            assert.ok(result2 !== undefined);
         });
     });
 
@@ -189,11 +183,12 @@ describe('Tier 1 - BigNumber math operations @tier1', function () {
             ), { numRuns: NUM_RUNS });
         });
 
-        it('division by zero does not throw (returns Infinity bignumber)', function () {
-            // Documenting actual behavior — bcdiv handles 0 denominator via mathjs
-            // which returns Infinity rather than throwing
+        it('division by zero returns bignumber(0) (fixed: no longer returns Infinity)', function () {
             const result = util.bcdiv('100', '0', 0);
-            assert.ok(result !== undefined);
+            assert.strictEqual(util.bcformat(result, 0), '0');
+            // Also handles null denominator (defaults to 0)
+            const result2 = util.bcdiv('100', null, 0);
+            assert.strictEqual(util.bcformat(result2, 0), '0');
         });
 
         it('division by 1 returns the numerator', function () {

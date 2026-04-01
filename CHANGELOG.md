@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.8.1] - 2026-04-01
+
+### Fixed
+- bcnum() no longer crashes on non-numeric, NaN, or Infinity inputs — returns bignumber(0) as safe fallback
+- bcnum() trims whitespace from string inputs before parsing to prevent mathjs DecimalError
+- bcdiv() returns bignumber(0) on division by zero instead of returning Infinity
+- isInteger() no longer crashes on objects with broken toString — returns false for non-primitive types, supports bignumber objects via toNumber()
+- getFormatVersion() no longer crashes on object inputs — returns null; correctly rejects decimal strings like '1.5' instead of truncating to integer
+- setNumberFormats() uses isNumeric() guard instead of try/catch for bcnum() calls
+- Address handler validates numeric input before bcnum() conversion to prevent DecimalError crash
+- Issue and Dividend handlers use Object.assign() instead of structuredClone() to prevent DataCloneError on bignumber objects during BATCH processing
+- normalizeDataValues() removed redundant ENCRYPTION_METHOD truncation that conflicted with NUMBER_FIELDS validation
+- bcgt/bclt/bcgte/bclte and hasBalance() routed through bcnum() for consistent input validation
+
 ## [1.8.0] - 2026-04-01
 
 ### Added
