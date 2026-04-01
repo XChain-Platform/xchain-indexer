@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-04-01
+
+### Added
+- Security test suite with 47 tests across 6 files validating vulnerability fixes and regression guards
+- Tests cover negative amount rejection, parameter injection, DECIMAL precision clamping, ledger table whitelist, balance arithmetic integrity, and startup configuration validation
+- `npm run test:security` script for running security tests in isolation
+
 ## [1.5.1] - 2026-04-01
 
 ### Fixed

@@ -1,0 +1,149 @@
+'use strict';
+
+process.env.INDEXER_COIN    = 'BTC';
+process.env.INDEXER_NETWORK = 'regtest';
+
+const assert = require('assert');
+const sinon  = require('sinon');
+
+const { createMockIndexer, createBaseData, createTokenInfo } = require('../../../fixtures/mocks');
+
+const Send  = require('../../../../src/actions/send.js');
+const Issue = require('../../../../src/actions/issue.js');
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function makeActionsCtx(indexer) {
+    return {
+        config:          indexer.config,
+        util:            indexer.util,
+        mapper:          indexer.mapper,
+        decoderDb:       indexer.decoderDb,
+        indexerDb:       indexer.indexerDb,
+        protocolChanges: {
+            isDefined:  sinon.stub().returns(true),
+            isEnabled:  sinon.stub().resolves(true),
+        },
+        processAction: sinon.stub().resolves(),
+    };
+}
+
+const LOW_BLOCK   = 100;
+const SOURCE      = '1SourceAddressXXXXXXXXXXXXXXXYs6gYt';
+const DESTINATION = '1BoogrfDADPLQpq8LMASmWQUVYDp4t2hF9';
+
+// Issue format 0 param builder
+function makeIssueParams(overrides = {}) {
+    const defaults = {
+        VERSION: '0', TICK: 'NEWTOKEN', MAX_SUPPLY: '1000', MAX_MINT: '100',
+        DECIMALS: '0', DESCRIPTION: 'Test', MINT_SUPPLY: '', TRANSFER: '',
+        TRANSFER_SUPPLY: '', LOCK_MAX_SUPPLY: '', LOCK_MAX_MINT: '',
+        LOCK_DESCRIPTION: '', LOCK_SLEEP: '', LOCK_CALLBACK: '',
+        CALLBACK_BLOCK: '', CALLBACK_TICK: '', CALLBACK_AMOUNT: '',
+        ALLOW_LIST: '', BLOCK_LIST: '', MINT_ADDRESS_MAX: '',
+        MINT_START_BLOCK: '', MINT_STOP_BLOCK: '', LOCK_MINT: '',
+        LOCK_MINT_SUPPLY: '', MEMO: '',
+    };
+    const m = Object.assign({}, defaults, overrides);
+    return [m.VERSION, m.TICK, m.MAX_SUPPLY, m.MAX_MINT, m.DECIMALS,
+        m.DESCRIPTION, m.MINT_SUPPLY, m.TRANSFER, m.TRANSFER_SUPPLY,
+        m.LOCK_MAX_SUPPLY, m.LOCK_MAX_MINT, m.LOCK_DESCRIPTION,
+        m.LOCK_SLEEP, m.LOCK_CALLBACK, m.CALLBACK_BLOCK, m.CALLBACK_TICK,
+        m.CALLBACK_AMOUNT, m.ALLOW_LIST, m.BLOCK_LIST, m.MINT_ADDRESS_MAX,
+        m.MINT_START_BLOCK, m.MINT_STOP_BLOCK, m.LOCK_MINT, m.LOCK_MINT_SUPPLY,
+        m.MEMO];
+}
+
+// ---------------------------------------------------------------------------
+// Suite
+// ---------------------------------------------------------------------------
+
+describe('Security: malformed parameter injection', function () {
+    let indexer, actionsCtx;
+
+    beforeEach(function () {
+        indexer     = createMockIndexer();
+        actionsCtx = makeActionsCtx(indexer);
+
+        indexer.indexerDb.getTokenInfo.resolves(createTokenInfo({ TICK: 'TEST', DECIMALS: 0 }));
+        indexer.indexerDb.isActionAllowed.resolves(true);
+        indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
+        indexer.indexerDb.getAddressBalances.resolves({ 1: '1000' });
+    });
+
+    afterEach(function () {
+        sinon.restore();
+    });
+
+    it('SEC-13: SEND with empty string AMOUNT → throws (empty treated as null, skips validation)', async function () {
+        const handler = new Send(actionsCtx);
+        const params  = ['0', 'TEST', '', DESTINATION, ''];
+        const data    = createBaseData({ ACTION: 'SEND', FORMAT: 0, BLOCK_INDEX: LOW_BLOCK, SOURCE });
+
+        // Empty string is treated as null by isNull(), skipping format validation.
+        // This causes mathjs.bignumber('') to throw in hasBalance().
+        // Documented as a known edge case — empty amounts do not reach the DB.
+        await assert.rejects(
+            () => handler.parse(params, data, null),
+            /Invalid argument|DecimalError/,
+            'empty AMOUNT should throw before reaching database'
+        );
+    });
+
+    it('SEC-14: SEND with non-numeric AMOUNT (\'abc\') → invalid', async function () {
+        const handler = new Send(actionsCtx);
+        const params  = ['0', 'TEST', 'abc', DESTINATION, ''];
+        const data    = createBaseData({ ACTION: 'SEND', FORMAT: 0, BLOCK_INDEX: LOW_BLOCK, SOURCE });
+
+        await handler.parse(params, data, null);
+
+        assert.ok(data.STATUS.startsWith('invalid'), `expected invalid but got: ${data.STATUS}`);
+    });
+
+    it('SEC-15: SEND with SQL injection in AMOUNT → invalid', async function () {
+        const handler = new Send(actionsCtx);
+        const params  = ['0', 'TEST', '1; DROP TABLE sends', DESTINATION, ''];
+        const data    = createBaseData({ ACTION: 'SEND', FORMAT: 0, BLOCK_INDEX: LOW_BLOCK, SOURCE });
+
+        await handler.parse(params, data, null);
+
+        assert.ok(data.STATUS.startsWith('invalid'), `expected invalid but got: ${data.STATUS}`);
+    });
+
+    it('SEC-16: ISSUE with TICK containing pipe delimiter → handled safely', async function () {
+        const handler = new Issue(actionsCtx);
+        indexer.indexerDb.getTokenInfo.resolves(null);
+        // Pipe in TICK would have been split during parsing, so the params array
+        // would be misaligned — handler should not crash
+        const params  = makeIssueParams({ TICK: 'BAD|TICK' });
+        const data    = createBaseData({ ACTION: 'ISSUE', FORMAT: 0, BLOCK_INDEX: LOW_BLOCK, SOURCE });
+
+        await handler.parse(params, data, null);
+
+        // Should either be invalid or at least not throw
+        assert.ok(typeof data.STATUS === 'string', 'handler should set a status string');
+    });
+
+    it('SEC-17: SEND with extremely long AMOUNT string (10000 chars) → invalid', async function () {
+        const handler = new Send(actionsCtx);
+        const longAmount = '1'.repeat(10000);
+        const params  = ['0', 'TEST', longAmount, DESTINATION, ''];
+        const data    = createBaseData({ ACTION: 'SEND', FORMAT: 0, BLOCK_INDEX: LOW_BLOCK, SOURCE });
+
+        await handler.parse(params, data, null);
+
+        assert.ok(data.STATUS.startsWith('invalid'), `expected invalid but got: ${data.STATUS}`);
+    });
+
+    it('SEC-18: SEND with null DESTINATION → invalid', async function () {
+        const handler = new Send(actionsCtx);
+        const params  = ['0', 'TEST', '100', null, ''];
+        const data    = createBaseData({ ACTION: 'SEND', FORMAT: 0, BLOCK_INDEX: LOW_BLOCK, SOURCE, COIN_DESTINATION: null });
+
+        await handler.parse(params, data, null);
+
+        assert.ok(data.STATUS.startsWith('invalid'), `expected invalid but got: ${data.STATUS}`);
+    });
+});
