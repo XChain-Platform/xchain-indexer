@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.12.1] - 2026-04-01
+
+### Changed
+- Rewrite README with features, quick start, scripts, documentation links, and test suite breakdown
+- Remove inline ACTION commands table in favor of xchain-documentation/indexer/ACTIONS.md reference
+
 ## [1.12.0] - 2026-04-01
 
 ### Added

@@ -1,44 +1,129 @@
 # XChain Platform Indexer
 
-This directory contains the basic XChain platform indexer written in javascript which supports indexing XChain platform transactions, determining status of transactions, and populating a database with the indexed data.
+<p align="center">
+  <img src="https://img.shields.io/badge/version-1.12.0-blue" alt="Version">
+  <img src="https://img.shields.io/badge/tests-958%20passing-brightgreen" alt="Tests">
+  <img src="https://img.shields.io/badge/coverage-unit%20%7C%20integration%20%7C%20e2e%20%7C%20fuzz%20%7C%20chaos%20%7C%20mutation%20%7C%20boundary%20%7C%20smoke-brightgreen" alt="Coverage">
+  <img src="https://img.shields.io/badge/node-%3E%3D18-green" alt="Node">
+  <img src="https://img.shields.io/badge/license-Dankest%20Community-orange" alt="License">
+</p>
 
-This indexer was born from the Broadcast Token Naming System (BTNS) project found at https://github.com/jdogresorg/Broadcast-Token-Naming-System
+State-processing engine for the XChain Platform. Reads decoded blockchain transactions from a Decoder database, validates and executes each ACTION according to protocol rules, and maintains authoritative token state (balances, supplies, ownership, DEX orders, dispensers) in a separate MariaDB database.
 
-## `ACTION` commands
-Below is a list of the defined `ACTION` commands and the function of each:
+## Features
 
-| ACTION                                                                                                  | Description                                                                                   | 
-| ------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| [`ADDRESS`](https://github.com/XChain-platform/xchain-documentation/blob/master/actions/ADDRESS.md)     | This action configures address specific options.                                              |
-| [`AIRDROP`](https://github.com/XChain-platform/xchain-documentation/blob/master/actions/AIRDROP.md)     | This action airdrops `TICK` supply to one or more lists.                                      |
-| [`BATCH`](https://github.com/XChain-platform/xchain-documentation/blob/master/actions/BATCH.md)         | This action batch executes multiple `ACTION` commands in a single transaction.                |
-| [`BROADCAST`](https://github.com/XChain-platform/xchain-documentation/blob/master/actions/BROADCAST.md) | This action broadcasts a message, and can also be used to create oracles and betting feeds.   |
-| [`CALLBACK`](https://github.com/XChain-platform/xchain-documentation/blob/master/actions/CALLBACK.md)   | This action performs a callback on a `TICK`.                                                  |
-| [`DESTROY`](https://github.com/XChain-platform/xchain-documentation/blob/master/actions/DESTROY.md)     | This action destroys `TICK` supply.                                                           |
-| [`DISPENSER`](https://github.com/XChain-platform/xchain-documentation/blob/master/actions/DISPENSER.md) | This action creates a dispenser (vending machine) to dispense `TICK` when triggered.          |
-| [`DIVIDEND`](https://github.com/XChain-platform/xchain-documentation/blob/master/actions/DIVIDEND.md)   | This action pays a dividend to holders of `TICK`.                                             |
-| [`FILE`](https://github.com/XChain-platform/xchain-documentation/blob/master/actions/FILE.md)           | This action uploads a file including file metadata.                                           |
-| [`ISSUE`](https://github.com/XChain-platform/xchain-documentation/blob/master/actions/ISSUE.md)         | This action creates or updates a `TICK`.                                                      |
-| [`LINK`](https://github.com/XChain-platform/xchain-documentation/blob/master/actions/LINK.md)           | This action links actions using `ACTION_INDEX`, including linking actions across blockchains. |
-| [`LIST`](https://github.com/XChain-platform/xchain-documentation/blob/master/actions/LIST.md)           | This action creates a list of items for use in actions.                                       |
-| [`MESSAGE`](https://github.com/XChain-platform/xchain-documentation/blob/master/actions/MESSAGE.md)     | This action allows for the sending of plaintext and encrypted messages between addresses.     |
-| [`MINT`](https://github.com/XChain-platform/xchain-documentation/blob/master/actions/MINT.md)           | This action mints `TICK` supply.                                                              |
-| [`ORDER`](https://github.com/XChain-platform/xchain-documentation/blob/master/actions/ORDER.md)         | This action creates a order to sell an item on the Decentralized Exchange (DEX).              |
-| [`SEND`](https://github.com/XChain-platform/xchain-documentation/blob/master/actions/SEND.md)           | This action sends one or more `TICK` to an `ADDRESS`.                                         |
-| [`SLEEP`](https://github.com/XChain-platform/xchain-documentation/blob/master/actions/SLEEP.md)         | This action pauses actions on `TICK` until `RESUME_BLOCK` is reached.                         |
-| [`SWAP`](https://github.com/XChain-platform/xchain-documentation/blob/master/actions/SWAP.md)           | This action allows for swapping tokens across XChain platform supported blockchains.          |
-| [`SWEEP`](https://github.com/XChain-platform/xchain-documentation/blob/master/actions/SWEEP.md)         | This action transfers all `TICK` balances and/or ownerships to an `DESTINATION` address.      |
+- **20 ACTION types** — ADDRESS, AIRDROP, BATCH, BROADCAST, CALLBACK, DESTROY, DISPENSER, DISPENSE, DIVIDEND, FILE, ISSUE, LINK, LIST, MESSAGE, MINT, ORDER, SEND, SLEEP, SWAP, SWEEP
+- **Multi-chain support** — Bitcoin, Litecoin, and Dogecoin on mainnet, testnet, and regtest
+- **Atomic block processing** — every block wrapped in a DB transaction; failures roll back cleanly
+- **Block reorg handling** — detects reorganizations from the Decoder DB, rolls back and re-indexes
+- **Double-entry ledger** — all token movements recorded as credits, debits, and escrows
+- **Per-block sanity check** — verifies token supplies match the sum of credits minus debits
+- **DEX engine** — ORDER matching, SWAP matching, DISPENSER triggering with automatic expiration
+- **Protocol versioning** — actions activate at specific block heights or timestamps per network
+- **Action mapping** — address/ticker/action_index cross-references for fast lookups
+- **Circuit-breaker DB connections** — automatic failure detection and recovery
+- **Watchdog timeout** — configurable per-block processing timeout detects deadlocks
+- **958 tests** — unit, integration, e2e, fuzz, chaos, mutation, boundary, smoke, performance, regression
+
+## Quick Start
+
+```bash
+git clone https://github.com/XChain-platform/xchain-indexer.git
+cd xchain-indexer
+npm install
+```
+
+Create a `.env` file:
+
+```env
+DECODER_DB_HOST=localhost
+DECODER_DB_PORT=3306
+DECODER_DB_NAME=XChain_BTC_Mainnet_Decoder
+DECODER_DB_USER=xchain_reader
+DECODER_DB_PASS=your_password
+
+INDEXER_DB_HOST=localhost
+INDEXER_DB_PORT=3306
+INDEXER_DB_NAME=XChain_BTC_Mainnet_Indexer
+INDEXER_DB_USER=xchain_writer
+INDEXER_DB_PASS=your_password
+
+INDEXER_API_PORT=3000
+INDEXER_COIN=BTC
+INDEXER_NETWORK=mainnet
+```
+
+Start the indexer:
+
+```bash
+npm run api
+```
+
+## Scripts
+
+| Command | Description |
+|---|---|
+| `npm run api` | Start the indexer and API server |
+| `npm test` | Run unit tests (~820 tests) |
+| `npm run test:integration` | Integration tests (~929 tests, requires MariaDB) |
+| `npm run test:e2e` | End-to-end tests (43 tests, requires full stack) |
+| `npm run test:boundary` | Boundary condition tests |
+| `npm run test:smoke` | Smoke tests (unit + connected) |
+| `npm run test:security` | Security tests |
+| `npm run test:fuzz` | Fuzz tests (property-based) |
+| `npm run test:fuzz:quick` | Quick fuzz (1,000 iterations, tier1) |
+| `npm run test:fuzz:full` | Full fuzz (10,000 iterations) |
+| `npm run test:chaos` | Chaos engineering tests |
+| `npm run test:mutation` | Mutation tests |
+| `npm run test:mutation:tier1` | Tier1 mutation tests |
+| `npm run test:mutation:report` | Mutation tests with coverage report |
+| `npm run test:perf` | All performance tests |
+| `npm run test:regression` | Regression tests (tagged across all suites) |
+| `npm run test:regression:fast` | Fast regression (tier1 + tier4, unit only) |
+| `npm run test:regression:full` | Full regression suite |
+| `npm run test:nodb` | All tests that don't require a database |
+| `npm run test:full` | Complete test suite |
+
+## Documentation
+
+Full indexer documentation is available in the [xchain-documentation](https://github.com/XChain-platform/xchain-documentation/tree/master/indexer) repository:
+
+| Document | Description |
+|---|---|
+| [README](https://github.com/XChain-platform/xchain-documentation/blob/master/indexer/README.md) | Overview, installation, quick start, scripts, dependencies |
+| [Architecture](https://github.com/XChain-platform/xchain-documentation/blob/master/indexer/ARCHITECTURE.md) | Data pipeline, internal components, action handlers, block processing pipeline |
+| [Configuration](https://github.com/XChain-platform/xchain-documentation/blob/master/indexer/CONFIGURATION.md) | Environment variables, coin-specific config, indexer constants |
+| [Actions](https://github.com/XChain-platform/xchain-documentation/blob/master/indexer/ACTIONS.md) | All 20 ACTION types, categories, format versions, protocol versioning |
+| [Database](https://github.com/XChain-platform/xchain-documentation/blob/master/indexer/DATABASE.md) | Full schema reference — core, ledger, action, state, index, and mapping tables |
+| [Ledger](https://github.com/XChain-platform/xchain-documentation/blob/master/indexer/LEDGER.md) | Double-entry ledger, balance calculation, sanity checks, gas token fees |
+| [Operations](https://github.com/XChain-platform/xchain-documentation/blob/master/indexer/OPERATIONS.md) | Running, Docker, API endpoints, resilience, troubleshooting |
+
+## Test Suite
+
+| Type | Tests | Description |
+|---|---|---|
+| Unit — Core | ~130 | `actions.test.js`, `utility.test.js`, `db.test.js`, `config.test.js`, `rollback.test.js`, `mapper.test.js`, `protocol_changes.test.js` |
+| Unit — Actions | ~530 | 27 action handlers: `send.test.js`, `issue.test.js`, `mint.test.js`, `order.test.js`, `dispenser.test.js`, ... |
+| Unit — Security | ~60 | SQL safety, parameter injection, negative amounts, balance integrity, startup validation |
+| Boundary | ~100 | Supply limits, tick length, fees, expiration, sleep/resume, address validation, DEX price matching |
+| Fuzz | ~50 | Property-based testing via fast-check: mathematical properties, format fuzzing |
+| Chaos | ~30 | Database failures, circuit breaker, timeout handling, malformed data |
+| Mutation | ~30 | Mutation testing harness: arithmetic, validation, boundary mutations |
+| Smoke | ~10 | Config loading, utility functions, handler instantiation, API liveness |
+| Regression | ~18 | Tagged tests across all suites for fast verification |
+| Integration | ~929 | Full scenario tests against MariaDB |
+| E2E | 43 | Full-stack tests exercising decoder → indexer → explorer pipeline |
+| Performance | 5 suites | Baseline throughput, action benchmarks, sustained load, spike load, scaling |
+| **Total** | **~958+** | |
 
 ---
 
-**Copyright © 2025 Dankest, LLC**
+**Copyright &copy; 2025 Dankest, LLC**
 
-**Based on XChain Platform by Dankest, LLC – https://dankest.llc**  
+**Based on XChain Platform by Dankest, LLC &ndash; https://dankest.llc**
 
-Licensed under the **Dankest Community License**  
-(based on the Apache License 2.0 with additional non-commercial and network-disclosure terms).  
+Licensed under the **Dankest Community License**
+(based on the Apache License 2.0 with additional non-commercial and network-disclosure terms).
 
-You may not use, modify, or distribute this material except in compliance with the License.  
+You may not use, modify, or distribute this material except in compliance with the License.
 A full copy of the License is available at: [https://dankest.llc/license](https://dankest.llc/license)
-
----
