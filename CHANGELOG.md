@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.9.0] - 2026-04-01
+
+### Added
+- Block processing watchdog timeout (5 min) — detects deadlocks and infinite loops, rolls back stalled blocks
+- Circuit breaker on database connections — opens after 10 consecutive failures, 30s cooldown before retry
+- Exponential backoff with jitter on connection retries — prevents thundering herd on database recovery
+- Connection pool validation via minDelayValidation (3s) — detects stale/half-open connections after network partitions
+- withTimeout() utility for promise-based timeout enforcement
+
+### Fixed
+- doQuery() now re-throws errors inside ACID transactions instead of silently returning empty results
+
 ## [1.8.1] - 2026-04-01
 
 ### Fixed
