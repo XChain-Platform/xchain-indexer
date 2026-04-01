@@ -111,13 +111,13 @@ class Rollback {
         // Placeholder for market pairs
         let markets = [];
 
-        // Get the first action_index after the given block
-        let query = `SELECT 
+        // Get the first action_index at or after the given block
+        let query = `SELECT
                         a.action_index
                     FROM
                         actions a
                     WHERE
-                        a.block_index > ?
+                        a.block_index >= ?
                     ORDER BY
                         a.action_index ASC
                     LIMIT 1`;
@@ -302,7 +302,7 @@ class Rollback {
 
             // Delete data from tables using block_index
             for(let table of this.blockTables){
-                query = `DELETE FROM ` + table + ` WHERE block_index > ?`;
+                query = `DELETE FROM ` + table + ` WHERE block_index >= ?`;
                 args  = [block_index];
                 await this.indexerDb.doQuery(query, args);
             }

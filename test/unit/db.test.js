@@ -172,11 +172,11 @@ describe('Database.normalizeDataValues()', function () {
         assert.strictEqual(out.LOCK_MAX_SUPPLY, null);
     });
 
-    it('sets LOCK_MINT to null when it is a string "1"', function () {
-        // [0,1].indexOf('1') === -1, so string '1' is not valid
+    it('converts LOCK_MINT string "1" to integer 1', function () {
+        // String '1' is numeric and converts to valid lock value 1
         const data = { LOCK_MINT: '1' };
         const out  = normalize(data);
-        assert.strictEqual(out.LOCK_MINT, null);
+        assert.strictEqual(out.LOCK_MINT, 1);
     });
 
     it('keeps LOCK_DESCRIPTION at 1', function () {

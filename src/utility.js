@@ -301,11 +301,14 @@ class Utility {
     }
 
     // Validate if a given value is considered valid
-    // @value = string or integer
+    // @value = string or integer or bignumber
     // @valid = string or array of values
     isValidValue(value, valid){
         let valueType = typeof value,
             validType = typeof valid;
+        // Convert bignumber objects to their numeric value
+        if(valueType=='object' && value !== null && typeof value.toNumber === 'function')
+            value = value.toNumber();
         // Convert any numeric string values to integer value
         if(valueType=='string' && this.isNumeric(value))
             value = parseInt(value);

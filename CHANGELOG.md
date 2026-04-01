@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-04-01
+
+### Added
+- Integration test suite with 109 tests across 6 scenario files (97 passing)
+- Test infrastructure: decoder seeder, indexer launcher, assertion helpers, DB connection manager
+- `npm run test:integration` script for running integration tests against MariaDB
+- Coverage for block discovery, token lifecycle, DEX orders, dispensers, reorgs, and error handling
+
+### Fixed
+- Rollback used `block_index > ?` instead of `>= ?`, leaving data at the reorg block uncleaned
+- `normalizeDataValues()` nullified LOCK fields when values were bignumber or string (broke all LOCK_* flags set via protocol actions)
+- `isValidValue()` could not match bignumber objects against valid value arrays (broke SWEEP action)
+
 ## [1.1.0] - 2026-03-31
 
 ### Added
