@@ -180,8 +180,8 @@ class Issue {
         if(!error && String(data['TICK']).indexOf(';')!=-1)
             error = 'invalid: TICK (semicolon)';
 
-        // Verify TICK is not on RESERVED_TICKS list
-        if(!error && this.config['RESERVED_TICKS'].indexOf(data['TICK'])!=-1)
+        // Verify TICK is not on RESERVED_TICKS list (GAS address can issue GAS token)
+        if(!error && this.config['RESERVED_TICKS'].indexOf(data['TICK'])!=-1 && !(data['TICK']==this.config['GAS'] && data['SOURCE']==this.config['ADDRESS']['GAS']))
             error = 'invalid: TICK (reserved)';
 
         // Verify only GAS address can issue on GAS token
