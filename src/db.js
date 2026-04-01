@@ -334,8 +334,12 @@ class Database {
     normalizeDataValues(data){
         // Handle converting any boxed primitives (e.g. mathjs Decimal) to plain primitives
         for(let key in data){
-            if(!this.util.isNull(data[key]) && typeof data[key] === 'object')
-                data[key] = data[key].toString();
+            if(!this.util.isNull(data[key]) && typeof data[key] === 'object'){
+                if(typeof data[key].toString === 'function')
+                    data[key] = data[key].toString();
+                else
+                    data[key] = null;
+            }
         }
         // Set LIST field values to numeric value or NULL
         for(let field of this.config['LIST_FIELDS'] ){
