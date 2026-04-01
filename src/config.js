@@ -188,8 +188,11 @@ module.exports = {
             'BLOCK_LIST'
         ];
 
-        // Define block parsing interval (10 seconds)
-        config['BLOCK_CHECK_INTERVAL'] = 5000; 
+        // Define block parsing interval (5 seconds)
+        config['BLOCK_CHECK_INTERVAL'] = 5000;
+
+        // Block processing watchdog timeout (5 minutes)
+        config['BLOCK_PROCESS_TIMEOUT'] = 300000;
 
         // Merge indexer config and COIN config into a single config object
         let fullConfig = Object.assign({}, config, coinConfig);

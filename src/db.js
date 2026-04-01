@@ -58,16 +58,24 @@ class Database {
             database: this.dbName,
             port:     this.port,
             // Connection options
-            connectionLimit:  10,
-            connectTimeout:   10000,
-            acquireTimeout:   10000,
-            idleTimeout:      60000,
-            insertIdAsNumber: true
+            connectionLimit:      10,
+            connectTimeout:       10000,
+            acquireTimeout:       10000,
+            idleTimeout:          60000,
+            insertIdAsNumber:     true,
+            minDelayValidation:   3000
         };
 
         // Setup pool of connections
         this.pool = mariadb.createPool(this.connectionPoolParams);
         this.transactionConnection = null;
+
+        // Circuit breaker state for database connections
+        this.circuitState     = 'closed';  // closed | open | half-open
+        this.circuitFailures  = 0;         // consecutive connection failures
+        this.circuitThreshold = 10;        // failures before opening circuit
+        this.circuitCooldown  = 30000;     // 30s cooldown before half-open retry
+        this.circuitOpenUntil = 0;         // timestamp when circuit can transition to half-open
     }
 
     /* 
@@ -181,24 +189,51 @@ class Database {
      * Common database connection functions (connect / rollback / commit / doQuery)
      */
 
-    // Handle getting a database Connection
+    // Handle getting a database Connection (with exponential backoff + jitter)
     async getConnection(){
         if(this.transactionConnection)
             return this.transactionConnection;
-        var connection = null;
-        var attempts   = 0;
-        var maxAttempts = 30;
+        // Circuit breaker: reject immediately if open
+        if(this.circuitState === 'open'){
+            if(Date.now() < this.circuitOpenUntil)
+                this.util.throwError('Circuit breaker open — database connections rejected until cooldown expires');
+            // Cooldown expired, transition to half-open
+            this.circuitState = 'half-open';
+            console.log('Circuit breaker half-open — attempting reconnection');
+        }
+        var connection    = null;
+        var attempts      = 0;
+        var maxAttempts   = 30;
+        var baseDelay     = 500;   // 500ms initial delay
+        var maxDelay      = 15000; // 15s max delay
         while(connection == null){
             try {
                 connection = await this.pool.getConnection();
-                // console.log("Connected to database!");
+                // Reset circuit breaker on success
+                if(this.circuitState === 'half-open'){
+                    this.circuitState = 'closed';
+                    this.circuitFailures = 0;
+                    console.log('Circuit breaker closed — database connection restored');
+                }
+                this.circuitFailures = 0;
             } catch (e){
                 attempts++;
+                this.circuitFailures = (this.circuitFailures || 0) + 1;
+                // Circuit breaker: open after consecutive failures
+                if(this.circuitFailures >= this.circuitThreshold){
+                    this.circuitState = 'open';
+                    this.circuitOpenUntil = Date.now() + this.circuitCooldown;
+                    this.util.throwError('Circuit breaker opened after ' + this.circuitFailures + ' consecutive failures — cooling down for ' + (this.circuitCooldown / 1000) + 's');
+                }
                 if(attempts >= maxAttempts)
                     this.util.throwError('Could not connect to MariaDB after ' + maxAttempts + ' attempts. Giving up.');
-                console.log("Can't connect to mariadb. Trying again... (" + attempts + '/' + maxAttempts + ')');
+                // Exponential backoff with jitter: delay = min(baseDelay * 2^attempt, maxDelay) + random jitter
+                let delay = Math.min(baseDelay * Math.pow(2, attempts - 1), maxDelay);
+                let jitter = Math.floor(Math.random() * delay * 0.3); // up to 30% jitter
+                let totalDelay = delay + jitter;
+                console.log("Can't connect to mariadb. Retrying in " + totalDelay + 'ms... (' + attempts + '/' + maxAttempts + ')');
                 connection = null;
-                await this.util.sleep(1000);
+                await this.util.sleep(totalDelay);
             }
         }
         return connection;
@@ -279,6 +314,10 @@ class Database {
                 results = await db.query(query, args);
             } catch (error){
                 this.util.logError('Error running database query :', error);
+                // Inside a transaction, re-throw so the block-level catch triggers a rollback
+                // This prevents silent data loss from failed writes within an ACID transaction
+                if(tx)
+                    throw error;
             }
             // Release the connection if we are not in the middle of a ACID transaction
             if(!tx)

@@ -78,6 +78,15 @@ class Utility {
         return new Promise((resolve) => setTimeout(resolve, ms));
     }
 
+    // Run a promise with a timeout — rejects with an error if the promise doesn't resolve in time
+    withTimeout(promise, ms, label) {
+        let timer;
+        const timeout = new Promise((_, reject) => {
+            timer = setTimeout(() => reject(new Error('Watchdog timeout: ' + (label || 'operation') + ' exceeded ' + ms + 'ms')), ms);
+        });
+        return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+    }
+
     // Throw an error and log to console
     throwError(error){
         console.error('throwError: ' + error);

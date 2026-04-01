@@ -179,24 +179,32 @@ class XChainIndexer {
                 await this.indexerDb.beginTransaction();
                 try {
 
-                    // Loop through any block transactions and process them
-                    for(const tx of blockTransactions)
-                        await this.actions.processTransaction(tx);
+                    // Process the block with a watchdog timeout to detect deadlocks or infinite loops
+                    let blockProcessing = (async () => {
 
-                    // Check for any expired items (orders, swaps, dispensers)
-                    await this.util.processExpirations(this.actions, this.indexerDb, lastIndexerBlock, blockTime);
+                        // Loop through any block transactions and process them
+                        for(const tx of blockTransactions)
+                            await this.actions.processTransaction(tx);
 
-                    // Check for any cancelled items (dispensers)
-                    await this.util.processCancellations(this.actions, this.indexerDb, lastIndexerBlock, blockTime);
+                        // Check for any expired items (orders, swaps, dispensers)
+                        await this.util.processExpirations(this.actions, this.indexerDb, lastIndexerBlock, blockTime);
 
-                    // Create record in `blocks` table with hashes of the credits/debits/escrows (ledger) and /actions tables
-                    let [ledger, actions] = await this.indexerDb.createBlock(lastIndexerBlock, blockTime);
+                        // Check for any cancelled items (dispensers)
+                        await this.util.processCancellations(this.actions, this.indexerDb, lastIndexerBlock, blockTime);
 
-                    // Create / Update DEX market information
-                    await this.util.processMarketUpdates(this.indexerDb, lastIndexerBlock, blockTime);
+                        // Create record in `blocks` table with hashes of the credits/debits/escrows (ledger) and /actions tables
+                        let [ledger, actions] = await this.indexerDb.createBlock(lastIndexerBlock, blockTime);
 
-                    // Do a sanity check to verify that token supplies match data in credits/debits/escrows/balances tables
-                    await this.indexerDb.sanityCheck(lastIndexerBlock);
+                        // Create / Update DEX market information
+                        await this.util.processMarketUpdates(this.indexerDb, lastIndexerBlock, blockTime);
+
+                        // Do a sanity check to verify that token supplies match data in credits/debits/escrows/balances tables
+                        await this.indexerDb.sanityCheck(lastIndexerBlock);
+
+                        return [ledger, actions];
+                    })();
+
+                    let [ledger, actions] = await this.util.withTimeout(blockProcessing, this.config['BLOCK_PROCESS_TIMEOUT'], 'block ' + lastIndexerBlock);
 
                     // Commit the block data to the database
                     await this.indexerDb.commitTransaction();
@@ -212,12 +220,6 @@ class XChainIndexer {
                     // Bail out with an error
                     this.util.logError('Error while parsing block data :', error);
                 }
-
-                // DEBUG : Exit processing at a select block
-                // if(lastIndexerBlock >=  862672){
-                //     await this.rollback.rollback(862663);
-                //     this.util.throwError('Exiting on target block');
-                // }
 
             }
 
