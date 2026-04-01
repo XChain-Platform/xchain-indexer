@@ -59,7 +59,9 @@ class Database {
             port:     this.port,
             // Connection options
             connectionLimit:  10,
-            //connectTimeout: 0,
+            connectTimeout:   10000,
+            acquireTimeout:   10000,
+            idleTimeout:      60000,
             insertIdAsNumber: true
         };
 
@@ -89,7 +91,7 @@ class Database {
                     return true;
                 return false;
             } catch (e){
-                console.log('e=',e);
+                console.log('Database connection error:', e.code || 'unknown');
                 console.log("There was an error trying to check if the " + this.dbName + " database exists. Trying again in a few seconds...");
                 await this.util.sleep(5000); // Wait 5 seconds
             }
@@ -106,16 +108,19 @@ class Database {
             port:     this.port
         };
         let databaseCreated = false;
+        // Validate database name to prevent SQL injection
+        if(!/^[A-Za-z0-9_]+$/.test(this.dbName))
+            throw new Error('Invalid database name: ' + this.dbName);
         console.log("Creating " + this.dbName + " database!");
         while(!databaseCreated){
             try {
                 let db      = await mariadb.createConnection(connectionParams);
-                let results = await db.query("CREATE DATABASE IF NOT EXISTS " + this.dbName);
+                let results = await db.query("CREATE DATABASE IF NOT EXISTS `" + this.dbName + "`");
                 await db.end();
                 databaseCreated = true;
             } catch(e){
                 // console.log('e=',e);
-                console.log("SQL Error: ", e.sqlMessage);
+                console.log("Database creation error:", e.code || 'unknown');
                 console.log("There was an error trying to connect to the " + this.dbName + " database. Trying again in a few seconds...");
                 await this.util.sleep(5000); // Waiting 5 seconds
             }
@@ -1012,6 +1017,8 @@ class Database {
                     decimals = row.decimals;
             }
         }
+        // Clamp decimals to valid range [0, 18] to prevent SQL injection via DECIMAL CAST
+        decimals = Math.max(0, Math.min(18, parseInt(decimals) || 0));
         return decimals;
     }
 
@@ -1536,6 +1543,10 @@ class Database {
 
     // Create / Update ledger change records (credits / debits / escrows)
     async createLedgerChangeRecord(table, action_index, tick, amount, address){
+        // Whitelist valid ledger table names to prevent SQL injection
+        const VALID_LEDGER_TABLES = ['credits', 'debits', 'escrows'];
+        if(!VALID_LEDGER_TABLES.includes(table))
+            throw new Error('Invalid ledger table: ' + table);
         let tick_id    = await this.createTicker(tick);
         let address_id = await this.createAddress(address);
         // Convert any BigNumber amount to a plainstring before inserting into the database

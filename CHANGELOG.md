@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.1] - 2026-04-01
+
+### Fixed
+- Reject negative amounts in `isValidAmountFormat()` to prevent balance inflation via sign bypass
+- Clamp token decimal precision to [0, 18] in `getTokenDecimalPrecision()` to prevent SQL injection via DECIMAL CAST
+- Whitelist table names in `createLedgerChangeRecord()` to prevent SQL injection
+- Validate database name format in `createDatabase()` and use backtick quoting
+- Mask SQL error details in logs to prevent information disclosure
+
+### Changed
+- Add `connectTimeout`, `acquireTimeout`, `idleTimeout` to MariaDB connection pool
+- Restrict CORS to configured origin (defaults to `http://localhost`, POST-only)
+- Validate all required environment variables at startup with fail-fast behavior
+
 ## [1.5.0] - 2026-04-01
 
 ### Added

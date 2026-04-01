@@ -31,6 +31,18 @@ const jsonRouter    = require('express-json-rpc-router');
 // Parse in .env config data
 dotenv.config();
 
+// Validate required environment variables
+const REQUIRED_ENV = [
+    'DECODER_DB_HOST','DECODER_DB_PORT','DECODER_DB_NAME','DECODER_DB_USER','DECODER_DB_PASS',
+    'INDEXER_DB_HOST','INDEXER_DB_PORT','INDEXER_DB_NAME','INDEXER_DB_USER','INDEXER_DB_PASS'
+];
+for(const key of REQUIRED_ENV){
+    if(!process.env[key]){
+        console.error('Missing required environment variable: ' + key);
+        process.exit(1);
+    }
+}
+
 // Parse in the environmental variables
 const INDEXER_API_PORT = process.env.INDEXER_API_PORT;
 const INDEXER_NETWORK  = process.env.INDEXER_NETWORK;
@@ -61,8 +73,11 @@ async function startApi(){
     // Allow JSON requests
     app.use(bodyParser.json());
 
-    // Allow CORS for development
-    app.use(cors());
+    // Allow CORS (restricted to configured origin, defaults to localhost)
+    app.use(cors({
+        origin: process.env.CORS_ORIGIN || 'http://localhost',
+        methods: ['POST']
+    }));
 
     const jsonRpcController = {
 
