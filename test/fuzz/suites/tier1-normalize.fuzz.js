@@ -94,9 +94,9 @@ describe('Tier 1 - normalizeDataValues @tier1', function () {
     });
 
     describe('NUMBER_FIELDS post-conditions', function () {
-        it('NUMBER_FIELDS are null or numeric after normalization (non-MESSAGE actions)', function () {
+        it('all NUMBER_FIELDS are null or numeric after normalization (all actions)', function () {
             fc.assert(fc.property(
-                fuzzedData().filter(d => d.ACTION !== 'MESSAGE'),
+                fuzzedData(),
                 (data) => {
                     normalize(data);
                     for (const field of config['NUMBER_FIELDS']) {
@@ -109,28 +109,6 @@ describe('Tier 1 - normalizeDataValues @tier1', function () {
                     }
                 }
             ), { numRuns: NUM_RUNS });
-        });
-
-        it('MESSAGE action: ENCRYPTION_METHOD may be truncated string (known behavior)', function () {
-            // normalizeDataValues truncates ENCRYPTION_METHOD to 1 char for MESSAGE actions
-            // AFTER NUMBER_FIELDS normalization nulls non-numeric values.
-            // If original value was non-null, the truncation re-introduces a string.
-            fc.assert(fc.property(
-                fuzzedData().filter(d => d.ACTION === 'MESSAGE'),
-                (data) => {
-                    normalize(data);
-                    // ENCRYPTION_METHOD is exempt — may be string after truncation
-                    for (const field of config['NUMBER_FIELDS']) {
-                        if (field === 'ENCRYPTION_METHOD') continue;
-                        if (data[field] !== undefined) {
-                            assert.ok(
-                                data[field] === null || util.isNumeric(data[field]),
-                                `${field} should be null or numeric, got: ${data[field]} (${typeof data[field]})`
-                            );
-                        }
-                    }
-                }
-            ), { numRuns: Math.floor(NUM_RUNS / 2) });
         });
     });
 

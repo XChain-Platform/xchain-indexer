@@ -56,14 +56,8 @@ describe('Tier 1 - processTransaction crash safety @tier1', function () {
             await actions.processTransaction(tx);
         } catch (err) {
             crashLog.push({ data: tx.data, error: err.message });
-            // Re-throw only for truly unexpected errors (not known crash patterns)
-            if (!err.message.includes('Invalid argument') &&
-                !err.message.includes('DecimalError') &&
-                !err.message.includes('Cannot convert') &&
-                !err.message.includes('is not a valid number') &&
-                !err.message.includes('Cannot read properties') &&
-                !err.message.includes('could not be cloned') &&
-                !err.message.includes('structuredClone') &&
+            // Re-throw only for truly unexpected errors
+            if (!err.message.includes('Cannot read properties') &&
                 !err.message.includes('split')) {
                 throw err;
             }

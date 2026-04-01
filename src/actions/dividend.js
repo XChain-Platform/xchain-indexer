@@ -65,7 +65,7 @@ class Dividend {
             data = this.util.setActionParams(data, params, this.formats, format);
 
         // Clone the raw data for storage in dividends table
-        let dividend = structuredClone(data);
+        let dividend = Object.assign({}, data);
 
         // Convert NUMBER fields from string value to number value so comparisons are mathematical 
         if(!error)

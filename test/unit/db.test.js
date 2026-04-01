@@ -319,10 +319,12 @@ describe('Database.normalizeDataValues()', function () {
 
     // ── MESSAGE truncation ────────────────────────────────────────────────
 
-    it('MESSAGE: truncates ENCRYPTION_METHOD to 1 character', function () {
+    it('MESSAGE: ENCRYPTION_METHOD validated by NUMBER_FIELDS (kept if numeric)', function () {
+        // ENCRYPTION_METHOD is in NUMBER_FIELDS — kept as-is if numeric, nullified otherwise.
+        // Truncation removed to prevent converting valid numbers to invalid strings.
         const data = { ACTION: 'MESSAGE', ENCRYPTION_METHOD: '12' };
         const out  = normalize(data);
-        assert.strictEqual(out.ENCRYPTION_METHOD, '1');
+        assert.strictEqual(out.ENCRYPTION_METHOD, '12');
     });
 
     it('MESSAGE: leaves ENCRYPTION_METHOD null when null', function () {

@@ -85,14 +85,9 @@ describe('Tier 2 - Tick name handling @tier2', function () {
             return fc.assert(fc.asyncProperty(
                 anyTick(),
                 async (tick) => {
-                    try {
-                        const data = makeIssueData(tick);
-                        const params = ['0', tick, '1000', '100', '0', 'Test'];
-                        await handler.parse(params, data, null);
-                    } catch (err) {
-                        // structuredClone failures are known (issue.js:108)
-                        if (!err.message.includes('could not be cloned')) throw err;
-                    }
+                    const data = makeIssueData(tick);
+                    const params = ['0', tick, '1000', '100', '0', 'Test'];
+                    await handler.parse(params, data, null);
                 }
             ), { numRuns: NUM_RUNS });
         });
@@ -103,12 +98,7 @@ describe('Tier 2 - Tick name handling @tier2', function () {
                 async (tick) => {
                     const data = makeIssueData(tick);
                     const params = ['0', tick, '1000', '100', '0', 'Reserved'];
-                    try {
-                        await handler.parse(params, data, null);
-                    } catch (err) {
-                        if (!err.message.includes('could not be cloned')) throw err;
-                        return; // structuredClone crash is a separate issue
-                    }
+                    await handler.parse(params, data, null);
                     assert.ok(
                         !data.STATUS || data.STATUS.startsWith('invalid'),
                         `Reserved tick '${tick}' should be rejected, got: ${data.STATUS}`
@@ -120,36 +110,21 @@ describe('Tier 2 - Tick name handling @tier2', function () {
         it('empty tick is rejected', async function () {
             const data = makeIssueData('');
             const params = ['0', '', '1000', '100', '0', 'Empty'];
-            try {
-                await handler.parse(params, data, null);
-            } catch (err) {
-                if (!err.message.includes('could not be cloned')) throw err;
-                return;
-            }
+            await handler.parse(params, data, null);
             assert.ok(data.STATUS.startsWith('invalid'), `Empty tick should be invalid, got: ${data.STATUS}`);
         });
 
         it('tick with leading period is rejected', async function () {
             const data = makeIssueData('.BADTICK');
             const params = ['0', '.BADTICK', '1000', '100', '0', 'Period'];
-            try {
-                await handler.parse(params, data, null);
-            } catch (err) {
-                if (!err.message.includes('could not be cloned')) throw err;
-                return;
-            }
+            await handler.parse(params, data, null);
             assert.ok(data.STATUS.startsWith('invalid'), `Leading period tick should be invalid, got: ${data.STATUS}`);
         });
 
         it('tick with trailing period is rejected', async function () {
             const data = makeIssueData('BADTICK.');
             const params = ['0', 'BADTICK.', '1000', '100', '0', 'Period'];
-            try {
-                await handler.parse(params, data, null);
-            } catch (err) {
-                if (!err.message.includes('could not be cloned')) throw err;
-                return;
-            }
+            await handler.parse(params, data, null);
             assert.ok(data.STATUS.startsWith('invalid'), `Trailing period tick should be invalid, got: ${data.STATUS}`);
         });
     });

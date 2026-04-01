@@ -162,6 +162,14 @@ class Utility {
 
     // Determine if value is integer
     isInteger(value){
+        if(value === null || value === undefined)
+            return false;
+        // Allow objects with numeric conversion (e.g. mathjs bignumber) but reject broken ones
+        if(typeof value === 'object'){
+            if(typeof value.toNumber === 'function')
+                return Number.isInteger(value.toNumber());
+            return false;
+        }
         return Number.isInteger(+value);
     }
 
@@ -186,6 +194,9 @@ class Utility {
     // Handle returning integer format version
     getFormatVersion(format){
         let type = typeof format;
+        // Reject objects (prevents crash on broken toString)
+        if(type=='object' && format !== null)
+            return null;
         if(type=='number' && this.isInteger(format) && format <= 255)
             return format;
         // Default to format 0 if none is given
@@ -194,8 +205,8 @@ class Utility {
         // Strip out any quotes and double-quotes
         if(type=='string')
             format = format.replace(/\"|\'/g,'');
-        // Convert any numeric strings to integers
-        if(this.isNumeric(format) && !this.isFloat(format) && format <= 255)
+        // Convert any numeric strings to integers (use parseFloat to detect decimals)
+        if(this.isNumeric(format) && !this.isFloat(parseFloat(format)) && format <= 255)
             return parseInt(format);
         // Return NULL if not able to identify format version
         return null;
@@ -239,7 +250,10 @@ class Utility {
 
     // Handle converting a string number to a mathjs bignumber for full precision
     bcnum(num){
-        return mathjs.bignumber(num);
+        let str = String(num).trim();
+        if(str === 'NaN' || str === 'Infinity' || str === '-Infinity' || !this.isNumeric(num))
+            return mathjs.bignumber(0);
+        return mathjs.bignumber(str);
     }
 
     // Handle returning a number to a given decimal point precision
@@ -277,27 +291,29 @@ class Utility {
         let a = (!this.isNull(numA)) ? numA : 0;
         let b = (!this.isNull(numB)) ? numB : 0;
         let d = (!this.isNull(decimals)) ? parseInt(decimals) : 0;
+        if(String(b) === '0' || b === 0)
+            return mathjs.bignumber(0);
         return this.bcnum(mathjs.format(mathjs.divide(mathjs.bignumber(a),mathjs.bignumber(b)),{notation: 'fixed', precision: d}));
     }
 
     // Handle comparing two big numbers: returns true if numA > numB
     bcgt(numA, numB){
-        return mathjs.larger(mathjs.bignumber(numA), mathjs.bignumber(numB));
+        return mathjs.larger(this.bcnum(numA), this.bcnum(numB));
     }
 
     // Handle comparing two big numbers: returns true if numA < numB
     bclt(numA, numB){
-        return mathjs.smaller(mathjs.bignumber(numA), mathjs.bignumber(numB));
+        return mathjs.smaller(this.bcnum(numA), this.bcnum(numB));
     }
 
     // Handle comparing two big numbers: returns true if numA >= numB
     bcgte(numA, numB){
-        return mathjs.largerEq(mathjs.bignumber(numA), mathjs.bignumber(numB));
+        return mathjs.largerEq(this.bcnum(numA), this.bcnum(numB));
     }
 
     // Handle comparing two big numbers: returns true if numA <= numB
     bclte(numA, numB){
-        return mathjs.smallerEq(mathjs.bignumber(numA), mathjs.bignumber(numB));
+        return mathjs.smallerEq(this.bcnum(numA), this.bcnum(numB));
     }
 
     // Validate if a given value is considered valid
@@ -421,7 +437,7 @@ class Utility {
     // Validate if a balances array holds a certain amount of a tick token
     hasBalance(balances, tick_id, amount){
         let balance = (!this.isNull(balances[tick_id])) ? balances[tick_id] : 0;
-        if(mathjs.largerEq(mathjs.bignumber(balance), mathjs.bignumber(amount)))
+        if(mathjs.largerEq(this.bcnum(balance), this.bcnum(amount)))
             return true;
         return false;
     }
@@ -496,13 +512,8 @@ class Utility {
     setNumberFormats(data){
         for(let name of this.config['NUMBER_FIELDS']){
             let value = data[name];
-            if(!this.isNull(value)){
-                try {
-                    data[name] = this.bcnum(value);
-                } catch(e) {
-                    // leave non-numeric value as-is; action validation will reject it
-                }
-            }
+            if(!this.isNull(value) && this.isNumeric(value))
+                data[name] = this.bcnum(value);
         }
         return data;
     }

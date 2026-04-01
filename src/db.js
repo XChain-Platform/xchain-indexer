@@ -347,10 +347,6 @@ class Database {
             // Truncate DESCRIPTION to MAX_TOKEN_DESCRIPTION
             if(!this.util.isNull(data['DESCRIPTION']))  
                 data['DESCRIPTION'] = String(data['DESCRIPTION']).substring(0,this.config['MAX_TOKEN_DESCRIPTION']);
-        } else if(action=='MESSAGE'){
-            // Truncate ENCRYPTION_METHOD to 1 character
-            if(!this.util.isNull(data['ENCRYPTION_METHOD']))  
-                data['ENCRYPTION_METHOD'] = String(data['ENCRYPTION_METHOD']).substring(0,1);
         } else if(action=='SLEEP'){
             // Truncate RESUME_BLOCK to 25 characters
             if(!this.util.isNull(data['RESUME_BLOCK'])) 
