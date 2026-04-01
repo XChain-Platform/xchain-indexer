@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.10.0] - 2026-04-01
+
+### Added
+- Chaos engineering test suite with 42 tests across 5 suites verifying resilience mechanisms
+- Circuit breaker state machine tests (12 tests): closed/open/half-open transitions, threshold, cooldown, per-instance isolation
+- Exponential backoff and retry tests (8 tests): delay doubling, jitter, max cap, attempt limits
+- Query error propagation tests (8 tests): re-throw in transactions, safe fallback outside, connection release
+- Watchdog timeout tests (6 tests): resolve/reject behavior, label inclusion, timer cleanup
+- Block processing resilience tests (8 tests): rollback on failure, watchdog timeout, recovery, multi-tx blocks
+- Chaos test harness with FakePool and FakeConnection for controlled fault injection
+- npm script: test:chaos
+
 ## [1.9.1] - 2026-04-01
 
 ### Added
