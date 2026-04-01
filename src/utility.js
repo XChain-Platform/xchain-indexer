@@ -348,6 +348,12 @@ class Utility {
 
     // Handle validating amount format
     isValidAmountFormat(decimals, amount){
+        // Reject objects that can't be safely converted to string (broken toString)
+        if(amount !== null && amount !== undefined && typeof amount === 'object'){
+            if(typeof amount.toString !== 'function')
+                return false;
+            try { String(amount); } catch(e){ return false; }
+        }
         // Reject negative amounts
         if(String(amount).startsWith('-'))
             return false;
