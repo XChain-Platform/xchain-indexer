@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-04-01
+
+### Fixed
+- Integration test DB connection reads credentials from `.env` file instead of hardcoded `root`/`test` defaults
+- `seedGasToken` ISSUE had wrong MAX_MINT (8 instead of 999999999), causing MINT and downstream actions to fail
+- Multi-block YTOKEN ISSUE MAX_MINT too low (100) for MINT of 200
+- Block count assertion corrected from 4 to 103 (accounts for gas setup blocks 1-3 plus indexer gap-fill)
+
 ## [1.2.0] - 2026-04-01
 
 ### Added

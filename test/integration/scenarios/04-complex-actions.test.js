@@ -26,12 +26,14 @@ const ADDR1 = 'mAddr1XXXXXXXXXXXXXXXXXXXXXXX1';
 const ADDR2 = 'mAddr2XXXXXXXXXXXXXXXXXXXXXXX2';
 const ADDR3 = 'mAddr3XXXXXXXXXXXXXXXXXXXXXXX3'; // sweep destination / airdrop member
 const ADDR4 = 'mAddr4XXXXXXXXXXXXXXXXXXXXXXX4'; // airdrop member
+const GAS_ADDR = 'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'; // GAS address (regtest)
 
 // ---------------------------------------------------------------------------
 // Token names
 // ---------------------------------------------------------------------------
 const TICK_X = 'XTOKEN';
 const TICK_Y = 'YTOKEN';
+const TICK_GAS = 'XCHAIN'; // Platform gas token
 
 // ---------------------------------------------------------------------------
 // Block times
@@ -47,6 +49,25 @@ async function freshIndexer() {
     const seeder  = new DecoderSeeder(decoderQuery);
     const indexer = await initIndexer();
     return { seeder, indexer };
+}
+
+/**
+ * Seed the XCHAIN gas token (issue + mint + send to addr) in blocks 1-3.
+ * Returns the next available block index (3).
+ */
+async function seedGasToken(seeder, addr, amount) {
+    await seeder.seedBlock(1, T0 - 3000, [
+        { source: GAS_ADDR, destination: null, amount: '0',
+          data: 'ISSUE|0|' + TICK_GAS + '|999999999|999999999|0' },
+    ]);
+    await seeder.seedBlock(2, T0 - 2000, [
+        { source: GAS_ADDR, destination: null, amount: '0',
+          data: 'MINT|0|' + TICK_GAS + '|' + amount },
+    ]);
+    await seeder.seedBlock(3, T0 - 1000, [
+        { source: GAS_ADDR, destination: null, amount: '0',
+          data: 'SEND|0|' + TICK_GAS + '|' + amount + '|' + addr + '|' },
+    ]);
 }
 
 // ---------------------------------------------------------------------------
@@ -272,6 +293,9 @@ describe('04 complex actions – BATCH, SLEEP, SWEEP, DESTROY, LIST, AIRDROP', f
             indexer   = ctx.indexer;
             const seeder = ctx.seeder;
 
+            // Seed XCHAIN gas token and send to ADDR1
+            await seedGasToken(seeder, ADDR1, '100');
+
             await seeder.seedBlock(100, T0, [
                 { source: ADDR1, destination: null, amount: '0',
                   data: 'ISSUE|0|' + TICK_X + '|1000|100|0' },
@@ -449,6 +473,9 @@ describe('04 complex actions – BATCH, SLEEP, SWEEP, DESTROY, LIST, AIRDROP', f
             indexer   = ctx.indexer;
             const seeder = ctx.seeder;
 
+            // Seed XCHAIN gas token and send to ADDR1
+            await seedGasToken(seeder, ADDR1, '100');
+
             await seeder.seedBlock(100, T0, [
                 { source: ADDR1, destination: null, amount: '0',
                   data: 'ISSUE|0|' + TICK_X + '|1000|100|0' },
@@ -518,10 +545,13 @@ describe('04 complex actions – BATCH, SLEEP, SWEEP, DESTROY, LIST, AIRDROP', f
             indexer   = ctx.indexer;
             const seeder = ctx.seeder;
 
+            // Seed XCHAIN gas token and send to ADDR1
+            await seedGasToken(seeder, ADDR1, '100');
+
             // Block 100 – ADDR1 issues YTOKEN
             await seeder.seedBlock(100, T0, [
                 { source: ADDR1, destination: null, amount: '0',
-                  data: 'ISSUE|0|' + TICK_Y + '|500|100|0' },
+                  data: 'ISSUE|0|' + TICK_Y + '|500|200|0' },
             ]);
 
             // Block 101 – ADDR1 mints 200 YTOKEN
@@ -597,8 +627,10 @@ describe('04 complex actions – BATCH, SLEEP, SWEEP, DESTROY, LIST, AIRDROP', f
             await helpers.assertSanity(indexerQuery, TICK_Y);
         });
 
-        it('should have processed 4 blocks total', async function () {
-            await helpers.assertBlockCount(indexerQuery, 4);
+        it('should have processed all blocks from gas setup through airdrop', async function () {
+            // Gas setup: blocks 1-3, test actions: blocks 100-103
+            // Indexer processes every block_index from 1 to 103
+            await helpers.assertBlockCount(indexerQuery, 103);
         });
     });
 
