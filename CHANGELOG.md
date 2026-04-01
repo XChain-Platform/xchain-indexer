@@ -9,9 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.9.1] - 2026-04-01
 
+### Added
+- safeToString() utility for defensive string conversion of objects with broken or missing toString
+
 ### Fixed
-- normalizeDataValues() crash on objects with toString overridden to a non-function — now falls back to null
-- isValidAmountFormat() crash on objects/arrays with broken toString — now safely rejects unconvertible values while still accepting mathjs bignumbers
+- normalizeDataValues() crash on objects with toString overridden to a non-function — now uses safeToString(), falls back to null
+- isValidAmountFormat() crash on objects/arrays with broken toString — now uses safeToString(), rejects unconvertible values while still accepting mathjs bignumbers
 
 ## [1.9.0] - 2026-04-01
 
