@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-04-01
+
+### Added
+- Performance and load testing suite with 15 tests across 5 scenario files measuring indexer throughput, latency, and resource utilization
+- Baseline throughput benchmarks for empty, light, normal, and heavy block loads
+- Per-action-type benchmarks comparing SEND, ISSUE+MINT, ORDER, and mixed workloads
+- Sustained load test with configurable duration and degradation detection
+- Spike load tests simulating sudden traffic surges and bursty patterns
+- Scaling tests measuring sanity check and market update cost across 10-200 tokens
+- Instrumented block processor with per-phase timing (decoderRead, actionProcessing, expirations, cancellations, blockCreation, marketUpdates, sanityCheck, commit)
+- Metrics collector tracking block timing distributions (min/avg/p50/p95/p99/max), memory usage, and event loop delay
+- Report generator producing console summaries, JSON data files, and Markdown reports
+- Bulk data generator with 5 action profiles: send-only, normal, token-launch, heavy-dex, mixed-heavy
+- `npm run test:perf` and per-scenario scripts (`test:perf:baseline`, `test:perf:benchmarks`, `test:perf:sustained`, `test:perf:spike`, `test:perf:scaling`)
+
 ## [1.6.0] - 2026-04-01
 
 ### Added
