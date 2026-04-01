@@ -467,7 +467,7 @@ class Utility {
     // Create the basic fees object used to calculate platform transaction fees
     async createFeesObject(db, data, preferences){
         // TODO: Change TICK from GAS to XCHAIN
-        let tick    = 'GAS';
+        let tick    = this.config['GAS'];
         let tick_id = await db.getTickerId(tick);
         let fees = {
             ACTION_INDEX : data['ACTION_INDEX'],
