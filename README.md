@@ -25,6 +25,20 @@ State-processing engine for the XChain Platform. Reads decoded blockchain transa
 - **Watchdog timeout** — configurable per-block processing timeout detects deadlocks
 - **958 tests** — unit, integration, e2e, fuzz, chaos, mutation, boundary, smoke, performance, regression
 
+## Documentation
+
+Full indexer documentation is available in the [xchain-documentation](https://github.com/XChain-platform/xchain-documentation/tree/master/indexer) repository:
+
+| Document | Description |
+|---|---|
+| [README](https://github.com/XChain-platform/xchain-documentation/blob/master/indexer/README.md) | Overview, installation, quick start, scripts, dependencies |
+| [Architecture](https://github.com/XChain-platform/xchain-documentation/blob/master/indexer/ARCHITECTURE.md) | Data pipeline, internal components, action handlers, block processing pipeline |
+| [Configuration](https://github.com/XChain-platform/xchain-documentation/blob/master/indexer/CONFIGURATION.md) | Environment variables, coin-specific config, indexer constants |
+| [Actions](https://github.com/XChain-platform/xchain-documentation/blob/master/indexer/ACTIONS.md) | All 20 ACTION types, categories, format versions, protocol versioning |
+| [Database](https://github.com/XChain-platform/xchain-documentation/blob/master/indexer/DATABASE.md) | Full schema reference — core, ledger, action, state, index, and mapping tables |
+| [Ledger](https://github.com/XChain-platform/xchain-documentation/blob/master/indexer/LEDGER.md) | Double-entry ledger, balance calculation, sanity checks, gas token fees |
+| [Operations](https://github.com/XChain-platform/xchain-documentation/blob/master/indexer/OPERATIONS.md) | Running, Docker, API endpoints, resilience, troubleshooting |
+
 ## Quick Start
 
 ```bash
@@ -83,20 +97,6 @@ npm run api
 | `npm run test:regression:full` | Full regression suite |
 | `npm run test:nodb` | All tests that don't require a database |
 | `npm run test:full` | Complete test suite |
-
-## Documentation
-
-Full indexer documentation is available in the [xchain-documentation](https://github.com/XChain-platform/xchain-documentation/tree/master/indexer) repository:
-
-| Document | Description |
-|---|---|
-| [README](https://github.com/XChain-platform/xchain-documentation/blob/master/indexer/README.md) | Overview, installation, quick start, scripts, dependencies |
-| [Architecture](https://github.com/XChain-platform/xchain-documentation/blob/master/indexer/ARCHITECTURE.md) | Data pipeline, internal components, action handlers, block processing pipeline |
-| [Configuration](https://github.com/XChain-platform/xchain-documentation/blob/master/indexer/CONFIGURATION.md) | Environment variables, coin-specific config, indexer constants |
-| [Actions](https://github.com/XChain-platform/xchain-documentation/blob/master/indexer/ACTIONS.md) | All 20 ACTION types, categories, format versions, protocol versioning |
-| [Database](https://github.com/XChain-platform/xchain-documentation/blob/master/indexer/DATABASE.md) | Full schema reference — core, ledger, action, state, index, and mapping tables |
-| [Ledger](https://github.com/XChain-platform/xchain-documentation/blob/master/indexer/LEDGER.md) | Double-entry ledger, balance calculation, sanity checks, gas token fees |
-| [Operations](https://github.com/XChain-platform/xchain-documentation/blob/master/indexer/OPERATIONS.md) | Running, Docker, API endpoints, resilience, troubleshooting |
 
 ## Test Suite
 
