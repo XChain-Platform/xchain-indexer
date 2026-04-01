@@ -298,8 +298,16 @@ class Database {
         }
         // set LOCK field values to explicitly unlocked (0), locked (1), or null
         for(let field of this.config['LOCK_FIELDS']){
-            if([0,1].indexOf(data[field]) == -1)
+            // Convert bignumber/string lock values to plain integers before checking
+            let lockVal = data[field];
+            if(lockVal !== null && lockVal !== undefined && typeof lockVal === 'object' && typeof lockVal.toNumber === 'function')
+                lockVal = lockVal.toNumber();
+            else if(typeof lockVal === 'string' && this.util.isNumeric(lockVal))
+                lockVal = parseInt(lockVal);
+            if([0,1].indexOf(lockVal) == -1)
                 data[field] = null;
+            else
+                data[field] = lockVal;
         }
         // Set DECIMALS to null if it is outside of the acceptable range
         if(!this.util.isNull(data['DECIMALS']) && (data['DECIMALS'] < this.config.MIN_TOKEN_DECIMALS || data['DECIMALS'] > this.config.MAX_TOKEN_DECIMALS))
