@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-04-01
+
+### Added
+- End-to-end test suite with 43 tests across 6 scenario files validating the full data pipeline through xchain-explorer API
+- E2E test infrastructure: explorer launcher, HTTP API client, API assertion helpers
+- `npm run test:e2e` script for running E2E tests against MariaDB + explorer API
+- Coverage for token lifecycle, DEX orders, dispensers, reorgs, error handling, pagination, and query patterns via Explorer HTTP endpoints
+
 ## [1.2.1] - 2026-04-01
 
 ### Fixed
