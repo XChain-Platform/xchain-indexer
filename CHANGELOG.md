@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-04-01
+
+### Added
+- Smoke test suite with 15 tests across 6 files validating service startup, DB connectivity, API liveness, action processing, and indexer lifecycle
+- Unit smoke mode (`npm run test:smoke:unit`) runs in ~1s with no external dependencies
+- Connected smoke mode (`npm run test:smoke:connected`) validates DB pools, schema, tables, JSON-RPC ping, and start/stop lifecycle against MariaDB
+- Combined `npm run test:smoke` script for running all smoke tests
+
 ## [1.4.0] - 2026-04-01
 
 ### Added
