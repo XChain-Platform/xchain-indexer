@@ -323,6 +323,9 @@ class Utility {
 
     // Handle validating amount format
     isValidAmountFormat(decimals, amount){
+        // Reject negative amounts
+        if(String(amount).startsWith('-'))
+            return false;
         // Determine divisibility and default to true
         let divisible   = (parseInt(decimals)==0) ? false : true;
         let [int, sats] = String(amount).split('.');
