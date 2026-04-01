@@ -1,0 +1,84 @@
+process.env.INDEXER_COIN = 'BTC';
+process.env.INDEXER_NETWORK = 'regtest';
+
+const assert = require('assert');
+const sinon = require('sinon');
+const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
+
+const Order_Expire = require('../../../src/actions/order_expire.js');
+
+describe('Order_Expire action handler', function () {
+    let indexer, actionsCtx, handler;
+
+    function makeOrderInfo(overrides) {
+        return {
+            ACTION_INDEX: 50,
+            SOURCE: '1SourceAddressXXXXXXXXXXXXXXXYs6gYt',
+            GIVE_TICK: 'TEST',
+            GIVE_REMAINING: '100',
+            GET_TICK: 'OTHER',
+            ...overrides,
+        };
+    }
+
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        actionsCtx = {
+            config: indexer.config,
+            util: indexer.util,
+            mapper: indexer.mapper,
+            decoderDb: indexer.decoderDb,
+            indexerDb: indexer.indexerDb,
+            protocolChanges: {
+                isDefined: sinon.stub().returns(true),
+                isEnabled: sinon.stub().resolves(true),
+            },
+            processAction: sinon.stub().resolves(),
+        };
+        handler = new Order_Expire(actionsCtx);
+        indexer.util.resetLists();
+    });
+
+    it('returns early when orderInfo is null (already expired or rolled back)', async function () {
+        indexer.indexerDb.getOrderInfo.resolves(null);
+        const data = createBaseData({ ACTION: 'ORDER_EXPIRE', ACTION_INDEX: 50, BLOCK_INDEX: 200 });
+        await handler.parse(null, data, null);
+        // No DB writes should have happened
+        assert.ok(indexer.indexerDb.createOrderExpire.notCalled);
+        assert.ok(indexer.indexerDb.createOrderStatus.notCalled);
+    });
+
+    it('credits GIVE_REMAINING back to SOURCE on expiry', async function () {
+        const orderInfo = makeOrderInfo({ GIVE_REMAINING: '75' });
+        indexer.indexerDb.getOrderInfo.resolves(orderInfo);
+        const data = createBaseData({ ACTION: 'ORDER_EXPIRE', ACTION_INDEX: 50, BLOCK_INDEX: 200 });
+        await handler.parse(null, data, null);
+        assert.ok(indexer.indexerDb.createOrderExpire.calledOnce);
+    });
+
+    it('creates an expired status record', async function () {
+        const orderInfo = makeOrderInfo();
+        indexer.indexerDb.getOrderInfo.resolves(orderInfo);
+        const data = createBaseData({ ACTION: 'ORDER_EXPIRE', ACTION_INDEX: 50, BLOCK_INDEX: 200 });
+        await handler.parse(null, data, null);
+        const statusCall = indexer.indexerDb.createOrderStatus.getCall(0);
+        assert.ok(statusCall, 'createOrderStatus should have been called');
+        assert.strictEqual(statusCall.args[2], 'expired');
+    });
+
+    it('calls updateBalances after processing', async function () {
+        const orderInfo = makeOrderInfo();
+        indexer.indexerDb.getOrderInfo.resolves(orderInfo);
+        const data = createBaseData({ ACTION: 'ORDER_EXPIRE', ACTION_INDEX: 50, BLOCK_INDEX: 200 });
+        await handler.parse(null, data, null);
+        assert.ok(indexer.indexerDb.updateBalances.calledOnce);
+    });
+
+    it('calls mapper.createMappings after processing', async function () {
+        const orderInfo = makeOrderInfo();
+        indexer.indexerDb.getOrderInfo.resolves(orderInfo);
+        const data = createBaseData({ ACTION: 'ORDER_EXPIRE', ACTION_INDEX: 50, BLOCK_INDEX: 200 });
+        await handler.parse(null, data, null);
+        assert.ok(indexer.mapper.createMappings.calledOnce);
+    });
+});

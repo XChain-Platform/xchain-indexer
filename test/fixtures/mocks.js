@@ -1,0 +1,300 @@
+/**
+ * Mock objects for xchain-indexer unit tests
+ *
+ * Provides MockDatabase, mock indexer, and factory helpers
+ * so action handlers and other classes can be tested without MariaDB.
+ */
+
+const sinon = require('sinon');
+const { getTestConfig } = require('./config');
+
+/**
+ * Creates a stub database with every public method as a sinon stub.
+ * Callers can override return values per test:
+ *   mockDb.getTokenInfo.resolves({ TICK: 'TEST', ... });
+ */
+function createMockDb() {
+    return {
+        // Connection / transaction
+        getConnection: sinon.stub().resolves({}),
+        releaseConnection: sinon.stub().resolves(),
+        beginTransaction: sinon.stub().resolves(),
+        commitTransaction: sinon.stub().resolves(true),
+        rollbackTransaction: sinon.stub().resolves(),
+        doQuery: sinon.stub().resolves([]),
+        verifyDatabase: sinon.stub().resolves(true),
+        verifyTables: sinon.stub().resolves(true),
+
+        // Block management
+        getBlockIndex: sinon.stub().resolves(null),
+        getBlockTime: sinon.stub().resolves(1700000000),
+        getBlockHashes: sinon.stub().resolves({ ledger: 'abc', actions: 'def' }),
+        createBlock: sinon.stub().resolves(['abc12', 'def34']),
+        createReorg: sinon.stub().resolves(),
+        getDecoderBlockData: sinon.stub().resolves([]),
+
+        // Index / ID management
+        getTransactionId: sinon.stub().resolves(1),
+        createTransaction: sinon.stub().resolves(1),
+        getAddressId: sinon.stub().resolves(1),
+        createAddress: sinon.stub().resolves(1),
+        getBlockId: sinon.stub().resolves(1),
+        getActionId: sinon.stub().resolves(1),
+        createAction: sinon.stub().resolves(1),
+        getNextTxIndex: sinon.stub().resolves(1),
+        getTxIndex: sinon.stub().resolves(1),
+        createTxIndex: sinon.stub().resolves(1),
+        getNextActionIndex: sinon.stub().resolves(1),
+        getActionIndex: sinon.stub().resolves(null),
+        createActionIndex: sinon.stub().resolves(1),
+        updateActionIndex: sinon.stub().resolves(),
+        deleteActionIndex: sinon.stub().resolves(),
+
+        // Ticker management
+        getTicker: sinon.stub().resolves('TEST'),
+        getTickerId: sinon.stub().resolves(1),
+        createTicker: sinon.stub().resolves(1),
+
+        // Token info
+        getTokenInfo: sinon.stub().resolves(null),
+        getTokenDecimalPrecision: sinon.stub().resolves(0),
+        getTokenSupply: sinon.stub().resolves(0),
+        getTokenSupplyToken: sinon.stub().resolves(0),
+        getTokenSupplyBalance: sinon.stub().resolves(0),
+        getTokenSupplyEscrow: sinon.stub().resolves(0),
+        getHolders: sinon.stub().resolves({}),
+        isDistributed: sinon.stub().resolves(false),
+
+        // Balance
+        getAddressBalances: sinon.stub().resolves({}),
+        getAddressTableBalances: sinon.stub().resolves({}),
+        getAddressCreditDebit: sinon.stub().resolves({}),
+        updateBalances: sinon.stub().resolves(),
+        updateAddressBalance: sinon.stub().resolves(),
+
+        // Token updates
+        updateTokens: sinon.stub().resolves(),
+        updateTokenInfo: sinon.stub().resolves(),
+
+        // Lists
+        isValidList: sinon.stub().resolves(false),
+        getListType: sinon.stub().resolves(false),
+        getList: sinon.stub().resolves([]),
+        createList: sinon.stub().resolves(),
+        createListEdit: sinon.stub().resolves(),
+        createListItem: sinon.stub().resolves(),
+        createListItemInvalid: sinon.stub().resolves(),
+
+        // Status
+        getStatusId: sinon.stub().resolves(1),
+        createStatus: sinon.stub().resolves(1),
+
+        // Ledger
+        createCredit: sinon.stub().resolves(),
+        createDebit: sinon.stub().resolves(),
+        createEscrow: sinon.stub().resolves(),
+        createLedgerChangeRecord: sinon.stub().resolves(),
+
+        // Action records
+        createIssue: sinon.stub().resolves(),
+        createToken: sinon.stub().resolves(),
+        createMint: sinon.stub().resolves(),
+        createSend: sinon.stub().resolves(),
+        createDestroy: sinon.stub().resolves(),
+        createAirdrop: sinon.stub().resolves(),
+        createBatch: sinon.stub().resolves(),
+        createBroadcast: sinon.stub().resolves(),
+        createCallback: sinon.stub().resolves(),
+        createDividend: sinon.stub().resolves(),
+        createFile: sinon.stub().resolves(),
+        createLink: sinon.stub().resolves(),
+        createMessage: sinon.stub().resolves(),
+        createSleep: sinon.stub().resolves(),
+        createSweep: sinon.stub().resolves(),
+        createFeeRecord: sinon.stub().resolves(),
+        createAddressOption: sinon.stub().resolves(),
+        createMemo: sinon.stub().resolves(1),
+        getMemoId: sinon.stub().resolves(1),
+
+        // Order
+        createOrder: sinon.stub().resolves(),
+        createOrderStatus: sinon.stub().resolves(),
+        createOrderCancel: sinon.stub().resolves(),
+        createOrderExpire: sinon.stub().resolves(),
+        createOrderEdit: sinon.stub().resolves(),
+        createOrderMatch: sinon.stub().resolves(),
+        findOrderMatches: sinon.stub().resolves([]),
+        getOrderInfo: sinon.stub().resolves(null),
+        getOrderEdits: sinon.stub().resolves([]),
+        getOrderAmountsRemaining: sinon.stub().resolves({}),
+
+        // Swap
+        createSwap: sinon.stub().resolves(),
+        createSwapStatus: sinon.stub().resolves(),
+        createSwapCancel: sinon.stub().resolves(),
+        createSwapExpire: sinon.stub().resolves(),
+        createSwapEdit: sinon.stub().resolves(),
+        createSwapMatch: sinon.stub().resolves(),
+        findSwapMatches: sinon.stub().resolves([]),
+        getSwapInfo: sinon.stub().resolves(null),
+        getSwapEdits: sinon.stub().resolves([]),
+
+        // Dispenser
+        createDispenser: sinon.stub().resolves(),
+        createDispenserStatus: sinon.stub().resolves(),
+        createDispenserEdit: sinon.stub().resolves(),
+        createDispenserCancel: sinon.stub().resolves(),
+        createDispenserClose: sinon.stub().resolves(),
+        createDispenserExpire: sinon.stub().resolves(),
+        createDispense: sinon.stub().resolves(),
+        findCancelledDispensers: sinon.stub().resolves([]),
+        findDispenserSends: sinon.stub().resolves([]),
+        findMatchingDispensers: sinon.stub().resolves([]),
+        getDispenserInfo: sinon.stub().resolves(null),
+        getDispenserEdits: sinon.stub().resolves([]),
+        getDispenserAmountRemaining: sinon.stub().resolves(0),
+        getSweepDestination: sinon.stub().resolves(null),
+
+        // Sleep / authorization
+        isAddressSleeping: sinon.stub().resolves(false),
+        isTickSleeping: sinon.stub().resolves(false),
+        isActionAllowed: sinon.stub().resolves(true),
+
+        // Validation
+        getFirstIssueActionIndex: sinon.stub().resolves(1),
+        validTickerBeforeTxIndex: sinon.stub().resolves(true),
+        isActionIndexValid: sinon.stub().resolves(true),
+        getActionIndexTable: sinon.stub().resolves('issues'),
+        getActionType: sinon.stub().resolves('ISSUE'),
+        getActionData: sinon.stub().resolves(null),
+        getActionCreditDebitAmount: sinon.stub().resolves(0),
+
+        // Preferences
+        getAddressPreferences: sinon.stub().resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 }),
+        getAddressOwnerships: sinon.stub().resolves({}),
+
+        // Market
+        getMarkets: sinon.stub().resolves([]),
+        getMarketId: sinon.stub().resolves(1),
+        createMarket: sinon.stub().resolves(1),
+        getMarketInfo: sinon.stub().resolves({}),
+        updateMarketInfo: sinon.stub().resolves(),
+        updateMarkets: sinon.stub().resolves(),
+
+        // Expiration
+        getExpiredItems: sinon.stub().resolves([]),
+
+        // Mappings
+        createActionMapping: sinon.stub().resolves(),
+        createFileMapping: sinon.stub().resolves(),
+
+        // Coin / Fiat / Mime
+        getCoinId: sinon.stub().resolves(1),
+        createCoin: sinon.stub().resolves(1),
+        getFiatId: sinon.stub().resolves(1),
+        createFiat: sinon.stub().resolves(1),
+        getMimeTypeId: sinon.stub().resolves(1),
+        createMimeType: sinon.stub().resolves(1),
+
+        // Normalization
+        normalizeDataValues: sinon.stub().callsFake(data => data),
+
+        // Sanity
+        sanityCheck: sinon.stub().resolves(),
+    };
+}
+
+/**
+ * Creates a minimal mock indexer object that can be passed to
+ * class constructors (Actions, Rollback, ProtocolChanges, etc.)
+ */
+function createMockIndexer(overrides = {}) {
+    const config = getTestConfig();
+    const Utility = require('../../src/utility.js');
+
+    // Use a real Utility instance (most methods are pure)
+    const util = new Utility();
+
+    const decoderDb = createMockDb();
+    const indexerDb = createMockDb();
+
+    // Create a mock mapper
+    const mapper = {
+        createMappings: sinon.stub().resolves(),
+    };
+
+    const indexer = {
+        config,
+        util,
+        decoderDb,
+        indexerDb,
+        mapper,
+        protocolChanges: null, // Set after construction if needed
+        ...overrides,
+    };
+
+    return indexer;
+}
+
+/**
+ * Creates a base transaction data object as produced by Actions.processTransaction()
+ */
+function createBaseData(overrides = {}) {
+    return {
+        ACTION: 'SEND',
+        FORMAT: 0,
+        BLOCK_INDEX: 100,
+        BLOCK_TIME: 1700000000,
+        SOURCE: '1SourceAddressXXXXXXXXXXXXXXXYs6gYt',
+        COIN: 'BTC',
+        COIN_DESTINATION: '1DestAddressXXXXXXXXXXXXXXXXXaKc5Z',
+        COIN_AMOUNT: '0.00000000',
+        TX_HASH: 'a'.repeat(64),
+        TX_VOUT: 0,
+        TX_DATA: 'SEND|0|TEST|100|1DestAddressXXXXXXXXXXXXXXXXXaKc5Z',
+        TX_INDEX: 1,
+        ACTION_INDEX: 1,
+        ...overrides,
+    };
+}
+
+/**
+ * Creates a standard tokenInfo object as returned by db.getTokenInfo()
+ */
+function createTokenInfo(overrides = {}) {
+    return {
+        TICK: 'TEST',
+        MAX_SUPPLY: '1000',
+        MAX_MINT: '100',
+        DECIMALS: 0,
+        DESCRIPTION: 'Test token',
+        MINT_SUPPLY: '0',
+        SUPPLY: '500',
+        OWNER: '1SourceAddressXXXXXXXXXXXXXXXYs6gYt',
+        TRANSFER: null,
+        TRANSFER_SUPPLY: null,
+        LOCK_MAX_SUPPLY: 0,
+        LOCK_MINT: 0,
+        LOCK_MAX_MINT: 0,
+        LOCK_MINT_SUPPLY: 0,
+        LOCK_DESCRIPTION: 0,
+        LOCK_SLEEP: 0,
+        LOCK_CALLBACK: 0,
+        CALLBACK_BLOCK: null,
+        CALLBACK_TICK: null,
+        CALLBACK_AMOUNT: null,
+        ALLOW_LIST: null,
+        BLOCK_LIST: null,
+        MINT_ADDRESS_MAX: null,
+        MINT_START_BLOCK: null,
+        MINT_STOP_BLOCK: null,
+        ...overrides,
+    };
+}
+
+module.exports = {
+    createMockDb,
+    createMockIndexer,
+    createBaseData,
+    createTokenInfo,
+};
