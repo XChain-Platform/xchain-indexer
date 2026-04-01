@@ -261,6 +261,13 @@ class Database {
     async doQuery(query, args){
         let results = [];
         if(!this.util.isNull(query)){
+            // Normalize args: convert any boxed primitives (e.g. mathjs BigNumber) to plain values
+            if(Array.isArray(args)){
+                for(let i = 0; i < args.length; i++){
+                    if(args[i] !== null && args[i] !== undefined && typeof args[i] === 'object')
+                        args[i] = args[i].toString();
+                }
+            }
             let tx = this.transactionConnection != null;
             let db = await this.getConnection();
             try {
@@ -3657,7 +3664,7 @@ class Database {
                                 s4.order_action_index=o1.action_index
                         ) AND
                         c1.coin=? AND
-                        o1.action_index=? 
+                        o1.action_index=?
                     LIMIT 1`;
         let args  = [coin, action_index];
         let results = await this.doQuery(query, args);
