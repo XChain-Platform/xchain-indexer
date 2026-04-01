@@ -1,7 +1,7 @@
 {
   "name": "xchain-indexer",
   "description": "xchain-indexer is a free open source token platform indexer for the XChain platform",
-  "version": "1.2.1",
+  "version": "1.3.0",
   "license": "SEE LICENSE IN LICENSE.md",
   "repository": {
     "type": "git",
@@ -20,7 +20,8 @@
   "scripts": {
     "api": "node ./src/api.js",
     "test": "mocha --timeout 5000 --recursive 'test/unit/**/*.test.js' 'test/unit/*.test.js'",
-    "test:integration": "mocha --timeout 30000 --recursive 'test/integration/scenarios/**/*.test.js'"
+    "test:integration": "mocha --timeout 30000 --recursive 'test/integration/scenarios/**/*.test.js'",
+    "test:e2e": "mocha --no-config --timeout 60000 --exit 'test/e2e/scenarios/**/*.test.js'"
   },
   "devDependencies": {
     "mocha": "^11.7.5",
