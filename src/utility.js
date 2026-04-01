@@ -78,6 +78,17 @@ class Utility {
         return new Promise((resolve) => setTimeout(resolve, ms));
     }
 
+    // Safely convert a value to string — returns null if the value can't be converted
+    safeToString(val) {
+        if(val === null || val === undefined)
+            return null;
+        if(typeof val !== 'object')
+            return String(val);
+        if(typeof val.toString !== 'function')
+            return null;
+        try { return String(val); } catch(e){ return null; }
+    }
+
     // Run a promise with a timeout — rejects with an error if the promise doesn't resolve in time
     withTimeout(promise, ms, label) {
         let timer;
@@ -348,12 +359,9 @@ class Utility {
 
     // Handle validating amount format
     isValidAmountFormat(decimals, amount){
-        // Reject objects that can't be safely converted to string (broken toString)
-        if(amount !== null && amount !== undefined && typeof amount === 'object'){
-            if(typeof amount.toString !== 'function')
-                return false;
-            try { String(amount); } catch(e){ return false; }
-        }
+        // Reject objects that can't be safely converted to string
+        if(amount !== null && amount !== undefined && typeof amount === 'object' && this.safeToString(amount) === null)
+            return false;
         // Reject negative amounts
         if(String(amount).startsWith('-'))
             return false;
