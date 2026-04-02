@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.15.0] - 2026-04-02
+
+### Added
+- COINPAY action handler: processes native coin payments that fulfill COINPay obligations
+- Per-output processing pattern (dispense-style): only the output matching payee address and amount triggers settlement
+- Settlement logic: releases escrowed tokens to buyer, records payment in coinpays table, updates obligation/match/order statuses
+- Order finalization on COINPAY: marks orders complete when fully filled, finalizes cancelling/expiring orders when all obligations resolve
+- Database methods: createCoinpay, getOrderMatchAmounts
+
 ## [1.14.0] - 2026-04-02
 
 ### Changed
