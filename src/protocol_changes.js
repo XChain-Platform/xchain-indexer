@@ -70,6 +70,8 @@ class ProtocolChanges {
         this.addChange('SLEEP',      '1.0.0',0,0,0,0,0,0);
         this.addChange('SWAP',       '1.0.0',0,0,0,0,0,0);
         this.addChange('SWEEP',      '1.0.0',0,0,0,0,0,0);
+        this.addChange('COINPAY',        '1.0.0',0,0,0,0,0,0);
+        this.addChange('COINPAY_EXPIRE', '1.0.0',0,0,0,0,0,0);
 
         // Define protocol changes (ALL LOWER Case)
         // this.addChange('name','1.0.0',0,0,0,0,0,0);

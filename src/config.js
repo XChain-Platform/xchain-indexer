@@ -75,6 +75,8 @@ module.exports = {
         // Native TICK 
         config['NATIVE_TICK']          = coin;
         config['NATIVE_TICK_DECIMALS'] = 8;
+        config['COIN_DECIMALS']        = 8;     // Native coin decimal places (BTC/LTC/DOGE all use 8)
+        config['COINPAY_EXPIRATION']   = 7200;  // COINPay obligation expiration in seconds (2 hours)
 
         // TICK Length
         config['MIN_TICK_LENGTH'] = 1;

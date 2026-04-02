@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.13.0] - 2026-04-02
+
+### Added
+- COINPay Phase 1: core infrastructure for native coin DEX pairs (BTC/LTC/DOGE)
+- Database tables: coinpay_obligations, coinpays, coinpay_expires, coinpay_statuses
+- settlement_type column on order_matches table (instant/coinpay)
+- COINPAY and COINPAY_EXPIRE protocol change registrations
+- COINPAY_EXPIRE action handler with obligation expiration, escrow release, and order state finalization
+- Database methods: createCoinpayObligation, createCoinpayStatus, createCoinpayExpire, getCoinpayObligationInfo, getExpiredCoinpayObligations, getOrderMatchOrders, getPendingCoinpayObligationsByOrder
+- Expired COINPay obligation processing in block expiration loop
+- Rollback support for all coinpay tables with market pair recalculation
+- COIN_DECIMALS (8) and COINPAY_EXPIRATION (7200s) config values
+
 ## [1.12.1] - 2026-04-01
 
 ### Changed

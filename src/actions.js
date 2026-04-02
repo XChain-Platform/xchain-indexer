@@ -29,6 +29,7 @@ const batch            = require('./actions/batch.js');
 // const bet              = require('./actions/bet.js');
 const broadcast        = require('./actions/broadcast.js');
 const callback         = require('./actions/callback.js');
+const coinpay_expire   = require('./actions/coinpay_expire.js');
 const destroy          = require('./actions/destroy.js');
 const dispenser        = require('./actions/dispenser.js');
 const dispenser_close  = require('./actions/dispenser_close.js');
@@ -79,6 +80,7 @@ class Actions {
         // this.actionBet             = new bet(this);
         this.actionBroadcast       = new broadcast(this);
         this.actionCallback        = new callback(this);
+        this.actionCoinpayExpire   = new coinpay_expire(this);
         this.actionDestroy         = new destroy(this);
         this.actionDispenser       = new dispenser(this);
         this.actionDispenserClose  = new dispenser_close(this);
@@ -216,6 +218,7 @@ class Actions {
         // if(action=='BET')                await this.actionBet.parse(params, data, error);
         if(action=='BROADCAST')          await this.actionBroadcast.parse(params, data, error);
         if(action=='CALLBACK')           await this.actionCallback.parse(params, data, error);
+        if(action=='COINPAY_EXPIRE')     await this.actionCoinpayExpire.parse(params, data, error);
         if(action=='DESTROY')            await this.actionDestroy.parse(params, data, error);
         if(action=='DISPENSER')          await this.actionDispenser.parse(params, data, error);
         if(action=='DISPENSER_CLOSE')    await this.actionDispenserClose.parse(params, data, error);
