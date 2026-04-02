@@ -127,6 +127,15 @@ function createMockDb() {
         getOrderInfo: sinon.stub().resolves(null),
         getOrderEdits: sinon.stub().resolves([]),
         getOrderAmountsRemaining: sinon.stub().resolves({}),
+        getOrderMatchOrders: sinon.stub().resolves(false),
+
+        // COINPay
+        createCoinpayObligation: sinon.stub().resolves(),
+        createCoinpayStatus: sinon.stub().resolves(),
+        createCoinpayExpire: sinon.stub().resolves(),
+        getCoinpayObligationInfo: sinon.stub().resolves(null),
+        getExpiredCoinpayObligations: sinon.stub().resolves([]),
+        getPendingCoinpayObligationsByOrder: sinon.stub().resolves([]),
 
         // Swap
         createSwap: sinon.stub().resolves(),

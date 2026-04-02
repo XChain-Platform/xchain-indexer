@@ -85,14 +85,19 @@ class Order {
         if(!error)
             data = this.util.setNumberFormats(data);
 
-        // Get information on the GIVE and GET tokens
+        // Detect native coin sides (null/empty TICK = native coin on that chain)
+        let isNativeCoinGive = (format==0) ? this.util.isNull(data['GIVE_TICK']) : false;
+        let isNativeCoinGet  = (format==0) ? this.util.isNull(data['GET_TICK'])  : false;
+
+        // Get information on the GIVE and GET tokens (skip for native coin sides)
         let giveTokenInfo = false;
         let getTokenInfo  = false;
         if(format==0){
-            giveTokenInfo = await this.indexerDb.getTokenInfo(data['GIVE_TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
-            if(data['GET_COIN']==this.config['COIN']){
+            if(!isNativeCoinGive)
+                giveTokenInfo = await this.indexerDb.getTokenInfo(data['GIVE_TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
+            if(!isNativeCoinGet && data['GET_COIN']==this.config['COIN']){
                 getTokenInfo = await this.indexerDb.getTokenInfo(data['GET_TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
-            } else {
+            } else if(!isNativeCoinGet) {
                 // TODO : add code to xchain-hub to validate that GET_TICK is valid on GET_COIN, and if not, mark as invalid
             }
         }
@@ -141,24 +146,30 @@ class Order {
         if(!error && format==0 && this.config['COIN']!=data['GET_COIN'])
             error = "invalid: GET_COIN (network)";
 
-        // Validate GIVE_TICK exists
-        if(!error && format==0 && !giveTokenInfo)
+        // Validate that both sides are not native coin (coin-for-coin is just a regular tx)
+        if(!error && format==0 && isNativeCoinGive && isNativeCoinGet)
+            error = 'invalid: cannot trade native coin for native coin';
+
+        // Validate GIVE_TICK exists (skip for native coin — no token to validate)
+        if(!error && format==0 && !isNativeCoinGive && !giveTokenInfo)
             error = 'invalid: GIVE_TICK (unknown)';
 
-        // Validate GET_TICK exists
-        if(!error && format==0 && !getTokenInfo)
+        // Validate GET_TICK exists (skip for native coin — no token to validate)
+        if(!error && format==0 && !isNativeCoinGet && !getTokenInfo)
             error = 'invalid: GET_TICK (unknown)';
 
         /*****************************************************************
          * FORMAT Validations
          ****************************************************************/
 
-        // Verify GIVE_AMOUNT format
-        if(!error && format==0 && !this.util.isNull(data['GIVE_AMOUNT']) && !this.util.isValidAmountFormat(giveTokenInfo['DECIMALS'], data['GIVE_AMOUNT']))
+        // Verify GIVE_AMOUNT format (use COIN_DECIMALS for native coin, token DECIMALS for tokens)
+        let giveDecimals = isNativeCoinGive ? this.config['COIN_DECIMALS'] : (giveTokenInfo ? giveTokenInfo['DECIMALS'] : 0);
+        if(!error && format==0 && !this.util.isNull(data['GIVE_AMOUNT']) && !this.util.isValidAmountFormat(giveDecimals, data['GIVE_AMOUNT']))
             error = "invalid: GIVE_AMOUNT (format)";
 
-        // Verify GET_AMOUNT format
-        if(!error && format==0 && !this.util.isNull(data['GET_AMOUNT']) && !this.util.isValidAmountFormat(getTokenInfo['DECIMALS'], data['GET_AMOUNT']))
+        // Verify GET_AMOUNT format (use COIN_DECIMALS for native coin, token DECIMALS for tokens)
+        let getDecimals = isNativeCoinGet ? this.config['COIN_DECIMALS'] : (getTokenInfo ? getTokenInfo['DECIMALS'] : 0);
+        if(!error && format==0 && !this.util.isNull(data['GET_AMOUNT']) && !this.util.isValidAmountFormat(getDecimals, data['GET_AMOUNT']))
             error = "invalid: GET_AMOUNT (format)";
 
         // Verify GET_ADDRESS is given if COIN network differs from GET_COIN network
@@ -197,8 +208,8 @@ class Order {
         if(!error && String(data['MEMO']).length > this.config['MAX_MEMO_LENGTH'])
             error = 'invalid: MEMO (length)';
 
-        // Verify TICK action is allowed from SOURCE (allow/block lists)
-        if(!error && format==0 && await this.indexerDb.isActionAllowed(data['SOURCE'], data['GIVE_TICK']) == false)
+        // Verify TICK action is allowed from SOURCE (allow/block lists) — skip for native coin
+        if(!error && format==0 && !isNativeCoinGive && await this.indexerDb.isActionAllowed(data['SOURCE'], data['GIVE_TICK']) == false)
             error = 'invalid: SOURCE (not authorized)';
 
         // Validate ORDER_ACTION_INDEX is valid SWAP
@@ -235,12 +246,12 @@ class Order {
             }
         }
 
-        // Verify SOURCE has enough balances to cover GIVE_AMOUNT
-        if(!error && format==0 && !this.util.hasBalance(balances, giveTokenInfo['TICK_ID'], data['GIVE_AMOUNT']))
+        // Verify SOURCE has enough balances to cover GIVE_AMOUNT (skip for native coin — can't verify on-chain balances)
+        if(!error && format==0 && !isNativeCoinGive && !this.util.hasBalance(balances, giveTokenInfo['TICK_ID'], data['GIVE_AMOUNT']))
             error = 'invalid: insufficient funds (GIVE_AMOUNT)';
 
-        // Adjust balances to reduce by SWAP GIVE_AMOUNT
-        if(!error && format==0)
+        // Adjust balances to reduce by SWAP GIVE_AMOUNT (skip for native coin)
+        if(!error && format==0 && !isNativeCoinGive)
             balances = this.util.debitBalances(balances, giveTokenInfo['TICK_ID'], data['GIVE_AMOUNT']);
 
         // Calculate total fee for this order based on EXPIRATION timestamp
@@ -310,11 +321,11 @@ class Order {
 
             // Format 0 - Create Order
             if(format==0){
-                // Debit GIVE_AMOUNT of GIVE_TICK from SOURCE
-                debits.push([data['GIVE_TICK'], data['GIVE_AMOUNT'], data['SOURCE']]);
-
-                // Escrow GIVE_AMOUNT of GIVE_TICK from SOURCE
-                escrows.push([data['GIVE_TICK'], data['GIVE_AMOUNT'], data['SOURCE']]);
+                // Debit and escrow GIVE_AMOUNT of GIVE_TICK from SOURCE (skip for native coin — can't escrow native coin)
+                if(!isNativeCoinGive){
+                    debits.push([data['GIVE_TICK'], data['GIVE_AMOUNT'], data['SOURCE']]);
+                    escrows.push([data['GIVE_TICK'], data['GIVE_AMOUNT'], data['SOURCE']]);
+                }
 
                 // Create record in the orders_statuses table
                 await this.indexerDb.createOrderStatus(data['ACTION_INDEX'], data['ACTION_INDEX'], 'open');
@@ -323,14 +334,23 @@ class Order {
             // Format 1 - Cancel Order
             if(format==1){
 
-                // Debit token from escrows
-                escrows.push([orderInfo['GIVE_TICK'], -orderInfo['GIVE_REMAINING'], orderInfo['SOURCE']]);
+                // Check for pending COINPay obligations before cancelling
+                let pendingObligations = await this.indexerDb.getPendingCoinpayObligationsByOrder(orderInfo['ACTION_INDEX']);
 
-                // Credit token to SOURCE
-                credits.push([orderInfo['GIVE_TICK'], orderInfo['GIVE_REMAINING'], orderInfo['SOURCE']]);
+                if(pendingObligations.length > 0){
+                    // Two-phase cancel: set status to 'cancelling' — blocks new matches, pending obligations must resolve first
+                    await this.indexerDb.createOrderStatus(data['ACTION_INDEX'], orderInfo['ACTION_INDEX'], 'cancelling');
+                } else {
+                    // No pending obligations — cancel immediately
+                    // Debit token from escrows (skip if native coin GIVE side — nothing was escrowed)
+                    if(!this.util.isNull(orderInfo['GIVE_TICK'])){
+                        escrows.push([orderInfo['GIVE_TICK'], -orderInfo['GIVE_REMAINING'], orderInfo['SOURCE']]);
+                        credits.push([orderInfo['GIVE_TICK'], orderInfo['GIVE_REMAINING'], orderInfo['SOURCE']]);
+                    }
 
-                // Create record in the orders_statuses table
-                await this.indexerDb.createOrderStatus(data['ACTION_INDEX'], orderInfo['ACTION_INDEX'], 'cancelled');
+                    // Create record in the orders_statuses table
+                    await this.indexerDb.createOrderStatus(data['ACTION_INDEX'], orderInfo['ACTION_INDEX'], 'cancelled');
+                }
 
             }
 

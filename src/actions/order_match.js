@@ -157,12 +157,18 @@ class Order_Match {
                 if(this.debug)
                     console.log('FINAL - GET / GIVE remaining=',order['GIVE_REMAINING'],order['GET_REMAINING'])
 
-                // TODO : Revisit this code once multi-chain order support is added to xchain-hub component
-                // Set the status to valid
-                data['STATUS'] = 'valid';
+                // Detect if this is a native coin match (one side has null/empty TICK)
+                let isNativeCoinMatch = (this.util.isNull(orderInfo['GIVE_TICK']) ||
+                                         this.util.isNull(orderInfo['GET_TICK'])  ||
+                                         this.util.isNull(matchInfo['GIVE_TICK']) ||
+                                         this.util.isNull(matchInfo['GET_TICK']));
+
+                // Set the status
+                data['STATUS'] = isNativeCoinMatch ? 'pending_coinpay' : 'valid';
+                data['SETTLEMENT_TYPE'] = isNativeCoinMatch ? 'coinpay' : 'instant';
 
                 // Print status message
-                console.log("\t ORDER_MATCH : " + give_amount + ' ' + orderInfo['GIVE_COIN'] + ':' + orderInfo['GIVE_TICK'] + ' = '  + get_amount + ' ' + data['GET_COIN'] + ':' + data['GET_TICK'] + ' : ' + data['STATUS']);
+                console.log("\t ORDER_MATCH : " + give_amount + ' ' + orderInfo['GIVE_COIN'] + ':' + (orderInfo['GIVE_TICK'] || orderInfo['GIVE_COIN']) + ' = '  + get_amount + ' ' + data['GET_COIN'] + ':' + (data['GET_TICK'] || data['GET_COIN']) + ' : ' + data['STATUS']);
 
                 // Array of credits, debits, and escrows
                 let credits = [],
@@ -182,17 +188,73 @@ class Order_Match {
                 data['MATCH_GIVE_AMOUNT'] = give_amount;
                 data['MATCH_GET_AMOUNT']  = get_amount;
 
-                // Remove tokens from escrow
-                escrows.push([matchInfo['GET_TICK'], -give_amount, matchInfo['GET_ADDRESS']]);
-                escrows.push([orderInfo['GET_TICK'], -get_amount,  orderInfo['GET_ADDRESS']]);
+                if(isNativeCoinMatch){
+                    // Two-phase settlement: create COINPay obligation
+                    // Tokens stay escrowed — no credits/escrow changes until COINPay fulfills or expires
 
-                // Credit tokens to addresses
-                credits.push([matchInfo['GET_TICK'], give_amount, matchInfo['GET_ADDRESS']]);
-                credits.push([orderInfo['GET_TICK'], get_amount,  orderInfo['GET_ADDRESS']]);
+                    // Determine which side is the coin offerer and which is the token seller
+                    let coinOrder, sellerOrder, nativeCoinAmount;
+                    if(this.util.isNull(orderInfo['GIVE_TICK'])){
+                        // orderInfo is offering native coin, matchInfo is selling tokens
+                        coinOrder   = orderInfo;
+                        sellerOrder = matchInfo;
+                        nativeCoinAmount = give_amount;
+                    } else if(this.util.isNull(matchInfo['GIVE_TICK'])){
+                        // matchInfo is offering native coin, orderInfo is selling tokens
+                        coinOrder   = matchInfo;
+                        sellerOrder = orderInfo;
+                        nativeCoinAmount = get_amount;
+                    } else {
+                        // GET_TICK is null on one side — the coin requester's counterparty is the coin payer
+                        if(this.util.isNull(orderInfo['GET_TICK'])){
+                            // orderInfo wants native coin, matchInfo must pay it
+                            coinOrder   = matchInfo;
+                            sellerOrder = orderInfo;
+                            nativeCoinAmount = get_amount;
+                        } else {
+                            // matchInfo wants native coin, orderInfo must pay it
+                            coinOrder   = orderInfo;
+                            sellerOrder = matchInfo;
+                            nativeCoinAmount = give_amount;
+                        }
+                    }
 
-                // Store the GET_ADDRESS and TICK in addresses list
-                this.util.addAddressTicker(matchInfo['GET_ADDRESS'], matchInfo['GET_TICK']);
-                this.util.addAddressTicker(orderInfo['GET_ADDRESS'], orderInfo['GET_TICK']);
+                    // Create the COINPay obligation
+                    let obligationData = {
+                        ACTION_INDEX:  data['ACTION_INDEX'],
+                        PAYER_ADDRESS: coinOrder['SOURCE'],
+                        PAYEE_ADDRESS: sellerOrder['GET_ADDRESS'],
+                        COIN:          this.config['COIN'],
+                        COIN_AMOUNT:   nativeCoinAmount,
+                        EXPIRATION:    data['BLOCK_TIME'] + this.config['COINPAY_EXPIRATION'],
+                        BLOCK_INDEX:   data['BLOCK_INDEX']
+                    };
+                    await this.indexerDb.createCoinpayObligation(obligationData);
+
+                    // Create coinpay obligation status as pending_coinpay
+                    await this.indexerDb.createCoinpayStatus(data['ACTION_INDEX'], data['ACTION_INDEX'], 'pending_coinpay');
+
+                    // Store addresses in list for balance/mapping updates
+                    if(!this.util.isNull(matchInfo['GET_TICK']))
+                        this.util.addAddressTicker(matchInfo['GET_ADDRESS'], matchInfo['GET_TICK']);
+                    if(!this.util.isNull(orderInfo['GET_TICK']))
+                        this.util.addAddressTicker(orderInfo['GET_ADDRESS'], orderInfo['GET_TICK']);
+
+                } else {
+                    // Instant settlement: existing token-to-token logic
+
+                    // Remove tokens from escrow
+                    escrows.push([matchInfo['GET_TICK'], -give_amount, matchInfo['GET_ADDRESS']]);
+                    escrows.push([orderInfo['GET_TICK'], -get_amount,  orderInfo['GET_ADDRESS']]);
+
+                    // Credit tokens to addresses
+                    credits.push([matchInfo['GET_TICK'], give_amount, matchInfo['GET_ADDRESS']]);
+                    credits.push([orderInfo['GET_TICK'], get_amount,  orderInfo['GET_ADDRESS']]);
+
+                    // Store the GET_ADDRESS and TICK in addresses list
+                    this.util.addAddressTicker(matchInfo['GET_ADDRESS'], matchInfo['GET_TICK']);
+                    this.util.addAddressTicker(orderInfo['GET_ADDRESS'], orderInfo['GET_TICK']);
+                }
 
                 // Process any transaction ledger changes (credits / debits / escrows)
                 await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits, escrows);
@@ -200,11 +262,14 @@ class Order_Match {
                 // Create record of match in order_matches table
                 await this.indexerDb.createOrderMatch(data, orderInfo, matchInfo);
 
-                // Handle marking the orders as 'complete' if we have nothing left to give or get
-                if(this.util.bclte(order['GET_REMAINING'], 0) || this.util.bclte(order['GIVE_REMAINING'], 0))
-                    await this.indexerDb.createOrderStatus(data['ACTION_INDEX'], orderInfo['ACTION_INDEX'], 'complete');
-                if(this.util.bclte(match['GET_REMAINING'], 0) || this.util.bclte(match['GIVE_REMAINING'], 0))
-                    await this.indexerDb.createOrderStatus(data['ACTION_INDEX'], matchInfo['ACTION_INDEX'], 'complete');
+                if(!isNativeCoinMatch){
+                    // Handle marking the orders as 'complete' if we have nothing left to give or get (instant settlement only)
+                    if(this.util.bclte(order['GET_REMAINING'], 0) || this.util.bclte(order['GIVE_REMAINING'], 0))
+                        await this.indexerDb.createOrderStatus(data['ACTION_INDEX'], orderInfo['ACTION_INDEX'], 'complete');
+                    if(this.util.bclte(match['GET_REMAINING'], 0) || this.util.bclte(match['GIVE_REMAINING'], 0))
+                        await this.indexerDb.createOrderStatus(data['ACTION_INDEX'], matchInfo['ACTION_INDEX'], 'complete');
+                }
+                // For native coin matches, orders stay 'open' until COINPay fulfills or expires
 
                 // Create action mappings
                 await this.mapper.createMappings(action);

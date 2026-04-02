@@ -3643,7 +3643,7 @@ class Database {
                                 s3.order_action_index=o2.action_index
                         ) AND
                         o1.give_coin_id=o2.get_coin_id AND
-                        o1.give_tick_id=o2.get_tick_id AND
+                        (o1.give_tick_id=o2.get_tick_id OR (o1.give_tick_id IS NULL AND o2.get_tick_id IS NULL)) AND
                         o1.action_index=? AND
                         t1.source_id!=? AND
                         s2.status='open'
@@ -3693,8 +3693,8 @@ class Database {
                         LEFT  JOIN blocks          b1 ON (b1.block_index=t1.block_index)
                         INNER JOIN index_addresses a2 ON (a2.id=t1.source_id)
                         INNER JOIN index_addresses a3 ON (a3.id=o1.get_address_id)
-                        INNER JOIN index_tickers   t2 ON (t2.id=o1.give_tick_id)
-                        INNER JOIN index_tickers   t3 ON (t3.id=o1.get_tick_id)
+                        LEFT  JOIN index_tickers   t2 ON (t2.id=o1.give_tick_id)
+                        LEFT  JOIN index_tickers   t3 ON (t3.id=o1.get_tick_id)
                         INNER JOIN index_coins     c1 ON (c1.id=o1.get_coin_id)
                         LEFT  JOIN index_memos     m1 ON (m1.id=o1.memo_id)
                         INNER JOIN order_statuses  s1 ON (s1.order_action_index=o1.action_index)
@@ -3823,9 +3823,9 @@ class Database {
                     INNER JOIN index_statuses s ON (s.id=m.status_id)
                 WHERE
                     (m.give_action_index=? OR m.get_action_index=?) AND
-                    s.status=?
+                    s.status IN (?, ?)
                 ORDER BY action_index ASC`;
-        args = [action_index, action_index, 'valid'];
+        args = [action_index, action_index, 'valid', 'pending_coinpay'];
         results = await this.doQuery(query, args);
         if(results.length > 0){
             // Loop through each order match and deduct amount from remaining
@@ -3929,6 +3929,7 @@ class Database {
         let status_id         = await this.createStatus(data['STATUS']);
         let give_amount       = data['MATCH_GIVE_AMOUNT'];
         let get_amount        = data['MATCH_GET_AMOUNT'];
+        let settlement_type   = data['SETTLEMENT_TYPE'] || 'instant';
         let action_index      = data['ACTION_INDEX'];
         let give_action_index = match['ACTION_INDEX']
         let get_action_index  = order['ACTION_INDEX'];
@@ -3957,14 +3958,15 @@ class Database {
                         get_tick_id=?,
                         get_amount=?,
                         get_action_index=?,
+                        settlement_type=?,
                         status_id=?
-                    WHERE 
+                    WHERE
                         action_index=?`;
         } else {
             // INSERT record
-            query = `INSERT INTO order_matches (give_coin_id, give_tick_id, give_amount, give_action_index, get_coin_id, get_tick_id, get_amount, get_action_index, status_id, action_index) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+            query = `INSERT INTO order_matches (give_coin_id, give_tick_id, give_amount, give_action_index, get_coin_id, get_tick_id, get_amount, get_action_index, settlement_type, status_id, action_index) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
         }
-        args    = [give_coin_id, give_tick_id, give_amount, give_action_index, get_coin_id, get_tick_id, get_amount, get_action_index, status_id, action_index];
+        args    = [give_coin_id, give_tick_id, give_amount, give_action_index, get_coin_id, get_tick_id, get_amount, get_action_index, settlement_type, status_id, action_index];
         results = await this.doQuery(query, args);
     }
 
