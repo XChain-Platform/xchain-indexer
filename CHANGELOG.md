@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.14.0] - 2026-04-02
+
+### Changed
+- ORDER action: detect native coin sides (null/empty TICK), skip token validation, balance check, and escrow for native coin GIVE; use COIN_DECIMALS for amount format validation; reject coin-for-coin orders
+- ORDER cancel (format 1): two-phase cancel with pending COINPay obligations (cancelling status)
+- ORDER_MATCH: detect native coin matches, create COINPay obligations instead of instant settlement, set settlement_type='coinpay' and status='pending_coinpay'
+- ORDER_EXPIRE: two-phase expiration with pending COINPay obligations (expiring status)
+- getOrderInfo query: LEFT JOIN on ticker tables for null tick support
+- findOrderMatches query: NULL-safe tick comparison for native coin order matching
+- getOrderAmountsRemaining: include pending_coinpay status in remaining calculation
+- createOrderMatch: add settlement_type column support
+- Test mocks: add all coinpay DB method stubs
+
 ## [1.13.0] - 2026-04-02
 
 ### Added
