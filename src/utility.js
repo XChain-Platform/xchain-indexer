@@ -671,6 +671,17 @@ class Utility {
             data['ACTION_INDEX'] = info.action_index;
             await actions.processAction(action, null, data, null);
         }
+        // Process expired COINPay obligations
+        let expiredObligations = await db.getExpiredCoinpayObligations(block_time);
+        for(let info of expiredObligations){
+            let action = 'COINPAY_EXPIRE';
+            let data = {};
+            data['ACTION']       = action;
+            data['BLOCK_INDEX']  = block_index;
+            data['BLOCK_TIME']   = block_time;
+            data['ACTION_INDEX'] = info.action_index;
+            await actions.processAction(action, null, data, null);
+        }
     }
 
     // Process any dispensers which have been cancelled and need to be closed

@@ -52,6 +52,10 @@ class Rollback {
             'callbacks',
             'credits',
             'debits',
+            'coinpay_expires',
+            'coinpay_obligations',
+            'coinpay_statuses',
+            'coinpays',
             'destroys',
             'dispensers',
             'dispenser_cancels',
@@ -238,6 +242,31 @@ class Rollback {
                             FROM 
                                 ` + table + ` m
                             WHERE 
+                                m.action_index >= ?`;
+                }
+
+                // COINPAY_OBLIGATIONS
+                if(table=='coinpay_obligations'){
+                    query = `SELECT
+                                om.give_tick_id as tick1_id,
+                                om.get_tick_id  as tick2_id
+                            FROM
+                                ` + table + ` m
+                                INNER JOIN order_matches om ON (om.action_index=m.action_index)
+                            WHERE
+                                m.action_index >= ?`;
+                }
+
+                // COINPAY_EXPIRES / COINPAY_STATUSES / COINPAYS
+                if(['coinpay_expires','coinpay_statuses','coinpays'].includes(table)){
+                    query = `SELECT
+                                om.give_tick_id as tick1_id,
+                                om.get_tick_id  as tick2_id
+                            FROM
+                                ` + table + ` m
+                                INNER JOIN coinpay_obligations co ON (co.action_index=m.` + (table=='coinpay_statuses' ? 'coinpay_action_index' : 'obligation_action_index') + `)
+                                INNER JOIN order_matches       om ON (om.action_index=co.action_index)
+                            WHERE
                                 m.action_index >= ?`;
                 }
 

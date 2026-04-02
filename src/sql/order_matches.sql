@@ -9,6 +9,7 @@ CREATE TABLE order_matches (
     get_coin_id       BIGINT UNSIGNED NOT NULL, -- id of record in index_coins table
     get_tick_id       BIGINT UNSIGNED NOT NULL, -- id of record in index_coins table
     get_amount        VARCHAR(250),             -- Amount of GET_TICK
+    settlement_type   ENUM('instant','coinpay') DEFAULT 'instant', -- Settlement type (instant for token-token, coinpay for native coin pairs)
     status_id         BIGINT UNSIGNED           -- id of record in index_statuses table (valid / invalid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
