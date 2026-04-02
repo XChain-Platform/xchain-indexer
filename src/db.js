@@ -4224,6 +4224,78 @@ class Database {
         return pending;
     }
 
+    // Create/Update record in `coinpays` table (fulfilled COINPay payments)
+    // @param {data} object COINPay payment data
+    async createCoinpay(data){
+        data = this.normalizeDataValues(data);
+        let action_index            = data['ACTION_INDEX'];
+        let obligation_action_index = data['OBLIGATION_ACTION_INDEX'];
+        let coin_amount             = data['COIN_AMOUNT'];
+        let txid                    = data['TXID'];
+        let vout                    = data['VOUT'];
+        let status_id               = await this.createStatus(data['STATUS']);
+        let block_index             = data['BLOCK_INDEX'];
+        // Check if record already exists
+        let query  = `SELECT
+                            action_index
+                        FROM
+                            coinpays
+                        WHERE
+                            action_index=?`;
+        let args = [action_index];
+        let exists = false;
+        let results = await this.doQuery(query, args);
+        if(results.length > 0)
+            exists = true;
+        if(exists){
+            // UPDATE record
+            query = `UPDATE
+                        coinpays
+                    SET
+                        obligation_action_index=?,
+                        coin_amount=?,
+                        txid=?,
+                        vout=?,
+                        status_id=?,
+                        block_index=?
+                    WHERE
+                        action_index=?`;
+            args = [obligation_action_index, coin_amount, txid, vout, status_id, block_index, action_index];
+        } else {
+            // INSERT record
+            query = `INSERT INTO coinpays (action_index, obligation_action_index, coin_amount, txid, vout, status_id, block_index) values (?, ?, ?, ?, ?, ?, ?)`;
+            args = [action_index, obligation_action_index, coin_amount, txid, vout, status_id, block_index];
+        }
+        results = await this.doQuery(query, args);
+    }
+
+    // Get ORDER_MATCH give/get amounts
+    // @param {match_action_index} integer The ORDER_MATCH action_index
+    // Returns {give_action_index, get_action_index, give_amount, get_amount} or false
+    async getOrderMatchAmounts(match_action_index){
+        let query = `SELECT
+                        give_action_index,
+                        get_action_index,
+                        give_amount,
+                        get_amount
+                    FROM
+                        order_matches
+                    WHERE
+                        action_index=?
+                    LIMIT 1`;
+        let args = [match_action_index];
+        let results = await this.doQuery(query, args);
+        if(results.length > 0){
+            return {
+                give_action_index: Number(results[0].give_action_index),
+                get_action_index:  Number(results[0].get_action_index),
+                give_amount:       results[0].give_amount,
+                get_amount:        results[0].get_amount
+            };
+        }
+        return false;
+    }
+
 
     // Create records in the 'mappings_actions' table
     async createActionMapping(action_index, type, value){
