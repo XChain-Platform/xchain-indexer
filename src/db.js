@@ -582,30 +582,95 @@ class Database {
                 ORDER BY 
                     a.action_index ASC`;
         actions = await this.doQuery(query, [block_index]);
+        // Contract hash data
+        let contracts_data = {
+            contracts:   [],
+            state:       [],
+            executions:  [],
+            emissions:   [],
+            deposits:    [],
+            withdrawals: []
+        };
+        // New deployments
+        query = `SELECT c.action_index, c.source_id, c.code_hash, c.status_id
+                 FROM contracts c
+                 INNER JOIN actions a ON (a.action_index=c.action_index)
+                 INNER JOIN transactions t ON (t.tx_index=a.tx_index)
+                 WHERE t.block_index=?
+                 ORDER BY c.action_index ASC`;
+        contracts_data.contracts = await this.doQuery(query, [block_index]);
+        // Contract state (latest value per key written in this block)
+        query = `SELECT cs.contract_index, cs.state_key, cs.state_value
+                 FROM contract_state cs
+                 INNER JOIN (
+                     SELECT MAX(id) as max_id
+                     FROM contract_state
+                     WHERE block_index=?
+                     GROUP BY contract_index, state_key
+                 ) latest ON cs.id = latest.max_id
+                 ORDER BY cs.contract_index ASC, cs.state_key ASC`;
+        contracts_data.state = await this.doQuery(query, [block_index]);
+        // Executions
+        query = `SELECT ce.action_index, ce.contract_index, ce.caller_id, ce.gas_used, ce.status_id, ce.emitted_count
+                 FROM contract_executions ce
+                 INNER JOIN actions a ON (a.action_index=ce.action_index)
+                 INNER JOIN transactions t ON (t.tx_index=a.tx_index)
+                 WHERE t.block_index=?
+                 ORDER BY ce.action_index ASC`;
+        contracts_data.executions = await this.doQuery(query, [block_index]);
+        // Emissions (join through executions to get block scope)
+        query = `SELECT em.execution_index, em.emitted_action, em.action_index, em.position
+                 FROM contract_emissions em
+                 INNER JOIN contract_executions ce ON (ce.action_index=em.execution_index)
+                 INNER JOIN actions a ON (a.action_index=ce.action_index)
+                 INNER JOIN transactions t ON (t.tx_index=a.tx_index)
+                 WHERE t.block_index=?
+                 ORDER BY em.execution_index ASC, em.position ASC`;
+        contracts_data.emissions = await this.doQuery(query, [block_index]);
+        // Deposits
+        query = `SELECT d.action_index, d.contract_index, d.source_id, d.tick_id, d.amount, d.status_id
+                 FROM deposits d
+                 INNER JOIN actions a ON (a.action_index=d.action_index)
+                 INNER JOIN transactions t ON (t.tx_index=a.tx_index)
+                 WHERE t.block_index=?
+                 ORDER BY d.action_index ASC`;
+        contracts_data.deposits = await this.doQuery(query, [block_index]);
+        // Withdrawals
+        query = `SELECT w.action_index, w.contract_index, w.source_id, w.tick_id, w.amount, w.status_id
+                 FROM withdrawals w
+                 INNER JOIN actions a ON (a.action_index=w.action_index)
+                 INNER JOIN transactions t ON (t.tx_index=a.tx_index)
+                 WHERE t.block_index=?
+                 ORDER BY w.action_index ASC`;
+        contracts_data.withdrawals = await this.doQuery(query, [block_index]);
         // Subtract one block from current block
         let prev_block_index = block_index -1;
         // Get hashes from the previous block to include in this blocks hash
         query = `SELECT
                 t1.hash as ledger,
-                t2.hash as actions
+                t2.hash as actions,
+                t3.hash as contracts
             FROM
                 blocks b
                 LEFT JOIN index_transactions t1 ON (t1.id=b.ledger_hash_id)
                 LEFT JOIN index_transactions t2 ON (t2.id=b.actions_hash_id)
+                LEFT JOIN index_transactions t3 ON (t3.id=b.contract_hash_id)
             WHERE
                 b.block_index=?`;
         let results = await this.doQuery(query, [prev_block_index]);
         if(results.length >0){
-            hashes['ledger']  = results[0].ledger;
-            hashes['actions'] = results[0].actions;
+            hashes['ledger']    = results[0].ledger;
+            hashes['actions']   = results[0].actions;
+            hashes['contracts'] = results[0].contracts;
         }
         // Define list of data to hash
-        let tables = ['ledger','actions'];
+        let tables = ['ledger','actions','contracts'];
         // Loop through the tables, add previous hash to data, then create new block hash
         tables.forEach(table => {
             var data = null;
-            if(table=='ledger')  data = ledger;
-            if(table=='actions') data = actions;
+            if(table=='ledger')    data = ledger;
+            if(table=='actions')   data = actions;
+            if(table=='contracts') data = contracts_data;
             // Include the block_index and previous block hash in the hash calculation for this block hash
             data['block_index']   = block_index;
             data['previous_hash'] = hashes[table];
@@ -695,25 +760,28 @@ class Database {
         let block_id = await this.getBlockId(block_index);
         let hashes   = await this.getBlockHashes(block_index);
         // Create transaction hashes in the `index_transactions` table and get the hash id
-        let ledger_hash_id  = await this.createTransaction(hashes.ledger.hash);
-        let actions_hash_id = await this.createTransaction(hashes.actions.hash);
+        let ledger_hash_id   = await this.createTransaction(hashes.ledger.hash);
+        let actions_hash_id  = await this.createTransaction(hashes.actions.hash);
+        let contract_hash_id = await this.createTransaction(hashes.contracts.hash);
         // Create data
-        let query = "INSERT INTO blocks (block_time, ledger_hash_id, actions_hash_id, block_index) values (?, ?, ?, ?)";
+        let query = "INSERT INTO blocks (block_time, ledger_hash_id, actions_hash_id, contract_hash_id, block_index) values (?, ?, ?, ?, ?)";
         if(block_id!=null){
             query = `UPDATE
                         blocks
                     SET
                         block_time=?,
                         ledger_hash_id=?,
-                        actions_hash_id=?
-                    WHERE 
+                        actions_hash_id=?,
+                        contract_hash_id=?
+                    WHERE
                         block_index=?`;
         }
-        let results = await this.doQuery(query, [block_time, ledger_hash_id, actions_hash_id, block_index]);
+        let results = await this.doQuery(query, [block_time, ledger_hash_id, actions_hash_id, contract_hash_id, block_index]);
         // Display status message
-        let ledger  = String(hashes.ledger.hash).substring(0,5);
-        let actions = String(hashes.actions.hash).substring(0,5);
-        return [ledger, actions];
+        let ledger    = String(hashes.ledger.hash).substring(0,5);
+        let actions   = String(hashes.actions.hash).substring(0,5);
+        let contracts = String(hashes.contracts.hash).substring(0,5);
+        return [ledger, actions, contracts];
     }
 
     // Lookup a record in the `index_actions` table and return record id

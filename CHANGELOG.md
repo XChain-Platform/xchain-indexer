@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-04-02
+
+### Added
+- Per-block contract hash (SHA-256) covering contracts, contract_state, contract_executions, contract_emissions, deposits, and withdrawals tables
+- `contract_hash_id` column on `blocks` table, following the existing ledger_hash/actions_hash pattern
+- Contract hash displayed in block parsing log output alongside ledger and actions hashes
+
 ## [2.0.0] - 2026-04-02
 
 ### Added

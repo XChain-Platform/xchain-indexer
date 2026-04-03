@@ -193,7 +193,7 @@ class XChainIndexer {
                         await this.util.processCancellations(this.actions, this.indexerDb, lastIndexerBlock, blockTime);
 
                         // Create record in `blocks` table with hashes of the credits/debits/escrows (ledger) and /actions tables
-                        let [ledger, actions] = await this.indexerDb.createBlock(lastIndexerBlock, blockTime);
+                        let [ledger, actions, contracts] = await this.indexerDb.createBlock(lastIndexerBlock, blockTime);
 
                         // Create / Update DEX market information
                         await this.util.processMarketUpdates(this.indexerDb, lastIndexerBlock, blockTime);
@@ -201,17 +201,17 @@ class XChainIndexer {
                         // Do a sanity check to verify that token supplies match data in credits/debits/escrows/balances tables
                         await this.indexerDb.sanityCheck(lastIndexerBlock);
 
-                        return [ledger, actions];
+                        return [ledger, actions, contracts];
                     })();
 
-                    let [ledger, actions] = await this.util.withTimeout(blockProcessing, this.config['BLOCK_PROCESS_TIMEOUT'], 'block ' + lastIndexerBlock);
+                    let [ledger, actions, contracts] = await this.util.withTimeout(blockProcessing, this.config['BLOCK_PROCESS_TIMEOUT'], 'block ' + lastIndexerBlock);
 
                     // Commit the block data to the database
                     await this.indexerDb.commitTransaction();
 
                     // Log the total parse time for this block
                     let parseTime = this.util.getTimer(debugTimer);
-                    console.log('Block Parsed' + "\t: " + lastIndexerBlock + ' [ledger:' + ledger + ' actions:' + actions + '] (' + parseTime + ')');
+                    console.log('Block Parsed' + "\t: " + lastIndexerBlock + ' [ledger:' + ledger + ' actions:' + actions + ' contracts:' + contracts + '] (' + parseTime + ')');
 
                 } catch(error){
                     // Roll back all writes for this block so the DB stays at the end of the previous block
