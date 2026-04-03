@@ -11,16 +11,21 @@
   <img src="https://img.shields.io/badge/license-Dankest%20Community-orange" alt="License">
 </p>
 
-State-processing engine for the XChain Platform. Reads decoded blockchain transactions from a Decoder database, validates and executes each ACTION according to protocol rules, and maintains authoritative token state (balances, supplies, ownership, DEX orders, dispensers) in a separate MariaDB database.
+State-processing engine for the XChain Platform. Reads decoded blockchain transactions from a Decoder database, validates and executes each ACTION according to protocol rules, and maintains authoritative token state (balances, supplies, ownership, DEX orders, dispensers, smart contracts) in a separate MariaDB database.
 
 ## Features
 
-- **20 ACTION types** — ADDRESS, AIRDROP, BATCH, BROADCAST, CALLBACK, DESTROY, DISPENSER, DISPENSE, DIVIDEND, FILE, ISSUE, LINK, LIST, MESSAGE, MINT, ORDER, SEND, SLEEP, SWAP, SWEEP
+- **29 ACTION types** — ADDRESS, AIRDROP, BATCH, BROADCAST, CALLBACK, COINPAY, DESTROY, DEPLOY, DEPOSIT, DISPENSER, DISPENSE, DIVIDEND, EXECUTE, FILE, ISSUE, LINK, LIST, MESSAGE, MINT, ORDER, SEND, SLEEP, STAKE, SWAP, SWEEP, UNSTAKE, DELEGATE, REVOKE_DELEGATION, CLAIM_REWARDS, WITHDRAW
+- **Virtual Machine** — deterministic JavaScript smart contracts via [xchain-vm](https://github.com/XChain-platform/xchain-vm) (sandboxed V8 isolates, AST-based gas metering, 16 emittable action types)
+- **Hub staking** — STAKE, UNSTAKE, DELEGATE, REVOKE_DELEGATION, CLAIM_REWARDS for validator staking on BTC chain
+- **COINPay** — native coin DEX pairs with two-phase settlement (ORDER_MATCH → COINPAY)
+- **Unified gas fee schedule** — all protocol fees expressed in gas units, converted via GAS_PRICE to XCHAIN
 - **Multi-chain support** — Bitcoin, Litecoin, and Dogecoin on mainnet, testnet, and regtest
 - **Atomic block processing** — every block wrapped in a DB transaction; failures roll back cleanly
 - **Block reorg handling** — detects reorganizations from the Decoder DB, rolls back and re-indexes
-- **Double-entry ledger** — all token movements recorded as credits, debits, and escrows
+- **Double-entry ledger** — all token movements recorded as credits, debits, and escrows (including contract derived addresses)
 - **Per-block sanity check** — verifies token supplies match the sum of credits minus debits
+- **Three block hashes** — ledger, actions, and contract hashes per block for state verification
 - **DEX engine** — ORDER matching, SWAP matching, DISPENSER triggering with automatic expiration
 - **Protocol versioning** — actions activate at specific block heights or timestamps per network
 - **Action mapping** — address/ticker/action_index cross-references for fast lookups
