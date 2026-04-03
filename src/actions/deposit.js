@@ -133,20 +133,23 @@ class Deposit {
         // Create record in deposits table
         await this.indexerDb.createDeposit(data);
 
-        // Update contract custody balance
-        if(status === 'valid')
-            await this.indexerDb.updateContractBalance(data['CONTRACT_ACTION_INDEX'], tokenInfo['TICK_ID'], data['AMOUNT'], 'add');
+        // Contract derived address
+        let contractAddress = 'C:' + this.config['CHAIN'] + ':' + data['CONTRACT_ACTION_INDEX'];
 
-        // Store the SOURCE and TICK in addresses list
+        // Store the SOURCE, contract address, and TICK in addresses list
         this.util.addAddressTicker(data['SOURCE'], data['TICK']);
+        if(status === 'valid')
+            this.util.addAddressTicker(contractAddress, data['TICK']);
 
         // Array of credits and debits
         let credits = [],
             debits  = [];
 
-        // Debit from SOURCE (no gas fee — on-chain tx cost is sufficient)
-        if(status === 'valid')
+        // Debit from SOURCE, credit to contract derived address
+        if(status === 'valid'){
             debits.push([data['TICK'], data['AMOUNT'], data['SOURCE']]);
+            credits.push([data['TICK'], data['AMOUNT'], contractAddress]);
+        }
 
         // Process any transaction ledger changes (credits / debits)
         await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits);

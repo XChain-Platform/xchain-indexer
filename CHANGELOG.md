@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-04-03
+
+### Added
+- VM runtime integration — EXECUTE actions now run contract code in sandboxed V8 isolates via xchain-vm
+- Full emission routing — contracts can emit 16 action types (SEND, DESTROY, ISSUE, etc.) processed through existing handlers
+- `processEmission()`, `getActionHandler()`, `buildActionParams()` methods in execute.js for routing emitted actions
+- Savepoint-based atomicity for VM execution — state changes and emissions roll back together on failure
+- `getContractState()`, `createContractState()`, `createContractEmission()` DB methods for VM state persistence
+- `createSavepoint()`, `releaseSavepoint()`, `rollbackToSavepoint()` DB methods for nested transaction control
+- `deleteContract()` DB method for constructor failure rollback
+- `getOracleDataForVM()` and `getCrossChainDataForVM()` stubs (return null until Track B / Phase 4)
+- `api_version` column on `contracts` table (default 1) for future gateway versioning
+- Deploy-time syntax validation via `vm.validateSyntax()` — rejects invalid code before charging gas
+- Deploy-time float usage warnings via `vm.checkFloatWarnings()`
+- Contract derived address creation (`C:<CHAIN>:<action_index>`) in deploy.js
+- Constructor execution — DEPLOY with CONSTRUCTOR_PARAMS runs `initialize` method through the VM
+- Per-block VM compilation cache lifecycle (`beginBlock()`/`endBlock()`) in XChainIndexer.js
+- Deterministic block hash derivation from block_index + block_time (until decoder provides real hashes)
+- Gas fee recalculation based on actual VM gas usage (not just base gas)
+- `emission_params.test.js` — mandatory format validation for all 16 emittable action types
+
+### Changed
+- execute.js: replaced TODO block with full VM execution, savepoint atomicity, and emission processing
+- deploy.js: added syntax validation, derived address creation, constructor execution, api_version support
+- deposit.js: migrated from `contract_balances` table to derived address credits/debits in standard ledger
+- withdraw.js: migrated from `contract_balances` solvency check to `getAddressBalances()` on derived address
+- actions.js: instantiates XChainVM at startup (graceful fallback if xchain-vm not installed)
+- actions.test.js: added VM/staking handler stubs, updated DEPLOY routing test (no longer aliased to ISSUE)
+
 ## [2.1.0] - 2026-04-02
 
 ### Added

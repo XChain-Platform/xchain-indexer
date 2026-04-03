@@ -28,6 +28,8 @@
  *
  ********************************************************************/
 
+const crypto = require('crypto');
+
 class Execute {
 
     // Handle constructing a class instance
@@ -118,22 +120,104 @@ class Execute {
 
         /*****************************************************************
          * VM Execution
-         * TODO: Integrate xchain-vm runtime when built (Phase 3A)
-         * For now, record the execution attempt and charge base gas
          ****************************************************************/
 
         let gasUsed = gasCost;
         let emittedCount = 0;
         let vmError = null;
 
-        // TODO: Load contract code, build sandbox, execute, collect emitted actions
-        // let vmResult = await vm.execute(contractInfo.code, contractState, inputs, blockContext);
-        // gasUsed = vmResult.gasUsed;
-        // emittedCount = vmResult.emittedActions.length;
-        // vmError = vmResult.error;
+        if(!error && this.actions.vm && contractInfo){
+            // Load contract state from DB
+            let contractState = await this.indexerDb.getContractState(data['CONTRACT_ACTION_INDEX']);
+
+            // Load read-only data for gateway
+            let oracleData = await this.indexerDb.getOracleDataForVM(data['BLOCK_INDEX']);
+            let crossChainData = await this.indexerDb.getCrossChainDataForVM();
+
+            // Derive deterministic block hash from block_index + block_time
+            let blockHash = crypto.createHash('sha256')
+                .update(String(data['BLOCK_INDEX']) + ':' + String(data['BLOCK_TIME']))
+                .digest('hex');
+
+            // Execute contract in VM
+            let vmResult = await this.actions.vm.execute({
+                code:             contractInfo.code,
+                state:            contractState,
+                method:           data['METHOD'],
+                params:           data['METHOD_PARAMS'] ? data['METHOD_PARAMS'].split('|') : [],
+                caller:           data['SOURCE'],
+                contractAddress:  'C:' + this.config['CHAIN'] + ':' + data['CONTRACT_ACTION_INDEX'],
+                contractIndex:    data['CONTRACT_ACTION_INDEX'],
+                blockContext: {
+                    height:    data['BLOCK_INDEX'],
+                    timestamp: data['BLOCK_TIME'],
+                    hash:      blockHash
+                },
+                balances:         null, // TODO: load balances for getBalance() when needed
+                tokenInfo:        null, // TODO: load token info for getTokenInfo() when needed
+                oracleData:       oracleData,
+                crossChainData:   crossChainData
+            });
+
+            gasUsed = vmResult.gasUsed;
+            emittedCount = vmResult.emittedActions.length;
+
+            if(!vmResult.success)
+                vmError = vmResult.error;
+
+            // Process state changes + emissions atomically via DB savepoint
+            if(vmResult.success){
+                let savepoint = await this.indexerDb.createSavepoint('vm_execute');
+                try {
+                    // Write state changes
+                    for(let change of vmResult.stateChanges){
+                        await this.indexerDb.createContractState({
+                            CONTRACT_INDEX: data['CONTRACT_ACTION_INDEX'],
+                            STATE_KEY:      change.key,
+                            STATE_VALUE:    JSON.stringify(change.value),
+                            BLOCK_INDEX:    data['BLOCK_INDEX'],
+                            ACTION_INDEX:   data['ACTION_INDEX']
+                        });
+                    }
+                    // Write state deletes (null value = deleted)
+                    for(let key of vmResult.stateDeletes){
+                        await this.indexerDb.createContractState({
+                            CONTRACT_INDEX: data['CONTRACT_ACTION_INDEX'],
+                            STATE_KEY:      key,
+                            STATE_VALUE:    null,
+                            BLOCK_INDEX:    data['BLOCK_INDEX'],
+                            ACTION_INDEX:   data['ACTION_INDEX']
+                        });
+                    }
+                    // Process emitted actions through existing handlers
+                    for(let i = 0; i < vmResult.emittedActions.length; i++){
+                        let emission = vmResult.emittedActions[i];
+                        await this.processEmission(emission, data, i);
+
+                        // Record emission link
+                        await this.indexerDb.createContractEmission({
+                            EXECUTION_INDEX: data['ACTION_INDEX'],
+                            EMITTED_ACTION:  emission.action,
+                            ACTION_INDEX:    emission.resultActionIndex,
+                            POSITION:        i
+                        });
+                    }
+
+                    await this.indexerDb.releaseSavepoint(savepoint);
+                } catch(emissionError){
+                    // Roll back ALL state changes and emissions from this execution
+                    await this.indexerDb.rollbackToSavepoint(savepoint);
+                    vmError = 'emission failed: ' + emissionError.message;
+                    emittedCount = 0;
+                }
+            }
+        }
 
         if(vmError && !error)
             error = 'invalid: VM execution error: ' + vmError;
+
+        // Recalculate fee based on actual gas used
+        fee = this.util.bcmul(gasUsed, this.config['GAS_PRICE'], 8);
 
         // Determine final status
         let status = (error) ? error : 'valid';
@@ -164,8 +248,8 @@ class Execute {
         let credits = [],
             debits  = [];
 
-        // Debit gas fee from SOURCE
-        if(status === 'valid')
+        // Debit gas fee from SOURCE (always, even on failure — caller pays for the attempt)
+        if(tokenInfo)
             debits.push([gas, fee, data['SOURCE']]);
 
         // Process any transaction ledger changes (credits / debits)
@@ -181,6 +265,153 @@ class Execute {
 
         // Create action mappings
         await this.mapper.createMappings(data);
+    }
+
+    /*****************************************************************
+     * Emission Processing — Routes emitted actions to existing handlers
+     ****************************************************************/
+
+    async processEmission(emission, executionData, position){
+        let action = emission.action;
+        let params = emission.params;
+
+        // Force source to the contract's derived address
+        let contractAddress = 'C:' + this.config['CHAIN'] + ':' + executionData['CONTRACT_ACTION_INDEX'];
+
+        // Build positional params array for the handler
+        let actionParams = this.buildActionParams(action, params);
+
+        // Create a real action_index for this emission
+        let emissionActionIndex = await this.indexerDb.createActionIndex({
+            ACTION:      action,
+            BLOCK_INDEX: executionData['BLOCK_INDEX'],
+            TX_INDEX:    executionData['TX_INDEX'],
+            TX_VOUT:     executionData['TX_VOUT'],
+            FORMAT:      0
+        }, true);  // force=true to always create new
+
+        // Build the data object that action handlers expect
+        let emissionData = {
+            ACTION_INDEX:  emissionActionIndex,
+            SOURCE:        contractAddress,
+            FEE_PAYER:     executionData['SOURCE'],
+            BLOCK_INDEX:   executionData['BLOCK_INDEX'],
+            BLOCK_TIME:    executionData['BLOCK_TIME'],
+            TX_INDEX:      executionData['TX_INDEX'],
+            TX_HASH:       executionData['TX_HASH'],
+            TX_VOUT:       executionData['TX_VOUT'],
+            FORMAT:        0,
+            IS_EMISSION:   true,
+            EMITTER:       executionData['CONTRACT_ACTION_INDEX']
+        };
+
+        // Route to the correct handler
+        let handler = this.getActionHandler(action);
+        if(!handler)
+            throw new Error('unknown emission action: ' + action);
+
+        // Parse through the existing handler — same validation as user-submitted actions
+        let emissionError = null;
+        await handler.parse(actionParams, emissionData, emissionError);
+
+        // Check handler result
+        if(emissionData['STATUS'] && emissionData['STATUS'] !== 'valid')
+            throw new Error(action + ': ' + emissionData['STATUS']);
+
+        // Store the resulting action_index for the emission record
+        emission.resultActionIndex = emissionData['ACTION_INDEX'];
+    }
+
+    // Map action names to handler instances
+    getActionHandler(action){
+        let handlers = {
+            'SEND':       this.actions.actionSend,
+            'DESTROY':    this.actions.actionDestroy,
+            'ISSUE':      this.actions.actionIssue,
+            'MINT':       this.actions.actionMint,
+            'ORDER':      this.actions.actionOrder,
+            'DISPENSER':  this.actions.actionDispenser,
+            'DIVIDEND':   this.actions.actionDividend,
+            'AIRDROP':    this.actions.actionAirdrop,
+            'CALLBACK':   this.actions.actionCallback,
+            'FILE':       this.actions.actionFile,
+            'LIST':       this.actions.actionList,
+            'COINPAY':    this.actions.actionCoinpay,
+            'SWEEP':      this.actions.actionSweep,
+            'LINK':       this.actions.actionLink,
+            'BROADCAST':  this.actions.actionBroadcast,
+            'MESSAGE':    this.actions.actionMessage
+        };
+        return handlers[action] || null;
+    }
+
+    // Convert emission params object to positional array for each action type.
+    // MUST match the format strings in each handler's this.formats[0].
+    buildActionParams(action, params){
+        switch(action){
+            case 'SEND':
+                // FORMAT: VERSION|TICK|AMOUNT|DESTINATION|MEMO
+                return [0, params.tick, params.quantity, params.destination, params.memo || ''];
+            case 'DESTROY':
+                // FORMAT: VERSION|TICK|AMOUNT|MEMO
+                return [0, params.tick, params.quantity, params.memo || ''];
+            case 'ISSUE':
+                // FORMAT: VERSION|TICK|MAX_SUPPLY|MAX_MINT|DECIMALS|DESCRIPTION|MINT_SUPPLY|TRANSFER|TRANSFER_SUPPLY|LOCK_MAX_SUPPLY|LOCK_MAX_MINT|LOCK_DESCRIPTION|LOCK_SLEEP|LOCK_CALLBACK|CALLBACK_BLOCK|CALLBACK_TICK|CALLBACK_AMOUNT|ALLOW_LIST|BLOCK_LIST|MINT_ADDRESS_MAX|MINT_START_BLOCK|MINT_STOP_BLOCK|LOCK_MINT|LOCK_MINT_SUPPLY|MEMO
+                return [0, params.tick, params.maxSupply || '', params.maxMint || '', params.decimals || '',
+                        params.description || '', params.mintSupply || '', params.transfer || '', params.transferSupply || '',
+                        params.lockMaxSupply || '', params.lockMaxMint || '', params.lockDescription || '',
+                        params.lockSleep || '', params.lockCallback || '', params.callbackBlock || '',
+                        params.callbackTick || '', params.callbackAmount || '', params.allowList || '',
+                        params.blockList || '', params.mintAddressMax || '', params.mintStartBlock || '',
+                        params.mintStopBlock || '', params.lockMint || '', params.lockMintSupply || '', params.memo || ''];
+            case 'MINT':
+                // FORMAT: VERSION|TICK|AMOUNT|DESTINATION|MEMO
+                return [0, params.tick, params.quantity, params.destination || '', params.memo || ''];
+            case 'ORDER':
+                // FORMAT: VERSION|GIVE_COIN|GIVE_TICK|GIVE_AMOUNT|GET_COIN|GET_TICK|GET_AMOUNT|GET_ADDRESS|EXPIRATION|ALLOW_LIST|BLOCK_LIST|MEMO
+                return [0, params.giveCoin || '', params.giveTick || '', params.giveAmount,
+                        params.getCoin || '', params.getTick || '', params.getAmount,
+                        params.getAddress || '', params.expiration || '',
+                        params.allowList || '', params.blockList || '', params.memo || ''];
+            case 'DISPENSER':
+                // FORMAT: VERSION|GIVE_COIN|GIVE_TICK|GIVE_AMOUNT|GIVE_ESCROW|GET_COIN|GET_TICK|GET_AMOUNT|GET_ADDRESS|FIAT_CODE|FIAT_AMOUNT|EXPIRATION|ALLOW_LIST|BLOCK_LIST|MEMO
+                return [0, params.giveCoin || '', params.giveTick || '', params.giveAmount, params.giveEscrow,
+                        params.getCoin || '', params.getTick || '', params.getAmount,
+                        params.getAddress || '', params.fiatCode || '', params.fiatAmount || '',
+                        params.expiration || '', params.allowList || '', params.blockList || '', params.memo || ''];
+            case 'DIVIDEND':
+                // FORMAT: VERSION|TICK|DIVIDEND_TICK|AMOUNT|MEMO
+                return [0, params.tick, params.dividendTick, params.quantity, params.memo || ''];
+            case 'AIRDROP':
+                // FORMAT: VERSION|TICK|AMOUNT|LIST_ACTION_INDEX|MEMO
+                return [0, params.tick, params.quantity, params.listActionIndex, params.memo || ''];
+            case 'CALLBACK':
+                // FORMAT: VERSION|TICK|MEMO
+                return [0, params.tick, params.memo || ''];
+            case 'FILE':
+                // FORMAT: VERSION|NAME|TYPE|TITLE|MEMO
+                return [0, params.name || '', params.type || '', params.title || '', params.memo || ''];
+            case 'LIST':
+                // FORMAT: VERSION|TYPE|ITEM
+                return [0, params.type || '', params.item || ''];
+            case 'COINPAY':
+                // FORMAT: VERSION|ORDER_MATCH_ACTION_INDEX
+                return [0, params.orderMatchActionIndex];
+            case 'SWEEP':
+                // FORMAT: VERSION|DESTINATION|BALANCES|OWNERSHIPS|ESCROWS|MEMO
+                return [0, params.destination, params.balances || '', params.ownerships || '', params.escrows || '', params.memo || ''];
+            case 'LINK':
+                // FORMAT: VERSION|COIN1|COIN1_ACTION_INDEX|COIN2|COIN2_ACTION_INDEX|MEMO
+                return [0, params.coin1, params.coin1ActionIndex, params.coin2, params.coin2ActionIndex, params.memo || ''];
+            case 'BROADCAST':
+                // FORMAT: VERSION|MESSAGE|VALUE
+                return [0, params.message || '', params.value || ''];
+            case 'MESSAGE':
+                // FORMAT: VERSION|DESTINATION|ENCRYPTION_METHOD|ENCRYPTION_KEY
+                return [0, params.destination, params.encryptionMethod || '', params.encryptionKey || ''];
+            default:
+                throw new Error('unsupported emission action: ' + action);
+        }
     }
 }
 
