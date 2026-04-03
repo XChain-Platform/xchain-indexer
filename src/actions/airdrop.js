@@ -262,12 +262,20 @@ class Airdrop {
             // Determine total DEBIT
             airdrop['DEBIT'] = (!error) ? this.util.bcmul(recipients.length, airdrop['AMOUNT'], tokenInfo['DECIMALS']) : 0;
 
-            // Calculate total number of database hits for this AIRDROP
-            let db_hits  = recipients.length * 2; // 1 credits, 1 balances
-                db_hits += 3;                     // 1 debits,  1 balances, 1 airdrops
-
-            // Determine total transaction FEE based on database hits
-            fees['AMOUNT'] = this.util.getTransactionFee(db_hits, fees['TICK']);
+            // Determine total transaction FEE
+            let unifiedFees = await this.actions.protocolChanges.isEnabled('UNIFIED_FEES', data['BLOCK_INDEX']);
+            if(unifiedFees){
+                // Unified gas schedule: per-recipient gas
+                let result = this.util.getUnifiedTransactionFee(recipients.length, 'AIRDROP_PER_RECIPIENT');
+                fees['GAS_COST']    = result.gasCost;
+                fees['AMOUNT']      = result.fee;
+                fees['FEE_VERSION'] = 2;
+            } else {
+                // Legacy: database hits model
+                let db_hits  = recipients.length * 2;
+                    db_hits += 3;
+                fees['AMOUNT'] = this.util.getTransactionFee(db_hits, fees['TICK']);
+            }
 
             // Verify SOURCE has enough balances to cover TICK total DEBIT amount
             if(!error && !this.util.hasBalance(balances, tokenInfo['TICK_ID'], airdrop['DEBIT']))

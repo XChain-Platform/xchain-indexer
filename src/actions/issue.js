@@ -371,13 +371,23 @@ class Issue {
         if(!error && String(data['MEMO']).length > this.config['MAX_MEMO_LENGTH'])
             error = 'invalid: MEMO (length)';
 
-        // Determine if an issuance FEE is required, and what that fee is using COIN config information
-        // TODO: Remove the block activation index (used for testing)
+        // Determine if an issuance FEE is required, and what that fee is
         if(!error && !tokenInfo && data['BLOCK_INDEX']>=862633){
-            if(parentInfo)
-                fees['AMOUNT'] = this.config['ISSUANCE_FEE_SUBTOKEN'];
-            else
-                fees['AMOUNT'] = this.config['ISSUANCE_FEE_TOKEN'];
+            let unifiedFees = await this.actions.protocolChanges.isEnabled('UNIFIED_FEES', data['BLOCK_INDEX']);
+            if(unifiedFees){
+                // Unified gas schedule
+                let schedule = this.config['GAS_SCHEDULE'];
+                let gasCost  = parentInfo ? schedule.ISSUE_SUBTOKEN : schedule.ISSUE;
+                fees['GAS_COST']     = gasCost;
+                fees['AMOUNT']       = this.util.bcmul(gasCost, this.config['GAS_PRICE'], 8);
+                fees['FEE_VERSION']  = 2;
+            } else {
+                // Legacy per-chain fee
+                if(parentInfo)
+                    fees['AMOUNT'] = this.config['ISSUANCE_FEE_SUBTOKEN'];
+                else
+                    fees['AMOUNT'] = this.config['ISSUANCE_FEE_TOKEN'];
+            }
         }
 
         // Verify SOURCE has enough balances to cover FEE AMOUNT

@@ -27,14 +27,34 @@ module.exports = {
         let config  = {};
 		let address = {};
 
-        // Set XCHAIN fee required for token issuances
+        // Legacy fee constants (used before UNIFIED_FEES activation)
         config['ISSUANCE_FEE_TOKEN']    = '0.25000000';
         config['ISSUANCE_FEE_SUBTOKEN'] = '0.10000000';
+        config['EXPIRATION_FEE_DEFAULT_DAYS'] = 90;
+        config['EXPIRATION_FEE_FREE_DAYS']    = 182;
+        config['EXPIRATION_FEE_PER_DAY']      = '0.00136986';
 
-        // Set XCHAIN fee required per day for EXPIRATION items (orders, swaps, dispensers)
-        config['EXPIRATION_FEE_DEFAULT_DAYS'] = 90;           // 3 month listing is default
-        config['EXPIRATION_FEE_FREE_DAYS']    = 182;          // 6 month listing is free (182 days)
-        config['EXPIRATION_FEE_PER_DAY']      = '0.00136986'; // 0.5 XCHAIN / 365 days = 0.00136986 XCHAIN per day
+        // Unified gas fee schedule (active after UNIFIED_FEES protocol change)
+        config['GAS_PRICE'] = '0.00001';
+        config['UNIFIED_EXPIRATION_FEE_FREE_DAYS'] = 90;
+        config['FEE_PAYMENT_MODE'] = 'xchain';
+        config['GAS_SCHEDULE'] = {
+            ISSUE:              100000,
+            ISSUE_SUBTOKEN:     50000,
+            EXPIRATION_PER_DAY: 550,
+            AIRDROP_PER_RECIPIENT: 100,
+            DIVIDEND_PER_RECIPIENT: 100,
+            VM_EXECUTE_BASE:    1000,
+            VM_DEPLOY_BASE:     100000,
+            VM_DEPLOY_PER_BYTE: 10,
+            VM_STATE_READ:      100,
+            VM_STATE_WRITE:     200,
+            VM_STATE_DELETE:     100,
+            VM_ORACLE_READ:     100,
+            VM_CROSSCHAIN_READ: 100,
+            VM_EMISSION:        500,
+            VM_COMPUTATION:     1
+        };
 
 		// Set network specific addresses
         switch(network){

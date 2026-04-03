@@ -162,12 +162,21 @@ class Dividend {
         if(!error && String(data['MEMO']).length > this.config['MAX_MEMO_LENGTH'])
             error = 'invalid: MEMO (length)';
 
-        // Calculate total number of database hits for this DIVIDEND
-        let db_hits = 3;                                                                       // 1 dividend, 1 debit, 1 balance 
-            db_hits += (recipients) ? this.util.bcmul(Object.keys(recipients).length,2,0) : 0; // 1 credits, 1 balance
-
-        // Determine total transaction FEE based on database hits
-        fees['AMOUNT'] = this.util.getTransactionFee(db_hits, fees['TICK']);
+        // Determine total transaction FEE
+        let unifiedFees = await this.actions.protocolChanges.isEnabled('UNIFIED_FEES', data['BLOCK_INDEX']);
+        if(unifiedFees){
+            // Unified gas schedule: per-recipient gas
+            let recipientCount = (recipients) ? Object.keys(recipients).length : 0;
+            let result = this.util.getUnifiedTransactionFee(recipientCount, 'DIVIDEND_PER_RECIPIENT');
+            fees['GAS_COST']    = result.gasCost;
+            fees['AMOUNT']      = result.fee;
+            fees['FEE_VERSION'] = 2;
+        } else {
+            // Legacy: database hits model
+            let db_hits = 3;
+                db_hits += (recipients) ? this.util.bcmul(Object.keys(recipients).length,2,0) : 0;
+            fees['AMOUNT'] = this.util.getTransactionFee(db_hits, fees['TICK']);
+        }
 
         // Verify SOURCE has enough balances to cover DIVIDEND_TICK total DEBIT amount
         if(!error && !this.util.hasBalance(balances, dividendTokenInfo['TICK_ID'], dividend['DEBIT']))

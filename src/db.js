@@ -2508,35 +2508,39 @@ class Database {
         let action_index   = data['ACTION_INDEX'];
         let amount         = data['AMOUNT'];
         let method         = data['METHOD'];
-        // Check if record already exists for this airdrop
-        let query = `SELECT
-                        action_index
-                    FROM
-                        fees
-                    WHERE
-                        action_index=?`;
+        // Unified gas fields (default to legacy values if not present)
+        let gas_cost        = data['GAS_COST'] || 0;
+        let gas_price       = data['GAS_PRICE'] || '0';
+        let xchain_amount   = data['XCHAIN_AMOUNT'] || amount || '0';
+        let payment_mode    = data['PAYMENT_MODE'] || 2;
+        let fee_preference  = data['FEE_PREFERENCE'] || method || 2;
+        let fee_version     = data['FEE_VERSION'] || 1;
+        // Check if record already exists
+        let query = `SELECT action_index FROM fees WHERE action_index=?`;
         let args = [action_index];
         let exists = false;
         let results = await this.doQuery(query, args);
         if(results.length > 0)
             exists = true;
-        // Define list of arguments for sql insert/update
         if(exists){
-            // UPDATE record
-            query = `UPDATE
-                        fees
-                    SET
-                        tick_id=?,
-                        destination_id=?,
-                        amount=?,
-                        method=?
-                    WHERE 
-                        action_index=?`;
+            query = `UPDATE fees SET
+                        tick_id=?, destination_id=?, amount=?, method=?,
+                        gas_cost=?, gas_price=?, xchain_amount=?,
+                        payment_mode=?, fee_preference=?, fee_version=?
+                    WHERE action_index=?`;
+            args = [tick_id, destination_id, amount, method,
+                    gas_cost, gas_price, xchain_amount,
+                    payment_mode, fee_preference, fee_version, action_index];
         } else {
-            // INSERT record
-            query = `INSERT INTO fees (tick_id, destination_id, amount, method, action_index) values (?, ?, ?, ?, ?)`;
+            query = `INSERT INTO fees
+                        (tick_id, destination_id, amount, method,
+                         gas_cost, gas_price, xchain_amount,
+                         payment_mode, fee_preference, fee_version, action_index)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+            args = [tick_id, destination_id, amount, method,
+                    gas_cost, gas_price, xchain_amount,
+                    payment_mode, fee_preference, fee_version, action_index];
         }
-        args    = [tick_id, destination_id, amount, method, action_index];
         results = await this.doQuery(query, args);
     }
 
@@ -6305,6 +6309,468 @@ class Database {
                 address = row.address;
         }
         return address;
+    }
+
+    /*
+     * Pubkey index methods (index_pubkeys table)
+     */
+
+    // Get pubkey id from index_pubkeys table
+    async getPubkeyId(pubkey){
+        let id    = null;
+        let query = "SELECT id FROM index_pubkeys WHERE `pubkey`=? LIMIT 1";
+        let results = await this.doQuery(query, [pubkey]);
+        if(results.length > 0)
+            id = Number(results[0].id);
+        return id;
+    }
+
+    // Create record in index_pubkeys table and return record id
+    async getOrCreatePubkeyId(pubkey){
+        // Ignore empty pubkey and return NULL
+        if(this.util.isNull(pubkey))
+            return null;
+        // Normalize to lowercase hex
+        pubkey = String(pubkey).toLowerCase().substring(0, 64);
+        let id = await this.getPubkeyId(pubkey);
+        // Create pubkey if it does not already exist
+        if(id === null){
+            let query   = "INSERT INTO index_pubkeys (`pubkey`) values (?)";
+            let results = await this.doQuery(query, [pubkey]);
+            if(results.insertId)
+                id = Number(results.insertId);
+        }
+        return id;
+    }
+
+    /*
+     * Staking action methods
+     */
+
+    // Create/Update record in `stakes` table
+    async createStake(data){
+        data                  = this.normalizeDataValues(data);
+        let status_id         = await this.createStatus(data['STATUS']);
+        let source_id         = await this.getAddressId(data['SOURCE']);
+        let signing_pubkey_id = await this.getOrCreatePubkeyId(data['SIGNING_PUBKEY']);
+        let action_index      = data['ACTION_INDEX'];
+        let tier              = data['TIER'];
+        let chains            = data['CHAINS'];
+        let amount            = data['AMOUNT'] || '0';
+        let block_index       = data['BLOCK_INDEX'];
+        // Check if record already exists
+        let query  = "SELECT action_index FROM stakes WHERE action_index=? LIMIT 1";
+        let args   = [action_index];
+        let exists = false;
+        let results = await this.doQuery(query, args);
+        if(results.length > 0)
+            exists = true;
+        if(exists){
+            query = `UPDATE stakes SET
+                        source_id=?, tier=?, chains=?, signing_pubkey_id=?,
+                        amount=?, status_id=?, block_index=?
+                    WHERE action_index=?`;
+            args = [source_id, tier, chains, signing_pubkey_id, amount, status_id, block_index, action_index];
+        } else {
+            query = `INSERT INTO stakes
+                        (source_id, tier, chains, signing_pubkey_id, amount, status_id, block_index, action_index)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)`;
+            args = [source_id, tier, chains, signing_pubkey_id, amount, status_id, block_index, action_index];
+        }
+        await this.doQuery(query, args);
+    }
+
+    // Create/Update record in `unstakes` table
+    async createUnstake(data){
+        data                  = this.normalizeDataValues(data);
+        let status_id         = await this.createStatus(data['STATUS']);
+        let source_id         = await this.getAddressId(data['SOURCE']);
+        let action_index      = data['ACTION_INDEX'];
+        let tier              = data['TIER'];
+        let cooldown_end_block = data['COOLDOWN_END_BLOCK'];
+        let amount            = data['AMOUNT'] || '0';
+        let block_index       = data['BLOCK_INDEX'];
+        // Check if record already exists
+        let query  = "SELECT action_index FROM unstakes WHERE action_index=? LIMIT 1";
+        let args   = [action_index];
+        let exists = false;
+        let results = await this.doQuery(query, args);
+        if(results.length > 0)
+            exists = true;
+        if(exists){
+            query = `UPDATE unstakes SET
+                        source_id=?, tier=?, cooldown_end_block=?,
+                        amount=?, status_id=?, block_index=?
+                    WHERE action_index=?`;
+            args = [source_id, tier, cooldown_end_block, amount, status_id, block_index, action_index];
+        } else {
+            query = `INSERT INTO unstakes
+                        (source_id, tier, cooldown_end_block, amount, status_id, block_index, action_index)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)`;
+            args = [source_id, tier, cooldown_end_block, amount, status_id, block_index, action_index];
+        }
+        await this.doQuery(query, args);
+    }
+
+    // Create/Update record in `delegations` table
+    async createDelegation(data){
+        data                  = this.normalizeDataValues(data);
+        let status_id         = await this.createStatus(data['STATUS']);
+        let source_id         = await this.getAddressId(data['SOURCE']);
+        let signing_pubkey_id = await this.getOrCreatePubkeyId(data['SIGNING_PUBKEY']);
+        let action_index      = data['ACTION_INDEX'];
+        let block_index       = data['BLOCK_INDEX'];
+        // Check if record already exists
+        let query  = "SELECT action_index FROM delegations WHERE action_index=? LIMIT 1";
+        let args   = [action_index];
+        let exists = false;
+        let results = await this.doQuery(query, args);
+        if(results.length > 0)
+            exists = true;
+        if(exists){
+            query = `UPDATE delegations SET
+                        source_id=?, signing_pubkey_id=?, status_id=?, block_index=?
+                    WHERE action_index=?`;
+            args = [source_id, signing_pubkey_id, status_id, block_index, action_index];
+        } else {
+            query = `INSERT INTO delegations
+                        (source_id, signing_pubkey_id, status_id, block_index, action_index)
+                    VALUES (?, ?, ?, ?, ?)`;
+            args = [source_id, signing_pubkey_id, status_id, block_index, action_index];
+        }
+        await this.doQuery(query, args);
+    }
+
+    // Create record in `delegations` table with 'revoked' status
+    async createRevokeDelegation(data){
+        // Set status to reflect revocation intent, then create as normal delegation record
+        await this.createDelegation(data);
+    }
+
+    // Create record in `reward_claims` table
+    async createRewardClaim(data){
+        data             = this.normalizeDataValues(data);
+        let status_id    = await this.createStatus(data['STATUS']);
+        let source_id    = await this.getAddressId(data['SOURCE']);
+        let action_index = data['ACTION_INDEX'];
+        let amount       = data['AMOUNT'] || '0';
+        let block_index  = data['BLOCK_INDEX'];
+        // Check if record already exists
+        let query  = "SELECT action_index FROM reward_claims WHERE action_index=? LIMIT 1";
+        let args   = [action_index];
+        let exists = false;
+        let results = await this.doQuery(query, args);
+        if(results.length > 0)
+            exists = true;
+        if(exists){
+            query = `UPDATE reward_claims SET
+                        source_id=?, amount=?, status_id=?, block_index=?
+                    WHERE action_index=?`;
+            args = [source_id, amount, status_id, block_index, action_index];
+        } else {
+            query = `INSERT INTO reward_claims
+                        (source_id, amount, status_id, block_index, action_index)
+                    VALUES (?, ?, ?, ?, ?)`;
+            args = [source_id, amount, status_id, block_index, action_index];
+        }
+        await this.doQuery(query, args);
+    }
+
+    /*
+     * Staking query methods
+     */
+
+    // Get active stake for a source address (optionally filtered by tier)
+    async getActiveStakeBySource(source, tier){
+        let source_id = await this.getAddressId(source);
+        if(source_id === null)
+            return null;
+        let valid_id = await this.getStatusId('valid');
+        let query = `SELECT
+                        s.*, ip.pubkey as signing_pubkey
+                    FROM stakes s
+                        LEFT JOIN index_pubkeys ip ON (ip.id=s.signing_pubkey_id)
+                    WHERE s.source_id=? AND s.status_id=?`;
+        let args = [source_id, valid_id];
+        if(tier !== undefined && tier !== null){
+            query += ' AND s.tier=?';
+            args.push(tier);
+        }
+        query += ' ORDER BY s.action_index DESC LIMIT 1';
+        let results = await this.doQuery(query, args);
+        if(results.length > 0)
+            return results[0];
+        return null;
+    }
+
+    // Get active stake by signing pubkey
+    async getActiveStakeByPubkey(pubkey){
+        let pubkey_id = await this.getPubkeyId(String(pubkey).toLowerCase());
+        if(pubkey_id === null)
+            return null;
+        let valid_id = await this.getStatusId('valid');
+        let query = `SELECT * FROM stakes WHERE signing_pubkey_id=? AND status_id=? ORDER BY action_index DESC LIMIT 1`;
+        let args = [pubkey_id, valid_id];
+        let results = await this.doQuery(query, args);
+        if(results.length > 0)
+            return results[0];
+        return null;
+    }
+
+    // Get active delegation for a source + pubkey
+    async getActiveDelegation(source, pubkey){
+        let source_id = await this.getAddressId(source);
+        let pubkey_id = await this.getPubkeyId(String(pubkey).toLowerCase());
+        if(source_id === null || pubkey_id === null)
+            return null;
+        let valid_id = await this.getStatusId('valid');
+        let query = `SELECT * FROM delegations WHERE source_id=? AND signing_pubkey_id=? AND status_id=? ORDER BY action_index DESC LIMIT 1`;
+        let args = [source_id, pubkey_id, valid_id];
+        let results = await this.doQuery(query, args);
+        if(results.length > 0)
+            return results[0];
+        return null;
+    }
+
+    /*
+     * VM action methods
+     */
+
+    // Create/Update record in `contracts` table
+    async createContract(data){
+        data             = this.normalizeDataValues(data);
+        let status_id    = await this.createStatus(data['STATUS']);
+        let source_id    = await this.getAddressId(data['SOURCE']);
+        let action_index = data['ACTION_INDEX'];
+        let code         = data['CODE'];
+        let code_hash    = data['CODE_HASH'];
+        let block_index  = data['BLOCK_INDEX'];
+        let query  = "SELECT action_index FROM contracts WHERE action_index=? LIMIT 1";
+        let args   = [action_index];
+        let exists = false;
+        let results = await this.doQuery(query, args);
+        if(results.length > 0)
+            exists = true;
+        if(exists){
+            query = `UPDATE contracts SET
+                        source_id=?, code=?, code_hash=?, status_id=?, block_index=?
+                    WHERE action_index=?`;
+            args = [source_id, code, code_hash, status_id, block_index, action_index];
+        } else {
+            query = `INSERT INTO contracts
+                        (source_id, code, code_hash, status_id, block_index, action_index)
+                    VALUES (?, ?, ?, ?, ?, ?)`;
+            args = [source_id, code, code_hash, status_id, block_index, action_index];
+        }
+        await this.doQuery(query, args);
+    }
+
+    // Get contract by action_index
+    async getContract(action_index){
+        let query = `SELECT * FROM contracts WHERE action_index=? LIMIT 1`;
+        let results = await this.doQuery(query, [action_index]);
+        if(results.length > 0)
+            return results[0];
+        return null;
+    }
+
+    // Get status string by status_id
+    async getStatusString(status_id){
+        if(this.util.isNull(status_id))
+            return null;
+        let query = `SELECT status FROM index_statuses WHERE id=? LIMIT 1`;
+        let results = await this.doQuery(query, [status_id]);
+        if(results.length > 0)
+            return results[0].status;
+        return null;
+    }
+
+    // Create record in `contract_executions` table
+    async createContractExecution(data){
+        data             = this.normalizeDataValues(data);
+        let status_id    = await this.createStatus(data['STATUS']);
+        let caller_id    = await this.getAddressId(data['CALLER']);
+        let action_index = data['ACTION_INDEX'];
+        let contract_index = data['CONTRACT_INDEX'];
+        let method_name  = data['METHOD_NAME'];
+        let input_params = data['INPUT_PARAMS'];
+        let gas_used     = data['GAS_USED'];
+        let gas_limit    = data['GAS_LIMIT'];
+        let error_message = data['ERROR_MESSAGE'];
+        let emitted_count = data['EMITTED_COUNT'] || 0;
+        let block_index  = data['BLOCK_INDEX'];
+        let query  = "SELECT action_index FROM contract_executions WHERE action_index=? LIMIT 1";
+        let args   = [action_index];
+        let exists = false;
+        let results = await this.doQuery(query, args);
+        if(results.length > 0)
+            exists = true;
+        if(exists){
+            query = `UPDATE contract_executions SET
+                        contract_index=?, caller_id=?, method_name=?, input_params=?,
+                        gas_used=?, gas_limit=?, status_id=?, error_message=?,
+                        emitted_count=?, block_index=?
+                    WHERE action_index=?`;
+            args = [contract_index, caller_id, method_name, input_params,
+                    gas_used, gas_limit, status_id, error_message,
+                    emitted_count, block_index, action_index];
+        } else {
+            query = `INSERT INTO contract_executions
+                        (contract_index, caller_id, method_name, input_params,
+                         gas_used, gas_limit, status_id, error_message,
+                         emitted_count, block_index, action_index)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+            args = [contract_index, caller_id, method_name, input_params,
+                    gas_used, gas_limit, status_id, error_message,
+                    emitted_count, block_index, action_index];
+        }
+        await this.doQuery(query, args);
+    }
+
+    // Create record in `deposits` table
+    async createDeposit(data){
+        data             = this.normalizeDataValues(data);
+        let status_id    = await this.createStatus(data['STATUS']);
+        let source_id    = await this.getAddressId(data['SOURCE']);
+        let tick_id      = await this.createTicker(data['TICK']);
+        let action_index = data['ACTION_INDEX'];
+        let contract_index = data['CONTRACT_ACTION_INDEX'];
+        let amount       = data['AMOUNT'];
+        let block_index  = data['BLOCK_INDEX'];
+        let query  = "SELECT action_index FROM deposits WHERE action_index=? LIMIT 1";
+        let args   = [action_index];
+        let exists = false;
+        let results = await this.doQuery(query, args);
+        if(results.length > 0)
+            exists = true;
+        if(exists){
+            query = `UPDATE deposits SET
+                        contract_index=?, source_id=?, tick_id=?, amount=?, status_id=?, block_index=?
+                    WHERE action_index=?`;
+            args = [contract_index, source_id, tick_id, amount, status_id, block_index, action_index];
+        } else {
+            query = `INSERT INTO deposits
+                        (contract_index, source_id, tick_id, amount, status_id, block_index, action_index)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)`;
+            args = [contract_index, source_id, tick_id, amount, status_id, block_index, action_index];
+        }
+        await this.doQuery(query, args);
+    }
+
+    // Create record in `withdrawals` table
+    async createWithdrawal(data){
+        data             = this.normalizeDataValues(data);
+        let status_id    = await this.createStatus(data['STATUS']);
+        let source_id    = await this.getAddressId(data['SOURCE']);
+        let tick_id      = await this.createTicker(data['TICK']);
+        let action_index = data['ACTION_INDEX'];
+        let contract_index = data['CONTRACT_ACTION_INDEX'];
+        let amount       = data['AMOUNT'];
+        let block_index  = data['BLOCK_INDEX'];
+        let query  = "SELECT action_index FROM withdrawals WHERE action_index=? LIMIT 1";
+        let args   = [action_index];
+        let exists = false;
+        let results = await this.doQuery(query, args);
+        if(results.length > 0)
+            exists = true;
+        if(exists){
+            query = `UPDATE withdrawals SET
+                        contract_index=?, source_id=?, tick_id=?, amount=?, status_id=?, block_index=?
+                    WHERE action_index=?`;
+            args = [contract_index, source_id, tick_id, amount, status_id, block_index, action_index];
+        } else {
+            query = `INSERT INTO withdrawals
+                        (contract_index, source_id, tick_id, amount, status_id, block_index, action_index)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)`;
+            args = [contract_index, source_id, tick_id, amount, status_id, block_index, action_index];
+        }
+        await this.doQuery(query, args);
+    }
+
+    // Update contract custody balance (add or subtract)
+    async updateContractBalance(contract_index, tick_id, amount, operation){
+        // Get current balance
+        let query = `SELECT amount FROM contract_balances WHERE contract_index=? AND tick_id=? LIMIT 1`;
+        let results = await this.doQuery(query, [contract_index, tick_id]);
+        let currentBalance = (results.length > 0) ? results[0].amount : '0';
+        let newBalance;
+        if(operation === 'add')
+            newBalance = this.util.bcadd(currentBalance, amount, 18);
+        else
+            newBalance = this.util.bcsub(currentBalance, amount, 18);
+        if(results.length > 0){
+            query = `UPDATE contract_balances SET amount=? WHERE contract_index=? AND tick_id=?`;
+            await this.doQuery(query, [newBalance, contract_index, tick_id]);
+        } else {
+            query = `INSERT INTO contract_balances (contract_index, tick_id, amount) VALUES (?, ?, ?)`;
+            await this.doQuery(query, [contract_index, tick_id, newBalance]);
+        }
+    }
+
+    // Get contract custody balance for a specific tick
+    async getContractBalance(contract_index, tick_id){
+        let query = `SELECT amount FROM contract_balances WHERE contract_index=? AND tick_id=? LIMIT 1`;
+        let results = await this.doQuery(query, [contract_index, tick_id]);
+        if(results.length > 0)
+            return results[0].amount;
+        return '0';
+    }
+
+    // Recalculate contract balances from deposits/withdrawals for touched pairs
+    async updateContractBalances(touchedPairs){
+        for(let pair of touchedPairs){
+            let { contract_index, tick_id } = pair;
+            // Sum valid deposits
+            let validId = await this.getStatusId('valid');
+            let query = `SELECT COALESCE(SUM(CAST(amount AS DECIMAL(65,18))), 0) as total
+                        FROM deposits WHERE contract_index=? AND tick_id=? AND status_id=?`;
+            let results = await this.doQuery(query, [contract_index, tick_id, validId]);
+            let totalDeposits = (results.length > 0) ? String(results[0].total) : '0';
+            // Sum valid withdrawals
+            query = `SELECT COALESCE(SUM(CAST(amount AS DECIMAL(65,18))), 0) as total
+                    FROM withdrawals WHERE contract_index=? AND tick_id=? AND status_id=?`;
+            results = await this.doQuery(query, [contract_index, tick_id, validId]);
+            let totalWithdrawals = (results.length > 0) ? String(results[0].total) : '0';
+            // Calculate balance
+            let balance = this.util.bcsub(totalDeposits, totalWithdrawals, 18);
+            // Update or insert
+            query = `SELECT contract_index FROM contract_balances WHERE contract_index=? AND tick_id=? LIMIT 1`;
+            results = await this.doQuery(query, [contract_index, tick_id]);
+            if(results.length > 0){
+                query = `UPDATE contract_balances SET amount=? WHERE contract_index=? AND tick_id=?`;
+                await this.doQuery(query, [balance, contract_index, tick_id]);
+            } else if(this.util.bcgt(balance, 0)){
+                query = `INSERT INTO contract_balances (contract_index, tick_id, amount) VALUES (?, ?, ?)`;
+                await this.doQuery(query, [contract_index, tick_id, balance]);
+            }
+        }
+    }
+
+    // Get total unclaimed rewards for a source address
+    async getUnclaimedRewardTotal(source){
+        let source_id = await this.getAddressId(source);
+        if(source_id === null)
+            return '0';
+        // Sum all rewards minus all claimed amounts
+        let query = `SELECT
+                        COALESCE(SUM(CAST(vr.amount AS DECIMAL(65,18))), 0) as total_rewards
+                    FROM validator_rewards vr
+                    WHERE vr.source_id=?`;
+        let args = [source_id];
+        let results = await this.doQuery(query, args);
+        let totalRewards = (results.length > 0) ? String(results[0].total_rewards) : '0';
+
+        query = `SELECT
+                    COALESCE(SUM(CAST(rc.amount AS DECIMAL(65,18))), 0) as total_claimed
+                FROM reward_claims rc
+                    INNER JOIN index_statuses s ON (s.id=rc.status_id)
+                WHERE rc.source_id=? AND s.status='valid'`;
+        args = [source_id];
+        results = await this.doQuery(query, args);
+        let totalClaimed = (results.length > 0) ? String(results[0].total_claimed) : '0';
+
+        let unclaimed = this.util.bcsub(totalRewards, totalClaimed, 18);
+        return unclaimed;
     }
 }
 module.exports = Database

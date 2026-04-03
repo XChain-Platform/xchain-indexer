@@ -54,6 +54,19 @@ const swap_match       = require('./actions/swap_match.js');
 const sweep            = require('./actions/sweep.js');
 const unknown          = require('./actions/unknown.js');
 
+// VM actions
+const deploy             = require('./actions/deploy.js');
+const execute            = require('./actions/execute.js');
+const deposit            = require('./actions/deposit.js');
+const withdraw           = require('./actions/withdraw.js');
+
+// Staking actions
+const stake              = require('./actions/stake.js');
+const unstake            = require('./actions/unstake.js');
+const delegate           = require('./actions/delegate.js');
+const revoke_delegation  = require('./actions/revoke_delegation.js');
+const claim_rewards      = require('./actions/claim_rewards.js');
+
 class Actions {
 
     // Handle constructing a class instance
@@ -106,12 +119,23 @@ class Actions {
         this.actionSweep           = new sweep(this);
         this.actionUnknown         = new unknown(this);
 
+        // VM action instances
+        this.actionDeploy           = new deploy(this);
+        this.actionExecute          = new execute(this);
+        this.actionDeposit          = new deposit(this);
+        this.actionWithdraw         = new withdraw(this);
+
+        // Staking action instances
+        this.actionStake            = new stake(this);
+        this.actionUnstake          = new unstake(this);
+        this.actionDelegate         = new delegate(this);
+        this.actionRevokeDelegation = new revoke_delegation(this);
+        this.actionClaimRewards     = new claim_rewards(this);
+
         // Define ACTION aliases
         this.actionAliases = {};
 
         // Legacy BRC20 formats
-        // TODO: Remove legacy formats before launch (only used in testing using BTNS data)
-        this.actionAliases['DEPLOY']   = 'ISSUE';
         this.actionAliases['TRANSFER'] = 'SEND';
 
         // Short aliases
@@ -244,6 +268,19 @@ class Actions {
         if(action=='SWAP_MATCH')         await this.actionSwapMatch.parse(params, data, error);
         if(action=='SWEEP')              await this.actionSweep.parse(params, data, error);
         if(action=='UNKNOWN')            await this.actionUnknown.parse(params, data, error);
+
+        // VM actions
+        if(action=='DEPLOY')             await this.actionDeploy.parse(params, data, error);
+        if(action=='EXECUTE')            await this.actionExecute.parse(params, data, error);
+        if(action=='DEPOSIT')            await this.actionDeposit.parse(params, data, error);
+        if(action=='WITHDRAW')           await this.actionWithdraw.parse(params, data, error);
+
+        // Staking actions
+        if(action=='STAKE')              await this.actionStake.parse(params, data, error);
+        if(action=='UNSTAKE')            await this.actionUnstake.parse(params, data, error);
+        if(action=='DELEGATE')           await this.actionDelegate.parse(params, data, error);
+        if(action=='REVOKE_DELEGATION')  await this.actionRevokeDelegation.parse(params, data, error);
+        if(action=='CLAIM_REWARDS')      await this.actionClaimRewards.parse(params, data, error);
     }
 
 }

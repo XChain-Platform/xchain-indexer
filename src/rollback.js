@@ -39,7 +39,9 @@ class Rollback {
         // List of tables that store data using block_index
         this.blockTables = [
             'blocks',
-            'transactions'
+            'transactions',
+            'validator_rewards',
+            'contract_state'
         ];
 
         // List of tables that store data using action_index
@@ -93,7 +95,15 @@ class Rollback {
             'swap_matches',
             'swap_statuses',
             'sweeps',
-            'tokens'
+            'tokens',
+            'stakes',
+            'unstakes',
+            'delegations',
+            'reward_claims',
+            'contracts',
+            'contract_executions',
+            'deposits',
+            'withdrawals'
         ];
 
     }
@@ -316,9 +326,33 @@ class Rollback {
         let addresses = this.util.getAddressesList();
         let tickers   = this.util.getTickersList();
 
+        // Collect touched contract balance pairs before deletion (for VM rollback)
+        let touchedContractPairs = [];
+        if(firstActionIndex){
+            query = `SELECT contract_index, tick_id FROM deposits WHERE action_index >= ?`;
+            args  = [firstActionIndex];
+            let depositRows = await this.indexerDb.doQuery(query, args);
+            for(let row of depositRows)
+                touchedContractPairs.push({ contract_index: Number(row.contract_index), tick_id: Number(row.tick_id) });
+
+            query = `SELECT contract_index, tick_id FROM withdrawals WHERE action_index >= ?`;
+            args  = [firstActionIndex];
+            let withdrawalRows = await this.indexerDb.doQuery(query, args);
+            for(let row of withdrawalRows)
+                touchedContractPairs.push({ contract_index: Number(row.contract_index), tick_id: Number(row.tick_id) });
+        }
+
         // Begin a transaction — all deletes and recalculations are atomic
         await this.indexerDb.beginTransaction();
         try {
+
+            // Delete contract_emissions first (references contract_executions)
+            if(firstActionIndex){
+                query = `DELETE FROM contract_emissions WHERE execution_index IN
+                            (SELECT action_index FROM contract_executions WHERE action_index >= ?)`;
+                args  = [firstActionIndex];
+                await this.indexerDb.doQuery(query, args);
+            }
 
             if(firstActionIndex){
                 // Loop through the data tables and delete records above the action_index
@@ -348,6 +382,10 @@ class Rollback {
 
             // Update market information
             await this.indexerDb.updateMarkets(markets, block_index);
+
+            // Recalculate contract custody balances for touched pairs
+            if(touchedContractPairs.length > 0)
+                await this.indexerDb.updateContractBalances(touchedContractPairs);
 
             // Do a sanity check to verify that token supplies match data in credits/debits/escrows/balances tables
             await this.indexerDb.sanityCheck(block_index);

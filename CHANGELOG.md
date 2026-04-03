@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-04-02
+
+### Added
+- Hub staking actions: STAKE, UNSTAKE, DELEGATE, REVOKE_DELEGATION, CLAIM_REWARDS (BTC-only)
+- VM actions: DEPLOY, EXECUTE, DEPOSIT, WITHDRAW (all chains)
+- Unified gas fee schedule with GAS_PRICE, GAS_SCHEDULE config across all chains
+- New shared table: index_pubkeys for Ed25519 signing key normalization
+- Staking tables: stakes, unstakes, delegations, validator_rewards, reward_claims
+- VM tables: contracts, contract_state (append-only), contract_executions, contract_emissions, contract_balances, deposits, withdrawals
+- DB methods: getPubkeyId, getOrCreatePubkeyId, createStake, createUnstake, createDelegation, createRevokeDelegation, createRewardClaim, getActiveStakeBySource, getActiveStakeByPubkey, getActiveDelegation, getUnclaimedRewardTotal
+- DB methods: createContract, getContract, getStatusString, createContractExecution, createDeposit, createWithdrawal, updateContractBalance, getContractBalance, updateContractBalances
+- Fee utility methods: getUnifiedTransactionFee, getUnifiedExpirationFee, getFeePaymentMode, validateNativeCoinFee (stub for Track B)
+- Protocol changes: STAKE, UNSTAKE, DELEGATE, REVOKE_DELEGATION, CLAIM_REWARDS, DEPLOY, EXECUTE, DEPOSIT, WITHDRAW, UNIFIED_FEES, VM_ACTIONS
+- Rollback support for all new tables including contract_emissions deletion and contract_balances recalculation
+
+### Changed
+- Fee schedule: unified gas model replaces per-chain fee constants (gated by UNIFIED_FEES protocol change)
+- Expiration free days reduced from 182 to 90 across all chains (unified schedule)
+- Flat fee rate across all chains (~2 XCHAIN/yr via gas schedule)
+- Updated fee handlers in issue.js, airdrop.js, dividend.js, order.js, dispenser.js, swap.js with UNIFIED_FEES gating
+- Fees table schema: added gas_cost, gas_price, xchain_amount, payment_mode, fee_preference, fee_version columns
+- Removed DEPLOY → ISSUE alias (DEPLOY reclaimed for VM contract deployment)
+
 ## [1.15.0] - 2026-04-02
 
 ### Added
