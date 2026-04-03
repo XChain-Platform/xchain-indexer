@@ -6612,6 +6612,7 @@ class Database {
         let action_index = data['ACTION_INDEX'];
         let code         = data['CODE'];
         let code_hash    = data['CODE_HASH'];
+        let api_version  = data['API_VERSION'] || 1;
         let block_index  = data['BLOCK_INDEX'];
         let query  = "SELECT action_index FROM contracts WHERE action_index=? LIMIT 1";
         let args   = [action_index];
@@ -6621,14 +6622,14 @@ class Database {
             exists = true;
         if(exists){
             query = `UPDATE contracts SET
-                        source_id=?, code=?, code_hash=?, status_id=?, block_index=?
+                        source_id=?, code=?, code_hash=?, api_version=?, status_id=?, block_index=?
                     WHERE action_index=?`;
-            args = [source_id, code, code_hash, status_id, block_index, action_index];
+            args = [source_id, code, code_hash, api_version, status_id, block_index, action_index];
         } else {
             query = `INSERT INTO contracts
-                        (source_id, code, code_hash, status_id, block_index, action_index)
-                    VALUES (?, ?, ?, ?, ?, ?)`;
-            args = [source_id, code, code_hash, status_id, block_index, action_index];
+                        (source_id, code, code_hash, api_version, status_id, block_index, action_index)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)`;
+            args = [source_id, code, code_hash, api_version, status_id, block_index, action_index];
         }
         await this.doQuery(query, args);
     }
@@ -6812,6 +6813,117 @@ class Database {
                 await this.doQuery(query, [contract_index, tick_id, balance]);
             }
         }
+    }
+
+    /*****************************************************************
+     * VM Integration — Savepoints
+     ****************************************************************/
+
+    // Create a savepoint within the current transaction
+    async createSavepoint(name){
+        if(!this.transactionConnection)
+            throw new Error('createSavepoint requires an active transaction');
+        await this.transactionConnection.query('SAVEPOINT ' + name);
+        return name;
+    }
+
+    // Release a savepoint
+    async releaseSavepoint(name){
+        if(!this.transactionConnection)
+            throw new Error('releaseSavepoint requires an active transaction');
+        await this.transactionConnection.query('RELEASE SAVEPOINT ' + name);
+    }
+
+    // Rollback to a savepoint
+    async rollbackToSavepoint(name){
+        if(!this.transactionConnection)
+            throw new Error('rollbackToSavepoint requires an active transaction');
+        await this.transactionConnection.query('ROLLBACK TO SAVEPOINT ' + name);
+    }
+
+    /*****************************************************************
+     * VM Integration — Contract State
+     ****************************************************************/
+
+    // Get the current state of a contract as a { key: value } object
+    async getContractState(contractIndex){
+        // Get the latest row per key using MAX(id)
+        // The idx_latest index (contract_index, state_key, id DESC) makes this efficient
+        let query = `SELECT cs.state_key, cs.state_value
+                     FROM contract_state cs
+                     INNER JOIN (
+                         SELECT MAX(id) as max_id
+                         FROM contract_state
+                         WHERE contract_index = ?
+                         GROUP BY state_key
+                     ) latest ON cs.id = latest.max_id
+                     WHERE cs.state_value IS NOT NULL`;
+        let results = await this.doQuery(query, [contractIndex]);
+        let state = {};
+        for(let row of results){
+            try {
+                state[row.state_key] = JSON.parse(row.state_value);
+            } catch(e){
+                state[row.state_key] = row.state_value;
+            }
+        }
+        return state;
+    }
+
+    // Append a new state row (append-only — rollback via DELETE WHERE block_index >= ?)
+    async createContractState(data){
+        let query = `INSERT INTO contract_state
+                        (contract_index, state_key, state_value, block_index, action_index)
+                     VALUES (?, ?, ?, ?, ?)`;
+        let args = [
+            data['CONTRACT_INDEX'],
+            data['STATE_KEY'],
+            data['STATE_VALUE'],
+            data['BLOCK_INDEX'],
+            data['ACTION_INDEX']
+        ];
+        await this.doQuery(query, args);
+    }
+
+    // Create a record in contract_emissions
+    async createContractEmission(data){
+        let query = `INSERT INTO contract_emissions
+                        (execution_index, emitted_action, action_index, position)
+                     VALUES (?, ?, ?, ?)`;
+        let args = [
+            data['EXECUTION_INDEX'],
+            data['EMITTED_ACTION'],
+            data['ACTION_INDEX'],
+            data['POSITION']
+        ];
+        await this.doQuery(query, args);
+    }
+
+    // Delete a contract record (for constructor failure rollback)
+    async deleteContract(actionIndex){
+        let query = `DELETE FROM contracts WHERE action_index=?`;
+        await this.doQuery(query, [actionIndex]);
+    }
+
+    /*****************************************************************
+     * VM Integration — Oracle / Cross-Chain Stubs
+     ****************************************************************/
+
+    // Oracle data stub — returns no-data accessors until Track B
+    async getOracleDataForVM(blockIndex){
+        return {
+            getPrice:        (coinPair) => null,
+            getPriceAtRound: (coinPair, round) => null,
+            getSnapshotAge:  () => Number.MAX_SAFE_INTEGER
+        };
+    }
+
+    // Cross-chain data stub — returns no-data accessors until Phase 4
+    async getCrossChainDataForVM(){
+        return {
+            getAttestation: (chain, actionIndex) => null,
+            isSettled:      (chain, actionIndex) => false
+        };
     }
 
     // Get total unclaimed rewards for a source address

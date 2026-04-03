@@ -182,6 +182,10 @@ class XChainIndexer {
                     // Process the block with a watchdog timeout to detect deadlocks or infinite loops
                     let blockProcessing = (async () => {
 
+                        // Initialize VM compilation cache for this block
+                        if(this.actions.vm)
+                            this.actions.vm.beginBlock();
+
                         // Loop through any block transactions and process them
                         for(const tx of blockTransactions)
                             await this.actions.processTransaction(tx);
@@ -191,6 +195,10 @@ class XChainIndexer {
 
                         // Check for any cancelled items (dispensers)
                         await this.util.processCancellations(this.actions, this.indexerDb, lastIndexerBlock, blockTime);
+
+                        // Clear VM compilation cache for this block
+                        if(this.actions.vm)
+                            this.actions.vm.endBlock();
 
                         // Create record in `blocks` table with hashes of the credits/debits/escrows (ledger) and /actions tables
                         let [ledger, actions, contracts] = await this.indexerDb.createBlock(lastIndexerBlock, blockTime);

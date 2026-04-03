@@ -4,6 +4,7 @@ CREATE TABLE contracts (
     source_id           BIGINT UNSIGNED NOT NULL,
     code                MEDIUMTEXT NOT NULL,
     code_hash           CHAR(64) NOT NULL,
+    api_version         INT UNSIGNED NOT NULL DEFAULT 1,
     status_id           BIGINT UNSIGNED,
     block_index         BIGINT UNSIGNED NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;

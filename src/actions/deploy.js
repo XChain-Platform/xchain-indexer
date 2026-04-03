@@ -94,6 +94,21 @@ class Deploy {
             error = 'invalid: GAS_LIMIT (required)';
 
         /*****************************************************************
+         * VM Syntax Validation (before charging gas)
+         ****************************************************************/
+
+        let floatWarnings = [];
+        if(!error && this.actions.vm){
+            let syntaxResult = this.actions.vm.validateSyntax(code);
+            if(!syntaxResult.valid)
+                error = 'invalid: CODE_ENCODING (' + syntaxResult.error + ')';
+
+            // Non-blocking float warnings (logged in execution record)
+            if(!error)
+                floatWarnings = this.actions.vm.checkFloatWarnings(code);
+        }
+
+        /*****************************************************************
          * Gas Fee Calculation
          ****************************************************************/
 
@@ -122,12 +137,67 @@ class Deploy {
         // Generate code hash
         let codeHash = crypto.createHash('sha256').update(code).digest('hex');
 
+        /*****************************************************************
+         * Contract Derived Address
+         ****************************************************************/
+
+        // Create the contract's derived address (C:<CHAIN>:<action_index>)
+        let contractAddress = 'C:' + this.config['CHAIN'] + ':' + data['ACTION_INDEX'];
+        if(!error)
+            await this.indexerDb.createAddress(contractAddress);
+
+        /*****************************************************************
+         * Constructor Execution
+         ****************************************************************/
+
+        let totalGas = gasCost;
+        let constructorError = null;
+        let constructorResult = null;
+
+        if(!error && data['CONSTRUCTOR_PARAMS'] && this.actions.vm){
+            // Derive deterministic block hash
+            let blockHash = crypto.createHash('sha256')
+                .update(String(data['BLOCK_INDEX']) + ':' + String(data['BLOCK_TIME']))
+                .digest('hex');
+
+            constructorResult = await this.actions.vm.execute({
+                code:             code,
+                state:            {},
+                method:           'initialize',
+                params:           data['CONSTRUCTOR_PARAMS'].split('|'),
+                caller:           data['SOURCE'],
+                contractAddress:  contractAddress,
+                contractIndex:    data['ACTION_INDEX'],
+                blockContext: {
+                    height:    data['BLOCK_INDEX'],
+                    timestamp: data['BLOCK_TIME'],
+                    hash:      blockHash
+                },
+                balances:         null,
+                tokenInfo:        null,
+                oracleData:       await this.indexerDb.getOracleDataForVM(data['BLOCK_INDEX']),
+                crossChainData:   await this.indexerDb.getCrossChainDataForVM()
+            });
+
+            totalGas += constructorResult.gasUsed;
+
+            if(!constructorResult.success){
+                constructorError = 'constructor failed: ' + constructorResult.error;
+                error = 'invalid: ' + constructorError;
+            }
+        }
+
+        // Recalculate fee based on total gas (deploy + constructor)
+        fee = this.util.bcmul(totalGas, this.config['GAS_PRICE'], 8);
+
         // Determine final status
         let status = (error) ? error : 'valid';
         data['STATUS'] = status;
 
         // Print status message
-        console.log("\t DEPLOY : hash=" + codeHash + ' : gas=' + gasCost + ' : ' + data['STATUS']);
+        console.log("\t DEPLOY : hash=" + codeHash + ' : gas=' + totalGas +
+            (floatWarnings.length > 0 ? ' : FLOAT_WARNINGS=' + floatWarnings.length : '') +
+            ' : ' + data['STATUS']);
 
         // Create record in contracts table
         await this.indexerDb.createContract({
@@ -135,9 +205,47 @@ class Deploy {
             SOURCE       : data['SOURCE'],
             CODE         : code,
             CODE_HASH    : codeHash,
+            API_VERSION  : 1,
             STATUS       : status,
             BLOCK_INDEX  : data['BLOCK_INDEX']
         });
+
+        // If constructor failed, delete the contract record
+        if(constructorError)
+            await this.indexerDb.deleteContract(data['ACTION_INDEX']);
+
+        // Process constructor state changes and emissions if successful
+        if(constructorResult && constructorResult.success){
+            let savepoint = await this.indexerDb.createSavepoint('vm_constructor');
+            try {
+                for(let change of constructorResult.stateChanges){
+                    await this.indexerDb.createContractState({
+                        CONTRACT_INDEX: data['ACTION_INDEX'],
+                        STATE_KEY:      change.key,
+                        STATE_VALUE:    JSON.stringify(change.value),
+                        BLOCK_INDEX:    data['BLOCK_INDEX'],
+                        ACTION_INDEX:   data['ACTION_INDEX']
+                    });
+                }
+                for(let key of constructorResult.stateDeletes){
+                    await this.indexerDb.createContractState({
+                        CONTRACT_INDEX: data['ACTION_INDEX'],
+                        STATE_KEY:      key,
+                        STATE_VALUE:    null,
+                        BLOCK_INDEX:    data['BLOCK_INDEX'],
+                        ACTION_INDEX:   data['ACTION_INDEX']
+                    });
+                }
+                await this.indexerDb.releaseSavepoint(savepoint);
+            } catch(e){
+                await this.indexerDb.rollbackToSavepoint(savepoint);
+                // Constructor state save failed — mark deployment as failed
+                error = 'invalid: constructor state write failed: ' + e.message;
+                status = error;
+                data['STATUS'] = status;
+                await this.indexerDb.deleteContract(data['ACTION_INDEX']);
+            }
+        }
 
         // Create execution record
         await this.indexerDb.createContractExecution({
@@ -146,11 +254,11 @@ class Deploy {
             CALLER          : data['SOURCE'],
             METHOD_NAME     : 'constructor',
             INPUT_PARAMS    : data['CONSTRUCTOR_PARAMS'] || '',
-            GAS_USED        : gasCost,
-            GAS_LIMIT       : data['GAS_LIMIT'] || gasCost,
+            GAS_USED        : totalGas,
+            GAS_LIMIT       : data['GAS_LIMIT'] || totalGas,
             STATUS          : status,
             ERROR_MESSAGE   : error || null,
-            EMITTED_COUNT   : 0,
+            EMITTED_COUNT   : constructorResult ? constructorResult.emittedActions.length : 0,
             BLOCK_INDEX     : data['BLOCK_INDEX']
         });
 
@@ -162,7 +270,7 @@ class Deploy {
             debits  = [];
 
         // Debit gas fee from SOURCE
-        if(status === 'valid')
+        if(tokenInfo)
             debits.push([gas, fee, data['SOURCE']]);
 
         // Process any transaction ledger changes (credits / debits)

@@ -106,10 +106,11 @@ class Withdraw {
         if(!error && !this.util.bcgt(data['AMOUNT'], 0))
             error = 'invalid: AMOUNT (zero)';
 
-        // Verify contract has sufficient custody balance
+        // Verify contract has sufficient balance at its derived address
+        let contractAddress = 'C:' + this.config['CHAIN'] + ':' + data['CONTRACT_ACTION_INDEX'];
         if(!error){
-            let custodyBalance = await this.indexerDb.getContractBalance(data['CONTRACT_ACTION_INDEX'], tokenInfo['TICK_ID']);
-            if(!this.util.bcgte(custodyBalance, data['AMOUNT']))
+            let contractBalances = await this.indexerDb.getAddressBalances(contractAddress, null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
+            if(!this.util.hasBalance(contractBalances, tokenInfo['TICK_ID'], data['AMOUNT']))
                 error = 'invalid: insufficient contract balance';
         }
 
@@ -127,20 +128,20 @@ class Withdraw {
         // Create record in withdrawals table
         await this.indexerDb.createWithdrawal(data);
 
-        // Update contract custody balance
-        if(status === 'valid')
-            await this.indexerDb.updateContractBalance(data['CONTRACT_ACTION_INDEX'], tokenInfo['TICK_ID'], data['AMOUNT'], 'sub');
-
-        // Store the SOURCE and TICK in addresses list
+        // Store the SOURCE, contract address, and TICK in addresses list
         this.util.addAddressTicker(data['SOURCE'], data['TICK']);
+        if(status === 'valid')
+            this.util.addAddressTicker(contractAddress, data['TICK']);
 
         // Array of credits and debits
         let credits = [],
             debits  = [];
 
-        // Credit to SOURCE (no gas fee — on-chain tx cost is sufficient)
-        if(status === 'valid')
+        // Debit from contract derived address, credit to SOURCE
+        if(status === 'valid'){
+            debits.push([data['TICK'], data['AMOUNT'], contractAddress]);
             credits.push([data['TICK'], data['AMOUNT'], data['SOURCE']]);
+        }
 
         // Process any transaction ledger changes (credits / debits)
         await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits);

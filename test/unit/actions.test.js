@@ -69,6 +69,9 @@ function buildActions(protocolChangesOverrides = {}) {
         'actionOrder', 'actionOrderExpire', 'actionOrderMatch', 'actionSleep',
         'actionSend', 'actionSwap', 'actionSwapExpire', 'actionSwapMatch',
         'actionSweep', 'actionUnknown',
+        'actionDeploy', 'actionExecute', 'actionDeposit', 'actionWithdraw',
+        'actionStake', 'actionUnstake', 'actionDelegate', 'actionRevokeDelegation',
+        'actionClaimRewards', 'actionCoinpay', 'actionCoinpayExpire',
     ];
 
     const stubs = {};
@@ -205,12 +208,11 @@ describe('Actions.processTransaction() @regression @tier3', function () {
 
     // ── Aliases ───────────────────────────────────────────────────────────
 
-    it('resolves DEPLOY alias to ISSUE', async function () {
-        const { actions, stubs, indexer } = buildActions();
-        // protocolChanges.isDefined checks the resolved name — stub returns true always
-        await actions.processTransaction(makeTx({ data: 'DEPLOY|0|TEST|1000|100|8' }));
-        assert.ok(stubs.actionIssue.calledOnce, 'DEPLOY should route to actionIssue.parse');
-        assert.ok(stubs.actionSend.notCalled);
+    it('routes DEPLOY to actionDeploy.parse', async function () {
+        const { actions, stubs } = buildActions();
+        await actions.processTransaction(makeTx({ data: 'DEPLOY|0|abcdef|1000' }));
+        assert.ok(stubs.actionDeploy.calledOnce, 'DEPLOY should route to actionDeploy.parse');
+        assert.ok(stubs.actionIssue.notCalled);
     });
 
     it('resolves TRANSFER alias to SEND', async function () {

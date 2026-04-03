@@ -60,6 +60,14 @@ const execute            = require('./actions/execute.js');
 const deposit            = require('./actions/deposit.js');
 const withdraw           = require('./actions/withdraw.js');
 
+// VM runtime
+let XChainVM;
+try {
+    XChainVM = require('xchain-vm');
+} catch(e) {
+    console.log('WARNING: xchain-vm not available — DEPLOY/EXECUTE will not run contract code');
+}
+
 // Staking actions
 const stake              = require('./actions/stake.js');
 const unstake            = require('./actions/unstake.js');
@@ -118,6 +126,24 @@ class Actions {
         this.actionSwapMatch       = new swap_match(this);
         this.actionSweep           = new sweep(this);
         this.actionUnknown         = new unknown(this);
+
+        // VM runtime
+        if(XChainVM){
+            this.vm = new XChainVM({
+                gasSchedule: this.config['GAS_SCHEDULE'],
+                gasCeiling:  1000000,
+                limits: {
+                    maxCpuTimeMs:      30000,
+                    maxMemory:         8,
+                    maxEmissions:      50,
+                    maxStateKeys:      10000,
+                    maxStateValueSize: 65536,
+                    maxCodeSize:       65536
+                }
+            });
+        } else {
+            this.vm = null;
+        }
 
         // VM action instances
         this.actionDeploy           = new deploy(this);
