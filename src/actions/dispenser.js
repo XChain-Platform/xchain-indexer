@@ -265,8 +265,17 @@ class Dispenser {
         fees['AMOUNT'] = 0;
 
         // Calculate the fee to charge based on the EXPIRATION
-        if(!error && !this.util.isNull(data['EXPIRATION']))
-            fees['AMOUNT'] = this.util.getExpirationFee(data, dispenserInfo);
+        if(!error && !this.util.isNull(data['EXPIRATION'])){
+            let unifiedFees = await this.actions.protocolChanges.isEnabled('UNIFIED_FEES', data['BLOCK_INDEX']);
+            if(unifiedFees){
+                let result = this.util.getUnifiedExpirationFee(data, dispenserInfo);
+                fees['GAS_COST']    = result.gasCost;
+                fees['AMOUNT']      = result.fee;
+                fees['FEE_VERSION'] = 2;
+            } else {
+                fees['AMOUNT'] = this.util.getExpirationFee(data, dispenserInfo);
+            }
+        }
 
         // Verify SOURCE has enough balances to cover FEE AMOUNT
         if(!error && !this.util.hasBalance(balances, fees['TICK_ID'], fees['AMOUNT']))

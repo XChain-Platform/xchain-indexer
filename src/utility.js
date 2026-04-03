@@ -508,7 +508,6 @@ class Utility {
 
     // Create the basic fees object used to calculate platform transaction fees
     async createFeesObject(db, data, preferences){
-        // TODO: Change TICK from GAS to XCHAIN
         let tick    = this.config['GAS'];
         let tick_id = await db.getTickerId(tick);
         let fees = {
@@ -517,18 +516,43 @@ class Utility {
             TICK         : tick,
             TICK_ID      : tick_id,
             AMOUNT       : 0,
-            METHOD       : (preferences['FEE_PREFERENCE']==1) ? 1 : 2 // 1=Destroy, 2=Donate
+            METHOD       : (preferences['FEE_PREFERENCE']==1) ? 1 : 2, // 1=Destroy, 2=Donate
+            // Unified gas fields (populated when UNIFIED_FEES is active)
+            GAS_COST     : 0,
+            GAS_PRICE    : this.config['GAS_PRICE'] || '0.00001',
+            PAYMENT_MODE : 2, // 2=xchain_balance (Track A default)
+            FEE_VERSION  : 1  // 1=legacy, updated to 2 when unified fees active
         };
         return fees;
     }
 
-    // Calculate Transaction fee based on number of database hits
-    // TODO: Make this code modular, so we can configure fees on actions on a per-chain basis
+    // Calculate Transaction fee based on number of database hits (legacy)
     getTransactionFee(db_hits, tick){
         let cost = 1000,                              // Cost in sats per DB hit
             sats = this.bcmul(db_hits, cost , 0),     // FEE in sats (integer)
             fee  = this.bcmul(sats, '0.00000001', 8); // FEE in decimal (divisible)
         return fee;
+    }
+
+    // Calculate Transaction fee using unified gas schedule (per-recipient)
+    getUnifiedTransactionFee(recipients, gasType){
+        let schedule  = this.config['GAS_SCHEDULE'];
+        let gasPerRecipient = schedule[gasType] || 100;
+        let gasCost   = this.bcmul(recipients, gasPerRecipient, 0);
+        let fee       = this.bcmul(gasCost, this.config['GAS_PRICE'], 8);
+        return { gasCost: gasCost, fee: fee };
+    }
+
+    // Get fee payment mode (Track A: always 'xchain')
+    getFeePaymentMode(){
+        return this.config['FEE_PAYMENT_MODE'] || 'xchain';
+    }
+
+    // Validate native coin fee (stub for Track B — not called in Track A)
+    validateNativeCoinFee(data){
+        // Track B: scan transaction outputs for payment to FEE_DESTINATION address
+        // Track B: query price_snapshots for oracle price and validate within tolerance band
+        return false;
     }
 
     // Convert NUMBER fields from string value to number value so comparisons are mathematical
@@ -541,7 +565,7 @@ class Utility {
         return data;
     }
 
-    // Calculate Transaction fee based on number of database hits
+    // Calculate expiration fee (legacy — per-chain rate)
     getExpirationFee(data, info){
         let fee    = 0,
             format = data['FORMAT'];
@@ -564,6 +588,38 @@ class Utility {
             }
         }
         return fee;
+    }
+
+    // Calculate expiration fee (unified gas schedule)
+    getUnifiedExpirationFee(data, info){
+        let schedule  = this.config['GAS_SCHEDULE'];
+        let freeDays  = this.config['UNIFIED_EXPIRATION_FEE_FREE_DAYS'] || 90;
+        let gasCost   = 0;
+        let fee       = 0;
+        let format    = data['FORMAT'];
+        // Create Order / Swap / Dispenser
+        if(format==0){
+            let expire_seconds = this.bcsub(data['EXPIRATION'], data['BLOCK_TIME'], 0);
+            let expire_days    = this.bcdiv(expire_seconds, 86400, 0);
+            let chargeableDays = this.bcsub(expire_days, freeDays, 0);
+            if(this.bcgt(chargeableDays, 0)){
+                gasCost = this.bcmul(chargeableDays, schedule.EXPIRATION_PER_DAY, 0);
+                fee     = this.bcmul(gasCost, this.config['GAS_PRICE'], 8);
+            }
+        }
+        // Edit Order / Swap / Dispenser
+        if(format==2 && info && this.bcgt(data['EXPIRATION'], info['EXPIRATION'])){
+            let orig_expire_seconds = this.bcsub(info['EXPIRATION'], info['BLOCK_TIME'], 0);
+            let orig_expire_days    = this.bcdiv(orig_expire_seconds, 86400, 0);
+            let edit_expire_seconds = this.bcsub(data['EXPIRATION'], info['BLOCK_TIME'], 0);
+            let edit_expire_days    = this.bcdiv(edit_expire_seconds, 86400, 0);
+            if(this.bcgt(edit_expire_days, freeDays)){
+                let additionalDays = this.bcsub(edit_expire_days, orig_expire_days, 0);
+                gasCost = this.bcmul(additionalDays, schedule.EXPIRATION_PER_DAY, 0);
+                fee     = this.bcmul(gasCost, this.config['GAS_PRICE'], 8);
+            }
+        }
+        return { gasCost: gasCost, fee: fee };
     }
 
     // Determine if a tx hash is valid or not
@@ -612,7 +668,7 @@ class Utility {
     // Process any transaction FEE according the user's ADDRESS preferences
     async processTransactionFees(db, credits, debits, fees){
         if(this.bcgt(fees['AMOUNT'], 0)){
-            // Debit FEE from SOURCE
+            // Debit FEE from SOURCE (XCHAIN balance deduction)
             debits.push([fees['TICK'], fees['AMOUNT'], fees['SOURCE']]);
             // Handle using FEE according the the users ADDRESS preferences
             if(fees['METHOD']>1){
@@ -624,7 +680,7 @@ class Utility {
                 this.addAddressTicker(fees['DESTINATION'], fees['TICK']);
                 // Credit donation address with FEE
                 credits.push([fees['TICK'], fees['AMOUNT'], fees['DESTINATION']]);
-            } 
+            }
             // Create record of FEE in `fees` table
             await db.createFeeRecord(fees);
         }

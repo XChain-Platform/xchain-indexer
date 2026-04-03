@@ -1,0 +1,171 @@
+/*********************************************************************
+ *
+ * Copyright © 2025 Dankest, LLC
+ * Based on XChain Platform by Dankest, LLC – https://dankest.llc
+ *
+ * Licensed under the Dankest Community License (Apache License 2.0 + Additional Terms).
+ * You may not use this file except in compliance with that License.
+ *
+ * A copy of the License is available at:
+ *     https://dankest.llc/license
+ *
+ * This software is provided "AS IS", without warranties or conditions of any kind.
+ *
+ **********************************************************************
+ *
+ * XChain Platform Action - STAKE
+ *
+ * This action stakes XCHAIN tokens for hub validation.
+ * BTC chain only.
+ *
+ * PARAMS:
+ * - VERSION        - Format Version
+ * - TIER           - Staking tier (1=oracle, 2=cross-chain)
+ * - CHAINS         - Comma-separated chains to validate (Tier 2 only)
+ * - SIGNING_PUBKEY - Ed25519 signing public key
+ *
+ * FORMATS:
+ * - 0 = Stake XCHAIN for validation
+ *
+ ********************************************************************/
+
+class Stake {
+
+    // Handle constructing a class instance
+    constructor(action){
+        // Setup short aliases
+        this.actions   = action;
+        this.config    = action.config;
+        this.decoderDb = action.decoderDb;
+        this.indexerDb = action.indexerDb;
+        this.util      = action.util;
+        this.mapper    = action.mapper;
+
+        // Define list of known FORMATS
+        this.formats = {};
+        this.formats[0] = 'VERSION|TIER|CHAINS|SIGNING_PUBKEY';
+    }
+
+    // Handle parsing the STAKE transaction
+    async parse(params, data, error){
+
+        // Validate that format is known
+        let format = data['FORMAT'];
+        if(!error && (format===null || this.formats[format] === undefined ))
+            error = 'invalid: VERSION (unknown)';
+
+        // Extract params
+        data['TIER']           = params[1];
+        data['CHAINS']         = params[2];
+        data['SIGNING_PUBKEY'] = params[3];
+
+        // Convert NUMBER fields from string value to number value
+        if(!error)
+            data = this.util.setNumberFormats(data);
+
+        /*****************************************************************
+         * Chain Restriction
+         ****************************************************************/
+
+        // STAKE is BTC-only
+        if(!error && data['COIN'] !== 'BTC')
+            error = 'invalid: ACTION (BTC only)';
+
+        /*****************************************************************
+         * TIER Validations
+         ****************************************************************/
+
+        // Verify TIER is valid (1=oracle, 2=cross-chain)
+        if(!error && ![1, 2].includes(data['TIER']))
+            error = 'invalid: TIER (unknown)';
+
+        // Verify CHAINS is provided for Tier 2
+        if(!error && data['TIER'] === 2 && this.util.isNull(data['CHAINS']))
+            error = 'invalid: CHAINS (required for tier 2)';
+
+        // Verify CHAINS is empty for Tier 1
+        if(!error && data['TIER'] === 1 && !this.util.isNull(data['CHAINS']) && data['CHAINS'] !== '')
+            error = 'invalid: CHAINS (not allowed for tier 1)';
+
+        // Validate CHAINS values if provided
+        if(!error && data['TIER'] === 2){
+            let validChains = this.config['COINS']; // ['BTC', 'LTC', 'DOGE']
+            let chains = String(data['CHAINS']).split(',');
+            for(let chain of chains){
+                if(!validChains.includes(chain.trim()))
+                    error = 'invalid: CHAINS (unknown chain)';
+            }
+        }
+
+        /*****************************************************************
+         * SIGNING_PUBKEY Validations
+         ****************************************************************/
+
+        // Verify SIGNING_PUBKEY is provided
+        if(!error && this.util.isNull(data['SIGNING_PUBKEY']))
+            error = 'invalid: SIGNING_PUBKEY (required)';
+
+        // Verify SIGNING_PUBKEY is 64 hex characters (Ed25519)
+        if(!error && !/^[0-9a-fA-F]{64}$/.test(data['SIGNING_PUBKEY']))
+            error = 'invalid: SIGNING_PUBKEY (format)';
+
+        /*****************************************************************
+         * Balance Validations
+         ****************************************************************/
+
+        // Get XCHAIN token info
+        let gas = this.config['GAS'];
+        let tokenInfo = await this.indexerDb.getTokenInfo(gas, data['BLOCK_INDEX'], data['ACTION_INDEX']);
+
+        // Get source address balances
+        let balances = await this.indexerDb.getAddressBalances(data['SOURCE'], null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
+
+        // TODO: Define staking amounts per tier (placeholder — use full XCHAIN balance for now)
+        // For now, we record the stake but don't enforce a minimum amount
+        // The amount staked will be defined by protocol parameters
+
+        // Verify SOURCE is not sleeping
+        if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
+            error = 'invalid: SOURCE (sleeping)';
+
+        // Check that the signing pubkey is not already in use by another active stake
+        if(!error){
+            let existingStake = await this.indexerDb.getActiveStakeByPubkey(data['SIGNING_PUBKEY']);
+            if(existingStake)
+                error = 'invalid: SIGNING_PUBKEY (already in use)';
+        }
+
+        // Determine final status
+        let status = (error) ? error : 'valid';
+        data['STATUS'] = status;
+
+        // Print status message
+        console.log("\t STAKE : tier=" + data['TIER'] + ' : chains=' + data['CHAINS'] + ' : ' + data['STATUS']);
+
+        // Create record in stakes table
+        await this.indexerDb.createStake(data);
+
+        // Store the SOURCE and GAS tick in addresses list
+        this.util.addAddressTicker(data['SOURCE'], gas);
+
+        // Array of credits and debits
+        let credits = [],
+            debits  = [];
+
+        // Process any transaction ledger changes (credits / debits)
+        await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits);
+
+        // Get a list of tickers & addresses
+        let tickers   = this.util.getTickersList(),
+            addresses = Object.keys(this.util.getAddressesList());
+
+        // Update address balances and token supply
+        await this.indexerDb.updateBalances(addresses);
+        await this.indexerDb.updateTokens(tickers);
+
+        // Create action mappings
+        await this.mapper.createMappings(data);
+    }
+}
+
+module.exports = Stake;

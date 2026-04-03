@@ -73,8 +73,23 @@ class ProtocolChanges {
         this.addChange('COINPAY',        '1.0.0',0,0,0,0,0,0);
         this.addChange('COINPAY_EXPIRE', '1.0.0',0,0,0,0,0,0);
 
+        // VM actions (all chains)
+        this.addChange('DEPLOY',             '2.0.0',0,0,0,0,0,0);
+        this.addChange('EXECUTE',            '2.0.0',0,0,0,0,0,0);
+        this.addChange('DEPOSIT',            '2.0.0',0,0,0,0,0,0);
+        this.addChange('WITHDRAW',           '2.0.0',0,0,0,0,0,0);
+
+        // Staking actions (BTC only)
+        this.addChange('STAKE',              '2.0.0',0,0,0,0,0,0);
+        this.addChange('UNSTAKE',            '2.0.0',0,0,0,0,0,0);
+        this.addChange('DELEGATE',           '2.0.0',0,0,0,0,0,0);
+        this.addChange('REVOKE_DELEGATION',  '2.0.0',0,0,0,0,0,0);
+        this.addChange('CLAIM_REWARDS',      '2.0.0',0,0,0,0,0,0);
+
         // Define protocol changes (ALL LOWER Case)
         // this.addChange('name','1.0.0',0,0,0,0,0,0);
+        this.addChange('UNIFIED_FEES',   '2.0.0',0,0,0,0,0,0);
+        this.addChange('VM_ACTIONS',     '2.0.0',0,0,0,0,0,0);
 
     }
 
