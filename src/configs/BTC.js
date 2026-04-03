@@ -38,6 +38,13 @@ module.exports = {
         config['GAS_PRICE'] = '0.00001';                     // XCHAIN per gas unit
         config['UNIFIED_EXPIRATION_FEE_FREE_DAYS'] = 90;     // 90 days free (reduced from 182)
         config['FEE_PAYMENT_MODE'] = 'xchain';               // 'xchain' initially; 'native' added in Track B
+        config['STAKING'] = {
+            COOLDOWN_BLOCKS: 1000,                             // Blocks before unstaked XCHAIN is returned
+            TIERS: {
+                1: { AMOUNT: '1000.00000000' },                // Tier 1: Oracle validator
+                2: { AMOUNT: '5000.00000000' },                // Tier 2: Cross-chain validator
+            }
+        };
         config['GAS_SCHEDULE'] = {
             ISSUE:              100000,
             ISSUE_SUBTOKEN:     50000,

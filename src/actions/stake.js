@@ -76,19 +76,20 @@ class Stake {
          ****************************************************************/
 
         // Verify TIER is valid (1=oracle, 2=cross-chain)
-        if(!error && ![1, 2].includes(data['TIER']))
+        let tier = parseInt(data['TIER']);
+        if(!error && ![1, 2].includes(tier))
             error = 'invalid: TIER (unknown)';
 
         // Verify CHAINS is provided for Tier 2
-        if(!error && data['TIER'] === 2 && this.util.isNull(data['CHAINS']))
+        if(!error && tier === 2 && this.util.isNull(data['CHAINS']))
             error = 'invalid: CHAINS (required for tier 2)';
 
         // Verify CHAINS is empty for Tier 1
-        if(!error && data['TIER'] === 1 && !this.util.isNull(data['CHAINS']) && data['CHAINS'] !== '')
+        if(!error && tier === 1 && !this.util.isNull(data['CHAINS']) && data['CHAINS'] !== '')
             error = 'invalid: CHAINS (not allowed for tier 1)';
 
         // Validate CHAINS values if provided
-        if(!error && data['TIER'] === 2){
+        if(!error && tier === 2){
             let validChains = this.config['COINS']; // ['BTC', 'LTC', 'DOGE']
             let chains = String(data['CHAINS']).split(',');
             for(let chain of chains){
@@ -113,16 +114,26 @@ class Stake {
          * Balance Validations
          ****************************************************************/
 
-        // Get XCHAIN token info
+        // Get XCHAIN token info and staking config
         let gas = this.config['GAS'];
-        let tokenInfo = await this.indexerDb.getTokenInfo(gas, data['BLOCK_INDEX'], data['ACTION_INDEX']);
+        let staking = this.config['STAKING'];
+        let tierConfig = (staking && staking['TIERS']) ? staking['TIERS'][tier] : null;
 
-        // Get source address balances
+        // Verify staking config exists for this tier
+        if(!error && !tierConfig)
+            error = 'invalid: TIER (no staking config)';
+
+        // Look up the required staking amount for this tier
+        let stakeAmount = tierConfig ? tierConfig['AMOUNT'] : '0';
+        data['AMOUNT'] = stakeAmount;
+
+        // Get token info and source address balances
+        let tokenInfo = await this.indexerDb.getTokenInfo(gas, data['BLOCK_INDEX'], data['ACTION_INDEX']);
         let balances = await this.indexerDb.getAddressBalances(data['SOURCE'], null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
 
-        // TODO: Define staking amounts per tier (placeholder — use full XCHAIN balance for now)
-        // For now, we record the stake but don't enforce a minimum amount
-        // The amount staked will be defined by protocol parameters
+        // Verify SOURCE has sufficient XCHAIN balance
+        if(!error && tokenInfo && !this.util.hasBalance(balances, tokenInfo['TICK_ID'], stakeAmount))
+            error = 'invalid: insufficient funds (STAKE)';
 
         // Verify SOURCE is not sleeping
         if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
@@ -133,6 +144,13 @@ class Stake {
             let existingStake = await this.indexerDb.getActiveStakeByPubkey(data['SIGNING_PUBKEY']);
             if(existingStake)
                 error = 'invalid: SIGNING_PUBKEY (already in use)';
+        }
+
+        // Check that SOURCE does not already have an active stake at this tier
+        if(!error){
+            let existingStakeBySource = await this.indexerDb.getActiveStakeBySource(data['SOURCE'], tier);
+            if(existingStakeBySource)
+                error = 'invalid: SOURCE (already staked at this tier)';
         }
 
         // Determine final status
@@ -151,6 +169,10 @@ class Stake {
         // Array of credits and debits
         let credits = [],
             debits  = [];
+
+        // If valid, debit the stake amount from SOURCE
+        if(status == 'valid')
+            debits.push([gas, data['AMOUNT'], data['SOURCE']]);
 
         // Process any transaction ledger changes (credits / debits)
         await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits);
