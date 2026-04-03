@@ -72,7 +72,8 @@ class Unstake {
          ****************************************************************/
 
         // Verify TIER is valid (1=oracle, 2=cross-chain)
-        if(!error && ![1, 2].includes(data['TIER']))
+        let tier = parseInt(data['TIER']);
+        if(!error && ![1, 2].includes(tier))
             error = 'invalid: TIER (unknown)';
 
         /*****************************************************************
@@ -82,7 +83,7 @@ class Unstake {
         // Verify SOURCE has an active stake at this tier
         let activeStake = null;
         if(!error){
-            activeStake = await this.indexerDb.getActiveStakeBySource(data['SOURCE'], data['TIER']);
+            activeStake = await this.indexerDb.getActiveStakeBySource(data['SOURCE'], tier);
             if(!activeStake)
                 error = 'invalid: no active stake at tier';
         }
@@ -91,9 +92,9 @@ class Unstake {
         if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
             error = 'invalid: SOURCE (sleeping)';
 
-        // Calculate cooldown end block
-        // TODO: Define cooldown period per tier (placeholder — 1000 blocks)
-        let cooldownBlocks = 1000;
+        // Calculate cooldown end block from staking config
+        let staking = this.config['STAKING'];
+        let cooldownBlocks = (staking && staking['COOLDOWN_BLOCKS']) ? staking['COOLDOWN_BLOCKS'] : 1000;
         data['COOLDOWN_END_BLOCK'] = data['BLOCK_INDEX'] + cooldownBlocks;
         data['AMOUNT'] = activeStake ? activeStake.amount : '0';
 
