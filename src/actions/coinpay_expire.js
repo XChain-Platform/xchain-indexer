@@ -111,8 +111,8 @@ class Coinpay_Expire {
         // Update ORDER_MATCH status to 'expired'
         await this.indexerDb.createOrderStatus(data['ACTION_INDEX'], obligationInfo['ACTION_INDEX'], 'expired');
 
-        // Cancel the coin-offering party's order (they failed to pay in time)
-        await this.indexerDb.createOrderStatus(data['ACTION_INDEX'], coinOrder['ACTION_INDEX'], 'cancelled');
+        // The coin-offering party's order stays open — it can match with other sellers.
+        // Only the ORDER_MATCH is expired, not the order itself.
 
         // Check if the seller's order is in a transitional state and can be finalized
         let sellerStatus = sellerOrder['ORDER_STATUS'];
