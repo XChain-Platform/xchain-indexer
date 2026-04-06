@@ -543,16 +543,108 @@ class Utility {
         return { gasCost: gasCost, fee: fee };
     }
 
-    // Get fee payment mode (Track A: always 'xchain')
-    getFeePaymentMode(){
-        return this.config['FEE_PAYMENT_MODE'] || 'xchain';
+    // Detect fee payment mode from the transaction
+    // Returns: 'native' if fee output present, 'xchain' if absent on BTC, 'rejected' if absent on LTC/DOGE
+    detectFeePaymentMode(data, decoderDb, txOutputs){
+        let feeDestination = this.config['ADDRESS'] ? this.config['ADDRESS']['FEE_DESTINATION'] : null;
+        if(!feeDestination || feeDestination === 'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX') {
+            // No fee destination configured — fall back to xchain balance deduction
+            return 'xchain';
+        }
+
+        // Check if any transaction output pays to the fee destination address
+        let feeOutput = null;
+        if(txOutputs && Array.isArray(txOutputs)){
+            for(let output of txOutputs){
+                if(output.address === feeDestination || output.scriptPubKey_address === feeDestination){
+                    feeOutput = output;
+                    break;
+                }
+            }
+        }
+
+        if(feeOutput){
+            return 'native'; // Fee output found — native coin payment
+        }
+
+        // No fee output — implicit detection
+        let coin = this.config['COIN'] || data['COIN'];
+        if(coin === 'BTC'){
+            return 'xchain'; // BTC allows XCHAIN balance deduction as fallback
+        }
+
+        // LTC/DOGE: native coin is the only option — missing fee output = rejected
+        return 'rejected';
     }
 
-    // Validate native coin fee (stub for Track B — not called in Track A)
-    validateNativeCoinFee(data){
-        // Track B: scan transaction outputs for payment to FEE_DESTINATION address
-        // Track B: query price_snapshots for oracle price and validate within tolerance band
-        return false;
+    // Validate a native coin fee output against oracle price
+    // Returns: { valid, nativeCoinAmount, oracleRound, error }
+    async validateNativeCoinFee(data, fees, db, txOutputs){
+        let feeDestination = this.config['ADDRESS']['FEE_DESTINATION'];
+        let toleranceMin = parseFloat(this.config['FEE_TOLERANCE_MIN'] || '0.95');
+        let toleranceMax = parseFloat(this.config['FEE_TOLERANCE_MAX'] || '1.10');
+
+        // Find the fee output
+        let feeOutput = null;
+        if(txOutputs && Array.isArray(txOutputs)){
+            for(let output of txOutputs){
+                if(output.address === feeDestination || output.scriptPubKey_address === feeDestination){
+                    feeOutput = output;
+                    break;
+                }
+            }
+        }
+
+        if(!feeOutput){
+            return { valid: false, error: 'no fee output to FEE_DESTINATION' };
+        }
+
+        let paidAmount = parseFloat(feeOutput.value || feeOutput.amount || 0);
+        if(paidAmount <= 0){
+            return { valid: false, error: 'fee output has zero value' };
+        }
+
+        // Get the XCHAIN fee amount (already calculated by the action handler)
+        let xchainAmount = parseFloat(fees['AMOUNT']);
+        if(xchainAmount <= 0){
+            // No fee required — accept
+            return { valid: true, nativeCoinAmount: '0', oracleRound: 0 };
+        }
+
+        // Get oracle prices: XCHAIN/USD and COIN/USD
+        let coin = this.config['COIN'] || data['COIN'];
+        let coinPriceData = await db.getLatestPrice(coin + '/USD');
+        if(!coinPriceData || !coinPriceData.price){
+            return { valid: false, error: 'no oracle price for ' + coin + '/USD' };
+        }
+
+        let coinUsdPrice = parseFloat(coinPriceData.price);
+        if(coinUsdPrice <= 0){
+            return { valid: false, error: 'invalid oracle price for ' + coin + '/USD' };
+        }
+
+        // Calculate expected native coin amount
+        // For now, use XCHAIN = $1 placeholder until XCHAIN/USD oracle is live
+        let xchainUsdPrice = 1.0;
+        let feeUsd = xchainAmount * xchainUsdPrice;
+        let expectedNative = feeUsd / coinUsdPrice;
+
+        // Apply tolerance band
+        let minAcceptable = expectedNative * toleranceMin;
+        let maxAcceptable = expectedNative * toleranceMax;
+
+        if(paidAmount < minAcceptable){
+            return { valid: false, error: 'insufficient native coin fee (paid: ' + paidAmount.toFixed(8) +
+                ', expected: ' + expectedNative.toFixed(8) + ', min: ' + minAcceptable.toFixed(8) + ')' };
+        }
+
+        return {
+            valid:            true,
+            nativeCoinAmount: paidAmount.toFixed(8),
+            nativeCoin:       coin,
+            oracleRound:      coinPriceData.roundNumber,
+            expectedAmount:   expectedNative.toFixed(8)
+        };
     }
 
     // Convert NUMBER fields from string value to number value so comparisons are mathematical
@@ -668,19 +760,24 @@ class Utility {
     // Process any transaction FEE according the user's ADDRESS preferences
     async processTransactionFees(db, credits, debits, fees){
         if(this.bcgt(fees['AMOUNT'], 0)){
-            // Debit FEE from SOURCE (XCHAIN balance deduction)
-            debits.push([fees['TICK'], fees['AMOUNT'], fees['SOURCE']]);
-            // Handle using FEE according the the users ADDRESS preferences
-            if(fees['METHOD']>1){
-                // Short alias to config addresses
-                let address = this.config['ADDRESS'];
-                // Determine what address to donate to
-                fees['DESTINATION'] = (fees['METHOD']==2) ? address['DONATE1'] : address['DONATE2'];
-                // Store the donation ADDRESS and TICK in addresses list
-                this.addAddressTicker(fees['DESTINATION'], fees['TICK']);
-                // Credit donation address with FEE
-                credits.push([fees['TICK'], fees['AMOUNT'], fees['DESTINATION']]);
+            let paymentMode = fees['PAYMENT_MODE'] || 2;
+
+            if(paymentMode === 1){
+                // Native coin payment mode — fee is paid via on-chain output
+                // No XCHAIN debit or credit — the native coin is already in the fee destination address
+                // Just record the fee in the fees table
+            } else {
+                // XCHAIN balance deduction mode (default / Track A)
+                debits.push([fees['TICK'], fees['AMOUNT'], fees['SOURCE']]);
+                // Handle using FEE according the the users ADDRESS preferences
+                if(fees['METHOD']>1){
+                    let address = this.config['ADDRESS'];
+                    fees['DESTINATION'] = (fees['METHOD']==2) ? address['DONATE1'] : address['DONATE2'];
+                    this.addAddressTicker(fees['DESTINATION'], fees['TICK']);
+                    credits.push([fees['TICK'], fees['AMOUNT'], fees['DESTINATION']]);
+                }
             }
+
             // Create record of FEE in `fees` table
             await db.createFeeRecord(fees);
         }

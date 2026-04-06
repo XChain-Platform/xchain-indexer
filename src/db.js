@@ -2577,12 +2577,16 @@ class Database {
         let amount         = data['AMOUNT'];
         let method         = data['METHOD'];
         // Unified gas fields (default to legacy values if not present)
-        let gas_cost        = data['GAS_COST'] || 0;
-        let gas_price       = data['GAS_PRICE'] || '0';
-        let xchain_amount   = data['XCHAIN_AMOUNT'] || amount || '0';
-        let payment_mode    = data['PAYMENT_MODE'] || 2;
-        let fee_preference  = data['FEE_PREFERENCE'] || method || 2;
-        let fee_version     = data['FEE_VERSION'] || 1;
+        let gas_cost           = data['GAS_COST'] || 0;
+        let gas_price          = data['GAS_PRICE'] || '0';
+        let xchain_amount      = data['XCHAIN_AMOUNT'] || amount || '0';
+        let payment_mode       = data['PAYMENT_MODE'] || 2;
+        let fee_preference     = data['FEE_PREFERENCE'] || method || 2;
+        let fee_version        = data['FEE_VERSION'] || 1;
+        // Native coin fields (Track B — null for XCHAIN balance payments)
+        let native_coin_amount = data['NATIVE_COIN_AMOUNT'] || null;
+        let native_coin        = data['NATIVE_COIN'] || null;
+        let oracle_round       = data['ORACLE_ROUND'] || null;
         // Check if record already exists
         let query = `SELECT action_index FROM fees WHERE action_index=?`;
         let args = [action_index];
@@ -2594,20 +2598,24 @@ class Database {
             query = `UPDATE fees SET
                         tick_id=?, destination_id=?, amount=?, method=?,
                         gas_cost=?, gas_price=?, xchain_amount=?,
-                        payment_mode=?, fee_preference=?, fee_version=?
+                        payment_mode=?, fee_preference=?, fee_version=?,
+                        native_coin_amount=?, native_coin=?, oracle_round=?
                     WHERE action_index=?`;
             args = [tick_id, destination_id, amount, method,
                     gas_cost, gas_price, xchain_amount,
-                    payment_mode, fee_preference, fee_version, action_index];
+                    payment_mode, fee_preference, fee_version,
+                    native_coin_amount, native_coin, oracle_round, action_index];
         } else {
             query = `INSERT INTO fees
                         (tick_id, destination_id, amount, method,
                          gas_cost, gas_price, xchain_amount,
-                         payment_mode, fee_preference, fee_version, action_index)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+                         payment_mode, fee_preference, fee_version,
+                         native_coin_amount, native_coin, oracle_round, action_index)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
             args = [tick_id, destination_id, amount, method,
                     gas_cost, gas_price, xchain_amount,
-                    payment_mode, fee_preference, fee_version, action_index];
+                    payment_mode, fee_preference, fee_version,
+                    native_coin_amount, native_coin, oracle_round, action_index];
         }
         results = await this.doQuery(query, args);
     }
@@ -6909,12 +6917,66 @@ class Database {
      * VM Integration — Oracle / Cross-Chain Stubs
      ****************************************************************/
 
-    // Oracle data stub — returns no-data accessors until Track B
+    // Oracle data accessor — reads from price_snapshots table
+    // Returns an accessor object that the VM gateway uses for xchain.oracle.*
     async getOracleDataForVM(blockIndex){
+        let self = this;
+
+        // Pre-load the latest finalized snapshot age (blocks since last snapshot)
+        let ageQuery = "SELECT MAX(reference_block) AS latest_block FROM price_snapshots WHERE status = 'finalized'";
+        let ageRows = await this.doQuery(ageQuery);
+        let latestBlock = (ageRows.length > 0 && ageRows[0].latest_block !== null) ? ageRows[0].latest_block : 0;
+        let snapshotAge = (blockIndex && latestBlock > 0) ? Math.max(0, blockIndex - latestBlock) : Number.MAX_SAFE_INTEGER;
+
         return {
-            getPrice:        (coinPair) => null,
-            getPriceAtRound: (coinPair, round) => null,
-            getSnapshotAge:  () => Number.MAX_SAFE_INTEGER
+            // Get the most recent finalized price at or before the current block
+            getPrice: async (coinPair) => {
+                let query = `SELECT price, round_number, block_timestamp
+                             FROM price_snapshots
+                             WHERE coin_pair = ? AND status = 'finalized' AND price IS NOT NULL
+                               AND reference_block <= ?
+                             ORDER BY round_number DESC LIMIT 1`;
+                let rows = await self.doQuery(query, [coinPair, blockIndex || 999999999]);
+                if(rows.length === 0) return null;
+                return {
+                    price:       rows[0].price,
+                    roundNumber: Number(rows[0].round_number),
+                    timestamp:   Number(rows[0].block_timestamp)
+                };
+            },
+
+            // Get a specific historical finalized snapshot
+            getPriceAtRound: async (coinPair, roundNumber) => {
+                let query = `SELECT price, round_number, block_timestamp
+                             FROM price_snapshots
+                             WHERE coin_pair = ? AND round_number = ? AND status = 'finalized' AND price IS NOT NULL
+                             LIMIT 1`;
+                let rows = await self.doQuery(query, [coinPair, roundNumber]);
+                if(rows.length === 0) return null;
+                return {
+                    price:       rows[0].price,
+                    roundNumber: Number(rows[0].round_number),
+                    timestamp:   Number(rows[0].block_timestamp)
+                };
+            },
+
+            // Get blocks since the last finalized snapshot
+            getSnapshotAge: () => snapshotAge
+        };
+    }
+
+    // Get the latest finalized price for a coin pair (used for fee validation)
+    async getLatestPrice(coinPair){
+        let query = `SELECT price, round_number, block_timestamp
+                     FROM price_snapshots
+                     WHERE coin_pair = ? AND status = 'finalized' AND price IS NOT NULL
+                     ORDER BY round_number DESC LIMIT 1`;
+        let rows = await this.doQuery(query, [coinPair]);
+        if(rows.length === 0) return null;
+        return {
+            price:       rows[0].price,
+            roundNumber: Number(rows[0].round_number),
+            timestamp:   Number(rows[0].block_timestamp)
         };
     }
 

@@ -252,12 +252,29 @@ class Swap {
             }
         }
 
-        // Verify SOURCE has enough balances to cover FEE AMOUNT
-        if(!error && !this.util.hasBalance(balances, fees['TICK_ID'], fees['AMOUNT']))
-            error = 'invalid: insufficient funds (FEE)';
+        // Validate fee payment (native coin or XCHAIN balance)
+        if(!error && this.util.bcgt(fees['AMOUNT'], 0)){
+            let paymentMode = this.util.detectFeePaymentMode(data, this.decoderDb, data['TX_OUTPUTS']);
+            if(paymentMode === 'native'){
+                let validation = await this.util.validateNativeCoinFee(data, fees, this.indexerDb, data['TX_OUTPUTS']);
+                if(!validation.valid){
+                    error = 'invalid: ' + (validation.error || 'native coin fee validation failed');
+                } else {
+                    fees['PAYMENT_MODE']       = 1;
+                    fees['NATIVE_COIN_AMOUNT'] = validation.nativeCoinAmount;
+                    fees['NATIVE_COIN']        = validation.nativeCoin;
+                    fees['ORACLE_ROUND']       = validation.oracleRound;
+                }
+            } else if(paymentMode === 'rejected'){
+                error = 'invalid: insufficient fee (native coin output required)';
+            } else {
+                if(!this.util.hasBalance(balances, fees['TICK_ID'], fees['AMOUNT']))
+                    error = 'invalid: insufficient funds (FEE)';
+            }
+        }
 
-        // Adjust balances to reduce by FEE AMOUNT
-        if(!error)
+        // Adjust balances to reduce by FEE AMOUNT (only for XCHAIN deduction mode)
+        if(!error && (!fees['PAYMENT_MODE'] || fees['PAYMENT_MODE'] === 2))
             balances = this.util.debitBalances(balances, fees['TICK_ID'], fees['AMOUNT']);
 
         // Determine final status

@@ -37,7 +37,9 @@ module.exports = {
         // Unified gas fee schedule (active after UNIFIED_FEES protocol change)
         config['GAS_PRICE'] = '0.00001';                     // XCHAIN per gas unit
         config['UNIFIED_EXPIRATION_FEE_FREE_DAYS'] = 90;     // 90 days free (reduced from 182)
-        config['FEE_PAYMENT_MODE'] = 'xchain';               // 'xchain' initially; 'native' added in Track B
+        config['FEE_PAYMENT_MODE'] = 'xchain';               // 'xchain' or 'native' (BTC supports both via implicit detection)
+        config['FEE_TOLERANCE_MIN'] = '0.95';                // Minimum acceptable fee (95% of expected)
+        config['FEE_TOLERANCE_MAX'] = '1.10';                // Maximum acceptable fee (110% of expected)
         config['STAKING'] = {
             COOLDOWN_BLOCKS: 1000,                             // Blocks before unstaked XCHAIN is returned
             TIERS: {
@@ -66,22 +68,25 @@ module.exports = {
 		// Set network specific addresses
         switch(network){
             case 'mainnet':
-                address['BURN']    = "1Muhahahahhahahahahahhahahauxh9QX";
-                address['GAS']     = "1BTNSGASK5En7rFurDJ79LQ8CVYo2ecLC8";
-                address['DONATE1'] = "1BTNSGASK5En7rFurDJ79LQ8CVYo2ecLC8"; // Protocol Development
-                address['DONATE2'] = "1BTNSGASK5En7rFurDJ79LQ8CVYo2ecLC8"; // Community Develoment
+                address['BURN']            = "1Muhahahahhahahahahahhahahauxh9QX";
+                address['GAS']             = "1BTNSGASK5En7rFurDJ79LQ8CVYo2ecLC8";
+                address['DONATE1']         = "1BTNSGASK5En7rFurDJ79LQ8CVYo2ecLC8"; // Protocol Development
+                address['DONATE2']         = "1BTNSGASK5En7rFurDJ79LQ8CVYo2ecLC8"; // Community Develoment
+                address['FEE_DESTINATION'] = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // Native coin fee destination (set pre-launch)
                 break;
             case 'testnet':
-                address['BURN']    = "mvCounterpartyXXXXXXXXXXXXXXW24Hef";
-                address['GAS']     = "mvThcDEbeqog2aJ7JNj1FefUPaNdYYGqHt";
-                address['DONATE1'] = "mvThcDEbeqog2aJ7JNj1FefUPaNdYYGqHt"; // Protocol Development
-                address['DONATE2'] = "mvThcDEbeqog2aJ7JNj1FefUPaNdYYGqHt"; // Community Develoment
+                address['BURN']            = "mvCounterpartyXXXXXXXXXXXXXXW24Hef";
+                address['GAS']             = "mvThcDEbeqog2aJ7JNj1FefUPaNdYYGqHt";
+                address['DONATE1']         = "mvThcDEbeqog2aJ7JNj1FefUPaNdYYGqHt"; // Protocol Development
+                address['DONATE2']         = "mvThcDEbeqog2aJ7JNj1FefUPaNdYYGqHt"; // Community Develoment
+                address['FEE_DESTINATION'] = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // Native coin fee destination (set pre-launch)
                 break;
             case 'regtest':
-                address['BURN']    = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
-                address['GAS']     = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
-                address['DONATE1'] = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // Protocol Development
-                address['DONATE2'] = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // Community Develoment
+                address['BURN']            = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
+                address['GAS']             = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
+                address['DONATE1']         = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // Protocol Development
+                address['DONATE2']         = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // Community Develoment
+                address['FEE_DESTINATION'] = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // Native coin fee destination
                 break;
         }
         config['ADDRESS'] = address;
