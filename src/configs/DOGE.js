@@ -37,7 +37,9 @@ module.exports = {
         // Unified gas fee schedule (active after UNIFIED_FEES protocol change)
         config['GAS_PRICE'] = '0.00001';
         config['UNIFIED_EXPIRATION_FEE_FREE_DAYS'] = 90;
-        config['FEE_PAYMENT_MODE'] = 'xchain';
+        config['FEE_PAYMENT_MODE'] = 'xchain';               // DOGE: 'native' only (no XCHAIN balance deduction)
+        config['FEE_TOLERANCE_MIN'] = '0.95';
+        config['FEE_TOLERANCE_MAX'] = '1.10';
         config['GAS_SCHEDULE'] = {
             ISSUE:              100000,
             ISSUE_SUBTOKEN:     50000,
@@ -59,22 +61,25 @@ module.exports = {
 		// Set network specific addresses
         switch(network){
             case 'mainnet':
-                address['BURN']    = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
-                address['GAS']     = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
-                address['DONATE1'] = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // Protocol Development
-                address['DONATE2'] = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // Community Develoment
+                address['BURN']            = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
+                address['GAS']             = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
+                address['DONATE1']         = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // Protocol Development
+                address['DONATE2']         = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // Community Develoment
+                address['FEE_DESTINATION'] = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // Native coin fee destination
                 break;
             case 'testnet':
-                address['BURN']    = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
-                address['GAS']     = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
-                address['DONATE1'] = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // Protocol Development
-                address['DONATE2'] = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // Community Develoment
+                address['BURN']            = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
+                address['GAS']             = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
+                address['DONATE1']         = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // Protocol Development
+                address['DONATE2']         = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // Community Develoment
+                address['FEE_DESTINATION'] = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // Native coin fee destination
                 break;
             case 'regtest':
-                address['BURN']    = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
-                address['GAS']     = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
-                address['DONATE1'] = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // Protocol Development
-                address['DONATE2'] = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // Community Develoment
+                address['BURN']            = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
+                address['GAS']             = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
+                address['DONATE1']         = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // Protocol Development
+                address['DONATE2']         = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // Community Develoment
+                address['FEE_DESTINATION'] = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // Native coin fee destination
                 break;
         }
         config['ADDRESS'] = address;

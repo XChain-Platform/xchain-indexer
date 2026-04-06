@@ -122,12 +122,31 @@ class Deploy {
         let tokenInfo = await this.indexerDb.getTokenInfo(gas, data['BLOCK_INDEX'], data['ACTION_INDEX']);
         let balances = await this.indexerDb.getAddressBalances(data['SOURCE'], null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
 
-        // Verify SOURCE has enough XCHAIN to cover gas fee
-        if(!error && tokenInfo && !this.util.hasBalance(balances, tokenInfo['TICK_ID'], fee))
-            error = 'invalid: insufficient funds (GAS)';
+        // Validate gas fee payment (native coin or XCHAIN balance)
+        let feePaymentMode = 2; // default: xchain balance
+        if(!error && tokenInfo && this.util.bcgt(fee, 0)){
+            let pmMode = this.util.detectFeePaymentMode(data, this.decoderDb, data['TX_OUTPUTS']);
+            if(pmMode === 'native'){
+                let tempFees = { AMOUNT: fee };
+                let validation = await this.util.validateNativeCoinFee(data, tempFees, this.indexerDb, data['TX_OUTPUTS']);
+                if(!validation.valid){
+                    error = 'invalid: ' + (validation.error || 'native coin fee validation failed');
+                } else {
+                    feePaymentMode = 1;
+                    data['NATIVE_COIN_AMOUNT'] = validation.nativeCoinAmount;
+                    data['NATIVE_COIN']        = validation.nativeCoin;
+                    data['ORACLE_ROUND']       = validation.oracleRound;
+                }
+            } else if(pmMode === 'rejected'){
+                error = 'invalid: insufficient fee (native coin output required)';
+            } else {
+                if(!this.util.hasBalance(balances, tokenInfo['TICK_ID'], fee))
+                    error = 'invalid: insufficient funds (GAS)';
+            }
+        }
 
-        // Adjust balances to reduce by gas fee
-        if(!error && tokenInfo)
+        // Adjust balances to reduce by gas fee (only for XCHAIN deduction mode)
+        if(!error && tokenInfo && feePaymentMode === 2)
             balances = this.util.debitBalances(balances, tokenInfo['TICK_ID'], fee);
 
         // Verify SOURCE is not sleeping
