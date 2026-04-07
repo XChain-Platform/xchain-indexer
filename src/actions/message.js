@@ -19,6 +19,7 @@
  * 
  * PARAMS:
  * - VERSION            - Format Version
+ * - COIN               - Destination coin network (BTC, LTC, DOGE)
  * - DESTINATION        - Address of the message or key recipient
  * - ENCRYPTION_METHOD  - Encryption Method (1=ECIES, 2=ECDH, 3=AES)
  * - ENCRYPTION_KEY     - public key to be used to exchange messages
@@ -47,10 +48,10 @@ class Message {
         
         // Define list of known FORMATS
         this.formats = {};
-        this.formats[0] = 'VERSION|DESTINATION|ENCRYPTION_METHOD|ENCRYPTION_KEY';
-        this.formats[1] = 'VERSION|DESTINATION|ENCRYPTION_METHOD|ENCRYPTION_KEY';
-        this.formats[2] = 'VERSION|DESTINATION|ENCRYPTED_MESSAGE';
-        this.formats[3] = 'VERSION|DESTINATION|PLAINTEXT_MESSAGE';
+        this.formats[0] = 'VERSION|COIN|DESTINATION|ENCRYPTION_METHOD|ENCRYPTION_KEY';
+        this.formats[1] = 'VERSION|COIN|DESTINATION|ENCRYPTION_METHOD|ENCRYPTION_KEY';
+        this.formats[2] = 'VERSION|COIN|DESTINATION|ENCRYPTED_MESSAGE';
+        this.formats[3] = 'VERSION|COIN|DESTINATION|PLAINTEXT_MESSAGE';
     }
 
     // Handle parsing the ADDRESS transaction
@@ -83,6 +84,10 @@ class Message {
         /*****************************************************************
          * FORMAT Validations
          ****************************************************************/
+
+        // Verify COIN is a valid coin
+        if(!error && !this.util.isNull(data['COIN']) && !this.config['COINS'].includes(String(data['COIN']).toUpperCase()))
+            error = "invalid: COIN (value)";
 
         // Verify DESTINATION address format
         if(!error && !this.util.isNull(data['DESTINATION']) && !this.util.isCryptoAddress(data['DESTINATION']))
