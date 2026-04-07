@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.3.0] - 2026-04-07
+
+### Added
+- `coin` column in `messages` table for cross-chain messaging — identifies the destination address network (BTC, LTC, DOGE)
+- COIN field validation in MESSAGE action parser
+
+### Changed
+- MESSAGE format strings updated to include COIN field: `VERSION|COIN|DESTINATION|...`
+- `createMessage()` stores the COIN value alongside other message fields
+
 ## [2.2.2] - 2026-04-07
 
 ### Changed

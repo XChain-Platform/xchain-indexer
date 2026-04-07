@@ -3071,6 +3071,7 @@ class Database {
         let destination_id    = await this.createAddress(data['DESTINATION']);
         let status_id         = await this.createStatus(data['STATUS']);
         let action_index      = data['ACTION_INDEX'];
+        let coin              = data['COIN'];
         let encryption_method = data['ENCRYPTION_METHOD'];
         let encryption_key    = data['ENCRYPTION_KEY'];
         let encrypted_message = data['ENCRYPTED_MESSAGE'];
@@ -3092,19 +3093,20 @@ class Database {
             query = `UPDATE
                         messages
                     SET
+                        coin=?,
                         encryption_method=?,
                         encryption_key=?,
                         encrypted_message=?,
                         plaintext_message=?,
                         destination_id=?,
                         status_id=?
-                    WHERE 
+                    WHERE
                         action_index=?`;
         } else {
             // INSERT record
-            query = `INSERT INTO messages (encryption_method, encryption_key, encrypted_message, plaintext_message, destination_id, status_id, action_index) values (?, ?, ?, ?, ?, ?, ?)`;
+            query = `INSERT INTO messages (coin, encryption_method, encryption_key, encrypted_message, plaintext_message, destination_id, status_id, action_index) values (?, ?, ?, ?, ?, ?, ?, ?)`;
         }
-        args    = [encryption_method, encryption_key, encrypted_message, plaintext_message, destination_id, status_id, action_index];
+        args    = [coin, encryption_method, encryption_key, encrypted_message, plaintext_message, destination_id, status_id, action_index];
         results = await this.doQuery(query, args);
     }        
 
