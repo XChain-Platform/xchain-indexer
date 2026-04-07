@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.2.1] - 2026-04-06
+
+### Changed
+- Move coverage badge to its own line in README.md for cleaner formatting
+
 ### Changed
 - README: update features list to reflect all 29 action types, VM integration, hub staking, COINPay, unified gas fees, contract derived addresses, and three block hashes
 
