@@ -20,7 +20,7 @@
  * PARAMS:
  * - VERSION            - Format Version
  * - DESTINATION        - Address of the message or key recipient
- * - ENCRYPTION_METHOD  - Encryption Method (1=ECDH, 2=AES)
+ * - ENCRYPTION_METHOD  - Encryption Method (1=ECIES, 2=ECDH, 3=AES)
  * - ENCRYPTION_KEY     - public key to be used to exchange messages
  * - ENCRYPTED_MESSAGE  - Message encryted with shared key
  * - PLAINTEXT_MESSAGE  - Plaintext message (visible to all!)

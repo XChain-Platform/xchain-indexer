@@ -116,8 +116,9 @@ module.exports = {
 
         // MESSAGE encryption methods
         config['MESSAGE_ENCRYPTION_METHODS'] = [
-            1, // Elliptic-curve Diffie–Hellman (ECDH) 
-            2, // Advanced Encryption Standard (AES)
+            1, // Elliptic Curve Integrated Encryption Scheme (ECIES)
+            2, // Elliptic-curve Diffie–Hellman (ECDH)
+            3, // Advanced Encryption Standard (AES)
         ];
 
         // SLEEP Immediate methods
