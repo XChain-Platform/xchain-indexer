@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.2.2] - 2026-04-07
+
+### Changed
+- `MESSAGE_ENCRYPTION_METHODS` config updated to `[1, 2, 3]` — reordered to 1=ECIES, 2=ECDH, 3=AES
+- Updated encryption method comment in `message.js` action handler
+
 ## [2.2.1] - 2026-04-06
 
 ### Changed
