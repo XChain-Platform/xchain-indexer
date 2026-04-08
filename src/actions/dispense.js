@@ -71,16 +71,36 @@ class Dispense {
             if(!error)
                 dispenserInfo[dispenser['ACTION_INDEX']] = dispenser;
 
-            // Verify COIN_AMOUNT is not less than GET_AMOUNT
-            if(!error && this.util.bclt(data['COIN_AMOUNT'], dispenser['GET_AMOUNT']))
-                error = 'invalid: GET_AMOUNT (insufficient funds)';
+            // FIAT dispenser: reverse price match to determine effective GET_AMOUNT
+            let multiplier = 0;
+            if(!error && !this.util.isNull(dispenser['FIAT'])){
+                let coinPair = dispenser['GET_COIN'] + '/' + dispenser['FIAT'];
+                let priceMatch = await this.util.reversePriceMatch(
+                    data['COIN_AMOUNT'],
+                    dispenser['FIAT_AMOUNT'],
+                    coinPair,
+                    data['BLOCK_TIME'],
+                    this.config['FIAT_DISPENSER_PRICE_WINDOW'],
+                    this.indexerDb
+                );
+                if(priceMatch){
+                    multiplier = priceMatch.units;
+                } else {
+                    error = 'invalid: no matching price snapshot';
+                }
+            }
+
+            // Non-FIAT dispenser: verify COIN_AMOUNT >= GET_AMOUNT and calculate multiplier
+            if(!error && this.util.isNull(dispenser['FIAT'])){
+                if(this.util.bclt(data['COIN_AMOUNT'], dispenser['GET_AMOUNT']))
+                    error = 'invalid: GET_AMOUNT (insufficient funds)';
+                if(!error)
+                    multiplier = Math.floor(this.util.bcdiv(data['COIN_AMOUNT'], dispenser['GET_AMOUNT'], 64));
+            }
 
             // Ignore if DISPENSE is being triggered by GET_ADDRESS (dispenser can't trigger itself)
             if(!error && data['SOURCE']==dispenser['GET_ADDRESS'])
                 error = 'invalid: SOURCE and GET_ADDRESS can not be same';
-
-            // Determine the GIVE_AMOUNT multiplier based on Math.floor(COIN_AMOUNT / GET_AMOUNT)
-            let multiplier = Math.floor(this.util.bcdiv(data['COIN_AMOUNT'], dispenser['GET_AMOUNT'], 64));
 
             // Calculate how much to dispense based on the payment amount
             let give_amount = this.util.bcmul(multiplier, dispenser['GIVE_AMOUNT'], 64);

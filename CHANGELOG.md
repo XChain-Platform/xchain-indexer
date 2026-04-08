@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.4.0] - 2026-04-07
+
+### Added
+- `getPricesInTimeRange()` in `db.js` — queries finalized oracle price snapshots within a time range (newest-first)
+- `reversePriceMatch()` in `utility.js` — floor-based reverse price matching for FIAT dispensers against historical oracle snapshots within a 24-hour window
+- `FIAT_DISPENSER_PRICE_WINDOW` config (86400 seconds) — configurable price matching window for FIAT dispensers
+- FIAT-aware dispense logic in `dispense.js` — uses reverse price matching to determine token units for FIAT-priced dispensers
+
+### Fixed
+- `createDispenser()` in `db.js` — `data['FIAT']` changed to `data['FIAT_CODE']` so `fiat_id` is stored correctly
+- `dispensers.sql` — `fiat_amount` column changed from `BIGINT UNSIGNED` to `VARCHAR(250)` to preserve decimal values (e.g., "0.05")
+
+### Changed
+- `findMatchingDispensers()` in `db.js` — FIAT dispensers are now included regardless of `coin_amount` vs `get_amount` comparison; actual matching deferred to `dispense.js`
+
 ## [2.3.0] - 2026-04-07
 
 ### Added

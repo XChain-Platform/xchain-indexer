@@ -133,6 +133,9 @@ module.exports = {
         // Delay dispenser closing by X seconds (1 hour)
         config['DISPENSER_CLOSE_DELAY'] = 3600;
 
+        // FIAT dispenser price matching window in seconds (24 hours)
+        config['FIAT_DISPENSER_PRICE_WINDOW'] = 86400;
+
         // Max MESSAGE lengths
         config['MAX_MESSAGE_LENGTH']     = 1048576; // 1 MB = 1,048,576 Characters
         config['MAX_MESSAGE_KEY_LENGTH'] = 1048576; // 1 MB = 1,048,576 Characters
