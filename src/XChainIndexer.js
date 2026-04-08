@@ -20,18 +20,20 @@
  ********************************************************************/
 
 // Load required libraries
-const config   = require('./config.js');
-const changes  = require('./protocol_changes.js');
-const database = require('./db.js');
-const actions  = require('./actions.js');
-const util     = require('./utility.js');
-const rollback = require('./rollback.js');
-const mapper   = require('./mapper.js');
+const config    = require('./config.js');
+const changes   = require('./protocol_changes.js');
+const database  = require('./db.js');
+const actions   = require('./actions.js');
+const util      = require('./utility.js');
+const rollback  = require('./rollback.js');
+const mapper    = require('./mapper.js');
+const HubClient = require('./hub_client.js');
+const HubDbSync = require('./hub_db_sync.js');
 
 class XChainIndexer {
 
     // Handle constructing a class instance
-    constructor(decoderDbHost, decoderDbPort, decoderDbName, decoderDbUser, decoderDbPass, indexerDbHost, indexerDbPort, indexerDbName, indexerDbUser, indexerDbPass){
+    constructor(decoderDbHost, decoderDbPort, decoderDbName, decoderDbUser, decoderDbPass, indexerDbHost, indexerDbPort, indexerDbName, indexerDbUser, indexerDbPass, hubDbHost, hubDbPort, hubDbName, hubDbUser, hubDbPass){
         // XChain Indexer Version
         this.version = process.env.npm_package_version;
         this.name    = process.env.npm_package_name;
@@ -50,9 +52,18 @@ class XChainIndexer {
         this.indexerDbUser = indexerDbUser;
         this.indexerDbPass = indexerDbPass;
 
+        // Hub database config (local read-only copy of cross-chain infrastructure data,
+        // synced from xchain-hub via xchain-indexer-sync)
+        this.hubDbHost = hubDbHost;
+        this.hubDbPort = hubDbPort;
+        this.hubDbName = hubDbName;
+        this.hubDbUser = hubDbUser;
+        this.hubDbPass = hubDbPass;
+
         // Placeholders for database connections
         this.decoderDb = null;
         this.indexerDb = null;
+        this.hubDb     = null;
 
         // Misc placeholders
         this.synced    = false;
@@ -80,9 +91,32 @@ class XChainIndexer {
         // Create instance of the utility class
         this.util = new util();
 
+        // Create hub client (for pushing chain tip and other cross-chain data to xchain-hub)
+        this.hubClient = new HubClient();
+
         // Establish database connections
         this.decoderDb = new database(this.decoderDbHost, this.decoderDbPort, this.decoderDbName, this.decoderDbUser, this.decoderDbPass, this);
         this.indexerDb = new database(this.indexerDbHost, this.indexerDbPort, this.indexerDbName, this.indexerDbUser, this.indexerDbPass, this);
+
+        // Optional hub database connection (read-only local copy of cross-chain infrastructure)
+        // Created only when hub DB credentials are provided. Indexer queries price_snapshots,
+        // oracle_prices, stakes, delegations, and validator_rewards from this connection.
+        if(this.hubDbHost && this.hubDbName){
+            this.hubDb = new database(this.hubDbHost, this.hubDbPort, this.hubDbName, this.hubDbUser, this.hubDbPass, this);
+
+            // Optional: subscribe to the hub's WebSocket channel to keep the local hub DB in sync
+            // with new price_snapshots and oracle_prices rows. Used in distributed deployments where
+            // the indexer is on a different host from the hub. For single-host deployments, the
+            // local hub DB is the hub's MariaDB itself, so sync is not needed.
+            // Enable by setting HUB_DB_SYNC_ENABLED=true (default off).
+            if(process.env.HUB_DB_SYNC_ENABLED === 'true'){
+                this.hubDbSync = new HubDbSync(this.hubDb, {});
+                // Start it in the background — failures don't block indexer startup
+                this.hubDbSync.start().catch(err => {
+                    console.warn('HubDbSync: start failed:', err.message);
+                });
+            }
+        }
 
         // Create instance of the protocol changes class
         this.protocolChanges = new changes(this);
@@ -220,6 +254,9 @@ class XChainIndexer {
                     // Log the total parse time for this block
                     let parseTime = this.util.getTimer(debugTimer);
                     console.log('Block Parsed' + "\t: " + lastIndexerBlock + ' [ledger:' + ledger + ' actions:' + actions + ' contracts:' + contracts + '] (' + parseTime + ')');
+
+                    // Push chain tip to hub (fire-and-forget — never blocks indexing)
+                    this.hubClient.pushChainTip(this.config['COIN'], lastIndexerBlock, blockTime);
 
                 } catch(error){
                     // Roll back all writes for this block so the DB stays at the end of the previous block

@@ -75,6 +75,9 @@ const delegate           = require('./actions/delegate.js');
 const revoke_delegation  = require('./actions/revoke_delegation.js');
 const claim_rewards      = require('./actions/claim_rewards.js');
 
+// PRICE action (validator snapshots and user oracle prices)
+const price              = require('./actions/price.js');
+
 class Actions {
 
     // Handle constructing a class instance
@@ -91,6 +94,10 @@ class Actions {
         // Setup alias to the indexer database connection
         this.decoderDb = indexer.decoderDb;
         this.indexerDb = indexer.indexerDb;
+        this.hubDb     = indexer.hubDb || null;
+
+        // Setup alias to the hub client (for pushing PRICE data to xchain-hub)
+        this.hubClient = indexer.hubClient || null;
 
         // Setup alias to the indexer protocol changes instance
         this.protocolChanges = indexer.protocolChanges;
@@ -157,6 +164,9 @@ class Actions {
         this.actionDelegate         = new delegate(this);
         this.actionRevokeDelegation = new revoke_delegation(this);
         this.actionClaimRewards     = new claim_rewards(this);
+
+        // PRICE action instance
+        this.actionPrice            = new price(this);
 
         // Define ACTION aliases
         this.actionAliases = {};
@@ -307,6 +317,9 @@ class Actions {
         if(action=='DELEGATE')           await this.actionDelegate.parse(params, data, error);
         if(action=='REVOKE_DELEGATION')  await this.actionRevokeDelegation.parse(params, data, error);
         if(action=='CLAIM_REWARDS')      await this.actionClaimRewards.parse(params, data, error);
+
+        // PRICE action (validator snapshots and user oracles)
+        if(action=='PRICE')              await this.actionPrice.parse(params, data, error);
     }
 
 }

@@ -83,9 +83,9 @@ class RevokeDelegation {
          * Delegation Existence Validations
          ****************************************************************/
 
-        // Verify SOURCE has an active delegation for this pubkey
+        // Verify SOURCE has an active delegation for this pubkey (gated by activation delay)
         if(!error){
-            let activeDelegation = await this.indexerDb.getActiveDelegation(data['SOURCE'], data['SIGNING_PUBKEY']);
+            let activeDelegation = await this.indexerDb.getActiveDelegation(data['SOURCE'], data['SIGNING_PUBKEY'], data['BLOCK_INDEX']);
             if(!activeDelegation)
                 error = 'invalid: no active delegation for pubkey';
         }
@@ -103,6 +103,13 @@ class RevokeDelegation {
 
         // Create record in delegations table (with revoked status)
         await this.indexerDb.createRevokeDelegation(data);
+
+        // Mark the parent delegation's deactivation_block (BLOCK_INDEX + activation delay)
+        if(status === 'valid'){
+            let staking = this.config['STAKING'];
+            let activationDelay = (staking && staking['ACTIVATION_DELAY_BLOCKS']) ? staking['ACTIVATION_DELAY_BLOCKS'] : 6;
+            await this.indexerDb.setDelegationDeactivation(data['SOURCE'], data['SIGNING_PUBKEY'], parseInt(data['BLOCK_INDEX']) + activationDelay);
+        }
 
         // Store the SOURCE in addresses list
         this.util.addAddressTicker(data['SOURCE'], this.config['GAS']);

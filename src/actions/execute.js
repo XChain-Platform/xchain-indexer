@@ -149,8 +149,8 @@ class Execute {
             // Load contract state from DB
             let contractState = await this.indexerDb.getContractState(data['CONTRACT_ACTION_INDEX']);
 
-            // Load read-only data for gateway
-            let oracleData = await this.indexerDb.getOracleDataForVM(data['BLOCK_INDEX']);
+            // Load read-only data for gateway (price data lives in local hub DB when configured)
+            let oracleData = await ((this.actions && this.actions.hubDb) || this.indexerDb).getOracleDataForVM(data['BLOCK_INDEX']);
             let crossChainData = await this.indexerDb.getCrossChainDataForVM();
 
             // Derive deterministic block hash from block_index + block_time

@@ -43,7 +43,7 @@ class Stake {
 
         // Define list of known FORMATS
         this.formats = {};
-        this.formats[0] = 'VERSION|TIER|CHAINS|SIGNING_PUBKEY';
+        this.formats[0] = 'VERSION|TIER|CHAINS|SIGNING_PUBKEY|DOGE_ADDRESS';
     }
 
     // Handle parsing the STAKE transaction
@@ -58,6 +58,7 @@ class Stake {
         data['TIER']           = params[1];
         data['CHAINS']         = params[2];
         data['SIGNING_PUBKEY'] = params[3];
+        data['DOGE_ADDRESS']   = params[4];
 
         // Convert NUMBER fields from string value to number value
         if(!error)
@@ -75,9 +76,9 @@ class Stake {
          * TIER Validations
          ****************************************************************/
 
-        // Verify TIER is valid (1=oracle, 2=cross-chain)
+        // Verify TIER is valid (1=oracle, 2=cross-chain, 3=oracle publisher)
         let tier = parseInt(data['TIER']);
-        if(!error && ![1, 2].includes(tier))
+        if(!error && ![1, 2, 3].includes(tier))
             error = 'invalid: TIER (unknown)';
 
         // Verify CHAINS is provided for Tier 2
@@ -88,6 +89,10 @@ class Stake {
         if(!error && tier === 1 && !this.util.isNull(data['CHAINS']) && data['CHAINS'] !== '')
             error = 'invalid: CHAINS (not allowed for tier 1)';
 
+        // Verify CHAINS is empty for Tier 3 (publishers always publish to DOGE)
+        if(!error && tier === 3 && !this.util.isNull(data['CHAINS']) && data['CHAINS'] !== '')
+            error = 'invalid: CHAINS (not allowed for tier 3)';
+
         // Validate CHAINS values if provided
         if(!error && tier === 2){
             let validChains = this.config['COINS']; // ['BTC', 'LTC', 'DOGE']
@@ -97,6 +102,22 @@ class Stake {
                     error = 'invalid: CHAINS (unknown chain)';
             }
         }
+
+        /*****************************************************************
+         * DOGE_ADDRESS Validations (Tier 3 only)
+         ****************************************************************/
+
+        // DOGE_ADDRESS is required for Tier 3
+        if(!error && tier === 3 && this.util.isNull(data['DOGE_ADDRESS']))
+            error = 'invalid: DOGE_ADDRESS (required for tier 3)';
+
+        // DOGE_ADDRESS must be empty for Tier 1 and Tier 2
+        if(!error && tier !== 3 && !this.util.isNull(data['DOGE_ADDRESS']) && data['DOGE_ADDRESS'] !== '')
+            error = 'invalid: DOGE_ADDRESS (only allowed for tier 3)';
+
+        // Validate DOGE_ADDRESS format (D-prefix, 34 chars base58)
+        if(!error && tier === 3 && !/^D[a-km-zA-HJ-NP-Z1-9]{33}$/.test(data['DOGE_ADDRESS']))
+            error = 'invalid: DOGE_ADDRESS (format)';
 
         /*****************************************************************
          * SIGNING_PUBKEY Validations
@@ -127,6 +148,10 @@ class Stake {
         let stakeAmount = tierConfig ? tierConfig['AMOUNT'] : '0';
         data['AMOUNT'] = stakeAmount;
 
+        // Calculate the activation block (6-block delay by default for BTC reorg safety)
+        let activationDelay = (staking && staking['ACTIVATION_DELAY_BLOCKS']) ? staking['ACTIVATION_DELAY_BLOCKS'] : 6;
+        data['ACTIVATION_BLOCK'] = parseInt(data['BLOCK_INDEX']) + activationDelay;
+
         // Get token info and source address balances
         let tokenInfo = await this.indexerDb.getTokenInfo(gas, data['BLOCK_INDEX'], data['ACTION_INDEX']);
         let balances = await this.indexerDb.getAddressBalances(data['SOURCE'], null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
@@ -140,13 +165,14 @@ class Stake {
             error = 'invalid: SOURCE (sleeping)';
 
         // Check that the signing pubkey is not already in use by another active stake
+        // Note: pubkey uniqueness is checked across ALL stakes (active or not yet activated) to prevent collision
         if(!error){
             let existingStake = await this.indexerDb.getActiveStakeByPubkey(data['SIGNING_PUBKEY']);
             if(existingStake)
                 error = 'invalid: SIGNING_PUBKEY (already in use)';
         }
 
-        // Check that SOURCE does not already have an active stake at this tier
+        // Check that SOURCE does not already have a stake at this tier (active or pending activation)
         if(!error){
             let existingStakeBySource = await this.indexerDb.getActiveStakeBySource(data['SOURCE'], tier);
             if(existingStakeBySource)

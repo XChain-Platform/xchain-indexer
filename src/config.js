@@ -58,14 +58,16 @@ module.exports = {
         config['FIATS']        = {};
         config['FIATS']['USD'] = 'US Dollar';
         config['FIATS']['CAD'] = 'Canadian Dollar';
-        config['FIATS']['AUD'] = 'Austrailian Dollar';
+        config['FIATS']['AUD'] = 'Australian Dollar';
         config['FIATS']['MXN'] = 'Mexican Peso';
-        config['FIATS']['GBP'] = 'Great Britian Pound';
+        config['FIATS']['GBP'] = 'Great Britain Pound';
         config['FIATS']['JPY'] = 'Japanese Yen';
         config['FIATS']['CNY'] = 'Chinese Yuan';
         config['FIATS']['CHF'] = 'Swiss Franc';
-        config['FIATS']['BRL'] = 'Brazillian Real';
+        config['FIATS']['BRL'] = 'Brazilian Real';
         config['FIATS']['INR'] = 'Indian Rupee';
+        config['FIATS']['EUR'] = 'Euro';
+        config['FIATS']['KRW'] = 'South Korean Won';
 
         // Parse in the gas / coin / network information
         config['GAS']     = gas;

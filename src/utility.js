@@ -578,6 +578,8 @@ class Utility {
     }
 
     // Validate a native coin fee output against oracle price
+    // db parameter accepts the indexer DB or hub DB connection — if a hubDb is available
+    // on the action context, callers should prefer it (price_snapshots lives in the local hub DB).
     // Returns: { valid, nativeCoinAmount, oracleRound, error }
     async validateNativeCoinFee(data, fees, db, txOutputs){
         let feeDestination = this.config['ADDRESS']['FEE_DESTINATION'];
@@ -612,8 +614,11 @@ class Utility {
         }
 
         // Get oracle prices: XCHAIN/USD and COIN/USD
+        // Gate by BLOCK_INDEX so two nodes processing the same block see the same price
+        // Prefer the local hub DB (where price_snapshots is synced from xchain-hub) when available
         let coin = this.config['COIN'] || data['COIN'];
-        let coinPriceData = await db.getLatestPrice(coin + '/USD');
+        let priceDb = (db.indexer && db.indexer.hubDb) ? db.indexer.hubDb : db;
+        let coinPriceData = await priceDb.getLatestPrice(coin + '/USD', data['BLOCK_INDEX']);
         if(!coinPriceData || !coinPriceData.price){
             return { valid: false, error: 'no oracle price for ' + coin + '/USD' };
         }
@@ -855,12 +860,61 @@ class Utility {
         }
     }
 
+    // Reverse price match for user TOKEN/FIAT oracles (PRICE v1)
+    // Given a coin payment amount and a user oracle reference, find the most recent oracle
+    // price within the window where the buyer can afford at least 1 token unit.
+    //
+    // The conversion uses BOTH a user oracle (TOKEN/FIAT) and a validator oracle (COIN/FIAT)
+    // for the same FIAT currency:
+    //   tokens_per_coin = (coin_amount × coin_fiat_price) / token_fiat_price
+    //
+    // Example: dispenser sells PEPECASH for BTC, denominated in JPY
+    //   user oracle:      1 PEPECASH = ¥7.50
+    //   validator oracle: 1 BTC      = ¥15,000,000
+    //   payment:          0.001 BTC
+    //   tokens = (0.001 × 15000000) / 7.50 = 2000 PEPECASH
+    //
+    // Returns { units, oraclePrice, coinFiatPrice } or null if no match found.
+    async reverseOraclePriceMatch(coinAmount, oracleAddress, coin, tick, fiat, blockTime, priceWindow, db){
+        let priceDb = (db.indexer && db.indexer.hubDb) ? db.indexer.hubDb : db;
+        let startTime = blockTime - priceWindow;
+
+        // Walk historical user oracle prices newest-first within the window
+        let oraclePrices = await priceDb.getOraclePricesInTimeRange(oracleAddress, coin, tick, fiat, startTime, blockTime);
+        if(!oraclePrices || oraclePrices.length === 0) return null;
+
+        // For each historical oracle price, also fetch the validator's COIN/FIAT price at the same effective time
+        let coinPair = coin + '/' + fiat;
+        for(let op of oraclePrices){
+            // Get the validator price at the time this oracle price was effective
+            // (use the earliest available validator price at or before the oracle's effective_at)
+            let validatorPrices = await priceDb.getPricesInTimeRange(coinPair, op.effectiveAt - priceWindow, op.effectiveAt);
+            if(!validatorPrices || validatorPrices.length === 0) continue;
+            let coinFiatPrice = validatorPrices[0].price;
+
+            // Compute: tokens = (coin_amount × coin_fiat_price) / token_fiat_price
+            let coinFiatTotal = this.bcmul(coinAmount, coinFiatPrice, 18);
+            let rawTokens     = this.bcdiv(coinFiatTotal, op.price, 18);
+            let units         = Math.floor(Number(rawTokens));
+            if(units >= 1){
+                return {
+                    units:         units,
+                    oraclePrice:   op,
+                    coinFiatPrice: coinFiatPrice
+                };
+            }
+        }
+        return null;
+    }
+
     // Reverse price match for FIAT dispensers
     // Given a coin payment amount, find the most recent price snapshot where the buyer can afford at least 1 unit
     // Returns { units, snapshot } or null if no match found
+    // Prefers the local hub DB (where price_snapshots is synced from xchain-hub) when available.
     async reversePriceMatch(coinAmount, fiatAmount, coinPair, blockTime, priceWindow, db){
         let startTime = blockTime - priceWindow;
-        let snapshots = await db.getPricesInTimeRange(coinPair, startTime, blockTime);
+        let priceDb = (db.indexer && db.indexer.hubDb) ? db.indexer.hubDb : db;
+        let snapshots = await priceDb.getPricesInTimeRange(coinPair, startTime, blockTime);
         for(let snapshot of snapshots){
             // Calculate BTC cost per token unit at this snapshot's price
             // btc_per_token = fiat_amount / snapshot.price

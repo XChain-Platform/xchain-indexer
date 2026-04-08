@@ -194,7 +194,7 @@ class Deploy {
                 },
                 balances:         null,
                 tokenInfo:        null,
-                oracleData:       await this.indexerDb.getOracleDataForVM(data['BLOCK_INDEX']),
+                oracleData:       await ((this.actions && this.actions.hubDb) || this.indexerDb).getOracleDataForVM(data['BLOCK_INDEX']),
                 crossChainData:   await this.indexerDb.getCrossChainDataForVM()
             });
 
