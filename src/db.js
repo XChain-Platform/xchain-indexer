@@ -5803,7 +5803,7 @@ class Database {
         let get_coin_id    = await this.createCoin(data['GET_COIN']);
         let get_tick_id    = await this.createTicker(data['GET_TICK']);
         let get_address_id = await this.createAddress(data['GET_ADDRESS']);
-        let fiat_id        = await this.createFiat(data['FIAT']);
+        let fiat_id        = await this.createFiat(data['FIAT_CODE']);
         let memo_id        = await this.createMemo(data['MEMO']);
         let status_id      = await this.createStatus(data['STATUS']);
         let action_index   = data['ACTION_INDEX'];
@@ -6322,7 +6322,8 @@ class Database {
         }
         let query  = `SELECT
                             d1.action_index,
-                            d1.get_amount
+                            d1.get_amount,
+                            d1.fiat_id
                         FROM
                             dispensers d1
                             INNER JOIN dispenser_statuses s1 ON (s1.dispenser_action_index=d1.action_index)
@@ -6337,16 +6338,17 @@ class Database {
                                 WHERE
                                     s4.dispenser_action_index=s1.action_index
                             ) AND
-                            s2.status='valid' AND 
-                            s3.status IN ('open', 'cancelling') AND 
+                            s2.status='valid' AND
+                            s3.status IN ('open', 'cancelling') AND
                             d1.get_coin_id=? AND
                             d1.get_address_id=?` + where + `
                         ORDER BY d1.action_index ASC`;
         let results = await this.doQuery(query, args);
         if(results.length > 0){
             for(let row of results){
-                // Only add dispenser if amount is greater than or equal to COIN_AMOUNT
-                if(this.util.bcgte(coin_amount, row.get_amount))
+                // FIAT dispensers: include regardless of coin_amount (matching happens in dispense.js via reverse price lookup)
+                // Non-FIAT dispensers: only include if coin_amount >= get_amount
+                if(!this.util.isNull(row.fiat_id) || this.util.bcgte(coin_amount, row.get_amount))
                     dispensers.push(Number(row.action_index));
             }
         }
@@ -6980,6 +6982,21 @@ class Database {
             roundNumber: Number(rows[0].round_number),
             timestamp:   Number(rows[0].block_timestamp)
         };
+    }
+
+    // Get finalized prices for a coin pair within a time range (newest-first)
+    async getPricesInTimeRange(coinPair, startTime, endTime){
+        let query = `SELECT price, round_number, block_timestamp
+                     FROM price_snapshots
+                     WHERE coin_pair = ? AND status = 'finalized' AND price IS NOT NULL
+                       AND block_timestamp BETWEEN ? AND ?
+                     ORDER BY block_timestamp DESC`;
+        let rows = await this.doQuery(query, [coinPair, startTime, endTime]);
+        return rows.map(row => ({
+            price:       row.price,
+            roundNumber: Number(row.round_number),
+            timestamp:   Number(row.block_timestamp)
+        }));
     }
 
     // Cross-chain data stub — returns no-data accessors until Phase 4

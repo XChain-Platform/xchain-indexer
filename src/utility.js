@@ -855,6 +855,31 @@ class Utility {
         }
     }
 
+    // Reverse price match for FIAT dispensers
+    // Given a coin payment amount, find the most recent price snapshot where the buyer can afford at least 1 unit
+    // Returns { units, snapshot } or null if no match found
+    async reversePriceMatch(coinAmount, fiatAmount, coinPair, blockTime, priceWindow, db){
+        let startTime = blockTime - priceWindow;
+        let snapshots = await db.getPricesInTimeRange(coinPair, startTime, blockTime);
+        for(let snapshot of snapshots){
+            // Calculate BTC cost per token unit at this snapshot's price
+            // btc_per_token = fiat_amount / snapshot.price
+            let btcPerToken = this.bcdiv(fiatAmount, snapshot.price, 18);
+            // Calculate how many units the buyer's coin amount covers
+            // raw_multiplier = coin_amount / btc_per_token
+            let rawMultiplier = this.bcdiv(coinAmount, btcPerToken, 18);
+            let units = Math.floor(Number(rawMultiplier));
+            if(units >= 1){
+                return {
+                    units:        units,
+                    snapshot:     snapshot,
+                    btcPerToken:  btcPerToken
+                };
+            }
+        }
+        return null;
+    }
+
     // Handle checking if any sends were to an active dispenser address
     async processDispenserSends(actions, db, info){
         let sends = await db.findDispenserSends(info['ACTION_INDEX']);

@@ -10,7 +10,7 @@ CREATE TABLE dispensers (
     get_amount         VARCHAR(250),             -- Amount required to trigger dispenser
     get_address_id     BIGINT UNSIGNED,          -- id of record in index_addresses table (dispenser address)
     fiat_id            BIGINT UNSIGNED,          -- id of record in index_fiats table
-    fiat_amount        BIGINT UNSIGNED,          -- amount of FIAT required to trigger a dispense
+    fiat_amount        VARCHAR(250),             -- amount of FIAT required to trigger a dispense
     expiration         BIGINT UNSIGNED,          -- unix timestamp of dispenser expiration date/time
     allow_list         BIGINT UNSIGNED,          -- action_index of a list from the lists table
     block_list         BIGINT UNSIGNED,          -- action_index of a list from the lists table
