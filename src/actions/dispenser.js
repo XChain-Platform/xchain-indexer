@@ -27,9 +27,10 @@
  * GET_TICK               - Ticker name or Ticker ID                                                   
  * GET_AMOUNT             - Quantity of `GET_COIN` or `GET_TICK` required to `DISPENSE`                
  * ADDRESS                - Address for dispenser to operate on (default=`SOURCE`)                     
- * FIAT_CODE              - Code for `FIAT` currency your dispenser is priced in (USD, JPY, GPB, etc.) 
- * FIAT_AMOUNT            - Amount of `FIAT` currency required to trigger a `DISPENSE`                 
- * EXPIRATION             - Timestamp of when dispenser should close, in Unix time                     
+ * FIAT_CODE              - Code for `FIAT` currency your dispenser is priced in (USD, JPY, GPB, etc.)
+ * FIAT_AMOUNT            - Amount of `FIAT` currency required to trigger a `DISPENSE` (ignored when ORACLE_ADDRESS is set)
+ * ORACLE_ADDRESS         - Optional address of a user oracle (PRICE v1) that prices the dispensed token in `FIAT_CODE`
+ * EXPIRATION             - Timestamp of when dispenser should close, in Unix time
  * ALLOW_LIST             - `ACTION_INDEX` of a `LIST` of addresses allowed to trigger dispenser       
  * BLOCK_LIST             - `ACTION_INDEX` of a `LIST` of addresses NOT allowed to trigger a dispenser 
  * MEMO                   - An optional memo to include                                                
@@ -56,7 +57,7 @@ class Dispenser {
         
         // Define list of known FORMATS
         this.formats = {};
-        this.formats[0] = 'VERSION|GIVE_COIN|GIVE_TICK|GIVE_AMOUNT|GIVE_ESCROW|GET_COIN|GET_TICK|GET_AMOUNT|GET_ADDRESS|FIAT_CODE|FIAT_AMOUNT|EXPIRATION|ALLOW_LIST|BLOCK_LIST|MEMO';
+        this.formats[0] = 'VERSION|GIVE_COIN|GIVE_TICK|GIVE_AMOUNT|GIVE_ESCROW|GET_COIN|GET_TICK|GET_AMOUNT|GET_ADDRESS|FIAT_CODE|FIAT_AMOUNT|ORACLE_ADDRESS|EXPIRATION|ALLOW_LIST|BLOCK_LIST|MEMO';
         this.formats[1] = 'VERSION|DISPENSER_ACTION_INDEX|MEMO';
         this.formats[2] = 'VERSION|DISPENSER_ACTION_INDEX|GIVE_ESCROW|EXPIRATION|ALLOW_LIST|BLOCK_LIST|MEMO';
 
@@ -153,6 +154,20 @@ class Dispenser {
         // Validate FIAT_CODE is valid
         if(!error && format==0 && !this.util.isNull(data['FIAT_CODE']) && this.util.isNull(this.config['FIATS'][data['FIAT_CODE']]))
             error = 'invalid: FIAT_CODE (unsupported FIAT)';
+
+        // Validate FIAT_CODE and FIAT_AMOUNT are both provided or both empty
+        // Exception: when ORACLE_ADDRESS is set, the oracle provides the price so FIAT_AMOUNT is optional/ignored
+        let usingOracle = !this.util.isNull(data['ORACLE_ADDRESS']);
+        if(!error && format==0 && !this.util.isNull(data['FIAT_CODE']) && this.util.isNull(data['FIAT_AMOUNT']) && !usingOracle)
+            error = 'invalid: FIAT_AMOUNT (required when FIAT_CODE is set without ORACLE_ADDRESS)';
+        if(!error && format==0 && this.util.isNull(data['FIAT_CODE']) && !this.util.isNull(data['FIAT_AMOUNT']))
+            error = 'invalid: FIAT_CODE (required when FIAT_AMOUNT is set)';
+
+        // ORACLE_ADDRESS rules: only valid for FIAT-denominated dispensers, must be a valid crypto address
+        if(!error && format==0 && usingOracle && this.util.isNull(data['FIAT_CODE']))
+            error = 'invalid: FIAT_CODE (required when ORACLE_ADDRESS is set)';
+        if(!error && format==0 && usingOracle && !this.util.isCryptoAddress(data['ORACLE_ADDRESS']))
+            error = 'invalid: ORACLE_ADDRESS (format)';
 
         /*****************************************************************
          * FORMAT Validations

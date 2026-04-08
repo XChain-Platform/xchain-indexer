@@ -72,8 +72,30 @@ class Dispense {
                 dispenserInfo[dispenser['ACTION_INDEX']] = dispenser;
 
             // FIAT dispenser: reverse price match to determine effective GET_AMOUNT
+            // Two pricing modes:
+            //   - With ORACLE_ADDRESS: use a user oracle (PRICE v1) for TOKEN/FIAT pricing.
+            //     The oracle prices the dispensed token directly; FIAT_AMOUNT is ignored.
+            //   - Without ORACLE_ADDRESS: use the validator COIN/FIAT snapshot (PRICE v0).
+            //     FIAT_AMOUNT defines how much of the FIAT currency 1 GIVE unit costs.
             let multiplier = 0;
-            if(!error && !this.util.isNull(dispenser['FIAT'])){
+            if(!error && !this.util.isNull(dispenser['FIAT']) && !this.util.isNull(dispenser['ORACLE_ADDRESS'])){
+                // User oracle path: combines PEPECASH/JPY (oracle) with BTC/JPY (validator) for cross-conversion
+                let priceMatch = await this.util.reverseOraclePriceMatch(
+                    data['COIN_AMOUNT'],
+                    dispenser['ORACLE_ADDRESS'],
+                    dispenser['GIVE_COIN'],
+                    dispenser['GIVE_TICK'],
+                    dispenser['FIAT'],
+                    data['BLOCK_TIME'],
+                    this.config['FIAT_DISPENSER_PRICE_WINDOW'],
+                    this.indexerDb
+                );
+                if(priceMatch){
+                    multiplier = priceMatch.units;
+                } else {
+                    error = 'invalid: no matching oracle price';
+                }
+            } else if(!error && !this.util.isNull(dispenser['FIAT'])){
                 let coinPair = dispenser['GET_COIN'] + '/' + dispenser['FIAT'];
                 let priceMatch = await this.util.reversePriceMatch(
                     data['COIN_AMOUNT'],

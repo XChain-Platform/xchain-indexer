@@ -34,6 +34,9 @@ class Database {
         // Create instance of the utility class
         this.util   = indexer.util;
 
+        // Reference back to the parent indexer (so dependent code can access hubDb, etc.)
+        this.indexer = indexer;
+
         // Database connection information
         this.host   = host;
         this.port   = port;
@@ -5797,23 +5800,24 @@ class Database {
 
     // Create/Update record in `dispensers` table
     async createDispenser(data){
-        data               = this.normalizeDataValues(data);
-        let give_coin_id   = await this.createCoin(data['GIVE_COIN']);
-        let give_tick_id   = await this.createTicker(data['GIVE_TICK']);
-        let get_coin_id    = await this.createCoin(data['GET_COIN']);
-        let get_tick_id    = await this.createTicker(data['GET_TICK']);
-        let get_address_id = await this.createAddress(data['GET_ADDRESS']);
-        let fiat_id        = await this.createFiat(data['FIAT_CODE']);
-        let memo_id        = await this.createMemo(data['MEMO']);
-        let status_id      = await this.createStatus(data['STATUS']);
-        let action_index   = data['ACTION_INDEX'];
-        let give_amount    = data['GIVE_AMOUNT'];
-        let get_amount     = data['GET_AMOUNT'];
-        let give_escrow    = data['GIVE_ESCROW'];
-        let fiat_amount    = data['FIAT_AMOUNT'];
-        let expiration     = data['EXPIRATION'];
-        let allow_list     = data['ALLOW_LIST'];
-        let block_list     = data['BLOCK_LIST'];
+        data                  = this.normalizeDataValues(data);
+        let give_coin_id      = await this.createCoin(data['GIVE_COIN']);
+        let give_tick_id      = await this.createTicker(data['GIVE_TICK']);
+        let get_coin_id       = await this.createCoin(data['GET_COIN']);
+        let get_tick_id       = await this.createTicker(data['GET_TICK']);
+        let get_address_id    = await this.createAddress(data['GET_ADDRESS']);
+        let fiat_id           = await this.createFiat(data['FIAT_CODE']);
+        let oracle_address_id = (!this.util.isNull(data['ORACLE_ADDRESS'])) ? await this.createAddress(data['ORACLE_ADDRESS']) : null;
+        let memo_id           = await this.createMemo(data['MEMO']);
+        let status_id         = await this.createStatus(data['STATUS']);
+        let action_index      = data['ACTION_INDEX'];
+        let give_amount       = data['GIVE_AMOUNT'];
+        let get_amount        = data['GET_AMOUNT'];
+        let give_escrow       = data['GIVE_ESCROW'];
+        let fiat_amount       = data['FIAT_AMOUNT'];
+        let expiration        = data['EXPIRATION'];
+        let allow_list        = data['ALLOW_LIST'];
+        let block_list        = data['BLOCK_LIST'];
         // Check if record already exists for this dispenser
         let query  = `SELECT
                             action_index
@@ -5841,20 +5845,21 @@ class Database {
                         get_address_id=?,
                         fiat_id=?,
                         fiat_amount=?,
+                        oracle_address_id=?,
                         expiration=?,
                         allow_list=?,
                         block_list=?,
                         memo_id=?,
                         status_id=?
-                    WHERE 
+                    WHERE
                         action_index=?`;
         } else {
             // INSERT record
-            query = `INSERT INTO dispensers (give_coin_id, give_tick_id, give_amount, give_escrow, get_coin_id, get_tick_id, get_amount, get_address_id, fiat_id, fiat_amount, expiration, allow_list, block_list, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+            query = `INSERT INTO dispensers (give_coin_id, give_tick_id, give_amount, give_escrow, get_coin_id, get_tick_id, get_amount, get_address_id, fiat_id, fiat_amount, oracle_address_id, expiration, allow_list, block_list, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
         }
-        args    = [give_coin_id, give_tick_id, give_amount, give_escrow, get_coin_id, get_tick_id, get_amount, get_address_id, fiat_id, fiat_amount, expiration, allow_list, block_list, memo_id, status_id, action_index];
+        args    = [give_coin_id, give_tick_id, give_amount, give_escrow, get_coin_id, get_tick_id, get_amount, get_address_id, fiat_id, fiat_amount, oracle_address_id, expiration, allow_list, block_list, memo_id, status_id, action_index];
         results = await this.doQuery(query, args);
-    }    
+    }
 
     // Create/Update record in `dispenser_statuses` table
     // @param {action_index}          integer Action index of action
@@ -5896,7 +5901,7 @@ class Database {
     // Return dispenser info for given action_index
     async getDispenserInfo(coin, action_index, block_time){
         let dispenser = false;
-        let query = `SELECT 
+        let query = `SELECT
                         d1.action_index,
                         t2.tick as give_tick,
                         d1.give_amount,
@@ -5911,18 +5916,20 @@ class Database {
                         d1.block_list,
                         f1.code as fiat,
                         d1.fiat_amount,
+                        a4.address as oracle_address,
                         m1.memo,
                         s2.status,
                         s3.status as dispenser_status,
                         b1.block_index,
                         b1.block_time
-                    FROM 
+                    FROM
                         dispensers d1
                         INNER JOIN actions             a1 ON (a1.action_index=d1.action_index)
                         INNER JOIN transactions        t1 ON (t1.tx_index=a1.tx_index)
                         LEFT  JOIN blocks              b1 ON (b1.block_index=t1.block_index)
                         INNER JOIN index_addresses     a2 ON (a2.id=t1.source_id)
                         INNER JOIN index_addresses     a3 ON (a3.id=d1.get_address_id)
+                        LEFT  JOIN index_addresses     a4 ON (a4.id=d1.oracle_address_id)
                         INNER JOIN index_tickers       t2 ON (t2.id=d1.give_tick_id)
                         LEFT  JOIN index_tickers       t3 ON (t3.id=d1.get_tick_id)
                         INNER JOIN index_coins         c1 ON (c1.id=d1.get_coin_id)
@@ -5931,7 +5938,7 @@ class Database {
                         INNER JOIN dispenser_statuses  s1 ON (s1.dispenser_action_index=d1.action_index)
                         INNER JOIN index_statuses      s2 ON (s2.id=d1.status_id)
                         INNER JOIN index_statuses      s3 ON (s3.id=s1.status_id)
-                    WHERE 
+                    WHERE
                         s1.action_index = (
                             SELECT
                                 MAX(s4.action_index)
@@ -5941,7 +5948,7 @@ class Database {
                                 s4.dispenser_action_index=d1.action_index
                         ) AND
                         c1.coin=? AND
-                        d1.action_index=? 
+                        d1.action_index=?
                     LIMIT 1`;
         let args  = [coin, action_index];
         let results = await this.doQuery(query, args);
@@ -6436,8 +6443,10 @@ class Database {
         let action_index      = data['ACTION_INDEX'];
         let tier              = data['TIER'];
         let chains            = data['CHAINS'];
+        let doge_address      = data['DOGE_ADDRESS'] || null;
         let amount            = data['AMOUNT'] || '0';
         let block_index       = data['BLOCK_INDEX'];
+        let activation_block  = data['ACTIVATION_BLOCK'] || 0;
         // Check if record already exists
         let query  = "SELECT action_index FROM stakes WHERE action_index=? LIMIT 1";
         let args   = [action_index];
@@ -6447,17 +6456,29 @@ class Database {
             exists = true;
         if(exists){
             query = `UPDATE stakes SET
-                        source_id=?, tier=?, chains=?, signing_pubkey_id=?,
-                        amount=?, status_id=?, block_index=?
+                        source_id=?, tier=?, chains=?, signing_pubkey_id=?, doge_address=?,
+                        amount=?, status_id=?, block_index=?, activation_block=?
                     WHERE action_index=?`;
-            args = [source_id, tier, chains, signing_pubkey_id, amount, status_id, block_index, action_index];
+            args = [source_id, tier, chains, signing_pubkey_id, doge_address, amount, status_id, block_index, activation_block, action_index];
         } else {
             query = `INSERT INTO stakes
-                        (source_id, tier, chains, signing_pubkey_id, amount, status_id, block_index, action_index)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)`;
-            args = [source_id, tier, chains, signing_pubkey_id, amount, status_id, block_index, action_index];
+                        (source_id, tier, chains, signing_pubkey_id, doge_address, amount, status_id, block_index, activation_block, action_index)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+            args = [source_id, tier, chains, signing_pubkey_id, doge_address, amount, status_id, block_index, activation_block, action_index];
         }
         await this.doQuery(query, args);
+    }
+
+    // Set the deactivation_block for a source's active stake at a specific tier
+    // Used by createUnstake to mark when the stake should be removed from the active set
+    async setStakeDeactivation(source, tier, deactivationBlock){
+        let source_id = await this.getAddressId(source);
+        if(source_id === null) return false;
+        let valid_id = await this.getStatusId('valid');
+        let query = `UPDATE stakes SET deactivation_block=?
+                     WHERE source_id=? AND tier=? AND status_id=? AND deactivation_block IS NULL`;
+        await this.doQuery(query, [deactivationBlock, source_id, tier, valid_id]);
+        return true;
     }
 
     // Create/Update record in `unstakes` table
@@ -6500,6 +6521,7 @@ class Database {
         let signing_pubkey_id = await this.getOrCreatePubkeyId(data['SIGNING_PUBKEY']);
         let action_index      = data['ACTION_INDEX'];
         let block_index       = data['BLOCK_INDEX'];
+        let activation_block  = data['ACTIVATION_BLOCK'] || 0;
         // Check if record already exists
         let query  = "SELECT action_index FROM delegations WHERE action_index=? LIMIT 1";
         let args   = [action_index];
@@ -6509,14 +6531,14 @@ class Database {
             exists = true;
         if(exists){
             query = `UPDATE delegations SET
-                        source_id=?, signing_pubkey_id=?, status_id=?, block_index=?
+                        source_id=?, signing_pubkey_id=?, status_id=?, block_index=?, activation_block=?
                     WHERE action_index=?`;
-            args = [source_id, signing_pubkey_id, status_id, block_index, action_index];
+            args = [source_id, signing_pubkey_id, status_id, block_index, activation_block, action_index];
         } else {
             query = `INSERT INTO delegations
-                        (source_id, signing_pubkey_id, status_id, block_index, action_index)
-                    VALUES (?, ?, ?, ?, ?)`;
-            args = [source_id, signing_pubkey_id, status_id, block_index, action_index];
+                        (source_id, signing_pubkey_id, status_id, block_index, activation_block, action_index)
+                    VALUES (?, ?, ?, ?, ?, ?)`;
+            args = [source_id, signing_pubkey_id, status_id, block_index, activation_block, action_index];
         }
         await this.doQuery(query, args);
     }
@@ -6527,7 +6549,50 @@ class Database {
         await this.createDelegation(data);
     }
 
+    // Set the deactivation_block for an active delegation
+    // Used by createRevokeDelegation flow to mark when the delegation should be removed
+    async setDelegationDeactivation(source, pubkey, deactivationBlock){
+        let source_id = await this.getAddressId(source);
+        let pubkey_id = await this.getPubkeyId(String(pubkey).toLowerCase());
+        if(source_id === null || pubkey_id === null) return false;
+        let valid_id = await this.getStatusId('valid');
+        let query = `UPDATE delegations SET deactivation_block=?
+                     WHERE source_id=? AND signing_pubkey_id=? AND status_id=? AND deactivation_block IS NULL`;
+        await this.doQuery(query, [deactivationBlock, source_id, pubkey_id, valid_id]);
+        return true;
+    }
+
     // Create record in `reward_claims` table
+    // Create a validator reward record (called when hub pushes rewards to indexer)
+    // pubkeyHex: 64-char hex Ed25519 signing pubkey of the validator that earned the reward
+    // roundReference: round number (oracle_round) or attestation index
+    // rewardType: 'oracle_round' or 'cross_chain_attestation'
+    // amount: reward amount as decimal string
+    // blockIndex: block height when the reward was earned
+    async createValidatorReward(pubkeyHex, roundReference, rewardType, amount, blockIndex){
+        // Look up the source address that owns this signing pubkey via the stakes table
+        let pubkey_id = await this.getPubkeyId(String(pubkeyHex).toLowerCase());
+        if(pubkey_id === null){
+            console.warn('createValidatorReward: unknown pubkey ' + pubkeyHex);
+            return false;
+        }
+        // Find the most recent active stake using this pubkey to determine source_id
+        let query = `SELECT source_id FROM stakes WHERE signing_pubkey_id=? ORDER BY action_index DESC LIMIT 1`;
+        let results = await this.doQuery(query, [pubkey_id]);
+        if(results.length === 0){
+            console.warn('createValidatorReward: no stake found for pubkey ' + pubkeyHex);
+            return false;
+        }
+        let source_id = results[0].source_id;
+        // Insert the reward (idempotent via UNIQUE INDEX on source_id+signing_pubkey_id+reward_type+round_reference)
+        query = `INSERT IGNORE INTO validator_rewards
+                    (source_id, signing_pubkey_id, reward_type, round_reference, amount, block_index)
+                 VALUES (?, ?, ?, ?, ?, ?)`;
+        let args = [source_id, pubkey_id, rewardType, roundReference, amount, blockIndex];
+        await this.doQuery(query, args);
+        return true;
+    }
+
     async createRewardClaim(data){
         data             = this.normalizeDataValues(data);
         let status_id    = await this.createStatus(data['STATUS']);
@@ -6560,8 +6625,9 @@ class Database {
      * Staking query methods
      */
 
-    // Get active stake for a source address (optionally filtered by tier)
-    async getActiveStakeBySource(source, tier){
+    // Get active stake for a source address (optionally filtered by tier and gated by block height)
+    // blockIndex enforces the 6-block activation/deactivation delay for BTC reorg safety
+    async getActiveStakeBySource(source, tier, blockIndex){
         let source_id = await this.getAddressId(source);
         if(source_id === null)
             return null;
@@ -6576,6 +6642,11 @@ class Database {
             query += ' AND s.tier=?';
             args.push(tier);
         }
+        if(blockIndex !== undefined && blockIndex !== null){
+            query += ' AND s.activation_block <= ? AND (s.deactivation_block IS NULL OR s.deactivation_block > ?)';
+            args.push(blockIndex);
+            args.push(blockIndex);
+        }
         query += ' ORDER BY s.action_index DESC LIMIT 1';
         let results = await this.doQuery(query, args);
         if(results.length > 0)
@@ -6583,29 +6654,113 @@ class Database {
         return null;
     }
 
+    // Count active stakes at a given tier (gated by activation/deactivation delay)
+    // Used for PBFT quorum calculation: quorum = 2 * floor((N - 1) / 3) + 1
+    async getActiveStakeCount(tier, blockIndex){
+        let valid_id = await this.getStatusId('valid');
+        let query = `SELECT COUNT(*) as cnt FROM stakes WHERE tier=? AND status_id=?`;
+        let args = [tier, valid_id];
+        if(blockIndex !== undefined && blockIndex !== null){
+            query += ' AND activation_block <= ? AND (deactivation_block IS NULL OR deactivation_block > ?)';
+            args.push(blockIndex);
+            args.push(blockIndex);
+        }
+        let results = await this.doQuery(query, args);
+        return results.length > 0 ? Number(results[0].cnt) : 0;
+    }
+
+    // Create/Update record in `prices` table (PRICE action log)
+    // Stores the raw on-chain PRICE action data; the hub aggregates these into price_snapshots/oracle_prices
+    async createPrice(data){
+        data                = this.normalizeDataValues(data);
+        let status_id       = await this.createStatus(data['STATUS']);
+        let source_id       = await this.getAddressId(data['SOURCE']);
+        let action_index    = data['ACTION_INDEX'];
+        let version         = data['VERSION'];
+        let validation      = data['VALIDATION_STATUS'] || 'pending';
+        // v0 fields
+        let round_number    = data['ROUND'] || null;
+        let round_timestamp = data['TIMESTAMP'] || null;
+        let pair_count      = data['PAIR_COUNT'] || null;
+        let pairs_json      = data['PAIRS_JSON'] || null;
+        let sig_count       = data['SIG_COUNT'] || null;
+        let sigs_json       = data['SIGS_JSON'] || null;
+        // v1 fields
+        let coin_id         = (data['V1_COIN'])  ? await this.createCoin(data['V1_COIN'])     : null;
+        let tick_id         = (data['V1_TICK'])  ? await this.createTicker(data['V1_TICK'])   : null;
+        let fiat_id         = (data['V1_FIAT'])  ? await this.createFiat(data['V1_FIAT'])     : null;
+        let value           = data['V1_VALUE'] || null;
+        let fee             = data['V1_FEE']   || null;
+        let memo_id         = (data['MEMO'])     ? await this.createMemo(data['MEMO'])         : null;
+        // Check if record exists (idempotent for retries)
+        let query   = "SELECT action_index FROM prices WHERE action_index=? LIMIT 1";
+        let args    = [action_index];
+        let exists  = false;
+        let results = await this.doQuery(query, args);
+        if(results.length > 0)
+            exists = true;
+        if(exists){
+            query = `UPDATE prices SET
+                        version=?, source_id=?, round_number=?, round_timestamp=?,
+                        pair_count=?, pairs_json=?, sig_count=?, sigs_json=?,
+                        coin_id=?, tick_id=?, fiat_id=?, value=?, fee=?, memo_id=?,
+                        validation_status=?, status_id=?
+                    WHERE action_index=?`;
+            args = [version, source_id, round_number, round_timestamp,
+                    pair_count, pairs_json, sig_count, sigs_json,
+                    coin_id, tick_id, fiat_id, value, fee, memo_id,
+                    validation, status_id, action_index];
+        } else {
+            query = `INSERT INTO prices
+                        (version, source_id, round_number, round_timestamp,
+                         pair_count, pairs_json, sig_count, sigs_json,
+                         coin_id, tick_id, fiat_id, value, fee, memo_id,
+                         validation_status, status_id, action_index)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+            args = [version, source_id, round_number, round_timestamp,
+                    pair_count, pairs_json, sig_count, sigs_json,
+                    coin_id, tick_id, fiat_id, value, fee, memo_id,
+                    validation, status_id, action_index];
+        }
+        await this.doQuery(query, args);
+    }
+
     // Get active stake by signing pubkey
-    async getActiveStakeByPubkey(pubkey){
+    // blockIndex enforces the 6-block activation/deactivation delay for BTC reorg safety
+    async getActiveStakeByPubkey(pubkey, blockIndex){
         let pubkey_id = await this.getPubkeyId(String(pubkey).toLowerCase());
         if(pubkey_id === null)
             return null;
         let valid_id = await this.getStatusId('valid');
-        let query = `SELECT * FROM stakes WHERE signing_pubkey_id=? AND status_id=? ORDER BY action_index DESC LIMIT 1`;
+        let query = `SELECT * FROM stakes WHERE signing_pubkey_id=? AND status_id=?`;
         let args = [pubkey_id, valid_id];
+        if(blockIndex !== undefined && blockIndex !== null){
+            query += ' AND activation_block <= ? AND (deactivation_block IS NULL OR deactivation_block > ?)';
+            args.push(blockIndex);
+            args.push(blockIndex);
+        }
+        query += ' ORDER BY action_index DESC LIMIT 1';
         let results = await this.doQuery(query, args);
         if(results.length > 0)
             return results[0];
         return null;
     }
 
-    // Get active delegation for a source + pubkey
-    async getActiveDelegation(source, pubkey){
+    // Get active delegation for a source + pubkey (gated by activation/deactivation delay)
+    async getActiveDelegation(source, pubkey, blockIndex){
         let source_id = await this.getAddressId(source);
         let pubkey_id = await this.getPubkeyId(String(pubkey).toLowerCase());
         if(source_id === null || pubkey_id === null)
             return null;
         let valid_id = await this.getStatusId('valid');
-        let query = `SELECT * FROM delegations WHERE source_id=? AND signing_pubkey_id=? AND status_id=? ORDER BY action_index DESC LIMIT 1`;
+        let query = `SELECT * FROM delegations WHERE source_id=? AND signing_pubkey_id=? AND status_id=?`;
         let args = [source_id, pubkey_id, valid_id];
+        if(blockIndex !== undefined && blockIndex !== null){
+            query += ' AND activation_block <= ? AND (deactivation_block IS NULL OR deactivation_block > ?)';
+            args.push(blockIndex);
+            args.push(blockIndex);
+        }
+        query += ' ORDER BY action_index DESC LIMIT 1';
         let results = await this.doQuery(query, args);
         if(results.length > 0)
             return results[0];
@@ -6969,19 +7124,79 @@ class Database {
         };
     }
 
-    // Get the latest finalized price for a coin pair (used for fee validation)
-    async getLatestPrice(coinPair){
-        let query = `SELECT price, round_number, block_timestamp
+    // Get the latest finalized price for a coin pair at or before a given block height
+    // blockHeight gates the query so two nodes processing the same block always see the same price
+    async getLatestPrice(coinPair, blockHeight){
+        let query, args;
+        if(blockHeight !== undefined && blockHeight !== null){
+            query = `SELECT price, round_number, block_timestamp
+                     FROM price_snapshots
+                     WHERE coin_pair = ? AND status = 'finalized' AND price IS NOT NULL
+                       AND reference_block <= ?
+                     ORDER BY round_number DESC LIMIT 1`;
+            args = [coinPair, blockHeight];
+        } else {
+            query = `SELECT price, round_number, block_timestamp
                      FROM price_snapshots
                      WHERE coin_pair = ? AND status = 'finalized' AND price IS NOT NULL
                      ORDER BY round_number DESC LIMIT 1`;
-        let rows = await this.doQuery(query, [coinPair]);
+            args = [coinPair];
+        }
+        let rows = await this.doQuery(query, args);
         if(rows.length === 0) return null;
         return {
             price:       rows[0].price,
             roundNumber: Number(rows[0].round_number),
             timestamp:   Number(rows[0].block_timestamp)
         };
+    }
+
+    // Get the latest effective oracle price for a (sourceAddress, coin, tick, fiat) combination
+    // gated by blockTime so two nodes processing the same block see the same price.
+    // The 24-hour lock window is enforced by `effective_at` — only prices whose effective_at <= blockTime are returned.
+    async getOraclePrice(sourceAddress, coin, tick, fiat, blockTime){
+        let query = `SELECT id, source_address, source_chain, coin, tick, fiat, value, fee, memo,
+                            block_time, effective_at, action_index
+                     FROM oracle_prices
+                     WHERE source_address = ? AND coin = ? AND tick = ? AND fiat = ?`;
+        let args = [sourceAddress, coin, tick, fiat];
+        if(blockTime !== undefined && blockTime !== null){
+            query += ' AND effective_at <= ?';
+            args.push(blockTime);
+        }
+        query += ' ORDER BY effective_at DESC, id DESC LIMIT 1';
+        let rows = await this.doQuery(query, args);
+        if(rows.length === 0) return null;
+        return {
+            sourceAddress: rows[0].source_address,
+            sourceChain:   rows[0].source_chain,
+            coin:          rows[0].coin,
+            tick:          rows[0].tick,
+            fiat:          rows[0].fiat,
+            value:         rows[0].value,
+            fee:           rows[0].fee,
+            memo:          rows[0].memo,
+            blockTime:     Number(rows[0].block_time),
+            effectiveAt:   Number(rows[0].effective_at),
+            actionIndex:   Number(rows[0].action_index)
+        };
+    }
+
+    // Get oracle prices for a (sourceAddress, coin, tick, fiat) within a time range (newest-first)
+    // Used by reverseOraclePriceMatch for FIAT dispenser settlement.
+    async getOraclePricesInTimeRange(sourceAddress, coin, tick, fiat, startTime, endTime){
+        let query = `SELECT value, block_time, effective_at, action_index
+                     FROM oracle_prices
+                     WHERE source_address = ? AND coin = ? AND tick = ? AND fiat = ?
+                       AND effective_at BETWEEN ? AND ?
+                     ORDER BY effective_at DESC, id DESC`;
+        let rows = await this.doQuery(query, [sourceAddress, coin, tick, fiat, startTime, endTime]);
+        return rows.map(row => ({
+            price:        row.value,
+            blockTime:    Number(row.block_time),
+            effectiveAt:  Number(row.effective_at),
+            actionIndex:  Number(row.action_index)
+        }));
     }
 
     // Get finalized prices for a coin pair within a time range (newest-first)

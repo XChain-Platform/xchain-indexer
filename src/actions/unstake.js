@@ -71,19 +71,19 @@ class Unstake {
          * TIER Validations
          ****************************************************************/
 
-        // Verify TIER is valid (1=oracle, 2=cross-chain)
+        // Verify TIER is valid (1=oracle, 2=cross-chain, 3=oracle publisher)
         let tier = parseInt(data['TIER']);
-        if(!error && ![1, 2].includes(tier))
+        if(!error && ![1, 2, 3].includes(tier))
             error = 'invalid: TIER (unknown)';
 
         /*****************************************************************
          * Stake Existence Validations
          ****************************************************************/
 
-        // Verify SOURCE has an active stake at this tier
+        // Verify SOURCE has an active stake at this tier (gated by activation delay)
         let activeStake = null;
         if(!error){
-            activeStake = await this.indexerDb.getActiveStakeBySource(data['SOURCE'], tier);
+            activeStake = await this.indexerDb.getActiveStakeBySource(data['SOURCE'], tier, data['BLOCK_INDEX']);
             if(!activeStake)
                 error = 'invalid: no active stake at tier';
         }
@@ -95,7 +95,8 @@ class Unstake {
         // Calculate cooldown end block from staking config
         let staking = this.config['STAKING'];
         let cooldownBlocks = (staking && staking['COOLDOWN_BLOCKS']) ? staking['COOLDOWN_BLOCKS'] : 1000;
-        data['COOLDOWN_END_BLOCK'] = data['BLOCK_INDEX'] + cooldownBlocks;
+        let activationDelay = (staking && staking['ACTIVATION_DELAY_BLOCKS']) ? staking['ACTIVATION_DELAY_BLOCKS'] : 6;
+        data['COOLDOWN_END_BLOCK'] = parseInt(data['BLOCK_INDEX']) + cooldownBlocks;
         data['AMOUNT'] = activeStake ? activeStake.amount : '0';
 
         // Determine final status
@@ -107,6 +108,11 @@ class Unstake {
 
         // Create record in unstakes table
         await this.indexerDb.createUnstake(data);
+
+        // Mark the parent stake's deactivation_block (BLOCK_INDEX + activation delay)
+        // The validator continues to participate for ACTIVATION_DELAY_BLOCKS blocks before being removed from active set
+        if(status === 'valid')
+            await this.indexerDb.setStakeDeactivation(data['SOURCE'], tier, parseInt(data['BLOCK_INDEX']) + activationDelay);
 
         // Store the SOURCE and GAS tick in addresses list
         let gas = this.config['GAS'];

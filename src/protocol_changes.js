@@ -86,6 +86,10 @@ class ProtocolChanges {
         this.addChange('REVOKE_DELEGATION',  '2.0.0',0,0,0,0,0,0);
         this.addChange('CLAIM_REWARDS',      '2.0.0',0,0,0,0,0,0);
 
+        // PRICE action — validator oracle (v0) and user oracle (v1) pricing
+        // Publishable on any chain (DOGE recommended for low fees)
+        this.addChange('PRICE',              '2.0.0',0,0,0,0,0,0);
+
         // Define protocol changes (ALL LOWER Case)
         // this.addChange('name','1.0.0',0,0,0,0,0,0);
         this.addChange('UNIFIED_FEES',   '2.0.0',0,0,0,0,0,0);

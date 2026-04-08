@@ -7,6 +7,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.5.0] - 2026-04-08
+
+### Added
+- `actions/price.js` — new PRICE action handler supporting both v0 (validator COIN/FIAT snapshots) and v1 (user TOKEN/FIAT oracles). v0 parses variable-length PBFT signatures, verifies each signer has an active Tier 1 stake, validates Ed25519 signatures against the canonical payload, and checks PBFT quorum (`2*floor((tier1_count-1)/3)+1`). v1 validates COIN/TICK/FIAT/VALUE/FEE fields. After validation, pushes to `xchain-hub` for cross-chain aggregation.
+- `sql/prices.sql` — new action table for on-chain PRICE actions. Stores v0 fields (`round_number`, `pairs_json`, `sigs_json`) and v1 fields (`coin_id`, `tick_id`, `fiat_id`, `value`, `fee`). One row per processed PRICE transaction.
+- `ed25519.js` — lightweight Ed25519 verification helper using Node.js built-in `crypto` (no external deps). Provides `pubkeyFromHex()`, `verify()`, and `buildPriceV0Payload()` for canonical sortable JSON payload construction matching the xchain-hub signer format.
+- `hub_client.js` — dependency-free JSON-RPC client for pushing data to `xchain-hub` (`pushChainTip`, `pushPriceRound`, `pushOraclePrice`). Uses Node's built-in `http`/`https` modules.
+- `hub_db_sync.js` — WebSocket sync client that maintains a local copy of the hub's `price_snapshots` and `oracle_prices` tables for geographic distribution. Bootstraps via REST snapshot (`GET /hub-db/snapshot/...`) then subscribes to `/hub-db/subscribe` for live row updates. Applies rows via `INSERT IGNORE` (idempotent). Falls back to periodic polling if the `ws` package isn't available. Opt-in via `HUB_DB_SYNC_ENABLED=true`.
+- Third database connection in `XChainIndexer.js` — new `hubDb` connection points at a local read-only copy of hub cross-chain infrastructure tables. Created when `HUB_DB_HOST` / `HUB_DB_NAME` env vars are set.
+- Tier 3 oracle publisher staking support in `configs/BTC.js` — `STAKING.TIERS[3]` = 500 XCHAIN, `STAKING.ACTIVATION_DELAY_BLOCKS` = 6.
+- `DOGE_ADDRESS` field on Tier 3 STAKE actions — validates D-prefix + 34-char base58 format. Recorded on-chain in `stakes.doge_address` column.
+- 6-block activation delay for all validator state changes (STAKE, UNSTAKE, DELEGATE, REVOKE_DELEGATION). Tracked via new `activation_block` and `deactivation_block` columns on the `stakes` and `delegations` tables. Active-stake queries filter by `activation_block <= current_block AND (deactivation_block IS NULL OR deactivation_block > current_block)` — eliminates BTC reorg edge cases for reorgs of ≤5 blocks.
+- `createValidatorReward()` in `db.js` — resolves a signing pubkey to the staking source address via the `stakes → index_pubkeys` join and inserts into the indexer's `validator_rewards` table. Called by the new `pushvalidatorrewards` JSON-RPC endpoint when xchain-hub's RewardTracker pushes reward records.
+- `getActiveStakeCount(tier, blockIndex)` in `db.js` — counts active stakes at a given tier for PBFT quorum calculation in PRICE v0 signature validation.
+- `getOraclePrice()` and `getOraclePricesInTimeRange()` in `db.js` — query helpers for `oracle_prices` with `effective_at` gating (enforces the 24-hour price lock window).
+- `reverseOraclePriceMatch()` in `utility.js` — user oracle reverse price matching for FIAT dispensers. Combines PRICE v1 user oracle (TOKEN/FIAT) with PRICE v0 validator oracle (COIN/FIAT) for cross-conversion. Walks historical oracle prices newest-first within a 24-hour window.
+- `ORACLE_ADDRESS` field on DISPENSER action (format 0) — references a user PRICE v1 oracle for TOKEN/FIAT pricing. When set, `FIAT_AMOUNT` is ignored and the oracle provides the price. `dispense.js` branches between `reversePriceMatch` (validator path) and `reverseOraclePriceMatch` (user oracle path).
+- `oracle_address_id` column on `dispensers` table (FK to `index_addresses`).
+- `pushvalidatorrewards` JSON-RPC endpoint on indexer `api.js` — receives reward push from xchain-hub's `RewardTracker`, writes to the indexer's `validator_rewards` table. Requires `INDEXER_API_KEY` for auth.
+- `HubClient.pushChainTip()` called after every successful block commit in `XChainIndexer.js` — anchors oracle rounds to BTC chain tip (fire-and-forget, never blocks indexing).
+- `EUR` and `KRW` added to `config.FIATS` and `sql/index_fiats.sql` — 12 supported FIAT currencies total.
+- `PRICE` action registered in `protocol_changes.js`, `actions.js`, and decoder `VALID_ACTION_NAMES`.
+
+### Changed
+- `getLatestPrice(coinPair, blockHeight)` in `db.js` — now accepts an optional `blockHeight` parameter and filters `reference_block <= blockHeight`. Gates price lookups by the current block so two independent nodes processing the same block always see the same price (cross-node determinism fix).
+- `utility.js validateNativeCoinFee()` — passes `data['BLOCK_INDEX']` to `getLatestPrice()` and prefers the local hub DB connection (`db.indexer.hubDb`) when available.
+- `utility.js reversePriceMatch()` — same hub DB preference for price snapshots.
+- `db.js` `Database` constructor — now stores `this.indexer` reference so dependent code can resolve `db.indexer.hubDb` automatically.
+- `actions/stake.js` — format expanded to `VERSION|TIER|CHAINS|SIGNING_PUBKEY|DOGE_ADDRESS`. Accepts tier 3. Tier 3 rules: CHAINS must be empty, DOGE_ADDRESS required with format validation. Tier 1/2 rules: DOGE_ADDRESS must be empty. Calculates `ACTIVATION_BLOCK = BLOCK_INDEX + 6`.
+- `actions/unstake.js` — accepts tier 3. Active-stake lookup gated by block index. Sets `deactivation_block = BLOCK_INDEX + 6` on the parent stake when valid.
+- `actions/delegate.js` — accepts new delegation with 6-block activation delay. Active-stake lookup gated by block index.
+- `actions/revoke_delegation.js` — sets `deactivation_block = BLOCK_INDEX + 6` on the parent delegation when valid. Active-delegation lookup gated by block index.
+- `actions/claim_rewards.js` — active-stake lookup gated by block index.
+- `actions/dispense.js` — FIAT dispenser flow now branches on `dispenser.ORACLE_ADDRESS`: uses `reverseOraclePriceMatch()` (user oracle path) when set, otherwise uses existing `reversePriceMatch()` (validator path).
+- `actions/dispenser.js` — added `ORACLE_ADDRESS` parser and validation. Requires `FIAT_CODE` when set; makes `FIAT_AMOUNT` optional when set.
+- `actions/deploy.js` and `actions/execute.js` — `getOracleDataForVM()` calls now prefer `actions.hubDb || indexerDb`.
+- `sql/stakes.sql` — added `doge_address`, `activation_block`, `deactivation_block` columns with indexes.
+- `sql/delegations.sql` — added `activation_block`, `deactivation_block` columns with indexes.
+- `sql/dispensers.sql` — added `oracle_address_id` column with index.
+- `sql/index_fiats.sql` — added EUR and KRW rows; fixed spelling (Australian, Britain, Brazilian).
+- `db.js createStake()` / `setStakeDeactivation()` / `createDelegation()` / `setDelegationDeactivation()` — write and update the new activation/deactivation block columns.
+- `db.js createDispenser()` / `getDispenserInfo()` — write and return `oracle_address_id` / `oracle_address`.
+- `XChainIndexer.js` constructor — accepts hub DB connection parameters (`hubDbHost`, `hubDbPort`, `hubDbName`, `hubDbUser`, `hubDbPass`). Creates `HubClient` for fire-and-forget pushes to xchain-hub. Creates `HubDbSync` (opt-in) for WebSocket-based local hub DB maintenance.
+- `api.js` — added `pushvalidatorrewards` write endpoint with optional `INDEXER_API_KEY` auth. Passes hub DB env vars through to `XChainIndexer`.
+- `actions.js` — `Actions` class now exposes `hubDb` and `hubClient` to action instances via the constructor.
+
 ## [2.4.0] - 2026-04-07
 
 ### Added

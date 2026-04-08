@@ -41,10 +41,12 @@ module.exports = {
         config['FEE_TOLERANCE_MIN'] = '0.95';                // Minimum acceptable fee (95% of expected)
         config['FEE_TOLERANCE_MAX'] = '1.10';                // Maximum acceptable fee (110% of expected)
         config['STAKING'] = {
-            COOLDOWN_BLOCKS: 1000,                             // Blocks before unstaked XCHAIN is returned
+            COOLDOWN_BLOCKS:         1000,                     // Blocks before unstaked XCHAIN is returned
+            ACTIVATION_DELAY_BLOCKS: 6,                        // Blocks before stake/delegation/unstake takes effect (BTC reorg safety)
             TIERS: {
                 1: { AMOUNT: '1000.00000000' },                // Tier 1: Oracle validator
                 2: { AMOUNT: '5000.00000000' },                // Tier 2: Cross-chain validator
+                3: { AMOUNT: '500.00000000'  },                // Tier 3: Oracle publisher (DOGE broadcast)
             }
         };
         config['GAS_SCHEDULE'] = {

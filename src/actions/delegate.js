@@ -83,14 +83,15 @@ class Delegate {
          * Stake Existence Validations
          ****************************************************************/
 
-        // Verify SOURCE has an active stake
+        // Verify SOURCE has an active stake (gated by activation delay)
         if(!error){
-            let activeStake = await this.indexerDb.getActiveStakeBySource(data['SOURCE']);
+            let activeStake = await this.indexerDb.getActiveStakeBySource(data['SOURCE'], null, data['BLOCK_INDEX']);
             if(!activeStake)
                 error = 'invalid: no active stake';
         }
 
         // Check that the new signing pubkey is not already in use
+        // Pubkey collision is checked across ALL stakes (including pending activation)
         if(!error){
             let existingStake = await this.indexerDb.getActiveStakeByPubkey(data['SIGNING_PUBKEY']);
             if(existingStake)
@@ -100,6 +101,11 @@ class Delegate {
         // Verify SOURCE is not sleeping
         if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
             error = 'invalid: SOURCE (sleeping)';
+
+        // Calculate the activation block (6-block delay for BTC reorg safety)
+        let staking = this.config['STAKING'];
+        let activationDelay = (staking && staking['ACTIVATION_DELAY_BLOCKS']) ? staking['ACTIVATION_DELAY_BLOCKS'] : 6;
+        data['ACTIVATION_BLOCK'] = parseInt(data['BLOCK_INDEX']) + activationDelay;
 
         // Determine final status
         let status = (error) ? error : 'valid';
