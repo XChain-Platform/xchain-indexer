@@ -62,11 +62,17 @@ class Dispenser_Close {
                 debits  = [],
                 escrows = [];
 
-            // Get address of sweep that cancelled the dispenser (if any)
-            let address = await this.indexerDb.getSweepDestination(data['DISPENSER_ACTION_INDEX']);
-
-            // Set the destination address
-            let destination = (!this.util.isNull(address)) ? address : dispenser['SOURCE'];
+            // Determine where escrow gets credited. Priority:
+            //   1. Sweep destination — if the cancel was driven by a SWEEP, honor the chosen destination.
+            //   2. Recorded canceller — per DISPENSER.md, escrow returns to whoever cancelled
+            //      (GET_ADDRESS or SOURCE). Recorded by createDispenserStatus when status='cancelling'.
+            //   3. SOURCE — fallback for paths with no canceller (auto-expire reaches dispenser_expire,
+            //      not here, but covered for safety).
+            let sweepDest = await this.indexerDb.getSweepDestination(data['DISPENSER_ACTION_INDEX']);
+            let canceller = (!this.util.isNull(sweepDest)) ? null : await this.indexerDb.getDispenserCanceller(data['DISPENSER_ACTION_INDEX']);
+            let destination = (!this.util.isNull(sweepDest)) ? sweepDest
+                            : (!this.util.isNull(canceller)) ? canceller
+                            : dispenser['SOURCE'];
 
             if(this.util.bcgt(dispenser['GIVE_REMAINING'], 0)){
                 escrows.push([dispenser['GIVE_TICK'], -dispenser['GIVE_REMAINING'], destination]);

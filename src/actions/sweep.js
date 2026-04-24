@@ -216,9 +216,12 @@ class Sweep {
                     }
 
                     // Handle canceling dispensers
-                    // Note: Dispensers close after a set block delay, and escrowed tokens are credited to destination address
+                    // Note: Dispensers close after a set block delay; escrow is routed by dispenser_close
+                    // (sweep destination wins when this status row's action_index ties to a SWEEP action).
+                    // Record SOURCE as the canceller so dispenser_close has the canceller identity for the
+                    // non-sweep cases the spec covers.
                     if(escrow.type=='dispenser')
-                        await this.indexerDb.createDispenserStatus(data['ACTION_INDEX'], escrow.action_index, 'cancelling');
+                        await this.indexerDb.createDispenserStatus(data['ACTION_INDEX'], escrow.action_index, 'cancelling', data['SOURCE']);
 
                 }
 

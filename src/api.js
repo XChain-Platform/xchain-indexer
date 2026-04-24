@@ -47,6 +47,10 @@ for(const key of REQUIRED_ENV){
 const INDEXER_API_PORT = process.env.INDEXER_API_PORT;
 const INDEXER_NETWORK  = process.env.INDEXER_NETWORK;
 
+// xchain-utxo-tracker config (optional — required by DISPENSER fresh-address check)
+const UTXO_TRACKER_URL      = process.env.UTXO_TRACKER_URL || '';
+const UTXO_TRACKER_API_PORT = process.env.UTXO_TRACKER_API_PORT || '';
+
 // Decoder database config
 const DECODER_DB_HOST  = process.env.DECODER_DB_HOST;
 const DECODER_DB_PORT  = process.env.DECODER_DB_PORT;
@@ -78,7 +82,7 @@ const WRITE_METHODS = new Set(['pushvalidatorrewards']);
 async function startApi(){
 
     // Initialize the indexer (created before API so the controller can reference it)
-    const indexer = new XChainIndexer(DECODER_DB_HOST, DECODER_DB_PORT, DECODER_DB_NAME, DECODER_DB_USER, DECODER_DB_PASS, INDEXER_DB_HOST, INDEXER_DB_PORT, INDEXER_DB_NAME, INDEXER_DB_USER, INDEXER_DB_PASS, HUB_DB_HOST, HUB_DB_PORT, HUB_DB_NAME, HUB_DB_USER, HUB_DB_PASS);
+    const indexer = new XChainIndexer(DECODER_DB_HOST, DECODER_DB_PORT, DECODER_DB_NAME, DECODER_DB_USER, DECODER_DB_PASS, INDEXER_DB_HOST, INDEXER_DB_PORT, INDEXER_DB_NAME, INDEXER_DB_USER, INDEXER_DB_PASS, HUB_DB_HOST, HUB_DB_PORT, HUB_DB_NAME, HUB_DB_USER, HUB_DB_PASS, UTXO_TRACKER_URL, UTXO_TRACKER_API_PORT);
 
     // Create the app
     const app = express();
