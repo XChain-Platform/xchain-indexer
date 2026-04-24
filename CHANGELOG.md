@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.6.1] - 2026-04-24
+
+### Security
+- `package-lock.json` — applied `npm audit fix` to clear 8 transitive advisories in the `express` dependency chain (`body-parser` <1.20.3 DoS, `cookie` <0.7.0 OOB chars, `path-to-regexp` ReDoS, `qs` DoS, `send` <0.19.0 template-injection/XSS, `serve-static`, plus `@babel/runtime` RegExp complexity). No `package.json` dependency ranges changed; `express` resolved to the latest 4.x patch. Unit suite delta: 0 new failures. `mathjs` and `mocha` breaking bumps deferred.
+
 ## [2.6.0] - 2026-04-24
 
 ### Added
