@@ -165,6 +165,7 @@ function createMockDb() {
         getDispenserEdits: sinon.stub().resolves([]),
         getDispenserAmountRemaining: sinon.stub().resolves(0),
         getSweepDestination: sinon.stub().resolves(null),
+        getDispenserCanceller: sinon.stub().resolves(null),
 
         // Sleep / authorization
         isAddressSleeping: sinon.stub().resolves(false),

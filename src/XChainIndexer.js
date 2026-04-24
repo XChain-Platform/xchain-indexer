@@ -27,13 +27,14 @@ const actions   = require('./actions.js');
 const util      = require('./utility.js');
 const rollback  = require('./rollback.js');
 const mapper    = require('./mapper.js');
-const HubClient = require('./hub_client.js');
-const HubDbSync = require('./hub_db_sync.js');
+const HubClient   = require('./hub_client.js');
+const HubDbSync   = require('./hub_db_sync.js');
+const UtxoTracker = require('./UtxoTracker.js');
 
 class XChainIndexer {
 
     // Handle constructing a class instance
-    constructor(decoderDbHost, decoderDbPort, decoderDbName, decoderDbUser, decoderDbPass, indexerDbHost, indexerDbPort, indexerDbName, indexerDbUser, indexerDbPass, hubDbHost, hubDbPort, hubDbName, hubDbUser, hubDbPass){
+    constructor(decoderDbHost, decoderDbPort, decoderDbName, decoderDbUser, decoderDbPass, indexerDbHost, indexerDbPort, indexerDbName, indexerDbUser, indexerDbPass, hubDbHost, hubDbPort, hubDbName, hubDbUser, hubDbPass, utxoTrackerUrl, utxoTrackerPort){
         // XChain Indexer Version
         this.version = process.env.npm_package_version;
         this.name    = process.env.npm_package_name;
@@ -60,10 +61,15 @@ class XChainIndexer {
         this.hubDbUser = hubDbUser;
         this.hubDbPass = hubDbPass;
 
+        // xchain-utxo-tracker config (used by DISPENSER fresh-address check)
+        this.utxoTrackerUrl  = utxoTrackerUrl;
+        this.utxoTrackerPort = utxoTrackerPort;
+
         // Placeholders for database connections
-        this.decoderDb = null;
-        this.indexerDb = null;
-        this.hubDb     = null;
+        this.decoderDb    = null;
+        this.indexerDb    = null;
+        this.hubDb        = null;
+        this.utxoTracker  = null;
 
         // Misc placeholders
         this.synced    = false;
@@ -123,6 +129,11 @@ class XChainIndexer {
 
         // Create instance of the mapper class
         this.mapper = new mapper(this);
+
+        // Create xchain-utxo-tracker client (used by DISPENSER fresh-address check)
+        this.utxoTracker = new UtxoTracker(this.utxoTrackerUrl, this.utxoTrackerPort);
+        if(!this.utxoTracker.enabled)
+            console.log('WARNING: UTXO_TRACKER_URL / UTXO_TRACKER_API_PORT not set — DISPENSER fresh-address check will reject all non-owner dispensers');
 
         // Create instance of the actions class and pass database connection instances to it
         this.actions = new actions(this);

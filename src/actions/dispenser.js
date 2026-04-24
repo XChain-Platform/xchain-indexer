@@ -48,12 +48,13 @@ class Dispenser {
     // Handle constructing a class instance
     constructor(action){
         // Setup short aliases
-        this.actions   = action;
-        this.config    = action.config;
-        this.decoderDb = action.decoderDb;
-        this.indexerDb = action.indexerDb;
-        this.util      = action.util;
-        this.mapper    = action.mapper;
+        this.actions     = action;
+        this.config      = action.config;
+        this.decoderDb   = action.decoderDb;
+        this.indexerDb   = action.indexerDb;
+        this.util        = action.util;
+        this.mapper      = action.mapper;
+        this.utxoTracker = action.utxoTracker || null;
         
         // Define list of known FORMATS
         this.formats = {};
@@ -234,6 +235,27 @@ class Dispenser {
         if(!error && format==0 && await this.indexerDb.isActionAllowed(data['GET_ADDRESS'], data['GIVE_TICK']) == false)
             error = 'invalid: GET_ADDRESS (not authorized)';
 
+        // Verify SOURCE may open a dispenser on GET_ADDRESS.
+        // SOURCE == GET_ADDRESS: always allowed (owner self-opening).
+        // Otherwise: GET_ADDRESS must either set DISPENSER_PREFERENCE=2 (anyone),
+        // or be a fresh address (no prior on-chain activity as of BLOCK_INDEX − 1).
+        if(!error && format==0 && data['GET_ADDRESS']!=data['SOURCE']){
+            let getPrefs = await this.indexerDb.getAddressPreferences(data['GET_ADDRESS'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
+            if(Number(getPrefs['DISPENSER_PREFERENCE']) !== 2){
+                let isFresh = false;
+                if(this.utxoTracker && this.utxoTracker.enabled){
+                    try {
+                        let firstSeen = await this.utxoTracker.getFirstSeen(data['GET_ADDRESS']);
+                        isFresh = !firstSeen || firstSeen.height >= data['BLOCK_INDEX'];
+                    } catch (err) {
+                        console.log('WARNING: utxo-tracker get_first_seen failed for ' + data['GET_ADDRESS'] + ': ' + err.message);
+                    }
+                }
+                if(!isFresh)
+                    error = 'invalid: GET_ADDRESS (dispenser not permitted)';
+            }
+        }
+
         // Validate DISPENSER_ACTION_INDEX is valid dispenser
         if(!error && (format==1 || format==2) && !dispenserInfo)
             error = 'invalid: DISPENSER_ACTION_INDEX (unknown)';
@@ -380,9 +402,10 @@ class Dispenser {
                 await this.indexerDb.createDispenserStatus(data['ACTION_INDEX'], data['ACTION_INDEX'], 'open');
 
             // Format 1 - Cancel Dispenser
-            // Note: Dispenser remains open for a set amount of time (DISPENSER_CLOSE_DELAY) before being closed
+            // Note: Dispenser remains open for a set amount of time (DISPENSER_CLOSE_DELAY) before being closed.
+            // Record SOURCE as the canceller so dispenser_close can route escrow per DISPENSER.md rules.
             if(format==1)
-                await this.indexerDb.createDispenserStatus(data['ACTION_INDEX'], dispenserInfo['ACTION_INDEX'], 'cancelling');
+                await this.indexerDb.createDispenserStatus(data['ACTION_INDEX'], dispenserInfo['ACTION_INDEX'], 'cancelling', data['SOURCE']);
 
             // Handle any transaction FEE according the users's ADDRESS preferences
             [credits, debits] = await this.util.processTransactionFees(this.indexerDb, credits, debits, fees);

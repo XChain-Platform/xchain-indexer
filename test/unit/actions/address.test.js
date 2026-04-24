@@ -29,8 +29,14 @@ describe('Address action handler @regression @tier3', function () {
         indexer.util.resetLists();
     });
 
-    function makeParams(feePreference, requireMemo, memo) {
-        return ['0', String(feePreference), String(requireMemo), memo !== undefined ? memo : ''];
+    function makeParams(feePreference, requireMemo, memo, dispenserPreference) {
+        return [
+            '0',
+            String(feePreference),
+            String(requireMemo),
+            dispenserPreference !== undefined ? String(dispenserPreference) : '',
+            memo !== undefined ? memo : '',
+        ];
     }
 
     // ─── FEE_PREFERENCE validations ──────────────────────────────────
@@ -61,7 +67,7 @@ describe('Address action handler @regression @tier3', function () {
 
     it('rejects FEE_PREFERENCE=5 (out of valid range)', async function () {
         const data = createBaseData({ ACTION: 'ADDRESS', FORMAT: 0 });
-        const params = ['0', '5', '0', ''];
+        const params = ['0', '5', '0', '', ''];
         await handler.parse(params, data, null);
         assert.ok(data['STATUS'].includes('FEE_PREFERENCE'), `Expected FEE_PREFERENCE error, got: ${data['STATUS']}`);
     });
@@ -84,6 +90,45 @@ describe('Address action handler @regression @tier3', function () {
         const data = createBaseData({ ACTION: 'ADDRESS', FORMAT: 0 });
         await handler.parse(makeParams(0, 2, ''), data, null);
         assert.ok(data['STATUS'].includes('REQUIRE_MEMO'), `Expected REQUIRE_MEMO error, got: ${data['STATUS']}`);
+    });
+
+    // ─── DISPENSER_PREFERENCE validations ─────────────────────────────
+
+    it('accepts DISPENSER_PREFERENCE=1', async function () {
+        const data = createBaseData({ ACTION: 'ADDRESS', FORMAT: 0 });
+        await handler.parse(makeParams(0, 0, '', 1), data, null);
+        assert.strictEqual(data['STATUS'], 'valid');
+    });
+
+    it('accepts DISPENSER_PREFERENCE=2', async function () {
+        const data = createBaseData({ ACTION: 'ADDRESS', FORMAT: 0 });
+        await handler.parse(makeParams(0, 0, '', 2), data, null);
+        assert.strictEqual(data['STATUS'], 'valid');
+    });
+
+    it('rejects DISPENSER_PREFERENCE=0 as invalid value', async function () {
+        const data = createBaseData({ ACTION: 'ADDRESS', FORMAT: 0 });
+        await handler.parse(makeParams(0, 0, '', 0), data, null);
+        assert.ok(data['STATUS'].includes('DISPENSER_PREFERENCE'), `Expected DISPENSER_PREFERENCE error, got: ${data['STATUS']}`);
+    });
+
+    it('rejects DISPENSER_PREFERENCE=3 (out of valid range)', async function () {
+        const data = createBaseData({ ACTION: 'ADDRESS', FORMAT: 0 });
+        await handler.parse(makeParams(0, 0, '', 3), data, null);
+        assert.ok(data['STATUS'].includes('DISPENSER_PREFERENCE'), `Expected DISPENSER_PREFERENCE error, got: ${data['STATUS']}`);
+    });
+
+    it('rejects non-numeric DISPENSER_PREFERENCE', async function () {
+        const data = createBaseData({ ACTION: 'ADDRESS', FORMAT: 0 });
+        const params = ['0', '0', '0', 'abc', ''];
+        await handler.parse(params, data, null);
+        assert.ok(data['STATUS'].includes('DISPENSER_PREFERENCE'), `Expected DISPENSER_PREFERENCE format error, got: ${data['STATUS']}`);
+    });
+
+    it('accepts blank DISPENSER_PREFERENCE (preserves prior preference)', async function () {
+        const data = createBaseData({ ACTION: 'ADDRESS', FORMAT: 0 });
+        await handler.parse(makeParams(0, 0, ''), data, null);
+        assert.strictEqual(data['STATUS'], 'valid');
     });
 
     // ─── MEMO validations ─────────────────────────────────────────────

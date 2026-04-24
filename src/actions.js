@@ -102,6 +102,9 @@ class Actions {
         // Setup alias to the indexer protocol changes instance
         this.protocolChanges = indexer.protocolChanges;
 
+        // Setup alias to the xchain-utxo-tracker client (used by DISPENSER fresh-address check)
+        this.utxoTracker = indexer.utxoTracker || null;
+
         // Create action instances and pass database connections
         this.actionAddress         = new address(this);
         this.actionAirdrop         = new airdrop(this);

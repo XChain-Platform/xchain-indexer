@@ -2283,12 +2283,13 @@ class Database {
 
     // Create record in `addresses` table
     async createAddressOption(data){
-        data               = this.normalizeDataValues(data);
-        let status_id      = await this.createStatus(data['STATUS']);
-        let memo_id        = await this.createMemo(data['MEMO']);
-        let action_index   = data['ACTION_INDEX'];
-        let fee_preference = data['FEE_PREFERENCE'];
-        let require_memo   = data['REQUIRE_MEMO'];
+        data                     = this.normalizeDataValues(data);
+        let status_id            = await this.createStatus(data['STATUS']);
+        let memo_id              = await this.createMemo(data['MEMO']);
+        let action_index         = data['ACTION_INDEX'];
+        let fee_preference       = data['FEE_PREFERENCE'];
+        let require_memo         = data['REQUIRE_MEMO'];
+        let dispenser_preference = data['DISPENSER_PREFERENCE'];
         // Check if record already exists for this address
         let query  = "SELECT action_index FROM addresses WHERE action_index=? LIMIT 1";
         let args   = [action_index];
@@ -2302,14 +2303,15 @@ class Database {
                     SET
                         fee_preference=?,
                         require_memo=?,
+                        dispenser_preference=?,
                         memo_id=?,
                         status_id=?
-                    WHERE 
+                    WHERE
                         action_index=?`;
         } else {
-            query = "INSERT INTO addresses (fee_preference, require_memo, memo_id, status_id, action_index) values (?, ?, ?, ?, ?)";
+            query = "INSERT INTO addresses (fee_preference, require_memo, dispenser_preference, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?)";
         }
-        args    = [fee_preference, require_memo, memo_id, status_id, action_index];
+        args    = [fee_preference, require_memo, dispenser_preference, memo_id, status_id, action_index];
         results = await this.doQuery(query, args);
     }
 
@@ -2388,8 +2390,9 @@ class Database {
         let id   = await this.createAddress(address);
         // Set default address preferences
         let data = {};
-        data['FEE_PREFERENCE'] = 2; // 2=Donate FEES to development
-        data['REQUIRE_MEMO']   = 0; // 0=Do NOT Require memo on SENDs to this address
+        data['FEE_PREFERENCE']       = 2; // 2=Donate FEES to development
+        data['REQUIRE_MEMO']         = 0; // 0=Do NOT Require memo on SENDs to this address
+        data['DISPENSER_PREFERENCE'] = 1; // 1=Only owner can open dispenser on this address
         // Build out the SQL query and arguments
         let sql  = '';
         let args = [id, 'valid'];
@@ -2402,24 +2405,27 @@ class Database {
             args.push(block_index);
         }
         // Lookup the address preferences
-        let query = `SELECT 
+        let query = `SELECT
                 a1.fee_preference,
-                a1.require_memo
+                a1.require_memo,
+                a1.dispenser_preference
             FROM
                 addresses                 a1
                 INNER JOIN actions        a2 ON (a1.action_index=a2.action_index)
                 INNER JOIN transactions   t1 ON (t1.tx_index=a2.tx_index)
                 INNER JOIN index_statuses s1 ON (s1.id=a1.status_id)
-            WHERE 
-                t1.source_id=? AND 
+            WHERE
+                t1.source_id=? AND
                 s1.status=?` + sql + `
-            ORDER BY 
+            ORDER BY
                 a1.action_index ASC`;
         let results = await this.doQuery(query, args);
         if(results.length > 0){
             for(let row of results){
                 data['FEE_PREFERENCE'] = Number(row.fee_preference);
                 data['REQUIRE_MEMO']   = Number(row.require_memo);
+                if(!this.util.isNull(row.dispenser_preference))
+                    data['DISPENSER_PREFERENCE'] = Number(row.dispenser_preference);
             }
         }
         return data;
@@ -5862,12 +5868,14 @@ class Database {
     }
 
     // Create/Update record in `dispenser_statuses` table
-    // @param {action_index}          integer Action index of action
-    // @param {dispenser_action_tick} integer Action index of dispenser
-    // @param {status}                string  Status of the referenced dispenser (open/complete/closing/cancelled/expired)
-    async createDispenserStatus(action_index, dispenser_action_index, status){
+    // @param {action_index}            integer Action index of action
+    // @param {dispenser_action_index}  integer Action index of dispenser
+    // @param {status}                  string  Status of the referenced dispenser (open/complete/closing/cancelled/expired)
+    // @param {cancelled_by}            string  (optional) Address that triggered the cancel — recorded for the 'cancelling' status so dispenser_close can route escrow correctly
+    async createDispenserStatus(action_index, dispenser_action_index, status, cancelled_by){
         // Normalize data
-        let status_id = await this.createStatus(status);
+        let status_id       = await this.createStatus(status);
+        let cancelled_by_id = (!this.util.isNull(cancelled_by)) ? await this.createAddress(cancelled_by) : null;
         // Check if record already exists for this in order_statuses table
         let query  = `SELECT
                             action_index
@@ -5886,15 +5894,17 @@ class Database {
             query = `UPDATE
                         dispenser_statuses
                     SET
-                        status_id=?
-                    WHERE 
+                        status_id=?,
+                        cancelled_by_id=?
+                    WHERE
                         action_index=? AND
                         dispenser_action_index=?`;
+            args = [status_id, cancelled_by_id, action_index, dispenser_action_index];
         } else {
             // INSERT record
-            query = `INSERT INTO dispenser_statuses (status_id, action_index, dispenser_action_index) values (?, ?, ?)`;
+            query = `INSERT INTO dispenser_statuses (status_id, cancelled_by_id, action_index, dispenser_action_index) values (?, ?, ?, ?)`;
+            args  = [status_id, cancelled_by_id, action_index, dispenser_action_index];
         }
-        args    = [status_id, action_index, dispenser_action_index];
         results = await this.doQuery(query, args);
     }
 
@@ -6362,6 +6372,29 @@ class Database {
         return dispensers;
     }
 
+
+    // Return the address recorded as the canceller for a dispenser's most recent
+    // 'cancelling' status row, or null if there isn't one. Used by dispenser_close
+    // to route escrow per DISPENSER.md (canceller == GET_ADDRESS → escrow to GET_ADDRESS;
+    // canceller == SOURCE → escrow to SOURCE).
+    async getDispenserCanceller(action_index){
+        let address = null;
+        let query = `SELECT
+                        a1.address
+                    FROM
+                        dispenser_statuses s1
+                        INNER JOIN index_addresses a1 ON (a1.id=s1.cancelled_by_id)
+                    WHERE
+                        s1.dispenser_action_index=? AND
+                        s1.cancelled_by_id IS NOT NULL
+                    ORDER BY
+                        s1.action_index DESC
+                    LIMIT 1`;
+        let results = await this.doQuery(query, [action_index]);
+        if(results.length > 0)
+            address = results[0].address;
+        return address;
+    }
 
     // Handle getting the sweep destination address for a given dispenser action_index
     async getSweepDestination(action_index){

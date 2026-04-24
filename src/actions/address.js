@@ -18,19 +18,24 @@
  * This action configures address specific options.
  * 
  * PARAMS:
- * - VERSION        - Format Version
- * - FEE_PREFERENCE - Set preference for how `FEE` is used
- * - REQUIRE_MEMO   - Require a `MEMO` on any received `SEND`
- * - MEMO           - An optional memo to include     
- * 
+ * - VERSION              - Format Version
+ * - FEE_PREFERENCE       - Set preference for how `FEE` is used
+ * - REQUIRE_MEMO         - Require a `MEMO` on any received `SEND`
+ * - DISPENSER_PREFERENCE - Who may open dispensers on this address
+ * - MEMO                 - An optional memo to include
+ *
  * FEE_PREFERENCE Options :
  * - 1 = `FEE` is destroyed, lowering supply
  * - 2 = `FEE` to donated to protocol development (default)
  * - 3 = `FEE` to donated to community development
  *
+ * DISPENSER_PREFERENCE Options :
+ * - 1 = Only owner can open dispenser (default)
+ * - 2 = Anyone can open dispenser
+ *
  * FORMATS:
  * - 0 = Full
- * 
+ *
  ********************************************************************/
 
 class Address {
@@ -47,13 +52,13 @@ class Address {
 
         // Define list of known FORMATS
         this.formats = {};
-        this.formats[0] = 'VERSION|FEE_PREFERENCE|REQUIRE_MEMO|MEMO';
+        this.formats[0] = 'VERSION|FEE_PREFERENCE|REQUIRE_MEMO|DISPENSER_PREFERENCE|MEMO';
 
         // Define lists of various fields
         this.fieldList = {};
 
         // Define list of NUMBER fields (used to convert values from string to number)
-        this.fieldList['NUMBER'] = ['FEE_PREFERENCE', 'REQUIRE_MEMO'];
+        this.fieldList['NUMBER'] = ['FEE_PREFERENCE', 'REQUIRE_MEMO', 'DISPENSER_PREFERENCE'];
 
         // Define lists of valid field values
         this.validValues = {};
@@ -61,8 +66,11 @@ class Address {
         // Define list of valid FEE_PREFERENCE values
         this.validValues['FEE_PREFERENCE'] = [0,1,2];
 
-        // Define list of valid MEMO_PREFERENCE values
+        // Define list of valid REQUIRE_MEMO values
         this.validValues['REQUIRE_MEMO'] = [0,1];
+
+        // Define list of valid DISPENSER_PREFERENCE values
+        this.validValues['DISPENSER_PREFERENCE'] = [1,2];
     }
 
     // Handle parsing the ADDRESS transaction
@@ -102,6 +110,10 @@ class Address {
         if(!error && !this.util.isNull(data['REQUIRE_MEMO']) && !this.util.isNumeric(data['REQUIRE_MEMO']))
             error = "invalid: REQUIRE_MEMO (format)";
 
+        // Verify DISPENSER_PREFERENCE is numeric
+        if(!error && !this.util.isNull(data['DISPENSER_PREFERENCE']) && !this.util.isNumeric(data['DISPENSER_PREFERENCE']))
+            error = "invalid: DISPENSER_PREFERENCE (format)";
+
         /*****************************************************************
          * General Validations
          ****************************************************************/
@@ -113,6 +125,10 @@ class Address {
         // Verify REQUIRE_MEMO value is valid
         if(!error && !this.util.isNull(data['REQUIRE_MEMO']) && !this.validValues['REQUIRE_MEMO'].includes(Number(data['REQUIRE_MEMO'])))
             error = 'invalid: REQUIRE_MEMO (value)';
+
+        // Verify DISPENSER_PREFERENCE value is valid
+        if(!error && !this.util.isNull(data['DISPENSER_PREFERENCE']) && !this.validValues['DISPENSER_PREFERENCE'].includes(Number(data['DISPENSER_PREFERENCE'])))
+            error = 'invalid: DISPENSER_PREFERENCE (value)';
 
         // Verify SOURCE is not sleeping
         if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)

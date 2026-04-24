@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.6.0] - 2026-04-24
+
+### Added
+- `actions/address.js` — `DISPENSER_PREFERENCE` field on `ADDRESS` format `0` (`1`=owner only default, `2`=anyone). Numeric + valid-value validation. Persisted via `createAddressOption()`; defaulted to `1` on first lookup for addresses that have never set the field.
+- `actions/dispenser.js` — authorization gate for opening a dispenser on a non-`SOURCE` `GET_ADDRESS`: allowed only when the target has `DISPENSER_PREFERENCE=2` or is a fresh address (`utxo-tracker get_first_seen` returns null or a height `>= BLOCK_INDEX`). Rejected with `invalid: GET_ADDRESS (dispenser not permitted)` otherwise. `GET_ADDRESS == SOURCE` bypasses the check (owner self-open).
+- `UtxoTracker.js` — new thin JSON-RPC client for `xchain-utxo-tracker`. Exposes `getFirstSeen(address)` used by the DISPENSER fresh-address check. `enabled` flag gated on `UTXO_TRACKER_URL` / `UTXO_TRACKER_API_PORT` env vars; when disabled, all non-owner dispensers on non-preference-open addresses are rejected (logged at startup).
+- `XChainIndexer.js` / `api.js` — plumb `UTXO_TRACKER_URL` and `UTXO_TRACKER_API_PORT` env vars through to the new `UtxoTracker` client; startup warning when the client is disabled.
+- `db.js getDispenserCanceller()` — returns the address recorded on the most recent `cancelling` status row for a dispenser, used by `dispenser_close` to route escrow per spec.
+- `sql/dispenser_statuses.sql` — new `cancelled_by_id` column (FK to `index_addresses`) recording the address that triggered a cancel; indexed for lookup.
+
+### Changed
+- `actions/dispenser.js` (format 1 cancel) and `actions/sweep.js` (dispenser cancel branch) — now pass `SOURCE` as the canceller when writing the `cancelling` status row, so `dispenser_close` has the canceller identity available.
+- `actions/dispenser_close.js` — escrow destination now resolves in this priority order: (1) `SWEEP` destination if the cancel came from a `SWEEP`, (2) recorded canceller (`GET_ADDRESS` or `SOURCE`) per `DISPENSER.md`, (3) dispenser `SOURCE` fallback. Matches the spec's close-path escrow rules.
+- `db.js createDispenserStatus()` — accepts optional `cancelled_by` address; writes/updates the new `cancelled_by_id` column.
+- `db.js createAddressOption()` / `getAddressPreferences()` — read/write the new `dispenser_preference` column. Defaults to `1` (owner only) when the address has no prior non-null value.
+- `sql/addresses.sql` — added `dispenser_preference BIGINT UNSIGNED` column.
+- `test/unit/actions/address.test.js` / `test/fixtures/mocks.js` — parameter helper and `makeParams()` signature updated for the new `DISPENSER_PREFERENCE` field position; `getDispenserCanceller` stub added to the mock DB.
+
 ## [2.5.0] - 2026-04-08
 
 ### Added
