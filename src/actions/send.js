@@ -238,7 +238,34 @@ class Send {
             // Verify SOURCE has enough balances to cover send AMOUNT
             if(!error && !this.util.hasBalance(balances, tokenInfo['TICK_ID'], send['AMOUNT']))
                 error = 'invalid: insufficient funds';
-        
+
+            // Gated-content rule: if TICK has any active gated FILEs, this
+            // SEND must be inside the same tx as a MESSAGE v2 addressed to
+            // DESTINATION carrying the key handoff payload. The indexer only
+            // checks structural presence — the wallet verifies cryptographic
+            // correctness at unlock time.
+            // See xchain-documentation/protocol/TOKEN_GATED_CONTENT.md.
+            if(!error){
+                let gatedHashes = await this.indexerDb.getActiveGatedKeyHashes(send['TICK']);
+                if(gatedHashes.length > 0){
+                    let siblings = data['SIBLING_ACTIONS'] || [];
+                    let foundHandoff = false;
+                    for(let s of siblings){
+                        if(s.action !== 'MESSAGE') continue;
+                        // MESSAGE v2 fields: VERSION|COIN|DESTINATION|ENCRYPTED_MESSAGE
+                        // (s.params[0]=VERSION, [1]=COIN, [2]=DESTINATION, [3]=ENCRYPTED_MESSAGE)
+                        let ver  = String(s.params[0] || '');
+                        let dest = String(s.params[2] || '');
+                        if(ver === '2' && dest === send['DESTINATION']){
+                            foundHandoff = true;
+                            break;
+                        }
+                    }
+                    if(!foundHandoff)
+                        error = 'invalid: gated token transfer requires key handoff message';
+                }
+            }
+
             // Adjust balances to reduce by SEND AMOUNT
             if(!error)
                 balances = this.util.debitBalances(balances, tokenInfo['TICK_ID'], send['AMOUNT']);

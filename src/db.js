@@ -466,6 +466,7 @@ class Database {
         let data = [];
         let query = `SELECT
                         t1.data,
+                        t1.raw_data,
                         t2.hash as tx_hash,
                         a1.address as source,
                         a2.address as destination,
@@ -2884,6 +2885,63 @@ class Database {
         }
         args    = [name, title, type_id, memo_id, status_id, action_index];
         results = await this.doQuery(query, args);
+    }
+
+    // Create/Update record in `gated_files` table.
+    // Called by the FILE handler when GATE_TICKER is non-empty.
+    // Mirrors the ciphertext bytes (data['RAW_DATA']) so the explorer can
+    // serve them via /api/file/{action_index}/raw without reaching across
+    // databases. See xchain-documentation/protocol/TOKEN_GATED_CONTENT.md.
+    async createGatedFile(data){
+        data              = this.normalizeDataValues(data);
+        let action_index  = data['ACTION_INDEX'];
+        let gate_ticker   = data['GATE_TICKER'];
+        let enc_method    = Number(data['ENCRYPTION_METHOD']) || 1;
+        let key_hash      = String(data['KEY_HASH'] || '').toLowerCase();
+        let status_id     = await this.createStatus(data['STATUS']);
+        let raw_data      = data['RAW_DATA'] || null;
+
+        let exists = false;
+        let q = `SELECT action_index FROM gated_files WHERE action_index=?`;
+        let r = await this.doQuery(q, [action_index]);
+        if(r.length > 0) exists = true;
+
+        let query;
+        let args;
+        if(exists){
+            query = `UPDATE gated_files SET gate_ticker=?, encryption_method=?, key_hash=?, status_id=?, raw_data=? WHERE action_index=?`;
+            args  = [gate_ticker, enc_method, key_hash, status_id, raw_data, action_index];
+        } else {
+            query = `INSERT INTO gated_files (action_index, gate_ticker, encryption_method, key_hash, status_id, raw_data) values (?, ?, ?, ?, ?, ?)`;
+            args  = [action_index, gate_ticker, enc_method, key_hash, status_id, raw_data];
+        }
+        await this.doQuery(query, args);
+    }
+
+    // Fetch the raw ciphertext bytes for a gated FILE by ACTION_INDEX.
+    // Returns null when no such gated file exists. Used by the explorer's
+    // /api/file/{action_index}/raw endpoint.
+    async getGatedFileRaw(action_index){
+        let q = `SELECT raw_data FROM gated_files WHERE action_index=? LIMIT 1`;
+        let r = await this.doQuery(q, [action_index]);
+        if(r.length === 0) return null;
+        return r[0].raw_data;
+    }
+
+    // Return the set of distinct KEY_HASH values across all currently-active
+    // gated FILE v1 actions for a given token. Used by the SEND processor
+    // to determine whether a transfer requires a paired MESSAGE handoff.
+    // A pack of N files contributes one entry. Returns [] if the token has
+    // no gated content.
+    async getActiveGatedKeyHashes(tick){
+        // Active = status maps to 'valid' (the canonical accepted status id).
+        let q = `SELECT DISTINCT gf.key_hash
+                 FROM gated_files gf
+                 INNER JOIN index_statuses s ON s.id = gf.status_id
+                 WHERE gf.gate_ticker = ?
+                   AND s.status = 'valid'`;
+        let r = await this.doQuery(q, [tick]);
+        return r.map((row) => String(row.key_hash).toLowerCase());
     }
 
     // Lookup a record in the `index_coins` table and return record id

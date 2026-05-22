@@ -246,6 +246,7 @@ class Actions {
         data['TX_HASH']          = tx_hash;     // Transaction Hash
         data['TX_VOUT']          = tx_vout;     // Transaction vout index
         data['TX_DATA']          = tx_data;     // Raw tx data string
+        data['RAW_DATA']         = tx.raw_data; // Raw payload bytes (FILE ciphertext, etc.)
 
         // Treat plain BTC transactions (empty data) as DISPENSE triggers
         // The decoder records these when the destination matches an active dispenser address

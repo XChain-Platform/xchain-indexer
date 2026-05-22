@@ -129,6 +129,18 @@ class Batch {
         
         // Handle processing the specific ACTION commands
         if(status=='valid'){
+
+            // Pre-parse all sibling commands so child handlers can inspect them
+            // (e.g. SEND verifying a paired MESSAGE for gated token transfers).
+            // See xchain-documentation/protocol/TOKEN_GATED_CONTENT.md.
+            let siblings = [];
+            for(let command of commands){
+                let parts  = String(command).split('|');
+                let name   = String(parts[0]).toUpperCase();
+                siblings.push({ action: name, params: parts.slice(1), raw: command });
+            }
+            data['SIBLING_ACTIONS'] = siblings;
+
             for(let command of commands){
 
                 // Parse command into params
