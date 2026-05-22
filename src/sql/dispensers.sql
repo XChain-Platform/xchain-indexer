@@ -11,7 +11,7 @@ CREATE TABLE dispensers (
     get_address_id     BIGINT UNSIGNED,          -- id of record in index_addresses table (dispenser address)
     fiat_id            BIGINT UNSIGNED,          -- id of record in index_fiats table
     fiat_amount        VARCHAR(250),             -- amount of FIAT required to trigger a dispense (ignored when oracle_address_id is set)
-    oracle_address_id  BIGINT UNSIGNED,          -- id of record in index_addresses (user oracle SOURCE address; PRICE v1)
+    oracle_address_id  BIGINT UNSIGNED,          -- id of record in index_addresses (user oracle SOURCE address - PRICE v1)
     expiration         BIGINT UNSIGNED,          -- unix timestamp of dispenser expiration date/time
     allow_list         BIGINT UNSIGNED,          -- action_index of a list from the lists table
     block_list         BIGINT UNSIGNED,          -- action_index of a list from the lists table
