@@ -52,6 +52,17 @@ class Order_Match {
 
         // Get a list of any matching open orders
         let matches = await this.indexerDb.findOrderMatches(orderInfo);
+
+        // Filter for ownership compatibility: an ownership-side and a balance-side
+        // never match; both sides' GIVE_OWNERSHIP / GET_OWNERSHIP must mirror.
+        if(matches){
+            matches = matches.filter(m =>
+                Number(m['GIVE_OWNERSHIP']||0) === Number(orderInfo['GET_OWNERSHIP']||0) &&
+                Number(m['GET_OWNERSHIP']||0)  === Number(orderInfo['GIVE_OWNERSHIP']||0)
+            );
+            if(matches.length === 0) matches = false;
+        }
+
         if(matches){
 
             // Get information on the tokens involved in the order
@@ -127,6 +138,22 @@ class Order_Match {
                     if(this.debug)
                         console.log('Skipping zero quantity GET amount ', get_amount);
                     continue;
+                }
+
+                // Ownership orders are single-fill: amounts must exactly equal the order's
+                // canonical sides (no partials). The counter-order must offer the full price.
+                let orderIsOwnership = (Number(orderInfo['GIVE_OWNERSHIP']||0)==1 || Number(orderInfo['GET_OWNERSHIP']||0)==1);
+                let matchIsOwnership = (Number(matchInfo['GIVE_OWNERSHIP']||0)==1 || Number(matchInfo['GET_OWNERSHIP']||0)==1);
+                if(orderIsOwnership || matchIsOwnership){
+                    let expectedGive = (Number(orderInfo['GIVE_OWNERSHIP']||0)==1) ? '1' : orderInfo['GIVE_AMOUNT'];
+                    let expectedGet  = (Number(orderInfo['GET_OWNERSHIP']||0)==1)  ? '1' : orderInfo['GET_AMOUNT'];
+                    let giveEqual = (!this.util.bcgt(give_amount, expectedGive) && !this.util.bclt(give_amount, expectedGive));
+                    let getEqual  = (!this.util.bcgt(get_amount,  expectedGet)  && !this.util.bclt(get_amount,  expectedGet));
+                    if(!giveEqual || !getEqual){
+                        if(this.debug)
+                            console.log('Skipping ownership match: amounts must be exact (single-fill)', give_amount, expectedGive, get_amount, expectedGet);
+                        continue;
+                    }
                 }
 
                 // List of addresses allowed or blocked from matching with this matching ORDER
@@ -241,19 +268,33 @@ class Order_Match {
                         this.util.addAddressTicker(orderInfo['GET_ADDRESS'], orderInfo['GET_TICK']);
 
                 } else {
-                    // Instant settlement: existing token-to-token logic
+                    // Instant settlement.
+                    //
+                    // Two sides settle independently:
+                    //   - orderInfo.GIVE → matchInfo.GET_ADDRESS
+                    //   - matchInfo.GIVE → orderInfo.GET_ADDRESS
+                    //
+                    // Token-balance sides follow the existing escrow/credit pattern.
+                    // Ownership sides clear the escrow gate and atomically transfer
+                    // tokens.owner_id via a synthetic ISSUE+TRANSFER.
 
-                    // Remove tokens from escrow
-                    escrows.push([matchInfo['GET_TICK'], -give_amount, matchInfo['GET_ADDRESS']]);
-                    escrows.push([orderInfo['GET_TICK'], -get_amount,  orderInfo['GET_ADDRESS']]);
+                    // orderInfo.GIVE side → matchInfo.GET_ADDRESS
+                    if(Number(orderInfo['GIVE_OWNERSHIP']||0) == 1){
+                        await this.util.transferTokenOwnership(this.indexerDb, this.mapper, data, orderInfo['GIVE_TICK'], orderInfo['SOURCE'], matchInfo['GET_ADDRESS']);
+                    } else {
+                        escrows.push([matchInfo['GET_TICK'], -give_amount, matchInfo['GET_ADDRESS']]);
+                        credits.push([matchInfo['GET_TICK'],  give_amount, matchInfo['GET_ADDRESS']]);
+                        this.util.addAddressTicker(matchInfo['GET_ADDRESS'], matchInfo['GET_TICK']);
+                    }
 
-                    // Credit tokens to addresses
-                    credits.push([matchInfo['GET_TICK'], give_amount, matchInfo['GET_ADDRESS']]);
-                    credits.push([orderInfo['GET_TICK'], get_amount,  orderInfo['GET_ADDRESS']]);
-
-                    // Store the GET_ADDRESS and TICK in addresses list
-                    this.util.addAddressTicker(matchInfo['GET_ADDRESS'], matchInfo['GET_TICK']);
-                    this.util.addAddressTicker(orderInfo['GET_ADDRESS'], orderInfo['GET_TICK']);
+                    // matchInfo.GIVE side → orderInfo.GET_ADDRESS
+                    if(Number(matchInfo['GIVE_OWNERSHIP']||0) == 1){
+                        await this.util.transferTokenOwnership(this.indexerDb, this.mapper, data, matchInfo['GIVE_TICK'], matchInfo['SOURCE'], orderInfo['GET_ADDRESS']);
+                    } else {
+                        escrows.push([orderInfo['GET_TICK'], -get_amount, orderInfo['GET_ADDRESS']]);
+                        credits.push([orderInfo['GET_TICK'],  get_amount, orderInfo['GET_ADDRESS']]);
+                        this.util.addAddressTicker(orderInfo['GET_ADDRESS'], orderInfo['GET_TICK']);
+                    }
                 }
 
                 // Process any transaction ledger changes (credits / debits / escrows)

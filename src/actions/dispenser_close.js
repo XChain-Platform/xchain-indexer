@@ -74,7 +74,21 @@ class Dispenser_Close {
                             : (!this.util.isNull(canceller)) ? canceller
                             : dispenser['SOURCE'];
 
-            if(this.util.bcgt(dispenser['GIVE_REMAINING'], 0)){
+            if(Number(dispenser['GIVE_OWNERSHIP']||0) == 1){
+                // Ownership dispenser closure. If the escrow is still set, this is a
+                // cancel/expire/sweep path (no successful DISPENSE) — release the gate;
+                // if the destination differs from SOURCE, transfer ownership accordingly.
+                // If the escrow has already been cleared (because DISPENSE settled and
+                // triggered the auto-close), no further action is needed.
+                let currentEscrow = await this.indexerDb.getTokenEscrow(dispenser['GIVE_TICK']);
+                if(Number(currentEscrow) === Number(dispenser['ACTION_INDEX'])){
+                    if(destination == dispenser['SOURCE']){
+                        await this.indexerDb.clearTokenEscrow(dispenser['GIVE_TICK']);
+                    } else {
+                        await this.util.transferTokenOwnership(this.indexerDb, this.mapper, data, dispenser['GIVE_TICK'], dispenser['SOURCE'], destination);
+                    }
+                }
+            } else if(this.util.bcgt(dispenser['GIVE_REMAINING'], 0)){
                 escrows.push([dispenser['GIVE_TICK'], -dispenser['GIVE_REMAINING'], destination]);
                 credits.push([dispenser['GIVE_TICK'],  dispenser['GIVE_REMAINING'], destination]);
             }

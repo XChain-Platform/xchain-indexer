@@ -64,9 +64,14 @@ class Swap_Expire {
             debits  = [],
             escrows = [];
 
-        // Debit GIVE_TICK from escrows and credit it to the SOURCE address
-        escrows.push([swapInfo['GIVE_TICK'], -swapInfo['GIVE_AMOUNT'], swapInfo['SOURCE']]);
-        credits.push([swapInfo['GIVE_TICK'],  swapInfo['GIVE_AMOUNT'], swapInfo['SOURCE']]);
+        if(swapInfo['GIVE_OWNERSHIP']==1){
+            // Release ownership escrow back to the seller (tokens.owner_id is unchanged)
+            await this.indexerDb.clearTokenEscrow(swapInfo['GIVE_TICK']);
+        } else {
+            // Debit GIVE_TICK from escrows and credit it to the SOURCE address
+            escrows.push([swapInfo['GIVE_TICK'], -swapInfo['GIVE_AMOUNT'], swapInfo['SOURCE']]);
+            credits.push([swapInfo['GIVE_TICK'],  swapInfo['GIVE_AMOUNT'], swapInfo['SOURCE']]);
+        }
 
         // Create record in the swaps_expires table
         await this.indexerDb.createSwapExpire(data['ACTION_INDEX'], swapInfo['ACTION_INDEX'], data['STATUS']);

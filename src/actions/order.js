@@ -18,13 +18,15 @@
  * This action creates a order to sell an item on the Decentralized Exchange (DEX).
  * 
  * PARAMS:
- * VERSION             - Format Versionz
+ * VERSION             - Format Version
  * GIVE_COIN           - `COIN` name (BTC, LTC, DOGE, etc)
  * GIVE_TICK           - Ticker name or Ticker ID
- * GIVE_AMOUNT         - Quantity of `GIVE_TICK` to escrow in the order
+ * GIVE_AMOUNT         - Quantity of `GIVE_TICK` to escrow in the order (empty when GIVE_OWNERSHIP=1)
+ * GIVE_OWNERSHIP      - 1 = escrow GIVE_TICK ownership instead of a balance amount (default 0)
  * GET_COIN            - `COIN` name (BTC, LTC, DOGE, etc)
  * GET_TICK            - Ticker name or Ticker ID
- * GET_AMOUNT          - Quantity of `GET_TICK` requested in return
+ * GET_AMOUNT          - Quantity of `GET_TICK` requested in return (empty when GET_OWNERSHIP=1)
+ * GET_OWNERSHIP       - 1 = require matcher to currently own GET_TICK and transfer it (default 0)
  * GET_ADDRESS         - Address to receive `GET_TICK` on `GET_COIN` network
  * EXPIRATION          - Timestamp of when order should expire, in Unix time
  * ALLOW_LIST          - `ACTION_INDEX` of a `LIST` of addresses allowed to match order
@@ -53,7 +55,7 @@ class Order {
         
         // Define list of known FORMATS
         this.formats = {};
-        this.formats[0] = 'VERSION|GIVE_COIN|GIVE_TICK|GIVE_AMOUNT|GET_COIN|GET_TICK|GET_AMOUNT|GET_ADDRESS|EXPIRATION|ALLOW_LIST|BLOCK_LIST|MEMO';
+        this.formats[0] = 'VERSION|GIVE_COIN|GIVE_TICK|GIVE_AMOUNT|GIVE_OWNERSHIP|GET_COIN|GET_TICK|GET_AMOUNT|GET_OWNERSHIP|GET_ADDRESS|EXPIRATION|ALLOW_LIST|BLOCK_LIST|MEMO';
         this.formats[1] = 'VERSION|ORDER_ACTION_INDEX|MEMO';
         this.formats[2] = 'VERSION|ORDER_ACTION_INDEX|EXPIRATION|ALLOW_LIST|BLOCK_LIST|MEMO';
 
@@ -88,6 +90,14 @@ class Order {
         // Detect native coin sides (null/empty TICK = native coin on that chain)
         let isNativeCoinGive = (format==0) ? this.util.isNull(data['GIVE_TICK']) : false;
         let isNativeCoinGet  = (format==0) ? this.util.isNull(data['GET_TICK'])  : false;
+
+        // Default ownership flags to 0 when omitted; coerce to Number for downstream comparisons
+        if(format==0){
+            data['GIVE_OWNERSHIP'] = this.util.isNull(data['GIVE_OWNERSHIP']) ? 0 : Number(data['GIVE_OWNERSHIP']);
+            data['GET_OWNERSHIP']  = this.util.isNull(data['GET_OWNERSHIP'])  ? 0 : Number(data['GET_OWNERSHIP']);
+        }
+        let isOwnershipGive = (format==0 && data['GIVE_OWNERSHIP']==1);
+        let isOwnershipGet  = (format==0 && data['GET_OWNERSHIP']==1);
 
         // Get information on the GIVE and GET tokens (skip for native coin sides)
         let giveTokenInfo = false;
@@ -185,6 +195,42 @@ class Order {
             error = "invalid: EXPIRATION (format)";
 
         /*****************************************************************
+         * Token Ownership Validations (format 0 only)
+         ****************************************************************/
+
+        // GIVE_OWNERSHIP / GET_OWNERSHIP must be 0 or 1
+        if(!error && format==0 && ![0,1].includes(data['GIVE_OWNERSHIP']))
+            error = "invalid: GIVE_OWNERSHIP (format)";
+        if(!error && format==0 && ![0,1].includes(data['GET_OWNERSHIP']))
+            error = "invalid: GET_OWNERSHIP (format)";
+
+        // When selling ownership: GIVE_AMOUNT must be empty, GIVE_TICK must be a real tick (no native coin),
+        // SOURCE must be the current owner, and the tick's ownership must not already be escrowed.
+        if(!error && isOwnershipGive){
+            if(!this.util.isNull(data['GIVE_AMOUNT']))
+                error = "invalid: GIVE_AMOUNT (must be empty when GIVE_OWNERSHIP=1)";
+            else if(isNativeCoinGive)
+                error = "invalid: GIVE_TICK (native coin has no ownership)";
+            else if(!giveTokenInfo)
+                error = "invalid: GIVE_TICK (unknown)";
+            else if(giveTokenInfo['OWNER'] != data['SOURCE'])
+                error = "invalid: SOURCE (not GIVE_TICK owner)";
+            else if(await this.indexerDb.isOwnershipEscrowed(data['GIVE_TICK']))
+                error = "invalid: GIVE_TICK (ownership already escrowed)";
+        }
+
+        // When bidding for ownership: GET_AMOUNT must be empty and GET_TICK must be a real tick.
+        // The matcher's-current-owner check happens at match time (order_match.js).
+        if(!error && isOwnershipGet){
+            if(!this.util.isNull(data['GET_AMOUNT']))
+                error = "invalid: GET_AMOUNT (must be empty when GET_OWNERSHIP=1)";
+            else if(isNativeCoinGet)
+                error = "invalid: GET_TICK (native coin has no ownership)";
+            else if(data['GET_COIN']==this.config['COIN'] && !getTokenInfo)
+                error = "invalid: GET_TICK (unknown)";
+        }
+
+        /*****************************************************************
          * General Validations
          ****************************************************************/
 
@@ -246,12 +292,12 @@ class Order {
             }
         }
 
-        // Verify SOURCE has enough balances to cover GIVE_AMOUNT (skip for native coin — can't verify on-chain balances)
-        if(!error && format==0 && !isNativeCoinGive && !this.util.hasBalance(balances, giveTokenInfo['TICK_ID'], data['GIVE_AMOUNT']))
+        // Verify SOURCE has enough balances to cover GIVE_AMOUNT (skip for native coin and ownership — no balance to escrow)
+        if(!error && format==0 && !isNativeCoinGive && !isOwnershipGive && !this.util.hasBalance(balances, giveTokenInfo['TICK_ID'], data['GIVE_AMOUNT']))
             error = 'invalid: insufficient funds (GIVE_AMOUNT)';
 
-        // Adjust balances to reduce by SWAP GIVE_AMOUNT (skip for native coin)
-        if(!error && format==0 && !isNativeCoinGive)
+        // Adjust balances to reduce by ORDER GIVE_AMOUNT (skip for native coin and ownership)
+        if(!error && format==0 && !isNativeCoinGive && !isOwnershipGive)
             balances = this.util.debitBalances(balances, giveTokenInfo['TICK_ID'], data['GIVE_AMOUNT']);
 
         // Calculate total fee for this order based on EXPIRATION timestamp
@@ -347,11 +393,17 @@ class Order {
 
             // Format 0 - Create Order
             if(format==0){
-                // Debit and escrow GIVE_AMOUNT of GIVE_TICK from SOURCE (skip for native coin — can't escrow native coin)
-                if(!isNativeCoinGive){
+                if(isOwnershipGive){
+                    // Selling ownership: no balance escrow — mark the tick as ownership-escrowed
+                    // for this order. tokens.owner_id stays at SOURCE; admin actions are gated by
+                    // escrow_action_index until cancel / expire / match clears it.
+                    await this.indexerDb.setTokenEscrow(data['GIVE_TICK'], data['ACTION_INDEX']);
+                } else if(!isNativeCoinGive){
+                    // Debit and escrow GIVE_AMOUNT of GIVE_TICK from SOURCE
                     debits.push([data['GIVE_TICK'], data['GIVE_AMOUNT'], data['SOURCE']]);
                     escrows.push([data['GIVE_TICK'], data['GIVE_AMOUNT'], data['SOURCE']]);
                 }
+                // (Native coin GIVE: no escrow — obligation created at match time via COINPay)
 
                 // Create record in the orders_statuses table
                 await this.indexerDb.createOrderStatus(data['ACTION_INDEX'], data['ACTION_INDEX'], 'open');
@@ -365,11 +417,15 @@ class Order {
 
                 if(pendingObligations.length > 0){
                     // Two-phase cancel: set status to 'cancelling' — blocks new matches, pending obligations must resolve first
+                    // Ownership escrow stays set; coinpay.js will release it when the final obligation resolves.
                     await this.indexerDb.createOrderStatus(data['ACTION_INDEX'], orderInfo['ACTION_INDEX'], 'cancelling');
                 } else {
                     // No pending obligations — cancel immediately
-                    // Debit token from escrows (skip if native coin GIVE side — nothing was escrowed)
-                    if(!this.util.isNull(orderInfo['GIVE_TICK'])){
+                    if(orderInfo['GIVE_OWNERSHIP']==1){
+                        // Release ownership escrow back to the seller (tokens.owner_id is unchanged — only the gate clears)
+                        await this.indexerDb.clearTokenEscrow(orderInfo['GIVE_TICK']);
+                    } else if(!this.util.isNull(orderInfo['GIVE_TICK'])){
+                        // Debit token from escrows and credit back to seller
                         escrows.push([orderInfo['GIVE_TICK'], -orderInfo['GIVE_REMAINING'], orderInfo['SOURCE']]);
                         credits.push([orderInfo['GIVE_TICK'], orderInfo['GIVE_REMAINING'], orderInfo['SOURCE']]);
                     }

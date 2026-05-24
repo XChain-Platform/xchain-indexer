@@ -165,8 +165,15 @@ class Coinpay {
         }
 
         if(tokenAmount){
-            escrows.push([sellerOrder['GIVE_TICK'], -tokenAmount, sellerOrder['SOURCE']]);
-            credits.push([sellerOrder['GIVE_TICK'],  tokenAmount, buyerGetAddress]);
+            if(Number(sellerOrder['GIVE_OWNERSHIP']||0) == 1){
+                // Ownership delivery: clear the escrow gate and transfer ownership to
+                // the buyer's GET_ADDRESS. No balance ledger change — the asset is the
+                // ownership record itself.
+                await this.util.transferTokenOwnership(this.indexerDb, this.mapper, data, sellerOrder['GIVE_TICK'], sellerOrder['SOURCE'], buyerGetAddress);
+            } else {
+                escrows.push([sellerOrder['GIVE_TICK'], -tokenAmount, sellerOrder['SOURCE']]);
+                credits.push([sellerOrder['GIVE_TICK'],  tokenAmount, buyerGetAddress]);
+            }
         }
 
         // Update coinpay obligation status to 'fulfilled'
@@ -194,8 +201,11 @@ class Coinpay {
                     let finalStatus = (sellerStatus == 'cancelling') ? 'cancelled' : 'expired';
                     await this.indexerDb.createOrderStatus(data['ACTION_INDEX'], sellerOrder['ACTION_INDEX'], finalStatus);
 
-                    // Release any remaining escrowed tokens back to the seller
-                    if(updatedSellerOrder['GIVE_REMAINING'] && this.util.bcgt(updatedSellerOrder['GIVE_REMAINING'], 0)){
+                    // Release any remaining escrowed tokens back to the seller. Ownership
+                    // orders are single-fill — there is no remaining balance to refund and
+                    // the escrow gate was already cleared in the settlement branch above.
+                    if(Number(sellerOrder['GIVE_OWNERSHIP']||0) != 1 &&
+                       updatedSellerOrder['GIVE_REMAINING'] && this.util.bcgt(updatedSellerOrder['GIVE_REMAINING'], 0)){
                         escrows.push([sellerOrder['GIVE_TICK'], -updatedSellerOrder['GIVE_REMAINING'], sellerOrder['SOURCE']]);
                         credits.push([sellerOrder['GIVE_TICK'],  updatedSellerOrder['GIVE_REMAINING'], sellerOrder['SOURCE']]);
                     }

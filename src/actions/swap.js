@@ -21,10 +21,12 @@
  * - VERSION           -  Format Version
  * - GIVE_COIN         -  `COIN` name (BTC, LTC, DOGE, etc)
  * - GIVE_TICK         -  Ticker name or Ticker ID
- * - GIVE_AMOUNT       -  Quantity of `GIVE_TICK` to escrow in the swap
+ * - GIVE_AMOUNT       -  Quantity of `GIVE_TICK` to escrow in the swap (empty when GIVE_OWNERSHIP=1)
+ * - GIVE_OWNERSHIP    -  1 = escrow GIVE_TICK ownership instead of a balance amount (default 0)
  * - GET_COIN          -  `COIN` name (BTC, LTC, DOGE, etc)
  * - GET_TICK          -  Ticker name or Ticker ID
- * - GET_AMOUNT        -  Quantity of `GET_TICK` requested in return
+ * - GET_AMOUNT        -  Quantity of `GET_TICK` requested in return (empty when GET_OWNERSHIP=1)
+ * - GET_OWNERSHIP     -  1 = require matcher to currently own GET_TICK and transfer it (default 0)
  * - GET_ADDRESS       -  Address to receive `GET_TICK` on `GET_COIN` network
  * - EXPIRATION        -  Timestamp of when swap should expire, in Unix time
  * - ALLOW_LIST        - `ACTION_INDEX` of a `LIST` of addresses allowed to match swap
@@ -53,7 +55,7 @@ class Swap {
         
         // Define list of known FORMATS
         this.formats = {};
-        this.formats[0] = 'VERSION|GIVE_COIN|GIVE_TICK|GIVE_AMOUNT|GET_COIN|GET_TICK|GET_AMOUNT|GET_ADDRESS|EXPIRATION|ALLOW_LIST|BLOCK_LIST|MEMO';
+        this.formats[0] = 'VERSION|GIVE_COIN|GIVE_TICK|GIVE_AMOUNT|GIVE_OWNERSHIP|GET_COIN|GET_TICK|GET_AMOUNT|GET_OWNERSHIP|GET_ADDRESS|EXPIRATION|ALLOW_LIST|BLOCK_LIST|MEMO';
         this.formats[1] = 'VERSION|SWAP_ACTION_INDEX|MEMO';
         this.formats[2] = 'VERSION|SWAP_ACTION_INDEX|EXPIRATION|ALLOW_LIST|BLOCK_LIST|MEMO';
 
@@ -94,6 +96,14 @@ class Swap {
                 // TODO : add code to xchain-hub to validate that GET_TICK is valid on GET_COIN, and if not, mark as invalid
             }
         }
+
+        // Default ownership flags to 0 when omitted; coerce to Number for downstream comparisons
+        if(format==0){
+            data['GIVE_OWNERSHIP'] = this.util.isNull(data['GIVE_OWNERSHIP']) ? 0 : Number(data['GIVE_OWNERSHIP']);
+            data['GET_OWNERSHIP']  = this.util.isNull(data['GET_OWNERSHIP'])  ? 0 : Number(data['GET_OWNERSHIP']);
+        }
+        let isOwnershipGive = (format==0 && data['GIVE_OWNERSHIP']==1);
+        let isOwnershipGet  = (format==0 && data['GET_OWNERSHIP']==1);
 
         // Get information on a swap given the COIN network and SWAP_ACTION_INDEX
         var swapInfo = false;
@@ -147,11 +157,11 @@ class Swap {
          ****************************************************************/
 
         // Verify GIVE_AMOUNT format
-        if(!error && format==0 && !this.util.isNull(data['GIVE_AMOUNT']) && !this.util.isValidAmountFormat(giveTokenInfo['DECIMALS'], data['GIVE_AMOUNT']))
+        if(!error && format==0 && !this.util.isNull(data['GIVE_AMOUNT']) && giveTokenInfo && !this.util.isValidAmountFormat(giveTokenInfo['DECIMALS'], data['GIVE_AMOUNT']))
             error = "invalid: GIVE_AMOUNT (format)";
 
         // Verify GET_AMOUNT format
-        if(!error && format==0 && !this.util.isNull(data['GET_AMOUNT']) && !this.util.isValidAmountFormat(getTokenInfo['DECIMALS'], data['GET_AMOUNT']))
+        if(!error && format==0 && !this.util.isNull(data['GET_AMOUNT']) && getTokenInfo && !this.util.isValidAmountFormat(getTokenInfo['DECIMALS'], data['GET_AMOUNT']))
             error = "invalid: GET_AMOUNT (format)";
 
         // Verify GET_ADDRESS is given if COIN network differs from GET_COIN network
@@ -165,6 +175,38 @@ class Swap {
         // Validate that EXPIRATION is an integer
         if(!error && !this.util.isNull(data['EXPIRATION']) && (!this.util.isNumeric(data['EXPIRATION']) || !this.util.isInteger(data['EXPIRATION'])))
             error = "invalid: EXPIRATION (format)";
+
+        /*****************************************************************
+         * Token Ownership Validations (format 0 only)
+         ****************************************************************/
+
+        // GIVE_OWNERSHIP / GET_OWNERSHIP must be 0 or 1
+        if(!error && format==0 && ![0,1].includes(data['GIVE_OWNERSHIP']))
+            error = "invalid: GIVE_OWNERSHIP (format)";
+        if(!error && format==0 && ![0,1].includes(data['GET_OWNERSHIP']))
+            error = "invalid: GET_OWNERSHIP (format)";
+
+        // Selling ownership: GIVE_AMOUNT must be empty, GIVE_TICK must be a known tick,
+        // SOURCE must currently own it, and the tick's ownership must not already be escrowed.
+        if(!error && isOwnershipGive){
+            if(!this.util.isNull(data['GIVE_AMOUNT']))
+                error = "invalid: GIVE_AMOUNT (must be empty when GIVE_OWNERSHIP=1)";
+            else if(!giveTokenInfo)
+                error = "invalid: GIVE_TICK (unknown)";
+            else if(giveTokenInfo['OWNER'] != data['SOURCE'])
+                error = "invalid: SOURCE (not GIVE_TICK owner)";
+            else if(await this.indexerDb.isOwnershipEscrowed(data['GIVE_TICK']))
+                error = "invalid: GIVE_TICK (ownership already escrowed)";
+        }
+
+        // Bidding for ownership: GET_AMOUNT must be empty. GET_TICK existence is only verifiable
+        // on the current chain — cross-chain GET_TICK validation lives in xchain-hub.
+        if(!error && isOwnershipGet){
+            if(!this.util.isNull(data['GET_AMOUNT']))
+                error = "invalid: GET_AMOUNT (must be empty when GET_OWNERSHIP=1)";
+            else if(data['GET_COIN']==this.config['COIN'] && !getTokenInfo)
+                error = "invalid: GET_TICK (unknown)";
+        }
 
         /*****************************************************************
          * General Validations
@@ -228,12 +270,12 @@ class Swap {
             }
         }
 
-        // Verify SOURCE has enough balances to cover GIVE_AMOUNT
-        if(!error && format==0 && !this.util.hasBalance(balances, giveTokenInfo['TICK_ID'], data['GIVE_AMOUNT']))
+        // Verify SOURCE has enough balances to cover GIVE_AMOUNT (skip for ownership — no balance to escrow)
+        if(!error && format==0 && !isOwnershipGive && !this.util.hasBalance(balances, giveTokenInfo['TICK_ID'], data['GIVE_AMOUNT']))
             error = 'invalid: insufficient funds (GIVE_AMOUNT)';
 
-        // Adjust balances to reduce by SWAP GIVE_AMOUNT
-        if(!error && format==0)
+        // Adjust balances to reduce by SWAP GIVE_AMOUNT (skip for ownership)
+        if(!error && format==0 && !isOwnershipGive)
             balances = this.util.debitBalances(balances, giveTokenInfo['TICK_ID'], data['GIVE_AMOUNT']);
 
         // Calculate total fee for this swap based on EXPIRATION timestamp
@@ -329,11 +371,18 @@ class Swap {
 
             // Format 0 - Create Swap
             if(format==0){
-                // Debit token from SOURCE
-                debits.push([data['GIVE_TICK'], data['GIVE_AMOUNT'], data['SOURCE']]);
+                if(isOwnershipGive){
+                    // Selling ownership: no balance escrow — mark the tick as ownership-escrowed
+                    // for this swap. tokens.owner_id stays at SOURCE; admin actions are gated by
+                    // escrow_action_index until cancel / expire / match clears it.
+                    await this.indexerDb.setTokenEscrow(data['GIVE_TICK'], data['ACTION_INDEX']);
+                } else {
+                    // Debit token from SOURCE
+                    debits.push([data['GIVE_TICK'], data['GIVE_AMOUNT'], data['SOURCE']]);
 
-                // Escrow token from SOURCE
-                escrows.push([data['GIVE_TICK'], data['GIVE_AMOUNT'], data['SOURCE']]);
+                    // Escrow token from SOURCE
+                    escrows.push([data['GIVE_TICK'], data['GIVE_AMOUNT'], data['SOURCE']]);
+                }
 
                 // Create record in the swaps_statuses table
                 await this.indexerDb.createSwapStatus(data['ACTION_INDEX'], data['ACTION_INDEX'], 'open');
@@ -341,11 +390,16 @@ class Swap {
 
             // Format 1 - Cancel Swap
             if(format==1){
-                // Debit token from escrows
-                escrows.push([swapInfo['GIVE_TICK'],  -swapInfo['GIVE_AMOUNT'],  swapInfo['SOURCE']]);
+                if(swapInfo['GIVE_OWNERSHIP']==1){
+                    // Release ownership escrow back to the seller (tokens.owner_id is unchanged)
+                    await this.indexerDb.clearTokenEscrow(swapInfo['GIVE_TICK']);
+                } else {
+                    // Debit token from escrows
+                    escrows.push([swapInfo['GIVE_TICK'],  -swapInfo['GIVE_AMOUNT'],  swapInfo['SOURCE']]);
 
-                // Credit token to SOURCE
-                credits.push([swapInfo['GIVE_TICK'], swapInfo['GIVE_AMOUNT'], swapInfo['SOURCE']]);
+                    // Credit token to SOURCE
+                    credits.push([swapInfo['GIVE_TICK'], swapInfo['GIVE_AMOUNT'], swapInfo['SOURCE']]);
+                }
 
                 // Create record in the swaps_statuses table
                 await this.indexerDb.createSwapStatus(data['ACTION_INDEX'], swapInfo['ACTION_INDEX'], 'cancelled');

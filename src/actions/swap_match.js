@@ -48,6 +48,17 @@ class Swap_Match {
 
         // Get a list of any matching open swaps
         let matches = await this.indexerDb.findSwapMatches(data);
+
+        // Filter for ownership compatibility: an ownership-side and a balance-side
+        // never match; both sides' GIVE_OWNERSHIP / GET_OWNERSHIP must mirror.
+        if(matches){
+            matches = matches.filter(m =>
+                Number(m['GIVE_OWNERSHIP']||0) === Number(swapInfo['GET_OWNERSHIP']||0) &&
+                Number(m['GET_OWNERSHIP']||0)  === Number(swapInfo['GIVE_OWNERSHIP']||0)
+            );
+            if(matches.length === 0) matches = false;
+        }
+
         if(matches){
             // Get information on the tokens involved in the swap
             let getTokenInfo  = await this.indexerDb.getTokenInfo(swapInfo['GET_TICK'],  swap['BLOCK_INDEX'], swap['ACTION_INDEX']);
@@ -116,17 +127,29 @@ class Swap_Match {
                 // Create a record of this SWAP_MATCH action in the actions table
                 data['ACTION_INDEX'] = await this.indexerDb.createActionIndex(action);
 
-                // Remove tokens from escrow
-                escrows.push([matchInfo['GET_TICK'], -matchInfo['GET_AMOUNT'], matchInfo['GET_ADDRESS']]);
-                escrows.push([swapInfo['GET_TICK'],  -swapInfo['GET_AMOUNT'],  swapInfo['GET_ADDRESS']]);
+                // Settlement — two sides settle independently:
+                //   - swapInfo.GIVE → matchInfo.GET_ADDRESS
+                //   - matchInfo.GIVE → swapInfo.GET_ADDRESS
+                // Ownership sides clear the escrow gate and atomically transfer ownership;
+                // balance sides keep the existing escrow/credit pattern.
 
-                // Credit tokens to addresses
-                credits.push([matchInfo['GET_TICK'], matchInfo['GET_AMOUNT'], matchInfo['GET_ADDRESS']]);
-                credits.push([swapInfo['GET_TICK'],  swapInfo['GET_AMOUNT'],  swapInfo['GET_ADDRESS']]);
+                // swapInfo.GIVE side → matchInfo.GET_ADDRESS
+                if(Number(swapInfo['GIVE_OWNERSHIP']||0) == 1){
+                    await this.util.transferTokenOwnership(this.indexerDb, this.mapper, data, swapInfo['GIVE_TICK'], swapInfo['SOURCE'], matchInfo['GET_ADDRESS']);
+                } else {
+                    escrows.push([matchInfo['GET_TICK'], -matchInfo['GET_AMOUNT'], matchInfo['GET_ADDRESS']]);
+                    credits.push([matchInfo['GET_TICK'],  matchInfo['GET_AMOUNT'], matchInfo['GET_ADDRESS']]);
+                    this.util.addAddressTicker(matchInfo['GET_ADDRESS'], matchInfo['GET_TICK']);
+                }
 
-                // Store the GET_ADDRESS and GET_TICK in addresses list
-                this.util.addAddressTicker(matchInfo['GET_ADDRESS'], matchInfo['GET_TICK']);
-                this.util.addAddressTicker(swapInfo['GET_ADDRESS'],  swapInfo['GET_TICK']);
+                // matchInfo.GIVE side → swapInfo.GET_ADDRESS
+                if(Number(matchInfo['GIVE_OWNERSHIP']||0) == 1){
+                    await this.util.transferTokenOwnership(this.indexerDb, this.mapper, data, matchInfo['GIVE_TICK'], matchInfo['SOURCE'], swapInfo['GET_ADDRESS']);
+                } else {
+                    escrows.push([swapInfo['GET_TICK'], -swapInfo['GET_AMOUNT'], swapInfo['GET_ADDRESS']]);
+                    credits.push([swapInfo['GET_TICK'],  swapInfo['GET_AMOUNT'], swapInfo['GET_ADDRESS']]);
+                    this.util.addAddressTicker(swapInfo['GET_ADDRESS'], swapInfo['GET_TICK']);
+                }
 
                 // Process any transaction ledger changes (credits / debits / escrows)
                 await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits, escrows);

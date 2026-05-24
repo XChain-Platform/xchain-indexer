@@ -64,9 +64,15 @@ class Dispenser_Expire {
                 debits  = [],
                 escrows = [];
 
-            // Debit GIVE_TICK from escrows and credit it to the SOURCE address
-            escrows.push([dispenser['GIVE_TICK'], -dispenser['GIVE_REMAINING'], dispenser['SOURCE']]);
-            credits.push([dispenser['GIVE_TICK'],  dispenser['GIVE_REMAINING'], dispenser['SOURCE']]);
+            if(Number(dispenser['GIVE_OWNERSHIP']||0) == 1){
+                // Ownership dispenser expire: release the escrow gate. tokens.owner_id is
+                // unchanged (ownership stays with the seller).
+                await this.indexerDb.clearTokenEscrow(dispenser['GIVE_TICK']);
+            } else {
+                // Balance dispenser: debit GIVE_TICK from escrows and credit it to the SOURCE address
+                escrows.push([dispenser['GIVE_TICK'], -dispenser['GIVE_REMAINING'], dispenser['SOURCE']]);
+                credits.push([dispenser['GIVE_TICK'],  dispenser['GIVE_REMAINING'], dispenser['SOURCE']]);
+            }
 
             // Create record in the dispenser_expires table
             await this.indexerDb.createDispenserExpire(data['ACTION_INDEX'], dispenser['ACTION_INDEX'], data['STATUS']);

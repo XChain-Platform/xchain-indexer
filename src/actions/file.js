@@ -128,6 +128,8 @@ class File {
                     error = 'invalid: GATE_TICKER (unknown)';
                 else if(tokenInfo['OWNER'] !== data['SOURCE'])
                     error = 'invalid: SOURCE (not GATE_TICKER issuer)';
+                else if(await this.indexerDb.isOwnershipEscrowed(data['GATE_TICKER']))
+                    error = 'invalid: GATE_TICKER (ownership escrowed)';
             }
         }
 

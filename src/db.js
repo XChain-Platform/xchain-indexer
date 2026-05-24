@@ -1936,6 +1936,41 @@ class Database {
             await this.createToken(data);
     }
 
+    // Mark a token's ownership as held in escrow by an ORDER/SWAP/DISPENSER action.
+    // While set, owner-only actions targeting this tick are rejected; on cancel/expire/match
+    // the corresponding action handler calls clearTokenEscrow() to release.
+    async setTokenEscrow(tick, action_index){
+        let tick_id = await this.createTicker(tick);
+        let query   = "UPDATE tokens SET escrow_action_index=? WHERE tick_id=?";
+        await this.doQuery(query, [action_index, tick_id]);
+    }
+
+    // Release a token's ownership escrow.
+    async clearTokenEscrow(tick){
+        let tick_id = await this.createTicker(tick);
+        let query   = "UPDATE tokens SET escrow_action_index=NULL WHERE tick_id=?";
+        await this.doQuery(query, [tick_id]);
+    }
+
+    // Returns the action_index of the offer holding this tick's ownership in escrow, or null
+    // if ownership is not currently escrowed. Used by ISSUE v1-5 / CALLBACK / SLEEP / LINK /
+    // FILE / child-ISSUE handlers to reject owner-only actions during escrow.
+    async getTokenEscrow(tick){
+        if(this.util.isNull(tick))
+            return null;
+        let tick_id = await this.createTicker(tick);
+        let query   = "SELECT escrow_action_index FROM tokens WHERE tick_id=? LIMIT 1";
+        let results = await this.doQuery(query, [tick_id]);
+        if(results.length === 0 || this.util.isNull(results[0].escrow_action_index))
+            return null;
+        return results[0].escrow_action_index;
+    }
+
+    // Convenience wrapper — true if this tick's ownership is currently escrowed.
+    async isOwnershipEscrowed(tick){
+        return (await this.getTokenEscrow(tick)) !== null;
+    }
+
     // Get action_index of the first valid ISSUE action for a given ticker
     async getFirstIssueActionIndex(tick){
         let tick_id      = await this.createTicker(tick);
@@ -3231,6 +3266,8 @@ class Database {
         let action_index   = data['ACTION_INDEX'];
         let give_amount    = data['GIVE_AMOUNT'];
         let get_amount     = data['GET_AMOUNT'];
+        let give_ownership = (data['GIVE_OWNERSHIP']==1) ? 1 : 0;
+        let get_ownership  = (data['GET_OWNERSHIP']==1)  ? 1 : 0;
         let expiration     = data['EXPIRATION'];
         let allow_list     = data['ALLOW_LIST'];
         let block_list     = data['BLOCK_LIST'];
@@ -3254,22 +3291,25 @@ class Database {
                         give_coin_id=?,
                         give_tick_id=?,
                         give_amount=?,
+                        give_ownership=?,
                         get_coin_id=?,
                         get_tick_id=?,
                         get_amount=?,
+                        get_ownership=?,
                         get_address_id=?,
                         expiration=?,
                         allow_list=?,
                         block_list=?,
                         memo_id=?,
                         status_id=?
-                    WHERE 
+                    WHERE
                         action_index=?`;
+            args = [give_coin_id, give_tick_id, give_amount, give_ownership, get_coin_id, get_tick_id, get_amount, get_ownership, get_address_id, expiration, allow_list, block_list, memo_id, status_id, action_index];
         } else {
             // INSERT record
-            query = `INSERT INTO swaps (give_coin_id, give_tick_id, give_amount, get_coin_id, get_tick_id, get_amount, get_address_id, expiration, allow_list, block_list, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+            query = `INSERT INTO swaps (give_coin_id, give_tick_id, give_amount, give_ownership, get_coin_id, get_tick_id, get_amount, get_ownership, get_address_id, expiration, allow_list, block_list, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+            args = [give_coin_id, give_tick_id, give_amount, give_ownership, get_coin_id, get_tick_id, get_amount, get_ownership, get_address_id, expiration, allow_list, block_list, memo_id, status_id, action_index];
         }
-        args    = [give_coin_id, give_tick_id, give_amount, get_coin_id, get_tick_id, get_amount, get_address_id, expiration, allow_list, block_list, memo_id, status_id, action_index];
         results = await this.doQuery(query, args);
     }
 
@@ -3387,13 +3427,15 @@ class Database {
     // Return swap info for given action_index
     async getSwapInfo(coin, action_index){
         let swap = false;
-        let query = `SELECT 
+        let query = `SELECT
                         s1.action_index,
                         t2.tick as give_tick,
                         s1.give_amount,
+                        s1.give_ownership,
                         c1.coin as get_coin,
                         t3.tick as get_tick,
                         s1.get_amount,
+                        s1.get_ownership,
                         a2.address as source,
                         a3.address as get_address,
                         s1.expiration,
@@ -3404,7 +3446,7 @@ class Database {
                         s4.status as swap_status,
                         b1.block_index,
                         b1.block_time
-                    FROM 
+                    FROM
                         swaps s1
                         INNER JOIN actions         a1 ON (a1.action_index=s1.action_index)
                         INNER JOIN transactions    t1 ON (t1.tx_index=a1.tx_index)
@@ -3438,10 +3480,18 @@ class Database {
             for(let key in results[0]){
                 let name  = String(key).toUpperCase()
                 let value = results[0][key];
-                if(['ACTION_INDEX', 'BLOCK_INDEX', 'BLOCK_TIME', 'EXPIRATION', 'ALLOW_LIST', 'BLOCK_LIST'].includes(name))
+                if(['ACTION_INDEX', 'BLOCK_INDEX', 'BLOCK_TIME', 'EXPIRATION', 'ALLOW_LIST', 'BLOCK_LIST', 'GIVE_OWNERSHIP', 'GET_OWNERSHIP'].includes(name))
                     value = Number(value);
                 swap[name] = value;
             }
+            // Ownership swaps expose virtual '1' for the ownership side's GIVE_AMOUNT /
+            // GET_AMOUNT so the matching engine can compare amounts uniformly. Settlement
+            // code branches on GIVE_OWNERSHIP / GET_OWNERSHIP flags rather than the
+            // synthetic amount.
+            if(swap['GIVE_OWNERSHIP'] == 1 && this.util.isNull(swap['GIVE_AMOUNT']))
+                swap['GIVE_AMOUNT'] = '1';
+            if(swap['GET_OWNERSHIP']  == 1 && this.util.isNull(swap['GET_AMOUNT']))
+                swap['GET_AMOUNT']  = '1';
             // Get updated swap properties from the swap_edits table
             let edit = await this.getSwapEdits(action_index);
             if(edit.expiration)
@@ -3647,6 +3697,8 @@ class Database {
         let action_index   = data['ACTION_INDEX'];
         let give_amount    = data['GIVE_AMOUNT'];
         let get_amount     = data['GET_AMOUNT'];
+        let give_ownership = (data['GIVE_OWNERSHIP']==1) ? 1 : 0;
+        let get_ownership  = (data['GET_OWNERSHIP']==1)  ? 1 : 0;
         let expiration     = data['EXPIRATION'];
         let allow_list     = data['ALLOW_LIST'];
         let block_list     = data['BLOCK_LIST'];
@@ -3670,22 +3722,25 @@ class Database {
                         give_coin_id=?,
                         give_tick_id=?,
                         give_amount=?,
+                        give_ownership=?,
                         get_coin_id=?,
                         get_tick_id=?,
                         get_amount=?,
+                        get_ownership=?,
                         get_address_id=?,
                         expiration=?,
                         allow_list=?,
                         block_list=?,
                         memo_id=?,
                         status_id=?
-                    WHERE 
+                    WHERE
                         action_index=?`;
+            args = [give_coin_id, give_tick_id, give_amount, give_ownership, get_coin_id, get_tick_id, get_amount, get_ownership, get_address_id, expiration, allow_list, block_list, memo_id, status_id, action_index];
         } else {
             // INSERT record
-            query = `INSERT INTO orders (give_coin_id, give_tick_id, give_amount, get_coin_id, get_tick_id, get_amount, get_address_id, expiration, allow_list, block_list, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+            query = `INSERT INTO orders (give_coin_id, give_tick_id, give_amount, give_ownership, get_coin_id, get_tick_id, get_amount, get_ownership, get_address_id, expiration, allow_list, block_list, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+            args = [give_coin_id, give_tick_id, give_amount, give_ownership, get_coin_id, get_tick_id, get_amount, get_ownership, get_address_id, expiration, allow_list, block_list, memo_id, status_id, action_index];
         }
-        args    = [give_coin_id, give_tick_id, give_amount, get_coin_id, get_tick_id, get_amount, get_address_id, expiration, allow_list, block_list, memo_id, status_id, action_index];
         results = await this.doQuery(query, args);
     }
 
@@ -3818,13 +3873,15 @@ class Database {
     // Return order info for given action_index
     async getOrderInfo(coin, action_index){
         let order = false;
-        let query = `SELECT 
+        let query = `SELECT
                         o1.action_index,
                         t2.tick as give_tick,
                         o1.give_amount,
+                        o1.give_ownership,
                         c1.coin as get_coin,
                         t3.tick as get_tick,
                         o1.get_amount,
+                        o1.get_ownership,
                         a2.address as source,
                         a3.address as get_address,
                         o1.expiration,
@@ -3835,7 +3892,7 @@ class Database {
                         s3.status as order_status,
                         b1.block_index,
                         b1.block_time
-                    FROM 
+                    FROM
                         orders o1
                         INNER JOIN actions         a1 ON (a1.action_index=o1.action_index)
                         INNER JOIN transactions    t1 ON (t1.tx_index=a1.tx_index)
@@ -3869,12 +3926,12 @@ class Database {
             for(let key in results[0]){
                 let name  = String(key).toUpperCase()
                 let value = results[0][key];
-                if(['ACTION_INDEX', 'BLOCK_INDEX', 'BLOCK_TIME', 'EXPIRATION', 'ALLOW_LIST', 'BLOCK_LIST'].includes(name))
+                if(['ACTION_INDEX', 'BLOCK_INDEX', 'BLOCK_TIME', 'EXPIRATION', 'ALLOW_LIST', 'BLOCK_LIST', 'GIVE_OWNERSHIP', 'GET_OWNERSHIP'].includes(name))
                     value = Number(value);
                 order[name] = value;
             }
         }
-        // Get additional information on this order 
+        // Get additional information on this order
         if(order){
             // Get updated order properties from the order_edits table
             let edit = await this.getOrderEdits(action_index);
@@ -3884,6 +3941,13 @@ class Database {
                 order['ALLOW_LIST'] = edit.allow_list;
             if(edit.block_list)
                 order['BLOCK_LIST'] = edit.block_list;
+            // Ownership orders carry no amount on the ownership side. Expose virtual '1'
+            // so price math + match comparison work uniformly. Settlement code branches on
+            // GIVE_OWNERSHIP / GET_OWNERSHIP flags rather than the synthetic amount.
+            if(order['GIVE_OWNERSHIP'] == 1 && this.util.isNull(order['GIVE_AMOUNT']))
+                order['GIVE_AMOUNT'] = '1';
+            if(order['GET_OWNERSHIP']  == 1 && this.util.isNull(order['GET_AMOUNT']))
+                order['GET_AMOUNT']  = '1';
             // Determine order get/give prices
             order['GIVE_PRICE'] = this.util.getPrice(order['GET_AMOUNT'],  order['GIVE_AMOUNT']);
             order['GET_PRICE']  = this.util.getPrice(order['GIVE_AMOUNT'], order['GET_AMOUNT']);
@@ -3937,17 +4001,19 @@ class Database {
             get_tick_id    = 0,
             get_remaining  = 0;
         // Get initial amounts from the orders table
-        let query  = `SELECT 
+        let query  = `SELECT
                         o.give_coin_id,
                         o.give_tick_id,
                         o.give_amount,
+                        o.give_ownership,
                         o.get_coin_id,
                         o.get_tick_id,
-                        o.get_amount
-                    FROM 
+                        o.get_amount,
+                        o.get_ownership
+                    FROM
                         orders o
                         INNER JOIN index_statuses s ON (s.id=o.status_id)
-                    WHERE 
+                    WHERE
                         o.action_index=? AND
                         s.status=?`;
         let args  = [action_index, 'valid'];
@@ -3955,11 +4021,14 @@ class Database {
         if(results.length > 0){
             let info = results[0];
             give_coin_id   = info.give_coin_id;
-            give_tick_id   = info.give_tick_id;  
-            give_remaining = info.give_amount;
+            give_tick_id   = info.give_tick_id;
+            // Ownership orders carry no GIVE_AMOUNT/GET_AMOUNT in the schema; expose
+            // virtual '1' so the matcher's bignumber math (price ratios, single-fill
+            // subtraction) works uniformly with token-balance orders.
+            give_remaining = (info.give_ownership == 1) ? '1' : info.give_amount;
             get_coin_id    = info.get_coin_id;
-            get_tick_id    = info.get_tick_id;  
-            get_remaining  = info.get_amount;
+            get_tick_id    = info.get_tick_id;
+            get_remaining  = (info.get_ownership  == 1) ? '1' : info.get_amount;
         }
         // Lookup amounts matched in order_matches
         query = `SELECT
@@ -5878,6 +5947,7 @@ class Database {
         let give_amount       = data['GIVE_AMOUNT'];
         let get_amount        = data['GET_AMOUNT'];
         let give_escrow       = data['GIVE_ESCROW'];
+        let give_ownership    = (data['GIVE_OWNERSHIP']==1) ? 1 : 0;
         let fiat_amount       = data['FIAT_AMOUNT'];
         let expiration        = data['EXPIRATION'];
         let allow_list        = data['ALLOW_LIST'];
@@ -5903,6 +5973,7 @@ class Database {
                         give_tick_id=?,
                         give_amount=?,
                         give_escrow=?,
+                        give_ownership=?,
                         get_coin_id=?,
                         get_tick_id=?,
                         get_amount=?,
@@ -5917,11 +5988,12 @@ class Database {
                         status_id=?
                     WHERE
                         action_index=?`;
+            args = [give_coin_id, give_tick_id, give_amount, give_escrow, give_ownership, get_coin_id, get_tick_id, get_amount, get_address_id, fiat_id, fiat_amount, oracle_address_id, expiration, allow_list, block_list, memo_id, status_id, action_index];
         } else {
             // INSERT record
-            query = `INSERT INTO dispensers (give_coin_id, give_tick_id, give_amount, give_escrow, get_coin_id, get_tick_id, get_amount, get_address_id, fiat_id, fiat_amount, oracle_address_id, expiration, allow_list, block_list, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+            query = `INSERT INTO dispensers (give_coin_id, give_tick_id, give_amount, give_escrow, give_ownership, get_coin_id, get_tick_id, get_amount, get_address_id, fiat_id, fiat_amount, oracle_address_id, expiration, allow_list, block_list, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+            args = [give_coin_id, give_tick_id, give_amount, give_escrow, give_ownership, get_coin_id, get_tick_id, get_amount, get_address_id, fiat_id, fiat_amount, oracle_address_id, expiration, allow_list, block_list, memo_id, status_id, action_index];
         }
-        args    = [give_coin_id, give_tick_id, give_amount, give_escrow, get_coin_id, get_tick_id, get_amount, get_address_id, fiat_id, fiat_amount, oracle_address_id, expiration, allow_list, block_list, memo_id, status_id, action_index];
         results = await this.doQuery(query, args);
     }
 
@@ -5973,6 +6045,7 @@ class Database {
                         d1.action_index,
                         t2.tick as give_tick,
                         d1.give_amount,
+                        d1.give_ownership,
                         c1.coin as get_coin,
                         t3.tick as get_tick,
                         d1.get_amount,
@@ -6026,12 +6099,12 @@ class Database {
             for(let key in results[0]){
                 let name  = String(key).toUpperCase()
                 let value = results[0][key];
-                if(['ACTION_INDEX', 'BLOCK_INDEX', 'BLOCK_TIME', 'EXPIRATION', 'ALLOW_LIST', 'BLOCK_LIST'].includes(name))
+                if(['ACTION_INDEX', 'BLOCK_INDEX', 'BLOCK_TIME', 'EXPIRATION', 'ALLOW_LIST', 'BLOCK_LIST', 'GIVE_OWNERSHIP'].includes(name))
                     value = Number(value);
                 dispenser[name] = value;
             }
         }
-        // Get additional information on this order 
+        // Get additional information on this order
         if(dispenser){
             // Get updated dispenser properties from the dispenser_edits table
             let edit = await this.getDispenserEdits(action_index, block_time);
@@ -6041,8 +6114,22 @@ class Database {
                 dispenser['ALLOW_LIST'] = edit.allow_list;
             if(edit.block_list)
                 dispenser['BLOCK_LIST'] = edit.block_list;
-            // Determine dispenser amounts remaining
-            dispenser['GIVE_REMAINING'] = await this.getDispenserAmountRemaining(action_index);
+            // Ownership dispensers expose virtual '1' for GIVE_AMOUNT / GIVE_ESCROW so the
+            // matching engine and dispense flow can compare amounts uniformly. Settlement
+            // code branches on GIVE_OWNERSHIP rather than the synthetic amount.
+            if(dispenser['GIVE_OWNERSHIP'] == 1){
+                if(this.util.isNull(dispenser['GIVE_AMOUNT']))  dispenser['GIVE_AMOUNT']  = '1';
+                if(this.util.isNull(dispenser['GIVE_ESCROW'])) dispenser['GIVE_ESCROW'] = '1';
+                // Virtual remaining: 1 if no dispense yet, 0 once dispensed (single-shot).
+                // getDispenserAmountRemaining returns 0 for a fresh ownership dispenser
+                // (give_escrow is null in the DB) and goes negative after a successful
+                // DISPENSE has been recorded with give_amount='1'.
+                let dispensed = await this.getDispenserAmountRemaining(action_index);
+                dispenser['GIVE_REMAINING'] = this.util.bclt(dispensed, 0) ? '0' : '1';
+            } else {
+                // Determine dispenser amounts remaining
+                dispenser['GIVE_REMAINING'] = await this.getDispenserAmountRemaining(action_index);
+            }
         }
         return dispenser;
     }

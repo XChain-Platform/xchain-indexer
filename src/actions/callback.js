@@ -158,6 +158,10 @@ class Callback {
         if(!error && data['SOURCE']!=tokenInfo['OWNER'])
             error = "invalid: SOURCE (not authorized)";
 
+        // Reject if TICK ownership is currently escrowed by an open ORDER/SWAP/DISPENSER
+        if(!error && await this.indexerDb.isOwnershipEscrowed(data['TICK']))
+            error = "invalid: TICK (ownership escrowed)";
+
         /*****************************************************************
          * FORMAT Validations
          ****************************************************************/

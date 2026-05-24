@@ -108,6 +108,10 @@ class Sleep {
         if(!error && data['TYPE']=='TICK' && data['SOURCE']!=tokenInfo['OWNER'])
             error = 'invalid: TICK (not authorized)';
 
+        // Reject if TICK ownership is currently escrowed by an open ORDER/SWAP/DISPENSER
+        if(!error && data['TYPE']=='TICK' && await this.indexerDb.isOwnershipEscrowed(data['TICK']))
+            error = 'invalid: TICK (ownership escrowed)';
+
         // Verify no pipe in MEMO (pipe is field delimiter)
         if(!error && String(data['MEMO']).indexOf('|')!=-1)
             error = 'invalid: MEMO (pipe)';

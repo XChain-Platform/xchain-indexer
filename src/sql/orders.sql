@@ -8,10 +8,12 @@ CREATE TABLE orders (
     get_tick_id      BIGINT UNSIGNED,          -- id of record in index_tickers table
     get_amount       VARCHAR(250),             -- Amount of GET_TICK in order
     get_address_id   BIGINT UNSIGNED,          -- id of record in index_addresses table
+    give_ownership   TINYINT(1) NOT NULL DEFAULT 0, -- 1 = order escrows GIVE_TICK ownership instead of a balance amount
+    get_ownership    TINYINT(1) NOT NULL DEFAULT 0, -- 1 = order requires matcher to currently own GET_TICK and transfer it
     expiration       BIGINT UNSIGNED,          -- unix timestamp of order expiration date/time
     allow_list       BIGINT UNSIGNED,          -- action_index of a list from the lists table
     block_list       BIGINT UNSIGNED,          -- action_index of a list from the lists table
-    memo_id          BIGINT UNSIGNED,          -- id of record in index_memos table 
+    memo_id          BIGINT UNSIGNED,          -- id of record in index_memos table
     status_id        BIGINT UNSIGNED           -- id of record in index_statuses table (status of open order tx)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
@@ -25,3 +27,5 @@ CREATE        INDEX block_list     ON orders (block_list);
 CREATE        INDEX get_address_id ON orders (get_address_id);
 CREATE        INDEX memo_id        ON orders (memo_id);
 CREATE        INDEX status_id      ON orders (status_id);
+CREATE        INDEX give_ownership ON orders (give_ownership);
+CREATE        INDEX get_ownership  ON orders (get_ownership);

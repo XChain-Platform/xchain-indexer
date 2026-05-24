@@ -18,15 +18,16 @@
  * This action creates a dispenser (vending machine) to dispense `TICK` when triggered
  * 
  * PARAMS:
- * VERSION                - Format Version                                                             
- * GIVE_COIN              - `COIN` name (BTC, LTC, DOGE, etc)                                          
- * GIVE_TICK              - Ticker name or Ticker ID                                                   
- * GIVE_AMOUNT            - Quantity of `GIVE_TICK` to `DISPENSE` when triggered                       
- * GIVE_ESCROW            - Quantity of `GIVE_TICK` to escrow in dispenser                             
- * GET_COIN               - `COIN` name (BTC, LTC, DOGE, etc)                                          
- * GET_TICK               - Ticker name or Ticker ID                                                   
- * GET_AMOUNT             - Quantity of `GET_COIN` or `GET_TICK` required to `DISPENSE`                
- * ADDRESS                - Address for dispenser to operate on (default=`SOURCE`)                     
+ * VERSION                - Format Version
+ * GIVE_COIN              - `COIN` name (BTC, LTC, DOGE, etc)
+ * GIVE_TICK              - Ticker name or Ticker ID
+ * GIVE_AMOUNT            - Quantity of `GIVE_TICK` to `DISPENSE` when triggered (empty when GIVE_OWNERSHIP=1)
+ * GIVE_OWNERSHIP         - 1 = dispense GIVE_TICK ownership (single-shot); GIVE_AMOUNT / GIVE_ESCROW must be empty (default 0)
+ * GIVE_ESCROW            - Quantity of `GIVE_TICK` to escrow in dispenser (empty when GIVE_OWNERSHIP=1)
+ * GET_COIN               - `COIN` name (BTC, LTC, DOGE, etc)
+ * GET_TICK               - Ticker name or Ticker ID
+ * GET_AMOUNT             - Quantity of `GET_COIN` or `GET_TICK` required to `DISPENSE`
+ * ADDRESS                - Address for dispenser to operate on (default=`SOURCE`)
  * FIAT_CODE              - Code for `FIAT` currency your dispenser is priced in (USD, JPY, GPB, etc.)
  * FIAT_AMOUNT            - Amount of `FIAT` currency required to trigger a `DISPENSE` (ignored when ORACLE_ADDRESS is set)
  * ORACLE_ADDRESS         - Optional address of a user oracle (PRICE v1) that prices the dispensed token in `FIAT_CODE`
@@ -58,7 +59,7 @@ class Dispenser {
         
         // Define list of known FORMATS
         this.formats = {};
-        this.formats[0] = 'VERSION|GIVE_COIN|GIVE_TICK|GIVE_AMOUNT|GIVE_ESCROW|GET_COIN|GET_TICK|GET_AMOUNT|GET_ADDRESS|FIAT_CODE|FIAT_AMOUNT|ORACLE_ADDRESS|EXPIRATION|ALLOW_LIST|BLOCK_LIST|MEMO';
+        this.formats[0] = 'VERSION|GIVE_COIN|GIVE_TICK|GIVE_AMOUNT|GIVE_OWNERSHIP|GIVE_ESCROW|GET_COIN|GET_TICK|GET_AMOUNT|GET_ADDRESS|FIAT_CODE|FIAT_AMOUNT|ORACLE_ADDRESS|EXPIRATION|ALLOW_LIST|BLOCK_LIST|MEMO';
         this.formats[1] = 'VERSION|DISPENSER_ACTION_INDEX|MEMO';
         this.formats[2] = 'VERSION|DISPENSER_ACTION_INDEX|GIVE_ESCROW|EXPIRATION|ALLOW_LIST|BLOCK_LIST|MEMO';
 
@@ -90,6 +91,11 @@ class Dispenser {
         // Convert NUMBER fields from string value to number value so comparisons are mathematical 
         if(!error)
             data = this.util.setNumberFormats(data);
+
+        // Default ownership flag to 0 when omitted; coerce to Number for downstream comparisons
+        if(format==0)
+            data['GIVE_OWNERSHIP'] = this.util.isNull(data['GIVE_OWNERSHIP']) ? 0 : Number(data['GIVE_OWNERSHIP']);
+        let isOwnershipGive = (format==0 && data['GIVE_OWNERSHIP']==1);
 
         // Get information on a dispenser given the COIN network and DISPENSER_ACTION_INDEX
         var dispenserInfo = false;
@@ -175,12 +181,32 @@ class Dispenser {
          ****************************************************************/
 
         // Verify GIVE_AMOUNT format
-        if(!error && format==0 && !this.util.isNull(data['GIVE_AMOUNT']) && !this.util.isValidAmountFormat(giveTokenInfo['DECIMALS'], data['GIVE_AMOUNT']))
+        if(!error && format==0 && !this.util.isNull(data['GIVE_AMOUNT']) && giveTokenInfo && !this.util.isValidAmountFormat(giveTokenInfo['DECIMALS'], data['GIVE_AMOUNT']))
             error = "invalid: GIVE_AMOUNT (format)";
 
         // Verify GIVE_ESCROW format
-        if(!error && format==0 && !this.util.isNull(data['GIVE_ESCROW']) && !this.util.isValidAmountFormat(giveTokenInfo['DECIMALS'], data['GIVE_ESCROW']))
+        if(!error && format==0 && !this.util.isNull(data['GIVE_ESCROW']) && giveTokenInfo && !this.util.isValidAmountFormat(giveTokenInfo['DECIMALS'], data['GIVE_ESCROW']))
             error = "invalid: GIVE_ESCROW (format)";
+
+        // GIVE_OWNERSHIP must be 0 or 1
+        if(!error && format==0 && ![0,1].includes(data['GIVE_OWNERSHIP']))
+            error = "invalid: GIVE_OWNERSHIP (format)";
+
+        // Ownership dispensers are single-shot: GIVE_AMOUNT and GIVE_ESCROW must be empty,
+        // SOURCE must be the current GIVE_TICK owner, and the tick's ownership must not
+        // already be escrowed by another offer.
+        if(!error && isOwnershipGive){
+            if(!this.util.isNull(data['GIVE_AMOUNT']))
+                error = "invalid: GIVE_AMOUNT (must be empty when GIVE_OWNERSHIP=1)";
+            else if(!this.util.isNull(data['GIVE_ESCROW']))
+                error = "invalid: GIVE_ESCROW (must be empty when GIVE_OWNERSHIP=1)";
+            else if(!giveTokenInfo)
+                error = "invalid: GIVE_TICK (unknown)";
+            else if(giveTokenInfo['OWNER'] != data['SOURCE'])
+                error = "invalid: SOURCE (not GIVE_TICK owner)";
+            else if(await this.indexerDb.isOwnershipEscrowed(data['GIVE_TICK']))
+                error = "invalid: GIVE_TICK (ownership already escrowed)";
+        }
 
         // Verify GET_AMOUNT format
         if(!error && format==0 && !this.util.isNull(data['GET_AMOUNT']) && getTokenInfo && !this.util.isValidAmountFormat(getTokenInfo['DECIMALS'], data['GET_AMOUNT']))
@@ -290,12 +316,12 @@ class Dispenser {
             }
         }
 
-        // Verify SOURCE has enough balances to cover GIVE_ESCROW
-        if(!error && !this.util.isNull(data['GIVE_ESCROW']) && !this.util.hasBalance(balances, giveTokenInfo['TICK_ID'], data['GIVE_ESCROW']))
+        // Verify SOURCE has enough balances to cover GIVE_ESCROW (skip for ownership — no balance to escrow)
+        if(!error && !isOwnershipGive && !this.util.isNull(data['GIVE_ESCROW']) && !this.util.hasBalance(balances, giveTokenInfo['TICK_ID'], data['GIVE_ESCROW']))
             error = 'invalid: insufficient funds (GIVE_ESCROW)';
 
-        // Adjust balances to reduce by dispenser GIVE_ESCROW
-        if(!error && !this.util.isNull(data['GIVE_ESCROW']))
+        // Adjust balances to reduce by dispenser GIVE_ESCROW (skip for ownership)
+        if(!error && !isOwnershipGive && !this.util.isNull(data['GIVE_ESCROW']))
             balances = this.util.debitBalances(balances, giveTokenInfo['TICK_ID'], data['GIVE_ESCROW']);
 
         // Calculate total fee for this dispenser based on EXPIRATION timestamp
@@ -391,15 +417,22 @@ class Dispenser {
             if(this.util.bcgt(fees['AMOUNT'], 0))
                 this.util.addAddressTicker(data['SOURCE'], fees['TICK']);
 
-            // Debit GIVE_ESCROW GIVE_TICK from SOURCE and add to escrow
-            if((format==0||format==2) && !this.util.isNull(data['GIVE_ESCROW'])){
+            // Debit GIVE_ESCROW GIVE_TICK from SOURCE and add to escrow (skip for ownership)
+            if((format==0||format==2) && !isOwnershipGive && !this.util.isNull(data['GIVE_ESCROW'])){
                 debits.push([giveTokenInfo['TICK'], data['GIVE_ESCROW'], data['SOURCE']]);
                 escrows.push([giveTokenInfo['TICK'], data['GIVE_ESCROW'], data['SOURCE']]);
             }
 
             // Format 0 - Create Dispenser
-            if(format==0)
+            if(format==0){
+                if(isOwnershipGive){
+                    // Ownership dispenser: no balance escrow — mark the tick as ownership-escrowed
+                    // for this dispenser. tokens.owner_id stays at SOURCE; admin actions are gated
+                    // by escrow_action_index until DISPENSE / cancel / expire clears it.
+                    await this.indexerDb.setTokenEscrow(data['GIVE_TICK'], data['ACTION_INDEX']);
+                }
                 await this.indexerDb.createDispenserStatus(data['ACTION_INDEX'], data['ACTION_INDEX'], 'open');
+            }
 
             // Format 1 - Cancel Dispenser
             // Note: Dispenser remains open for a set amount of time (DISPENSER_CLOSE_DELAY) before being closed.

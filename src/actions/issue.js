@@ -152,6 +152,10 @@ class Issue {
             // Verify ISSUE is coming from PARENT TICK owner
             if(!error && parentInfo && parentInfo['OWNER']!=data['SOURCE'])
                 error = 'invalid: TICK (parent issued by another address)';
+
+            // Reject child issuance while the parent's ownership is escrowed in an open offer
+            if(!error && parentInfo && await this.indexerDb.isOwnershipEscrowed(parent))
+                error = 'invalid: TICK (parent ownership escrowed)';
         }
 
         // Verify TICK contains only allowed characters
@@ -239,6 +243,14 @@ class Issue {
         // Verify ISSUE is coming from TICK owner
         if(!error && tokenInfo && tokenInfo['OWNER']!=data['SOURCE'])
             error = 'invalid: issued by another address';
+
+        // Reject any ISSUE that edits an existing tick while its ownership is escrowed
+        // (covers v1 description edit, v2 mint params, v3 lock params, v4 callback params,
+        // v5 list params, and v0 re-issuance from the existing owner). The escrow itself
+        // was opened by a successful ORDER/SWAP/DISPENSER from the same SOURCE; only
+        // closing the offer (via cancel/expire/match/sweep) releases this lock.
+        if(!error && tokenInfo && await this.indexerDb.isOwnershipEscrowed(data['TICK']))
+            error = 'invalid: TICK (ownership escrowed)';
 
         // Verify LOCK fields cannot be changed once enabled/locked
         for(let name of this.fieldList['LOCK']){

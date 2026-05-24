@@ -69,12 +69,16 @@ class Order_Expire {
 
         if(pendingObligations.length > 0){
             // Two-phase expiration: set status to 'expiring' — blocks new matches, pending obligations must resolve first
+            // Ownership escrow stays set; coinpay.js releases it when the final obligation resolves.
             await this.indexerDb.createOrderExpire(data['ACTION_INDEX'], orderInfo['ACTION_INDEX'], data['STATUS']);
             await this.indexerDb.createOrderStatus(data['ACTION_INDEX'], orderInfo['ACTION_INDEX'], 'expiring');
         } else {
             // No pending obligations — expire immediately
-            // Debit GIVE_TICK from escrows and credit it to the SOURCE address (skip for native coin GIVE)
-            if(!this.util.isNull(orderInfo['GIVE_TICK'])){
+            if(orderInfo['GIVE_OWNERSHIP']==1){
+                // Release ownership escrow back to the seller (tokens.owner_id is unchanged)
+                await this.indexerDb.clearTokenEscrow(orderInfo['GIVE_TICK']);
+            } else if(!this.util.isNull(orderInfo['GIVE_TICK'])){
+                // Debit GIVE_TICK from escrows and credit it to the SOURCE address (skip for native coin GIVE)
                 escrows.push([orderInfo['GIVE_TICK'], -orderInfo['GIVE_REMAINING'], orderInfo['SOURCE']]);
                 credits.push([orderInfo['GIVE_TICK'],  orderInfo['GIVE_REMAINING'], orderInfo['SOURCE']]);
             }

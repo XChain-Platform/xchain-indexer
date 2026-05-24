@@ -20,9 +20,11 @@
  * PARAMS:
  * - VERSION     - Format Version
  * - DESTINATION - address where `token` shall be swept
- * - BALANCES    - Indicates if address `token` balances should be swept (default=1)
- * - OWNERSHIPS  - Indicates if address `token` ownerships should be swept (default=1)
- * - ESCROWS     - Indicates if escrowed tokens should be swept (default=0)
+ * - BALANCES    - Sweep `TICK` balances to DESTINATION (default=1)
+ * - OWNERSHIPS  - Sweep `TICK` ownerships to DESTINATION (default=1)
+ * - ORDERS      - Cancel open ORDERs and credit escrow to DESTINATION (default=0)
+ * - SWAPS       - Cancel open SWAPs and credit escrow to DESTINATION (default=0)
+ * - DISPENSERS  - Close open DISPENSERs and credit escrow to DESTINATION (default=0)
  * - MEMO        - Optional memo to include
  * 
  * FORMATS:
@@ -44,7 +46,7 @@ class Sweep {
         
         // Define list of known FORMATS
         this.formats = {};
-        this.formats[0] = 'VERSION|DESTINATION|BALANCES|OWNERSHIPS|ESCROWS|MEMO';
+        this.formats[0] = 'VERSION|DESTINATION|BALANCES|OWNERSHIPS|ORDERS|SWAPS|DISPENSERS|MEMO';
     }
 
     // Handle parsing the SWEEP transaction
@@ -52,7 +54,7 @@ class Sweep {
         /*****************************************************************
          * DEBUGGING - Force params
          ****************************************************************/
-        // let str = '0|1BoogrfDADPLQpq8LMASmWQUVYDp4t2hF9|1|1|1|memo';
+        // let str = '0|1BoogrfDADPLQpq8LMASmWQUVYDp4t2hF9|1|1|1|1|1|memo';
         // params = String(str).split('|');
         // data['FORMAT'] = this.util.getFormatVersion(params[0]);
 
@@ -94,14 +96,24 @@ class Sweep {
         if(!error && !this.util.isNull(data['OWNERSHIPS']) && !this.util.isValidValue(data['OWNERSHIPS'],[0,1]))
             error = "invalid: OWNERSHIP (format)";
 
-        // Verify ESCROWS format is valid (0 or 1)
-        if(!error && !this.util.isNull(data['ESCROWS']) && !this.util.isValidValue(data['ESCROWS'],[0,1]))
-            error = "invalid: ESCROWS (format)";
+        // Verify ORDERS format is valid (0 or 1)
+        if(!error && !this.util.isNull(data['ORDERS']) && !this.util.isValidValue(data['ORDERS'],[0,1]))
+            error = "invalid: ORDERS (format)";
 
-        // Set default values for BALANCES, OWNERSHIP, and ESCROWS
-        data['BALANCES']   = (!this.util.isNull(data['BALANCES'])) ? data['BALANCES'] : 1;
+        // Verify SWAPS format is valid (0 or 1)
+        if(!error && !this.util.isNull(data['SWAPS']) && !this.util.isValidValue(data['SWAPS'],[0,1]))
+            error = "invalid: SWAPS (format)";
+
+        // Verify DISPENSERS format is valid (0 or 1)
+        if(!error && !this.util.isNull(data['DISPENSERS']) && !this.util.isValidValue(data['DISPENSERS'],[0,1]))
+            error = "invalid: DISPENSERS (format)";
+
+        // Set default values for BALANCES, OWNERSHIPS, and per-offer-type close flags
+        data['BALANCES']   = (!this.util.isNull(data['BALANCES']))   ? data['BALANCES']   : 1;
         data['OWNERSHIPS'] = (!this.util.isNull(data['OWNERSHIPS'])) ? data['OWNERSHIPS'] : 1;
-        data['ESCROWS']    = (!this.util.isNull(data['ESCROWS'])) ? data['ESCROWS'] : 0;
+        data['ORDERS']     = (!this.util.isNull(data['ORDERS']))     ? data['ORDERS']     : 0;
+        data['SWAPS']      = (!this.util.isNull(data['SWAPS']))      ? data['SWAPS']      : 0;
+        data['DISPENSERS'] = (!this.util.isNull(data['DISPENSERS'])) ? data['DISPENSERS'] : 0;
 
         // Clone the raw data for storage in mints table
         let sweep = Object.assign({}, data);
@@ -129,11 +141,16 @@ class Sweep {
         // TODO: Verify sweep is allowed to new address (ALLOW_LIST & BLOCK_LIST)
         // TODO: Verify sweep is allowed on each TICK (SLEEP)
 
+        // Partition escrow rows by type so we can fee + iterate per enabled flag
+        let orderEscrows     = (data['ORDERS']     == 1) ? escrowed.filter(e => e.type === 'order')     : [];
+        let swapEscrows      = (data['SWAPS']      == 1) ? escrowed.filter(e => e.type === 'swap')      : [];
+        let dispenserEscrows = (data['DISPENSERS'] == 1) ? escrowed.filter(e => e.type === 'dispenser') : [];
+
         // Calculate total number of database hits for this SWEEP
-        let db_hits = 1;                                                                               // 1 sweeps
-            db_hits += (data['BALANCES']) ? this.util.bcmul(Object.keys(balances).length,4,0) : 0;     // 1 debits, 1 credits, 2 balances
-            db_hits += (data['ESCROWS']) ? this.util.bcmul(Object.keys(escrowed).length,4,0) : 0;      // 1 escrows, 1 credits, 2 balances
-            db_hits += (data['OWNERSHIPS']) ? this.util.bcmul(Object.keys(ownerships).length,2,0) : 0; // 1 issue, 1 tokens
+        let db_hits = 1;                                                                                                                            // 1 sweeps
+            db_hits += (data['BALANCES'])   ? this.util.bcmul(Object.keys(balances).length,4,0)                                              : 0;   // 1 debits, 1 credits, 2 balances
+            db_hits += this.util.bcmul(orderEscrows.length + swapEscrows.length + dispenserEscrows.length, 4, 0);                                   // 1 escrows, 1 credits, 2 balances (per affected offer)
+            db_hits += (data['OWNERSHIPS']) ? this.util.bcmul(Object.keys(ownerships).length,2,0)                                            : 0;   // 1 issue, 1 tokens
 
         // Determine total transaction FEE based on database hits
         fees['AMOUNT'] = this.util.getTransactionFee(db_hits, fees['TICK']);
@@ -196,36 +213,64 @@ class Sweep {
             // Handle any transaction FEE according the users's ADDRESS preferences
             [credits, debits] = await this.util.processTransactionFees(this.indexerDb, credits, debits, fees);
 
-            // Transfer escrowed tokens
-            if(data['ESCROWS']==1){
-                // Get list of actions with escrowed tokens
-                for(let escrow of escrowed){
-
-                    // Handle closing orders
-                    if(escrow.type=='order'){
-                        let info = await this.indexerDb.getOrderInfo(this.config['COIN'], escrow.action_index);
+            // Cancel open ORDERs. If the order has pending COINPay obligations, use the
+            // two-phase 'cancelling' path (matches order.js v1 cancel behavior) — escrow
+            // stays locked until obligations resolve via coinpay.js. Otherwise cancel
+            // immediately and route escrow to DESTINATION.
+            //
+            // KNOWN GAP: when COINPay-deferred orders eventually resolve, coinpay.js
+            // routes the remaining escrow to the ORIGINAL order SOURCE, not the sweep
+            // DESTINATION. Per-order sweep-destination tracking (analogous to
+            // getSweepDestination for dispensers) is a follow-up.
+            for(let escrow of orderEscrows){
+                let info = await this.indexerDb.getOrderInfo(this.config['COIN'], escrow.action_index);
+                let pendingObligations = await this.indexerDb.getPendingCoinpayObligationsByOrder(info['ACTION_INDEX']);
+                if(pendingObligations.length > 0){
+                    // Defer — let coinpay.js finalize once obligations resolve
+                    await this.indexerDb.createOrderStatus(data['ACTION_INDEX'], info['ACTION_INDEX'], 'cancelling');
+                } else {
+                    // Immediate cancel: route the escrow to DESTINATION
+                    if(info['GIVE_OWNERSHIP']==1){
+                        // Ownership order: release the escrow gate and atomically transfer
+                        // ownership to the sweep DESTINATION.
+                        await this.util.transferTokenOwnership(this.indexerDb, this.mapper, data, info['GIVE_TICK'], info['SOURCE'], data['DESTINATION']);
+                    } else if(!this.util.isNull(info['GIVE_TICK'])){
+                        // Balance order: standard escrow → DESTINATION
                         escrows.push([info['GIVE_TICK'], -info['GIVE_REMAINING'], info['SOURCE']]);
-                        await this.indexerDb.createOrderStatus(data['ACTION_INDEX'], info['ACTION_INDEX'], 'cancelled');
+                        credits.push([info['GIVE_TICK'],  info['GIVE_REMAINING'], data['DESTINATION']]);
+                        this.util.addAddressTicker(data['DESTINATION'], info['GIVE_TICK']);
                     }
-
-                    // Handle closing swaps
-                    if(escrow.type=='swap'){
-                        let info = await this.indexerDb.getSwapInfo(this.config['COIN'], escrow.action_index);
-                        escrows.push([info['GIVE_TICK'], -info['GIVE_AMOUNT'], info['SOURCE']]);
-                        await this.indexerDb.createSwapStatus(data['ACTION_INDEX'], info['ACTION_INDEX'], 'cancelled');
-                    }
-
-                    // Handle canceling dispensers
-                    // Note: Dispensers close after a set block delay; escrow is routed by dispenser_close
-                    // (sweep destination wins when this status row's action_index ties to a SWEEP action).
-                    // Record SOURCE as the canceller so dispenser_close has the canceller identity for the
-                    // non-sweep cases the spec covers.
-                    if(escrow.type=='dispenser')
-                        await this.indexerDb.createDispenserStatus(data['ACTION_INDEX'], escrow.action_index, 'cancelling', data['SOURCE']);
-
+                    await this.indexerDb.createOrderStatus(data['ACTION_INDEX'], info['ACTION_INDEX'], 'cancelled');
                 }
+            }
 
-                // Store the SOURCE and DESTINATION in the addresses list
+            // Cancel open SWAPs and route their escrow to DESTINATION.
+            for(let escrow of swapEscrows){
+                let info = await this.indexerDb.getSwapInfo(this.config['COIN'], escrow.action_index);
+                if(info['GIVE_OWNERSHIP']==1){
+                    // Ownership swap: release the escrow gate and atomically transfer
+                    // ownership to the sweep DESTINATION.
+                    await this.util.transferTokenOwnership(this.indexerDb, this.mapper, data, info['GIVE_TICK'], info['SOURCE'], data['DESTINATION']);
+                } else {
+                    // Balance swap: standard escrow → DESTINATION
+                    escrows.push([info['GIVE_TICK'], -info['GIVE_AMOUNT'], info['SOURCE']]);
+                    credits.push([info['GIVE_TICK'],  info['GIVE_AMOUNT'], data['DESTINATION']]);
+                    this.util.addAddressTicker(data['DESTINATION'], info['GIVE_TICK']);
+                }
+                await this.indexerDb.createSwapStatus(data['ACTION_INDEX'], info['ACTION_INDEX'], 'cancelled');
+            }
+
+            // Close open DISPENSERs. Dispensers close after a set block delay; escrow is
+            // routed at close time by dispenser_close, which checks getSweepDestination()
+            // and credits the sweep DESTINATION when this status row's action_index ties
+            // to a SWEEP action. SOURCE is recorded as the canceller for the non-sweep
+            // close paths the spec covers.
+            for(let escrow of dispenserEscrows){
+                await this.indexerDb.createDispenserStatus(data['ACTION_INDEX'], escrow.action_index, 'cancelling', data['SOURCE']);
+            }
+
+            // Ensure SOURCE + DESTINATION are tracked so balance updates run for both
+            if(orderEscrows.length || swapEscrows.length || dispenserEscrows.length){
                 this.util.addAddressTicker(data['SOURCE']);
                 this.util.addAddressTicker(data['DESTINATION']);
             }

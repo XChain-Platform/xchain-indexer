@@ -8,10 +8,12 @@ CREATE TABLE swaps (
     get_tick_id      BIGINT UNSIGNED,          -- id of record in index_tickers table
     get_amount       VARCHAR(250),             -- Amount of GET_TICK in swap
     get_address_id   BIGINT UNSIGNED,          -- id of record in index_addresses table
+    give_ownership   TINYINT(1) NOT NULL DEFAULT 0, -- 1 = swap escrows GIVE_TICK ownership instead of a balance amount
+    get_ownership    TINYINT(1) NOT NULL DEFAULT 0, -- 1 = swap requires matcher to currently own GET_TICK and transfer it
     expiration       BIGINT UNSIGNED,          -- unix timestamp of swap expiration date/time
     allow_list       BIGINT UNSIGNED,          -- action_index of a list from the lists table
     block_list       BIGINT UNSIGNED,          -- action_index of a list from the lists table
-    memo_id          BIGINT UNSIGNED,          -- id of record in index_memos table 
+    memo_id          BIGINT UNSIGNED,          -- id of record in index_memos table
     status_id        BIGINT UNSIGNED           -- id of record in index_statuses table (status of open swap tx)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
@@ -25,3 +27,5 @@ CREATE        INDEX block_list     ON swaps (block_list);
 CREATE        INDEX get_address_id ON swaps (get_address_id);
 CREATE        INDEX memo_id        ON swaps (memo_id);
 CREATE        INDEX status_id      ON swaps (status_id);
+CREATE        INDEX give_ownership ON swaps (give_ownership);
+CREATE        INDEX get_ownership  ON swaps (get_ownership);

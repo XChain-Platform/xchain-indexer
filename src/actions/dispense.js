@@ -124,6 +124,12 @@ class Dispense {
             if(!error && data['SOURCE']==dispenser['GET_ADDRESS'])
                 error = 'invalid: SOURCE and GET_ADDRESS can not be same';
 
+            // Ownership dispensers are single-shot: cap multiplier at 1 regardless of overpayment
+            // (extra coin is absorbed as a tip — matches the existing overpayment behavior).
+            let isOwnershipDispenser = (Number(dispenser['GIVE_OWNERSHIP']||0) == 1);
+            if(isOwnershipDispenser && multiplier > 1)
+                multiplier = 1;
+
             // Calculate how much to dispense based on the payment amount
             let give_amount = this.util.bcmul(multiplier, dispenser['GIVE_AMOUNT'], 64);
 
@@ -260,8 +266,12 @@ class Dispense {
                     debits  = [],
                     escrows = [];
 
-                // Debit GIVE_TICK from escrows and credit it to the SOURCE address
-                if(this.util.bcgt(dispense['GIVE_AMOUNT'], 0)){
+                if(Number(dispenser['GIVE_OWNERSHIP']||0) == 1){
+                    // Ownership dispense: clear the escrow gate and atomically transfer
+                    // ownership from the dispenser SOURCE to the buyer (data['SOURCE']).
+                    await this.util.transferTokenOwnership(this.indexerDb, this.mapper, dispense, dispense['GIVE_TICK'], dispenser['SOURCE'], dispense['DESTINATION']);
+                } else if(this.util.bcgt(dispense['GIVE_AMOUNT'], 0)){
+                    // Balance dispense: debit from escrow, credit buyer
                     escrows.push([dispense['GIVE_TICK'], -dispense['GIVE_AMOUNT'], dispense['DESTINATION']]);
                     credits.push([dispense['GIVE_TICK'],  dispense['GIVE_AMOUNT'], dispense['DESTINATION']]);
                 }

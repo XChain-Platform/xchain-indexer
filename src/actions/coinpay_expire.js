@@ -96,11 +96,16 @@ class Coinpay_Expire {
             debits  = [],
             escrows = [];
 
-        // Release escrowed tokens back to the seller's order
-        // The escrowed amount is tracked in the obligation's corresponding ORDER_MATCH
-        // We need to restore the seller's GIVE_REMAINING
-        escrows.push([sellerOrder['GIVE_TICK'], -obligationInfo['COIN_AMOUNT'], sellerOrder['SOURCE']]);
-        credits.push([sellerOrder['GIVE_TICK'],  obligationInfo['COIN_AMOUNT'], sellerOrder['SOURCE']]);
+        // Release escrowed tokens back to the seller's order. For balance orders this
+        // restores the seller's GIVE_REMAINING via a ledger credit. For ownership orders
+        // there's nothing in the balance ledger — release the ownership escrow gate so
+        // the seller can edit / re-list the tick again.
+        if(Number(sellerOrder['GIVE_OWNERSHIP']||0) == 1){
+            await this.indexerDb.clearTokenEscrow(sellerOrder['GIVE_TICK']);
+        } else {
+            escrows.push([sellerOrder['GIVE_TICK'], -obligationInfo['COIN_AMOUNT'], sellerOrder['SOURCE']]);
+            credits.push([sellerOrder['GIVE_TICK'],  obligationInfo['COIN_AMOUNT'], sellerOrder['SOURCE']]);
+        }
 
         // Create record in the coinpay_expires table
         await this.indexerDb.createCoinpayExpire(data['ACTION_INDEX'], obligationInfo['ACTION_INDEX'], data['STATUS']);
@@ -123,8 +128,11 @@ class Coinpay_Expire {
                 let finalStatus = (sellerStatus == 'cancelling') ? 'cancelled' : 'expired';
                 await this.indexerDb.createOrderStatus(data['ACTION_INDEX'], sellerOrder['ACTION_INDEX'], finalStatus);
 
-                // Release any remaining escrowed tokens back to the seller
-                if(sellerOrder['GIVE_REMAINING'] && this.util.bcgt(sellerOrder['GIVE_REMAINING'], 0)){
+                // Release any remaining escrowed tokens back to the seller. Ownership
+                // orders are single-fill — no remaining balance, and the escrow gate was
+                // already cleared above.
+                if(Number(sellerOrder['GIVE_OWNERSHIP']||0) != 1 &&
+                   sellerOrder['GIVE_REMAINING'] && this.util.bcgt(sellerOrder['GIVE_REMAINING'], 0)){
                     escrows.push([sellerOrder['GIVE_TICK'], -sellerOrder['GIVE_REMAINING'], sellerOrder['SOURCE']]);
                     credits.push([sellerOrder['GIVE_TICK'],  sellerOrder['GIVE_REMAINING'], sellerOrder['SOURCE']]);
                 }

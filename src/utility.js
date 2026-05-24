@@ -790,6 +790,30 @@ class Utility {
         return [credits, debits];
     }
 
+    // Transfer ownership of a tick from one address to another by clearing the ownership
+    // escrow gate and writing a synthetic ISSUE+TRANSFER. `tokens.owner_id` is then
+    // re-derived by db.updateTokens(). Called by order_match / swap_match / dispense /
+    // coinpay / sweep when an ownership offer settles or is closed with delivery routing.
+    async transferTokenOwnership(db, mapper, data, tick, fromAddress, toAddress){
+        await db.clearTokenEscrow(tick);
+        let issue = {
+            ACTION:       'ISSUE',
+            TICK:         tick,
+            TRANSFER:     toAddress,
+            SOURCE:       fromAddress,
+            BLOCK_INDEX:  data['BLOCK_INDEX'],
+            TX_INDEX:     data['TX_INDEX'],
+            BLOCK_TIME:   data['BLOCK_TIME'],
+            STATUS:       'valid'
+        };
+        issue['ACTION_INDEX'] = await db.createActionIndex(issue, true);
+        await db.createIssue(issue);
+        await db.updateTokens(tick);
+        this.addAddressTicker(fromAddress, tick);
+        this.addAddressTicker(toAddress,   tick);
+        await mapper.createMappings(issue);
+    }
+
     // Process any transaction ledger changes (credits / debits / escrows)
     async processTransactionLedgerChanges(db, data, credits, debits, escrows){
         // Consolidate the credit / debit / escrow records to write as few records as possible
