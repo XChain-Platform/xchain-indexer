@@ -168,24 +168,45 @@ class Database {
         return true;
     }
 
-    // Handle creating database tables
+    // Handle creating database tables.
+    //
+    // Uses raw db.query (not doQuery) because doQuery swallows non-transactional
+    // errors — a DROP TABLE that committed followed by a CREATE TABLE that
+    // failed on a connection blip would leave a partial-state table missing
+    // (observed on LTC regtest: `dispensers` ended up missing after a transient
+    // MariaDB hiccup during init, fatal-looped the indexer on every block).
+    // Retries the whole file with exponential backoff so transient DB issues
+    // don't leave half-built schema.
     async createTable(file){
-        let dir     = path.join(__dirname, 'sql');
-        let data    = fs.readFileSync(dir + '/' + file, "utf8");
-        let table   = file.substring(0, file.indexOf('.sql'));
-        let queries = data.split(';');
-        let query   = null;
+        const dir     = path.join(__dirname, 'sql');
+        const data    = fs.readFileSync(dir + '/' + file, "utf8");
+        const table   = file.substring(0, file.indexOf('.sql'));
+        const queries = data.split(';').map(q => q.trim()).filter(q => q !== '');
         console.log('Creating ' + table + ' table and indexes...');
-        // Loop through SQL queries
-        for(query of queries){
-            query = query.trim();
-            // Ignore empty queries
-            if(query=='')
-                continue;
-            let results = await this.doQuery(query);
-            if(results.length > 0)
-                continue;
+
+        const MAX_ATTEMPTS = 5;
+        let lastErr = null;
+        for(let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++){
+            let db = null;
+            try {
+                db = await this.getConnection();
+                for(const query of queries){
+                    await db.query(query);
+                }
+                await db.release();
+                return;
+            } catch (err) {
+                lastErr = err;
+                if(db){
+                    try { await db.release(); } catch (_){}
+                }
+                if(attempt >= MAX_ATTEMPTS) break;
+                const backoffMs = Math.min(30000, 500 * Math.pow(2, attempt - 1));
+                console.log('Error creating ' + table + ' (attempt ' + attempt + '/' + MAX_ATTEMPTS + '): ' + err.message + '. Retrying in ' + backoffMs + 'ms...');
+                await this.util.sleep(backoffMs);
+            }
         }
+        this.util.throwError('Failed to create ' + table + ' table after ' + MAX_ATTEMPTS + ' attempts: ' + (lastErr ? lastErr.message : 'unknown'));
     }
 
     /* 
