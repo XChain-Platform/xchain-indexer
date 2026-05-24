@@ -122,9 +122,33 @@ class Order_Match {
                     continue;
                 }
 
-                // Calculate the give and get amounts for this order match
-                let give_amount = this.util.bcmul(matchInfo['GIVE_REMAINING'], orderInfo['GET_PRICE']),
-                    get_amount  = this.util.bcmul(give_amount, orderInfo['GIVE_PRICE']);
+                // Calculate the give and get amounts for this order match.
+                //
+                // Both orders constrain the trade:
+                //   give_amount (orderInfo.GIVE_TICK = matchInfo.GET_TICK) is bounded by
+                //     matchInfo.GET_REMAINING and orderInfo.GIVE_REMAINING.
+                //   get_amount  (orderInfo.GET_TICK = matchInfo.GIVE_TICK) is bounded by
+                //     matchInfo.GIVE_REMAINING and orderInfo.GET_REMAINING.
+                // Take whichever pair tightens first as the bottleneck, then derive the
+                // other amount from the price. bcmul precision = 18 to preserve sub-integer
+                // amounts (the default of 0 silently truncates 0.00000003 to 0).
+                let max_give = this.util.bclt(matchInfo['GET_REMAINING'], orderInfo['GIVE_REMAINING'])
+                    ? matchInfo['GET_REMAINING']
+                    : orderInfo['GIVE_REMAINING'];
+                let max_get = this.util.bclt(matchInfo['GIVE_REMAINING'], orderInfo['GET_REMAINING'])
+                    ? matchInfo['GIVE_REMAINING']
+                    : orderInfo['GET_REMAINING'];
+                let give_from_get = this.util.bcmul(max_get, orderInfo['GET_PRICE'], 18);
+                let give_amount, get_amount;
+                if (this.util.bcgt(give_from_get, max_give)) {
+                    // give-side is the bottleneck — clamp give and derive get
+                    give_amount = max_give;
+                    get_amount  = this.util.bcmul(max_give, orderInfo['GIVE_PRICE'], 18);
+                } else {
+                    // get-side is the bottleneck (or both equal) — use full max_get
+                    give_amount = give_from_get;
+                    get_amount  = max_get;
+                }
 
                 // Ignore zero quantity GIVE
                 if(this.util.bclte(give_amount, 0)){
