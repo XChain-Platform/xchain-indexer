@@ -15,7 +15,8 @@
     "fs": "^0.0.1-security",
     "helmet": "^7.1.0",
     "mariadb": "^3.2.3",
-    "mathjs": "^13.2.0"
+    "mathjs": "^13.2.0",
+    "xchain-vm": "file:./xchain-vm"
   },
   "scripts": {
     "api": "node ./src/api.js",
