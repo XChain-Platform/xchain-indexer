@@ -417,8 +417,8 @@ class Execute {
                 // FORMAT: VERSION|ORDER_MATCH_ACTION_INDEX
                 return [0, params.orderMatchActionIndex];
             case 'SWEEP':
-                // FORMAT: VERSION|DESTINATION|BALANCES|OWNERSHIPS|ESCROWS|MEMO
-                return [0, params.destination, params.balances || '', params.ownerships || '', params.escrows || '', params.memo || ''];
+                // FORMAT: VERSION|DESTINATION|BALANCES|OWNERSHIPS|ORDERS|SWAPS|DISPENSERS|MEMO
+                return [0, params.destination, params.balances || '', params.ownerships || '', params.orders || '', params.swaps || '', params.dispensers || '', params.memo || ''];
             case 'LINK':
                 // FORMAT: VERSION|COIN1|COIN1_ACTION_INDEX|COIN2|COIN2_ACTION_INDEX|MEMO
                 return [0, params.coin1, params.coin1ActionIndex, params.coin2, params.coin2ActionIndex, params.memo || ''];
