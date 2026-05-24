@@ -325,10 +325,13 @@ class Database {
     async doQuery(query, args){
         let results = [];
         if(!this.util.isNull(query)){
-            // Normalize args: convert any boxed primitives (e.g. mathjs BigNumber) to plain values
+            // Normalize args: convert any boxed primitives (e.g. mathjs BigNumber) to plain values.
+            // Skip Buffers — the mariadb driver inserts them as binary into BLOB columns; calling
+            // .toString() on them would UTF-8-decode the bytes and replace invalid sequences with
+            // U+FFFD, corrupting binary payloads (e.g. FILE raw_data ciphertext).
             if(Array.isArray(args)){
                 for(let i = 0; i < args.length; i++){
-                    if(args[i] !== null && args[i] !== undefined && typeof args[i] === 'object')
+                    if(args[i] !== null && args[i] !== undefined && typeof args[i] === 'object' && !Buffer.isBuffer(args[i]))
                         args[i] = args[i].toString();
                 }
             }
@@ -356,9 +359,12 @@ class Database {
 
     // Handle normalizing data values before inserting in the database tables
     normalizeDataValues(data){
-        // Handle converting any boxed primitives (e.g. mathjs Decimal) to plain primitives
+        // Handle converting any boxed primitives (e.g. mathjs Decimal) to plain primitives.
+        // Buffers (e.g. FILE raw_data) must pass through unchanged — String(buffer) would
+        // UTF-8-decode the bytes and replace any invalid sequences with U+FFFD, corrupting
+        // binary payloads like AES-GCM ciphertext.
         for(let key in data){
-            if(!this.util.isNull(data[key]) && typeof data[key] === 'object')
+            if(!this.util.isNull(data[key]) && typeof data[key] === 'object' && !Buffer.isBuffer(data[key]))
                 data[key] = this.util.safeToString(data[key]);
         }
         // Set LIST field values to numeric value or NULL
