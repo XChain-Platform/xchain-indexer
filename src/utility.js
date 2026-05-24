@@ -78,12 +78,17 @@ class Utility {
         return new Promise((resolve) => setTimeout(resolve, ms));
     }
 
-    // Safely convert a value to string — returns null if the value can't be converted
+    // Safely convert a value to string — returns null if the value can't be converted.
+    // mathjs bignumbers serialize via String() in scientific notation for very small
+    // / very large magnitudes ("3e-8" for 0.00000003), which breaks downstream string
+    // comparisons against the wire-format value. Format bignumbers in fixed notation.
     safeToString(val) {
         if(val === null || val === undefined)
             return null;
         if(typeof val !== 'object')
             return String(val);
+        if(mathjs.isBigNumber && mathjs.isBigNumber(val))
+            return mathjs.format(val, {notation: 'fixed'});
         if(typeof val.toString !== 'function')
             return null;
         try { return String(val); } catch(e){ return null; }
