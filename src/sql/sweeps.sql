@@ -3,9 +3,11 @@ CREATE TABLE sweeps (
     action_index     BIGINT UNSIGNED NOT NULL, -- Unique action index
     balances         BIGINT UNSIGNED,          -- Indicates if token balances should be swept
     ownerships       BIGINT UNSIGNED,          -- Indicates if token ownerships should be swept
-    escrows          BIGINT UNSIGNED,          -- Indicates if escrowed tokens should be swept
+    orders           BIGINT UNSIGNED,          -- Indicates if open ORDERs should be cancelled and escrow credited to DESTINATION
+    swaps            BIGINT UNSIGNED,          -- Indicates if open SWAPs should be cancelled and escrow credited to DESTINATION
+    dispensers       BIGINT UNSIGNED,          -- Indicates if open DISPENSERs should be closed and escrow credited to DESTINATION
     destination_id   BIGINT UNSIGNED,          -- id of record in index_addresses table
-    memo_id          BIGINT UNSIGNED,          -- id of record in index_memos table 
+    memo_id          BIGINT UNSIGNED,          -- id of record in index_memos table
     status_id        BIGINT UNSIGNED           -- id of record in index_statuses table
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 

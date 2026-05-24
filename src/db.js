@@ -2756,7 +2756,9 @@ class Database {
         let action_index   = data['ACTION_INDEX'];
         let balances       = data['BALANCES'];
         let ownerships     = data['OWNERSHIPS'];
-        let escrows        = data['ESCROWS'];
+        let orders         = data['ORDERS'];
+        let swaps          = data['SWAPS'];
+        let dispensers     = data['DISPENSERS'];
         // Check if record already exists for this sweep
         let query = `SELECT
                         action_index
@@ -2777,16 +2779,18 @@ class Database {
                         destination_id=?,
                         balances=?,
                         ownerships=?,
-                        escrows=?,
+                        orders=?,
+                        swaps=?,
+                        dispensers=?,
                         memo_id=?,
                         status_id=?
-                    WHERE 
+                    WHERE
                         action_index=?`;
         } else {
             // INSERT record
-            query = `INSERT INTO sweeps (destination_id, balances, ownerships, escrows, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?, ?)`;
+            query = `INSERT INTO sweeps (destination_id, balances, ownerships, orders, swaps, dispensers, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
         }
-        args    = [destination_id, balances, ownerships, escrows, memo_id, status_id, action_index];
+        args    = [destination_id, balances, ownerships, orders, swaps, dispensers, memo_id, status_id, action_index];
         results = await this.doQuery(query, args);
     }
 
