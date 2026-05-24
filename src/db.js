@@ -1683,7 +1683,14 @@ class Database {
             throw new Error('Invalid ledger table: ' + table);
         let tick_id    = await this.createTicker(tick);
         let address_id = await this.createAddress(address);
-        // Convert any BigNumber amount to a plainstring before inserting into the database
+        // Round amount to the tick's actual decimal precision before storing.
+        // Without this, fractional amounts (e.g. VM gas fees calculated at 8
+        // decimals against a tick issued with fewer) drift between ledger sums
+        // (rounded once at SUM time) and per-address balance sums (rounded per
+        // row by updateAddressBalance) — triggering the supply SanityError.
+        let decimals = await this.getTokenDecimalPrecision(tick_id);
+        amount = this.util.bcadd(amount, 0, decimals);
+        // Convert any BigNumber amount to a plain string before inserting into the database
         amount = String(amount);
         // Check if record already exists for this token
         let query = `SELECT
@@ -1830,25 +1837,24 @@ class Database {
             this.getAddressCreditDebit('credits', address_id, null, block_index, action_index),
             this.getAddressCreditDebit('debits',  address_id, null, block_index, action_index)
         ]);
-        let decimals = {}; // Object to store tick_id/decimals
         let balances = {}; // Object to store tick_id/balance
-        const decimalResults = await Promise.all(
-            Object.keys(credits).map(tick_id =>
-                this.getTokenDecimalPrecision(tick_id).then(d => [tick_id, d])
-            )
-        );
-        for(const [tick_id, d] of decimalResults)
-            decimals[tick_id] = d;
-        // Build out balances (credits - debits)
+        // Build out balances (credits - debits).
+        // Compute at full (18-decimal) precision rather than the token's own
+        // precision: rounding here per-address causes sum-of-rounded-balances
+        // to drift from rounded-sum-of-ledger when a token's decimals are too
+        // low to represent the underlying ledger values (e.g. fractional VM
+        // gas fees against a tick issued with decimals=0). The sanityCheck's
+        // DECIMAL(60, decimals) cast rounds the aggregate sum the same way on
+        // both sides, so as long as per-address balances stay exact, both
+        // paths agree.
         for(let tick_id in credits){
             let credit  = credits[tick_id];
             let debit   = (!this.util.isNull(debits[tick_id])) ? debits[tick_id] : 0;
-            let decimal = decimals[tick_id];
             let balance = null;
             try {
-                balance = this.util.bcsub(credit, debit, decimal);
+                balance = this.util.bcsub(credit, debit, 18);
             } catch(err){
-                balance = this.util.bcadd(0, 0, decimal);
+                balance = this.util.bcadd(0, 0, 18);
             }
             // Pass forward any numeric values (including 0 balance)
             if(this.util.isNumeric(balance))
