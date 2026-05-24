@@ -67,18 +67,21 @@ class Coinpay {
 
         // Early exit: if obligation doesn't exist or is not pending, this output is not relevant
         if(!obligationInfo || obligationInfo['COINPAY_STATUS'] != 'pending_coinpay'){
+            console.log("\t COINPAY (skip): obligation " + data['ORDER_MATCH_ACTION_INDEX'] + " " + (obligationInfo ? "status=" + obligationInfo['COINPAY_STATUS'] : "not found"));
             await this.indexerDb.deleteActionIndex(data['ACTION_INDEX']);
             return;
         }
 
         // Early exit: if this output's destination doesn't match the payee address
         if(data['COIN_DESTINATION'] != obligationInfo['PAYEE_ADDRESS']){
+            console.log("\t COINPAY (skip): destination mismatch — tx=" + data['COIN_DESTINATION'] + " payee=" + obligationInfo['PAYEE_ADDRESS']);
             await this.indexerDb.deleteActionIndex(data['ACTION_INDEX']);
             return;
         }
 
         // Early exit: if this output's amount is less than the obligation amount
         if(this.util.bclt(data['COIN_AMOUNT'], obligationInfo['COIN_AMOUNT'])){
+            console.log("\t COINPAY (skip): amount short — tx=" + data['COIN_AMOUNT'] + " owed=" + obligationInfo['COIN_AMOUNT']);
             await this.indexerDb.deleteActionIndex(data['ACTION_INDEX']);
             return;
         }
