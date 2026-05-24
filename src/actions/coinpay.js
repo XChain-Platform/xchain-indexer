@@ -201,13 +201,23 @@ class Coinpay {
                     let finalStatus = (sellerStatus == 'cancelling') ? 'cancelled' : 'expired';
                     await this.indexerDb.createOrderStatus(data['ACTION_INDEX'], sellerOrder['ACTION_INDEX'], finalStatus);
 
-                    // Release any remaining escrowed tokens back to the seller. Ownership
-                    // orders are single-fill — there is no remaining balance to refund and
-                    // the escrow gate was already cleared in the settlement branch above.
+                    // Release any remaining escrowed tokens back to the seller — or to
+                    // the SWEEP DESTINATION if the cancelling state was triggered by a
+                    // SWEEP with ORDERS=1. Ownership orders are single-fill, so no
+                    // remaining balance exists and the escrow gate was already cleared
+                    // in the settlement branch above.
                     if(Number(sellerOrder['GIVE_OWNERSHIP']||0) != 1 &&
                        updatedSellerOrder['GIVE_REMAINING'] && this.util.bcgt(updatedSellerOrder['GIVE_REMAINING'], 0)){
+                        let refundTo = sellerOrder['SOURCE'];
+                        if(sellerStatus == 'cancelling'){
+                            let sweepDest = await this.indexerDb.getOrderSweepDestination(sellerOrder['ACTION_INDEX']);
+                            if(sweepDest){
+                                refundTo = sweepDest;
+                                this.util.addAddressTicker(refundTo, sellerOrder['GIVE_TICK']);
+                            }
+                        }
                         escrows.push([sellerOrder['GIVE_TICK'], -updatedSellerOrder['GIVE_REMAINING'], sellerOrder['SOURCE']]);
-                        credits.push([sellerOrder['GIVE_TICK'],  updatedSellerOrder['GIVE_REMAINING'], sellerOrder['SOURCE']]);
+                        credits.push([sellerOrder['GIVE_TICK'],  updatedSellerOrder['GIVE_REMAINING'], refundTo]);
                     }
                 }
             }

@@ -543,6 +543,15 @@ class Utility {
         return { gasCost: gasCost, fee: fee };
     }
 
+    // Flat premium charged when an ORDER/SWAP/DISPENSER create escrows ownership of a tick.
+    // Added on top of the expiration fee in the UNIFIED_FEES path; legacy fees do not charge it.
+    getOwnershipEscrowFee(){
+        let schedule = this.config['GAS_SCHEDULE'];
+        let gasCost  = schedule.OWNERSHIP_ESCROW || 0;
+        let fee      = this.bcmul(gasCost, this.config['GAS_PRICE'], 8);
+        return { gasCost: gasCost, fee: fee };
+    }
+
     // Detect fee payment mode from the transaction
     // Returns: 'native' if fee output present, 'xchain' if absent on BTC, 'rejected' if absent on LTC/DOGE
     detectFeePaymentMode(data, decoderDb, txOutputs){

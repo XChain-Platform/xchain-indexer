@@ -324,18 +324,28 @@ class Dispenser {
         if(!error && !isOwnershipGive && !this.util.isNull(data['GIVE_ESCROW']))
             balances = this.util.debitBalances(balances, giveTokenInfo['TICK_ID'], data['GIVE_ESCROW']);
 
-        // Calculate total fee for this dispenser based on EXPIRATION timestamp
+        // Calculate total fee for this dispenser — expiration + ownership-escrow premium (create only)
         fees['AMOUNT'] = 0;
 
-        // Calculate the fee to charge based on the EXPIRATION
-        if(!error && !this.util.isNull(data['EXPIRATION'])){
+        if(!error){
             let unifiedFees = await this.actions.protocolChanges.isEnabled('UNIFIED_FEES', data['BLOCK_INDEX']);
             if(unifiedFees){
-                let result = this.util.getUnifiedExpirationFee(data, dispenserInfo);
-                fees['GAS_COST']    = result.gasCost;
-                fees['AMOUNT']      = result.fee;
+                let gasCost = 0;
+                let fee     = 0;
+                if(!this.util.isNull(data['EXPIRATION'])){
+                    let exp = this.util.getUnifiedExpirationFee(data, dispenserInfo);
+                    gasCost = this.util.bcadd(gasCost, exp.gasCost, 0);
+                    fee     = this.util.bcadd(fee, exp.fee, 8);
+                }
+                if(format==0 && isOwnershipGive){
+                    let own = this.util.getOwnershipEscrowFee();
+                    gasCost = this.util.bcadd(gasCost, own.gasCost, 0);
+                    fee     = this.util.bcadd(fee, own.fee, 8);
+                }
+                fees['GAS_COST']    = gasCost;
+                fees['AMOUNT']      = fee;
                 fees['FEE_VERSION'] = 2;
-            } else {
+            } else if(!this.util.isNull(data['EXPIRATION'])){
                 fees['AMOUNT'] = this.util.getExpirationFee(data, dispenserInfo);
             }
         }

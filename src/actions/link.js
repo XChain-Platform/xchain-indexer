@@ -110,6 +110,22 @@ class Link {
         if(!error && data['COIN2']==this.config['COIN'] && await this.indexerDb.isActionIndexValid(data['COIN2_ACTION_INDEX']) == false)
             error = 'invalid: COIN2_ACTION_INDEX (status)';
 
+        // When COIN2_ACTION_INDEX resolves to a local ISSUE (i.e. linking against a TICK),
+        // the LINK must be authored by the current owner AND the tick's ownership must
+        // not be currently sitting in protocol-held escrow (e.g. listed for sale via
+        // ORDER/SWAP/DISPENSER with GIVE_OWNERSHIP=1). Cross-chain ISSUE targets cannot
+        // be validated locally and are deliberately skipped.
+        if(!error && data['COIN2']==this.config['COIN']){
+            let tick = await this.indexerDb.getIssueTick(data['COIN2_ACTION_INDEX']);
+            if(tick){
+                let tokenInfo = await this.indexerDb.getTokenInfo(tick, data['BLOCK_INDEX'], data['ACTION_INDEX']);
+                if(tokenInfo && tokenInfo['OWNER'] !== data['SOURCE'])
+                    error = 'invalid: SOURCE (not current TICK owner)';
+                if(!error && await this.indexerDb.isOwnershipEscrowed(tick))
+                    error = 'invalid: TICK (ownership escrowed)';
+            }
+        }
+
         // Verify no pipe in MEMO (pipe is field delimiter)
         if(!error && String(data['MEMO']).indexOf('|')!=-1)
             error = 'invalid: MEMO (pipe)';

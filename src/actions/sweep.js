@@ -215,13 +215,10 @@ class Sweep {
 
             // Cancel open ORDERs. If the order has pending COINPay obligations, use the
             // two-phase 'cancelling' path (matches order.js v1 cancel behavior) — escrow
-            // stays locked until obligations resolve via coinpay.js. Otherwise cancel
+            // stays locked until obligations resolve via coinpay.js / coinpay_expire.js,
+            // which look up db.getOrderSweepDestination() to route residual escrow (or
+            // ownership) to this SWEEP's DESTINATION on finalization. Otherwise cancel
             // immediately and route escrow to DESTINATION.
-            //
-            // KNOWN GAP: when COINPay-deferred orders eventually resolve, coinpay.js
-            // routes the remaining escrow to the ORIGINAL order SOURCE, not the sweep
-            // DESTINATION. Per-order sweep-destination tracking (analogous to
-            // getSweepDestination for dispensers) is a follow-up.
             for(let escrow of orderEscrows){
                 let info = await this.indexerDb.getOrderInfo(this.config['COIN'], escrow.action_index);
                 let pendingObligations = await this.indexerDb.getPendingCoinpayObligationsByOrder(info['ACTION_INDEX']);

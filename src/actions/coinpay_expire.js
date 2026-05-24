@@ -96,15 +96,30 @@ class Coinpay_Expire {
             debits  = [],
             escrows = [];
 
-        // Release escrowed tokens back to the seller's order. For balance orders this
-        // restores the seller's GIVE_REMAINING via a ledger credit. For ownership orders
-        // there's nothing in the balance ledger — release the ownership escrow gate so
-        // the seller can edit / re-list the tick again.
+        // If the seller's order was put into 'cancelling' by a SWEEP with ORDERS=1,
+        // residual escrow / ownership must route to the sweep's DESTINATION rather
+        // than back to the seller. Lookup is a no-op (returns null) for non-sweep
+        // cancellations and for orders never sweep-cancelled.
+        let sweepDest = (sellerOrder['ORDER_STATUS'] == 'cancelling')
+            ? await this.indexerDb.getOrderSweepDestination(sellerOrder['ACTION_INDEX'])
+            : null;
+
+        // Release escrowed tokens back to the seller's order — or to the sweep
+        // DESTINATION when applicable. For balance orders this restores the seller's
+        // GIVE_REMAINING via a ledger credit. For ownership orders there's nothing
+        // in the balance ledger — either release the escrow gate back to the seller,
+        // or atomically transfer ownership to the sweep DESTINATION.
         if(Number(sellerOrder['GIVE_OWNERSHIP']||0) == 1){
-            await this.indexerDb.clearTokenEscrow(sellerOrder['GIVE_TICK']);
+            if(sweepDest){
+                await this.util.transferTokenOwnership(this.indexerDb, this.mapper, data, sellerOrder['GIVE_TICK'], sellerOrder['SOURCE'], sweepDest);
+            } else {
+                await this.indexerDb.clearTokenEscrow(sellerOrder['GIVE_TICK']);
+            }
         } else {
+            let refundTo = sweepDest || sellerOrder['SOURCE'];
+            if(sweepDest) this.util.addAddressTicker(sweepDest, sellerOrder['GIVE_TICK']);
             escrows.push([sellerOrder['GIVE_TICK'], -obligationInfo['COIN_AMOUNT'], sellerOrder['SOURCE']]);
-            credits.push([sellerOrder['GIVE_TICK'],  obligationInfo['COIN_AMOUNT'], sellerOrder['SOURCE']]);
+            credits.push([sellerOrder['GIVE_TICK'],  obligationInfo['COIN_AMOUNT'], refundTo]);
         }
 
         // Create record in the coinpay_expires table
@@ -128,13 +143,19 @@ class Coinpay_Expire {
                 let finalStatus = (sellerStatus == 'cancelling') ? 'cancelled' : 'expired';
                 await this.indexerDb.createOrderStatus(data['ACTION_INDEX'], sellerOrder['ACTION_INDEX'], finalStatus);
 
-                // Release any remaining escrowed tokens back to the seller. Ownership
-                // orders are single-fill — no remaining balance, and the escrow gate was
-                // already cleared above.
+                // Release any remaining escrowed tokens back to the seller — or to the
+                // sweep DESTINATION when finalizing a SWEEP-triggered cancel. Ownership
+                // orders are single-fill: no remaining balance, and the gate was already
+                // cleared or transferred above.
                 if(Number(sellerOrder['GIVE_OWNERSHIP']||0) != 1 &&
                    sellerOrder['GIVE_REMAINING'] && this.util.bcgt(sellerOrder['GIVE_REMAINING'], 0)){
+                    let refundTo = sellerOrder['SOURCE'];
+                    if(sellerStatus == 'cancelling' && sweepDest){
+                        refundTo = sweepDest;
+                        this.util.addAddressTicker(refundTo, sellerOrder['GIVE_TICK']);
+                    }
                     escrows.push([sellerOrder['GIVE_TICK'], -sellerOrder['GIVE_REMAINING'], sellerOrder['SOURCE']]);
-                    credits.push([sellerOrder['GIVE_TICK'],  sellerOrder['GIVE_REMAINING'], sellerOrder['SOURCE']]);
+                    credits.push([sellerOrder['GIVE_TICK'],  sellerOrder['GIVE_REMAINING'], refundTo]);
                 }
             }
         }

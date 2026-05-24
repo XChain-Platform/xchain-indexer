@@ -1971,6 +1971,27 @@ class Database {
         return (await this.getTokenEscrow(tick)) !== null;
     }
 
+    // Return the tick associated with an ISSUE action_index, or null if the
+    // action_index does not resolve to a valid ISSUE. Used by LINK to decide
+    // whether a linked action is targeting a TICK (and thus subject to the
+    // owner / ownership-escrow rules).
+    async getIssueTick(action_index){
+        let query = `SELECT
+                        t.tick
+                    FROM
+                        issues i
+                        INNER JOIN index_tickers t ON (t.id=i.tick_id)
+                        INNER JOIN index_statuses s ON (s.id=i.status_id)
+                    WHERE
+                        i.action_index=? AND
+                        s.status='valid'
+                    LIMIT 1`;
+        let results = await this.doQuery(query, [action_index]);
+        if(results.length > 0)
+            return results[0].tick;
+        return null;
+    }
+
     // Get action_index of the first valid ISSUE action for a given ticker
     async getFirstIssueActionIndex(tick){
         let tick_id      = await this.createTicker(tick);
@@ -6536,6 +6557,33 @@ class Database {
                         s1.action_index DESC
                     LIMIT 1`;
         let results = await this.doQuery(query, [action_index]);
+        if(results.length > 0)
+            address = results[0].address;
+        return address;
+    }
+
+    // Return the SWEEP DESTINATION address if the most recent 'cancelling' status
+    // row on the given order_action_index was triggered by a SWEEP, else null.
+    // Used by coinpay.js / coinpay_expire.js to route residual escrow (or ownership)
+    // to the sweeper's DESTINATION rather than the order's original SOURCE.
+    async getOrderSweepDestination(order_action_index){
+        let address = null;
+        let query = `SELECT
+                        a1.address
+                    FROM
+                        order_statuses    s1
+                        INNER JOIN index_statuses   s2 ON (s2.id=s1.status_id)
+                        INNER JOIN sweeps           sw ON (sw.action_index=s1.action_index)
+                        INNER JOIN index_statuses   s3 ON (s3.id=sw.status_id)
+                        INNER JOIN index_addresses  a1 ON (a1.id=sw.destination_id)
+                    WHERE
+                        s1.order_action_index=? AND
+                        s2.status='cancelling' AND
+                        s3.status='valid'
+                    ORDER BY
+                        s1.action_index DESC
+                    LIMIT 1`;
+        let results = await this.doQuery(query, [order_action_index]);
         if(results.length > 0)
             address = results[0].address;
         return address;

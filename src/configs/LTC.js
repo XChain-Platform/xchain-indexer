@@ -44,6 +44,7 @@ module.exports = {
             ISSUE:              100000,
             ISSUE_SUBTOKEN:     50000,
             EXPIRATION_PER_DAY: 550,
+            OWNERSHIP_ESCROW:   50000,   // Premium charged on ORDER/SWAP/DISPENSER create when GIVE_OWNERSHIP=1
             AIRDROP_PER_RECIPIENT: 100,
             DIVIDEND_PER_RECIPIENT: 100,
             VM_EXECUTE_BASE:    1000,
