@@ -82,6 +82,9 @@ class Utility {
     // mathjs bignumbers serialize via String() in scientific notation for very small
     // / very large magnitudes ("3e-8" for 0.00000003), which breaks downstream string
     // comparisons against the wire-format value. Format bignumbers in fixed notation.
+    // (We don't pass a `precision` arg — that would also right-pad trailing zeros
+    // that may or may not have been present in the original. Callers that care about
+    // a specific digit count should normalize at write time.)
     safeToString(val) {
         if(val === null || val === undefined)
             return null;
@@ -666,11 +669,19 @@ class Utility {
         };
     }
 
-    // Convert NUMBER fields from string value to number value so comparisons are mathematical
+    // Convert NUMBER fields from non-string numeric values to mathjs bignumbers so
+    // downstream code can mix integers, Numbers, and bignumbers freely.
+    //
+    // String inputs (the typical case from the wire-format parser) are left as-is.
+    // Converting "0.00000003" or "100.00000000" to a bignumber and back loses both
+    // (scientific-notation on round-trip, trailing zeros that the original wire
+    // value committed to). Math functions (bcmul/bcsub/bclt/bcgt/...) already
+    // call bcnum on their inputs, so leaving strings is safe — and lets the
+    // string-form survive into the DB write so post-broadcast polls can match it.
     setNumberFormats(data){
         for(let name of this.config['NUMBER_FIELDS']){
             let value = data[name];
-            if(!this.isNull(value) && this.isNumeric(value))
+            if(!this.isNull(value) && this.isNumeric(value) && typeof value !== 'string')
                 data[name] = this.bcnum(value);
         }
         return data;
