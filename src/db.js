@@ -153,7 +153,10 @@ class Database {
                 try {
                     let results = await db.query("SELECT * FROM information_schema.tables WHERE table_schema = ? AND table_name = ?",[this.dbName, table]);
                     if(results.length > 0){
-                        continue;
+                        // Existing table — reconcile column nullability against the
+                        // SQL source. Catches schemas that were updated upstream but
+                        // never migrated on stacks created from an older release.
+                        await this.alterTableForDrift(file, db);
                     } else {
                         await this.createTable(file);
                     }
@@ -166,6 +169,59 @@ class Database {
         }
         await db.release();
         return true;
+    }
+
+    // Parse a CREATE TABLE statement to extract expected column nullability.
+    // Conservative — only used for drift detection, not for full schema mgmt.
+    // Returns array of {name, nullable} or null when parsing can't recognize
+    // the file (e.g. a non-CREATE-TABLE definition).
+    parseExpectedColumns(sqlData){
+        const m = sqlData.match(/CREATE\s+TABLE\s+\S+\s*\(([\s\S]+?)\)\s*ENGINE/i);
+        if(!m) return null;
+        // Split on top-level commas (i.e. commas not inside type parens like VARCHAR(250))
+        const parts = m[1].split(/,(?![^()]*\))/g);
+        const cols = [];
+        for(let raw of parts){
+            // Strip trailing `-- comment` text
+            let line = raw.replace(/--[^\n\r]*/g, '').trim();
+            if(!line) continue;
+            // Skip constraint/index/key lines — column definitions only
+            if(/^(PRIMARY|UNIQUE|INDEX|KEY|CHECK|CONSTRAINT|FOREIGN)\b/i.test(line)) continue;
+            const tokens = line.split(/\s+/);
+            if(tokens.length < 2) continue;
+            const name = tokens[0].replace(/`/g, '');
+            // SQL columns are NULL unless explicitly NOT NULL
+            const nullable = !/\bNOT\s+NULL\b/i.test(line);
+            cols.push({ name, nullable });
+        }
+        return cols.length > 0 ? cols : null;
+    }
+
+    // Detect column-nullability drift between the live table and its SQL
+    // source, and fix it by ALTER. Only relaxes NOT NULL -> NULL (the safe
+    // direction — never strengthens to NOT NULL since live rows might have
+    // NULL values that would block the ALTER). Doesn't touch types, defaults,
+    // or indexes. Each applied ALTER is loudly logged.
+    async alterTableForDrift(file, db){
+        const dir      = path.join(__dirname, 'sql');
+        const data     = fs.readFileSync(dir + '/' + file, "utf8");
+        const table    = file.substring(0, file.indexOf('.sql'));
+        const expected = this.parseExpectedColumns(data);
+        if(!expected) return;
+        const live = await db.query(
+            "SELECT COLUMN_NAME, IS_NULLABLE, COLUMN_TYPE FROM information_schema.columns WHERE table_schema = ? AND table_name = ?",
+            [this.dbName, table]
+        );
+        const liveByName = new Map(live.map(c => [c.COLUMN_NAME.toLowerCase(), c]));
+        for(const exp of expected){
+            const cur = liveByName.get(exp.name.toLowerCase());
+            if(!cur) continue; // column missing live — out of scope (may be intentional)
+            const liveIsNullable = cur.IS_NULLABLE === 'YES';
+            if(!liveIsNullable && exp.nullable){
+                console.log('Schema drift on ' + table + '.' + exp.name + ': live=NOT NULL, source=NULL. Relaxing constraint.');
+                await db.query('ALTER TABLE `' + table + '` MODIFY `' + exp.name + '` ' + cur.COLUMN_TYPE + ' NULL');
+            }
+        }
     }
 
     // Handle creating database tables.
