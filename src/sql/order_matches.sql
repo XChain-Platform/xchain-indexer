@@ -3,11 +3,11 @@ CREATE TABLE order_matches (
     action_index      BIGINT UNSIGNED NOT NULL, -- Unique action index
     give_action_index BIGINT UNSIGNED NOT NULL, -- Unique action index on GIVE_COIN network of the order request
     give_coin_id      BIGINT UNSIGNED NOT NULL, -- id of record in index_coins table
-    give_tick_id      BIGINT UNSIGNED NOT NULL, -- id of record in index_tickers table
+    give_tick_id      BIGINT UNSIGNED,          -- id of record in index_tickers table (NULL for native-coin side of a COINPay match)
     give_amount       VARCHAR(250),             -- Amount of GIVE_TICK
     get_action_index  BIGINT UNSIGNED NOT NULL, -- Unique action index on GET_COIN network of the order request
     get_coin_id       BIGINT UNSIGNED NOT NULL, -- id of record in index_coins table
-    get_tick_id       BIGINT UNSIGNED NOT NULL, -- id of record in index_coins table
+    get_tick_id       BIGINT UNSIGNED,          -- id of record in index_tickers table (NULL for native-coin side of a COINPay match)
     get_amount        VARCHAR(250),             -- Amount of GET_TICK
     settlement_type   ENUM('instant','coinpay') DEFAULT 'instant', -- Settlement type (instant for token-token, coinpay for native coin pairs)
     status_id         BIGINT UNSIGNED           -- id of record in index_statuses table (valid / invalid)
