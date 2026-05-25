@@ -7304,7 +7304,18 @@ class Database {
                      WHERE ` + where + `
                      ORDER BY block_index ASC, action_index ASC
                      LIMIT ` + max;
-        return await this.doQuery(query, args);
+        let rows = await this.doQuery(query, args);
+        // Convert BigInt columns to Number so the express JSON serializer
+        // doesn't throw `TypeError: Do not know how to serialize a BigInt`.
+        // Bounded chain values (block heights, action indexes) stay well
+        // within Number.MAX_SAFE_INTEGER on a regtest or production network.
+        return rows.map(r => ({
+            ...r,
+            action_index:   typeof r.action_index   === 'bigint' ? Number(r.action_index)   : r.action_index,
+            contract_index: typeof r.contract_index === 'bigint' ? Number(r.contract_index) : r.contract_index,
+            deadline_block: typeof r.deadline_block === 'bigint' ? Number(r.deadline_block) : r.deadline_block,
+            block_index:    typeof r.block_index    === 'bigint' ? Number(r.block_index)    : r.block_index
+        }));
     }
 
     // Find ATTESTATION_REQUESTs whose deadline_block has passed without a response.
