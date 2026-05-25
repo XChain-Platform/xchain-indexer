@@ -7285,6 +7285,40 @@ class Database {
         await this.doQuery(query, [newStatus, String(requestId || '').toLowerCase()]);
     }
 
+    // List ATTESTATION_REQUESTs currently in 'pending' status, ordered by
+    // creation. xchain-hub's AttestationRound polls this to discover work.
+    // Optional providerId filter lets a validator only see requests for
+    // providers it serves.
+    async getPendingAttestationRequests(providerId, limit){
+        let where = "request_status = 'pending'";
+        let args  = [];
+        if(providerId){
+            where += ' AND provider_id = ?';
+            args.push(String(providerId));
+        }
+        let max = Number(limit) > 0 ? Number(limit) : 100;
+        let query = `SELECT action_index, request_id, contract_index, provider_id,
+                            payload, callback_method, callback_params_json,
+                            redundancy, deadline_block, request_status, block_index
+                     FROM attestation_requests
+                     WHERE ` + where + `
+                     ORDER BY block_index ASC, action_index ASC
+                     LIMIT ` + max;
+        return await this.doQuery(query, args);
+    }
+
+    // Find ATTESTATION_REQUESTs whose deadline_block has passed without a response.
+    // Returns full rows so the expiry handler doesn't have to refetch.
+    async getExpiredAttestationRequests(blockIndex){
+        let query = `SELECT ar.*, ia.address AS fee_payer
+                     FROM attestation_requests ar
+                     LEFT JOIN index_addresses ia ON ia.id = ar.fee_payer_id
+                     WHERE ar.request_status = 'pending'
+                       AND ar.deadline_block < ?
+                     ORDER BY ar.deadline_block ASC, ar.action_index ASC`;
+        return await this.doQuery(query, [blockIndex]);
+    }
+
     // Set callback_execute_action_index on an attestation_responses row (after the system EXECUTE is injected)
     async setAttestationResponseCallbackIndex(responseActionIndex, callbackExecuteActionIndex){
         let query = `UPDATE attestation_responses

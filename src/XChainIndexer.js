@@ -241,6 +241,9 @@ class XChainIndexer {
                         // Check for any cancelled items (dispensers)
                         await this.util.processCancellations(this.actions, this.indexerDb, lastIndexerBlock, blockTime);
 
+                        // Check for any attestation requests past their DEADLINE_BLOCK
+                        await this.util.processAttestationExpirations(this.actions, this.indexerDb, lastIndexerBlock, blockTime);
+
                         // Clear VM compilation cache for this block
                         if(this.actions.vm)
                             this.actions.vm.endBlock();

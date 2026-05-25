@@ -863,7 +863,26 @@ class Utility {
         }
     }
 
-    // Process any orders, swaps, or dispensers which are past expiration 
+    // Process any ATTESTATION_REQUESTs whose DEADLINE_BLOCK has passed without a
+    // fulfilled response. Synthesizes one ATTESTATION_REQUEST_EXPIRE action per
+    // stale row; the handler flips the request status to 'expired' and fires the
+    // callback with status='expired' per framework spec §11.
+    //
+    // Driven by block_index (not block_time) because attestation deadlines are
+    // measured in blocks, matching the wire format DEADLINE_BLOCKS.
+    async processAttestationExpirations(actions, db, block_index, block_time){
+        let expired = await db.getExpiredAttestationRequests(block_index);
+        for(let info of expired){
+            let data = {};
+            data['ACTION']      = 'ATTESTATION_REQUEST_EXPIRE';
+            data['BLOCK_INDEX'] = block_index;
+            data['BLOCK_TIME']  = block_time;
+            data['REQUEST_ID']  = info.request_id;
+            await actions.processAction('ATTESTATION_REQUEST_EXPIRE', null, data, null);
+        }
+    }
+
+    // Process any orders, swaps, or dispensers which are past expiration
     // NOTE: We currently use block_time to expire items... not ideal as block times can be manipulated
     // TODO: Revisit this code and handle calculating block time more elegantly
     async processExpirations(actions, db, block_index, block_time){

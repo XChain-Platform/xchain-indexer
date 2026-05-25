@@ -79,8 +79,9 @@ const claim_rewards      = require('./actions/claim_rewards.js');
 const price              = require('./actions/price.js');
 
 // External attestation framework actions
-const attestation_request  = require('./actions/attestation_request.js');
-const attestation_response = require('./actions/attestation_response.js');
+const attestation_request         = require('./actions/attestation_request.js');
+const attestation_request_expire  = require('./actions/attestation_request_expire.js');
+const attestation_response        = require('./actions/attestation_response.js');
 
 class Actions {
 
@@ -176,8 +177,9 @@ class Actions {
         this.actionPrice            = new price(this);
 
         // Attestation framework action instances
-        this.actionAttestationRequest  = new attestation_request(this);
-        this.actionAttestationResponse = new attestation_response(this);
+        this.actionAttestationRequest        = new attestation_request(this);
+        this.actionAttestationRequestExpire  = new attestation_request_expire(this);
+        this.actionAttestationResponse       = new attestation_response(this);
 
         // Define ACTION aliases
         this.actionAliases = {};
@@ -341,8 +343,9 @@ class Actions {
         if(action=='PRICE')              await this.actionPrice.parse(params, data, error);
 
         // Attestation framework
-        if(action=='ATTESTATION_REQUEST')  await this.actionAttestationRequest.parse(params, data, error);
-        if(action=='ATTESTATION_RESPONSE') await this.actionAttestationResponse.parse(params, data, error);
+        if(action=='ATTESTATION_REQUEST')         await this.actionAttestationRequest.parse(params, data, error);
+        if(action=='ATTESTATION_REQUEST_EXPIRE')  await this.actionAttestationRequestExpire.parse(params, data, error);
+        if(action=='ATTESTATION_RESPONSE')        await this.actionAttestationResponse.parse(params, data, error);
     }
 
 }

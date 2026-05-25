@@ -104,8 +104,11 @@ class AttestationResponse {
         let canonical    = Buffer.from(String(requestId) + String(providerId) + responseHash + String(responseStatus) + String(meta || ''), 'utf8');
 
         // Verify each signature
-        // - pubkey must have active `attestation` capability at this block
+        // - pubkey must have active `attestation` capability at the SNAPSHOT block
+        //   (the request's block_index, per spec §5.2 / §8.2 — same block on every
+        //   hub so the validator set is deterministic across the federation)
         // - Ed25519 signature must verify against the canonical message
+        let snapshotBlock = request ? Number(request.block_index) : Number(data['BLOCK_INDEX']);
         let validSigs    = 0;
         let verifiedSigs = [];
         if(!error){
@@ -113,18 +116,27 @@ class AttestationResponse {
             for(let s of sigs){
                 if(seenPubkey.has(s.pubkey)) continue;
                 seenPubkey.add(s.pubkey);
-                if(!await this.indexerDb.hasCapability(s.pubkey, 'attestation', data['BLOCK_INDEX']))
+                if(!await this.indexerDb.hasCapability(s.pubkey, 'attestation', snapshotBlock))
                     continue;
                 if(!ed25519.verify(canonical, s.sig, s.pubkey))
                     continue;
                 validSigs++;
                 verifiedSigs.push(s);
             }
-            // Phase 1 quorum: require valid_sigs >= REDUNDANCY (PBFT quorum collapses to this
-            // for small validator sets; multi-validator quorum lands in framework Phase 3).
+            // Quorum: validSigs must meet BOTH the request's REDUNDANCY parameter
+            // and the PBFT quorum 2*floor((N-1)/3)+1 over the capability snapshot N.
+            // For N=1 both collapse to 1, preserving single-validator behavior.
             let redundancy = request ? Number(request.redundancy) : 0;
-            if(validSigs < redundancy)
-                error = 'invalid: insufficient valid signatures (' + validSigs + '/' + redundancy + ')';
+            let pbftQuorum = 0;
+            if(request){
+                let snapshot = await this.indexerDb.getValidatorsByCapability('attestation', snapshotBlock);
+                let N = snapshot.length;
+                pbftQuorum = (N <= 1) ? N : (2 * Math.floor((N - 1) / 3) + 1);
+            }
+            let required = Math.max(redundancy, pbftQuorum);
+            if(validSigs < required)
+                error = 'invalid: insufficient valid signatures (' + validSigs + '/' + required +
+                        ' — redundancy=' + redundancy + ' pbft=' + pbftQuorum + ')';
         }
 
         // Stash for DB write

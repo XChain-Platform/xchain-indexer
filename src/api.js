@@ -218,6 +218,32 @@ async function startApi(){
             }
         },
 
+        // List ATTESTATION_REQUEST rows currently awaiting validator fulfillment.
+        // Used by xchain-hub's AttestationRound to discover work. Returns
+        // latest_block_index alongside so the hub can compute its
+        // confirmation-wait threshold (block_index + CONFIRMATIONS <= latest)
+        // in a single round-trip without a follow-up getlatestblock call.
+        // Body: { provider_id?: string, limit?: number }
+        async getpendingattestation_requests({provider_id, limit}){
+            if(!indexer.indexerDb)
+                return { error: 'indexer database not ready' };
+            let max = Number(limit);
+            if(!Number.isFinite(max) || max <= 0) max = 100;
+            if(max > 500) max = 500;
+            try {
+                let latest  = await indexer.indexerDb.getLatestBlockIndex();
+                let rows    = await indexer.indexerDb.getPendingAttestationRequests(provider_id, max);
+                return {
+                    latest_block_index: latest,
+                    count:              rows.length,
+                    requests:           rows
+                };
+            } catch (err) {
+                console.error('getpendingattestation_requests error:', err && err.message ? err.message : err);
+                return { error: 'failed to look up pending attestation requests' };
+            }
+        },
+
         // Receive validator reward records pushed from xchain-hub after a finalized oracle round
         // Body: { round, reward_type, block_index, rewards: [{pubkey, amount}, ...] }
         async pushvalidatorrewards({round, reward_type, block_index, rewards}){
