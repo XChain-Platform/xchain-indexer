@@ -36,6 +36,19 @@ const PROVIDERS = {
         max_response_bytes:     32768,
         allowed_redundancy:     [1, 3, 5],
         deadline_window_blocks: 100
+    },
+    // Spec: claude/reports/specs/2026-05-24_llm-attestation-provider.md §3.
+    // The indexer's job here is structural validation only — provider_id
+    // is in the registry, the payload fits, redundancy is allowed, deadline
+    // is within window. The hub side does the actual LLM API call + consensus.
+    llm: {
+        provider_id:            'llm',
+        version:                1,
+        consensus_strategy:     'judge_model',
+        max_request_bytes:      8192,
+        max_response_bytes:     16384,
+        allowed_redundancy:     [1, 3, 5],
+        deadline_window_blocks: 20
     }
 };
 
