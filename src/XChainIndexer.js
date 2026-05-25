@@ -54,7 +54,7 @@ class XChainIndexer {
         this.indexerDbPass = indexerDbPass;
 
         // Hub database config (local read-only copy of cross-chain infrastructure data,
-        // synced from xchain-hub via xchain-indexer-sync)
+        // synced from xchain-hub via xchain-sync)
         this.hubDbHost = hubDbHost;
         this.hubDbPort = hubDbPort;
         this.hubDbName = hubDbName;
