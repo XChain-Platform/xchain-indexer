@@ -48,12 +48,22 @@ class AttestationResponse {
         if(!error && (format === null || this.formats[format] === undefined))
             error = 'invalid: VERSION (unknown)';
 
-        // Extract fixed-position fields
-        let requestId       = params[1];
-        let providerId      = params[2];
-        let responsePayload = params[3];
-        let responseStatus  = params[4];
-        let meta            = params[5];
+        // Extract fixed-position fields. RESPONSE_PAYLOAD travels as base64
+        // (binary-safe, no embedded `|` chars). We decode to bytes for
+        // signature verification (must hash the same bytes the hub signed)
+        // and to UTF-8 text for storage + callback delivery. Binary payloads
+        // still round-trip correctly through verification; the stored text
+        // form remains the existing lossy projection since the VM callback
+        // API is string-typed.
+        let requestId          = params[1];
+        let providerId         = params[2];
+        let responsePayloadB64 = String(params[3] || '');
+        let responseBodyBytes;
+        try { responseBodyBytes = Buffer.from(responsePayloadB64, 'base64'); }
+        catch(_)            { responseBodyBytes = Buffer.alloc(0); }
+        let responsePayload    = responseBodyBytes.toString('utf8');
+        let responseStatus     = params[4];
+        let meta               = params[5];
 
         if(!error && (!requestId || !/^[0-9a-fA-F]{64}$/.test(String(requestId))))
             error = 'invalid: REQUEST_ID (format)';
@@ -99,8 +109,10 @@ class AttestationResponse {
         }
 
         // Build canonical signing message:
-        //   request_id || provider_id || sha256(response_payload) || status || meta
-        let responseHash = crypto.createHash('sha256').update(String(responsePayload || ''), 'utf8').digest('hex');
+        //   request_id || provider_id || sha256(response_body_bytes) || status || meta
+        // Hash the decoded BYTES (not the base64 string) so binary payloads
+        // verify against the hub's signature over the same bytes.
+        let responseHash = crypto.createHash('sha256').update(responseBodyBytes).digest('hex');
         let canonical    = Buffer.from(String(requestId) + String(providerId) + responseHash + String(responseStatus) + String(meta || ''), 'utf8');
 
         // Verify each signature
@@ -165,6 +177,18 @@ class AttestationResponse {
                     SIGNATURE:             s.sig,
                     BLOCK_INDEX:           data['BLOCK_INDEX']
                 });
+            }
+
+            // Bump fulfilled_count for each signing validator. Only on
+            // status=='ok' — a 'no_quorum'/'provider_error' response means
+            // the validators participated but didn't resolve, which is a
+            // different stat we don't track separately yet.
+            if(String(responseStatus) === 'ok'){
+                for(let s of verifiedSigs){
+                    await this.indexerDb.incrementAttestationValidatorStat(
+                        s.pubkey, String(providerId), 'fulfilled_count', data['BLOCK_INDEX']
+                    );
+                }
             }
 
             // Flip request status

@@ -26,6 +26,8 @@
  *
  ********************************************************************/
 
+const crypto = require('crypto');
+
 class AttestationRequestExpire {
 
     constructor(action){
@@ -35,6 +37,23 @@ class AttestationRequestExpire {
         this.indexerDb = action.indexerDb;
         this.util      = action.util;
         this.mapper    = action.mapper;
+    }
+
+    // Compute the responsible validator set for a given request — same
+    // deterministic rule the hub uses (xchain-hub AttestationRound):
+    //   sort capability validators by SHA256(request_id || pubkey),
+    //   take top REDUNDANCY.
+    // Returns array of pubkey hex strings.
+    async _computeResponsibleSet(requestId, redundancy, blockIndex){
+        let validators = await this.indexerDb.getValidatorsByCapability('attestation', blockIndex);
+        if(!validators || validators.length === 0) return [];
+        let withHash = validators.map(v => {
+            let pk = String(v.pubkey).toLowerCase();
+            let h  = crypto.createHash('sha256').update(String(requestId), 'utf8').update(pk, 'utf8').digest('hex');
+            return { pubkey: pk, hash: h };
+        });
+        withHash.sort((a, b) => (a.hash < b.hash) ? -1 : (a.hash > b.hash ? 1 : 0));
+        return withHash.slice(0, Math.max(1, Number(redundancy) || 1)).map(v => v.pubkey);
     }
 
     async parse(params, data, error){
@@ -63,6 +82,26 @@ class AttestationRequestExpire {
         // attestation_response.js — request_status field drift on rollback is a
         // known pre-existing issue affecting both expire and response paths.
         await this.indexerDb.updateAttestationRequestStatus(requestId, 'expired');
+
+        // Mark missed_count on each validator who was responsible for this
+        // request. Responsibility is computed deterministically at the
+        // request's snapshot block — same rule used by xchain-hub's
+        // AttestationRound so this matches the validators who should have
+        // produced a response.
+        try {
+            let responsible = await this._computeResponsibleSet(
+                requestId, request.redundancy, Number(request.block_index)
+            );
+            for(let pk of responsible){
+                await this.indexerDb.incrementAttestationValidatorStat(
+                    pk, String(request.provider_id), 'missed_count', data['BLOCK_INDEX']
+                );
+            }
+        } catch(e){
+            // Missed-count tracking is informational for Phase 4 slashing.
+            // Don't fail the expire path if the capability lookup errors.
+            console.warn('Attestation expire: missed_count update failed: ' + (e && e.message ? e.message : e));
+        }
 
         // Synthesize the callback EXECUTE so the contract can clean up
         // pending state and react to the failure (spec §4.3 — status='expired').

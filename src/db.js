@@ -7274,6 +7274,34 @@ class Database {
         await this.doQuery(query, [response_action_index, validator_pubkey, signature, block_index]);
     }
 
+    // Increment a counter column on attestation_validator_stats. Upserts the
+    // (validator_pubkey, provider_id) row on first sight. `field` is whitelisted
+    // to the counter columns so callers can't inject arbitrary SQL.
+    //
+    // Reorg note: the table is append-monotone (counters only). On rollback
+    // the standard `DELETE WHERE block_index >= ?` pattern would drop a row
+    // even when only its most-recent touch is being undone, losing all
+    // earlier increments. Proper rollback requires per-event journaling or a
+    // recompute pass against attestation_responses + expirations. Tracked
+    // for Phase 4 slashing work — until then stats are best-effort across
+    // reorgs.
+    //
+    // Spec: claude/reports/specs/2026-05-24_external-attestation-framework.md §10
+    async incrementAttestationValidatorStat(validatorPubkey, providerId, field, blockIndex){
+        const allowed = { fulfilled_count: 1, missed_count: 1, slashed_count: 1 };
+        if(!allowed[field]) throw new Error('incrementAttestationValidatorStat: unsupported field ' + field);
+        let pk  = String(validatorPubkey || '').toLowerCase();
+        let pid = String(providerId || '');
+        if(!pk || !pid) return;
+        let query = `INSERT INTO attestation_validator_stats
+                        (validator_pubkey, provider_id, ${field}, last_updated_block)
+                     VALUES (?, ?, 1, ?)
+                     ON DUPLICATE KEY UPDATE
+                        ${field} = ${field} + 1,
+                        last_updated_block = VALUES(last_updated_block)`;
+        await this.doQuery(query, [pk, pid, blockIndex || 0]);
+    }
+
     // Look up an attestation_requests row by its request_id (64-hex hash)
     async getAttestationRequestById(requestId){
         let query = `SELECT ar.*, ia.address AS fee_payer
