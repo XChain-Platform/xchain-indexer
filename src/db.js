@@ -7091,6 +7091,43 @@ class Database {
         };
     }
 
+    // Latest parsed block index (highest entry in blocks table), or 0 if none.
+    async getLatestBlockIndex(){
+        let results = await this.doQuery('SELECT MAX(block_index) AS max_block FROM blocks');
+        if(!results || results.length === 0) return 0;
+        let max = results[0].max_block;
+        return (max === null || max === undefined) ? 0 : Number(max);
+    }
+
+    // Return all pubkeys whose SUM(active stake) at `blockIndex` meets the
+    // capability's MIN_STAKE. Used by xchain-hub's CapabilitySnapshot to lock
+    // the validator set at a block boundary for PBFT quorum calculations —
+    // every hub independently calling this against the same blockIndex must
+    // arrive at the same set, so consensus on quorum N is deterministic.
+    // Spec: claude/reports/specs/2026-05-24_capability-staking-model.md §6
+    async getValidatorsByCapability(capability, blockIndex){
+        let caps = (this.config['STAKING'] && this.config['STAKING']['CAPABILITIES']) ? this.config['STAKING']['CAPABILITIES'] : {};
+        let capConfig = caps[capability];
+        if(!capConfig) return [];
+        let minStake = capConfig['MIN_STAKE'] || '0';
+        let valid_id = await this.getStatusId('valid');
+        if(valid_id === null) return [];
+        let query = `SELECT ip.pubkey AS pubkey,
+                            SUM(CAST(s.amount AS DECIMAL(30,8))) AS total
+                     FROM stakes s
+                     JOIN index_pubkeys ip ON ip.id = s.signing_pubkey_id
+                     WHERE s.status_id = ?
+                       AND s.activation_block <= ?
+                       AND (s.deactivation_block IS NULL OR s.deactivation_block > ?)
+                     GROUP BY ip.pubkey
+                     HAVING total >= CAST(? AS DECIMAL(30,8))`;
+        let rows = await this.doQuery(query, [valid_id, blockIndex, blockIndex, minStake]);
+        return rows.map(r => ({
+            pubkey: String(r.pubkey),
+            amount: (r.total === null || r.total === undefined) ? '0' : String(r.total)
+        }));
+    }
+
     // Check whether a pubkey's active stake qualifies for a capability.
     // Returns true if SUM(active stake amount for pubkey) >= governance.min_stake[capability].
     async hasCapability(pubkey, capability, blockIndex){

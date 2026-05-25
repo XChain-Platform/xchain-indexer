@@ -122,6 +122,60 @@ async function startApi(){
             return { status: "success" };
         },
 
+        // Look up the active stake amount + latest block index for a single pubkey.
+        // Used by xchain-hub's CapabilityRegistry to keep its own qualification
+        // state in sync with on-chain stake without needing direct DB access.
+        // Body: { pubkey }
+        async getownstake({pubkey}){
+            if(!pubkey || !/^[0-9a-fA-F]{64}$/.test(String(pubkey)))
+                return { error: 'pubkey must be a 64-char hex string' };
+            if(!indexer.indexerDb)
+                return { error: 'indexer database not ready' };
+            let pk = String(pubkey).toLowerCase();
+            try {
+                let blockIndex = await indexer.indexerDb.getLatestBlockIndex();
+                let stake = await indexer.indexerDb.getActiveStakeByPubkey(pk, blockIndex);
+                return {
+                    pubkey:      pk,
+                    block_index: blockIndex,
+                    amount:      stake ? stake.amount : '0',
+                    has_stake:   !!stake
+                };
+            } catch (err) {
+                console.error('getownstake error:', err && err.message ? err.message : err);
+                return { error: 'failed to look up stake' };
+            }
+        },
+
+        // Return the validator-set snapshot for a capability at a block boundary.
+        // Used by xchain-hub's CapabilitySnapshot to lock PBFT quorum N for a
+        // consensus round. Deterministic — every hub at the same block sees
+        // the same set, so all hubs compute the same quorum.
+        // Body: { capability, block_index }
+        async getcapabilityvalidators({capability, block_index}){
+            if(!capability || typeof capability !== 'string')
+                return { error: 'capability is required' };
+            if(block_index === undefined || block_index === null)
+                return { error: 'block_index is required' };
+            let blk = Number(block_index);
+            if(!Number.isInteger(blk) || blk < 0)
+                return { error: 'block_index must be a non-negative integer' };
+            if(!indexer.indexerDb)
+                return { error: 'indexer database not ready' };
+            try {
+                let validators = await indexer.indexerDb.getValidatorsByCapability(capability, blk);
+                return {
+                    capability:  capability,
+                    block_index: blk,
+                    count:       validators.length,
+                    validators:  validators
+                };
+            } catch (err) {
+                console.error('getcapabilityvalidators error:', err && err.message ? err.message : err);
+                return { error: 'failed to look up capability validators' };
+            }
+        },
+
         // Receive validator reward records pushed from xchain-hub after a finalized oracle round
         // Body: { round, reward_type, block_index, rewards: [{pubkey, amount}, ...] }
         async pushvalidatorrewards({round, reward_type, block_index, rewards}){
