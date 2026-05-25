@@ -33,12 +33,15 @@ class HubClient {
         this.enabled = !!this.hubUrl;
     }
 
-    // Push a chain tip update to the hub (fire-and-forget)
-    async pushChainTip(coin, blockHeight, blockTime){
+    // Push a chain tip update to the hub (fire-and-forget). Network is
+    // optional — older hubs ignore it; newer ones use it to scope the
+    // chain_tips entry so multi-network hubs don't collide on 'mainnet'.
+    async pushChainTip(coin, network, blockHeight, blockTime){
         if(!this.enabled) return;
         try {
             await this._call('pushchaintip', {
                 coin:         coin,
+                network:      network,
                 block_height: blockHeight,
                 block_time:   blockTime
             });

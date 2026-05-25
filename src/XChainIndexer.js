@@ -266,8 +266,10 @@ class XChainIndexer {
                     let parseTime = this.util.getTimer(debugTimer);
                     console.log('Block Parsed' + "\t: " + lastIndexerBlock + ' [ledger:' + ledger + ' actions:' + actions + ' contracts:' + contracts + '] (' + parseTime + ')');
 
-                    // Push chain tip to hub (fire-and-forget — never blocks indexing)
-                    this.hubClient.pushChainTip(this.config['COIN'], lastIndexerBlock, blockTime);
+                    // Push chain tip to hub (fire-and-forget — never blocks indexing).
+                    // Network is included so multi-network hubs scope tips correctly
+                    // (older hubs ignore it; pre-network-aware behavior = 'mainnet').
+                    this.hubClient.pushChainTip(this.config['COIN'], this.config['NETWORK'], lastIndexerBlock, blockTime);
 
                 } catch(error){
                     // Roll back all writes for this block so the DB stays at the end of the previous block
