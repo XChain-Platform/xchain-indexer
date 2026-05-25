@@ -147,6 +147,32 @@ async function startApi(){
             }
         },
 
+        // Whole-federation validator-set snapshot at a block boundary —
+        // every pubkey with ANY active stake at the block, regardless of
+        // capability. Used by xchain-hub's Consensus (config-change PBFT)
+        // where quorum is over all stakers, not a capability subset.
+        // Body: { block_index }
+        async getactivevalidators({block_index}){
+            if(block_index === undefined || block_index === null)
+                return { error: 'block_index is required' };
+            let blk = Number(block_index);
+            if(!Number.isInteger(blk) || blk < 0)
+                return { error: 'block_index must be a non-negative integer' };
+            if(!indexer.indexerDb)
+                return { error: 'indexer database not ready' };
+            try {
+                let validators = await indexer.indexerDb.getActiveValidators(blk);
+                return {
+                    block_index: blk,
+                    count:       validators.length,
+                    validators:  validators
+                };
+            } catch (err) {
+                console.error('getactivevalidators error:', err && err.message ? err.message : err);
+                return { error: 'failed to look up active validators' };
+            }
+        },
+
         // Return the validator-set snapshot for a capability at a block boundary.
         // Used by xchain-hub's CapabilitySnapshot to lock PBFT quorum N for a
         // consensus round. Deterministic — every hub at the same block sees

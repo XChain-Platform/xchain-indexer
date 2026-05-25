@@ -7099,6 +7099,30 @@ class Database {
         return (max === null || max === undefined) ? 0 : Number(max);
     }
 
+    // Return all pubkeys with ANY active stake at `blockIndex`, regardless
+    // of capability. Used by xchain-hub's Consensus (config-change PBFT) to
+    // snapshot the whole-federation validator set at a block boundary —
+    // governance/config quorum is over every staker, not just a capability
+    // subset (OracleConsensus uses getValidatorsByCapability('price', ...)
+    // when the quorum is capability-scoped).
+    async getActiveValidators(blockIndex){
+        let valid_id = await this.getStatusId('valid');
+        if(valid_id === null) return [];
+        let query = `SELECT ip.pubkey AS pubkey,
+                            SUM(CAST(s.amount AS DECIMAL(30,8))) AS total
+                     FROM stakes s
+                     JOIN index_pubkeys ip ON ip.id = s.signing_pubkey_id
+                     WHERE s.status_id = ?
+                       AND s.activation_block <= ?
+                       AND (s.deactivation_block IS NULL OR s.deactivation_block > ?)
+                     GROUP BY ip.pubkey`;
+        let rows = await this.doQuery(query, [valid_id, blockIndex, blockIndex]);
+        return rows.map(r => ({
+            pubkey: String(r.pubkey),
+            amount: (r.total === null || r.total === undefined) ? '0' : String(r.total)
+        }));
+    }
+
     // Return all pubkeys whose SUM(active stake) at `blockIndex` meets the
     // capability's MIN_STAKE. Used by xchain-hub's CapabilitySnapshot to lock
     // the validator set at a block boundary for PBFT quorum calculations —
