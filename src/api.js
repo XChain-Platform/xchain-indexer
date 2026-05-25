@@ -147,6 +147,22 @@ async function startApi(){
             }
         },
 
+        // Latest parsed block index. Used by xchain-hub's Consensus to
+        // anchor its snapshot at a deterministic block boundary when the
+        // hub's own chain-tip table is empty (no HUB_API_URL on the
+        // indexer = no pushChainTip = no chain_tips rows).
+        async getlatestblock(){
+            if(!indexer.indexerDb)
+                return { error: 'indexer database not ready' };
+            try {
+                let block_index = await indexer.indexerDb.getLatestBlockIndex();
+                return { block_index: block_index };
+            } catch (err) {
+                console.error('getlatestblock error:', err && err.message ? err.message : err);
+                return { error: 'failed to look up latest block' };
+            }
+        },
+
         // Whole-federation validator-set snapshot at a block boundary —
         // every pubkey with ANY active stake at the block, regardless of
         // capability. Used by xchain-hub's Consensus (config-change PBFT)
