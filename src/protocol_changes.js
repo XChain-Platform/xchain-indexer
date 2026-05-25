@@ -90,6 +90,10 @@ class ProtocolChanges {
         // Publishable on any chain (DOGE recommended for low fees)
         this.addChange('PRICE',              '2.0.0',0,0,0,0,0,0);
 
+        // External attestation framework — see specs/2026-05-24_external-attestation-framework.md
+        this.addChange('ATTESTATION_REQUEST',  '2.0.0',0,0,0,0,0,0);
+        this.addChange('ATTESTATION_RESPONSE', '2.0.0',0,0,0,0,0,0);
+
         // Define protocol changes (ALL LOWER Case)
         // this.addChange('name','1.0.0',0,0,0,0,0,0);
         this.addChange('UNIFIED_FEES',   '2.0.0',0,0,0,0,0,0);

@@ -141,9 +141,8 @@ class Price {
                 }
                 seenPubkey.add(s.pubkey);
 
-                // Verify the validator has an active Tier 1 stake at this block
-                let stake = await this.indexerDb.getActiveStakeByPubkey(s.pubkey, data['BLOCK_INDEX']);
-                if(!stake || stake.tier !== 1){
+                // Verify the validator's stake qualifies for the `price` capability at this block
+                if(!await this.indexerDb.hasCapability(s.pubkey, 'price', data['BLOCK_INDEX'])){
                     continue;
                 }
 
@@ -154,9 +153,9 @@ class Price {
                 validSigs++;
             }
 
-            // Compute PBFT quorum: 2 * floor((N - 1) / 3) + 1
-            let tier1Count = await this.indexerDb.getActiveStakeCount(1, data['BLOCK_INDEX']);
-            let quorum = (tier1Count <= 1) ? 1 : 2 * Math.floor((tier1Count - 1) / 3) + 1;
+            // Compute PBFT quorum: 2 * floor((N - 1) / 3) + 1 over validators with `price` capability
+            let priceValidatorCount = await this.indexerDb.getActiveCapabilityCount('price', data['BLOCK_INDEX']);
+            let quorum = (priceValidatorCount <= 1) ? 1 : 2 * Math.floor((priceValidatorCount - 1) / 3) + 1;
 
             if(validSigs < quorum)
                 error = 'invalid: insufficient PBFT quorum (' + validSigs + '/' + quorum + ')';

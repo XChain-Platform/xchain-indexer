@@ -6753,16 +6753,16 @@ class Database {
      * Staking action methods
      */
 
-    // Create/Update record in `stakes` table
+    // Create/Update record in `stakes` table.
+    // Capability model: each STAKE action (v1 create or v2 top-up) gets its own row.
+    // Active stake amount for a pubkey is SUM(amount) across all valid rows.
     async createStake(data){
         data                  = this.normalizeDataValues(data);
         let status_id         = await this.createStatus(data['STATUS']);
         let source_id         = await this.getAddressId(data['SOURCE']);
         let signing_pubkey_id = await this.getOrCreatePubkeyId(data['SIGNING_PUBKEY']);
         let action_index      = data['ACTION_INDEX'];
-        let tier              = data['TIER'];
-        let chains            = data['CHAINS'];
-        let doge_address      = data['DOGE_ADDRESS'] || null;
+        let version           = data['VERSION'] || 1;
         let amount            = data['AMOUNT'] || '0';
         let block_index       = data['BLOCK_INDEX'];
         let activation_block  = data['ACTIVATION_BLOCK'] || 0;
@@ -6775,28 +6775,28 @@ class Database {
             exists = true;
         if(exists){
             query = `UPDATE stakes SET
-                        source_id=?, tier=?, chains=?, signing_pubkey_id=?, doge_address=?,
+                        source_id=?, version=?, signing_pubkey_id=?,
                         amount=?, status_id=?, block_index=?, activation_block=?
                     WHERE action_index=?`;
-            args = [source_id, tier, chains, signing_pubkey_id, doge_address, amount, status_id, block_index, activation_block, action_index];
+            args = [source_id, version, signing_pubkey_id, amount, status_id, block_index, activation_block, action_index];
         } else {
             query = `INSERT INTO stakes
-                        (source_id, tier, chains, signing_pubkey_id, doge_address, amount, status_id, block_index, activation_block, action_index)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
-            args = [source_id, tier, chains, signing_pubkey_id, doge_address, amount, status_id, block_index, activation_block, action_index];
+                        (source_id, version, signing_pubkey_id, amount, status_id, block_index, activation_block, action_index)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)`;
+            args = [source_id, version, signing_pubkey_id, amount, status_id, block_index, activation_block, action_index];
         }
         await this.doQuery(query, args);
     }
 
-    // Set the deactivation_block for a source's active stake at a specific tier
-    // Used by createUnstake to mark when the stake should be removed from the active set
-    async setStakeDeactivation(source, tier, deactivationBlock){
-        let source_id = await this.getAddressId(source);
-        if(source_id === null) return false;
+    // Set deactivation_block for ALL active stake rows owned by the given pubkey.
+    // Used by createUnstake to mark when all of a pubkey's stake (original + top-ups) should be removed from the active set.
+    async setStakeDeactivationByPubkey(pubkey, deactivationBlock){
+        let pubkey_id = await this.getPubkeyId(String(pubkey).toLowerCase());
+        if(pubkey_id === null) return false;
         let valid_id = await this.getStatusId('valid');
         let query = `UPDATE stakes SET deactivation_block=?
-                     WHERE source_id=? AND tier=? AND status_id=? AND deactivation_block IS NULL`;
-        await this.doQuery(query, [deactivationBlock, source_id, tier, valid_id]);
+                     WHERE signing_pubkey_id=? AND status_id=? AND deactivation_block IS NULL`;
+        await this.doQuery(query, [deactivationBlock, pubkey_id, valid_id]);
         return true;
     }
 
@@ -6805,8 +6805,8 @@ class Database {
         data                  = this.normalizeDataValues(data);
         let status_id         = await this.createStatus(data['STATUS']);
         let source_id         = await this.getAddressId(data['SOURCE']);
+        let signing_pubkey_id = await this.getOrCreatePubkeyId(data['SIGNING_PUBKEY']);
         let action_index      = data['ACTION_INDEX'];
-        let tier              = data['TIER'];
         let cooldown_end_block = data['COOLDOWN_END_BLOCK'];
         let amount            = data['AMOUNT'] || '0';
         let block_index       = data['BLOCK_INDEX'];
@@ -6819,15 +6819,15 @@ class Database {
             exists = true;
         if(exists){
             query = `UPDATE unstakes SET
-                        source_id=?, tier=?, cooldown_end_block=?,
+                        source_id=?, signing_pubkey_id=?, cooldown_end_block=?,
                         amount=?, status_id=?, block_index=?
                     WHERE action_index=?`;
-            args = [source_id, tier, cooldown_end_block, amount, status_id, block_index, action_index];
+            args = [source_id, signing_pubkey_id, cooldown_end_block, amount, status_id, block_index, action_index];
         } else {
             query = `INSERT INTO unstakes
-                        (source_id, tier, cooldown_end_block, amount, status_id, block_index, action_index)
+                        (source_id, signing_pubkey_id, cooldown_end_block, amount, status_id, block_index, action_index)
                     VALUES (?, ?, ?, ?, ?, ?, ?)`;
-            args = [source_id, tier, cooldown_end_block, amount, status_id, block_index, action_index];
+            args = [source_id, signing_pubkey_id, cooldown_end_block, amount, status_id, block_index, action_index];
         }
         await this.doQuery(query, args);
     }
@@ -6944,9 +6944,9 @@ class Database {
      * Staking query methods
      */
 
-    // Get active stake for a source address (optionally filtered by tier and gated by block height)
-    // blockIndex enforces the 6-block activation/deactivation delay for BTC reorg safety
-    async getActiveStakeBySource(source, tier, blockIndex){
+    // Get active stake for a source address (existence/source check; returns any one of the source's active stake rows).
+    // blockIndex enforces the 6-block activation/deactivation delay for BTC reorg safety.
+    async getActiveStakeBySource(source, blockIndex){
         let source_id = await this.getAddressId(source);
         if(source_id === null)
             return null;
@@ -6957,10 +6957,6 @@ class Database {
                         LEFT JOIN index_pubkeys ip ON (ip.id=s.signing_pubkey_id)
                     WHERE s.source_id=? AND s.status_id=?`;
         let args = [source_id, valid_id];
-        if(tier !== undefined && tier !== null){
-            query += ' AND s.tier=?';
-            args.push(tier);
-        }
         if(blockIndex !== undefined && blockIndex !== null){
             query += ' AND s.activation_block <= ? AND (s.deactivation_block IS NULL OR s.deactivation_block > ?)';
             args.push(blockIndex);
@@ -6973,17 +6969,28 @@ class Database {
         return null;
     }
 
-    // Count active stakes at a given tier (gated by activation/deactivation delay)
-    // Used for PBFT quorum calculation: quorum = 2 * floor((N - 1) / 3) + 1
-    async getActiveStakeCount(tier, blockIndex){
+    // Count distinct active validators (by pubkey) qualified for the given capability.
+    // Used for PBFT quorum calculation: quorum = 2 * floor((N - 1) / 3) + 1.
+    async getActiveCapabilityCount(capability, blockIndex){
+        let caps = (this.config['STAKING'] && this.config['STAKING']['CAPABILITIES']) ? this.config['STAKING']['CAPABILITIES'] : {};
+        let capConfig = caps[capability];
+        if(!capConfig) return 0;
+        let minStake = capConfig['MIN_STAKE'] || '0';
         let valid_id = await this.getStatusId('valid');
-        let query = `SELECT COUNT(*) as cnt FROM stakes WHERE tier=? AND status_id=?`;
-        let args = [tier, valid_id];
+        let query = `SELECT COUNT(*) AS cnt FROM (
+                        SELECT signing_pubkey_id, SUM(CAST(amount AS DECIMAL(30,8))) AS total
+                        FROM stakes
+                        WHERE status_id=?`;
+        let args = [valid_id];
         if(blockIndex !== undefined && blockIndex !== null){
             query += ' AND activation_block <= ? AND (deactivation_block IS NULL OR deactivation_block > ?)';
             args.push(blockIndex);
             args.push(blockIndex);
         }
+        query += `   GROUP BY signing_pubkey_id
+                     HAVING total >= ?
+                  ) AS qualified`;
+        args.push(minStake);
         let results = await this.doQuery(query, args);
         return results.length > 0 ? Number(results[0].cnt) : 0;
     }
@@ -7044,25 +7051,185 @@ class Database {
         await this.doQuery(query, args);
     }
 
-    // Get active stake by signing pubkey
-    // blockIndex enforces the 6-block activation/deactivation delay for BTC reorg safety
+    // Get aggregate active stake info for a pubkey (SUM of amount across all active rows).
+    // Returns { source_id, signing_pubkey_id, signing_pubkey, amount, activation_block, ... } or null.
+    // blockIndex enforces the 6-block activation/deactivation delay for BTC reorg safety.
     async getActiveStakeByPubkey(pubkey, blockIndex){
         let pubkey_id = await this.getPubkeyId(String(pubkey).toLowerCase());
         if(pubkey_id === null)
             return null;
         let valid_id = await this.getStatusId('valid');
-        let query = `SELECT * FROM stakes WHERE signing_pubkey_id=? AND status_id=?`;
+        let query = `SELECT
+                        MIN(s.source_id)                       AS source_id,
+                        s.signing_pubkey_id                    AS signing_pubkey_id,
+                        SUM(CAST(s.amount AS DECIMAL(30,8)))   AS amount,
+                        MIN(s.activation_block)                AS activation_block,
+                        MIN(s.block_index)                     AS block_index,
+                        MIN(s.status_id)                       AS status_id,
+                        ip.pubkey                              AS signing_pubkey
+                     FROM stakes s
+                         LEFT JOIN index_pubkeys ip ON (ip.id = s.signing_pubkey_id)
+                     WHERE s.signing_pubkey_id=? AND s.status_id=?`;
         let args = [pubkey_id, valid_id];
         if(blockIndex !== undefined && blockIndex !== null){
-            query += ' AND activation_block <= ? AND (deactivation_block IS NULL OR deactivation_block > ?)';
+            query += ' AND s.activation_block <= ? AND (s.deactivation_block IS NULL OR s.deactivation_block > ?)';
             args.push(blockIndex);
             args.push(blockIndex);
         }
-        query += ' ORDER BY action_index DESC LIMIT 1';
+        query += ' GROUP BY s.signing_pubkey_id, ip.pubkey LIMIT 1';
         let results = await this.doQuery(query, args);
-        if(results.length > 0)
-            return results[0];
-        return null;
+        if(results.length === 0) return null;
+        let row = results[0];
+        return {
+            source_id:         row.source_id,
+            signing_pubkey_id: row.signing_pubkey_id,
+            signing_pubkey:    row.signing_pubkey,
+            amount:            (row.amount === null || row.amount === undefined) ? '0' : String(row.amount),
+            activation_block:  row.activation_block,
+            block_index:       row.block_index,
+            status_id:         row.status_id
+        };
+    }
+
+    // Check whether a pubkey's active stake qualifies for a capability.
+    // Returns true if SUM(active stake amount for pubkey) >= governance.min_stake[capability].
+    async hasCapability(pubkey, capability, blockIndex){
+        let caps = (this.config['STAKING'] && this.config['STAKING']['CAPABILITIES']) ? this.config['STAKING']['CAPABILITIES'] : {};
+        let capConfig = caps[capability];
+        if(!capConfig) return false;
+        let minStake = capConfig['MIN_STAKE'] || '0';
+        let stake = await this.getActiveStakeByPubkey(pubkey, blockIndex);
+        if(!stake) return false;
+        return this.util.bcgte(stake.amount, minStake);
+    }
+
+    /*
+     * External attestation framework — see specs/2026-05-24_external-attestation-framework.md
+     */
+
+    // Create/Update record in `attestation_requests` table
+    async createAttestationRequest(data){
+        data                 = this.normalizeDataValues(data);
+        let status_id        = await this.createStatus(data['STATUS']);
+        let fee_payer_id     = await this.getAddressId(data['FEE_PAYER']);
+        let action_index     = data['ACTION_INDEX'];
+        let request_id       = String(data['REQUEST_ID'] || '').toLowerCase();
+        let contract_index   = data['CONTRACT_INDEX'];
+        let provider_id      = data['PROVIDER_ID'];
+        let payload          = data['REQUEST_PAYLOAD'] || null;
+        let callback_method  = data['CALLBACK_METHOD'];
+        let callback_params  = data['CALLBACK_PARAMS'] || null;
+        let redundancy       = Number(data['REDUNDANCY']) || 0;
+        let deadline_block   = data['DEADLINE_BLOCK'] || 0;
+        let gas_escrow       = data['GAS_ESCROW'] || '0';
+        let request_status   = data['REQUEST_STATUS'] || 'pending';
+        let block_index      = data['BLOCK_INDEX'];
+
+        let query  = "SELECT action_index FROM attestation_requests WHERE action_index=? LIMIT 1";
+        let exists = false;
+        let results = await this.doQuery(query, [action_index]);
+        if(results.length > 0) exists = true;
+        if(exists){
+            query = `UPDATE attestation_requests SET
+                        request_id=?, contract_index=?, fee_payer_id=?, provider_id=?, payload=?,
+                        callback_method=?, callback_params_json=?, redundancy=?, deadline_block=?,
+                        gas_escrow=?, request_status=?, status_id=?, block_index=?
+                    WHERE action_index=?`;
+            await this.doQuery(query, [
+                request_id, contract_index, fee_payer_id, provider_id, payload,
+                callback_method, callback_params, redundancy, deadline_block,
+                gas_escrow, request_status, status_id, block_index, action_index
+            ]);
+        } else {
+            query = `INSERT INTO attestation_requests
+                        (action_index, request_id, contract_index, fee_payer_id, provider_id, payload,
+                         callback_method, callback_params_json, redundancy, deadline_block,
+                         gas_escrow, request_status, status_id, block_index)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+            await this.doQuery(query, [
+                action_index, request_id, contract_index, fee_payer_id, provider_id, payload,
+                callback_method, callback_params, redundancy, deadline_block,
+                gas_escrow, request_status, status_id, block_index
+            ]);
+        }
+    }
+
+    // Create/Update record in `attestation_responses` table
+    async createAttestationResponse(data){
+        data                 = this.normalizeDataValues(data);
+        let status_id        = await this.createStatus(data['STATUS']);
+        let action_index     = data['ACTION_INDEX'];
+        let request_id       = String(data['REQUEST_ID'] || '').toLowerCase();
+        let provider_id      = data['PROVIDER_ID'];
+        let response_hash    = String(data['RESPONSE_HASH'] || '').toLowerCase();
+        let response_payload = data['RESPONSE_PAYLOAD'] || null;
+        let response_status  = data['RESPONSE_STATUS'];
+        let meta             = data['META'] || null;
+        let block_index      = data['BLOCK_INDEX'];
+
+        let query  = "SELECT action_index FROM attestation_responses WHERE action_index=? LIMIT 1";
+        let exists = false;
+        let results = await this.doQuery(query, [action_index]);
+        if(results.length > 0) exists = true;
+        if(exists){
+            query = `UPDATE attestation_responses SET
+                        request_id=?, provider_id=?, response_hash=?, response_payload=?,
+                        response_status=?, meta=?, status_id=?, block_index=?
+                    WHERE action_index=?`;
+            await this.doQuery(query, [
+                request_id, provider_id, response_hash, response_payload,
+                response_status, meta, status_id, block_index, action_index
+            ]);
+        } else {
+            query = `INSERT INTO attestation_responses
+                        (action_index, request_id, provider_id, response_hash, response_payload,
+                         response_status, meta, status_id, block_index)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+            await this.doQuery(query, [
+                action_index, request_id, provider_id, response_hash, response_payload,
+                response_status, meta, status_id, block_index
+            ]);
+        }
+    }
+
+    // Insert a single (validator_pubkey, signature) row associated with an ATTESTATION_RESPONSE
+    async createAttestationValidatorSignature(data){
+        data                  = this.normalizeDataValues(data);
+        let response_action_index = data['RESPONSE_ACTION_INDEX'];
+        let validator_pubkey  = String(data['VALIDATOR_PUBKEY'] || '').toLowerCase();
+        let signature         = String(data['SIGNATURE'] || '').toLowerCase();
+        let block_index       = data['BLOCK_INDEX'];
+        let query = `INSERT INTO attestation_validator_signatures
+                        (response_action_index, validator_pubkey, signature, block_index)
+                     VALUES (?, ?, ?, ?)`;
+        await this.doQuery(query, [response_action_index, validator_pubkey, signature, block_index]);
+    }
+
+    // Look up an attestation_requests row by its request_id (64-hex hash)
+    async getAttestationRequestById(requestId){
+        let query = `SELECT ar.*, ia.address AS fee_payer
+                     FROM attestation_requests ar
+                     LEFT JOIN index_addresses ia ON ia.id = ar.fee_payer_id
+                     WHERE ar.request_id = ?
+                     LIMIT 1`;
+        let rows = await this.doQuery(query, [String(requestId || '').toLowerCase()]);
+        return rows.length > 0 ? rows[0] : null;
+    }
+
+    // Update the request_status field on an attestation_requests row
+    async updateAttestationRequestStatus(requestId, newStatus){
+        let query = `UPDATE attestation_requests
+                     SET request_status = ?
+                     WHERE request_id = ?`;
+        await this.doQuery(query, [newStatus, String(requestId || '').toLowerCase()]);
+    }
+
+    // Set callback_execute_action_index on an attestation_responses row (after the system EXECUTE is injected)
+    async setAttestationResponseCallbackIndex(responseActionIndex, callbackExecuteActionIndex){
+        let query = `UPDATE attestation_responses
+                     SET callback_execute_action_index = ?
+                     WHERE action_index = ?`;
+        await this.doQuery(query, [callbackExecuteActionIndex, responseActionIndex]);
     }
 
     // Get active delegation for a source + pubkey (gated by activation/deactivation delay)

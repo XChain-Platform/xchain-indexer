@@ -41,7 +41,8 @@ class Rollback {
             'blocks',
             'transactions',
             'validator_rewards',
-            'contract_state'
+            'contract_state',
+            'attestation_validator_signatures'
         ];
 
         // List of tables that store data using action_index
@@ -103,7 +104,9 @@ class Rollback {
             'contracts',
             'contract_executions',
             'deposits',
-            'withdrawals'
+            'withdrawals',
+            'attestation_requests',
+            'attestation_responses'
         ];
 
     }

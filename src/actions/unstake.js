@@ -15,15 +15,12 @@
  *
  * XChain Platform Action - UNSTAKE
  *
- * This action begins the unstaking cooldown period for staked XCHAIN.
+ * Begins the unstaking cooldown for an active stake identified by pubkey.
+ * Full unstake of all stake rows for the pubkey (original + any top-ups).
  * BTC chain only.
  *
- * PARAMS:
- * - VERSION - Format Version
- * - TIER    - Staking tier to unstake from (1=oracle, 2=cross-chain)
- *
- * FORMATS:
- * - 0 = Begin unstaking cooldown
+ * FORMAT:
+ *   v0 - VERSION|SIGNING_PUBKEY
  *
  ********************************************************************/
 
@@ -31,7 +28,6 @@ class Unstake {
 
     // Handle constructing a class instance
     constructor(action){
-        // Setup short aliases
         this.actions   = action;
         this.config    = action.config;
         this.decoderDb = action.decoderDb;
@@ -41,7 +37,7 @@ class Unstake {
 
         // Define list of known FORMATS
         this.formats = {};
-        this.formats[0] = 'VERSION|TIER';
+        this.formats[0] = 'VERSION|SIGNING_PUBKEY';
     }
 
     // Handle parsing the UNSTAKE transaction
@@ -49,11 +45,11 @@ class Unstake {
 
         // Validate that format is known
         let format = data['FORMAT'];
-        if(!error && (format===null || this.formats[format] === undefined ))
+        if(!error && (format===null || this.formats[format] === undefined))
             error = 'invalid: VERSION (unknown)';
 
         // Extract params
-        data['TIER'] = params[1];
+        data['SIGNING_PUBKEY'] = params[1];
 
         // Convert NUMBER fields from string value to number value
         if(!error)
@@ -68,51 +64,67 @@ class Unstake {
             error = 'invalid: ACTION (BTC only)';
 
         /*****************************************************************
-         * TIER Validations
+         * SIGNING_PUBKEY Validations
          ****************************************************************/
 
-        // Verify TIER is valid (1=oracle, 2=cross-chain, 3=oracle publisher)
-        let tier = parseInt(data['TIER']);
-        if(!error && ![1, 2, 3].includes(tier))
-            error = 'invalid: TIER (unknown)';
+        // Verify SIGNING_PUBKEY is provided
+        if(!error && this.util.isNull(data['SIGNING_PUBKEY']))
+            error = 'invalid: SIGNING_PUBKEY (required)';
+
+        // Verify SIGNING_PUBKEY is 64 hex characters (Ed25519)
+        if(!error && !/^[0-9a-fA-F]{64}$/.test(String(data['SIGNING_PUBKEY'])))
+            error = 'invalid: SIGNING_PUBKEY (format)';
 
         /*****************************************************************
          * Stake Existence Validations
          ****************************************************************/
 
-        // Verify SOURCE has an active stake at this tier (gated by activation delay)
-        let activeStake = null;
+        // Verify the pubkey has an active stake owned by SOURCE
+        let totalAmount = '0';
         if(!error){
-            activeStake = await this.indexerDb.getActiveStakeBySource(data['SOURCE'], tier, data['BLOCK_INDEX']);
-            if(!activeStake)
-                error = 'invalid: no active stake at tier';
+            let aggregate = await this.indexerDb.getActiveStakeAggregateByPubkey(data['SIGNING_PUBKEY'], data['BLOCK_INDEX']);
+            if(!aggregate){
+                error = 'invalid: SIGNING_PUBKEY (no active stake)';
+            } else {
+                let sourceId = await this.indexerDb.getAddressId(data['SOURCE']);
+                if(sourceId === null || sourceId !== aggregate.source_id)
+                    error = 'invalid: SOURCE (does not own this stake)';
+                else
+                    totalAmount = aggregate.amount;
+            }
         }
 
         // Verify SOURCE is not sleeping
         if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
             error = 'invalid: SOURCE (sleeping)';
 
-        // Calculate cooldown end block from staking config
-        let staking = this.config['STAKING'];
-        let cooldownBlocks = (staking && staking['COOLDOWN_BLOCKS']) ? staking['COOLDOWN_BLOCKS'] : 1000;
+        /*****************************************************************
+         * Cooldown / Deactivation Calculation
+         ****************************************************************/
+
+        let staking         = this.config['STAKING'];
+        let cooldownBlocks  = (staking && staking['COOLDOWN_BLOCKS'])         ? staking['COOLDOWN_BLOCKS']         : 1000;
         let activationDelay = (staking && staking['ACTIVATION_DELAY_BLOCKS']) ? staking['ACTIVATION_DELAY_BLOCKS'] : 6;
         data['COOLDOWN_END_BLOCK'] = parseInt(data['BLOCK_INDEX']) + cooldownBlocks;
-        data['AMOUNT'] = activeStake ? activeStake.amount : '0';
+        data['AMOUNT']             = totalAmount;
 
         // Determine final status
         let status = (error) ? error : 'valid';
         data['STATUS'] = status;
 
         // Print status message
-        console.log("\t UNSTAKE : tier=" + data['TIER'] + ' : ' + data['STATUS']);
+        console.log("\t UNSTAKE : pubkey=" + String(data['SIGNING_PUBKEY']).substring(0, 16) + '... : amount=' + data['AMOUNT'] + ' : ' + data['STATUS']);
 
         // Create record in unstakes table
         await this.indexerDb.createUnstake(data);
 
-        // Mark the parent stake's deactivation_block (BLOCK_INDEX + activation delay)
-        // The validator continues to participate for ACTIVATION_DELAY_BLOCKS blocks before being removed from active set
+        // Mark all active stake rows for this pubkey with deactivation_block
+        // (validator continues to participate for ACTIVATION_DELAY_BLOCKS blocks before being removed from active set)
         if(status === 'valid')
-            await this.indexerDb.setStakeDeactivation(data['SOURCE'], tier, parseInt(data['BLOCK_INDEX']) + activationDelay);
+            await this.indexerDb.setStakeDeactivationByPubkey(
+                data['SIGNING_PUBKEY'],
+                parseInt(data['BLOCK_INDEX']) + activationDelay
+            );
 
         // Store the SOURCE and GAS tick in addresses list
         let gas = this.config['GAS'];

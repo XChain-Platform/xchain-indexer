@@ -78,6 +78,10 @@ const claim_rewards      = require('./actions/claim_rewards.js');
 // PRICE action (validator snapshots and user oracle prices)
 const price              = require('./actions/price.js');
 
+// External attestation framework actions
+const attestation_request  = require('./actions/attestation_request.js');
+const attestation_response = require('./actions/attestation_response.js');
+
 class Actions {
 
     // Handle constructing a class instance
@@ -170,6 +174,10 @@ class Actions {
 
         // PRICE action instance
         this.actionPrice            = new price(this);
+
+        // Attestation framework action instances
+        this.actionAttestationRequest  = new attestation_request(this);
+        this.actionAttestationResponse = new attestation_response(this);
 
         // Define ACTION aliases
         this.actionAliases = {};
@@ -331,6 +339,10 @@ class Actions {
 
         // PRICE action (validator snapshots and user oracles)
         if(action=='PRICE')              await this.actionPrice.parse(params, data, error);
+
+        // Attestation framework
+        if(action=='ATTESTATION_REQUEST')  await this.actionAttestationRequest.parse(params, data, error);
+        if(action=='ATTESTATION_RESPONSE') await this.actionAttestationResponse.parse(params, data, error);
     }
 
 }

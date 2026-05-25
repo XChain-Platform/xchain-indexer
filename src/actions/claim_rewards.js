@@ -69,7 +69,7 @@ class ClaimRewards {
 
         // Verify SOURCE has an active stake (any tier, gated by activation delay)
         if(!error){
-            let activeStake = await this.indexerDb.getActiveStakeBySource(data['SOURCE'], null, data['BLOCK_INDEX']);
+            let activeStake = await this.indexerDb.getActiveStakeBySource(data['SOURCE'], data['BLOCK_INDEX']);
             if(!activeStake)
                 error = 'invalid: no active stake';
         }

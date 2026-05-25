@@ -106,9 +106,14 @@ class Execute {
         let tokenInfo = await this.indexerDb.getTokenInfo(gas, data['BLOCK_INDEX'], data['ACTION_INDEX']);
         let balances = await this.indexerDb.getAddressBalances(data['SOURCE'], null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
 
-        // Validate gas fee payment (native coin or XCHAIN balance)
+        // Validate gas fee payment (native coin or XCHAIN balance).
+        // System-injected EXECUTEs (e.g. attestation callbacks via attestation_response.js)
+        // skip fee accounting — those run against the request's gas_escrow, not the
+        // synthetic SOURCE's wallet. Pre-escrow (Phase 1) means fee is simply skipped;
+        // Phase 3 economics deducts the actual cost from gas_escrow on the request row.
         let feePaymentMode = 2; // default: xchain balance
-        if(!error && tokenInfo && this.util.bcgt(fee, 0)){
+        let skipFee = Boolean(data['IS_EMISSION']);
+        if(!error && !skipFee && tokenInfo && this.util.bcgt(fee, 0)){
             let pmMode = this.util.detectFeePaymentMode(data, this.decoderDb, data['TX_OUTPUTS']);
             if(pmMode === 'native'){
                 let tempFees = { AMOUNT: fee };
@@ -129,8 +134,8 @@ class Execute {
             }
         }
 
-        // Adjust balances to reduce by gas fee (only for XCHAIN deduction mode)
-        if(!error && tokenInfo && feePaymentMode === 2)
+        // Adjust balances to reduce by gas fee (only for XCHAIN deduction mode, never for system-injected)
+        if(!error && !skipFee && tokenInfo && feePaymentMode === 2)
             balances = this.util.debitBalances(balances, tokenInfo['TICK_ID'], fee);
 
         // Verify SOURCE is not sleeping
@@ -167,6 +172,7 @@ class Execute {
                 caller:           data['SOURCE'],
                 contractAddress:  'C:' + this.config['CHAIN'] + ':' + data['CONTRACT_ACTION_INDEX'],
                 contractIndex:    data['CONTRACT_ACTION_INDEX'],
+                txHash:           data['TX_HASH'],   // needed for deterministic attestation request_id
                 blockContext: {
                     height:    data['BLOCK_INDEX'],
                     timestamp: data['BLOCK_TIME'],
@@ -175,7 +181,8 @@ class Execute {
                 balances:         null, // TODO: load balances for getBalance() when needed
                 tokenInfo:        null, // TODO: load token info for getTokenInfo() when needed
                 oracleData:       oracleData,
-                crossChainData:   crossChainData
+                crossChainData:   crossChainData,
+                attestationData:  null  // TODO: wire getResponse() reader once response retention is in place
             });
 
             gasUsed = vmResult.gasUsed;
@@ -267,8 +274,9 @@ class Execute {
         let credits = [],
             debits  = [];
 
-        // Debit gas fee from SOURCE (always, even on failure — caller pays for the attempt)
-        if(tokenInfo)
+        // Debit gas fee from SOURCE (always, even on failure — caller pays for the attempt).
+        // Skipped for system-injected EXECUTEs (e.g. attestation callbacks); see fee block above.
+        if(tokenInfo && !data['IS_EMISSION'])
             debits.push([gas, fee, data['SOURCE']]);
 
         // Process any transaction ledger changes (credits / debits)
@@ -311,17 +319,18 @@ class Execute {
 
         // Build the data object that action handlers expect
         let emissionData = {
-            ACTION_INDEX:  emissionActionIndex,
-            SOURCE:        contractAddress,
-            FEE_PAYER:     executionData['SOURCE'],
-            BLOCK_INDEX:   executionData['BLOCK_INDEX'],
-            BLOCK_TIME:    executionData['BLOCK_TIME'],
-            TX_INDEX:      executionData['TX_INDEX'],
-            TX_HASH:       executionData['TX_HASH'],
-            TX_VOUT:       executionData['TX_VOUT'],
-            FORMAT:        0,
-            IS_EMISSION:   true,
-            EMITTER:       executionData['CONTRACT_ACTION_INDEX']
+            ACTION_INDEX:       emissionActionIndex,
+            SOURCE:             contractAddress,
+            FEE_PAYER:          executionData['SOURCE'],
+            BLOCK_INDEX:        executionData['BLOCK_INDEX'],
+            BLOCK_TIME:         executionData['BLOCK_TIME'],
+            TX_INDEX:           executionData['TX_INDEX'],
+            TX_HASH:            executionData['TX_HASH'],
+            TX_VOUT:            executionData['TX_VOUT'],
+            FORMAT:             0,
+            IS_EMISSION:        true,
+            EMITTER:            executionData['CONTRACT_ACTION_INDEX'],
+            EMITTER_POSITION:   position    // index within this EXECUTE's emission list — used by ATTESTATION_REQUEST to verify deterministic request_id
         };
 
         // Route to the correct handler
@@ -359,7 +368,8 @@ class Execute {
             'SWEEP':      this.actions.actionSweep,
             'LINK':       this.actions.actionLink,
             'BROADCAST':  this.actions.actionBroadcast,
-            'MESSAGE':    this.actions.actionMessage
+            'MESSAGE':    this.actions.actionMessage,
+            'ATTESTATION_REQUEST': this.actions.actionAttestationRequest
         };
         return handlers[action] || null;
     }
@@ -428,6 +438,10 @@ class Execute {
             case 'MESSAGE':
                 // FORMAT: VERSION|DESTINATION|ENCRYPTION_METHOD|ENCRYPTION_KEY
                 return [0, params.destination, params.encryptionMethod || '', params.encryptionKey || ''];
+            case 'ATTESTATION_REQUEST':
+                // FORMAT: VERSION|REQUEST_ID|PROVIDER_ID|REQUEST_PAYLOAD|CALLBACK_METHOD|CALLBACK_PARAMS_JSON|REDUNDANCY|DEADLINE_BLOCKS
+                return [0, params.requestId, params.providerId, params.requestPayload, params.callbackMethod,
+                        params.callbackParams || '[]', params.redundancy, params.deadlineBlocks];
             default:
                 throw new Error('unsupported emission action: ' + action);
         }

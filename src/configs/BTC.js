@@ -43,10 +43,11 @@ module.exports = {
         config['STAKING'] = {
             COOLDOWN_BLOCKS:         1000,                     // Blocks before unstaked XCHAIN is returned
             ACTIVATION_DELAY_BLOCKS: 6,                        // Blocks before stake/delegation/unstake takes effect (BTC reorg safety)
-            TIERS: {
-                1: { AMOUNT: '1000.00000000' },                // Tier 1: Oracle validator
-                2: { AMOUNT: '5000.00000000' },                // Tier 2: Cross-chain validator
-                3: { AMOUNT: '500.00000000'  },                // Tier 3: Oracle publisher (DOGE broadcast)
+            CAPABILITIES: {
+                price:          { MIN_STAKE: '1000.00000000' }, // Sign PRICE v0 snapshots (replaces Tier 1)
+                cross_chain:    { MIN_STAKE: '5000.00000000' }, // Cross-chain attestation (replaces Tier 2)
+                oracle_publish: { MIN_STAKE: '500.00000000'  }, // Publish price rounds to DOGE chain (replaces Tier 3)
+                attestation:    { MIN_STAKE: '1000.00000000' }  // Off-chain data attestation framework (http_get, llm, future providers)
             }
         };
         config['GAS_SCHEDULE'] = {
@@ -64,6 +65,7 @@ module.exports = {
             VM_STATE_DELETE:     100,
             VM_ORACLE_READ:     100,
             VM_CROSSCHAIN_READ: 100,
+            VM_ATTESTATION_REQUEST: 5000,    // External attestation framework — emit one off-chain data request
             VM_EMISSION:        500,
             VM_COMPUTATION:     1
         };

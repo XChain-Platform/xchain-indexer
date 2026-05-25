@@ -15,17 +15,19 @@
  *
  * XChain Platform Action - STAKE
  *
- * This action stakes XCHAIN tokens for hub validation.
- * BTC chain only.
+ * Stakes XCHAIN tokens for hub validation. BTC chain only.
  *
- * PARAMS:
- * - VERSION        - Format Version
- * - TIER           - Staking tier (1=oracle, 2=cross-chain)
- * - CHAINS         - Comma-separated chains to validate (Tier 2 only)
- * - SIGNING_PUBKEY - Ed25519 signing public key
+ * The protocol does not assign tiers. Capabilities (price, cross_chain,
+ * oracle_publish, attestation) auto-qualify when stake amount meets the
+ * governance-configured min_stake for each. See:
+ *   claude/reports/specs/2026-05-24_capability-staking-model.md
  *
  * FORMATS:
- * - 0 = Stake XCHAIN for validation
+ *   v1 - VERSION|AMOUNT|SIGNING_PUBKEY            (create new stake)
+ *   v2 - VERSION|AMOUNT|SIGNING_PUBKEY            (top-up existing stake)
+ *
+ * Top-ups create their own stake row with version=2. Active stake amount
+ * for a pubkey is the SUM of all active stake rows for that pubkey.
  *
  ********************************************************************/
 
@@ -33,7 +35,6 @@ class Stake {
 
     // Handle constructing a class instance
     constructor(action){
-        // Setup short aliases
         this.actions   = action;
         this.config    = action.config;
         this.decoderDb = action.decoderDb;
@@ -43,7 +44,8 @@ class Stake {
 
         // Define list of known FORMATS
         this.formats = {};
-        this.formats[0] = 'VERSION|TIER|CHAINS|SIGNING_PUBKEY|DOGE_ADDRESS';
+        this.formats[1] = 'VERSION|AMOUNT|SIGNING_PUBKEY';   // create new stake
+        this.formats[2] = 'VERSION|AMOUNT|SIGNING_PUBKEY';   // top-up existing stake
     }
 
     // Handle parsing the STAKE transaction
@@ -51,14 +53,12 @@ class Stake {
 
         // Validate that format is known
         let format = data['FORMAT'];
-        if(!error && (format===null || this.formats[format] === undefined ))
+        if(!error && (format===null || this.formats[format] === undefined))
             error = 'invalid: VERSION (unknown)';
 
         // Extract params
-        data['TIER']           = params[1];
-        data['CHAINS']         = params[2];
-        data['SIGNING_PUBKEY'] = params[3];
-        data['DOGE_ADDRESS']   = params[4];
+        data['AMOUNT']         = params[1];
+        data['SIGNING_PUBKEY'] = params[2];
 
         // Convert NUMBER fields from string value to number value
         if(!error)
@@ -73,51 +73,14 @@ class Stake {
             error = 'invalid: ACTION (BTC only)';
 
         /*****************************************************************
-         * TIER Validations
+         * AMOUNT Validations
          ****************************************************************/
 
-        // Verify TIER is valid (1=oracle, 2=cross-chain, 3=oracle publisher)
-        let tier = parseInt(data['TIER']);
-        if(!error && ![1, 2, 3].includes(tier))
-            error = 'invalid: TIER (unknown)';
-
-        // Verify CHAINS is provided for Tier 2
-        if(!error && tier === 2 && this.util.isNull(data['CHAINS']))
-            error = 'invalid: CHAINS (required for tier 2)';
-
-        // Verify CHAINS is empty for Tier 1
-        if(!error && tier === 1 && !this.util.isNull(data['CHAINS']) && data['CHAINS'] !== '')
-            error = 'invalid: CHAINS (not allowed for tier 1)';
-
-        // Verify CHAINS is empty for Tier 3 (publishers always publish to DOGE)
-        if(!error && tier === 3 && !this.util.isNull(data['CHAINS']) && data['CHAINS'] !== '')
-            error = 'invalid: CHAINS (not allowed for tier 3)';
-
-        // Validate CHAINS values if provided
-        if(!error && tier === 2){
-            let validChains = this.config['COINS']; // ['BTC', 'LTC', 'DOGE']
-            let chains = String(data['CHAINS']).split(',');
-            for(let chain of chains){
-                if(!validChains.includes(chain.trim()))
-                    error = 'invalid: CHAINS (unknown chain)';
-            }
-        }
-
-        /*****************************************************************
-         * DOGE_ADDRESS Validations (Tier 3 only)
-         ****************************************************************/
-
-        // DOGE_ADDRESS is required for Tier 3
-        if(!error && tier === 3 && this.util.isNull(data['DOGE_ADDRESS']))
-            error = 'invalid: DOGE_ADDRESS (required for tier 3)';
-
-        // DOGE_ADDRESS must be empty for Tier 1 and Tier 2
-        if(!error && tier !== 3 && !this.util.isNull(data['DOGE_ADDRESS']) && data['DOGE_ADDRESS'] !== '')
-            error = 'invalid: DOGE_ADDRESS (only allowed for tier 3)';
-
-        // Validate DOGE_ADDRESS format (D-prefix, 34 chars base58)
-        if(!error && tier === 3 && !/^D[a-km-zA-HJ-NP-Z1-9]{33}$/.test(data['DOGE_ADDRESS']))
-            error = 'invalid: DOGE_ADDRESS (format)';
+        // AMOUNT must be a positive 8-decimal string
+        if(!error && (this.util.isNull(data['AMOUNT']) || !/^[0-9]+(\.[0-9]{1,8})?$/.test(String(data['AMOUNT']))))
+            error = 'invalid: AMOUNT (format)';
+        if(!error && !this.util.bcgt(data['AMOUNT'], '0'))
+            error = 'invalid: AMOUNT (must be greater than 0)';
 
         /*****************************************************************
          * SIGNING_PUBKEY Validations
@@ -128,63 +91,69 @@ class Stake {
             error = 'invalid: SIGNING_PUBKEY (required)';
 
         // Verify SIGNING_PUBKEY is 64 hex characters (Ed25519)
-        if(!error && !/^[0-9a-fA-F]{64}$/.test(data['SIGNING_PUBKEY']))
+        if(!error && !/^[0-9a-fA-F]{64}$/.test(String(data['SIGNING_PUBKEY'])))
             error = 'invalid: SIGNING_PUBKEY (format)';
+
+        /*****************************************************************
+         * Format-Specific Stake Validation
+         ****************************************************************/
+
+        let existingStake = null;
+        if(!error){
+            existingStake = await this.indexerDb.getActiveStakeByPubkey(
+                data['SIGNING_PUBKEY'], data['BLOCK_INDEX']
+            );
+        }
+
+        if(!error && format === 1){
+            // v1 (new stake): pubkey must NOT already have an active stake
+            if(existingStake)
+                error = 'invalid: SIGNING_PUBKEY (already in use)';
+        }
+
+        if(!error && format === 2){
+            // v2 (top-up): pubkey MUST have an active stake owned by SOURCE
+            if(!existingStake){
+                error = 'invalid: SIGNING_PUBKEY (no active stake to top up)';
+            } else {
+                let sourceId = await this.indexerDb.getAddressId(data['SOURCE']);
+                if(sourceId === null || sourceId !== existingStake.source_id)
+                    error = 'invalid: SOURCE (does not own this stake)';
+            }
+        }
 
         /*****************************************************************
          * Balance Validations
          ****************************************************************/
 
-        // Get XCHAIN token info and staking config
         let gas = this.config['GAS'];
-        let staking = this.config['STAKING'];
-        let tierConfig = (staking && staking['TIERS']) ? staking['TIERS'][tier] : null;
-
-        // Verify staking config exists for this tier
-        if(!error && !tierConfig)
-            error = 'invalid: TIER (no staking config)';
-
-        // Look up the required staking amount for this tier
-        let stakeAmount = tierConfig ? tierConfig['AMOUNT'] : '0';
-        data['AMOUNT'] = stakeAmount;
-
-        // Calculate the activation block (6-block delay by default for BTC reorg safety)
-        let activationDelay = (staking && staking['ACTIVATION_DELAY_BLOCKS']) ? staking['ACTIVATION_DELAY_BLOCKS'] : 6;
-        data['ACTIVATION_BLOCK'] = parseInt(data['BLOCK_INDEX']) + activationDelay;
-
-        // Get token info and source address balances
         let tokenInfo = await this.indexerDb.getTokenInfo(gas, data['BLOCK_INDEX'], data['ACTION_INDEX']);
-        let balances = await this.indexerDb.getAddressBalances(data['SOURCE'], null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
+        let balances  = await this.indexerDb.getAddressBalances(data['SOURCE'], null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
 
-        // Verify SOURCE has sufficient XCHAIN balance
-        if(!error && tokenInfo && !this.util.hasBalance(balances, tokenInfo['TICK_ID'], stakeAmount))
+        // Verify SOURCE has sufficient XCHAIN balance for AMOUNT
+        if(!error && tokenInfo && !this.util.hasBalance(balances, tokenInfo['TICK_ID'], data['AMOUNT']))
             error = 'invalid: insufficient funds (STAKE)';
 
         // Verify SOURCE is not sleeping
         if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
             error = 'invalid: SOURCE (sleeping)';
 
-        // Check that the signing pubkey is not already in use by another active stake
-        // Note: pubkey uniqueness is checked across ALL stakes (active or not yet activated) to prevent collision
-        if(!error){
-            let existingStake = await this.indexerDb.getActiveStakeByPubkey(data['SIGNING_PUBKEY']);
-            if(existingStake)
-                error = 'invalid: SIGNING_PUBKEY (already in use)';
-        }
+        /*****************************************************************
+         * Activation Calculation
+         ****************************************************************/
 
-        // Check that SOURCE does not already have a stake at this tier (active or pending activation)
-        if(!error){
-            let existingStakeBySource = await this.indexerDb.getActiveStakeBySource(data['SOURCE'], tier);
-            if(existingStakeBySource)
-                error = 'invalid: SOURCE (already staked at this tier)';
-        }
+        let staking = this.config['STAKING'];
+        let activationDelay = (staking && staking['ACTIVATION_DELAY_BLOCKS']) ? staking['ACTIVATION_DELAY_BLOCKS'] : 6;
+        data['ACTIVATION_BLOCK'] = parseInt(data['BLOCK_INDEX']) + activationDelay;
+        data['VERSION'] = format;
 
         // Determine final status
         let status = (error) ? error : 'valid';
         data['STATUS'] = status;
 
         // Print status message
-        console.log("\t STAKE : tier=" + data['TIER'] + ' : chains=' + data['CHAINS'] + ' : ' + data['STATUS']);
+        let label = (format === 2) ? 'STAKE topup' : 'STAKE';
+        console.log("\t " + label + " : amount=" + data['AMOUNT'] + ' : pubkey=' + String(data['SIGNING_PUBKEY']).substring(0, 16) + '... : ' + data['STATUS']);
 
         // Create record in stakes table
         await this.indexerDb.createStake(data);
