@@ -5,7 +5,7 @@ CREATE TABLE dispensers (
     give_tick_id       BIGINT UNSIGNED,          -- id of record in index_tickers table
     give_amount        VARCHAR(250),             -- Amount of GIVE_TICK to dispense when triggered (empty when give_ownership=1)
     give_escrow        VARCHAR(250),             -- Amount of GIVE_TICK to escrow in dispenser (empty when give_ownership=1)
-    give_ownership     TINYINT(1) NOT NULL DEFAULT 0, -- 1 = dispenser sells GIVE_TICK ownership (single-shot); GIVE_AMOUNT / GIVE_ESCROW must be empty
+    give_ownership     TINYINT(1) NOT NULL DEFAULT 0, -- 1 = dispenser sells GIVE_TICK ownership (single-shot, GIVE_AMOUNT / GIVE_ESCROW must be empty)
     get_coin_id        BIGINT UNSIGNED,          -- id of record in index_coins table
     get_tick_id        BIGINT UNSIGNED,          -- id of record in index_tickers table
     get_amount         VARCHAR(250),             -- Amount required to trigger dispenser

@@ -82,12 +82,12 @@ class Unstake {
         // Verify the pubkey has an active stake owned by SOURCE
         let totalAmount = '0';
         if(!error){
-            let aggregate = await this.indexerDb.getActiveStakeAggregateByPubkey(data['SIGNING_PUBKEY'], data['BLOCK_INDEX']);
+            let aggregate = await this.indexerDb.getActiveStakeByPubkey(data['SIGNING_PUBKEY'], data['BLOCK_INDEX']);
             if(!aggregate){
                 error = 'invalid: SIGNING_PUBKEY (no active stake)';
             } else {
                 let sourceId = await this.indexerDb.getAddressId(data['SOURCE']);
-                if(sourceId === null || sourceId !== aggregate.source_id)
+                if(sourceId === null || Number(sourceId) !== Number(aggregate.source_id))
                     error = 'invalid: SOURCE (does not own this stake)';
                 else
                     totalAmount = aggregate.amount;

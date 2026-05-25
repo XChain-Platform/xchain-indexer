@@ -98,26 +98,25 @@ class Stake {
          * Format-Specific Stake Validation
          ****************************************************************/
 
-        let existingStake = null;
-        if(!error){
-            existingStake = await this.indexerDb.getActiveStakeByPubkey(
-                data['SIGNING_PUBKEY'], data['BLOCK_INDEX']
-            );
-        }
-
         if(!error && format === 1){
-            // v1 (new stake): pubkey must NOT already have an active stake
-            if(existingStake)
+            // v1 (new stake): pubkey must NOT already have any valid stake row
+            // (pass blockIndex=null so the activation-window doesn't hide a
+            // freshly-staked pubkey that hasn't activated yet)
+            let anyStake = await this.indexerDb.getActiveStakeByPubkey(data['SIGNING_PUBKEY'], null);
+            if(anyStake)
                 error = 'invalid: SIGNING_PUBKEY (already in use)';
         }
 
         if(!error && format === 2){
             // v2 (top-up): pubkey MUST have an active stake owned by SOURCE
-            if(!existingStake){
+            let activeStake = await this.indexerDb.getActiveStakeByPubkey(
+                data['SIGNING_PUBKEY'], data['BLOCK_INDEX']
+            );
+            if(!activeStake){
                 error = 'invalid: SIGNING_PUBKEY (no active stake to top up)';
             } else {
                 let sourceId = await this.indexerDb.getAddressId(data['SOURCE']);
-                if(sourceId === null || sourceId !== existingStake.source_id)
+                if(sourceId === null || Number(sourceId) !== Number(activeStake.source_id))
                     error = 'invalid: SOURCE (does not own this stake)';
             }
         }

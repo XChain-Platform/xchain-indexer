@@ -83,7 +83,7 @@ class Withdraw {
         // Verify caller is contract owner
         if(!error && contractInfo){
             let ownerId = await this.indexerDb.getAddressId(data['SOURCE']);
-            if(ownerId !== contractInfo.source_id)
+            if(ownerId === null || Number(ownerId) !== Number(contractInfo.source_id))
                 error = 'invalid: SOURCE (not contract owner)';
         }
 
