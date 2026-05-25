@@ -66,6 +66,14 @@ class Database {
             acquireTimeout:       10000,
             idleTimeout:          60000,
             insertIdAsNumber:     true,
+            // Return BIGINT columns as JS Numbers rather than BigInts. Without
+            // this, any JSON-RPC handler returning a DB row crashes the process
+            // on res.json() with `TypeError: Do not know how to serialize a
+            // BigInt` (xchain-hub polls getlatestblock/getactivevalidators/
+            // getownstake on a loop, so the crash window is always open).
+            // Matches xchain-hub and xchain-sync; all indexer BIGINT columns
+            // are within Number.MAX_SAFE_INTEGER for any realistic chain.
+            bigIntAsNumber:       true,
             minDelayValidation:   3000
         };
 
