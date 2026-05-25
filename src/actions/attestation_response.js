@@ -123,20 +123,17 @@ class AttestationResponse {
                 validSigs++;
                 verifiedSigs.push(s);
             }
-            // Quorum: validSigs must meet BOTH the request's REDUNDANCY parameter
-            // and the PBFT quorum 2*floor((N-1)/3)+1 over the capability snapshot N.
-            // For N=1 both collapse to 1, preserving single-validator behavior.
+            // Quorum: only REDUNDANCY validators are responsible for fetching
+            // (spec §8.2 — top-REDUNDANCY by leader-sort), so they can only
+            // produce REDUNDANCY signatures. A PBFT 2f+1 formula over the full
+            // capability set N would demand more sigs than the responsible set
+            // can produce. The simpler `>= REDUNDANCY` bound matches the
+            // responsibility model. Tolerance for divergence within the
+            // responsible set comes later via spot-check + slashing (Phase 4),
+            // not via this gate.
             let redundancy = request ? Number(request.redundancy) : 0;
-            let pbftQuorum = 0;
-            if(request){
-                let snapshot = await this.indexerDb.getValidatorsByCapability('attestation', snapshotBlock);
-                let N = snapshot.length;
-                pbftQuorum = (N <= 1) ? N : (2 * Math.floor((N - 1) / 3) + 1);
-            }
-            let required = Math.max(redundancy, pbftQuorum);
-            if(validSigs < required)
-                error = 'invalid: insufficient valid signatures (' + validSigs + '/' + required +
-                        ' — redundancy=' + redundancy + ' pbft=' + pbftQuorum + ')';
+            if(validSigs < redundancy)
+                error = 'invalid: insufficient valid signatures (' + validSigs + '/' + redundancy + ')';
         }
 
         // Stash for DB write
