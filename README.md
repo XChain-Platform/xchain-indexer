@@ -18,9 +18,12 @@ State-processing engine for the XChain Platform. Reads decoded blockchain transa
 
 ## Features
 
-- **29 ACTION types** — ADDRESS, AIRDROP, BATCH, BROADCAST, CALLBACK, COINPAY, DESTROY, DEPLOY, DEPOSIT, DISPENSER, DISPENSE, DIVIDEND, EXECUTE, FILE, ISSUE, LINK, LIST, MESSAGE, MINT, ORDER, SEND, SLEEP, STAKE, SWAP, SWEEP, UNSTAKE, DELEGATE, REVOKE_DELEGATION, CLAIM_REWARDS, WITHDRAW
-- **Virtual Machine** — deterministic JavaScript smart contracts via [xchain-vm](https://github.com/XChain-platform/xchain-vm) (sandboxed V8 isolates, AST-based gas metering, 16 emittable action types)
-- **Hub staking** — STAKE, UNSTAKE, DELEGATE, REVOKE_DELEGATION, CLAIM_REWARDS for validator staking on BTC chain
+- **ACTION types** — ADDRESS, AIRDROP, ATTESTATION_REQUEST, ATTESTATION_RESPONSE, ATTESTATION_REQUEST_EXPIRE, BATCH, BROADCAST, CALLBACK, COINPAY, DESTROY, DEPLOY, DEPOSIT, DISPENSER, DISPENSE, DIVIDEND, EXECUTE, FILE, ISSUE, LINK, LIST, MESSAGE, MINT, ORDER, PRICE, SEND, SLEEP, STAKE, SWAP, SWEEP, UNSTAKE, DELEGATE, REVOKE_DELEGATION, CLAIM_REWARDS, WITHDRAW
+- **Virtual Machine** — deterministic JavaScript smart contracts via [xchain-vm](https://github.com/XChain-platform/xchain-vm) (sandboxed V8 isolates, AST-based gas metering, attestation gateway namespace)
+- **Capability-based staking** — STAKE (VERSION 1 new / VERSION 2 top-up) and UNSTAKE (pubkey-based). A validator's aggregate active stake auto-qualifies it for each of four independent capabilities (`price`, `cross_chain`, `oracle_publish`, `attestation`) per governance-configurable `min_stake[capability]`. New `stakes` columns: `version`, `activation_block`, `deactivation_block`.
+- **External attestation framework** — contracts emit ATTESTATION_REQUEST via `xchain.attestation.request`; hub federation reaches PBFT quorum; ATTESTATION_RESPONSE is submitted on-chain; indexer fires the request's callback EXECUTE on quorum or system-injects ATTESTATION_REQUEST_EXPIRE on deadline.
+- **PRICE v1 user oracles** — validators with the `oracle_publish` capability can publish PRICE rows that the hub indexes for the price-fetch hot path (`oracle_prices` on the hub).
+- **Token-gated content** — FILE action supports AES-256-GCM gated payloads with a compact 33-byte binary key handoff; new `gated_files` table.
 - **COINPay** — native coin DEX pairs with two-phase settlement (ORDER_MATCH → COINPAY)
 - **Unified gas fee schedule** — all protocol fees expressed in gas units, converted via GAS_PRICE to XCHAIN
 - **Multi-chain support** — Bitcoin, Litecoin, and Dogecoin on mainnet, testnet, and regtest
@@ -34,7 +37,8 @@ State-processing engine for the XChain Platform. Reads decoded blockchain transa
 - **Action mapping** — address/ticker/action_index cross-references for fast lookups
 - **Circuit-breaker DB connections** — automatic failure detection and recovery
 - **Watchdog timeout** — configurable per-block processing timeout detects deadlocks
-- **958 tests** — unit, integration, e2e, fuzz, chaos, mutation, boundary, smoke, performance, regression
+- **Hub-facing RPCs** — `getownstake`, `getactivevalidators`, `getcapabilityvalidators`, `getpendingattestation_requests`, `getlatestblock`; ingests `pushvalidatorrewards` from hub
+- **Comprehensive test suite** — unit, integration, e2e, fuzz, chaos, mutation, boundary, smoke, performance, regression
 
 ## Documentation
 
