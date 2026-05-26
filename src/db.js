@@ -7173,6 +7173,392 @@ class Database {
     }
 
     /*
+     * Contract-targeted staking methods (STAKE v3 / UNSTAKE v1 / DELEGATE v1)
+     * Parallel to the capability staking system; tracked in separate tables to keep
+     * capability-staking queries unchanged. See claude/reports/specs/contract-staking-model.md
+     */
+
+    // Create/Update record in `contract_stakes` table.
+    // Each STAKE v3 action gets its own row; active stake for (target, pubkey, tick)
+    // is SUM(amount) across all valid rows. Top-up vs. new is determined by caller.
+    async createContractStake(data){
+        data                    = this.normalizeDataValues(data);
+        let status_id           = await this.createStatus(data['STATUS']);
+        let source_id           = await this.getAddressId(data['SOURCE']);
+        let signing_pubkey_id   = await this.getOrCreatePubkeyId(data['SIGNING_PUBKEY']);
+        let tick_id             = await this.createTicker(data['TICK']);
+        let action_index        = data['ACTION_INDEX'];
+        let version             = data['VERSION'] || 3;
+        let target_contract_index = Number(data['TARGET_CONTRACT_INDEX']);
+        let amount              = data['AMOUNT'] || '0';
+        let block_index         = data['BLOCK_INDEX'];
+        let activation_block    = data['ACTIVATION_BLOCK'] || 0;
+        let query  = "SELECT action_index FROM contract_stakes WHERE action_index=? LIMIT 1";
+        let args   = [action_index];
+        let exists = false;
+        let results = await this.doQuery(query, args);
+        if(results.length > 0)
+            exists = true;
+        if(exists){
+            query = `UPDATE contract_stakes SET
+                        source_id=?, version=?, signing_pubkey_id=?, target_contract_index=?, tick_id=?,
+                        amount=?, status_id=?, block_index=?, activation_block=?
+                    WHERE action_index=?`;
+            args = [source_id, version, signing_pubkey_id, target_contract_index, tick_id,
+                    amount, status_id, block_index, activation_block, action_index];
+        } else {
+            query = `INSERT INTO contract_stakes
+                        (source_id, version, signing_pubkey_id, target_contract_index, tick_id,
+                         amount, status_id, block_index, activation_block, action_index)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+            args = [source_id, version, signing_pubkey_id, target_contract_index, tick_id,
+                    amount, status_id, block_index, activation_block, action_index];
+        }
+        await this.doQuery(query, args);
+    }
+
+    // Set deactivation_block for ALL active contract_stakes rows matching (target, pubkey, tick).
+    // Used by createContractUnstake to start the cooldown on all of a staker's (target, tick) rows.
+    async setContractStakeDeactivationByPubkey(targetContractIndex, pubkey, tick, deactivationBlock){
+        let pubkey_id = await this.getPubkeyId(String(pubkey).toLowerCase());
+        if(pubkey_id === null) return false;
+        let tick_id = await this.getTickerId(tick);
+        if(tick_id === null) return false;
+        let valid_id = await this.getStatusId('valid');
+        let query = `UPDATE contract_stakes SET deactivation_block=?
+                     WHERE target_contract_index=? AND signing_pubkey_id=? AND tick_id=?
+                       AND status_id=? AND deactivation_block IS NULL`;
+        await this.doQuery(query, [deactivationBlock, Number(targetContractIndex), pubkey_id, tick_id, valid_id]);
+        return true;
+    }
+
+    // Get aggregate active contract-stake for (target, pubkey, tick).
+    // Returns { source_id, signing_pubkey_id, signing_pubkey, tick_id, tick, amount, activation_block } or null.
+    async getActiveContractStakeByPubkey(targetContractIndex, pubkey, tick, blockIndex){
+        let pubkey_id = await this.getPubkeyId(String(pubkey).toLowerCase());
+        if(pubkey_id === null) return null;
+        let tick_id = await this.getTickerId(tick);
+        if(tick_id === null) return null;
+        let valid_id = await this.getStatusId('valid');
+        let query = `SELECT
+                        MIN(cs.source_id)                       AS source_id,
+                        cs.signing_pubkey_id                    AS signing_pubkey_id,
+                        cs.tick_id                              AS tick_id,
+                        SUM(CAST(cs.amount AS DECIMAL(30,8)))   AS amount,
+                        MIN(cs.activation_block)                AS activation_block,
+                        MIN(cs.block_index)                     AS block_index,
+                        ip.pubkey                               AS signing_pubkey,
+                        t.tick                                  AS tick
+                     FROM contract_stakes cs
+                         LEFT JOIN index_pubkeys ip ON (ip.id = cs.signing_pubkey_id)
+                         LEFT JOIN index_tickers t  ON (t.id  = cs.tick_id)
+                     WHERE cs.target_contract_index=? AND cs.signing_pubkey_id=? AND cs.tick_id=? AND cs.status_id=?`;
+        let args = [Number(targetContractIndex), pubkey_id, tick_id, valid_id];
+        if(blockIndex !== undefined && blockIndex !== null){
+            query += ' AND cs.activation_block <= ? AND (cs.deactivation_block IS NULL OR cs.deactivation_block > ?)';
+            args.push(blockIndex);
+            args.push(blockIndex);
+        }
+        query += ' GROUP BY cs.signing_pubkey_id, cs.tick_id, ip.pubkey, t.tick LIMIT 1';
+        let results = await this.doQuery(query, args);
+        if(results.length === 0) return null;
+        let row = results[0];
+        return {
+            source_id:         row.source_id,
+            signing_pubkey_id: row.signing_pubkey_id,
+            signing_pubkey:    row.signing_pubkey,
+            tick_id:           row.tick_id,
+            tick:              row.tick,
+            amount:            (row.amount === null || row.amount === undefined) ? '0' : String(row.amount),
+            activation_block:  row.activation_block,
+            block_index:       row.block_index
+        };
+    }
+
+    // Check whether the (target, source) combination already owns an active stake for (pubkey, tick).
+    // Used by STAKE v3 to detect "new vs. top-up" — top-up requires the existing stake be owned by the same source.
+    async getContractStakeOwner(targetContractIndex, pubkey, tick){
+        let pubkey_id = await this.getPubkeyId(String(pubkey).toLowerCase());
+        if(pubkey_id === null) return null;
+        let tick_id = await this.getTickerId(tick);
+        if(tick_id === null) return null;
+        let valid_id = await this.getStatusId('valid');
+        let query = `SELECT source_id FROM contract_stakes
+                     WHERE target_contract_index=? AND signing_pubkey_id=? AND tick_id=? AND status_id=?
+                     ORDER BY action_index ASC LIMIT 1`;
+        let results = await this.doQuery(query, [Number(targetContractIndex), pubkey_id, tick_id, valid_id]);
+        if(results.length === 0) return null;
+        return Number(results[0].source_id);
+    }
+
+    // Create/Update record in `contract_unstakes` table
+    async createContractUnstake(data){
+        data                  = this.normalizeDataValues(data);
+        let status_id         = await this.createStatus(data['STATUS']);
+        let source_id         = await this.getAddressId(data['SOURCE']);
+        let signing_pubkey_id = await this.getOrCreatePubkeyId(data['SIGNING_PUBKEY']);
+        let tick_id           = await this.createTicker(data['TICK']);
+        let target_contract_index = Number(data['TARGET_CONTRACT_INDEX']);
+        let action_index      = data['ACTION_INDEX'];
+        let cooldown_end_block = data['COOLDOWN_END_BLOCK'];
+        let amount            = data['AMOUNT'] || '0';
+        let block_index       = data['BLOCK_INDEX'];
+        let query  = "SELECT action_index FROM contract_unstakes WHERE action_index=? LIMIT 1";
+        let args   = [action_index];
+        let exists = false;
+        let results = await this.doQuery(query, args);
+        if(results.length > 0)
+            exists = true;
+        if(exists){
+            query = `UPDATE contract_unstakes SET
+                        source_id=?, signing_pubkey_id=?, target_contract_index=?, tick_id=?,
+                        cooldown_end_block=?, amount=?, status_id=?, block_index=?
+                    WHERE action_index=?`;
+            args = [source_id, signing_pubkey_id, target_contract_index, tick_id,
+                    cooldown_end_block, amount, status_id, block_index, action_index];
+        } else {
+            query = `INSERT INTO contract_unstakes
+                        (source_id, signing_pubkey_id, target_contract_index, tick_id,
+                         cooldown_end_block, amount, status_id, block_index, action_index)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+            args = [source_id, signing_pubkey_id, target_contract_index, tick_id,
+                    cooldown_end_block, amount, status_id, block_index, action_index];
+        }
+        await this.doQuery(query, args);
+    }
+
+    // Create/Update record in `contract_delegations` table
+    async createContractDelegation(data){
+        data                  = this.normalizeDataValues(data);
+        let status_id         = await this.createStatus(data['STATUS']);
+        let source_id         = await this.getAddressId(data['SOURCE']);
+        let signing_pubkey_id = await this.getOrCreatePubkeyId(data['SIGNING_PUBKEY']);
+        let tick_id           = await this.createTicker(data['TICK']);
+        let target_contract_index = Number(data['TARGET_CONTRACT_INDEX']);
+        let action_index      = data['ACTION_INDEX'];
+        let block_index       = data['BLOCK_INDEX'];
+        let activation_block  = data['ACTIVATION_BLOCK'] || 0;
+        let query  = "SELECT action_index FROM contract_delegations WHERE action_index=? LIMIT 1";
+        let args   = [action_index];
+        let exists = false;
+        let results = await this.doQuery(query, args);
+        if(results.length > 0)
+            exists = true;
+        if(exists){
+            query = `UPDATE contract_delegations SET
+                        source_id=?, signing_pubkey_id=?, target_contract_index=?, tick_id=?,
+                        status_id=?, block_index=?, activation_block=?
+                    WHERE action_index=?`;
+            args = [source_id, signing_pubkey_id, target_contract_index, tick_id,
+                    status_id, block_index, activation_block, action_index];
+        } else {
+            query = `INSERT INTO contract_delegations
+                        (source_id, signing_pubkey_id, target_contract_index, tick_id,
+                         status_id, block_index, activation_block, action_index)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)`;
+            args = [source_id, signing_pubkey_id, target_contract_index, tick_id,
+                    status_id, block_index, activation_block, action_index];
+        }
+        await this.doQuery(query, args);
+    }
+
+    // Snapshot the contract's stake state at blockIndex into an in-memory accessor
+    // returned to the VM execution context. Methods on the returned object are
+    // synchronous since they query the pre-loaded snapshot only.
+    //
+    // The snapshot is scoped to THIS contract (targetContractIndex) — a contract
+    // calling xchain.contract.* cannot see other contracts' stakes through this
+    // accessor (implicit slash authorization). The 1000-staker cap on getStakers
+    // is applied here at query time (LIMIT clause).
+    async getContractStakeDataForVM(targetContractIndex, blockIndex){
+        let valid_id = await this.getStatusId('valid');
+        let stakes = [];
+        if(valid_id !== null){
+            let query = `SELECT cs.signing_pubkey_id, ip.pubkey AS pubkey, cs.tick_id, t.tick AS tick, cs.amount,
+                                cs.activation_block, cs.deactivation_block
+                         FROM contract_stakes cs
+                             LEFT JOIN index_pubkeys ip ON (ip.id = cs.signing_pubkey_id)
+                             LEFT JOIN index_tickers t  ON (t.id  = cs.tick_id)
+                         WHERE cs.target_contract_index=? AND cs.status_id=?
+                           AND cs.activation_block <= ?
+                           AND (cs.deactivation_block IS NULL OR cs.deactivation_block > ?)`;
+            stakes = await this.doQuery(query, [Number(targetContractIndex), valid_id, blockIndex, blockIndex]);
+        }
+        // Aggregate (pubkey, tick) → amount; also build per-tick stakers map for getStakers/getTotalStaked.
+        let perPubkeyTick = new Map();      // key: pubkey + '|' + tick → string amount
+        let perTickStakers = new Map();     // key: tick → Map(pubkey → string amount)
+        let util = this.util;
+        for(let row of stakes){
+            let pubkey = String(row.pubkey || '').toLowerCase();
+            let tick   = String(row.tick || '');
+            if(!pubkey || !tick) continue;
+            let key = pubkey + '|' + tick;
+            perPubkeyTick.set(key, util.bcadd((perPubkeyTick.get(key) || '0'), row.amount, 8));
+            if(!perTickStakers.has(tick)) perTickStakers.set(tick, new Map());
+            let m = perTickStakers.get(tick);
+            m.set(pubkey, util.bcadd((m.get(pubkey) || '0'), row.amount, 8));
+        }
+        return {
+            // Sum of amount for (pubkey, tick); '0' if not found
+            getStake(pubkey, token){
+                let key = String(pubkey || '').toLowerCase() + '|' + String(token || '');
+                return perPubkeyTick.get(key) || '0';
+            },
+            // Total amount staked across all stakers for tick
+            getTotalStaked(token){
+                let stakers = perTickStakers.get(String(token || ''));
+                if(!stakers) return '0';
+                let total = '0';
+                for(let amt of stakers.values()) total = util.bcadd(total, amt, 8);
+                return total;
+            },
+            // Array of { pubkey, amount }, sorted amount DESC, capped at 1000
+            getStakers(token){
+                let stakers = perTickStakers.get(String(token || ''));
+                if(!stakers) return [];
+                let arr = [];
+                for(let [pk, amt] of stakers.entries()) arr.push({ pubkey: pk, amount: amt });
+                arr.sort((a, b) => (util.bcgt(b.amount, a.amount) ? 1 : (util.bcgt(a.amount, b.amount) ? -1 : 0)));
+                return arr.slice(0, 1000);
+            }
+        };
+    }
+
+    // Slash a staker. Deducts `amount` from active contract_stakes rows first (LIFO by
+    // activation_block / action_index), then from contract_unstakes rows if any remainder.
+    // Returns the actual amount slashed (may be less than `amount` if available balance is lower).
+    // Does NOT credit the destination or emit the slash_events row — caller (_processSlashEmission)
+    // wires those side effects.
+    async slashContractStake(targetContractIndex, pubkeyId, tickId, amount){
+        let valid_id = await this.getStatusId('valid');
+        if(valid_id === null) return '0';
+        let remaining = String(amount);
+        let totalSlashed = '0';
+        // Pass 1: deduct from active contract_stakes rows (LIFO — highest action_index first)
+        let stakesQ = `SELECT action_index, amount FROM contract_stakes
+                       WHERE target_contract_index=? AND signing_pubkey_id=? AND tick_id=? AND status_id=?
+                         AND CAST(amount AS DECIMAL(30,8)) > 0
+                       ORDER BY action_index DESC`;
+        let stakeRows = await this.doQuery(stakesQ, [Number(targetContractIndex), pubkeyId, tickId, valid_id]);
+        for(let row of stakeRows){
+            if(!this.util.bcgt(remaining, '0')) break;
+            let rowAmt = String(row.amount);
+            let take = this.util.bcgte(rowAmt, remaining) ? remaining : rowAmt;
+            let newAmt = this.util.bcsub(rowAmt, take, 8);
+            await this.doQuery('UPDATE contract_stakes SET amount=? WHERE action_index=?', [newAmt, row.action_index]);
+            remaining = this.util.bcsub(remaining, take, 8);
+            totalSlashed = this.util.bcadd(totalSlashed, take, 8);
+        }
+        if(!this.util.bcgt(remaining, '0')) return totalSlashed;
+        // Pass 2: deduct from contract_unstakes rows (cooldown-locked but still slashable)
+        let pendingId = await this.getStatusId('pending');
+        let unstakeStatusIds = [valid_id];
+        if(pendingId !== null) unstakeStatusIds.push(pendingId);
+        let placeholders = unstakeStatusIds.map(() => '?').join(',');
+        let unstakesQ = `SELECT action_index, amount FROM contract_unstakes
+                         WHERE target_contract_index=? AND signing_pubkey_id=? AND tick_id=?
+                           AND status_id IN (${placeholders})
+                           AND CAST(amount AS DECIMAL(30,8)) > 0
+                         ORDER BY action_index DESC`;
+        let unstakeRows = await this.doQuery(unstakesQ, [Number(targetContractIndex), pubkeyId, tickId, ...unstakeStatusIds]);
+        for(let row of unstakeRows){
+            if(!this.util.bcgt(remaining, '0')) break;
+            let rowAmt = String(row.amount);
+            let take = this.util.bcgte(rowAmt, remaining) ? remaining : rowAmt;
+            let newAmt = this.util.bcsub(rowAmt, take, 8);
+            await this.doQuery('UPDATE contract_unstakes SET amount=? WHERE action_index=?', [newAmt, row.action_index]);
+            remaining = this.util.bcsub(remaining, take, 8);
+            totalSlashed = this.util.bcadd(totalSlashed, take, 8);
+        }
+        return totalSlashed;
+    }
+
+    // Record a slash event row. Caller has already deducted from contract_stakes/contract_unstakes
+    // (via slashContractStake) and credited the destination address.
+    async createSlashEvent(data){
+        data                  = this.normalizeDataValues(data);
+        let execution_index   = data['EXECUTION_INDEX'];
+        let target_contract_index = Number(data['TARGET_CONTRACT_INDEX']);
+        let signing_pubkey_id = data['SIGNING_PUBKEY_ID'];
+        let tick_id           = data['TICK_ID'];
+        let amount            = data['AMOUNT'];
+        let destination_id    = data['DESTINATION_ID'];
+        let block_index       = data['BLOCK_INDEX'];
+        let query = `INSERT INTO slash_events
+                        (execution_index, target_contract_index, signing_pubkey_id, tick_id,
+                         amount, destination_id, block_index)
+                     VALUES (?, ?, ?, ?, ?, ?, ?)`;
+        await this.doQuery(query, [execution_index, target_contract_index, signing_pubkey_id, tick_id,
+                                   amount, destination_id, block_index]);
+    }
+
+    // Process cooldown completions at the end of a block.
+    // Sweeps BOTH capability `unstakes` AND `contract_unstakes` tables: any row where
+    // cooldown_end_block <= currentBlock and status='pending' (or 'valid') gets its
+    // remaining amount credited back to the source, and the row is marked 'completed'.
+    // Returns array of credit tuples [tick, amount, address] for processTransactionLedgerChanges,
+    // plus the rowids that were finalized so they can be updated to 'completed' status.
+    async sweepCompletedCooldowns(currentBlock){
+        let credits = [];
+        let pendingId = await this.getStatusId('pending');
+        let validId = await this.getStatusId('valid');
+        let completedId = await this.createStatus('completed');
+        // Status filter — most existing unstakes carry 'valid' since createStatus normalizes that way.
+        let statusIds = [];
+        if(pendingId !== null) statusIds.push(pendingId);
+        if(validId !== null) statusIds.push(validId);
+        if(statusIds.length === 0) return { credits, capabilityRows: [], contractRows: [] };
+        let placeholders = statusIds.map(() => '?').join(',');
+        let gas = this.config['GAS'];
+        // Capability unstakes (XCHAIN only)
+        let capQ = `SELECT u.action_index, u.amount, a.address AS source_address
+                    FROM unstakes u
+                        LEFT JOIN index_addresses a ON (a.id = u.source_id)
+                    WHERE u.cooldown_end_block <= ?
+                      AND u.status_id IN (${placeholders})
+                      AND CAST(u.amount AS DECIMAL(30,8)) > 0`;
+        let capRows = await this.doQuery(capQ, [currentBlock, ...statusIds]);
+        let capabilityRows = [];
+        for(let row of capRows){
+            credits.push([gas, String(row.amount), row.source_address]);
+            capabilityRows.push(row.action_index);
+        }
+        // Contract unstakes (any tick)
+        let conQ = `SELECT cu.action_index, cu.amount, a.address AS source_address, t.tick AS tick
+                    FROM contract_unstakes cu
+                        LEFT JOIN index_addresses a ON (a.id = cu.source_id)
+                        LEFT JOIN index_tickers   t ON (t.id = cu.tick_id)
+                    WHERE cu.cooldown_end_block <= ?
+                      AND cu.status_id IN (${placeholders})
+                      AND CAST(cu.amount AS DECIMAL(30,8)) > 0`;
+        let conRows = await this.doQuery(conQ, [currentBlock, ...statusIds]);
+        let contractRows = [];
+        for(let row of conRows){
+            credits.push([row.tick, String(row.amount), row.source_address]);
+            contractRows.push(row.action_index);
+        }
+        return { credits, capabilityRows, contractRows, completedId };
+    }
+
+    // Mark unstake / contract_unstake rows as completed after their funds have been credited.
+    async markCooldownsCompleted(capabilityRowIds, contractRowIds, completedStatusId){
+        if(capabilityRowIds && capabilityRowIds.length > 0){
+            let placeholders = capabilityRowIds.map(() => '?').join(',');
+            await this.doQuery(
+                `UPDATE unstakes SET status_id=? WHERE action_index IN (${placeholders})`,
+                [completedStatusId, ...capabilityRowIds]
+            );
+        }
+        if(contractRowIds && contractRowIds.length > 0){
+            let placeholders = contractRowIds.map(() => '?').join(',');
+            await this.doQuery(
+                `UPDATE contract_unstakes SET status_id=? WHERE action_index IN (${placeholders})`,
+                [completedStatusId, ...contractRowIds]
+            );
+        }
+    }
+
+    /*
      * External attestation framework — see specs/2026-05-24_external-attestation-framework.md
      */
 
@@ -7409,6 +7795,12 @@ class Database {
         let code_hash    = data['CODE_HASH'];
         let api_version  = data['API_VERSION'] || 1;
         let block_index  = data['BLOCK_INDEX'];
+        // DEPLOY v1+ staking config (NULL when contract is not opted into contract-staking)
+        let cooldown_blocks = (this.util.isNull(data['COOLDOWN_BLOCKS'])) ? null : Number(data['COOLDOWN_BLOCKS']);
+        let slash_destination_id = null;
+        if(!this.util.isNull(data['SLASH_DESTINATION'])){
+            slash_destination_id = await this.createAddress(data['SLASH_DESTINATION']);
+        }
         let query  = "SELECT action_index FROM contracts WHERE action_index=? LIMIT 1";
         let args   = [action_index];
         let exists = false;
@@ -7417,14 +7809,18 @@ class Database {
             exists = true;
         if(exists){
             query = `UPDATE contracts SET
-                        source_id=?, code=?, code_hash=?, api_version=?, status_id=?, block_index=?
+                        source_id=?, code=?, code_hash=?, api_version=?, status_id=?, block_index=?,
+                        cooldown_blocks=?, slash_destination_id=?
                     WHERE action_index=?`;
-            args = [source_id, code, code_hash, api_version, status_id, block_index, action_index];
+            args = [source_id, code, code_hash, api_version, status_id, block_index,
+                    cooldown_blocks, slash_destination_id, action_index];
         } else {
             query = `INSERT INTO contracts
-                        (source_id, code, code_hash, api_version, status_id, block_index, action_index)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)`;
-            args = [source_id, code, code_hash, api_version, status_id, block_index, action_index];
+                        (source_id, code, code_hash, api_version, status_id, block_index,
+                         cooldown_blocks, slash_destination_id, action_index)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+            args = [source_id, code, code_hash, api_version, status_id, block_index,
+                    cooldown_blocks, slash_destination_id, action_index];
         }
         await this.doQuery(query, args);
     }

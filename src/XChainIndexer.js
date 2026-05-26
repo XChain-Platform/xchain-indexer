@@ -244,6 +244,9 @@ class XChainIndexer {
                         // Check for any attestation requests past their DEADLINE_BLOCK
                         await this.util.processAttestationExpirations(this.actions, this.indexerDb, lastIndexerBlock, blockTime);
 
+                        // Release tokens for unstakes (capability + contract) past their cooldown
+                        await this.util.processCooldownCompletions(this.indexerDb, lastIndexerBlock);
+
                         // Clear VM compilation cache for this block
                         if(this.actions.vm)
                             this.actions.vm.endBlock();

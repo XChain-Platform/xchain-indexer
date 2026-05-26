@@ -158,6 +158,13 @@ class Execute {
             let oracleData = await ((this.actions && this.actions.hubDb) || this.indexerDb).getOracleDataForVM(data['BLOCK_INDEX']);
             let crossChainData = await this.indexerDb.getCrossChainDataForVM();
 
+            // Pre-load contract-stake snapshot scoped to THIS contract — backs the
+            // xchain.contract.{getStake,getTotalStaked,getStakers,slash} APIs synchronously.
+            // Implicit slash authorization: the accessor only knows this contract's stakes.
+            let contractStakeData = await this.indexerDb.getContractStakeDataForVM(
+                data['CONTRACT_ACTION_INDEX'], data['BLOCK_INDEX']
+            );
+
             // Derive deterministic block hash from block_index + block_time
             let blockHash = crypto.createHash('sha256')
                 .update(String(data['BLOCK_INDEX']) + ':' + String(data['BLOCK_TIME']))
@@ -178,11 +185,12 @@ class Execute {
                     timestamp: data['BLOCK_TIME'],
                     hash:      blockHash
                 },
-                balances:         null, // TODO: load balances for getBalance() when needed
-                tokenInfo:        null, // TODO: load token info for getTokenInfo() when needed
-                oracleData:       oracleData,
-                crossChainData:   crossChainData,
-                attestationData:  null  // TODO: wire getResponse() reader once response retention is in place
+                balances:          null, // TODO: load balances for getBalance() when needed
+                tokenInfo:         null, // TODO: load token info for getTokenInfo() when needed
+                oracleData:        oracleData,
+                crossChainData:    crossChainData,
+                attestationData:   null, // TODO: wire getResponse() reader once response retention is in place
+                contractStakeData: contractStakeData
             });
 
             gasUsed = vmResult.gasUsed;
@@ -218,13 +226,21 @@ class Execute {
                     // Process emitted actions through existing handlers
                     for(let i = 0; i < vmResult.emittedActions.length; i++){
                         let emission = vmResult.emittedActions[i];
-                        await this.processEmission(emission, data, i);
 
-                        // Record emission link
+                        // SLASH emissions are internal — never on-wire, never run through
+                        // the generic emission router (no decoder/parser exists for them).
+                        // Handled inline: deduct stake, credit destination, write event log.
+                        if(emission.action === 'SLASH'){
+                            await this._processSlashEmission(emission, data);
+                        } else {
+                            await this.processEmission(emission, data, i);
+                        }
+
+                        // Record emission link (SLASH rows carry no resultActionIndex)
                         await this.indexerDb.createContractEmission({
                             EXECUTION_INDEX: data['ACTION_INDEX'],
                             EMITTED_ACTION:  emission.action,
-                            ACTION_INDEX:    emission.resultActionIndex,
+                            ACTION_INDEX:    emission.resultActionIndex || null,
                             POSITION:        i
                         });
                     }
@@ -445,6 +461,72 @@ class Execute {
             default:
                 throw new Error('unsupported emission action: ' + action);
         }
+    }
+
+    // Process a SLASH emission from inside the VM. The emission carries:
+    //   { action: 'SLASH', params: { contractIndex, pubkey, token, amount } }
+    // Authorization is implicit — the gateway's contractStakeData accessor is scoped
+    // to the executing contract, so SLASH can only target stakes against that contract.
+    // We still defense-in-depth verify contractIndex matches data['CONTRACT_ACTION_INDEX'].
+    //
+    // Side effects (all inside the surrounding vm_execute savepoint):
+    //   1. Deduct `amount` from contract_stakes (LIFO) then contract_unstakes.
+    //   2. Credit the slashed amount to contracts.slash_destination_id (BURN or configured).
+    //   3. Write a slash_events row keyed by execution_index for audit + wallet UX.
+    async _processSlashEmission(emission, data){
+        let p = emission.params || {};
+        let contractIndex = Number(p.contractIndex);
+        let pubkey        = String(p.pubkey || '').toLowerCase();
+        let token         = String(p.token || '');
+        let amount        = String(p.amount || '0');
+
+        // Defense in depth — caller mismatch should never happen if the gateway
+        // closure is sourced correctly, but throw if it does (rolls back the savepoint).
+        if(contractIndex !== Number(data['CONTRACT_ACTION_INDEX']))
+            throw new Error('SLASH emission contractIndex mismatch: ' + contractIndex + ' vs ' + data['CONTRACT_ACTION_INDEX']);
+
+        // Load contract row to fetch slash_destination_id (locked at DEPLOY time)
+        let contractInfo = await this.indexerDb.getContract(contractIndex);
+        if(!contractInfo)
+            throw new Error('SLASH: contract not found: ' + contractIndex);
+        if(contractInfo.slash_destination_id === null || contractInfo.slash_destination_id === undefined)
+            throw new Error('SLASH: contract has no slash destination configured');
+
+        // Resolve FKs
+        let pubkeyId = await this.indexerDb.getPubkeyId(pubkey);
+        if(pubkeyId === null) return; // pubkey not staked here — nothing to slash, silent no-op
+        let tickId = await this.indexerDb.getTickerId(token);
+        if(tickId === null) return;
+
+        // Deduct (returns actual slashed total — may be less than requested if balance lower)
+        let slashed = await this.indexerDb.slashContractStake(contractIndex, pubkeyId, tickId, amount);
+        if(!this.util.bcgt(slashed, '0')) return;
+
+        // Credit destination address (BURN or user-specified)
+        let destQ = await this.indexerDb.doQuery(
+            'SELECT address FROM index_addresses WHERE id=? LIMIT 1',
+            [contractInfo.slash_destination_id]
+        );
+        if(destQ.length === 0)
+            throw new Error('SLASH: destination address row missing');
+        let destAddress = destQ[0].address;
+
+        // Write credit row (action_index = the EXECUTE's action_index, for audit trail)
+        await this.indexerDb.createCredit(data['ACTION_INDEX'], token, slashed, destAddress);
+
+        // Track destination + token for balance reconciliation in the surrounding execute()
+        this.util.addAddressTicker(destAddress, token);
+
+        // Write the slash event row
+        await this.indexerDb.createSlashEvent({
+            EXECUTION_INDEX:       data['ACTION_INDEX'],
+            TARGET_CONTRACT_INDEX: contractIndex,
+            SIGNING_PUBKEY_ID:     pubkeyId,
+            TICK_ID:               tickId,
+            AMOUNT:                slashed,
+            DESTINATION_ID:        contractInfo.slash_destination_id,
+            BLOCK_INDEX:           data['BLOCK_INDEX']
+        });
     }
 }
 

@@ -882,6 +882,64 @@ class Utility {
         }
     }
 
+    // Finalize unstakes (capability + contract) whose cooldown has elapsed.
+    // For each completed row: writes a credit using the unstake's own action_index
+    // (for audit-trail continuity), updates the source address's balance, and marks
+    // the unstake row as 'completed' so the same release doesn't fire twice.
+    //
+    // Skips rows where amount=0 (fully slashed). Operates inside the block transaction
+    // so the credit + balance update + status flip are all atomic with the block.
+    async processCooldownCompletions(db, block_index){
+        let sweep = await db.sweepCompletedCooldowns(block_index);
+        if(!sweep || sweep.credits.length === 0) return;
+        let addressesToRebalance = new Set();
+        // Apply credits — each tuple is [tick, amount, sourceAddress]
+        // The credit's action_index reuses the unstake's action_index for the audit trail.
+        // We need to associate each credit with the right row, so re-derive from sweep state.
+        // capabilityRows and contractRows preserve action_index order — re-query for tick/amount/address.
+        if(sweep.capabilityRows.length > 0 || sweep.contractRows.length > 0){
+            // Re-fetch with action_index so each credit gets its own action_index trail
+            let placeholdersCap = sweep.capabilityRows.map(() => '?').join(',');
+            let placeholdersCon = sweep.contractRows.map(() => '?').join(',');
+            if(sweep.capabilityRows.length > 0){
+                let rows = await db.doQuery(
+                    `SELECT u.action_index, u.amount, a.address AS source_address
+                     FROM unstakes u
+                         LEFT JOIN index_addresses a ON (a.id = u.source_id)
+                     WHERE u.action_index IN (${placeholdersCap})`,
+                    sweep.capabilityRows
+                );
+                let gas = db.config['GAS'];
+                for(let row of rows){
+                    if(!this.bcgt(row.amount, '0')) continue;
+                    await db.createCredit(row.action_index, gas, String(row.amount), row.source_address);
+                    addressesToRebalance.add(row.source_address);
+                }
+            }
+            if(sweep.contractRows.length > 0){
+                let rows = await db.doQuery(
+                    `SELECT cu.action_index, cu.amount, a.address AS source_address, t.tick AS tick
+                     FROM contract_unstakes cu
+                         LEFT JOIN index_addresses a ON (a.id = cu.source_id)
+                         LEFT JOIN index_tickers   t ON (t.id = cu.tick_id)
+                     WHERE cu.action_index IN (${placeholdersCon})`,
+                    sweep.contractRows
+                );
+                for(let row of rows){
+                    if(!this.bcgt(row.amount, '0')) continue;
+                    await db.createCredit(row.action_index, row.tick, String(row.amount), row.source_address);
+                    addressesToRebalance.add(row.source_address);
+                }
+            }
+        }
+        // Update balances for all addresses that received credits
+        if(addressesToRebalance.size > 0){
+            await db.updateBalances(Array.from(addressesToRebalance));
+        }
+        // Flip the unstake rows to 'completed' so they won't be swept again
+        await db.markCooldownsCompleted(sweep.capabilityRows, sweep.contractRows, sweep.completedId);
+    }
+
     // Process any orders, swaps, or dispensers which are past expiration
     // NOTE: We currently use block_time to expire items... not ideal as block times can be manipulated
     // TODO: Revisit this code and handle calculating block time more elegantly

@@ -23,7 +23,8 @@
  * - NEW_SIGNING_PUBKEY - New Ed25519 signing public key
  *
  * FORMATS:
- * - 0 = Rotate signing key
+ *   v0 - VERSION|SIGNING_PUBKEY                                       (capability delegation)
+ *   v1 - VERSION|SIGNING_PUBKEY|TARGET_CONTRACT_INDEX|TICK            (contract-targeted delegation, per (target, tick))
  *
  ********************************************************************/
 
@@ -41,7 +42,8 @@ class Delegate {
 
         // Define list of known FORMATS
         this.formats = {};
-        this.formats[0] = 'VERSION|NEW_SIGNING_PUBKEY';
+        this.formats[0] = 'VERSION|NEW_SIGNING_PUBKEY';                                       // capability delegation
+        this.formats[1] = 'VERSION|NEW_SIGNING_PUBKEY|TARGET_CONTRACT_INDEX|TICK';            // contract-targeted delegation
     }
 
     // Handle parsing the DELEGATE transaction
@@ -52,7 +54,12 @@ class Delegate {
         if(!error && (format===null || this.formats[format] === undefined ))
             error = 'invalid: VERSION (unknown)';
 
-        // Extract params
+        // v1 = contract-targeted delegation — dispatch to its own handler
+        if(!error && format === 1){
+            return await this._parseContractDelegate(params, data, error);
+        }
+
+        // Extract params (v0 capability delegation)
         data['SIGNING_PUBKEY'] = params[1];
 
         // Convert NUMBER fields from string value to number value
@@ -136,6 +143,111 @@ class Delegate {
         await this.indexerDb.updateTokens(tickers);
 
         // Create action mappings
+        await this.mapper.createMappings(data);
+    }
+
+    // DELEGATE v1 — rotate signing key for a contract-targeted stake.
+    // Scoped to (target_contract_index, tick); pubkey-collision check is restricted to
+    // contract_* tables so a single pubkey CAN serve as both a capability validator
+    // and a contract staker simultaneously (see plan §12.5).
+    async _parseContractDelegate(params, data, error){
+
+        // Extract params
+        data['SIGNING_PUBKEY']        = params[1];
+        data['TARGET_CONTRACT_INDEX'] = params[2];
+        data['TICK']                  = params[3];
+
+        if(!error)
+            data = this.util.setNumberFormats(data);
+
+        if(!error && data['COIN'] !== 'BTC')
+            error = 'invalid: ACTION (BTC only)';
+
+        if(!error && this.util.isNull(data['SIGNING_PUBKEY']))
+            error = 'invalid: SIGNING_PUBKEY (required)';
+        if(!error && !/^[0-9a-fA-F]{64}$/.test(String(data['SIGNING_PUBKEY'])))
+            error = 'invalid: SIGNING_PUBKEY (format)';
+        if(!error && this.util.isNull(data['TARGET_CONTRACT_INDEX']))
+            error = 'invalid: TARGET_CONTRACT_INDEX (required)';
+        if(!error && (!/^[0-9]+$/.test(String(data['TARGET_CONTRACT_INDEX'])) || Number(data['TARGET_CONTRACT_INDEX']) <= 0))
+            error = 'invalid: TARGET_CONTRACT_INDEX (format)';
+        if(!error && this.util.isNull(data['TICK']))
+            error = 'invalid: TICK (required)';
+
+        // Source must own an active contract-stake for (target, *, tick) — any pubkey on this slot
+        if(!error){
+            // Reuse getActiveContractStakeByPubkey requires a known pubkey; instead check via owner lookup.
+            // We don't know the OLD pubkey from the wire — pubkey rotation just claims a new one.
+            // Validate by sweep: does SOURCE own ANY active contract_stakes row for (target, tick)?
+            let sourceId = await this.indexerDb.getAddressId(data['SOURCE']);
+            if(sourceId === null){
+                error = 'invalid: SOURCE (no active contract stake)';
+            } else {
+                let valid_id = await this.indexerDb.getStatusId('valid');
+                let tick_id  = await this.indexerDb.getTickerId(data['TICK']);
+                let rows = await this.indexerDb.doQuery(
+                    `SELECT 1 FROM contract_stakes
+                     WHERE target_contract_index=? AND source_id=? AND tick_id=? AND status_id=?
+                       AND activation_block <= ? AND (deactivation_block IS NULL OR deactivation_block > ?)
+                     LIMIT 1`,
+                    [Number(data['TARGET_CONTRACT_INDEX']), sourceId, tick_id, valid_id, data['BLOCK_INDEX'], data['BLOCK_INDEX']]
+                );
+                if(rows.length === 0)
+                    error = 'invalid: SOURCE (no active contract stake)';
+            }
+        }
+
+        // Pubkey-collision check — scoped to contract_stakes and contract_delegations only.
+        // A pubkey can be a capability validator AND a contract staker; only block reuse within contract scope.
+        if(!error){
+            let valid_id = await this.indexerDb.getStatusId('valid');
+            let pubkey_id = await this.indexerDb.getPubkeyId(String(data['SIGNING_PUBKEY']).toLowerCase());
+            if(pubkey_id !== null){
+                let csRows = await this.indexerDb.doQuery(
+                    `SELECT 1 FROM contract_stakes WHERE signing_pubkey_id=? AND status_id=? LIMIT 1`,
+                    [pubkey_id, valid_id]
+                );
+                if(csRows.length > 0){
+                    error = 'invalid: SIGNING_PUBKEY (already in use by contract stake)';
+                } else {
+                    let cdRows = await this.indexerDb.doQuery(
+                        `SELECT 1 FROM contract_delegations WHERE signing_pubkey_id=? AND status_id=? LIMIT 1`,
+                        [pubkey_id, valid_id]
+                    );
+                    if(cdRows.length > 0)
+                        error = 'invalid: SIGNING_PUBKEY (already in use by contract delegation)';
+                }
+            }
+        }
+
+        if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
+            error = 'invalid: SOURCE (sleeping)';
+
+        let staking = this.config['STAKING'];
+        let activationDelay = (staking && staking['ACTIVATION_DELAY_BLOCKS']) ? staking['ACTIVATION_DELAY_BLOCKS'] : 6;
+        data['ACTIVATION_BLOCK'] = parseInt(data['BLOCK_INDEX']) + activationDelay;
+
+        let status = (error) ? error : 'valid';
+        data['STATUS'] = status;
+
+        console.log("\t DELEGATE v1 : pubkey=" + String(data['SIGNING_PUBKEY']).substring(0, 16) +
+            '... : target=' + data['TARGET_CONTRACT_INDEX'] +
+            ' : tick=' + data['TICK'] +
+            ' : ' + data['STATUS']);
+
+        await this.indexerDb.createContractDelegation(data);
+
+        this.util.addAddressTicker(data['SOURCE'], data['TICK']);
+
+        let credits = [],
+            debits  = [];
+        await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits);
+
+        let tickers   = this.util.getTickersList(),
+            addresses = Object.keys(this.util.getAddressesList());
+        await this.indexerDb.updateBalances(addresses);
+        await this.indexerDb.updateTokens(tickers);
+
         await this.mapper.createMappings(data);
     }
 }

@@ -45,9 +45,16 @@ class Deploy {
         // Define list of known FORMATS
         this.formats = {};
         this.formats[0] = 'VERSION|CODE_ENCODING|GAS_LIMIT|CONSTRUCTOR_PARAMS';
+        // v1 adds optional staking config: COOLDOWN_BLOCKS + SLASH_DESTINATION (address or 'BURN' sentinel).
+        // Contracts deployed without these fields cannot be stake targets.
+        this.formats[1] = 'VERSION|CODE_ENCODING|GAS_LIMIT|CONSTRUCTOR_PARAMS|COOLDOWN_BLOCKS|SLASH_DESTINATION';
 
         // Maximum code size (64KB)
         this.MAX_CODE_SIZE = 65536;
+
+        // Cooldown bounds for contract-staking (DEPLOY v1+)
+        this.MIN_COOLDOWN_BLOCKS = 1;
+        this.MAX_COOLDOWN_BLOCKS = 100000;
     }
 
     // Handle parsing the DEPLOY transaction
@@ -62,6 +69,44 @@ class Deploy {
         data['CODE_ENCODING']      = params[1];
         data['GAS_LIMIT']          = params[2];
         data['CONSTRUCTOR_PARAMS'] = params[3];
+        // v1+ optional staking config
+        data['COOLDOWN_BLOCKS']    = (format >= 1) ? params[4] : null;
+        data['SLASH_DESTINATION']  = (format >= 1) ? params[5] : null;
+
+        // Validate v1 staking config (both optional, but pairing rules apply)
+        if(!error && format === 1){
+            let hasCooldown = !this.util.isNull(data['COOLDOWN_BLOCKS']) && data['COOLDOWN_BLOCKS'] !== '';
+            let hasDest     = !this.util.isNull(data['SLASH_DESTINATION']) && data['SLASH_DESTINATION'] !== '';
+            // SLASH_DESTINATION without COOLDOWN_BLOCKS is meaningless
+            if(hasDest && !hasCooldown){
+                error = 'invalid: SLASH_DESTINATION (requires COOLDOWN_BLOCKS)';
+            }
+            if(!error && hasCooldown){
+                if(!this.util.isNumeric(data['COOLDOWN_BLOCKS'])){
+                    error = 'invalid: COOLDOWN_BLOCKS (not numeric)';
+                } else {
+                    let cb = Number(data['COOLDOWN_BLOCKS']);
+                    if(cb < this.MIN_COOLDOWN_BLOCKS || cb > this.MAX_COOLDOWN_BLOCKS){
+                        error = 'invalid: COOLDOWN_BLOCKS (out of range)';
+                    }
+                }
+            }
+            // If contract opted into staking but didn't name a destination, default to BURN
+            if(!error && hasCooldown && !hasDest){
+                data['SLASH_DESTINATION'] = (this.config['ADDRESS'] && this.config['ADDRESS']['BURN']) || null;
+            }
+            // Resolve BURN sentinel to the configured BURN address
+            if(!error && data['SLASH_DESTINATION'] === 'BURN'){
+                data['SLASH_DESTINATION'] = (this.config['ADDRESS'] && this.config['ADDRESS']['BURN']) || null;
+                if(this.util.isNull(data['SLASH_DESTINATION']))
+                    error = 'invalid: SLASH_DESTINATION (BURN address not configured)';
+            }
+            // Clear staking config on non-stakeable deployments so createContract stores NULLs
+            if(!hasCooldown){
+                data['COOLDOWN_BLOCKS']   = null;
+                data['SLASH_DESTINATION'] = null;
+            }
+        }
 
         // Convert NUMBER fields from string value to number value
         if(!error)
@@ -220,13 +265,15 @@ class Deploy {
 
         // Create record in contracts table
         await this.indexerDb.createContract({
-            ACTION_INDEX : data['ACTION_INDEX'],
-            SOURCE       : data['SOURCE'],
-            CODE         : code,
-            CODE_HASH    : codeHash,
-            API_VERSION  : 1,
-            STATUS       : status,
-            BLOCK_INDEX  : data['BLOCK_INDEX']
+            ACTION_INDEX      : data['ACTION_INDEX'],
+            SOURCE            : data['SOURCE'],
+            CODE              : code,
+            CODE_HASH         : codeHash,
+            API_VERSION       : 1,
+            STATUS            : status,
+            BLOCK_INDEX       : data['BLOCK_INDEX'],
+            COOLDOWN_BLOCKS   : data['COOLDOWN_BLOCKS'],
+            SLASH_DESTINATION : data['SLASH_DESTINATION']
         });
 
         // If constructor failed, delete the contract record

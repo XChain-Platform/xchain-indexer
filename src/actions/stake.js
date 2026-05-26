@@ -23,11 +23,17 @@
  *   claude/reports/specs/2026-05-24_capability-staking-model.md
  *
  * FORMATS:
- *   v1 - VERSION|AMOUNT|SIGNING_PUBKEY            (create new stake)
- *   v2 - VERSION|AMOUNT|SIGNING_PUBKEY            (top-up existing stake)
+ *   v1 - VERSION|AMOUNT|SIGNING_PUBKEY                                              (create new capability stake)
+ *   v2 - VERSION|AMOUNT|SIGNING_PUBKEY                                              (top-up existing capability stake)
+ *   v3 - VERSION|AMOUNT|SIGNING_PUBKEY|TARGET_CONTRACT_INDEX|TICK                   (contract-targeted stake, multi-token)
  *
- * Top-ups create their own stake row with version=2. Active stake amount
- * for a pubkey is the SUM of all active stake rows for that pubkey.
+ * Capability staking (v1/v2): XCHAIN-only, qualifies for the four built-in
+ * protocol capabilities by amount.
+ *
+ * Contract staking (v3): any token, targets a specific smart contract that
+ * was deployed with cooldown_blocks + slash_destination metadata. New-vs-topup
+ * is auto-detected based on whether (target, pubkey, tick) already has an
+ * active row owned by the same source.
  *
  ********************************************************************/
 
@@ -44,8 +50,9 @@ class Stake {
 
         // Define list of known FORMATS
         this.formats = {};
-        this.formats[1] = 'VERSION|AMOUNT|SIGNING_PUBKEY';   // create new stake
-        this.formats[2] = 'VERSION|AMOUNT|SIGNING_PUBKEY';   // top-up existing stake
+        this.formats[1] = 'VERSION|AMOUNT|SIGNING_PUBKEY';                                       // create new capability stake
+        this.formats[2] = 'VERSION|AMOUNT|SIGNING_PUBKEY';                                       // top-up existing capability stake
+        this.formats[3] = 'VERSION|AMOUNT|SIGNING_PUBKEY|TARGET_CONTRACT_INDEX|TICK';            // contract-targeted stake (any token)
     }
 
     // Handle parsing the STAKE transaction
@@ -56,7 +63,12 @@ class Stake {
         if(!error && (format===null || this.formats[format] === undefined))
             error = 'invalid: VERSION (unknown)';
 
-        // Extract params
+        // v3 = contract-targeted stake — dispatch to its own handler (separate machinery)
+        if(!error && format === 3){
+            return await this._parseContractStake(params, data, error);
+        }
+
+        // Extract params (v1/v2 capability staking)
         data['AMOUNT']         = params[1];
         data['SIGNING_PUBKEY'] = params[2];
 
@@ -180,6 +192,135 @@ class Stake {
         await this.indexerDb.updateTokens(tickers);
 
         // Create action mappings
+        await this.mapper.createMappings(data);
+    }
+
+    // STAKE v3 — contract-targeted stake. Separate machinery from v1/v2 capability
+    // staking; writes to contract_stakes table and supports any token (not just XCHAIN).
+    async _parseContractStake(params, data, error){
+
+        // Extract params
+        data['AMOUNT']                = params[1];
+        data['SIGNING_PUBKEY']        = params[2];
+        data['TARGET_CONTRACT_INDEX'] = params[3];
+        data['TICK']                  = params[4];
+
+        if(!error)
+            data = this.util.setNumberFormats(data);
+
+        // BTC-only (same gate as capability staking — relax later if/when cross-chain contract staking lands)
+        if(!error && data['COIN'] !== 'BTC')
+            error = 'invalid: ACTION (BTC only)';
+
+        // Basic field presence
+        if(!error && (this.util.isNull(data['AMOUNT'])))
+            error = 'invalid: AMOUNT (required)';
+        if(!error && this.util.isNull(data['SIGNING_PUBKEY']))
+            error = 'invalid: SIGNING_PUBKEY (required)';
+        if(!error && this.util.isNull(data['TARGET_CONTRACT_INDEX']))
+            error = 'invalid: TARGET_CONTRACT_INDEX (required)';
+        if(!error && this.util.isNull(data['TICK']))
+            error = 'invalid: TICK (required)';
+
+        // SIGNING_PUBKEY format
+        if(!error && !/^[0-9a-fA-F]{64}$/.test(String(data['SIGNING_PUBKEY'])))
+            error = 'invalid: SIGNING_PUBKEY (format)';
+
+        // TARGET_CONTRACT_INDEX must be a positive integer
+        if(!error && (!/^[0-9]+$/.test(String(data['TARGET_CONTRACT_INDEX'])) || Number(data['TARGET_CONTRACT_INDEX']) <= 0))
+            error = 'invalid: TARGET_CONTRACT_INDEX (format)';
+
+        // Look up the target contract — must exist, be valid, and have opted into staking (cooldown_blocks NOT NULL)
+        let contractInfo = null;
+        if(!error){
+            contractInfo = await this.indexerDb.getContract(data['TARGET_CONTRACT_INDEX']);
+            if(!contractInfo){
+                error = 'invalid: TARGET_CONTRACT_INDEX (unknown)';
+            } else {
+                let st = await this.indexerDb.getStatusString(contractInfo.status_id);
+                if(st !== 'valid')
+                    error = 'invalid: TARGET_CONTRACT_INDEX (contract not active)';
+                else if(contractInfo.cooldown_blocks === null || contractInfo.cooldown_blocks === undefined)
+                    error = 'invalid: TARGET_CONTRACT_INDEX (contract is not stakeable)';
+            }
+        }
+
+        // Look up the tick — must exist
+        let tickTokenInfo = null;
+        if(!error){
+            tickTokenInfo = await this.indexerDb.getTokenInfo(data['TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
+            if(!tickTokenInfo)
+                error = 'invalid: TICK (unknown)';
+        }
+
+        // AMOUNT validation — positive decimal, precision bounded by the token's decimals
+        if(!error){
+            let decimals = (tickTokenInfo && tickTokenInfo['DECIMALS'] !== undefined) ? Number(tickTokenInfo['DECIMALS']) : 8;
+            let amountRegex = (decimals > 0)
+                ? new RegExp('^[0-9]+(\\.[0-9]{1,' + decimals + '})?$')
+                : /^[0-9]+$/;
+            if(!amountRegex.test(String(data['AMOUNT'])))
+                error = 'invalid: AMOUNT (format or precision)';
+        }
+        if(!error && !this.util.bcgt(data['AMOUNT'], '0'))
+            error = 'invalid: AMOUNT (must be greater than 0)';
+
+        // Top-up vs. new — if (target, pubkey, tick) already has an active row,
+        // it MUST be owned by the same SOURCE (otherwise reject pubkey-collision).
+        if(!error){
+            let ownerId = await this.indexerDb.getContractStakeOwner(
+                data['TARGET_CONTRACT_INDEX'], data['SIGNING_PUBKEY'], data['TICK']
+            );
+            if(ownerId !== null){
+                let sourceId = await this.indexerDb.getAddressId(data['SOURCE']);
+                if(sourceId === null || Number(sourceId) !== Number(ownerId))
+                    error = 'invalid: SIGNING_PUBKEY (already staked to this contract by another source)';
+            }
+        }
+
+        // Balance check — source must hold the TICK amount
+        let balances = await this.indexerDb.getAddressBalances(data['SOURCE'], null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
+        if(!error && tickTokenInfo && !this.util.hasBalance(balances, tickTokenInfo['TICK_ID'], data['AMOUNT']))
+            error = 'invalid: insufficient funds (TICK)';
+
+        // Source must not be sleeping
+        if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
+            error = 'invalid: SOURCE (sleeping)';
+
+        // Activation delay — reuse the capability staking constant for now (6 blocks)
+        let staking = this.config['STAKING'];
+        let activationDelay = (staking && staking['ACTIVATION_DELAY_BLOCKS']) ? staking['ACTIVATION_DELAY_BLOCKS'] : 6;
+        data['ACTIVATION_BLOCK'] = parseInt(data['BLOCK_INDEX']) + activationDelay;
+        data['VERSION'] = 3;
+
+        let status = (error) ? error : 'valid';
+        data['STATUS'] = status;
+
+        console.log("\t STAKE v3 : amount=" + data['AMOUNT'] +
+            ' : pubkey=' + String(data['SIGNING_PUBKEY']).substring(0, 16) +
+            '... : target=' + data['TARGET_CONTRACT_INDEX'] +
+            ' : tick=' + data['TICK'] +
+            ' : ' + data['STATUS']);
+
+        // Write the contract_stakes row
+        await this.indexerDb.createContractStake(data);
+
+        // Track tickers/addresses for balance reconciliation
+        this.util.addAddressTicker(data['SOURCE'], data['TICK']);
+
+        // Debit the stake amount from SOURCE
+        let credits = [],
+            debits  = [];
+        if(status === 'valid')
+            debits.push([data['TICK'], data['AMOUNT'], data['SOURCE']]);
+
+        await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits);
+
+        let tickers   = this.util.getTickersList(),
+            addresses = Object.keys(this.util.getAddressesList());
+        await this.indexerDb.updateBalances(addresses);
+        await this.indexerDb.updateTokens(tickers);
+
         await this.mapper.createMappings(data);
     }
 }
