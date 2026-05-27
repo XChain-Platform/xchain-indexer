@@ -315,6 +315,15 @@ class Attest {
         if(!request || request.request_status !== 'pending')
             return;
 
+        // Synthesized actions arrive without an ACTION_INDEX; allocate one now
+        // (mirrors order_expire.js). Without this, mapper.createMappings and the
+        // injected callback's EMITTER reference both NULL out.
+        data['ACTION_INDEX'] = await this.indexerDb.createActionIndex({
+            ACTION:      'ATTEST',
+            BLOCK_INDEX: data['BLOCK_INDEX'],
+            FORMAT:      2
+        }, true);
+
         data['STATUS'] = 'valid';
 
         console.log("\t ATTEST v2 : id=" + requestId.substring(0,16) + '...' +
