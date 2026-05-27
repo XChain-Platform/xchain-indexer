@@ -6,7 +6,7 @@ CREATE TABLE delegations (
     status_id           BIGINT UNSIGNED,                 -- active/revoked
     block_index         BIGINT UNSIGNED NOT NULL,
     activation_block    BIGINT UNSIGNED NOT NULL DEFAULT 0,  -- block when delegation becomes active
-    deactivation_block  BIGINT UNSIGNED                       -- block when delegation becomes inactive (set on REVOKE_DELEGATION)
+    deactivation_block  BIGINT UNSIGNED                       -- block when delegation becomes inactive (set on DELEGATE v2 revoke)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
 CREATE UNIQUE INDEX action_index       ON delegations (action_index);

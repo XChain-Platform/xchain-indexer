@@ -72,16 +72,13 @@ try {
 const stake              = require('./actions/stake.js');
 const unstake            = require('./actions/unstake.js');
 const delegate           = require('./actions/delegate.js');
-const revoke_delegation  = require('./actions/revoke_delegation.js');
-const claim_rewards      = require('./actions/claim_rewards.js');
+const collect            = require('./actions/collect.js');
 
 // PRICE action (validator snapshots and user oracle prices)
 const price              = require('./actions/price.js');
 
-// External attestation framework actions
-const attestation_request         = require('./actions/attestation_request.js');
-const attestation_request_expire  = require('./actions/attestation_request_expire.js');
-const attestation_response        = require('./actions/attestation_response.js');
+// External attestation framework (single action; v0=request, v1=response, v2=expire)
+const attest             = require('./actions/attest.js');
 
 class Actions {
 
@@ -170,16 +167,13 @@ class Actions {
         this.actionStake            = new stake(this);
         this.actionUnstake          = new unstake(this);
         this.actionDelegate         = new delegate(this);
-        this.actionRevokeDelegation = new revoke_delegation(this);
-        this.actionClaimRewards     = new claim_rewards(this);
+        this.actionCollect          = new collect(this);
 
         // PRICE action instance
         this.actionPrice            = new price(this);
 
-        // Attestation framework action instances
-        this.actionAttestationRequest        = new attestation_request(this);
-        this.actionAttestationRequestExpire  = new attestation_request_expire(this);
-        this.actionAttestationResponse       = new attestation_response(this);
+        // Attestation framework action instance (single handler dispatches v0/v1/v2 internally)
+        this.actionAttest           = new attest(this);
 
         // Define ACTION aliases
         this.actionAliases = {};
@@ -332,20 +326,17 @@ class Actions {
         if(action=='DEPOSIT')            await this.actionDeposit.parse(params, data, error);
         if(action=='WITHDRAW')           await this.actionWithdraw.parse(params, data, error);
 
-        // Staking actions
+        // Staking actions (DELEGATE handles both rotate v0/v1 and revoke v2/v3 internally)
         if(action=='STAKE')              await this.actionStake.parse(params, data, error);
         if(action=='UNSTAKE')            await this.actionUnstake.parse(params, data, error);
         if(action=='DELEGATE')           await this.actionDelegate.parse(params, data, error);
-        if(action=='REVOKE_DELEGATION')  await this.actionRevokeDelegation.parse(params, data, error);
-        if(action=='CLAIM_REWARDS')      await this.actionClaimRewards.parse(params, data, error);
+        if(action=='COLLECT')            await this.actionCollect.parse(params, data, error);
 
         // PRICE action (validator snapshots and user oracles)
         if(action=='PRICE')              await this.actionPrice.parse(params, data, error);
 
-        // Attestation framework
-        if(action=='ATTESTATION_REQUEST')         await this.actionAttestationRequest.parse(params, data, error);
-        if(action=='ATTESTATION_REQUEST_EXPIRE')  await this.actionAttestationRequestExpire.parse(params, data, error);
-        if(action=='ATTESTATION_RESPONSE')        await this.actionAttestationResponse.parse(params, data, error);
+        // Attestation framework — handler dispatches on VERSION (v0=request, v1=response, v2=expire)
+        if(action=='ATTEST')             await this.actionAttest.parse(params, data, error);
     }
 
 }

@@ -79,20 +79,19 @@ class ProtocolChanges {
         this.addChange('DEPOSIT',            '2.0.0',0,0,0,0,0,0);
         this.addChange('WITHDRAW',           '2.0.0',0,0,0,0,0,0);
 
-        // Staking actions (BTC only)
+        // Staking actions (BTC only) — DELEGATE handles both rotate (v0/v1) and revoke (v2/v3)
         this.addChange('STAKE',              '2.0.0',0,0,0,0,0,0);
         this.addChange('UNSTAKE',            '2.0.0',0,0,0,0,0,0);
         this.addChange('DELEGATE',           '2.0.0',0,0,0,0,0,0);
-        this.addChange('REVOKE_DELEGATION',  '2.0.0',0,0,0,0,0,0);
-        this.addChange('CLAIM_REWARDS',      '2.0.0',0,0,0,0,0,0);
+        this.addChange('COLLECT',            '2.0.0',0,0,0,0,0,0);
 
         // PRICE action — validator oracle (v0) and user oracle (v1) pricing
         // Publishable on any chain (DOGE recommended for low fees)
         this.addChange('PRICE',              '2.0.0',0,0,0,0,0,0);
 
-        // External attestation framework — see specs/2026-05-24_external-attestation-framework.md
-        this.addChange('ATTESTATION_REQUEST',  '2.0.0',0,0,0,0,0,0);
-        this.addChange('ATTESTATION_RESPONSE', '2.0.0',0,0,0,0,0,0);
+        // External attestation framework — single ATTEST action with v0=request, v1=response, v2=expire
+        // (See xchain-documentation/protocol/actions/ATTEST.md)
+        this.addChange('ATTEST',             '2.0.0',0,0,0,0,0,0);
 
         // Define protocol changes (ALL LOWER Case)
         // this.addChange('name','1.0.0',0,0,0,0,0,0);

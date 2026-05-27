@@ -346,7 +346,7 @@ class Execute {
             FORMAT:             0,
             IS_EMISSION:        true,
             EMITTER:            executionData['CONTRACT_ACTION_INDEX'],
-            EMITTER_POSITION:   position    // index within this EXECUTE's emission list — used by ATTESTATION_REQUEST to verify deterministic request_id
+            EMITTER_POSITION:   position    // index within this EXECUTE's emission list — used by ATTEST v0 (request) to verify deterministic request_id
         };
 
         // Route to the correct handler
@@ -385,7 +385,7 @@ class Execute {
             'LINK':       this.actions.actionLink,
             'BROADCAST':  this.actions.actionBroadcast,
             'MESSAGE':    this.actions.actionMessage,
-            'ATTESTATION_REQUEST': this.actions.actionAttestationRequest
+            'ATTEST':     this.actions.actionAttest
         };
         return handlers[action] || null;
     }
@@ -454,8 +454,8 @@ class Execute {
             case 'MESSAGE':
                 // FORMAT: VERSION|DESTINATION|ENCRYPTION_METHOD|ENCRYPTION_KEY
                 return [0, params.destination, params.encryptionMethod || '', params.encryptionKey || ''];
-            case 'ATTESTATION_REQUEST':
-                // FORMAT: VERSION|REQUEST_ID|PROVIDER_ID|REQUEST_PAYLOAD|CALLBACK_METHOD|CALLBACK_PARAMS_JSON|REDUNDANCY|DEADLINE_BLOCKS
+            case 'ATTEST':
+                // FORMAT v0 (request, VM-emitted): VERSION|REQUEST_ID|PROVIDER_ID|REQUEST_PAYLOAD|CALLBACK_METHOD|CALLBACK_PARAMS_JSON|REDUNDANCY|DEADLINE_BLOCKS
                 return [0, params.requestId, params.providerId, params.requestPayload, params.callbackMethod,
                         params.callbackParams || '[]', params.redundancy, params.deadlineBlocks];
             default:

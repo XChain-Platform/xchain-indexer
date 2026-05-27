@@ -15,16 +15,19 @@
  *
  * XChain Platform Action - DELEGATE
  *
- * This action rotates the signing key for a staked validator.
+ * Manages the signing key bound to a staked validator. Four flavors:
+ *   v0 — Capability rotate (rotate the signing key for a capability stake)
+ *   v1 — Contract-targeted rotate (rotate the signing key for a contract-targeted stake)
+ *   v2 — Capability revoke (remove a previously delegated capability signing key)
+ *   v3 — Contract-targeted revoke (remove a previously delegated contract-targeted signing key)
+ *
  * BTC chain only.
  *
- * PARAMS:
- * - VERSION            - Format Version
- * - NEW_SIGNING_PUBKEY - New Ed25519 signing public key
- *
  * FORMATS:
- *   v0 - VERSION|SIGNING_PUBKEY                                       (capability delegation)
- *   v1 - VERSION|SIGNING_PUBKEY|TARGET_CONTRACT_INDEX|TICK            (contract-targeted delegation, per (target, tick))
+ *   v0 - VERSION|NEW_SIGNING_PUBKEY                                     (capability rotate)
+ *   v1 - VERSION|NEW_SIGNING_PUBKEY|TARGET_CONTRACT_INDEX|TICK          (contract-targeted rotate)
+ *   v2 - VERSION|SIGNING_PUBKEY                                         (capability revoke)
+ *   v3 - VERSION|SIGNING_PUBKEY|TARGET_CONTRACT_INDEX|TICK              (contract-targeted revoke)
  *
  ********************************************************************/
 
@@ -42,8 +45,10 @@ class Delegate {
 
         // Define list of known FORMATS
         this.formats = {};
-        this.formats[0] = 'VERSION|NEW_SIGNING_PUBKEY';                                       // capability delegation
-        this.formats[1] = 'VERSION|NEW_SIGNING_PUBKEY|TARGET_CONTRACT_INDEX|TICK';            // contract-targeted delegation
+        this.formats[0] = 'VERSION|NEW_SIGNING_PUBKEY';                                       // capability rotate
+        this.formats[1] = 'VERSION|NEW_SIGNING_PUBKEY|TARGET_CONTRACT_INDEX|TICK';            // contract-targeted rotate
+        this.formats[2] = 'VERSION|SIGNING_PUBKEY';                                           // capability revoke
+        this.formats[3] = 'VERSION|SIGNING_PUBKEY|TARGET_CONTRACT_INDEX|TICK';                // contract-targeted revoke
     }
 
     // Handle parsing the DELEGATE transaction
@@ -54,10 +59,10 @@ class Delegate {
         if(!error && (format===null || this.formats[format] === undefined ))
             error = 'invalid: VERSION (unknown)';
 
-        // v1 = contract-targeted delegation — dispatch to its own handler
-        if(!error && format === 1){
-            return await this._parseContractDelegate(params, data, error);
-        }
+        // Dispatch by version
+        if(!error && format === 1) return await this._parseContractDelegate(params, data, error);
+        if(!error && format === 2) return await this._parseCapabilityRevoke(params, data, error);
+        if(!error && format === 3) return await this._parseContractRevoke(params, data, error);
 
         // Extract params (v0 capability delegation)
         data['SIGNING_PUBKEY'] = params[1];
@@ -236,6 +241,157 @@ class Delegate {
             ' : ' + data['STATUS']);
 
         await this.indexerDb.createContractDelegation(data);
+
+        this.util.addAddressTicker(data['SOURCE'], data['TICK']);
+
+        let credits = [],
+            debits  = [];
+        await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits);
+
+        let tickers   = this.util.getTickersList(),
+            addresses = Object.keys(this.util.getAddressesList());
+        await this.indexerDb.updateBalances(addresses);
+        await this.indexerDb.updateTokens(tickers);
+
+        await this.mapper.createMappings(data);
+    }
+
+    // DELEGATE v2 — capability revoke. Removes a previously delegated signing key
+    // without replacing it. Marks `deactivation_block` (BLOCK_INDEX + activation delay)
+    // on the matching capability delegation row.
+    async _parseCapabilityRevoke(params, data, error){
+
+        // Extract params
+        data['SIGNING_PUBKEY'] = params[1];
+
+        if(!error)
+            data = this.util.setNumberFormats(data);
+
+        if(!error && data['COIN'] !== 'BTC')
+            error = 'invalid: ACTION (BTC only)';
+
+        // Verify SIGNING_PUBKEY is provided + format
+        if(!error && this.util.isNull(data['SIGNING_PUBKEY']))
+            error = 'invalid: SIGNING_PUBKEY (required)';
+        if(!error && !/^[0-9a-fA-F]{64}$/.test(data['SIGNING_PUBKEY']))
+            error = 'invalid: SIGNING_PUBKEY (format)';
+
+        // Verify SOURCE has an active delegation for this pubkey (gated by activation delay)
+        if(!error){
+            let activeDelegation = await this.indexerDb.getActiveDelegation(data['SOURCE'], data['SIGNING_PUBKEY'], data['BLOCK_INDEX']);
+            if(!activeDelegation)
+                error = 'invalid: no active delegation for pubkey';
+        }
+
+        // Verify SOURCE is not sleeping
+        if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
+            error = 'invalid: SOURCE (sleeping)';
+
+        let status = (error) ? error : 'valid';
+        data['STATUS'] = status;
+
+        console.log("\t DELEGATE v2 (revoke) : pubkey=" + data['SIGNING_PUBKEY'] + ' : ' + data['STATUS']);
+
+        // Create record in delegations table (with revoked status)
+        await this.indexerDb.createRevokeDelegation(data);
+
+        // Mark the parent delegation's deactivation_block (BLOCK_INDEX + activation delay)
+        if(status === 'valid'){
+            let staking = this.config['STAKING'];
+            let activationDelay = (staking && staking['ACTIVATION_DELAY_BLOCKS']) ? staking['ACTIVATION_DELAY_BLOCKS'] : 6;
+            await this.indexerDb.setDelegationDeactivation(data['SOURCE'], data['SIGNING_PUBKEY'], parseInt(data['BLOCK_INDEX']) + activationDelay);
+        }
+
+        // Store the SOURCE in addresses list
+        this.util.addAddressTicker(data['SOURCE'], this.config['GAS']);
+
+        let credits = [],
+            debits  = [];
+        await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits);
+
+        let tickers   = this.util.getTickersList(),
+            addresses = Object.keys(this.util.getAddressesList());
+        await this.indexerDb.updateBalances(addresses);
+        await this.indexerDb.updateTokens(tickers);
+
+        await this.mapper.createMappings(data);
+    }
+
+    // DELEGATE v3 — contract-targeted revoke. Removes a previously delegated signing key
+    // scoped to (target_contract_index, signing_pubkey, tick) without replacing it.
+    // Marks `deactivation_block` on the matching contract_delegations row.
+    async _parseContractRevoke(params, data, error){
+
+        // Extract params
+        data['SIGNING_PUBKEY']        = params[1];
+        data['TARGET_CONTRACT_INDEX'] = params[2];
+        data['TICK']                  = params[3];
+
+        if(!error)
+            data = this.util.setNumberFormats(data);
+
+        if(!error && data['COIN'] !== 'BTC')
+            error = 'invalid: ACTION (BTC only)';
+
+        if(!error && this.util.isNull(data['SIGNING_PUBKEY']))
+            error = 'invalid: SIGNING_PUBKEY (required)';
+        if(!error && !/^[0-9a-fA-F]{64}$/.test(String(data['SIGNING_PUBKEY'])))
+            error = 'invalid: SIGNING_PUBKEY (format)';
+        if(!error && this.util.isNull(data['TARGET_CONTRACT_INDEX']))
+            error = 'invalid: TARGET_CONTRACT_INDEX (required)';
+        if(!error && (!/^[0-9]+$/.test(String(data['TARGET_CONTRACT_INDEX'])) || Number(data['TARGET_CONTRACT_INDEX']) <= 0))
+            error = 'invalid: TARGET_CONTRACT_INDEX (format)';
+        if(!error && this.util.isNull(data['TICK']))
+            error = 'invalid: TICK (required)';
+
+        // Verify SOURCE owns an active contract_delegations row for (target, pubkey, tick)
+        if(!error){
+            let valid_id  = await this.indexerDb.getStatusId('valid');
+            let source_id = await this.indexerDb.getAddressId(data['SOURCE']);
+            let pubkey_id = await this.indexerDb.getPubkeyId(String(data['SIGNING_PUBKEY']).toLowerCase());
+            let tick_id   = await this.indexerDb.getTickerId(data['TICK']);
+            if(source_id === null || pubkey_id === null || tick_id === null){
+                error = 'invalid: no active contract delegation';
+            } else {
+                let rows = await this.indexerDb.doQuery(
+                    `SELECT 1 FROM contract_delegations
+                     WHERE target_contract_index=? AND source_id=? AND signing_pubkey_id=? AND tick_id=?
+                       AND status_id=? AND activation_block <= ?
+                       AND (deactivation_block IS NULL OR deactivation_block > ?)
+                     LIMIT 1`,
+                    [Number(data['TARGET_CONTRACT_INDEX']), source_id, pubkey_id, tick_id, valid_id, data['BLOCK_INDEX'], data['BLOCK_INDEX']]
+                );
+                if(rows.length === 0)
+                    error = 'invalid: no active contract delegation';
+            }
+        }
+
+        if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
+            error = 'invalid: SOURCE (sleeping)';
+
+        let status = (error) ? error : 'valid';
+        data['STATUS'] = status;
+
+        console.log("\t DELEGATE v3 (contract revoke) : pubkey=" + String(data['SIGNING_PUBKEY']).substring(0,16) +
+                    '... : target=' + data['TARGET_CONTRACT_INDEX'] +
+                    ' : tick=' + data['TICK'] +
+                    ' : ' + data['STATUS']);
+
+        // Mark the contract_delegations row's deactivation_block
+        if(status === 'valid'){
+            let staking = this.config['STAKING'];
+            let activationDelay = (staking && staking['ACTIVATION_DELAY_BLOCKS']) ? staking['ACTIVATION_DELAY_BLOCKS'] : 6;
+            let deactivationBlock = parseInt(data['BLOCK_INDEX']) + activationDelay;
+            let valid_id  = await this.indexerDb.getStatusId('valid');
+            let pubkey_id = await this.indexerDb.getPubkeyId(String(data['SIGNING_PUBKEY']).toLowerCase());
+            let tick_id   = await this.indexerDb.getTickerId(data['TICK']);
+            await this.indexerDb.doQuery(
+                `UPDATE contract_delegations SET deactivation_block=?
+                 WHERE target_contract_index=? AND signing_pubkey_id=? AND tick_id=?
+                   AND status_id=? AND deactivation_block IS NULL`,
+                [deactivationBlock, Number(data['TARGET_CONTRACT_INDEX']), pubkey_id, tick_id, valid_id]
+            );
+        }
 
         this.util.addAddressTicker(data['SOURCE'], data['TICK']);
 

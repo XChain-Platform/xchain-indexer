@@ -1,6 +1,6 @@
 DROP TABLE IF EXISTS attestation_requests;
 CREATE TABLE attestation_requests (
-    action_index           BIGINT UNSIGNED NOT NULL,        -- FK to actions (the ATTESTATION_REQUEST action that created this row)
+    action_index           BIGINT UNSIGNED NOT NULL,        -- FK to actions (the ATTEST v0 action that created this row)
     request_id             CHAR(64) NOT NULL,               -- SHA256(tx_hash || contract_index || emission_index)
     contract_index         BIGINT UNSIGNED NOT NULL,        -- FK to contracts (which contract emitted the request)
     fee_payer_id           BIGINT UNSIGNED NOT NULL,        -- FK to index_addresses (original EXECUTE caller — billed for callback gas)

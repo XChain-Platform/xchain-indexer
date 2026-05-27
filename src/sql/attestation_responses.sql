@@ -1,6 +1,6 @@
 DROP TABLE IF EXISTS attestation_responses;
 CREATE TABLE attestation_responses (
-    action_index                  BIGINT UNSIGNED NOT NULL,  -- FK to actions (the ATTESTATION_RESPONSE action)
+    action_index                  BIGINT UNSIGNED NOT NULL,  -- FK to actions (the ATTEST v1 action)
     request_id                    CHAR(64) NOT NULL,         -- joins to attestation_requests.request_id
     provider_id                   VARCHAR(32) NOT NULL,
     response_hash                 CHAR(64) NOT NULL,         -- SHA256 of the canonical response body

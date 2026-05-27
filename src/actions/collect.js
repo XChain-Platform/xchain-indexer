@@ -13,21 +13,20 @@
  *
  **********************************************************************
  *
- * XChain Platform Action - REVOKE_DELEGATION
+ * XChain Platform Action - COLLECT
  *
- * This action revokes a previously delegated signing key.
+ * This action collects accrued validator rewards.
  * BTC chain only.
  *
  * PARAMS:
- * - VERSION        - Format Version
- * - SIGNING_PUBKEY - Ed25519 signing public key to revoke
+ * - VERSION - Format Version
  *
  * FORMATS:
- * - 0 = Revoke a signing key
+ * - 0 = Collect accrued validator rewards
  *
  ********************************************************************/
 
-class RevokeDelegation {
+class Collect {
 
     // Handle constructing a class instance
     constructor(action){
@@ -41,19 +40,16 @@ class RevokeDelegation {
 
         // Define list of known FORMATS
         this.formats = {};
-        this.formats[0] = 'VERSION|SIGNING_PUBKEY';
+        this.formats[0] = 'VERSION';
     }
 
-    // Handle parsing the REVOKE_DELEGATION transaction
+    // Handle parsing the COLLECT transaction
     async parse(params, data, error){
 
         // Validate that format is known
         let format = data['FORMAT'];
         if(!error && (format===null || this.formats[format] === undefined ))
             error = 'invalid: VERSION (unknown)';
-
-        // Extract params
-        data['SIGNING_PUBKEY'] = params[1];
 
         // Convert NUMBER fields from string value to number value
         if(!error)
@@ -63,60 +59,61 @@ class RevokeDelegation {
          * Chain Restriction
          ****************************************************************/
 
-        // REVOKE_DELEGATION is BTC-only
+        // COLLECT is BTC-only
         if(!error && data['COIN'] !== 'BTC')
             error = 'invalid: ACTION (BTC only)';
 
         /*****************************************************************
-         * SIGNING_PUBKEY Validations
+         * Stake Existence Validations
          ****************************************************************/
 
-        // Verify SIGNING_PUBKEY is provided
-        if(!error && this.util.isNull(data['SIGNING_PUBKEY']))
-            error = 'invalid: SIGNING_PUBKEY (required)';
-
-        // Verify SIGNING_PUBKEY is 64 hex characters (Ed25519)
-        if(!error && !/^[0-9a-fA-F]{64}$/.test(data['SIGNING_PUBKEY']))
-            error = 'invalid: SIGNING_PUBKEY (format)';
-
-        /*****************************************************************
-         * Delegation Existence Validations
-         ****************************************************************/
-
-        // Verify SOURCE has an active delegation for this pubkey (gated by activation delay)
+        // Verify SOURCE has an active stake (any tier, gated by activation delay)
         if(!error){
-            let activeDelegation = await this.indexerDb.getActiveDelegation(data['SOURCE'], data['SIGNING_PUBKEY'], data['BLOCK_INDEX']);
-            if(!activeDelegation)
-                error = 'invalid: no active delegation for pubkey';
+            let activeStake = await this.indexerDb.getActiveStakeBySource(data['SOURCE'], data['BLOCK_INDEX']);
+            if(!activeStake)
+                error = 'invalid: no active stake';
         }
 
         // Verify SOURCE is not sleeping
         if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
             error = 'invalid: SOURCE (sleeping)';
 
+        /*****************************************************************
+         * Reward Calculation
+         ****************************************************************/
+
+        // Get unclaimed reward total for SOURCE
+        let rewardAmount = '0';
+        if(!error){
+            rewardAmount = await this.indexerDb.getUnclaimedRewardTotal(data['SOURCE']);
+            if(this.util.bclte(rewardAmount, '0'))
+                error = 'invalid: no unclaimed rewards';
+        }
+
+        data['AMOUNT'] = rewardAmount;
+
         // Determine final status
         let status = (error) ? error : 'valid';
         data['STATUS'] = status;
 
         // Print status message
-        console.log("\t REVOKE_DELEGATION : pubkey=" + data['SIGNING_PUBKEY'] + ' : ' + data['STATUS']);
+        console.log("\t COLLECT : amount=" + data['AMOUNT'] + ' : ' + data['STATUS']);
 
-        // Create record in delegations table (with revoked status)
-        await this.indexerDb.createRevokeDelegation(data);
+        // Create record in reward_claims table
+        await this.indexerDb.createRewardClaim(data);
 
-        // Mark the parent delegation's deactivation_block (BLOCK_INDEX + activation delay)
-        if(status === 'valid'){
-            let staking = this.config['STAKING'];
-            let activationDelay = (staking && staking['ACTIVATION_DELAY_BLOCKS']) ? staking['ACTIVATION_DELAY_BLOCKS'] : 6;
-            await this.indexerDb.setDelegationDeactivation(data['SOURCE'], data['SIGNING_PUBKEY'], parseInt(data['BLOCK_INDEX']) + activationDelay);
-        }
-
-        // Store the SOURCE in addresses list
-        this.util.addAddressTicker(data['SOURCE'], this.config['GAS']);
+        // Store the SOURCE and GAS tick in addresses list
+        let gas = this.config['GAS'];
+        this.util.addAddressTicker(data['SOURCE'], gas);
 
         // Array of credits and debits
         let credits = [],
             debits  = [];
+
+        // If valid, credit the reward amount to SOURCE
+        if(status === 'valid'){
+            credits.push([gas, rewardAmount, data['SOURCE']]);
+        }
 
         // Process any transaction ledger changes (credits / debits)
         await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits);
@@ -134,4 +131,4 @@ class RevokeDelegation {
     }
 }
 
-module.exports = RevokeDelegation;
+module.exports = Collect;

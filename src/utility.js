@@ -863,10 +863,10 @@ class Utility {
         }
     }
 
-    // Process any ATTESTATION_REQUESTs whose DEADLINE_BLOCK has passed without a
-    // fulfilled response. Synthesizes one ATTESTATION_REQUEST_EXPIRE action per
-    // stale row; the handler flips the request status to 'expired' and fires the
-    // callback with status='expired' per framework spec §11.
+    // Process any ATTEST v0 requests whose DEADLINE_BLOCK has passed without a
+    // fulfilled response. Synthesizes one ATTEST v2 action per stale row; the
+    // handler flips the request status to 'expired' and fires the callback with
+    // status='expired' per framework spec §11.
     //
     // Driven by block_index (not block_time) because attestation deadlines are
     // measured in blocks, matching the wire format DEADLINE_BLOCKS.
@@ -874,11 +874,14 @@ class Utility {
         let expired = await db.getExpiredAttestationRequests(block_index);
         for(let info of expired){
             let data = {};
-            data['ACTION']      = 'ATTESTATION_REQUEST_EXPIRE';
-            data['BLOCK_INDEX'] = block_index;
-            data['BLOCK_TIME']  = block_time;
-            data['REQUEST_ID']  = info.request_id;
-            await actions.processAction('ATTESTATION_REQUEST_EXPIRE', null, data, null);
+            data['ACTION']       = 'ATTEST';
+            data['FORMAT']       = 2;
+            data['BLOCK_INDEX']  = block_index;
+            data['BLOCK_TIME']   = block_time;
+            data['REQUEST_ID']   = info.request_id;
+            data['IS_SYNTHETIC'] = true;
+            // Mirror the synthetic-action positional layout: VERSION|REQUEST_ID
+            await actions.processAction('ATTEST', [2, info.request_id], data, null);
         }
     }
 

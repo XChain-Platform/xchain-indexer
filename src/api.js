@@ -218,7 +218,7 @@ async function startApi(){
             }
         },
 
-        // List ATTESTATION_REQUEST rows currently awaiting validator fulfillment.
+        // List ATTEST v0 (request) rows currently awaiting validator fulfillment.
         // Used by xchain-hub's AttestationRound to discover work. Returns
         // latest_block_index alongside so the hub can compute its
         // confirmation-wait threshold (block_index + CONFIRMATIONS <= latest)

@@ -7647,7 +7647,7 @@ class Database {
         }
     }
 
-    // Insert a single (validator_pubkey, signature) row associated with an ATTESTATION_RESPONSE
+    // Insert a single (validator_pubkey, signature) row associated with an ATTEST v1 (response)
     async createAttestationValidatorSignature(data){
         data                  = this.normalizeDataValues(data);
         let response_action_index = data['RESPONSE_ACTION_INDEX'];
@@ -7707,7 +7707,7 @@ class Database {
         await this.doQuery(query, [newStatus, String(requestId || '').toLowerCase()]);
     }
 
-    // List ATTESTATION_REQUESTs currently in 'pending' status, ordered by
+    // List ATTEST v0 (request) rows currently in 'pending' status, ordered by
     // creation. xchain-hub's AttestationRound polls this to discover work.
     // Optional providerId filter lets a validator only see requests for
     // providers it serves.
@@ -7740,7 +7740,7 @@ class Database {
         }));
     }
 
-    // Find ATTESTATION_REQUESTs whose deadline_block has passed without a response.
+    // Find ATTEST v0 (request) rows whose deadline_block has passed without a response.
     // Returns full rows so the expiry handler doesn't have to refetch.
     async getExpiredAttestationRequests(blockIndex){
         let query = `SELECT ar.*, ia.address AS fee_payer

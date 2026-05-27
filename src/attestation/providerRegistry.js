@@ -16,7 +16,7 @@
  * XChain Indexer - Provider Registry (Phase 1 stub)
  *
  * Hard-coded allow-list of attestation providers known to the indexer.
- * The indexer uses this registry to validate ATTESTATION_REQUEST actions
+ * The indexer uses this registry to validate ATTEST v0 (request) actions
  * (provider_id known, redundancy in allowed list, payload within max).
  *
  * Phase 1 ships with `http_get` only. Phase 2 swaps this stub for a
