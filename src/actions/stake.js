@@ -253,14 +253,21 @@ class Stake {
                 error = 'invalid: TICK (unknown)';
         }
 
-        // AMOUNT validation — positive decimal, precision bounded by the token's decimals
+        // AMOUNT validation — positive decimal, precision bounded by the token's decimals.
+        // Trailing zeros in the fractional part are tolerated (so '200.00000000' against
+        // a 0-decimal token reads as 200, semantically valid).
         if(!error){
-            let decimals = (tickTokenInfo && tickTokenInfo['DECIMALS'] !== undefined) ? Number(tickTokenInfo['DECIMALS']) : 8;
-            let amountRegex = (decimals > 0)
-                ? new RegExp('^[0-9]+(\\.[0-9]{1,' + decimals + '})?$')
-                : /^[0-9]+$/;
-            if(!amountRegex.test(String(data['AMOUNT'])))
-                error = 'invalid: AMOUNT (format or precision)';
+            let amountStr = String(data['AMOUNT']);
+            if(!/^[0-9]+(\.[0-9]+)?$/.test(amountStr)){
+                error = 'invalid: AMOUNT (format)';
+            } else {
+                let decimals = (tickTokenInfo && tickTokenInfo['DECIMALS'] !== undefined) ? Number(tickTokenInfo['DECIMALS']) : 8;
+                let parts = amountStr.split('.');
+                // Strip trailing zeros from fractional part — they don't add precision
+                let fracDigits = parts.length > 1 ? parts[1].replace(/0+$/, '').length : 0;
+                if(fracDigits > decimals)
+                    error = 'invalid: AMOUNT (exceeds token decimals)';
+            }
         }
         if(!error && !this.util.bcgt(data['AMOUNT'], '0'))
             error = 'invalid: AMOUNT (must be greater than 0)';
