@@ -51,5 +51,9 @@
     "fast-check": "^4.6.0",
     "mocha": "^11.7.5",
     "sinon": "^21.0.3"
+  },
+  "overrides": {
+    "serialize-javascript": "^7.0.5",
+    "diff": "^8.0.3"
   }
 }
