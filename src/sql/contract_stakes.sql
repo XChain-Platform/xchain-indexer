@@ -2,7 +2,7 @@ DROP TABLE IF EXISTS contract_stakes;
 CREATE TABLE contract_stakes (
     action_index           BIGINT UNSIGNED NOT NULL,        -- FK to actions table (each STAKE v3 action gets its own row)
     source_id              BIGINT UNSIGNED NOT NULL,        -- FK to index_addresses (staking address)
-    version                TINYINT UNSIGNED NOT NULL DEFAULT 3,  -- STAKE format version (3 today; reserved for future variants)
+    version                TINYINT UNSIGNED NOT NULL DEFAULT 3,  -- STAKE format version (3 today, reserved for future variants)
     signing_pubkey_id      BIGINT UNSIGNED NOT NULL,        -- FK to index_pubkeys (Ed25519 hot key)
     target_contract_index  BIGINT UNSIGNED NOT NULL,        -- FK to contracts.action_index (the contract being staked to)
     tick_id                BIGINT UNSIGNED NOT NULL,        -- FK to index_tickers (which token is staked)

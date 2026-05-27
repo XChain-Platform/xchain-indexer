@@ -8,7 +8,7 @@ CREATE TABLE contracts (
     status_id             BIGINT UNSIGNED,
     block_index           BIGINT UNSIGNED NOT NULL,
     cooldown_blocks       INT UNSIGNED,                    -- DEPLOY v1+: per-contract unstake cooldown (NULL = not stakeable)
-    slash_destination_id  BIGINT UNSIGNED                  -- DEPLOY v1+: FK to index_addresses (BURN sentinel resolved at parse time; NULL = not stakeable)
+    slash_destination_id  BIGINT UNSIGNED                  -- DEPLOY v1+: FK to index_addresses (BURN sentinel resolved at parse time — NULL means not stakeable)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
 CREATE UNIQUE INDEX action_index         ON contracts (action_index);

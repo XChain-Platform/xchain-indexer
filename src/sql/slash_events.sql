@@ -6,7 +6,7 @@ CREATE TABLE slash_events (
     signing_pubkey_id      BIGINT UNSIGNED NOT NULL,        -- FK to index_pubkeys (the staker that was slashed)
     tick_id                BIGINT UNSIGNED NOT NULL,        -- FK to index_tickers (which token)
     amount                 VARCHAR(250) NOT NULL,           -- Amount slashed (may be less than requested if available balance is lower)
-    destination_id         BIGINT UNSIGNED NOT NULL,        -- FK to index_addresses (where slashed funds were routed; BURN sentinel resolved at DEPLOY time)
+    destination_id         BIGINT UNSIGNED NOT NULL,        -- FK to index_addresses (where slashed funds were routed — BURN sentinel resolved at DEPLOY time)
     block_index            BIGINT UNSIGNED NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
