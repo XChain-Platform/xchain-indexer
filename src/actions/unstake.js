@@ -169,9 +169,6 @@ class Unstake {
         if(!error)
             data = this.util.setNumberFormats(data);
 
-        if(!error && data['COIN'] !== 'BTC')
-            error = 'invalid: ACTION (BTC only)';
-
         if(!error && this.util.isNull(data['SIGNING_PUBKEY']))
             error = 'invalid: SIGNING_PUBKEY (required)';
         if(!error && !/^[0-9a-fA-F]{64}$/.test(String(data['SIGNING_PUBKEY'])))

@@ -208,10 +208,6 @@ class Stake {
         if(!error)
             data = this.util.setNumberFormats(data);
 
-        // BTC-only (same gate as capability staking — relax later if/when cross-chain contract staking lands)
-        if(!error && data['COIN'] !== 'BTC')
-            error = 'invalid: ACTION (BTC only)';
-
         // Basic field presence
         if(!error && (this.util.isNull(data['AMOUNT'])))
             error = 'invalid: AMOUNT (required)';

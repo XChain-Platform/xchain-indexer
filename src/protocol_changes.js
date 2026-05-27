@@ -79,7 +79,8 @@ class ProtocolChanges {
         this.addChange('DEPOSIT',            '2.0.0',0,0,0,0,0,0);
         this.addChange('WITHDRAW',           '2.0.0',0,0,0,0,0,0);
 
-        // Staking actions (BTC only) — DELEGATE handles both rotate (v0/v1) and revoke (v2/v3)
+        // Staking actions — capability variants (STAKE v1/v2, UNSTAKE v0, DELEGATE v0/v2, COLLECT) are BTC-only;
+        // contract variants (STAKE v3, UNSTAKE v1, DELEGATE v1/v3) work on any chain
         this.addChange('STAKE',              '2.0.0',0,0,0,0,0,0);
         this.addChange('UNSTAKE',            '2.0.0',0,0,0,0,0,0);
         this.addChange('DELEGATE',           '2.0.0',0,0,0,0,0,0);
