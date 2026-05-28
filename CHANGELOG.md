@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.6.7] - 2026-05-28
+
+### Fixed
+- `rollback.js` — added `contract_unstakes` and `contract_delegations` to the `dataTables` rollback list, completing the contract-staking set alongside the already-listed `contract_stakes`. Each table is keyed on `action_index` and carries a `block_index` column, so a chain reorg previously left orphaned contract-staking rows from rolled-back blocks in place. The `contract_unstakes` case is the most acute: every UNSTAKE v1 action writes a row carrying a `cooldown_end_block` computed against the abandoned chain tip, so after a reorg the cooldown either expires at the wrong height (phantom fund release) or appears still-locked (delayed release) — both surfaced through the explorer read paths until the chain advanced past the orphaned tip. Adding the two tables to the delete loop purges the stale rows so contract-staking state tracks canonical chain state across reorgs.
+
 ## [2.6.6] - 2026-05-28
 
 ### Fixed
