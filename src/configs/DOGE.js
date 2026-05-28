@@ -55,6 +55,7 @@ module.exports = {
             VM_STATE_DELETE:     100,
             VM_ORACLE_READ:     100,
             VM_CROSSCHAIN_READ: 100,
+            VM_ATTEST_REQUEST: 5000,    // External attestation framework — emit one ATTEST v0 (off-chain data request)
             VM_EMISSION:        500,
             VM_COMPUTATION:     1
         };

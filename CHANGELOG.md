@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.7.2] - 2026-05-28
+
+### Security
+- `src/configs/LTC.js`, `src/configs/DOGE.js` — added the missing `VM_ATTEST_REQUEST: 5000` entry to each chain's `GAS_SCHEDULE`. BTC already declared it, but LTC and DOGE did not, so an `ATTEST v0` (off-chain data request) emission on those chains looked up an undefined gas cost. Downstream this charged zero gas, letting any actor emit attestation requests for free and flood the federation request queue on LTC/DOGE. The value matches BTC's; gas units are chain-agnostic so no chain-specific tuning is needed.
+
 ## [2.7.1] - 2026-05-28
 
 ### Fixed
