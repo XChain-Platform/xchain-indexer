@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.7.3] - 2026-05-28
+
+### Fixed
+- `src/configs/DOGE.js`, `src/configs/LTC.js` — corrected `FEE_PAYMENT_MODE` from `'xchain'` to `'native'` on both chains. The inline comment on each line already documented the intended behaviour (`'native'` only — no XCHAIN balance deduction), but the value contradicted it. The key is currently informational only — fee payment mode is detected implicitly at runtime by `detectFeePaymentMode()` in `src/utility.js` from the transaction's fee output and coin name, so this had no behavioural effect today — but a future change making detection config-driven would have silently applied the wrong (`'xchain'`) mode on DOGE/LTC, corrupting fee accounting on both chains. Value now mirrors the implicit per-chain behaviour.
+
 ## [2.7.2] - 2026-05-28
 
 ### Security

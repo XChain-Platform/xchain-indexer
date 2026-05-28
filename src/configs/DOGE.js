@@ -37,7 +37,7 @@ module.exports = {
         // Unified gas fee schedule (active after UNIFIED_FEES protocol change)
         config['GAS_PRICE'] = '0.00001';
         config['UNIFIED_EXPIRATION_FEE_FREE_DAYS'] = 90;
-        config['FEE_PAYMENT_MODE'] = 'xchain';               // DOGE: 'native' only (no XCHAIN balance deduction)
+        config['FEE_PAYMENT_MODE'] = 'native';               // DOGE: 'native' only (no XCHAIN balance deduction)
         config['FEE_TOLERANCE_MIN'] = '0.95';
         config['FEE_TOLERANCE_MAX'] = '1.10';
         config['GAS_SCHEDULE'] = {
