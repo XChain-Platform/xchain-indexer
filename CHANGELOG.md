@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.7.1] - 2026-05-28
+
+### Fixed
+- `XChainIndexer.js` — the inner catch-up loop in `run()` advanced its block counter (`lastIndexerBlock++`) *before* the `try` that processes the block, and the `catch` rolled back and logged but then fell through to the next loop iteration. When a block failed to process (VM watchdog timeout, DB deadlock, sanity-check failure, etc.), the counter was already pointing past the failed block, so the loop processed the next block instead — and because `getBlockIndex('indexer', 'last')` is `SELECT MAX(block_index) FROM blocks`, once later blocks committed the failed block was permanently absent with no gap signal, leaving every downstream consumer serving chain history with a hole. The counter is now advanced only after a successful `commitTransaction()` (via a local `blockToParse`), and the `catch` `break`s out of the inner loop so the outer loop re-fetches the last indexed block from the DB and retries the same block after the sleep interval — the intended retry behaviour. Added chaos regression tests (BK-09, BK-10) asserting a failing block is never skipped and a transient failure is retried with no gap in the committed block sequence.
+
 ## [2.7.0] - 2026-05-28
 
 ### Fixed

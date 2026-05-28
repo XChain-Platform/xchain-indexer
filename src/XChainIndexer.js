@@ -211,14 +211,17 @@ class XChainIndexer {
                 // Start tracking time to parse block
                 var debugTimer = this.util.startTimer();
 
-                // Increase lastIndexerBlock to next block
-                lastIndexerBlock++;
+                // Determine the next block to parse. Do NOT advance lastIndexerBlock yet —
+                // it is only updated after this block commits successfully (below). A failure
+                // therefore leaves the counter un-advanced so the same block is retried rather
+                // than silently skipped.
+                let blockToParse = Number(lastIndexerBlock) + 1;
 
                 // Get a list of any transactions in this block from the decoder database
-                let blockTransactions = await this.decoderDb.getDecoderBlockData(lastIndexerBlock);
+                let blockTransactions = await this.decoderDb.getDecoderBlockData(blockToParse);
 
                 // Lookup the block time for a given block (read from decoder DB before opening transaction)
-                let blockTime = await this.decoderDb.getBlockTime(lastIndexerBlock);
+                let blockTime = await this.decoderDb.getBlockTime(blockToParse);
 
                 // Begin a transaction — all indexer DB writes for this block are atomic
                 await this.indexerDb.beginTransaction();
@@ -236,37 +239,42 @@ class XChainIndexer {
                             await this.actions.processTransaction(tx);
 
                         // Check for any expired items (orders, swaps, dispensers)
-                        await this.util.processExpirations(this.actions, this.indexerDb, lastIndexerBlock, blockTime);
+                        await this.util.processExpirations(this.actions, this.indexerDb, blockToParse, blockTime);
 
                         // Check for any cancelled items (dispensers)
-                        await this.util.processCancellations(this.actions, this.indexerDb, lastIndexerBlock, blockTime);
+                        await this.util.processCancellations(this.actions, this.indexerDb, blockToParse, blockTime);
 
                         // Check for any attestation requests past their DEADLINE_BLOCK
-                        await this.util.processAttestationExpirations(this.actions, this.indexerDb, lastIndexerBlock, blockTime);
+                        await this.util.processAttestationExpirations(this.actions, this.indexerDb, blockToParse, blockTime);
 
                         // Release tokens for unstakes (capability + contract) past their cooldown
-                        await this.util.processCooldownCompletions(this.indexerDb, lastIndexerBlock);
+                        await this.util.processCooldownCompletions(this.indexerDb, blockToParse);
 
                         // Clear VM compilation cache for this block
                         if(this.actions.vm)
                             this.actions.vm.endBlock();
 
                         // Create record in `blocks` table with hashes of the credits/debits/escrows (ledger) and /actions tables
-                        let [ledger, actions, contracts] = await this.indexerDb.createBlock(lastIndexerBlock, blockTime);
+                        let [ledger, actions, contracts] = await this.indexerDb.createBlock(blockToParse, blockTime);
 
                         // Create / Update DEX market information
-                        await this.util.processMarketUpdates(this.indexerDb, lastIndexerBlock, blockTime);
+                        await this.util.processMarketUpdates(this.indexerDb, blockToParse, blockTime);
 
                         // Do a sanity check to verify that token supplies match data in credits/debits/escrows/balances tables
-                        await this.indexerDb.sanityCheck(lastIndexerBlock);
+                        await this.indexerDb.sanityCheck(blockToParse);
 
                         return [ledger, actions, contracts];
                     })();
 
-                    let [ledger, actions, contracts] = await this.util.withTimeout(blockProcessing, this.config['BLOCK_PROCESS_TIMEOUT'], 'block ' + lastIndexerBlock);
+                    let [ledger, actions, contracts] = await this.util.withTimeout(blockProcessing, this.config['BLOCK_PROCESS_TIMEOUT'], 'block ' + blockToParse);
 
                     // Commit the block data to the database
                     await this.indexerDb.commitTransaction();
+
+                    // Block committed successfully — only now advance the counter. Doing this
+                    // after the commit (rather than before the try) ensures a failed block leaves
+                    // lastIndexerBlock un-advanced so it is retried instead of skipped.
+                    lastIndexerBlock = blockToParse;
 
                     // Log the total parse time for this block
                     let parseTime = this.util.getTimer(debugTimer);
@@ -281,8 +289,14 @@ class XChainIndexer {
                     // Roll back all writes for this block so the DB stays at the end of the previous block
                     await this.indexerDb.rollbackTransaction();
 
-                    // Bail out with an error
+                    // Log the error
                     this.util.logError('Error while parsing block data :', error);
+
+                    // Exit the inner catch-up loop on failure. lastIndexerBlock was not advanced
+                    // (the assignment above only runs after a successful commit), so the outer loop
+                    // re-fetches it from the DB and retries this same block after the sleep interval
+                    // — instead of falling through and silently skipping the failed block.
+                    break;
                 }
 
             }
