@@ -200,16 +200,28 @@ class Database {
             const name = tokens[0].replace(/`/g, '');
             // SQL columns are NULL unless explicitly NOT NULL
             const nullable = !/\bNOT\s+NULL\b/i.test(line);
-            cols.push({ name, nullable });
+            // Keep the full (comment-stripped) column definition so a missing
+            // column can be re-added verbatim — this preserves the DEFAULT
+            // clause, which is what backfills existing rows on NOT NULL columns.
+            const notNull    = !nullable;
+            const hasDefault = /\bDEFAULT\b/i.test(line);
+            cols.push({ name, nullable, definition: line, notNull, hasDefault });
         }
         return cols.length > 0 ? cols : null;
     }
 
-    // Detect column-nullability drift between the live table and its SQL
-    // source, and fix it by ALTER. Only relaxes NOT NULL -> NULL (the safe
-    // direction — never strengthens to NOT NULL since live rows might have
-    // NULL values that would block the ALTER). Doesn't touch types, defaults,
-    // or indexes. Each applied ALTER is loudly logged.
+    // Detect schema drift between the live table and its SQL source, and fix
+    // it by ALTER. Two kinds of drift are handled:
+    //   1. Missing columns — a column declared in the SQL source but absent
+    //      from the live table is added with ADD COLUMN, reusing the source
+    //      definition verbatim so its DEFAULT clause backfills existing rows.
+    //      (A NOT NULL column with no DEFAULT can't be backfilled safely, so
+    //      it's skipped with a loud warning rather than aborting startup.)
+    //   2. Nullability — only relaxes NOT NULL -> NULL (the safe direction —
+    //      never strengthens to NOT NULL since live rows might hold NULLs that
+    //      would block the ALTER).
+    // Doesn't touch types, defaults of existing columns, or indexes. Each
+    // applied ALTER is loudly logged.
     async alterTableForDrift(file, db){
         const dir      = path.join(__dirname, 'sql');
         const data     = fs.readFileSync(dir + '/' + file, "utf8");
@@ -223,7 +235,17 @@ class Database {
         const liveByName = new Map(live.map(c => [c.COLUMN_NAME.toLowerCase(), c]));
         for(const exp of expected){
             const cur = liveByName.get(exp.name.toLowerCase());
-            if(!cur) continue; // column missing live — out of scope (may be intentional)
+            if(!cur){
+                // Column declared in the SQL source but absent from the live
+                // table (schema created before the column was introduced).
+                if(exp.notNull && !exp.hasDefault){
+                    console.log('Schema drift on ' + table + '.' + exp.name + ': column missing live, source is NOT NULL with no DEFAULT — cannot backfill existing rows safely. Skipping; add manually.');
+                    continue;
+                }
+                console.log('Schema drift on ' + table + '.' + exp.name + ': column missing live. Adding column from SQL source.');
+                await db.query('ALTER TABLE `' + table + '` ADD COLUMN ' + exp.definition);
+                continue;
+            }
             const liveIsNullable = cur.IS_NULLABLE === 'YES';
             if(!liveIsNullable && exp.nullable){
                 console.log('Schema drift on ' + table + '.' + exp.name + ': live=NOT NULL, source=NULL. Relaxing constraint.');
