@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.6.4] - 2026-05-28
+
+### Fixed
+- `api.js` — `getactivevalidators` and `getcapabilityvalidators` now validate the requested `block_index` against the latest indexed block before querying. Previously both handlers echoed the caller-supplied `block_index` straight into the response without confirming the indexer had processed that far. A caller requesting a future block (e.g. during indexer lag) received a snapshot accurate only through the latest indexed block but labelled with the requested block. Consumers caching validator-set snapshots keyed on that block index could lock incorrect quorum membership. Both handlers now return `{ error: 'block_index N not yet indexed (latest: M)' }` when `blk > latestBlock`, so callers that already check `result.error` surface the lag explicitly instead of trusting a mislabelled snapshot.
+
 ## [2.6.3] - 2026-05-28
 
 ### Fixed

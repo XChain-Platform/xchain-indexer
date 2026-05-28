@@ -177,6 +177,9 @@ async function startApi(){
             if(!indexer.indexerDb)
                 return { error: 'indexer database not ready' };
             try {
+                let latestBlock = await indexer.indexerDb.getLatestBlockIndex();
+                if(blk > latestBlock)
+                    return { error: 'block_index ' + blk + ' not yet indexed (latest: ' + latestBlock + ')' };
                 let validators = await indexer.indexerDb.getActiveValidators(blk);
                 return {
                     block_index: blk,
@@ -205,6 +208,9 @@ async function startApi(){
             if(!indexer.indexerDb)
                 return { error: 'indexer database not ready' };
             try {
+                let latestBlock = await indexer.indexerDb.getLatestBlockIndex();
+                if(blk > latestBlock)
+                    return { error: 'block_index ' + blk + ' not yet indexed (latest: ' + latestBlock + ')' };
                 let validators = await indexer.indexerDb.getValidatorsByCapability(capability, blk);
                 return {
                     capability:  capability,
