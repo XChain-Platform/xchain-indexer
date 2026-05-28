@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.6.6] - 2026-05-28
+
+### Fixed
+- `db.js` — `findCancelledDispensers` now appends `ORDER BY m.action_index ASC` to its SELECT. The query finds dispensers whose latest status is `cancelling` and whose `DISPENSER_CLOSE_DELAY` has expired, and `processCancellations` iterates the result to emit a `DISPENSER_CLOSE` per dispenser. Without an explicit ordering, when two or more dispensers reached their close-delay threshold in the same block MariaDB could return them in any order, so different nodes processed the closures in different sequences. Because each `DISPENSER_CLOSE` writes `credits` / `debits` / `escrows` / `dispenser_statuses` rows with AUTO_INCREMENT primary keys, divergent processing order assigned divergent IDs, splitting ledger state and corrupting the block digest hash chain. Ordering by `action_index` makes the close sequence deterministic across all nodes.
+
 ## [2.6.5] - 2026-05-28
 
 ### Fixed

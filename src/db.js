@@ -6498,7 +6498,8 @@ class Database {
                             WHERE
                                 s3.dispenser_action_index=m.action_index
                         ) AND
-                        s2.status='cancelling'`
+                        s2.status='cancelling'
+                    ORDER BY m.action_index ASC`
         let results = await this.doQuery(query, args);
         if(results.length > 0){
             for(let row of results)
