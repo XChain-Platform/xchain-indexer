@@ -15,9 +15,9 @@
  *
  * XChain Platform Action - UNSTAKE
  *
- * Begins the unstaking cooldown for an active stake identified by pubkey.
- * Full unstake of all stake rows for the pubkey (original + any top-ups).
- * BTC chain only.
+ * Begins the unstaking cooldown for an active stake.
+ *   v0 (capability) — BTC-only; unwinds all rows for the pubkey (original + top-ups).
+ *   v1 (contract)   — any chain; scoped to a single (target, pubkey, tick) triple.
  *
  * FORMATS:
  *   v0 - VERSION|SIGNING_PUBKEY                                       (capability stake — all rows for pubkey)

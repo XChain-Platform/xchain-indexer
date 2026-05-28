@@ -15,7 +15,8 @@
  *
  * XChain Platform Action - STAKE
  *
- * Stakes XCHAIN tokens for hub validation. BTC chain only.
+ * Stakes tokens for hub validation (v1/v2 — BTC + XCHAIN only) or against
+ * a smart contract (v3 — any chain, any registered token).
  *
  * The protocol does not assign tiers. Capabilities (price, cross_chain,
  * oracle_publish, attestation) auto-qualify when stake amount meets the
