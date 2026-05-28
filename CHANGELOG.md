@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.6.5] - 2026-05-28
+
+### Fixed
+- `rollback.js` — added `prices` to the `dataTables` rollback list so on-chain PRICE oracle rows (v0 validator COIN/FIAT snapshots and v1 user TOKEN/FIAT oracle prices, keyed by `action_index`) are purged during a block rollback. Previously a chain reorg left orphaned `prices` rows from rolled-back blocks in place, so the explorer and any consumer of the `prices` table kept serving prices that were never finalized on-chain. `prices` carries no balance/ticker impact (the PRICE handlers write no credits/debits/escrows), so it joins the delete loop only — no read-phase address scan and no `source_id` rebalancing are required.
+- `rollback.js` / `hub_client.js` — after a rollback commits, the indexer now signals the cross-chain hub (new `pushpricereorg` JSON-RPC call carrying the source chain + lowest rolled-back `action_index`) to retract any `price_snapshots` / `oracle_prices` rows the hub seeded from the orphaned PRICE actions. Previously the hub only invalidated price snapshots on a separate PBFT reorg attestation, which never arrives for non-PBFT reorgs — leaving the hub (and every indexer mirroring its price tables) serving never-finalized prices to fee validation, DEX dispenser settlement, and VM oracle calls. The signal is best-effort: a hub failure logs a warning and never leaves the local rollback half-applied.
+- `hub_db_sync.js` — the hub DB sync client now handles `row:deleted` events from the hub's price-table broadcast channel, pruning the matching rows from the local `price_snapshots` / `oracle_prices` copy. This propagates a reorg retraction to distributed indexers so their local hub DB mirror stops serving rolled-back prices. The deletion column is resolved from a local table→column map (never the wire) so the `DELETE` cannot interpolate an untrusted column name.
+
 ## [2.6.4] - 2026-05-28
 
 ### Fixed

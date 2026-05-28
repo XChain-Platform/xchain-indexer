@@ -38,6 +38,15 @@ try {
     // ws is optional — if not installed, live updates are disabled but bootstrap still works
 }
 
+// Maps each mirrored hub table to the column holding the source-chain action_index.
+// Used to apply reorg retractions (row:deleted events) against the local copy.
+// Kept local (not taken from the wire) so the DELETE never interpolates an
+// attacker-supplied column name.
+const RETRACTION_COLUMNS = {
+    price_snapshots: 'source_action_index',
+    oracle_prices:   'action_index'
+};
+
 class HubDbSync {
 
     constructor(hubDb, options) {
@@ -123,6 +132,19 @@ class HubDbSync {
         await this.hubDb.doQuery(query, args);
     }
 
+    // Apply a reorg retraction to the local hub DB copy. The hub deletes price
+    // rows seeded from rolled-back PRICE actions; we mirror that delete so this
+    // indexer stops reading prices that were never finalized on-chain.
+    // event: { table, source_chain, from_action_index }
+    async _applyRetraction(event) {
+        let column = RETRACTION_COLUMNS[event.table];
+        if (!column) return;                                   // unknown table — ignore
+        let from = Number(event.from_action_index);
+        if (!Number.isFinite(from)) return;                    // malformed — ignore
+        let query = 'DELETE FROM ' + event.table + ' WHERE source_chain = ? AND ' + column + ' >= ?';
+        await this.hubDb.doQuery(query, [event.source_chain, from]);
+    }
+
     // Open the WebSocket subscription for live row updates
     _connectWebSocket() {
         if (!WebSocket || !this.running) return;
@@ -150,6 +172,8 @@ class HubDbSync {
                 let event = JSON.parse(data.toString());
                 if (event.type === 'row:inserted' && event.table && event.row) {
                     await this._applyRow(event.table, event.row);
+                } else if (event.type === 'row:deleted' && event.table) {
+                    await this._applyRetraction(event);
                 }
             } catch (err) {
                 console.warn('HubDbSync: failed to handle WebSocket message:', err.message);

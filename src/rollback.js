@@ -33,6 +33,10 @@ class Rollback {
         // Setup alias to the utility class
         this.util      = indexer.util;
 
+        // Setup alias to the hub client (used to retract price rows seeded
+        // from rolled-back PRICE actions on the cross-chain hub)
+        this.hubClient = indexer.hubClient;
+
         // Setup alias to the indexer protocol changes instance
         this.protocolChanges = indexer.protocolChanges;
 
@@ -109,7 +113,8 @@ class Rollback {
             'deposits',
             'withdrawals',
             'attestation_requests',
-            'attestation_responses'
+            'attestation_responses',
+            'prices'
         ];
 
     }
@@ -403,6 +408,22 @@ class Rollback {
             // Roll back so the DB is left untouched rather than in a partial rollback state
             await this.indexerDb.rollbackTransaction();
             throw e;
+        }
+
+        // Signal the cross-chain hub to retract any price rows seeded from the
+        // PRICE actions we just rolled back. The hub stores each pushed round /
+        // oracle price tagged with the source chain + the source action_index, so
+        // it can prune exactly the rows whose action_index falls in the orphaned
+        // range. Without this, the hub (and every indexer mirroring its price
+        // tables) keeps serving prices that were never finalized on-chain.
+        // Best-effort, like every other hub push — a failure here must not leave
+        // the local rollback half-applied, so we only log on error.
+        if(firstActionIndex && this.hubClient){
+            try {
+                await this.hubClient.retractPriceRange(this.config['COIN'], firstActionIndex);
+            } catch(err) {
+                console.warn('Rollback: hub price retraction failed:', err.message);
+            }
         }
 
         // Log the rollback time

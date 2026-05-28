@@ -64,6 +64,19 @@ class HubClient {
         return this._call('pushoracleprice', priceData);
     }
 
+    // Notify the hub that a reorg rolled back PRICE actions on this chain so it can
+    // retract any price_snapshots / oracle_prices rows seeded from those actions.
+    // sourceChain:     the chain this indexer serves (BTC/LTC/DOGE)
+    // fromActionIndex: lowest rolled-back action_index — the hub deletes rows for
+    //                  this source_chain whose action_index is >= this value.
+    async retractPriceRange(sourceChain, fromActionIndex){
+        if(!this.enabled) return;
+        return this._call('pushpricereorg', {
+            source_chain:      sourceChain,
+            from_action_index: fromActionIndex
+        });
+    }
+
     // Make a JSON-RPC 2.0 call to the hub
     _call(method, params){
         return new Promise((resolve, reject) => {

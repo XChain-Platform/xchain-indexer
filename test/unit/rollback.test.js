@@ -42,6 +42,50 @@ describe('Rollback @regression @tier3', function () {
         }
     });
 
+    it('dataTables contains the prices table so orphaned PRICE rows are pruned', function () {
+        assert.ok(rollback.dataTables.includes('prices'), `dataTables should include 'prices'`);
+    });
+
+    // ─── Hub price retraction signal ──────────────────────────────────
+
+    it('signals the hub to retract prices for the rolled-back range', async function () {
+        const hubClient = { retractPriceRange: sinon.stub().resolves() };
+        const idx = createMockIndexer({ hubClient });
+        idx.protocolChanges = { isDefined: sinon.stub().returns(true), isEnabled: sinon.stub().resolves(true) };
+        const rb = new Rollback(idx);
+        idx.util.resetLists();
+        // First query returns an action_index so the rollback has an orphaned range
+        idx.indexerDb.doQuery.onFirstCall().resolves([{ action_index: 50 }]);
+        idx.indexerDb.doQuery.resolves([]);
+        await rb.rollback(100);
+        assert.ok(hubClient.retractPriceRange.calledOnce, 'expected retractPriceRange to be called once');
+        assert.strictEqual(hubClient.retractPriceRange.firstCall.args[0], rb.config['COIN']);
+        assert.strictEqual(hubClient.retractPriceRange.firstCall.args[1], 50);
+    });
+
+    it('does NOT signal the hub when there are no actions in the rolled-back range', async function () {
+        const hubClient = { retractPriceRange: sinon.stub().resolves() };
+        const idx = createMockIndexer({ hubClient });
+        idx.protocolChanges = { isDefined: sinon.stub().returns(true), isEnabled: sinon.stub().resolves(true) };
+        const rb = new Rollback(idx);
+        idx.util.resetLists();
+        idx.indexerDb.doQuery.resolves([]); // no action_index found
+        await rb.rollback(100);
+        assert.ok(hubClient.retractPriceRange.notCalled, 'expected no retraction when range is empty');
+    });
+
+    it('does not throw when the hub retraction fails (best-effort)', async function () {
+        const hubClient = { retractPriceRange: sinon.stub().rejects(new Error('hub unreachable')) };
+        const idx = createMockIndexer({ hubClient });
+        idx.protocolChanges = { isDefined: sinon.stub().returns(true), isEnabled: sinon.stub().resolves(true) };
+        const rb = new Rollback(idx);
+        idx.util.resetLists();
+        idx.indexerDb.doQuery.onFirstCall().resolves([{ action_index: 50 }]);
+        idx.indexerDb.doQuery.resolves([]);
+        await assert.doesNotReject(() => rb.rollback(100));
+        assert.ok(idx.indexerDb.commitTransaction.calledOnce, 'local rollback should still commit');
+    });
+
     // ─── Transaction wrapping ─────────────────────────────────────────
 
     it('calls beginTransaction at the start of rollback', async function () {
