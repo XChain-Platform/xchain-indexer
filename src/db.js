@@ -1331,7 +1331,7 @@ class Database {
     // @param {block_index}     integer Block Index 
     // @param {action_index}    integer action_index of action
     // TODO: Add support for 'escrowed' tokens (dispensers, orders, bets)
-    // TODO: Can optimize this function to allow getting list of holders from balances table instead of credits/debits
+    // TODO(j-dog): Can optimize this function to allow getting list of holders from balances table instead of credits/debits
     async getHolders(tick, block_index, action_index){
         let holders = {};
         let sql     = '',
