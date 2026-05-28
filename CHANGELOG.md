@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.6.3] - 2026-05-28
+
+### Fixed
+- `rollback.js` — added `slash_events` to the `blockTables` rollback list so its rows are purged during a block rollback. `slash_events` is a persistent log table keyed by `block_index`; previously a chain reorg left rows from rolled-back blocks in place, producing phantom slash events that corrupted contract-staking state (validator quality scores, slashed balances) and propagated to downstream consumers (explorer API, SDK `getSlashEvents`, wallet) until the chain advanced past the orphaned tip. The table has no enforced foreign key on `execution_index` (index only), and `blockTables` is deleted after `dataTables` (which already removes `contract_executions`), so delete ordering is safe as-is.
+
 ## [2.6.2] - 2026-05-28
 
 ### Fixed
