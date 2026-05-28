@@ -71,6 +71,7 @@ class Rollback {
             'escrows',
             'fees',
             'files',
+            'gated_files',
             'issues',
             'links',
             'lists',

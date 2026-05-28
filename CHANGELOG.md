@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.6.2] - 2026-05-28
+
+### Fixed
+- `rollback.js` — added `gated_files` to the `dataTables` rollback list so its rows are purged alongside `files` during a block rollback. Previously a chain reorg deleted the parent `files` row but left the `gated_files` metadata row behind, orphaning it by `action_index`. Stale gated-file rows caused the `SEND` handler to reject all further transfers of the affected token (gated token with no valid key-handoff message) and the explorer to serve ciphertext from rolled-back blocks. `gated_files` carries no balance/ticker impact and no enforced foreign key, so it joins the delete loop only (no read-phase query) and delete ordering relative to `files` is immaterial.
+
 ## [2.6.1] - 2026-04-24
 
 ### Security
