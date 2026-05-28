@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.7.0] - 2026-05-28
+
+### Fixed
+- Every `index_*` lookup-table upsert in `db.js` (`createTransaction`, `createAddress`, `createAction`, `createTicker`, `createStatus`, `createMemo`, `createMimeType`, `createCoin`, `createFiat`, `getOrCreatePubkeyId`) used a SELECT-then-INSERT — a time-of-check/time-of-use race in which a concurrent caller inserting the same key between the lookup and the bare INSERT triggered an uncaught duplicate-key error against the table's UNIQUE index. Each now upserts with `INSERT IGNORE` + refetch, which is race-safe and swallows the duplicate-key collision. The case-insensitive get-first lookup is retained for `createTicker` (its UNIQUE index is binary but `getTickerId` folds case via `LOWER(tick)`), so the refetch preserves the existing case-folding behaviour. Note: `index_actions` carries only a non-unique index, so `INSERT IGNORE` there does not itself prevent duplicate rows — the single-threaded block-processing loop is what serializes those inserts; it is changed for consistency.
+
 ## [2.6.7] - 2026-05-28
 
 ### Fixed

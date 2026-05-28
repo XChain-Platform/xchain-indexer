@@ -795,10 +795,12 @@ class Database {
         let id = await this.getTransactionId(hash);
         // Create transaction if it does not already exist
         if(id === null){
-            let query   = "INSERT INTO index_transactions (`hash`) values (?)";
-            let results = await this.doQuery(query, [hash]);
-            if(results.insertId)
-                id = results.insertId;
+            // INSERT IGNORE + refetch is race-safe against the UNIQUE index: a
+            // concurrent insert of the same hash is skipped (no duplicate-key throw),
+            // and the refetch resolves to the canonical row id.
+            let query   = "INSERT IGNORE INTO index_transactions (`hash`) values (?)";
+            await this.doQuery(query, [hash]);
+            id = await this.getTransactionId(hash);
         }
         // Convert id to a number
         if(id !== null)
@@ -826,10 +828,12 @@ class Database {
         let id = await this.getAddressId(address);
         // Create address if it does not already exist
         if(id === null){
-            let query   = "INSERT INTO index_addresses (`address`) values (?)";
-            let results = await this.doQuery(query, [address]);
-            if(results.insertId)
-                id = results.insertId;
+            // INSERT IGNORE + refetch is race-safe against the UNIQUE index: a
+            // concurrent insert of the same address is skipped (no duplicate-key throw),
+            // and the refetch resolves to the canonical row id.
+            let query   = "INSERT IGNORE INTO index_addresses (`address`) values (?)";
+            await this.doQuery(query, [address]);
+            id = await this.getAddressId(address);
         }
         // Convert id to a number
         if(id !== null)
@@ -894,10 +898,13 @@ class Database {
         var id = await this.getActionId(action);
         // Handle creating record
         if(id==null){
-            let query = "INSERT INTO index_actions (action) values (?)";
-            let results = await this.doQuery(query, [action]);
-            if(results.insertId)
-                id = Number(results.insertId);
+            // INSERT IGNORE + refetch keeps this consistent with the other index_*
+            // upserts. NOTE: index_actions carries only a non-unique index, so IGNORE
+            // does not itself prevent duplicate rows under true concurrency — the
+            // single-threaded block-processing loop is what serializes these inserts.
+            let query = "INSERT IGNORE INTO index_actions (action) values (?)";
+            await this.doQuery(query, [action]);
+            id = await this.getActionId(action);
         }
         return id;
     }
@@ -1056,10 +1063,13 @@ class Database {
         let id = await this.getTickerId(tick);
         // Create ticker if it does not already exist
         if(id === null){
-            let query   = "INSERT INTO index_tickers (tick) values (?)";
-            let results = await this.doQuery(query, [tick]);
-            if(results.insertId)
-                id = results.insertId;
+            // INSERT IGNORE + refetch is race-safe against the UNIQUE index. The
+            // get-first lookup above is retained because getTickerId() matches
+            // case-insensitively (LOWER(tick)) while the UNIQUE index is binary —
+            // refetching through getTickerId keeps that case-folding behaviour.
+            let query   = "INSERT IGNORE INTO index_tickers (tick) values (?)";
+            await this.doQuery(query, [tick]);
+            id = await this.getTickerId(tick);
         }
         // Convert id to a number
         if(id !== null)
@@ -1523,10 +1533,10 @@ class Database {
         var id = await this.getStatusId(status);
         // Handle creating record
         if(id==null){
-            let query = "INSERT INTO index_statuses (status) values (?)";
-            let results = await this.doQuery(query, [status]);
-            if(results.insertId)
-                id = Number(results.insertId);
+            // INSERT IGNORE + refetch is race-safe against the UNIQUE index.
+            let query = "INSERT IGNORE INTO index_statuses (status) values (?)";
+            await this.doQuery(query, [status]);
+            id = await this.getStatusId(status);
         }
         return id;
     }
@@ -2245,10 +2255,10 @@ class Database {
         var id = await this.getMemoId(memo);
         // Handle creating record
         if(id==null){
-            let query = "INSERT INTO index_memos (memo) values (?)";
-            let results = await this.doQuery(query, [memo]);
-            if(results.insertId)
-                id = Number(results.insertId);
+            // INSERT IGNORE + refetch is race-safe against the UNIQUE index.
+            let query = "INSERT IGNORE INTO index_memos (memo) values (?)";
+            await this.doQuery(query, [memo]);
+            id = await this.getMemoId(memo);
         }
         return id;
     }
@@ -2994,11 +3004,11 @@ class Database {
         var id = await this.getMimeTypeId(type);
         // Handle creating record
         if(id==null){
-            let query = "INSERT INTO index_mime_types (`type`) values (?)";
+            // INSERT IGNORE + refetch is race-safe against the UNIQUE index.
+            let query = "INSERT IGNORE INTO index_mime_types (`type`) values (?)";
             let args  = [type];
-            let results = await this.doQuery(query, args);
-            if(results.insertId)
-                id = Number(results.insertId);
+            await this.doQuery(query, args);
+            id = await this.getMimeTypeId(type);
         }
         return id;
     }
@@ -3120,11 +3130,11 @@ class Database {
         var id = await this.getCoinId(coin);
         // Handle creating record
         if(id==null){
-            let query = "INSERT INTO index_coins (`coin`) values (?)";
+            // INSERT IGNORE + refetch is race-safe against the UNIQUE index.
+            let query = "INSERT IGNORE INTO index_coins (`coin`) values (?)";
             let args  = [coin];
-            let results = await this.doQuery(query, args);
-            if(results.insertId)
-                id = Number(results.insertId);
+            await this.doQuery(query, args);
+            id = await this.getCoinId(coin);
         }
         return id;
     }
@@ -3148,11 +3158,11 @@ class Database {
         var id = await this.getFiatId(code);
         // Handle creating record
         if(id==null){
-            let query = "INSERT INTO index_fiats (`code`) values (?)";
+            // INSERT IGNORE + refetch is race-safe against the UNIQUE index.
+            let query = "INSERT IGNORE INTO index_fiats (`code`) values (?)";
             let args  = [code];
-            let results = await this.doQuery(query, args);
-            if(results.insertId)
-                id = Number(results.insertId);
+            await this.doQuery(query, args);
+            id = await this.getFiatId(code);
         }
         return id;
     }    
@@ -6750,10 +6760,10 @@ class Database {
         let id = await this.getPubkeyId(pubkey);
         // Create pubkey if it does not already exist
         if(id === null){
-            let query   = "INSERT INTO index_pubkeys (`pubkey`) values (?)";
-            let results = await this.doQuery(query, [pubkey]);
-            if(results.insertId)
-                id = Number(results.insertId);
+            // INSERT IGNORE + refetch is race-safe against the UNIQUE index.
+            let query   = "INSERT IGNORE INTO index_pubkeys (`pubkey`) values (?)";
+            await this.doQuery(query, [pubkey]);
+            id = await this.getPubkeyId(pubkey);
         }
         return id;
     }
