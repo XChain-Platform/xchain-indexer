@@ -4534,7 +4534,8 @@ class Database {
                                 s3.coinpay_action_index=co.action_index
                         ) AND
                         s2.status='pending_coinpay' AND
-                        co.expiration < ?`;
+                        co.expiration < ?
+                    ORDER BY co.action_index ASC`;
         let args = [block_time];
         let results = await this.doQuery(query, args);
         for(let row of results){
@@ -4590,7 +4591,8 @@ class Database {
                                 s3.coinpay_action_index=co.action_index
                         ) AND
                         s2.status='pending_coinpay' AND
-                        (om.give_action_index=? OR om.get_action_index=?)`;
+                        (om.give_action_index=? OR om.get_action_index=?)
+                    ORDER BY co.action_index ASC`;
         let args = [order_action_index, order_action_index];
         let results = await this.doQuery(query, args);
         for(let row of results){
@@ -5540,6 +5542,10 @@ class Database {
                         ) AND
                         s2.status='open'`
         }
+        // Process expirations in ascending global action_index order so every
+        // instance derives identical AUTO_INCREMENT IDs for the same block.
+        // (UNION result: order by the output column name, not a table alias.)
+        query += ' ORDER BY action_index ASC';
         let results = await this.doQuery(query, args);
         if(results.length > 0){
             // Get the current expiration for each item

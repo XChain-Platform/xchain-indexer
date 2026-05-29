@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - `test/unit/rollback-coverage.test.js` — a rollback-coverage guard. It derives the set of tables the indexer owns from `src/sql/*.sql` (the same source `verifyTables()` uses) and asserts every one is handled by `Rollback` on reorg: in `dataTables` (action_index-keyed delete), `blockTables` (block_index-keyed delete), recomputed during rollback, special-cased, or explicitly exempt with a reason. Also guards against stale references in the rollback lists and a table appearing in both lists. New tables have previously shipped before being wired into the rollback set (e.g. `gated_files` had a 6-day window); this fails at CI time when a table is left unhandled instead of surfacing as silent post-reorg divergence on mainnet.
 
+## [2.7.7] - 2026-05-29
+
+### Fixed
+- `src/db.js` — three expiration/obligation gather queries lacked an `ORDER BY`, making their row order non-deterministic across instances. `processExpirations` iterates the result and emits credits/debits via `processAction`, each allocating a fresh `AUTO_INCREMENT` `action_index`; `getBlockHashes` then orders credits/debits by `action_index ASC` to derive the per-block ledger hash. When two or more items expired on the same block, two honest indexers could process them in different orders, assign `action_index` values differently, and derive divergent ledger hashes for that block — a consensus split. Added `ORDER BY co.action_index ASC` to `getExpiredCoinpayObligations` and `getPendingCoinpayObligationsByOrder`, and `ORDER BY action_index ASC` to the `getExpiredItems` UNION (ordered by the output column name, since the union erases table aliases). `findCancelledDispensers` already ordered by `m.action_index ASC` and was left unchanged.
+
+### Added
+- `test/integration/scenarios/07-expiry-ordering.test.js` — seeds several coinpay obligations whose `action_index` values are inserted in descending order, all expiring on the same block, and asserts both `getExpiredCoinpayObligations` and `getPendingCoinpayObligationsByOrder` return them strictly ascending by `action_index`. Guards against the `ORDER BY` being dropped (without it the query returns the rows descending and the test fails).
+
 ## [2.7.6] - 2026-05-29
 
 ### Fixed
