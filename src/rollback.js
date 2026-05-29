@@ -383,6 +383,26 @@ class Rollback {
             }
 
             if(firstActionIndex){
+
+                // Reset request_status on attestation_requests rows whose ATTEST
+                // response is about to be deleted below. The forward path flips a
+                // request from 'pending' to 'fulfilled'/'errored' via a direct
+                // UPDATE on the request row (created in an EARLIER block, so its
+                // action_index < firstActionIndex and it survives the bulk delete
+                // that follows). Deleting the orphaned response row alone would
+                // leave the surviving request stuck non-'pending': on re-application
+                // the response is rejected as already-resolved, the contract
+                // callback never fires, and the deadline-expiry sweep (which only
+                // considers 'pending' requests) never re-arms. This UPDATE must run
+                // BEFORE the delete loop so the join to the soon-to-be-deleted
+                // attestation_responses rows still resolves.
+                query = `UPDATE attestation_requests ar
+                            INNER JOIN attestation_responses resp ON (resp.request_id = ar.request_id)
+                            SET ar.request_status = 'pending'
+                            WHERE resp.action_index >= ?`;
+                args  = [firstActionIndex];
+                await this.indexerDb.doQuery(query, args);
+
                 // Loop through the data tables and delete records above the action_index
                 for(let table of this.dataTables){
                     query = `DELETE FROM ` + table + ` WHERE action_index >= ?`;

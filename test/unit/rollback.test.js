@@ -206,4 +206,64 @@ describe('Rollback @regression @tier3', function () {
         await rollback.rollback(100);
         assert.ok(indexer.indexerDb.sanityCheck.calledOnce);
     });
+
+    // ─── Attestation request_status reset (reorg correctness) ─────────
+    //
+    // Regression for: a reorg that orphans an ATTEST v1 (response) block must
+    // reset the originating request back to 'pending'. The response row lives in
+    // the orphaned range and is bulk-deleted, but the request row was created in
+    // an EARLIER block (action_index < firstActionIndex) and survives. Without a
+    // companion UPDATE the surviving request stays 'fulfilled'/'errored', the
+    // re-applied response is rejected as already-resolved, the contract callback
+    // never fires, and the deadline-expiry sweep (which only scans 'pending'
+    // requests) never re-arms.
+
+    function attestationResetUpdate() {
+        const queries = indexer.indexerDb.doQuery.args.map(a => a[0]);
+        return queries.find(q =>
+            q &&
+            /UPDATE\s+attestation_requests/i.test(q) &&
+            /attestation_responses/i.test(q) &&
+            /request_status\s*=\s*'pending'/i.test(q)
+        );
+    }
+
+    it('resets attestation request_status to pending for responses in the orphaned range', async function () {
+        indexer.indexerDb.doQuery.onFirstCall().resolves([{ action_index: 50 }]);
+        indexer.indexerDb.doQuery.resolves([]);
+        await rollback.rollback(100);
+
+        const updateQuery = attestationResetUpdate();
+        assert.ok(updateQuery, 'expected a companion UPDATE resetting attestation_requests.request_status to pending');
+        // Joined to attestation_responses by request_id and bounded by firstActionIndex
+        assert.ok(/resp(onse)?\.request_id\s*=\s*ar\.request_id|ar\.request_id\s*=\s*resp(onse)?\.request_id/i.test(updateQuery),
+            'reset UPDATE should join attestation_requests to attestation_responses on request_id');
+        assert.ok(/action_index\s*>=\s*\?/i.test(updateQuery),
+            'reset UPDATE should be bounded by the firstActionIndex parameter');
+        // The bound argument matches the orphaned-range start
+        const call = indexer.indexerDb.doQuery.args.find(a => a[0] === updateQuery);
+        assert.deepStrictEqual(call[1], [50], 'reset UPDATE should be parameterised with firstActionIndex');
+    });
+
+    it('issues the request_status reset BEFORE deleting attestation_responses', async function () {
+        indexer.indexerDb.doQuery.onFirstCall().resolves([{ action_index: 50 }]);
+        indexer.indexerDb.doQuery.resolves([]);
+        await rollback.rollback(100);
+
+        const queries = indexer.indexerDb.doQuery.args.map(a => a[0]).filter(Boolean);
+        const updateIdx = queries.findIndex(q =>
+            /UPDATE\s+attestation_requests/i.test(q) && /request_status\s*=\s*'pending'/i.test(q));
+        const deleteIdx = queries.findIndex(q =>
+            /DELETE\s+FROM\s+attestation_responses/i.test(q));
+        assert.ok(updateIdx >= 0, 'expected the request_status reset UPDATE to be issued');
+        assert.ok(deleteIdx >= 0, 'expected the attestation_responses DELETE to be issued');
+        assert.ok(updateIdx < deleteIdx,
+            'request_status reset must run before the response DELETE so the join still resolves');
+    });
+
+    it('does NOT issue the request_status reset when there is no orphaned range', async function () {
+        indexer.indexerDb.doQuery.resolves([]); // no firstActionIndex
+        await rollback.rollback(100);
+        assert.ok(!attestationResetUpdate(), 'no reset UPDATE expected when the rolled-back range is empty');
+    });
 });
