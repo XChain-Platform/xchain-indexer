@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.7.4] - 2026-05-28
+
+### Fixed
+- `src/rollback.js` — the reorg read/pre-scan phase collected no affected addresses or tickers for the contract-staking tables (`contract_stakes`, `contract_unstakes`, `contract_delegations`). Their rows were deleted from `dataTables` on reorg, but because no pre-scan gathered the staking addresses/tickers, the post-rollback `updateBalances`/`updateTokens` recompute could undercount staking positions whose balances should be refreshed. Added a pre-scan branch (mirroring the `credits`/`debits`/`escrows` pattern, joined to `index_addresses` on `source_id` and `index_tickers` on `tick_id`) that gathers the staking address and ticker for each of the three tables. Added a regression test asserting the pre-scan SELECTs fire for all three tables and that the collected addresses/tickers reach the post-rollback recompute.
+
 ## [2.7.3] - 2026-05-28
 
 ### Fixed

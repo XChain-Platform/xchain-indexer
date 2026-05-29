@@ -176,6 +176,19 @@ class Rollback {
                                 m.action_index >= ?`;
                 }
 
+                // Contract staking (STAKE v3 / UNSTAKE v1 / DELEGATE v1+v3)
+                if(['contract_stakes','contract_unstakes','contract_delegations'].includes(table)){
+                    query = `SELECT
+                                t1.tick,
+                                a1.address
+                            FROM
+                                ` + table + ` m
+                                INNER JOIN index_tickers   t1 ON (t1.id=m.tick_id)
+                                INNER JOIN index_addresses a1 ON (a1.id=m.source_id)
+                            WHERE
+                                m.action_index >= ?`;
+                }
+
                 // AIRDROP / DESTROY
                 if(['airdrops','destroys'].includes(table)){
                     query = `SELECT 

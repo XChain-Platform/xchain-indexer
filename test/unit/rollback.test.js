@@ -46,6 +46,46 @@ describe('Rollback @regression @tier3', function () {
         assert.ok(rollback.dataTables.includes('prices'), `dataTables should include 'prices'`);
     });
 
+    it('dataTables contains all contract-staking tables so orphaned STAKE/UNSTAKE/DELEGATE rows are pruned', function () {
+        const stakingTables = ['contract_stakes', 'contract_unstakes', 'contract_delegations'];
+        for (const table of stakingTables) {
+            assert.ok(rollback.dataTables.includes(table), `dataTables should include '${table}'`);
+        }
+    });
+
+    // ─── Contract-staking pre-scan (addresses/tickers collection) ─────
+
+    it('pre-scans contract-staking tables and feeds affected addresses/tickers to updateBalances/updateTokens', async function () {
+        // First query (firstActionIndex lookup) returns an orphaned range;
+        // each contract-staking pre-scan SELECT returns one affected (address, tick) row.
+        indexer.indexerDb.doQuery.callsFake(async (query) => {
+            if (/FROM\s+actions\s+a/i.test(query) && /a\.action_index/i.test(query)) return [{ action_index: 50 }];
+            if (query.includes('contract_stakes') && query.includes('source_id')) return [{ tick: 'CSTK', address: 'addrStake' }];
+            if (query.includes('contract_unstakes') && query.includes('source_id')) return [{ tick: 'CUNS', address: 'addrUnstake' }];
+            if (query.includes('contract_delegations') && query.includes('source_id')) return [{ tick: 'CDEL', address: 'addrDeleg' }];
+            return [];
+        });
+
+        await rollback.rollback(100);
+
+        // A pre-scan SELECT (joined on source_id) was issued for each of the three tables
+        const queries = indexer.indexerDb.doQuery.args.map(a => a[0]);
+        for (const table of ['contract_stakes', 'contract_unstakes', 'contract_delegations']) {
+            assert.ok(
+                queries.some(q => q && /SELECT/i.test(q) && q.includes(table) && q.includes('source_id')),
+                `expected a pre-scan SELECT joining '${table}' on source_id`
+            );
+        }
+
+        // The collected addresses/tickers reach the post-rollback recompute
+        const balanceArg = indexer.indexerDb.updateBalances.firstCall.args[0];
+        assert.ok(balanceArg.includes('addrStake') && balanceArg.includes('addrUnstake') && balanceArg.includes('addrDeleg'),
+            'updateBalances should receive the staking addresses from all three tables');
+        const tokenArg = indexer.indexerDb.updateTokens.firstCall.args[0];
+        assert.ok(tokenArg.includes('CSTK') && tokenArg.includes('CUNS') && tokenArg.includes('CDEL'),
+            'updateTokens should receive the tickers from all three tables');
+    });
+
     // ─── Hub price retraction signal ──────────────────────────────────
 
     it('signals the hub to retract prices for the rolled-back range', async function () {
