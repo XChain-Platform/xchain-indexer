@@ -267,6 +267,26 @@ describe('Utility @regression @tier1', function () {
         });
     });
 
+    describe('bcfloor()', function () {
+        it('should floor a fractional bignumber', function () {
+            assert.strictEqual(util.bcfloor(util.bcdiv('5.7', '1', 64)), 5);
+        });
+        it('should preserve exact integers', function () {
+            assert.strictEqual(util.bcfloor(util.bcdiv('10', '1', 64)), 10);
+        });
+        it('should return 0 for sub-integer values', function () {
+            assert.strictEqual(util.bcfloor(util.bcdiv('0.5', '1', 64)), 0);
+        });
+        it('should floor a value just below an integer (not round it up)', function () {
+            // mathjs.floor() on this value returns 138 (rounds up due to internal
+            // precision), but native bignumber.floor() correctly returns 137.
+            assert.strictEqual(util.bcfloor(util.bcnum('137.99999999999')), 137);
+        });
+        it('should handle the sat-divisor case correctly', function () {
+            assert.strictEqual(util.bcfloor(util.bcdiv('0.00000003', '0.00000001', 64)), 3);
+        });
+    });
+
     describe('bcgt()', function () {
         it('should return true when a > b', function () {
             assert.strictEqual(util.bcgt(5, 3), true);

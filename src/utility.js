@@ -324,6 +324,16 @@ class Utility {
         return this.bcnum(mathjs.format(mathjs.divide(mathjs.bignumber(a),mathjs.bignumber(b)),{notation: 'fixed', precision: d}));
     }
 
+    // Floor a bignumber to a JS integer in bignumber space — avoids the
+    // Math.floor(Number(bignumber)) trap where the implicit Number() coercion
+    // goes through IEEE 754 and can round a value like 2.9999…964 down to 2
+    // instead of returning the correct 3. Note: uses decimal.js's native
+    // .floor(), NOT mathjs.floor() — the latter is configured with a default
+    // precision that rounds 137.99999999999 up to 138.
+    bcfloor(num){
+        return this.bcnum(num).floor().toNumber();
+    }
+
     // Handle comparing two big numbers: returns true if numA > numB
     bcgt(numA, numB){
         return mathjs.larger(this.bcnum(numA), this.bcnum(numB));
@@ -1024,7 +1034,7 @@ class Utility {
             // Compute: tokens = (coin_amount × coin_fiat_price) / token_fiat_price
             let coinFiatTotal = this.bcmul(coinAmount, coinFiatPrice, 18);
             let rawTokens     = this.bcdiv(coinFiatTotal, op.price, 64);
-            let units         = Math.floor(Number(rawTokens));
+            let units         = this.bcfloor(rawTokens);
             if(units >= 1){
                 return {
                     units:         units,
@@ -1051,7 +1061,7 @@ class Utility {
             // Calculate how many units the buyer's coin amount covers
             // raw_multiplier = coin_amount / btc_per_token
             let rawMultiplier = this.bcdiv(coinAmount, btcPerToken, 64);
-            let units = Math.floor(Number(rawMultiplier));
+            let units = this.bcfloor(rawMultiplier);
             if(units >= 1){
                 return {
                     units:        units,

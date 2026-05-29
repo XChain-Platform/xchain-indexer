@@ -117,7 +117,7 @@ class Dispense {
                 if(this.util.bclt(data['COIN_AMOUNT'], dispenser['GET_AMOUNT']))
                     error = 'invalid: GET_AMOUNT (insufficient funds)';
                 if(!error)
-                    multiplier = Math.floor(Number(this.util.bcdiv(data['COIN_AMOUNT'], dispenser['GET_AMOUNT'], 64)));
+                    multiplier = this.util.bcfloor(this.util.bcdiv(data['COIN_AMOUNT'], dispenser['GET_AMOUNT'], 64));
             }
 
             // Ignore if DISPENSE is being triggered by GET_ADDRESS (dispenser can't trigger itself)
