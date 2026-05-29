@@ -7706,13 +7706,15 @@ class Database {
     // (validator_pubkey, provider_id) row on first sight. `field` is whitelisted
     // to the counter columns so callers can't inject arbitrary SQL.
     //
-    // Reorg note: the table is append-monotone (counters only). On rollback
-    // the standard `DELETE WHERE block_index >= ?` pattern would drop a row
-    // even when only its most-recent touch is being undone, losing all
-    // earlier increments. Proper rollback requires per-event journaling or a
-    // recompute pass against attestation_responses + expirations. Tracked
-    // for Phase 4 slashing work — until then stats are best-effort across
-    // reorgs.
+    // Reorg note: the table is append-monotone (counters only), so the standard
+    // `DELETE WHERE block_index >= ?` pattern can't roll it back — a row's
+    // earlier, surviving increments live alongside the orphaned ones. Rollback
+    // therefore recomputes affected pairs from the surviving ledger rather than
+    // deleting by index: Rollback._recomputeAttestationValidatorStats() drops the
+    // rows last touched in the orphaned range and rebuilds them from surviving
+    // signatures (fulfilled) + expired requests (missed), matching a from-genesis
+    // replay. This keeps the counters consensus-safe across reorgs so Phase 4
+    // slashing can consume them. See src/rollback.js.
     //
     // Spec: claude/reports/specs/2026-05-24_external-attestation-framework.md §10
     async incrementAttestationValidatorStat(validatorPubkey, providerId, field, blockIndex){
