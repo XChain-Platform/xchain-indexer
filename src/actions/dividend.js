@@ -103,8 +103,13 @@ class Dividend {
                 if(address==data['SOURCE'])
                     valid = false;
                 // Add address to the recipients list and calculate AMOUNT of the DIVIDEND_TICK the address should receive
-                if(valid)
-                    recipients[address] = this.util.bcmul(holders[address], data['AMOUNT'], dividendTokenInfo['DECIMALS']);
+                // Skip holders whose calculated share rounds to 0 (e.g. fractional TICK balances when DIVIDEND_TICK is
+                // non-divisible) - they receive no DIVIDEND_TICK, so they must not count toward the per-recipient fee.
+                if(valid){
+                    let share = this.util.bcmul(holders[address], data['AMOUNT'], dividendTokenInfo['DECIMALS']);
+                    if(share != 0)
+                        recipients[address] = share;
+                }
             }
 
             // Determine total DEBIT for this dividend using recipient list
