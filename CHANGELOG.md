@@ -10,6 +10,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - `test/unit/rollback-coverage.test.js` — a rollback-coverage guard. It derives the set of tables the indexer owns from `src/sql/*.sql` (the same source `verifyTables()` uses) and asserts every one is handled by `Rollback` on reorg: in `dataTables` (action_index-keyed delete), `blockTables` (block_index-keyed delete), recomputed during rollback, special-cased, or explicitly exempt with a reason. Also guards against stale references in the rollback lists and a table appearing in both lists. New tables have previously shipped before being wired into the rollback set (e.g. `gated_files` had a 6-day window); this fails at CI time when a table is left unhandled instead of surfacing as silent post-reorg divergence on mainnet.
 
+## [2.7.8] - 2026-05-29
+
+### Fixed
+- `src/utility.js`, `src/actions/dispense.js` — fixed FIAT/COINPAY dispenser unit calculation that could dispense tokens for a dust payment. `bcdiv()` returns a mathjs BigNumber whose string form switches to exponential notation below ~1e-7 (e.g. `"3e-8"`); a prior edit floored it with `parseInt()`, and `parseInt("3e-8")` is `3`, not `0`, so a payment whose true unit count rounds to zero cleared the `units >= 1` affordability gate in `reverseOraclePriceMatch`/`reversePriceMatch` and dispensed tokens (symmetrically, `parseInt("2e+21")` is `2`, under-crediting very large buys). Reverted to `Math.floor(Number(...))`, which parses exponential strings correctly, and made the non-FIAT multiplier in `dispense.js` wrap `Number()` explicitly for the same reason. Also raised the division precision on the two COINPAY unit calcs from 18 to 64 decimals (matching the non-FIAT path) to reduce off-by-one truncation from chained-division rounding. This alters a computed/indexed value, so it is consensus-relevant: safe to land pre-launch (no chain history to diverge), but post-launch an equivalent change would need block-gating via `protocol_changes.js`.
+
 ## [2.7.7] - 2026-05-29
 
 ### Fixed
