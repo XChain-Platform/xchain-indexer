@@ -57,6 +57,15 @@ class HubDbSync {
         this.pollIntervalMs = parseInt(options.pollInterval || process.env.HUB_DB_SYNC_POLL_INTERVAL || '30000');
         this.ws        = null;
         this.running   = false;
+
+        // Highest reference_block present in the local price_snapshots copy. Used by the
+        // block-processing sync barrier (waitForPriceSyncHeight) so an indexer does not
+        // validate native-coin fees for a block until its local price mirror has caught up
+        // to that block — otherwise two operators with different sync states could read a
+        // different latest price round and compute a different fee threshold, diverging the
+        // ledger. Refreshed after every successful price_snapshots sync.
+        this.priceSyncHeight = 0;
+        this._priceWaiters   = [];                         // pending waitForPriceSyncHeight() resolvers
     }
 
     // Start: bootstrap from REST snapshots, then subscribe to live updates
@@ -121,6 +130,68 @@ class HubDbSync {
             }
         }
         console.log('HubDbSync: bootstrapped ' + applied + ' rows into ' + table);
+        if (table === 'price_snapshots') await this._refreshPriceSyncHeight();
+    }
+
+    // Recompute the highest finalized price block present in the local price_snapshots
+    // copy and release any barrier waiters that are now satisfied. Called after every
+    // successful sync of the table (bootstrap, poll, live insert, reorg retraction).
+    async _refreshPriceSyncHeight() {
+        let height = 0;
+        try {
+            let rows = await this.hubDb.doQuery(
+                "SELECT MAX(reference_block) AS h FROM price_snapshots WHERE status = 'finalized'"
+            );
+            if (rows.length > 0 && rows[0].h !== null) height = Number(rows[0].h);
+        } catch (e) {
+            return;                                         // table not ready yet — leave height untouched
+        }
+        this.priceSyncHeight = height;
+        this._releasePriceWaiters();
+    }
+
+    // Resolve any pending waiters whose target height is now covered.
+    _releasePriceWaiters() {
+        if (this._priceWaiters.length === 0) return;
+        let stillWaiting = [];
+        for (let w of this._priceWaiters) {
+            if (this.priceSyncHeight >= w.height) {
+                clearTimeout(w.timer);
+                w.resolve(this.priceSyncHeight);
+            } else {
+                stillWaiting.push(w);
+            }
+        }
+        this._priceWaiters = stillWaiting;
+    }
+
+    // Block-processing sync barrier. Resolves once the local price_snapshots copy holds a
+    // finalized round anchored at reference_block >= blockHeight (i.e. this node has caught
+    // up to the hub for that block, so every round eligible at this block is already local).
+    // Rejects after timeoutMs so the caller can DEFER the block and retry — never validate
+    // native-coin fees against a stale local mirror.
+    //
+    // Price rounds are anchored to the oracle reference chain's block height (reference_block),
+    // so this comparison is only meaningful for an indexer whose own chain IS that reference
+    // chain. Callers on other chains must not gate on this — see XChainIndexer.
+    waitForPriceSyncHeight(blockHeight, timeoutMs) {
+        blockHeight = Number(blockHeight);
+        // Nothing to wait on when sync is disabled (single-host: the local hub DB is the hub
+        // itself, always current) or the target is not a finite height.
+        if (!this.enabled || !Number.isFinite(blockHeight)) return Promise.resolve(this.priceSyncHeight);
+        if (this.priceSyncHeight >= blockHeight)           return Promise.resolve(this.priceSyncHeight);
+
+        let ms = parseInt(timeoutMs);
+        if (!Number.isFinite(ms) || ms <= 0) ms = 60000;
+        return new Promise((resolve, reject) => {
+            let waiter = { height: blockHeight, resolve: resolve, timer: null };
+            waiter.timer = setTimeout(() => {
+                this._priceWaiters = this._priceWaiters.filter(w => w !== waiter);
+                reject(new Error('price sync barrier timed out after ' + ms + 'ms waiting for block ' +
+                                 blockHeight + ' (price mirror at ' + this.priceSyncHeight + ')'));
+            }, ms);
+            this._priceWaiters.push(waiter);
+        });
     }
 
     // Apply a row to the local hub DB (INSERT IGNORE to keep idempotent)
@@ -172,8 +243,10 @@ class HubDbSync {
                 let event = JSON.parse(data.toString());
                 if (event.type === 'row:inserted' && event.table && event.row) {
                     await this._applyRow(event.table, event.row);
+                    if (event.table === 'price_snapshots') await this._refreshPriceSyncHeight();
                 } else if (event.type === 'row:deleted' && event.table) {
                     await this._applyRetraction(event);
+                    if (event.table === 'price_snapshots') await this._refreshPriceSyncHeight();
                 }
             } catch (err) {
                 console.warn('HubDbSync: failed to handle WebSocket message:', err.message);

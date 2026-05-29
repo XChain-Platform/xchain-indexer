@@ -75,6 +75,12 @@ class XChainIndexer {
         this.synced    = false;
         this.stopFlag  = false
         this.blockchainInfoLastBlock = -1
+
+        // Price-sync barrier timeout (ms). Before processing a block, the indexer waits for
+        // its local price mirror to catch up to that block height so native-coin fee
+        // validation is deterministic across operators. On timeout the block is deferred and
+        // retried rather than validated against a stale price copy.
+        this.priceSyncTimeoutMs = parseInt(process.env.HUB_PRICE_SYNC_TIMEOUT_MS || '60000');
     }
 
     // Handle indicating if indexer is synced
@@ -222,6 +228,29 @@ class XChainIndexer {
 
                 // Lookup the block time for a given block (read from decoder DB before opening transaction)
                 let blockTime = await this.decoderDb.getBlockTime(blockToParse);
+
+                // Price-sync barrier: don't process this block until the local price mirror has
+                // caught up to it. Native-coin fee validation reads the latest finalized price
+                // round at or before the block height; if two operators hold different sync
+                // states they can read different rounds, compute different fee thresholds, and
+                // diverge the ledger. Waiting until the mirror covers this block closes that race.
+                //
+                // Price rounds are anchored to BTC block heights, so this height comparison is
+                // only meaningful for a BTC indexer; other chains' block heights are not
+                // comparable to the anchor and would never satisfy the barrier (their price
+                // freshness is addressed separately). No barrier when hub-db sync is disabled
+                // (single-host: the local hub DB is the hub itself, always current).
+                if(this.hubDbSync && this.config['COIN'] === 'BTC'){
+                    try {
+                        await this.hubDbSync.waitForPriceSyncHeight(blockToParse, this.priceSyncTimeoutMs);
+                    } catch(err){
+                        // Defer the block: lastIndexerBlock is not advanced, so the outer loop
+                        // retries this same block after the sleep interval rather than processing
+                        // it against a stale price copy. No transaction is open yet.
+                        console.warn('Deferring block ' + blockToParse + ' (price sync): ' + err.message);
+                        break;
+                    }
+                }
 
                 // Begin a transaction — all indexer DB writes for this block are atomic
                 await this.indexerDb.beginTransaction();
