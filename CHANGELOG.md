@@ -10,6 +10,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - `test/unit/rollback-coverage.test.js` — a rollback-coverage guard. It derives the set of tables the indexer owns from `src/sql/*.sql` (the same source `verifyTables()` uses) and asserts every one is handled by `Rollback` on reorg: in `dataTables` (action_index-keyed delete), `blockTables` (block_index-keyed delete), recomputed during rollback, special-cased, or explicitly exempt with a reason. Also guards against stale references in the rollback lists and a table appearing in both lists. New tables have previously shipped before being wired into the rollback set (e.g. `gated_files` had a 6-day window); this fails at CI time when a table is left unhandled instead of surfacing as silent post-reorg divergence on mainnet.
 
+## [2.7.6] - 2026-05-29
+
+### Fixed
+- `src/configs/LTC.js`, `src/configs/DOGE.js` — added the `STAKING` config block that BTC already declared, so all three chain configs expose a well-formed `STAKING` object instead of `undefined` on LTC/DOGE. `CAPABILITIES` is an empty array on both chains because capability staking is BTC-only at the protocol level; the comment now documents that intent in the config itself. Previously, code reading `config['STAKING']` had to null-guard per call site, and the BTC-only invariant was enforced only by scattered per-handler coin checks — any future handler or utility that read `config['STAKING']` without a guard would have thrown on LTC/DOGE indexers. The stub keeps the practical effect unchanged (the `db.js` capability lookups key into `CAPABILITIES` and find nothing) while making the schema uniform across chains.
+
 ## [2.7.5] - 2026-05-29
 
 ### Fixed

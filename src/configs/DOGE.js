@@ -40,6 +40,11 @@ module.exports = {
         config['FEE_PAYMENT_MODE'] = 'native';               // DOGE: 'native' only (no XCHAIN balance deduction)
         config['FEE_TOLERANCE_MIN'] = '0.95';
         config['FEE_TOLERANCE_MAX'] = '1.10';
+        config['STAKING'] = {
+            COOLDOWN_BLOCKS:         1000,                     // Blocks before unstaked XCHAIN is returned
+            ACTIVATION_DELAY_BLOCKS: 6,                        // Blocks before stake/delegation/unstake takes effect
+            CAPABILITIES: []                                   // Capability staking is BTC-only at the protocol level
+        };
         config['GAS_SCHEDULE'] = {
             ISSUE:              100000,
             ISSUE_SUBTOKEN:     50000,
