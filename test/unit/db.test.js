@@ -565,3 +565,52 @@ describe('Database.getBlockIndex() — decoder reorg parsing @regression @tier1'
         assert.strictEqual(result, null);
     });
 });
+
+// ---------------------------------------------------------------------------
+// describe: getValidatorsByCapability — MIN_STAKE threshold source
+// ---------------------------------------------------------------------------
+// Regression guard: the validator-set snapshot must filter by the caller-supplied
+// threshold (the hub's authoritative MIN_STAKE) when one is provided, and only
+// fall back to this indexer's local config when it is absent. If the local config
+// could override a supplied threshold, two hubs pointing at differently-configured
+// indexers would compute different validator sets for the same block and break
+// PBFT quorum determinism.
+describe('Database.getValidatorsByCapability() — threshold source @regression @tier1', function () {
+    let db;
+
+    beforeEach(function () {
+        const config = getTestConfig();
+        config.STAKING = { CAPABILITIES: { attestation: { MIN_STAKE: '10000' } } };
+        db = {
+            config,
+            getValidatorsByCapability: Database.prototype.getValidatorsByCapability,
+            getStatusId: sinon.stub().resolves(1),
+            doQuery:     sinon.stub().resolves([]),
+        };
+    });
+
+    // The HAVING threshold is always the last bound parameter.
+    function thresholdArg() {
+        return db.doQuery.firstCall.args[1].slice(-1)[0];
+    }
+
+    it('uses the caller-supplied override over local config', async function () {
+        await db.getValidatorsByCapability.call(db, 'attestation', 100, '25000');
+        assert.strictEqual(thresholdArg(), '25000');
+    });
+
+    it('coerces a numeric override to a string', async function () {
+        await db.getValidatorsByCapability.call(db, 'attestation', 100, 25000);
+        assert.strictEqual(thresholdArg(), '25000');
+    });
+
+    it('falls back to local config when no override is supplied', async function () {
+        await db.getValidatorsByCapability.call(db, 'attestation', 100);
+        assert.strictEqual(thresholdArg(), '10000');
+    });
+
+    it('treats a 0 override as a real threshold (not a falsy fallback)', async function () {
+        await db.getValidatorsByCapability.call(db, 'attestation', 100, 0);
+        assert.strictEqual(thresholdArg(), '0');
+    });
+});

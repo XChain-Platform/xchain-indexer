@@ -196,8 +196,11 @@ async function startApi(){
         // Used by xchain-hub's CapabilitySnapshot to lock PBFT quorum N for a
         // consensus round. Deterministic — every hub at the same block sees
         // the same set, so all hubs compute the same quorum.
-        // Body: { capability, block_index }
-        async getcapabilityvalidators({capability, block_index}){
+        // Body: { capability, block_index, min_stake? }
+        // min_stake (optional) lets a caller (the hub) supply its own authoritative
+        // threshold so the validator set doesn't depend on this indexer's local
+        // config. Omitted → indexer falls back to its local config (back-compat).
+        async getcapabilityvalidators({capability, block_index, min_stake}){
             if(!capability || typeof capability !== 'string')
                 return { error: 'capability is required' };
             if(block_index === undefined || block_index === null)
@@ -211,7 +214,7 @@ async function startApi(){
                 let latestBlock = await indexer.indexerDb.getLatestBlockIndex();
                 if(blk > latestBlock)
                     return { error: 'block_index ' + blk + ' not yet indexed (latest: ' + latestBlock + ')' };
-                let validators = await indexer.indexerDb.getValidatorsByCapability(capability, blk);
+                let validators = await indexer.indexerDb.getValidatorsByCapability(capability, blk, min_stake);
                 return {
                     capability:  capability,
                     block_index: blk,

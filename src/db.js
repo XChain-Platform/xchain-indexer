@@ -7179,11 +7179,18 @@ class Database {
     // every hub independently calling this against the same blockIndex must
     // arrive at the same set, so consensus on quorum N is deterministic.
     // Spec: claude/reports/specs/2026-05-24_capability-staking-model.md §6
-    async getValidatorsByCapability(capability, blockIndex){
+    async getValidatorsByCapability(capability, blockIndex, minStakeOverride){
         let caps = (this.config['STAKING'] && this.config['STAKING']['CAPABILITIES']) ? this.config['STAKING']['CAPABILITIES'] : {};
         let capConfig = caps[capability];
         if(!capConfig) return [];
-        let minStake = capConfig['MIN_STAKE'] || '0';
+        // A caller-supplied threshold (the hub passes its own authoritative
+        // MIN_STAKE) takes precedence over this indexer's local config. The local
+        // config can drift between independently-operated indexers, so honouring
+        // the caller's value keeps every hub computing the same validator set for
+        // the same block. Non-hub callers omit it and get the local fallback.
+        let minStake = (minStakeOverride !== undefined && minStakeOverride !== null)
+            ? String(minStakeOverride)
+            : (capConfig['MIN_STAKE'] || '0');
         let valid_id = await this.getStatusId('valid');
         if(valid_id === null) return [];
         let query = `SELECT ip.pubkey AS pubkey,
