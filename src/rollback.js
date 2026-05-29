@@ -19,6 +19,8 @@
  *
  ********************************************************************/
 
+const crypto = require('crypto');
+
 class Rollback {
 
     // Handle constructing a class instance
@@ -408,6 +410,16 @@ class Rollback {
             args  = [block_index];
             await this.indexerDb.doQuery(query, args);
 
+            // Re-derive attestation_validator_stats for the orphaned range. This is
+            // a monotone aggregate (fulfilled/missed/slashed counters per
+            // validator/provider) with no action_index or block FK, so neither
+            // generic delete loop above can touch it. A blanket delete would also
+            // drop increments earned in surviving blocks. Instead we drop only the
+            // rows whose most-recent touch is in the orphaned range and rebuild them
+            // from the surviving signatures + expired-request records, matching what
+            // a from-genesis replay to block_index-1 would produce.
+            await this._recomputeAttestationValidatorStats(block_index);
+
             // DEBUG : Full balances and token updates
             // await this.indexerDb.updateBalances(true, true);
             // await this.indexerDb.updateTokens(true, true);
@@ -455,6 +467,153 @@ class Rollback {
 
         // Log the rollback time
         this.util.logTimer(rollbackTimer, 'Rollback Done');
+    }
+
+    // Re-derive attestation_validator_stats rows touched at or after block_index.
+    //
+    // The counters are written incrementally by the ATTEST handler
+    // (db.incrementAttestationValidatorStat):
+    //   - fulfilled_count: +1 per verified signature on a STATUS='ok' response.
+    //   - missed_count:    +1 per responsible-set validator when a request expires.
+    //   - slashed_count:   Phase 4 (no producer yet → always 0).
+    // Because the table is keyed by (validator_pubkey, provider_id) and carries
+    // only counters, it can't be rolled back by deleting a row range — earlier,
+    // surviving increments live in the same row as the orphaned ones. So we drop
+    // every row whose last touch is in the orphaned range and rebuild those exact
+    // pairs from the surviving ledger. Runs inside the rollback transaction (after
+    // the data/block deletes), so every query below sees only post-rollback rows.
+    async _recomputeAttestationValidatorStats(block_index){
+        // Pairs whose counters may include orphaned increments: any row last
+        // touched at/after block_index. Increments stamp last_updated_block with
+        // the touch block and blocks advance monotonically, so a pair touched in
+        // the orphaned range always has last_updated_block >= block_index here.
+        let pairRows = await this.indexerDb.doQuery(
+            `SELECT validator_pubkey, provider_id
+             FROM attestation_validator_stats
+             WHERE last_updated_block >= ?`,
+            [block_index]
+        );
+        if(pairRows.length === 0)
+            return;
+
+        let affected = new Set();
+        for(let r of pairRows)
+            affected.add(String(r.validator_pubkey).toLowerCase() + '|' + String(r.provider_id));
+
+        // Drop the stale rows. Any pair whose entire history was orphaned simply
+        // stays gone — a from-genesis replay would never have created its row.
+        await this.indexerDb.doQuery(
+            `DELETE FROM attestation_validator_stats WHERE last_updated_block >= ?`,
+            [block_index]
+        );
+
+        // Accumulate recomputed counters: key -> { pubkey, provider, fulfilled, missed, lastBlock }
+        let stats  = new Map();
+        let ensure = (pubkey, provider) => {
+            let key = pubkey + '|' + provider;
+            if(!stats.has(key))
+                stats.set(key, { pubkey, provider, fulfilled: 0, missed: 0, lastBlock: 0 });
+            return stats.get(key);
+        };
+
+        // fulfilled_count: one per verified signature contributed to a STATUS='ok'
+        // response. Signatures live in attestation_validator_signatures (block
+        // scoped, already rolled back); provider_id comes from the joined response.
+        let fulfilledRows = await this.indexerDb.doQuery(
+            `SELECT avs.validator_pubkey AS pubkey,
+                    ar.provider_id        AS provider,
+                    COUNT(*)              AS cnt,
+                    MAX(avs.block_index)  AS last_block
+             FROM attestation_validator_signatures avs
+             INNER JOIN attestation_responses ar ON ar.action_index = avs.response_action_index
+             WHERE ar.response_status = 'ok'
+             GROUP BY avs.validator_pubkey, ar.provider_id`,
+            []
+        );
+        for(let row of fulfilledRows){
+            let s = ensure(String(row.pubkey).toLowerCase(), String(row.provider));
+            s.fulfilled = Number(row.cnt) || 0;
+            s.lastBlock = Math.max(s.lastBlock, Number(row.last_block) || 0);
+        }
+
+        // missed_count: one per responsible-set validator each time a request
+        // expired. There is no per-validator expiry row to count — the live path
+        // recomputes the responsible set deterministically and bumps each member.
+        // We reproduce that over the surviving requests that WOULD have expired in
+        // a replay to block_index-1: a request expires at deadline_block+1 (the
+        // first sweep past its deadline), so it counts iff deadline_block+1 <=
+        // block_index-1 (i.e. deadline_block < block_index-1) AND no *valid*
+        // response survives for it (any valid response flips it out of 'pending'
+        // before the deadline, so it never expires). We derive eligibility from
+        // surviving rows, NOT request_status, because rollback does not reset
+        // request_status (a response/expiry undone by the reorg leaves it stale).
+        let validId = await this.indexerDb.getStatusId('valid');
+        let expiredReqs = await this.indexerDb.doQuery(
+            `SELECT ar.request_id, ar.provider_id, ar.redundancy, ar.block_index, ar.deadline_block
+             FROM attestation_requests ar
+             WHERE ar.deadline_block < ?
+               AND NOT EXISTS (
+                   SELECT 1 FROM attestation_responses r
+                   WHERE r.request_id = ar.request_id
+                     AND r.status_id = ?
+               )`,
+            [block_index - 1, validId]
+        );
+
+        // Cache the capability set per request block — getValidatorsByCapability
+        // is the same deterministic snapshot the live expiry path consulted.
+        let validatorsByBlock = new Map();
+        for(let req of expiredReqs){
+            let reqBlock   = Number(req.block_index);
+            let validators = validatorsByBlock.get(reqBlock);
+            if(validators === undefined){
+                let vs     = await this.indexerDb.getValidatorsByCapability('attestation', reqBlock);
+                validators = (vs || []).map(v => String(v.pubkey).toLowerCase());
+                validatorsByBlock.set(reqBlock, validators);
+            }
+            let responsible = this._responsibleSet(String(req.request_id), validators, Number(req.redundancy));
+            let provider    = String(req.provider_id);
+            let expiryBlock  = Number(req.deadline_block) + 1;
+            for(let pubkey of responsible){
+                let s = ensure(pubkey, provider);
+                s.missed   += 1;
+                s.lastBlock = Math.max(s.lastBlock, expiryBlock);
+            }
+        }
+
+        // Re-insert recomputed rows for the pairs we dropped (others are already
+        // correct). slashed_count/quality_score re-derive to 0 (Phase 4 unshipped).
+        for(let s of stats.values()){
+            if(!affected.has(s.pubkey + '|' + s.provider))
+                continue;
+            if(s.fulfilled === 0 && s.missed === 0)
+                continue;
+            await this.indexerDb.doQuery(
+                `INSERT INTO attestation_validator_stats
+                    (validator_pubkey, provider_id, fulfilled_count, missed_count, slashed_count, quality_score, last_updated_block)
+                 VALUES (?, ?, ?, ?, 0, 0, ?)
+                 ON DUPLICATE KEY UPDATE
+                    fulfilled_count    = VALUES(fulfilled_count),
+                    missed_count       = VALUES(missed_count),
+                    slashed_count      = VALUES(slashed_count),
+                    last_updated_block = VALUES(last_updated_block)`,
+                [s.pubkey, s.provider, s.fulfilled, s.missed, s.lastBlock]
+            );
+        }
+    }
+
+    // Deterministic responsible validator set — mirrors attest.js
+    // _computeResponsibleSet: sort the capability validators by
+    // SHA256(request_id || pubkey), take the top REDUNDANCY.
+    _responsibleSet(requestId, validators, redundancy){
+        if(!validators || validators.length === 0)
+            return [];
+        let withHash = validators.map(pk => ({
+            pubkey: pk,
+            hash:   crypto.createHash('sha256').update(String(requestId), 'utf8').update(pk, 'utf8').digest('hex')
+        }));
+        withHash.sort((a, b) => (a.hash < b.hash) ? -1 : (a.hash > b.hash ? 1 : 0));
+        return withHash.slice(0, Math.max(1, Number(redundancy) || 1)).map(v => v.pubkey);
     }
 }
 

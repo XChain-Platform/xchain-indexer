@@ -56,9 +56,12 @@ const UNIVERSE = fs.readdirSync(SQL_DIR)
 
 // Tables not deleted by index but fully recomputed from surviving ledger rows
 // inside rollback() (updateBalances / updateTokens / updateMarkets /
-// updateContractBalances). `tokens` is ALSO in dataTables — listing it here is
-// harmless; coverage is a union, not a partition.
-const RECOMPUTED = ['balances', 'tokens', 'markets', 'contract_balances'];
+// updateContractBalances; attestation_validator_stats via
+// _recomputeAttestationValidatorStats — drops rows last touched in the orphaned
+// range, then rebuilds them from surviving signatures + expired requests).
+// `tokens` is ALSO in dataTables — listing it here is harmless; coverage is a
+// union, not a partition.
+const RECOMPUTED = ['balances', 'tokens', 'markets', 'contract_balances', 'attestation_validator_stats'];
 
 // Tables deleted by bespoke logic in rollback() rather than the generic loops.
 // contract_emissions is cascade-deleted via its contract_executions parent.
@@ -72,12 +75,6 @@ const ROLLBACK_EXEMPT = {
     events:
         'Append-only operational audit log — it records the REORG event itself. ' +
         'Rolling it back would erase the evidence of the rollback.',
-    attestation_validator_stats:
-        'Monotone counter table (fulfilled/missed/slashed counts). A blanket ' +
-        'delete would drop earlier increments that should survive; correct ' +
-        'rollback needs a recompute pass against attestation_responses. ' +
-        'Deliberately deferred — see db.js incrementAttestationValidatorStat(). ' +
-        'MUST be resolved before slashed_count/quality_score drive live slashing.',
     icons:
         'TIS icon dedup lookup; not populated on the per-action indexing path.',
 };
