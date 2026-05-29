@@ -502,3 +502,66 @@ describe('Database.getBlockIndex() — input validation @regression @tier1', fun
         }
     });
 });
+
+// ---------------------------------------------------------------------------
+// describe: getBlockIndex — decoder reorg parsing (mocked doQuery)
+//
+// The decoder stores REORG events as a JSON-serialised array of
+// {block_index, block_hash} objects. getBlockIndex('decoder','reorg') must
+// unwrap the numeric block_index from each element and return the lowest one
+// as a number — not the raw object. A regression here breaks the rollback
+// trigger check, so rollbacks silently never fire.
+// ---------------------------------------------------------------------------
+describe('Database.getBlockIndex() — decoder reorg parsing @regression @tier1', function () {
+    let db;
+
+    beforeEach(function () {
+        const config = getTestConfig();
+        const util   = new Utility();
+        sinon.stub(util, 'logError');
+        db = {
+            config,
+            util,
+            doQuery: sinon.stub().resolves([]),
+            getBlockIndex: Database.prototype.getBlockIndex,
+        };
+    });
+
+    afterEach(function () {
+        sinon.restore();
+    });
+
+    it('returns a number (not an object) for the object-array format', async function () {
+        const events = [{ block_index: 120, block_hash: 'abc123' }];
+        db.doQuery.resolves([{ data: JSON.stringify(events) }]);
+        const result = await db.getBlockIndex.call(db, 'decoder', 'reorg');
+        assert.strictEqual(typeof result, 'number');
+        assert.strictEqual(result, 120);
+    });
+
+    it('returns the lowest block_index across multiple orphaned blocks', async function () {
+        const events = [
+            { block_index: 122, block_hash: 'h122' },
+            { block_index: 120, block_hash: 'h120' },
+            { block_index: 121, block_hash: 'h121' },
+        ];
+        db.doQuery.resolves([{ data: JSON.stringify(events) }]);
+        const result = await db.getBlockIndex.call(db, 'decoder', 'reorg');
+        assert.strictEqual(result, 120);
+    });
+
+    it('produces a value that compares numerically (rollback trigger fires)', async function () {
+        const events = [{ block_index: 120, block_hash: 'abc' }];
+        db.doQuery.resolves([{ data: JSON.stringify(events) }]);
+        const lastDecoderReorgBlock = await db.getBlockIndex.call(db, 'decoder', 'reorg');
+        const lastIndexerBlock = 130;
+        // This is the upstream rollback guard; it must evaluate true here.
+        assert.strictEqual(lastIndexerBlock >= lastDecoderReorgBlock, true);
+    });
+
+    it('returns null when there are no reorg events', async function () {
+        db.doQuery.resolves([]);
+        const result = await db.getBlockIndex.call(db, 'decoder', 'reorg');
+        assert.strictEqual(result, null);
+    });
+});

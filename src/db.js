@@ -540,8 +540,11 @@ class Database {
                         let data = JSON.parse(row.data);
                         if(typeof data === 'object'){
                             for (let block of data){
-                                if(block < block_index || !block_index)
-                                    block_index = block;
+                                // Reorg events are stored as an array of {block_index, block_hash}
+                                // objects, so unwrap the numeric block index before comparing.
+                                let idx = (typeof block === 'object' && block !== null) ? block.block_index : block;
+                                if(idx < block_index || block_index === null)
+                                    block_index = idx;
                             }
                         }
 
