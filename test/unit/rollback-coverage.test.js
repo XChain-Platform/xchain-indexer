@@ -62,7 +62,9 @@ const RECOMPUTED = ['balances', 'tokens', 'markets', 'contract_balances'];
 
 // Tables deleted by bespoke logic in rollback() rather than the generic loops.
 // contract_emissions is cascade-deleted via its contract_executions parent.
-const SPECIAL_CASE = ['contract_emissions'];
+// price_snapshots anchors rounds via reference_block (not block_index), so it
+// gets its own delete (`reference_block >= ?`) outside the blockTables loop.
+const SPECIAL_CASE = ['contract_emissions', 'price_snapshots'];
 
 // Tables intentionally never rolled back. Every entry MUST state why, and is
 // asserted below to actually exist (so this list can't rot with stale names).
@@ -78,8 +80,6 @@ const ROLLBACK_EXEMPT = {
         'MUST be resolved before slashed_count/quality_score drive live slashing.',
     icons:
         'TIS icon dedup lookup; not populated on the per-action indexing path.',
-    price_snapshots:
-        'Price-round cache owned by xchain-hub; the indexer has no write path to it.',
 };
 
 // Convention: append-only, id-keyed dedup lookups. Orphaned rows are inert

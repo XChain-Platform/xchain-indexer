@@ -396,6 +396,18 @@ class Rollback {
                 await this.indexerDb.doQuery(query, args);
             }
 
+            // Delete consensus price snapshots anchored to the orphaned blocks.
+            // price_snapshots anchors each round to a block via reference_block
+            // (its equivalent of block_index) rather than block_index itself, so
+            // it falls outside the generic blockTables loop above and needs its
+            // own delete. Without it, snapshots tied to orphaned blocks survive
+            // with status='finalized' and a from-genesis replay on the new chain
+            // never regenerates those rounds, leaving replaying nodes permanently
+            // divergent from surviving nodes on this table.
+            query = `DELETE FROM price_snapshots WHERE reference_block >= ?`;
+            args  = [block_index];
+            await this.indexerDb.doQuery(query, args);
+
             // DEBUG : Full balances and token updates
             // await this.indexerDb.updateBalances(true, true);
             // await this.indexerDb.updateTokens(true, true);

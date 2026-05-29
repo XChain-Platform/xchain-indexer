@@ -10,6 +10,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - `test/unit/rollback-coverage.test.js` — a rollback-coverage guard. It derives the set of tables the indexer owns from `src/sql/*.sql` (the same source `verifyTables()` uses) and asserts every one is handled by `Rollback` on reorg: in `dataTables` (action_index-keyed delete), `blockTables` (block_index-keyed delete), recomputed during rollback, special-cased, or explicitly exempt with a reason. Also guards against stale references in the rollback lists and a table appearing in both lists. New tables have previously shipped before being wired into the rollback set (e.g. `gated_files` had a 6-day window); this fails at CI time when a table is left unhandled instead of surfacing as silent post-reorg divergence on mainnet.
 
+## [2.7.5] - 2026-05-29
+
+### Fixed
+- `src/rollback.js` — `price_snapshots` was not rolled back on reorg. The table anchors each consensus price round to a block via `reference_block` (its equivalent of `block_index`), so it fell outside the generic `blockTables` delete loop, which keys on `block_index`. After a reorg, snapshot rows tied to orphaned blocks survived with `status='finalized'`; because a from-genesis replay on the post-reorg chain never re-produces those rounds (the triggering blocks no longer exist), replaying nodes and surviving nodes diverged permanently on this table at any snapshot round boundary touched by the reorg. Added a dedicated `DELETE FROM price_snapshots WHERE reference_block >= ?` inside the rollback transaction, alongside the other per-table deletes, so it participates in the same atomicity guarantee.
+- `test/unit/rollback-coverage.test.js` — corrected the coverage classification for `price_snapshots`. It had been listed in `ROLLBACK_EXEMPT` with the justification that the indexer has no write path to it, which was wrong (`OracleConsensus` writes consensus rounds to it). Moved it to `SPECIAL_CASE` to reflect the new bespoke `reference_block` delete, so the coverage guard now asserts the table is handled on reorg.
+
 ## [2.7.4] - 2026-05-28
 
 ### Fixed
