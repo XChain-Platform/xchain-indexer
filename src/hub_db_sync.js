@@ -193,8 +193,26 @@ class HubDbSync {
 
     _scheduleReconnect() {
         if (!this.running) return;
-        setTimeout(() => {
-            if (this.running) this._connectWebSocket();
+        setTimeout(async () => {
+            if (!this.running) return;
+            this._connectWebSocket();
+
+            // Re-bootstrap after reconnecting. The WebSocket subscription only
+            // delivers rows broadcast after we resubscribe; any rows the hub
+            // inserted while we were disconnected would otherwise be missing
+            // permanently. _bootstrapTable uses the local max-ID as since_id, so
+            // this fetches only genuinely-missing rows (re-receives are harmless
+            // thanks to INSERT IGNORE in _applyRow).
+            try {
+                await this._bootstrapTable('price_snapshots');
+            } catch (err) {
+                console.warn('HubDbSync: price_snapshots re-bootstrap failed:', err.message);
+            }
+            try {
+                await this._bootstrapTable('oracle_prices');
+            } catch (err) {
+                console.warn('HubDbSync: oracle_prices re-bootstrap failed:', err.message);
+            }
         }, 5000);
     }
 
