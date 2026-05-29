@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `test/unit/rollback-coverage.test.js` — a rollback-coverage guard. It derives the set of tables the indexer owns from `src/sql/*.sql` (the same source `verifyTables()` uses) and asserts every one is handled by `Rollback` on reorg: in `dataTables` (action_index-keyed delete), `blockTables` (block_index-keyed delete), recomputed during rollback, special-cased, or explicitly exempt with a reason. Also guards against stale references in the rollback lists and a table appearing in both lists. New tables have previously shipped before being wired into the rollback set (e.g. `gated_files` had a 6-day window); this fails at CI time when a table is left unhandled instead of surfacing as silent post-reorg divergence on mainnet.
+
 ## [2.7.4] - 2026-05-28
 
 ### Fixed
