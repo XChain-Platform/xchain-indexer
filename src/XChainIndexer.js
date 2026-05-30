@@ -337,7 +337,7 @@ class XChainIndexer {
             }
 
             // Set flag to indicate fully synced and listening for block
-            if(!this.synced){
+            if(!this.synced && !this.util.bclt(lastIndexerBlock, lastDecoderBlock)){
                 this.synced = true;
                 console.log('Listening for blocks...');
             }

@@ -641,11 +641,13 @@ class Database {
                         a1.address as source,
                         a2.address as destination,
                         t1.amount,
+                        t1.fee,
                         t1.block_index,
                         b1.block_time,
                         t3.vout,
                         t3.amount as output_amount,
-                        a3.address as output_destination
+                        a3.address as output_destination,
+                        p1.pubkey as source_pubkey
                     FROM
                         transactions t1
                         INNER JOIN blocks              b1 ON (b1.block_index=t1.block_index)
@@ -654,10 +656,11 @@ class Database {
                         LEFT  JOIN index_addresses     a1 ON (a1.id=t1.source_id)
                         LEFT  JOIN index_addresses     a2 ON (a2.id=t1.destination_id)
                         LEFT  JOIN index_addresses     a3 ON (a3.id=t3.destination_id)
-                    WHERE 
+                        LEFT  JOIN pubkeys             p1 ON (p1.address_id=t1.source_id)
+                    WHERE
                         t1.block_index=?
-                    ORDER BY 
-                        t1.tx_index ASC, 
+                    ORDER BY
+                        t1.tx_index ASC,
                         t3.vout ASC`;
         let results = await this.doQuery(query, [block_index]);
         if(results.length > 0){
@@ -1020,8 +1023,13 @@ class Database {
             let block_index = data.BLOCK_INDEX;
             let source_id   = await this.createAddress(data.SOURCE);
             let tx_hash_id  = await this.createTransaction(data.TX_HASH);
-            let query       = "INSERT INTO transactions (tx_index, block_index, tx_hash_id, source_id) values (?, ?, ?, ?)";
-            let results     = await this.doQuery(query, [tx_index, block_index, tx_hash_id, source_id]);
+            let fee         = (data.FEE !== undefined && data.FEE !== null) ? data.FEE : null;
+            let tx_data     = (data.TX_DATA !== undefined && data.TX_DATA !== null) ? data.TX_DATA : null;
+            let query       = "INSERT INTO transactions (tx_index, block_index, tx_hash_id, source_id, fee, data) values (?, ?, ?, ?, ?, ?)";
+            let results     = await this.doQuery(query, [tx_index, block_index, tx_hash_id, source_id, fee, tx_data]);
+            // Store source pubkey mapping if the decoder provided one
+            if(data.SOURCE_PUBKEY && source_id)
+                await this.createPubkey(source_id, data.SOURCE_PUBKEY);
         }
         return tx_index;
     }
