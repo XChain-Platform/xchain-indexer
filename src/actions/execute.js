@@ -255,14 +255,22 @@ class Execute {
             }
         }
 
-        if(vmError && !error)
-            error = 'invalid: VM execution error: ' + vmError;
+        // A VM-execution failure (revert / out_of_gas / timeout / runtime error) is NOT a
+        // pre-VM rejection: the contract DID run and consumed gas, so the caller pays for the
+        // failed attempt (see the gas-debit note below). Atomicity is preserved — state changes
+        // and emissions are applied only on vmResult.success. We record a dedicated execution
+        // status ('reverted' / 'out_of_gas' / 'timeout' / 'failed') and deliberately leave
+        // `error` null so the gas debit fires, mirroring the in-memory debit taken before the
+        // VM ran. (Leaving it as a generic 'invalid:' error would skip the debit, letting any
+        // caller burn up to the gas ceiling / CPU limit for free — a node-DoS vector.)
+        let vmFailed = Boolean(vmError) && !error;
+        let vmStatus = vmFailed ? this._vmFailureStatus(vmError) : null;
 
         // Recalculate fee based on actual gas used
         fee = this.util.bcmul(gasUsed, this.config['GAS_PRICE'], 8);
 
         // Determine final status
-        let status = (error) ? error : 'valid';
+        let status = error ? error : (vmStatus || 'valid');
         data['STATUS'] = status;
 
         // Print status message
@@ -278,7 +286,7 @@ class Execute {
             GAS_USED        : gasUsed,
             GAS_LIMIT       : gasUsed, // TODO: user-specified gas limit
             STATUS          : status,
-            ERROR_MESSAGE   : error || null,
+            ERROR_MESSAGE   : error || vmError || null,
             EMITTED_COUNT   : emittedCount,
             BLOCK_INDEX     : data['BLOCK_INDEX']
         });
@@ -291,9 +299,12 @@ class Execute {
             debits  = [];
 
         // Debit gas fee from SOURCE. Mirror the in-memory balance debit's condition
-        // EXACTLY (!error && !skipFee && feePaymentMode === 2). A reverted VM run leaves
-        // `error` null (it sets vmError, status='reverted'), so the "caller pays for a
-        // failed attempt" case still debits. But an EXECUTE rejected before the VM ran
+        // EXACTLY (!error && !skipFee && feePaymentMode === 2). A failed VM run (revert /
+        // out_of_gas / timeout) leaves `error` null (it sets vmError + a dedicated vmStatus),
+        // so the "caller pays for a failed attempt" case still debits. The source is known to
+        // hold GAS credits here (it passed the pre-VM balance check), so the debit stays
+        // ledger/balance-consistent even if it drives the balance negative. But an EXECUTE
+        // rejected before the VM ran
         // (insufficient GAS funds / inactive contract / sleeping source) sets `error`
         // and must NOT record a ledger debit: burning gas the source never had drops
         // ledger supply while getAddressBalances (which only iterates credit ticks)
@@ -314,6 +325,17 @@ class Execute {
 
         // Create action mappings
         await this.mapper.createMappings(data);
+    }
+
+    // Map a VM failure message ("revert: ...", "out_of_gas: ...", "timeout: ...", "error: ...")
+    // to a concise, consensus-stable execution status. The detailed message is preserved in
+    // contract_executions.ERROR_MESSAGE; only this short token is interned in index_statuses.
+    _vmFailureStatus(vmError){
+        let msg = String(vmError || '');
+        if(msg.startsWith('revert:'))     return 'reverted';
+        if(msg.startsWith('out_of_gas:')) return 'out_of_gas';
+        if(msg.startsWith('timeout:'))    return 'timeout';
+        return 'failed';
     }
 
     /*****************************************************************
