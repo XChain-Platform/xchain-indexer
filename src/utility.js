@@ -1114,8 +1114,13 @@ class Utility {
         // Get list of market orders for the given block
         // Note: this also gets a list of any markets that have not had an update in the past 24 hours
         let markets = await db.getMarkets(block_index, true);
-        // Process all market pairs in parallel (each pair is independent)
-        await Promise.all(markets.map(async (pair) => {
+        // Process market pairs sequentially so that any new pair's row is
+        // inserted in a deterministic order. createMarket() assigns an
+        // AUTO_INCREMENT id on first insert; fanning the inserts out
+        // concurrently let the id be assigned in DB-completion order, so two
+        // nodes processing the same block could give the same pair different
+        // ids. A serial loop pins the id to pair-iteration order on every node.
+        for(let pair of markets){
             // Create market
             let market_id = await db.createMarket(pair.tick1_id, pair.tick2_id);
             // Get the market data
@@ -1124,7 +1129,7 @@ class Utility {
             data.last_updated = block_time;
             // Update market with the updated data
             await db.updateMarketInfo(data);
-        }));
+        }
     }
 
 
