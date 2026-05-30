@@ -78,6 +78,19 @@ const INDEXER_API_KEY = process.env.INDEXER_API_KEY || '';
 // Set of write methods that require the API key when one is configured
 const WRITE_METHODS = new Set(['pushvalidatorrewards']);
 
+// Set of federation read methods that require the API key when one is
+// configured. These expose the staked validator set and the pending
+// attestation work queue (including provider URLs queued for external
+// fetch), so they are gated to authenticated federation callers only —
+// preventing unauthenticated enumeration and attestation pre-fetch
+// contamination. Hub callers attach the key via the x-api-key header.
+const FEDERATION_READ_METHODS = new Set([
+    'getownstake',
+    'getactivevalidators',
+    'getcapabilityvalidators',
+    'getpendingattestation_requests'
+]);
+
 // Start up the API
 async function startApi(){
 
@@ -99,11 +112,12 @@ async function startApi(){
         methods: ['POST']
     }));
 
-    // API key enforcement for write methods
+    // API key enforcement for write + federation read methods
     app.use((req, res, next) => {
         if(!INDEXER_API_KEY) return next();
         let method = req.body && req.body.method;
-        if(method && WRITE_METHODS.has(method.toLowerCase())){
+        let normalized = method ? method.toLowerCase() : '';
+        if(method && (WRITE_METHODS.has(normalized) || FEDERATION_READ_METHODS.has(normalized))){
             let provided = req.headers['x-api-key'] || '';
             if(provided !== INDEXER_API_KEY){
                 return res.status(401).json({
