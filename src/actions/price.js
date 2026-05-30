@@ -16,15 +16,15 @@
  * XChain Platform Action - PRICE
  *
  * Two versions:
- *   v0: Validator COIN/FIAT snapshot (PBFT-signed by Tier 1 validators)
+ *   v0: Validator COIN/FIAT snapshot (PBFT-signed by price-capable validators)
  *       Format: PRICE|0|ROUND|TIMESTAMP|PAIR_COUNT|PAIR_ID|PAIR_PRICE|...|SIG_COUNT|PUBKEY|SIG|...
  *   v1: User TOKEN/FIAT oracle price (no staking required)
  *       Format: PRICE|1|COIN|TICK|FIAT|VALUE|FEE|MEMO
  *
  * v0 validation:
- *   1. Each PUBKEY must have an active Tier 1 stake
+ *   1. Each PUBKEY must have an active price capability stake
  *   2. Each Ed25519 signature must verify against the canonical payload
- *   3. SIG_COUNT must meet PBFT quorum: >= 2 * floor((tier1_count - 1) / 3) + 1
+ *   3. SIG_COUNT must meet PBFT quorum: >= 2 * floor((price_count - 1) / 3) + 1
  *
  * After validation, the indexer pushes the round to xchain-hub which
  * deduplicates by round_number into the unified price_snapshots table.
@@ -129,7 +129,7 @@ class Price {
         data['SIGS_JSON']  = sigs.length  > 0 ? JSON.stringify(sigs)  : null;
 
         // Verify Ed25519 signatures against the canonical payload
-        // Each pubkey must have an active Tier 1 stake at the BLOCK_INDEX of this PRICE tx
+        // Each pubkey must have an active price capability stake at the BLOCK_INDEX of this PRICE tx
         if(!error){
             let payload    = ed25519.buildPriceV0Payload(round, timestamp, pairs);
             let validSigs  = 0;

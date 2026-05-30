@@ -1924,8 +1924,7 @@ class Database {
                     addrs.push(row.address);
         }
         // Loop through addresses and update balance list
-        for(address of addrs)
-            await this.updateAddressBalance(address, rollback);
+        await Promise.all(addrs.map(addr => this.updateAddressBalance(addr, rollback)));
     }
 
     // Create/Update/Delete records in the 'balances' table
@@ -1947,24 +1946,14 @@ class Database {
         // Handle updating any current balances based on credits/debits table records
         for(let tick_id in balances){
             balance = balances[tick_id];
-            let action  = 'insert';
-            query = "SELECT id FROM balances WHERE address_id=? AND tick_id=? LIMIT 1";
-            results = await this.doQuery(query, [address_id, tick_id]);
-            if(results.length > 0)
-                action = 'update';
             let args = [];
-            if(balance==0)
-                action = 'delete';
-            // Convert BigNumber to plain string so mariadb driver serializes it correctly
-            balance = String(balance);
-            if(action=='delete'){
-                query = "DELETE FROM balances WHERE address_id=? AND tick_id=? ";
+            if(balance==0){
+                query = "DELETE FROM balances WHERE address_id=? AND tick_id=?";
                 args.push(address_id, tick_id);
-            } else if(action=='update'){
-                query = "UPDATE balances SET amount=? WHERE address_id=? AND tick_id=? ";
-                args.push(balance, address_id, tick_id);
-            } else if(action=='insert'){
-                query = "INSERT INTO balances (tick_id, address_id, amount) values (?, ?, ?)";
+            } else {
+                // Convert BigNumber to plain string so mariadb driver serializes it correctly
+                balance = String(balance);
+                query = "INSERT INTO balances (tick_id, address_id, amount) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE amount = VALUES(amount)";
                 args.push(tick_id, address_id, balance);
             }
             results = await this.doQuery(query, args);
