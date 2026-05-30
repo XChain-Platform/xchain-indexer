@@ -108,8 +108,8 @@ class Utility {
 
     // Throw an error and log to console
     throwError(error){
-        console.error('throwError: ' + error);
-        throw new Error(error);
+        console.error('throwError:', error);
+        throw error;
     }
 
     // Log an error to the error.log file
