@@ -14,7 +14,7 @@
     "express-json-rpc-router": "^1.4.0",
     "fs": "^0.0.1-security",
     "helmet": "^7.1.0",
-    "mariadb": "^3.2.3",
+    "mariadb": "~3.4.5",
     "mathjs": "^15.2.0",
     "xchain-vm": "file:./xchain-vm"
   },
@@ -55,6 +55,7 @@
   },
   "overrides": {
     "serialize-javascript": "^7.0.5",
-    "diff": "^8.0.3"
+    "diff": "^8.0.3",
+    "tmp": ">=0.2.2"
   }
 }
