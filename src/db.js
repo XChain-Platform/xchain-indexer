@@ -181,6 +181,11 @@ class Database {
     // Returns array of {name, nullable} or null when parsing can't recognize
     // the file (e.g. a non-CREATE-TABLE definition).
     parseExpectedColumns(sqlData){
+        // Strip `--` line comments BEFORE any structural parsing. Inline comments
+        // routinely contain commas and parens (e.g. `-- 0=request, 1=response
+        // (matches ...)`) that otherwise fool the top-level-comma split below into
+        // emitting phantom columns and triggering bogus ADD COLUMN drift fixes.
+        sqlData = this.stripSqlLineComments(sqlData);
         const m = sqlData.match(/CREATE\s+TABLE\s+\S+\s*\(([\s\S]+?)\)\s*ENGINE/i);
         if(!m) return null;
         // Split on top-level commas (i.e. commas not inside type parens like VARCHAR(250))
@@ -260,11 +265,45 @@ class Database {
     // MariaDB hiccup during init, fatal-looped the indexer on every block).
     // Retries the whole file with exponential backoff so transient DB issues
     // don't leave half-built schema.
+    // Remove SQL `--` line comments while respecting quoted strings, so a ';'
+    // appearing inside comment prose is never mistaken for a statement
+    // terminator. Single/double-quote and backtick spans are preserved verbatim
+    // (doubled quotes treated as escapes); a `--` outside any quote skips to the
+    // end of its line. Newlines are kept so error positions stay meaningful.
+    stripSqlLineComments(sql){
+        let out = '';
+        let quote = null;
+        for(let i = 0; i < sql.length; i++){
+            const ch = sql[i];
+            if(quote){
+                out += ch;
+                if(ch === quote){
+                    if(sql[i + 1] === quote){ out += sql[++i]; }
+                    else { quote = null; }
+                }
+                continue;
+            }
+            if(ch === "'" || ch === '"' || ch === '`'){ quote = ch; out += ch; continue; }
+            if(ch === '-' && sql[i + 1] === '-'){
+                while(i < sql.length && sql[i] !== '\n'){ i++; }
+                if(i < sql.length){ out += '\n'; }
+                continue;
+            }
+            out += ch;
+        }
+        return out;
+    }
+
     async createTable(file){
         const dir     = path.join(__dirname, 'sql');
         const data    = fs.readFileSync(dir + '/' + file, "utf8");
         const table   = file.substring(0, file.indexOf('.sql'));
-        const queries = data.split(';').map(q => q.trim()).filter(q => q !== '');
+        // Strip `--` line comments BEFORE splitting on ';'. A ';' inside a
+        // comment (prose punctuation in a header block) must not be treated as
+        // a statement terminator — that truncates the comment into a bogus
+        // standalone query and fails schema creation (observed: a semicolon in
+        // attests.sql's header split its comment, crash-looping the indexer).
+        const queries = this.stripSqlLineComments(data).split(';').map(q => q.trim()).filter(q => q !== '');
         console.log('Creating ' + table + ' table and indexes...');
 
         const MAX_ATTEMPTS = 5;
