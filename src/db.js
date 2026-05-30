@@ -1962,8 +1962,16 @@ class Database {
                 for(let row of results)
                     addrs.push(row.address);
         }
-        // Loop through addresses and update balance list
-        await Promise.all(addrs.map(addr => this.updateAddressBalance(addr, rollback)));
+        // Loop through addresses and update balances SERIALLY. During block
+        // processing these run on the single shared transaction connection
+        // (getConnection() returns this.transactionConnection mid-transaction),
+        // which cannot serve concurrent queries — a Promise.all here interleaves
+        // each address's read-compute-write and corrupts balances (observed:
+        // AIRDROP double-counted token supply, 200 != 100, tripping the supply
+        // sanity check and crash-looping the indexer). The N+1->UPSERT win in
+        // updateAddressBalance still applies; only the parallelism is unsafe.
+        for(const addr of addrs)
+            await this.updateAddressBalance(addr, rollback);
     }
 
     // Create/Update/Delete records in the 'balances' table
@@ -8212,7 +8220,14 @@ class Database {
                      ) latest ON cs.id = latest.max_id
                      WHERE cs.state_value IS NOT NULL`;
         let results = await this.doQuery(query, [contractIndex]);
-        let state = {};
+        // Null-prototype object so adversarial keys round-trip faithfully. A
+        // plain {} would route state['__proto__'] = value through the __proto__
+        // setter — a no-op for non-object values (silently dropping the key) or
+        // a prototype reassignment for object values. The VM's StateManager
+        // already uses Object.create(null) and lets contracts state.set('__proto__'),
+        // so the reload path must preserve it too, else that key vanishes on the
+        // next EXECUTE.
+        let state = Object.create(null);
         for(let row of results){
             try {
                 state[row.state_key] = JSON.parse(row.state_value);
