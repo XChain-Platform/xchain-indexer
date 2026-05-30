@@ -95,91 +95,62 @@ async function createDatabases() {
     }
 }
 
-/** Create the decoder DB schema (tables the indexer reads from) */
+// Canonical decoder schema lives in the xchain-decoder repo (sibling in the monorepo).
+// Override with XCHAIN_DECODER_SQL_PATH if the layout differs.
+const DECODER_SQL_DIR = process.env.XCHAIN_DECODER_SQL_PATH
+    || path.resolve(__dirname, '../../../../xchain-decoder/src/sql');
+
+/**
+ * Create the decoder DB schema from xchain-decoder's canonical src/sql/*.sql — the SAME
+ * declarative schema the decoder itself creates via db.verifyTables(). Loading the real
+ * files (instead of a hand-maintained copy) means this harness can never silently drift
+ * from the decoder schema again — the previous hand-rolled copy had fallen behind (missing
+ * pubkeys, transactions.raw_data, transactions.fee), breaking the integration suite.
+ *
+ * Each canonical .sql begins with DROP TABLE IF EXISTS and seeds its sentinel rows, so this
+ * is idempotent and doubles as the per-test reset. FK checks are disabled during the load
+ * so file order is irrelevant (e.g. pubkeys -> index_addresses).
+ */
 async function createDecoderSchema() {
+    if (!fs.existsSync(DECODER_SQL_DIR)) {
+        throw new Error('Decoder schema dir not found: ' + DECODER_SQL_DIR +
+            ' — set XCHAIN_DECODER_SQL_PATH to the xchain-decoder src/sql directory.');
+    }
     const pool = getDecoderPool();
     const conn = await pool.getConnection();
     try {
-        await conn.query(`
-            CREATE TABLE IF NOT EXISTS blocks (
-                block_index INT UNSIGNED NOT NULL PRIMARY KEY,
-                block_time  INT UNSIGNED DEFAULT NULL
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8
-        `);
-        await conn.query(`
-            CREATE TABLE IF NOT EXISTS index_transactions (
-                id   INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-                hash VARCHAR(250) NOT NULL,
-                UNIQUE KEY hash_idx (hash(64))
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8
-        `);
-        await conn.query(`
-            CREATE TABLE IF NOT EXISTS index_addresses (
-                id      INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-                address VARCHAR(120) NOT NULL,
-                UNIQUE KEY addr_idx (address(62))
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8
-        `);
-        await conn.query(`
-            CREATE TABLE IF NOT EXISTS transactions (
-                tx_index       INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-                tx_hash_id     INT UNSIGNED DEFAULT NULL,
-                block_index    INT UNSIGNED DEFAULT NULL,
-                source_id      INT UNSIGNED DEFAULT NULL,
-                destination_id INT UNSIGNED DEFAULT NULL,
-                amount         VARCHAR(250) DEFAULT NULL,
-                fee            VARCHAR(250) DEFAULT NULL,
-                data           MEDIUMTEXT DEFAULT NULL,
-                raw_data       MEDIUMTEXT DEFAULT NULL,
-                KEY block_index (block_index),
-                KEY tx_hash_id (tx_hash_id),
-                KEY source_id (source_id)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8
-        `);
-        // The indexer LEFT JOINs pubkeys when reading decoder transactions
-        // (db.js getDecoderBlockData). It can be empty, but must exist or the
-        // read query errors and no actions are ever processed.
-        await conn.query(`
-            CREATE TABLE IF NOT EXISTS pubkeys (
-                address_id BIGINT UNSIGNED NOT NULL PRIMARY KEY,
-                pubkey     VARCHAR(66) NOT NULL
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8
-        `);
-        await conn.query(`
-            CREATE TABLE IF NOT EXISTS transaction_outputs (
-                tx_index       INT UNSIGNED NOT NULL,
-                vout           INT UNSIGNED NOT NULL DEFAULT 0,
-                destination_id INT UNSIGNED DEFAULT NULL,
-                amount         VARCHAR(250) DEFAULT NULL,
-                PRIMARY KEY (tx_index, vout)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8
-        `);
-        await conn.query(`
-            CREATE TABLE IF NOT EXISTS events (
-                id   BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-                time DATETIME DEFAULT NULL,
-                code VARCHAR(32) DEFAULT NULL,
-                data TEXT DEFAULT NULL
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8
-        `);
+        await conn.query('SET FOREIGN_KEY_CHECKS = 0');
+        // Drop every existing table first so the load is clean regardless of whether each
+        // canonical .sql opens with its own DROP TABLE IF EXISTS (some do, some are bare
+        // CREATE or CREATE IF NOT EXISTS — re-running those would otherwise error).
+        const existing = await conn.query('SHOW TABLES');
+        for (const row of existing) {
+            await conn.query('DROP TABLE IF EXISTS `' + Object.values(row)[0] + '`');
+        }
+        const files = fs.readdirSync(DECODER_SQL_DIR).filter(f => f.endsWith('.sql')).sort();
+        for (const file of files) {
+            // Strip `--` line comments (a ';' in comment prose must not split a statement),
+            // then run each statement — mirrors xchain-decoder/src/db.js createTable().
+            const sql = fs.readFileSync(path.join(DECODER_SQL_DIR, file), 'utf8')
+                .replace(/--[^\n]*/g, '');
+            for (let stmt of sql.split(';')) {
+                stmt = stmt.trim();
+                if (stmt) await conn.query(stmt);
+            }
+        }
+        await conn.query('SET FOREIGN_KEY_CHECKS = 1');
     } finally {
         conn.release();
     }
 }
 
-/** Truncate all decoder tables (fast reset between tests) */
+/**
+ * Reset the decoder DB between tests by reloading the canonical schema. Every decoder .sql
+ * drops + recreates + reseeds its table, so this yields a pristine canonical state (and
+ * restores the id=1 blank address/hash sentinels that a TRUNCATE would have wiped).
+ */
 async function resetDecoderDb() {
-    const tables = ['events', 'transaction_outputs', 'transactions',
-                    'index_addresses', 'index_transactions', 'blocks'];
-    const pool = getDecoderPool();
-    const conn = await pool.getConnection();
-    try {
-        await conn.query('SET FOREIGN_KEY_CHECKS = 0');
-        for (const t of tables) await conn.query(`TRUNCATE TABLE ${t}`);
-        await conn.query('SET FOREIGN_KEY_CHECKS = 1');
-    } finally {
-        conn.release();
-    }
+    await createDecoderSchema();
 }
 
 /** Drop and recreate the indexer DB (clean slate — indexer creates its own tables) */

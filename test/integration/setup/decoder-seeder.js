@@ -99,15 +99,16 @@ class DecoderSeeder {
             const sourceId = await this.getOrCreateAddress(tx.source);
             const destId = await this.getOrCreateAddress(tx.destination);
 
-            // Insert transaction
-            const result = await this.query(
+            // Insert transaction. The canonical decoder schema's transactions.tx_index is a
+            // plain PRIMARY KEY (not AUTO_INCREMENT — the decoder assigns it explicitly), so
+            // we supply it from the monotonic counter rather than relying on insertId.
+            const txIndex = this.txCounter;
+            await this.query(
                 `INSERT INTO transactions
-                    (tx_hash_id, block_index, source_id, destination_id, amount, data)
-                 VALUES (?, ?, ?, ?, ?, ?)`,
-                [txHashId, blockIndex, sourceId, destId, amount, tx.data]
+                    (tx_index, tx_hash_id, block_index, source_id, destination_id, amount, data)
+                 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                [txIndex, txHashId, blockIndex, sourceId, destId, amount, tx.data]
             );
-
-            const txIndex = Number(result.insertId);
 
             // Insert transaction_output if destination is specified
             if (tx.destination || vout > 0) {
