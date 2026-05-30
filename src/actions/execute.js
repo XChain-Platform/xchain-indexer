@@ -441,16 +441,18 @@ class Execute {
                 // FORMAT: VERSION|TICK|AMOUNT|DESTINATION|MEMO
                 return [0, params.tick, params.quantity, params.destination || '', params.memo || ''];
             case 'ORDER':
-                // FORMAT: VERSION|GIVE_COIN|GIVE_TICK|GIVE_AMOUNT|GET_COIN|GET_TICK|GET_AMOUNT|GET_ADDRESS|EXPIRATION|ALLOW_LIST|BLOCK_LIST|MEMO
-                return [0, params.giveCoin || '', params.giveTick || '', params.giveAmount,
-                        params.getCoin || '', params.getTick || '', params.getAmount,
+                // FORMAT: VERSION|GIVE_COIN|GIVE_TICK|GIVE_AMOUNT|GIVE_OWNERSHIP|GET_COIN|GET_TICK|GET_AMOUNT|GET_OWNERSHIP|GET_ADDRESS|EXPIRATION|ALLOW_LIST|BLOCK_LIST|MEMO
+                // GIVE_OWNERSHIP/GET_OWNERSHIP (token-ownership trading) default to 0 when empty.
+                return [0, params.giveCoin || '', params.giveTick || '', params.giveAmount, params.giveOwnership || '',
+                        params.getCoin || '', params.getTick || '', params.getAmount, params.getOwnership || '',
                         params.getAddress || '', params.expiration || '',
                         params.allowList || '', params.blockList || '', params.memo || ''];
             case 'DISPENSER':
-                // FORMAT: VERSION|GIVE_COIN|GIVE_TICK|GIVE_AMOUNT|GIVE_ESCROW|GET_COIN|GET_TICK|GET_AMOUNT|GET_ADDRESS|FIAT_CODE|FIAT_AMOUNT|EXPIRATION|ALLOW_LIST|BLOCK_LIST|MEMO
-                return [0, params.giveCoin || '', params.giveTick || '', params.giveAmount, params.giveEscrow,
+                // FORMAT: VERSION|GIVE_COIN|GIVE_TICK|GIVE_AMOUNT|GIVE_OWNERSHIP|GIVE_ESCROW|GET_COIN|GET_TICK|GET_AMOUNT|GET_ADDRESS|FIAT_CODE|FIAT_AMOUNT|ORACLE_ADDRESS|EXPIRATION|ALLOW_LIST|BLOCK_LIST|MEMO
+                // GIVE_OWNERSHIP defaults to 0; ORACLE_ADDRESS (PRICE v1 oracle) is optional.
+                return [0, params.giveCoin || '', params.giveTick || '', params.giveAmount, params.giveOwnership || '', params.giveEscrow,
                         params.getCoin || '', params.getTick || '', params.getAmount,
-                        params.getAddress || '', params.fiatCode || '', params.fiatAmount || '',
+                        params.getAddress || '', params.fiatCode || '', params.fiatAmount || '', params.oracleAddress || '',
                         params.expiration || '', params.allowList || '', params.blockList || '', params.memo || ''];
             case 'DIVIDEND':
                 // FORMAT: VERSION|TICK|DIVIDEND_TICK|AMOUNT|MEMO
@@ -462,8 +464,11 @@ class Execute {
                 // FORMAT: VERSION|TICK|MEMO
                 return [0, params.tick, params.memo || ''];
             case 'FILE':
-                // FORMAT: VERSION|NAME|TYPE|TITLE|MEMO
-                return [0, params.name || '', params.type || '', params.title || '', params.memo || ''];
+                // FORMAT: VERSION|NAME|TYPE|TITLE|MEMO|GATE_TICKER|ENCRYPTION_METHOD|KEY_HASH
+                // Trailing gated-file fields default to empty (public file); a contract may set
+                // them to emit a token-gated FILE.
+                return [0, params.name || '', params.type || '', params.title || '', params.memo || '',
+                        params.gateTicker || '', params.encryptionMethod || '', params.keyHash || ''];
             case 'LIST':
                 // FORMAT: VERSION|TYPE|ITEM
                 return [0, params.type || '', params.item || ''];
@@ -480,8 +485,10 @@ class Execute {
                 // FORMAT: VERSION|MESSAGE|VALUE
                 return [0, params.message || '', params.value || ''];
             case 'MESSAGE':
-                // FORMAT: VERSION|DESTINATION|ENCRYPTION_METHOD|ENCRYPTION_KEY
-                return [0, params.destination, params.encryptionMethod || '', params.encryptionKey || ''];
+                // FORMAT: VERSION|COIN|DESTINATION|ENCRYPTION_METHOD|ENCRYPTION_KEY
+                // COIN (destination network) is optional — empty = unscoped. Without it the
+                // DESTINATION would land in the COIN slot and the message would be malformed.
+                return [0, params.coin || '', params.destination, params.encryptionMethod || '', params.encryptionKey || ''];
             case 'ATTEST':
                 // FORMAT v0 (request, VM-emitted): VERSION|REQUEST_ID|PROVIDER_ID|REQUEST_PAYLOAD|CALLBACK_METHOD|CALLBACK_PARAMS_JSON|REDUNDANCY|DEADLINE_BLOCKS
                 return [0, params.requestId, params.providerId, params.requestPayload, params.callbackMethod,

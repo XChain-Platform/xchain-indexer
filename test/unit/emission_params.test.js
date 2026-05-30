@@ -1,159 +1,123 @@
 /*********************************************************************
- * MANDATORY: Emission Params Validation Test
+ * MANDATORY: Emission Params Arity Test
  *
- * Verifies that buildActionParams() output length matches each
- * handler's formats[0] field count for all 16 emittable actions.
- * If a handler's format changes, this test fails before production does.
+ * When a contract emits an action from inside the VM, Execute.buildActionParams()
+ * turns the emission's named params into the POSITIONAL params array that the
+ * target action handler's parser expects. That array MUST have exactly as many
+ * slots as the handler's `formats[0]` has pipe-delimited fields — otherwise the
+ * emitted action silently misaligns (a value lands in the wrong column) or the
+ * parser under/over-reads.
+ *
+ * This drift is exactly what bit us: several feature initiatives (token-ownership
+ * trading, gated FILE, MESSAGE coin-scoping, PRICE-v1 oracle) extended handler
+ * formats[0] but not buildActionParams. The bugs were invisible until on-chain.
+ *
+ * This test pins both sides to the REAL source of truth:
+ *   - the arity comes from the live `Execute.prototype.buildActionParams`
+ *   - the expected field count comes from each handler's live `formats[0]`
+ * so a change to EITHER without the other fails here, before production.
+ *
+ * (The previous version of this test copied buildActionParams into the test file
+ * and hard-coded the field counts — both drifted stale and it could never have
+ * caught the very class of bug it was meant to. Do not reintroduce a local copy.)
  ********************************************************************/
 
-const assert = require('assert');
+const assert  = require('assert');
+const Execute = require('../../src/actions/execute.js');
 
-// We need to instantiate Execute to access buildActionParams.
-// Since it requires the full action context, we test via a standalone copy.
-// Extract the buildActionParams logic for testing.
-
-// Expected field counts from formats[0] for each emittable action
-const EXPECTED_FIELD_COUNTS = {
-    'SEND':       5,   // VERSION|TICK|AMOUNT|DESTINATION|MEMO
-    'DESTROY':    4,   // VERSION|TICK|AMOUNT|MEMO
-    'ISSUE':      25,  // VERSION|TICK|MAX_SUPPLY|...|MEMO (25 fields)
-    'MINT':       5,   // VERSION|TICK|AMOUNT|DESTINATION|MEMO
-    'ORDER':      12,  // VERSION|GIVE_COIN|GIVE_TICK|GIVE_AMOUNT|GET_COIN|GET_TICK|GET_AMOUNT|GET_ADDRESS|EXPIRATION|ALLOW_LIST|BLOCK_LIST|MEMO
-    'DISPENSER':  15,  // VERSION|GIVE_COIN|GIVE_TICK|GIVE_AMOUNT|GIVE_ESCROW|GET_COIN|GET_TICK|GET_AMOUNT|GET_ADDRESS|FIAT_CODE|FIAT_AMOUNT|EXPIRATION|ALLOW_LIST|BLOCK_LIST|MEMO
-    'DIVIDEND':   5,   // VERSION|TICK|DIVIDEND_TICK|AMOUNT|MEMO
-    'AIRDROP':    5,   // VERSION|TICK|AMOUNT|LIST_ACTION_INDEX|MEMO
-    'CALLBACK':   3,   // VERSION|TICK|MEMO
-    'FILE':       5,   // VERSION|NAME|TYPE|TITLE|MEMO
-    'LIST':       3,   // VERSION|TYPE|ITEM
-    'COINPAY':    2,   // VERSION|ORDER_MATCH_ACTION_INDEX
-    'SWEEP':      6,   // VERSION|DESTINATION|BALANCES|OWNERSHIPS|ESCROWS|MEMO
-    'LINK':       6,   // VERSION|COIN1|COIN1_ACTION_INDEX|COIN2|COIN2_ACTION_INDEX|MEMO
-    'BROADCAST':  3,   // VERSION|MESSAGE|VALUE
-    'MESSAGE':    4    // VERSION|DESTINATION|ENCRYPTION_METHOD|ENCRYPTION_KEY
+// Every action that can be emitted from a VM contract — must stay in lock-step
+// with Execute.getActionHandler()'s map and the buildActionParams() switch.
+// Maps the action name to its handler module.
+const EMITTABLE_HANDLERS = {
+    'SEND':      require('../../src/actions/send.js'),
+    'DESTROY':   require('../../src/actions/destroy.js'),
+    'ISSUE':     require('../../src/actions/issue.js'),
+    'MINT':      require('../../src/actions/mint.js'),
+    'ORDER':     require('../../src/actions/order.js'),
+    'DISPENSER': require('../../src/actions/dispenser.js'),
+    'DIVIDEND':  require('../../src/actions/dividend.js'),
+    'AIRDROP':   require('../../src/actions/airdrop.js'),
+    'CALLBACK':  require('../../src/actions/callback.js'),
+    'FILE':      require('../../src/actions/file.js'),
+    'LIST':      require('../../src/actions/list.js'),
+    'COINPAY':   require('../../src/actions/coinpay.js'),
+    'SWEEP':     require('../../src/actions/sweep.js'),
+    'LINK':      require('../../src/actions/link.js'),
+    'BROADCAST': require('../../src/actions/broadcast.js'),
+    'MESSAGE':   require('../../src/actions/message.js'),
+    'ATTEST':    require('../../src/actions/attest.js')
 };
 
-// Standalone copy of buildActionParams for testing without full Execute instance
-function buildActionParams(action, params){
-    switch(action){
-        case 'SEND':
-            return [0, params.tick, params.quantity, params.destination, params.memo || ''];
-        case 'DESTROY':
-            return [0, params.tick, params.quantity, params.memo || ''];
-        case 'ISSUE':
-            return [0, params.tick, params.maxSupply || '', params.maxMint || '', params.decimals || '',
-                    params.description || '', params.mintSupply || '', params.transfer || '', params.transferSupply || '',
-                    params.lockMaxSupply || '', params.lockMaxMint || '', params.lockDescription || '',
-                    params.lockSleep || '', params.lockCallback || '', params.callbackBlock || '',
-                    params.callbackTick || '', params.callbackAmount || '', params.allowList || '',
-                    params.blockList || '', params.mintAddressMax || '', params.mintStartBlock || '',
-                    params.mintStopBlock || '', params.lockMint || '', params.lockMintSupply || '', params.memo || ''];
-        case 'MINT':
-            return [0, params.tick, params.quantity, params.destination || '', params.memo || ''];
-        case 'ORDER':
-            return [0, params.giveCoin || '', params.giveTick || '', params.giveAmount,
-                    params.getCoin || '', params.getTick || '', params.getAmount,
-                    params.getAddress || '', params.expiration || '',
-                    params.allowList || '', params.blockList || '', params.memo || ''];
-        case 'DISPENSER':
-            return [0, params.giveCoin || '', params.giveTick || '', params.giveAmount, params.giveEscrow,
-                    params.getCoin || '', params.getTick || '', params.getAmount,
-                    params.getAddress || '', params.fiatCode || '', params.fiatAmount || '',
-                    params.expiration || '', params.allowList || '', params.blockList || '', params.memo || ''];
-        case 'DIVIDEND':
-            return [0, params.tick, params.dividendTick, params.quantity, params.memo || ''];
-        case 'AIRDROP':
-            return [0, params.tick, params.quantity, params.listActionIndex, params.memo || ''];
-        case 'CALLBACK':
-            return [0, params.tick, params.memo || ''];
-        case 'FILE':
-            return [0, params.name || '', params.type || '', params.title || '', params.memo || ''];
-        case 'LIST':
-            return [0, params.type || '', params.item || ''];
-        case 'COINPAY':
-            return [0, params.orderMatchActionIndex];
-        case 'SWEEP':
-            return [0, params.destination, params.balances || '', params.ownerships || '', params.escrows || '', params.memo || ''];
-        case 'LINK':
-            return [0, params.coin1, params.coin1ActionIndex, params.coin2, params.coin2ActionIndex, params.memo || ''];
-        case 'BROADCAST':
-            return [0, params.message || '', params.value || ''];
-        case 'MESSAGE':
-            return [0, params.destination, params.encryptionMethod || '', params.encryptionKey || ''];
-        default:
-            throw new Error('unsupported emission action: ' + action);
-    }
+// buildActionParams() does not touch `this`; call it directly off the prototype.
+const buildActionParams = Execute.prototype.buildActionParams;
+
+// Handler constructors only read properties off the `action` registry and assign
+// them — they never call into the deps during construction — so a recursive stub
+// that answers any property access (and any call) lets us reach `this.formats`
+// without standing up a DB / config / util layer.
+function makeStub(){
+    return new Proxy(function(){}, { get: () => makeStub(), apply: () => makeStub() });
 }
 
-// Sample params with all fields populated for each action
-const SAMPLE_PARAMS = {
-    'SEND':       { tick: 'TEST', quantity: '100', destination: 'addr1', memo: 'test' },
-    'DESTROY':    { tick: 'TEST', quantity: '100', memo: 'test' },
-    'ISSUE':      { tick: 'TEST', maxSupply: '1000', maxMint: '100', decimals: '8', description: 'desc',
-                    mintSupply: '500', transfer: 'addr', transferSupply: '100',
-                    lockMaxSupply: '1', lockMaxMint: '1', lockDescription: '0',
-                    lockSleep: '0', lockCallback: '0', callbackBlock: '', callbackTick: '', callbackAmount: '',
-                    allowList: '', blockList: '', mintAddressMax: '', mintStartBlock: '', mintStopBlock: '',
-                    lockMint: '0', lockMintSupply: '0', memo: 'test' },
-    'MINT':       { tick: 'TEST', quantity: '100', destination: 'addr1', memo: 'test' },
-    'ORDER':      { giveCoin: 'BTC', giveTick: 'TEST', giveAmount: '100', getCoin: 'BTC', getTick: 'GAS', getAmount: '50',
-                    getAddress: 'addr', expiration: '100', allowList: '', blockList: '', memo: 'test' },
-    'DISPENSER':  { giveCoin: 'BTC', giveTick: 'TEST', giveAmount: '100', giveEscrow: '1000',
-                    getCoin: 'BTC', getTick: 'GAS', getAmount: '50', getAddress: 'addr',
-                    fiatCode: 'USD', fiatAmount: '10', expiration: '100', allowList: '', blockList: '', memo: 'test' },
-    'DIVIDEND':   { tick: 'TEST', dividendTick: 'GAS', quantity: '100', memo: 'test' },
-    'AIRDROP':    { tick: 'TEST', quantity: '100', listActionIndex: '42', memo: 'test' },
-    'CALLBACK':   { tick: 'TEST', memo: 'test' },
-    'FILE':       { name: 'file.txt', type: 'text/plain', title: 'Test File', memo: 'test' },
-    'LIST':       { type: 'whitelist', item: 'addr1' },
-    'COINPAY':    { orderMatchActionIndex: '42' },
-    'SWEEP':      { destination: 'addr1', balances: '1', ownerships: '1', escrows: '1', memo: 'test' },
-    'LINK':       { coin1: 'BTC', coin1ActionIndex: '1', coin2: 'LTC', coin2ActionIndex: '2', memo: 'test' },
-    'BROADCAST':  { message: 'hello', value: 'world' },
-    'MESSAGE':    { destination: 'addr1', encryptionMethod: 'aes', encryptionKey: 'key123' }
-};
+// The pipe-delimited field count of a handler's primary (version 0) format.
+function formatFieldCount(HandlerClass){
+    const handler = new HandlerClass(makeStub());
+    assert(handler.formats && typeof handler.formats[0] === 'string',
+        'handler has no string formats[0]');
+    return handler.formats[0].split('|').length;
+}
 
-describe('Emission Params Validation (MANDATORY) @regression @tier1', function() {
+describe('Emission Params Arity (MANDATORY) @regression @tier1', function() {
 
-    for(const [action, expectedCount] of Object.entries(EXPECTED_FIELD_COUNTS)){
-        it('should produce correct field count for ' + action + ' (' + expectedCount + ' fields)', function() {
-            const params = SAMPLE_PARAMS[action];
-            assert(params, 'missing sample params for ' + action);
-            const result = buildActionParams(action, params);
-            assert.strictEqual(result.length, expectedCount,
-                action + ': expected ' + expectedCount + ' fields, got ' + result.length +
-                ' — params: ' + JSON.stringify(result));
+    for(const [action, HandlerClass] of Object.entries(EMITTABLE_HANDLERS)){
+        it(action + ': buildActionParams arity === handler formats[0] field count', function() {
+            const expected = formatFieldCount(HandlerClass);
+            // Length is fixed by the array literal in each case, independent of the
+            // param values, so an empty params object yields the canonical arity.
+            const built = buildActionParams.call(null, action, {});
+            assert.strictEqual(built.length, expected,
+                action + ': buildActionParams produced ' + built.length + ' positional params but ' +
+                'handler formats[0] declares ' + expected + ' fields — emission would misalign. ' +
+                'Update Execute.buildActionParams (src/actions/execute.js) to match the handler format.');
+            // VERSION slot is always 0 (format[0] handlers).
+            assert.strictEqual(built[0], 0, action + ': first positional param (VERSION) must be 0');
         });
     }
 
-    it('should cover all 16 emittable actions', function() {
-        assert.strictEqual(Object.keys(EXPECTED_FIELD_COUNTS).length, 16);
+    it('buildActionParams handles every emittable action and rejects unknown ones', function() {
+        for(const action of Object.keys(EMITTABLE_HANDLERS)){
+            assert.doesNotThrow(() => buildActionParams.call(null, action, {}),
+                'buildActionParams should handle emittable action ' + action);
+        }
+        assert.throws(() => buildActionParams.call(null, 'NOPE', {}), /unsupported emission action/);
     });
 
-    it('should throw on unknown action', function() {
-        assert.throws(() => buildActionParams('UNKNOWN', {}), /unsupported emission action/);
+    // Spot-check critical field ordering (camelCase param -> positional slot).
+    // These guard the columns most prone to silent misalignment.
+
+    it('ORDER: GIVE_AMOUNT@3, GIVE_OWNERSHIP@4, GET_AMOUNT@7, GET_OWNERSHIP@8', function() {
+        const r = buildActionParams.call(null, 'ORDER', {
+            giveCoin: 'BTC', giveTick: 'T', giveAmount: 'GA', giveOwnership: 'GO',
+            getCoin: 'BTC', getTick: 'G', getAmount: 'TA', getOwnership: 'TO'
+        });
+        assert.strictEqual(r[3], 'GA');   // GIVE_AMOUNT
+        assert.strictEqual(r[4], 'GO');   // GIVE_OWNERSHIP
+        assert.strictEqual(r[7], 'TA');   // GET_AMOUNT
+        assert.strictEqual(r[8], 'TO');   // GET_OWNERSHIP
     });
 
-    // Spot-check field ordering for critical actions
-    it('SEND: tick=1, quantity=2, destination=3', function() {
-        const result = buildActionParams('SEND', { tick: 'T', quantity: '100', destination: 'D' });
-        assert.strictEqual(result[0], 0);           // VERSION
-        assert.strictEqual(result[1], 'T');          // TICK
-        assert.strictEqual(result[2], '100');        // AMOUNT
-        assert.strictEqual(result[3], 'D');          // DESTINATION
+    it('MESSAGE: COIN@1, DESTINATION@2 (destination must not collapse into the COIN slot)', function() {
+        const r = buildActionParams.call(null, 'MESSAGE', { coin: 'BTC', destination: 'D' });
+        assert.strictEqual(r[1], 'BTC');  // COIN
+        assert.strictEqual(r[2], 'D');    // DESTINATION
     });
 
-    it('ISSUE: tick=1, maxSupply=2, maxMint=3', function() {
-        const result = buildActionParams('ISSUE', { tick: 'T', maxSupply: '1000', maxMint: '100' });
-        assert.strictEqual(result[0], 0);            // VERSION
-        assert.strictEqual(result[1], 'T');           // TICK
-        assert.strictEqual(result[2], '1000');        // MAX_SUPPLY
-        assert.strictEqual(result[3], '100');         // MAX_MINT
-    });
-
-    it('ORDER: giveAmount=3, getAmount=6', function() {
-        const result = buildActionParams('ORDER', { giveCoin: 'BTC', giveTick: 'T', giveAmount: '100',
-                                                     getCoin: 'BTC', getTick: 'G', getAmount: '50' });
-        assert.strictEqual(result[3], '100');         // GIVE_AMOUNT
-        assert.strictEqual(result[6], '50');          // GET_AMOUNT
+    it('FILE: trailing gated-file fields present (GATE_TICKER@5, ENCRYPTION_METHOD@6, KEY_HASH@7)', function() {
+        const r = buildActionParams.call(null, 'FILE', {
+            name: 'f', type: 't', title: 'T', gateTicker: 'GT', encryptionMethod: 'EM', keyHash: 'KH'
+        });
+        assert.strictEqual(r[5], 'GT');   // GATE_TICKER
+        assert.strictEqual(r[6], 'EM');   // ENCRYPTION_METHOD
+        assert.strictEqual(r[7], 'KH');   // KEY_HASH
     });
 });
