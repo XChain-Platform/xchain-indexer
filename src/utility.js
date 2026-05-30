@@ -510,12 +510,7 @@ class Utility {
         return data;
     }
 
-    // Handle getting the current time in seconds
-    getCurrentTime(){
-        return this.bcdiv(Date.now(), 1000, 0);
-    }
-
-    // Handle getting the default EXPIRATION 
+    // Handle getting the default EXPIRATION
     getDefaultExpiration(block_time){
         // Get current time in seconds
         let now = block_time;
