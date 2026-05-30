@@ -40,6 +40,7 @@ module.exports = {
         config['FEE_PAYMENT_MODE'] = 'xchain';               // 'xchain' or 'native' (BTC supports both via implicit detection)
         config['FEE_TOLERANCE_MIN'] = '0.95';                // Minimum acceptable fee (95% of expected)
         config['FEE_TOLERANCE_MAX'] = '1.10';                // Maximum acceptable fee (110% of expected)
+        config['ORACLE_MAX_PRICE_AGE_SECONDS'] = 1800;       // Reject oracle prices older than this vs the block being processed (≈3× the 10-min publish interval); 0 disables
         config['STAKING'] = {
             COOLDOWN_BLOCKS:         1000,                     // Blocks before unstaked XCHAIN is returned
             ACTIVATION_DELAY_BLOCKS: 6,                        // Blocks before stake/delegation/unstake takes effect (BTC reorg safety)

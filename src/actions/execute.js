@@ -155,7 +155,7 @@ class Execute {
             let contractState = await this.indexerDb.getContractState(data['CONTRACT_ACTION_INDEX']);
 
             // Load read-only data for gateway (price data lives in local hub DB when configured)
-            let oracleData = await ((this.actions && this.actions.hubDb) || this.indexerDb).getOracleDataForVM(data['BLOCK_INDEX']);
+            let oracleData = await ((this.actions && this.actions.hubDb) || this.indexerDb).getOracleDataForVM(data['BLOCK_INDEX'], data['BLOCK_TIME'], parseInt(this.config['ORACLE_MAX_PRICE_AGE_SECONDS']) || 1800);
             let crossChainData = await this.indexerDb.getCrossChainDataForVM();
 
             // Pre-load contract-stake snapshot scoped to THIS contract — backs the

@@ -106,7 +106,7 @@ class Dividend {
                 // Skip holders whose calculated share rounds to 0 (e.g. fractional TICK balances when DIVIDEND_TICK is
                 // non-divisible) - they receive no DIVIDEND_TICK, so they must not count toward the per-recipient fee.
                 if(valid){
-                    let share = this.util.bcmul(holders[address], data['AMOUNT'], dividendTokenInfo['DECIMALS']);
+                    let share = this.util.bcmulfloor(holders[address], data['AMOUNT'], dividendTokenInfo['DECIMALS']);
                     if(share != 0)
                         recipients[address] = share;
                 }

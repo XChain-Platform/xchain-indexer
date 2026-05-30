@@ -239,7 +239,7 @@ class Deploy {
                 },
                 balances:         null,
                 tokenInfo:        null,
-                oracleData:       await ((this.actions && this.actions.hubDb) || this.indexerDb).getOracleDataForVM(data['BLOCK_INDEX']),
+                oracleData:       await ((this.actions && this.actions.hubDb) || this.indexerDb).getOracleDataForVM(data['BLOCK_INDEX'], data['BLOCK_TIME'], parseInt(this.config['ORACLE_MAX_PRICE_AGE_SECONDS']) || 1800),
                 crossChainData:   await this.indexerDb.getCrossChainDataForVM()
             });
 

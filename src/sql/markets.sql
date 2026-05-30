@@ -24,3 +24,6 @@ CREATE TABLE markets (
 
 CREATE INDEX tick1_id on markets (tick1_id);
 CREATE INDEX tick2_id on markets (tick2_id);
+-- One row per traded pair. Guarantees createMarket() can never produce two rows
+-- for the same (tick1_id, tick2_id) even if inserts race, so market_id is stable.
+CREATE UNIQUE INDEX uq_markets_pair on markets (tick1_id, tick2_id);

@@ -314,6 +314,20 @@ class Utility {
         return this.bcnum(mathjs.format(mathjs.multiply(mathjs.bignumber(a),mathjs.bignumber(b)),{notation: 'fixed', precision: d}));
     }
 
+    // Multiply two bignumber strings and floor the result to d decimal places.
+    // Uses Decimal.js native .floor() (via bcnum) to avoid mathjs.format()'s
+    // banker's rounding, which rounds half-to-even and can credit holders more
+    // than their strict proportional entitlement at midpoint fractional values.
+    bcmulfloor(numA, numB, decimals){
+        let a = (!this.isNull(numA)) ? numA : 0;
+        let b = (!this.isNull(numB)) ? numB : 0;
+        let d = (!this.isNull(decimals)) ? parseInt(decimals) : 0;
+        let product = mathjs.multiply(mathjs.bignumber(a), mathjs.bignumber(b));
+        let scale = mathjs.bignumber(10).pow(d);
+        let floored = this.bcnum(product).times(scale).floor().div(scale);
+        return this.bcnum(mathjs.format(floored, {notation: 'fixed', precision: d}));
+    }
+
     // Handle dividing 2 big numbers
     bcdiv(numA, numB, decimals){
         let a = (!this.isNull(numA)) ? numA : 0;
@@ -640,9 +654,15 @@ class Utility {
         // Prefer the local hub DB (where price_snapshots is synced from xchain-hub) when available
         let coin = this.config['COIN'] || data['COIN'];
         let priceDb = (db.indexer && db.indexer.hubDb) ? db.indexer.hubDb : db;
-        let coinPriceData = await priceDb.getLatestPrice(coin + '/USD', data['BLOCK_INDEX']);
+        // Reject silently stale prices: during a feed outage the oracle stops publishing
+        // new snapshots, so a fee validated against a price older than ORACLE_MAX_PRICE_AGE_SECONDS
+        // surfaces an explicit error instead of locking in an outdated rate. Age is measured
+        // deterministically against the block's own timestamp (see db.getLatestPrice).
+        let maxPriceAgeSeconds = parseInt(this.config['ORACLE_MAX_PRICE_AGE_SECONDS']) || 1800;
+        let coinPriceData = await priceDb.getLatestPrice(coin + '/USD', data['BLOCK_INDEX'],
+            { blockTime: data['BLOCK_TIME'], maxAgeSeconds: maxPriceAgeSeconds });
         if(!coinPriceData || !coinPriceData.price){
-            return { valid: false, error: 'no oracle price for ' + coin + '/USD' };
+            return { valid: false, error: 'no current oracle price for ' + coin + '/USD (missing or stale beyond ' + maxPriceAgeSeconds + 's)' };
         }
 
         let coinUsdPrice = parseFloat(coinPriceData.price);

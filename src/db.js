@@ -5766,7 +5766,13 @@ class Database {
     async createMarket(tick1_id, tick2_id){
         let id = await this.getMarketId(tick1_id, tick2_id);
         if(id==null){
-            let query = `INSERT INTO markets (tick1_id, tick2_id) values (?, ?)`;
+            // ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id) makes a concurrent
+            // insert of the same pair a no-op while still returning the existing
+            // row's id via insertId. Combined with the UNIQUE(tick1_id, tick2_id)
+            // key this prevents two rows ever being created for the same pair if
+            // two inserts race past the getMarketId check above.
+            let query = `INSERT INTO markets (tick1_id, tick2_id) values (?, ?)
+                         ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id)`;
             let args  = [tick1_id, tick2_id];
             let results = await this.doQuery(query, args);
             if(results.insertId)
@@ -7665,7 +7671,7 @@ class Database {
      * External attestation framework — see specs/2026-05-24_external-attestation-framework.md
      */
 
-    // Create/Update record in `attestation_requests` table
+    // Create/Update an ATTEST v0 (request) row in the consolidated `attests` table
     async createAttestationRequest(data){
         data                 = this.normalizeDataValues(data);
         let status_id        = await this.createStatus(data['STATUS']);
@@ -7683,13 +7689,13 @@ class Database {
         let request_status   = data['REQUEST_STATUS'] || 'pending';
         let block_index      = data['BLOCK_INDEX'];
 
-        let query  = "SELECT action_index FROM attestation_requests WHERE action_index=? LIMIT 1";
+        let query  = "SELECT action_index FROM attests WHERE action_index=? LIMIT 1";
         let exists = false;
         let results = await this.doQuery(query, [action_index]);
         if(results.length > 0) exists = true;
         if(exists){
-            query = `UPDATE attestation_requests SET
-                        request_id=?, contract_index=?, fee_payer_id=?, provider_id=?, payload=?,
+            query = `UPDATE attests SET
+                        version=0, request_id=?, contract_index=?, fee_payer_id=?, provider_id=?, payload=?,
                         callback_method=?, callback_params_json=?, redundancy=?, deadline_block=?,
                         gas_escrow=?, request_status=?, status_id=?, block_index=?
                     WHERE action_index=?`;
@@ -7699,11 +7705,11 @@ class Database {
                 gas_escrow, request_status, status_id, block_index, action_index
             ]);
         } else {
-            query = `INSERT INTO attestation_requests
-                        (action_index, request_id, contract_index, fee_payer_id, provider_id, payload,
+            query = `INSERT INTO attests
+                        (action_index, version, request_id, contract_index, fee_payer_id, provider_id, payload,
                          callback_method, callback_params_json, redundancy, deadline_block,
                          gas_escrow, request_status, status_id, block_index)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+                    VALUES (?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
             await this.doQuery(query, [
                 action_index, request_id, contract_index, fee_payer_id, provider_id, payload,
                 callback_method, callback_params, redundancy, deadline_block,
@@ -7712,7 +7718,10 @@ class Database {
         }
     }
 
-    // Create/Update record in `attestation_responses` table
+    // Create/Update an ATTEST v1 (response) row in the consolidated `attests` table.
+    // The verified federation signatures ride in the validator_signatures JSON
+    // column (data['VALIDATOR_SIGNATURES'] — a JSON array string, or null) rather
+    // than in a separate child table.
     async createAttestationResponse(data){
         data                 = this.normalizeDataValues(data);
         let status_id        = await this.createStatus(data['STATUS']);
@@ -7723,47 +7732,35 @@ class Database {
         let response_payload = data['RESPONSE_PAYLOAD'] || null;
         let response_status  = data['RESPONSE_STATUS'];
         let meta             = data['META'] || null;
+        let signatures       = data['VALIDATOR_SIGNATURES'] || null;
         let block_index      = data['BLOCK_INDEX'];
 
-        let query  = "SELECT action_index FROM attestation_responses WHERE action_index=? LIMIT 1";
+        let query  = "SELECT action_index FROM attests WHERE action_index=? LIMIT 1";
         let exists = false;
         let results = await this.doQuery(query, [action_index]);
         if(results.length > 0) exists = true;
         if(exists){
-            query = `UPDATE attestation_responses SET
-                        request_id=?, provider_id=?, response_hash=?, response_payload=?,
-                        response_status=?, meta=?, status_id=?, block_index=?
+            query = `UPDATE attests SET
+                        version=1, request_id=?, provider_id=?, response_hash=?, response_payload=?,
+                        response_status=?, meta=?, validator_signatures=?, status_id=?, block_index=?
                     WHERE action_index=?`;
             await this.doQuery(query, [
                 request_id, provider_id, response_hash, response_payload,
-                response_status, meta, status_id, block_index, action_index
+                response_status, meta, signatures, status_id, block_index, action_index
             ]);
         } else {
-            query = `INSERT INTO attestation_responses
-                        (action_index, request_id, provider_id, response_hash, response_payload,
-                         response_status, meta, status_id, block_index)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+            query = `INSERT INTO attests
+                        (action_index, version, request_id, provider_id, response_hash, response_payload,
+                         response_status, meta, validator_signatures, status_id, block_index)
+                    VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
             await this.doQuery(query, [
                 action_index, request_id, provider_id, response_hash, response_payload,
-                response_status, meta, status_id, block_index
+                response_status, meta, signatures, status_id, block_index
             ]);
         }
     }
 
-    // Insert a single (validator_pubkey, signature) row associated with an ATTEST v1 (response)
-    async createAttestationValidatorSignature(data){
-        data                  = this.normalizeDataValues(data);
-        let response_action_index = data['RESPONSE_ACTION_INDEX'];
-        let validator_pubkey  = String(data['VALIDATOR_PUBKEY'] || '').toLowerCase();
-        let signature         = String(data['SIGNATURE'] || '').toLowerCase();
-        let block_index       = data['BLOCK_INDEX'];
-        let query = `INSERT INTO attestation_validator_signatures
-                        (response_action_index, validator_pubkey, signature, block_index)
-                     VALUES (?, ?, ?, ?)`;
-        await this.doQuery(query, [response_action_index, validator_pubkey, signature, block_index]);
-    }
-
-    // Increment a counter column on attestation_validator_stats. Upserts the
+    // Increment a counter column on attest_validator_stats. Upserts the
     // (validator_pubkey, provider_id) row on first sight. `field` is whitelisted
     // to the counter columns so callers can't inject arbitrary SQL.
     //
@@ -7784,7 +7781,7 @@ class Database {
         let pk  = String(validatorPubkey || '').toLowerCase();
         let pid = String(providerId || '');
         if(!pk || !pid) return;
-        let query = `INSERT INTO attestation_validator_stats
+        let query = `INSERT INTO attest_validator_stats
                         (validator_pubkey, provider_id, ${field}, last_updated_block)
                      VALUES (?, ?, 1, ?)
                      ON DUPLICATE KEY UPDATE
@@ -7793,22 +7790,22 @@ class Database {
         await this.doQuery(query, [pk, pid, blockIndex || 0]);
     }
 
-    // Look up an attestation_requests row by its request_id (64-hex hash)
+    // Look up an ATTEST v0 (request) row by its request_id (64-hex hash)
     async getAttestationRequestById(requestId){
         let query = `SELECT ar.*, ia.address AS fee_payer
-                     FROM attestation_requests ar
+                     FROM attests ar
                      LEFT JOIN index_addresses ia ON ia.id = ar.fee_payer_id
-                     WHERE ar.request_id = ?
+                     WHERE ar.request_id = ? AND ar.version = 0
                      LIMIT 1`;
         let rows = await this.doQuery(query, [String(requestId || '').toLowerCase()]);
         return rows.length > 0 ? rows[0] : null;
     }
 
-    // Update the request_status field on an attestation_requests row
+    // Update the request_status field on an ATTEST v0 (request) row
     async updateAttestationRequestStatus(requestId, newStatus){
-        let query = `UPDATE attestation_requests
+        let query = `UPDATE attests
                      SET request_status = ?
-                     WHERE request_id = ?`;
+                     WHERE request_id = ? AND version = 0`;
         await this.doQuery(query, [newStatus, String(requestId || '').toLowerCase()]);
     }
 
@@ -7824,11 +7821,12 @@ class Database {
             args.push(String(providerId));
         }
         let max = Number(limit) > 0 ? Number(limit) : 100;
+        where += ' AND version = 0';
         let query = `SELECT action_index, request_id, contract_index, fee_payer_id, provider_id,
                             payload, callback_method, callback_params_json,
                             redundancy, deadline_block, gas_escrow, request_status,
                             status_id, block_index
-                     FROM attestation_requests
+                     FROM attests
                      WHERE ` + where + `
                      ORDER BY block_index ASC, action_index ASC
                      LIMIT ` + max;
@@ -7852,19 +7850,20 @@ class Database {
     // Returns full rows so the expiry handler doesn't have to refetch.
     async getExpiredAttestationRequests(blockIndex){
         let query = `SELECT ar.*, ia.address AS fee_payer
-                     FROM attestation_requests ar
+                     FROM attests ar
                      LEFT JOIN index_addresses ia ON ia.id = ar.fee_payer_id
-                     WHERE ar.request_status = 'pending'
+                     WHERE ar.version = 0
+                       AND ar.request_status = 'pending'
                        AND ar.deadline_block < ?
                      ORDER BY ar.deadline_block ASC, ar.action_index ASC`;
         return await this.doQuery(query, [blockIndex]);
     }
 
-    // Set callback_execute_action_index on an attestation_responses row (after the system EXECUTE is injected)
+    // Set callback_execute_action_index on an ATTEST v1 (response) row (after the system EXECUTE is injected)
     async setAttestationResponseCallbackIndex(responseActionIndex, callbackExecuteActionIndex){
-        let query = `UPDATE attestation_responses
+        let query = `UPDATE attests
                      SET callback_execute_action_index = ?
-                     WHERE action_index = ?`;
+                     WHERE action_index = ? AND version = 1`;
         await this.doQuery(query, [callbackExecuteActionIndex, responseActionIndex]);
     }
 
@@ -8210,14 +8209,30 @@ class Database {
 
     // Oracle data accessor — reads from price_snapshots table
     // Returns an accessor object that the VM gateway uses for xchain.oracle.*
-    async getOracleDataForVM(blockIndex){
+    //
+    // blockTime is the unix-second timestamp of the block being processed; together with
+    // maxAgeSeconds it gates getPrice against stale snapshots. Staleness is measured
+    // deterministically as (blockTime − snapshot.block_timestamp), both chain-derived
+    // unix seconds, so every node replaying the block computes the same result and
+    // historical backfill is never falsely flagged stale. maxAgeSeconds <= 0 disables the guard.
+    async getOracleDataForVM(blockIndex, blockTime, maxAgeSeconds){
         let self = this;
+        let refTime = parseInt(blockTime);
+        let maxAge  = parseInt(maxAgeSeconds);
 
         // Pre-load the latest finalized snapshot age (blocks since last snapshot)
         let ageQuery = "SELECT MAX(reference_block) AS latest_block FROM price_snapshots WHERE status = 'finalized'";
         let ageRows = await this.doQuery(ageQuery);
         let latestBlock = (ageRows.length > 0 && ageRows[0].latest_block !== null) ? ageRows[0].latest_block : 0;
         let snapshotAge = (blockIndex && latestBlock > 0) ? Math.max(0, blockIndex - latestBlock) : Number.MAX_SAFE_INTEGER;
+
+        // True when a snapshot is older than the configured max age relative to the
+        // block being processed (stale ⇒ treated as no price).
+        let isStale = (snapshotTimestamp) => {
+            if(!(maxAge > 0) || !Number.isFinite(refTime)) return false;
+            if(!(snapshotTimestamp > 0)) return false;
+            return (refTime - snapshotTimestamp) > maxAge;
+        };
 
         return {
             // Get the most recent finalized price at or before the current block
@@ -8229,6 +8244,9 @@ class Database {
                              ORDER BY round_number DESC LIMIT 1`;
                 let rows = await self.doQuery(query, [coinPair, blockIndex || 999999999]);
                 if(rows.length === 0) return null;
+                // Stale prices surface as null rather than a silently outdated value;
+                // contracts can still consult getSnapshotAge() for the staleness signal.
+                if(isStale(Number(rows[0].block_timestamp))) return null;
                 return {
                     price:       rows[0].price,
                     roundNumber: Number(rows[0].round_number),
@@ -8258,7 +8276,14 @@ class Database {
 
     // Get the latest finalized price for a coin pair at or before a given block height
     // blockHeight gates the query so two nodes processing the same block always see the same price
-    async getLatestPrice(coinPair, blockHeight){
+    //
+    // opts (optional) enables a staleness guard: { blockTime, maxAgeSeconds }. When both
+    // are supplied and maxAgeSeconds > 0, a snapshot whose block_timestamp is older than
+    // maxAgeSeconds relative to blockTime is treated as no price (returns null) rather than
+    // a silently outdated value. Age is measured as (blockTime − snapshot.block_timestamp),
+    // both chain-derived unix seconds, so the check is deterministic across nodes and does
+    // not false-trigger during historical backfill.
+    async getLatestPrice(coinPair, blockHeight, opts){
         let query, args;
         if(blockHeight !== undefined && blockHeight !== null){
             query = `SELECT price, round_number, block_timestamp
@@ -8276,6 +8301,17 @@ class Database {
         }
         let rows = await this.doQuery(query, args);
         if(rows.length === 0) return null;
+
+        // Staleness guard (opt-in via opts) — see method comment.
+        if(opts){
+            let refTime = parseInt(opts.blockTime);
+            let maxAge  = parseInt(opts.maxAgeSeconds);
+            let snapTs  = Number(rows[0].block_timestamp);
+            if(maxAge > 0 && Number.isFinite(refTime) && snapTs > 0 && (refTime - snapTs) > maxAge){
+                return null;
+            }
+        }
+
         return {
             price:       rows[0].price,
             roundNumber: Number(rows[0].round_number),

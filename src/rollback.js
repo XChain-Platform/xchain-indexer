@@ -48,7 +48,6 @@ class Rollback {
             'transactions',
             'validator_rewards',
             'contract_state',
-            'attestation_validator_signatures',
             'slash_events'
         ];
 
@@ -116,8 +115,7 @@ class Rollback {
             'contract_executions',
             'deposits',
             'withdrawals',
-            'attestation_requests',
-            'attestation_responses',
+            'attests',
             'prices'
         ];
 
@@ -384,22 +382,23 @@ class Rollback {
 
             if(firstActionIndex){
 
-                // Reset request_status on attestation_requests rows whose ATTEST
-                // response is about to be deleted below. The forward path flips a
-                // request from 'pending' to 'fulfilled'/'errored' via a direct
+                // Reset request_status on ATTEST v0 (request) rows whose ATTEST v1
+                // (response) row is about to be deleted below. The forward path flips
+                // a request from 'pending' to 'fulfilled'/'errored' via a direct
                 // UPDATE on the request row (created in an EARLIER block, so its
                 // action_index < firstActionIndex and it survives the bulk delete
                 // that follows). Deleting the orphaned response row alone would
                 // leave the surviving request stuck non-'pending': on re-application
                 // the response is rejected as already-resolved, the contract
                 // callback never fires, and the deadline-expiry sweep (which only
-                // considers 'pending' requests) never re-arms. This UPDATE must run
-                // BEFORE the delete loop so the join to the soon-to-be-deleted
-                // attestation_responses rows still resolves.
-                query = `UPDATE attestation_requests ar
-                            INNER JOIN attestation_responses resp ON (resp.request_id = ar.request_id)
-                            SET ar.request_status = 'pending'
-                            WHERE resp.action_index >= ?`;
+                // considers 'pending' requests) never re-arms. Both rows now live in
+                // the consolidated `attests` table, so this is a self-join (v0 row to
+                // its v1 row by request_id). Must run BEFORE the delete loop so the
+                // join to the soon-to-be-deleted response rows still resolves.
+                query = `UPDATE attests req
+                            INNER JOIN attests resp ON (resp.request_id = req.request_id AND resp.version = 1)
+                            SET req.request_status = 'pending'
+                            WHERE req.version = 0 AND resp.action_index >= ?`;
                 args  = [firstActionIndex];
                 await this.indexerDb.doQuery(query, args);
 
@@ -430,7 +429,7 @@ class Rollback {
             args  = [block_index];
             await this.indexerDb.doQuery(query, args);
 
-            // Re-derive attestation_validator_stats for the orphaned range. This is
+            // Re-derive attest_validator_stats for the orphaned range. This is
             // a monotone aggregate (fulfilled/missed/slashed counters per
             // validator/provider) with no action_index or block FK, so neither
             // generic delete loop above can touch it. A blanket delete would also
@@ -489,7 +488,7 @@ class Rollback {
         this.util.logTimer(rollbackTimer, 'Rollback Done');
     }
 
-    // Re-derive attestation_validator_stats rows touched at or after block_index.
+    // Re-derive attest_validator_stats rows touched at or after block_index.
     //
     // The counters are written incrementally by the ATTEST handler
     // (db.incrementAttestationValidatorStat):
@@ -509,7 +508,7 @@ class Rollback {
         // the orphaned range always has last_updated_block >= block_index here.
         let pairRows = await this.indexerDb.doQuery(
             `SELECT validator_pubkey, provider_id
-             FROM attestation_validator_stats
+             FROM attest_validator_stats
              WHERE last_updated_block >= ?`,
             [block_index]
         );
@@ -523,7 +522,7 @@ class Rollback {
         // Drop the stale rows. Any pair whose entire history was orphaned simply
         // stays gone — a from-genesis replay would never have created its row.
         await this.indexerDb.doQuery(
-            `DELETE FROM attestation_validator_stats WHERE last_updated_block >= ?`,
+            `DELETE FROM attest_validator_stats WHERE last_updated_block >= ?`,
             [block_index]
         );
 
@@ -537,23 +536,27 @@ class Rollback {
         };
 
         // fulfilled_count: one per verified signature contributed to a STATUS='ok'
-        // response. Signatures live in attestation_validator_signatures (block
-        // scoped, already rolled back); provider_id comes from the joined response.
-        let fulfilledRows = await this.indexerDb.doQuery(
-            `SELECT avs.validator_pubkey AS pubkey,
-                    ar.provider_id        AS provider,
-                    COUNT(*)              AS cnt,
-                    MAX(avs.block_index)  AS last_block
-             FROM attestation_validator_signatures avs
-             INNER JOIN attestation_responses ar ON ar.action_index = avs.response_action_index
-             WHERE ar.response_status = 'ok'
-             GROUP BY avs.validator_pubkey, ar.provider_id`,
+        // response. Signatures now ride in the validator_signatures JSON column on
+        // the surviving v1 response rows (already rolled back via the action_index
+        // delete), so we aggregate them in JS rather than joining a child table.
+        let okResponses = await this.indexerDb.doQuery(
+            `SELECT provider_id, validator_signatures, block_index
+             FROM attests
+             WHERE version = 1 AND response_status = 'ok' AND validator_signatures IS NOT NULL`,
             []
         );
-        for(let row of fulfilledRows){
-            let s = ensure(String(row.pubkey).toLowerCase(), String(row.provider));
-            s.fulfilled = Number(row.cnt) || 0;
-            s.lastBlock = Math.max(s.lastBlock, Number(row.last_block) || 0);
+        for(let row of okResponses){
+            let sigs = [];
+            try { sigs = JSON.parse(row.validator_signatures) || []; }
+            catch(_) { sigs = []; }
+            let provider = String(row.provider_id);
+            let block    = Number(row.block_index) || 0;
+            for(let sig of sigs){
+                if(!sig || !sig.pubkey) continue;
+                let s = ensure(String(sig.pubkey).toLowerCase(), provider);
+                s.fulfilled += 1;
+                s.lastBlock = Math.max(s.lastBlock, block);
+            }
         }
 
         // missed_count: one per responsible-set validator each time a request
@@ -570,11 +573,13 @@ class Rollback {
         let validId = await this.indexerDb.getStatusId('valid');
         let expiredReqs = await this.indexerDb.doQuery(
             `SELECT ar.request_id, ar.provider_id, ar.redundancy, ar.block_index, ar.deadline_block
-             FROM attestation_requests ar
-             WHERE ar.deadline_block < ?
+             FROM attests ar
+             WHERE ar.version = 0
+               AND ar.deadline_block < ?
                AND NOT EXISTS (
-                   SELECT 1 FROM attestation_responses r
-                   WHERE r.request_id = ar.request_id
+                   SELECT 1 FROM attests r
+                   WHERE r.version = 1
+                     AND r.request_id = ar.request_id
                      AND r.status_id = ?
                )`,
             [block_index - 1, validId]
@@ -609,7 +614,7 @@ class Rollback {
             if(s.fulfilled === 0 && s.missed === 0)
                 continue;
             await this.indexerDb.doQuery(
-                `INSERT INTO attestation_validator_stats
+                `INSERT INTO attest_validator_stats
                     (validator_pubkey, provider_id, fulfilled_count, missed_count, slashed_count, quality_score, last_updated_block)
                  VALUES (?, ?, ?, ?, 0, 0, ?)
                  ON DUPLICATE KEY UPDATE

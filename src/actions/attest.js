@@ -248,25 +248,22 @@ class Attest {
         let status = (error) ? error : 'valid';
         data['STATUS'] = status;
 
+        // Inline the verified federation signatures as a JSON array on the response
+        // row (consolidated `attests` table — no separate signatures table). Only
+        // persisted for a valid response, mirroring the prior per-row behavior.
+        data['VALIDATOR_SIGNATURES'] = (status === 'valid' && verifiedSigs.length)
+            ? JSON.stringify(verifiedSigs.map(s => ({ pubkey: s.pubkey, sig: s.sig })))
+            : null;
+
         console.log("\t ATTEST v1 : id=" + String(requestId).substring(0,16) + '...' +
                     ' : status=' + responseStatus +
                     ' : sigs=' + validSigs + '/' + (request ? request.redundancy : '?') +
                     ' : ' + data['STATUS']);
 
-        // Persist response row
+        // Persist response row (with verified sigs inlined as JSON)
         await this.indexerDb.createAttestationResponse(data);
 
         if(status === 'valid'){
-            // Persist verified signatures
-            for(let s of verifiedSigs){
-                await this.indexerDb.createAttestationValidatorSignature({
-                    RESPONSE_ACTION_INDEX: data['ACTION_INDEX'],
-                    VALIDATOR_PUBKEY:      s.pubkey,
-                    SIGNATURE:             s.sig,
-                    BLOCK_INDEX:           data['BLOCK_INDEX']
-                });
-            }
-
             // Bump fulfilled_count for each signing validator (only on STATUS=='ok')
             if(String(responseStatus) === 'ok'){
                 for(let s of verifiedSigs){

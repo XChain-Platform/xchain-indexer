@@ -255,6 +255,27 @@ describe('Utility @regression @tier1', function () {
         });
     });
 
+    describe('bcmulfloor()', function () {
+        it('should floor a midpoint fractional result rather than rounding up', function () {
+            // holders balance = 3, dividend amount = 0.5, decimals = 0
+            // full-precision product = 1.5 — banker's rounding gives 2, floor gives 1
+            assert.strictEqual(util.bcmulfloor('3', '0.5', 0).toString(), '1');
+        });
+        it('should floor a non-midpoint fractional result', function () {
+            assert.strictEqual(util.bcmulfloor('2', '0.3', 0).toString(), '0');
+        });
+        it('should return exact integer results unchanged', function () {
+            assert.strictEqual(util.bcmulfloor('3', '4', 0).toString(), '12');
+        });
+        it('should floor to the specified decimal places', function () {
+            // 1.005 * 1 with 2 decimals: product = 1.005, floored to 2dp = 1.00
+            assert.strictEqual(util.bcformat(util.bcmulfloor('1.005', '1', 2), 2), '1.00');
+        });
+        it('should handle null inputs as zero', function () {
+            assert.strictEqual(util.bcmulfloor(null, 5, 0).toString(), '0');
+        });
+    });
+
     describe('bcdiv()', function () {
         it('should divide two numbers', function () {
             assert.strictEqual(util.bcdiv(10, 3, 8).toString(), '3.33333333');

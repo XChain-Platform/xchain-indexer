@@ -56,12 +56,12 @@ const UNIVERSE = fs.readdirSync(SQL_DIR)
 
 // Tables not deleted by index but fully recomputed from surviving ledger rows
 // inside rollback() (updateBalances / updateTokens / updateMarkets /
-// updateContractBalances; attestation_validator_stats via
+// updateContractBalances; attest_validator_stats via
 // _recomputeAttestationValidatorStats — drops rows last touched in the orphaned
 // range, then rebuilds them from surviving signatures + expired requests).
 // `tokens` is ALSO in dataTables — listing it here is harmless; coverage is a
 // union, not a partition.
-const RECOMPUTED = ['balances', 'tokens', 'markets', 'contract_balances', 'attestation_validator_stats'];
+const RECOMPUTED = ['balances', 'tokens', 'markets', 'contract_balances', 'attest_validator_stats'];
 
 // Tables deleted by bespoke logic in rollback() rather than the generic loops.
 // contract_emissions is cascade-deleted via its contract_executions parent.

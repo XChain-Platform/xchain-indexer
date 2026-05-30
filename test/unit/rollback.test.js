@@ -222,8 +222,8 @@ describe('Rollback @regression @tier3', function () {
         const queries = indexer.indexerDb.doQuery.args.map(a => a[0]);
         return queries.find(q =>
             q &&
-            /UPDATE\s+attestation_requests/i.test(q) &&
-            /attestation_responses/i.test(q) &&
+            /UPDATE\s+attests/i.test(q) &&
+            /JOIN\s+attests/i.test(q) &&
             /request_status\s*=\s*'pending'/i.test(q)
         );
     }
@@ -234,10 +234,10 @@ describe('Rollback @regression @tier3', function () {
         await rollback.rollback(100);
 
         const updateQuery = attestationResetUpdate();
-        assert.ok(updateQuery, 'expected a companion UPDATE resetting attestation_requests.request_status to pending');
-        // Joined to attestation_responses by request_id and bounded by firstActionIndex
-        assert.ok(/resp(onse)?\.request_id\s*=\s*ar\.request_id|ar\.request_id\s*=\s*resp(onse)?\.request_id/i.test(updateQuery),
-            'reset UPDATE should join attestation_requests to attestation_responses on request_id');
+        assert.ok(updateQuery, 'expected a companion UPDATE resetting the v0 request row request_status to pending');
+        // Self-join (v0 request row to its v1 response row) by request_id, bounded by firstActionIndex
+        assert.ok(/resp\.request_id\s*=\s*req\.request_id|req\.request_id\s*=\s*resp\.request_id/i.test(updateQuery),
+            'reset UPDATE should self-join the request row to its response row on request_id');
         assert.ok(/action_index\s*>=\s*\?/i.test(updateQuery),
             'reset UPDATE should be bounded by the firstActionIndex parameter');
         // The bound argument matches the orphaned-range start
@@ -245,20 +245,20 @@ describe('Rollback @regression @tier3', function () {
         assert.deepStrictEqual(call[1], [50], 'reset UPDATE should be parameterised with firstActionIndex');
     });
 
-    it('issues the request_status reset BEFORE deleting attestation_responses', async function () {
+    it('issues the request_status reset BEFORE deleting the response (attests) rows', async function () {
         indexer.indexerDb.doQuery.onFirstCall().resolves([{ action_index: 50 }]);
         indexer.indexerDb.doQuery.resolves([]);
         await rollback.rollback(100);
 
         const queries = indexer.indexerDb.doQuery.args.map(a => a[0]).filter(Boolean);
         const updateIdx = queries.findIndex(q =>
-            /UPDATE\s+attestation_requests/i.test(q) && /request_status\s*=\s*'pending'/i.test(q));
+            /UPDATE\s+attests/i.test(q) && /request_status\s*=\s*'pending'/i.test(q));
         const deleteIdx = queries.findIndex(q =>
-            /DELETE\s+FROM\s+attestation_responses/i.test(q));
+            /DELETE\s+FROM\s+attests\b/i.test(q));
         assert.ok(updateIdx >= 0, 'expected the request_status reset UPDATE to be issued');
-        assert.ok(deleteIdx >= 0, 'expected the attestation_responses DELETE to be issued');
+        assert.ok(deleteIdx >= 0, 'expected the attests DELETE to be issued');
         assert.ok(updateIdx < deleteIdx,
-            'request_status reset must run before the response DELETE so the join still resolves');
+            'request_status reset must run before the attests DELETE so the self-join still resolves');
     });
 
     it('does NOT issue the request_status reset when there is no orphaned range', async function () {

@@ -1,9 +1,9 @@
 /**
  * test/unit/rollback-attestation-stats.test.js
  *
- * Behavioral regression for attestation_validator_stats recompute on reorg.
+ * Behavioral regression for attest_validator_stats recompute on reorg.
  *
- * attestation_validator_stats is a monotone aggregate: incrementAttestationValidatorStat
+ * attest_validator_stats is a monotone aggregate: incrementAttestationValidatorStat
  * bumps fulfilled_count / missed_count / slashed_count on a (validator_pubkey,
  * provider_id) row that carries no block FK, so neither generic rollback delete
  * loop can touch it. A blanket delete would also wipe increments earned in
@@ -32,7 +32,7 @@ const sinon  = require('sinon');
 const { createMockIndexer } = require('../fixtures/mocks');
 const Rollback              = require('../../src/rollback.js');
 
-describe('Rollback attestation_validator_stats recompute @regression @tier3', function () {
+describe('Rollback attest_validator_stats recompute @regression @tier3', function () {
     this.timeout(0);
 
     const N        = 100;          // rollback target: orphan everything at/after this block
@@ -60,7 +60,7 @@ describe('Rollback attestation_validator_stats recompute @regression @tier3', fu
         };
         rollback = new Rollback(indexer);
 
-        // ── In-memory attestation_validator_stats (post block-delete state) ──
+        // ── In-memory attest_validator_stats (post block-delete state) ──
         // Each value mirrors a real row. last_updated_block decides "affected".
         statsStore = new Map([
             [`${pkA}|${PROV}`, { validator_pubkey: pkA, provider_id: PROV, fulfilled_count: 5, missed_count: 2, slashed_count: 0, quality_score: 0, last_updated_block: 105 }],
@@ -68,11 +68,13 @@ describe('Rollback attestation_validator_stats recompute @regression @tier3', fu
             [`${pkC}|${PROV}`, { validator_pubkey: pkC, provider_id: PROV, fulfilled_count: 1, missed_count: 0, slashed_count: 0, quality_score: 0, last_updated_block: 110 }],
         ]);
 
-        // Surviving verified signatures on STATUS='ok' responses (block_index < N
-        // — the block deletes already pruned the rest). pkA earned 2; pkC earned
-        // none post-rollback (its only signatures were orphaned).
-        const fulfilledRows = [
-            { pubkey: pkA, provider: PROV, cnt: 2, last_block: 90 },
+        // Surviving STATUS='ok' response rows whose validator_signatures JSON column
+        // holds the verified sigs (block_index < N — the block deletes already pruned
+        // the rest). pkA appears on two ok responses (earns 2, last block 90); pkC
+        // earned none post-rollback (its only signatures were orphaned).
+        const okResponses = [
+            { provider_id: PROV, validator_signatures: JSON.stringify([{ pubkey: pkA, sig: 'ab'.repeat(64) }]), block_index: 90 },
+            { provider_id: PROV, validator_signatures: JSON.stringify([{ pubkey: pkA, sig: 'cd'.repeat(64) }]), block_index: 88 },
         ];
 
         // Surviving requests that WOULD have expired in a replay to N-1: deadline
@@ -97,24 +99,24 @@ describe('Rollback attestation_validator_stats recompute @regression @tier3', fu
                     .map(r => ({ validator_pubkey: r.validator_pubkey, provider_id: r.provider_id }));
             }
             // 2. drop the stale rows
-            if (/DELETE FROM\s+attestation_validator_stats/i.test(query)) {
+            if (/DELETE FROM\s+attest_validator_stats/i.test(query)) {
                 const cutoff = args[0];
                 for (const [k, r] of [...statsStore])
                     if (r.last_updated_block >= cutoff) statsStore.delete(k);
                 return [];
             }
-            // 3. fulfilled_count source: verified sigs on ok responses
-            if (/attestation_validator_signatures/i.test(query)) {
-                return fulfilledRows;
+            // 3. fulfilled_count source: verified sigs (JSON) on ok response rows
+            if (/FROM\s+attests/i.test(query) && /response_status\s*=\s*'ok'/i.test(query)) {
+                return okResponses;
             }
             // 4. missed_count source: surviving requests that would have expired
-            if (/attestation_requests/i.test(query) && /NOT\s+EXISTS/i.test(query)) {
+            if (/FROM\s+attests/i.test(query) && /NOT\s+EXISTS/i.test(query)) {
                 assert.strictEqual(args[0], N - 1, 'expiry cutoff must be block_index-1');
                 assert.strictEqual(args[1], VALID_ID, 'expiry NOT EXISTS must filter on the valid status id');
                 return expiredReqs;
             }
             // 5. re-insert recomputed rows (INSERT ... ON DUPLICATE KEY UPDATE)
-            if (/INSERT INTO\s+attestation_validator_stats/i.test(query)) {
+            if (/INSERT INTO\s+attest_validator_stats/i.test(query)) {
                 const [pubkey, provider, fulfilled, missed, lastBlock] = args;
                 statsStore.set(`${pubkey}|${provider}`, {
                     validator_pubkey: pubkey, provider_id: provider,
