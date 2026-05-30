@@ -7,8 +7,9 @@ RUN mkdir /XChainIndexer/
 # (LIBRARY_BUNDLES); the file: link in package.json resolves it at npm install.
 COPY ./xchain-vm /XChainIndexer/xchain-vm
 COPY ./package.json /XChainIndexer/package.json
+COPY ./package-lock.json /XChainIndexer/package-lock.json
 WORKDIR /XChainIndexer
-RUN npm install
+RUN npm ci
 
 COPY ./src /XChainIndexer/src
 COPY ./.en[v] /XChainIndexer/.env
