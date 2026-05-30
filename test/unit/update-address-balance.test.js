@@ -179,10 +179,13 @@ describe('Database.updateBalances (parallelized) @unit @regression', function ()
         assert.ok(db.updateAddressBalance.calledWith('addr1', false));
     });
 
-    it('runs all address updates concurrently (Promise.all semantics)', async function () {
+    it('runs address updates sequentially (one fully completes before the next starts)', async function () {
+        // updateBalances intentionally serializes per-address updates: the shared
+        // MariaDB connection cannot serve concurrent queries, and a Promise.all
+        // here interleaves them and corrupts balances. See src/db.js updateBalances
+        // (commit "Fix balance corruption: serialize per-address balance updates").
         const db = makeDb();
         const order = [];
-        // Each call records when it starts; delays simulate different durations
         db.updateAddressBalance = sinon.stub().callsFake(async (addr) => {
             order.push(addr + ':start');
             await new Promise(r => setImmediate(r));
@@ -191,12 +194,12 @@ describe('Database.updateBalances (parallelized) @unit @regression', function ()
 
         await db.updateBalances(['a', 'b', 'c'], false);
 
-        // With Promise.all, all three start before any finish
-        const starts = order.filter(e => e.endsWith(':start'));
-        const firstEnd = order.findIndex(e => e.endsWith(':end'));
-        const lastStart = order.map((e, i) => e.endsWith(':start') ? i : -1).filter(i => i >= 0).pop();
-        // All starts should appear before the first end (parallelism, not serial)
-        assert.strictEqual(starts.length, 3, 'all three addresses should start');
-        assert.ok(lastStart < firstEnd, 'all starts should precede the first completion');
+        // Serial execution → each address fully completes (start then end) before
+        // the next one starts. No interleaving.
+        assert.deepStrictEqual(order, [
+            'a:start', 'a:end',
+            'b:start', 'b:end',
+            'c:start', 'c:end',
+        ], 'each address must finish before the next begins (no concurrency)');
     });
 });

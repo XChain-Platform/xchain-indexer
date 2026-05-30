@@ -45,7 +45,8 @@ describe('Swap action handler @regression @tier2', function () {
     });
 
     function makeCreateParams(giveTick, giveAmt, getTick, getAmt, expiration, memo) {
-        return ['0', 'BTC', giveTick, String(giveAmt), 'BTC', getTick, String(getAmt), '', String(expiration || ''), '', '', memo || ''];
+        // Format 0: VERSION|GIVE_COIN|GIVE_TICK|GIVE_AMOUNT|GIVE_OWNERSHIP|GET_COIN|GET_TICK|GET_AMOUNT|GET_OWNERSHIP|GET_ADDRESS|EXPIRATION|ALLOW_LIST|BLOCK_LIST|MEMO
+        return ['0', 'BTC', giveTick, String(giveAmt), '', 'BTC', getTick, String(getAmt), '', '', String(expiration || ''), '', '', memo || ''];
     }
 
     function makeCancelParams(swapActionIndex, memo) {
@@ -76,14 +77,14 @@ describe('Swap action handler @regression @tier2', function () {
 
     it('rejects GIVE_COIN not in accepted coins', async function () {
         const data = createBaseData({ ACTION: 'SWAP', FORMAT: 0, BLOCK_TIME: 1700000000 });
-        const params = ['0', 'XYZ', 'GIVE', '10', 'BTC', 'GET', '5', '', String(FUTURE_EXPIRATION), '', '', ''];
+        const params = ['0', 'XYZ', 'GIVE', '10', '', 'BTC', 'GET', '5', '', '', String(FUTURE_EXPIRATION), '', '', ''];
         await handler.parse(params, data, null);
         assert.ok(data['STATUS'].includes('GIVE_COIN'), `Expected GIVE_COIN error, got: ${data['STATUS']}`);
     });
 
     it('rejects GET_COIN not in accepted coins', async function () {
         const data = createBaseData({ ACTION: 'SWAP', FORMAT: 0, BLOCK_TIME: 1700000000 });
-        const params = ['0', 'BTC', 'GIVE', '10', 'ETH', 'GET', '5', '', String(FUTURE_EXPIRATION), '', '', ''];
+        const params = ['0', 'BTC', 'GIVE', '10', '', 'ETH', 'GET', '5', '', '', String(FUTURE_EXPIRATION), '', '', ''];
         await handler.parse(params, data, null);
         assert.ok(data['STATUS'].includes('GET_COIN'), `Expected GET_COIN error, got: ${data['STATUS']}`);
     });

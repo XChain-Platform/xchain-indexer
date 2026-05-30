@@ -746,8 +746,17 @@ describe('Utility @regression @tier1', function () {
     // ─── Data Transformation ──────────────────────────────────────
 
     describe('setNumberFormats()', function () {
-        it('should convert numeric string fields to bignumber', function () {
+        it('leaves numeric STRING fields as strings (string is the canonical form)', function () {
+            // setNumberFormats only coerces non-string numerics to bignumber
+            // (guard: typeof value !== 'string'). Wire/amount values are strings
+            // everywhere, so they pass through untouched — no float/bignumber drift.
             const data = { AMOUNT: '100', DECIMALS: '8' };
+            const result = util.setNumberFormats(data);
+            assert.strictEqual(typeof result.AMOUNT, 'string');
+            assert.strictEqual(result.AMOUNT, '100');
+        });
+        it('coerces a non-string numeric field to bignumber', function () {
+            const data = { AMOUNT: 100 };
             const result = util.setNumberFormats(data);
             assert.strictEqual(typeof result.AMOUNT, 'object'); // bignumber
             assert.strictEqual(result.AMOUNT.toString(), '100');

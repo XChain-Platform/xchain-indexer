@@ -279,6 +279,9 @@ describe('Issue handler @regression @tier1', function () {
         });
 
         it('reserved TICK name (BTC) → invalid', async function () {
+            // RESERVED_TICKS rejection is a mainnet rule — issue.js deliberately
+            // exempts regtest (any address may mint reserved ticks there).
+            indexer.config.NETWORK = 'mainnet';
             const params = makeFormat0Params({ TICK: 'BTC' });
             const data   = makeData({ FORMAT: 0, BLOCK_INDEX: LOW_BLOCK });
 
@@ -288,6 +291,9 @@ describe('Issue handler @regression @tier1', function () {
         });
 
         it('reserved TICK name (XCHAIN) → invalid', async function () {
+            // RESERVED_TICKS rejection is a mainnet rule — issue.js deliberately
+            // exempts regtest (any address may mint reserved ticks there).
+            indexer.config.NETWORK = 'mainnet';
             const params = makeFormat0Params({ TICK: 'XCHAIN' });
             const data   = makeData({ FORMAT: 0, BLOCK_INDEX: LOW_BLOCK });
 

@@ -109,11 +109,11 @@ describe('Config @regression @tier3', function () {
         it('should define FIATS dictionary', function () {
             assert.ok(config.FIATS.USD);
             assert.ok(config.FIATS.JPY);
-            assert.strictEqual(Object.keys(config.FIATS).length, 10);
+            assert.strictEqual(Object.keys(config.FIATS).length, 12);
         });
 
         it('should set message encryption methods', function () {
-            assert.deepStrictEqual(config.MESSAGE_ENCRYPTION_METHODS, [1, 2]);
+            assert.deepStrictEqual(config.MESSAGE_ENCRYPTION_METHODS, [1, 2, 3]);
         });
 
         it('should set sleep immediate methods', function () {
