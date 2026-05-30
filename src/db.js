@@ -2141,15 +2141,14 @@ class Database {
                     tokens.push(row.tick);
         }
         // Loop through tokens and update basic info
-        for(let tick of tokens)
-            await this.updateTokenInfo(tick);
+        await Promise.all(tokens.map(t => this.updateTokenInfo(t)));
     }
 
     // Handle getting token info (supply, price, etc) and updating the `tokens` table
     async updateTokenInfo(tick){
-        let tick_id = await this.createTicker(tick);
-        // Lookup current token information
-        let data = await this.getTokenInfo(tick);
+        // createTicker and getTokenInfo are independent; run them concurrently.
+        // tick_id is unused here — createToken calls createTicker internally.
+        const [, data] = await Promise.all([this.createTicker(tick), this.getTokenInfo(tick)]);
         // Update the record in `tokens` table
         if(data)
             await this.createToken(data);
