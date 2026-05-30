@@ -671,8 +671,17 @@ class Utility {
         }
 
         // Calculate expected native coin amount
-        // For now, use XCHAIN = $1 placeholder until XCHAIN/USD oracle is live
-        let xchainUsdPrice = 1.0;
+        let xchainPriceData = await priceDb.getLatestPrice('XCHAIN/USD', data['BLOCK_INDEX'],
+            { blockTime: data['BLOCK_TIME'], maxAgeSeconds: maxPriceAgeSeconds });
+        if(!xchainPriceData || !xchainPriceData.price){
+            return { valid: false, error: 'no current oracle price for XCHAIN/USD (missing or stale beyond ' + maxPriceAgeSeconds + 's)' };
+        }
+
+        let xchainUsdPrice = parseFloat(xchainPriceData.price);
+        if(xchainUsdPrice <= 0){
+            return { valid: false, error: 'invalid oracle price for XCHAIN/USD' };
+        }
+
         let feeUsd = xchainAmount * xchainUsdPrice;
         let expectedNative = feeUsd / coinUsdPrice;
 
