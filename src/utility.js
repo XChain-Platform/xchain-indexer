@@ -619,8 +619,8 @@ class Utility {
     // Returns: { valid, nativeCoinAmount, oracleRound, error }
     async validateNativeCoinFee(data, fees, db, txOutputs){
         let feeDestination = this.config['ADDRESS']['FEE_DESTINATION'];
-        let toleranceMin = parseFloat(this.config['FEE_TOLERANCE_MIN'] || '0.95');
-        let toleranceMax = parseFloat(this.config['FEE_TOLERANCE_MAX'] || '1.10');
+        let toleranceMin = this.bcnum(this.config['FEE_TOLERANCE_MIN'] || '0.95');
+        let toleranceMax = this.bcnum(this.config['FEE_TOLERANCE_MAX'] || '1.10');
 
         // Find the fee output
         let feeOutput = null;
@@ -637,14 +637,14 @@ class Utility {
             return { valid: false, error: 'no fee output to FEE_DESTINATION' };
         }
 
-        let paidAmount = parseFloat(feeOutput.value || feeOutput.amount || 0);
-        if(paidAmount <= 0){
+        let paidAmount = this.bcnum(feeOutput.value || feeOutput.amount || 0);
+        if(this.bclte(paidAmount, 0)){
             return { valid: false, error: 'fee output has zero value' };
         }
 
         // Get the XCHAIN fee amount (already calculated by the action handler)
-        let xchainAmount = parseFloat(fees['AMOUNT']);
-        if(xchainAmount <= 0){
+        let xchainAmount = this.bcnum(fees['AMOUNT']);
+        if(this.bclte(xchainAmount, 0)){
             // No fee required — accept
             return { valid: true, nativeCoinAmount: '0', oracleRound: 0 };
         }
@@ -665,8 +665,8 @@ class Utility {
             return { valid: false, error: 'no current oracle price for ' + coin + '/USD (missing or stale beyond ' + maxPriceAgeSeconds + 's)' };
         }
 
-        let coinUsdPrice = parseFloat(coinPriceData.price);
-        if(coinUsdPrice <= 0){
+        let coinUsdPrice = this.bcnum(coinPriceData.price);
+        if(this.bclte(coinUsdPrice, 0)){
             return { valid: false, error: 'invalid oracle price for ' + coin + '/USD' };
         }
 
@@ -677,29 +677,32 @@ class Utility {
             return { valid: false, error: 'no current oracle price for XCHAIN/USD (missing or stale beyond ' + maxPriceAgeSeconds + 's)' };
         }
 
-        let xchainUsdPrice = parseFloat(xchainPriceData.price);
-        if(xchainUsdPrice <= 0){
+        let xchainUsdPrice = this.bcnum(xchainPriceData.price);
+        if(this.bclte(xchainUsdPrice, 0)){
             return { valid: false, error: 'invalid oracle price for XCHAIN/USD' };
         }
 
-        let feeUsd = xchainAmount * xchainUsdPrice;
-        let expectedNative = feeUsd / coinUsdPrice;
+        // Carry USD intermediates at high precision so the final 8-decimal native
+        // amount isn't biased by mid-computation truncation; native-coin outputs
+        // are computed and reported at satoshi (8-decimal) precision.
+        let feeUsd = this.bcmul(xchainAmount, xchainUsdPrice, 18);
+        let expectedNative = this.bcdiv(feeUsd, coinUsdPrice, 18);
 
-        // Apply tolerance band
-        let minAcceptable = expectedNative * toleranceMin;
-        let maxAcceptable = expectedNative * toleranceMax;
+        // Apply tolerance band (native-coin precision)
+        let minAcceptable = this.bcmul(expectedNative, toleranceMin, 8);
+        let maxAcceptable = this.bcmul(expectedNative, toleranceMax, 8);
 
-        if(paidAmount < minAcceptable){
-            return { valid: false, error: 'insufficient native coin fee (paid: ' + paidAmount.toFixed(8) +
-                ', expected: ' + expectedNative.toFixed(8) + ', min: ' + minAcceptable.toFixed(8) + ')' };
+        if(this.bclt(paidAmount, minAcceptable)){
+            return { valid: false, error: 'insufficient native coin fee (paid: ' + this.bcformat(paidAmount, 8) +
+                ', expected: ' + this.bcformat(expectedNative, 8) + ', min: ' + this.bcformat(minAcceptable, 8) + ')' };
         }
 
         return {
             valid:            true,
-            nativeCoinAmount: paidAmount.toFixed(8),
+            nativeCoinAmount: this.bcformat(paidAmount, 8),
             nativeCoin:       coin,
             oracleRound:      coinPriceData.roundNumber,
-            expectedAmount:   expectedNative.toFixed(8)
+            expectedAmount:   this.bcformat(expectedNative, 8)
         };
     }
 

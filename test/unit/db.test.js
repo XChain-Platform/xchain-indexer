@@ -698,3 +698,63 @@ describe('Database.getValidatorsByCapability() — threshold source @regression 
         assert.strictEqual(thresholdArg(), '0');
     });
 });
+
+// ---------------------------------------------------------------------------
+// describe: getContractState — adversarial state keys (__proto__) must
+// round-trip faithfully into the VM's initialState. A plain {} would route
+// state['__proto__'] = value through the __proto__ setter (no-op for strings,
+// prototype reassignment for objects), silently losing the key on reload.
+// Regression guard for the Object.create(null) fix in src/db.js.
+// ---------------------------------------------------------------------------
+describe('Database.getContractState() adversarial keys @regression @tier1', function () {
+    let db;
+
+    function makeDb(rows) {
+        return {
+            doQuery: sinon.stub().resolves(rows),
+            getContractState: Database.prototype.getContractState,
+        };
+    }
+
+    // Values are stored JSON-serialized (createContractState writes JSON.stringify(value)).
+    const row = (k, v) => ({ state_key: k, state_value: JSON.stringify(v) });
+
+    it('returns a null-prototype object (no inherited Object.prototype)', async function () {
+        db = makeDb([row('owner', 'addr1')]);
+        const state = await db.getContractState.call(db, 1);
+        assert.strictEqual(Object.getPrototypeOf(state), null,
+            'state object must have a null prototype so adversarial keys are own data properties');
+    });
+
+    it('round-trips a "__proto__" string key as an own property (not the proto setter)', async function () {
+        db = makeDb([row('__proto__', 'secret-balance'), row('owner', 'addr1')]);
+        const state = await db.getContractState.call(db, 1);
+        assert.ok(Object.prototype.hasOwnProperty.call(state, '__proto__'),
+            '__proto__ must be a genuine own property');
+        assert.strictEqual(state['__proto__'], 'secret-balance',
+            '__proto__ value must survive the reload (this is what regressed with a plain {})');
+        assert.strictEqual(state.owner, 'addr1');
+    });
+
+    it('round-trips a "__proto__" OBJECT key without reassigning the prototype', async function () {
+        db = makeDb([row('__proto__', { nested: true })]);
+        const state = await db.getContractState.call(db, 1);
+        // With a plain {}, state['__proto__'] = {nested:true} would set the
+        // object's [[Prototype]] instead of an own key — corrupting the state.
+        assert.strictEqual(Object.getPrototypeOf(state), null,
+            'assigning an object to __proto__ must NOT reassign the prototype');
+        assert.deepStrictEqual(state['__proto__'], { nested: true });
+    });
+
+    it('round-trips a "constructor" key', async function () {
+        db = makeDb([row('constructor', 'C')]);
+        const state = await db.getContractState.call(db, 1);
+        assert.strictEqual(state['constructor'], 'C');
+    });
+
+    it('falls back to the raw string when state_value is not valid JSON', async function () {
+        db = makeDb([{ state_key: 'legacy', state_value: 'not-json' }]);
+        const state = await db.getContractState.call(db, 1);
+        assert.strictEqual(state.legacy, 'not-json');
+    });
+});

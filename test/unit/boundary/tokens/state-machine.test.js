@@ -85,6 +85,8 @@ describe('Token state machine boundary tests @regression @tier2', function () {
     describe('TOK-01: Issue reserved tick from non-GAS address', function () {
 
         it("ISSUE TICK='BTC' from non-GAS address → invalid (reserved)", async function () {
+            // RESERVED_TICKS rejection is a mainnet rule — issue.js exempts regtest.
+            indexer.config.NETWORK = 'mainnet';
             indexer.indexerDb.getTokenInfo.resolves(null);
 
             const params = makeIssueParams({ TICK: 'BTC' });

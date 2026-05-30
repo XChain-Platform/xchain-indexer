@@ -335,8 +335,13 @@ class Deploy {
         let credits = [],
             debits  = [];
 
-        // Debit gas fee from SOURCE
-        if(tokenInfo)
+        // Debit gas fee from SOURCE — mirror the in-memory balance debit above
+        // EXACTLY (!error && feePaymentMode === 2). Recording a ledger debit for a
+        // rejected deploy (e.g. one rejected for insufficient GAS funds) burns gas
+        // the source never had: the ledger supply drops but getAddressBalances only
+        // iterates credit ticks, so the debit-only tick is invisible to the balances
+        // projection — leaving balance = ledger + 1 and tripping the supply SanityError.
+        if(!error && tokenInfo && feePaymentMode === 2)
             debits.push([gas, fee, data['SOURCE']]);
 
         // Process any transaction ledger changes (credits / debits)

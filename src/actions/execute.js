@@ -290,9 +290,15 @@ class Execute {
         let credits = [],
             debits  = [];
 
-        // Debit gas fee from SOURCE (always, even on failure — caller pays for the attempt).
-        // Skipped for system-injected EXECUTEs (e.g. attestation callbacks); see fee block above.
-        if(tokenInfo && !data['IS_EMISSION'])
+        // Debit gas fee from SOURCE. Mirror the in-memory balance debit's condition
+        // EXACTLY (!error && !skipFee && feePaymentMode === 2). A reverted VM run leaves
+        // `error` null (it sets vmError, status='reverted'), so the "caller pays for a
+        // failed attempt" case still debits. But an EXECUTE rejected before the VM ran
+        // (insufficient GAS funds / inactive contract / sleeping source) sets `error`
+        // and must NOT record a ledger debit: burning gas the source never had drops
+        // ledger supply while getAddressBalances (which only iterates credit ticks)
+        // leaves the balances projection unchanged — balance = ledger + 1, SanityError.
+        if(!error && !skipFee && tokenInfo && feePaymentMode === 2)
             debits.push([gas, fee, data['SOURCE']]);
 
         // Process any transaction ledger changes (credits / debits)

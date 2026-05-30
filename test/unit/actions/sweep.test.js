@@ -149,7 +149,7 @@ describe('Sweep @regression @tier3', function () {
             assert.strictEqual(data['STATUS'], 'valid');
         });
 
-        it('open swaps cancelled when ESCROWS=1 (via data override)', async function () {
+        it('open swaps cancelled when SWAPS=1 (via data override)', async function () {
             const swapInfo = {
                 ACTION_INDEX: 20, SOURCE, GIVE_TICK: 'TEST', GIVE_AMOUNT: '30',
             };
@@ -170,7 +170,7 @@ describe('Sweep @regression @tier3', function () {
             const origSetActionParams = indexer.util.setActionParams.bind(indexer.util);
             indexer.util.setActionParams = (d, p, f, v) => {
                 const result = origSetActionParams(d, p, f, v);
-                result['ESCROWS'] = 1; // force escrows
+                result['SWAPS'] = 1; // force swap-escrow cancellation
                 return result;
             };
 
@@ -179,7 +179,7 @@ describe('Sweep @regression @tier3', function () {
             assert.ok(indexer.indexerDb.createSwapStatus.called, 'createSwapStatus should be called');
         });
 
-        it('dispensers set to cancelling when ESCROWS=1 (via data override)', async function () {
+        it('dispensers set to cancelling when DISPENSERS=1 (via data override)', async function () {
             indexer.indexerDb.getAddressBalances.resolves({ 1: '1' });
             indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
             indexer.indexerDb.getAddressOwnerships.resolves([]);
@@ -192,7 +192,7 @@ describe('Sweep @regression @tier3', function () {
             const origSetActionParams = indexer.util.setActionParams.bind(indexer.util);
             indexer.util.setActionParams = (d, p, f, v) => {
                 const result = origSetActionParams(d, p, f, v);
-                result['ESCROWS'] = 1;
+                result['DISPENSERS'] = 1;
                 return result;
             };
 
@@ -228,7 +228,7 @@ describe('Sweep @regression @tier3', function () {
 
     describe('all flags combined', function () {
 
-        it('BALANCES=1, OWNERSHIPS=1, ESCROWS=1 all processed (via data override)', async function () {
+        it('BALANCES=1, OWNERSHIPS=1, ORDERS/SWAPS/DISPENSERS=1 all processed (via data override)', async function () {
             const orderInfo = {
                 ACTION_INDEX: 10, SOURCE, GIVE_TICK: 'TEST', GIVE_REMAINING: '10',
             };
@@ -244,11 +244,13 @@ describe('Sweep @regression @tier3', function () {
             const data = createBaseData({ ACTION: 'SWEEP', FORMAT: 0, SOURCE });
             const params = ['0', DESTINATION]; // BALANCES/OWNERSHIPS/ESCROWS omitted → default to null → use defaults
 
-            // Inject ESCROWS=1 to test all three flags
+            // Inject ORDERS/SWAPS/DISPENSERS=1 to test all three escrow-close flags
             const origSetActionParams = indexer.util.setActionParams.bind(indexer.util);
             indexer.util.setActionParams = (d, p, f, v) => {
                 const result = origSetActionParams(d, p, f, v);
-                result['ESCROWS'] = 1;
+                result['ORDERS']     = 1;
+                result['SWAPS']      = 1;
+                result['DISPENSERS'] = 1;
                 return result;
             };
 

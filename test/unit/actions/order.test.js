@@ -79,7 +79,7 @@ describe('Order action handler @regression @tier2', function () {
     describe('Format 0 – Create Order', function () {
 
         it('valid order creation calls createOrder and createOrderStatus', async function () {
-            const params = makeParams(`0|BTC|RAREPEPE|1|BTC|PEPECASH|10|${OWNER_ADDR}|${EXPIRATION}|||`);
+            const params = makeParams(`0|BTC|RAREPEPE|1||BTC|PEPECASH|10||${OWNER_ADDR}|${EXPIRATION}|||`);
             const data   = createBaseData({ ACTION: 'ORDER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
 
             await order.parse(params, data, false);
@@ -90,7 +90,7 @@ describe('Order action handler @regression @tier2', function () {
         });
 
         it('valid order triggers processAction ORDER_MATCH', async function () {
-            const params = makeParams(`0|BTC|RAREPEPE|1|BTC|PEPECASH|10|${OWNER_ADDR}|${EXPIRATION}|||`);
+            const params = makeParams(`0|BTC|RAREPEPE|1||BTC|PEPECASH|10||${OWNER_ADDR}|${EXPIRATION}|||`);
             const data   = createBaseData({ ACTION: 'ORDER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
 
             await order.parse(params, data, false);
@@ -101,7 +101,7 @@ describe('Order action handler @regression @tier2', function () {
         });
 
         it('valid order creates debit and escrow for GIVE_AMOUNT', async function () {
-            const params = makeParams(`0|BTC|RAREPEPE|1|BTC|PEPECASH|10|${OWNER_ADDR}|${EXPIRATION}|||`);
+            const params = makeParams(`0|BTC|RAREPEPE|1||BTC|PEPECASH|10||${OWNER_ADDR}|${EXPIRATION}|||`);
             const data   = createBaseData({ ACTION: 'ORDER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
 
             await order.parse(params, data, false);
@@ -111,7 +111,7 @@ describe('Order action handler @regression @tier2', function () {
         });
 
         it('GIVE_COIN not matching COIN config returns invalid', async function () {
-            const params = makeParams(`0|LTC|RAREPEPE|1|BTC|PEPECASH|10|${OWNER_ADDR}|${EXPIRATION}|||`);
+            const params = makeParams(`0|LTC|RAREPEPE|1||BTC|PEPECASH|10||${OWNER_ADDR}|${EXPIRATION}|||`);
             const data   = createBaseData({ ACTION: 'ORDER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
 
             await order.parse(params, data, false);
@@ -122,7 +122,7 @@ describe('Order action handler @regression @tier2', function () {
         });
 
         it('GET_COIN not matching COIN config returns invalid', async function () {
-            const params = makeParams(`0|BTC|RAREPEPE|1|LTC|PEPECASH|10|${OWNER_ADDR}|${EXPIRATION}|||`);
+            const params = makeParams(`0|BTC|RAREPEPE|1||LTC|PEPECASH|10||${OWNER_ADDR}|${EXPIRATION}|||`);
             const data   = createBaseData({ ACTION: 'ORDER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
 
             await order.parse(params, data, false);
@@ -135,7 +135,7 @@ describe('Order action handler @regression @tier2', function () {
                 .withArgs('UNKNOWN', sinon.match.any, sinon.match.any)
                 .resolves(null);
 
-            const params = makeParams(`0|BTC|UNKNOWN|1|BTC|PEPECASH|10|${OWNER_ADDR}|${EXPIRATION}|||`);
+            const params = makeParams(`0|BTC|UNKNOWN|1||BTC|PEPECASH|10||${OWNER_ADDR}|${EXPIRATION}|||`);
             const data   = createBaseData({ ACTION: 'ORDER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
 
             await order.parse(params, data, false);
@@ -148,7 +148,7 @@ describe('Order action handler @regression @tier2', function () {
                 .withArgs('NOTOKEN', sinon.match.any, sinon.match.any)
                 .resolves(null);
 
-            const params = makeParams(`0|BTC|RAREPEPE|1|BTC|NOTOKEN|10|${OWNER_ADDR}|${EXPIRATION}|||`);
+            const params = makeParams(`0|BTC|RAREPEPE|1||BTC|NOTOKEN|10||${OWNER_ADDR}|${EXPIRATION}|||`);
             const data   = createBaseData({ ACTION: 'ORDER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
 
             await order.parse(params, data, false);
@@ -160,7 +160,7 @@ describe('Order action handler @regression @tier2', function () {
             // Balance is 0 — insufficient for GIVE_AMOUNT of 1
             indexer.indexerDb.getAddressBalances.resolves({ 10: '0', 20: '999999' });
 
-            const params = makeParams(`0|BTC|RAREPEPE|1|BTC|PEPECASH|10|${OWNER_ADDR}|${EXPIRATION}|||`);
+            const params = makeParams(`0|BTC|RAREPEPE|1||BTC|PEPECASH|10||${OWNER_ADDR}|${EXPIRATION}|||`);
             const data   = createBaseData({ ACTION: 'ORDER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
 
             await order.parse(params, data, false);
@@ -170,7 +170,7 @@ describe('Order action handler @regression @tier2', function () {
 
         it('EXPIRATION before BLOCK_TIME returns invalid', async function () {
             const pastExpiration = BLOCK_TIME - 1000;
-            const params = makeParams(`0|BTC|RAREPEPE|1|BTC|PEPECASH|10|${OWNER_ADDR}|${pastExpiration}|||`);
+            const params = makeParams(`0|BTC|RAREPEPE|1||BTC|PEPECASH|10||${OWNER_ADDR}|${pastExpiration}|||`);
             const data   = createBaseData({ ACTION: 'ORDER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
 
             await order.parse(params, data, false);
@@ -179,7 +179,7 @@ describe('Order action handler @regression @tier2', function () {
         });
 
         it('EXPIRATION equal to BLOCK_TIME returns invalid', async function () {
-            const params = makeParams(`0|BTC|RAREPEPE|1|BTC|PEPECASH|10|${OWNER_ADDR}|${BLOCK_TIME}|||`);
+            const params = makeParams(`0|BTC|RAREPEPE|1||BTC|PEPECASH|10||${OWNER_ADDR}|${BLOCK_TIME}|||`);
             const data   = createBaseData({ ACTION: 'ORDER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
 
             await order.parse(params, data, false);
@@ -188,7 +188,7 @@ describe('Order action handler @regression @tier2', function () {
         });
 
         it('unsupported GIVE_COIN returns invalid', async function () {
-            const params = makeParams(`0|ETH|RAREPEPE|1|BTC|PEPECASH|10|${OWNER_ADDR}|${EXPIRATION}|||`);
+            const params = makeParams(`0|ETH|RAREPEPE|1||BTC|PEPECASH|10||${OWNER_ADDR}|${EXPIRATION}|||`);
             const data   = createBaseData({ ACTION: 'ORDER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
 
             await order.parse(params, data, false);
@@ -201,7 +201,7 @@ describe('Order action handler @regression @tier2', function () {
                 .withArgs(OWNER_ADDR, null, sinon.match.any)
                 .resolves(false);
 
-            const params = makeParams(`0|BTC|RAREPEPE|1|BTC|PEPECASH|10|${OWNER_ADDR}|${EXPIRATION}|||`);
+            const params = makeParams(`0|BTC|RAREPEPE|1||BTC|PEPECASH|10||${OWNER_ADDR}|${EXPIRATION}|||`);
             const data   = createBaseData({ ACTION: 'ORDER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
 
             await order.parse(params, data, false);
@@ -214,7 +214,7 @@ describe('Order action handler @regression @tier2', function () {
                 .withArgs(null, 'RAREPEPE', sinon.match.any)
                 .resolves(false);
 
-            const params = makeParams(`0|BTC|RAREPEPE|1|BTC|PEPECASH|10|${OWNER_ADDR}|${EXPIRATION}|||`);
+            const params = makeParams(`0|BTC|RAREPEPE|1||BTC|PEPECASH|10||${OWNER_ADDR}|${EXPIRATION}|||`);
             const data   = createBaseData({ ACTION: 'ORDER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
 
             await order.parse(params, data, false);
@@ -229,7 +229,7 @@ describe('Order action handler @regression @tier2', function () {
             // validation checks data['MEMO'] AFTER setActionParams runs.
             // We replicate the same effect by passing the already-parsed MEMO directly
             // into the data object BEFORE calling parse, which tests the validation path.
-            const params = makeParams(`0|BTC|RAREPEPE|1|BTC|PEPECASH|10|${OWNER_ADDR}|${EXPIRATION}|||hello`);
+            const params = makeParams(`0|BTC|RAREPEPE|1||BTC|PEPECASH|10||${OWNER_ADDR}|${EXPIRATION}|||hello`);
             const data   = createBaseData({ ACTION: 'ORDER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
             // Override MEMO after parse would set it, by injecting it as a pre-parse error scenario
             // Testing via a stub: stub setActionParams to inject a MEMO with pipe
@@ -246,7 +246,7 @@ describe('Order action handler @regression @tier2', function () {
         });
 
         it('GIVE_COIN unsupported coin returns invalid (unknown COINS list)', async function () {
-            const params = makeParams(`0|XRP|RAREPEPE|1|BTC|PEPECASH|10|${OWNER_ADDR}|${EXPIRATION}|||`);
+            const params = makeParams(`0|XRP|RAREPEPE|1||BTC|PEPECASH|10||${OWNER_ADDR}|${EXPIRATION}|||`);
             const data   = createBaseData({ ACTION: 'ORDER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
 
             await order.parse(params, data, false);
@@ -256,7 +256,7 @@ describe('Order action handler @regression @tier2', function () {
 
         it('defaults GET_ADDRESS to SOURCE when COIN networks match and GET_ADDRESS not provided', async function () {
             // Empty GET_ADDRESS in param string
-            const params = makeParams(`0|BTC|RAREPEPE|1|BTC|PEPECASH|10||${EXPIRATION}|||`);
+            const params = makeParams(`0|BTC|RAREPEPE|1||BTC|PEPECASH|10|||${EXPIRATION}|||`);
             const data   = createBaseData({ ACTION: 'ORDER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
 
             await order.parse(params, data, false);
@@ -267,7 +267,7 @@ describe('Order action handler @regression @tier2', function () {
         });
 
         it('pre-existing error short-circuits validation', async function () {
-            const params = makeParams(`0|BTC|RAREPEPE|1|BTC|PEPECASH|10|${OWNER_ADDR}|${EXPIRATION}|||`);
+            const params = makeParams(`0|BTC|RAREPEPE|1||BTC|PEPECASH|10||${OWNER_ADDR}|${EXPIRATION}|||`);
             const data   = createBaseData({ ACTION: 'ORDER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
 
             await order.parse(params, data, 'invalid: pre-existing error');

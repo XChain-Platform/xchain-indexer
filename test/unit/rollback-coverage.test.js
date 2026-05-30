@@ -77,6 +77,12 @@ const ROLLBACK_EXEMPT = {
         'Rolling it back would erase the evidence of the rollback.',
     icons:
         'TIS icon dedup lookup; not populated on the per-action indexing path.',
+    pubkeys:
+        'Idempotent address_id → pubkey registry (createPubkey: INSERT IGNORE, ' +
+        'address_id PRIMARY KEY). Content-addressed — a given address always has ' +
+        'the same pubkey — and keyed on the append-only address registry (stable ' +
+        'ids), so a row surviving a reorg is harmless: re-applying the same blocks ' +
+        're-inserts it as a no-op. Never block-height state, so nothing to undo.',
 };
 
 // Convention: append-only, id-keyed dedup lookups. Orphaned rows are inert

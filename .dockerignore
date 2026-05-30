@@ -1,0 +1,14 @@
+# Keep host/staged node_modules out of the build context so `npm ci` (Dockerfile)
+# is the SOLE authority on dependency versions. A copied-in xchain-vm/node_modules
+# would nest-shadow the hoisted, lockfile-pinned deps — notably the consensus-
+# critical decimal.js arithmetic engine — making the version that actually runs
+# in production ambiguous between validators. The whole fleet must run the same
+# decimal.js (10.4.3) or contract math diverges and the chain forks.
+node_modules
+**/node_modules
+
+# VCS / local cruft (do NOT add .env — Dockerfile's `COPY ./.en[v]` copies it on purpose)
+.git
+.gitignore
+*.log
+npm-debug.log*

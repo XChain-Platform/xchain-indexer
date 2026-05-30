@@ -83,8 +83,8 @@ describe('Dispenser action handler @regression @tier2', function () {
     describe('Format 0 – Create Dispenser', function () {
 
         it('valid dispenser creation calls createDispenser and createDispenserStatus', async function () {
-            // FORMAT: 0|GIVE_COIN|GIVE_TICK|GIVE_AMOUNT|GIVE_ESCROW|GET_COIN|GET_TICK|GET_AMOUNT|GET_ADDRESS|FIAT_CODE|FIAT_AMOUNT|EXPIRATION|ALLOW_LIST|BLOCK_LIST|MEMO
-            const params = makeParams(`0|BTC|JDOG|1|10|BTC||0.01|${OWNER_ADDR}|||${EXPIRATION}|||Creating JDOG dispenser`);
+            // FORMAT: 0|GIVE_COIN|GIVE_TICK|GIVE_AMOUNT|GIVE_OWNERSHIP|GIVE_ESCROW|GET_COIN|GET_TICK|GET_AMOUNT|GET_ADDRESS|FIAT_CODE|FIAT_AMOUNT|ORACLE_ADDRESS|EXPIRATION|ALLOW_LIST|BLOCK_LIST|MEMO
+            const params = makeParams(`0|BTC|JDOG|1||10|BTC||0.01|${OWNER_ADDR}||||${EXPIRATION}|||Creating JDOG dispenser`);
             const data   = createBaseData({ ACTION: 'DISPENSER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
 
             await dispenser.parse(params, data, false);
@@ -95,7 +95,7 @@ describe('Dispenser action handler @regression @tier2', function () {
         });
 
         it('valid dispenser escrow deducts GIVE_ESCROW from SOURCE balance', async function () {
-            const params = makeParams(`0|BTC|JDOG|1|10|BTC||0.01|${OWNER_ADDR}|||${EXPIRATION}|||`);
+            const params = makeParams(`0|BTC|JDOG|1||10|BTC||0.01|${OWNER_ADDR}||||${EXPIRATION}|||`);
             const data   = createBaseData({ ACTION: 'DISPENSER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
 
             await dispenser.parse(params, data, false);
@@ -109,7 +109,7 @@ describe('Dispenser action handler @regression @tier2', function () {
                 .withArgs('UNKNOWN', sinon.match.any, sinon.match.any)
                 .resolves(null);
 
-            const params = makeParams(`0|BTC|UNKNOWN|1|10|BTC||0.01|${OWNER_ADDR}|||${EXPIRATION}|||`);
+            const params = makeParams(`0|BTC|UNKNOWN|1||10|BTC||0.01|${OWNER_ADDR}||||${EXPIRATION}|||`);
             const data   = createBaseData({ ACTION: 'DISPENSER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
 
             await dispenser.parse(params, data, false);
@@ -120,7 +120,7 @@ describe('Dispenser action handler @regression @tier2', function () {
         });
 
         it('invalid GET_ADDRESS format returns invalid', async function () {
-            const params = makeParams(`0|BTC|JDOG|1|10|BTC||0.01|not-a-valid-address|||${EXPIRATION}|||`);
+            const params = makeParams(`0|BTC|JDOG|1||10|BTC||0.01|not-a-valid-address||||${EXPIRATION}|||`);
             const data   = createBaseData({ ACTION: 'DISPENSER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
 
             await dispenser.parse(params, data, false);
@@ -131,7 +131,7 @@ describe('Dispenser action handler @regression @tier2', function () {
         it('insufficient balance for GIVE_ESCROW returns invalid', async function () {
             indexer.indexerDb.getAddressBalances.resolves({ 10: '0' });
 
-            const params = makeParams(`0|BTC|JDOG|1|10|BTC||0.01|${OWNER_ADDR}|||${EXPIRATION}|||`);
+            const params = makeParams(`0|BTC|JDOG|1||10|BTC||0.01|${OWNER_ADDR}||||${EXPIRATION}|||`);
             const data   = createBaseData({ ACTION: 'DISPENSER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
 
             await dispenser.parse(params, data, false);
@@ -141,7 +141,7 @@ describe('Dispenser action handler @regression @tier2', function () {
 
         it('EXPIRATION before BLOCK_TIME returns invalid', async function () {
             const pastExpiry = BLOCK_TIME - 1000;
-            const params = makeParams(`0|BTC|JDOG|1|10|BTC||0.01|${OWNER_ADDR}|||${pastExpiry}|||`);
+            const params = makeParams(`0|BTC|JDOG|1||10|BTC||0.01|${OWNER_ADDR}||||${pastExpiry}|||`);
             const data   = createBaseData({ ACTION: 'DISPENSER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
 
             await dispenser.parse(params, data, false);
@@ -150,7 +150,7 @@ describe('Dispenser action handler @regression @tier2', function () {
         });
 
         it('EXPIRATION equal to BLOCK_TIME returns invalid', async function () {
-            const params = makeParams(`0|BTC|JDOG|1|10|BTC||0.01|${OWNER_ADDR}|||${BLOCK_TIME}|||`);
+            const params = makeParams(`0|BTC|JDOG|1||10|BTC||0.01|${OWNER_ADDR}||||${BLOCK_TIME}|||`);
             const data   = createBaseData({ ACTION: 'DISPENSER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
 
             await dispenser.parse(params, data, false);
@@ -159,7 +159,7 @@ describe('Dispenser action handler @regression @tier2', function () {
         });
 
         it('GIVE_COIN not matching COIN config returns invalid', async function () {
-            const params = makeParams(`0|LTC|JDOG|1|10|BTC||0.01|${OWNER_ADDR}|||${EXPIRATION}|||`);
+            const params = makeParams(`0|LTC|JDOG|1||10|BTC||0.01|${OWNER_ADDR}||||${EXPIRATION}|||`);
             const data   = createBaseData({ ACTION: 'DISPENSER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
 
             await dispenser.parse(params, data, false);
@@ -168,7 +168,7 @@ describe('Dispenser action handler @regression @tier2', function () {
         });
 
         it('GET_COIN not matching COIN config returns invalid', async function () {
-            const params = makeParams(`0|BTC|JDOG|1|10|LTC||0.01|${OWNER_ADDR}|||${EXPIRATION}|||`);
+            const params = makeParams(`0|BTC|JDOG|1||10|LTC||0.01|${OWNER_ADDR}||||${EXPIRATION}|||`);
             const data   = createBaseData({ ACTION: 'DISPENSER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
 
             await dispenser.parse(params, data, false);
@@ -181,7 +181,7 @@ describe('Dispenser action handler @regression @tier2', function () {
                 .withArgs(OWNER_ADDR, null, sinon.match.any)
                 .resolves(false);
 
-            const params = makeParams(`0|BTC|JDOG|1|10|BTC||0.01|${OWNER_ADDR}|||${EXPIRATION}|||`);
+            const params = makeParams(`0|BTC|JDOG|1||10|BTC||0.01|${OWNER_ADDR}||||${EXPIRATION}|||`);
             const data   = createBaseData({ ACTION: 'DISPENSER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
 
             await dispenser.parse(params, data, false);
@@ -194,7 +194,7 @@ describe('Dispenser action handler @regression @tier2', function () {
                 .withArgs(null, 'JDOG', sinon.match.any)
                 .resolves(false);
 
-            const params = makeParams(`0|BTC|JDOG|1|10|BTC||0.01|${OWNER_ADDR}|||${EXPIRATION}|||`);
+            const params = makeParams(`0|BTC|JDOG|1||10|BTC||0.01|${OWNER_ADDR}||||${EXPIRATION}|||`);
             const data   = createBaseData({ ACTION: 'DISPENSER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
 
             await dispenser.parse(params, data, false);
@@ -203,7 +203,7 @@ describe('Dispenser action handler @regression @tier2', function () {
         });
 
         it('invalid FIAT_CODE returns invalid', async function () {
-            const params = makeParams(`0|BTC|JDOG|1|10|BTC||0.01|${OWNER_ADDR}|XXX|100.00|${EXPIRATION}|||`);
+            const params = makeParams(`0|BTC|JDOG|1||10|BTC||0.01|${OWNER_ADDR}|XXX|100.00||${EXPIRATION}|||`);
             const data   = createBaseData({ ACTION: 'DISPENSER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
 
             await dispenser.parse(params, data, false);
@@ -212,7 +212,7 @@ describe('Dispenser action handler @regression @tier2', function () {
         });
 
         it('pre-existing error short-circuits processing', async function () {
-            const params = makeParams(`0|BTC|JDOG|1|10|BTC||0.01|${OWNER_ADDR}|||${EXPIRATION}|||`);
+            const params = makeParams(`0|BTC|JDOG|1||10|BTC||0.01|${OWNER_ADDR}||||${EXPIRATION}|||`);
             const data   = createBaseData({ ACTION: 'DISPENSER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
 
             await dispenser.parse(params, data, 'invalid: pre-existing');
@@ -418,7 +418,7 @@ describe('Dispenser action handler @regression @tier2', function () {
 
     describe('Unknown format', function () {
         it('unknown VERSION returns invalid', async function () {
-            const params = makeParams('9|BTC|JDOG|1|10|BTC||0.01|||');
+            const params = makeParams('9|BTC|JDOG|1||10|BTC||0.01|||');
             const data   = createBaseData({ ACTION: 'DISPENSER', FORMAT: 9, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
 
             await dispenser.parse(params, data, false);

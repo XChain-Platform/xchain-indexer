@@ -95,6 +95,13 @@ function createMockDb() {
         createEscrow: sinon.stub().resolves(),
         createLedgerChangeRecord: sinon.stub().resolves(),
 
+        // Ownership-escrow / token-gating / link reads. Defaults are the
+        // neutral path (not escrowed / no gated keys / no linked ISSUE tick);
+        // tests that exercise those features override the stub per-case.
+        isOwnershipEscrowed: sinon.stub().resolves(false),
+        getActiveGatedKeyHashes: sinon.stub().resolves([]),
+        getIssueTick: sinon.stub().resolves(null),
+
         // Action records
         createIssue: sinon.stub().resolves(),
         createToken: sinon.stub().resolves(),
