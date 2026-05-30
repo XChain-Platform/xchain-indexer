@@ -110,7 +110,7 @@ class Database {
                     return true;
                 return false;
             } catch (e){
-                console.error('Error checking if database ' + this.dbName + ' exists: ' + e.message, e)
+                console.error('Error checking if database ' + this.dbName + ' exists:', e)
                 await this.util.sleep(5000); // Wait 5 seconds
             }
         }
@@ -137,7 +137,7 @@ class Database {
                 await db.end();
                 databaseCreated = true;
             } catch(e){
-                console.error('Error creating database ' + this.dbName + ': ' + e.message, e)
+                console.error('Error creating database ' + this.dbName + ':', e)
                 await this.util.sleep(5000); // Waiting 5 seconds
             }
         }
@@ -324,7 +324,7 @@ class Database {
                 }
                 if(attempt >= MAX_ATTEMPTS) break;
                 const backoffMs = Math.min(30000, 500 * Math.pow(2, attempt - 1));
-                console.log('Error creating ' + table + ' (attempt ' + attempt + '/' + MAX_ATTEMPTS + '): ' + err.message + '. Retrying in ' + backoffMs + 'ms...');
+                console.log('Error creating ' + table + ' (attempt ' + attempt + '/' + MAX_ATTEMPTS + '): ', err, '. Retrying in ' + backoffMs + 'ms...');
                 await this.util.sleep(backoffMs);
             }
         }
@@ -377,7 +377,7 @@ class Database {
                 let delay = Math.min(baseDelay * Math.pow(2, attempts - 1), maxDelay);
                 let jitter = Math.floor(Math.random() * delay * 0.3); // up to 30% jitter
                 let totalDelay = delay + jitter;
-                console.error('MariaDB connection attempt ' + attempts + '/' + maxAttempts + ' failed: ' + e.message + '. Retrying in ' + totalDelay + 'ms...', e)
+                console.error('MariaDB connection attempt ' + attempts + '/' + maxAttempts + ' failed. Retrying in ' + totalDelay + 'ms...', e)
                 connection = null;
                 await this.util.sleep(totalDelay);
             }
@@ -430,7 +430,7 @@ class Database {
                 this.transactionConnection = null;
                 return true;
             } catch (e){
-                console.error('Error committing transaction: ' + e.message, e)
+                console.error('Error committing transaction:', e)
                 try {
                     await this.transactionConnection.rollback();
                 } finally {

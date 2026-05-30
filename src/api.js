@@ -156,7 +156,7 @@ async function startApi(){
                     has_stake:   !!stake
                 };
             } catch (err) {
-                console.error('getownstake error:', err && err.message ? err.message : err);
+                console.error('getownstake error:', err);
                 return { error: 'failed to look up stake' };
             }
         },
@@ -171,12 +171,16 @@ async function startApi(){
             if(!indexer.indexerDb)
                 return { error: 'indexer database not ready' };
             try {
-                let block_index         = await indexer.indexerDb.getLatestBlockIndex();
-                let decoder_block_index = indexer.decoderDb ? await indexer.decoderDb.getLatestBlockIndex() : null;
-                let is_synced           = decoder_block_index !== null && block_index >= decoder_block_index;
-                return { block_index, decoder_block_index, is_synced };
+                let block_index = await indexer.indexerDb.getLatestBlockIndex();
+                return {
+                    block_index,
+                    decoder_block: indexer.lastDecoderBlock,
+                    lag: indexer.lastDecoderBlock != null
+                        ? indexer.lastDecoderBlock - block_index
+                        : null,
+                };
             } catch (err) {
-                console.error('getlatestblock error:', err && err.message ? err.message : err);
+                console.error('getlatestblock error:', err);
                 return { error: 'failed to look up latest block' };
             }
         },
@@ -205,7 +209,7 @@ async function startApi(){
                     validators:  validators
                 };
             } catch (err) {
-                console.error('getactivevalidators error:', err && err.message ? err.message : err);
+                console.error('getactivevalidators error:', err);
                 return { error: 'failed to look up active validators' };
             }
         },
@@ -240,7 +244,7 @@ async function startApi(){
                     validators:  validators
                 };
             } catch (err) {
-                console.error('getcapabilityvalidators error:', err && err.message ? err.message : err);
+                console.error('getcapabilityvalidators error:', err);
                 return { error: 'failed to look up capability validators' };
             }
         },
@@ -276,7 +280,7 @@ async function startApi(){
                     requests:           rows
                 };
             } catch (err) {
-                console.error('getpendingattestation_requests error:', err && err.message ? err.message : err);
+                console.error('getpendingattestation_requests error:', err);
                 return { error: 'failed to look up pending attestation requests' };
             }
         },
@@ -301,7 +305,7 @@ async function startApi(){
                     if(ok) written++;
                     else skipped++;
                 } catch (err) {
-                    console.error('pushvalidatorrewards: error writing reward for ' + r.pubkey + ':', err.message);
+                    console.error('pushvalidatorrewards: error writing reward for ' + r.pubkey + ':', err);
                     skipped++;
                 }
             }

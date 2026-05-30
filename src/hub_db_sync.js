@@ -86,7 +86,7 @@ class HubDbSync {
             try {
                 await this._connectWebSocket();
             } catch (err) {
-                console.warn('HubDbSync: WebSocket not ready before bootstrap:', err.message);
+                console.warn('HubDbSync: WebSocket not ready before bootstrap:', err);
                 // Continue — bootstrap still runs; _scheduleReconnect is already queued
             }
         } else {
@@ -97,12 +97,12 @@ class HubDbSync {
         try {
             await this._bootstrapTable('price_snapshots');
         } catch (err) {
-            console.warn('HubDbSync: price_snapshots bootstrap failed:', err.message);
+            console.warn('HubDbSync: price_snapshots bootstrap failed:', err);
         }
         try {
             await this._bootstrapTable('oracle_prices');
         } catch (err) {
-            console.warn('HubDbSync: oracle_prices bootstrap failed:', err.message);
+            console.warn('HubDbSync: oracle_prices bootstrap failed:', err);
         }
 
         if (!WebSocket) {
@@ -142,7 +142,7 @@ class HubDbSync {
                 await this._applyRow(table, row);
                 applied++;
             } catch (err) {
-                console.warn('HubDbSync: failed to apply row in ' + table + ':', err.message);
+                console.warn('HubDbSync: failed to apply row in ' + table + ':', err);
             }
         }
         console.log('HubDbSync: bootstrapped ' + applied + ' rows into ' + table);
@@ -170,7 +170,7 @@ class HubDbSync {
                         }
                     }
                 } catch (err) {
-                    console.warn('HubDbSync: catch-up fetch failed for ' + table + ':', err.message);
+                    console.warn('HubDbSync: catch-up fetch failed for ' + table + ':', err);
                 }
             }
         }
@@ -283,7 +283,7 @@ class HubDbSync {
             try {
                 ws = new WebSocket(wsUrl, { headers: headers });
             } catch (e) {
-                console.warn('HubDbSync: WebSocket connect failed:', e.message);
+                console.warn('HubDbSync: WebSocket connect failed:', e);
                 this._scheduleReconnect();
                 return reject(e);
             }
@@ -321,7 +321,7 @@ class HubDbSync {
                         if (event.table === 'price_snapshots') await this._refreshPriceSyncHeight();
                     }
                 } catch (err) {
-                    console.warn('HubDbSync: failed to handle WebSocket message:', err.message);
+                    console.warn('HubDbSync: failed to handle WebSocket message:', err);
                 }
             });
 
@@ -362,12 +362,12 @@ class HubDbSync {
             try {
                 await this._bootstrapTable('price_snapshots');
             } catch (err) {
-                console.warn('HubDbSync: price_snapshots re-bootstrap failed:', err.message);
+                console.warn('HubDbSync: price_snapshots re-bootstrap failed:', err);
             }
             try {
                 await this._bootstrapTable('oracle_prices');
             } catch (err) {
-                console.warn('HubDbSync: oracle_prices re-bootstrap failed:', err.message);
+                console.warn('HubDbSync: oracle_prices re-bootstrap failed:', err);
             }
         }, 5000);
     }
@@ -380,7 +380,7 @@ class HubDbSync {
                 await this._bootstrapTable('price_snapshots');
                 await this._bootstrapTable('oracle_prices');
             } catch (err) {
-                console.warn('HubDbSync: poll error:', err.message);
+                console.warn('HubDbSync: poll error:', err);
             }
             if (this.running) setTimeout(poll, this.pollIntervalMs);
         };

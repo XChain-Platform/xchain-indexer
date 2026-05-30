@@ -274,7 +274,7 @@ class Dispenser {
                         let firstSeen = await this.utxoTracker.getFirstSeen(data['GET_ADDRESS']);
                         isFresh = !firstSeen || firstSeen.height >= data['BLOCK_INDEX'];
                     } catch (err) {
-                        console.log('WARNING: utxo-tracker get_first_seen failed for ' + data['GET_ADDRESS'] + ': ' + err.message);
+                        console.log('WARNING: utxo-tracker get_first_seen failed for ' + data['GET_ADDRESS'] + ': ', err);
                     }
                 }
                 if(!isFresh)

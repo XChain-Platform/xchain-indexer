@@ -72,8 +72,9 @@ class XChainIndexer {
         this.utxoTracker  = null;
 
         // Misc placeholders
-        this.synced    = false;
-        this.stopFlag  = false
+        this.synced           = false;
+        this.lastDecoderBlock = null;
+        this.stopFlag         = false
         this.blockchainInfoLastBlock = -1
 
         // Price-sync barrier timeout (ms). Before processing a block, the indexer waits for
@@ -190,8 +191,9 @@ class XChainIndexer {
             let lastProcessedReorgId = await this.indexerDb.getLastProcessedReorgId();
 
             // Get last processed block from Indexer and Decoder databases
-            lastDecoderBlock  = await this.decoderDb.getBlockIndex('decoder', 'last');
-            lastIndexerBlock  = await this.indexerDb.getBlockIndex('indexer', 'last');
+            lastDecoderBlock       = await this.decoderDb.getBlockIndex('decoder', 'last');
+            this.lastDecoderBlock  = lastDecoderBlock;
+            lastIndexerBlock       = await this.indexerDb.getBlockIndex('indexer', 'last');
 
             // Handle block reorgs — process when the decoder's latest reorg event is one the
             // indexer has not yet recorded (identity check). Always record the reorg, but only
@@ -256,7 +258,7 @@ class XChainIndexer {
                         // Defer the block: lastIndexerBlock is not advanced, so the outer loop
                         // retries this same block after the sleep interval rather than processing
                         // it against a stale price copy. No transaction is open yet.
-                        console.warn('Deferring block ' + blockToParse + ' (price sync): ' + err.message);
+                        console.warn('Deferring block ' + blockToParse + ' (price sync): ', err);
                         break;
                     }
                 }
@@ -378,14 +380,14 @@ class XChainIndexer {
                     try {
                         this.config[key] = JSON.parse(val);
                     } catch(e) {
-                        console.warn('XChainIndexer: failed to JSON-parse hub param ' + key + ':', e.message);
+                        console.warn('XChainIndexer: failed to JSON-parse hub param ' + key + ':', e);
                     }
                 } else if(typeof val === 'object'){
                     this.config[key] = val;
                 }
             }
         } catch(err) {
-            console.warn('XChainIndexer: hub config overlay failed, using local defaults:', err.message);
+            console.warn('XChainIndexer: hub config overlay failed, using local defaults:', err);
         }
     }
 

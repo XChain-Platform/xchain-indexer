@@ -47,7 +47,7 @@ class HubClient {
             });
         } catch (err) {
             // Best-effort — log and continue
-            console.warn('HubClient: pushChainTip failed:', err.message);
+            console.warn('HubClient: pushChainTip failed:', err);
         }
     }
 

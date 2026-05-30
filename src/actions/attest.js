@@ -284,7 +284,7 @@ class Attest {
                 if(callbackActionIndex)
                     await this.indexerDb.setAttestationResponseCallbackIndex(data['ACTION_INDEX'], callbackActionIndex);
             } catch(e){
-                console.warn('Attestation callback injection failed: ' + (e && e.message ? e.message : e));
+                console.warn('Attestation callback injection failed:', e);
             }
         }
 
@@ -341,14 +341,14 @@ class Attest {
                 );
             }
         } catch(e){
-            console.warn('Attestation expire: missed_count update failed: ' + (e && e.message ? e.message : e));
+            console.warn('Attestation expire: missed_count update failed:', e);
         }
 
         // Synthesize the callback EXECUTE so the contract can clean up (status='expired')
         try {
             await this._injectExpiredCallback(request, data);
         } catch(e){
-            console.warn('Attestation expiry callback failed: ' + (e && e.message ? e.message : e));
+            console.warn('Attestation expiry callback failed:', e);
         }
 
         await this.mapper.createMappings(data);

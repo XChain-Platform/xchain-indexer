@@ -480,7 +480,7 @@ class Rollback {
             try {
                 await this.hubClient.retractPriceRange(this.config['COIN'], firstActionIndex);
             } catch(err) {
-                console.warn('Rollback: hub price retraction failed:', err.message);
+                console.warn('Rollback: hub price retraction failed:', err);
             }
         }
 
