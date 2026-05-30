@@ -553,12 +553,20 @@ class Database {
 
             }
 
-            // Handle getting reorg data from the indexer
+            // Handle getting reorg data from the indexer. Newer rows store a JSON
+            // {block_index, decoder_event_id} payload; legacy rows store a bare number.
             if(component=='indexer'){
                 let query = `SELECT data FROM events WHERE code='REORG' ORDER BY id DESC LIMIT 1`;
                 let results = await this.doQuery(query);
-                if(results.length > 0)
-                    block_index = Number(results[0]["data"]);
+                if(results.length > 0){
+                    let raw = results[0]["data"];
+                    try {
+                        let parsed = JSON.parse(raw);
+                        block_index = (parsed !== null && typeof parsed === 'object') ? Number(parsed.block_index) : Number(parsed);
+                    } catch(e){
+                        block_index = Number(raw);
+                    }
+                }
             }
         } else {
             let func  = (type=='first') ? 'MIN' : 'MAX';
@@ -570,10 +578,56 @@ class Database {
         return block_index;
     }
 
-    // Handle creating a record of a block reorg
-    async createReorg(block_index){
+    // Get the decoder's most-recent reorg event as { id, block_index }, or null if none.
+    // `id` is the decoder events.id — the IDENTITY used to decide whether a reorg is new.
+    // Block height alone is ambiguous across repeated reorgs (heights increase), so the
+    // caller compares this id rather than the block number. `block_index` is the lowest
+    // block touched by the event (the rollback target).
+    async getLatestReorg(){
+        let query = `SELECT id, data FROM events WHERE code='REORG' ORDER BY id DESC LIMIT 1`;
+        let results = await this.doQuery(query);
+        if(results.length === 0)
+            return null;
+        let row = results[0];
+        let block_index = null;
+        let data = JSON.parse(row.data);
+        if(typeof data === 'object' && data !== null){
+            for(let block of data){
+                // Reorg events are stored as an array of {block_index, block_hash}
+                // objects, so unwrap the numeric block index before comparing.
+                let idx = (typeof block === 'object' && block !== null) ? block.block_index : block;
+                if(idx < block_index || block_index === null)
+                    block_index = idx;
+            }
+        }
+        return { id: Number(row.id), block_index: block_index };
+    }
+
+    // Get the decoder event id of the most-recent reorg the indexer has already recorded,
+    // or null if none. This is the value compared against getLatestReorg().id to decide
+    // whether a new reorg needs processing — an IDENTITY check, not a block-height compare.
+    async getLastProcessedReorgId(){
+        let query = `SELECT data FROM events WHERE code='REORG' ORDER BY id DESC LIMIT 1`;
+        let results = await this.doQuery(query);
+        if(results.length === 0)
+            return null;
+        try {
+            let parsed = JSON.parse(results[0]["data"]);
+            if(parsed !== null && typeof parsed === 'object' && parsed.decoder_event_id !== undefined)
+                return Number(parsed.decoder_event_id);
+        } catch(e){
+            // Legacy plain-block-number rows carry no decoder event id.
+        }
+        return null;
+    }
+
+    // Handle creating a record of a block reorg. Persists the decoder event id alongside the
+    // block index so reorgs can be matched by identity (see getLastProcessedReorgId), not by
+    // block-height magnitude — which silently misses every reorg after the first.
+    async createReorg(block_index, decoder_event_id){
+        let payload = JSON.stringify({ block_index: Number(block_index), decoder_event_id: Number(decoder_event_id) });
         let query = `INSERT INTO events (time, code, data) values (now(), 'REORG', ?)`;
-        let args  = [block_index];
+        let args  = [payload];
         let results = await this.doQuery(query, args);
     }
 
@@ -7770,9 +7824,10 @@ class Database {
             args.push(String(providerId));
         }
         let max = Number(limit) > 0 ? Number(limit) : 100;
-        let query = `SELECT action_index, request_id, contract_index, provider_id,
+        let query = `SELECT action_index, request_id, contract_index, fee_payer_id, provider_id,
                             payload, callback_method, callback_params_json,
-                            redundancy, deadline_block, request_status, block_index
+                            redundancy, deadline_block, gas_escrow, request_status,
+                            status_id, block_index
                      FROM attestation_requests
                      WHERE ` + where + `
                      ORDER BY block_index ASC, action_index ASC
@@ -7786,7 +7841,9 @@ class Database {
             ...r,
             action_index:   typeof r.action_index   === 'bigint' ? Number(r.action_index)   : r.action_index,
             contract_index: typeof r.contract_index === 'bigint' ? Number(r.contract_index) : r.contract_index,
+            fee_payer_id:   typeof r.fee_payer_id   === 'bigint' ? Number(r.fee_payer_id)   : r.fee_payer_id,
             deadline_block: typeof r.deadline_block === 'bigint' ? Number(r.deadline_block) : r.deadline_block,
+            status_id:      typeof r.status_id      === 'bigint' ? Number(r.status_id)      : r.status_id,
             block_index:    typeof r.block_index    === 'bigint' ? Number(r.block_index)    : r.block_index
         }));
     }

@@ -167,10 +167,8 @@ class XChainIndexer {
 
         // Define placeholders for block parsing status
         let firstDecoderBlock     = null;
-        let lastIndexerBlock      = null; 
+        let lastIndexerBlock      = null;
         let lastDecoderBlock      = null;
-        let lastDecoderReorgBlock = null;
-        let lastIndexerReorgBlock = null;
 
         while (true){
 
@@ -178,20 +176,28 @@ class XChainIndexer {
             if(this.stopFlag)
                 break;
 
-            // Get last reorg block from Indexer and Decoder databases
-            lastDecoderReorgBlock = await this.decoderDb.getBlockIndex('decoder', 'reorg');
-            lastIndexerReorgBlock = await this.indexerDb.getBlockIndex('indexer', 'reorg');
+            // Get the decoder's latest reorg event ({id, block_index}) and the decoder event id
+            // the indexer last recorded. Reorgs are matched by event IDENTITY (the decoder's
+            // events.id), NOT by block-height magnitude: block heights increase across repeated
+            // reorgs, so comparing heights (e.g. `decoder < indexer`) silently drops every reorg
+            // after the first. Comparing the decoder event id the indexer already processed
+            // against the decoder's current latest reorg id catches each new reorg regardless of
+            // its height — do not re-introduce a block-height comparison here.
+            let decoderReorg         = await this.decoderDb.getLatestReorg();
+            let lastProcessedReorgId = await this.indexerDb.getLastProcessedReorgId();
 
             // Get last processed block from Indexer and Decoder databases
             lastDecoderBlock  = await this.decoderDb.getBlockIndex('decoder', 'last');
             lastIndexerBlock  = await this.indexerDb.getBlockIndex('indexer', 'last');
 
-            // Handle block reorgs — always record the reorg, but only roll back if the indexer has already indexed past the reorg block
-            if(!this.util.isNull(lastDecoderReorgBlock) && (this.util.isNull(lastIndexerReorgBlock) || lastDecoderReorgBlock < lastIndexerReorgBlock)){
-                console.log("Detected block reorganization at block #",lastDecoderReorgBlock);
-                await this.indexerDb.createReorg(lastDecoderReorgBlock);
-                if(!this.util.isNull(lastIndexerBlock) && lastIndexerBlock >= lastDecoderReorgBlock)
-                    await this.rollback.rollback(lastDecoderReorgBlock);
+            // Handle block reorgs — process when the decoder's latest reorg event is one the
+            // indexer has not yet recorded (identity check). Always record the reorg, but only
+            // roll back if the indexer has already indexed past the reorg block.
+            if(!this.util.isNull(decoderReorg) && decoderReorg.id !== lastProcessedReorgId){
+                console.log("Detected block reorganization at block #",decoderReorg.block_index);
+                await this.indexerDb.createReorg(decoderReorg.block_index, decoderReorg.id);
+                if(!this.util.isNull(lastIndexerBlock) && lastIndexerBlock >= decoderReorg.block_index)
+                    await this.rollback.rollback(decoderReorg.block_index);
             }
 
             // If indexer has no parsed blocks, set last indexer block to first decoder block-1 

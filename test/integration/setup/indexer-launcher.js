@@ -79,20 +79,21 @@ async function initIndexer() {
 async function processBlocks(indexer) {
     let blocksProcessed = 0;
 
-    // Get reorg state
-    const lastDecoderReorgBlock = await indexer.decoderDb.getBlockIndex('decoder', 'reorg');
-    const lastIndexerReorgBlock = await indexer.indexerDb.getBlockIndex('indexer', 'reorg');
+    // Get reorg state — match the decoder's reorg event by IDENTITY (events.id),
+    // not block-height magnitude, so consecutive higher-block reorgs are not missed.
+    const decoderReorg         = await indexer.decoderDb.getLatestReorg();
+    const lastProcessedReorgId = await indexer.indexerDb.getLastProcessedReorgId();
 
     // Get block positions
     let lastDecoderBlock = await indexer.decoderDb.getBlockIndex('decoder', 'last');
     let lastIndexerBlock = await indexer.indexerDb.getBlockIndex('indexer', 'last');
 
-    // Handle reorgs: trigger if decoder has a new reorg event not yet reflected in indexer
-    if (lastDecoderReorgBlock !== null &&
-        (lastIndexerReorgBlock === null || lastDecoderReorgBlock !== lastIndexerReorgBlock)) {
-        await indexer.indexerDb.createReorg(lastDecoderReorgBlock);
-        if (lastIndexerBlock !== null && lastIndexerBlock >= lastDecoderReorgBlock) {
-            await indexer.rollback.rollback(lastDecoderReorgBlock);
+    // Handle reorgs: trigger if the decoder's latest reorg event is one the indexer
+    // has not yet recorded (identity check, mirroring XChainIndexer.start()).
+    if (decoderReorg !== null && decoderReorg.id !== lastProcessedReorgId) {
+        await indexer.indexerDb.createReorg(decoderReorg.block_index, decoderReorg.id);
+        if (lastIndexerBlock !== null && lastIndexerBlock >= decoderReorg.block_index) {
+            await indexer.rollback.rollback(decoderReorg.block_index);
         }
         // Re-query after rollback
         lastIndexerBlock = await indexer.indexerDb.getBlockIndex('indexer', 'last');

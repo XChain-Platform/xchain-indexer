@@ -567,6 +567,90 @@ describe('Database.getBlockIndex() — decoder reorg parsing @regression @tier1'
 });
 
 // ---------------------------------------------------------------------------
+// describe: reorg detection by event IDENTITY (not block-height magnitude)
+//
+// Regression for the consecutive-reorg miss: comparing reorg block heights
+// (`lastDecoderReorgBlock < lastIndexerReorgBlock`) silently drops every reorg
+// after the first, because block heights increase. Detection must instead match
+// the decoder's reorg events.id (identity). These guard the three pieces the
+// indexer composes: getLatestReorg (decoder id+block), createReorg (persists the
+// decoder id), getLastProcessedReorgId (reads it back).
+// ---------------------------------------------------------------------------
+describe('Database reorg identity detection @regression @tier1', function () {
+    let db;
+
+    beforeEach(function () {
+        const config = getTestConfig();
+        const util   = new Utility();
+        sinon.stub(util, 'logError');
+        db = {
+            config,
+            util,
+            doQuery: sinon.stub().resolves([]),
+            getLatestReorg:         Database.prototype.getLatestReorg,
+            getLastProcessedReorgId: Database.prototype.getLastProcessedReorgId,
+            createReorg:            Database.prototype.createReorg,
+        };
+    });
+
+    afterEach(function () {
+        sinon.restore();
+    });
+
+    it('getLatestReorg returns {id, block_index} with the lowest orphaned block', async function () {
+        const events = [
+            { block_index: 202, block_hash: 'h202' },
+            { block_index: 200, block_hash: 'h200' },
+        ];
+        db.doQuery.resolves([{ id: 7, data: JSON.stringify(events) }]);
+        const result = await db.getLatestReorg.call(db);
+        assert.deepStrictEqual(result, { id: 7, block_index: 200 });
+    });
+
+    it('getLatestReorg returns null when there are no reorg events', async function () {
+        db.doQuery.resolves([]);
+        assert.strictEqual(await db.getLatestReorg.call(db), null);
+    });
+
+    it('createReorg persists both block_index and decoder_event_id as JSON', async function () {
+        await db.createReorg.call(db, 200, 7);
+        const args = db.doQuery.firstCall.args[1];
+        assert.deepStrictEqual(JSON.parse(args[0]), { block_index: 200, decoder_event_id: 7 });
+    });
+
+    it('getLastProcessedReorgId reads back the persisted decoder event id', async function () {
+        db.doQuery.resolves([{ data: JSON.stringify({ block_index: 200, decoder_event_id: 7 }) }]);
+        assert.strictEqual(await db.getLastProcessedReorgId.call(db), 7);
+    });
+
+    it('getLastProcessedReorgId returns null for legacy bare-number rows', async function () {
+        db.doQuery.resolves([{ data: '100' }]);
+        assert.strictEqual(await db.getLastProcessedReorgId.call(db), null);
+    });
+
+    it('detects a SECOND, higher-block reorg that a magnitude compare would miss', async function () {
+        // Indexer already recorded the first reorg (block 100, decoder event id 5).
+        const indexerDb = {
+            config: db.config, util: db.util,
+            doQuery: sinon.stub().resolves([{ data: JSON.stringify({ block_index: 100, decoder_event_id: 5 }) }]),
+            getLastProcessedReorgId: Database.prototype.getLastProcessedReorgId,
+        };
+        // Decoder now reports a newer reorg at the HIGHER block 200 (event id 6).
+        const decoderDb = {
+            config: db.config, util: db.util,
+            doQuery: sinon.stub().resolves([{ id: 6, data: JSON.stringify([{ block_index: 200, block_hash: 'h200' }]) }]),
+            getLatestReorg: Database.prototype.getLatestReorg,
+        };
+        const decoderReorg         = await decoderDb.getLatestReorg.call(decoderDb);
+        const lastProcessedReorgId = await indexerDb.getLastProcessedReorgId.call(indexerDb);
+
+        // The buggy magnitude check (200 < 100) was false → miss. Identity catches it.
+        assert.strictEqual(decoderReorg.block_index < lastProcessedReorgId, false, 'magnitude compare would have missed it');
+        assert.strictEqual(decoderReorg.id !== lastProcessedReorgId, true, 'identity check detects the new reorg');
+    });
+});
+
+// ---------------------------------------------------------------------------
 // describe: getValidatorsByCapability — MIN_STAKE threshold source
 // ---------------------------------------------------------------------------
 // Regression guard: the validator-set snapshot must filter by the caller-supplied
