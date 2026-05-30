@@ -65,7 +65,7 @@ let XChainVM;
 try {
     XChainVM = require('xchain-vm');
 } catch(e) {
-    console.log('WARNING: xchain-vm not available — DEPLOY/EXECUTE will not run contract code');
+    console.log('WARNING: xchain-vm not available — DEPLOY/EXECUTE will not run contract code', e);
 }
 
 // Staking actions
