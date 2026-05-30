@@ -4,3 +4,11 @@
 /.env
 # Staged at build time by xchain-node (LIBRARY_BUNDLES) — not part of the repo
 /xchain-vm/
+
+# Local DB dumps (multi-hundred-MB SQL blobs are a GitHub push blocker)
+/tmp/
+/src/tmp/
+/XChain_Decoder.sql
+/XChain_Decoder.sql.gz
+/XChain_Indexer.sql
+/XChain_Indexer.sql.gz
