@@ -128,10 +128,21 @@ async function createDecoderSchema() {
                 source_id      INT UNSIGNED DEFAULT NULL,
                 destination_id INT UNSIGNED DEFAULT NULL,
                 amount         VARCHAR(250) DEFAULT NULL,
+                fee            VARCHAR(250) DEFAULT NULL,
                 data           MEDIUMTEXT DEFAULT NULL,
+                raw_data       MEDIUMTEXT DEFAULT NULL,
                 KEY block_index (block_index),
                 KEY tx_hash_id (tx_hash_id),
                 KEY source_id (source_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8
+        `);
+        // The indexer LEFT JOINs pubkeys when reading decoder transactions
+        // (db.js getDecoderBlockData). It can be empty, but must exist or the
+        // read query errors and no actions are ever processed.
+        await conn.query(`
+            CREATE TABLE IF NOT EXISTS pubkeys (
+                address_id BIGINT UNSIGNED NOT NULL PRIMARY KEY,
+                pubkey     VARCHAR(66) NOT NULL
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8
         `);
         await conn.query(`
