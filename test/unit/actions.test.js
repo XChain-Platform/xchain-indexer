@@ -60,19 +60,21 @@ function buildActions(protocolChangesOverrides = {}) {
 
     const actions = new Actions(indexer);
 
-    // Stub every handler's parse() with a resolved stub
-    const handlerKeys = [
-        'actionAddress', 'actionAirdrop', 'actionBatch', 'actionBroadcast',
-        'actionCallback', 'actionDestroy', 'actionDispenser', 'actionDispenserClose',
-        'actionDispenserExpire', 'actionDispense', 'actionDividend', 'actionFile',
-        'actionIssue', 'actionLink', 'actionList', 'actionMessage', 'actionMint',
-        'actionOrder', 'actionOrderExpire', 'actionOrderMatch', 'actionSleep',
-        'actionSend', 'actionSwap', 'actionSwapExpire', 'actionSwapMatch',
-        'actionSweep', 'actionUnknown',
-        'actionDeploy', 'actionExecute', 'actionDeposit', 'actionWithdraw',
-        'actionStake', 'actionUnstake', 'actionDelegate', 'actionRevokeDelegation',
-        'actionClaimRewards', 'actionCoinpay', 'actionCoinpayExpire',
-    ];
+    // Stub every handler's parse() with a resolved stub.
+    //
+    // The list is derived from the live Actions instance — any `action*`
+    // property exposing a parse() method — rather than hardcoded. A hardcoded
+    // list drifts: handlers get added to Actions (e.g. COLLECT, PRICE, ATTEST)
+    // without a matching stub, so routing for them runs the real handler against
+    // a mock DB; conversely a renamed/removed handler leaves a stale key that
+    // makes sinon.stub() throw on undefined and breaks the whole file. Deriving
+    // keeps the stub set in lockstep with what Actions actually registers.
+    // (actionAliases is excluded automatically — it has no parse() method.)
+    const handlerKeys = Object.keys(actions).filter(
+        (key) => key.startsWith('action')
+            && actions[key]
+            && typeof actions[key].parse === 'function'
+    );
 
     const stubs = {};
     for (const key of handlerKeys) {
@@ -204,6 +206,26 @@ describe('Actions.processTransaction() @regression @tier3', function () {
         const { actions, stubs } = buildActions();
         await actions.processTransaction(makeTx({ data: 'SWEEP|0|destaddr' }));
         assert.ok(stubs.actionSweep.calledOnce);
+    });
+
+    // ── Recently-added handlers (staking COLLECT, oracle PRICE, attestation) ─
+
+    it('routes COLLECT to actionCollect.parse', async function () {
+        const { actions, stubs } = buildActions();
+        await actions.processTransaction(makeTx({ data: 'COLLECT|0' }));
+        assert.ok(stubs.actionCollect.calledOnce, 'COLLECT should route to actionCollect.parse');
+    });
+
+    it('routes PRICE to actionPrice.parse', async function () {
+        const { actions, stubs } = buildActions();
+        await actions.processTransaction(makeTx({ data: 'PRICE|1|BTC|TEST|USD|1.00|0|memo' }));
+        assert.ok(stubs.actionPrice.calledOnce, 'PRICE should route to actionPrice.parse');
+    });
+
+    it('routes ATTEST to actionAttest.parse', async function () {
+        const { actions, stubs } = buildActions();
+        await actions.processTransaction(makeTx({ data: 'ATTEST|1|' + 'a'.repeat(64) + '|http_get|payload|ok|meta|0' }));
+        assert.ok(stubs.actionAttest.calledOnce, 'ATTEST should route to actionAttest.parse');
     });
 
     // ── Aliases ───────────────────────────────────────────────────────────
@@ -571,6 +593,21 @@ describe('Actions.processAction() @regression @tier3', function () {
     it('dispatches UNKNOWN to actionUnknown.parse', async function () {
         await call('UNKNOWN');
         assert.ok(stubs.actionUnknown.calledOnce);
+    });
+
+    it('dispatches COLLECT to actionCollect.parse', async function () {
+        await call('COLLECT');
+        assert.ok(stubs.actionCollect.calledOnce);
+    });
+
+    it('dispatches PRICE to actionPrice.parse', async function () {
+        await call('PRICE');
+        assert.ok(stubs.actionPrice.calledOnce);
+    });
+
+    it('dispatches ATTEST to actionAttest.parse', async function () {
+        await call('ATTEST');
+        assert.ok(stubs.actionAttest.calledOnce);
     });
 
     it('does not call any other handler when dispatching SEND', async function () {
