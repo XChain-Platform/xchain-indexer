@@ -97,6 +97,12 @@ async function startApi(){
     // Initialize the indexer (created before API so the controller can reference it)
     const indexer = new XChainIndexer(DECODER_DB_HOST, DECODER_DB_PORT, DECODER_DB_NAME, DECODER_DB_USER, DECODER_DB_PASS, INDEXER_DB_HOST, INDEXER_DB_PORT, INDEXER_DB_NAME, INDEXER_DB_USER, INDEXER_DB_PASS, HUB_DB_HOST, HUB_DB_PORT, HUB_DB_NAME, HUB_DB_USER, HUB_DB_PASS, UTXO_TRACKER_URL, UTXO_TRACKER_API_PORT);
 
+    // Track indexer liveness so the health endpoint can report it (the indexer
+    // process exits on a fatal error, but the flag still distinguishes a clean
+    // run from one tearing down).
+    let indexerRunning = true;
+    let indexerError   = null;
+
     // Create the app
     const app = express();
 
@@ -134,6 +140,38 @@ async function startApi(){
         // Handle returning a success response to ping requests
         async ping(){
             return { status: "success" };
+        },
+
+        // Health check that reports actual indexer state. ping only confirms the
+        // HTTP server is up; this surfaces sync progress plus the circuit-breaker
+        // state of BOTH database connections so an operator can tell a healthy,
+        // syncing indexer apart from one silently stalled at an open circuit after
+        // a database outage (the breaker trips after repeated connection failures).
+        async health(){
+            let lastIndexedBlock = null;
+            try {
+                if(indexer.indexerDb)
+                    lastIndexedBlock = await indexer.indexerDb.getLatestBlockIndex();
+            } catch (err) {
+                // Database unreachable — leave lastIndexedBlock null; the circuit
+                // state below tells the operator why.
+            }
+            let decoderDbCircuit = indexer.decoderDb ? indexer.decoderDb.circuitState : null;
+            let indexerDbCircuit = indexer.indexerDb ? indexer.indexerDb.circuitState : null;
+            let circuitOpen = decoderDbCircuit === 'open' || indexerDbCircuit === 'open';
+            return {
+                status:           (indexerRunning && !circuitOpen) ? "healthy" : "unhealthy",
+                running:          indexerRunning,
+                synced:           indexer.isSynced(),
+                lastIndexedBlock: lastIndexedBlock,
+                decoderBlock:     indexer.lastDecoderBlock,
+                lag:              (indexer.lastDecoderBlock != null && lastIndexedBlock != null)
+                                    ? indexer.lastDecoderBlock - lastIndexedBlock
+                                    : null,
+                decoderDbCircuit: decoderDbCircuit,
+                indexerDbCircuit: indexerDbCircuit,
+                error:            indexerError ? indexerError.message : null
+            };
         },
 
         // Look up the active stake amount + latest block index for a single pubkey.
@@ -232,6 +270,13 @@ async function startApi(){
                 return { error: 'block_index must be a non-negative integer' };
             if(!indexer.indexerDb)
                 return { error: 'indexer database not ready' };
+            // A capability absent from this indexer's STAKING.CAPABILITIES config would
+            // otherwise produce an empty validator set indistinguishable from "no
+            // qualified validators at this block". Surface it as an error so the hub's
+            // CapabilitySnapshot treats it as a null snapshot (degraded mode) and the
+            // operator gets a signal of config drift instead of a silent attestation drop.
+            if(!indexer.indexerDb.isCapabilityConfigured(capability))
+                return { error: 'capability not configured: ' + capability };
             try {
                 let latestBlock = await indexer.indexerDb.getLatestBlockIndex();
                 if(blk > latestBlock)
@@ -325,6 +370,8 @@ async function startApi(){
     // Start the Indexer (trap any errors and log them before exiting the indexer)
     indexer.start().catch((error) => {
         console.error('Fatal indexer error:', error);
+        indexerRunning = false;
+        indexerError   = error;
         process.exit(1);
     });
 
