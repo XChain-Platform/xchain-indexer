@@ -8,3 +8,4 @@ CREATE TABLE balances (
 
 CREATE INDEX address_id ON balances (address_id);
 CREATE INDEX tick_id    ON balances (tick_id);
+CREATE UNIQUE INDEX addr_tick ON balances (address_id, tick_id);
