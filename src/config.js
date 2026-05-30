@@ -74,6 +74,13 @@ module.exports = {
         config['COIN']    = coin;
         config['NETWORK'] = network;
 
+        // Chain identifier used to derive smart-contract addresses (C:<CHAIN>:<action_index>,
+        // e.g. C:BTC:500) and to tag attestation actions. Equal to the coin symbol; kept as a
+        // distinct key because the VM/contract layer references config['CHAIN'] by that name.
+        // Without this, contract addresses derive as "C:undefined:<index>", breaking the
+        // documented cross-chain uniqueness guarantee (C:BTC:500 vs C:DOGE:500).
+        config['CHAIN']   = coin;
+
         // Native TICK 
         config['NATIVE_TICK']          = coin;
         config['NATIVE_TICK_DECIMALS'] = 8;
