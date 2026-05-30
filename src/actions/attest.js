@@ -114,7 +114,7 @@ class Attest {
             error = 'invalid: DEADLINE (outside provider window)';
 
         // Validate contract_index references a real contract
-        if(!error && data['CONTRACT_INDEX']){
+        if(!error && data['CONTRACT_INDEX'] != null){
             let contract = await this.indexerDb.getContract(data['CONTRACT_INDEX']);
             if(!contract)
                 error = 'invalid: CONTRACT_INDEX (unknown)';
