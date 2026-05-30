@@ -2,7 +2,7 @@
 -- all three version-discriminated phases of the external-data attestation
 -- lifecycle (mirrors how `messages` holds every MESSAGE variant in one table):
 --   version 0 — Request  (VM-emitted via xchain.attestation.request)
---   version 1 — Response (validator-broadcast PBFT bundle; verified sigs inlined as JSON)
+--   version 1 — Response (validator-broadcast PBFT bundle, verified sigs inlined as JSON)
 -- A v0 request row and its v1 response row are separate rows correlated by
 -- request_id (each ATTEST action keeps its own action_index). ATTEST v2 (expire)
 -- is system-synthesized and only flips the v0 row's request_status — it writes no
