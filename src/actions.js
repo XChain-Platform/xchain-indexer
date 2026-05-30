@@ -251,6 +251,8 @@ class Actions {
         data['TX_VOUT']          = tx_vout;     // Transaction vout index
         data['TX_DATA']          = tx_data;     // Raw tx data string
         data['RAW_DATA']         = tx.raw_data; // Raw payload bytes (FILE ciphertext, etc.)
+        data['FEE']              = tx.fee;      // Miners fee in satoshis
+        data['SOURCE_PUBKEY']    = tx.source_pubkey; // Public key for the source address
 
         // Treat plain BTC transactions (empty data) as DISPENSE triggers
         // The decoder records these when the destination matches an active dispenser address

@@ -165,12 +165,16 @@ async function startApi(){
         // anchor its snapshot at a deterministic block boundary when the
         // hub's own chain-tip table is empty (no HUB_API_URL on the
         // indexer = no pushChainTip = no chain_tips rows).
+        // Also exposes the decoder's current tip and a sync-status flag so
+        // operators can see the indexer→decoder lag in a single call.
         async getlatestblock(){
             if(!indexer.indexerDb)
                 return { error: 'indexer database not ready' };
             try {
-                let block_index = await indexer.indexerDb.getLatestBlockIndex();
-                return { block_index: block_index };
+                let block_index         = await indexer.indexerDb.getLatestBlockIndex();
+                let decoder_block_index = indexer.decoderDb ? await indexer.decoderDb.getLatestBlockIndex() : null;
+                let is_synced           = decoder_block_index !== null && block_index >= decoder_block_index;
+                return { block_index, decoder_block_index, is_synced };
             } catch (err) {
                 console.error('getlatestblock error:', err && err.message ? err.message : err);
                 return { error: 'failed to look up latest block' };

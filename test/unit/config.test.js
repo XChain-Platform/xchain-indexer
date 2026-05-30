@@ -200,3 +200,90 @@ describe('Config @regression @tier3', function () {
         });
     });
 });
+
+// ---------------------------------------------------------------------------
+// Hub config overlay (_applyHubConfigOverlay)
+// ---------------------------------------------------------------------------
+
+describe('XChainIndexer hub config overlay', function () {
+    const sinon = require('sinon');
+
+    let indexer;
+
+    function makeIndexer(){
+        const XChainIndexer = require('../../src/XChainIndexer.js');
+        let inst = new XChainIndexer(
+            'dhost', 3306, 'ddb', 'duser', 'dpass',
+            'ihost', 3306, 'idb', 'iuser', 'ipass',
+            null, null, null, null, null,
+            null, null
+        );
+        process.env.INDEXER_COIN    = 'BTC';
+        process.env.INDEXER_NETWORK = 'regtest';
+        delete require.cache[require.resolve('../../src/config.js')];
+        inst.config = require('../../src/config.js').getConfig();
+        return inst;
+    }
+
+    afterEach(function () {
+        sinon.restore();
+        delete require.cache[require.resolve('../../src/XChainIndexer.js')];
+    });
+
+    it('overrides GAS_PRICE with hub-served value', async function () {
+        indexer = makeIndexer();
+        let localPrice = indexer.config.GAS_PRICE;
+
+        // stub the hub client's _call to return a higher GAS_PRICE
+        let hubStub = { enabled: true, _call: sinon.stub().resolves({
+            BTC: { regtest: { 'xchain-indexer': { GAS_PRICE: '0.00099' } } }
+        })};
+        indexer.hubClient = hubStub;
+
+        await indexer._applyHubConfigOverlay();
+
+        assert.strictEqual(indexer.config.GAS_PRICE, '0.00099');
+        assert.notStrictEqual(indexer.config.GAS_PRICE, localPrice);
+    });
+
+    it('falls back gracefully when hub is unreachable', async function () {
+        indexer = makeIndexer();
+        let localPrice = indexer.config.GAS_PRICE;
+
+        let hubStub = { enabled: true, _call: sinon.stub().rejects(new Error('ECONNREFUSED')) };
+        indexer.hubClient = hubStub;
+
+        // Should not throw
+        await indexer._applyHubConfigOverlay();
+
+        // Local default is preserved
+        assert.strictEqual(indexer.config.GAS_PRICE, localPrice);
+    });
+
+    it('JSON-parses a GAS_SCHEDULE blob from the hub', async function () {
+        indexer = makeIndexer();
+        let schedule = { ISSUE: 200000, ISSUE_SUBTOKEN: 100000 };
+
+        let hubStub = { enabled: true, _call: sinon.stub().resolves({
+            BTC: { regtest: { 'xchain-indexer': { GAS_SCHEDULE: JSON.stringify(schedule) } } }
+        })};
+        indexer.hubClient = hubStub;
+
+        await indexer._applyHubConfigOverlay();
+
+        assert.deepStrictEqual(indexer.config.GAS_SCHEDULE, schedule);
+    });
+
+    it('skips overlay when hub client is disabled', async function () {
+        indexer = makeIndexer();
+        let localPrice = indexer.config.GAS_PRICE;
+
+        let hubStub = { enabled: false, _call: sinon.stub().resolves({}) };
+        indexer.hubClient = hubStub;
+
+        await indexer._applyHubConfigOverlay();
+
+        assert.strictEqual(indexer.config.GAS_PRICE, localPrice);
+        assert.ok(!hubStub._call.called, '_call should not be invoked when disabled');
+    });
+});

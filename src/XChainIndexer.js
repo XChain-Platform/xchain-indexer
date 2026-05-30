@@ -106,6 +106,9 @@ class XChainIndexer {
         // Create hub client (for pushing chain tip and other cross-chain data to xchain-hub)
         this.hubClient = new HubClient();
 
+        // Overlay hub-served operational params on top of local config defaults (best-effort)
+        await this._applyHubConfigOverlay();
+
         // Establish database connections
         this.decoderDb = new database(this.decoderDbHost, this.decoderDbPort, this.decoderDbName, this.decoderDbUser, this.decoderDbPass, this);
         this.indexerDb = new database(this.indexerDbHost, this.indexerDbPort, this.indexerDbName, this.indexerDbUser, this.indexerDbPass, this);
@@ -345,6 +348,45 @@ class XChainIndexer {
             // Sleep for BLOCK_CHECK_INTERVAL before checking for new transaction data
             await this.util.sleep(this.config['BLOCK_CHECK_INTERVAL']);
         }      
+    }
+
+    // Fetch operational params from the hub and shallow-merge them over the local coin config.
+    // Called once at startup. Best-effort: logs a warning and returns without modifying config
+    // if the hub is unreachable or returns an unexpected response.
+    async _applyHubConfigOverlay(){
+        if(!this.hubClient || !this.hubClient.enabled) return;
+
+        const SCALAR_PARAMS = ['GAS_PRICE', 'FEE_PAYMENT_MODE', 'ACTIVATION_DELAY_BLOCKS', 'EXPIRATION_FEE_PER_DAY'];
+        const BLOB_PARAMS   = ['GAS_SCHEDULE', 'STAKING'];
+
+        try {
+            let allConfigs = await this.hubClient._call('getallconfigs', {});
+            let coin    = this.config.COIN;
+            let network = this.config.NETWORK;
+            let hubParams = (allConfigs && allConfigs[coin] && allConfigs[coin][network] && allConfigs[coin][network]['xchain-indexer']) || {};
+
+            for(let key of SCALAR_PARAMS){
+                let val = hubParams[key];
+                if(val === undefined || val === null) continue;
+                this.config[key] = val;
+            }
+
+            for(let key of BLOB_PARAMS){
+                let val = hubParams[key];
+                if(val === undefined || val === null) continue;
+                if(typeof val === 'string' && (val.charAt(0) === '{' || val.charAt(0) === '[')){
+                    try {
+                        this.config[key] = JSON.parse(val);
+                    } catch(e) {
+                        console.warn('XChainIndexer: failed to JSON-parse hub param ' + key + ':', e.message);
+                    }
+                } else if(typeof val === 'object'){
+                    this.config[key] = val;
+                }
+            }
+        } catch(err) {
+            console.warn('XChainIndexer: hub config overlay failed, using local defaults:', err.message);
+        }
     }
 
 }

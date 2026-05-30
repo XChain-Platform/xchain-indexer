@@ -6836,6 +6836,17 @@ class Database {
     }
 
     /*
+     * Pubkeys table methods (address → pubkey mapping)
+     */
+
+    // Store an address_id → pubkey mapping in the pubkeys table (idempotent)
+    async createPubkey(address_id, pubkey){
+        if(!address_id || !pubkey) return;
+        let query = "INSERT IGNORE INTO pubkeys (address_id, pubkey) VALUES (?, ?)";
+        await this.doQuery(query, [address_id, String(pubkey)]);
+    }
+
+    /*
      * Pubkey index methods (index_pubkeys table)
      */
 
