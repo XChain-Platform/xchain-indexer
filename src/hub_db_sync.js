@@ -68,7 +68,11 @@ class HubDbSync {
         this._priceWaiters   = [];                         // pending waitForPriceSyncHeight() resolvers
     }
 
-    // Start: bootstrap from REST snapshots, then subscribe to live updates
+    // Start: open WebSocket and await the hub's ready acknowledgement (confirming
+    // the subscription is registered), then bootstrap from REST snapshots. This
+    // order ensures no rows can be broadcast between the snapshot response and our
+    // subscription becoming active. Rows that arrive via the stream during the
+    // bootstrap window are harmless duplicates — _applyRow uses INSERT IGNORE.
     async start() {
         if (!this.enabled) {
             console.log('HubDbSync: disabled (no hub URL or no local hub DB connection)');
@@ -76,7 +80,20 @@ class HubDbSync {
         }
         this.running = true;
 
-        // Bootstrap each tracked table
+        if (WebSocket) {
+            // Subscribe first so no row is missed between the REST snapshot and
+            // when the hub registers us as a subscriber.
+            try {
+                await this._connectWebSocket();
+            } catch (err) {
+                console.warn('HubDbSync: WebSocket not ready before bootstrap:', err.message);
+                // Continue — bootstrap still runs; _scheduleReconnect is already queued
+            }
+        } else {
+            console.warn('HubDbSync: ws package not available, falling back to periodic polling');
+        }
+
+        // Bootstrap each tracked table after the subscription is confirmed active
         try {
             await this._bootstrapTable('price_snapshots');
         } catch (err) {
@@ -88,11 +105,7 @@ class HubDbSync {
             console.warn('HubDbSync: oracle_prices bootstrap failed:', err.message);
         }
 
-        // Subscribe to WebSocket live updates if available
-        if (WebSocket) {
-            this._connectWebSocket();
-        } else {
-            console.warn('HubDbSync: ws package not available, falling back to periodic polling');
+        if (!WebSocket) {
             this._startPolling();
         }
     }
@@ -105,7 +118,10 @@ class HubDbSync {
         }
     }
 
-    // Bootstrap: fetch a full snapshot of the table from the hub and apply it
+    // Bootstrap: fetch a full snapshot of the table from the hub and apply it.
+    // If the hub supplied max_ids in the ready message, runs a supplemental
+    // catch-up fetch for any IDs between the snapshot ceiling and hub_ready_max_id
+    // that may have arrived while the REST round-trip was in flight.
     async _bootstrapTable(table) {
         // Determine the highest existing ID in the local copy so we only fetch newer rows
         let lastId = 0;
@@ -130,6 +146,35 @@ class HubDbSync {
             }
         }
         console.log('HubDbSync: bootstrapped ' + applied + ' rows into ' + table);
+
+        // Defense-in-depth: if the hub told us its max_id at subscription time and our
+        // local copy is still behind that ceiling, the REST snapshot window may have
+        // missed rows that arrived right before the snapshot was served. Issue a targeted
+        // catch-up for that narrow gap. Rows already local are ignored (INSERT IGNORE).
+        let hubReadyMaxId = this._readyMaxIds && this._readyMaxIds[table];
+        if (hubReadyMaxId) {
+            let localRows = [];
+            try {
+                localRows = await this.hubDb.doQuery('SELECT MAX(id) AS max_id FROM ' + table);
+            } catch (e) { /* ignore */ }
+            let localMax = (localRows.length > 0 && localRows[0].max_id) ? Number(localRows[0].max_id) : 0;
+            if (localMax < hubReadyMaxId) {
+                console.log('HubDbSync: gap detected in ' + table + ' (local=' + localMax +
+                            ' hub_ready=' + hubReadyMaxId + '), fetching catch-up rows');
+                try {
+                    let catchUpPath = '/hub-db/snapshot/' + table + '?since_id=' + localMax + '&limit=10000';
+                    let catchUp = await this._httpGet(catchUpPath);
+                    if (catchUp && Array.isArray(catchUp.rows)) {
+                        for (let row of catchUp.rows) {
+                            try { await this._applyRow(table, row); } catch (e) { /* ignore */ }
+                        }
+                    }
+                } catch (err) {
+                    console.warn('HubDbSync: catch-up fetch failed for ' + table + ':', err.message);
+                }
+            }
+        }
+
         if (table === 'price_snapshots') await this._refreshPriceSyncHeight();
     }
 
@@ -216,51 +261,82 @@ class HubDbSync {
         await this.hubDb.doQuery(query, [event.source_chain, from]);
     }
 
-    // Open the WebSocket subscription for live row updates
+    // Open the WebSocket subscription for live row updates. Returns a Promise that
+    // resolves once the hub sends a 'ready' acknowledgement confirming the subscription
+    // is registered server-side. start() awaits this before running the REST bootstrap,
+    // eliminating the race where rows inserted between the REST response and the upgrade
+    // complete were silently dropped. After ready, the connection stays open and
+    // processes live events. Rejects if the socket closes before ready is received.
     _connectWebSocket() {
-        if (!WebSocket || !this.running) return;
-        let parsed = url.parse(this.hubUrl);
-        let wsScheme = parsed.protocol === 'https:' ? 'wss:' : 'ws:';
-        let wsUrl = wsScheme + '//' + parsed.host + '/hub-db/subscribe';
-
-        let headers = {};
-        if (this.apiKey) headers['Authorization'] = 'Bearer ' + this.apiKey;
-
-        try {
-            this.ws = new WebSocket(wsUrl, { headers: headers });
-        } catch (e) {
-            console.warn('HubDbSync: WebSocket connect failed:', e.message);
-            this._scheduleReconnect();
-            return;
-        }
-
-        this.ws.on('open', () => {
-            console.log('HubDbSync: WebSocket connected to ' + wsUrl);
-        });
-
-        this.ws.on('message', async (data) => {
-            try {
-                let event = JSON.parse(data.toString());
-                if (event.type === 'row:inserted' && event.table && event.row) {
-                    await this._applyRow(event.table, event.row);
-                    if (event.table === 'price_snapshots') await this._refreshPriceSyncHeight();
-                } else if (event.type === 'row:deleted' && event.table) {
-                    await this._applyRetraction(event);
-                    if (event.table === 'price_snapshots') await this._refreshPriceSyncHeight();
-                }
-            } catch (err) {
-                console.warn('HubDbSync: failed to handle WebSocket message:', err.message);
+        return new Promise((resolve, reject) => {
+            if (!WebSocket || !this.running) {
+                return reject(new Error('WebSocket unavailable or sync stopped'));
             }
-        });
+            let parsed = url.parse(this.hubUrl);
+            let wsScheme = parsed.protocol === 'https:' ? 'wss:' : 'ws:';
+            let wsUrl = wsScheme + '//' + parsed.host + '/hub-db/subscribe';
 
-        this.ws.on('close', () => {
-            console.log('HubDbSync: WebSocket disconnected, reconnecting in 5s');
-            this.ws = null;
-            this._scheduleReconnect();
-        });
+            let headers = {};
+            if (this.apiKey) headers['Authorization'] = 'Bearer ' + this.apiKey;
 
-        this.ws.on('error', (err) => {
-            console.warn('HubDbSync: WebSocket error:', err.message);
+            let ws;
+            try {
+                ws = new WebSocket(wsUrl, { headers: headers });
+            } catch (e) {
+                console.warn('HubDbSync: WebSocket connect failed:', e.message);
+                this._scheduleReconnect();
+                return reject(e);
+            }
+            this.ws = ws;
+
+            // Resolved once either ready or an error fires — prevents double-settle
+            let settled = false;
+            const settle = (fn, val) => {
+                if (settled) return;
+                settled = true;
+                fn(val);
+            };
+
+            ws.on('open', () => {
+                console.log('HubDbSync: WebSocket connected to ' + wsUrl);
+            });
+
+            ws.on('message', async (data) => {
+                try {
+                    let event = JSON.parse(data.toString());
+                    if (event.type === 'ready') {
+                        // Hub has registered our subscription. Capture hub-side max IDs
+                        // (included by HubDbBroadcaster for gap detection after bootstrap).
+                        if (event.max_ids && typeof event.max_ids === 'object') {
+                            this._readyMaxIds = event.max_ids;
+                        }
+                        settle(resolve, event);
+                        return;
+                    }
+                    if (event.type === 'row:inserted' && event.table && event.row) {
+                        await this._applyRow(event.table, event.row);
+                        if (event.table === 'price_snapshots') await this._refreshPriceSyncHeight();
+                    } else if (event.type === 'row:deleted' && event.table) {
+                        await this._applyRetraction(event);
+                        if (event.table === 'price_snapshots') await this._refreshPriceSyncHeight();
+                    }
+                } catch (err) {
+                    console.warn('HubDbSync: failed to handle WebSocket message:', err.message);
+                }
+            });
+
+            ws.on('close', () => {
+                console.log('HubDbSync: WebSocket disconnected, reconnecting in 5s');
+                this.ws = null;
+                settle(reject, new Error('WebSocket closed before ready'));
+                this._scheduleReconnect();
+            });
+
+            ws.on('error', (err) => {
+                console.warn('HubDbSync: WebSocket error:', err.message);
+                // close fires after error and will call _scheduleReconnect
+                settle(reject, err);
+            });
         });
     }
 
@@ -268,14 +344,21 @@ class HubDbSync {
         if (!this.running) return;
         setTimeout(async () => {
             if (!this.running) return;
-            this._connectWebSocket();
 
-            // Re-bootstrap after reconnecting. The WebSocket subscription only
-            // delivers rows broadcast after we resubscribe; any rows the hub
-            // inserted while we were disconnected would otherwise be missing
-            // permanently. _bootstrapTable uses the local max-ID as since_id, so
-            // this fetches only genuinely-missing rows (re-receives are harmless
-            // thanks to INSERT IGNORE in _applyRow).
+            // Await the hub's ready acknowledgement before re-bootstrapping, for the
+            // same reason as start(): no row must fall in the gap between the REST
+            // snapshot and the subscription becoming active on the hub side.
+            try {
+                await this._connectWebSocket();
+            } catch (err) {
+                // _connectWebSocket already queued another _scheduleReconnect via the
+                // close handler — nothing more to do here.
+                return;
+            }
+
+            // Re-bootstrap to fill in rows missed while disconnected. _bootstrapTable
+            // uses the local max-ID as since_id, so it fetches only genuinely-missing
+            // rows; re-receives are harmless thanks to INSERT IGNORE in _applyRow.
             try {
                 await this._bootstrapTable('price_snapshots');
             } catch (err) {
