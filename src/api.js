@@ -282,6 +282,15 @@ async function startApi(){
                 if(blk > latestBlock)
                     return { error: 'block_index ' + blk + ' not yet indexed (latest: ' + latestBlock + ')' };
                 let validators = await indexer.indexerDb.getValidatorsByCapability(capability, blk, min_stake);
+                // Confirm which threshold this snapshot actually filtered by, so a
+                // hub↔indexer MIN_STAKE mismatch is visible in the indexer log
+                // rather than surfacing only as a silently-divergent quorum N.
+                let thresholdSource = (min_stake !== undefined && min_stake !== null)
+                    ? String(min_stake) + ' (caller-supplied)'
+                    : 'local-config';
+                console.log('getcapabilityvalidators: capability=' + capability +
+                    ' block=' + blk + ' min_stake=' + thresholdSource +
+                    ' validators=' + validators.length);
                 return {
                     capability:  capability,
                     block_index: blk,

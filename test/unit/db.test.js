@@ -700,6 +700,120 @@ describe('Database.getValidatorsByCapability() — threshold source @regression 
 });
 
 // ---------------------------------------------------------------------------
+// describe: getActiveCapabilityCount / hasCapability — threshold source
+// ---------------------------------------------------------------------------
+// Companions to getValidatorsByCapability: both expose the same optional
+// caller-supplied MIN_STAKE override (falling back to local config when absent)
+// so the API is symmetric and a future hub caller can drive the threshold the
+// same way the validator-set snapshot already does. Current internal callers
+// (price/attest block processing) omit the override and keep using local config.
+describe('Database.getActiveCapabilityCount() — threshold source @regression @tier1', function () {
+    let db;
+
+    beforeEach(function () {
+        const config = getTestConfig();
+        config.STAKING = { CAPABILITIES: { attestation: { MIN_STAKE: '10000' } } };
+        db = {
+            config,
+            getActiveCapabilityCount: Database.prototype.getActiveCapabilityCount,
+            getStatusId: sinon.stub().resolves(1),
+            doQuery:     sinon.stub().resolves([{ cnt: 0 }]),
+        };
+    });
+
+    // The HAVING threshold is always the last bound parameter.
+    function thresholdArg() {
+        return db.doQuery.firstCall.args[1].slice(-1)[0];
+    }
+
+    it('uses the caller-supplied override over local config', async function () {
+        await db.getActiveCapabilityCount.call(db, 'attestation', 100, '25000');
+        assert.strictEqual(thresholdArg(), '25000');
+    });
+
+    it('falls back to local config when no override is supplied', async function () {
+        await db.getActiveCapabilityCount.call(db, 'attestation', 100);
+        assert.strictEqual(thresholdArg(), '10000');
+    });
+
+    it('treats a 0 override as a real threshold (not a falsy fallback)', async function () {
+        await db.getActiveCapabilityCount.call(db, 'attestation', 100, 0);
+        assert.strictEqual(thresholdArg(), '0');
+    });
+});
+
+describe('Database.hasCapability() — threshold source @regression @tier1', function () {
+    let db;
+
+    beforeEach(function () {
+        const config = getTestConfig();
+        config.STAKING = { CAPABILITIES: { attestation: { MIN_STAKE: '10000' } } };
+        db = {
+            config,
+            hasCapability:          Database.prototype.hasCapability,
+            getActiveStakeByPubkey: sinon.stub().resolves({ amount: '15000' }),
+            util:                   { bcgte: sinon.stub().returns(true) },
+        };
+    });
+
+    // hasCapability compares stake.amount against the resolved threshold via
+    // util.bcgte(amount, minStake) — the threshold is the second arg.
+    function thresholdArg() {
+        return db.util.bcgte.firstCall.args[1];
+    }
+
+    it('uses the caller-supplied override over local config', async function () {
+        await db.hasCapability.call(db, 'pk', 'attestation', 100, '25000');
+        assert.strictEqual(thresholdArg(), '25000');
+    });
+
+    it('coerces a numeric override to a string', async function () {
+        await db.hasCapability.call(db, 'pk', 'attestation', 100, 25000);
+        assert.strictEqual(thresholdArg(), '25000');
+    });
+
+    it('falls back to local config when no override is supplied', async function () {
+        await db.hasCapability.call(db, 'pk', 'attestation', 100);
+        assert.strictEqual(thresholdArg(), '10000');
+    });
+
+    it('treats a 0 override as a real threshold (not a falsy fallback)', async function () {
+        await db.hasCapability.call(db, 'pk', 'attestation', 100, 0);
+        assert.strictEqual(thresholdArg(), '0');
+    });
+});
+
+// ---------------------------------------------------------------------------
+// describe: isCapabilityConfigured — config-drift signal for the hub RPC
+// ---------------------------------------------------------------------------
+// The getcapabilityvalidators RPC uses this to distinguish a capability this
+// indexer doesn't know about (config drift during a rollout) from one that
+// simply has no qualified validators. Both used to return an empty set, so a
+// misconfigured capability silently dropped all its attestation work.
+describe('Database.isCapabilityConfigured() @regression @tier1', function () {
+    function dbWith(caps) {
+        const config = getTestConfig();
+        config.STAKING = caps === undefined ? {} : { CAPABILITIES: caps };
+        return { config, isCapabilityConfigured: Database.prototype.isCapabilityConfigured };
+    }
+
+    it('returns true for a configured capability', function () {
+        const db = dbWith({ attestation: { MIN_STAKE: '10000' } });
+        assert.strictEqual(db.isCapabilityConfigured.call(db, 'attestation'), true);
+    });
+
+    it('returns false for a capability absent from the config', function () {
+        const db = dbWith({ attestation: { MIN_STAKE: '10000' } });
+        assert.strictEqual(db.isCapabilityConfigured.call(db, 'oracle_publish'), false);
+    });
+
+    it('returns false when STAKING.CAPABILITIES is missing entirely', function () {
+        const db = dbWith(undefined);
+        assert.strictEqual(db.isCapabilityConfigured.call(db, 'attestation'), false);
+    });
+});
+
+// ---------------------------------------------------------------------------
 // describe: getContractState — adversarial state keys (__proto__) must
 // round-trip faithfully into the VM's initialState. A plain {} would route
 // state['__proto__'] = value through the __proto__ setter (no-op for strings,

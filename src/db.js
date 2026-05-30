@@ -7132,11 +7132,16 @@ class Database {
 
     // Count distinct active validators (by pubkey) qualified for the given capability.
     // Used for PBFT quorum calculation: quorum = 2 * floor((N - 1) / 3) + 1.
-    async getActiveCapabilityCount(capability, blockIndex){
+    async getActiveCapabilityCount(capability, blockIndex, minStakeOverride){
         let caps = (this.config['STAKING'] && this.config['STAKING']['CAPABILITIES']) ? this.config['STAKING']['CAPABILITIES'] : {};
         let capConfig = caps[capability];
         if(!capConfig) return 0;
-        let minStake = capConfig['MIN_STAKE'] || '0';
+        // A caller-supplied threshold takes precedence over this indexer's local
+        // config (see getValidatorsByCapability). Internal block-processing callers
+        // omit it and get the local fallback unchanged.
+        let minStake = (minStakeOverride !== undefined && minStakeOverride !== null)
+            ? String(minStakeOverride)
+            : (capConfig['MIN_STAKE'] || '0');
         let valid_id = await this.getStatusId('valid');
         let query = `SELECT COUNT(*) AS cnt FROM (
                         SELECT signing_pubkey_id, SUM(CAST(amount AS DECIMAL(30,8))) AS total
@@ -7320,13 +7325,28 @@ class Database {
         }));
     }
 
+    // Whether `capability` is present in this indexer's STAKING.CAPABILITIES config.
+    // Lets the hub-facing getcapabilityvalidators RPC distinguish a genuinely empty
+    // validator set from a capability this indexer doesn't know about — the latter
+    // signals config drift during a capability rollout and must surface as an error
+    // rather than an empty set that looks identical to "no qualified validators".
+    isCapabilityConfigured(capability){
+        let caps = (this.config['STAKING'] && this.config['STAKING']['CAPABILITIES']) ? this.config['STAKING']['CAPABILITIES'] : {};
+        return !!caps[capability];
+    }
+
     // Check whether a pubkey's active stake qualifies for a capability.
     // Returns true if SUM(active stake amount for pubkey) >= governance.min_stake[capability].
-    async hasCapability(pubkey, capability, blockIndex){
+    async hasCapability(pubkey, capability, blockIndex, minStakeOverride){
         let caps = (this.config['STAKING'] && this.config['STAKING']['CAPABILITIES']) ? this.config['STAKING']['CAPABILITIES'] : {};
         let capConfig = caps[capability];
         if(!capConfig) return false;
-        let minStake = capConfig['MIN_STAKE'] || '0';
+        // A caller-supplied threshold takes precedence over this indexer's local
+        // config (see getValidatorsByCapability). Internal block-processing callers
+        // omit it and get the local fallback unchanged.
+        let minStake = (minStakeOverride !== undefined && minStakeOverride !== null)
+            ? String(minStakeOverride)
+            : (capConfig['MIN_STAKE'] || '0');
         let stake = await this.getActiveStakeByPubkey(pubkey, blockIndex);
         if(!stake) return false;
         return this.util.bcgte(stake.amount, minStake);
