@@ -463,6 +463,18 @@ class Utility {
         return false;
     }
 
+    // Detect a contract's derived ledger address (e.g. "C:BTC:500"). Contracts ARE
+    // valid on-ledger balance holders, so this format is a legitimate recipient
+    // wherever proceeds settle purely on the XChain ledger (e.g. the GET_ADDRESS of a
+    // same-chain token ORDER). It is NOT a real on-chain address: callers MUST keep
+    // rejecting it anywhere native coin must actually be paid out (every DISPENSER,
+    // and the native-coin side of an ORDER), since a synthetic address can't receive
+    // a UTXO. Format-only check (mirrors isCryptoAddress) — see contract address
+    // derivation in actions/execute.js (`'C:' + CHAIN + ':' + index`).
+    isContractAddress(address){
+        return /^C:[A-Z]+:[0-9]+$/.test(String(address));
+    }
+
     // Handle adding a ticker to the addreses
     addAddressTicker(address, tick){
         let type = typeof tick;

@@ -186,9 +186,17 @@ class Order {
         if(!error && format==0 && this.config['COIN']!=data['GET_COIN'] && this.util.isNull(data['GET_ADDRESS']))
             error = "invalid: GET_ADDRESS";
 
-        // Verify GET_ADDRESS is valid for the given GET_COIN network
-        if(!error && format==0 && !this.util.isNull(data['GET_ADDRESS']) && !this.util.isCryptoAddress(data['GET_ADDRESS']))
-            error = "invalid: GET_ADDRESS (format)";
+        // Verify GET_ADDRESS is valid for the given GET_COIN network.
+        // A contract's derived address (C:CHAIN:N) is accepted ONLY when the GET side is a
+        // token (not native coin): token proceeds settle on the XChain ledger (order_match
+        // instant settlement) and a contract is a valid balance holder. A contract cannot
+        // receive native coin at a synthetic address, so reject it for a native-coin GET.
+        if(!error && format==0 && !this.util.isNull(data['GET_ADDRESS']) && !this.util.isCryptoAddress(data['GET_ADDRESS'])){
+            if(!this.util.isContractAddress(data['GET_ADDRESS']))
+                error = "invalid: GET_ADDRESS (format)";
+            else if(isNativeCoinGet)
+                error = "invalid: GET_ADDRESS (contract cannot receive native coin)";
+        }
 
         // Validate that EXPIRATION is an integer
         if(!error && !this.util.isNull(data['EXPIRATION']) && (!this.util.isNumeric(data['EXPIRATION']) || !this.util.isInteger(data['EXPIRATION'])))

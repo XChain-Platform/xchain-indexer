@@ -478,6 +478,33 @@ describe('Utility @regression @tier1', function () {
         it('should reject 43+ chars', function () {
             assert.strictEqual(util.isCryptoAddress('a'.repeat(43)), false);
         });
+        it('should reject a contract address (too short for a real address)', function () {
+            assert.strictEqual(util.isCryptoAddress('C:BTC:500'), false);
+        });
+    });
+
+    describe('isContractAddress()', function () {
+        it('should accept a well-formed contract address', function () {
+            assert.strictEqual(util.isContractAddress('C:BTC:500'), true);
+            assert.strictEqual(util.isContractAddress('C:LTC:1'), true);
+            assert.strictEqual(util.isContractAddress('C:DOGE:99999'), true);
+            assert.strictEqual(util.isContractAddress('C:TBTC:0'), true);
+        });
+        it('should reject a real crypto address', function () {
+            assert.strictEqual(util.isContractAddress('1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2'), false);
+        });
+        it('should reject malformed contract-ish strings', function () {
+            assert.strictEqual(util.isContractAddress('C:BTC:'), false);      // no index
+            assert.strictEqual(util.isContractAddress('C:BTC:1a'), false);    // non-numeric index
+            assert.strictEqual(util.isContractAddress('C::500'), false);      // no chain
+            assert.strictEqual(util.isContractAddress('C:btc:500'), false);   // lowercase chain
+            assert.strictEqual(util.isContractAddress('X:BTC:500'), false);   // wrong prefix
+            assert.strictEqual(util.isContractAddress('C:BTC:500:1'), false); // extra segment
+        });
+        it('should not throw on null/undefined', function () {
+            assert.strictEqual(util.isContractAddress(null), false);
+            assert.strictEqual(util.isContractAddress(undefined), false);
+        });
     });
 
     describe('isValidTransactionHash()', function () {
