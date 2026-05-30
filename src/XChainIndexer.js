@@ -325,7 +325,7 @@ class XChainIndexer {
                     await this.indexerDb.rollbackTransaction();
 
                     // Log the error
-                    this.util.logError('Error while parsing block data :', error);
+                    this.util.logError(`Error while parsing block data at block ${lastIndexerBlock}:`, error);
 
                     // Exit the inner catch-up loop on failure. lastIndexerBlock was not advanced
                     // (the assignment above only runs after a successful commit), so the outer loop
