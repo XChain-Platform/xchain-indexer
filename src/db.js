@@ -7829,15 +7829,27 @@ class Database {
     // creation. xchain-hub's AttestationRound polls this to discover work.
     // Optional providerId filter lets a validator only see requests for
     // providers it serves.
-    async getPendingAttestationRequests(providerId, limit){
+    async getPendingAttestationRequests(providerId, limit, cursor){
         let where = "request_status = 'pending'";
         let args  = [];
         if(providerId){
             where += ' AND provider_id = ?';
             args.push(String(providerId));
         }
-        let max = Number(limit) > 0 ? Number(limit) : 100;
         where += ' AND version = 0';
+        // Keyset/cursor pagination. When the caller passes the last
+        // (block_index, action_index) it has already consumed, return only rows
+        // strictly after it. This lets a poller page through more than `limit`
+        // pending requests across successive calls instead of being permanently
+        // pinned to the oldest `limit` rows — without a cursor, a backlog larger
+        // than `limit` starves every newer request until the oldest ones drain.
+        let afterBlock  = cursor ? Number(cursor.after_block_index)  : NaN;
+        let afterAction = cursor ? Number(cursor.after_action_index) : NaN;
+        if(Number.isFinite(afterBlock) && Number.isFinite(afterAction)){
+            where += ' AND (block_index > ? OR (block_index = ? AND action_index > ?))';
+            args.push(afterBlock, afterBlock, afterAction);
+        }
+        let max = Number(limit) > 0 ? Number(limit) : 100;
         let query = `SELECT action_index, request_id, contract_index, fee_payer_id, provider_id,
                             payload, callback_method, callback_params_json,
                             redundancy, deadline_block, gas_escrow, request_status,

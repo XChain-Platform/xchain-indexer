@@ -250,16 +250,26 @@ async function startApi(){
         // latest_block_index alongside so the hub can compute its
         // confirmation-wait threshold (block_index + CONFIRMATIONS <= latest)
         // in a single round-trip without a follow-up getlatestblock call.
-        // Body: { provider_id?: string, limit?: number }
-        async getpendingattestation_requests({provider_id, limit}){
+        // Body: { provider_id?: string, limit?: number,
+        //         after_block_index?: number, after_action_index?: number }
+        //   The after_* pair is a keyset cursor for paging past the oldest
+        //   `limit` rows (see getPendingAttestationRequests).
+        async getpendingattestation_requests({provider_id, limit, after_block_index, after_action_index}){
             if(!indexer.indexerDb)
                 return { error: 'indexer database not ready' };
             let max = Number(limit);
             if(!Number.isFinite(max) || max <= 0) max = 100;
             if(max > 500) max = 500;
+            // Optional keyset cursor: caller pages forward by passing the last
+            // (block_index, action_index) it consumed. Only honoured when both
+            // components are present and finite; otherwise a full sweep is returned.
+            let cursor = null;
+            if(Number.isFinite(Number(after_block_index)) && Number.isFinite(Number(after_action_index))){
+                cursor = { after_block_index, after_action_index };
+            }
             try {
                 let latest  = await indexer.indexerDb.getLatestBlockIndex();
-                let rows    = await indexer.indexerDb.getPendingAttestationRequests(provider_id, max);
+                let rows    = await indexer.indexerDb.getPendingAttestationRequests(provider_id, max, cursor);
                 return {
                     latest_block_index: latest,
                     count:              rows.length,
