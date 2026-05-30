@@ -164,7 +164,7 @@ describe('ISSUE / MINT / SEND / DESTROY Token Lifecycle @regression @tier1', fun
     // -----------------------------------------------------------------------
     // 5. ISSUE reserved tick name (BTC) — status invalid
     // -----------------------------------------------------------------------
-    it('ISSUE of reserved tick BTC is marked invalid', async function () {
+    it('ISSUE of reserved tick BTC is rejected (except on regtest, which is exempt)', async function () {
         await seeder.seedBlock(130, BASE_TIME, [
             { source: ADDR1, data: 'ISSUE|0|BTC|1000|100|0|Trying to issue reserved tick' }
         ]);
@@ -173,7 +173,13 @@ describe('ISSUE / MINT / SEND / DESTROY Token Lifecycle @regression @tier1', fun
 
         const actionIndex = await getLastActionIndexByType(indexerQuery, 'ISSUE');
         assert.ok(actionIndex !== null);
-        await assertActionStatus(indexerQuery, 'issues', actionIndex, 'invalid: TICK (reserved)');
+        // Reserved-tick enforcement (issue.js) is intentionally exempted on
+        // regtest so dev/test chains can issue freely; it applies on
+        // mainnet/testnet. Assert whichever behavior matches this run's network.
+        const expected = (process.env.INDEXER_NETWORK === 'regtest')
+            ? 'valid'
+            : 'invalid: TICK (reserved)';
+        await assertActionStatus(indexerQuery, 'issues', actionIndex, expected);
     });
 
     // -----------------------------------------------------------------------
