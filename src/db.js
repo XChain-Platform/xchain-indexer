@@ -7703,7 +7703,8 @@ class Database {
                         LEFT JOIN index_addresses a ON (a.id = u.source_id)
                     WHERE u.cooldown_end_block <= ?
                       AND u.status_id IN (${placeholders})
-                      AND CAST(u.amount AS DECIMAL(30,8)) > 0`;
+                      AND CAST(u.amount AS DECIMAL(30,8)) > 0
+                    ORDER BY u.action_index ASC`;
         let capRows = await this.doQuery(capQ, [currentBlock, ...statusIds]);
         let capabilityRows = [];
         for(let row of capRows){
@@ -7717,7 +7718,8 @@ class Database {
                         LEFT JOIN index_tickers   t ON (t.id = cu.tick_id)
                     WHERE cu.cooldown_end_block <= ?
                       AND cu.status_id IN (${placeholders})
-                      AND CAST(cu.amount AS DECIMAL(30,8)) > 0`;
+                      AND CAST(cu.amount AS DECIMAL(30,8)) > 0
+                    ORDER BY cu.action_index ASC`;
         let conRows = await this.doQuery(conQ, [currentBlock, ...statusIds]);
         let contractRows = [];
         for(let row of conRows){
