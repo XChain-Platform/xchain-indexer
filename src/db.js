@@ -7281,6 +7281,13 @@ class Database {
     async getActiveValidators(blockIndex){
         let valid_id = await this.getStatusId('valid');
         if(valid_id === null) return [];
+        // Safety cap on the result set. This query runs on every cache miss
+        // (and in-process, uncached, inside block processing), so an unbounded
+        // result on an unexpectedly large validator set is a latency/liveness
+        // risk. The cap is generous relative to any realistic federation size;
+        // hitting it is logged so operators get early warning that the set is
+        // outgrowing the assumption. Override via VALIDATOR_QUERY_LIMIT.
+        let limit = parseInt(process.env.VALIDATOR_QUERY_LIMIT) || 1000;
         let query = `SELECT ip.pubkey AS pubkey,
                             SUM(CAST(s.amount AS DECIMAL(30,8))) AS total
                      FROM stakes s
@@ -7288,8 +7295,11 @@ class Database {
                      WHERE s.status_id = ?
                        AND s.activation_block <= ?
                        AND (s.deactivation_block IS NULL OR s.deactivation_block > ?)
-                     GROUP BY ip.pubkey`;
-        let rows = await this.doQuery(query, [valid_id, blockIndex, blockIndex]);
+                     GROUP BY ip.pubkey
+                     LIMIT ?`;
+        let rows = await this.doQuery(query, [valid_id, blockIndex, blockIndex, limit]);
+        if(rows.length >= limit)
+            console.warn('getActiveValidators hit the result cap of ' + limit + ' rows at block ' + blockIndex + ' — validator set may be truncated. Raise VALIDATOR_QUERY_LIMIT if the federation has grown.');
         return rows.map(r => ({
             pubkey: String(r.pubkey),
             amount: (r.total === null || r.total === undefined) ? '0' : String(r.total)
@@ -7316,6 +7326,11 @@ class Database {
             : (capConfig['MIN_STAKE'] || '0');
         let valid_id = await this.getStatusId('valid');
         if(valid_id === null) return [];
+        // Safety cap — see getActiveValidators. Bounds the result set so a
+        // cache miss (or the uncached in-process call during block processing)
+        // can't return an unbounded set on a large federation. Override via
+        // VALIDATOR_QUERY_LIMIT.
+        let limit = parseInt(process.env.VALIDATOR_QUERY_LIMIT) || 1000;
         let query = `SELECT ip.pubkey AS pubkey,
                             SUM(CAST(s.amount AS DECIMAL(30,8))) AS total
                      FROM stakes s
@@ -7324,8 +7339,11 @@ class Database {
                        AND s.activation_block <= ?
                        AND (s.deactivation_block IS NULL OR s.deactivation_block > ?)
                      GROUP BY ip.pubkey
-                     HAVING total >= CAST(? AS DECIMAL(30,8))`;
-        let rows = await this.doQuery(query, [valid_id, blockIndex, blockIndex, minStake]);
+                     HAVING total >= CAST(? AS DECIMAL(30,8))
+                     LIMIT ?`;
+        let rows = await this.doQuery(query, [valid_id, blockIndex, blockIndex, minStake, limit]);
+        if(rows.length >= limit)
+            console.warn('getValidatorsByCapability(' + capability + ') hit the result cap of ' + limit + ' rows at block ' + blockIndex + ' — validator set may be truncated. Raise VALIDATOR_QUERY_LIMIT if the federation has grown.');
         return rows.map(r => ({
             pubkey: String(r.pubkey),
             amount: (r.total === null || r.total === undefined) ? '0' : String(r.total)

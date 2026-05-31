@@ -673,9 +673,10 @@ describe('Database.getValidatorsByCapability() — threshold source @regression 
         };
     });
 
-    // The HAVING threshold is always the last bound parameter.
+    // The HAVING threshold is the second-to-last bound parameter — the trailing
+    // LIMIT (VALIDATOR_QUERY_LIMIT safety cap) binds after it.
     function thresholdArg() {
-        return db.doQuery.firstCall.args[1].slice(-1)[0];
+        return db.doQuery.firstCall.args[1].slice(-2)[0];
     }
 
     it('uses the caller-supplied override over local config', async function () {
