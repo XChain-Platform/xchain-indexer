@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - The Docker image is now built with `npm ci` instead of `npm install`. The committed `package-lock.json` is copied into the build context and `npm ci` installs the exact dependency tree it records, failing the build if the lockfile is out of sync with `package.json` rather than silently resolving newer transitive dependency versions.
+- `src/actions/deploy.js` — the contract code-size cap (`MAX_CODE_SIZE`, 64 KiB) is now hoisted to an exported module constant instead of an inline instance literal. No behavior change — the value is identical — but it is now importable, so the cross-service regression suite can assert it has not drifted from the canonical protocol value in `xchain-documentation/protocol/constants.js` (kept equal across the SDK, indexer, and VM).
 - `src/actions.js` — the `catch` guarding the optional `xchain-vm` require now logs the caught error alongside the warning, so a load failure shows why the contract engine was unavailable instead of printing only a generic warning.
 
 ### Removed

@@ -30,6 +30,12 @@
 
 const crypto = require('crypto');
 
+// Maximum smart-contract code size (64 KiB). Canonical value:
+// xchain-documentation/protocol/constants.js (MAX_CODE_SIZE); kept equal to the
+// SDK and VM by the cross-service regression suite, which reads the value
+// exported at the bottom of this module.
+const MAX_CODE_SIZE = 65536;
+
 class Deploy {
 
     // Handle constructing a class instance
@@ -49,10 +55,8 @@ class Deploy {
         // Contracts deployed without these fields cannot be stake targets.
         this.formats[1] = 'VERSION|CODE_ENCODING|GAS_LIMIT|CONSTRUCTOR_PARAMS|COOLDOWN_BLOCKS|SLASH_DESTINATION';
 
-        // Maximum code size (64KB). Canonical value: xchain-documentation/protocol/
-        // constants.js (MAX_CODE_SIZE); kept equal to the SDK and VM by the
-        // cross-service regression suite.
-        this.MAX_CODE_SIZE = 65536;
+        // Maximum code size (64KB) — see the MAX_CODE_SIZE module constant above.
+        this.MAX_CODE_SIZE = MAX_CODE_SIZE;
 
         // Cooldown bounds for contract-staking (DEPLOY v1+)
         this.MIN_COOLDOWN_BLOCKS = 1;
@@ -363,3 +367,6 @@ class Deploy {
 }
 
 module.exports = Deploy;
+// Expose the canonical code-size cap so the cross-service regression suite can
+// assert it has not drifted from the protocol constant.
+module.exports.MAX_CODE_SIZE = MAX_CODE_SIZE;
