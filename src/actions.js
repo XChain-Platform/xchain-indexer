@@ -150,6 +150,7 @@ class Actions {
                     maxEmissions:      50,
                     maxStateKeys:      10000,
                     maxStateValueSize: 65536,
+                    // Canonical MAX_CODE_SIZE: xchain-documentation/protocol/constants.js
                     maxCodeSize:       65536
                 }
             });

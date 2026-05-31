@@ -25,6 +25,28 @@
  *
  * Pure Node.js — uses built-in http/https + the `ws` package only when present.
  *
+ * Relationship to xchain-sync (deliberately separate, not accidental dup)
+ * ----------------------------------------------------------------------
+ * xchain-sync solves a superficially similar problem (snapshot-then-stream a
+ * MariaDB table) but is a different abstraction: it fans *validated ledger*
+ * data DOWNSTREAM from a master to many validator replicas, with Merkle
+ * transparency, cross-source hash verification, and rollback. This module
+ * pulls oracle config UPSTREAM from the hub (the producer) into a single
+ * consumer — the indexer's own hub-DB mirror — and its real payload is the
+ * `waitForPriceSyncHeight` consensus barrier wired into the block loop
+ * (XChainIndexer.js), NOT the plumbing. The two are kept apart on purpose:
+ * xchain-sync's replicatedTables.js excludes price_snapshots as "hub-mirrored"
+ * and SnapshotBuilder defers to this file. See review finding e800fdf6.
+ *
+ * TRIGGER for revisiting: if a THIRD cross-service table (e.g. validator-set
+ * or attestation-results) needs the same snapshot-then-stream treatment, do
+ * NOT copy this file a third time. Extract the shared mechanics — the
+ * subscribe-before-bootstrap ordering handshake, INSERT IGNORE applier,
+ * reconnect/re-bootstrap, and retraction-by-known-column — into one small
+ * applier library that both this module and the new consumer use. Merging the
+ * two services wholesale is the wrong move (different trust direction, and the
+ * consensus barrier belongs to the indexer loop, not to a replication fabric).
+ *
  ********************************************************************/
 
 const http  = require('http');

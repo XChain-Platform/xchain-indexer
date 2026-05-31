@@ -49,7 +49,9 @@ class Deploy {
         // Contracts deployed without these fields cannot be stake targets.
         this.formats[1] = 'VERSION|CODE_ENCODING|GAS_LIMIT|CONSTRUCTOR_PARAMS|COOLDOWN_BLOCKS|SLASH_DESTINATION';
 
-        // Maximum code size (64KB)
+        // Maximum code size (64KB). Canonical value: xchain-documentation/protocol/
+        // constants.js (MAX_CODE_SIZE); kept equal to the SDK and VM by the
+        // cross-service regression suite.
         this.MAX_CODE_SIZE = 65536;
 
         // Cooldown bounds for contract-staking (DEPLOY v1+)
