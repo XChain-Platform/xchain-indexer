@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `src/db.js` — the MariaDB connection pool now sets `queryTimeout: parseInt(process.env.DB_QUERY_TIMEOUT) || 30000`. Without a query timeout a slow or lock-blocked statement had no upper bound and could hang a pooled connection indefinitely; during a large block storm or schema-lock contention the indexer could stall on the block-processing hot path with no timeout-based recovery. A query now aborts after the configured timeout (30s default, overridable via `DB_QUERY_TIMEOUT`) instead of hanging. Matches the pattern already used by `xchain-hub`.
 - `src/api.js` — new `health` JSON-RPC method. `ping` only confirms the HTTP server is up; `health` additionally reports `running`, `synced`, `lastIndexedBlock`, the decoder chain tip and `lag`, and the circuit-breaker state of both the decoder and indexer database connections (`decoderDbCircuit` / `indexerDbCircuit`). The database circuit breaker trips open after repeated connection failures and halts block processing during its cooldown, so an operator polling `ping` after a database restart would see a healthy 200 while the indexer was silently stalled at the open circuit; `health` makes that state observable. Mirrors the decoder's existing `health` endpoint. Purely additive — no existing method is changed.
 
 ### Changed

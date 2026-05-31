@@ -74,7 +74,8 @@ class Database {
             // Matches xchain-hub and xchain-sync; all indexer BIGINT columns
             // are within Number.MAX_SAFE_INTEGER for any realistic chain.
             bigIntAsNumber:       true,
-            minDelayValidation:   3000
+            minDelayValidation:   3000,
+            queryTimeout:         parseInt(process.env.DB_QUERY_TIMEOUT) || 30000
         };
 
         // Setup pool of connections
