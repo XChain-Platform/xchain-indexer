@@ -1,0 +1,32 @@
+-- Migration: composite index on balances(address_id, tick_id)
+--
+-- Applies to databases created from an older schema that only had the two
+-- single-column indexes (address_id, tick_id) on the `balances` table.
+--
+-- Every balance mutation in db.js queries `WHERE address_id=? AND tick_id=?`
+-- (and the hot path now upserts via `INSERT ... ON DUPLICATE KEY UPDATE`, which
+-- requires a UNIQUE key on that pair). Without the composite, MariaDB uses one
+-- single-column index and filter-scans the other predicate across every row for
+-- the leading column — a linear scan over a high-volume address's full token
+-- portfolio on each SEND/ISSUE/BURN/SWEEP/dispense.
+--
+-- This adds the composite UNIQUE index and drops the now-redundant single-column
+-- `address_id` index (the composite covers it as a leading-column prefix). The
+-- single-column `tick_id` index is kept — it serves `WHERE tick_id=?` lookups
+-- (e.g. supply sums and the explorer holders count) that the composite cannot.
+--
+-- The table's schema-drift reconciler only handles columns, not indexes, so this
+-- must be applied manually to existing deployments. Fresh installs already get
+-- the correct indexes from balances.sql. Statements are idempotent (IF [NOT]
+-- EXISTS), so re-running is safe.
+--
+-- WARNING: the UNIQUE index will fail to build if duplicate (address_id, tick_id)
+-- rows already exist. Check first and resolve any duplicates before running:
+--
+--   SELECT address_id, tick_id, COUNT(*) c
+--     FROM balances
+--    GROUP BY address_id, tick_id
+--   HAVING c > 1;
+
+ALTER TABLE balances ADD UNIQUE INDEX IF NOT EXISTS addr_tick (address_id, tick_id);
+ALTER TABLE balances DROP INDEX IF EXISTS address_id;
