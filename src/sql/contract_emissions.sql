@@ -3,7 +3,7 @@ CREATE TABLE contract_emissions (
     id                  BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
     execution_index     BIGINT UNSIGNED NOT NULL,
     emitted_action      VARCHAR(20) NOT NULL,
-    action_index        BIGINT UNSIGNED NOT NULL,
+    action_index        BIGINT UNSIGNED NULL,            -- the on-chain action this emission produced; NULL for internal emissions (e.g. SLASH) that move ledger state without minting a new on-wire action
     position            INT UNSIGNED NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 

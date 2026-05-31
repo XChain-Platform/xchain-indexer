@@ -152,8 +152,15 @@ class Sweep {
             db_hits += this.util.bcmul(orderEscrows.length + swapEscrows.length + dispenserEscrows.length, 4, 0);                                   // 1 escrows, 1 credits, 2 balances (per affected offer)
             db_hits += (data['OWNERSHIPS']) ? this.util.bcmul(Object.keys(ownerships).length,2,0)                                            : 0;   // 1 issue, 1 tokens
 
-        // Determine total transaction FEE based on database hits
-        fees['AMOUNT'] = this.util.getTransactionFee(db_hits, fees['TICK']);
+        // Determine total transaction FEE based on database hits.
+        // Emitted actions (a SWEEP synthesized inside an EXECUTE) pay no separate protocol
+        // fee: the VM already charged VM_EMISSION gas to the EXECUTE caller, and the db_hits
+        // fee model validates against the EXECUTE tx's fee-destination outputs, which don't
+        // belong to this synthesized action (there is no native fee output, and the contract
+        // SOURCE need not hold XCHAIN). Mirrors execute.js's `skipFee = Boolean(IS_EMISSION)`.
+        // Without this, getTransactionFee > 0 + detectFeePaymentMode('xchain') rejects every
+        // contract-emitted SWEEP as 'insufficient funds (FEE)'.
+        fees['AMOUNT'] = data['IS_EMISSION'] ? 0 : this.util.getTransactionFee(db_hits, fees['TICK']);
 
         // DEBUG
         // console.log('source=',data['SOURCE']);
