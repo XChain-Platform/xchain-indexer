@@ -110,6 +110,10 @@ class XChainIndexer {
         // Overlay hub-served operational params on top of local config defaults (best-effort)
         await this._applyHubConfigOverlay();
 
+        // Keep the overlay live: poll the hub so a PBFT-committed config change takes
+        // effect without requiring a process restart (see _startHubConfigPolling).
+        this._startHubConfigPolling();
+
         // Establish database connections
         this.decoderDb = new database(this.decoderDbHost, this.decoderDbPort, this.decoderDbName, this.decoderDbUser, this.decoderDbPass, this);
         this.indexerDb = new database(this.indexerDbHost, this.indexerDbPort, this.indexerDbName, this.indexerDbUser, this.indexerDbPass, this);
@@ -357,38 +361,83 @@ class XChainIndexer {
     // if the hub is unreachable or returns an unexpected response.
     async _applyHubConfigOverlay(){
         if(!this.hubClient || !this.hubClient.enabled) return;
-
-        const SCALAR_PARAMS = ['GAS_PRICE', 'FEE_PAYMENT_MODE', 'ACTIVATION_DELAY_BLOCKS', 'EXPIRATION_FEE_PER_DAY'];
-        const BLOB_PARAMS   = ['GAS_SCHEDULE', 'STAKING'];
-
         try {
-            let allConfigs = await this.hubClient._call('getallconfigs', {});
-            let coin    = this.config.COIN;
-            let network = this.config.NETWORK;
-            let hubParams = (allConfigs && allConfigs[coin] && allConfigs[coin][network] && allConfigs[coin][network]['xchain-indexer']) || {};
-
-            for(let key of SCALAR_PARAMS){
-                let val = hubParams[key];
-                if(val === undefined || val === null) continue;
-                this.config[key] = val;
-            }
-
-            for(let key of BLOB_PARAMS){
-                let val = hubParams[key];
-                if(val === undefined || val === null) continue;
-                if(typeof val === 'string' && (val.charAt(0) === '{' || val.charAt(0) === '[')){
-                    try {
-                        this.config[key] = JSON.parse(val);
-                    } catch(e) {
-                        console.warn('XChainIndexer: failed to JSON-parse hub param ' + key + ':', e);
-                    }
-                } else if(typeof val === 'object'){
-                    this.config[key] = val;
-                }
-            }
+            let { configs, seq } = this._unwrapHubConfigResponse(await this.hubClient._call('getallconfigs', {}));
+            this._mergeHubParams(configs);
+            this.lastHubConfigSeq = seq;
         } catch(err) {
             console.warn('XChainIndexer: hub config overlay failed, using local defaults:', err);
         }
+    }
+
+    // Normalize the getallconfigs response across hub versions. Newer hubs wrap the
+    // config map as { configs, seq } so consumers can detect a config change committed
+    // between polls; older hubs return the bare nested map. Returns { configs, seq }
+    // with seq defaulting to 0 (treated as "no committed change seen" by the poll loop).
+    _unwrapHubConfigResponse(response){
+        if(response && typeof response === 'object' && response.configs && typeof response.configs === 'object' && ('seq' in response)){
+            return { configs: response.configs, seq: Number(response.seq) || 0 };
+        }
+        return { configs: response || {}, seq: 0 };
+    }
+
+    // Shallow-merge the hub's operational params for this coin/network over the live
+    // config object. Mutating this.config in place is what lets a re-applied overlay
+    // take effect without a process restart.
+    _mergeHubParams(allConfigs){
+        const SCALAR_PARAMS = ['GAS_PRICE', 'FEE_PAYMENT_MODE', 'ACTIVATION_DELAY_BLOCKS', 'EXPIRATION_FEE_PER_DAY'];
+        const BLOB_PARAMS   = ['GAS_SCHEDULE', 'STAKING'];
+
+        let coin    = this.config.COIN;
+        let network = this.config.NETWORK;
+        let hubParams = (allConfigs && allConfigs[coin] && allConfigs[coin][network] && allConfigs[coin][network]['xchain-indexer']) || {};
+
+        for(let key of SCALAR_PARAMS){
+            let val = hubParams[key];
+            if(val === undefined || val === null) continue;
+            this.config[key] = val;
+        }
+
+        for(let key of BLOB_PARAMS){
+            let val = hubParams[key];
+            if(val === undefined || val === null) continue;
+            if(typeof val === 'string' && (val.charAt(0) === '{' || val.charAt(0) === '[')){
+                try {
+                    this.config[key] = JSON.parse(val);
+                } catch(e) {
+                    console.warn('XChainIndexer: failed to JSON-parse hub param ' + key + ':', e);
+                }
+            } else if(typeof val === 'object'){
+                this.config[key] = val;
+            }
+        }
+    }
+
+    // Poll the hub for PBFT-committed config changes. The startup overlay runs only
+    // once; without this loop a governance-committed parameter change (e.g. GAS_PRICE
+    // or STAKING) would not take effect until the indexer process is restarted. We
+    // re-apply the overlay only when the hub's committed sequence advances past the
+    // last one we applied, so a steady-state poll is a cheap no-op. Against an older
+    // hub that returns the bare map, seq stays 0 and the overlay is never re-applied
+    // (matching pre-existing startup-only behavior). The timer is unref'd so it never
+    // keeps the process alive. Interval is HUB_CONFIG_POLL_INTERVAL_MS (default 60s).
+    _startHubConfigPolling(){
+        if(!this.hubClient || !this.hubClient.enabled) return;
+        if(this._hubConfigPollTimer) return;
+        const intervalMs = parseInt(process.env.HUB_CONFIG_POLL_INTERVAL_MS, 10) || 60000;
+        this._hubConfigPollTimer = setInterval(async () => {
+            try {
+                let { configs, seq } = this._unwrapHubConfigResponse(await this.hubClient._call('getallconfigs', {}));
+                if(seq > (this.lastHubConfigSeq || 0)){
+                    this._mergeHubParams(configs);
+                    this.lastHubConfigSeq = seq;
+                    console.log('XChainIndexer: applied hub config update (committed seq ' + seq + ')');
+                }
+            } catch(err) {
+                console.warn('XChainIndexer: hub config poll failed, keeping current config:', err.message || err);
+            }
+        }, intervalMs);
+        if(this._hubConfigPollTimer.unref) this._hubConfigPollTimer.unref();
     }
 
 }

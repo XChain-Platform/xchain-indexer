@@ -286,4 +286,57 @@ describe('XChainIndexer hub config overlay', function () {
         assert.strictEqual(indexer.config.GAS_PRICE, localPrice);
         assert.ok(!hubStub._call.called, '_call should not be invoked when disabled');
     });
+
+    it('unwraps a { configs, seq } response and records the committed seq', async function () {
+        indexer = makeIndexer();
+
+        let hubStub = { enabled: true, _call: sinon.stub().resolves({
+            configs: { BTC: { regtest: { 'xchain-indexer': { GAS_PRICE: '0.00077' } } } },
+            seq: 5
+        })};
+        indexer.hubClient = hubStub;
+
+        await indexer._applyHubConfigOverlay();
+
+        assert.strictEqual(indexer.config.GAS_PRICE, '0.00077');
+        assert.strictEqual(indexer.lastHubConfigSeq, 5);
+    });
+
+    it('poll re-applies the overlay only when the committed seq advances', async function () {
+        indexer = makeIndexer();
+        let clock = sinon.useFakeTimers();
+        try {
+            // Startup: seq 5, GAS_PRICE 0.00010
+            let hubStub = { enabled: true, _call: sinon.stub() };
+            hubStub._call.onCall(0).resolves({
+                configs: { BTC: { regtest: { 'xchain-indexer': { GAS_PRICE: '0.00010' } } } }, seq: 5
+            });
+            indexer.hubClient = hubStub;
+            await indexer._applyHubConfigOverlay();
+            assert.strictEqual(indexer.config.GAS_PRICE, '0.00010');
+            assert.strictEqual(indexer.lastHubConfigSeq, 5);
+
+            process.env.HUB_CONFIG_POLL_INTERVAL_MS = '60000';
+            indexer._startHubConfigPolling();
+
+            // Tick 1: same seq (5) but different value — must NOT re-apply (stale guard).
+            hubStub._call.onCall(1).resolves({
+                configs: { BTC: { regtest: { 'xchain-indexer': { GAS_PRICE: '0.99999' } } } }, seq: 5
+            });
+            await clock.tickAsync(60000);
+            assert.strictEqual(indexer.config.GAS_PRICE, '0.00010', 'unchanged seq must not re-apply');
+
+            // Tick 2: seq advances to 6 — now the new value takes effect without a restart.
+            hubStub._call.onCall(2).resolves({
+                configs: { BTC: { regtest: { 'xchain-indexer': { GAS_PRICE: '0.00022' } } } }, seq: 6
+            });
+            await clock.tickAsync(60000);
+            assert.strictEqual(indexer.config.GAS_PRICE, '0.00022', 'advanced seq must re-apply');
+            assert.strictEqual(indexer.lastHubConfigSeq, 6);
+        } finally {
+            if(indexer._hubConfigPollTimer) clearInterval(indexer._hubConfigPollTimer);
+            clock.restore();
+            delete process.env.HUB_CONFIG_POLL_INTERVAL_MS;
+        }
+    });
 });
