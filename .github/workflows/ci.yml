@@ -1,23 +1,18 @@
+# FINAL — the slim per-repo replacement for .github/workflows/ci.yml
+# Drop this into each npm repo. It does nothing but delegate to the shared definition.
+# Pinned @master: push the reusable workflow once and every caller picks it up on its
+# next run. (Switch to a moving @v1 tag later if you want change-control.)
 name: CI
+
 on:
   push:
-    branches: [master]
+    branches: [master]          # use [main] for repos whose default branch is main
   pull_request:
     branches: [master]
-concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+
 jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Use Node.js 22
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - name: Install dependencies
-        run: npm ci
-      - name: Run test gate
-        run: npm run ci
+  ci:
+    uses: XChain-Platform/.github/.github/workflows/ci-reusable.yml@master
+    # Override the Node version for a repo if ever needed:
+    # with:
+    #   node-version: "20"
