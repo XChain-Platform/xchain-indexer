@@ -358,7 +358,10 @@ class Execute {
             BLOCK_INDEX: executionData['BLOCK_INDEX'],
             TX_INDEX:    executionData['TX_INDEX'],
             TX_VOUT:     executionData['TX_VOUT'],
-            FORMAT:      0
+            FORMAT:      0,
+            // The emission's TRUE source is the contract, not the EXECUTE caller. Persisting it
+            // here is what lets refunds/ownership/auth resolve back to the contract later.
+            SOURCE:      contractAddress
         }, true);  // force=true to always create new
 
         // Build the data object that action handlers expect

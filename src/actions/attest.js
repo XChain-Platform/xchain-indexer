@@ -406,7 +406,8 @@ class Attest {
             BLOCK_INDEX: responseData['BLOCK_INDEX'],
             TX_INDEX:    responseData['TX_INDEX'],
             TX_VOUT:     responseData['TX_VOUT'],
-            FORMAT:      0
+            FORMAT:      0,
+            SOURCE:      'C:' + chain + ':' + request.contract_index
         }, true);
 
         // SOURCE = contract address so xchain.getSourceAddress() === xchain.getContractAddress() (spec §4.3)
@@ -471,7 +472,8 @@ class Attest {
         let emissionActionIndex = await this.indexerDb.createActionIndex({
             ACTION:      'EXECUTE',
             BLOCK_INDEX: expireData['BLOCK_INDEX'],
-            FORMAT:      0
+            FORMAT:      0,
+            SOURCE:      'C:' + chain + ':' + request.contract_index
         }, true);
 
         let emissionData = {
