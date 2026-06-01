@@ -82,3 +82,99 @@ describe('HubDbSync price-sync barrier @regression @tier3', function () {
         assert.strictEqual(got, sync.priceSyncHeight);
     });
 });
+
+// Build a HubDbSync whose enabled flag is true, backed by a stubbed doQuery returning a
+// MAX(effective_at) row to simulate the local oracle_prices mirror. maxEffectiveAt === null
+// simulates an empty oracle_prices table (a deployment with no FIAT oracles).
+function makeOracleSync(maxEffectiveAt) {
+    const doQuery = sinon.stub();
+    doQuery.callsFake(async () => [{ ts: maxEffectiveAt }]);
+    const hubDb = { doQuery };
+    const sync = new HubDbSync(hubDb, { hubUrl: 'http://hub.test' });
+    return { sync, hubDb, doQuery };
+}
+
+describe('HubDbSync oracle-sync barrier @regression @tier3', function () {
+
+    it('starts with oracleSyncTimestamp null and oracleBootstrapped false', function () {
+        const { sync } = makeOracleSync(0);
+        assert.strictEqual(sync.oracleSyncTimestamp, null);
+        assert.strictEqual(sync.oracleBootstrapped, false);
+    });
+
+    it('_refreshOracleSyncTimestamp adopts MAX(effective_at) and marks bootstrapped', async function () {
+        const { sync } = makeOracleSync(1700000000);
+        await sync._refreshOracleSyncTimestamp();
+        assert.strictEqual(sync.oracleSyncTimestamp, 1700000000);
+        assert.strictEqual(sync.oracleBootstrapped, true);
+    });
+
+    it('_refreshOracleSyncTimestamp records an empty mirror as null but still bootstrapped', async function () {
+        const { sync } = makeOracleSync(null);     // MAX over an empty table → null
+        await sync._refreshOracleSyncTimestamp();
+        assert.strictEqual(sync.oracleSyncTimestamp, null);
+        assert.strictEqual(sync.oracleBootstrapped, true);
+    });
+
+    it('_refreshOracleSyncTimestamp leaves state untouched when the table is not ready', async function () {
+        const { sync, doQuery } = makeOracleSync(0);
+        sync.oracleSyncTimestamp = 1234;
+        sync.oracleBootstrapped  = true;
+        doQuery.rejects(new Error("Table 'oracle_prices' doesn't exist"));
+        await sync._refreshOracleSyncTimestamp();
+        assert.strictEqual(sync.oracleSyncTimestamp, 1234, 'timestamp must not reset on query failure');
+    });
+
+    it('waitForOracleSyncTimestamp blocks before bootstrap, then resolves once caught up', async function () {
+        const { sync, doQuery } = makeOracleSync(1000);
+        // Not yet bootstrapped → must NOT resolve early even though target looks small.
+        const pending = sync.waitForOracleSyncTimestamp(1500, 2000);
+        assert.strictEqual(sync._oracleWaiters.length, 1);
+        // A sync delivers prices effective at/after the target block time.
+        doQuery.callsFake(async () => [{ ts: 1600 }]);
+        await sync._refreshOracleSyncTimestamp();
+        const got = await pending;
+        assert.strictEqual(got, 1600);
+        assert.strictEqual(sync._oracleWaiters.length, 0, 'waiter should be cleared on resolve');
+    });
+
+    it('waitForOracleSyncTimestamp resolves immediately when already caught up', async function () {
+        const { sync } = makeOracleSync(0);
+        sync.oracleBootstrapped  = true;
+        sync.oracleSyncTimestamp = 2000;
+        const got = await sync.waitForOracleSyncTimestamp(1500, 1000);
+        assert.strictEqual(got, 2000);
+    });
+
+    it('waitForOracleSyncTimestamp is a no-op once the mirror is known to be empty (no FIAT oracles)', async function () {
+        const { sync } = makeOracleSync(null);
+        await sync._refreshOracleSyncTimestamp();      // empty table → bootstrapped, timestamp null
+        // Must resolve immediately for any block time — otherwise non-oracle deployments stall.
+        const got = await sync.waitForOracleSyncTimestamp(9999999999, 50);
+        assert.strictEqual(got, null);
+    });
+
+    it('waitForOracleSyncTimestamp rejects on timeout when the mirror stays behind', async function () {
+        const { sync } = makeOracleSync(0);
+        sync.oracleBootstrapped  = true;
+        sync.oracleSyncTimestamp = 1000;
+        await assert.rejects(
+            sync.waitForOracleSyncTimestamp(5000, 50),
+            /oracle sync barrier timed out/
+        );
+        assert.strictEqual(sync._oracleWaiters.length, 0, 'timed-out waiter should be removed');
+    });
+
+    it('waitForOracleSyncTimestamp is a no-op when sync is disabled (single-host)', async function () {
+        const sync = new HubDbSync({ doQuery: sinon.stub() }, {});
+        assert.strictEqual(sync.enabled, false);
+        const got = await sync.waitForOracleSyncTimestamp(999999, 10);
+        assert.strictEqual(got, null);
+    });
+
+    it('waitForOracleSyncTimestamp resolves for a non-finite target rather than hanging', async function () {
+        const { sync } = makeOracleSync(0);
+        const got = await sync.waitForOracleSyncTimestamp(undefined, 10);
+        assert.strictEqual(got, sync.oracleSyncTimestamp);
+    });
+});

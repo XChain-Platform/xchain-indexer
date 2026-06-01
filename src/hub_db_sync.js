@@ -88,6 +88,20 @@ class HubDbSync {
         // ledger. Refreshed after every successful price_snapshots sync.
         this.priceSyncHeight = 0;
         this._priceWaiters   = [];                         // pending waitForPriceSyncHeight() resolvers
+
+        // Highest effective_at present in the local oracle_prices copy. Used by the
+        // block-processing sync barrier (waitForOracleSyncTimestamp) so an indexer does not
+        // settle FIAT dispensers for a block until its local oracle mirror has caught up to
+        // that block's time — otherwise two operators with different sync states could read a
+        // different set of effective oracle prices in reverseOraclePriceMatch() and settle a
+        // FIAT dispenser at a different amount, diverging the ledger. Refreshed after every
+        // successful oracle_prices sync. Unlike price_snapshots (foundational on BTC),
+        // oracle_prices is optional — a deployment with no FIAT oracles never populates it, so
+        // this stays null and the barrier must treat that as "nothing to wait on" (see
+        // _oracleSyncSatisfied) rather than stalling every block forever.
+        this.oracleSyncTimestamp = null;                   // null = mirror's max effective_at not yet known
+        this.oracleBootstrapped  = false;                  // true once the mirror has been read at least once
+        this._oracleWaiters      = [];                     // pending waitForOracleSyncTimestamp() resolvers
     }
 
     // Start: open WebSocket and await the hub's ready acknowledgement (confirming
@@ -198,6 +212,7 @@ class HubDbSync {
         }
 
         if (table === 'price_snapshots') await this._refreshPriceSyncHeight();
+        if (table === 'oracle_prices')   await this._refreshOracleSyncTimestamp();
     }
 
     // Recompute the highest finalized price block present in the local price_snapshots
@@ -258,6 +273,78 @@ class HubDbSync {
                                  blockHeight + ' (price mirror at ' + this.priceSyncHeight + ')'));
             }, ms);
             this._priceWaiters.push(waiter);
+        });
+    }
+
+    // Recompute the highest effective_at present in the local oracle_prices copy and release
+    // any barrier waiters that are now satisfied. Called after every successful sync of the
+    // table (bootstrap, poll, live insert, reorg retraction). A NULL max (empty mirror) is a
+    // valid result — it means this deployment has no oracle prices, which oracleBootstrapped
+    // distinguishes from "not synced yet".
+    async _refreshOracleSyncTimestamp() {
+        let ts = null;
+        try {
+            let rows = await this.hubDb.doQuery('SELECT MAX(effective_at) AS ts FROM oracle_prices');
+            if (rows.length > 0 && rows[0].ts !== null) ts = Number(rows[0].ts);
+        } catch (e) {
+            return;                                         // table not ready yet — leave state untouched
+        }
+        this.oracleSyncTimestamp = ts;                      // number, or null when the mirror holds no oracle prices
+        this.oracleBootstrapped  = true;                    // we have successfully read the mirror at least once
+        this._releaseOracleWaiters();
+    }
+
+    // Whether the local oracle mirror is caught up enough to safely settle a block at blockTime.
+    // Two distinct "satisfied" cases:
+    //   1. The mirror has been read and holds no oracle prices at all — nothing to gate on.
+    //   2. The mirror holds prices whose newest effective_at is at or past this block's time,
+    //      so every price effective at or before blockTime is already local.
+    _oracleSyncSatisfied(blockTime) {
+        if (this.oracleBootstrapped && this.oracleSyncTimestamp === null) return true;
+        if (this.oracleSyncTimestamp !== null && this.oracleSyncTimestamp >= blockTime) return true;
+        return false;
+    }
+
+    // Resolve any pending waiters whose target time is now covered.
+    _releaseOracleWaiters() {
+        if (this._oracleWaiters.length === 0) return;
+        let stillWaiting = [];
+        for (let w of this._oracleWaiters) {
+            if (this._oracleSyncSatisfied(w.ts)) {
+                clearTimeout(w.timer);
+                w.resolve(this.oracleSyncTimestamp);
+            } else {
+                stillWaiting.push(w);
+            }
+        }
+        this._oracleWaiters = stillWaiting;
+    }
+
+    // Block-processing sync barrier for FIAT dispenser settlement. Resolves once the local
+    // oracle_prices copy holds every price effective at or before this block's median time
+    // (block_time), so reverseOraclePriceMatch() reads the same effective price set on every
+    // indexer. Rejects after timeoutMs so the caller can DEFER the block and retry — never
+    // settle a FIAT dispenser against a stale local oracle mirror.
+    //
+    // Oracle prices are keyed by wall-clock effective_at (not a chain block height), so unlike
+    // waitForPriceSyncHeight this comparison is meaningful — and required — on every chain.
+    // Resolves immediately when sync is disabled (single-host: the local hub DB is the hub
+    // itself, always current) or when the mirror is known to hold no oracle prices at all.
+    waitForOracleSyncTimestamp(blockTime, timeoutMs) {
+        blockTime = Number(blockTime);
+        if (!this.enabled || !Number.isFinite(blockTime)) return Promise.resolve(this.oracleSyncTimestamp);
+        if (this._oracleSyncSatisfied(blockTime))          return Promise.resolve(this.oracleSyncTimestamp);
+
+        let ms = parseInt(timeoutMs);
+        if (!Number.isFinite(ms) || ms <= 0) ms = 60000;
+        return new Promise((resolve, reject) => {
+            let waiter = { ts: blockTime, resolve: resolve, timer: null };
+            waiter.timer = setTimeout(() => {
+                this._oracleWaiters = this._oracleWaiters.filter(w => w !== waiter);
+                reject(new Error('oracle sync barrier timed out after ' + ms + 'ms waiting for block_time ' +
+                                 blockTime + ' (oracle mirror at ' + this.oracleSyncTimestamp + ')'));
+            }, ms);
+            this._oracleWaiters.push(waiter);
         });
     }
 
@@ -338,9 +425,11 @@ class HubDbSync {
                     if (event.type === 'row:inserted' && event.table && event.row) {
                         await this._applyRow(event.table, event.row);
                         if (event.table === 'price_snapshots') await this._refreshPriceSyncHeight();
+                        if (event.table === 'oracle_prices')   await this._refreshOracleSyncTimestamp();
                     } else if (event.type === 'row:deleted' && event.table) {
                         await this._applyRetraction(event);
                         if (event.table === 'price_snapshots') await this._refreshPriceSyncHeight();
+                        if (event.table === 'oracle_prices')   await this._refreshOracleSyncTimestamp();
                     }
                 } catch (err) {
                     console.warn('HubDbSync: failed to handle WebSocket message:', err);

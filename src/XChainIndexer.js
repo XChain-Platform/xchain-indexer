@@ -267,6 +267,27 @@ class XChainIndexer {
                     }
                 }
 
+                // Oracle-price sync barrier (ALL chains): FIAT dispenser settlement
+                // (reverseOraclePriceMatch) reads oracle_prices gated by effective_at <= blockTime.
+                // If two distributed indexers enter this block with different oracle_prices mirror
+                // states they can settle the same FIAT dispenser at different amounts and silently
+                // fork the ledger. Wait until the local oracle mirror holds every price effective
+                // at or before this block's time. Oracle prices are keyed by wall-clock effective_at
+                // (not BTC height), so unlike the price barrier this applies on every chain. The
+                // barrier is a no-op when sync is disabled or the mirror holds no oracle prices at
+                // all (deployments without FIAT oracles), so non-oracle chains never stall on it.
+                if(this.hubDbSync){
+                    try {
+                        await this.hubDbSync.waitForOracleSyncTimestamp(blockTime, this.priceSyncTimeoutMs);
+                    } catch(err){
+                        // Defer the block (same retry semantics as the price barrier above): the
+                        // counter is not advanced, so this block is retried rather than settled
+                        // against a stale oracle copy. No transaction is open yet.
+                        console.warn('Deferring block ' + blockToParse + ' (oracle sync): ', err);
+                        break;
+                    }
+                }
+
                 // Begin a transaction — all indexer DB writes for this block are atomic
                 await this.indexerDb.beginTransaction();
                 try {
