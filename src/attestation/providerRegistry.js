@@ -95,6 +95,17 @@ class ProviderRegistry {
     listProviderIds() {
         return Object.keys(PROVIDERS);
     }
+
+    // Map of provider_id -> deadline_window_blocks, for injection into the VM
+    // gateway so attestation.request() rejects an over-limit deadlineBlocks at
+    // contract call time instead of letting it land on-chain and then fail the
+    // structural DEADLINE check here (which strands the callback silently).
+    getDeadlineWindows() {
+        let windows = {};
+        for (let id of Object.keys(PROVIDERS))
+            windows[id] = Number(PROVIDERS[id].deadline_window_blocks);
+        return windows;
+    }
 }
 
 module.exports = ProviderRegistry;

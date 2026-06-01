@@ -29,6 +29,13 @@
  ********************************************************************/
 
 const crypto = require('crypto');
+const ProviderRegistry = require('../attestation/providerRegistry.js');
+
+// Per-provider deadline windows, injected into the VM gateway so a constructor's
+// attestation.request() rejects an over-limit deadlineBlocks at call time rather
+// than landing on-chain and being silently rejected by the indexer DEADLINE check.
+// Sourced from the single provider registry so the two caps cannot drift.
+const PROVIDER_DEADLINE_WINDOWS = new ProviderRegistry().getDeadlineWindows();
 
 // Maximum smart-contract code size (64 KiB). Canonical value:
 // xchain-documentation/protocol/constants.js (MAX_CODE_SIZE); kept equal to the
@@ -246,7 +253,8 @@ class Deploy {
                 balances:         null,
                 tokenInfo:        null,
                 oracleData:       await ((this.actions && this.actions.hubDb) || this.indexerDb).getOracleDataForVM(data['BLOCK_INDEX'], data['BLOCK_TIME'], parseInt(this.config['ORACLE_MAX_PRICE_AGE_SECONDS']) || 1800),
-                crossChainData:   await this.indexerDb.getCrossChainDataForVM()
+                crossChainData:   await this.indexerDb.getCrossChainDataForVM(),
+                providerDeadlines: PROVIDER_DEADLINE_WINDOWS
             });
 
             totalGas += constructorResult.gasUsed;

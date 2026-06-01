@@ -29,6 +29,13 @@
  ********************************************************************/
 
 const crypto = require('crypto');
+const ProviderRegistry = require('../attestation/providerRegistry.js');
+
+// Per-provider deadline windows, injected into the VM gateway so a contract's
+// attestation.request() rejects an over-limit deadlineBlocks at call time rather
+// than landing on-chain and being silently rejected here by the DEADLINE check.
+// Sourced from the single provider registry so the two caps cannot drift.
+const PROVIDER_DEADLINE_WINDOWS = new ProviderRegistry().getDeadlineWindows();
 
 class Execute {
 
@@ -190,7 +197,8 @@ class Execute {
                 oracleData:        oracleData,
                 crossChainData:    crossChainData,
                 attestationData:   null, // TODO: wire getResponse() reader once response retention is in place
-                contractStakeData: contractStakeData
+                contractStakeData: contractStakeData,
+                providerDeadlines: PROVIDER_DEADLINE_WINDOWS
             });
 
             gasUsed = vmResult.gasUsed;
