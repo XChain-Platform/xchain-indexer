@@ -25,6 +25,15 @@
 const fs   = require('fs');
 const path = require('path');
 
+// Parse a non-negative integer from an env var, falling back to defaultVal when
+// the value is absent, empty, or non-numeric. Unlike `parseInt(x) || default`,
+// this preserves 0 as a valid configured value.
+const parseIntMin0 = (val, defaultVal) => {
+    if(val === undefined || val === null || val === '') return defaultVal;
+    let parsed = parseInt(val, 10);
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : defaultVal;
+};
+
 module.exports = {
 
     // Handle returning the current indexer configuration
@@ -203,11 +212,11 @@ module.exports = {
             'BLOCK_LIST'
         ];
 
-        // Define block parsing interval (5 seconds)
-        config['BLOCK_CHECK_INTERVAL'] = 5000;
+        // Define block parsing interval (default 5 seconds; override via BLOCK_CHECK_INTERVAL)
+        config['BLOCK_CHECK_INTERVAL'] = parseIntMin0(process.env.BLOCK_CHECK_INTERVAL, 5000);
 
-        // Block processing watchdog timeout (5 minutes)
-        config['BLOCK_PROCESS_TIMEOUT'] = 300000;
+        // Block processing watchdog timeout (default 5 minutes; override via BLOCK_PROCESS_TIMEOUT)
+        config['BLOCK_PROCESS_TIMEOUT'] = parseIntMin0(process.env.BLOCK_PROCESS_TIMEOUT, 300000);
 
         // Merge indexer config and COIN config into a single config object
         let fullConfig = Object.assign({}, config, coinConfig);
