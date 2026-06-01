@@ -132,8 +132,12 @@ class Rollback {
         // Reset the address/tickers/transactions lists
         this.util.resetLists();
 
-        // Placeholder for the first action_index
-        let firstActionIndex = false;
+        // Placeholder for the first action_index. Initialized to null (not a
+        // falsy number) so the guards below distinguish "no actions in range"
+        // from a legitimate action_index of 0 — Number(0) is falsy, so a false
+        // sentinel would silently skip all rollback processing and the hub
+        // price retraction whenever the lowest rolled-back action is index 0.
+        let firstActionIndex = null;
 
         // Placeholder for market pairs
         let markets = [];
@@ -154,7 +158,7 @@ class Rollback {
             firstActionIndex = Number(rows[0].action_index);
 
         // Handle looking up data for any action_indexes in the rollback
-        if(firstActionIndex){
+        if(firstActionIndex !== null){
 
             // Loop through the data tables and build out list of addresses and tickers
             for(let table of this.dataTables){
@@ -354,7 +358,7 @@ class Rollback {
 
         // Collect touched contract balance pairs before deletion (for VM rollback)
         let touchedContractPairs = [];
-        if(firstActionIndex){
+        if(firstActionIndex !== null){
             query = `SELECT contract_index, tick_id FROM deposits WHERE action_index >= ?`;
             args  = [firstActionIndex];
             let depositRows = await this.indexerDb.doQuery(query, args);
@@ -373,14 +377,14 @@ class Rollback {
         try {
 
             // Delete contract_emissions first (references contract_executions)
-            if(firstActionIndex){
+            if(firstActionIndex !== null){
                 query = `DELETE FROM contract_emissions WHERE execution_index IN
                             (SELECT action_index FROM contract_executions WHERE action_index >= ?)`;
                 args  = [firstActionIndex];
                 await this.indexerDb.doQuery(query, args);
             }
 
-            if(firstActionIndex){
+            if(firstActionIndex !== null){
 
                 // Reset request_status on ATTEST v0 (request) rows whose ATTEST v1
                 // (response) row is about to be deleted below. The forward path flips
@@ -487,7 +491,16 @@ class Rollback {
         // tables) keeps serving prices that were never finalized on-chain.
         // Best-effort, like every other hub push — a failure here must not leave
         // the local rollback half-applied, so we only log on error.
-        if(firstActionIndex && this.hubClient){
+        //
+        // One-time recovery note: prior to the null-sentinel fix above, a reorg
+        // whose lowest rolled-back action had action_index 0 skipped this
+        // retraction entirely (Number(0) is falsy), leaving orphaned rows in the
+        // hub's oracle_prices / price_snapshots tables and every indexer mirror.
+        // If any chain experienced such a reorg before this fix shipped, flush the
+        // stale rows once by invoking the hub's price-reorg reconciliation
+        // (pushpricereorg) with from_action_index=0 for the affected COIN before
+        // resuming normal indexing.
+        if(firstActionIndex !== null && this.hubClient){
             try {
                 await this.hubClient.retractPriceRange(this.config['COIN'], firstActionIndex);
             } catch(err) {
