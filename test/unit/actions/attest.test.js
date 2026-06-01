@@ -306,14 +306,48 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             assert.ok(indexer.indexerDb.updateAttestationRequestStatus.calledWith(REQ_ID.toLowerCase(), 'fulfilled'));
         });
 
-        it('flips request to errored (no fulfilled_count) for a valid non-ok response', async function () {
+        it('flips request to errored (no fulfilled_count) for a valid terminal non-ok response', async function () {
+            // `expired` is the only non-ok status that is genuinely terminal (the
+            // deadline passed); it closes the request and still fires the callback.
             indexer.indexerDb.getAttestationRequestById.resolves(makeRequestRow({ redundancy: 1 }));
             const data = v1Data();
-            await handler.parse(v1Params([{ pubkey: PUBKEY_A, sig: SIG_A }], { status: 'timeout' }), data, null);
+            await handler.parse(v1Params([{ pubkey: PUBKEY_A, sig: SIG_A }], { status: 'expired' }), data, null);
             assert.strictEqual(data['STATUS'], 'valid');
             assert.ok(indexer.indexerDb.incrementAttestationValidatorStat.notCalled, 'no fulfilled_count on non-ok');
             assert.ok(indexer.indexerDb.updateAttestationRequestStatus.calledWith(REQ_ID.toLowerCase(), 'errored'));
-            assert.ok(executeStub.parse.calledOnce, 'callback still injected for a valid non-ok response');
+            assert.ok(executeStub.parse.calledOnce, 'callback still injected for a valid terminal non-ok response');
+        });
+
+        // ── retryable statuses leave the request open for another PBFT round ──
+
+        ['no_quorum', 'timeout', 'provider_error'].forEach(function (retryableStatus) {
+            it(`leaves request pending (no status flip, no callback) for a valid '${retryableStatus}' response`, async function () {
+                indexer.indexerDb.getAttestationRequestById.resolves(makeRequestRow({ redundancy: 1 }));
+                const data = v1Data();
+                await handler.parse(v1Params([{ pubkey: PUBKEY_A, sig: SIG_A }], { status: retryableStatus }), data, null);
+                assert.strictEqual(data['STATUS'], 'valid', 'response itself is still a valid, recorded row');
+                assert.ok(indexer.indexerDb.createAttestationResponse.calledOnce, 'response row recorded for audit');
+                assert.ok(indexer.indexerDb.incrementAttestationValidatorStat.notCalled, 'no fulfilled_count on non-ok');
+                assert.ok(indexer.indexerDb.updateAttestationRequestStatus.notCalled, 'request_status left untouched (pending)');
+                assert.ok(executeStub.parse.notCalled, 'no callback fired while the request can still retry');
+            });
+        });
+
+        it('still fulfills a request after an earlier retryable round left it pending', async function () {
+            // Simulate the hub broadcasting no_quorum, then succeeding on a later round.
+            // The request row stays `pending` throughout (the indexer never flipped it),
+            // so the replay guard at the top of the handler admits the second response.
+            indexer.indexerDb.getAttestationRequestById.resolves(makeRequestRow({ redundancy: 1 }));
+
+            const round1 = v1Data();
+            await handler.parse(v1Params([{ pubkey: PUBKEY_A, sig: SIG_A }], { status: 'no_quorum' }), round1, null);
+            assert.ok(indexer.indexerDb.updateAttestationRequestStatus.notCalled, 'no_quorum must not close the request');
+
+            const round2 = v1Data();
+            await handler.parse(v1Params([{ pubkey: PUBKEY_A, sig: SIG_A }], { status: 'ok' }), round2, null);
+            assert.ok(indexer.indexerDb.updateAttestationRequestStatus.calledOnceWith(REQ_ID.toLowerCase(), 'fulfilled'),
+                'the later ok response fulfills the still-pending request');
+            assert.ok(executeStub.parse.calledOnce, 'callback fires exactly once, on the fulfilling response');
         });
 
         it('stores the response but injects no callback when quorum is not reached', async function () {

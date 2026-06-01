@@ -273,18 +273,33 @@ class Attest {
                 }
             }
 
-            // Flip request status
-            let newRequestStatus = (responseStatus === 'ok') ? 'fulfilled' : 'errored';
-            await this.indexerDb.updateAttestationRequestStatus(data['REQUEST_ID'], newRequestStatus);
+            // Retryable response statuses leave the request OPEN. no_quorum means
+            // the responsible set could not agree this round; timeout / provider_error
+            // mean a fetch failed transiently. In all three cases another round may
+            // still succeed before the deadline, so the request stays `pending` — the
+            // deadline-expiry handler flips it to `expired` if no quorum is ever
+            // reached. Only `ok` (fulfilled) or a genuinely terminal failure closes the
+            // request and fires the callback. (allowedStatuses, see above, is
+            // ['ok','timeout','no_quorum','provider_error','expired']; an explicit
+            // `expired` response is terminal and maps to `errored`.)
+            const RETRYABLE_STATUSES = new Set(['no_quorum', 'timeout', 'provider_error']);
+            if(RETRYABLE_STATUSES.has(String(responseStatus))){
+                console.log("\t ATTEST v1 : id=" + String(requestId).substring(0,16) + '...' +
+                            ' : retryable status=' + responseStatus + ' — request left pending for retry');
+            } else {
+                // Flip request status to its terminal value
+                let newRequestStatus = (responseStatus === 'ok') ? 'fulfilled' : 'errored';
+                await this.indexerDb.updateAttestationRequestStatus(data['REQUEST_ID'], newRequestStatus);
 
-            // Inject the callback EXECUTE. Wrapped in a savepoint so a failing callback
-            // does NOT roll back the response row.
-            try {
-                let callbackActionIndex = await this._injectCallbackExecute(request, data);
-                if(callbackActionIndex)
-                    await this.indexerDb.setAttestationResponseCallbackIndex(data['ACTION_INDEX'], callbackActionIndex);
-            } catch(e){
-                console.warn('Attestation callback injection failed:', e);
+                // Inject the callback EXECUTE. Wrapped in a savepoint so a failing callback
+                // does NOT roll back the response row.
+                try {
+                    let callbackActionIndex = await this._injectCallbackExecute(request, data);
+                    if(callbackActionIndex)
+                        await this.indexerDb.setAttestationResponseCallbackIndex(data['ACTION_INDEX'], callbackActionIndex);
+                } catch(e){
+                    console.warn('Attestation callback injection failed:', e);
+                }
             }
         }
 
