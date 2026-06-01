@@ -223,6 +223,41 @@ async function startApi(){
             }
         },
 
+        // Read-only native-coin fee pre-flight. Given an action + its wire params (and
+        // optionally a proposed FEE_DESTINATION output value in satoshis), value the action's
+        // XCHAIN protocol fee in the native coin at current oracle prices and judge a proposed
+        // output against the on-chain tolerance — WITHOUT persisting anything. Lets a client size
+        // the fee output and refuse to broadcast a doomed (under-sized / stale-priced) native-fee
+        // tx, which would otherwise forfeit the fee. Public read (surfaced to wallets/SDK via the
+        // explorer proxy); not a write or federation method.
+        // Body: { action, params, source, feeOutputSats? }
+        async feequote({action, params, source, feeOutputSats}){
+            if(!action || typeof action !== 'string')
+                return { error: 'action is required' };
+            if(!indexer.indexerDb || !indexer.actions)
+                return { error: 'indexer not ready' };
+            try {
+                return await indexer.actions.computeFeeQuote({ action, params, source, feeOutputSats });
+            } catch (err) {
+                console.error('feequote error:', err);
+                return { error: 'failed to compute fee quote' };
+            }
+        },
+
+        // Read-only native-coin fee schedule + current oracle prices. Lets a client display the
+        // gas schedule / tolerance band and rough-estimate a native fee before a per-action
+        // feequote. Public read (surfaced to wallets/SDK via the explorer proxy).
+        async feeschedule(){
+            if(!indexer.indexerDb || !indexer.actions)
+                return { error: 'indexer not ready' };
+            try {
+                return await indexer.actions.getFeeSchedule();
+            } catch (err) {
+                console.error('feeschedule error:', err);
+                return { error: 'failed to fetch fee schedule' };
+            }
+        },
+
         // Whole-federation validator-set snapshot at a block boundary —
         // every pubkey with ANY active stake at the block, regardless of
         // capability. Used by xchain-hub's Consensus (config-change PBFT)

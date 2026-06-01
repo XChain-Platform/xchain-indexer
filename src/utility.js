@@ -637,6 +637,53 @@ class Utility {
         return 'rejected';
     }
 
+    // Pure native-coin fee math, shared by validateNativeCoinFee (the on-chain consensus
+    // check) and the read-only feequote pre-flight (Actions.computeFeeQuote). Keeping the
+    // arithmetic in one place guarantees a client's output sizing and the validator's
+    // acceptance test use identical numbers. USD intermediates are carried at 18-decimal
+    // precision so the final native amount isn't biased by mid-computation truncation;
+    // native-coin outputs are reported at satoshi (8-decimal) precision.
+    // Returns { feeUsd, expectedNative, minAcceptable, maxAcceptable } (all bignumbers).
+    computeNativeFeeBand(xchainAmount, xchainUsdPrice, coinUsdPrice, toleranceMin, toleranceMax){
+        let feeUsd         = this.bcmul(xchainAmount, xchainUsdPrice, 18);
+        let expectedNative = this.bcdiv(feeUsd, coinUsdPrice, 18);
+        let minAcceptable  = this.bcmul(expectedNative, toleranceMin, 8);
+        let maxAcceptable  = this.bcmul(expectedNative, toleranceMax, 8);
+        return { feeUsd, expectedNative, minAcceptable, maxAcceptable };
+    }
+
+    // Fetch + validate the two oracle prices a native-coin fee is valued against
+    // (COIN/USD and XCHAIN/USD), gated by blockIndex so two nodes see the same price and
+    // rejected when staler than maxAgeSeconds relative to refTime. Prefers the local hub DB
+    // (where price_snapshots is synced from xchain-hub) when available. Shared by
+    // validateNativeCoinFee and computeFeeQuote.
+    // Returns { coinUsdPrice, xchainUsdPrice, oracleRound } on success, or { error } on
+    // a missing/stale/invalid price.
+    async getFeeOraclePrices(db, coin, blockIndex, refTime, maxAgeSeconds){
+        let priceDb = (db.indexer && db.indexer.hubDb) ? db.indexer.hubDb : db;
+        let opts = { blockTime: refTime, maxAgeSeconds: maxAgeSeconds };
+
+        let coinPriceData = await priceDb.getLatestPrice(coin + '/USD', blockIndex, opts);
+        if(!coinPriceData || !coinPriceData.price)
+            return { error: 'no current oracle price for ' + coin + '/USD (missing or stale beyond ' + maxAgeSeconds + 's)' };
+        let coinUsdPrice = this.bcnum(coinPriceData.price);
+        if(this.bclte(coinUsdPrice, 0))
+            return { error: 'invalid oracle price for ' + coin + '/USD' };
+
+        let xchainPriceData = await priceDb.getLatestPrice('XCHAIN/USD', blockIndex, opts);
+        if(!xchainPriceData || !xchainPriceData.price)
+            return { error: 'no current oracle price for XCHAIN/USD (missing or stale beyond ' + maxAgeSeconds + 's)' };
+        let xchainUsdPrice = this.bcnum(xchainPriceData.price);
+        if(this.bclte(xchainUsdPrice, 0))
+            return { error: 'invalid oracle price for XCHAIN/USD' };
+
+        return {
+            coinUsdPrice:   coinUsdPrice,
+            xchainUsdPrice: xchainUsdPrice,
+            oracleRound:    coinPriceData.roundNumber
+        };
+    }
+
     // Validate a native coin fee output against oracle price
     // db parameter accepts the indexer DB or hub DB connection — if a hubDb is available
     // on the action context, callers should prefer it (price_snapshots lives in the local hub DB).
@@ -673,60 +720,30 @@ class Utility {
             return { valid: true, nativeCoinAmount: '0', oracleRound: 0 };
         }
 
-        // Get oracle prices: XCHAIN/USD and COIN/USD
-        // Gate by BLOCK_INDEX so two nodes processing the same block see the same price
-        // Prefer the local hub DB (where price_snapshots is synced from xchain-hub) when available
+        // Get oracle prices: XCHAIN/USD and COIN/USD.
+        // Gate by BLOCK_INDEX so two nodes processing the same block see the same price, and
+        // reject silently stale prices against the block's own timestamp (deterministic during
+        // consensus replay) — see db.getLatestPrice and getFeeOraclePrices.
         let coin = this.config['COIN'] || data['COIN'];
-        let priceDb = (db.indexer && db.indexer.hubDb) ? db.indexer.hubDb : db;
-        // Reject silently stale prices: during a feed outage the oracle stops publishing
-        // new snapshots, so a fee validated against a price older than ORACLE_MAX_PRICE_AGE_SECONDS
-        // surfaces an explicit error instead of locking in an outdated rate. Age is measured
-        // deterministically against the block's own timestamp (see db.getLatestPrice).
         let maxPriceAgeSeconds = parseInt(this.config['ORACLE_MAX_PRICE_AGE_SECONDS']) || 1800;
-        let coinPriceData = await priceDb.getLatestPrice(coin + '/USD', data['BLOCK_INDEX'],
-            { blockTime: data['BLOCK_TIME'], maxAgeSeconds: maxPriceAgeSeconds });
-        if(!coinPriceData || !coinPriceData.price){
-            return { valid: false, error: 'no current oracle price for ' + coin + '/USD (missing or stale beyond ' + maxPriceAgeSeconds + 's)' };
+        let prices = await this.getFeeOraclePrices(db, coin, data['BLOCK_INDEX'], data['BLOCK_TIME'], maxPriceAgeSeconds);
+        if(prices.error){
+            return { valid: false, error: prices.error };
         }
 
-        let coinUsdPrice = this.bcnum(coinPriceData.price);
-        if(this.bclte(coinUsdPrice, 0)){
-            return { valid: false, error: 'invalid oracle price for ' + coin + '/USD' };
-        }
+        let band = this.computeNativeFeeBand(xchainAmount, prices.xchainUsdPrice, prices.coinUsdPrice, toleranceMin, toleranceMax);
 
-        // Calculate expected native coin amount
-        let xchainPriceData = await priceDb.getLatestPrice('XCHAIN/USD', data['BLOCK_INDEX'],
-            { blockTime: data['BLOCK_TIME'], maxAgeSeconds: maxPriceAgeSeconds });
-        if(!xchainPriceData || !xchainPriceData.price){
-            return { valid: false, error: 'no current oracle price for XCHAIN/USD (missing or stale beyond ' + maxPriceAgeSeconds + 's)' };
-        }
-
-        let xchainUsdPrice = this.bcnum(xchainPriceData.price);
-        if(this.bclte(xchainUsdPrice, 0)){
-            return { valid: false, error: 'invalid oracle price for XCHAIN/USD' };
-        }
-
-        // Carry USD intermediates at high precision so the final 8-decimal native
-        // amount isn't biased by mid-computation truncation; native-coin outputs
-        // are computed and reported at satoshi (8-decimal) precision.
-        let feeUsd = this.bcmul(xchainAmount, xchainUsdPrice, 18);
-        let expectedNative = this.bcdiv(feeUsd, coinUsdPrice, 18);
-
-        // Apply tolerance band (native-coin precision)
-        let minAcceptable = this.bcmul(expectedNative, toleranceMin, 8);
-        let maxAcceptable = this.bcmul(expectedNative, toleranceMax, 8);
-
-        if(this.bclt(paidAmount, minAcceptable)){
+        if(this.bclt(paidAmount, band.minAcceptable)){
             return { valid: false, error: 'insufficient native coin fee (paid: ' + this.bcformat(paidAmount, 8) +
-                ', expected: ' + this.bcformat(expectedNative, 8) + ', min: ' + this.bcformat(minAcceptable, 8) + ')' };
+                ', expected: ' + this.bcformat(band.expectedNative, 8) + ', min: ' + this.bcformat(band.minAcceptable, 8) + ')' };
         }
 
         return {
             valid:            true,
             nativeCoinAmount: this.bcformat(paidAmount, 8),
             nativeCoin:       coin,
-            oracleRound:      coinPriceData.roundNumber,
-            expectedAmount:   this.bcformat(expectedNative, 8)
+            oracleRound:      prices.oracleRound,
+            expectedAmount:   this.bcformat(band.expectedNative, 8)
         };
     }
 

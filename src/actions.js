@@ -343,6 +343,224 @@ class Actions {
         if(action=='ATTEST')             await this.actionAttest.parse(params, data, error);
     }
 
+    // Read-only estimator for the XCHAIN-denominated protocol fee ("fees.AMOUNT") an action
+    // would be charged, computed against current chain state WITHOUT persisting anything.
+    // Powers the native-coin fee pre-flight (see computeFeeQuote) so a client can size the
+    // FEE_DESTINATION output before broadcasting. Reuses the same util fee helpers + per-handler
+    // format strings the live handlers use, to keep drift minimal.
+    //
+    // Phase 1 scope (where the fee is computable from params + current tip + config alone):
+    //   - ISSUE create (format 0): issuance fee, gated by ISSUANCE_FEE/UNIFIED_FEES.
+    //   - ORDER / SWAP / DISPENSER create (format 0): expiration + ownership-escrow premium.
+    // Everything else (edits, DIVIDEND/AIRDROP whose fee depends on enumerated recipients/holders,
+    // DEPLOY/EXECUTE, ...) returns { supported:false } so the client falls back to XCHAIN-balance
+    // mode rather than guessing. A future full-handler dry-run will supersede this and remove the
+    // duplication. Returns { supported, amount }.
+    async estimateActionFee(data, params){
+        let action     = data['ACTION'];
+        let format     = data['FORMAT'];
+        let blockIndex = data['BLOCK_INDEX'];
+        let unsupported = { supported: false, amount: '0' };
+
+        if(action === 'ISSUE'){
+            // Only a fresh create charges the issuance fee.
+            if(format != 0) return unsupported;
+            data = this.util.setActionParams(data, params, this.actionIssue.formats, format);
+            if(this.util.isNull(data['TICK'])) return unsupported;
+            // An already-existing token is a re-issue/edit — no issuance fee.
+            let tokenInfo = await this.indexerDb.getTokenInfo(data['TICK'], blockIndex, data['ACTION_INDEX']);
+            if(tokenInfo) return { supported: true, amount: '0' };
+            if(!(await this.protocolChanges.isEnabled('ISSUANCE_FEE', blockIndex)))
+                return { supported: true, amount: '0' };
+            // Subtoken (TICK has a parent segment whose token exists) charges the subtoken rate.
+            let parentInfo = false;
+            let parts = String(data['TICK']).split('.');
+            if(parts.length > 1){
+                let parent = parts.slice(0, -1).join('.');
+                parentInfo = await this.indexerDb.getTokenInfo(parent, blockIndex, data['ACTION_INDEX']);
+            }
+            if(await this.protocolChanges.isEnabled('UNIFIED_FEES', blockIndex)){
+                let schedule = this.config['GAS_SCHEDULE'];
+                let gasCost  = parentInfo ? schedule.ISSUE_SUBTOKEN : schedule.ISSUE;
+                return { supported: true, amount: this.util.bcmul(gasCost, this.config['GAS_PRICE'], 8) };
+            }
+            return { supported: true, amount: parentInfo ? this.config['ISSUANCE_FEE_SUBTOKEN'] : this.config['ISSUANCE_FEE_TOKEN'] };
+        }
+
+        if(action === 'ORDER' || action === 'SWAP' || action === 'DISPENSER'){
+            // Edits (format 2) need the prior on-chain record — out of phase-1 scope.
+            if(format != 0) return unsupported;
+            let handler = (action === 'ORDER') ? this.actionOrder
+                        : (action === 'SWAP')  ? this.actionSwap
+                        :                        this.actionDispenser;
+            data = this.util.setActionParams(data, params, handler.formats, format);
+            let isOwnershipGive = (data['GIVE_OWNERSHIP'] == 1);
+            if(await this.protocolChanges.isEnabled('UNIFIED_FEES', blockIndex)){
+                let fee = 0;
+                if(!this.util.isNull(data['EXPIRATION'])){
+                    let exp = this.util.getUnifiedExpirationFee(data, null);
+                    fee = this.util.bcadd(fee, exp.fee, 8);
+                }
+                if(isOwnershipGive){
+                    let own = this.util.getOwnershipEscrowFee();
+                    fee = this.util.bcadd(fee, own.fee, 8);
+                }
+                return { supported: true, amount: fee };
+            }
+            if(!this.util.isNull(data['EXPIRATION']))
+                return { supported: true, amount: this.util.getExpirationFee(data, null) };
+            return { supported: true, amount: '0' };
+        }
+
+        return unsupported;
+    }
+
+    // Read-only native-coin fee pre-flight. Given an action + its wire params, compute the
+    // XCHAIN protocol fee against current state, value it in the native coin via current oracle
+    // prices, and (optionally) judge a proposed fee-output amount against the same tolerance the
+    // on-chain validator enforces. Never persists. The SDK/wallet use the result to size the
+    // FEE_DESTINATION output and to refuse broadcasting a doomed (under-sized / stale-priced) tx.
+    // `feeOutputSats` (optional) is the proposed output value in satoshis.
+    async computeFeeQuote({ action, params, source, feeOutputSats }){
+        let coin           = this.config['COIN'];
+        let feeDestination = this.config['ADDRESS'] ? this.config['ADDRESS']['FEE_DESTINATION'] : null;
+        let toleranceMin   = this.util.bcnum(this.config['FEE_TOLERANCE_MIN'] || '0.95');
+        let toleranceMax   = this.util.bcnum(this.config['FEE_TOLERANCE_MAX'] || '1.10');
+
+        action = String(action || '').toUpperCase();
+        if(!Array.isArray(params)) params = String(params == null ? '' : params).split('|');
+        params = params.map(v => String(v).trim());
+
+        let blockIndex = await this.indexerDb.getLatestBlockIndex();
+        let blockTime  = await this.indexerDb.getBlockTime(blockIndex);
+
+        let data = {};
+        data['ACTION']       = action;
+        data['FORMAT']       = this.util.getFormatVersion(params[0]);
+        data['BLOCK_INDEX']  = blockIndex;
+        data['BLOCK_TIME']   = blockTime;       // current tip; expiration-fee day count is anchored here
+        data['SOURCE']       = source || null;
+        data['COIN']         = coin;
+        data['ACTION_INDEX'] = null;
+
+        let base = {
+            supported:      true,
+            action:         action,
+            coin:           coin,
+            blockIndex:     blockIndex,
+            blockTime:      blockTime,
+            feeDestination: feeDestination,
+            toleranceMin:   this.util.bcformat(toleranceMin, 8),
+            toleranceMax:   this.util.bcformat(toleranceMax, 8)
+        };
+
+        // Native-coin fees are off unless a real FEE_DESTINATION is configured.
+        if(!feeDestination || feeDestination === 'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX')
+            return Object.assign(base, { supported: false, valid: false, error: 'native coin fee not enabled (no FEE_DESTINATION configured)' });
+
+        // 1) XCHAIN-denominated economic fee for this action against current state.
+        let estimate;
+        try {
+            estimate = await this.estimateActionFee(data, params);
+        } catch(e){
+            return Object.assign(base, { supported: false, valid: false, error: 'fee estimate failed: ' + ((e && e.message) ? e.message : e) });
+        }
+        if(!estimate.supported)
+            return Object.assign(base, { supported: false, valid: false, error: 'native fee pre-flight not supported for ' + action + ' (pay the fee in XCHAIN)' });
+
+        let xchainFee = this.util.bcnum(estimate.amount);
+        base.xchainFee = this.util.bcformat(xchainFee, 8);
+
+        // No protocol fee => nothing to pay in native coin.
+        if(this.util.bclte(xchainFee, 0)){
+            return Object.assign(base, {
+                valid: true, error: null, oracleRound: 0,
+                requiredFeeNative: '0.00000000', requiredFeeSats: 0,
+                expectedNative: '0.00000000', minAcceptable: '0.00000000', maxAcceptable: '0.00000000'
+            });
+        }
+
+        // 2) Value it in native coin via current oracle prices (shared with validateNativeCoinFee).
+        //    Staleness is judged against wall-clock now so the freshness verdict reflects real-world
+        //    price age (a pre-flight isn't tied to a specific future block).
+        let nowEpoch           = Math.floor(Date.now() / 1000);
+        let maxPriceAgeSeconds = parseInt(this.config['ORACLE_MAX_PRICE_AGE_SECONDS']) || 1800;
+        let prices = await this.util.getFeeOraclePrices(this.indexerDb, coin, blockIndex, nowEpoch, maxPriceAgeSeconds);
+        if(prices.error)
+            return Object.assign(base, { valid: false, error: prices.error });
+
+        let band = this.util.computeNativeFeeBand(xchainFee, prices.xchainUsdPrice, prices.coinUsdPrice, toleranceMin, toleranceMax);
+
+        // Recommended output (what the client should pay). Satoshi rounding is dwarfed by the
+        // tolerance band, so plain 8-dp formatting is safe (only under-MIN risks forfeiture).
+        let requiredFeeNative = this.util.bcformat(band.expectedNative, 8);
+        let requiredFeeSats   = Number(this.util.bcformat(this.util.bcmul(band.expectedNative, 100000000, 0), 0));
+
+        // 3) If the caller supplied a proposed output, judge it against the SAME lower-bound rule
+        //    the on-chain validator enforces (validateNativeCoinFee rejects only below min).
+        let valid = true, error = null;
+        if(feeOutputSats !== undefined && feeOutputSats !== null && String(feeOutputSats) !== ''){
+            let paidCoin = this.util.bcdiv(this.util.bcnum(feeOutputSats), 100000000, 8);
+            if(this.util.bclt(paidCoin, band.minAcceptable)){
+                valid = false;
+                error = 'native fee output too small (provided: ' + this.util.bcformat(paidCoin, 8) +
+                        ', min: ' + this.util.bcformat(band.minAcceptable, 8) + ')';
+            }
+        }
+
+        return Object.assign(base, {
+            valid:             valid,
+            error:             error,
+            oracleRound:       prices.oracleRound,
+            xchainUsdPrice:    this.util.bcformat(prices.xchainUsdPrice, 8),
+            coinUsdPrice:      this.util.bcformat(prices.coinUsdPrice, 8),
+            expectedNative:    requiredFeeNative,
+            minAcceptable:     this.util.bcformat(band.minAcceptable, 8),
+            maxAcceptable:     this.util.bcformat(band.maxAcceptable, 8),
+            requiredFeeNative: requiredFeeNative,
+            requiredFeeSats:   requiredFeeSats
+        });
+    }
+
+    // Read-only fee schedule + current oracle prices for native-coin fee payment. Lets a client
+    // display the gas schedule / tolerance band and do a rough native-fee estimate before issuing
+    // a per-action computeFeeQuote. Surfaced publicly via the explorer's /{COIN}/api/feeschedule
+    // proxy. Never persists.
+    async getFeeSchedule(){
+        let coin           = this.config['COIN'];
+        let feeDestination = this.config['ADDRESS'] ? this.config['ADDRESS']['FEE_DESTINATION'] : null;
+        let enabled        = !!(feeDestination && feeDestination !== 'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX');
+        let maxPriceAgeSeconds = parseInt(this.config['ORACLE_MAX_PRICE_AGE_SECONDS']) || 1800;
+        let blockIndex     = await this.indexerDb.getLatestBlockIndex();
+
+        // Current oracle prices (best-effort — a missing/stale feed doesn't fail the schedule call;
+        // prices.available=false tells the client native fees can't be priced right now).
+        let nowEpoch = Math.floor(Date.now() / 1000);
+        let prices   = await this.util.getFeeOraclePrices(this.indexerDb, coin, blockIndex, nowEpoch, maxPriceAgeSeconds);
+        let priceInfo = prices.error
+            ? { available: false, error: prices.error }
+            : {
+                available:   true,
+                xchainUsd:   this.util.bcformat(prices.xchainUsdPrice, 8),
+                coinUsd:     this.util.bcformat(prices.coinUsdPrice, 8),
+                oracleRound: prices.oracleRound
+              };
+
+        return {
+            coin:               coin,
+            network:            this.config['NETWORK'],
+            nativeFeeEnabled:   enabled,
+            feeDestination:     enabled ? feeDestination : null,
+            gasPrice:           this.config['GAS_PRICE'] || null,
+            gasSchedule:        this.config['GAS_SCHEDULE'] || null,
+            toleranceMin:       this.config['FEE_TOLERANCE_MIN'] || '0.95',
+            toleranceMax:       this.config['FEE_TOLERANCE_MAX'] || '1.10',
+            maxPriceAgeSeconds: maxPriceAgeSeconds,
+            blockIndex:         blockIndex,
+            prices:             priceInfo
+        };
+    }
+
 }
 
 module.exports = Actions;
