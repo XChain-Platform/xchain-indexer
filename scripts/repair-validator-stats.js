@@ -13,10 +13,10 @@
  *
  **********************************************************************
  *
- * XChain Indexer - attestation_validator_stats repair tool
+ * XChain Indexer - attest_validator_stats repair tool
  *
- * Rebuilds every attestation_validator_stats row from scratch by aggregating the
- * surviving ledger. attestation_validator_stats is a monotone aggregate
+ * Rebuilds every attest_validator_stats row from scratch by aggregating the
+ * surviving ledger. attest_validator_stats is a monotone aggregate
  * (fulfilled/missed/slashed counters per validator/provider) that, before the
  * rollback fix landed, was not cleaned up on chain reorganization — so any node
  * that processed a reorg may carry permanently overcounted fulfilled/missed
@@ -80,7 +80,7 @@ async function main(){
     );
     parent.indexerDb = db;
 
-    console.log('Recomputing attestation_validator_stats from surviving ledger data...');
+    console.log('Recomputing attest_validator_stats from surviving ledger data...');
 
     // key -> { pubkey, provider, fulfilled, missed, lastBlock }
     let stats  = new Map();
@@ -92,33 +92,58 @@ async function main(){
     };
 
     // fulfilled_count: one per verified signature contributed to a STATUS='ok'
-    // response (db.incrementAttestationValidatorStat, attest.js _parseResponse).
-    let fulfilledRows = await db.doQuery(
-        `SELECT avs.validator_pubkey AS pubkey,
-                ar.provider_id        AS provider,
-                COUNT(*)              AS cnt,
-                MAX(avs.block_index)  AS last_block
-         FROM attestation_validator_signatures avs
-         INNER JOIN attestation_responses ar ON ar.action_index = avs.response_action_index
-         WHERE ar.response_status = 'ok'
-         GROUP BY avs.validator_pubkey, ar.provider_id`,
+    // response (attest.js _parseResponse). Signatures ride in the
+    // validator_signatures JSON column on the v1 response rows, so we aggregate
+    // them in JS rather than joining a child table.
+    let okResponses = await db.doQuery(
+        `SELECT provider_id, validator_signatures, block_index
+         FROM attests
+         WHERE version = 1 AND response_status = 'ok' AND validator_signatures IS NOT NULL`,
         []
     );
-    for(let row of fulfilledRows){
-        let s = ensure(String(row.pubkey).toLowerCase(), String(row.provider));
-        s.fulfilled = Number(row.cnt) || 0;
-        s.lastBlock = Math.max(s.lastBlock, Number(row.last_block) || 0);
+    for(let row of okResponses){
+        let sigs = [];
+        try { sigs = JSON.parse(row.validator_signatures) || []; }
+        catch(_) { sigs = []; }
+        let provider = String(row.provider_id);
+        let block    = Number(row.block_index) || 0;
+        for(let sig of sigs){
+            if(!sig || !sig.pubkey) continue;
+            let s = ensure(String(sig.pubkey).toLowerCase(), provider);
+            s.fulfilled += 1;
+            s.lastBlock = Math.max(s.lastBlock, block);
+        }
     }
 
     // missed_count: one per responsible-set validator each time a request expired
-    // (attest.js _parseExpire). request_status flips to 'expired' exactly when that
-    // happened, so on a healthy DB the 'expired' rows ARE the historical misses.
-    // For each, reproduce the responsible set at the request's block.
+    // (attest.js _parseExpire). There is no per-validator expiry row to count — we
+    // reproduce the responsible set deterministically and bump each member, exactly
+    // as the live path does. A request counts as expired iff (a) its expiry sweep
+    // has actually happened — a request expires at deadline_block+1, so the sweep
+    // occurred iff deadline_block+1 <= tip (i.e. deadline_block < tip), where tip is
+    // the latest parsed block; a request still inside its deadline window is
+    // 'pending' and has recorded zero misses — and (b) no *valid* v1 response
+    // survives for it (any valid response flips it out of 'pending' before the
+    // deadline). We derive eligibility from the surviving v0 rows, NOT
+    // request_status, because a reorg-undone response/expiry leaves request_status
+    // stale — the same staleness hazard a post-reorg repair must avoid. This mirrors
+    // Rollback._recomputeAttestationValidatorStats with the rollback target replaced
+    // by tip+1, so its cutoff `deadline_block < block_index-1` becomes
+    // `deadline_block < tip` over the whole surviving chain.
+    let tip     = await db.getLatestBlockIndex();
+    let validId = await db.getStatusId('valid');
     let expiredReqs = await db.doQuery(
-        `SELECT request_id, provider_id, redundancy, block_index, deadline_block
-         FROM attestation_requests
-         WHERE request_status = 'expired'`,
-        []
+        `SELECT ar.request_id, ar.provider_id, ar.redundancy, ar.block_index, ar.deadline_block
+         FROM attests ar
+         WHERE ar.version = 0
+           AND ar.deadline_block < ?
+           AND NOT EXISTS (
+               SELECT 1 FROM attests r
+               WHERE r.version = 1
+                 AND r.request_id = ar.request_id
+                 AND r.status_id = ?
+           )`,
+        [tip, validId]
     );
     let validatorsByBlock = new Map();
     for(let req of expiredReqs){
@@ -144,10 +169,10 @@ async function main(){
     let rows = [...stats.values()].filter(s => s.fulfilled > 0 || s.missed > 0);
     await db.beginTransaction();
     try {
-        await db.doQuery('DELETE FROM attestation_validator_stats', []);
+        await db.doQuery('DELETE FROM attest_validator_stats', []);
         for(let s of rows){
             await db.doQuery(
-                `INSERT INTO attestation_validator_stats
+                `INSERT INTO attest_validator_stats
                     (validator_pubkey, provider_id, fulfilled_count, missed_count, slashed_count, quality_score, last_updated_block)
                  VALUES (?, ?, ?, ?, 0, 0, ?)`,
                 [s.pubkey, s.provider, s.fulfilled, s.missed, s.lastBlock]
