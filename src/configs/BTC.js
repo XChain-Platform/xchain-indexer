@@ -79,6 +79,7 @@ module.exports = {
                 address['DONATE1']         = "1BTNSGASK5En7rFurDJ79LQ8CVYo2ecLC8"; // Protocol Development
                 address['DONATE2']         = "1BTNSGASK5En7rFurDJ79LQ8CVYo2ecLC8"; // Community Develoment
                 address['FEE_DESTINATION'] = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // Native coin fee destination (set pre-launch)
+                address['REWARD']          = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // Validator reward pool — pre-funded, manual top-up, drained by COLLECT (set pre-launch)
                 break;
             case 'testnet':
                 address['BURN']            = "mvCounterpartyXXXXXXXXXXXXXXW24Hef";
@@ -86,6 +87,7 @@ module.exports = {
                 address['DONATE1']         = "mvThcDEbeqog2aJ7JNj1FefUPaNdYYGqHt"; // Protocol Development
                 address['DONATE2']         = "mvThcDEbeqog2aJ7JNj1FefUPaNdYYGqHt"; // Community Develoment
                 address['FEE_DESTINATION'] = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // Native coin fee destination (set pre-launch)
+                address['REWARD']          = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // Validator reward pool — pre-funded, manual top-up, drained by COLLECT (set pre-launch)
                 break;
             case 'regtest':
                 address['BURN']            = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
@@ -93,6 +95,7 @@ module.exports = {
                 address['DONATE1']         = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // Protocol Development
                 address['DONATE2']         = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // Community Develoment
                 address['FEE_DESTINATION'] = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // Native coin fee destination
+                address['REWARD']          = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // Validator reward pool — pre-funded, manual top-up, drained by COLLECT
                 break;
         }
         config['ADDRESS'] = address;

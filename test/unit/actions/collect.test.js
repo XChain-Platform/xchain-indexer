@@ -17,6 +17,10 @@ describe('Collect (COLLECT) @regression @tier3', function () {
         db.getActiveStakeBySource  = sinon.stub().resolves({ stake_index: 1 });
         db.getUnclaimedRewardTotal = sinon.stub().resolves('100');
         db.createRewardClaim       = sinon.stub().resolves();
+        // Reward pool is paid by debit, not minting: the guard reads the gas-tick id and the
+        // pool's balance. Default to a well-funded pool so the happy path stays valid.
+        db.getTokenInfo            = sinon.stub().resolves({ TICK_ID: 1 });
+        db.getAddressBalances      = sinon.stub().resolves({ 1: '1000000' });
     }
 
     beforeEach(function () {
@@ -88,5 +92,59 @@ describe('Collect (COLLECT) @regression @tier3', function () {
         const data = collectData({ COIN: 'LTC' });
         await handler.parse(['0'], data, null);
         assert.ok(indexer.indexerDb.createRewardClaim.calledOnce);
+    });
+
+    it('valid collect debits the reward pool and credits the validator (no mint)', async function () {
+        const data = collectData();
+        await handler.parse(['0'], data, null);
+        assert.strictEqual(data['STATUS'], 'valid');
+
+        const gas        = indexer.config['GAS'];
+        const rewardPool = indexer.config['ADDRESS']['REWARD'];
+
+        // Pool is debited for the reward amount...
+        assert.ok(indexer.indexerDb.createDebit.calledOnce, 'expected exactly one debit');
+        const [, debitTick, debitAmt, debitAddr] = indexer.indexerDb.createDebit.firstCall.args;
+        assert.strictEqual(debitTick, gas);
+        assert.strictEqual(debitAmt, '100');
+        assert.strictEqual(debitAddr, rewardPool);
+
+        // ...and the validator is credited the same amount (net supply change = 0)
+        assert.ok(indexer.indexerDb.createCredit.calledOnce, 'expected exactly one credit');
+        const [, creditTick, creditAmt, creditAddr] = indexer.indexerDb.createCredit.firstCall.args;
+        assert.strictEqual(creditTick, gas);
+        assert.strictEqual(creditAmt, '100');
+        assert.strictEqual(creditAddr, SOURCE);
+    });
+
+    it('rejects when the reward pool cannot cover the claim, leaving it unclaimed', async function () {
+        // Pool holds less than the 100 owed
+        indexer.indexerDb.getAddressBalances.resolves({ 1: '50' });
+        const data = collectData();
+        await handler.parse(['0'], data, null);
+
+        assert.ok(String(data['STATUS']).includes('insufficient reward pool'));
+        // Claim row is still recorded (with the invalid status) so it stays auditable...
+        assert.ok(indexer.indexerDb.createRewardClaim.calledOnce);
+        // ...but nothing moves on the ledger, so the reward remains claimable later.
+        assert.ok(indexer.indexerDb.createDebit.notCalled);
+        assert.ok(indexer.indexerDb.createCredit.notCalled);
+    });
+
+    it('lets the validator retry successfully after the pool is topped up', async function () {
+        // First COLLECT: pool underfunded → rejected
+        indexer.indexerDb.getAddressBalances = sinon.stub();
+        indexer.indexerDb.getAddressBalances.onFirstCall().resolves({ 1: '50' });
+        indexer.indexerDb.getAddressBalances.onSecondCall().resolves({ 1: '1000000' });
+
+        const first = collectData();
+        await handler.parse(['0'], first, null);
+        assert.ok(String(first['STATUS']).includes('insufficient reward pool'));
+
+        // After a top-up, the same unclaimed reward can be collected
+        const second = collectData();
+        await handler.parse(['0'], second, null);
+        assert.strictEqual(second['STATUS'], 'valid');
+        assert.strictEqual(second['AMOUNT'], '100');
     });
 });

@@ -90,6 +90,20 @@ class Collect {
                 error = 'invalid: no unclaimed rewards';
         }
 
+        // Verify the reward pool can cover this claim. Rewards are paid by debiting the
+        // pre-funded REWARD address (never minted), so a claim that would overdraw the pool
+        // is rejected here. Because this sets `error` before STATUS is computed below, the
+        // claim is recorded as invalid and getUnclaimedRewardTotal() keeps it unclaimed —
+        // the validator can COLLECT again once the pool is topped up. The balance is read at
+        // (BLOCK_INDEX, ACTION_INDEX) so accept/reject is identical across all validators.
+        if(!error){
+            let rewardPool = this.config['ADDRESS']['REWARD'];
+            let tokenInfo  = await this.indexerDb.getTokenInfo(this.config['GAS'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
+            let poolBal    = await this.indexerDb.getAddressBalances(rewardPool, null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
+            if(!tokenInfo || !this.util.hasBalance(poolBal, tokenInfo['TICK_ID'], rewardAmount))
+                error = 'invalid: insufficient reward pool';
+        }
+
         data['AMOUNT'] = rewardAmount;
 
         // Determine final status
@@ -102,16 +116,20 @@ class Collect {
         // Create record in reward_claims table
         await this.indexerDb.createRewardClaim(data);
 
-        // Store the SOURCE and GAS tick in addresses list
-        let gas = this.config['GAS'];
+        // Store the SOURCE, GAS tick, and reward pool in addresses list
+        let gas        = this.config['GAS'];
+        let rewardPool = this.config['ADDRESS']['REWARD'];
         this.util.addAddressTicker(data['SOURCE'], gas);
+        this.util.addAddressTicker(rewardPool, gas);
 
         // Array of credits and debits
         let credits = [],
             debits  = [];
 
-        // If valid, credit the reward amount to SOURCE
+        // If valid, pay the reward by debiting the pre-funded pool and crediting SOURCE
+        // (no minting — total XCHAIN supply is unchanged by COLLECT)
         if(status === 'valid'){
+            debits.push([gas, rewardAmount, rewardPool]);
             credits.push([gas, rewardAmount, data['SOURCE']]);
         }
 
