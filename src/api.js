@@ -368,6 +368,34 @@ async function startApi(){
 
     };
 
+    // Plain REST status endpoint for monitoring tools that poll over a simple
+    // GET — uptime checks, container liveness/readiness probes, and load-balancer
+    // health checks that cannot speak the JSON-RPC envelope the methods above
+    // require. Surfaces the indexer's current block height, the decoder's current
+    // tip, the computed indexer→decoder lag, and the sync flag, so quantitative
+    // lag is readable from the public API surface without direct database access.
+    // The indexer block is read fresh from the DB (same source as the `health`
+    // method) so it never reports a stale in-memory counter.
+    app.get('/status', async (req, res) => {
+        let indexerBlock = null;
+        try {
+            if(indexer.indexerDb)
+                indexerBlock = await indexer.indexerDb.getLatestBlockIndex();
+        } catch (err) {
+            // Database unreachable — leave indexerBlock null so lag stays null
+            // rather than reporting a misleading figure.
+        }
+        let decoderBlock = (indexer.lastDecoderBlock != null) ? Number(indexer.lastDecoderBlock) : null;
+        res.json({
+            indexerBlock: indexerBlock,
+            decoderBlock: decoderBlock,
+            lag:          (decoderBlock != null && indexerBlock != null)
+                            ? decoderBlock - indexerBlock
+                            : null,
+            isSynced:     indexer.isSynced()
+        });
+    });
+
     // Allow JSON-RPC requests
     app.use(jsonRouter({methods: jsonRpcController}));
 
