@@ -573,6 +573,18 @@ class Utility {
         return fee;
     }
 
+    // Per-tx protocol fee for a possibly-emitted action. VM-emitted actions (synthesized
+    // inside an EXECUTE, flagged IS_EMISSION) pay no separate per-tx fee: the VM already
+    // charges VM_EMISSION gas to the EXECUTE caller, and the fee model validates against the
+    // EXECUTE tx's fee-destination outputs, which don't belong to a synthesized action (no
+    // native fee output, and the contract SOURCE need not hold XCHAIN). Returns the computed
+    // fee for normal on-wire actions, 0 for emissions. Mirrors execute.js's
+    // `skipFee = Boolean(IS_EMISSION)`. NOTE: this is the per-tx processing fee only — it does
+    // NOT cover deliberate economic fees (e.g. the ISSUE issuance fee), which are left intact.
+    feeForAction(amount, data){
+        return (data && data['IS_EMISSION']) ? '0' : amount;
+    }
+
     // Calculate Transaction fee using unified gas schedule (per-recipient)
     getUnifiedTransactionFee(recipients, gasType){
         let schedule  = this.config['GAS_SCHEDULE'];

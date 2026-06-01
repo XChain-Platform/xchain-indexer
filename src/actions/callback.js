@@ -131,8 +131,9 @@ class Callback {
         let db_hits = 4;                                                                       // 1 debits, 1 credits, 1 balances, 1 callback
             db_hits += (recipients) ? this.util.bcmul(Object.keys(recipients).length,3,0) : 0; // 1 debits, 1 credits, 1 balances
 
-        // Determine total transaction FEE based on database hits
-        fees['AMOUNT'] = this.util.getTransactionFee(db_hits, fees['TICK']);
+        // Determine total transaction FEE based on database hits.
+        // Emitted (VM-synthesized) actions pay no separate per-tx fee — see util.feeForAction.
+        fees['AMOUNT'] = this.util.feeForAction(this.util.getTransactionFee(db_hits, fees['TICK']), data);
 
         /*****************************************************************
          * TICK Validations

@@ -715,6 +715,19 @@ describe('Utility @regression @tier1', function () {
         });
     });
 
+    describe('feeForAction()', function () {
+        it('returns the fee unchanged for a normal on-wire action', function () {
+            assert.strictEqual(util.feeForAction('0.00010000', { IS_EMISSION: false }), '0.00010000');
+        });
+        it('returns the fee unchanged when no emission flag is present', function () {
+            assert.strictEqual(util.feeForAction('0.00010000', {}), '0.00010000');
+            assert.strictEqual(util.feeForAction('0.00010000', null), '0.00010000');
+        });
+        it('returns 0 for a VM-emitted (IS_EMISSION) action', function () {
+            assert.strictEqual(util.feeForAction('0.00010000', { IS_EMISSION: true }), '0');
+        });
+    });
+
     describe('getExpirationFee()', function () {
         it('should return 0 for format 0 within free days', function () {
             // 182 days free, expiration within free period
