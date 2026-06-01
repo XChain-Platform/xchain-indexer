@@ -98,6 +98,9 @@ class ProtocolChanges {
         // this.addChange('name','1.0.0',0,0,0,0,0,0);
         this.addChange('UNIFIED_FEES',   '2.0.0',0,0,0,0,0,0);
         this.addChange('VM_ACTIONS',     '2.0.0',0,0,0,0,0,0);
+        // Issuance fee activation. Mainnet turns on at the historical block 862633;
+        // testnet/regtest charge from block 0 so the fee path is exercisable there.
+        this.addChange('ISSUANCE_FEE',   '1.0.0',0,0,0,862633,0,0);
 
     }
 

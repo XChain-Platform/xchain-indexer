@@ -254,6 +254,7 @@ class Actions {
         data['RAW_DATA']         = tx.raw_data; // Raw payload bytes (FILE ciphertext, etc.)
         data['FEE']              = tx.fee;      // Miners fee in satoshis
         data['SOURCE_PUBKEY']    = tx.source_pubkey; // Public key for the source address
+        data['TX_OUTPUTS']       = tx.tx_outputs || []; // Full native-coin output set (fee detection)
 
         // Treat plain BTC transactions (empty data) as DISPENSE triggers
         // The decoder records these when the destination matches an active dispenser address

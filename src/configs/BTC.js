@@ -78,7 +78,7 @@ module.exports = {
                 address['GAS']             = "1BTNSGASK5En7rFurDJ79LQ8CVYo2ecLC8";
                 address['DONATE1']         = "1BTNSGASK5En7rFurDJ79LQ8CVYo2ecLC8"; // Protocol Development
                 address['DONATE2']         = "1BTNSGASK5En7rFurDJ79LQ8CVYo2ecLC8"; // Community Develoment
-                address['FEE_DESTINATION'] = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // Native coin fee destination (set pre-launch)
+                address['FEE_DESTINATION'] = process.env['XCHAIN_FEE_DESTINATION_BTC_' + network.toUpperCase()] || "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // Native coin fee destination (set pre-launch)
                 address['REWARD']          = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // Validator reward pool — pre-funded, manual top-up, drained by COLLECT (set pre-launch)
                 break;
             case 'testnet':
@@ -86,7 +86,7 @@ module.exports = {
                 address['GAS']             = "mvThcDEbeqog2aJ7JNj1FefUPaNdYYGqHt";
                 address['DONATE1']         = "mvThcDEbeqog2aJ7JNj1FefUPaNdYYGqHt"; // Protocol Development
                 address['DONATE2']         = "mvThcDEbeqog2aJ7JNj1FefUPaNdYYGqHt"; // Community Develoment
-                address['FEE_DESTINATION'] = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // Native coin fee destination (set pre-launch)
+                address['FEE_DESTINATION'] = process.env['XCHAIN_FEE_DESTINATION_BTC_' + network.toUpperCase()] || "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // Native coin fee destination (set pre-launch)
                 address['REWARD']          = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // Validator reward pool — pre-funded, manual top-up, drained by COLLECT (set pre-launch)
                 break;
             case 'regtest':
@@ -94,7 +94,7 @@ module.exports = {
                 address['GAS']             = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
                 address['DONATE1']         = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // Protocol Development
                 address['DONATE2']         = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // Community Develoment
-                address['FEE_DESTINATION'] = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // Native coin fee destination
+                address['FEE_DESTINATION'] = process.env['XCHAIN_FEE_DESTINATION_BTC_' + network.toUpperCase()] || "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // Native coin fee destination
                 address['REWARD']          = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // Validator reward pool — pre-funded, manual top-up, drained by COLLECT
                 break;
         }

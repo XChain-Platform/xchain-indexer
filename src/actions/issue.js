@@ -384,7 +384,7 @@ class Issue {
             error = 'invalid: MEMO (length)';
 
         // Determine if an issuance FEE is required, and what that fee is
-        if(!error && !tokenInfo && data['BLOCK_INDEX']>=862633){
+        if(!error && !tokenInfo && await this.actions.protocolChanges.isEnabled('ISSUANCE_FEE', data['BLOCK_INDEX'])){
             let unifiedFees = await this.actions.protocolChanges.isEnabled('UNIFIED_FEES', data['BLOCK_INDEX']);
             if(unifiedFees){
                 // Unified gas schedule

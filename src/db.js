@@ -701,6 +701,27 @@ class Database {
                         t3.vout ASC`;
         let results = await this.doQuery(query, [block_index]);
         if(results.length > 0){
+            // First pass: collect the stored outputs for each transaction so every emitted row can
+            // carry the full output set. The indexer uses this for native-coin fee detection
+            // (xchain-indexer/src/utility.js detectFeePaymentMode / validateNativeCoinFee). The
+            // decoder persists the fee-destination output (and COINPAY/dispense outputs) to
+            // transaction_outputs.
+            let outputsByTx = {};
+            for(let row of results){
+                if(this.util.isNull(row.output_destination))
+                    continue;
+                let key = row.tx_hash;
+                if(!outputsByTx[key])
+                    outputsByTx[key] = [];
+                outputsByTx[key].push({
+                    vout:    this.util.isNull(row.vout) ? 0 : row.vout,
+                    address: row.output_destination,
+                    value:   row.output_amount
+                });
+            }
+            for(let key in outputsByTx)
+                outputsByTx[key].sort((a, b) => Number(a.vout) - Number(b.vout));
+
             for(let row of results){
                 if(!this.util.isNull(row.output_destination))
                     row.destination = row.output_destination;
@@ -708,6 +729,8 @@ class Database {
                     row.amount = row.output_amount;
                 if(this.util.isNull(row.vout))
                     row.vout = 0;
+                // Full output set for this transaction (used by native-coin fee validation)
+                row.tx_outputs = outputsByTx[row.tx_hash] || [];
                 delete row.output_destination;
                 delete row.output_amount;
                 data.push(row);
