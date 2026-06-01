@@ -408,6 +408,17 @@ class Rollback {
                     args  = [firstActionIndex];
                     await this.indexerDb.doQuery(query, args);
                 }
+
+                // Sweep orphaned icon-cache rows. icons is a metadata cache keyed by
+                // token_id with no action_index/block_index of its own, so it escapes
+                // both delete loops. When a token row is removed above (tokens is in
+                // dataTables) any icons row pointing at it is left dangling — and with
+                // no enforced FK the DB won't cascade the delete. A stale orphan makes
+                // the icon-fetch pipeline believe an icon already exists for a token
+                // that no longer does. Runs after the loop, so the tokens rows are
+                // already gone before the orphan sweep evaluates the sub-query.
+                query = `DELETE FROM icons WHERE token_id NOT IN (SELECT id FROM tokens)`;
+                await this.indexerDb.doQuery(query, []);
             }
 
             // Delete data from tables using block_index
