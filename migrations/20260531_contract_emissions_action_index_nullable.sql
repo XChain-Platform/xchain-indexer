@@ -15,8 +15,12 @@
 --
 -- All readers (snapshot sync SELECT, rollback DELETE-by-execution_index) tolerate NULL;
 -- nothing JOINs on action_index. Safe to run on any database created before this shipped.
--- The startup schema reconciliation adds missing columns but does not relax nullability,
--- so this MODIFY is required for existing DBs.
+--
+-- NOTE: the indexer's startup schema reconciliation (db.js alterTableForDrift) already
+-- relaxes NOT NULL -> NULL automatically, so any DB that runs the new indexer code self-heals
+-- on first boot — no manual step needed there. This migration exists for environments that do
+-- NOT run that reconciliation: snapshot-bootstrapped xchain-sync replicas, or to relax the
+-- constraint ahead of the code roll.
 
 ALTER TABLE contract_emissions
   MODIFY COLUMN action_index BIGINT UNSIGNED NULL;
