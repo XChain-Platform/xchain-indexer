@@ -274,6 +274,28 @@ describe('XChainIndexer hub config overlay', function () {
         assert.deepStrictEqual(indexer.config.GAS_SCHEDULE, schedule);
     });
 
+    it('re-points the VM gasSchedule at the updated GAS_SCHEDULE blob', async function () {
+        indexer = makeIndexer();
+        let schedule = { ISSUE: 222000, ISSUE_SUBTOKEN: 111000 };
+
+        // Simulate the constructed VM that captured the startup-time schedule by reference.
+        let startupSchedule = indexer.config.GAS_SCHEDULE;
+        indexer.actions = { vm: { gasSchedule: startupSchedule } };
+
+        let hubStub = { enabled: true, _call: sinon.stub().resolves({
+            BTC: { regtest: { 'xchain-indexer': { GAS_SCHEDULE: JSON.stringify(schedule) } } }
+        })};
+        indexer.hubClient = hubStub;
+
+        await indexer._applyHubConfigOverlay();
+
+        // The VM must share the exact object the pre-VM charge sites read from config,
+        // otherwise in-VM gas metering diverges from the base-fee charges.
+        assert.deepStrictEqual(indexer.actions.vm.gasSchedule, schedule);
+        assert.strictEqual(indexer.actions.vm.gasSchedule, indexer.config.GAS_SCHEDULE);
+        assert.notStrictEqual(indexer.actions.vm.gasSchedule, startupSchedule);
+    });
+
     it('skips overlay when hub client is disabled', async function () {
         indexer = makeIndexer();
         let localPrice = indexer.config.GAS_PRICE;

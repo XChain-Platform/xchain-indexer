@@ -432,6 +432,15 @@ class XChainIndexer {
                 this.config[key] = val;
             }
         }
+
+        // The VM captures the gas schedule by reference at construction time, and the
+        // pre-VM base-fee charges in execute.js/deploy.js read this.config['GAS_SCHEDULE']
+        // directly. Re-point the VM at the live config object so both charge sites use the
+        // same schedule; otherwise in-VM gas metering keeps the startup-time schedule while
+        // the base fees pick up the update, diverging within a single action.
+        if(this.actions && this.actions.vm){
+            this.actions.vm.gasSchedule = this.config['GAS_SCHEDULE'];
+        }
     }
 
     // Poll the hub for PBFT-committed config changes. The startup overlay runs only
