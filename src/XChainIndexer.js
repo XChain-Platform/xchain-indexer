@@ -27,9 +27,10 @@ const actions   = require('./actions.js');
 const util      = require('./utility.js');
 const rollback  = require('./rollback.js');
 const mapper    = require('./mapper.js');
-const HubClient   = require('./hub_client.js');
-const HubDbSync   = require('./hub_db_sync.js');
-const UtxoTracker = require('./UtxoTracker.js');
+const HubClient    = require('./hub_client.js');
+const HubDbSync    = require('./hub_db_sync.js');
+const HubPushQueue = require('./hub_push_queue.js');
+const UtxoTracker  = require('./UtxoTracker.js');
 
 class XChainIndexer {
 
@@ -92,6 +93,7 @@ class XChainIndexer {
     // Handle setting flag to stop indexer
     stop(){
         this.stopFlag = true;
+        if(this.hubPushQueue) this.hubPushQueue.stop();
     }
 
     // Handle starting up the XChain indexer
@@ -172,6 +174,14 @@ class XChainIndexer {
             if(!indexerTablesVerified)
                 this.util.throwError("Database " + this.indexerDbName + " tables don't exist!");
         }
+
+        // Start the durable hub-push retry queue. Both PRICE hub pushes (v0 round
+        // and v1 oracle price) enqueue into pending_hub_pushes on failure so a
+        // transient hub outage can't permanently drop the row; this poller drains
+        // the queue with exponential backoff. No-op when no hub is configured —
+        // nothing ever enqueues in that case.
+        this.hubPushQueue = new HubPushQueue(this);
+        this.hubPushQueue.start();
 
         // Define placeholders for block parsing status
         let firstDecoderBlock     = null;

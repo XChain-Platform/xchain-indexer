@@ -116,7 +116,8 @@ class Rollback {
             'deposits',
             'withdrawals',
             'attests',
-            'prices'
+            'prices',
+            'pending_hub_pushes'
         ];
 
     }

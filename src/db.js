@@ -7253,6 +7253,78 @@ class Database {
         await this.doQuery(query, args);
     }
 
+    /*
+     * Hub push retry queue (`pending_hub_pushes`)
+     *
+     * Durable backing for best-effort hub pushes (PRICE v0 round / PRICE v1
+     * oracle price). When a live push fails, the payload is parked here and the
+     * HubPushQueue poller drains it later with exponential backoff.
+     *
+     * These methods deliberately bypass doQuery()/getConnection(): the poller
+     * runs concurrently with block processing on this same `indexerDb` instance,
+     * and getConnection() returns the open block's `transactionConnection` while
+     * a block is being processed. Routing queue writes through it would attach
+     * operational queue I/O to the block's ACID transaction (committed/rolled
+     * back with the block) and risk two statements sharing one physical
+     * connection. _poolQuery() always draws an independent pooled connection.
+     */
+
+    // Run a query on a fresh pooled connection, isolated from any in-progress
+    // block transaction. Always releases the connection.
+    async _poolQuery(query, args){
+        let conn = await this.pool.getConnection();
+        try {
+            return await conn.query(query, args);
+        } finally {
+            await conn.release();
+        }
+    }
+
+    // Park a failed hub push for later retry. `payload` is the exact argument
+    // object the HubClient method expects; it is serialized to JSON. The source
+    // action_index is lifted out into its own column so a reorg can purge queued
+    // pushes for orphaned actions via the rollback dataTables loop.
+    async enqueueHubPush(pushType, payload){
+        let actionIndex = (payload && payload.action_index != null) ? payload.action_index : 0;
+        let query = `INSERT INTO pending_hub_pushes (push_type, action_index, payload, status, attempts, created_at)
+                     VALUES (?, ?, ?, 'pending', 0, NOW())`;
+        await this._poolQuery(query, [pushType, actionIndex, JSON.stringify(payload)]);
+    }
+
+    // Fetch the oldest pending rows for the poller to consider (it applies the
+    // per-row backoff gate in JS). `failed` rows are excluded — they are
+    // terminal.
+    async getPendingHubPushes(limit){
+        let max = Number(limit);
+        if(!Number.isFinite(max) || max <= 0) max = 50;
+        let query = `SELECT id, push_type, payload, attempts, last_attempted_at, status
+                     FROM pending_hub_pushes
+                     WHERE status='pending'
+                     ORDER BY id ASC
+                     LIMIT ?`;
+        return await this._poolQuery(query, [max]);
+    }
+
+    // Drop a row once the hub has accepted it (delivered rows aren't retained).
+    async markHubPushDelivered(id){
+        await this._poolQuery('DELETE FROM pending_hub_pushes WHERE id=?', [id]);
+    }
+
+    // Record a failed delivery attempt: bump the counter, stamp the time, keep
+    // the last error, and retire the row to `failed` once it hits maxAttempts so
+    // the queue stays bounded.
+    async recordHubPushAttempt(id, errMsg, maxAttempts){
+        let max = Number(maxAttempts);
+        if(!Number.isFinite(max) || max <= 0) max = 10;
+        let query = `UPDATE pending_hub_pushes
+                     SET attempts = attempts + 1,
+                         last_attempted_at = NOW(),
+                         last_error = ?,
+                         status = IF(attempts + 1 >= ?, 'failed', 'pending')
+                     WHERE id = ?`;
+        await this._poolQuery(query, [errMsg, max, id]);
+    }
+
     // Get aggregate active stake info for a pubkey (SUM of amount across all active rows).
     // Returns { source_id, signing_pubkey_id, signing_pubkey, amount, activation_block, ... } or null.
     // blockIndex enforces the 6-block activation/deactivation delay for BTC reorg safety.

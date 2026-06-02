@@ -172,9 +172,13 @@ class Price {
         // Create record in prices table
         await this.indexerDb.createPrice(data);
 
-        // Push validated round to hub for cross-chain aggregation
+        // Push validated round to hub for cross-chain aggregation. The push is
+        // fire-and-forget so block processing never blocks on hub latency, but a
+        // failure no longer drops the round: it is parked in pending_hub_pushes
+        // for the HubPushQueue poller to retry with backoff. The hub dedupes by
+        // round_number, so a later replay it already has is a safe no-op.
         if(!error && this.hubClient){
-            this.hubClient.pushPriceRound({
+            let payload = {
                 source_chain: data['COIN'],
                 round:        round,
                 timestamp:    timestamp,
@@ -182,7 +186,12 @@ class Price {
                 sigs:         sigs,
                 action_index: data['ACTION_INDEX'],
                 block_index:  data['BLOCK_INDEX']
-            }).catch(err => console.warn('PRICE v0: hub push failed:', err.message));
+            };
+            this.hubClient.pushPriceRound(payload).catch(err => {
+                console.warn('PRICE v0: hub push failed, queued for retry:', err.message);
+                this.indexerDb.enqueueHubPush('price_round', payload)
+                    .catch(e => console.error('PRICE v0: failed to enqueue hub push for retry:', e.message));
+            });
         }
 
         // Create action mappings
@@ -233,9 +242,14 @@ class Price {
         // Create record in prices table
         await this.indexerDb.createPrice(data);
 
-        // Push to hub for cross-chain aggregation (Phase 4 implements full lock window logic)
+        // Push to hub for cross-chain aggregation (Phase 4 implements full lock
+        // window logic). Fire-and-forget so block processing never blocks on hub
+        // latency, but a failure no longer drops the price: it is parked in
+        // pending_hub_pushes for the HubPushQueue poller to retry with backoff.
+        // The hub dedupes by (source_address, source_chain, action_index), so a
+        // later replay it already has is a safe no-op.
         if(!error && this.hubClient){
-            this.hubClient.pushOraclePrice({
+            let payload = {
                 source_chain:   data['COIN'],
                 source_address: data['SOURCE'],
                 coin:           data['V1_COIN'],
@@ -246,7 +260,12 @@ class Price {
                 memo:           data['MEMO'],
                 block_time:     data['BLOCK_TIME'],
                 action_index:   data['ACTION_INDEX']
-            }).catch(err => console.warn('PRICE v1: hub push failed:', err.message));
+            };
+            this.hubClient.pushOraclePrice(payload).catch(err => {
+                console.warn('PRICE v1: hub push failed, queued for retry:', err.message);
+                this.indexerDb.enqueueHubPush('oracle_price', payload)
+                    .catch(e => console.error('PRICE v1: failed to enqueue hub push for retry:', e.message));
+            });
         }
 
         // Create action mappings
