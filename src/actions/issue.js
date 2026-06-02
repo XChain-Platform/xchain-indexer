@@ -383,8 +383,15 @@ class Issue {
         if(!error && String(data['MEMO']).length > this.config['MAX_MEMO_LENGTH'])
             error = 'invalid: MEMO (length)';
 
+        // The GAS token itself cannot pay an XCHAIN issuance fee to come into
+        // existence (chicken-and-egg) — its genesis issuance is fee-exempt.
+        // Only the exact GAS tick qualifies (subtokens like XCHAIN.foo do not),
+        // and only its first issuance (!tokenInfo). Off regtest, GAS issuance is
+        // restricted to the GAS address (checked above), so this cannot be abused.
+        let gasBootstrap = (String(data['TICK']).toUpperCase() === String(this.config['GAS']).toUpperCase());
+
         // Determine if an issuance FEE is required, and what that fee is
-        if(!error && !tokenInfo && await this.actions.protocolChanges.isEnabled('ISSUANCE_FEE', data['BLOCK_INDEX'])){
+        if(!error && !tokenInfo && !gasBootstrap && await this.actions.protocolChanges.isEnabled('ISSUANCE_FEE', data['BLOCK_INDEX'])){
             let unifiedFees = await this.actions.protocolChanges.isEnabled('UNIFIED_FEES', data['BLOCK_INDEX']);
             if(unifiedFees){
                 // Unified gas schedule
