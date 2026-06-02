@@ -230,20 +230,43 @@ describe('XChainIndexer hub config overlay', function () {
         delete require.cache[require.resolve('../../src/XChainIndexer.js')];
     });
 
-    it('overrides GAS_PRICE with hub-served value', async function () {
+    it('overrides a tunable scalar param (EXPIRATION_FEE_PER_DAY) with hub-served value', async function () {
         indexer = makeIndexer();
-        let localPrice = indexer.config.GAS_PRICE;
+        let localFee = indexer.config.EXPIRATION_FEE_PER_DAY;
 
-        // stub the hub client's _call to return a higher GAS_PRICE
+        // stub the hub client's _call to return a different expiration fee
         let hubStub = { enabled: true, _call: sinon.stub().resolves({
-            BTC: { regtest: { 'xchain-indexer': { GAS_PRICE: '0.00099' } } }
+            BTC: { regtest: { 'xchain-indexer': { EXPIRATION_FEE_PER_DAY: '0.00999999' } } }
         })};
         indexer.hubClient = hubStub;
 
         await indexer._applyHubConfigOverlay();
 
-        assert.strictEqual(indexer.config.GAS_PRICE, '0.00099');
-        assert.notStrictEqual(indexer.config.GAS_PRICE, localPrice);
+        assert.strictEqual(indexer.config.EXPIRATION_FEE_PER_DAY, '0.00999999');
+        assert.notStrictEqual(indexer.config.EXPIRATION_FEE_PER_DAY, localFee);
+    });
+
+    it('does NOT apply hub-served GAS_PRICE or GAS_SCHEDULE (consensus-critical, local-only)', async function () {
+        indexer = makeIndexer();
+        let localPrice    = indexer.config.GAS_PRICE;
+        let localSchedule = indexer.config.GAS_SCHEDULE;
+
+        // The hub serves divergent consensus values; the overlay must ignore both so every
+        // federation node keeps processing blocks with the same schedule/price. A live swap
+        // would let nodes diverge within the poll window (soft fork). These change only via a
+        // coordinated node upgrade.
+        let hubStub = { enabled: true, _call: sinon.stub().resolves({
+            BTC: { regtest: { 'xchain-indexer': {
+                GAS_PRICE:    '0.00099',
+                GAS_SCHEDULE: JSON.stringify({ ISSUE: 999999, ISSUE_SUBTOKEN: 999999 })
+            } } }
+        })};
+        indexer.hubClient = hubStub;
+
+        await indexer._applyHubConfigOverlay();
+
+        assert.strictEqual(indexer.config.GAS_PRICE, localPrice, 'GAS_PRICE must stay at the local default');
+        assert.strictEqual(indexer.config.GAS_SCHEDULE, localSchedule, 'GAS_SCHEDULE must stay the local object');
     });
 
     it('falls back gracefully when hub is unreachable', async function () {
@@ -260,40 +283,18 @@ describe('XChainIndexer hub config overlay', function () {
         assert.strictEqual(indexer.config.GAS_PRICE, localPrice);
     });
 
-    it('JSON-parses a GAS_SCHEDULE blob from the hub', async function () {
+    it('JSON-parses a STAKING blob from the hub', async function () {
         indexer = makeIndexer();
-        let schedule = { ISSUE: 200000, ISSUE_SUBTOKEN: 100000 };
+        let staking = { COOLDOWN_BLOCKS: 2000, ACTIVATION_DELAY_BLOCKS: 12 };
 
         let hubStub = { enabled: true, _call: sinon.stub().resolves({
-            BTC: { regtest: { 'xchain-indexer': { GAS_SCHEDULE: JSON.stringify(schedule) } } }
+            BTC: { regtest: { 'xchain-indexer': { STAKING: JSON.stringify(staking) } } }
         })};
         indexer.hubClient = hubStub;
 
         await indexer._applyHubConfigOverlay();
 
-        assert.deepStrictEqual(indexer.config.GAS_SCHEDULE, schedule);
-    });
-
-    it('re-points the VM gasSchedule at the updated GAS_SCHEDULE blob', async function () {
-        indexer = makeIndexer();
-        let schedule = { ISSUE: 222000, ISSUE_SUBTOKEN: 111000 };
-
-        // Simulate the constructed VM that captured the startup-time schedule by reference.
-        let startupSchedule = indexer.config.GAS_SCHEDULE;
-        indexer.actions = { vm: { gasSchedule: startupSchedule } };
-
-        let hubStub = { enabled: true, _call: sinon.stub().resolves({
-            BTC: { regtest: { 'xchain-indexer': { GAS_SCHEDULE: JSON.stringify(schedule) } } }
-        })};
-        indexer.hubClient = hubStub;
-
-        await indexer._applyHubConfigOverlay();
-
-        // The VM must share the exact object the pre-VM charge sites read from config,
-        // otherwise in-VM gas metering diverges from the base-fee charges.
-        assert.deepStrictEqual(indexer.actions.vm.gasSchedule, schedule);
-        assert.strictEqual(indexer.actions.vm.gasSchedule, indexer.config.GAS_SCHEDULE);
-        assert.notStrictEqual(indexer.actions.vm.gasSchedule, startupSchedule);
+        assert.deepStrictEqual(indexer.config.STAKING, staking);
     });
 
     it('skips overlay when hub client is disabled', async function () {
@@ -313,14 +314,14 @@ describe('XChainIndexer hub config overlay', function () {
         indexer = makeIndexer();
 
         let hubStub = { enabled: true, _call: sinon.stub().resolves({
-            configs: { BTC: { regtest: { 'xchain-indexer': { GAS_PRICE: '0.00077' } } } },
+            configs: { BTC: { regtest: { 'xchain-indexer': { EXPIRATION_FEE_PER_DAY: '0.00077000' } } } },
             seq: 5
         })};
         indexer.hubClient = hubStub;
 
         await indexer._applyHubConfigOverlay();
 
-        assert.strictEqual(indexer.config.GAS_PRICE, '0.00077');
+        assert.strictEqual(indexer.config.EXPIRATION_FEE_PER_DAY, '0.00077000');
         assert.strictEqual(indexer.lastHubConfigSeq, 5);
     });
 
@@ -328,14 +329,14 @@ describe('XChainIndexer hub config overlay', function () {
         indexer = makeIndexer();
         let clock = sinon.useFakeTimers();
         try {
-            // Startup: seq 5, GAS_PRICE 0.00010
+            // Startup: seq 5, EXPIRATION_FEE_PER_DAY 0.00010000
             let hubStub = { enabled: true, _call: sinon.stub() };
             hubStub._call.onCall(0).resolves({
-                configs: { BTC: { regtest: { 'xchain-indexer': { GAS_PRICE: '0.00010' } } } }, seq: 5
+                configs: { BTC: { regtest: { 'xchain-indexer': { EXPIRATION_FEE_PER_DAY: '0.00010000' } } } }, seq: 5
             });
             indexer.hubClient = hubStub;
             await indexer._applyHubConfigOverlay();
-            assert.strictEqual(indexer.config.GAS_PRICE, '0.00010');
+            assert.strictEqual(indexer.config.EXPIRATION_FEE_PER_DAY, '0.00010000');
             assert.strictEqual(indexer.lastHubConfigSeq, 5);
 
             process.env.HUB_CONFIG_POLL_INTERVAL_MS = '60000';
@@ -343,17 +344,17 @@ describe('XChainIndexer hub config overlay', function () {
 
             // Tick 1: same seq (5) but different value — must NOT re-apply (stale guard).
             hubStub._call.onCall(1).resolves({
-                configs: { BTC: { regtest: { 'xchain-indexer': { GAS_PRICE: '0.99999' } } } }, seq: 5
+                configs: { BTC: { regtest: { 'xchain-indexer': { EXPIRATION_FEE_PER_DAY: '0.99999999' } } } }, seq: 5
             });
             await clock.tickAsync(60000);
-            assert.strictEqual(indexer.config.GAS_PRICE, '0.00010', 'unchanged seq must not re-apply');
+            assert.strictEqual(indexer.config.EXPIRATION_FEE_PER_DAY, '0.00010000', 'unchanged seq must not re-apply');
 
             // Tick 2: seq advances to 6 — now the new value takes effect without a restart.
             hubStub._call.onCall(2).resolves({
-                configs: { BTC: { regtest: { 'xchain-indexer': { GAS_PRICE: '0.00022' } } } }, seq: 6
+                configs: { BTC: { regtest: { 'xchain-indexer': { EXPIRATION_FEE_PER_DAY: '0.00022000' } } } }, seq: 6
             });
             await clock.tickAsync(60000);
-            assert.strictEqual(indexer.config.GAS_PRICE, '0.00022', 'advanced seq must re-apply');
+            assert.strictEqual(indexer.config.EXPIRATION_FEE_PER_DAY, '0.00022000', 'advanced seq must re-apply');
             assert.strictEqual(indexer.lastHubConfigSeq, 6);
         } finally {
             if(indexer._hubConfigPollTimer) clearInterval(indexer._hubConfigPollTimer);

@@ -406,8 +406,18 @@ class XChainIndexer {
     // config object. Mutating this.config in place is what lets a re-applied overlay
     // take effect without a process restart.
     _mergeHubParams(allConfigs){
-        const SCALAR_PARAMS = ['GAS_PRICE', 'FEE_PAYMENT_MODE', 'ACTIVATION_DELAY_BLOCKS', 'EXPIRATION_FEE_PER_DAY'];
-        const BLOB_PARAMS   = ['GAS_SCHEDULE', 'STAKING'];
+        // GAS_SCHEDULE and GAS_PRICE are deliberately EXCLUDED from the hub-polled lists.
+        // Both feed consensus-critical fee math: GAS_SCHEDULE sets gasUsed and GAS_PRICE
+        // multiplies it into the fee charged, and both land in contract_executions rows and
+        // ultimately block hashes. The overlay applies a committed change the moment a node
+        // observes it, which happens at different wall-clock times — hence different block
+        // heights — across the federation. Polling these would let two nodes process the same
+        // block with different schedules/prices and produce divergent state (a soft fork).
+        // They come solely from the per-chain local defaults (configs/BTC.js, LTC.js, DOGE.js)
+        // and may change only via a coordinated node upgrade. Any future governance path must
+        // gate the switch on a protocol-agreed activation block height, not a live poll.
+        const SCALAR_PARAMS = ['FEE_PAYMENT_MODE', 'ACTIVATION_DELAY_BLOCKS', 'EXPIRATION_FEE_PER_DAY'];
+        const BLOB_PARAMS   = ['STAKING'];
 
         let coin    = this.config.COIN;
         let network = this.config.NETWORK;
@@ -432,19 +442,10 @@ class XChainIndexer {
                 this.config[key] = val;
             }
         }
-
-        // The VM captures the gas schedule by reference at construction time, and the
-        // pre-VM base-fee charges in execute.js/deploy.js read this.config['GAS_SCHEDULE']
-        // directly. Re-point the VM at the live config object so both charge sites use the
-        // same schedule; otherwise in-VM gas metering keeps the startup-time schedule while
-        // the base fees pick up the update, diverging within a single action.
-        if(this.actions && this.actions.vm){
-            this.actions.vm.gasSchedule = this.config['GAS_SCHEDULE'];
-        }
     }
 
     // Poll the hub for PBFT-committed config changes. The startup overlay runs only
-    // once; without this loop a governance-committed parameter change (e.g. GAS_PRICE
+    // once; without this loop a governance-committed parameter change (e.g. FEE_PAYMENT_MODE
     // or STAKING) would not take effect until the indexer process is restarted. We
     // re-apply the overlay only when the hub's committed sequence advances past the
     // last one we applied, so a steady-state poll is a cheap no-op. Against an older
