@@ -3495,13 +3495,19 @@ class Database {
 
     // Create/Update record in `sleeps` table
     async createSleep(data){
+        // Capture the sleep TYPE *before* normalizeDataValues runs: TYPE is a
+        // NUMBER_FIELD, so the non-numeric string 'TICK'/'ADDRESS' gets nulled
+        // there. Reading it after normalize made (data['TYPE']=='TICK') always
+        // false, so every TICK sleep (SLEEP v1) was stored as an ADDRESS sleep
+        // (type=1) — wrongly sleeping the token owner's whole address and never
+        // pausing the tick (isTickSleeping looks for type=2).
+        let type         = (data['TYPE']=='TICK') ? 2 : 1;
         data             = this.normalizeDataValues(data);
         let tick_id      = await this.createTicker(data['TICK']);
         let memo_id      = await this.createMemo(data['MEMO']);
         let status_id    = await this.createStatus(data['STATUS']);
         let action_index = data['ACTION_INDEX'];
         let resume_block = data['RESUME_BLOCK'];
-        let type         = (data['TYPE']=='TICK') ? 2 : 1;
         // Check if record already exists for this sleep
         let query  = `SELECT
                             action_index
