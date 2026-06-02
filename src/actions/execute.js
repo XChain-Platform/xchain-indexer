@@ -354,6 +354,14 @@ class Execute {
         let action = emission.action;
         let params = emission.params;
 
+        // ATTEST v0 (request) anchors its on-chain request_id to the emitter position, so the
+        // handler can re-derive and verify it (defends against a compromised VM forging a
+        // request_id). EMITTER_POSITION is therefore mandatory for ATTEST emissions — fail
+        // loudly at the source if a caller ever omits it rather than letting the handler fall
+        // back to accepting an unverified request_id.
+        if(action === 'ATTEST' && (position === undefined || position === null))
+            throw new Error('ATTEST emission missing EMITTER_POSITION (position argument)');
+
         // Force source to the contract's derived address
         let contractAddress = 'C:' + this.config['CHAIN'] + ':' + executionData['CONTRACT_ACTION_INDEX'];
 

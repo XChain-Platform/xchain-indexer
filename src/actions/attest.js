@@ -123,13 +123,22 @@ class Attest {
         }
 
         // Re-derive request_id and compare. Defends against a compromised VM by anchoring
-        // the on-chain request_id to (tx_hash, contract_index, emitter_position) — once
-        // execute.processEmission passes EMITTER_POSITION the verification kicks in.
-        if(!error && data['EMITTER_POSITION'] !== undefined && data['TX_HASH']){
-            let preimage = String(data['TX_HASH']) + ':' + String(data['CONTRACT_INDEX']) + ':' + String(data['EMITTER_POSITION']);
-            let expected = crypto.createHash('sha256').update(preimage).digest('hex');
-            if(expected !== String(data['REQUEST_ID']).toLowerCase())
-                error = 'invalid: REQUEST_ID (does not match deterministic derivation)';
+        // the on-chain request_id to (tx_hash, contract_index, emitter_position).
+        // EMITTER_POSITION and TX_HASH are REQUIRED inputs for this derivation — both are
+        // always supplied for a legitimate VM emission (execute.processEmission). Their
+        // absence is treated as a hard failure rather than a silent bypass, so no code
+        // path can ever skip the check and accept an arbitrary, unverified REQUEST_ID.
+        if(!error){
+            if(data['EMITTER_POSITION'] === undefined || data['EMITTER_POSITION'] === null){
+                error = 'invalid: EMITTER_POSITION (required for request_id derivation)';
+            } else if(!data['TX_HASH']){
+                error = 'invalid: TX_HASH (required for request_id derivation)';
+            } else {
+                let preimage = String(data['TX_HASH']) + ':' + String(data['CONTRACT_INDEX']) + ':' + String(data['EMITTER_POSITION']);
+                let expected = crypto.createHash('sha256').update(preimage).digest('hex');
+                if(expected !== String(data['REQUEST_ID']).toLowerCase())
+                    error = 'invalid: REQUEST_ID (does not match deterministic derivation)';
+            }
         }
 
         // Phase 1 placeholders (gas escrow lands in Phase 3 per spec §11)

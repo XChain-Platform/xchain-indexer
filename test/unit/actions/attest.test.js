@@ -21,6 +21,14 @@ const REQ_ID   = 'd'.repeat(64);
 
 const b64 = (s) => Buffer.from(s, 'utf8').toString('base64');
 
+// Mirror the handler's deterministic request_id derivation:
+//   sha256(tx_hash + ':' + contract_index + ':' + emitter_position)
+// A legitimate VM emission always supplies a REQUEST_ID equal to this digest.
+const deriveReqId = (txHash, contractIndex, position) =>
+    crypto.createHash('sha256')
+        .update(String(txHash) + ':' + String(contractIndex) + ':' + String(position))
+        .digest('hex');
+
 describe('Attest (ATTEST) @regression @tier3', function () {
     let indexer, actionsCtx, handler, executeStub;
 
@@ -83,8 +91,11 @@ describe('Attest (ATTEST) @regression @tier3', function () {
     describe('v0 — request', function () {
 
         function v0Data(overrides = {}) {
+            // EMITTER_POSITION is a required field on every legitimate ATTEST v0 emission
+            // (set by execute.processEmission); include it by default so the fixture mirrors
+            // production. Tests that probe its absence override it back to undefined.
             return createBaseData({
-                ACTION: 'ATTEST', FORMAT: 0, IS_EMISSION: true, EMITTER: 5, BLOCK_INDEX: 100,
+                ACTION: 'ATTEST', FORMAT: 0, IS_EMISSION: true, EMITTER: 5, EMITTER_POSITION: 0, BLOCK_INDEX: 100,
                 ...overrides,
             });
         }
@@ -100,9 +111,30 @@ describe('Attest (ATTEST) @regression @tier3', function () {
 
         it('valid request → STATUS valid and createAttestationRequest called', async function () {
             const data = v0Data();
-            await handler.parse(v0Params(), data, null);
+            // A legitimate emission carries a REQUEST_ID that matches the deterministic
+            // derivation over (tx_hash, contract_index, emitter_position).
+            const reqId = deriveReqId(data['TX_HASH'], data['EMITTER'], data['EMITTER_POSITION']);
+            await handler.parse(v0Params({ requestId: reqId }), data, null);
             assert.strictEqual(data['STATUS'], 'valid');
             assert.ok(indexer.indexerDb.createAttestationRequest.calledOnce);
+        });
+
+        it('rejects a request missing EMITTER_POSITION instead of accepting an unverified REQUEST_ID', async function () {
+            // The bug this guards: when EMITTER_POSITION is absent the request_id check used
+            // to silently skip, so an arbitrary REQUEST_ID from a compromised/buggy VM was
+            // accepted. It must now hard-fail.
+            const data = v0Data({ EMITTER_POSITION: undefined });
+            await handler.parse(v0Params(), data, null); // arbitrary REQUEST_ID, no position
+            assert.notStrictEqual(data['STATUS'], 'valid');
+            assert.ok(String(data['STATUS']).includes('EMITTER_POSITION'),
+                'expected EMITTER_POSITION rejection, got: ' + data['STATUS']);
+        });
+
+        it('rejects a request whose REQUEST_ID does not match the deterministic derivation', async function () {
+            const data = v0Data(); // EMITTER_POSITION present, but REQUEST_ID is arbitrary
+            await handler.parse(v0Params({ requestId: REQ_ID }), data, null);
+            assert.ok(String(data['STATUS']).includes('deterministic derivation'),
+                'expected derivation-mismatch rejection, got: ' + data['STATUS']);
         });
 
         it('rejects a non-emission (user-broadcast) request', async function () {

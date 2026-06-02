@@ -120,4 +120,16 @@ describe('Emission Params Arity (MANDATORY) @regression @tier1', function() {
         assert.strictEqual(r[6], 'EM');   // ENCRYPTION_METHOD
         assert.strictEqual(r[7], 'KH');   // KEY_HASH
     });
+
+    // EMITTER_POSITION is mandatory for ATTEST emissions: the v0 request handler re-derives
+    // the request_id from (tx_hash, contract_index, emitter_position) to defend against a
+    // compromised VM. processEmission must fail loudly at the source if the position is
+    // ever omitted rather than letting the handler accept an unverified request_id. The
+    // guard runs before any `this` access, so a bare context suffices.
+    it('ATTEST: processEmission throws when EMITTER_POSITION (position arg) is absent', async function() {
+        const processEmission = Execute.prototype.processEmission;
+        await assert.rejects(
+            () => processEmission.call(makeStub(), { action: 'ATTEST', params: {} }, {}, undefined),
+            /EMITTER_POSITION/);
+    });
 });
