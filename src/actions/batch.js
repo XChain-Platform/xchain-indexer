@@ -141,6 +141,14 @@ class Batch {
             }
             data['SIBLING_ACTIONS'] = siblings;
 
+            // Snapshot the transaction-level field names. Anything a sub-action
+            // adds beyond these is action-specific and must be cleared before the
+            // next sub-action runs, otherwise it bleeds across commands — e.g. a
+            // FILE leaves FORMAT=0 + ENCRYPTION_METHOD set, and a following
+            // MESSAGE v2 then parses under FILE's v0 format (its ciphertext lands
+            // in ENCRYPTION_METHOD) and is wrongly rejected.
+            let baseKeys = new Set(Object.keys(data));
+
             for(let command of commands){
 
                 // Parse command into params
@@ -149,9 +157,15 @@ class Batch {
                 // Extract ACTION from params
                 let action = String(params.shift()).toUpperCase();
 
-                // Update ACTION transaction data object
+                // Clear action-specific fields left by the previous sub-action.
+                for(let key of Object.keys(data))
+                    if(!baseKeys.has(key)) delete data[key];
+
+                // Update ACTION transaction data object. FORMAT must be derived
+                // from THIS command's version (params[0]) rather than left stale.
                 data['ACTION']  = action;
                 data['TX_DATA'] = command;
+                data['FORMAT']  = this.util.getFormatVersion(params[0]);
 
                 // Increase the action index for every command and create a record of this action in the actions table
                 data['ACTION_INDEX'] = await this.indexerDb.createActionIndex(data, true);
