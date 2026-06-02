@@ -350,6 +350,17 @@ class XChainIndexer {
                     // (older hubs ignore it; pre-network-aware behavior = 'mainnet').
                     this.hubClient.pushChainTip(this.config['COIN'], this.config['NETWORK'], lastIndexerBlock, blockTime);
 
+                    // Refresh the decoder tip after each committed block. Without this the
+                    // decoder tip is snapshotted once per outer-loop iteration and stays frozen
+                    // for the whole catch-up, so reported lag (decoderBlock - indexerBlock) shrinks
+                    // to zero as the indexer advances even while the decoder is still moving ahead.
+                    // Re-reading keeps the value live, so the /status, getlatestblock(), and health()
+                    // surfaces — plus the synced check below, which compares against this same
+                    // variable — reflect the true decoder tip throughout catch-up rather than a
+                    // false all-clear. An indexed last-block lookup is cheap enough to do per block.
+                    lastDecoderBlock      = await this.decoderDb.getBlockIndex('decoder', 'last');
+                    this.lastDecoderBlock = lastDecoderBlock;
+
                 } catch(error){
                     // Roll back all writes for this block so the DB stays at the end of the previous block
                     await this.indexerDb.rollbackTransaction();
