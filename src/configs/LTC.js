@@ -69,27 +69,27 @@ module.exports = {
 		// Set network specific addresses
         switch(network){
             case 'mainnet':
-                address['BURN']            = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
-                address['GAS']             = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
-                address['DONATE1']         = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // Protocol Development
-                address['DONATE2']         = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // Community Develoment
-                address['FEE_DESTINATION'] = process.env['XCHAIN_FEE_DESTINATION_LTC_' + network.toUpperCase()] || "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // Native coin fee destination
+                address['BURN']            = "LXChainBurnAddressXXXXXXXXXXSkrYkJ";
+                address['GAS']             = "LXChainCN6yjHVqqS9tYzYVYZ8CCZcSx72";
+                address['DONATE1']         = "Ldonate18tNZcVThKm5MX33EjvhaanJ6Mg"; // Protocol Development
+                address['DONATE2']         = "Ldonate2io846q2e7q8dUArh3TNnaq9ENb"; // Community Develoment
+                address['FEE_DESTINATION'] = process.env['XCHAIN_FEE_DESTINATION_LTC_' + network.toUpperCase()] || "Lfees7tszAx5Gqam2fuqf6biaX3LXafM4H"; // Native coin fee destination
                 address['REWARD']          = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // Validator reward pool (structural only — COLLECT/XCHAIN are BTC-only; unused on LTC)
                 break;
             case 'testnet':
-                address['BURN']            = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
-                address['GAS']             = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
-                address['DONATE1']         = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // Protocol Development
-                address['DONATE2']         = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // Community Develoment
-                address['FEE_DESTINATION'] = process.env['XCHAIN_FEE_DESTINATION_LTC_' + network.toUpperCase()] || "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // Native coin fee destination
+                address['BURN']            = "mxchainburnaddressXXXXXXXXXXa8EAfp";
+                address['GAS']             = "mgashLN9oSvj2CUJYKWdNxh6VkamPg1Ges";
+                address['DONATE1']         = "mybp5CceJvVV5tNCCiF7oBiZWko2fNkmnT"; // Protocol Development
+                address['DONATE2']         = "muKEjejjXQvLY7Lp7Ecpn29gM2TCb5BLTF"; // Community Develoment
+                address['FEE_DESTINATION'] = process.env['XCHAIN_FEE_DESTINATION_LTC_' + network.toUpperCase()] || "mfeeskqGYw3wXYqMZFnUxBwGposEvjziRW"; // Native coin fee destination
                 address['REWARD']          = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // Validator reward pool (structural only — COLLECT/XCHAIN are BTC-only; unused on LTC)
                 break;
             case 'regtest':
-                address['BURN']            = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
-                address['GAS']             = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
-                address['DONATE1']         = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // Protocol Development
-                address['DONATE2']         = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // Community Develoment
-                address['FEE_DESTINATION'] = process.env['XCHAIN_FEE_DESTINATION_LTC_' + network.toUpperCase()] || "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // Native coin fee destination
+                address['BURN']            = "mxchainburnaddressXXXXXXXXXXa8EAfp";
+                address['GAS']             = "mgas5QYE38Bg34hwEjFKaE7Gs536FARue4";
+                address['DONATE1']         = "mgNY2ZXbnNEkRT5ZRF8yGamivrSX2QH97h"; // Protocol Development
+                address['DONATE2']         = "n2DLJPppXUi8jC6fLiSkthZi2sc9UKiZHd"; // Community Develoment
+                address['FEE_DESTINATION'] = process.env['XCHAIN_FEE_DESTINATION_LTC_' + network.toUpperCase()] || "mfeesJdVLx23zhtsCveA8EEfmHX7qSV2Ls"; // Native coin fee destination
                 address['REWARD']          = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // Validator reward pool (structural only — COLLECT/XCHAIN are BTC-only; unused on LTC)
                 break;
         }

@@ -69,27 +69,27 @@ module.exports = {
 		// Set network specific addresses
         switch(network){
             case 'mainnet':
-                address['BURN']            = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
-                address['GAS']             = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
-                address['DONATE1']         = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // Protocol Development
-                address['DONATE2']         = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // Community Develoment
-                address['FEE_DESTINATION'] = process.env['XCHAIN_FEE_DESTINATION_DOGE_' + network.toUpperCase()] || "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // Native coin fee destination
+                address['BURN']            = "DChainBurnAddressXXXXXXXXXXXawc9pt";
+                address['GAS']             = "DGasfpttCnTijuuoAdiJ9sXJjG7vQ5pMkW";
+                address['DONATE1']         = "DDonate1RBcwGnCRNnVtwuCmQyWW1Gn25f"; // Protocol Development
+                address['DONATE2']         = "DDonate2o3Sg4phybp92oFpkmv8S9ZhGSV"; // Community Develoment
+                address['FEE_DESTINATION'] = process.env['XCHAIN_FEE_DESTINATION_DOGE_' + network.toUpperCase()] || "DFeesjvoMoVqd9UDuwDSAxzHMF5xZFgeG9"; // Native coin fee destination
                 address['REWARD']          = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // Validator reward pool (structural only — COLLECT/XCHAIN are BTC-only; unused on DOGE)
                 break;
             case 'testnet':
-                address['BURN']            = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
-                address['GAS']             = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
-                address['DONATE1']         = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // Protocol Development
-                address['DONATE2']         = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // Community Develoment
-                address['FEE_DESTINATION'] = process.env['XCHAIN_FEE_DESTINATION_DOGE_' + network.toUpperCase()] || "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // Native coin fee destination
+                address['BURN']            = "nchainburnaddressXXXXXXXXXXXYKgF7W";
+                address['GAS']             = "ngasn6zHFzJ72zpk3DBKmXhD2XtszujSDW";
+                address['DONATE1']         = "ndonate1dE87UXUFf4gjyhPg7hfQRJXVXr"; // Protocol Development
+                address['DONATE2']         = "ndonate2wev8vKDgvd1DHhtJtvkRbn2usJ"; // Community Develoment
+                address['FEE_DESTINATION'] = process.env['XCHAIN_FEE_DESTINATION_DOGE_' + network.toUpperCase()] || "nfeesoodkv5UTFXcDeKcUU95QHFiK2Ggo7"; // Native coin fee destination
                 address['REWARD']          = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // Validator reward pool (structural only — COLLECT/XCHAIN are BTC-only; unused on DOGE)
                 break;
             case 'regtest':
-                address['BURN']            = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
-                address['GAS']             = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
-                address['DONATE1']         = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // Protocol Development
-                address['DONATE2']         = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // Community Develoment
-                address['FEE_DESTINATION'] = process.env['XCHAIN_FEE_DESTINATION_DOGE_' + network.toUpperCase()] || "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // Native coin fee destination
+                address['BURN']            = "mvs8WdppEhzQLxfcYwrr1eoKA2nUFi55ff";
+                address['GAS']             = "mgasDTdKu5DsbW97qSRnE8raAuYpKMfmhg";
+                address['DONATE1']         = "mzdg8wGxgP3Jk45FuZPspumCL3Ruup37ob"; // Protocol Development
+                address['DONATE2']         = "mmXU8RU7q3BUsyT66rtw1H6P7B2ZZd9c5Y"; // Community Develoment
+                address['FEE_DESTINATION'] = process.env['XCHAIN_FEE_DESTINATION_DOGE_' + network.toUpperCase()] || "mfees5pa2HwNBonk5vG23aDWkN9fuDJib4"; // Native coin fee destination
                 address['REWARD']          = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // Validator reward pool (structural only — COLLECT/XCHAIN are BTC-only; unused on DOGE)
                 break;
         }
