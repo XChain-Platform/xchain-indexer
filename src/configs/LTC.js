@@ -44,7 +44,7 @@ module.exports = {
         config['STAKING'] = {
             COOLDOWN_BLOCKS:         1000,                     // Blocks before unstaked XCHAIN is returned
             ACTIVATION_DELAY_BLOCKS: 6,                        // Blocks before stake/delegation/unstake takes effect
-            CAPABILITIES: []                                   // Capability staking is BTC-only at the protocol level
+            CAPABILITIES: {}                                   // Capability staking is BTC-only at the protocol level
         };
         config['GAS_SCHEDULE'] = {
             ISSUE:              100000,
