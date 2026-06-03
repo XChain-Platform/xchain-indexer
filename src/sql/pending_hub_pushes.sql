@@ -8,7 +8,8 @@ CREATE TABLE pending_hub_pushes (
     last_attempted_at   DATETIME NULL,                           -- time of most recent attempt (NULL = not yet tried by poller)
     last_error          VARCHAR(500),                            -- last failure message (diagnostics only)
     status              VARCHAR(16) NOT NULL DEFAULT 'pending',   -- pending | failed  (delivered rows are deleted)
-    created_at          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id)                                              -- AUTO_INCREMENT column must be a key, else ER_WRONG_AUTO_KEY (table never creates → indexer can't init)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
 CREATE INDEX status       ON pending_hub_pushes (status);
