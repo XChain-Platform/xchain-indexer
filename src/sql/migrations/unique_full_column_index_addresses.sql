@@ -1,0 +1,38 @@
+-- Migration: widen the index_addresses unique index from a 62-char prefix to
+-- the full column.
+--
+-- Applies to databases created from an older schema whose `address` unique
+-- index covered only the first 62 characters: `address(62)`. The column is
+-- VARCHAR(120), so the prefix never matched the column width — full-column
+-- uniqueness was always the intent.
+--
+-- WHY
+-- ---
+-- db.js upserts addresses with INSERT IGNORE + refetch, whose race-safety
+-- relies on the UNIQUE index being an exact key for the value being inserted.
+-- A 62-char prefix index treats two distinct addresses that share their first
+-- 62 characters as the same key: the second INSERT is silently ignored and the
+-- caller refetches the FIRST address's id, mis-mapping the new address to an
+-- existing id. All standard Bitcoin/Litecoin/Dogecoin addresses are <=62 chars
+-- so no live data is affected today, but any longer future address format would
+-- trigger this phantom collision. This widens the key to the full column,
+-- matching index_addresses.sql for fresh installs.
+--
+-- The schema-drift reconciler in db.js only reconciles columns, not indexes, so
+-- this must be applied manually to existing deployments. Fresh installs already
+-- get the full-column index from src/sql/index_addresses.sql.
+--
+-- No dedup is required: the old index is already UNIQUE (on the 62-char prefix),
+-- so every existing row already has a distinct 62-char prefix and therefore a
+-- distinct full address. Widening prefix-uniqueness to full-column uniqueness is
+-- strictly weaker on the existing rows and cannot fail on duplicate data.
+--
+-- HOW TO RUN
+-- ----------
+--   mysql -u <user> -p <indexer_db> < src/sql/migrations/unique_full_column_index_addresses.sql
+--
+-- Take a backup first. Safe to re-run: the drop is guarded by IF EXISTS and the
+-- create by IF NOT EXISTS. Run while the indexer process is stopped.
+
+ALTER TABLE index_addresses DROP INDEX IF EXISTS address;
+CREATE UNIQUE INDEX IF NOT EXISTS address ON index_addresses (address);

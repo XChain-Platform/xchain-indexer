@@ -4,4 +4,4 @@ CREATE TABLE index_addresses (
     address VARCHAR(120) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
-CREATE UNIQUE INDEX address on index_addresses (address(62));
+CREATE UNIQUE INDEX address on index_addresses (address);
