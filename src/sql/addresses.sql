@@ -1,5 +1,5 @@
 DROP TABLE IF EXISTS addresses;
-CREATE TABLE IF NOT EXISTS addresses (
+CREATE TABLE addresses (
     action_index         BIGINT UNSIGNED NOT NULL, -- Unique action index
     fee_preference       BIGINT UNSIGNED,
     require_memo         BIGINT UNSIGNED,
