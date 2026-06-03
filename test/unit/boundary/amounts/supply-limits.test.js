@@ -27,7 +27,10 @@ function makeActionsCtx(indexer) {
         indexerDb:       indexer.indexerDb,
         protocolChanges: {
             isDefined:  sinon.stub().returns(true),
-            isEnabled:  sinon.stub().resolves(true),
+            // ISSUANCE_FEE is block-gated (protocol_changes.js: mainnet 862633);
+            // mirror that so sub-activation blocks skip the fee (all other changes on).
+            isEnabled:  sinon.stub().callsFake(async (name, block) =>
+                name === "ISSUANCE_FEE" ? Number(block) >= 862633 : true),
         },
         processAction: sinon.stub().resolves(),
     };
