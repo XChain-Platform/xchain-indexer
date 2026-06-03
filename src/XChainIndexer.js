@@ -437,7 +437,7 @@ class XChainIndexer {
         // They come solely from the per-chain local defaults (configs/BTC.js, LTC.js, DOGE.js)
         // and may change only via a coordinated node upgrade. Any future governance path must
         // gate the switch on a protocol-agreed activation block height, not a live poll.
-        const SCALAR_PARAMS = ['FEE_PAYMENT_MODE', 'ACTIVATION_DELAY_BLOCKS', 'EXPIRATION_FEE_PER_DAY'];
+        const SCALAR_PARAMS = ['ACTIVATION_DELAY_BLOCKS', 'EXPIRATION_FEE_PER_DAY'];
         const BLOB_PARAMS   = ['STAKING'];
 
         let coin    = this.config.COIN;
@@ -466,7 +466,7 @@ class XChainIndexer {
     }
 
     // Poll the hub for PBFT-committed config changes. The startup overlay runs only
-    // once; without this loop a governance-committed parameter change (e.g. FEE_PAYMENT_MODE
+    // once; without this loop a governance-committed parameter change (e.g. EXPIRATION_FEE_PER_DAY
     // or STAKING) would not take effect until the indexer process is restarted. We
     // re-apply the overlay only when the hub's committed sequence advances past the
     // last one we applied, so a steady-state poll is a cheap no-op. Against an older
