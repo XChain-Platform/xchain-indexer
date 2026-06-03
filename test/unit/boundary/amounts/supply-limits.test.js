@@ -163,11 +163,12 @@ describe('Supply & amount boundary tests @regression @tier1', function () {
             sinon.restore();
         });
 
-        // NOTE: mathjs.bignumber loses integer precision beyond ~20 significant digits.
-        // '1000000000000000000001' rounds to '1e+21' internally, so bcgt(val, MAX_TOKEN_SUPPLY)
-        // returns false and the overflow is NOT detected. The handler accepts this value as valid.
-        // This test documents the current (limited) behavior — not the desired behavior.
-        it('MAX_SUPPLY = 10^21 + 1 passes validation due to mathjs precision limit at this scale → valid', async function () {
+        // 10^21 + 1 exceeds MAX_TOKEN_SUPPLY (10^21) and must be rejected. This previously
+        // slipped through: the overflow guard bcgt(MAX_SUPPLY, MAX_TOKEN_SUPPLY) used mathjs's
+        // comparison epsilon (~1e-12 relative), which treated 10^21+1 as equal to 10^21 — NOT a
+        // bignumber storage limit (bignumber stores it exactly), a comparison-epsilon bug. The
+        // bc* comparators now use decimal.js's exact .gt/.lt, so the overflow is correctly caught.
+        it('MAX_SUPPLY = 10^21 + 1 exceeds MAX_TOKEN_SUPPLY → invalid', async function () {
             const params = makeIssueParams({
                 TICK:       'OVERTOK',
                 MAX_SUPPLY: '1000000000000000000001',
@@ -178,8 +179,7 @@ describe('Supply & amount boundary tests @regression @tier1', function () {
 
             await handler.parse(params, data, null);
 
-            // mathjs cannot distinguish 10^21+1 from 10^21 at this precision — treated as valid
-            assert.strictEqual(data.STATUS, 'valid');
+            assert.strictEqual(data.STATUS, 'invalid: MAX_SUPPLY (min/max)');
         });
     });
 

@@ -20,13 +20,22 @@
  */
 
 const assert = require('assert');
+const mathjs = require('mathjs');
+
+// Exact decimal. A conservation checker MUST NOT go through parseFloat / JS
+// doubles: parseFloat loses precision past 2^53 (~9e15, well under the 10^21
+// MAX_TOKEN_SUPPLY) and below ~1e-15, so a real 1e-18 discrepancy between two
+// large supplies is invisible (false pass) and 10^21+1 can't be told from
+// 10^21 (false fail). We keep every value as an exact bignumber string from
+// SQL and compare with decimal.js's exact .eq — never `parseFloat` or `===`.
+const bn = (s) => mathjs.bignumber(String(s == null ? 0 : s));
 
 async function _sum(indexerQuery, table, tickId) {
     const r = await indexerQuery(
-        `SELECT COALESCE(SUM(CAST(amount AS DECIMAL(65,18))), 0) AS total FROM ${table} WHERE tick_id = ?`,
+        `SELECT CAST(COALESCE(SUM(CAST(amount AS DECIMAL(65,18))), 0) AS CHAR) AS total FROM ${table} WHERE tick_id = ?`,
         [tickId]
     );
-    return parseFloat(r[0].total);
+    return bn(r[0].total);
 }
 
 /**
@@ -43,22 +52,22 @@ async function assertStateInvariants(indexerQuery) {
     for (const row of ticks) {
         const tickId = row.tick_id;
         const tick = row.tick;
-        const supply = parseFloat(row.supply);
+        const supply = bn(row.supply);
 
         const credits = await _sum(indexerQuery, 'credits', tickId);
         const debits = await _sum(indexerQuery, 'debits', tickId);
         const escrows = await _sum(indexerQuery, 'escrows', tickId);
         const balances = await _sum(indexerQuery, 'balances', tickId);
 
-        const ledger = credits - debits + escrows;
-        const total = balances + escrows;
+        const ledger = credits.minus(debits).plus(escrows);
+        const total = balances.plus(escrows);
 
-        assert.strictEqual(supply, ledger,
+        assert.ok(supply.eq(ledger),
             `INVARIANT[conservation-ledger]: ${tick} supply ${supply} != credits-debits+escrows ${ledger}`);
-        assert.strictEqual(supply, total,
+        assert.ok(supply.eq(total),
             `INVARIANT[conservation-balance]: ${tick} supply ${supply} != balances+escrows ${total}`);
-        assert.ok(supply >= 0, `INVARIANT[supply>=0]: ${tick} supply ${supply} < 0`);
-        assert.ok(escrows >= 0, `INVARIANT[escrow>=0]: ${tick} net escrow ${escrows} < 0`);
+        assert.ok(supply.gte(0), `INVARIANT[supply>=0]: ${tick} supply ${supply} < 0`);
+        assert.ok(escrows.gte(0), `INVARIANT[escrow>=0]: ${tick} net escrow ${escrows} < 0`);
     }
 
     // No current balance row may be negative (you cannot hold negative tokens).

@@ -349,23 +349,30 @@ class Utility {
     }
 
     // Handle comparing two big numbers: returns true if numA > numB
+    //
+    // Uses decimal.js's native .gt/.lt/.gte/.lte (exact) rather than
+    // mathjs.larger/smaller/largerEq/smallerEq, which apply mathjs's comparison
+    // epsilon (~1e-12) and treat any two amounts differing by less than that as
+    // EQUAL. For 18-decimal tokens that silently corrupts every comparison of
+    // sub-1e-12 amounts — e.g. bcgt('0.000000000000001', '0') returned false,
+    // so a dust balance read as "not greater than zero". These must be exact.
     bcgt(numA, numB){
-        return mathjs.larger(this.bcnum(numA), this.bcnum(numB));
+        return this.bcnum(numA).gt(this.bcnum(numB));
     }
 
     // Handle comparing two big numbers: returns true if numA < numB
     bclt(numA, numB){
-        return mathjs.smaller(this.bcnum(numA), this.bcnum(numB));
+        return this.bcnum(numA).lt(this.bcnum(numB));
     }
 
     // Handle comparing two big numbers: returns true if numA >= numB
     bcgte(numA, numB){
-        return mathjs.largerEq(this.bcnum(numA), this.bcnum(numB));
+        return this.bcnum(numA).gte(this.bcnum(numB));
     }
 
     // Handle comparing two big numbers: returns true if numA <= numB
     bclte(numA, numB){
-        return mathjs.smallerEq(this.bcnum(numA), this.bcnum(numB));
+        return this.bcnum(numA).lte(this.bcnum(numB));
     }
 
     // Validate if a given value is considered valid

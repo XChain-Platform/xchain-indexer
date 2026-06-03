@@ -306,17 +306,16 @@ describe('Token state machine boundary tests @regression @tier2', function () {
     // TOK-10: LOCK_MAX_SUPPLY with zero supply
     // -------------------------------------------------------------------------
 
-    describe('TOK-10: LOCK_MAX_SUPPLY guard with zero supply (bclt precision limit)', function () {
+    describe('TOK-10: LOCK_MAX_SUPPLY guard with zero supply', function () {
 
-        // NOTE: The LOCK_MAX_SUPPLY guard in issue.js checks:
-        //   bclt(tokenInfo['SUPPLY'], config.MIN_TOKEN_SUPPLY)
-        // MIN_TOKEN_SUPPLY = '0.000000000000000001' (10^-18).
-        // Due to mathjs bignumber precision limits, bclt('0', '0.000000000000000001')
-        // returns false — zero is not considered less than MIN_TOKEN_SUPPLY by the math
-        // library at this scale. As a result, LOCK_MAX_SUPPLY=1 on a token with SUPPLY=0
-        // bypasses the guard and is accepted as valid.
-        // This test documents the current (limited) behavior — not the desired behavior.
-        it('ISSUE format 3 LOCK_MAX_SUPPLY=1 on zero-supply token passes due to bclt precision limit → valid', async function () {
+        // The LOCK_MAX_SUPPLY guard in issue.js checks:
+        //   bclt(tokenInfo['SUPPLY'], config.MIN_TOKEN_SUPPLY)   (MIN_TOKEN_SUPPLY = 10^-18)
+        // A zero-supply token must NOT be allowed to lock max supply. This previously slipped
+        // through: bclt('0', '0.000000000000000001') returned false because mathjs's comparison
+        // epsilon (~1e-12 relative) treated 0 and 1e-18 as equal, bypassing the guard. The bc*
+        // comparators now use decimal.js's exact .lt, so 0 < 1e-18 is correctly true and the
+        // guard fires.
+        it('ISSUE format 3 LOCK_MAX_SUPPLY=1 on zero-supply token → invalid (no supply)', async function () {
             const token = createTokenInfo({
                 TICK:            'TEST',
                 TICK_ID:         1,
@@ -337,9 +336,9 @@ describe('Token state machine boundary tests @regression @tier2', function () {
 
             await issueHandler.parse(params, data, null);
 
-            // bclt(0, MIN_TOKEN_SUPPLY) returns false due to precision limits →
-            // LOCK_MAX_SUPPLY guard is bypassed → handler accepts zero-supply lock as valid
-            assert.strictEqual(data.STATUS, 'valid', `Expected valid (precision bypass), got: ${data.STATUS}`);
+            // bclt(0, MIN_TOKEN_SUPPLY) is now exactly true → LOCK_MAX_SUPPLY guard fires →
+            // a zero-supply token is correctly rejected from locking its max supply.
+            assert.strictEqual(data.STATUS, 'invalid: LOCK_MAX_SUPPLY (no supply)', `got: ${data.STATUS}`);
         });
     });
 });
