@@ -1413,7 +1413,7 @@ class Database {
         }
         // Get Credits 
         query = `SELECT 
-                    CAST(SUM(m.amount) AS DECIMAL(60,` + decimals + `)) as credits 
+                    SUM(CAST(m.amount AS DECIMAL(60,` + decimals + `))) as credits 
                 FROM 
                     credits m
                     INNER JOIN actions      a ON (a.action_index=m.action_index)
@@ -1425,7 +1425,7 @@ class Database {
             credits = results[0].credits;
         // Get Debits 
         query = `SELECT 
-                    CAST(SUM(m.amount) AS DECIMAL(60,` + decimals + `)) as debits 
+                    SUM(CAST(m.amount AS DECIMAL(60,` + decimals + `))) as debits 
                 FROM 
                     debits m
                     INNER JOIN actions      a ON (a.action_index=m.action_index)
@@ -1437,7 +1437,7 @@ class Database {
             debits = results[0].debits;
         // Get Escrows 
         query = `SELECT 
-                    CAST(SUM(m.amount) AS DECIMAL(60,` + decimals + `)) as escrows 
+                    SUM(CAST(m.amount AS DECIMAL(60,` + decimals + `))) as escrows 
                 FROM 
                     escrows m
                     INNER JOIN actions      a ON (a.action_index=m.action_index)
@@ -1469,7 +1469,7 @@ class Database {
         let supply   = 0;
         let tick_id  = await this.createTicker(tick);
         let decimals = await this.getTokenDecimalPrecision(tick_id);
-        let query = `SELECT CAST(SUM(amount) AS DECIMAL(60, ` + decimals + `)) as supply FROM balances WHERE tick_id=? LIMIT 1`;
+        let query = `SELECT SUM(CAST(amount AS DECIMAL(60, ` + decimals + `))) as supply FROM balances WHERE tick_id=? LIMIT 1`;
         let results = await this.doQuery(query, [tick_id]);
         if(results.length > 0 && !this.util.isNull(results[0].supply))
             supply = results[0].supply;
@@ -1481,7 +1481,7 @@ class Database {
         let supply   = 0;
         let tick_id  = await this.createTicker(tick);
         let decimals = await this.getTokenDecimalPrecision(tick_id);
-        let query = `SELECT CAST(SUM(amount) AS DECIMAL(60, ` + decimals + `)) as supply FROM escrows WHERE tick_id=? LIMIT 1`;
+        let query = `SELECT SUM(CAST(amount AS DECIMAL(60, ` + decimals + `))) as supply FROM escrows WHERE tick_id=? LIMIT 1`;
         let results = await this.doQuery(query, [tick_id]);
         if(results.length > 0 && !this.util.isNull(results[0].supply))
             supply = results[0].supply;
@@ -1521,7 +1521,7 @@ class Database {
         }
         // Get Credits 
         query = `SELECT 
-                    CAST(SUM(m.amount) AS DECIMAL(60,` + decimals + `)) as credits,
+                    SUM(CAST(m.amount AS DECIMAL(60,` + decimals + `))) as credits,
                     a2.address
                 FROM 
                     credits m
@@ -1536,7 +1536,7 @@ class Database {
                 holders[row.address] = row.credits;
         // Get Debits 
         query = `SELECT 
-                    CAST(SUM(m.amount) AS DECIMAL(60,` + decimals + `)) as debits,
+                    SUM(CAST(m.amount AS DECIMAL(60,` + decimals + `))) as debits,
                     a2.address
                 FROM 
                     debits m
