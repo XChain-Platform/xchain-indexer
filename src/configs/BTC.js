@@ -43,7 +43,7 @@ module.exports = {
         config['ORACLE_MAX_PRICE_AGE_SECONDS'] = 1800;       // Reject oracle prices older than this vs the block being processed (≈3× the ~10-min BTC oracle-round interval; applies on all chains); 0 disables
         config['STAKING'] = {
             COOLDOWN_BLOCKS:         1000,                     // Blocks before unstaked XCHAIN is returned
-            ACTIVATION_DELAY_BLOCKS: 6,                        // Blocks before stake/delegation/unstake takes effect (BTC reorg safety)
+            ACTIVATION_DELAY_BLOCKS: 6,                        // ~60 min reorg protection at ~10 min/block
             CAPABILITIES: {
                 price:          { MIN_STAKE: '1000.00000000' }, // Sign PRICE v0 snapshots (replaces Tier 1)
                 cross_chain:    { MIN_STAKE: '5000.00000000' }, // Cross-chain attestation (replaces Tier 2)

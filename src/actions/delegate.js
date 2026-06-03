@@ -114,9 +114,9 @@ class Delegate {
         if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
             error = 'invalid: SOURCE (sleeping)';
 
-        // Calculate the activation block (6-block delay for BTC reorg safety)
+        // Calculate the activation block (per-chain ACTIVATION_DELAY_BLOCKS, calibrated for ~60 min reorg protection on each chain)
         let staking = this.config['STAKING'];
-        let activationDelay = (staking && staking['ACTIVATION_DELAY_BLOCKS']) ? staking['ACTIVATION_DELAY_BLOCKS'] : 6;
+        let activationDelay = (staking && staking['ACTIVATION_DELAY_BLOCKS']) ? staking['ACTIVATION_DELAY_BLOCKS'] : this.config['ACTIVATION_DELAY_BLOCKS'];
         data['ACTIVATION_BLOCK'] = parseInt(data['BLOCK_INDEX']) + activationDelay;
 
         // Determine final status
@@ -226,7 +226,7 @@ class Delegate {
             error = 'invalid: SOURCE (sleeping)';
 
         let staking = this.config['STAKING'];
-        let activationDelay = (staking && staking['ACTIVATION_DELAY_BLOCKS']) ? staking['ACTIVATION_DELAY_BLOCKS'] : 6;
+        let activationDelay = (staking && staking['ACTIVATION_DELAY_BLOCKS']) ? staking['ACTIVATION_DELAY_BLOCKS'] : this.config['ACTIVATION_DELAY_BLOCKS'];
         data['ACTIVATION_BLOCK'] = parseInt(data['BLOCK_INDEX']) + activationDelay;
 
         let status = (error) ? error : 'valid';
@@ -295,7 +295,7 @@ class Delegate {
         // Mark the parent delegation's deactivation_block (BLOCK_INDEX + activation delay)
         if(status === 'valid'){
             let staking = this.config['STAKING'];
-            let activationDelay = (staking && staking['ACTIVATION_DELAY_BLOCKS']) ? staking['ACTIVATION_DELAY_BLOCKS'] : 6;
+            let activationDelay = (staking && staking['ACTIVATION_DELAY_BLOCKS']) ? staking['ACTIVATION_DELAY_BLOCKS'] : this.config['ACTIVATION_DELAY_BLOCKS'];
             await this.indexerDb.setDelegationDeactivation(data['SOURCE'], data['SIGNING_PUBKEY'], parseInt(data['BLOCK_INDEX']) + activationDelay);
         }
 
@@ -374,7 +374,7 @@ class Delegate {
         // Mark the contract_delegations row's deactivation_block
         if(status === 'valid'){
             let staking = this.config['STAKING'];
-            let activationDelay = (staking && staking['ACTIVATION_DELAY_BLOCKS']) ? staking['ACTIVATION_DELAY_BLOCKS'] : 6;
+            let activationDelay = (staking && staking['ACTIVATION_DELAY_BLOCKS']) ? staking['ACTIVATION_DELAY_BLOCKS'] : this.config['ACTIVATION_DELAY_BLOCKS'];
             let deactivationBlock = parseInt(data['BLOCK_INDEX']) + activationDelay;
             let valid_id  = await this.indexerDb.getStatusId('valid');
             let pubkey_id = await this.indexerDb.getPubkeyId(String(data['SIGNING_PUBKEY']).toLowerCase());

@@ -111,7 +111,7 @@ class Unstake {
 
         let staking         = this.config['STAKING'];
         let cooldownBlocks  = (staking && staking['COOLDOWN_BLOCKS'])         ? staking['COOLDOWN_BLOCKS']         : 1000;
-        let activationDelay = (staking && staking['ACTIVATION_DELAY_BLOCKS']) ? staking['ACTIVATION_DELAY_BLOCKS'] : 6;
+        let activationDelay = (staking && staking['ACTIVATION_DELAY_BLOCKS']) ? staking['ACTIVATION_DELAY_BLOCKS'] : this.config['ACTIVATION_DELAY_BLOCKS'];
         data['COOLDOWN_END_BLOCK'] = parseInt(data['BLOCK_INDEX']) + cooldownBlocks;
         data['AMOUNT']             = totalAmount;
 
@@ -212,7 +212,7 @@ class Unstake {
             error = 'invalid: SOURCE (sleeping)';
 
         let staking         = this.config['STAKING'];
-        let activationDelay = (staking && staking['ACTIVATION_DELAY_BLOCKS']) ? staking['ACTIVATION_DELAY_BLOCKS'] : 6;
+        let activationDelay = (staking && staking['ACTIVATION_DELAY_BLOCKS']) ? staking['ACTIVATION_DELAY_BLOCKS'] : this.config['ACTIVATION_DELAY_BLOCKS'];
         let cooldownBlocks  = (contractInfo && contractInfo.cooldown_blocks) ? Number(contractInfo.cooldown_blocks) : 1000;
         data['COOLDOWN_END_BLOCK'] = parseInt(data['BLOCK_INDEX']) + cooldownBlocks;
         data['AMOUNT']             = totalAmount;

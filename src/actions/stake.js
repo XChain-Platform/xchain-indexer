@@ -155,7 +155,7 @@ class Stake {
          ****************************************************************/
 
         let staking = this.config['STAKING'];
-        let activationDelay = (staking && staking['ACTIVATION_DELAY_BLOCKS']) ? staking['ACTIVATION_DELAY_BLOCKS'] : 6;
+        let activationDelay = (staking && staking['ACTIVATION_DELAY_BLOCKS']) ? staking['ACTIVATION_DELAY_BLOCKS'] : this.config['ACTIVATION_DELAY_BLOCKS'];
         data['ACTIVATION_BLOCK'] = parseInt(data['BLOCK_INDEX']) + activationDelay;
         data['VERSION'] = format;
 
@@ -291,9 +291,9 @@ class Stake {
         if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
             error = 'invalid: SOURCE (sleeping)';
 
-        // Activation delay — reuse the capability staking constant for now (6 blocks)
+        // Activation delay — each chain sets its own calibrated default in STAKING (BTC 6 / LTC 24 / DOGE 60, ~60 min reorg protection per chain)
         let staking = this.config['STAKING'];
-        let activationDelay = (staking && staking['ACTIVATION_DELAY_BLOCKS']) ? staking['ACTIVATION_DELAY_BLOCKS'] : 6;
+        let activationDelay = (staking && staking['ACTIVATION_DELAY_BLOCKS']) ? staking['ACTIVATION_DELAY_BLOCKS'] : this.config['ACTIVATION_DELAY_BLOCKS'];
         data['ACTIVATION_BLOCK'] = parseInt(data['BLOCK_INDEX']) + activationDelay;
         data['VERSION'] = 3;
 
