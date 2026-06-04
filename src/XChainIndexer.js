@@ -78,6 +78,14 @@ class XChainIndexer {
         this.stopFlag         = false
         this.blockchainInfoLastBlock = -1
 
+        // Wall-clock (epoch ms) of the most recent SUCCESSFUL hub-config fetch — set by the
+        // startup overlay and every poll tick that gets a response, regardless of whether the
+        // committed config actually changed. Stays null until the first success. Surfaced as
+        // an age in the health/status endpoints so an operator can tell that a hub outage has
+        // left the live-polled governance params (ACTIVATION_DELAY_BLOCKS, EXPIRATION_FEE_PER_DAY,
+        // STAKING) silently frozen while the indexer keeps reporting healthy.
+        this.lastHubConfigFetchAt = null;
+
         // Price-sync barrier timeout (ms). Before processing a block, the indexer waits for
         // its local price mirror to catch up to that block height so native-coin fee
         // validation is deterministic across operators. On timeout the block is deferred and
@@ -415,6 +423,7 @@ class XChainIndexer {
             let { configs, seq } = this._unwrapHubConfigResponse(await this.hubClient._call('getallconfigs', {}));
             this._mergeHubParams(configs);
             this.lastHubConfigSeq = seq;
+            this.lastHubConfigFetchAt = Date.now();
         } catch(err) {
             console.warn('XChainIndexer: hub config overlay failed, using local defaults:', err);
         }
@@ -488,6 +497,10 @@ class XChainIndexer {
         this._hubConfigPollTimer = setInterval(async () => {
             try {
                 let { configs, seq } = this._unwrapHubConfigResponse(await this.hubClient._call('getallconfigs', {}));
+                // A response (no throw) means the hub answered — record the fetch time even when
+                // seq is unchanged, since the freshness of the live-polled params is what the
+                // health/status age signal reports, not whether they happened to change.
+                this.lastHubConfigFetchAt = Date.now();
                 if(seq > (this.lastHubConfigSeq || 0)){
                     this._mergeHubParams(configs);
                     this.lastHubConfigSeq = seq;

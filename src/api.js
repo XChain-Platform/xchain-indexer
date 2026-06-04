@@ -159,6 +159,15 @@ async function startApi(){
             let decoderDbCircuit = indexer.decoderDb ? indexer.decoderDb.circuitState : null;
             let indexerDbCircuit = indexer.indexerDb ? indexer.indexerDb.circuitState : null;
             let circuitOpen = decoderDbCircuit === 'open' || indexerDbCircuit === 'open';
+            // How long ago the indexer last got a response from the hub for its config
+            // overlay. null until the first success. When the hub is down this age keeps
+            // climbing while status stays "healthy", so an operator can spot that the
+            // live-polled governance params (ACTIVATION_DELAY_BLOCKS, EXPIRATION_FEE_PER_DAY,
+            // STAKING) are frozen at their last-fetched values.
+            let lastHubConfigFetchAt = indexer.lastHubConfigFetchAt || null;
+            let hubConfigAgeSeconds  = (lastHubConfigFetchAt != null)
+                                        ? Math.floor((Date.now() - lastHubConfigFetchAt) / 1000)
+                                        : null;
             return {
                 status:           (indexerRunning && !circuitOpen) ? "healthy" : "unhealthy",
                 running:          indexerRunning,
@@ -170,6 +179,8 @@ async function startApi(){
                                     : null,
                 decoderDbCircuit: decoderDbCircuit,
                 indexerDbCircuit: indexerDbCircuit,
+                lastHubConfigFetchAt: lastHubConfigFetchAt,
+                hubConfigAgeSeconds:  hubConfigAgeSeconds,
                 error:            indexerError ? indexerError.message : null
             };
         },
@@ -421,13 +432,22 @@ async function startApi(){
             // rather than reporting a misleading figure.
         }
         let decoderBlock = (indexer.lastDecoderBlock != null) ? Number(indexer.lastDecoderBlock) : null;
+        // Age of the last successful hub-config fetch (null until the first success). A
+        // climbing age here while the indexer otherwise looks synced is the signal that
+        // the hub is unreachable and the live-polled governance params are stale.
+        let lastHubConfigFetchAt = indexer.lastHubConfigFetchAt || null;
+        let hubConfigAgeSeconds  = (lastHubConfigFetchAt != null)
+                                    ? Math.floor((Date.now() - lastHubConfigFetchAt) / 1000)
+                                    : null;
         res.json({
             indexerBlock: indexerBlock,
             decoderBlock: decoderBlock,
             lag:          (decoderBlock != null && indexerBlock != null)
                             ? decoderBlock - indexerBlock
                             : null,
-            isSynced:     indexer.isSynced()
+            isSynced:     indexer.isSynced(),
+            lastHubConfigFetchAt: lastHubConfigFetchAt,
+            hubConfigAgeSeconds:  hubConfigAgeSeconds
         });
     });
 
