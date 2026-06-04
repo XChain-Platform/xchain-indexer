@@ -667,7 +667,24 @@ class Utility {
     // Returns { coinUsdPrice, xchainUsdPrice, oracleRound } on success, or { error } on
     // a missing/stale/invalid price.
     async getFeeOraclePrices(db, coin, blockIndex, refTime, maxAgeSeconds){
-        let priceDb = (db.indexer && db.indexer.hubDb) ? db.indexer.hubDb : db;
+        let priceDb;
+        if(db.indexer && db.indexer.hubDb){
+            priceDb = db.indexer.hubDb;
+        } else {
+            // No hub DB connection configured — price_snapshots / oracle_prices are read from
+            // the indexer's own database instead. This is the intended single-host setup (the
+            // local DB holds the synced hub copy). In a distributed deployment it almost always
+            // means HUB_DB_HOST / HUB_DB_NAME are unset or misconfigured, in which case fee
+            // validation and FIAT settlement run against stale or empty local price data with
+            // no error. Warn once so the misconfiguration is visible in logs.
+            priceDb = db;
+            if(!this._hubDbFallbackWarned){
+                this._hubDbFallbackWarned = true;
+                console.warn('WARNING: getFeeOraclePrices — no hub DB configured (HUB_DB_HOST/HUB_DB_NAME unset); ' +
+                    'falling back to the local indexer DB for price_snapshots/oracle_prices. ' +
+                    'Expected for single-host deployments; on a distributed node this means price data may be stale or absent.');
+            }
+        }
         let opts = { blockTime: refTime, maxAgeSeconds: maxAgeSeconds };
 
         let coinPriceData = await priceDb.getLatestPrice(coin + '/USD', blockIndex, opts);

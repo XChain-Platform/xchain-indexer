@@ -138,6 +138,14 @@ class XChainIndexer {
                     console.warn('HubDbSync: start failed:', err.message);
                 });
             }
+        } else {
+            // No hub DB credentials supplied — hub-owned tables (price_snapshots, oracle_prices,
+            // stakes, delegations, validator_rewards) will be read from the indexer's own DB.
+            // Correct for single-host deployments; on a distributed node it means HUB_DB_HOST /
+            // HUB_DB_NAME are unset and price/oracle reads will use local (possibly stale) data.
+            console.warn('WARNING: HUB_DB_HOST / HUB_DB_NAME not set — hub-owned price/oracle tables ' +
+                'will be read from the local indexer DB. Expected for single-host setups; on a distributed ' +
+                'node this indicates a hub DB misconfiguration and fee/price data may be stale or absent.');
         }
 
         // Create instance of the protocol changes class
