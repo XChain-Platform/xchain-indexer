@@ -273,6 +273,16 @@ class Execute {
         let vmFailed = Boolean(vmError) && !error;
         let vmStatus = vmFailed ? this._vmFailureStatus(vmError) : null;
 
+        // Defense-in-depth (consensus): non-gas resource terminations report a
+        // gasUsed captured at a machine-/GC-/stack-/timing-dependent point. The VM
+        // already clamps these to the ceiling, but clamp here too so a VM regression
+        // (or an older bundled VM) can never make fee = gasUsed * GAS_PRICE diverge
+        // across validators → fork. Gas ceiling must match the gasCeiling in actions.js.
+        const GAS_CEILING = 1000000;
+        if(vmFailed && /^(timeout|out_of_memory|out_of_stack|out_of_resource)\b/.test(String(vmError))){
+            gasUsed = GAS_CEILING;
+        }
+
         // Recalculate fee based on actual gas used
         fee = this.util.bcmul(gasUsed, this.config['GAS_PRICE'], 8);
 

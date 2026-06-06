@@ -141,6 +141,14 @@ class Actions {
         // VM runtime
         if(XChainVM){
             this.vm = new XChainVM({
+                // Run every contract in a forked worker process. A contract that
+                // aborts V8 (process-wide SIGABRT — e.g. a bulk allocation that
+                // bypasses the isolate memory limit) then crashes only the worker,
+                // never this indexer; the executor returns a deterministic
+                // resource-failure result (gasUsed = ceiling) and respawns, so the
+                // block still advances. REQUIRES the bundled xchain-vm to support
+                // process isolation (process-executor.js / vm-worker.js).
+                execution:   'subprocess',
                 gasSchedule: this.config['GAS_SCHEDULE'],
                 gasCeiling:  1000000,
                 limits: {

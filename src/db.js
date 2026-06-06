@@ -7703,30 +7703,27 @@ class Database {
             let m = perTickStakers.get(tick);
             m.set(pubkey, util.bcadd((m.get(pubkey) || '0'), row.amount, 8));
         }
-        return {
-            // Sum of amount for (pubkey, tick); '0' if not found
-            getStake(pubkey, token){
-                let key = String(pubkey || '').toLowerCase() + '|' + String(token || '');
-                return perPubkeyTick.get(key) || '0';
-            },
-            // Total amount staked across all stakers for tick
-            getTotalStaked(token){
-                let stakers = perTickStakers.get(String(token || ''));
-                if(!stakers) return '0';
-                let total = '0';
-                for(let amt of stakers.values()) total = util.bcadd(total, amt, 8);
-                return total;
-            },
-            // Array of { pubkey, amount }, sorted amount DESC, capped at 1000
-            getStakers(token){
-                let stakers = perTickStakers.get(String(token || ''));
-                if(!stakers) return [];
-                let arr = [];
-                for(let [pk, amt] of stakers.entries()) arr.push({ pubkey: pk, amount: amt });
-                arr.sort((a, b) => (util.bcgt(b.amount, a.amount) ? 1 : (util.bcgt(a.amount, b.amount) ? -1 : 0)));
-                return arr.slice(0, 1000);
+        // Return a SERIALIZABLE snapshot (plain data), not closures: the VM runs
+        // in a forked worker and the read-only data must cross the IPC boundary.
+        // xchain-vm/src/readonly-accessors.js rebuilds the sync getStake/
+        // getTotalStaked/getStakers accessors from this shape inside the worker.
+        let stakeByPubkeyTick = {};
+        for(let [key, amt] of perPubkeyTick.entries()) stakeByPubkeyTick[key] = amt;
+
+        let totalByTick   = {};
+        let stakersByTick = {};
+        for(let [tick, stakers] of perTickStakers.entries()){
+            let total = '0';
+            let arr = [];
+            for(let [pk, amt] of stakers.entries()){
+                total = util.bcadd(total, amt, 8);
+                arr.push({ pubkey: pk, amount: amt });
             }
-        };
+            arr.sort((a, b) => (util.bcgt(b.amount, a.amount) ? 1 : (util.bcgt(a.amount, b.amount) ? -1 : 0)));
+            totalByTick[tick]   = total;
+            stakersByTick[tick] = arr.slice(0, 1000);
+        }
+        return { stakeByPubkeyTick, totalByTick, stakersByTick };
     }
 
     // Slash a staker. Deducts `amount` from active contract_stakes rows first (LIFO by
@@ -8451,44 +8448,66 @@ class Database {
             return (refTime - snapshotTimestamp) > maxAge;
         };
 
-        return {
-            // Get the most recent finalized price at or before the current block
-            getPrice: async (coinPair) => {
-                let query = `SELECT price, round_number, block_timestamp
-                             FROM price_snapshots
-                             WHERE coin_pair = ? AND status = 'finalized' AND price IS NOT NULL
-                               AND reference_block <= ?
-                             ORDER BY round_number DESC LIMIT 1`;
-                let rows = await self.doQuery(query, [coinPair, blockIndex || 999999999]);
-                if(rows.length === 0) return null;
-                // Stale prices surface as null rather than a silently outdated value;
-                // contracts can still consult getSnapshotAge() for the staleness signal.
-                if(isStale(Number(rows[0].block_timestamp))) return null;
-                return {
-                    price:       rows[0].price,
-                    roundNumber: Number(rows[0].round_number),
-                    timestamp:   Number(rows[0].block_timestamp)
-                };
-            },
+        // ── Build a SERIALIZABLE oracle snapshot (plain data) ───────────────
+        // The VM runs in a forked worker; read-only data must cross the IPC
+        // boundary, so we PRE-LOAD here and let xchain-vm/src/readonly-accessors.js
+        // rebuild the synchronous getPrice/getPriceAtRound/getSnapshotAge accessors
+        // inside the worker. (These were previously async DB closures — incompatible
+        // with the VM's synchronous applySync bridge, so oracle reads silently
+        // resolved a Promise. This conversion also fixes that latent bug.)
+        let blockCap = blockIndex || 999999999;
 
-            // Get a specific historical finalized snapshot
-            getPriceAtRound: async (coinPair, roundNumber) => {
-                let query = `SELECT price, round_number, block_timestamp
-                             FROM price_snapshots
-                             WHERE coin_pair = ? AND round_number = ? AND status = 'finalized' AND price IS NOT NULL
-                             LIMIT 1`;
-                let rows = await self.doQuery(query, [coinPair, roundNumber]);
-                if(rows.length === 0) return null;
-                return {
-                    price:       rows[0].price,
-                    roundNumber: Number(rows[0].round_number),
-                    timestamp:   Number(rows[0].block_timestamp)
-                };
-            },
+        // getPrice(): latest finalized price per coin_pair at/<= block, one row
+        // per pair (GROUP BY guarantees correctness), staleness-applied.
+        let prices = {};
+        let latestQuery = `SELECT t.coin_pair AS coin_pair, t.price AS price,
+                                  t.round_number AS round_number, t.block_timestamp AS block_timestamp
+                           FROM price_snapshots t
+                           INNER JOIN (
+                               SELECT coin_pair, MAX(round_number) AS mr
+                               FROM price_snapshots
+                               WHERE status = 'finalized' AND price IS NOT NULL AND reference_block <= ?
+                               GROUP BY coin_pair
+                           ) m ON t.coin_pair = m.coin_pair AND t.round_number = m.mr
+                           WHERE t.status = 'finalized' AND t.price IS NOT NULL`;
+        let latestRows = await this.doQuery(latestQuery, [blockCap]);
+        for(let r of latestRows){
+            // Stale prices surface as no-price (null), as before; contracts can
+            // still read getSnapshotAge() for the staleness signal.
+            if(isStale(Number(r.block_timestamp))) continue;
+            prices[String(r.coin_pair)] = {
+                price:       r.price,
+                roundNumber: Number(r.round_number),
+                timestamp:   Number(r.block_timestamp)
+            };
+        }
 
-            // Get blocks since the last finalized snapshot
-            getSnapshotAge: () => snapshotAge
-        };
+        // getPriceAtRound(): historical finalized rounds at/<= block. NOTE: this
+        // now respects block causality (reference_block <= block) — an improvement
+        // over the old unfiltered query (which was non-functional anyway). Capped
+        // for safety; a hit is LOGGED, never silently truncated.
+        let rounds = {};
+        const MAX_ORACLE_ROUNDS = 50000;
+        let roundQuery = `SELECT coin_pair, price, round_number, block_timestamp
+                          FROM price_snapshots
+                          WHERE status = 'finalized' AND price IS NOT NULL AND reference_block <= ?
+                          ORDER BY round_number DESC
+                          LIMIT ${MAX_ORACLE_ROUNDS}`;
+        let roundRows = await this.doQuery(roundQuery, [blockCap]);
+        if(roundRows.length >= MAX_ORACLE_ROUNDS)
+            console.error('[oracle snapshot] round set capped at ' + MAX_ORACLE_ROUNDS +
+                ' rows for block ' + blockIndex + ' — getPriceAtRound may miss older rounds');
+        for(let r of roundRows){
+            let cp = String(r.coin_pair);
+            if(!rounds[cp]) rounds[cp] = {};
+            rounds[cp][String(r.round_number)] = {
+                price:       r.price,
+                roundNumber: Number(r.round_number),
+                timestamp:   Number(r.block_timestamp)
+            };
+        }
+
+        return { snapshotAge, prices, rounds };
     }
 
     // Get the latest finalized price for a coin pair at or before a given block height
@@ -8601,10 +8620,10 @@ class Database {
 
     // Cross-chain data stub — returns no-data accessors until Phase 4
     async getCrossChainDataForVM(){
-        return {
-            getAttestation: (chain, actionIndex) => null,
-            isSettled:      (chain, actionIndex) => false
-        };
+        // Serializable snapshot (plain data) — the VM worker rebuilds the
+        // getAttestation/isSettled accessors. Cross-chain reads are not yet wired,
+        // so the snapshot is empty (getAttestation→null, isSettled→false).
+        return { attestations: {}, settled: {} };
     }
 
     // Get total unclaimed rewards for a source address
