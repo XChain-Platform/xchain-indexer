@@ -266,12 +266,13 @@ class Execute {
         // pre-VM rejection: the contract DID run and consumed gas, so the caller pays for the
         // failed attempt (see the gas-debit note below). Atomicity is preserved — state changes
         // and emissions are applied only on vmResult.success. We record a dedicated execution
-        // status ('reverted' / 'out_of_gas' / 'timeout' / 'failed') and deliberately leave
+        // status ('reverted' / 'out_of_gas' / 'out_of_resource' / 'failed', via
+        // util.vmFailureStatus) and deliberately leave
         // `error` null so the gas debit fires, mirroring the in-memory debit taken before the
         // VM ran. (Leaving it as a generic 'invalid:' error would skip the debit, letting any
         // caller burn up to the gas ceiling / CPU limit for free — a node-DoS vector.)
         let vmFailed = Boolean(vmError) && !error;
-        let vmStatus = vmFailed ? this._vmFailureStatus(vmError) : null;
+        let vmStatus = vmFailed ? this.util.vmFailureStatus(vmError) : null;
 
         // Defense-in-depth (consensus): non-gas resource terminations report a
         // gasUsed captured at a machine-/GC-/stack-/timing-dependent point. The VM
@@ -342,17 +343,6 @@ class Execute {
 
         // Create action mappings
         await this.mapper.createMappings(data);
-    }
-
-    // Map a VM failure message ("revert: ...", "out_of_gas: ...", "timeout: ...", "error: ...")
-    // to a concise, consensus-stable execution status. The detailed message is preserved in
-    // contract_executions.ERROR_MESSAGE; only this short token is interned in index_statuses.
-    _vmFailureStatus(vmError){
-        let msg = String(vmError || '');
-        if(msg.startsWith('revert:'))     return 'reverted';
-        if(msg.startsWith('out_of_gas:')) return 'out_of_gas';
-        if(msg.startsWith('timeout:'))    return 'timeout';
-        return 'failed';
     }
 
     /*****************************************************************

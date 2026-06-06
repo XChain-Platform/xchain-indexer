@@ -256,7 +256,15 @@ class Deploy {
                 providerDeadlines: PROVIDER_DEADLINE_WINDOWS
             });
 
-            totalGas += constructorResult.gasUsed;
+            // Defense-in-depth (consensus): mirror the gasUsed clamp in actions/execute.js so a
+            // non-gas resource termination in the constructor can never make totalGas — hashed
+            // via contract_executions.gas_used → contract_hash — diverge across validators. The
+            // VM already clamps these; this guards a VM regression. Keep the family regex
+            // identical to util.vmFailureStatus and execute.js.
+            let constructorGas = constructorResult.gasUsed;
+            if(!constructorResult.success && /^(timeout|out_of_memory|out_of_stack|out_of_resource)\b/.test(String(constructorResult.error)))
+                constructorGas = 1000000;
+            totalGas += constructorGas;
 
             if(!constructorResult.success){
                 constructorError = 'constructor failed: ' + constructorResult.error;
@@ -267,8 +275,21 @@ class Deploy {
         // Recalculate fee based on total gas (deploy + constructor)
         fee = this.util.bcmul(totalGas, this.config['GAS_PRICE'], 8);
 
-        // Determine final status
-        let status = (error) ? error : 'valid';
+        // Determine final status. This is consensus-hashed (contracts.status_id /
+        // contract_executions.status_id → contract_hash), so it MUST be deterministic. A
+        // failed constructor's raw VM error is timing-/memory-/arch-dependent (V8 abort vs
+        // isolate wall-clock vs parent watchdog — see util.vmFailureStatus), so normalize it to
+        // a stable token instead of storing the raw 'invalid: constructor failed: <vm error>'
+        // string. Pre-VM rejections keep their deterministic 'invalid: ...' message; a clean
+        // deploy is 'valid'. The raw detail is preserved (un-hashed) in
+        // contract_executions.ERROR_MESSAGE below.
+        let status;
+        if(constructorResult && !constructorResult.success)
+            status = this.util.vmFailureStatus(constructorResult.error);
+        else if(error)
+            status = error;
+        else
+            status = 'valid';
         data['STATUS'] = status;
 
         // Print status message

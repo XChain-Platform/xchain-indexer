@@ -131,6 +131,29 @@ class Utility {
         return hash;
     }
 
+    // Map a raw VM execution error ("revert: ...", "out_of_gas: ...", "timeout: ...",
+    // "out_of_resource: ...", "error: ...") to a deterministic, consensus-stable status
+    // token. The token is interned in index_statuses and hashed into contract_hash (via
+    // contracts_data.executions.status_id in db.getBlockHashes), so it MUST be a pure
+    // function of consensus inputs.
+    //
+    // The non-gas resource-termination family (timeout / out_of_memory / out_of_stack /
+    // out_of_resource host-crash) collapses to ONE token: which backstop actually fires for
+    // a given poisoned contract is timing-/memory-/arch-dependent (V8 abort vs isolate
+    // wall-clock vs parent watchdog), so mapping them to distinct tokens would let two honest
+    // validators record different status_ids for the same contract → divergent contract_hash
+    // → chain fork. out_of_gas stays its own token (it is deterministically gas-bounded).
+    //
+    // The family regex MUST stay identical to the gas-clamp regex in actions/execute.js so the
+    // status mapping and the fee clamp can never drift to different family definitions.
+    vmFailureStatus(vmError){
+        let msg = String(vmError || '');
+        if(msg.startsWith('revert:'))     return 'reverted';
+        if(msg.startsWith('out_of_gas:')) return 'out_of_gas';
+        if(/^(timeout|out_of_memory|out_of_stack|out_of_resource)\b/.test(msg)) return 'out_of_resource';
+        return 'failed';
+    }
+
     // Start a debug timer
     startTimer(){
         let now = Date.now();
