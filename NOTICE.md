@@ -1,46 +1,40 @@
 # NOTICE
 
-This product includes software developed by **Dankest, LLC**  
-Copyright © 2025 Dankest, LLC  
-Website: [https://dankest.llc](https://dankest.llc)
+XChain Platform
+Copyright © 2025–2026 Dankest, LLC
+https://dankest.llc
+
+This product includes software developed by Dankest, LLC.
 
 ---
 
-## Attribution Notice
+## License
 
-Portions of this software are based on and distributed under the **Dankest Community License**, which supplements the Apache License, Version 2.0, with additional terms restricting commercial use and requiring network disclosure of modified versions.
+XChain Platform is dual-licensed:
 
-Any redistribution or modification of this software must include the following attribution:
+- **GNU Affero General Public License v3.0 or later** (AGPL-3.0-or-later) — the
+  free, open-source license. The full text is in [LICENSE.md](./LICENSE.md).
+- **A commercial license** from Dankest, LLC, for use without the AGPL's
+  source-disclosure requirements.
+
+For commercial licensing, contact **legal@dankest.llc**.
+
+## Attribution
+
+Any redistribution or modification of this software must retain the following
+attribution, per the AGPL and the project's trademark policy:
 
 > Based on XChain Platform by Dankest, LLC – https://dankest.llc
 
-This attribution must remain visible in source code headers, documentation, and user interfaces where applicable.
+## Trademark
 
----
+"XChain" and the XChain logo are trademarks of Dankest, LLC. The software
+license does not grant any rights to these marks. See the Trademark Policy:
+<https://docs.xchain.io/legal/trademark>
 
-## License Summary
+## Third-Party Components
 
-- Licensed under the Apache License, Version 2.0, with **Additional Terms and Conditions** set forth in the Dankest Community License.  
-- Commercial use, sublicensing, or repackaging requires **prior written consent** from Dankest, LLC.  
-- Modified versions must be distributed under the same license and made publicly available if used over a network.  
-- This software is provided “AS IS” without warranties or conditions of any kind, as described in the Apache License.
-
----
-
-## Third-Party Components (if any)
-
-This software may include open-source dependencies governed by their respective licenses.  
-All such components retain their original notices and must be cited per their license terms.
-
----
-
-## Contact
-
-For inquiries regarding commercial licensing, partnership, or written authorization, please contact:  
-**Dankest, LLC**  
-📧 legal@dankest.llc  
-🌐 [https://dankest.llc](https://dankest.llc)
-
----
-
-### END OF NOTICE
+This software includes third-party open-source dependencies, each governed by
+its own license — predominantly MIT, ISC, Apache-2.0, and BSD. The MariaDB
+Node.js connector (`mariadb`) is licensed under LGPL-2.1-or-later. All
+third-party components retain their original license notices.

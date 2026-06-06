@@ -1,15 +1,14 @@
 /*********************************************************************
  *
- * Copyright © 2025 Dankest, LLC
+ * Copyright © 2025–2026 Dankest, LLC
  * Based on XChain Platform by Dankest, LLC – https://dankest.llc
  *
- * Licensed under the Dankest Community License (Apache License 2.0 + Additional Terms).
- * You may not use this file except in compliance with that License.
+ * SPDX-License-Identifier: AGPL-3.0-or-later
  *
- * A copy of the License is available at:
- *     https://dankest.llc/license
- *
- * This software is provided "AS IS", without warranties or conditions of any kind.
+ * This file is part of XChain Platform. Licensed under the GNU Affero
+ * General Public License v3.0 or later; see LICENSE.md. A commercial
+ * license (without AGPL source-disclosure terms) is available —
+ * contact legal@dankest.llc.
  *
  **********************************************************************
  *
