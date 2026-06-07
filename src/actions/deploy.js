@@ -257,12 +257,13 @@ class Deploy {
             });
 
             // Defense-in-depth (consensus): mirror the gasUsed clamp in actions/execute.js so a
-            // non-gas resource termination in the constructor can never make totalGas — hashed
-            // via contract_executions.gas_used → contract_hash — diverge across validators. The
+            // resource termination in the constructor can never make totalGas — hashed via
+            // contract_executions.gas_used → contract_hash — diverge across validators. The
             // VM already clamps these; this guards a VM regression. Keep the family regex
-            // identical to util.vmFailureStatus and execute.js.
+            // identical to util.vmFailureStatus and execute.js (out_of_gas included so the
+            // regexes never drift — a no-op for the fee since out_of_gas == ceiling already).
             let constructorGas = constructorResult.gasUsed;
-            if(!constructorResult.success && /^(timeout|out_of_memory|out_of_stack|out_of_resource)\b/.test(String(constructorResult.error)))
+            if(!constructorResult.success && /^(out_of_gas|timeout|out_of_memory|out_of_stack|out_of_resource)\b/.test(String(constructorResult.error)))
                 constructorGas = 1000000;
             totalGas += constructorGas;
 

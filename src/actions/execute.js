@@ -274,13 +274,16 @@ class Execute {
         let vmFailed = Boolean(vmError) && !error;
         let vmStatus = vmFailed ? this.util.vmFailureStatus(vmError) : null;
 
-        // Defense-in-depth (consensus): non-gas resource terminations report a
-        // gasUsed captured at a machine-/GC-/stack-/timing-dependent point. The VM
-        // already clamps these to the ceiling, but clamp here too so a VM regression
-        // (or an older bundled VM) can never make fee = gasUsed * GAS_PRICE diverge
-        // across validators → fork. Gas ceiling must match the gasCeiling in actions.js.
+        // Defense-in-depth (consensus): resource terminations report a gasUsed
+        // captured at a machine-/GC-/stack-/timing-dependent point. The VM already
+        // clamps these to the ceiling, but clamp here too so a VM regression (or an
+        // older bundled VM) can never make fee = gasUsed * GAS_PRICE diverge across
+        // validators → fork. The family regex MUST stay identical to util.vmFailureStatus
+        // (out_of_gas is included so the two regexes never drift — it is a no-op for the
+        // fee since out_of_gas already reports gasUsed == ceiling). Gas ceiling must match
+        // the gasCeiling in actions.js.
         const GAS_CEILING = 1000000;
-        if(vmFailed && /^(timeout|out_of_memory|out_of_stack|out_of_resource)\b/.test(String(vmError))){
+        if(vmFailed && /^(out_of_gas|timeout|out_of_memory|out_of_stack|out_of_resource)\b/.test(String(vmError))){
             gasUsed = GAS_CEILING;
         }
 

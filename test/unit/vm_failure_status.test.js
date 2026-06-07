@@ -18,17 +18,24 @@
  * committed to the TransparencyLog Merkle root that validators compare. So it MUST be a
  * pure, deterministic function of the VM error.
  *
- * The critical invariant: the entire NON-GAS resource-termination family — timeout,
+ * The critical invariant: the entire resource-exhaustion family — out_of_gas, timeout,
  * out_of_memory, out_of_stack, and out_of_resource (host crash / watchdog) — collapses to
- * ONE token. Which of these backstops actually fires for a given poisoned contract is
+ * ONE token. Which of these backstops actually fires for a given contract is
  * timing-/memory-/arch-dependent (proven by the cross-arch determinism run: ARM hits V8
  * abort → 'out_of_resource: ...(signal SIGABRT)', x86 hits the isolate wall-clock →
  * 'timeout: wall-clock...', a slow/tight host hits the parent watchdog →
- * 'out_of_resource: ...(watchdog timeout)'). Mapping them to distinct tokens would let two
- * honest validators record different status_ids for the same contract → divergent
- * contract_hash → chain FORK. This test pins the grouping so it can never silently
- * re-split (a regression would have re-introduced the fork). out_of_gas stays its own
- * token because it is deterministically gas-bounded.
+ * 'out_of_resource: ...(watchdog timeout)').
+ *
+ * out_of_gas is part of the family, NOT a distinct token. It was once kept separate on the
+ * assumption it is "deterministically gas-bounded", but a gas-burning loop RACES the gas
+ * ceiling (deterministic) against the wall-clock net (host-speed dependent): a fast
+ * validator reports 'out_of_gas: ...', a slow/loaded one reports 'timeout: ...' for the
+ * SAME contract+gas-schedule. Keeping out_of_gas distinct therefore re-introduced exactly
+ * this fork (surfaced by the x86 re-validation run). Mapping the whole family to one token
+ * makes WHICH ceiling fires irrelevant to consensus; gasUsed is clamped to the ceiling on
+ * every path so the fee stays fork-safe, and the raw out_of_gas-vs-timeout detail is kept
+ * un-hashed in contract_executions.error_message. This test pins the grouping so it can
+ * never silently re-split.
  ********************************************************************/
 
 const assert = require('assert');
@@ -47,12 +54,15 @@ describe('VM failure status mapping — consensus stability @regression @tier1',
         assert.strictEqual(util.vmFailureStatus('revert:'), 'reverted');
     });
 
-    it('out_of_gas → out_of_gas (deterministic gas-bounded; stays distinct)', function () {
-        assert.strictEqual(util.vmFailureStatus('out_of_gas: used 1000001 of 1000000'), 'out_of_gas');
+    it('out_of_gas → out_of_resource (part of the family; gas-vs-wall-clock is a host race)', function () {
+        // A fast validator reports this for a gas-burning loop; a slow one reports
+        // 'timeout: ...' for the identical contract. Same token required, or they fork.
+        assert.strictEqual(util.vmFailureStatus('out_of_gas: used 1000001 of 1000000'), 'out_of_resource');
     });
 
-    it('the ENTIRE non-gas resource family → out_of_resource (the fork-safety invariant)', function () {
+    it('the ENTIRE resource-exhaustion family → out_of_resource (the fork-safety invariant)', function () {
         // Each of these can be the outcome of the SAME contract on different validators.
+        assert.strictEqual(util.vmFailureStatus('out_of_gas: used 1000001 of 1000000'), 'out_of_resource');
         assert.strictEqual(util.vmFailureStatus('timeout: wall-clock safety net triggered'), 'out_of_resource');
         assert.strictEqual(util.vmFailureStatus('out_of_memory: isolate memory limit exceeded'), 'out_of_resource');
         assert.strictEqual(util.vmFailureStatus('out_of_stack: maximum call depth exceeded'), 'out_of_resource');
