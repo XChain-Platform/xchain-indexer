@@ -390,8 +390,23 @@ class XChainIndexer {
                     // Roll back all writes for this block so the DB stays at the end of the previous block
                     await this.indexerDb.rollbackTransaction();
 
-                    // Log the error
-                    this.util.logError(`Error while parsing block data at block ${lastIndexerBlock}:`, error);
+                    // Host fault (out-of-process VM executor cannot run a contract on THIS
+                    // machine: fork EAGAIN, isolated-vm load failure). This is NOT a contract
+                    // outcome — committing a fabricated out_of_resource for work the fleet runs
+                    // normally would diverge this node's contract_hash and fork it off the chain.
+                    // So we HALT (do not advance) rather than fabricate: the block is left
+                    // uncommitted and retried below. A transient fault self-heals on the next
+                    // retry (the executor probes a fresh worker); a persistent one keeps the
+                    // indexer halted + alerting until the operator fixes the host. The block
+                    // watchdog surfaces the stall (no silent freeze).
+                    if(error && error.code === 'EXECUTOR_UNAVAILABLE'){
+                        console.error(`HOST FAULT at block ${lastIndexerBlock}: VM executor unavailable — ` +
+                            `HALTING block processing (not committing; a fabricated result would fork). ` +
+                            `Retrying after ${this.config['BLOCK_CHECK_INTERVAL']}ms; will resume when the host recovers.`);
+                    } else {
+                        // Log the error
+                        this.util.logError(`Error while parsing block data at block ${lastIndexerBlock}:`, error);
+                    }
 
                     // Exit the inner catch-up loop on failure. lastIndexerBlock was not advanced
                     // (the assignment above only runs after a successful commit), so the outer loop
