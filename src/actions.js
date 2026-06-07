@@ -165,6 +165,20 @@ class Actions {
             this.vm = null;
         }
 
+        // Consensus-runtime gate (non-fatal): the VM produces some
+        // contract-observable bytes (native V8 error text, ICU-backed
+        // primitives) that are NOT spec-mandated and vary across engine
+        // versions. A validator on an off-pin V8/ICU can commit different
+        // bytes for the same contract → divergent contract_hash → fork. We
+        // warn loudly rather than refuse to start, so an operator notices the
+        // hazard without an engine mismatch silently halting the chain. The
+        // hard gate is the CI test (xchain-vm consensus-runtime-gate.test.js).
+        if(this.vm && typeof XChainVM.checkConsensusRuntime === 'function'){
+            const rt = XChainVM.checkConsensusRuntime();
+            if(!rt.ok)
+                console.log('WARNING: ' + XChainVM.describeRuntimeMismatch(rt));
+        }
+
         // VM action instances
         this.actionDeploy           = new deploy(this);
         this.actionExecute          = new execute(this);
