@@ -154,6 +154,10 @@ class Utility {
     // The family regex MUST stay identical to the gas-clamp regex in actions/execute.js and
     // actions/deploy.js so the status mapping and the fee clamp can never drift to different
     // family definitions.
+    //
+    // FROZEN VOCABULARY: the returned tokens are the closed set
+    // xchain-vm/src/consensus-runtime.js CONSENSUS_STATUS_TOKENS. Adding/splitting a token is a
+    // consensus change (bump CONSENSUS_VERSION). Guarded by test/unit/consensus-params.test.js.
     vmFailureStatus(vmError){
         let msg = String(vmError || '');
         if(msg.startsWith('revert:')) return 'reverted';
