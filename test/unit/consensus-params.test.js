@@ -50,6 +50,30 @@ const GOLDEN_GAS_SCHEDULE = {
 const EXPECTED_VM_CONSENSUS_VERSION = '1';
 const FROZEN_STATUS_TOKENS = ['reverted', 'out_of_resource', 'failed'];
 
+// Other NODE-LOCAL consensus params (frozen with the wire format, track 8). These
+// feed fee math / tx-acceptance and land in hashed state, and — unlike the GAS_*
+// pair — they are NOT identical across chains, so the golden is PER-CHAIN.
+// DELIBERATELY EXCLUDED (hub-governed, change at runtime via PBFT overlay — see
+// XChainIndexer _applyHubConfigOverlay): ACTIVATION_DELAY_BLOCKS,
+// EXPIRATION_FEE_PER_DAY, STAKING. Freezing those would break governance.
+const GOLDEN_FEE_PARAMS_SHARED = {
+    EXPIRATION_FEE_DEFAULT_DAYS:      90,
+    EXPIRATION_FEE_FREE_DAYS:         182,
+    UNIFIED_EXPIRATION_FEE_FREE_DAYS: 90,
+    FEE_TOLERANCE_MIN:                '0.95',
+    FEE_TOLERANCE_MAX:                '1.10',
+    ORACLE_MAX_PRICE_AGE_SECONDS:     1800
+};
+const GOLDEN_FEE_PARAMS_PER_CHAIN = {
+    BTC:  { ISSUANCE_FEE_TOKEN: '1.00000000', ISSUANCE_FEE_SUBTOKEN: '0.50000000', FEE_PAYMENT_MODE: 'xchain' },
+    LTC:  { ISSUANCE_FEE_TOKEN: '0.50000000', ISSUANCE_FEE_SUBTOKEN: '0.25000000', FEE_PAYMENT_MODE: 'native' },
+    DOGE: { ISSUANCE_FEE_TOKEN: '0.25000000', ISSUANCE_FEE_SUBTOKEN: '0.10000000', FEE_PAYMENT_MODE: 'native' }
+};
+// The hub-governed params that must STAY excluded from the freeze (a regression
+// that moved one into the node-local frozen set would be caught by asserting the
+// overlay still lists them — see the test below).
+const HUB_GOVERNED_PARAMS = ['ACTIVATION_DELAY_BLOCKS', 'EXPIRATION_FEE_PER_DAY', 'STAKING'];
+
 // Resolve the bundled VM's consensus exports, defensively: the file: dep
 // (node_modules/xchain-vm -> ./xchain-vm) is populated in prod by xchain-node,
 // and the sibling exists in the monorepo, but a standalone indexer CI checkout
@@ -70,6 +94,30 @@ describe('consensus parameters are frozen (track 8 guard) @regression', function
             assert.strictEqual(cfg.GAS_PRICE, GOLDEN_GAS_PRICE, coin + ' GAS_PRICE drifted');
             assert.deepStrictEqual(cfg.GAS_SCHEDULE, GOLDEN_GAS_SCHEDULE, coin + ' GAS_SCHEDULE drifted');
         }
+    });
+
+    it('node-local fee/oracle params equal the golden on every chain (per-chain + shared)', function(){
+        for(const coin of ['BTC', 'LTC', 'DOGE']){
+            const cfg = require('../../src/configs/' + coin + '.js').getConfig('regtest');
+            for(const [k, v] of Object.entries(GOLDEN_FEE_PARAMS_SHARED))
+                assert.strictEqual(cfg[k], v, coin + ' ' + k + ' drifted (shared consensus param)');
+            for(const [k, v] of Object.entries(GOLDEN_FEE_PARAMS_PER_CHAIN[coin]))
+                assert.strictEqual(cfg[k], v, coin + ' ' + k + ' drifted (per-chain consensus param)');
+        }
+    });
+
+    it('hub-governed params stay EXCLUDED from the freeze (governance must keep working)', function(){
+        // Guard against accidentally freezing a hub-governed param: the indexer's
+        // overlay must still treat these as runtime-adjustable. We assert they are
+        // NOT present in either frozen fee golden, so a future edit that hard-codes
+        // one into the golden reddens here with a clear reason.
+        const frozenKeys = new Set([
+            ...Object.keys(GOLDEN_FEE_PARAMS_SHARED),
+            ...Object.keys(GOLDEN_FEE_PARAMS_PER_CHAIN.BTC),
+            ...Object.keys(GOLDEN_GAS_SCHEDULE), 'GAS_PRICE', 'GAS_SCHEDULE'
+        ]);
+        for(const k of HUB_GOVERNED_PARAMS)
+            assert.ok(!frozenKeys.has(k), k + ' is hub-governed and must NOT be frozen');
     });
 
     it('vmFailureStatus maps every VM error into the frozen closed token set', function(){
