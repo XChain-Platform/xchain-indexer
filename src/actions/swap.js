@@ -110,10 +110,12 @@ class Swap {
         let isOwnershipGive = (format==0 && data['GIVE_OWNERSHIP']==1);
         let isOwnershipGet  = (format==0 && data['GET_OWNERSHIP']==1);
 
-        // Get information on a swap given the COIN network and SWAP_ACTION_INDEX
+        // Get information on the swap by its action_index. Pass null coin (not the local
+        // COIN): cancel/edit must locate the swap regardless of its get_coin, or a
+        // cross-chain swap (whose get_coin is the counterparty chain) is never found.
         var swapInfo = false;
         if(format==1 || format==2)
-            swapInfo = await this.indexerDb.getSwapInfo(this.config['COIN'], data['SWAP_ACTION_INDEX'])
+            swapInfo = await this.indexerDb.getSwapInfo(null, data['SWAP_ACTION_INDEX'])
 
         // Get source address balances and preferences
         let balances    = await this.indexerDb.getAddressBalances(data['SOURCE'], null, data['BLOCK_INDEX'], data['ACTION_INDEX']);

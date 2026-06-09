@@ -34,8 +34,9 @@ class Swap_Expire {
     // Handle expiring a swap
     async parse(params, data, error){
 
-        // Get info on the swap
-        let swapInfo = await this.indexerDb.getSwapInfo(this.config['COIN'], data['ACTION_INDEX']);
+        // Get info on the swap by action_index. Pass null coin (not the local COIN) so a
+        // cross-chain swap (get_coin = counterparty chain) is also located on expiry.
+        let swapInfo = await this.indexerDb.getSwapInfo(null, data['ACTION_INDEX']);
 
         // Bail out if swap no longer exists (already expired or rolled back)
         if(!swapInfo)

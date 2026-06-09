@@ -3949,6 +3949,11 @@ class Database {
     }
 
     // Return swap info for given action_index
+    // Resolve a single swap by its (locally-unique) action_index. `coin` matches the
+    // swap's GET coin (same-chain: the local coin; cross-chain: the counterparty coin).
+    // Pass the counterparty coin (e.g. cross_settle) to assert the get side, or null to
+    // look up purely by action_index — what cancel/expire must do, since they operate on
+    // a local swap by index and cannot assume its get_coin is local.
     async getSwapInfo(coin, action_index){
         let swap = false;
         let query = `SELECT
@@ -3993,10 +3998,10 @@ class Database {
                             WHERE
                                 s5.swap_action_index=s1.action_index
                         ) AND
-                        c1.coin=? AND
-                        s1.action_index=? 
+                        ${coin ? 'c1.coin=? AND' : ''}
+                        s1.action_index=?
                     LIMIT 1`;
-        let args  = [coin, action_index];
+        let args  = coin ? [coin, action_index] : [action_index];
         let results = await this.doQuery(query, args);
         if(results.length > 0){
             swap = {};
@@ -4395,6 +4400,13 @@ class Database {
     }
 
     // Return order info for given action_index
+    // Resolve a single order by its (locally-unique) action_index. `coin` matches the
+    // order's GET coin: for a SAME-chain order get_coin == the local coin, and for a
+    // CROSS-chain order get_coin == the counterparty coin. Pass the counterparty coin
+    // (e.g. cross_settle) to assert the get side, or pass null to look up purely by
+    // action_index — which is what cancel/expire/edit must do, since those operate on a
+    // local order by index and cannot assume its get_coin is local (that assumption is
+    // exactly what hid cross-chain offers from the cancel/expire paths).
     async getOrderInfo(coin, action_index){
         let order = false;
         let query = `SELECT
@@ -4439,10 +4451,10 @@ class Database {
                             WHERE
                                 s4.order_action_index=o1.action_index
                         ) AND
-                        c1.coin=? AND
+                        ${coin ? 'c1.coin=? AND' : ''}
                         o1.action_index=?
                     LIMIT 1`;
-        let args  = [coin, action_index];
+        let args  = coin ? [coin, action_index] : [action_index];
         let results = await this.doQuery(query, args);
         if(results.length > 0){
             order = {};

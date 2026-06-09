@@ -117,10 +117,12 @@ class Order {
             }
         }
 
-        // Get information on a order given the COIN network and ORDER_ACTION_INDEX
+        // Get information on the order by its action_index. Pass null coin (not the local
+        // COIN): cancel/edit must locate the order regardless of its get_coin, or a
+        // cross-chain order (whose get_coin is the counterparty chain) is never found.
         var orderInfo = false;
         if(format==1 || format==2)
-            orderInfo = await this.indexerDb.getOrderInfo(this.config['COIN'], data['ORDER_ACTION_INDEX'])
+            orderInfo = await this.indexerDb.getOrderInfo(null, data['ORDER_ACTION_INDEX'])
 
         // Get source address balances and preferences
         let balances    = await this.indexerDb.getAddressBalances(data['SOURCE'], null, data['BLOCK_INDEX'], data['ACTION_INDEX']);

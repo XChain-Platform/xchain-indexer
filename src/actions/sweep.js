@@ -222,7 +222,11 @@ class Sweep {
             // ownership) to this SWEEP's DESTINATION on finalization. Otherwise cancel
             // immediately and route escrow to DESTINATION.
             for(let escrow of orderEscrows){
-                let info = await this.indexerDb.getOrderInfo(this.config['COIN'], escrow.action_index);
+                // Null coin: look up by the (local) escrow action_index. SWEEP cancels the
+                // SOURCE's open orders whose give-escrow is locked on THIS chain — including
+                // cross-chain orders (get_coin = counterparty), which the local-COIN filter
+                // would otherwise skip, silently stranding their escrow.
+                let info = await this.indexerDb.getOrderInfo(null, escrow.action_index);
                 let pendingObligations = await this.indexerDb.getPendingCoinpayObligationsByOrder(info['ACTION_INDEX']);
                 if(pendingObligations.length > 0){
                     // Defer — let coinpay.js finalize once obligations resolve
@@ -245,7 +249,9 @@ class Sweep {
 
             // Cancel open SWAPs and route their escrow to DESTINATION.
             for(let escrow of swapEscrows){
-                let info = await this.indexerDb.getSwapInfo(this.config['COIN'], escrow.action_index);
+                // Null coin: look up by the (local) escrow action_index so cross-chain swaps
+                // (get_coin = counterparty) are swept too, not skipped by the local-COIN filter.
+                let info = await this.indexerDb.getSwapInfo(null, escrow.action_index);
                 if(info['GIVE_OWNERSHIP']==1){
                     // Ownership swap: release the escrow gate and atomically transfer
                     // ownership to the sweep DESTINATION.

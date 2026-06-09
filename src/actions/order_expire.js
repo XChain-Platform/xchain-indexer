@@ -34,8 +34,9 @@ class Order_Expire {
     // Handle expiring a order
     async parse(params, data, error){
 
-        // Get info on the order
-        let orderInfo = await this.indexerDb.getOrderInfo(this.config['COIN'], data['ACTION_INDEX']);
+        // Get info on the order by action_index. Pass null coin (not the local COIN) so a
+        // cross-chain order (get_coin = counterparty chain) is also located on expiry.
+        let orderInfo = await this.indexerDb.getOrderInfo(null, data['ACTION_INDEX']);
 
         // Bail out if order no longer exists (already expired or rolled back)
         if(!orderInfo)
