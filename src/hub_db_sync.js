@@ -118,6 +118,19 @@ class HubDbSync {
         this.matchSyncTimestamp = null;
         this.matchBootstrapped  = false;
         this._matchWaiters      = [];
+
+        // Coin this indexer settles for (e.g. 'LTC'). Used to scope the snapshot-presence
+        // barrier to matches this chain will actually settle. See waitForSnapshotSync.
+        this.coin = options.coin || null;
+
+        // Pending waitForSnapshotSync() resolvers. Unlike the match barrier (a cached
+        // scalar max(effective_time)), snapshot-presence is set-dependent — a match can
+        // only be settled once the capability_snapshots row set for its snapshot_block is
+        // mirrored — so satisfaction is recomputed by a live query per evaluation rather
+        // than tracked as a scalar. Gating block advancement on it (defer-and-retry, like
+        // the match barrier) keeps every operator settling a match at the same height even
+        // if the snapshot mirrors in after the match. See _snapshotSyncSatisfied.
+        this._snapshotWaiters   = [];
     }
 
     // Start: open WebSocket and await the hub's ready acknowledgement (confirming
@@ -237,6 +250,9 @@ class HubDbSync {
         if (table === 'price_snapshots')     await this._refreshPriceSyncHeight();
         if (table === 'oracle_prices')       await this._refreshOracleSyncTimestamp();
         if (table === 'cross_chain_matches') await this._refreshMatchSyncTimestamp();
+        // A new match (new required snapshot_block) or an arriving snapshot can change
+        // snapshot-presence — re-evaluate the snapshot barrier on either cross-chain table.
+        if (table === 'cross_chain_matches' || table === 'capability_snapshots') await this._releaseSnapshotWaiters();
     }
 
     // Recompute the highest finalized price block present in the local price_snapshots
@@ -465,6 +481,83 @@ class HubDbSync {
         });
     }
 
+    // ── Cross-chain capability-snapshot presence barrier ───────────────────────
+    // Companion to the match barrier. A match is only settleable once the cross_chain
+    // capability snapshot at its snapshot_block has mirrored in — cross_settle verifies
+    // the match's signatures against that snapshot. If it is absent, cross_settle would
+    // skip the match while the block advances, so the match settles at whatever later
+    // block the snapshot first appears locally — a per-operator-variable height that
+    // diverges the ledger. This barrier defers the block (never advancing) until every
+    // cross-chain match effective at/before this block's time, for this coin, has its
+    // snapshot present — so all operators settle each match at the same height.
+    //
+    // Scope is PRESENCE only (≥1 snapshot row for the block). Deterministic quorum-N
+    // under partial snapshot arrival is a separate, narrower concern sealed by the
+    // multi-node design (see cross_settle's N-handling); in the happy path the hub
+    // broadcasts the snapshot rows before the match row, so presence implies the set.
+
+    // True when sync is disabled, or when every finalized match effective at/before
+    // blockTime for this coin has its cross_chain snapshot mirrored locally. A query
+    // error (table not ready) reads as NOT satisfied so the barrier waits rather than
+    // letting a block settle against a missing snapshot.
+    async _snapshotSyncSatisfied(blockTime) {
+        if (!this.enabled) return true;
+        blockTime = Number(blockTime);
+        if (!Number.isFinite(blockTime)) return true;
+        try {
+            // Any finalized, effective match (for this coin) whose snapshot_block has no
+            // mirrored cross_chain capability_snapshots row → not yet satisfied. coin is
+            // optional: without it, fall back to a (safe) superset over all chains.
+            let coinClause = this.coin ? 'AND (m.a_chain = ? OR m.b_chain = ?)' : '';
+            let args = this.coin ? [blockTime, this.coin, this.coin] : [blockTime];
+            let missing = await this.hubDb.doQuery(
+                "SELECT 1 FROM cross_chain_matches m " +
+                "WHERE m.status = 'finalized' AND m.effective_time <= ? " + coinClause + " " +
+                "AND NOT EXISTS (SELECT 1 FROM capability_snapshots s " +
+                "                WHERE s.snapshot_block = m.snapshot_block AND s.capability = 'cross_chain') " +
+                "LIMIT 1", args);
+            return missing.length === 0;
+        } catch (e) {
+            return false;                                      // table not ready → wait, don't advance
+        }
+    }
+
+    async _releaseSnapshotWaiters() {
+        if (this._snapshotWaiters.length === 0) return;
+        let stillWaiting = [];
+        for (let w of this._snapshotWaiters) {
+            if (await this._snapshotSyncSatisfied(w.ts)) {
+                clearTimeout(w.timer);
+                w.resolve(true);
+            } else {
+                stillWaiting.push(w);
+            }
+        }
+        this._snapshotWaiters = stillWaiting;
+    }
+
+    // Block-processing barrier: resolves once every effective cross-chain match for this
+    // coin has its capability snapshot mirrored. Rejects after timeoutMs so the caller
+    // DEFERS the block (counter not advanced) and retries — never settling a match whose
+    // snapshot is missing. Resolves immediately when sync is disabled or already satisfied.
+    async waitForSnapshotSync(blockTime, timeoutMs) {
+        blockTime = Number(blockTime);
+        if (!this.enabled || !Number.isFinite(blockTime)) return true;
+        if (await this._snapshotSyncSatisfied(blockTime))     return true;
+
+        let ms = parseInt(timeoutMs);
+        if (!Number.isFinite(ms) || ms <= 0) ms = 60000;
+        return new Promise((resolve, reject) => {
+            let waiter = { ts: blockTime, resolve: resolve, timer: null };
+            waiter.timer = setTimeout(() => {
+                this._snapshotWaiters = this._snapshotWaiters.filter(w => w !== waiter);
+                reject(new Error('snapshot sync barrier timed out after ' + ms + 'ms waiting for block_time ' +
+                                 blockTime + ' (a cross-chain match is missing its capability snapshot)'));
+            }, ms);
+            this._snapshotWaiters.push(waiter);
+        });
+    }
+
     // Open the WebSocket subscription for live row updates. Returns a Promise that
     // resolves once the hub sends a 'ready' acknowledgement confirming the subscription
     // is registered server-side. start() awaits this before running the REST bootstrap,
@@ -522,11 +615,13 @@ class HubDbSync {
                         if (event.table === 'price_snapshots')     await this._refreshPriceSyncHeight();
                         if (event.table === 'oracle_prices')       await this._refreshOracleSyncTimestamp();
                         if (event.table === 'cross_chain_matches') await this._refreshMatchSyncTimestamp();
+                        if (event.table === 'cross_chain_matches' || event.table === 'capability_snapshots') await this._releaseSnapshotWaiters();
                     } else if (event.type === 'row:deleted' && event.table) {
                         await this._applyRetraction(event);
                         if (event.table === 'price_snapshots')     await this._refreshPriceSyncHeight();
                         if (event.table === 'oracle_prices')       await this._refreshOracleSyncTimestamp();
                         if (event.table === 'cross_chain_matches') await this._refreshMatchSyncTimestamp();
+                        if (event.table === 'cross_chain_matches') await this._releaseSnapshotWaiters();
                     }
                 } catch (err) {
                     console.warn('HubDbSync: failed to handle WebSocket message:', err);

@@ -77,8 +77,13 @@ class Cross_Settle {
         let validators = await this.indexerDb.getValidatorsByCapability('cross_chain', snapshotBlock);
         let N = (validators && validators.length) ? validators.length : 0;
         if(N === 0){
-            // The capability snapshot for this block isn't mirrored yet — defer this match
-            // (it stays unsettled + effective and retries on a later block). NOT an error.
+            // The capability snapshot for this block isn't mirrored yet. In distributed mode
+            // the block loop's snapshot-sync barrier (HubDbSync.waitForSnapshotSync) front-stops
+            // this by deferring the whole block until the snapshot is present, so every operator
+            // settles the match at the same height; this early-return is a defensive guard for
+            // the residual race / single-host path. The match stays unsettled + effective and
+            // retries on a later block. NOT an error. (Deterministic quorum-N under PARTIAL
+            // snapshot arrival is sealed separately by the multi-node design — presence here.)
             console.log("\t CROSS_SETTLE : match=" + String(m.match_id).substring(0,16) + '... : capability snapshot not synced — deferring');
             return;
         }

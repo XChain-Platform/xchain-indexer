@@ -139,7 +139,7 @@ class XChainIndexer {
             // local hub DB is the hub's MariaDB itself, so sync is not needed.
             // Enable by setting HUB_DB_SYNC_ENABLED=true (default off).
             if(process.env.HUB_DB_SYNC_ENABLED === 'true'){
-                this.hubDbSync = new HubDbSync(this.hubDb, {});
+                this.hubDbSync = new HubDbSync(this.hubDb, { coin: this.config['COIN'] });
                 // Start it in the background — failures don't block indexer startup
                 this.hubDbSync.start().catch(err => {
                     console.warn('HubDbSync: start failed:', err.message);
@@ -322,6 +322,19 @@ class XChainIndexer {
                         await this.hubDbSync.waitForMatchSync(blockTime, this.priceSyncTimeoutMs);
                     } catch(err){
                         console.warn('Deferring block ' + blockToParse + ' (cross-chain match sync): ', err);
+                        break;
+                    }
+                }
+
+                // Cross-chain capability-snapshot barrier: wait until the capability snapshot
+                // for every effective cross-chain match has mirrored in, so a match is never
+                // skipped (and settled later at a per-operator-variable height) for a missing
+                // snapshot. Defers the block on timeout, same as the match barrier above.
+                if(this.hubDbSync){
+                    try {
+                        await this.hubDbSync.waitForSnapshotSync(blockTime, this.priceSyncTimeoutMs);
+                    } catch(err){
+                        console.warn('Deferring block ' + blockToParse + ' (cross-chain snapshot sync): ', err);
                         break;
                     }
                 }
