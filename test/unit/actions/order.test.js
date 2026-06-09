@@ -131,13 +131,27 @@ describe('Order action handler @regression @tier2', function () {
             assert.ok(data['STATUS'].includes('GIVE_COIN') || data['STATUS'].includes('GET_COIN') || data['STATUS'].includes('network'));
         });
 
-        it('GET_COIN not matching COIN config returns invalid', async function () {
+        it('cross-chain order (GET_COIN != COIN) is invalid when CROSS_CHAIN_DEX is disabled', async function () {
+            actionsCtx.protocolChanges.isEnabled = sinon.stub().resolves(false);
             const params = makeParams(`0|BTC|RAREPEPE|1||LTC|PEPECASH|10||${OWNER_ADDR}|${EXPIRATION}|||`);
             const data   = createBaseData({ ACTION: 'ORDER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
 
             await order.parse(params, data, false);
 
             assert.ok(data['STATUS'].startsWith('invalid'));
+            assert.ok(data['STATUS'].includes('cross-chain') || data['STATUS'].includes('GET_COIN'));
+        });
+
+        it('cross-chain order (GET_COIN != COIN) is accepted when CROSS_CHAIN_DEX is enabled and does NOT match locally', async function () {
+            // Phase B: the GIVE side escrows locally; matching + settlement are federation-driven,
+            // so the local ORDER_MATCH path is skipped (the counterparty lives on another chain).
+            const params = makeParams(`0|BTC|RAREPEPE|1||LTC|PEPECASH|10||${OWNER_ADDR}|${EXPIRATION}|||`);
+            const data   = createBaseData({ ACTION: 'ORDER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
+
+            await order.parse(params, data, false);
+
+            assert.strictEqual(data['STATUS'], 'valid');
+            sinon.assert.notCalled(actionsCtx.processAction);   // no local ORDER_MATCH for cross-chain
         });
 
         it('GIVE_TICK not found returns invalid', async function () {

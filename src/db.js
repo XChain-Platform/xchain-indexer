@@ -4893,11 +4893,13 @@ class Database {
             action_index:   Number(row.action_index),
             give_coin:      row.give_coin,
             give_tick:      row.give_tick,
-            give_amount:    row.give_amount,
+            // Ownership offers carry no amount — expose virtual '1' so the hub's committed
+            // ledger + amount compare work uniformly (matches getOrderInfo's convention).
+            give_amount:    (Number(row.give_ownership) === 1 && this.util.isNull(row.give_amount)) ? '1' : row.give_amount,
             give_ownership: Number(row.give_ownership),
             get_coin:       row.get_coin,
             get_tick:       row.get_tick,
-            get_amount:     row.get_amount,
+            get_amount:     (Number(row.get_ownership) === 1 && this.util.isNull(row.get_amount)) ? '1' : row.get_amount,
             get_ownership:  Number(row.get_ownership),
             get_address:    row.get_address,
             source:         row.source,
@@ -4906,6 +4908,104 @@ class Database {
             block_list:     row.block_list,
             block_index:    Number(row.block_index)
         }));
+    }
+
+    // Open cross-chain ORDER offers (get on a different COIN network), for the hub's unified
+    // book. Parallels getOpenCrossChainSwaps but carries give_remaining/get_remaining (partial
+    // fills) so the hub matches against effective remaining and never over-fills escrow. The
+    // "from" chain is implicit (this indexer's COIN). Keyset-paginated by action_index.
+    async getOpenCrossChainOrders(limit, after_action_index, to_coin){
+        let where = [
+            `os.action_index = (SELECT MAX(s3.action_index) FROM order_statuses s3 WHERE s3.order_action_index=o1.action_index)`,
+            `st.status='open'`,
+            `o1.give_coin_id != o1.get_coin_id`
+        ];
+        let args = [];
+        if(!this.util.isNull(to_coin)){ where.push(`cc.coin=?`); args.push(to_coin); }
+        if(Number.isFinite(Number(after_action_index))){ where.push(`o1.action_index>?`); args.push(Number(after_action_index)); }
+        let query = `SELECT
+                        o1.action_index,
+                        gc.coin    as give_coin,
+                        gt.tick    as give_tick,
+                        o1.give_amount,
+                        o1.give_ownership,
+                        cc.coin    as get_coin,
+                        rt.tick    as get_tick,
+                        o1.get_amount,
+                        o1.get_ownership,
+                        ga.address as get_address,
+                        sa.address as source,
+                        o1.expiration,
+                        o1.allow_list,
+                        o1.block_list,
+                        t1.block_index
+                    FROM
+                        orders o1
+                        INNER JOIN actions         a1 ON (a1.action_index=o1.action_index)
+                        INNER JOIN transactions    t1 ON (t1.tx_index=a1.tx_index)
+                        INNER JOIN index_addresses sa ON (sa.id=a1.source_id)
+                        INNER JOIN index_addresses ga ON (ga.id=o1.get_address_id)
+                        INNER JOIN index_coins     gc ON (gc.id=o1.give_coin_id)
+                        INNER JOIN index_coins     cc ON (cc.id=o1.get_coin_id)
+                        LEFT  JOIN index_tickers   gt ON (gt.id=o1.give_tick_id)
+                        LEFT  JOIN index_tickers   rt ON (rt.id=o1.get_tick_id)
+                        INNER JOIN order_statuses  os ON (os.order_action_index=o1.action_index)
+                        INNER JOIN index_statuses  st ON (st.id=os.status_id)
+                    WHERE ` + where.join(' AND ') + `
+                    ORDER BY o1.action_index ASC
+                    LIMIT ?`;
+        args.push(Number(limit));
+        let results = await this.doQuery(query, args);
+        let orders = [];
+        for(let row of results){
+            // Remaining (give/get) reflects all fills — local order_matches AND cross-chain
+            // settlements (both recorded in order_matches) — so the hub's reservation is exact.
+            let [give_remaining, get_remaining] = await this.getOrderAmountsRemaining(row.action_index);
+            let isOwnGive = (Number(row.give_ownership) === 1 && this.util.isNull(row.give_amount));
+            let isOwnGet  = (Number(row.get_ownership)  === 1 && this.util.isNull(row.get_amount));
+            orders.push({
+                kind:           'order',
+                action_index:   Number(row.action_index),
+                give_coin:      row.give_coin,
+                give_tick:      row.give_tick,
+                give_amount:    isOwnGive ? '1' : row.give_amount,
+                give_remaining: String(give_remaining),
+                give_ownership: Number(row.give_ownership),
+                get_coin:       row.get_coin,
+                get_tick:       row.get_tick,
+                get_amount:     isOwnGet ? '1' : row.get_amount,
+                get_remaining:  String(get_remaining),
+                get_ownership:  Number(row.get_ownership),
+                get_address:    row.get_address,
+                source:         row.source,
+                expiration:     Number(row.expiration),
+                allow_list:     row.allow_list,
+                block_list:     row.block_list,
+                block_index:    Number(row.block_index)
+            });
+        }
+        return orders;
+    }
+
+    // Record a cross-chain ORDER partial fill in order_matches so getOrderAmountsRemaining
+    // deducts it — the single source of truth for an order's remaining (local fills and
+    // cross-chain fills both live here, so the offer book + completion logic stay consistent).
+    // The local order is the GET side of the synthetic row (get_action_index = local order),
+    // so the subtract loop maps give_amount→give_remaining and get_amount→get_remaining.
+    // The cross counterparty has no local order, so give_action_index = the CROSS_SETTLE
+    // action_index (rollback-able: a reorg drops this row and the order's remaining restores).
+    async recordCrossChainOrderFill(settlement_action_index, order_action_index, give_amount, get_amount, give_coin, give_tick, get_coin, get_tick){
+        let give_coin_id = await this.createCoin(give_coin);
+        let get_coin_id  = await this.createCoin(get_coin);
+        let give_tick_id = this.util.isNull(give_tick) ? null : await this.createTicker(give_tick);
+        let get_tick_id  = this.util.isNull(get_tick)  ? null : await this.createTicker(get_tick);
+        let status_id    = await this.createStatus('valid');
+        let exists = await this.doQuery(`SELECT action_index FROM order_matches WHERE action_index=?`, [settlement_action_index]);
+        if(exists.length > 0) return;                          // idempotent (one fill per settlement)
+        await this.doQuery(
+            `INSERT INTO order_matches (give_coin_id, give_tick_id, give_amount, give_action_index, get_coin_id, get_tick_id, get_amount, get_action_index, settlement_type, status_id, action_index)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'instant', ?, ?)`,
+            [give_coin_id, give_tick_id, give_amount, settlement_action_index, get_coin_id, get_tick_id, get_amount, order_action_index, status_id, settlement_action_index]);
     }
 
     // Finalized cross-chain matches that involve THIS chain, are effective at/before

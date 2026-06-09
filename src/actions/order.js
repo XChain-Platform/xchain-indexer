@@ -98,6 +98,12 @@ class Order {
         let isOwnershipGive = (format==0 && data['GIVE_OWNERSHIP']==1);
         let isOwnershipGet  = (format==0 && data['GET_OWNERSHIP']==1);
 
+        // Detect a cross-chain order (GET side settles on a different COIN network). The GIVE
+        // side still escrows locally; matching + settlement are driven by the validator
+        // federation (mirror-delivered cross-chain fill) rather than the local ORDER_MATCH path.
+        let isCrossChain      = (format==0 && !this.util.isNull(data['GET_COIN']) && data['GET_COIN']!=this.config['COIN']);
+        let crossChainEnabled = isCrossChain ? await this.actions.protocolChanges.isEnabled('CROSS_CHAIN_DEX', data['BLOCK_INDEX']) : false;
+
         // Get information on the GIVE and GET tokens (skip for native coin sides)
         let giveTokenInfo = false;
         let getTokenInfo  = false;
@@ -150,10 +156,11 @@ class Order {
         if(!error && format==0 && this.config['COIN']!=data['GIVE_COIN'])
             error = "invalid: GIVE_COIN (network)";
 
-        // validate GET_COIN network is current COIN network
-        // TODO: Remove this and allow support for cross-chain orders once xchain-hub is finished and working properly
-        if(!error && format==0 && this.config['COIN']!=data['GET_COIN'])
-            error = "invalid: GET_COIN (network)";
+        // Cross-chain orders (GET on another COIN network) require the CROSS_CHAIN_DEX
+        // protocol change. GET_COIN itself is validated above; the xchain-hub federation
+        // validates the cross GET_TICK and matches + settles the cross leg.
+        if(!error && isCrossChain && !crossChainEnabled)
+            error = "invalid: GET_COIN (cross-chain not enabled)";
 
         // Validate that both sides are not native coin (coin-for-coin is just a regular tx)
         if(!error && format==0 && isNativeCoinGive && isNativeCoinGet)
@@ -163,8 +170,10 @@ class Order {
         if(!error && format==0 && !isNativeCoinGive && !giveTokenInfo)
             error = 'invalid: GIVE_TICK (unknown)';
 
-        // Validate GET_TICK exists (skip for native coin — no token to validate)
-        if(!error && format==0 && !isNativeCoinGet && !getTokenInfo)
+        // Validate GET_TICK exists (skip for native coin — no token to validate — and for
+        // cross-chain, where GET_TICK lives on another COIN network and is validated by the
+        // xchain-hub federation, not locally)
+        if(!error && format==0 && !isNativeCoinGet && !isCrossChain && !getTokenInfo)
             error = 'invalid: GET_TICK (unknown)';
 
         /*****************************************************************
@@ -176,9 +185,11 @@ class Order {
         if(!error && format==0 && !this.util.isNull(data['GIVE_AMOUNT']) && !this.util.isValidAmountFormat(giveDecimals, data['GIVE_AMOUNT']))
             error = "invalid: GIVE_AMOUNT (format)";
 
-        // Verify GET_AMOUNT format (use COIN_DECIMALS for native coin, token DECIMALS for tokens)
+        // Verify GET_AMOUNT format (use COIN_DECIMALS for native coin, token DECIMALS for
+        // tokens). Skip for cross-chain: the GET token's DECIMALS live on another COIN
+        // network, so the format is validated by the xchain-hub federation, not locally.
         let getDecimals = isNativeCoinGet ? this.config['COIN_DECIMALS'] : (getTokenInfo ? getTokenInfo['DECIMALS'] : 0);
-        if(!error && format==0 && !this.util.isNull(data['GET_AMOUNT']) && !this.util.isValidAmountFormat(getDecimals, data['GET_AMOUNT']))
+        if(!error && format==0 && !isCrossChain && !this.util.isNull(data['GET_AMOUNT']) && !this.util.isValidAmountFormat(getDecimals, data['GET_AMOUNT']))
             error = "invalid: GET_AMOUNT (format)";
 
         // Verify GET_ADDRESS is given if COIN network differs from GET_COIN network
@@ -472,8 +483,12 @@ class Order {
         // Create action mappings
         await this.mapper.createMappings(data);
 
-        // Check to see if we have any matches for this order
-        if(status=='valid')
+        // Check to see if we have any matches for this order. Cross-chain orders are NOT
+        // matched locally — the counterparty lives in another chain's indexer DB, invisible
+        // to the local ORDER_MATCH query. The xchain-hub federation matches them and delivers
+        // a validator-signed fill via the hub mirror, which the indexer settles from escrow
+        // (see the cross-chain settlement pass). GIVE stays escrowed until filled/cancelled/expired.
+        if(status=='valid' && !isCrossChain)
             await this.actions.processAction('ORDER_MATCH', null, data, null);
     }
 }

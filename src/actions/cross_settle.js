@@ -46,12 +46,17 @@ class Cross_Settle {
     }
 
     // Canonical signing string — MUST byte-match the hub's CrossChainDexEngine._canonicalMatch.
+    // Phase B appends the fill fields after `network` (Phase-A field order preserved):
+    // a_amount/b_amount are the FILL settled by THIS match; *_kind + *_filled_before bind
+    // sequential partial fills apart.
     _canonical(m){
         return [
             'XMATCH', m.match_id, String(m.snapshot_block),
             m.a_chain, String(m.a_action_index), m.a_tick || '', String(m.a_amount), String(m.a_ownership), m.a_payout_addr,
             m.b_chain, String(m.b_action_index), m.b_tick || '', String(m.b_amount), String(m.b_ownership), m.b_payout_addr,
-            String(m.effective_time), m.network || ''
+            String(m.effective_time), m.network || '',
+            m.a_kind || 'swap', String(m.a_filled_before != null ? m.a_filled_before : '0'),
+            m.b_kind || 'swap', String(m.b_filled_before != null ? m.b_filled_before : '0')
         ].join('|');
     }
 
@@ -119,11 +124,19 @@ class Cross_Settle {
         if(!isA && m.b_chain !== coin) return;                  // not our match
 
         let localActionIndex = isA ? Number(m.a_action_index) : Number(m.b_action_index);
+        let localKind        = String(isA ? m.a_kind : m.b_kind) || 'swap';
         let giveTick         = isA ? m.a_tick : m.b_tick;
-        let giveAmount       = isA ? m.a_amount : m.b_amount;
+        let giveAmount       = isA ? m.a_amount : m.b_amount;   // FILL released from local escrow
+        let getAmount        = isA ? m.b_amount : m.a_amount;   // FILL the local offer receives
+        let getTick          = isA ? m.b_tick : m.a_tick;       // tick the local offer receives
         let giveOwnership    = Number(isA ? m.a_ownership : m.b_ownership);
         let payoutAddr       = isA ? m.b_payout_addr : m.a_payout_addr;
         let counterpartyCoin = isA ? m.b_chain : m.a_chain;
+
+        // ORDER leg → partial-fill settlement (release the fill, decrement remaining, complete
+        // only when fully filled). SWAP leg falls through to the Phase-A full-release path.
+        if(localKind === 'order')
+            return await this._settleOrderLeg(data, m, coin, localActionIndex, giveTick, giveAmount, getAmount, getTick, giveOwnership, payoutAddr, counterpartyCoin);
 
         // The local offer must still be open (not already settled / cancelled / expired).
         // A cross-chain swap stores get_coin = counterparty coin, so getSwapInfo resolves it.
@@ -160,6 +173,61 @@ class Cross_Settle {
 
         // Complete the offer and record the settlement (idempotent on match_id).
         await this.indexerDb.createSwapStatus(data['ACTION_INDEX'], localActionIndex, 'complete');
+        await this.indexerDb.recordCrossChainSettlement(data['ACTION_INDEX'], m.match_id, localActionIndex, data['BLOCK_INDEX']);
+
+        let addresses = Object.keys(this.util.getAddressesList());
+        await this.indexerDb.updateBalances(addresses);
+
+        await this.mapper.createMappings(data);
+    }
+
+    // Settle one ORDER leg of a cross-chain match: release only THIS match's fill from escrow
+    // to the counterparty, record the fill (so the order's remaining drops), and complete the
+    // order only once fully filled. Multiple partial fills each settle once (distinct match_id
+    // → distinct cross_chain_settlements row), accumulating against the same local order.
+    async _settleOrderLeg(data, m, coin, localActionIndex, giveTick, giveAmount, getAmount, getTick, giveOwnership, payoutAddr, counterpartyCoin){
+        // A cross-chain order stores get_coin = counterparty coin, so getOrderInfo (which
+        // filters by get_coin) resolves it under the counterparty coin.
+        let orderInfo = await this.indexerDb.getOrderInfo(counterpartyCoin, localActionIndex);
+        if(!orderInfo){
+            console.warn("\t CROSS_SETTLE : match=" + String(m.match_id).substring(0,16) + '... : local order ' + coin + ':' + localActionIndex + ' not found — skipping');
+            return;
+        }
+        if(orderInfo['ORDER_STATUS'] !== 'open'){
+            // Terminal already (fully filled by a prior pass, cancelled, or expired). Record
+            // the settlement so we stop re-evaluating it, but move no funds.
+            console.log("\t CROSS_SETTLE : match=" + String(m.match_id).substring(0,16) + '... : order ' + coin + ':' + localActionIndex + ' not open (' + orderInfo['ORDER_STATUS'] + ') — skipping');
+            return;
+        }
+
+        let action = { ACTION: 'CROSS_SETTLE', BLOCK_INDEX: data['BLOCK_INDEX'] };
+        data['ACTION_INDEX'] = await this.indexerDb.createActionIndex(action);
+        data['STATUS'] = 'valid';
+
+        console.log("\t CROSS_SETTLE : match=" + String(m.match_id).substring(0,16) + '... : order fill release ' +
+                    giveAmount + ' ' + coin + ':' + (giveTick || coin) + ' → ' + payoutAddr + ' : ' + data['STATUS']);
+
+        let credits = [], debits = [], escrows = [];
+        if(giveOwnership === 1){
+            // Ownership orders are single-fill: transfer ownership, no balance escrow.
+            await this.util.transferTokenOwnership(this.indexerDb, this.mapper, data, giveTick, orderInfo['SOURCE'], payoutAddr);
+        } else {
+            escrows.push([giveTick, -giveAmount, payoutAddr]);
+            credits.push([giveTick,  giveAmount, payoutAddr]);
+            this.util.addAddressTicker(payoutAddr, giveTick);
+        }
+        await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits, escrows);
+
+        // Record the fill so getOrderAmountsRemaining deducts it (single source of truth).
+        await this.indexerDb.recordCrossChainOrderFill(data['ACTION_INDEX'], localActionIndex, giveAmount, getAmount, coin, giveTick, counterpartyCoin, getTick);
+
+        // Complete the order only when nothing remains to give (or it was an ownership order,
+        // which is single-fill). Otherwise it stays 'open' for further fills.
+        let [give_remaining] = await this.indexerDb.getOrderAmountsRemaining(localActionIndex);
+        if(giveOwnership === 1 || this.util.bclte(give_remaining, 0))
+            await this.indexerDb.createOrderStatus(data['ACTION_INDEX'], localActionIndex, 'complete');
+
+        // Record the settlement (idempotent on match_id).
         await this.indexerDb.recordCrossChainSettlement(data['ACTION_INDEX'], m.match_id, localActionIndex, data['BLOCK_INDEX']);
 
         let addresses = Object.keys(this.util.getAddressesList());

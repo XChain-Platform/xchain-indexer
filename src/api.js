@@ -398,13 +398,16 @@ async function startApi(){
             if(max > 500) max = 500;
             try {
                 let latest = await indexer.indexerDb.getLatestBlockIndex();
-                // Phase A: cross-chain SWAP offers. Phase B adds ORDER offers (partial fills).
-                let orders = await indexer.indexerDb.getOpenCrossChainSwaps(max, after_action_index, to_coin);
+                // Unified cross-chain book: SWAP offers (Phase A, exact single-fill) + ORDER
+                // offers (Phase B, price-time partial fills). Each is tagged with `kind`.
+                let swaps  = await indexer.indexerDb.getOpenCrossChainSwaps(max, after_action_index, to_coin);
+                let orders = await indexer.indexerDb.getOpenCrossChainOrders(max, after_action_index, to_coin);
+                let merged = swaps.concat(orders);
                 return {
                     latest_block_index: latest,
                     network:            indexer.config['NETWORK'],
-                    count:              orders.length,
-                    orders:             orders
+                    count:              merged.length,
+                    orders:             merged
                 };
             } catch (err) {
                 console.error('getopencrosschainorders error:', err);

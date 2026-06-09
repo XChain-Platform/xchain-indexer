@@ -293,4 +293,82 @@ describe('Cross_Settle action handler @regression @tier1', function () {
         assert.ok(indexer.indexerDb.createEscrow.notCalled);
         assert.ok(indexer.indexerDb.recordCrossChainSettlement.calledOnce);
     });
+
+    // ─── ORDER leg: partial-fill settlement (Phase B) ─────────────────────
+    describe('ORDER leg (partial fills)', function () {
+        beforeEach(function () {
+            indexer.indexerDb.recordCrossChainOrderFill = sinon.stub().resolves();
+            indexer.indexerDb.getOrderInfo.resolves({ SOURCE: '1SrcOrderXXXXXXXXXXXXXXXXXXXXYs6gYt', ORDER_STATUS: 'open' });
+            indexer.indexerDb.getOrderAmountsRemaining.resolves(['90', '45']);  // still remaining by default
+            indexer.indexerDb.getValidatorsByCapability.resolves([{}]);          // N=1 → quorum 1
+        });
+
+        const orderMatch = (o) => makeMatch({ a_kind: 'order', b_kind: 'order', ...o });
+
+        it('partial fill: releases the fill, records it, and leaves the order OPEN', async function () {
+            const { match } = signMatch(orderMatch(), 1);
+            const data = makeData({ MATCH: match });
+            await handler.parse(null, data, null);
+
+            assert.strictEqual(data['STATUS'], 'valid');
+            assert.ok(indexer.indexerDb.createEscrow.called);          // fungible escrow released
+            assert.ok(indexer.indexerDb.recordCrossChainOrderFill.calledOnce);
+            const f = indexer.indexerDb.recordCrossChainOrderFill.firstCall.args;
+            assert.strictEqual(f[0], 777);   // settlement action_index
+            assert.strictEqual(f[1], 42);    // local order action_index
+            assert.strictEqual(f[2], '10');  // give fill = a_amount
+            assert.strictEqual(f[3], '5');   // get fill = b_amount
+            assert.ok(indexer.indexerDb.createOrderStatus.notCalled);  // NOT complete (remaining > 0)
+            assert.ok(indexer.indexerDb.recordCrossChainSettlement.calledOnce);
+        });
+
+        it('final fill: marks the order complete when nothing remains', async function () {
+            const { match } = signMatch(orderMatch(), 1);
+            indexer.indexerDb.getOrderAmountsRemaining.resolves(['0', '0']);
+            const data = makeData({ MATCH: match });
+            await handler.parse(null, data, null);
+            assert.ok(indexer.indexerDb.createOrderStatus.calledWith(777, 42, 'complete'));
+            assert.ok(indexer.indexerDb.recordCrossChainSettlement.calledOnce);
+        });
+
+        it('settles the b leg order when this chain is the b side', async function () {
+            const { match } = signMatch(orderMatch({
+                a_chain: 'LTC', a_action_index: 11, a_amount: '5', a_payout_addr: 'LpayoutA',
+                b_chain: 'BTC', b_action_index: 88, b_tick: 'BBB', b_amount: '7',
+                b_payout_addr: '1payoutBXXXXXXXXXXXXXXXXXXXXXaKc5Z',
+            }), 1);
+            const data = makeData({ MATCH: match });
+            await handler.parse(null, data, null);
+            const f = indexer.indexerDb.recordCrossChainOrderFill.firstCall.args;
+            assert.strictEqual(f[1], 88);    // local order = b leg
+            assert.strictEqual(f[2], '7');   // give fill = b_amount
+            assert.strictEqual(f[3], '5');   // get fill = a_amount
+        });
+
+        it('ownership order: transfers ownership and completes (single fill)', async function () {
+            const { match } = signMatch(orderMatch({ a_ownership: 1 }), 1);
+            indexer.indexerDb.getOrderAmountsRemaining.resolves(['1', '1']);  // ownership completes regardless
+            const data = makeData({ MATCH: match });
+            await handler.parse(null, data, null);
+            assert.ok(indexer.indexerDb.clearTokenEscrow.called);
+            assert.ok(indexer.indexerDb.createIssue.called);
+            assert.ok(indexer.indexerDb.createEscrow.notCalled);
+            assert.ok(indexer.indexerDb.createOrderStatus.calledWith(777, 42, 'complete'));
+        });
+
+        it('skips when the local order is not open', async function () {
+            const { match } = signMatch(orderMatch(), 1);
+            indexer.indexerDb.getOrderInfo.resolves({ SOURCE: 'x', ORDER_STATUS: 'complete' });
+            await handler.parse(null, makeData({ MATCH: match }), null);
+            assert.ok(indexer.indexerDb.recordCrossChainOrderFill.notCalled);
+            assert.ok(indexer.indexerDb.recordCrossChainSettlement.notCalled);
+        });
+
+        it('skips when the local order is not found', async function () {
+            const { match } = signMatch(orderMatch(), 1);
+            indexer.indexerDb.getOrderInfo.resolves(null);
+            await handler.parse(null, makeData({ MATCH: match }), null);
+            assert.ok(indexer.indexerDb.recordCrossChainSettlement.notCalled);
+        });
+    });
 });
