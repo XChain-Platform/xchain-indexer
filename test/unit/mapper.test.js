@@ -157,4 +157,63 @@ describe('Mapper @regression @tier3', function () {
         await mapper.createMappings(data);
         assert.ok(indexer.indexerDb.createFileMapping.notCalled);
     });
+
+    // ─── LINK branch coverage ─────────────────────────────────────────────
+
+    it('does NOT resolve a leg whose COIN is not the local network', async function () {
+        const OWNER_ADDR = '1SourceAddressXXXXXXXXXXXXXXXYs6gYt';
+        // COIN1 is LTC (not the local BTC) → action1 short-circuits to false, no mapping.
+        indexer.indexerDb.getActionData.callsFake(async (actionIndex) => {
+            if (actionIndex == 6) return { action: 'ISSUE', action_index: 6, tick: 'MYTOKEN' };
+            return null;
+        });
+        indexer.util.addAddressTicker(OWNER_ADDR);
+        const data = createBaseData({
+            ACTION: 'LINK', ACTION_INDEX: 10, STATUS: 'valid', SOURCE: OWNER_ADDR,
+            COIN1: 'LTC', COIN1_ACTION_INDEX: 5,
+            COIN2: 'BTC', COIN2_ACTION_INDEX: 6,
+        });
+        await mapper.createMappings(data);
+        assert.ok(indexer.indexerDb.getActionData.neverCalledWith(5)); // LTC leg never fetched locally
+        assert.ok(indexer.indexerDb.createFileMapping.notCalled);
+    });
+
+    it('creates the FILE→TICK mapping when the ISSUE/FILE legs are in reversed order', async function () {
+        const FILE_INDEX  = 7;
+        const ISSUE_INDEX = 8;
+        const OWNER_ADDR  = '1SourceAddressXXXXXXXXXXXXXXXYs6gYt';
+        // action1 = ISSUE, action2 = FILE — exercises the second arm of the FILE/ISSUE
+        // detection and the reversed tick/index ternaries.
+        indexer.indexerDb.getActionData.callsFake(async (actionIndex) => {
+            if (actionIndex == ISSUE_INDEX) return { action: 'ISSUE', action_index: ISSUE_INDEX, tick: 'REVTOK' };
+            if (actionIndex == FILE_INDEX)  return { action: 'FILE',  action_index: FILE_INDEX,  tick: null };
+            return null;
+        });
+        indexer.indexerDb.getTokenInfo.resolves(createTokenInfo({ TICK: 'REVTOK', OWNER: OWNER_ADDR }));
+        indexer.util.addAddressTicker(OWNER_ADDR);
+        const data = createBaseData({
+            ACTION: 'LINK', ACTION_INDEX: 10, STATUS: 'valid', SOURCE: OWNER_ADDR,
+            COIN1: 'BTC', COIN1_ACTION_INDEX: ISSUE_INDEX,  // leg 1 = ISSUE
+            COIN2: 'BTC', COIN2_ACTION_INDEX: FILE_INDEX,   // leg 2 = FILE
+        });
+        await mapper.createMappings(data);
+        assert.ok(indexer.indexerDb.createFileMapping.calledWith(FILE_INDEX, 'tick', 'REVTOK'));
+    });
+
+    it('does NOT create a mapping when the two legs are not a FILE/ISSUE pair', async function () {
+        const OWNER_ADDR = '1SourceAddressXXXXXXXXXXXXXXXYs6gYt';
+        indexer.indexerDb.getActionData.callsFake(async (actionIndex) => {
+            if (actionIndex == 5) return { action: 'SEND', action_index: 5, tick: 'X' };
+            if (actionIndex == 6) return { action: 'ISSUE', action_index: 6, tick: 'X' };
+            return null;
+        });
+        indexer.util.addAddressTicker(OWNER_ADDR);
+        const data = createBaseData({
+            ACTION: 'LINK', ACTION_INDEX: 10, STATUS: 'valid', SOURCE: OWNER_ADDR,
+            COIN1: 'BTC', COIN1_ACTION_INDEX: 5,
+            COIN2: 'BTC', COIN2_ACTION_INDEX: 6,
+        });
+        await mapper.createMappings(data);
+        assert.ok(indexer.indexerDb.createFileMapping.notCalled);
+    });
 });

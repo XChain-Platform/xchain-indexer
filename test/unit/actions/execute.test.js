@@ -455,4 +455,136 @@ describe('Execute (EXECUTE) @regression @tier2', function () {
         });
 
     });
+
+    // ─── _processSlashEmission (internal SLASH handler) ───────────────────
+    // Driven directly: SLASH emissions never reach the wire/decoder, so they are
+    // handled inline by this method rather than the generic emission router.
+    describe('_processSlashEmission', function () {
+
+        const PUBKEY = 'a'.repeat(64);
+
+        function slashEmission(overrides = {}) {
+            return { action: 'SLASH', params: { contractIndex: CONTRACT, pubkey: PUBKEY, token: 'STK', amount: '100', ...overrides } };
+        }
+
+        function slashData(overrides = {}) {
+            return executeData({ CONTRACT_ACTION_INDEX: CONTRACT, ACTION_INDEX: 99, BLOCK_INDEX: 200, ...overrides });
+        }
+
+        // Wire the DB methods _processSlashEmission needs (absent from the default mock).
+        function wireSlashDb(over = {}) {
+            indexer.indexerDb.getContract        = sinon.stub().resolves({ slash_destination_id: 42 });
+            indexer.indexerDb.getPubkeyId        = sinon.stub().resolves(7);
+            indexer.indexerDb.getTickerId        = sinon.stub().resolves(3);
+            indexer.indexerDb.slashContractStake = sinon.stub().resolves('100');
+            indexer.indexerDb.doQuery            = sinon.stub().resolves([{ address: '1SlashDestXXXXXXXXXXXXXXXXXXXXX' }]);
+            indexer.indexerDb.createCredit       = sinon.stub().resolves();
+            indexer.indexerDb.createSlashEvent   = sinon.stub().resolves();
+            for(const [k, v] of Object.entries(over)) indexer.indexerDb[k] = v;
+        }
+
+        it('slashes stake, credits the destination, and writes a slash event (happy path)', async function () {
+            wireSlashDb();
+            await handler._processSlashEmission(slashEmission(), slashData());
+            assert.ok(indexer.indexerDb.slashContractStake.calledWith(CONTRACT, 7, 3, '100'));
+            assert.ok(indexer.indexerDb.createCredit.calledWith(99, 'STK', '100', '1SlashDestXXXXXXXXXXXXXXXXXXXXX'));
+            assert.ok(indexer.indexerDb.createSlashEvent.calledOnce);
+            const ev = indexer.indexerDb.createSlashEvent.firstCall.args[0];
+            assert.strictEqual(ev['TARGET_CONTRACT_INDEX'], CONTRACT);
+            assert.strictEqual(ev['SIGNING_PUBKEY_ID'], 7);
+            assert.strictEqual(ev['AMOUNT'], '100');
+        });
+
+        it('throws on a contractIndex mismatch (defense in depth)', async function () {
+            wireSlashDb();
+            await assert.rejects(
+                handler._processSlashEmission(slashEmission({ contractIndex: 999 }), slashData()),
+                /contractIndex mismatch/);
+        });
+
+        it('throws when the contract row is missing', async function () {
+            wireSlashDb({ getContract: sinon.stub().resolves(null) });
+            await assert.rejects(handler._processSlashEmission(slashEmission(), slashData()), /contract not found/);
+        });
+
+        it('throws when the contract has no slash destination configured', async function () {
+            wireSlashDb({ getContract: sinon.stub().resolves({ slash_destination_id: null }) });
+            await assert.rejects(handler._processSlashEmission(slashEmission(), slashData()), /no slash destination/);
+        });
+
+        it('no-ops silently when the pubkey is not staked here', async function () {
+            wireSlashDb({ getPubkeyId: sinon.stub().resolves(null) });
+            await handler._processSlashEmission(slashEmission(), slashData());
+            assert.ok(indexer.indexerDb.slashContractStake.notCalled);
+            assert.ok(indexer.indexerDb.createCredit.notCalled);
+        });
+
+        it('no-ops when the token ticker is unknown', async function () {
+            wireSlashDb({ getTickerId: sinon.stub().resolves(null) });
+            await handler._processSlashEmission(slashEmission(), slashData());
+            assert.ok(indexer.indexerDb.slashContractStake.notCalled);
+            assert.ok(indexer.indexerDb.createCredit.notCalled);
+        });
+
+        it('no-ops when nothing was actually slashed (0 available)', async function () {
+            wireSlashDb({ slashContractStake: sinon.stub().resolves('0') });
+            await handler._processSlashEmission(slashEmission(), slashData());
+            assert.ok(indexer.indexerDb.createCredit.notCalled);
+            assert.ok(indexer.indexerDb.createSlashEvent.notCalled);
+        });
+
+        it('throws when the destination address row is missing', async function () {
+            wireSlashDb({ doQuery: sinon.stub().resolves([]) });
+            await assert.rejects(handler._processSlashEmission(slashEmission(), slashData()), /destination address row missing/);
+        });
+    });
+
+    // ─── Gas-fee payment modes (fee > 0) ──────────────────────────────────
+    // The default suite runs with GAS_PRICE=0 (fee skipped). Raising GAS_PRICE makes
+    // fee = VM_EXECUTE_BASE * GAS_PRICE > 0, driving the native/xchain fee branch. The
+    // rejected/invalid paths set `error` and short-circuit BEFORE VM execution, so they
+    // are deterministic without a live VM.
+    describe('gas-fee payment modes', function () {
+
+        beforeEach(function () {
+            indexer.config['GAS_PRICE'] = '0.00000100'; // fee = base * price > 0
+        });
+
+        it('rejects when a native-coin fee output is required but absent (rejected)', async function () {
+            sinon.stub(indexer.util, 'detectFeePaymentMode').returns('rejected');
+            const data = executeData();
+            await handler.parse(['0', String(CONTRACT), 'run', ''], data, null);
+            assert.strictEqual(data['STATUS'], 'invalid: insufficient fee (native coin output required)');
+        });
+
+        it('rejects an invalid native-coin fee', async function () {
+            sinon.stub(indexer.util, 'detectFeePaymentMode').returns('native');
+            sinon.stub(indexer.util, 'validateNativeCoinFee').resolves({ valid: false, error: 'underpaid' });
+            const data = executeData();
+            await handler.parse(['0', String(CONTRACT), 'run', ''], data, null);
+            assert.ok(String(data['STATUS']).startsWith('invalid'));
+        });
+
+        it('accepts a valid native-coin fee and records the native-coin metadata', async function () {
+            sinon.stub(indexer.util, 'detectFeePaymentMode').returns('native');
+            const valStub = sinon.stub(indexer.util, 'validateNativeCoinFee').resolves({
+                valid: true, nativeCoinAmount: '0.0005', nativeCoin: 'BTC', oracleRound: 5,
+            });
+            const data = executeData();
+            await handler.parse(['0', String(CONTRACT), 'run', ''], data, null);
+            assert.ok(valStub.called);
+            // native-coin metadata is stamped on the action before VM execution
+            assert.strictEqual(data['NATIVE_COIN'], 'BTC');
+            assert.strictEqual(data['NATIVE_COIN_AMOUNT'], '0.0005');
+            assert.strictEqual(data['ORACLE_ROUND'], 5);
+        });
+
+        it('rejects when SOURCE lacks the XCHAIN gas balance', async function () {
+            sinon.stub(indexer.util, 'detectFeePaymentMode').returns('xchain');
+            indexer.indexerDb.getAddressBalances.resolves({ 1: '0' }); // no GAS balance
+            const data = executeData();
+            await handler.parse(['0', String(CONTRACT), 'run', ''], data, null);
+            assert.strictEqual(data['STATUS'], 'invalid: insufficient funds (GAS)');
+        });
+    });
 });

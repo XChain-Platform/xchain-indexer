@@ -75,6 +75,15 @@ describe('ed25519 @crypto @regression', function () {
             assert.strictEqual(ed.verify('msg', sig, 'nothex'), false);          // pubkey not 64 hex
             assert.strictEqual(ed.verify('msg', sig, 'g'.repeat(64)), false);    // 64 chars but non-hex
         });
+
+        it('returns false for a well-formed-hex but cryptographically invalid pubkey', function () {
+            const { privateKey } = realKey();
+            const sig = sign('msg', privateKey);
+            // 'f'*64 passes the hex-length guards; Node imports any 32 bytes as an Ed25519
+            // key and crypto.verify just returns false for the bad point (it does not throw),
+            // so this exercises the normal false return — the try/catch is defensive only.
+            assert.strictEqual(ed.verify('msg', sig, 'f'.repeat(64)), false);
+        });
     });
 
     describe('buildPriceV0Payload()', function () {
@@ -90,6 +99,24 @@ describe('ed25519 @crypto @regression', function () {
             const obj = JSON.parse(payload);
             assert.strictEqual(obj.round, 42);
             assert.strictEqual(obj.timestamp, 1700000000);
+        });
+
+        it('sorts pairs deterministically regardless of input order (both comparator branches)', function () {
+            // Pre-sorted ascending input forces the comparator's a.pair > b.pair (return 1) path,
+            // which the reversed-order case alone does not always exercise.
+            const asc  = ed.buildPriceV0Payload(1, 1, [{ pair: 'AAA' }, { pair: 'BBB' }, { pair: 'CCC' }]);
+            const desc = ed.buildPriceV0Payload(1, 1, [{ pair: 'CCC' }, { pair: 'BBB' }, { pair: 'AAA' }]);
+            assert.strictEqual(asc, desc);
+            const obj = JSON.parse(asc);
+            assert.deepStrictEqual(obj.pairs.map(p => p.pair), ['AAA', 'BBB', 'CCC']);
+        });
+
+        it('treats equal pair names as equal in the comparator (return 0 path)', function () {
+            // Two identical pair keys force the comparator's a==b branch (return 0).
+            const payload = ed.buildPriceV0Payload(1, 1, [{ pair: 'DUP', v: 1 }, { pair: 'DUP', v: 2 }]);
+            const obj = JSON.parse(payload);
+            assert.strictEqual(obj.pairs.length, 2);
+            assert.ok(obj.pairs.every(p => p.pair === 'DUP'));
         });
 
         it('round-trips through sign/verify (the real consensus path)', function () {

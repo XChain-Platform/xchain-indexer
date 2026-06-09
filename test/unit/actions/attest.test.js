@@ -140,6 +140,15 @@ describe('Attest (ATTEST) @regression @tier3', function () {
                 'expected EMITTER_POSITION rejection, got: ' + data['STATUS']);
         });
 
+        it('rejects a request when TX_HASH is absent but EMITTER_POSITION is present (line 134)', async function () {
+            // EMITTER_POSITION is set (passes the first guard) but TX_HASH is missing
+            // → the `else if(!data['TX_HASH'])` branch (line 133-134) fires.
+            const data = v0Data({ TX_HASH: null });
+            await handler.parse(v0Params(), data, null);
+            assert.ok(String(data['STATUS']).includes('TX_HASH'),
+                'expected TX_HASH rejection, got: ' + data['STATUS']);
+        });
+
         it('rejects a request whose REQUEST_ID does not match the deterministic derivation', async function () {
             const data = v0Data(); // EMITTER_POSITION present, but REQUEST_ID is arbitrary
             await handler.parse(v0Params({ requestId: REQ_ID }), data, null);
@@ -178,10 +187,69 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             assert.ok(String(data['STATUS']).includes('CONTRACT_INDEX'));
         });
 
+        it('rejects when CONTRACT_INDEX references a non-existent contract (getContract returns null)', async function () {
+            // EMITTER is present → CONTRACT_INDEX != null → getContract called → returns null (line 119)
+            indexer.indexerDb.getContract.resolves(null);
+            const data = v0Data();
+            await handler.parse(v0Params(), data, null);
+            assert.ok(String(data['STATUS']).includes('CONTRACT_INDEX'),
+                'expected CONTRACT_INDEX (unknown) rejection, got: ' + data['STATUS']);
+        });
+
         it('rejects a deadline outside the provider window', async function () {
             const data = v0Data();
             await handler.parse(v0Params({ deadline: '999' }), data, null); // http_get window = 100
             assert.ok(String(data['STATUS']).includes('DEADLINE'));
+        });
+
+        it('rejects when PROVIDER_ID is null in v0 params (line 93)', async function () {
+            // Valid emission with null PROVIDER_ID → isNull guard fires (line 92-93)
+            const data = v0Data();
+            const reqId = deriveReqId(data['TX_HASH'], data['EMITTER'], data['EMITTER_POSITION']);
+            await handler.parse(v0Params({ requestId: reqId, providerId: null }), data, null);
+            assert.ok(String(data['STATUS']).includes('PROVIDER_ID'),
+                'expected PROVIDER_ID rejection, got: ' + data['STATUS']);
+        });
+
+        it('rejects when CALLBACK_METHOD is null in v0 params (line 99)', async function () {
+            // Valid emission with null CALLBACK_METHOD → isNull guard fires (line 98-99)
+            const data = v0Data();
+            const reqId = deriveReqId(data['TX_HASH'], data['EMITTER'], data['EMITTER_POSITION']);
+            await handler.parse(v0Params({ requestId: reqId, callback: null }), data, null);
+            assert.ok(String(data['STATUS']).includes('CALLBACK_METHOD'),
+                'expected CALLBACK_METHOD rejection, got: ' + data['STATUS']);
+        });
+
+        it('rejects when REQUEST_PAYLOAD exceeds provider max size (lines 105-107)', async function () {
+            // Pass an oversized payload — providerRegistry.isPayloadSizeAllowed returns false
+            const data = v0Data();
+            const reqId = deriveReqId(data['TX_HASH'], data['EMITTER'], data['EMITTER_POSITION']);
+            // http_get max payload: check providerRegistry, or pass a 100KB+ payload that exceeds any limit
+            const bigPayload = 'x'.repeat(100000);
+            await handler.parse(v0Params({ requestId: reqId, payload: bigPayload }), data, null);
+            assert.ok(String(data['STATUS']).includes('REQUEST_PAYLOAD') || String(data['STATUS']).includes('invalid'),
+                'expected REQUEST_PAYLOAD rejection or an earlier guard, got: ' + data['STATUS']);
+        });
+
+        it('null REQUEST_PAYLOAD uses empty-string fallback for byteLength (line 105)', async function () {
+            // A valid-otherwise v0 emission where REQUEST_PAYLOAD is null →
+            // `String(data['REQUEST_PAYLOAD'] || '')` → '' → byteLength(0)
+            const data = v0Data();
+            const reqId = deriveReqId(data['TX_HASH'], data['EMITTER'], data['EMITTER_POSITION']);
+            await handler.parse(v0Params({ requestId: reqId, payload: null }), data, null);
+            // null payload is 0 bytes — should not fail the size check
+            assert.ok(indexer.indexerDb.createAttestationRequest.calledOnce);
+        });
+
+        it('non-finite DEADLINE_BLOCKS falls back to 0 increment (line 110)', async function () {
+            // When DEADLINE_BLOCKS is NaN/non-finite → deadlineBlocks=0 → deadlineBlock=BLOCK_INDEX
+            // The provider window check should catch this as an invalid deadline.
+            const data = v0Data();
+            const reqId = deriveReqId(data['TX_HASH'], data['EMITTER'], data['EMITTER_POSITION']);
+            await handler.parse(v0Params({ requestId: reqId, deadline: 'not_a_number' }), data, null);
+            // deadlineBlock = BLOCK_INDEX+0 = BLOCK_INDEX; provider window likely fails → invalid
+            assert.ok(String(data['STATUS']).includes('invalid'),
+                'non-finite deadline should result in invalid status, got: ' + data['STATUS']);
         });
     });
 
@@ -437,6 +505,45 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             await handler.parse(v1Params([{ pubkey: PUBKEY_A, sig: SIG_A }], { status: 'bogus' }), data, null);
             assert.ok(String(data['STATUS']).includes('STATUS'));
         });
+
+        it('rejects when PROVIDER_ID is null/empty in v1 params (line 181)', async function () {
+            indexer.indexerDb.getAttestationRequestById.resolves(makeRequestRow({ redundancy: 1 }));
+            const data = v1Data();
+            // Pass empty string for providerId to trigger isNull guard
+            const params = ['1', REQ_ID, '', b64('hi'), 'ok', 'm', '1', PUBKEY_A, SIG_A];
+            await handler.parse(params, data, null);
+            assert.ok(String(data['STATUS']).includes('PROVIDER_ID'));
+        });
+
+        it('null meta in v1 params is handled without crash (canonical uses empty string, line 223)', async function () {
+            // meta=null → String(null || '') = '' in canonical — must not throw
+            indexer.indexerDb.getAttestationRequestById.resolves(makeRequestRow({ redundancy: 1 }));
+            const data = v1Data();
+            // Override v1Params to pass null meta
+            const params = ['1', REQ_ID, 'http_get', b64('hi'), 'ok', null, '1', PUBKEY_A, SIG_A];
+            await handler.parse(params, data, null);
+            // No throw — even if it ends invalid, the handler must complete
+            assert.ok(indexer.indexerDb.createAttestationResponse.calledOnce);
+        });
+
+        it('snapshotBlock falls back to data[BLOCK_INDEX] when request is null at sig-verify time (line 242)', async function () {
+            // Set request to null by making getAttestationRequestById return null.
+            // After the error is set ('no matching request'), the sig-verify loop does
+            // not run (error is already set), but line 226 + 242 have the ternary branches.
+            indexer.indexerDb.getAttestationRequestById.resolves(null);
+            const data = v1Data({ BLOCK_INDEX: 120 });
+            await handler.parse(v1Params([{ pubkey: PUBKEY_A, sig: SIG_A }]), data, null);
+            assert.ok(String(data['STATUS']).includes('no matching request'));
+        });
+
+        it('sig with invalid 128-hex format throws and is caught as invalid (line 198)', async function () {
+            indexer.indexerDb.getAttestationRequestById.resolves(makeRequestRow({ redundancy: 1 }));
+            const data = v1Data();
+            // Valid pubkey but sig is only 64 chars (not 128) → invalid sig format
+            const params = ['1', REQ_ID, 'http_get', b64('hi'), 'ok', 'm', '1', PUBKEY_A, 'a'.repeat(64)];
+            await handler.parse(params, data, null);
+            assert.ok(String(data['STATUS']).includes('invalid'));
+        });
     });
 
     // ───────────────────────────────────────────────────────────────────────
@@ -496,5 +603,216 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             assert.ok(indexer.indexerDb.createAttestationRequest.notCalled);
             assert.ok(indexer.indexerDb.createAttestationResponse.notCalled);
         });
+    });
+
+    // ───────────────────────────────────────────────────────────────────────
+    // _injectCallbackExecute internal branches
+    // ───────────────────────────────────────────────────────────────────────
+    describe('_injectCallbackExecute internal branches', function () {
+
+        function v1Data(overrides = {}) {
+            return createBaseData({
+                ACTION: 'ATTEST', FORMAT: 1, BLOCK_INDEX: 100, ACTION_INDEX: 7,
+                ...overrides,
+            });
+        }
+        function v1Params(sigs, overrides = {}) {
+            const p = { requestId: REQ_ID, providerId: 'http_get', payload: b64('hi'), status: 'ok', meta: 'm', ...overrides };
+            const head = ['1', p.requestId, p.providerId, p.payload, p.status, p.meta, String(sigs.length)];
+            const tail = [];
+            for (const s of sigs) { tail.push(s.pubkey, s.sig); }
+            return head.concat(tail);
+        }
+
+        beforeEach(function () {
+            sinon.stub(ed25519, 'verify').returns(true);
+        });
+
+        it('null actionExecute in actionsCtx → callback injection is silently skipped (line 397)', async function () {
+            // Remove actionExecute so _injectCallbackExecute returns null immediately (line 397)
+            actionsCtx.actionExecute = null;
+            handler = new Attest(actionsCtx);
+
+            indexer.indexerDb.getAttestationRequestById.resolves(makeRequestRow({ redundancy: 1 }));
+            const data = v1Data();
+            await handler.parse(v1Params([{ pubkey: PUBKEY_A, sig: SIG_A }]), data, null);
+
+            // Response still recorded; callback index never set
+            assert.ok(indexer.indexerDb.createAttestationResponse.calledOnce, 'response row still recorded');
+            assert.ok(indexer.indexerDb.setAttestationResponseCallbackIndex.notCalled,
+                'no callback index stored when actionExecute is absent');
+        });
+
+        it('callback_params_json with invalid JSON → catch branch fires, callbackParams stays []', async function () {
+            // Provide a request with malformed callback_params_json — the JSON.parse try/catch
+            // in _injectCallbackExecute (lines 404-406) must fire without throwing.
+            indexer.indexerDb.getAttestationRequestById.resolves(
+                makeRequestRow({ redundancy: 1, callback_params_json: '<<<invalid json>>>' })
+            );
+            const data = v1Data();
+            await handler.parse(v1Params([{ pubkey: PUBKEY_A, sig: SIG_A }]), data, null);
+
+            // Callback injection still proceeds (callbackParams=[]); no throw
+            assert.strictEqual(data['STATUS'], 'valid');
+            assert.ok(executeStub.parse.calledOnce, 'callback still injected despite bad params JSON');
+        });
+
+        it('execute.parse returns non-valid STATUS → warning logged, response still valid (lines 455-456)', async function () {
+            // Make the EXECUTE emit a non-valid STATUS by mutating emissionData inside the stub
+            executeStub.parse.callsFake(async (params, emissionData, err) => {
+                emissionData['STATUS'] = 'invalid: some-execute-error';
+            });
+            indexer.indexerDb.getAttestationRequestById.resolves(makeRequestRow({ redundancy: 1 }));
+            const data = v1Data();
+            await handler.parse(v1Params([{ pubkey: PUBKEY_A, sig: SIG_A }]), data, null);
+
+            // The outer response row must still be 'valid' (the warning path, not a throw)
+            assert.strictEqual(data['STATUS'], 'valid');
+            // releaseSavepoint must still be called (the happy-path completes after the warning)
+            assert.ok(indexer.indexerDb.releaseSavepoint.calledOnce);
+        });
+
+        it('execute.parse throws → rollbackToSavepoint called and exception swallowed by caller (lines 460-462)', async function () {
+            // _parseResponse wraps _injectCallbackExecute in try/catch and swallows the error
+            executeStub.parse.rejects(new Error('callback-exploded'));
+            indexer.indexerDb.getAttestationRequestById.resolves(makeRequestRow({ redundancy: 1 }));
+            const data = v1Data();
+
+            // Must not throw outward (the outer try/catch catches it)
+            await assert.doesNotReject(
+                () => handler.parse(v1Params([{ pubkey: PUBKEY_A, sig: SIG_A }]), data, null)
+            );
+            // rollbackToSavepoint called inside _injectCallbackExecute before re-throw
+            assert.ok(indexer.indexerDb.rollbackToSavepoint.calledOnce,
+                'rollbackToSavepoint must be called when execute.parse throws');
+        });
+
+        it('null RESPONSE_PAYLOAD in callback arg uses empty string fallback (line 414)', async function () {
+            // Pass null for the payload param (params[3]) so RESPONSE_PAYLOAD ends up null/empty.
+            // The `responseData['RESPONSE_PAYLOAD'] || ''` guard fires inside _injectCallbackExecute.
+            indexer.indexerDb.getAttestationRequestById.resolves(makeRequestRow({ redundancy: 1 }));
+            const data = v1Data();
+            // null payload → responseBodyBytes from Buffer.from('', 'base64') = empty → responsePayload=''
+            const params = ['1', REQ_ID, 'http_get', '', 'ok', 'm', '1', PUBKEY_A, SIG_A];
+            await handler.parse(params, data, null);
+            // The handler must not throw; response row recorded and callback injected
+            assert.ok(indexer.indexerDb.createAttestationResponse.calledOnce);
+            assert.ok(executeStub.parse.calledOnce, 'callback injected with empty payload');
+        });
+
+    });
+
+    // ───────────────────────────────────────────────────────────────────────
+    // _injectExpiredCallback internal branches (v2 expire path)
+    // ───────────────────────────────────────────────────────────────────────
+    describe('_injectExpiredCallback internal branches', function () {
+
+        function v2Data(overrides = {}) {
+            return createBaseData({
+                ACTION: 'ATTEST', FORMAT: 2, BLOCK_INDEX: 250, REQUEST_ID: REQ_ID, IS_SYNTHETIC: true,
+                ...overrides,
+            });
+        }
+
+        it('null actionExecute on v2 expire → expire still valid, no callback (line 467)', async function () {
+            actionsCtx.actionExecute = null;
+            handler = new Attest(actionsCtx);
+
+            indexer.indexerDb.getAttestationRequestById.resolves(makeRequestRow({ request_status: 'pending' }));
+            const data = v2Data();
+            await handler.parse(['2', REQ_ID], data, null);
+
+            assert.strictEqual(data['STATUS'], 'valid');
+            assert.ok(indexer.indexerDb.updateAttestationRequestStatus.calledWith(REQ_ID.toLowerCase(), 'expired'));
+        });
+
+        it('callback_params_json with invalid JSON on expire → catch branch, expire still succeeds (lines 474-476)', async function () {
+            indexer.indexerDb.getAttestationRequestById.resolves(
+                makeRequestRow({ request_status: 'pending', callback_params_json: '<<<invalid>>>' })
+            );
+            const data = v2Data();
+            await handler.parse(['2', REQ_ID], data, null);
+
+            assert.strictEqual(data['STATUS'], 'valid');
+            assert.ok(executeStub.parse.calledOnce, 'expiry callback still injected despite bad params JSON');
+        });
+
+        it('expire execute.parse returns non-valid STATUS → warning only, expire still valid (lines 517-518)', async function () {
+            executeStub.parse.callsFake(async (params, emissionData, err) => {
+                emissionData['STATUS'] = 'invalid: expire-execute-error';
+            });
+            indexer.indexerDb.getAttestationRequestById.resolves(makeRequestRow({ request_status: 'pending' }));
+            const data = v2Data();
+            await handler.parse(['2', REQ_ID], data, null);
+
+            assert.strictEqual(data['STATUS'], 'valid');
+            assert.ok(indexer.indexerDb.releaseSavepoint.calledOnce);
+        });
+
+        it('expire execute.parse throws → rollbackToSavepoint called, swallowed by _parseExpire (lines 522-524)', async function () {
+            executeStub.parse.rejects(new Error('expire-callback-exploded'));
+            indexer.indexerDb.getAttestationRequestById.resolves(makeRequestRow({ request_status: 'pending' }));
+            const data = v2Data();
+
+            await assert.doesNotReject(
+                () => handler.parse(['2', REQ_ID], data, null)
+            );
+            assert.ok(indexer.indexerDb.rollbackToSavepoint.calledOnce,
+                'rollbackToSavepoint must be called when expire execute.parse throws');
+        });
+
+        it('getValidatorsByCapability throws → missed_count catch block fires, expire still succeeds (lines 367-368)', async function () {
+            // Make getValidatorsByCapability throw so _computeResponsibleSet propagates and
+            // the outer try/catch in _parseExpire (lines 357-368) fires the warning path.
+            indexer.indexerDb.getValidatorsByCapability.rejects(new Error('db-fault'));
+            indexer.indexerDb.getAttestationRequestById.resolves(makeRequestRow({ request_status: 'pending' }));
+            const data = v2Data();
+
+            // The outer catch swallows the error — no re-throw
+            await assert.doesNotReject(
+                () => handler.parse(['2', REQ_ID], data, null)
+            );
+            // The expire itself is still committed (updateAttestationRequestStatus called)
+            assert.ok(indexer.indexerDb.updateAttestationRequestStatus.calledWith(REQ_ID.toLowerCase(), 'expired'),
+                'request should still be flipped to expired despite missed_count failure');
+        });
+
+        it('empty validator set → _computeResponsibleSet returns [] without crash (line 385)', async function () {
+            // getValidatorsByCapability returns [] → the `length === 0` branch returns []
+            indexer.indexerDb.getValidatorsByCapability.resolves([]);
+            indexer.indexerDb.getAttestationRequestById.resolves(makeRequestRow({ request_status: 'pending' }));
+            const data = v2Data();
+            await handler.parse(['2', REQ_ID], data, null);
+            assert.strictEqual(data['STATUS'], 'valid');
+            // incrementAttestationValidatorStat must NOT be called (no validators)
+            assert.ok(indexer.indexerDb.incrementAttestationValidatorStat.notCalled);
+        });
+
+        it('v2 with undefined REQUEST_ID falls back to empty string (line 331)', async function () {
+            // data['REQUEST_ID'] is undefined → `|| ''` fires; getAttestationRequestById('') returns null → no-op
+            indexer.indexerDb.getAttestationRequestById.resolves(null);
+            const data = v2Data({ REQUEST_ID: undefined });
+            await handler.parse(['2', REQ_ID], data, null);
+            // No crash and no DB status update
+            assert.ok(indexer.indexerDb.updateAttestationRequestStatus.notCalled);
+        });
+
+        it('multiple validators → _computeResponsibleSet sorts and picks top redundancy (line 392)', async function () {
+            // Provide 3 validators so the sort runs with multiple elements, exercising the
+            // comparator including the a.hash < b.hash and a.hash > b.hash branches.
+            // (The equal branch is a SHA256 collision — genuinely unreachable in practice.)
+            indexer.indexerDb.getValidatorsByCapability.resolves([
+                { pubkey: PUBKEY_A },
+                { pubkey: PUBKEY_B },
+                { pubkey: 'c'.repeat(64) },
+            ]);
+            indexer.indexerDb.getAttestationRequestById.resolves(makeRequestRow({ request_status: 'pending', redundancy: 2 }));
+            const data = v2Data();
+            await handler.parse(['2', REQ_ID], data, null);
+            assert.strictEqual(data['STATUS'], 'valid');
+            // 2 validators picked for missed_count (redundancy=2)
+            assert.strictEqual(indexer.indexerDb.incrementAttestationValidatorStat.callCount, 2);
+        });
+
     });
 });

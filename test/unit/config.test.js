@@ -372,4 +372,43 @@ describe('XChainIndexer hub config overlay', function () {
             delete process.env.HUB_CONFIG_POLL_INTERVAL_MS;
         }
     });
+
+    // ─── parseIntMin0 — non-negative integer env parsing ──────────────────
+    describe('parseIntMin0 (BLOCK_CHECK_INTERVAL / BLOCK_PROCESS_TIMEOUT)', function () {
+
+        function loadWith(env) {
+            process.env.INDEXER_COIN = 'BTC';
+            process.env.INDEXER_NETWORK = 'regtest';
+            for(const [k, v] of Object.entries(env)){
+                if(v === undefined) delete process.env[k]; else process.env[k] = v;
+            }
+            delete require.cache[require.resolve('../../src/config.js')];
+            return require('../../src/config.js').getConfig();
+        }
+
+        afterEach(function () {
+            delete process.env.BLOCK_CHECK_INTERVAL;
+            delete process.env.BLOCK_PROCESS_TIMEOUT;
+        });
+
+        it('uses the configured value when a valid non-negative integer is set', function () {
+            assert.strictEqual(loadWith({ BLOCK_CHECK_INTERVAL: '12345' }).BLOCK_CHECK_INTERVAL, 12345);
+        });
+
+        it('preserves an explicit 0 (not treated as falsy)', function () {
+            assert.strictEqual(loadWith({ BLOCK_CHECK_INTERVAL: '0' }).BLOCK_CHECK_INTERVAL, 0);
+        });
+
+        it('falls back to the default for a negative value', function () {
+            assert.strictEqual(loadWith({ BLOCK_CHECK_INTERVAL: '-5' }).BLOCK_CHECK_INTERVAL, 5000);
+        });
+
+        it('falls back to the default for a non-numeric value', function () {
+            assert.strictEqual(loadWith({ BLOCK_PROCESS_TIMEOUT: 'abc' }).BLOCK_PROCESS_TIMEOUT, 300000);
+        });
+
+        it('falls back to the default when unset', function () {
+            assert.strictEqual(loadWith({ BLOCK_CHECK_INTERVAL: undefined }).BLOCK_CHECK_INTERVAL, 5000);
+        });
+    });
 });
