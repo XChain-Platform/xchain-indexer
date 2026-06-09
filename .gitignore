@@ -12,3 +12,7 @@
 /XChain_Decoder.sql.gz
 /XChain_Indexer.sql
 /XChain_Indexer.sql.gz
+
+# Coverage output (c8/nyc) — generated, not source
+coverage/
+.nyc_output/
