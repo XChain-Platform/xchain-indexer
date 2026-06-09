@@ -162,6 +162,12 @@ class Database {
                         // SQL source. Catches schemas that were updated upstream but
                         // never migrated on stacks created from an older release.
                         await this.alterTableForDrift(file, db);
+                        // Also reconcile declared indexes. A UNIQUE index added to the
+                        // SQL source AFTER a table was first created (e.g. balances'
+                        // addr_tick on 2026-05-29) is otherwise never applied, which
+                        // silently degrades updateAddressBalance's INSERT ... ON DUPLICATE
+                        // KEY UPDATE to a plain INSERT and accumulates duplicate rows.
+                        await this.reconcileTableIndexes(file, db);
                     } else {
                         await this.createTable(file);
                     }
@@ -222,8 +228,8 @@ class Database {
     //   2. Nullability — only relaxes NOT NULL -> NULL (the safe direction —
     //      never strengthens to NOT NULL since live rows might hold NULLs that
     //      would block the ALTER).
-    // Doesn't touch types, defaults of existing columns, or indexes. Each
-    // applied ALTER is loudly logged.
+    // Doesn't touch types or defaults of existing columns. Index reconciliation
+    // is handled separately by reconcileTableIndexes(). Each applied ALTER is loudly logged.
     async alterTableForDrift(file, db){
         const dir      = path.join(__dirname, 'sql');
         const data     = fs.readFileSync(dir + '/' + file, "utf8");
@@ -254,6 +260,111 @@ class Database {
                 await db.query('ALTER TABLE `' + table + '` MODIFY `' + exp.name + '` ' + cur.COLUMN_TYPE + ' NULL');
             }
         }
+    }
+
+    // Parse standalone `CREATE [UNIQUE] INDEX <name> ON <table> (<cols>)` statements
+    // from a table's SQL source. Returns [{name, unique, columns:[...]}]. Inline
+    // PRIMARY KEY / UNIQUE clauses inside CREATE TABLE are created with the table and
+    // are not reconciled here. Index/column names come from the trusted SQL files.
+    parseExpectedIndexes(sqlData, table){
+        sqlData = this.stripSqlLineComments(sqlData);
+        const re = /CREATE\s+(UNIQUE\s+)?INDEX\s+`?(\w+)`?\s+ON\s+`?(\w+)`?\s*\(\s*([\s\S]+?)\s*\)\s*;/gi;
+        const out = [];
+        let m;
+        while((m = re.exec(sqlData)) !== null){
+            if(m[3].toLowerCase() !== table.toLowerCase()) continue;
+            // Split the column list on commas; strip backticks, ASC/DESC, and any (len) prefix.
+            const columns = m[4].split(',')
+                .map(c => c.trim().replace(/`/g, '').split(/\s+/)[0].replace(/\(\d+\)$/, ''))
+                .filter(Boolean);
+            if(columns.length) out.push({ name: m[2], unique: !!m[1], columns });
+        }
+        return out;
+    }
+
+    // Reconcile declared indexes against the live table. Adds any index named in the
+    // SQL source that is absent live (matched by column set, so a renamed-but-equivalent
+    // index is treated as present). For a UNIQUE index blocked by pre-existing duplicate
+    // rows, dedupes first (see dedupeForUniqueIndex) then retries. Never throws — a
+    // failure is logged and startup continues. On a table that already has every declared
+    // index (the normal case) this is a single information_schema read and a no-op.
+    async reconcileTableIndexes(file, db){
+        try {
+            const dir      = path.join(__dirname, 'sql');
+            const data     = fs.readFileSync(dir + '/' + file, "utf8");
+            const table    = file.substring(0, file.indexOf('.sql'));
+            const expected = this.parseExpectedIndexes(data, table);
+            if(!expected.length) return;
+
+            // Live indexes -> map keyed by ordered column-set: "c1,c2" => {unique}
+            const rows = await db.query(
+                "SELECT INDEX_NAME, NON_UNIQUE, COLUMN_NAME, SEQ_IN_INDEX FROM information_schema.statistics " +
+                "WHERE table_schema = ? AND table_name = ? ORDER BY INDEX_NAME, SEQ_IN_INDEX",
+                [this.dbName, table]);
+            const byName = new Map();
+            const liveNames = new Set();
+            for(const r of rows){
+                liveNames.add(r.INDEX_NAME.toLowerCase());
+                if(!byName.has(r.INDEX_NAME)) byName.set(r.INDEX_NAME, { unique: Number(r.NON_UNIQUE) === 0, cols: [] });
+                byName.get(r.INDEX_NAME).cols.push(r.COLUMN_NAME.toLowerCase());
+            }
+            const liveByCols = new Map();
+            for(const info of byName.values()) liveByCols.set(info.cols.join(','), info);
+
+            for(const idx of expected){
+                const key  = idx.columns.map(c => c.toLowerCase()).join(',');
+                const live = liveByCols.get(key);
+                if(live && (!idx.unique || live.unique)) continue;          // already satisfied
+                if(liveNames.has(idx.name.toLowerCase())) continue;          // name taken by a different index — leave alone
+                const colList = idx.columns.map(c => '`' + c + '`').join(', ');
+
+                if(!idx.unique){
+                    console.log('Schema drift on ' + table + ': missing index ' + idx.name + ' (' + key + '). Adding.');
+                    await db.query('ALTER TABLE `' + table + '` ADD INDEX `' + idx.name + '` (' + colList + ')');
+                    continue;
+                }
+                try {
+                    console.log('Schema drift on ' + table + ': missing UNIQUE index ' + idx.name + ' (' + key + '). Adding.');
+                    await db.query('ALTER TABLE `' + table + '` ADD UNIQUE INDEX `' + idx.name + '` (' + colList + ')');
+                } catch(e){
+                    const dup = e && (Number(e.errno) === 1062 || /duplicate entry/i.test(e.message || ''));
+                    if(!dup){ console.log('  could not add UNIQUE index ' + idx.name + ' on ' + table + ': ' + (e && e.message)); continue; }
+                    console.log('  ' + table + '.' + idx.name + ': duplicate rows block the UNIQUE index — deduping (keep newest id per ' + key + ') then retrying.');
+                    if(!(await this.dedupeForUniqueIndex(db, table, idx.columns))) continue;
+                    try {
+                        await db.query('ALTER TABLE `' + table + '` ADD UNIQUE INDEX `' + idx.name + '` (' + colList + ')');
+                        console.log('  added ' + idx.name + ' after dedupe.');
+                    } catch(e2){
+                        console.log('  ' + table + '.' + idx.name + ' still failing after dedupe — leaving as-is: ' + (e2 && e2.message));
+                    }
+                }
+            }
+        } catch(e){
+            // Never abort startup over index reconciliation.
+            console.warn('reconcileTableIndexes(' + file + ') failed (non-fatal): ' + (e && e.message));
+        }
+    }
+
+    // Collapse duplicate rows on `columns` so a UNIQUE index can be added, keeping the
+    // row with the highest `id` in each group. For the failure this repairs — an
+    // INSERT ... ON DUPLICATE KEY UPDATE upsert that degraded to plain INSERT because the
+    // unique index was missing — each balance change appended a fresh row with the current
+    // value, so the highest id is the live (correct) value and the older rows are stale.
+    // Uses `=` (not `<=>`) so NULL tuples are left intact, matching UNIQUE semantics (a
+    // UNIQUE index permits multiple NULLs). Requires a single `id` column to pick a
+    // survivor; skips with a warning if absent. Returns true if the table is now safe to index.
+    async dedupeForUniqueIndex(db, table, columns){
+        const hasId = (await db.query(
+            "SELECT COLUMN_NAME FROM information_schema.columns WHERE table_schema = ? AND table_name = ? AND COLUMN_NAME = 'id'",
+            [this.dbName, table])).length > 0;
+        if(!hasId){
+            console.log('  cannot dedupe ' + table + ' (no `id` column to pick a surviving row) — skipping unique-index add.');
+            return false;
+        }
+        const on  = columns.map(c => 't1.`' + c + '` = t2.`' + c + '`').join(' AND ');
+        const res = await db.query('DELETE t1 FROM `' + table + '` t1 JOIN `' + table + '` t2 ON ' + on + ' AND t1.id < t2.id');
+        console.log('  deduped ' + table + ': removed ' + (res && res.affectedRows != null ? res.affectedRows : '?') + ' stale duplicate row(s).');
+        return true;
     }
 
     // Handle creating database tables.
