@@ -360,4 +360,212 @@ describe('Order_Match action handler @regression @tier2', function () {
 
         sinon.assert.calledWith(indexer.indexerDb.getOrderInfo, 'BTC', 1);
     });
+
+    // ─── Ownership compatibility filter ───────────────────────────────────
+
+    it('filters out matches where GIVE_OWNERSHIP does not mirror GET_OWNERSHIP', async function () {
+        // orderInfo has GIVE_OWNERSHIP=0, GET_OWNERSHIP=0
+        // matchInfo has GIVE_OWNERSHIP=1, GET_OWNERSHIP=0 → ownership mismatch → filtered out
+        indexer.indexerDb.getOrderInfo.resolves(makeOrderInfo({ GIVE_OWNERSHIP: 0, GET_OWNERSHIP: 0 }));
+        indexer.indexerDb.findOrderMatches.resolves([makeMatchInfo({ GIVE_OWNERSHIP: 1, GET_OWNERSHIP: 0 })]);
+
+        const data = createBaseData({ ACTION: 'ORDER_MATCH', BLOCK_TIME, ACTION_INDEX: 1 });
+        await orderMatch.parse([], data, false);
+
+        // After filtering, matches becomes empty → createOrderMatch not called
+        sinon.assert.notCalled(indexer.indexerDb.createOrderMatch);
+    });
+
+    it('allows match when GIVE_OWNERSHIP mirrors GET_OWNERSHIP (both 0)', async function () {
+        indexer.indexerDb.getOrderInfo.resolves(makeOrderInfo({ GIVE_OWNERSHIP: 0, GET_OWNERSHIP: 0 }));
+        indexer.indexerDb.findOrderMatches.resolves([makeMatchInfo({ GIVE_OWNERSHIP: 0, GET_OWNERSHIP: 0 })]);
+
+        const data = createBaseData({ ACTION: 'ORDER_MATCH', BLOCK_TIME, ACTION_INDEX: 1 });
+        await orderMatch.parse([], data, false);
+
+        sinon.assert.calledOnce(indexer.indexerDb.createOrderMatch);
+    });
+
+    // ─── Native coin match (pending_coinpay settlement) ───────────────────
+
+    it('native coin GIVE_TICK on orderInfo → pending_coinpay status, createCoinpayObligation called', async function () {
+        // orderInfo is offering native coin (null GIVE_TICK), matchInfo has PEPECASH
+        const nativeOrderInfo = makeOrderInfo({
+            GIVE_TICK:      null,  // native coin side
+            GIVE_REMAINING: '0.001',
+            GET_TICK:       'PEPECASH',
+            GET_REMAINING:  '100',
+            GIVE_PRICE:     '100000',  // 1 PEPECASH per 0.00001 BTC → high ratio
+            GET_PRICE:      '0.00001',
+            SOURCE:         '1SourceAddressXXXXXXXXXXXXXXXYs6gYt',
+        });
+        const nativeMatchInfo = makeMatchInfo({
+            GIVE_TICK:      'PEPECASH',
+            GIVE_REMAINING: '100',
+            GET_TICK:       null,   // native coin side
+            GET_REMAINING:  '0.001',
+            GET_PRICE:      '100000',
+            GET_ADDRESS:    '1DestAddressXXXXXXXXXXXXXXXXXaKc5Z',
+        });
+
+        indexer.indexerDb.getOrderInfo.resolves(nativeOrderInfo);
+        indexer.indexerDb.findOrderMatches.resolves([nativeMatchInfo]);
+        indexer.indexerDb.getTokenInfo
+            .withArgs(null, sinon.match.any, sinon.match.any).resolves(null)
+            .withArgs('PEPECASH', sinon.match.any, sinon.match.any)
+            .resolves(createTokenInfo({ TICK: 'PEPECASH', TICK_ID: 20, ALLOW_LIST: null, BLOCK_LIST: null }));
+
+        const data = createBaseData({ ACTION: 'ORDER_MATCH', BLOCK_TIME, ACTION_INDEX: 1, BLOCK_INDEX: 100 });
+        await orderMatch.parse([], data, false);
+
+        sinon.assert.calledOnce(indexer.indexerDb.createCoinpayObligation);
+        sinon.assert.calledOnce(indexer.indexerDb.createCoinpayStatus);
+        // Instant status set to pending_coinpay
+        assert.strictEqual(data['STATUS'], 'pending_coinpay');
+    });
+
+    it('native coin GET_TICK on orderInfo → pending_coinpay, matchInfo is coin payer', async function () {
+        // orderInfo wants native coin (null GET_TICK), matchInfo provides it (null GIVE_TICK)
+        const orderWithNullGet = makeOrderInfo({
+            GIVE_TICK:      'RAREPEPE',
+            GIVE_REMAINING: '10',
+            GET_TICK:       null,  // wants native coin
+            GET_REMAINING:  '0.001',
+            GIVE_PRICE:     '0.0001',
+            GET_PRICE:      '10000',
+            SOURCE:         '1SourceAddressXXXXXXXXXXXXXXXYs6gYt',
+            GET_ADDRESS:    '1SourceAddressXXXXXXXXXXXXXXXYs6gYt',
+        });
+        const matchWithNullGive = makeMatchInfo({
+            GIVE_TICK:      null,  // offering native coin
+            GIVE_REMAINING: '0.001',
+            GET_TICK:       'RAREPEPE',
+            GET_REMAINING:  '10',
+            GET_PRICE:      '0.0001',
+            SOURCE:         '1DestAddressXXXXXXXXXXXXXXXXXaKc5Z',
+            GET_ADDRESS:    '1DestAddressXXXXXXXXXXXXXXXXXaKc5Z',
+        });
+
+        indexer.indexerDb.getOrderInfo.resolves(orderWithNullGet);
+        indexer.indexerDb.findOrderMatches.resolves([matchWithNullGive]);
+        indexer.indexerDb.getTokenInfo.resolves(null); // both ticks are native
+
+        const data = createBaseData({ ACTION: 'ORDER_MATCH', BLOCK_TIME, ACTION_INDEX: 1, BLOCK_INDEX: 100 });
+        await orderMatch.parse([], data, false);
+
+        sinon.assert.calledOnce(indexer.indexerDb.createCoinpayObligation);
+    });
+
+    // ─── Ownership order matching ─────────────────────────────────────────
+
+    it('GIVE_OWNERSHIP=1 on orderInfo calls transferTokenOwnership for the give side', async function () {
+        const transferSpy = sinon.stub(indexer.util, 'transferTokenOwnership').resolves();
+
+        // Compatibility filter: match.GIVE_OWNERSHIP must == orderInfo.GET_OWNERSHIP (0)
+        //                       match.GET_OWNERSHIP  must == orderInfo.GIVE_OWNERSHIP (1)
+        const ownershipOrder = makeOrderInfo({
+            GIVE_OWNERSHIP: 1,
+            GET_OWNERSHIP:  0,
+            GIVE_TICK:      'RAREPEPE',
+            GIVE_AMOUNT:    '1',
+            GIVE_REMAINING: '1',
+            GIVE_PRICE:     '100',
+            GET_TICK:       'PEPECASH',
+            GET_AMOUNT:     '100',
+            GET_REMAINING:  '100',
+            GET_PRICE:      '0.01',
+        });
+        const counterMatch = makeMatchInfo({
+            GIVE_OWNERSHIP: 0,  // must equal orderInfo.GET_OWNERSHIP
+            GET_OWNERSHIP:  1,  // must equal orderInfo.GIVE_OWNERSHIP
+            GIVE_TICK:      'PEPECASH',
+            GIVE_AMOUNT:    '100',
+            GIVE_REMAINING: '100',
+            GET_TICK:       'RAREPEPE',
+            GET_AMOUNT:     '1',
+            GET_REMAINING:  '1',
+            GET_PRICE:      '100',
+        });
+
+        indexer.indexerDb.getOrderInfo.resolves(ownershipOrder);
+        indexer.indexerDb.findOrderMatches.resolves([counterMatch]);
+
+        const data = createBaseData({ ACTION: 'ORDER_MATCH', BLOCK_TIME, ACTION_INDEX: 1 });
+        await orderMatch.parse([], data, false);
+
+        sinon.assert.called(transferSpy);
+    });
+
+    it('GIVE_OWNERSHIP=1 on matchInfo calls transferTokenOwnership for the match give side', async function () {
+        const transferSpy = sinon.stub(indexer.util, 'transferTokenOwnership').resolves();
+
+        // Compatibility filter: match.GIVE_OWNERSHIP must == orderInfo.GET_OWNERSHIP (1)
+        //                       match.GET_OWNERSHIP  must == orderInfo.GIVE_OWNERSHIP (0)
+        const regularOrder = makeOrderInfo({
+            GIVE_OWNERSHIP: 0,
+            GET_OWNERSHIP:  1,
+            GIVE_TICK:      'PEPECASH',
+            GIVE_AMOUNT:    '100',
+            GIVE_REMAINING: '100',
+            GIVE_PRICE:     '0.01',
+            GET_TICK:       'RAREPEPE',
+            GET_AMOUNT:     '1',
+            GET_REMAINING:  '1',
+            GET_PRICE:      '100',
+        });
+        const ownershipMatch = makeMatchInfo({
+            GIVE_OWNERSHIP: 1,  // must equal orderInfo.GET_OWNERSHIP
+            GET_OWNERSHIP:  0,  // must equal orderInfo.GIVE_OWNERSHIP
+            GIVE_TICK:      'RAREPEPE',
+            GIVE_AMOUNT:    '1',
+            GIVE_REMAINING: '1',
+            GET_TICK:       'PEPECASH',
+            GET_AMOUNT:     '100',
+            GET_REMAINING:  '100',
+            GET_PRICE:      '0.01',
+        });
+
+        indexer.indexerDb.getOrderInfo.resolves(regularOrder);
+        indexer.indexerDb.findOrderMatches.resolves([ownershipMatch]);
+
+        const data = createBaseData({ ACTION: 'ORDER_MATCH', BLOCK_TIME, ACTION_INDEX: 1 });
+        await orderMatch.parse([], data, false);
+
+        sinon.assert.called(transferSpy);
+    });
+
+    // ─── Ownership single-fill enforcement ────────────────────────────────
+
+    it('ownership order: skipped when amounts are not exactly equal (single-fill enforcement)', async function () {
+        // orderInfo has GIVE_OWNERSHIP=1, GIVE_REMAINING=1, GET_REMAINING=100
+        // match offers only 50 PEPECASH (half of expected 100) → rejected
+        const ownershipOrder = makeOrderInfo({
+            GIVE_OWNERSHIP: 1,
+            GET_OWNERSHIP:  0,
+            GIVE_AMOUNT:    '1',
+            GIVE_REMAINING: '1',
+            GIVE_PRICE:     '100',
+            GET_REMAINING:  '100',
+            GET_AMOUNT:     '100',
+            GET_PRICE:      '0.01',
+        });
+        const partialMatch = makeMatchInfo({
+            GIVE_OWNERSHIP: 0,
+            GET_OWNERSHIP:  1,
+            GIVE_TICK:      'PEPECASH',
+            GIVE_REMAINING: '50',   // only half the required 100
+            GET_TICK:       'RAREPEPE',
+            GET_REMAINING:  '1',
+            GET_PRICE:      '100',
+        });
+
+        indexer.indexerDb.getOrderInfo.resolves(ownershipOrder);
+        indexer.indexerDb.findOrderMatches.resolves([partialMatch]);
+
+        const data = createBaseData({ ACTION: 'ORDER_MATCH', BLOCK_TIME, ACTION_INDEX: 1 });
+        await orderMatch.parse([], data, false);
+
+        // Single-fill enforcement — must skip partial matches for ownership orders
+        sinon.assert.notCalled(indexer.indexerDb.createOrderMatch);
+    });
 });

@@ -91,4 +91,73 @@ describe('Order_Expire action handler @regression @tier2', function () {
         await handler.parse(null, data, null);
         assert.ok(indexer.mapper.createMappings.calledOnce);
     });
+
+    // ─── Pending COINPay obligations — two-phase expiration ──────────
+
+    it('sets status to expiring (not expired) when pending COINPay obligations exist', async function () {
+        const orderInfo = makeOrderInfo();
+        indexer.indexerDb.getOrderInfo.resolves(orderInfo);
+        // Pending obligations → two-phase path
+        indexer.indexerDb.getPendingCoinpayObligationsByOrder.resolves([{ id: 1 }]);
+        const data = createBaseData({ ACTION: 'ORDER_EXPIRE', ACTION_INDEX: 50, BLOCK_INDEX: 200 });
+        await handler.parse(null, data, null);
+
+        const statusCall = indexer.indexerDb.createOrderStatus.getCall(0);
+        assert.ok(statusCall, 'createOrderStatus should have been called');
+        assert.strictEqual(statusCall.args[2], 'expiring');
+    });
+
+    it('calls createOrderExpire even in two-phase path (pending obligations)', async function () {
+        const orderInfo = makeOrderInfo();
+        indexer.indexerDb.getOrderInfo.resolves(orderInfo);
+        indexer.indexerDb.getPendingCoinpayObligationsByOrder.resolves([{ id: 1 }]);
+        const data = createBaseData({ ACTION: 'ORDER_EXPIRE', ACTION_INDEX: 50, BLOCK_INDEX: 200 });
+        await handler.parse(null, data, null);
+
+        assert.ok(indexer.indexerDb.createOrderExpire.calledOnce);
+    });
+
+    // ─── GIVE_OWNERSHIP=1 — release ownership escrow ─────────────────
+
+    it('calls clearTokenEscrow when GIVE_OWNERSHIP=1 and no pending obligations', async function () {
+        indexer.indexerDb.clearTokenEscrow = sinon.stub().resolves();
+        const orderInfo = makeOrderInfo({ GIVE_OWNERSHIP: 1 });
+        indexer.indexerDb.getOrderInfo.resolves(orderInfo);
+        indexer.indexerDb.getPendingCoinpayObligationsByOrder.resolves([]);
+        const data = createBaseData({ ACTION: 'ORDER_EXPIRE', ACTION_INDEX: 50, BLOCK_INDEX: 200 });
+        await handler.parse(null, data, null);
+
+        assert.ok(indexer.indexerDb.clearTokenEscrow.calledOnce);
+    });
+
+    it('GIVE_OWNERSHIP=1 still creates expired status', async function () {
+        indexer.indexerDb.clearTokenEscrow = sinon.stub().resolves();
+        const orderInfo = makeOrderInfo({ GIVE_OWNERSHIP: 1 });
+        indexer.indexerDb.getOrderInfo.resolves(orderInfo);
+        indexer.indexerDb.getPendingCoinpayObligationsByOrder.resolves([]);
+        const data = createBaseData({ ACTION: 'ORDER_EXPIRE', ACTION_INDEX: 50, BLOCK_INDEX: 200 });
+        await handler.parse(null, data, null);
+
+        const statusCall = indexer.indexerDb.createOrderStatus.getCall(0);
+        assert.ok(statusCall);
+        assert.strictEqual(statusCall.args[2], 'expired');
+    });
+
+    // ─── Native coin GIVE (null GIVE_TICK) ───────────────────────────
+
+    it('null GIVE_TICK (native coin order) — no escrow credit on expire', async function () {
+        // When GIVE_TICK is null, the else-if branch skips escrow/credit setup
+        const orderInfo = makeOrderInfo({ GIVE_TICK: null });
+        indexer.indexerDb.getOrderInfo.resolves(orderInfo);
+        indexer.indexerDb.getPendingCoinpayObligationsByOrder.resolves([]);
+        const data = createBaseData({ ACTION: 'ORDER_EXPIRE', ACTION_INDEX: 50, BLOCK_INDEX: 200 });
+
+        const ledgerSpy = sinon.spy(indexer.util, 'processTransactionLedgerChanges');
+        await handler.parse(null, data, null);
+
+        const [,, credits, debits, escrows] = ledgerSpy.firstCall.args;
+        // No credits or escrow changes for native coin side
+        assert.strictEqual(credits.length, 0);
+        assert.strictEqual(escrows ? escrows.length : 0, 0);
+    });
 });

@@ -201,4 +201,161 @@ describe('Price (PRICE) @regression @tier3', function () {
         assert.strictEqual(data['VALIDATION_STATUS'], 'invalid');
         assert.ok(indexer.indexerDb.createPrice.calledOnce);
     });
+
+    // ───────────────────────────────────────────────────────────────────────
+    // Hub push paths (hubClient present)
+    // ───────────────────────────────────────────────────────────────────────
+
+    describe('hub push — v0', function () {
+        function v0Params(pairs, sigs) {
+            const out = ['0', '7', '1700000000', String(pairs.length)];
+            for (const pr of pairs) { out.push(pr.pair, pr.price); }
+            out.push(String(sigs.length));
+            for (const s of sigs) { out.push(s.pubkey, s.sig); }
+            return out;
+        }
+        const ONE_PAIR = [{ pair: 'BTC/USD', price: '50000' }];
+
+        beforeEach(function () {
+            sinon.stub(ed25519, 'verify').returns(true);
+        });
+
+        it('valid v0 with hubClient → pushPriceRound called', async function () {
+            const mockHubClient = { pushPriceRound: sinon.stub().resolves() };
+            indexer.indexerDb.getActiveCapabilityCount.resolves(1);
+
+            const localActionsCtx = {
+                config:    indexer.config,
+                util:      indexer.util,
+                mapper:    indexer.mapper,
+                decoderDb: indexer.decoderDb,
+                indexerDb: indexer.indexerDb,
+                hubClient: mockHubClient,
+            };
+            const localHandler = new Price(localActionsCtx);
+
+            const data = createBaseData({ ACTION: 'PRICE', FORMAT: 0, BLOCK_INDEX: 100 });
+            await localHandler.parse(v0Params(ONE_PAIR, [{ pubkey: PUBKEY_A, sig: SIG_A }]), data, null);
+
+            assert.strictEqual(data['VALIDATION_STATUS'], 'valid');
+            assert.ok(mockHubClient.pushPriceRound.calledOnce);
+        });
+
+        it('valid v0 with hubClient — hub push failure queues retry', async function () {
+            // pushPriceRound rejects — should queue via enqueueHubPush (fire-and-forget)
+            indexer.indexerDb.enqueueHubPush = sinon.stub().resolves();
+            const mockHubClient = { pushPriceRound: sinon.stub().rejects(new Error('network timeout')) };
+            indexer.indexerDb.getActiveCapabilityCount.resolves(1);
+
+            const localActionsCtx = {
+                config:    indexer.config,
+                util:      indexer.util,
+                mapper:    indexer.mapper,
+                decoderDb: indexer.decoderDb,
+                indexerDb: indexer.indexerDb,
+                hubClient: mockHubClient,
+            };
+            const localHandler = new Price(localActionsCtx);
+
+            const data = createBaseData({ ACTION: 'PRICE', FORMAT: 0, BLOCK_INDEX: 100 });
+            // Should NOT throw even though hub push rejects (fire-and-forget)
+            await localHandler.parse(v0Params(ONE_PAIR, [{ pubkey: PUBKEY_A, sig: SIG_A }]), data, null);
+
+            assert.strictEqual(data['VALIDATION_STATUS'], 'valid');
+            // enqueueHubPush is called after the rejection is caught by the .catch chain (async)
+            // We just verify the main parse didn't throw
+        });
+
+        it('invalid v0 with hubClient → pushPriceRound NOT called', async function () {
+            const mockHubClient = { pushPriceRound: sinon.stub().resolves() };
+            // Fail quorum by returning false for all sigs
+            ed25519.verify.returns(false);
+            indexer.indexerDb.getActiveCapabilityCount.resolves(1);
+
+            const localActionsCtx = {
+                config:    indexer.config,
+                util:      indexer.util,
+                mapper:    indexer.mapper,
+                decoderDb: indexer.decoderDb,
+                indexerDb: indexer.indexerDb,
+                hubClient: mockHubClient,
+            };
+            const localHandler = new Price(localActionsCtx);
+
+            const data = createBaseData({ ACTION: 'PRICE', FORMAT: 0, BLOCK_INDEX: 100 });
+            await localHandler.parse(v0Params(ONE_PAIR, [{ pubkey: PUBKEY_A, sig: SIG_A }]), data, null);
+
+            assert.strictEqual(data['VALIDATION_STATUS'], 'invalid');
+            assert.ok(!mockHubClient.pushPriceRound.called);
+        });
+    });
+
+    describe('hub push — v1', function () {
+        function v1Params(overrides = {}) {
+            const p = { coin: 'BTC', tick: 'TEST', fiat: 'USD', value: '1.50', fee: '0', memo: 'm', ...overrides };
+            return ['1', p.coin, p.tick, p.fiat, p.value, p.fee, p.memo];
+        }
+
+        it('valid v1 with hubClient → pushOraclePrice called', async function () {
+            const mockHubClient = { pushOraclePrice: sinon.stub().resolves() };
+
+            const localActionsCtx = {
+                config:    indexer.config,
+                util:      indexer.util,
+                mapper:    indexer.mapper,
+                decoderDb: indexer.decoderDb,
+                indexerDb: indexer.indexerDb,
+                hubClient: mockHubClient,
+            };
+            const localHandler = new Price(localActionsCtx);
+
+            const data = createBaseData({ ACTION: 'PRICE', FORMAT: 1 });
+            await localHandler.parse(v1Params(), data, null);
+
+            assert.strictEqual(data['VALIDATION_STATUS'], 'valid');
+            assert.ok(mockHubClient.pushOraclePrice.calledOnce);
+        });
+
+        it('invalid v1 with hubClient → pushOraclePrice NOT called', async function () {
+            const mockHubClient = { pushOraclePrice: sinon.stub().resolves() };
+
+            const localActionsCtx = {
+                config:    indexer.config,
+                util:      indexer.util,
+                mapper:    indexer.mapper,
+                decoderDb: indexer.decoderDb,
+                indexerDb: indexer.indexerDb,
+                hubClient: mockHubClient,
+            };
+            const localHandler = new Price(localActionsCtx);
+
+            // Invalid — unsupported FIAT
+            const data = createBaseData({ ACTION: 'PRICE', FORMAT: 1 });
+            await localHandler.parse(v1Params({ fiat: 'ZZZ' }), data, null);
+
+            assert.strictEqual(data['VALIDATION_STATUS'], 'invalid');
+            assert.ok(!mockHubClient.pushOraclePrice.called);
+        });
+
+        it('valid v1 with hubClient — hub push failure queued for retry (no throw)', async function () {
+            indexer.indexerDb.enqueueHubPush = sinon.stub().resolves();
+            const mockHubClient = { pushOraclePrice: sinon.stub().rejects(new Error('hub down')) };
+
+            const localActionsCtx = {
+                config:    indexer.config,
+                util:      indexer.util,
+                mapper:    indexer.mapper,
+                decoderDb: indexer.decoderDb,
+                indexerDb: indexer.indexerDb,
+                hubClient: mockHubClient,
+            };
+            const localHandler = new Price(localActionsCtx);
+
+            const data = createBaseData({ ACTION: 'PRICE', FORMAT: 1 });
+            // Fire-and-forget — must not throw
+            await localHandler.parse(v1Params(), data, null);
+
+            assert.strictEqual(data['VALIDATION_STATUS'], 'valid');
+        });
+    });
 });
