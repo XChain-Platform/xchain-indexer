@@ -4841,6 +4841,105 @@ class Database {
         return pending;
     }
 
+    // List this chain's OPEN cross-chain SWAP offers (give_coin != get_coin) for the
+    // xchain-hub federation's matching view. Paginates by keyset on action_index.
+    // @param {limit}             integer Max rows (caller clamps)
+    // @param {after_action_index} integer Keyset cursor — return rows with action_index > this
+    // @param {to_coin}           string  Optional filter: only offers whose GET_COIN equals this
+    async getOpenCrossChainSwaps(limit, after_action_index, to_coin){
+        let where = [
+            `ss.action_index = (SELECT MAX(s3.action_index) FROM swap_statuses s3 WHERE s3.swap_action_index=s1.action_index)`,
+            `st.status='open'`,
+            `s1.give_coin_id != s1.get_coin_id`
+        ];
+        let args = [];
+        if(!this.util.isNull(to_coin)){ where.push(`cc.coin=?`); args.push(to_coin); }
+        if(Number.isFinite(Number(after_action_index))){ where.push(`s1.action_index>?`); args.push(Number(after_action_index)); }
+        let query = `SELECT
+                        s1.action_index,
+                        gc.coin    as give_coin,
+                        gt.tick    as give_tick,
+                        s1.give_amount,
+                        s1.give_ownership,
+                        cc.coin    as get_coin,
+                        rt.tick    as get_tick,
+                        s1.get_amount,
+                        s1.get_ownership,
+                        ga.address as get_address,
+                        sa.address as source,
+                        s1.expiration,
+                        s1.allow_list,
+                        s1.block_list,
+                        t1.block_index
+                    FROM
+                        swaps s1
+                        INNER JOIN actions         a1 ON (a1.action_index=s1.action_index)
+                        INNER JOIN transactions    t1 ON (t1.tx_index=a1.tx_index)
+                        INNER JOIN index_addresses sa ON (sa.id=a1.source_id)
+                        INNER JOIN index_addresses ga ON (ga.id=s1.get_address_id)
+                        INNER JOIN index_coins     gc ON (gc.id=s1.give_coin_id)
+                        INNER JOIN index_coins     cc ON (cc.id=s1.get_coin_id)
+                        INNER JOIN index_tickers   gt ON (gt.id=s1.give_tick_id)
+                        LEFT  JOIN index_tickers   rt ON (rt.id=s1.get_tick_id)
+                        INNER JOIN swap_statuses   ss ON (ss.swap_action_index=s1.action_index)
+                        INNER JOIN index_statuses  st ON (st.id=ss.status_id)
+                    WHERE ` + where.join(' AND ') + `
+                    ORDER BY s1.action_index ASC
+                    LIMIT ?`;
+        args.push(Number(limit));
+        let results = await this.doQuery(query, args);
+        return results.map(row => ({
+            kind:           'swap',
+            action_index:   Number(row.action_index),
+            give_coin:      row.give_coin,
+            give_tick:      row.give_tick,
+            give_amount:    row.give_amount,
+            give_ownership: Number(row.give_ownership),
+            get_coin:       row.get_coin,
+            get_tick:       row.get_tick,
+            get_amount:     row.get_amount,
+            get_ownership:  Number(row.get_ownership),
+            get_address:    row.get_address,
+            source:         row.source,
+            expiration:     Number(row.expiration),
+            allow_list:     row.allow_list,
+            block_list:     row.block_list,
+            block_index:    Number(row.block_index)
+        }));
+    }
+
+    // Finalized cross-chain matches that involve THIS chain, are effective at/before
+    // block_time, and have not yet been settled locally. Drives the settlement pass.
+    // cross_chain_matches is a hub-mirrored table (read via _mirrorDb), while
+    // cross_chain_settlements is a local indexer table (read via this) — so we filter in JS
+    // rather than join across two databases.
+    async getEffectiveUnsettledMatches(coin, block_time){
+        // network filter: a match only settles on the indexer of the network it was matched
+        // + signed on (also bound into the signed canonical — see cross_settle._canonical).
+        let network = this.config['NETWORK'];
+        let matches = await this._mirrorDb().doQuery(
+            `SELECT * FROM cross_chain_matches
+             WHERE status = 'finalized' AND network = ? AND effective_time <= ? AND (a_chain = ? OR b_chain = ?)
+             ORDER BY id ASC`,
+            [network, block_time, coin, coin]);
+        if(matches.length === 0) return [];
+        let ids = matches.map(m => m.match_id);
+        let placeholders = ids.map(() => '?').join(',');
+        let settled = await this.doQuery(
+            `SELECT match_id FROM cross_chain_settlements WHERE match_id IN (${placeholders})`, ids);
+        let settledSet = new Set(settled.map(r => r.match_id));
+        return matches.filter(m => !settledSet.has(m.match_id));
+    }
+
+    // Record that this chain settled its leg of a cross-chain match (idempotent on
+    // match_id). The action_index is rollback-able, so a reorg drops this row and the
+    // match re-applies.
+    async recordCrossChainSettlement(action_index, match_id, local_action_index, block_index){
+        await this.doQuery(
+            `INSERT IGNORE INTO cross_chain_settlements (action_index, match_id, local_action_index, block_index) VALUES (?, ?, ?, ?)`,
+            [action_index, match_id, local_action_index, block_index]);
+    }
+
     // Create/Update record in `coinpays` table (fulfilled COINPay payments)
     // @param {data} object COINPay payment data
     async createCoinpay(data){
@@ -7524,6 +7623,13 @@ class Database {
     // arrive at the same set, so consensus on quorum N is deterministic.
     // Spec: claude/reports/specs/2026-05-24_capability-staking-model.md §6
     async getValidatorsByCapability(capability, blockIndex, minStakeOverride){
+        // Off-BTC chains have no local capability stakes (capability staking is BTC-only),
+        // so resolve the qualifying set from the hub-mirrored capability_snapshots at the
+        // (BTC-anchored) block. Scoped to `cross_chain` — the only capability verified on a
+        // non-BTC chain (for cross-chain match settlement); other capabilities keep the
+        // existing local-stakes path (which is empty off BTC, exactly as before).
+        if(this.config['COIN'] !== 'BTC' && capability === 'cross_chain')
+            return await this.getCapabilitySnapshotValidators(capability, blockIndex);
         let caps = (this.config['STAKING'] && this.config['STAKING']['CAPABILITIES']) ? this.config['STAKING']['CAPABILITIES'] : {};
         let capConfig = caps[capability];
         if(!capConfig) return [];
@@ -7574,6 +7680,11 @@ class Database {
     // Check whether a pubkey's active stake qualifies for a capability.
     // Returns true if SUM(active stake amount for pubkey) >= governance.min_stake[capability].
     async hasCapability(pubkey, capability, blockIndex, minStakeOverride){
+        // Off-BTC chains verify cross_chain against the hub-mirrored capability snapshot
+        // (presence = qualified) since capability stakes live only on BTC. Scoped to
+        // cross_chain; other capabilities keep the local-stakes path. See getValidatorsByCapability.
+        if(this.config['COIN'] !== 'BTC' && capability === 'cross_chain')
+            return await this.isPubkeyInCapabilitySnapshot(pubkey, capability, blockIndex);
         let caps = (this.config['STAKING'] && this.config['STAKING']['CAPABILITIES']) ? this.config['STAKING']['CAPABILITIES'] : {};
         let capConfig = caps[capability];
         if(!capConfig) return false;
@@ -7586,6 +7697,33 @@ class Database {
         let stake = await this.getActiveStakeByPubkey(pubkey, blockIndex);
         if(!stake) return false;
         return this.util.bcgte(stake.amount, minStake);
+    }
+
+    // Connection for hub-mirrored tables (price_snapshots, oracle_prices,
+    // cross_chain_matches, capability_snapshots). In distributed deployments these live in
+    // the local hub-DB copy; single-host falls back to this indexer DB. Mirrors the
+    // `(this.actions.hubDb || this.indexerDb)` idiom used at the oracle read sites.
+    _mirrorDb(){
+        return (this.indexer && this.indexer.hubDb) ? this.indexer.hubDb : this;
+    }
+
+    // Read the hub-mirrored qualifying validator set for a capability at a BTC-anchored
+    // snapshot block. Presence in capability_snapshots = qualified (the hub only mirrors
+    // pubkeys already past min_stake). Lets a non-BTC indexer resolve the cross_chain set.
+    async getCapabilitySnapshotValidators(capability, snapshotBlock){
+        let query = `SELECT signing_pubkey AS pubkey, amount
+                     FROM capability_snapshots
+                     WHERE capability = ? AND snapshot_block = ?`;
+        let rows = await this._mirrorDb().doQuery(query, [capability, snapshotBlock]);
+        return rows.map(r => ({ pubkey: String(r.pubkey), amount: String(r.amount) }));
+    }
+
+    // Whether a pubkey is in the mirrored capability snapshot at a block (qualified).
+    async isPubkeyInCapabilitySnapshot(pubkey, capability, snapshotBlock){
+        let query = `SELECT 1 FROM capability_snapshots
+                     WHERE capability = ? AND snapshot_block = ? AND signing_pubkey = ? LIMIT 1`;
+        let rows = await this._mirrorDb().doQuery(query, [capability, snapshotBlock, String(pubkey).toLowerCase()]);
+        return rows.length > 0;
     }
 
     /*

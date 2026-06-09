@@ -68,6 +68,13 @@ const RETRACTION_COLUMNS = {
     oracle_prices:   'action_index'
 };
 
+// Tables mirrored for the cross-chain DEX. cross_chain_matches carries finalized,
+// validator-signed matches; capability_snapshots carries the block-boundary
+// cross_chain validator set the indexer verifies those matches against. Retraction
+// of cross_chain_matches is two-sided (either order leg) — handled specially in
+// _applyRetraction; capability_snapshots are immutable history and never retracted.
+const CROSS_CHAIN_TABLES = ['cross_chain_matches', 'capability_snapshots'];
+
 class HubDbSync {
 
     constructor(hubDb, options) {
@@ -101,6 +108,16 @@ class HubDbSync {
         this.oracleSyncTimestamp = null;                   // null = mirror's max effective_at not yet known
         this.oracleBootstrapped  = false;                  // true once the mirror has been read at least once
         this._oracleWaiters      = [];                     // pending waitForOracleSyncTimestamp() resolvers
+
+        // Highest effective_time present in the local cross_chain_matches copy. The
+        // cross-chain settlement pass uses waitForMatchSync(block_time) so an indexer does
+        // not settle a block until its match mirror has caught up to that block's time —
+        // otherwise two operators of the same chain could settle a cross-chain match at
+        // different blocks, diverging that chain's ledger. Mirrors oracleSyncTimestamp:
+        // a NULL max (empty mirror) is valid and means "no cross-chain matches to wait on".
+        this.matchSyncTimestamp = null;
+        this.matchBootstrapped  = false;
+        this._matchWaiters      = [];
     }
 
     // Start: open WebSocket and await the hub's ready acknowledgement (confirming
@@ -138,6 +155,13 @@ class HubDbSync {
             await this._bootstrapTable('oracle_prices');
         } catch (err) {
             console.warn('HubDbSync: oracle_prices bootstrap failed:', err);
+        }
+        for (let table of CROSS_CHAIN_TABLES) {
+            try {
+                await this._bootstrapTable(table);
+            } catch (err) {
+                console.warn('HubDbSync: ' + table + ' bootstrap failed:', err);
+            }
         }
 
         if (!WebSocket) {
@@ -210,8 +234,9 @@ class HubDbSync {
             }
         }
 
-        if (table === 'price_snapshots') await this._refreshPriceSyncHeight();
-        if (table === 'oracle_prices')   await this._refreshOracleSyncTimestamp();
+        if (table === 'price_snapshots')     await this._refreshPriceSyncHeight();
+        if (table === 'oracle_prices')       await this._refreshOracleSyncTimestamp();
+        if (table === 'cross_chain_matches') await this._refreshMatchSyncTimestamp();
     }
 
     // Recompute the highest finalized price block present in the local price_snapshots
@@ -361,12 +386,83 @@ class HubDbSync {
     // indexer stops reading prices that were never finalized on-chain.
     // event: { table, source_chain, from_action_index }
     async _applyRetraction(event) {
-        let column = RETRACTION_COLUMNS[event.table];
-        if (!column) return;                                   // unknown table — ignore
         let from = Number(event.from_action_index);
         if (!Number.isFinite(from)) return;                    // malformed — ignore
+        // cross_chain_matches is two-sided: a match is retracted when EITHER order leg on
+        // the reorged chain was rolled back. The settlement pass then rolls back any leg it
+        // already applied for that match (its cross_chain_settlements row drops with the block).
+        if (event.table === 'cross_chain_matches') {
+            await this.hubDb.doQuery(
+                'DELETE FROM cross_chain_matches WHERE (a_chain = ? AND a_action_index >= ?) OR (b_chain = ? AND b_action_index >= ?)',
+                [event.source_chain, from, event.source_chain, from]);
+            await this._refreshMatchSyncTimestamp();
+            return;
+        }
+        let column = RETRACTION_COLUMNS[event.table];
+        if (!column) return;                                   // unknown table — ignore
         let query = 'DELETE FROM ' + event.table + ' WHERE source_chain = ? AND ' + column + ' >= ?';
         await this.hubDb.doQuery(query, [event.source_chain, from]);
+    }
+
+    // ── Cross-chain match sync barrier (mirrors the oracle_prices barrier) ──────
+
+    // Recompute the highest effective_time present in the local cross_chain_matches copy
+    // (finalized only) and release satisfied waiters. A NULL max (empty mirror) is valid.
+    async _refreshMatchSyncTimestamp() {
+        let ts = null;
+        try {
+            let rows = await this.hubDb.doQuery(
+                "SELECT MAX(effective_time) AS ts FROM cross_chain_matches WHERE status = 'finalized'");
+            if (rows.length > 0 && rows[0].ts !== null) ts = Number(rows[0].ts);
+        } catch (e) {
+            return;                                             // table not ready yet
+        }
+        this.matchSyncTimestamp = ts;
+        this.matchBootstrapped  = true;
+        this._releaseMatchWaiters();
+    }
+
+    _matchSyncSatisfied(blockTime) {
+        if (this.matchBootstrapped && this.matchSyncTimestamp === null) return true;
+        if (this.matchSyncTimestamp !== null && this.matchSyncTimestamp >= blockTime) return true;
+        return false;
+    }
+
+    _releaseMatchWaiters() {
+        if (this._matchWaiters.length === 0) return;
+        let stillWaiting = [];
+        for (let w of this._matchWaiters) {
+            if (this._matchSyncSatisfied(w.ts)) {
+                clearTimeout(w.timer);
+                w.resolve(this.matchSyncTimestamp);
+            } else {
+                stillWaiting.push(w);
+            }
+        }
+        this._matchWaiters = stillWaiting;
+    }
+
+    // Block-processing barrier for the cross-chain settlement pass. Resolves once the local
+    // cross_chain_matches copy holds every match effective at or before this block's time, so
+    // every operator of this chain settles the same matches at the same block. Rejects after
+    // timeoutMs so the caller can DEFER the block and retry — never settle against a stale
+    // match mirror. Resolves immediately when sync is disabled or the mirror holds no matches.
+    waitForMatchSync(blockTime, timeoutMs) {
+        blockTime = Number(blockTime);
+        if (!this.enabled || !Number.isFinite(blockTime)) return Promise.resolve(this.matchSyncTimestamp);
+        if (this._matchSyncSatisfied(blockTime))           return Promise.resolve(this.matchSyncTimestamp);
+
+        let ms = parseInt(timeoutMs);
+        if (!Number.isFinite(ms) || ms <= 0) ms = 60000;
+        return new Promise((resolve, reject) => {
+            let waiter = { ts: blockTime, resolve: resolve, timer: null };
+            waiter.timer = setTimeout(() => {
+                this._matchWaiters = this._matchWaiters.filter(w => w !== waiter);
+                reject(new Error('match sync barrier timed out after ' + ms + 'ms waiting for block_time ' +
+                                 blockTime + ' (match mirror at ' + this.matchSyncTimestamp + ')'));
+            }, ms);
+            this._matchWaiters.push(waiter);
+        });
     }
 
     // Open the WebSocket subscription for live row updates. Returns a Promise that
@@ -423,12 +519,14 @@ class HubDbSync {
                     }
                     if (event.type === 'row:inserted' && event.table && event.row) {
                         await this._applyRow(event.table, event.row);
-                        if (event.table === 'price_snapshots') await this._refreshPriceSyncHeight();
-                        if (event.table === 'oracle_prices')   await this._refreshOracleSyncTimestamp();
+                        if (event.table === 'price_snapshots')     await this._refreshPriceSyncHeight();
+                        if (event.table === 'oracle_prices')       await this._refreshOracleSyncTimestamp();
+                        if (event.table === 'cross_chain_matches') await this._refreshMatchSyncTimestamp();
                     } else if (event.type === 'row:deleted' && event.table) {
                         await this._applyRetraction(event);
-                        if (event.table === 'price_snapshots') await this._refreshPriceSyncHeight();
-                        if (event.table === 'oracle_prices')   await this._refreshOracleSyncTimestamp();
+                        if (event.table === 'price_snapshots')     await this._refreshPriceSyncHeight();
+                        if (event.table === 'oracle_prices')       await this._refreshOracleSyncTimestamp();
+                        if (event.table === 'cross_chain_matches') await this._refreshMatchSyncTimestamp();
                     }
                 } catch (err) {
                     console.warn('HubDbSync: failed to handle WebSocket message:', err);
@@ -479,6 +577,13 @@ class HubDbSync {
             } catch (err) {
                 console.warn('HubDbSync: oracle_prices re-bootstrap failed:', err);
             }
+            for (let table of CROSS_CHAIN_TABLES) {
+                try {
+                    await this._bootstrapTable(table);
+                } catch (err) {
+                    console.warn('HubDbSync: ' + table + ' re-bootstrap failed:', err);
+                }
+            }
         }, 5000);
     }
 
@@ -489,6 +594,7 @@ class HubDbSync {
             try {
                 await this._bootstrapTable('price_snapshots');
                 await this._bootstrapTable('oracle_prices');
+                for (let table of CROSS_CHAIN_TABLES) await this._bootstrapTable(table);
             } catch (err) {
                 console.warn('HubDbSync: poll error:', err);
             }

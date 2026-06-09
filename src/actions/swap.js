@@ -91,10 +91,16 @@ class Swap {
             giveTokenInfo = await this.indexerDb.getTokenInfo(data['GIVE_TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
             if(data['GET_COIN']==this.config['COIN']){
                 getTokenInfo = await this.indexerDb.getTokenInfo(data['GET_TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
-            } else {
-                // TODO : add code to xchain-hub to validate that GET_TICK is valid on GET_COIN, and if not, mark as invalid
             }
+            // (Cross-chain GET_TICK lives on another COIN network — it cannot be validated
+            //  locally; the xchain-hub federation validates it before matching/settlement.)
         }
+
+        // Detect a cross-chain swap (GET side settles on a different COIN network). The GIVE
+        // side still escrows locally; matching + settlement are driven by the validator
+        // federation (mirror-delivered cross-chain match) rather than the local SWAP_MATCH path.
+        let isCrossChain      = (format==0 && !this.util.isNull(data['GET_COIN']) && data['GET_COIN']!=this.config['COIN']);
+        let crossChainEnabled = isCrossChain ? await this.actions.protocolChanges.isEnabled('CROSS_CHAIN_DEX', data['BLOCK_INDEX']) : false;
 
         // Default ownership flags to 0 when omitted; coerce to Number for downstream comparisons
         if(format==0){
@@ -147,8 +153,13 @@ class Swap {
         if(!error && format==0 && !giveTokenInfo)
             error = 'invalid: GIVE_TICK (unknown)';
 
-        // Validate GET_TICK exists
-        if(!error && format==0 && !getTokenInfo)
+        // Cross-chain swaps require the CROSS_CHAIN_DEX protocol change to be active
+        if(!error && isCrossChain && !crossChainEnabled)
+            error = 'invalid: GET_COIN (cross-chain not enabled)';
+
+        // Validate GET_TICK exists (local validation only — a cross-chain GET_TICK is
+        // validated by the xchain-hub federation, so skip the local existence check)
+        if(!error && format==0 && !isCrossChain && !getTokenInfo)
             error = 'invalid: GET_TICK (unknown)';
 
         /*****************************************************************
@@ -436,8 +447,12 @@ class Swap {
         // Reset the address/tickers/transactions list on each parse
         this.util.resetLists();
 
-        // Check to see if we have a match for this swap
-        if(status=='valid')
+        // Check to see if we have a match for this swap.
+        // Cross-chain swaps are NOT matched locally — the counterparty lives in another
+        // chain's indexer DB, invisible to the local SWAP_MATCH query. The xchain-hub
+        // federation matches them and delivers a validator-signed match via the hub mirror,
+        // which the indexer settles from escrow (see the cross-chain settlement pass).
+        if(status=='valid' && !isCrossChain)
             await this.actions.processAction('SWAP_MATCH', null, data, null);
 
     }

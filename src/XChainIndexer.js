@@ -313,6 +313,19 @@ class XChainIndexer {
                     }
                 }
 
+                // Cross-chain match sync barrier: wait until the local cross_chain_matches
+                // mirror has caught up to this block's time, so every operator of this chain
+                // settles the same cross-chain matches at the same block. No-op when sync is
+                // disabled or the mirror holds no cross-chain matches.
+                if(this.hubDbSync){
+                    try {
+                        await this.hubDbSync.waitForMatchSync(blockTime, this.priceSyncTimeoutMs);
+                    } catch(err){
+                        console.warn('Deferring block ' + blockToParse + ' (cross-chain match sync): ', err);
+                        break;
+                    }
+                }
+
                 // Begin a transaction — all indexer DB writes for this block are atomic
                 await this.indexerDb.beginTransaction();
                 try {
@@ -330,6 +343,10 @@ class XChainIndexer {
 
                         // Check for any expired items (orders, swaps, dispensers)
                         await this.util.processExpirations(this.actions, this.indexerDb, blockToParse, blockTime);
+
+                        // Settle this chain's leg of any effective cross-chain DEX matches
+                        // (validator-signed, mirror-delivered; verified inside CROSS_SETTLE)
+                        await this.util.processCrossChainSettlements(this.actions, this.indexerDb, blockToParse, blockTime);
 
                         // Check for any cancelled items (dispensers)
                         await this.util.processCancellations(this.actions, this.indexerDb, blockToParse, blockTime);

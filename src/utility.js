@@ -1106,6 +1106,25 @@ class Utility {
         }
     }
 
+    // Settle this chain's leg of any cross-chain DEX matches that are effective at or
+    // before this block. Each match is a finalized, validator-signed record delivered via
+    // the hub mirror; CROSS_SETTLE verifies the 2f+1 signatures and releases escrow to the
+    // counterparty. Idempotent: getEffectiveUnsettledMatches excludes matches already in
+    // cross_chain_settlements. The caller gates this on the match-sync barrier so every
+    // operator of this chain settles the same matches at the same block.
+    async processCrossChainSettlements(actions, db, block_index, block_time){
+        let coin    = db.config['COIN'];
+        let matches = await db.getEffectiveUnsettledMatches(coin, block_time);
+        for(let m of matches){
+            let data = {};
+            data['ACTION']      = 'CROSS_SETTLE';
+            data['BLOCK_INDEX'] = block_index;
+            data['BLOCK_TIME']  = block_time;
+            data['MATCH']       = m;
+            await actions.processAction('CROSS_SETTLE', null, data, null);
+        }
+    }
+
     // Process any dispensers which have been cancelled and need to be closed
     // NOTE: We currently use block_time to expire items... not ideal as block times can be manipulated
     // TODO: Revisit this code and handle calculating block time more elegantly

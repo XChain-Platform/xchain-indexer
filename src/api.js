@@ -87,7 +87,8 @@ const FEDERATION_READ_METHODS = new Set([
     'getownstake',
     'getactivevalidators',
     'getcapabilityvalidators',
-    'getpendingattestation_requests'
+    'getpendingattestation_requests',
+    'getopencrosschainorders'
 ]);
 
 // Start up the API
@@ -381,6 +382,33 @@ async function startApi(){
             } catch (err) {
                 console.error('getpendingattestation_requests error:', err);
                 return { error: 'failed to look up pending attestation requests' };
+            }
+        },
+
+        // Return this chain's OPEN cross-chain DEX offers (give_coin != get_coin) so the
+        // xchain-hub federation can build the unified cross-chain order book. The "from"
+        // chain is implicit (this indexer's COIN). Paginates by keyset on action_index.
+        // Returns the latest block in the same round-trip so the federation can snapshot
+        // its matching view without a follow-up getlatestblock.
+        async getopencrosschainorders({to_coin, limit, after_action_index}){
+            if(!indexer.indexerDb)
+                return { error: 'indexer database not ready' };
+            let max = Number(limit);
+            if(!Number.isFinite(max) || max <= 0) max = 100;
+            if(max > 500) max = 500;
+            try {
+                let latest = await indexer.indexerDb.getLatestBlockIndex();
+                // Phase A: cross-chain SWAP offers. Phase B adds ORDER offers (partial fills).
+                let orders = await indexer.indexerDb.getOpenCrossChainSwaps(max, after_action_index, to_coin);
+                return {
+                    latest_block_index: latest,
+                    network:            indexer.config['NETWORK'],
+                    count:              orders.length,
+                    orders:             orders
+                };
+            } catch (err) {
+                console.error('getopencrosschainorders error:', err);
+                return { error: 'failed to look up cross-chain orders' };
             }
         },
 

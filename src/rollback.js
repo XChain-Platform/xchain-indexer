@@ -101,6 +101,7 @@ class Rollback {
             'swap_expires',
             'swap_matches',
             'swap_statuses',
+            'cross_chain_settlements',
             'sweeps',
             'tokens',
             'stakes',
