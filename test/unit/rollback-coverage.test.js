@@ -96,6 +96,20 @@ const ROLLBACK_EXEMPT = {
         'the same pubkey — and keyed on the append-only address registry (stable ' +
         'ids), so a row surviving a reorg is harmless: re-applying the same blocks ' +
         're-inserts it as a no-op. Never block-height state, so nothing to undo.',
+    cross_chain_matches:
+        'Hub-mirrored cross-chain DEX state (CROSS_CHAIN_TABLES in hub_db_sync.js), ' +
+        'NOT produced by local block/action processing — the indexer only SELECTs it. ' +
+        'It is synced from the hub via a monotonic `id` cursor and retracted on the ' +
+        'mirror side by hub_db_sync._applyRetraction (DELETE … WHERE a_/b_action_index ' +
+        '>= the orphaned point, two-sided). Block replay does not re-pull it, so the ' +
+        'chain-reorg path must leave its lifecycle to the hub mirror, not delete by index.',
+    capability_snapshots:
+        'Hub-mirrored, immutable block-boundary capability snapshots (CROSS_CHAIN_TABLES ' +
+        'in hub_db_sync.js): one row per pubkey that qualified for a capability at a ' +
+        'BTC-anchored snapshot_block, synced from the hub via an `id` cursor and never ' +
+        'retracted (immutable history). The indexer only SELECTs it to verify match ' +
+        'signatures; block replay does not recreate it, so the chain-reorg path must ' +
+        'not delete it.',
 };
 
 // Convention: append-only, id-keyed dedup lookups. Orphaned rows are inert

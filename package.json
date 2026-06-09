@@ -21,6 +21,7 @@
     "api": "node --no-node-snapshot ./src/api.js",
     "check:consensus-time": "if grep -rn 'getCurrentTime(' src/actions/ 2>/dev/null; then echo 'ERROR: getCurrentTime() (wall-clock Date.now) must never be called inside src/actions/ — block processing must use the deterministic block timestamp (data[\"BLOCK_TIME\"]); a wall-clock value here diverges consensus state across validator instances'; exit 1; else echo 'OK: no wall-clock time usage in src/actions/'; fi",
     "test": "mocha --timeout 5000 --recursive 'test/unit/**/*.test.js' 'test/unit/*.test.js'",
+    "coverage": "c8 --reporter=text --reporter=html --include 'src/**/*.js' mocha --timeout 5000 --recursive 'test/unit/**/*.test.js' 'test/unit/*.test.js' --exit",
     "ci": "mocha --timeout 5000 --recursive --exit 'test/unit/**/*.test.js' 'test/unit/*.test.js'",
     "test:integration": "mocha --timeout 30000 --recursive 'test/integration/scenarios/**/*.test.js'",
     "test:e2e": "mocha --no-config --timeout 60000 --exit 'test/e2e/scenarios/**/*.test.js'",
@@ -49,6 +50,7 @@
     "test:full": "npm run check:consensus-time && npm test && npm run test:integration && npm run test:e2e && npm run test:smoke && npm run test:chaos && npm run test:mutation && npm run test:fuzz:quick"
   },
   "devDependencies": {
+    "c8": "^11.0.0",
     "fast-check": "^4.6.0",
     "mocha": "^11.7.5",
     "sinon": "^21.0.3"
