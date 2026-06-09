@@ -341,4 +341,193 @@ describe('Callback @regression @tier3', function () {
         });
 
     });
+
+    // ─── Native-coin fee payment branches ─────────────────────────────────
+    // The default suite covers XCHAIN-balance fee deduction; these drive the
+    // native-coin payment-mode branch (detectFeePaymentMode → 'native'/'rejected').
+
+    describe('native-coin fee payment', function () {
+
+        function setupValid() {
+            indexer.indexerDb.getTokenInfo.withArgs('TEST').resolves(makeTokenInfo());
+            indexer.indexerDb.getTokenInfo.withArgs('CBTEST').resolves(makeCallbackTokenInfo());
+            indexer.indexerDb.getAddressBalances.resolves({ 1: '1', 2: '100' });
+            indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
+            indexer.indexerDb.getHolders.resolves({ [HOLDER1]: '10', [HOLDER2]: '20' });
+            indexer.indexerDb.getList.resolves([]);
+            indexer.indexerDb.isActionAllowed.resolves(true);
+        }
+
+        it('accepts a valid native-coin fee (PAYMENT_MODE native)', async function () {
+            setupValid();
+            sinon.stub(indexer.util, 'detectFeePaymentMode').returns('native');
+            const valStub = sinon.stub(indexer.util, 'validateNativeCoinFee').resolves({
+                valid: true, nativeCoinAmount: '0.0001', nativeCoin: 'BTC', oracleRound: 7,
+            });
+            const data = createBaseData({ ACTION: 'CALLBACK', FORMAT: 0, SOURCE: OWNER, BLOCK_INDEX: 100 });
+            await handler.parse(['0', 'TEST', null], data, null);
+            assert.ok(valStub.called);
+            assert.strictEqual(data['STATUS'], 'valid');
+            assert.ok(indexer.indexerDb.createCallback.called);
+        });
+
+        it('rejects an invalid native-coin fee (validation.valid=false)', async function () {
+            setupValid();
+            sinon.stub(indexer.util, 'detectFeePaymentMode').returns('native');
+            sinon.stub(indexer.util, 'validateNativeCoinFee').resolves({ valid: false, error: 'underpaid' });
+            const data = createBaseData({ ACTION: 'CALLBACK', FORMAT: 0, SOURCE: OWNER, BLOCK_INDEX: 100 });
+            await handler.parse(['0', 'TEST', null], data, null);
+            assert.ok(String(data['STATUS']).startsWith('invalid'));
+        });
+
+        it('rejects when native-coin output is required but absent (rejected)', async function () {
+            setupValid();
+            sinon.stub(indexer.util, 'detectFeePaymentMode').returns('rejected');
+            const data = createBaseData({ ACTION: 'CALLBACK', FORMAT: 0, SOURCE: OWNER, BLOCK_INDEX: 100 });
+            await handler.parse(['0', 'TEST', null], data, null);
+            assert.ok(String(data['STATUS']).startsWith('invalid'));
+        });
+    });
+
+    // ─── Validation guards (each rejects with its specific reason) ────────
+    describe('validation guards', function () {
+
+        function setup(tokenOverrides = {}, cbOverrides = {}) {
+            indexer.indexerDb.getTokenInfo.withArgs('TEST').resolves(makeTokenInfo(tokenOverrides));
+            indexer.indexerDb.getTokenInfo.withArgs('CBTEST').resolves(makeCallbackTokenInfo(cbOverrides));
+            indexer.indexerDb.getAddressBalances.resolves({ 1: '1', 2: '100' });
+            indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
+            indexer.indexerDb.getHolders.resolves({ [HOLDER1]: '10', [HOLDER2]: '20' });
+            indexer.indexerDb.getList.resolves([]);
+            indexer.indexerDb.isActionAllowed.resolves(true);
+        }
+
+        async function run(params, dataOverrides = {}) {
+            const data = createBaseData({ ACTION: 'CALLBACK', FORMAT: 0, SOURCE: OWNER, BLOCK_INDEX: 100, ...dataOverrides });
+            await handler.parse(params, data, null);
+            return data;
+        }
+
+        it('rejects when LOCK_CALLBACK is set', async function () {
+            setup({ LOCK_CALLBACK: 1 });
+            const data = await run(['0', 'TEST', null]);
+            assert.strictEqual(data['STATUS'], 'invalid: LOCK_CALLBACK');
+        });
+
+        it('rejects when the TICK ownership is escrowed', async function () {
+            setup();
+            indexer.indexerDb.isOwnershipEscrowed.resolves(true);
+            const data = await run(['0', 'TEST', null]);
+            assert.strictEqual(data['STATUS'], 'invalid: TICK (ownership escrowed)');
+        });
+
+        it('rejects a malformed CALLBACK_BLOCK', async function () {
+            setup({ CALLBACK_BLOCK: '9.5' });
+            const data = await run(['0', 'TEST', null]);
+            assert.strictEqual(data['STATUS'], 'invalid: CALLBACK_BLOCK (format)');
+        });
+
+        it('rejects a malformed CALLBACK_AMOUNT', async function () {
+            setup({ CALLBACK_AMOUNT: '1.5' }); // CBTEST DECIMALS=0 → fractional invalid
+            const data = await run(['0', 'TEST', null]);
+            assert.strictEqual(data['STATUS'], 'invalid: CALLBACK_AMOUNT (format)');
+        });
+
+        it('rejects when SOURCE is sleeping', async function () {
+            setup();
+            indexer.indexerDb.isActionAllowed.callsFake(async (addr) => addr !== OWNER);
+            const data = await run(['0', 'TEST', null]);
+            assert.strictEqual(data['STATUS'], 'invalid: SOURCE (sleeping)');
+        });
+
+        it('rejects when the TICK is sleeping', async function () {
+            setup();
+            indexer.indexerDb.isActionAllowed.callsFake(async (addr, tick) => tick !== 'TEST');
+            const data = await run(['0', 'TEST', null]);
+            assert.strictEqual(data['STATUS'], 'invalid: TICK (sleeping)');
+        });
+
+        it('rejects when the CALLBACK_TICK is sleeping', async function () {
+            setup();
+            indexer.indexerDb.isActionAllowed.callsFake(async (addr, tick) => tick !== 'CBTEST');
+            const data = await run(['0', 'TEST', null]);
+            assert.strictEqual(data['STATUS'], 'invalid: CALLBACK_TICK (sleeping)');
+        });
+
+        it('rejects when CALLBACK_BLOCK is in the future', async function () {
+            setup({ CALLBACK_BLOCK: 200 }); // > BLOCK_INDEX 100
+            const data = await run(['0', 'TEST', null]);
+            assert.strictEqual(data['STATUS'], 'invalid: CALLBACK_BLOCK (block index)');
+        });
+
+        it('rejects a MEMO containing a pipe', async function () {
+            setup();
+            const data = await run(['0', 'TEST', 'a|b']);
+            assert.strictEqual(data['STATUS'], 'invalid: MEMO (pipe)');
+        });
+
+        it('rejects a MEMO containing a semicolon', async function () {
+            setup();
+            const data = await run(['0', 'TEST', 'a;b']);
+            assert.strictEqual(data['STATUS'], 'invalid: MEMO (semicolon)');
+        });
+
+        it('rejects a MEMO exceeding MAX_MEMO_LENGTH', async function () {
+            setup();
+            const data = await run(['0', 'TEST', 'x'.repeat(5000)]);
+            assert.strictEqual(data['STATUS'], 'invalid: MEMO (length)');
+        });
+    });
+
+    // ─── CALLBACK_TICK ALLOW/BLOCK list filters holders ───────────────────
+    describe('holder allow/block list filtering', function () {
+
+        function setup(cbOverrides) {
+            indexer.indexerDb.getTokenInfo.withArgs('TEST').resolves(makeTokenInfo());
+            indexer.indexerDb.getTokenInfo.withArgs('CBTEST').resolves(makeCallbackTokenInfo(cbOverrides));
+            indexer.indexerDb.getAddressBalances.resolves({ 1: '1', 2: '100' });
+            indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
+            // include the SOURCE as a holder to drive the source-skip branch too
+            indexer.indexerDb.getHolders.resolves({ [OWNER]: '5', [HOLDER1]: '10', [HOLDER2]: '20' });
+            indexer.indexerDb.isActionAllowed.resolves(true);
+        }
+
+        it('excludes holders not on the CALLBACK_TICK ALLOW_LIST', async function () {
+            setup({ ALLOW_LIST: 70 });
+            indexer.indexerDb.getList.callsFake(async (id) => (id === 70 ? [HOLDER1] : []));
+            const data = createBaseData({ ACTION: 'CALLBACK', FORMAT: 0, SOURCE: OWNER, BLOCK_INDEX: 100 });
+            await handler.parse(['0', 'TEST', null], data, null);
+            assert.strictEqual(data['STATUS'], 'valid');
+            // only HOLDER1 should be credited (HOLDER2 filtered out)
+            const credited = indexer.indexerDb.createCredit.getCalls().map(c => c.args[3]);
+            assert.ok(credited.includes(HOLDER1));
+            assert.ok(!credited.includes(HOLDER2));
+        });
+
+        it('excludes holders on the CALLBACK_TICK BLOCK_LIST', async function () {
+            setup({ BLOCK_LIST: 71 });
+            indexer.indexerDb.getList.callsFake(async (id) => (id === 71 ? [HOLDER2] : []));
+            const data = createBaseData({ ACTION: 'CALLBACK', FORMAT: 0, SOURCE: OWNER, BLOCK_INDEX: 100 });
+            await handler.parse(['0', 'TEST', null], data, null);
+            assert.strictEqual(data['STATUS'], 'valid');
+            const credited = indexer.indexerDb.createCredit.getCalls().map(c => c.args[3]);
+            assert.ok(!credited.includes(HOLDER2));
+        });
+    });
+
+    // ─── Native fee: validation failure with no error message (fallback) ──
+    it('falls back to a generic message when native fee fails without error text', async function () {
+        indexer.indexerDb.getTokenInfo.withArgs('TEST').resolves(makeTokenInfo());
+        indexer.indexerDb.getTokenInfo.withArgs('CBTEST').resolves(makeCallbackTokenInfo());
+        indexer.indexerDb.getAddressBalances.resolves({ 1: '1', 2: '100' });
+        indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
+        indexer.indexerDb.getHolders.resolves({ [HOLDER1]: '10' });
+        indexer.indexerDb.getList.resolves([]);
+        indexer.indexerDb.isActionAllowed.resolves(true);
+        sinon.stub(indexer.util, 'detectFeePaymentMode').returns('native');
+        sinon.stub(indexer.util, 'validateNativeCoinFee').resolves({ valid: false }); // no .error
+        const data = createBaseData({ ACTION: 'CALLBACK', FORMAT: 0, SOURCE: OWNER, BLOCK_INDEX: 100 });
+        await handler.parse(['0', 'TEST', null], data, null);
+        assert.strictEqual(data['STATUS'], 'invalid: native coin fee validation failed');
+    });
 });

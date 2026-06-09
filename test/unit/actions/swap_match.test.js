@@ -186,4 +186,140 @@ describe('Swap_Match action handler @regression @tier2', function () {
         await handler.parse(null, data, null);
         assert.ok(indexer.mapper.createMappings.notCalled);
     });
+
+    // ─── Ownership-transfer settlement sides (GIVE_OWNERSHIP = 1) ─────────
+    // The default tests cover the balance-escrow path. An ownership offer only
+    // matches another ownership offer (the GIVE/GET_OWNERSHIP mirror filter), so
+    // an ownership-for-ownership swap drives BOTH ownership branches at once
+    // (swapInfo.GIVE side + matchInfo.GIVE side).
+
+    it('transfers ownership on both sides for an ownership-for-ownership swap', async function () {
+        indexer.indexerDb.clearTokenEscrow = sinon.stub().resolves();
+        const swapInfo  = makeSwapInfo({ GIVE_OWNERSHIP: 1, GET_OWNERSHIP: 1 });
+        const matchInfo = makeMatchInfo({ GIVE_OWNERSHIP: 1, GET_OWNERSHIP: 1 });
+        indexer.indexerDb.getSwapInfo.resolves(swapInfo);
+        indexer.indexerDb.findSwapMatches.resolves([matchInfo]);
+        const data = createBaseData({ ACTION: 'SWAP_MATCH', ACTION_INDEX: 10, BLOCK_INDEX: 200 });
+        await handler.parse(null, data, null);
+        // two ownership transfers → two transfer-ISSUEs, escrow gate cleared twice
+        assert.strictEqual(indexer.indexerDb.clearTokenEscrow.callCount, 2);
+        assert.ok(indexer.indexerDb.createIssue.called);
+        assert.ok(indexer.indexerDb.createSwapMatch.calledOnce);
+    });
+
+    it('mixed: balance offer never matches an ownership offer (mirror filter)', async function () {
+        const swapInfo  = makeSwapInfo({ GIVE_OWNERSHIP: 1, GET_OWNERSHIP: 1 });
+        const matchInfo = makeMatchInfo(); // balance offer (ownership 0/0)
+        indexer.indexerDb.getSwapInfo.resolves(swapInfo);
+        indexer.indexerDb.findSwapMatches.resolves([matchInfo]);
+        const data = createBaseData({ ACTION: 'SWAP_MATCH', ACTION_INDEX: 10, BLOCK_INDEX: 200 });
+        await handler.parse(null, data, null);
+        assert.ok(indexer.indexerDb.createSwapMatch.notCalled);
+    });
+
+    // ─── SWAP_ACTION_INDEX selects the swap to resolve ────────────────────
+    it('resolves the swap by SWAP_ACTION_INDEX when present', async function () {
+        const swapInfo  = makeSwapInfo();
+        const matchInfo = makeMatchInfo();
+        indexer.indexerDb.getSwapInfo.resolves(swapInfo);
+        indexer.indexerDb.findSwapMatches.resolves([matchInfo]);
+        const data = createBaseData({ ACTION: 'SWAP_MATCH', ACTION_INDEX: 10, BLOCK_INDEX: 200, SWAP_ACTION_INDEX: 7 });
+        await handler.parse(null, data, null);
+        assert.ok(indexer.indexerDb.getSwapInfo.calledWith('BTC', 7));
+        assert.ok(indexer.indexerDb.createSwapMatch.calledOnce);
+    });
+
+    // ─── Token ALLOW/BLOCK list filtering (rejects the match) ─────────────
+    // Helper: re-stub getTokenInfo so GET / GIVE tokens carry a list id, and
+    // getList returns the list contents for that id.
+    function withTokenLists({ getList, giveList }) {
+        indexer.indexerDb.getTokenInfo.callsFake(async (tick) => {
+            if (tick === 'GET')  return createTokenInfo({ TICK: 'GET',  ALLOW_LIST: getList?.allow ?? null, BLOCK_LIST: getList?.block ?? null });
+            if (tick === 'GIVE') return createTokenInfo({ TICK: 'GIVE', ALLOW_LIST: giveList?.allow ?? null, BLOCK_LIST: giveList?.block ?? null });
+            return null;
+        });
+    }
+
+    it('rejects a match absent from the GET-token ALLOW_LIST', async function () {
+        withTokenLists({ getList: { allow: 11 } });
+        indexer.indexerDb.getList.callsFake(async (id) => (id === 11 ? ['1OtherOnlyXXXXXXXXXXXXXXXXXXXXXXXX'] : []));
+        indexer.indexerDb.getSwapInfo.resolves(makeSwapInfo());
+        indexer.indexerDb.findSwapMatches.resolves([makeMatchInfo()]);
+        const data = createBaseData({ ACTION: 'SWAP_MATCH', ACTION_INDEX: 10, BLOCK_INDEX: 200 });
+        await handler.parse(null, data, null);
+        assert.ok(indexer.indexerDb.createSwapMatch.notCalled);
+    });
+
+    it('rejects a match whose address is on the GET-token BLOCK_LIST', async function () {
+        withTokenLists({ getList: { block: 12 } });
+        indexer.indexerDb.getList.callsFake(async (id) => (id === 12 ? ['1DestAddressXXXXXXXXXXXXXXXXXaKc5Z'] : []));
+        indexer.indexerDb.getSwapInfo.resolves(makeSwapInfo());
+        indexer.indexerDb.findSwapMatches.resolves([makeMatchInfo()]);
+        const data = createBaseData({ ACTION: 'SWAP_MATCH', ACTION_INDEX: 10, BLOCK_INDEX: 200 });
+        await handler.parse(null, data, null);
+        assert.ok(indexer.indexerDb.createSwapMatch.notCalled);
+    });
+
+    it('rejects a match absent from the GIVE-token ALLOW_LIST', async function () {
+        withTokenLists({ giveList: { allow: 13 } });
+        indexer.indexerDb.getList.callsFake(async (id) => (id === 13 ? ['1OtherOnlyXXXXXXXXXXXXXXXXXXXXXXXX'] : []));
+        indexer.indexerDb.getSwapInfo.resolves(makeSwapInfo());
+        indexer.indexerDb.findSwapMatches.resolves([makeMatchInfo()]);
+        const data = createBaseData({ ACTION: 'SWAP_MATCH', ACTION_INDEX: 10, BLOCK_INDEX: 200 });
+        await handler.parse(null, data, null);
+        assert.ok(indexer.indexerDb.createSwapMatch.notCalled);
+    });
+
+    it('rejects a match whose address is on the GIVE-token BLOCK_LIST', async function () {
+        withTokenLists({ giveList: { block: 14 } });
+        indexer.indexerDb.getList.callsFake(async (id) => (id === 14 ? ['1DestAddressXXXXXXXXXXXXXXXXXaKc5Z'] : []));
+        indexer.indexerDb.getSwapInfo.resolves(makeSwapInfo());
+        indexer.indexerDb.findSwapMatches.resolves([makeMatchInfo()]);
+        const data = createBaseData({ ACTION: 'SWAP_MATCH', ACTION_INDEX: 10, BLOCK_INDEX: 200 });
+        await handler.parse(null, data, null);
+        assert.ok(indexer.indexerDb.createSwapMatch.notCalled);
+    });
+
+    it('rejects when the swap ALLOW_LIST excludes the match address', async function () {
+        const swapInfo = makeSwapInfo({ ALLOW_LIST: 21 });
+        indexer.indexerDb.getList.callsFake(async (id) => (id === 21 ? ['1OtherOnlyXXXXXXXXXXXXXXXXXXXXXXXX'] : []));
+        indexer.indexerDb.getSwapInfo.resolves(swapInfo);
+        indexer.indexerDb.findSwapMatches.resolves([makeMatchInfo()]);
+        const data = createBaseData({ ACTION: 'SWAP_MATCH', ACTION_INDEX: 10, BLOCK_INDEX: 200 });
+        await handler.parse(null, data, null);
+        assert.ok(indexer.indexerDb.createSwapMatch.notCalled);
+    });
+
+    it('rejects when the match ALLOW_LIST excludes the swap address', async function () {
+        const matchInfo = makeMatchInfo({ ALLOW_LIST: 31 });
+        indexer.indexerDb.getList.callsFake(async (id) => (id === 31 ? ['1OtherOnlyXXXXXXXXXXXXXXXXXXXXXXXX'] : []));
+        indexer.indexerDb.getSwapInfo.resolves(makeSwapInfo());
+        indexer.indexerDb.findSwapMatches.resolves([matchInfo]);
+        const data = createBaseData({ ACTION: 'SWAP_MATCH', ACTION_INDEX: 10, BLOCK_INDEX: 200 });
+        await handler.parse(null, data, null);
+        assert.ok(indexer.indexerDb.createSwapMatch.notCalled);
+    });
+
+    it('rejects when the swap address is on the match BLOCK_LIST', async function () {
+        const matchInfo = makeMatchInfo({ BLOCK_LIST: 41 });
+        indexer.indexerDb.getList.callsFake(async (id) => (id === 41 ? ['1SourceAddressXXXXXXXXXXXXXXXYs6gYt'] : []));
+        indexer.indexerDb.getSwapInfo.resolves(makeSwapInfo());
+        indexer.indexerDb.findSwapMatches.resolves([matchInfo]);
+        const data = createBaseData({ ACTION: 'SWAP_MATCH', ACTION_INDEX: 10, BLOCK_INDEX: 200 });
+        await handler.parse(null, data, null);
+        assert.ok(indexer.indexerDb.createSwapMatch.notCalled);
+    });
+
+    // ALLOW_LIST that contains the swap's GET_ADDRESS but NOT the match address —
+    // drives the second operand of the allow-list short-circuit.
+    it('rejects when GET ALLOW_LIST has the swap address but not the match address', async function () {
+        withTokenLists({ getList: { allow: 51 } });
+        indexer.indexerDb.getList.callsFake(async (id) =>
+            (id === 51 ? ['1SourceAddressXXXXXXXXXXXXXXXYs6gYt'] : []));
+        indexer.indexerDb.getSwapInfo.resolves(makeSwapInfo());
+        indexer.indexerDb.findSwapMatches.resolves([makeMatchInfo()]);
+        const data = createBaseData({ ACTION: 'SWAP_MATCH', ACTION_INDEX: 10, BLOCK_INDEX: 200 });
+        await handler.parse(null, data, null);
+        assert.ok(indexer.indexerDb.createSwapMatch.notCalled);
+    });
 });

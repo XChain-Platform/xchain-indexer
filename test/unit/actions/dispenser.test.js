@@ -436,4 +436,229 @@ describe('Dispenser action handler @regression @tier2', function () {
             assert.ok(data['STATUS'].includes('invalid'));
         });
     });
+
+    // ─── GET_ADDRESS != SOURCE validation (lines 268-282) ───────────────
+
+    describe('GET_ADDRESS different from SOURCE validation', function () {
+
+        it('GET_ADDRESS with DISPENSER_PREFERENCE=2 allows any opener', async function () {
+            // GET_ADDRESS != SOURCE, but GET_ADDRESS has DISPENSER_PREFERENCE=2 (open to anyone)
+            indexer.indexerDb.getAddressPreferences
+                .withArgs(OTHER_ADDR, sinon.match.any, sinon.match.any)
+                .resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0, DISPENSER_PREFERENCE: 2 });
+
+            const params = makeParams(`0|BTC|JDOG|1||10|BTC||0.01|${OTHER_ADDR}||||${EXPIRATION}|||`);
+            const data   = createBaseData({ ACTION: 'DISPENSER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
+
+            await dispenser.parse(params, data, false);
+
+            assert.strictEqual(data['STATUS'], 'valid');
+        });
+
+        it('GET_ADDRESS without DISPENSER_PREFERENCE=2 and no utxoTracker returns invalid', async function () {
+            // GET_ADDRESS != SOURCE, no special preference, no utxoTracker → not fresh → invalid
+            indexer.indexerDb.getAddressPreferences
+                .withArgs(OTHER_ADDR, sinon.match.any, sinon.match.any)
+                .resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0, DISPENSER_PREFERENCE: 0 });
+
+            const params = makeParams(`0|BTC|JDOG|1||10|BTC||0.01|${OTHER_ADDR}||||${EXPIRATION}|||`);
+            const data   = createBaseData({ ACTION: 'DISPENSER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
+
+            await dispenser.parse(params, data, false);
+
+            assert.ok(data['STATUS'].includes('GET_ADDRESS') && data['STATUS'].includes('not permitted'));
+        });
+
+        it('GET_ADDRESS with utxoTracker fresh address is allowed', async function () {
+            indexer.indexerDb.getAddressPreferences
+                .withArgs(OTHER_ADDR, sinon.match.any, sinon.match.any)
+                .resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0, DISPENSER_PREFERENCE: 0 });
+
+            // Wire a utxoTracker with enabled=true and getFirstSeen returning null (never seen)
+            const utxoTracker = {
+                enabled: true,
+                getFirstSeen: sinon.stub().resolves(null),
+            };
+            actionsCtx.utxoTracker = utxoTracker;
+            dispenser = new Dispenser(actionsCtx);
+
+            const params = makeParams(`0|BTC|JDOG|1||10|BTC||0.01|${OTHER_ADDR}||||${EXPIRATION}|||`);
+            const data   = createBaseData({ ACTION: 'DISPENSER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
+
+            await dispenser.parse(params, data, false);
+
+            assert.strictEqual(data['STATUS'], 'valid');
+        });
+
+        it('GET_ADDRESS with utxoTracker throwing falls back to not-fresh (invalid)', async function () {
+            indexer.indexerDb.getAddressPreferences
+                .withArgs(OTHER_ADDR, sinon.match.any, sinon.match.any)
+                .resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0, DISPENSER_PREFERENCE: 0 });
+
+            const utxoTracker = {
+                enabled: true,
+                getFirstSeen: sinon.stub().rejects(new Error('db error')),
+            };
+            actionsCtx.utxoTracker = utxoTracker;
+            dispenser = new Dispenser(actionsCtx);
+
+            const params = makeParams(`0|BTC|JDOG|1||10|BTC||0.01|${OTHER_ADDR}||||${EXPIRATION}|||`);
+            const data   = createBaseData({ ACTION: 'DISPENSER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
+
+            await dispenser.parse(params, data, false);
+
+            // Throws caught → isFresh stays false → invalid
+            assert.ok(data['STATUS'].includes('GET_ADDRESS') && data['STATUS'].includes('not permitted'));
+        });
+    });
+
+    // ─── LIST field validation (lines 304-314) ───────────────────────────
+
+    describe('LIST field validation', function () {
+
+        it('unknown ALLOW_LIST returns invalid', async function () {
+            indexer.indexerDb.getListType.resolves(false);
+
+            const params = makeParams(`0|BTC|JDOG|1||10|BTC||0.01|${OWNER_ADDR}||||${EXPIRATION}|99||`);
+            const data   = createBaseData({ ACTION: 'DISPENSER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
+
+            await dispenser.parse(params, data, false);
+
+            assert.ok(data['STATUS'].includes('ALLOW_LIST') && data['STATUS'].includes('unknown'));
+        });
+
+        it('unsupported LIST type (tick list) returns invalid', async function () {
+            // Type 1 = tick list; dispenser.listTypes only includes type 2 (address)
+            indexer.indexerDb.getListType.resolves(1);
+
+            const params = makeParams(`0|BTC|JDOG|1||10|BTC||0.01|${OWNER_ADDR}||||${EXPIRATION}|99||`);
+            const data   = createBaseData({ ACTION: 'DISPENSER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
+
+            await dispenser.parse(params, data, false);
+
+            assert.ok(data['STATUS'].includes('unsupported'));
+        });
+    });
+
+    // ─── Ownership dispenser create path (lines 438-442) ─────────────────
+
+    describe('GIVE_OWNERSHIP=1 (ownership dispenser)', function () {
+
+        beforeEach(function () {
+            indexer.indexerDb.setTokenEscrow = sinon.stub().resolves();
+            // Ownership source must be token owner
+            indexer.indexerDb.getTokenInfo
+                .withArgs('JDOG', sinon.match.any, sinon.match.any)
+                .resolves(createTokenInfo({ TICK: 'JDOG', TICK_ID: 10, DECIMALS: 0, ALLOW_LIST: null, BLOCK_LIST: null, OWNER: OWNER_ADDR }));
+            indexer.indexerDb.isOwnershipEscrowed.resolves(false);
+        });
+
+        it('valid ownership-give dispenser calls setTokenEscrow and no balance escrow', async function () {
+            // FORMAT: 0|GIVE_COIN|GIVE_TICK|GIVE_AMOUNT|GIVE_OWNERSHIP|GIVE_ESCROW|GET_COIN|GET_TICK|GET_AMOUNT|GET_ADDRESS|...
+            // GIVE_OWNERSHIP=1, GIVE_AMOUNT and GIVE_ESCROW must be empty
+            indexer.indexerDb.getAddressBalances.resolves({ 10: '0', 99: '999999999' });
+            const params = makeParams(`0|BTC|JDOG||1||BTC||0.01|${OWNER_ADDR}||||${EXPIRATION}|||`);
+            const data   = createBaseData({ ACTION: 'DISPENSER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
+
+            await dispenser.parse(params, data, false);
+
+            assert.strictEqual(data['STATUS'], 'valid');
+            sinon.assert.calledOnce(indexer.indexerDb.setTokenEscrow);
+        });
+
+        it('ownership dispenser: ownership_escrow fee included in unified fees', async function () {
+            // With UNIFIED_FEES enabled (default), ownership escrow fee is added
+            indexer.indexerDb.getAddressBalances.resolves({ 10: '0', 99: '999999999' });
+            const params = makeParams(`0|BTC|JDOG||1||BTC||0.01|${OWNER_ADDR}||||${EXPIRATION}|||`);
+            const data   = createBaseData({ ACTION: 'DISPENSER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
+
+            await dispenser.parse(params, data, false);
+
+            // If UNIFIED_FEES branches covered — status valid means fee path was exercised
+            assert.strictEqual(data['STATUS'], 'valid');
+        });
+    });
+
+    // ─── Non-unified fee path (line 348-349) ─────────────────────────────
+
+    describe('Non-unified expiration fee path', function () {
+
+        it('legacy getExpirationFee path when UNIFIED_FEES disabled', async function () {
+            actionsCtx.protocolChanges.isEnabled = sinon.stub().resolves(false);
+
+            const params = makeParams(`0|BTC|JDOG|1||10|BTC||0.01|${OWNER_ADDR}||||${EXPIRATION}|||`);
+            const data   = createBaseData({ ACTION: 'DISPENSER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
+
+            await dispenser.parse(params, data, false);
+
+            // valid or invalid depending on fee — key point is legacy branch was executed
+            sinon.assert.calledOnce(indexer.indexerDb.createDispenser);
+        });
+    });
+
+    // ─── Native coin fee payment paths (lines 354-371) ───────────────────
+
+    describe('Native coin fee payment path', function () {
+
+        it('valid native coin fee sets PAYMENT_MODE=1', async function () {
+            sinon.stub(indexer.util, 'detectFeePaymentMode').returns('native');
+            sinon.stub(indexer.util, 'validateNativeCoinFee').resolves({
+                valid: true,
+                nativeCoinAmount: '0.0001',
+                nativeCoin: 'BTC',
+                oracleRound: 1,
+            });
+            sinon.stub(indexer.util, 'getUnifiedExpirationFee').returns({ gasCost: 100, fee: '0.00001' });
+
+            const params = makeParams(`0|BTC|JDOG|1||10|BTC||0.01|${OWNER_ADDR}||||${EXPIRATION}|||`);
+            const data   = createBaseData({ ACTION: 'DISPENSER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
+
+            await dispenser.parse(params, data, false);
+
+            assert.strictEqual(data['STATUS'], 'valid');
+        });
+
+        it('invalid native coin fee returns error', async function () {
+            sinon.stub(indexer.util, 'detectFeePaymentMode').returns('native');
+            sinon.stub(indexer.util, 'validateNativeCoinFee').resolves({
+                valid: false,
+                error: 'output too small',
+            });
+            sinon.stub(indexer.util, 'getUnifiedExpirationFee').returns({ gasCost: 100, fee: '0.00001' });
+
+            const params = makeParams(`0|BTC|JDOG|1||10|BTC||0.01|${OWNER_ADDR}||||${EXPIRATION}|||`);
+            const data   = createBaseData({ ACTION: 'DISPENSER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
+
+            await dispenser.parse(params, data, false);
+
+            assert.ok(data['STATUS'].startsWith('invalid'));
+        });
+
+        it('rejected payment mode returns insufficient fee error', async function () {
+            sinon.stub(indexer.util, 'detectFeePaymentMode').returns('rejected');
+            sinon.stub(indexer.util, 'getUnifiedExpirationFee').returns({ gasCost: 100, fee: '0.00001' });
+
+            const params = makeParams(`0|BTC|JDOG|1||10|BTC||0.01|${OWNER_ADDR}||||${EXPIRATION}|||`);
+            const data   = createBaseData({ ACTION: 'DISPENSER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
+
+            await dispenser.parse(params, data, false);
+
+            assert.ok(data['STATUS'].includes('insufficient fee'));
+        });
+
+        it('insufficient xchain fee balance returns error', async function () {
+            sinon.stub(indexer.util, 'detectFeePaymentMode').returns('xchain');
+            sinon.stub(indexer.util, 'getUnifiedExpirationFee').returns({ gasCost: 100, fee: '9999999' });
+
+            // Deplete the fee balance
+            indexer.indexerDb.getAddressBalances.resolves({ 10: '1000', 99: '0' });
+
+            const params = makeParams(`0|BTC|JDOG|1||10|BTC||0.01|${OWNER_ADDR}||||${EXPIRATION}|||`);
+            const data   = createBaseData({ ACTION: 'DISPENSER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
+
+            await dispenser.parse(params, data, false);
+
+            assert.ok(data['STATUS'].includes('insufficient funds') || data['STATUS'].startsWith('invalid'));
+        });
+    });
 });

@@ -401,4 +401,132 @@ describe('Dispense action handler @regression @tier2', function () {
 
         sinon.assert.calledOnce(indexer.mapper.createMappings);
     });
+
+    // ─── Ownership dispense (GIVE_OWNERSHIP=1) ────────────────────────────
+    it('ownership dispense transfers token ownership to the buyer', async function () {
+        indexer.indexerDb.clearTokenEscrow = sinon.stub().resolves();
+        indexer.indexerDb.getDispenserInfo.resolves(makeDispenserInfo({ GIVE_OWNERSHIP: 1 }));
+
+        const data = createBaseData({ ACTION: 'DISPENSE', SOURCE: BUYER_ADDR, COIN_AMOUNT: '0.01', BLOCK_TIME });
+        await dispense.parse([], data, false);
+
+        const rec = indexer.indexerDb.createDispense.firstCall.args[0];
+        assert.strictEqual(rec['STATUS'], 'valid');
+        sinon.assert.called(indexer.indexerDb.clearTokenEscrow);  // ownership transfer path
+        sinon.assert.called(indexer.indexerDb.createIssue);
+        sinon.assert.notCalled(indexer.indexerDb.createEscrow);   // no balance escrow move
+    });
+
+    // ─── FIAT-priced dispenser (validator price snapshot) ─────────────────
+    it('FIAT dispenser resolves units via reversePriceMatch', async function () {
+        indexer.indexerDb.getDispenserInfo.resolves(makeDispenserInfo({
+            FIAT: 'USD', FIAT_AMOUNT: '100', ORACLE_ADDRESS: null, GET_AMOUNT: null,
+        }));
+        sinon.stub(indexer.util, 'reversePriceMatch').resolves({ units: 2 });
+
+        const data = createBaseData({ ACTION: 'DISPENSE', SOURCE: BUYER_ADDR, COIN_AMOUNT: '0.02', BLOCK_TIME });
+        await dispense.parse([], data, false);
+
+        const rec = indexer.indexerDb.createDispense.firstCall.args[0];
+        assert.strictEqual(rec['STATUS'], 'valid');
+    });
+
+    it('FIAT dispenser rejects when no price snapshot matches', async function () {
+        indexer.indexerDb.getDispenserInfo.resolves(makeDispenserInfo({
+            FIAT: 'USD', FIAT_AMOUNT: '100', ORACLE_ADDRESS: null, GET_AMOUNT: null,
+        }));
+        sinon.stub(indexer.util, 'reversePriceMatch').resolves(null);
+
+        const data = createBaseData({ ACTION: 'DISPENSE', SOURCE: BUYER_ADDR, COIN_AMOUNT: '0.02', BLOCK_TIME });
+        await dispense.parse([], data, false);
+
+        const rec = indexer.indexerDb.createDispense.firstCall.args[0];
+        assert.strictEqual(rec['STATUS'], 'invalid: no matching price snapshot');
+    });
+
+    // ─── FIAT dispenser with a user oracle (cross-conversion) ─────────────
+    it('FIAT dispenser with ORACLE_ADDRESS resolves units via reverseOraclePriceMatch', async function () {
+        indexer.indexerDb.getDispenserInfo.resolves(makeDispenserInfo({
+            FIAT: 'JPY', FIAT_AMOUNT: '1000', ORACLE_ADDRESS: '1OracleAddrXXXXXXXXXXXXXXXXXXXX', GET_AMOUNT: null,
+        }));
+        sinon.stub(indexer.util, 'reverseOraclePriceMatch').resolves({ units: 1 });
+
+        const data = createBaseData({ ACTION: 'DISPENSE', SOURCE: BUYER_ADDR, COIN_AMOUNT: '0.01', BLOCK_TIME });
+        await dispense.parse([], data, false);
+
+        const rec = indexer.indexerDb.createDispense.firstCall.args[0];
+        assert.strictEqual(rec['STATUS'], 'valid');
+    });
+
+    it('FIAT oracle dispenser rejects when no oracle price matches', async function () {
+        indexer.indexerDb.getDispenserInfo.resolves(makeDispenserInfo({
+            FIAT: 'JPY', FIAT_AMOUNT: '1000', ORACLE_ADDRESS: '1OracleAddrXXXXXXXXXXXXXXXXXXXX', GET_AMOUNT: null,
+        }));
+        sinon.stub(indexer.util, 'reverseOraclePriceMatch').resolves(null);
+
+        const data = createBaseData({ ACTION: 'DISPENSE', SOURCE: BUYER_ADDR, COIN_AMOUNT: '0.01', BLOCK_TIME });
+        await dispense.parse([], data, false);
+
+        const rec = indexer.indexerDb.createDispense.firstCall.args[0];
+        assert.strictEqual(rec['STATUS'], 'invalid: no matching oracle price');
+    });
+
+    // ─── GIVE-token ALLOW/BLOCK list enforcement ──────────────────────────
+    it('rejects a buyer absent from the GIVE-token ALLOW_LIST', async function () {
+        indexer.indexerDb.getTokenInfo
+            .withArgs('JDOG', sinon.match.any, sinon.match.any)
+            .resolves(createTokenInfo({ TICK: 'JDOG', TICK_ID: 10, ALLOW_LIST: 60, BLOCK_LIST: null }));
+        indexer.indexerDb.getList.callsFake(async (id) => (id === 60 ? ['1OtherOnlyXXXXXXXXXXXXXXXXXXXX'] : []));
+
+        const data = createBaseData({ ACTION: 'DISPENSE', SOURCE: BUYER_ADDR, COIN_AMOUNT: '0.01', BLOCK_TIME });
+        await dispense.parse([], data, false);
+
+        const rec = indexer.indexerDb.createDispense.firstCall.args[0];
+        assert.ok(String(rec['STATUS']).includes('GIVE_TOKEN allow list'));
+    });
+
+    it('rejects a buyer present on the GIVE-token BLOCK_LIST', async function () {
+        indexer.indexerDb.getTokenInfo
+            .withArgs('JDOG', sinon.match.any, sinon.match.any)
+            .resolves(createTokenInfo({ TICK: 'JDOG', TICK_ID: 10, ALLOW_LIST: null, BLOCK_LIST: 61 }));
+        indexer.indexerDb.getList.callsFake(async (id) => (id === 61 ? [BUYER_ADDR] : []));
+
+        const data = createBaseData({ ACTION: 'DISPENSE', SOURCE: BUYER_ADDR, COIN_AMOUNT: '0.01', BLOCK_TIME });
+        await dispense.parse([], data, false);
+
+        const rec = indexer.indexerDb.createDispense.firstCall.args[0];
+        assert.ok(String(rec['STATUS']).includes('GIVE_TOKEN block list'));
+    });
+
+    // ─── GET-token (token-priced dispenser) ALLOW/BLOCK list enforcement ───
+    // A token-priced dispenser sets GET_TICK; the GET-token's lists then gate
+    // the buyer's DESTINATION + the dispenser GET_ADDRESS.
+    function tokenPricedDispenser(getTokenOverrides) {
+        indexer.indexerDb.getDispenserInfo.resolves(makeDispenserInfo({ GET_TICK: 'PAYTOK', GET_COIN: 'BTC' }));
+        indexer.indexerDb.getTokenInfo
+            .withArgs('PAYTOK', sinon.match.any, sinon.match.any)
+            .resolves(createTokenInfo({ TICK: 'PAYTOK', TICK_ID: 20, ...getTokenOverrides }));
+    }
+
+    it('rejects a buyer absent from the GET-token ALLOW_LIST', async function () {
+        tokenPricedDispenser({ ALLOW_LIST: 70, BLOCK_LIST: null });
+        indexer.indexerDb.getList.callsFake(async (id) => (id === 70 ? ['1OtherOnlyXXXXXXXXXXXXXXXXXXXX'] : []));
+
+        const data = createBaseData({ ACTION: 'DISPENSE', SOURCE: BUYER_ADDR, COIN_AMOUNT: '0.01', BLOCK_TIME });
+        await dispense.parse([], data, false);
+
+        const rec = indexer.indexerDb.createDispense.firstCall.args[0];
+        assert.ok(String(rec['STATUS']).includes('GET_TOKEN allow list'));
+    });
+
+    it('rejects a buyer present on the GET-token BLOCK_LIST', async function () {
+        tokenPricedDispenser({ ALLOW_LIST: null, BLOCK_LIST: 71 });
+        indexer.indexerDb.getList.callsFake(async (id) => (id === 71 ? [BUYER_ADDR] : []));
+
+        const data = createBaseData({ ACTION: 'DISPENSE', SOURCE: BUYER_ADDR, COIN_AMOUNT: '0.01', BLOCK_TIME });
+        await dispense.parse([], data, false);
+
+        const rec = indexer.indexerDb.createDispense.firstCall.args[0];
+        assert.ok(String(rec['STATUS']).includes('GET_TOKEN block list'));
+    });
 });

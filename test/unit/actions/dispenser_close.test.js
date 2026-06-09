@@ -108,4 +108,72 @@ describe('Dispenser_Close action handler @regression @tier2', function () {
         await handler.parse(null, data, null);
         assert.ok(indexer.mapper.createMappings.calledOnce);
     });
+
+    // ─── Ownership dispenser closure paths (lines 77-89) ──────────────────────
+
+    it('ownership dispenser: clearTokenEscrow when escrow matches and destination is SOURCE', async function () {
+        const SOURCE = '1SourceAddressXXXXXXXXXXXXXXXYs6gYt';
+        const dispenser = makeDispenser({ GIVE_OWNERSHIP: 1, ACTION_INDEX: 50, SOURCE });
+        indexer.indexerDb.getDispenserInfo.resolves(dispenser);
+        indexer.indexerDb.getSweepDestination.resolves(null);
+        indexer.indexerDb.getDispenserCanceller.resolves(null);
+        // escrow matches dispenser.ACTION_INDEX → ownership path executes
+        indexer.indexerDb.getTokenEscrow = sinon.stub().resolves(50);
+        indexer.indexerDb.clearTokenEscrow = sinon.stub().resolves();
+
+        const data = createBaseData({ ACTION: 'DISPENSER_CLOSE', DISPENSER_ACTION_INDEX: 50, BLOCK_INDEX: 200, DISPENSER_STATUS: 'closed' });
+        await handler.parse(null, data, null);
+
+        sinon.assert.calledOnce(indexer.indexerDb.clearTokenEscrow);
+    });
+
+    it('ownership dispenser: transferTokenOwnership when escrow matches and destination differs from SOURCE', async function () {
+        const SOURCE   = '1SourceAddressXXXXXXXXXXXXXXXYs6gYt';
+        const DEST     = '1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev';
+        const dispenser = makeDispenser({ GIVE_OWNERSHIP: 1, ACTION_INDEX: 50, SOURCE });
+        indexer.indexerDb.getDispenserInfo.resolves(dispenser);
+        indexer.indexerDb.getSweepDestination.resolves(DEST);  // sweep → destination != SOURCE
+        indexer.indexerDb.getTokenEscrow = sinon.stub().resolves(50);
+        indexer.indexerDb.clearTokenEscrow = sinon.stub().resolves();
+        // transferTokenOwnership is a util method — stub it
+        sinon.stub(indexer.util, 'transferTokenOwnership').resolves();
+
+        const data = createBaseData({ ACTION: 'DISPENSER_CLOSE', DISPENSER_ACTION_INDEX: 50, BLOCK_INDEX: 200, DISPENSER_STATUS: 'closed' });
+        await handler.parse(null, data, null);
+
+        sinon.assert.calledOnce(indexer.util.transferTokenOwnership);
+        sinon.assert.notCalled(indexer.indexerDb.clearTokenEscrow);
+    });
+
+    it('ownership dispenser: no action when escrow does not match (already cleared by DISPENSE)', async function () {
+        const SOURCE = '1SourceAddressXXXXXXXXXXXXXXXYs6gYt';
+        const dispenser = makeDispenser({ GIVE_OWNERSHIP: 1, ACTION_INDEX: 50, SOURCE });
+        indexer.indexerDb.getDispenserInfo.resolves(dispenser);
+        indexer.indexerDb.getSweepDestination.resolves(null);
+        indexer.indexerDb.getDispenserCanceller.resolves(null);
+        // escrow is already cleared (returns null/different action_index)
+        indexer.indexerDb.getTokenEscrow = sinon.stub().resolves(null);
+        indexer.indexerDb.clearTokenEscrow = sinon.stub().resolves();
+
+        const data = createBaseData({ ACTION: 'DISPENSER_CLOSE', DISPENSER_ACTION_INDEX: 50, BLOCK_INDEX: 200, DISPENSER_STATUS: 'closed' });
+        await handler.parse(null, data, null);
+
+        sinon.assert.notCalled(indexer.indexerDb.clearTokenEscrow);
+        sinon.assert.calledOnce(indexer.indexerDb.createDispenserClose);
+    });
+
+    it('canceller address is used as destination when no sweep and canceller set', async function () {
+        const CANCELLER = '1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev';
+        const dispenser = makeDispenser({ GIVE_REMAINING: '100' });
+        indexer.indexerDb.getDispenserInfo.resolves(dispenser);
+        indexer.indexerDb.getSweepDestination.resolves(null);
+        indexer.indexerDb.getDispenserCanceller.resolves(CANCELLER);
+
+        const data = createBaseData({ ACTION: 'DISPENSER_CLOSE', DISPENSER_ACTION_INDEX: 50, BLOCK_INDEX: 200, DISPENSER_STATUS: 'closed' });
+        await handler.parse(null, data, null);
+
+        // Destination should have been tracked in addresses list
+        const addresses = indexer.util.getAddressesList();
+        assert.ok(Object.keys(addresses).includes(CANCELLER), 'Canceller address should be tracked as destination');
+    });
 });

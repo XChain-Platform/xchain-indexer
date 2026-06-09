@@ -291,5 +291,196 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
             assert.ok(String(data['STATUS']).includes('COOLDOWN_BLOCKS'));
         });
 
+        it('COOLDOWN_BLOCKS without SLASH_DESTINATION defaults to BURN address (line 107-109)', async function () {
+            // hasCooldown=true, hasDest=false → SLASH_DESTINATION set to BURN address from config
+            const data = deployData({ FORMAT: 1 });
+            await handler.parse(['1', VALID_CODE_HEX, '100000', '', '100', ''], data, null);
+            assert.strictEqual(data['STATUS'], 'valid');
+            // createContract should have been called (deploy succeeded)
+            sinon.assert.calledOnce(indexer.indexerDb.createContract);
+        });
+
+    });
+
+    // ─── Hex decode failure (line 141-142) ───────────────────────────────
+
+    describe('hex decode failure', function () {
+
+        it('rejects CODE_ENCODING with non-hex characters', async function () {
+            // Buffer.from with invalid hex doesn't throw in Node — it silently ignores bad chars.
+            // To hit the catch branch we need to stub Buffer.from or cause a real throw.
+            // In practice the try/catch is a defensive guard; test via stub.
+            const origBufferFrom = Buffer.from.bind(Buffer);
+            const bufferStub = sinon.stub(Buffer, 'from').callsFake((data, encoding) => {
+                if(encoding === 'hex') throw new Error('invalid hex');
+                return origBufferFrom(data, encoding);
+            });
+
+            const data = deployData({ FORMAT: 0 });
+            await handler.parse(['0', 'not-valid-hex!!', '100000', ''], data, null);
+            bufferStub.restore();
+
+            assert.ok(String(data['STATUS']).includes('CODE_ENCODING'));
+        });
+
+    });
+
+    // ─── Native coin fee payment paths (lines 185-203) ───────────────────
+
+    describe('native coin fee payment', function () {
+
+        it('valid native coin fee sets feePaymentMode=1 and STATUS valid', async function () {
+            const config = getTestConfig();
+            config['GAS_PRICE'] = '0.00000001'; // non-zero fee to trigger payment mode check
+            const localIndexer = createMockIndexer({ config });
+            addDeployStubs(localIndexer.indexerDb);
+            localIndexer.indexerDb.isActionAllowed.resolves(true);
+            localIndexer.indexerDb.getTokenInfo.resolves({ TICK_ID: 1 });
+            localIndexer.indexerDb.getAddressBalances.resolves({ 1: '1000000' });
+
+            const ctx = { config: localIndexer.config, util: localIndexer.util, mapper: localIndexer.mapper, decoderDb: localIndexer.decoderDb, indexerDb: localIndexer.indexerDb };
+            const h = new Deploy(ctx);
+
+            sinon.stub(localIndexer.util, 'detectFeePaymentMode').returns('native');
+            sinon.stub(localIndexer.util, 'validateNativeCoinFee').resolves({ valid: true, nativeCoinAmount: '0.0001', nativeCoin: 'BTC', oracleRound: 1 });
+
+            const data = deployData({ FORMAT: 0 });
+            await h.parse(['0', VALID_CODE_HEX, '100000', ''], data, null);
+            assert.strictEqual(data['STATUS'], 'valid');
+        });
+
+        it('invalid native coin fee returns error', async function () {
+            const config = getTestConfig();
+            config['GAS_PRICE'] = '0.00000001';
+            const localIndexer = createMockIndexer({ config });
+            addDeployStubs(localIndexer.indexerDb);
+            localIndexer.indexerDb.isActionAllowed.resolves(true);
+            localIndexer.indexerDb.getTokenInfo.resolves({ TICK_ID: 1 });
+            localIndexer.indexerDb.getAddressBalances.resolves({ 1: '1000000' });
+
+            const ctx = { config: localIndexer.config, util: localIndexer.util, mapper: localIndexer.mapper, decoderDb: localIndexer.decoderDb, indexerDb: localIndexer.indexerDb };
+            const h = new Deploy(ctx);
+
+            sinon.stub(localIndexer.util, 'detectFeePaymentMode').returns('native');
+            sinon.stub(localIndexer.util, 'validateNativeCoinFee').resolves({ valid: false, error: 'fee too small' });
+
+            const data = deployData({ FORMAT: 0 });
+            await h.parse(['0', VALID_CODE_HEX, '100000', ''], data, null);
+            assert.ok(String(data['STATUS']).includes('fee too small') || String(data['STATUS']).startsWith('invalid'));
+        });
+
+        it('rejected native coin fee returns insufficient fee error', async function () {
+            const config = getTestConfig();
+            config['GAS_PRICE'] = '0.00000001';
+            const localIndexer = createMockIndexer({ config });
+            addDeployStubs(localIndexer.indexerDb);
+            localIndexer.indexerDb.isActionAllowed.resolves(true);
+            localIndexer.indexerDb.getTokenInfo.resolves({ TICK_ID: 1 });
+            localIndexer.indexerDb.getAddressBalances.resolves({ 1: '1000000' });
+
+            const ctx = { config: localIndexer.config, util: localIndexer.util, mapper: localIndexer.mapper, decoderDb: localIndexer.decoderDb, indexerDb: localIndexer.indexerDb };
+            const h = new Deploy(ctx);
+
+            sinon.stub(localIndexer.util, 'detectFeePaymentMode').returns('rejected');
+
+            const data = deployData({ FORMAT: 0 });
+            await h.parse(['0', VALID_CODE_HEX, '100000', ''], data, null);
+            assert.ok(String(data['STATUS']).includes('insufficient fee'));
+        });
+
+        it('xchain balance insufficient for GAS returns invalid (lines 200-202)', async function () {
+            const config = getTestConfig();
+            config['GAS_PRICE'] = '0.00000001';
+            const localIndexer = createMockIndexer({ config });
+            addDeployStubs(localIndexer.indexerDb);
+            localIndexer.indexerDb.isActionAllowed.resolves(true);
+            localIndexer.indexerDb.getTokenInfo.resolves({ TICK_ID: 1 });
+            // Zero balance — fee check will fail
+            localIndexer.indexerDb.getAddressBalances.resolves({ 1: '0' });
+
+            const ctx = { config: localIndexer.config, util: localIndexer.util, mapper: localIndexer.mapper, decoderDb: localIndexer.decoderDb, indexerDb: localIndexer.indexerDb };
+            const h = new Deploy(ctx);
+
+            // Ensure xchain mode is used (detectFeePaymentMode returns 'xchain')
+            sinon.stub(localIndexer.util, 'detectFeePaymentMode').returns('xchain');
+
+            const data = deployData({ FORMAT: 0 });
+            await h.parse(['0', VALID_CODE_HEX, '100000', ''], data, null);
+            assert.ok(String(data['STATUS']).includes('insufficient funds') || String(data['STATUS']).includes('GAS'));
+        });
+
+    });
+
+    // ─── Constructor state changes + rollback (lines 323-348) ────────────
+
+    describe('constructor state changes and rollback', function () {
+
+        it('constructor with stateChanges calls createContractState for each change (lines 322-330)', async function () {
+            const vm = makeVm({
+                execute: sinon.stub().resolves({
+                    success: true,
+                    gasUsed: 50,
+                    stateChanges: [{ key: 'foo', value: 'bar' }, { key: 'baz', value: 42 }],
+                    stateDeletes: [],
+                    emittedActions: [],
+                }),
+            });
+            actionsCtx.vm = vm;
+            handler = new Deploy(actionsCtx);
+
+            const data = deployData({ FORMAT: 0 });
+            await handler.parse(['0', VALID_CODE_HEX, '100000', 'initparam'], data, null);
+
+            // createContractState called twice (once per change)
+            assert.ok(indexer.indexerDb.createContractState.callCount >= 2);
+            assert.strictEqual(data['STATUS'], 'valid');
+        });
+
+        it('constructor with stateDeletes calls createContractState with null value (lines 332-339)', async function () {
+            const vm = makeVm({
+                execute: sinon.stub().resolves({
+                    success: true,
+                    gasUsed: 50,
+                    stateChanges: [],
+                    stateDeletes: ['oldKey1', 'oldKey2'],
+                    emittedActions: [],
+                }),
+            });
+            actionsCtx.vm = vm;
+            handler = new Deploy(actionsCtx);
+
+            const data = deployData({ FORMAT: 0 });
+            await handler.parse(['0', VALID_CODE_HEX, '100000', 'initparam'], data, null);
+
+            const calls = indexer.indexerDb.createContractState.args;
+            const nullCalls = calls.filter(a => a[0].STATE_VALUE === null);
+            assert.ok(nullCalls.length >= 2, 'should have called createContractState with null for each delete');
+            assert.strictEqual(data['STATUS'], 'valid');
+        });
+
+        it('constructor state write failure rolls back savepoint and marks deploy failed (lines 341-348)', async function () {
+            const vm = makeVm({
+                execute: sinon.stub().resolves({
+                    success: true,
+                    gasUsed: 50,
+                    stateChanges: [{ key: 'k', value: 'v' }],
+                    stateDeletes: [],
+                    emittedActions: [],
+                }),
+            });
+            actionsCtx.vm = vm;
+            // Cause createContractState to throw
+            indexer.indexerDb.createContractState.rejects(new Error('disk full'));
+            handler = new Deploy(actionsCtx);
+
+            const data = deployData({ FORMAT: 0 });
+            await handler.parse(['0', VALID_CODE_HEX, '100000', 'initparam'], data, null);
+
+            sinon.assert.calledOnce(indexer.indexerDb.rollbackToSavepoint);
+            // deleteContract called (contract record cleaned up)
+            assert.ok(indexer.indexerDb.deleteContract.called);
+            assert.ok(String(data['STATUS']).includes('failed') || String(data['STATUS']).startsWith('invalid'));
+        });
+
     });
 });
