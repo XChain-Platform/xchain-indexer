@@ -1,0 +1,51 @@
+-- xchain:migration mode=auto
+-- Migration: add the Phase B partial-fill columns to cross_chain_matches.
+--
+-- Applies to indexer databases whose `cross_chain_matches` table was created
+-- BEFORE the cross-chain DEX Phase B release (ORDER offers / partial fills).
+-- Phase B added four columns to cross_chain_matches.sql:
+--
+--   a_kind          VARCHAR(10)  NOT NULL DEFAULT 'swap'  -- 'swap' (full) | 'order' (partial-fillable)
+--   a_filled_before VARCHAR(250) NOT NULL DEFAULT '0'     -- A's cumulative committed fill BEFORE this match
+--   b_kind          VARCHAR(10)  NOT NULL DEFAULT 'swap'
+--   b_filled_before VARCHAR(250) NOT NULL DEFAULT '0'
+--
+-- WHY THIS NEEDS A MIGRATION
+-- -------------------------
+-- Two things conspired to leave existing DBs without these columns:
+--
+--   1. verifyTables() -> createTable() only CREATEs a table when it is absent.
+--      An already-existing cross_chain_matches is never re-created, so the new
+--      columns in the SQL source don't reach it on their own.
+--
+--   2. The column-drift reconciler (db.js alterTableForDrift, which WOULD add a
+--      missing column verbatim — DEFAULT clause and all — for an existing table)
+--      depends on parseExpectedColumns(), whose regex only matches a CREATE
+--      TABLE that ends with `) ENGINE ...`. cross_chain_matches.sql historically
+--      ended with a bare `);` (no ENGINE clause), so the parse returned null and
+--      the reconciler SILENTLY SKIPPED the whole table — the columns were never
+--      auto-added on upgrade.
+--
+-- The companion source fix adds `ENGINE=InnoDB ...` to cross_chain_matches.sql,
+-- so going forward the reconciler self-heals this table automatically on indexer
+-- startup (all four columns carry a DEFAULT, so they are added, not skipped).
+-- This file remains the explicit, auditable migration for operators who prefer
+-- to apply it deliberately (e.g. while the indexer is stopped) or to document
+-- exactly what changed.
+--
+-- All four columns carry a DEFAULT, so they backfill existing rows safely; the
+-- defaults ('swap' / '0') are also the correct historical values — every row
+-- written before Phase B was a full, single-fill SWAP at offset 0.
+--
+-- HOW TO RUN
+-- ----------
+--   mariadb -u <indexer_user> -p <indexer_db> < src/sql/migrations/add_cross_chain_matches_partial_fill_columns.sql
+--
+-- Safe to re-run: each ADD COLUMN is guarded with IF NOT EXISTS (MariaDB). No
+-- data dedup or backup-sensitive operation is involved — this only adds columns
+-- with defaults and never drops or rewrites existing data.
+
+ALTER TABLE cross_chain_matches ADD COLUMN IF NOT EXISTS a_kind          VARCHAR(10)  NOT NULL DEFAULT 'swap' AFTER a_action_index;
+ALTER TABLE cross_chain_matches ADD COLUMN IF NOT EXISTS a_filled_before VARCHAR(250) NOT NULL DEFAULT '0'    AFTER a_amount;
+ALTER TABLE cross_chain_matches ADD COLUMN IF NOT EXISTS b_kind          VARCHAR(10)  NOT NULL DEFAULT 'swap' AFTER b_action_index;
+ALTER TABLE cross_chain_matches ADD COLUMN IF NOT EXISTS b_filled_before VARCHAR(250) NOT NULL DEFAULT '0'    AFTER b_amount;

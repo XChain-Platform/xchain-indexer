@@ -188,6 +188,12 @@ class XChainIndexer {
             let indexerTablesVerified = await this.indexerDb.verifyTables();
             if(!indexerTablesVerified)
                 this.util.throwError("Database " + this.indexerDbName + " tables don't exist!");
+
+            // Apply any pending `auto` schema migrations (additive/idempotent changes the
+            // drift reconciler can't make on its own). Manual/destructive migrations stay
+            // gated for an explicit operator run (`node src/migrate.js`). Recorded in the
+            // schema_migrations ledger, so this is a no-op once applied.
+            await this.indexerDb.runMigrations();
         }
 
         // Start the durable hub-push retry queue. Both PRICE hub pushes (v0 round

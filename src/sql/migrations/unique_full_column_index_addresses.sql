@@ -1,3 +1,6 @@
+-- xchain:migration mode=manual
+-- (manual: rebuilds a UNIQUE index on index_addresses — run with the indexer stopped;
+--  see HOW TO RUN below.)
 -- Migration: widen the index_addresses unique index from a 62-char prefix to
 -- the full column.
 --

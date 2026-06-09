@@ -10,4 +10,4 @@ CREATE TABLE capability_snapshots (
     -- indexer verify cross-chain match signatures without local capability stakes.
     UNIQUE KEY uq_cap_snap (snapshot_block, capability, signing_pubkey),
     KEY idx_cap_block (capability, snapshot_block)
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;

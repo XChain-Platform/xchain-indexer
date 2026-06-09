@@ -182,6 +182,123 @@ class Database {
         return true;
     }
 
+    // Apply tracked, ordered schema migrations from src/sql/migrations/ — the changes
+    // the startup drift reconciler deliberately can't/won't make on its own: data
+    // backfills, destructive index/column changes, dedup-then-unique, type changes.
+    // (Additive column/index drift is already auto-reconciled by verifyTables; this is
+    // only for the rest.) Each file is applied at most once and recorded in the
+    // `schema_migrations` ledger, so it is safe to call on every startup.
+    //
+    // A migration opts into unattended application with a header tag on any of its
+    // first lines:
+    //   -- xchain:migration mode=auto     → applied automatically at startup
+    //   -- xchain:migration mode=manual   → applied only by an explicit operator run
+    // A file with NO tag is treated as `manual` — unknown DDL never auto-runs on a
+    // validator fleet. `auto` migrations must be additive + idempotent (guard with
+    // IF [NOT] EXISTS); anything that can fail on existing data (e.g. a UNIQUE index
+    // needing dedup) must be `manual`.
+    //
+    // opts.includeManual=true also applies pending `manual` migrations — that's the
+    // operator-initiated path (`node src/migrate.js`). The whole run holds a DB-scoped
+    // advisory lock so concurrent processes/replicas can't apply the same file twice.
+    // Returns { applied:[...], pending:[...] }.
+    async runMigrations(opts = {}){
+        const crypto        = require('crypto');
+        const includeManual = !!opts.includeManual;
+        const dir           = path.join(__dirname, 'sql', 'migrations');
+        const result        = { applied: [], pending: [] };
+
+        let files = [];
+        try { files = fs.readdirSync(dir).filter(f => f.endsWith('.sql')).sort(); }
+        catch(e){ return result; }   // no migrations dir → nothing to do
+        if(!files.length) return result;
+
+        const lockName = 'xchain_migrate_' + this.dbName;
+        let conn = await this.getConnection();
+        try {
+            // DB-scoped advisory lock so two processes don't apply concurrently. GET_LOCK
+            // is server-global, so the name is namespaced by dbName (the shared MariaDB on
+            // a combined box hosts many indexer DBs).
+            const got = await conn.query('SELECT GET_LOCK(?, 30) AS l', [lockName]);
+            if(!got || !got[0] || String(got[0].l) !== '1'){
+                console.warn('runMigrations: could not acquire lock ' + lockName + ' (another process is migrating). Skipping this run.');
+                return result;
+            }
+            try {
+                await this._ensureMigrationsLedger(conn);
+                const appliedRows   = await conn.query('SELECT name, checksum FROM schema_migrations');
+                const appliedByName = new Map(appliedRows.map(r => [r.name, r.checksum]));
+
+                for(const file of files){
+                    const raw      = fs.readFileSync(path.join(dir, file), 'utf8');
+                    const checksum = crypto.createHash('sha256').update(raw).digest('hex');
+
+                    if(appliedByName.has(file)){
+                        if(appliedByName.get(file) !== checksum){
+                            // Migrations are immutable once applied. A changed checksum means
+                            // someone edited an applied file — surface it loudly; never silently re-run.
+                            console.warn('runMigrations: ' + file + ' was already applied but its content CHANGED (checksum mismatch). Migrations are immutable once applied — review manually.');
+                        }
+                        continue;
+                    }
+
+                    const mode = this._migrationMode(raw);
+                    if(mode !== 'auto' && !includeManual){
+                        console.log('runMigrations: PENDING (gated, mode=' + mode + '): ' + file + ' — apply with `node src/migrate.js`.');
+                        result.pending.push(file);
+                        continue;
+                    }
+
+                    // Strip `--` line comments before splitting on ';' (a ';' in a comment
+                    // header must not terminate a statement — same rule as createTable()).
+                    const statements = this.stripSqlLineComments(raw).split(';').map(s => s.trim()).filter(Boolean);
+                    console.log('runMigrations: applying ' + file + ' (mode=' + mode + ', ' + statements.length + ' statement(s))...');
+                    try {
+                        for(const stmt of statements){ await conn.query(stmt); }
+                    } catch(err){
+                        // Schema is now in an unknown state — block startup rather than run on.
+                        console.error('runMigrations: FAILED applying ' + file + ': ' + (err && err.message));
+                        throw err;
+                    }
+                    await conn.query(
+                        'INSERT INTO schema_migrations (name, checksum, mode, applied_at) VALUES (?, ?, ?, NOW())',
+                        [file, checksum, mode]
+                    );
+                    result.applied.push(file);
+                    console.log('runMigrations: applied ' + file);
+                }
+            } finally {
+                try { await conn.query('SELECT RELEASE_LOCK(?)', [lockName]); } catch(_){}
+            }
+        } finally {
+            try { await conn.release(); } catch(_){}
+        }
+
+        if(result.applied.length) console.log('runMigrations: ' + result.applied.length + ' migration(s) applied to ' + this.dbName + '.');
+        if(result.pending.length) console.log('runMigrations: ' + result.pending.length + ' manual migration(s) pending for ' + this.dbName + ' — run `node src/migrate.js` to apply.');
+        return result;
+    }
+
+    // Read a migration file's `-- xchain:migration mode=auto|manual` header tag.
+    // Defaults to 'manual' when absent (conservative — unknown DDL never auto-runs).
+    _migrationMode(raw){
+        const m = String(raw).match(/^\s*--\s*xchain:migration\b[^\n]*\bmode\s*=\s*(auto|manual)\b/im);
+        return m ? m[1].toLowerCase() : 'manual';
+    }
+
+    // Create the migration ledger if absent. Created directly (not via src/sql/) — it
+    // is infrastructure, not a domain table, so verifyTables() doesn't manage it.
+    async _ensureMigrationsLedger(conn){
+        await conn.query(
+            'CREATE TABLE IF NOT EXISTS schema_migrations (' +
+            "name VARCHAR(255) NOT NULL PRIMARY KEY, " +
+            "checksum VARCHAR(64) NOT NULL, " +
+            "mode VARCHAR(10) NOT NULL DEFAULT 'manual', " +
+            'applied_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP' +
+            ') ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci'
+        );
+    }
+
     // Parse a CREATE TABLE statement to extract expected column nullability.
     // Conservative — only used for drift detection, not for full schema mgmt.
     // Returns array of {name, nullable} or null when parsing can't recognize
@@ -235,7 +352,17 @@ class Database {
         const data     = fs.readFileSync(dir + '/' + file, "utf8");
         const table    = file.substring(0, file.indexOf('.sql'));
         const expected = this.parseExpectedColumns(data);
-        if(!expected) return;
+        if(!expected){
+            // parseExpectedColumns returns null when the file has no recognizable
+            // `CREATE TABLE ... ) ENGINE ...` block (e.g. a missing ENGINE clause).
+            // That silently disables ALL column-drift reconciliation for this table —
+            // exactly the gap that left cross_chain_matches without its Phase B columns.
+            // Make it loud so a malformed source file can't hide. (Non-fatal: index
+            // reconciliation and table creation are unaffected; the parse-coverage
+            // unit test is the hard guardrail.)
+            console.warn('Schema drift check SKIPPED for `' + table + '`: could not parse columns from ' + file + ' — expected a `CREATE TABLE ... ) ENGINE ...` definition. Additive column/nullability drift will NOT auto-reconcile for this table until the SQL source is fixed.');
+            return;
+        }
         const live = await db.query(
             "SELECT COLUMN_NAME, IS_NULLABLE, COLUMN_TYPE FROM information_schema.columns WHERE table_schema = ? AND table_name = ?",
             [this.dbName, table]

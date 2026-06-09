@@ -30,4 +30,4 @@ CREATE TABLE cross_chain_matches (
     KEY idx_a_ref (a_chain, a_action_index),
     KEY idx_b_ref (b_chain, b_action_index),
     KEY idx_status (status)
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;

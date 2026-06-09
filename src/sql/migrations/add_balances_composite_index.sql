@@ -1,3 +1,6 @@
+-- xchain:migration mode=manual
+-- (manual: the UNIQUE index fails to build if duplicate (address_id, tick_id) rows
+--  already exist — must be checked/deduped first; see WARNING below.)
 -- Migration: composite index on balances(address_id, tick_id)
 --
 -- Applies to databases created from an older schema that only had the two
