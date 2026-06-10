@@ -288,7 +288,7 @@ class XChainIndexer {
                 // (single-host: the local hub DB is the hub itself, always current).
                 if(this.hubDbSync && this.config['COIN'] === 'BTC'){
                     try {
-                        await this.hubDbSync.waitForPriceSyncHeight(blockToParse, this.priceSyncTimeoutMs);
+                        await this.hubDbSync.waitForPriceSyncHeight(blockToParse, this.priceSyncTimeoutMs, blockTime);
                     } catch(err){
                         // Defer the block: lastIndexerBlock is not advanced, so the outer loop
                         // retries this same block after the sleep interval rather than processing

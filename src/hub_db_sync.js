@@ -131,6 +131,47 @@ class HubDbSync {
         // the match barrier) keeps every operator settling a match at the same height even
         // if the snapshot mirrors in after the match. See _snapshotSyncSatisfied.
         this._snapshotWaiters   = [];
+
+        // Stream-position watermark — the hub's "you have received everything I
+        // produced up to ts" signal, carried by the WS heartbeat ({type:'watermark'}),
+        // the ready message, and REST snapshot responses. This is what lets the
+        // barriers below distinguish "my mirror is BEHIND the hub" (must defer —
+        // settling now could fork the ledger) from "no new rows exist anywhere"
+        // (must proceed — deferring deadlocks the chain). The previous row-content
+        // watermarks (MAX(effective_at)/MAX(effective_time)) could not make that
+        // distinction: the first sparse row armed the barrier and the tip deferred
+        // forever until the NEXT row arrived (review items #1984/#1986, live-repro'd
+        // on the origin-host/test-host testbed 2026-06-09).
+        //
+        // Grace margins (seconds) cover rows whose effective time can precede their
+        // insertion into the stream: oracle first-publishes are effective at their
+        // action's block_time (source-chain indexing lag → retroactive arrival; see
+        // the PriceAggregator retroactivity finding for the protocol-level fix),
+        // price rounds finalize via PBFT some time after their anchor block, and
+        // matches are stamped with the hub's wall clock (skew only).
+        this.streamWatermark      = 0;
+        this.priceWatermarkGraceS  = parseInt(options.priceWatermarkGraceS  || process.env.HUB_SYNC_PRICE_GRACE_S  || '600');
+        this.oracleWatermarkGraceS = parseInt(options.oracleWatermarkGraceS || process.env.HUB_SYNC_ORACLE_GRACE_S || '600');
+        this.matchWatermarkGraceS  = parseInt(options.matchWatermarkGraceS  || process.env.HUB_SYNC_MATCH_GRACE_S  || '120');
+
+        // Watermark advancement is gated on a completed bootstrap: WS heartbeats
+        // certify only what was delivered ON THE SOCKET, so until the REST
+        // bootstrap has fully drained every mirrored table (rows from before the
+        // subscription), a heartbeat must not certify the mirror as caught-up.
+        // Reset on disconnect; re-set after the reconnect re-bootstrap drains.
+        this._bootstrapDrained = false;
+        this._readyWatermark   = null;
+    }
+
+    // Advance the stream watermark (monotonic) and re-evaluate every pending
+    // barrier waiter — a watermark advance can satisfy any of them.
+    _advanceWatermark(ts) {
+        ts = Number(ts);
+        if (!Number.isFinite(ts) || ts <= this.streamWatermark) return;
+        this.streamWatermark = ts;
+        this._releasePriceWaiters();
+        this._releaseOracleWaiters();
+        this._releaseMatchWaiters();
     }
 
     // Start: open WebSocket and await the hub's ready acknowledgement (confirming
@@ -159,26 +200,35 @@ class HubDbSync {
         }
 
         // Bootstrap each tracked table after the subscription is confirmed active
-        try {
-            await this._bootstrapTable('price_snapshots');
-        } catch (err) {
-            console.warn('HubDbSync: price_snapshots bootstrap failed:', err);
-        }
-        try {
-            await this._bootstrapTable('oracle_prices');
-        } catch (err) {
-            console.warn('HubDbSync: oracle_prices bootstrap failed:', err);
-        }
-        for (let table of CROSS_CHAIN_TABLES) {
-            try {
-                await this._bootstrapTable(table);
-            } catch (err) {
-                console.warn('HubDbSync: ' + table + ' bootstrap failed:', err);
-            }
-        }
+        await this._bootstrapAll();
 
         if (!WebSocket) {
             this._startPolling();
+        }
+    }
+
+    // Bootstrap every mirrored table. When ALL of them fully drain (each REST
+    // snapshot returned fewer rows than its page limit and applied cleanly),
+    // the mirror provably holds everything the hub had at the OLDEST of the
+    // per-table response watermarks — advance the stream watermark to it and
+    // open the heartbeat gate. Any partial drain leaves the gate closed; the
+    // next poll/reconnect re-attempts.
+    async _bootstrapAll() {
+        let marks = [];
+        let allDrained = true;
+        for (let table of ['price_snapshots', 'oracle_prices'].concat(CROSS_CHAIN_TABLES)) {
+            try {
+                let mark = await this._bootstrapTable(table);
+                if (mark === null) allDrained = false;
+                else marks.push(mark);
+            } catch (err) {
+                allDrained = false;
+                console.warn('HubDbSync: ' + table + ' bootstrap failed:', err);
+            }
+        }
+        if (allDrained && marks.length > 0) {
+            this._bootstrapDrained = true;
+            this._advanceWatermark(Math.min.apply(null, marks));
         }
     }
 
@@ -194,7 +244,11 @@ class HubDbSync {
     // If the hub supplied max_ids in the ready message, runs a supplemental
     // catch-up fetch for any IDs between the snapshot ceiling and hub_ready_max_id
     // that may have arrived while the REST round-trip was in flight.
+    // Returns the snapshot response's stream watermark when this table fully
+    // drained (page not full, every row applied), or null otherwise — the caller
+    // (_bootstrapAll) only advances the global watermark once every table drains.
     async _bootstrapTable(table) {
+        const PAGE_LIMIT = 10000;
         // Determine the highest existing ID in the local copy so we only fetch newer rows
         let lastId = 0;
         try {
@@ -204,16 +258,18 @@ class HubDbSync {
             // Table may not exist yet — bootstrap starts at 0
         }
 
-        let path = '/hub-db/snapshot/' + table + '?since_id=' + lastId + '&limit=10000';
+        let path = '/hub-db/snapshot/' + table + '?since_id=' + lastId + '&limit=' + PAGE_LIMIT;
         let result = await this._httpGet(path);
-        if (!result || !Array.isArray(result.rows)) return;
+        if (!result || !Array.isArray(result.rows)) return null;
 
         let applied = 0;
+        let applyErrors = 0;
         for (let row of result.rows) {
             try {
                 await this._applyRow(table, row);
                 applied++;
             } catch (err) {
+                applyErrors++;
                 console.warn('HubDbSync: failed to apply row in ' + table + ':', err);
             }
         }
@@ -253,6 +309,11 @@ class HubDbSync {
         // A new match (new required snapshot_block) or an arriving snapshot can change
         // snapshot-presence — re-evaluate the snapshot barrier on either cross-chain table.
         if (table === 'cross_chain_matches' || table === 'capability_snapshots') await this._releaseSnapshotWaiters();
+
+        // Fully drained only if the page wasn't full and everything applied.
+        let fullyDrained = result.rows.length < PAGE_LIMIT && applyErrors === 0;
+        if (!fullyDrained) return null;
+        return Number.isFinite(Number(result.watermark)) ? Number(result.watermark) : 0;
     }
 
     // Recompute the highest finalized price block present in the local price_snapshots
@@ -268,16 +329,37 @@ class HubDbSync {
         } catch (e) {
             return;                                         // table not ready yet — leave height untouched
         }
-        this.priceSyncHeight = height;
+        this.priceSyncHeight  = height;
+        this.priceBootstrapped = true;                      // mirror read successfully at least once
         this._releasePriceWaiters();
     }
 
-    // Resolve any pending waiters whose target height is now covered.
+    // Whether the price mirror is caught up enough to safely process a block at
+    // (blockHeight, blockTime). Two satisfied cases:
+    //   1. A finalized round anchored at or past this height is local — every round
+    //      eligible at this height is therefore local (rows arrive id-ordered).
+    //   2. The hub's stream watermark has passed this block's time plus a grace
+    //      margin covering PBFT finalization lag — the hub has told us everything
+    //      it produced through that instant, so the set of rounds at or before this
+    //      height is FINAL (a round anchored ≤ H is finalized within grace of
+    //      time(H); none can appear later). This is what lets a fresh distributed
+    //      BTC indexer bootstrap on a chain with no rounds yet (#1986) and lets
+    //      the tip proceed deterministically through an oracle round gap, while a
+    //      genuinely-behind mirror (hub unreachable → watermark frozen) still
+    //      defers. blockTime may be absent (legacy callers) — then only case 1.
+    _priceSyncSatisfied(blockHeight, blockTime) {
+        if (this.priceSyncHeight >= blockHeight) return true;
+        if (this.priceBootstrapped && Number.isFinite(blockTime) &&
+            this.streamWatermark >= blockTime + this.priceWatermarkGraceS) return true;
+        return false;
+    }
+
+    // Resolve any pending waiters whose target is now covered.
     _releasePriceWaiters() {
         if (this._priceWaiters.length === 0) return;
         let stillWaiting = [];
         for (let w of this._priceWaiters) {
-            if (this.priceSyncHeight >= w.height) {
+            if (this._priceSyncSatisfied(w.height, w.blockTime)) {
                 clearTimeout(w.timer);
                 w.resolve(this.priceSyncHeight);
             } else {
@@ -296,21 +378,23 @@ class HubDbSync {
     // Price rounds are anchored to the oracle reference chain's block height (reference_block),
     // so this comparison is only meaningful for an indexer whose own chain IS that reference
     // chain. Callers on other chains must not gate on this — see XChainIndexer.
-    waitForPriceSyncHeight(blockHeight, timeoutMs) {
+    waitForPriceSyncHeight(blockHeight, timeoutMs, blockTime) {
         blockHeight = Number(blockHeight);
+        blockTime   = Number(blockTime);
         // Nothing to wait on when sync is disabled (single-host: the local hub DB is the hub
         // itself, always current) or the target is not a finite height.
         if (!this.enabled || !Number.isFinite(blockHeight)) return Promise.resolve(this.priceSyncHeight);
-        if (this.priceSyncHeight >= blockHeight)           return Promise.resolve(this.priceSyncHeight);
+        if (this._priceSyncSatisfied(blockHeight, blockTime)) return Promise.resolve(this.priceSyncHeight);
 
         let ms = parseInt(timeoutMs);
         if (!Number.isFinite(ms) || ms <= 0) ms = 60000;
         return new Promise((resolve, reject) => {
-            let waiter = { height: blockHeight, resolve: resolve, timer: null };
+            let waiter = { height: blockHeight, blockTime: blockTime, resolve: resolve, timer: null };
             waiter.timer = setTimeout(() => {
                 this._priceWaiters = this._priceWaiters.filter(w => w !== waiter);
                 reject(new Error('price sync barrier timed out after ' + ms + 'ms waiting for block ' +
-                                 blockHeight + ' (price mirror at ' + this.priceSyncHeight + ')'));
+                                 blockHeight + ' (price mirror at ' + this.priceSyncHeight +
+                                 ', stream watermark at ' + this.streamWatermark + ')'));
             }, ms);
             this._priceWaiters.push(waiter);
         });
@@ -342,6 +426,12 @@ class HubDbSync {
     _oracleSyncSatisfied(blockTime) {
         if (this.oracleBootstrapped && this.oracleSyncTimestamp === null) return true;
         if (this.oracleSyncTimestamp !== null && this.oracleSyncTimestamp >= blockTime) return true;
+        // Stream watermark: the hub has sent us every row it produced through
+        // blockTime + grace, so the set of prices effective at or before this
+        // block is final — quiet oracles must not stall the chain (#1984). The
+        // grace margin covers first-publish rows arriving after their (retro-
+        // active) effective_at; see the PriceAggregator retroactivity finding.
+        if (this.oracleBootstrapped && this.streamWatermark >= blockTime + this.oracleWatermarkGraceS) return true;
         return false;
     }
 
@@ -441,6 +531,14 @@ class HubDbSync {
     _matchSyncSatisfied(blockTime) {
         if (this.matchBootstrapped && this.matchSyncTimestamp === null) return true;
         if (this.matchSyncTimestamp !== null && this.matchSyncTimestamp >= blockTime) return true;
+        // Stream watermark: matches are stamped with the hub's wall clock at
+        // finalization and broadcast immediately, so a watermark past this
+        // block's time (plus clock-skew grace) means every match effective at
+        // or before it is already local. Without this, the FIRST finalized
+        // cross-chain match anywhere froze every distributed replica on every
+        // chain until the next match arrived (#1984, live-repro'd: an LTC⇄DOGE
+        // match stalled the BTC replica for 6+ cycles).
+        if (this.matchBootstrapped && this.streamWatermark >= blockTime + this.matchWatermarkGraceS) return true;
         return false;
     }
 
@@ -607,7 +705,19 @@ class HubDbSync {
                         if (event.max_ids && typeof event.max_ids === 'object') {
                             this._readyMaxIds = event.max_ids;
                         }
+                        // NOTE: the ready watermark is NOT advanced here — at this point
+                        // the REST bootstrap has not run, so rows the hub produced before
+                        // this subscription may not be local yet. Bootstrap responses
+                        // carry their own watermark (advanced only on a full drain).
+                        if (event.watermark) this._readyWatermark = Number(event.watermark);
                         settle(resolve, event);
+                        return;
+                    }
+                    if (event.type === 'watermark') {
+                        // Stream-position heartbeat: every row event produced up to ts has
+                        // been delivered on this socket. Safe to advance only once the
+                        // bootstrap has drained (rows from before the subscription).
+                        if (this._bootstrapDrained) this._advanceWatermark(event.ts);
                         return;
                     }
                     if (event.type === 'row:inserted' && event.table && event.row) {
@@ -631,6 +741,10 @@ class HubDbSync {
             ws.on('close', () => {
                 console.log('HubDbSync: WebSocket disconnected, reconnecting in 5s');
                 this.ws = null;
+                // Rows produced while disconnected won't arrive on the socket —
+                // close the heartbeat gate (and freeze the watermark) until the
+                // reconnect re-bootstrap has drained the gap.
+                this._bootstrapDrained = false;
                 settle(reject, new Error('WebSocket closed before ready'));
                 this._scheduleReconnect();
             });
@@ -662,34 +776,19 @@ class HubDbSync {
             // Re-bootstrap to fill in rows missed while disconnected. _bootstrapTable
             // uses the local max-ID as since_id, so it fetches only genuinely-missing
             // rows; re-receives are harmless thanks to INSERT IGNORE in _applyRow.
-            try {
-                await this._bootstrapTable('price_snapshots');
-            } catch (err) {
-                console.warn('HubDbSync: price_snapshots re-bootstrap failed:', err);
-            }
-            try {
-                await this._bootstrapTable('oracle_prices');
-            } catch (err) {
-                console.warn('HubDbSync: oracle_prices re-bootstrap failed:', err);
-            }
-            for (let table of CROSS_CHAIN_TABLES) {
-                try {
-                    await this._bootstrapTable(table);
-                } catch (err) {
-                    console.warn('HubDbSync: ' + table + ' re-bootstrap failed:', err);
-                }
-            }
+            // A full drain re-opens the heartbeat gate and advances the watermark.
+            await this._bootstrapAll();
         }, 5000);
     }
 
-    // Polling fallback when ws is not available
+    // Polling fallback when ws is not available. Snapshot responses carry the
+    // hub's stream watermark, so poll-mode mirrors get the same liveness
+    // semantics as the WS heartbeat (at poll-interval granularity).
     _startPolling() {
         let poll = async () => {
             if (!this.running) return;
             try {
-                await this._bootstrapTable('price_snapshots');
-                await this._bootstrapTable('oracle_prices');
-                for (let table of CROSS_CHAIN_TABLES) await this._bootstrapTable(table);
+                await this._bootstrapAll();
             } catch (err) {
                 console.warn('HubDbSync: poll error:', err);
             }

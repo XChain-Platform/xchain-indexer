@@ -188,3 +188,100 @@ describe('HubDbSync oracle-sync barrier @regression @tier3', function () {
         assert.strictEqual(got, sync.oracleSyncTimestamp);
     });
 });
+
+describe('HubDbSync stream-position watermark @regression @tier3', function () {
+
+    function makeWatermarkSync() {
+        const doQuery = sinon.stub().callsFake(async () => [{ h: 0 }]);
+        const sync = new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test' });
+        sync.priceWatermarkGraceS  = 60;
+        sync.oracleWatermarkGraceS = 60;
+        sync.matchWatermarkGraceS  = 30;
+        return sync;
+    }
+
+    it('_advanceWatermark is monotonic and ignores junk', function () {
+        const sync = makeWatermarkSync();
+        sync._advanceWatermark(100);
+        assert.strictEqual(sync.streamWatermark, 100);
+        sync._advanceWatermark(50);                       // regression must not rewind
+        assert.strictEqual(sync.streamWatermark, 100);
+        sync._advanceWatermark('not-a-number');
+        assert.strictEqual(sync.streamWatermark, 100);
+        sync._advanceWatermark(150);
+        assert.strictEqual(sync.streamWatermark, 150);
+    });
+
+    it('price barrier passes on an EMPTY mirror once the watermark clears blockTime+grace (#1986 bootstrap deadlock)', function () {
+        const sync = makeWatermarkSync();
+        sync.priceBootstrapped = true;
+        sync.priceSyncHeight   = 0;                       // no rounds exist anywhere
+        sync.streamWatermark   = 1000 + 60;
+        assert.strictEqual(sync._priceSyncSatisfied(5, 1000), true);
+    });
+
+    it('price barrier still defers while the watermark is short of grace', function () {
+        const sync = makeWatermarkSync();
+        sync.priceBootstrapped = true;
+        sync.streamWatermark   = 1000 + 59;
+        assert.strictEqual(sync._priceSyncSatisfied(5, 1000), false);
+    });
+
+    it('price barrier ignores the watermark for legacy callers that pass no blockTime', function () {
+        const sync = makeWatermarkSync();
+        sync.priceBootstrapped = true;
+        sync.streamWatermark   = 10_000_000;
+        assert.strictEqual(sync._priceSyncSatisfied(5, undefined), false, 'row path only without blockTime');
+        sync.priceSyncHeight = 5;
+        assert.strictEqual(sync._priceSyncSatisfied(5, undefined), true);
+    });
+
+    it('oracle barrier releases a stale armed row via the watermark (#1984 deadlock)', function () {
+        const sync = makeWatermarkSync();
+        sync.oracleBootstrapped   = true;
+        sync.oracleSyncTimestamp  = 500;                  // armed: newest row far behind the tip
+        sync.streamWatermark      = 1000 + 60;
+        assert.strictEqual(sync._oracleSyncSatisfied(1000), true);
+        sync.streamWatermark      = 1000 + 59;
+        assert.strictEqual(sync._oracleSyncSatisfied(1000), false, 'must defer until grace is covered');
+    });
+
+    it('match barrier releases a stale armed match via the watermark (#1984, not coin-scoped)', function () {
+        const sync = makeWatermarkSync();
+        sync.matchBootstrapped  = true;
+        sync.matchSyncTimestamp = 500;
+        sync.streamWatermark    = 1000 + 30;
+        assert.strictEqual(sync._matchSyncSatisfied(1000), true);
+        sync.streamWatermark    = 1000 + 29;
+        assert.strictEqual(sync._matchSyncSatisfied(1000), false);
+    });
+
+    it('a watermark advance releases an in-flight oracle waiter without a new row', async function () {
+        const sync = makeWatermarkSync();
+        sync.oracleBootstrapped  = true;
+        sync.oracleSyncTimestamp = 500;                   // armed
+        const pending = sync.waitForOracleSyncTimestamp(1000, 5000);
+        assert.strictEqual(sync._oracleWaiters.length, 1);
+        sync._advanceWatermark(1000 + 60);                // heartbeat lands
+        await pending;
+        assert.strictEqual(sync._oracleWaiters.length, 0, 'waiter released by watermark, not by a row');
+    });
+
+    it('_bootstrapAll opens the heartbeat gate and adopts the OLDEST per-table watermark only when every table drains', async function () {
+        const sync = makeWatermarkSync();
+        const marks = { price_snapshots: 900, oracle_prices: 880, cross_chain_matches: 910, capability_snapshots: 905 };
+        sinon.stub(sync, '_bootstrapTable').callsFake(async (table) => marks[table]);
+        await sync._bootstrapAll();
+        assert.strictEqual(sync._bootstrapDrained, true);
+        assert.strictEqual(sync.streamWatermark, 880, 'min across tables — no table may be certified past its own drain');
+    });
+
+    it('_bootstrapAll keeps the gate closed when any table fails to drain', async function () {
+        const sync = makeWatermarkSync();
+        sinon.stub(sync, '_bootstrapTable').callsFake(async (table) =>
+            table === 'oracle_prices' ? null : 900);      // partial page / apply error
+        await sync._bootstrapAll();
+        assert.strictEqual(sync._bootstrapDrained, false);
+        assert.strictEqual(sync.streamWatermark, 0, 'watermark must not advance on a partial drain');
+    });
+});
