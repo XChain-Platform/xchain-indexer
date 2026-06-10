@@ -155,10 +155,9 @@ describe('ProtocolChanges @regression @tier3', function () {
             assert.strictEqual(enabled, false);
         });
 
-        it('should handle getBlockTime errors gracefully', async function () {
+        it('should propagate getBlockTime errors (a DB fault must not read as disabled)', async function () {
             indexer.decoderDb.getBlockTime.rejects(new Error('DB error'));
-            const enabled = await pc.isEnabled('SEND', 100);
-            assert.strictEqual(enabled, false);
+            await assert.rejects(() => pc.isEnabled('SEND', 100), /DB error/);
         });
 
         it('should check version major/minor/revision correctly', async function () {

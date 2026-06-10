@@ -220,8 +220,13 @@ class ProtocolChanges {
                 enabled = false;
             }
         } catch (e){
-            enabled = false;
+            // Could-not-evaluate is NOT the same as not-enabled. Swallowing an error here
+            // (e.g. a transient decoder-DB fault in getBlockTime) would mark the action as
+            // disabled on this node only — invalidating actions that healthy peers process
+            // normally and silently forking the ledger. Propagate instead so block
+            // processing rolls back and retries the block with correct activation state.
             console.log('protocol error e=',e);
+            throw e;
         }
         return enabled;
     }
