@@ -93,6 +93,11 @@ class ProtocolChanges {
         // (See xchain-documentation/protocol/actions/ATTEST.md)
         this.addChange('ATTEST',             '2.0.0',0,0,0,0,0,0);
 
+        // ANCHOR — DOGE-only on-chain state commitments: v0=checkpoint,
+        // v1=checkpoint+match archive, v2=archive continuation
+        // (See xchain-documentation/protocol/actions/ANCHOR.md)
+        this.addChange('ANCHOR',             '2.0.0',0,0,0,0,0,0);
+
         // Define protocol changes (ALL LOWER Case)
         // this.addChange('name','1.0.0',0,0,0,0,0,0);
         this.addChange('UNIFIED_FEES',   '2.0.0',0,0,0,0,0,0);

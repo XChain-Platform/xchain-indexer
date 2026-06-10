@@ -1,5 +1,5 @@
 CREATE TABLE cross_chain_matches (
-    id                   BIGINT AUTO_INCREMENT PRIMARY KEY,       -- mirror cursor (matches hub id)
+    id                   BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,       -- mirror cursor (matches hub id)
     match_id             VARCHAR(80)  NOT NULL,                   -- deterministic hash of both order refs + snapshot_block
     snapshot_block       BIGINT NOT NULL,                         -- BTC-anchored block; selects the cross_chain validator set
     network              VARCHAR(20)  NOT NULL,                    -- mainnet/testnet/regtest; signed into the canonical so a match can never settle off-network

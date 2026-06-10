@@ -33,7 +33,8 @@ dotenv.config();
 // Validate required environment variables
 const REQUIRED_ENV = [
     'DECODER_DB_HOST','DECODER_DB_PORT','DECODER_DB_NAME','DECODER_DB_USER','DECODER_DB_PASS',
-    'INDEXER_DB_HOST','INDEXER_DB_PORT','INDEXER_DB_NAME','INDEXER_DB_USER','INDEXER_DB_PASS'
+    'INDEXER_DB_HOST','INDEXER_DB_PORT','INDEXER_DB_NAME','INDEXER_DB_USER','INDEXER_DB_PASS',
+    'INDEXER_API_KEY'
 ];
 for(const key of REQUIRED_ENV){
     if(!process.env[key]){
@@ -71,7 +72,8 @@ const HUB_DB_NAME = process.env.HUB_DB_NAME || '';
 const HUB_DB_USER = process.env.HUB_DB_USER || '';
 const HUB_DB_PASS = process.env.HUB_DB_PASS || '';
 
-// Optional API key for write methods (e.g. hub→indexer reward pushes)
+// API key for write + federation read methods (e.g. hub→indexer reward pushes).
+// Required at startup — these methods fail closed (401) without a valid key.
 const INDEXER_API_KEY = process.env.INDEXER_API_KEY || '';
 
 // Set of write methods that require the API key when one is configured
@@ -118,14 +120,14 @@ async function startApi(){
         methods: ['POST']
     }));
 
-    // API key enforcement for write + federation read methods
+    // API key enforcement for write + federation read methods. Fails closed:
+    // without a configured key these methods are rejected, never left open.
     app.use((req, res, next) => {
-        if(!INDEXER_API_KEY) return next();
         let method = req.body && req.body.method;
         let normalized = method ? method.toLowerCase() : '';
         if(method && (WRITE_METHODS.has(normalized) || FEDERATION_READ_METHODS.has(normalized))){
             let provided = req.headers['x-api-key'] || '';
-            if(provided !== INDEXER_API_KEY){
+            if(!INDEXER_API_KEY || provided !== INDEXER_API_KEY){
                 return res.status(401).json({
                     jsonrpc: '2.0', id: req.body.id || null,
                     error: { code: -32001, message: 'Unauthorized' }
@@ -231,6 +233,46 @@ async function startApi(){
             } catch (err) {
                 console.error('getlatestblock error:', err);
                 return { error: 'failed to look up latest block' };
+            }
+        },
+
+        // The stored per-block state-hash triple (+ the chain block hash from the
+        // decoder DB) for a height — what the hub's StateCheckpointEngine reads,
+        // independently re-fetches on every peer, and quorum-signs into the
+        // XCHECKPOINT canonical (spec: protocol/actions/ANCHOR.md). Omitting
+        // block_index returns the latest indexed block. Public read: these hashes
+        // are the platform's verifiability primitive, not sensitive state.
+        async getblockhashes({block_index}){
+            if(!indexer.indexerDb || !indexer.decoderDb)
+                return { error: 'indexer database not ready' };
+            try {
+                let target = (block_index !== undefined && block_index !== null)
+                    ? Number(block_index)
+                    : await indexer.indexerDb.getLatestBlockIndex();
+                if(!Number.isFinite(target) || target < 0)
+                    return { error: 'invalid block_index' };
+                let stored = await indexer.indexerDb.getStoredBlockHashes(target);
+                if(!stored)
+                    return { error: 'block not indexed: ' + target };
+                let blockHash = null;
+                let rows = await indexer.decoderDb.doQuery(
+                    'SELECT t.hash AS block_hash FROM blocks b ' +
+                    'LEFT JOIN index_transactions t ON (t.id = b.block_hash_id) WHERE b.block_index = ? LIMIT 1',
+                    [target]);
+                if(rows.length > 0 && rows[0].block_hash) blockHash = String(rows[0].block_hash);
+                return {
+                    coin:          indexer.config['COIN'],
+                    network:       indexer.config['NETWORK'],
+                    block_index:   Number(stored.block_index),
+                    block_time:    (stored.block_time != null) ? Number(stored.block_time) : null,
+                    block_hash:    blockHash,
+                    ledger_hash:   stored.ledger_hash   || null,
+                    actions_hash:  stored.actions_hash  || null,
+                    contract_hash: stored.contract_hash || null
+                };
+            } catch (err) {
+                console.error('getblockhashes error:', err);
+                return { error: 'failed to look up block hashes' };
             }
         },
 

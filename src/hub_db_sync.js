@@ -75,6 +75,12 @@ const RETRACTION_COLUMNS = {
 // _applyRetraction; capability_snapshots are immutable history and never retracted.
 const CROSS_CHAIN_TABLES = ['cross_chain_matches', 'capability_snapshots'];
 
+// Hub federation state tables. state_checkpoints carries quorum-signed per-chain
+// state-hash commitments (the explorer/SDK verification source). Append-only,
+// never retracted — a reorged height is superseded by a new row with a higher
+// checkpoint_seq. Not on any settlement-critical path (no block-loop barrier).
+const HUB_STATE_TABLES = ['state_checkpoints'];
+
 class HubDbSync {
 
     constructor(hubDb, options) {
@@ -216,7 +222,7 @@ class HubDbSync {
     async _bootstrapAll() {
         let marks = [];
         let allDrained = true;
-        for (let table of ['price_snapshots', 'oracle_prices'].concat(CROSS_CHAIN_TABLES)) {
+        for (let table of ['price_snapshots', 'oracle_prices'].concat(CROSS_CHAIN_TABLES, HUB_STATE_TABLES)) {
             try {
                 let mark = await this._bootstrapTable(table);
                 if (mark === null) allDrained = false;

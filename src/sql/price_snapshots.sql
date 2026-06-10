@@ -1,5 +1,5 @@
 CREATE TABLE price_snapshots (
-    id                  BIGINT AUTO_INCREMENT PRIMARY KEY,
+    id                  BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     round_number        BIGINT NOT NULL,
     coin_pair           VARCHAR(20) NOT NULL,
     price               VARCHAR(40),

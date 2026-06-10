@@ -1,5 +1,5 @@
 CREATE TABLE capability_snapshots (
-    id             BIGINT AUTO_INCREMENT PRIMARY KEY,        -- mirror cursor (matches hub id)
+    id             BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,        -- mirror cursor (matches hub id)
     snapshot_block BIGINT NOT NULL,                          -- BTC-anchored block boundary
     capability     VARCHAR(20)  NOT NULL,                    -- e.g. 'cross_chain'
     signing_pubkey VARCHAR(64)  NOT NULL,                    -- Ed25519 validator pubkey (64 hex)

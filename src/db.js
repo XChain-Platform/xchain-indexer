@@ -323,8 +323,19 @@ class Database {
             const tokens = line.split(/\s+/);
             if(tokens.length < 2) continue;
             const name = tokens[0].replace(/`/g, '');
-            // SQL columns are NULL unless explicitly NOT NULL
-            const nullable = !/\bNOT\s+NULL\b/i.test(line);
+            // SQL columns are NULL unless explicitly NOT NULL. Column-level
+            // PRIMARY KEY and AUTO_INCREMENT both IMPLY NOT NULL (SQL semantics)
+            // — without this, a source line like `id BIGINT AUTO_INCREMENT
+            // PRIMARY KEY` reads as "nullable", the reconciler "relaxes" the
+            // live NOT NULL with a bare `MODIFY <type> NULL`, and that MODIFY
+            // silently STRIPS the AUTO_INCREMENT attribute on every startup
+            // (live-diagnosed 2026-06-10: capability_snapshots / price_snapshots /
+            // cross_chain_matches / state_checkpoints id cursors lost
+            // AUTO_INCREMENT, so id-omitting INSERT IGNORE writers collided on
+            // id=0 and were silently swallowed).
+            const nullable = !/\bNOT\s+NULL\b/i.test(line) &&
+                             !/\bPRIMARY\s+KEY\b/i.test(line) &&
+                             !/\bAUTO_INCREMENT\b/i.test(line);
             // Keep the full (comment-stripped) column definition so a missing
             // column can be re-added verbatim — this preserves the DEFAULT
             // clause, which is what backfills existing rows on NOT NULL columns.
@@ -364,7 +375,7 @@ class Database {
             return;
         }
         const live = await db.query(
-            "SELECT COLUMN_NAME, IS_NULLABLE, COLUMN_TYPE FROM information_schema.columns WHERE table_schema = ? AND table_name = ?",
+            "SELECT COLUMN_NAME, IS_NULLABLE, COLUMN_TYPE, COLUMN_KEY, EXTRA FROM information_schema.columns WHERE table_schema = ? AND table_name = ?",
             [this.dbName, table]
         );
         const liveByName = new Map(live.map(c => [c.COLUMN_NAME.toLowerCase(), c]));
@@ -383,6 +394,17 @@ class Database {
             }
             const liveIsNullable = cur.IS_NULLABLE === 'YES';
             if(!liveIsNullable && exp.nullable){
+                // NEVER relax a primary-key or auto-increment column: a PK can't be
+                // NULL anyway, and a bare `MODIFY <type> NULL` silently strips the
+                // AUTO_INCREMENT attribute (the mirror-cursor corruption found live
+                // 2026-06-10). parseExpectedColumns already treats such sources as
+                // NOT NULL; this guards against any parse gap.
+                const isPk     = String(cur.COLUMN_KEY || '').toUpperCase() === 'PRI';
+                const isAutoInc = /auto_increment/i.test(String(cur.EXTRA || ''));
+                if(isPk || isAutoInc){
+                    console.log('Schema drift on ' + table + '.' + exp.name + ': live=NOT NULL, source=NULL — SKIPPING relax (' + (isPk ? 'PRIMARY KEY' : 'AUTO_INCREMENT') + ' column; a bare MODIFY would strip attributes).');
+                    continue;
+                }
                 console.log('Schema drift on ' + table + '.' + exp.name + ': live=NOT NULL, source=NULL. Relaxing constraint.');
                 await db.query('ALTER TABLE `' + table + '` MODIFY `' + exp.name + '` ' + cur.COLUMN_TYPE + ' NULL');
             }
@@ -1152,6 +1174,27 @@ class Database {
             info[table]['hash'] = this.util.getDataHash(data);
         });
         return info;
+    }
+
+    // Read the STORED per-block hash triple (ledger/actions/contracts) for a block
+    // from the blocks table — the values createBlock() committed, NOT a recompute.
+    // Powers the getblockhashes RPC the hub's StateCheckpointEngine signs over.
+    async getStoredBlockHashes(block_index){
+        let query = `SELECT
+                b.block_index,
+                b.block_time,
+                t1.hash as ledger_hash,
+                t2.hash as actions_hash,
+                t3.hash as contract_hash
+            FROM
+                blocks b
+                LEFT JOIN index_transactions t1 ON (t1.id=b.ledger_hash_id)
+                LEFT JOIN index_transactions t2 ON (t2.id=b.actions_hash_id)
+                LEFT JOIN index_transactions t3 ON (t3.id=b.contract_hash_id)
+            WHERE
+                b.block_index=?`;
+        let results = await this.doQuery(query, [block_index]);
+        return results.length > 0 ? results[0] : null;
     }
 
     // Lookup a record in the `index_transactions` table and return record id
@@ -7869,10 +7912,11 @@ class Database {
     async getValidatorsByCapability(capability, blockIndex, minStakeOverride){
         // Off-BTC chains have no local capability stakes (capability staking is BTC-only),
         // so resolve the qualifying set from the hub-mirrored capability_snapshots at the
-        // (BTC-anchored) block. Scoped to `cross_chain` — the only capability verified on a
-        // non-BTC chain (for cross-chain match settlement); other capabilities keep the
-        // existing local-stakes path (which is empty off BTC, exactly as before).
-        if(this.config['COIN'] !== 'BTC' && capability === 'cross_chain')
+        // (BTC-anchored) block. Scoped to the capabilities verified on a non-BTC chain:
+        // `cross_chain` (cross-chain match settlement) and `oracle_publish` (the DOGE-only
+        // ANCHOR action); other capabilities keep the existing local-stakes path (which is
+        // empty off BTC, exactly as before).
+        if(this.config['COIN'] !== 'BTC' && (capability === 'cross_chain' || capability === 'oracle_publish'))
             return await this.getCapabilitySnapshotValidators(capability, blockIndex);
         let caps = (this.config['STAKING'] && this.config['STAKING']['CAPABILITIES']) ? this.config['STAKING']['CAPABILITIES'] : {};
         let capConfig = caps[capability];
@@ -7924,10 +7968,11 @@ class Database {
     // Check whether a pubkey's active stake qualifies for a capability.
     // Returns true if SUM(active stake amount for pubkey) >= governance.min_stake[capability].
     async hasCapability(pubkey, capability, blockIndex, minStakeOverride){
-        // Off-BTC chains verify cross_chain against the hub-mirrored capability snapshot
-        // (presence = qualified) since capability stakes live only on BTC. Scoped to
-        // cross_chain; other capabilities keep the local-stakes path. See getValidatorsByCapability.
-        if(this.config['COIN'] !== 'BTC' && capability === 'cross_chain')
+        // Off-BTC chains verify cross_chain (match settlement) and oracle_publish (the
+        // DOGE-only ANCHOR action) against the hub-mirrored capability snapshot
+        // (presence = qualified) since capability stakes live only on BTC. Other
+        // capabilities keep the local-stakes path. See getValidatorsByCapability.
+        if(this.config['COIN'] !== 'BTC' && (capability === 'cross_chain' || capability === 'oracle_publish'))
             return await this.isPubkeyInCapabilitySnapshot(pubkey, capability, blockIndex);
         let caps = (this.config['STAKING'] && this.config['STAKING']['CAPABILITIES']) ? this.config['STAKING']['CAPABILITIES'] : {};
         let capConfig = caps[capability];
@@ -7968,6 +8013,103 @@ class Database {
                      WHERE capability = ? AND snapshot_block = ? AND signing_pubkey = ? LIMIT 1`;
         let rows = await this._mirrorDb().doQuery(query, [capability, snapshotBlock, String(pubkey).toLowerCase()]);
         return rows.length > 0;
+    }
+
+    /*
+     * ANCHOR action methods (DOGE-only on-chain state commitments).
+     * anchor_actions is the permanent on-chain record (action-indexed, rolled back
+     * like any data table); the hub-mirrored state_checkpoints copy is the live
+     * verification source. Spec: xchain-documentation/protocol/actions/ANCHOR.md
+     */
+
+    // Create/Update record in `anchor_actions` table (one row per ANCHOR action_index).
+    async createAnchorAction(data){
+        data            = this.normalizeDataValues(data);
+        let status_id   = await this.createStatus(data['STATUS']);
+        let action_index = data['ACTION_INDEX'];
+        let version      = Number(data['FORMAT']);
+        let args = [
+            version,
+            data['CHAIN'] || null,
+            data['NETWORK'] || null,
+            (data['BLOCK_INDEX_CHECKPOINTED'] != null) ? Number(data['BLOCK_INDEX_CHECKPOINTED']) : null,
+            data['BLOCK_HASH'] || null,
+            data['LEDGER_HASH'] || null,
+            data['ACTIONS_HASH'] || null,
+            data['CONTRACT_HASH'] || null,
+            (data['CHECKPOINT_SEQ'] != null) ? Number(data['CHECKPOINT_SEQ']) : null,
+            (data['SNAPSHOT_BLOCK'] != null) ? Number(data['SNAPSHOT_BLOCK']) : null,
+            (data['MATCH_BATCH_SEQ'] != null) ? Number(data['MATCH_BATCH_SEQ']) : null,
+            (data['MATCH_COUNT'] != null) ? Number(data['MATCH_COUNT']) : null,
+            data['BATCH_CRC32'] || null,
+            (data['TOTAL_CHUNKS'] != null) ? Number(data['TOTAL_CHUNKS']) : null,
+            (data['CHUNK_INDEX'] != null) ? Number(data['CHUNK_INDEX']) : null,
+            data['ARCHIVE_B64'] || null,
+            data['VALIDATOR_SIGNATURES'] || null,
+            status_id,
+            data['BLOCK_INDEX']
+        ];
+        let exists = (await this.doQuery("SELECT action_index FROM anchor_actions WHERE action_index=? LIMIT 1", [action_index])).length > 0;
+        if(exists){
+            await this.doQuery(
+                `UPDATE anchor_actions SET version=?, chain=?, network=?, block_index=?, block_hash=?,
+                        ledger_hash=?, actions_hash=?, contract_hash=?, checkpoint_seq=?, snapshot_block=?,
+                        match_batch_seq=?, match_count=?, batch_crc32=?, total_chunks=?, chunk_index=?,
+                        archive_b64=?, validator_signatures=?, status_id=?, block_index_doge=?
+                 WHERE action_index=?`, args.concat([action_index]));
+        } else {
+            await this.doQuery(
+                `INSERT INTO anchor_actions
+                        (version, chain, network, block_index, block_hash, ledger_hash, actions_hash,
+                         contract_hash, checkpoint_seq, snapshot_block, match_batch_seq, match_count,
+                         batch_crc32, total_chunks, chunk_index, archive_b64, validator_signatures,
+                         status_id, block_index_doge, action_index)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, args.concat([action_index]));
+        }
+    }
+
+    // Highest VALID checkpoint_seq recorded for (chain, network) — the ANCHOR
+    // replay guard. Only status 'valid'/'unverified' rows count (an 'invalid: ...'
+    // replay attempt must not poison the watermark).
+    async getMaxAnchorCheckpointSeq(chain, network){
+        let query = `SELECT MAX(a.checkpoint_seq) AS max_seq
+                     FROM anchor_actions a
+                     JOIN index_statuses s ON s.id = a.status_id
+                     WHERE a.chain = ? AND a.network = ? AND a.version IN (0, 1)
+                       AND s.status IN ('valid', 'unverified')`;
+        let rows = await this.doQuery(query, [chain, network]);
+        return (rows.length > 0 && rows[0].max_seq != null) ? Number(rows[0].max_seq) : null;
+    }
+
+    // Highest VALID archive batch seq recorded — the v1 batch replay guard
+    // (mirrors getMaxAnchorCheckpointSeq).
+    async getMaxAnchorBatchSeq(){
+        let query = `SELECT MAX(a.match_batch_seq) AS max_seq
+                     FROM anchor_actions a
+                     JOIN index_statuses s ON s.id = a.status_id
+                     WHERE a.version = 1 AND s.status IN ('valid', 'unverified')`;
+        let rows = await this.doQuery(query, []);
+        return (rows.length > 0 && rows[0].max_seq != null) ? Number(rows[0].max_seq) : null;
+    }
+
+    // The v1 anchor that started an archive batch (status irrelevant — chunk
+    // geometry checks belong to the caller).
+    async getAnchorV1ByBatchSeq(batchSeq){
+        let rows = await this.doQuery(
+            "SELECT * FROM anchor_actions WHERE version = 1 AND match_batch_seq = ? LIMIT 1", [batchSeq]);
+        return rows.length > 0 ? rows[0] : null;
+    }
+
+    // All v2 continuation chunks stored for an archive batch.
+    async getAnchorChunks(batchSeq){
+        return await this.doQuery(
+            "SELECT * FROM anchor_actions WHERE version = 2 AND match_batch_seq = ? ORDER BY chunk_index ASC", [batchSeq]);
+    }
+
+    // Flag an anchor row (e.g. 'invalid_archive' when chunk reassembly fails CRC).
+    async setAnchorArchiveStatus(actionIndex, status){
+        let status_id = await this.createStatus(status);
+        await this.doQuery("UPDATE anchor_actions SET status_id = ? WHERE action_index = ?", [status_id, actionIndex]);
     }
 
     /*

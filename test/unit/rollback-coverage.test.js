@@ -110,6 +110,14 @@ const ROLLBACK_EXEMPT = {
         'retracted (immutable history). The indexer only SELECTs it to verify match ' +
         'signatures; block replay does not recreate it, so the chain-reorg path must ' +
         'not delete it.',
+    state_checkpoints:
+        'Hub-mirrored, quorum-signed state checkpoints (hub_db_sync.js), NOT produced ' +
+        'by local block/action processing — the indexer only SELECTs it for the ' +
+        'explorer/SDK verification APIs. Synced from the hub via an `id` cursor and ' +
+        'never retracted (a reorged height is superseded by a re-broadcast row with a ' +
+        'higher checkpoint_seq). Block replay does not recreate it, so the chain-reorg ' +
+        'path must not delete it. (The on-chain ANCHOR record, anchor_actions, IS ' +
+        'action-indexed and rolls back normally as a dataTable.)',
 };
 
 // Convention: append-only, id-keyed dedup lookups. Orphaned rows are inert

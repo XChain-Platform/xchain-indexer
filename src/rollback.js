@@ -115,6 +115,7 @@ class Rollback {
             'contract_executions',
             'deposits',
             'withdrawals',
+            'anchor_actions',
             'attests',
             'prices',
             'pending_hub_pushes'
