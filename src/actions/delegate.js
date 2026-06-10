@@ -75,7 +75,7 @@ class Delegate {
          * Chain Restriction
          ****************************************************************/
 
-        // DELEGATE is BTC-only
+        // Capability delegation (v0) is BTC-only
         if(!error && data['COIN'] !== 'BTC')
             error = 'invalid: ACTION (BTC only)';
 
