@@ -3218,19 +3218,24 @@ class Database {
         results = await this.doQuery(query, args);
     }
 
-    // Get tokens owned by a given address
+    // Get tokens owned by a given address. Ticks whose ownership is currently
+    // escrowed by an open ORDER/SWAP/DISPENSER (escrow_action_index set) are in
+    // protocol custody, not in the address's ownership records, so they are
+    // excluded — per SWEEP.md, escrowed ownership is reachable only through the
+    // offer-close path, never through the OWNERSHIPS snapshot.
     async getAddressOwnerships(address){
         let id   = await this.createAddress(address);
         let data = [];
         // Lookup the address preferences
-        let query = `SELECT 
+        let query = `SELECT
                         t2.tick
                     FROM
                         tokens t1
                         INNER JOIN index_tickers t2 ON (t2.id=t1.tick_id)
-                    WHERE 
-                        t1.owner_id=? 
-                    ORDER BY 
+                    WHERE
+                        t1.owner_id=?
+                        AND t1.escrow_action_index IS NULL
+                    ORDER BY
                         t2.tick`;
         let results = await this.doQuery(query, [id]);
         if(results.length > 0)

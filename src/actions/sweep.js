@@ -208,6 +208,15 @@ class Sweep {
                 escrows = [],
                 debits  = [];
 
+            // Ticks whose ownership the ORDERS/SWAPS loops below deliver to
+            // DESTINATION. The OWNERSHIPS loop must never transfer these a
+            // second time — escrowed ownership is routed by the offer-close
+            // path only (see SWEEP.md), and a duplicate ISSUE would change the
+            // per-block actions hash. getAddressOwnerships already excludes
+            // escrowed ticks from the snapshot; this set guards the same
+            // invariant at the handler level.
+            let ownershipsTransferred = new Set();
+
             // If we are charging a fee, store the SOURCE and fees TICK in addresses list
             if(this.util.bcgt(fees['AMOUNT'], 0))
                 this.util.addAddressTicker(data['SOURCE'], fees['TICK']);
@@ -237,6 +246,7 @@ class Sweep {
                         // Ownership order: release the escrow gate and atomically transfer
                         // ownership to the sweep DESTINATION.
                         await this.util.transferTokenOwnership(this.indexerDb, this.mapper, data, info['GIVE_TICK'], info['SOURCE'], data['DESTINATION']);
+                        ownershipsTransferred.add(info['GIVE_TICK']);
                     } else if(!this.util.isNull(info['GIVE_TICK'])){
                         // Balance order: standard escrow → DESTINATION
                         escrows.push([info['GIVE_TICK'], -info['GIVE_REMAINING'], info['SOURCE']]);
@@ -256,6 +266,7 @@ class Sweep {
                     // Ownership swap: release the escrow gate and atomically transfer
                     // ownership to the sweep DESTINATION.
                     await this.util.transferTokenOwnership(this.indexerDb, this.mapper, data, info['GIVE_TICK'], info['SOURCE'], data['DESTINATION']);
+                    ownershipsTransferred.add(info['GIVE_TICK']);
                 } else {
                     // Balance swap: standard escrow → DESTINATION
                     escrows.push([info['GIVE_TICK'], -info['GIVE_AMOUNT'], info['SOURCE']]);
@@ -313,6 +324,12 @@ class Sweep {
             // Transfer token ownerships
             if(data['OWNERSHIPS']==1){
                 for(let tick of ownerships){
+
+                    // Ownership already delivered to DESTINATION by the
+                    // ORDERS/SWAPS escrow-close path above — never issue a
+                    // second transfer for it.
+                    if(ownershipsTransferred.has(tick))
+                        continue;
 
                     // Reset the address/tickers/transactions list on each parse
                     this.util.resetLists();

@@ -1951,6 +1951,21 @@ describe('Database.getAddressOwnerships() @regression @tier1', function () {
         const result = await db.getAddressOwnerships('addr1');
         assert.deepStrictEqual(result, ['PEPE', 'DOGE']);
     });
+
+    it('excludes ticks whose ownership is escrowed by an open offer', async function () {
+        // Escrowed ownership is in protocol custody — it must never appear in an
+        // address's ownership snapshot (SWEEP OWNERSHIPS=1 reaches it only via
+        // the offer-close path). Pin the SQL predicate so the guard can't be
+        // dropped silently.
+        const db   = makeDb();
+        const stub = sinon.stub(db, 'doQuery');
+        stub.onCall(0).resolves([{ id: 2 }]);
+        stub.onCall(1).resolves([]);
+        await db.getAddressOwnerships('addr1');
+        const query = String(stub.secondCall.args[0]).replace(/\s+/g, ' ');
+        assert.ok(query.includes('escrow_action_index IS NULL'),
+            'getAddressOwnerships must filter out escrowed ownerships');
+    });
 });
 
 // ---------------------------------------------------------------------------
