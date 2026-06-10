@@ -120,7 +120,7 @@ describe('File action handler @regression @tier3', function () {
     // ─── Gated content validations ────────────────────────────────────────────
 
     describe('gated content', function () {
-        const SOURCE     = '1SourceAddressXXXXXXXXXXXXXXXYs6gYt';
+        const SOURCE     = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
         const VALID_HASH = 'a'.repeat(64); // 64-char hex
 
         function makeGatedParams(overrides = {}) {

@@ -48,9 +48,9 @@ const { initIndexer, processBlocks, destroyIndexer } = require('../setup/indexer
 const BASELINE_PATH = path.join(__dirname, '..', 'INDEXER_STATE_BASELINE.json');
 const REGEN = process.env.REGEN_INDEXER_STATE_BASELINE === '1';
 
-const A1 = 'mDetAddr1XXXXXXXXXXXXXXXXXXXX1'; // 30 chars
-const A2 = 'mDetAddr2XXXXXXXXXXXXXXXXXXXX2';
-const A3 = 'mDetAddr3XXXXXXXXXXXXXXXXXXXX3';
+const A1 = 'mq7tVfobimRUPxPNnyd5mKn11SVmTiLxtu'; // 30 chars
+const A2 = 'n4nbVcRRR5sEHyp2VYuLUvCyDmQmBoonoK';
+const A3 = 'mvuKWKvgzrkxh8QgNZ91vMBZUKN5BFYmo3';
 const BASE_TIME = 1700000000;
 
 // ---------------------------------------------------------------------------

@@ -47,9 +47,9 @@ function makeData(overrides = {}) {
 }
 
 // Valid BTC addresses used across tests
-const SOURCE      = '1SourceAddressXXXXXXXXXXXXXXXYs6gYt';
-const DESTINATION = '1BoogrfDADPLQpq8LMASmWQUVYDp4t2hF9';
-const DEST2       = '1BTNSGASK5En7rFurDJ79LQ8CVYo2ecLC8';
+const SOURCE      = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
+const DESTINATION = 'mtr6NtB5KJRAxTX5AbuRtV7S4FF2PZJXUs';
+const DEST2       = 'n2j7X44Gm6P4E9cs2H13EkBAotYbjPZW17';
 
 // A tokenInfo with TICK_ID = 1 so hasBalance checks work
 function makeToken(overrides = {}) {

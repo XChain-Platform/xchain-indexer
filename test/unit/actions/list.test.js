@@ -20,9 +20,9 @@ const List = require('../../../src/actions/list.js');
 describe('List @regression @tier3', function () {
     let indexer, actionsCtx, handler;
 
-    const SOURCE  = '1SourceAddressXXXXXXXXXXXXXXXYs6gYt';
-    const ADDR1   = '1HolderOneXXXXXXXXXXXXXXXXXXXY7vAZ';
-    const ADDR2   = '1HolderTwoXXXXXXXXXXXXXXXXXXXWqp6Q';
+    const SOURCE  = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
+    const ADDR1   = 'mmqFL1hiu2RDuyS69KS9ko6uaMryhANwsz';
+    const ADDR2   = 'mk7MdP3qzVkgyjaYNR2sUY8Ggn4DWxt2KS';
 
     beforeEach(function () {
         indexer = createMockIndexer();

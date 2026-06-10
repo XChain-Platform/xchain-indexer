@@ -20,8 +20,8 @@ const Sweep = require('../../../src/actions/sweep.js');
 describe('Sweep @regression @tier3', function () {
     let indexer, actionsCtx, handler;
 
-    const SOURCE      = '1SourceAddressXXXXXXXXXXXXXXXYs6gYt';
-    const DESTINATION = '1DestAddressXXXXXXXXXXXXXXXXXaKc5Z';
+    const SOURCE      = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
+    const DESTINATION = 'mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM';
 
     beforeEach(function () {
         indexer = createMockIndexer();

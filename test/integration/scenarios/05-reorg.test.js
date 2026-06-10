@@ -40,9 +40,9 @@ const helpers = require('../setup/assertion-helpers');
 // ---------------------------------------------------------------------------
 // Addresses — 30-char strings, safe for the indexer's address validation
 // ---------------------------------------------------------------------------
-const ADDR1 = 'mAddr1XXXXXXXXXXXXXXXXXXXXXXX1';
-const ADDR2 = 'mAddr2XXXXXXXXXXXXXXXXXXXXXXX2';
-const ADDR3 = 'mAddr3XXXXXXXXXXXXXXXXXXXXXXX3';
+const ADDR1 = 'msK1rsgNVFPM4cR3X5rngczTKa6EtT4WKD';
+const ADDR2 = 'mjifPngDYQ6HHPNQdGk1kQuFkJWEiQksQp';
+const ADDR3 = 'mwGujTXFXMLN2YXqo4mQK4DcKy31DUcwoi';
 
 // Base block time (Unix timestamp)
 const T0 = 1700000000;

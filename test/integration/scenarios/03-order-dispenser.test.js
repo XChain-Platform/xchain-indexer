@@ -18,7 +18,7 @@
  * Each test group is self-contained: it resets both databases before running, seeds
  * the decoder DB with the required blocks, then drives the indexer to process them.
  *
- * Address length note: P2PKH validation requires 26-35 chars.  All addresses here are 30 chars.
+ * Address note: all addresses here are valid regtest P2PKH (base58check-validated).
  */
 
 const assert = require('assert');
@@ -34,9 +34,9 @@ const helpers = require('../setup/assertion-helpers');
 // ---------------------------------------------------------------------------
 // Addresses (30 chars, valid P2PKH length)
 // ---------------------------------------------------------------------------
-const ADDR1 = 'mAddr1XXXXXXXXXXXXXXXXXXXXXXX1'; // issues ALPHA
-const ADDR2 = 'mAddr2XXXXXXXXXXXXXXXXXXXXXXX2'; // issues BETA
-const ADDR3 = 'mAddr3XXXXXXXXXXXXXXXXXXXXXXX3'; // dispenser payment collector
+const ADDR1 = 'msK1rsgNVFPM4cR3X5rngczTKa6EtT4WKD'; // issues ALPHA
+const ADDR2 = 'mjifPngDYQ6HHPNQdGk1kQuFkJWEiQksQp'; // issues BETA
+const ADDR3 = 'mwGujTXFXMLN2YXqo4mQK4DcKy31DUcwoi'; // dispenser payment collector
 
 // ---------------------------------------------------------------------------
 // Token names

@@ -16,11 +16,14 @@ const DecoderSeeder = require('../../integration/setup/decoder-seeder');
 const GAS_ADDR = 'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX';
 const TICK_GAS = 'XCHAIN';
 
-// 10 test addresses — each exactly 30 chars (valid P2PKH length range 26-35)
-const PERF_ADDRS = Array.from({ length: 10 }, (_, i) => {
-    const suffix = String(i).padStart(2, '0');
-    return 'mPerfAddr' + suffix + 'XXXXXXXXXXXXXXXXXXX'; // 9 + 2 + 19 = 30
-});
+// 10 test addresses — valid regtest P2PKH (isCryptoAddress verifies base58check)
+const PERF_ADDRS = [
+    'mq69zWDZmUo27UV2kBEizTBmKP8qoBRDH5', 'muFL6KMd9eEkxcuNHTKbSmkZj6TqBfQMdm',
+    'n13R1eZGMyjzfG1txVRH1H2RFkdathxhWe', 'n2t9NyzYAREoWkoqZxJYpEjbHq4jzNHntf',
+    'n3mnWv4YBxt3qCRP8Pn7gnp6EqM3Aj4btW', 'mrzdeFj6LJULgDKnb72SDZ8Q6gHE6RS1YF',
+    'mxXExuJZdna719k514xnbhq1aDvSPRhFvk', 'mnzndbPioooMVtSRd6KvyG2cMr1rW6m6J1',
+    'mjeW11pd6TSt14NZt7dWJRJJy8qNRxfEJc', 'my1poBUbZNyYEoowhPZDManQvwj3rYcCoa',
+];
 
 class DataGenerator extends DecoderSeeder {
 

@@ -94,7 +94,7 @@ describe('Mapper @regression @tier3', function () {
     it('creates FILE→TICK mapping for valid LINK when owner matches', async function () {
         const FILE_INDEX  = 5;
         const ISSUE_INDEX = 6;
-        const OWNER_ADDR  = '1SourceAddressXXXXXXXXXXXXXXXYs6gYt';
+        const OWNER_ADDR  = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
         const TOKEN_TICK  = 'MYTOKEN';
 
         indexer.indexerDb.getActionData.callsFake(async (actionIndex) => {
@@ -118,7 +118,7 @@ describe('Mapper @regression @tier3', function () {
     });
 
     it('does NOT create FILE→TICK mapping when LINK status is not valid', async function () {
-        const OWNER_ADDR = '1SourceAddressXXXXXXXXXXXXXXXYs6gYt';
+        const OWNER_ADDR = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
         indexer.util.addAddressTicker(OWNER_ADDR);
         const data = createBaseData({
             ACTION: 'LINK',
@@ -135,7 +135,7 @@ describe('Mapper @regression @tier3', function () {
     it('does NOT create FILE→TICK mapping when SOURCE does not own the token', async function () {
         const FILE_INDEX  = 5;
         const ISSUE_INDEX = 6;
-        const SOURCE_ADDR = '1SourceAddressXXXXXXXXXXXXXXXYs6gYt';
+        const SOURCE_ADDR = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
         const OWNER_ADDR  = '1DifferentOwnerXXXXXXXXXXXXXXXXXXXX';
 
         indexer.indexerDb.getActionData.callsFake(async (actionIndex) => {
@@ -161,7 +161,7 @@ describe('Mapper @regression @tier3', function () {
     // ─── LINK branch coverage ─────────────────────────────────────────────
 
     it('does NOT resolve a leg whose COIN is not the local network', async function () {
-        const OWNER_ADDR = '1SourceAddressXXXXXXXXXXXXXXXYs6gYt';
+        const OWNER_ADDR = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
         // COIN1 is LTC (not the local BTC) → action1 short-circuits to false, no mapping.
         indexer.indexerDb.getActionData.callsFake(async (actionIndex) => {
             if (actionIndex == 6) return { action: 'ISSUE', action_index: 6, tick: 'MYTOKEN' };
@@ -181,7 +181,7 @@ describe('Mapper @regression @tier3', function () {
     it('creates the FILE→TICK mapping when the ISSUE/FILE legs are in reversed order', async function () {
         const FILE_INDEX  = 7;
         const ISSUE_INDEX = 8;
-        const OWNER_ADDR  = '1SourceAddressXXXXXXXXXXXXXXXYs6gYt';
+        const OWNER_ADDR  = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
         // action1 = ISSUE, action2 = FILE — exercises the second arm of the FILE/ISSUE
         // detection and the reversed tick/index ternaries.
         indexer.indexerDb.getActionData.callsFake(async (actionIndex) => {
@@ -201,7 +201,7 @@ describe('Mapper @regression @tier3', function () {
     });
 
     it('does NOT create a mapping when the two legs are not a FILE/ISSUE pair', async function () {
-        const OWNER_ADDR = '1SourceAddressXXXXXXXXXXXXXXXYs6gYt';
+        const OWNER_ADDR = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
         indexer.indexerDb.getActionData.callsFake(async (actionIndex) => {
             if (actionIndex == 5) return { action: 'SEND', action_index: 5, tick: 'X' };
             if (actionIndex == 6) return { action: 'ISSUE', action_index: 6, tick: 'X' };

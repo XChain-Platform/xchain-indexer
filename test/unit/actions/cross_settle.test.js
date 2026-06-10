@@ -89,7 +89,7 @@ describe('Cross_Settle action handler @regression @tier1', function () {
 
         // Local offer resolves open by default; the AAA token exists.
         indexer.indexerDb.getSwapInfo.resolves({
-            SOURCE: '1SourceAddressXXXXXXXXXXXXXXXYs6gYt',
+            SOURCE: 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH',
             SWAP_STATUS: 'open',
         });
         indexer.indexerDb.getTokenInfo.callsFake(async (tick) =>

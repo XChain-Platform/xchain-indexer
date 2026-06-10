@@ -23,10 +23,10 @@ describe('Dispenser_Expire action handler @regression @tier2', function () {
     function makeDispenser(overrides) {
         return {
             ACTION_INDEX: 50,
-            SOURCE: '1SourceAddressXXXXXXXXXXXXXXXYs6gYt',
+            SOURCE: 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH',
             GIVE_TICK: 'TEST',
             GIVE_REMAINING: '200',
-            GET_ADDRESS: '1SourceAddressXXXXXXXXXXXXXXXYs6gYt',
+            GET_ADDRESS: 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH',
             ...overrides,
         };
     }

@@ -122,8 +122,8 @@ describe('Action field-format contract', function () {
 
         // Each golden wire string + the params split exposes for the handler.
         const VECTORS = [
-            { v: 0, wire: '0|XCP|100|1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev|hello',
-              params: ['0', 'XCP', '100', '1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev', 'hello'] },
+            { v: 0, wire: '0|XCP|100|mqmJDcs5nXFHrj9q7a2G5sBVmjcQTDdUZp|hello',
+              params: ['0', 'XCP', '100', 'mqmJDcs5nXFHrj9q7a2G5sBVmjcQTDdUZp', 'hello'] },
             { v: 1, wire: '1|XCP|5|1AddrAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA|7|1AddrBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB|memo',
               params: ['1', 'XCP', '5', '1AddrAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA', '7', '1AddrBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB', 'memo'] },
             { v: 2, wire: '2|XCP|5|1AddrAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA|BRRR|3|1AddrBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB|memo',

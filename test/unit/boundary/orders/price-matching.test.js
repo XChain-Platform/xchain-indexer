@@ -35,8 +35,8 @@ function makeActionsCtx(indexer) {
     };
 }
 
-const SOURCE     = '1SourceAddressXXXXXXXXXXXXXXXYs6gYt';
-const OTHER      = '1BoogrfDADPLQpq8LMASmWQUVYDp4t2hF9';
+const SOURCE     = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
+const OTHER      = 'mtr6NtB5KJRAxTX5AbuRtV7S4FF2PZJXUs';
 const BLOCK_TIME = 1700000000;
 
 /**

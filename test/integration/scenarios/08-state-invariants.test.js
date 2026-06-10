@@ -31,9 +31,9 @@ const DecoderSeeder = require('../setup/decoder-seeder');
 const { initIndexer, processBlocks, destroyIndexer } = require('../setup/indexer-launcher');
 const { assertStateInvariants } = require('../setup/state-invariants');
 
-const ADDR1 = 'mAddr1XXXXXXXXXXXXXXXXXXXXXXX1';
-const ADDR2 = 'mAddr2XXXXXXXXXXXXXXXXXXXXXXX2';
-const ADDR3 = 'mAddr3XXXXXXXXXXXXXXXXXXXXXXX3';
+const ADDR1 = 'msK1rsgNVFPM4cR3X5rngczTKa6EtT4WKD';
+const ADDR2 = 'mjifPngDYQ6HHPNQdGk1kQuFkJWEiQksQp';
+const ADDR3 = 'mwGujTXFXMLN2YXqo4mQK4DcKy31DUcwoi';
 const BASE_TIME = 1700000000;
 
 // ISSUE → MINT 1000 → SEND 300 (1→2) → SEND 100 (2→3). Final balances

@@ -23,7 +23,7 @@ describe('Order_Expire action handler @regression @tier2', function () {
     function makeOrderInfo(overrides) {
         return {
             ACTION_INDEX: 50,
-            SOURCE: '1SourceAddressXXXXXXXXXXXXXXXYs6gYt',
+            SOURCE: 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH',
             GIVE_TICK: 'TEST',
             GIVE_REMAINING: '100',
             GET_TICK: 'OTHER',

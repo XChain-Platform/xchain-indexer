@@ -34,8 +34,8 @@ function makeActionsCtx(indexer) {
     };
 }
 
-const SOURCE      = '1SourceAddressXXXXXXXXXXXXXXXYs6gYt'; // 34 chars - valid P2PKH
-const DESTINATION = '1BoogrfDADPLQpq8LMASmWQUVYDp4t2hF9'; // 35 chars - valid P2PKH
+const SOURCE      = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH'; // 34 chars - valid P2PKH
+const DESTINATION = 'mtr6NtB5KJRAxTX5AbuRtV7S4FF2PZJXUs'; // 35 chars - valid P2PKH
 
 // ---------------------------------------------------------------------------
 // Utility-level isCryptoAddress() boundary tests
@@ -49,41 +49,59 @@ describe('Utility isCryptoAddress() boundary tests @regression @tier3', function
         util = indexer.util;
     });
 
-    // P2PKH lower boundary (26 chars)
-    it('isCryptoAddress: 26 chars → valid (P2PKH minimum)', function () {
-        assert.strictEqual(util.isCryptoAddress('A'.repeat(26)), true);
+    // Valid regtest addresses across every supported encoding
+    it('isCryptoAddress: valid P2PKH → valid', function () {
+        assert.strictEqual(util.isCryptoAddress(SOURCE), true);
     });
 
-    it('isCryptoAddress: 25 chars → invalid (below P2PKH minimum)', function () {
-        assert.strictEqual(util.isCryptoAddress('A'.repeat(25)), false);
+    it('isCryptoAddress: valid P2SH → valid', function () {
+        assert.strictEqual(util.isCryptoAddress('2NETsvK6gpTRsvxt3z4oJJLVof6BkA9AHmQ'), true);
     });
 
-    // P2PKH upper boundary (35 chars)
-    it('isCryptoAddress: 35 chars → valid (P2PKH maximum)', function () {
-        assert.strictEqual(util.isCryptoAddress('A'.repeat(35)), true);
+    it('isCryptoAddress: valid bech32 P2WPKH (20-byte program) → valid', function () {
+        assert.strictEqual(util.isCryptoAddress('bcrt1qe6l04hhwjg98fmggptdm0cemj6lm7hhwzahaul'), true);
     });
 
-    it('isCryptoAddress: 36 chars → invalid (above P2PKH max, below Segwit)', function () {
-        assert.strictEqual(util.isCryptoAddress('A'.repeat(36)), false);
+    it('isCryptoAddress: valid bech32 P2WSH (32-byte program) → valid', function () {
+        assert.strictEqual(util.isCryptoAddress('bcrt1qg2zrk70aelwvua5v5e06lca4mqdmnta7gt3pymurghg8wsw8z69q3p3pcw'), true);
     });
 
-    // Mid-range inside P2PKH window
-    it('isCryptoAddress: 30 chars → valid (inside P2PKH window)', function () {
-        assert.strictEqual(util.isCryptoAddress('A'.repeat(30)), true);
+    it('isCryptoAddress: valid bech32m P2TR (taproot) → valid', function () {
+        assert.strictEqual(util.isCryptoAddress('bcrt1pxqgcx65hqkd9c7y6wulyfv2wlwawqx62n3ufwxkjhjpas2jtqxmsglytaf'), true);
     });
 
-    // Segwit exact boundary (42 chars)
-    it('isCryptoAddress: 42 chars → valid (Segwit exact)', function () {
-        assert.strictEqual(util.isCryptoAddress('A'.repeat(42)), true);
+    // Checksum boundaries — a single flipped character must invalidate
+    it('isCryptoAddress: base58 checksum flip → invalid', function () {
+        assert.strictEqual(util.isCryptoAddress(SOURCE.slice(0, -1) + (SOURCE.endsWith('H') ? 'J' : 'H')), false);
     });
 
-    // Segwit off-by-one boundaries
-    it('isCryptoAddress: 41 chars → invalid (one below Segwit)', function () {
-        assert.strictEqual(util.isCryptoAddress('A'.repeat(41)), false);
+    it('isCryptoAddress: bech32 checksum flip → invalid', function () {
+        assert.strictEqual(util.isCryptoAddress('bcrt1qe6l04hhwjg98fmggptdm0cemj6lm7hhwzahauf'), false);
     });
 
-    it('isCryptoAddress: 43 chars → invalid (one above Segwit)', function () {
-        assert.strictEqual(util.isCryptoAddress('A'.repeat(43)), false);
+    // Wrong network / wrong coin
+    it('isCryptoAddress: mainnet P2PKH on regtest → invalid', function () {
+        assert.strictEqual(util.isCryptoAddress('17Roegnpwqam4FwwXsM47bX3Tf1jFyyKMt'), false);
+    });
+
+    it('isCryptoAddress: testnet HRP (tb1) on regtest → invalid', function () {
+        assert.strictEqual(util.isCryptoAddress('tb1q8fhc7yh0d9mr78hy4z8hlgndtwyemdnuwl6np6'), false);
+    });
+
+    // Garbage strings of previously "valid" lengths
+    it('isCryptoAddress: 26/30/35/42-char garbage → invalid', function () {
+        assert.strictEqual(util.isCryptoAddress('A'.repeat(26)), false);
+        assert.strictEqual(util.isCryptoAddress('A'.repeat(30)), false);
+        assert.strictEqual(util.isCryptoAddress('A'.repeat(35)), false);
+        assert.strictEqual(util.isCryptoAddress('A'.repeat(42)), false);
+    });
+
+    it('isCryptoAddress: base58 with out-of-alphabet characters (0, O, I, l) → invalid', function () {
+        assert.strictEqual(util.isCryptoAddress('m0OIl3iRkfcWj9onyGFzyDSpfRwga2WtxH'), false);
+    });
+
+    it('isCryptoAddress: mixed-case bech32 → invalid', function () {
+        assert.strictEqual(util.isCryptoAddress('bcrt1Qe6l04hhwjg98fmggptdm0cemj6lm7hhwzahaul'), false);
     });
 });
 
@@ -108,10 +126,9 @@ describe('Address validation boundary tests via SEND handler @regression @tier3'
 
     afterEach(function () { sinon.restore(); });
 
-    it('ADR-01: DESTINATION at 26 chars (P2PKH minimum) → valid', async function () {
-        const dest   = 'A'.repeat(26);
+    it('ADR-01: valid P2PKH DESTINATION → valid', async function () {
         // Format 0: VERSION|TICK|AMOUNT|DESTINATION|MEMO
-        const params = ['0', 'TEST', '1', dest, ''];
+        const params = ['0', 'TEST', '1', DESTINATION, ''];
         const data   = createBaseData({ ACTION: 'SEND', FORMAT: 0, BLOCK_INDEX: 100, SOURCE });
 
         await handler.parse(params, data, null);
@@ -119,9 +136,8 @@ describe('Address validation boundary tests via SEND handler @regression @tier3'
         assert.strictEqual(data.STATUS, 'valid', `expected valid but got: ${data.STATUS}`);
     });
 
-    it('ADR-02: DESTINATION at 35 chars (P2PKH maximum) → valid', async function () {
-        const dest   = 'A'.repeat(35);
-        const params = ['0', 'TEST', '1', dest, ''];
+    it('ADR-02: valid P2SH DESTINATION → valid', async function () {
+        const params = ['0', 'TEST', '1', '2NETsvK6gpTRsvxt3z4oJJLVof6BkA9AHmQ', ''];
         const data   = createBaseData({ ACTION: 'SEND', FORMAT: 0, BLOCK_INDEX: 100, SOURCE });
 
         await handler.parse(params, data, null);
@@ -139,8 +155,8 @@ describe('Address validation boundary tests via SEND handler @regression @tier3'
         assert.ok(data.STATUS.startsWith('invalid'), `expected invalid but got: ${data.STATUS}`);
     });
 
-    it('ADR-04: DESTINATION at 36 chars (between P2PKH max and Segwit) → invalid', async function () {
-        const dest   = 'A'.repeat(36);
+    it('ADR-04: address-length garbage DESTINATION (bad checksum) → invalid', async function () {
+        const dest   = 'A'.repeat(34);
         const params = ['0', 'TEST', '1', dest, ''];
         const data   = createBaseData({ ACTION: 'SEND', FORMAT: 0, BLOCK_INDEX: 100, SOURCE });
 
@@ -149,9 +165,8 @@ describe('Address validation boundary tests via SEND handler @regression @tier3'
         assert.ok(data.STATUS.startsWith('invalid'), `expected invalid but got: ${data.STATUS}`);
     });
 
-    it('ADR-05: DESTINATION at exactly 42 chars (Segwit) → valid', async function () {
-        const dest   = 'A'.repeat(42);
-        const params = ['0', 'TEST', '1', dest, ''];
+    it('ADR-05: valid bech32 segwit DESTINATION → valid', async function () {
+        const params = ['0', 'TEST', '1', 'bcrt1qe6l04hhwjg98fmggptdm0cemj6lm7hhwzahaul', ''];
         const data   = createBaseData({ ACTION: 'SEND', FORMAT: 0, BLOCK_INDEX: 100, SOURCE });
 
         await handler.parse(params, data, null);
@@ -159,8 +174,17 @@ describe('Address validation boundary tests via SEND handler @regression @tier3'
         assert.strictEqual(data.STATUS, 'valid', `expected valid but got: ${data.STATUS}`);
     });
 
-    it('ADR-06a: DESTINATION at 41 chars (one below Segwit) → invalid', async function () {
-        const dest   = 'A'.repeat(41);
+    it('ADR-06a: valid bech32m taproot DESTINATION → valid', async function () {
+        const params = ['0', 'TEST', '1', 'bcrt1pxqgcx65hqkd9c7y6wulyfv2wlwawqx62n3ufwxkjhjpas2jtqxmsglytaf', ''];
+        const data   = createBaseData({ ACTION: 'SEND', FORMAT: 0, BLOCK_INDEX: 100, SOURCE });
+
+        await handler.parse(params, data, null);
+
+        assert.strictEqual(data.STATUS, 'valid', `expected valid but got: ${data.STATUS}`);
+    });
+
+    it('ADR-06b: checksum-flipped DESTINATION → invalid', async function () {
+        const dest   = DESTINATION.slice(0, -1) + (DESTINATION.endsWith('s') ? 't' : 's');
         const params = ['0', 'TEST', '1', dest, ''];
         const data   = createBaseData({ ACTION: 'SEND', FORMAT: 0, BLOCK_INDEX: 100, SOURCE });
 
@@ -169,9 +193,8 @@ describe('Address validation boundary tests via SEND handler @regression @tier3'
         assert.ok(data.STATUS.startsWith('invalid'), `expected invalid but got: ${data.STATUS}`);
     });
 
-    it('ADR-06b: DESTINATION at 43 chars (one above Segwit) → invalid', async function () {
-        const dest   = 'A'.repeat(43);
-        const params = ['0', 'TEST', '1', dest, ''];
+    it('ADR-07: wrong-network DESTINATION (mainnet P2PKH on regtest) → invalid', async function () {
+        const params = ['0', 'TEST', '1', '17Roegnpwqam4FwwXsM47bX3Tf1jFyyKMt', ''];
         const data   = createBaseData({ ACTION: 'SEND', FORMAT: 0, BLOCK_INDEX: 100, SOURCE });
 
         await handler.parse(params, data, null);

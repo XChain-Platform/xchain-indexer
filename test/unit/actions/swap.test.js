@@ -17,7 +17,7 @@ const { createMockIndexer, createBaseData, createTokenInfo } = require('../../fi
 
 const Swap = require('../../../src/actions/swap.js');
 
-const VALID_GET_ADDRESS = '1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev';
+const VALID_GET_ADDRESS = 'mqmJDcs5nXFHrj9q7a2G5sBVmjcQTDdUZp';
 
 describe('Swap action handler @regression @tier2', function () {
     let indexer, actionsCtx, handler;
@@ -128,12 +128,12 @@ describe('Swap action handler @regression @tier2', function () {
     it('cancels a valid open swap', async function () {
         const swapInfo = {
             ACTION_INDEX: 10,
-            SOURCE: '1SourceAddressXXXXXXXXXXXXXXXYs6gYt',
+            SOURCE: 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH',
             SWAP_STATUS: 'open',
             GIVE_TICK: 'GIVE', GIVE_AMOUNT: '10', GIVE_REMAINING: '10',
             GET_TICK: 'GET',   GET_AMOUNT: '5',
             GET_COIN: 'BTC', GIVE_COIN: 'BTC',
-            GET_ADDRESS: '1SourceAddressXXXXXXXXXXXXXXXYs6gYt',
+            GET_ADDRESS: 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH',
             ALLOW_LIST: null, BLOCK_LIST: null,
         };
         indexer.indexerDb.getSwapInfo.resolves(swapInfo);
@@ -146,7 +146,7 @@ describe('Swap action handler @regression @tier2', function () {
     it('rejects cancel when swap is not open', async function () {
         const swapInfo = {
             ACTION_INDEX: 10,
-            SOURCE: '1SourceAddressXXXXXXXXXXXXXXXYs6gYt',
+            SOURCE: 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH',
             SWAP_STATUS: 'complete',
             GIVE_TICK: 'GIVE', GIVE_AMOUNT: '10', GET_TICK: 'GET', GET_AMOUNT: '5',
             ALLOW_LIST: null, BLOCK_LIST: null,
@@ -178,12 +178,12 @@ describe('Swap action handler @regression @tier2', function () {
     it('edits a valid open swap expiration', async function () {
         const swapInfo = {
             ACTION_INDEX: 10,
-            SOURCE: '1SourceAddressXXXXXXXXXXXXXXXYs6gYt',
+            SOURCE: 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH',
             SWAP_STATUS: 'open',
             GIVE_TICK: 'GIVE', GIVE_AMOUNT: '10', GIVE_REMAINING: '10',
             GET_TICK: 'GET',   GET_AMOUNT: '5',
             GET_COIN: 'BTC', GIVE_COIN: 'BTC',
-            GET_ADDRESS: '1SourceAddressXXXXXXXXXXXXXXXYs6gYt',
+            GET_ADDRESS: 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH',
             ALLOW_LIST: null, BLOCK_LIST: null,
             EXPIRATION: 1000000,
         };
@@ -225,7 +225,7 @@ describe('Swap action handler @regression @tier2', function () {
             indexer.indexerDb.setTokenEscrow  = sinon.stub().resolves();
             indexer.indexerDb.isOwnershipEscrowed = sinon.stub().resolves(false);
             indexer.indexerDb.getTokenInfo.callsFake(async (tick) => {
-                if(tick === 'GIVE') return createTokenInfo({ TICK: 'GIVE', TICK_ID: 1, DECIMALS: 0, OWNER: '1SourceAddressXXXXXXXXXXXXXXXYs6gYt' });
+                if(tick === 'GIVE') return createTokenInfo({ TICK: 'GIVE', TICK_ID: 1, DECIMALS: 0, OWNER: 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH' });
                 if(tick === 'GET')  return createTokenInfo({ TICK: 'GET',  TICK_ID: 2, DECIMALS: 0 });
                 return null;
             });
@@ -357,7 +357,7 @@ describe('Swap action handler @regression @tier2', function () {
 
             const swapInfo = {
                 ACTION_INDEX:  10,
-                SOURCE:        '1SourceAddressXXXXXXXXXXXXXXXYs6gYt',
+                SOURCE:        'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH',
                 SWAP_STATUS:   'open',
                 GIVE_TICK:     'GIVE',
                 GIVE_AMOUNT:   '10',
@@ -366,7 +366,7 @@ describe('Swap action handler @regression @tier2', function () {
                 GET_AMOUNT:    '5',
                 GET_COIN:      'BTC',
                 GIVE_COIN:     'BTC',
-                GET_ADDRESS:   '1SourceAddressXXXXXXXXXXXXXXXYs6gYt',
+                GET_ADDRESS:   'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH',
                 ALLOW_LIST:    null,
                 BLOCK_LIST:    null,
             };

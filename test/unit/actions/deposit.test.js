@@ -20,7 +20,7 @@ const Deposit = require('../../../src/actions/deposit.js');
 describe('Deposit (DEPOSIT) @regression @tier2', function () {
     let indexer, actionsCtx, handler;
 
-    const SOURCE = '1SourceAddressXXXXXXXXXXXXXXXYs6gYt';
+    const SOURCE = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
     const CONTRACT_INDEX = '7';
 
     function addDepositStubs(db) {

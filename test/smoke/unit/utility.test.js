@@ -66,8 +66,10 @@ describe('Smoke: utility math and validation', function () {
         assert.strictEqual(util.isNull('value'), false, 'isNull non-empty string');
 
         // ── isCryptoAddress ───────────────────────────────────────────────
-        // 34-char string satisfies P2PKH range (26-35)
-        assert.strictEqual(util.isCryptoAddress('A'.repeat(34)), true,  'isCryptoAddress 34-char valid');
+        // Valid regtest P2PKH (base58check checksum + version byte)
+        assert.strictEqual(util.isCryptoAddress('mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH'), true,  'isCryptoAddress valid P2PKH');
+        // Address-length garbage fails the checksum
+        assert.strictEqual(util.isCryptoAddress('A'.repeat(34)), false, 'isCryptoAddress 34-char garbage invalid');
         // 20-char string is too short
         assert.strictEqual(util.isCryptoAddress('A'.repeat(20)), false, 'isCryptoAddress 20-char too short');
     });

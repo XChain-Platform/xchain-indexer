@@ -31,8 +31,8 @@ const Destroy = require('../../../src/actions/destroy.js');
 const Issue = require('../../../src/actions/issue.js');
 
 // Valid BTC addresses
-const SOURCE = '1SourceAddressXXXXXXXXXXXXXXXYs6gYt';
-const DESTINATION = '1BoogrfDADPLQpq8LMASmWQUVYDp4t2hF9';
+const SOURCE = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
+const DESTINATION = 'mtr6NtB5KJRAxTX5AbuRtV7S4FF2PZJXUs';
 
 function makeToken(overrides = {}) {
     return createTokenInfo(Object.assign({ TICK: 'TEST', TICK_ID: 1, DECIMALS: 0 }, overrides));

@@ -28,10 +28,10 @@ const { initIndexer, processBlocks, destroyIndexer } = require('../setup/indexer
 const { assertBlockCount, assertHashChain, countRows,
         getActionIndex } = require('../setup/assertion-helpers');
 
-// Addresses: 30 characters each (within the 26-35 P2PKH range)
-const ADDR1 = 'mAddr1XXXXXXXXXXXXXXXXXXXXXXX1'; // 30 chars
-const ADDR2 = 'mAddr2XXXXXXXXXXXXXXXXXXXXXXX2'; // 30 chars
-const ADDR3 = 'mAddr3XXXXXXXXXXXXXXXXXXXXXXX3'; // 30 chars
+// Addresses: valid regtest P2PKH (base58check-validated)
+const ADDR1 = 'msK1rsgNVFPM4cR3X5rngczTKa6EtT4WKD'; // 30 chars
+const ADDR2 = 'mjifPngDYQ6HHPNQdGk1kQuFkJWEiQksQp'; // 30 chars
+const ADDR3 = 'mwGujTXFXMLN2YXqo4mQK4DcKy31DUcwoi'; // 30 chars
 
 // A block time baseline (unix epoch seconds, ~2023)
 const BASE_TIME = 1700000000;

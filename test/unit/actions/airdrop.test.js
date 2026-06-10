@@ -51,7 +51,7 @@ describe('Airdrop @regression @tier2', function () {
             const tokenInfo = createTokenInfo({ TICK: 'TEST', TICK_ID: 1, DECIMALS: 0, SUPPLY: '500' });
             indexer.indexerDb.getTokenInfo.resolves(tokenInfo);
             indexer.indexerDb.getListType.resolves(2);
-            indexer.indexerDb.getList.resolves(['1DestAddressXXXXXXXXXXXXXXXXXaKc5Z']);
+            indexer.indexerDb.getList.resolves(['mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM']);
             indexer.indexerDb.getAddressBalances.resolves({ 1: '1000' });
             indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
             indexer.indexerDb.isActionAllowed.resolves(true);
@@ -71,8 +71,8 @@ describe('Airdrop @regression @tier2', function () {
             indexer.indexerDb.getListType.resolves(1);
             indexer.indexerDb.getList.resolves(['TEST']);
             indexer.indexerDb.getHolders.resolves({
-                '1HolderOneXXXXXXXXXXXXXXXXXXXY7vAZ': '100',
-                '1HolderTwoXXXXXXXXXXXXXXXXXXXWqp6Q': '200',
+                'mmqFL1hiu2RDuyS69KS9ko6uaMryhANwsz': '100',
+                'mk7MdP3qzVkgyjaYNR2sUY8Ggn4DWxt2KS': '200',
             });
             indexer.indexerDb.getAddressBalances.resolves({ 1: '5000' });
             indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
@@ -90,7 +90,7 @@ describe('Airdrop @regression @tier2', function () {
         it('TICK not found → invalid', async function () {
             indexer.indexerDb.getTokenInfo.resolves(null);
             indexer.indexerDb.getListType.resolves(2);
-            indexer.indexerDb.getList.resolves(['1DestAddressXXXXXXXXXXXXXXXXXaKc5Z']);
+            indexer.indexerDb.getList.resolves(['mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM']);
             indexer.indexerDb.getAddressBalances.resolves({});
             indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
             indexer.indexerDb.isActionAllowed.resolves(true);
@@ -125,9 +125,9 @@ describe('Airdrop @regression @tier2', function () {
             indexer.indexerDb.getTokenInfo.resolves(tokenInfo);
             indexer.indexerDb.getListType.resolves(2);
             indexer.indexerDb.getList.resolves([
-                '1HolderOneXXXXXXXXXXXXXXXXXXXY7vAZ',
-                '1HolderTwoXXXXXXXXXXXXXXXXXXXWqp6Q',
-                '1HolderThreeXXXXXXXXXXXXXXXXXW8fcq',
+                'mmqFL1hiu2RDuyS69KS9ko6uaMryhANwsz',
+                'mk7MdP3qzVkgyjaYNR2sUY8Ggn4DWxt2KS',
+                'mr5CBpzjw2QLYwCZEBYMxbrPcS7pwLSDwF',
             ]);
             // Balance only covers 2, but we need 3 * 100 = 300
             indexer.indexerDb.getAddressBalances.resolves({ 1: '5' });
@@ -146,7 +146,7 @@ describe('Airdrop @regression @tier2', function () {
             const tokenInfo = createTokenInfo({ TICK: 'TEST', TICK_ID: 1, DECIMALS: 0 });
             indexer.indexerDb.getTokenInfo.resolves(tokenInfo);
             indexer.indexerDb.getListType.resolves(2);
-            indexer.indexerDb.getList.resolves(['1DestAddressXXXXXXXXXXXXXXXXXaKc5Z']);
+            indexer.indexerDb.getList.resolves(['mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM']);
             indexer.indexerDb.getAddressBalances.resolves({ 1: '1000' });
             indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
             indexer.indexerDb.isActionAllowed.resolves(true);
@@ -164,7 +164,7 @@ describe('Airdrop @regression @tier2', function () {
             const tokenInfo = createTokenInfo({ TICK: 'TEST', TICK_ID: 1, DECIMALS: 0 });
             indexer.indexerDb.getTokenInfo.resolves(tokenInfo);
             indexer.indexerDb.getListType.resolves(2);
-            indexer.indexerDb.getList.resolves(['1DestAddressXXXXXXXXXXXXXXXXXaKc5Z']);
+            indexer.indexerDb.getList.resolves(['mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM']);
             indexer.indexerDb.getAddressBalances.resolves({ 1: '1000' });
             indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
             indexer.indexerDb.isActionAllowed.resolves(true);
@@ -203,7 +203,7 @@ describe('Airdrop @regression @tier2', function () {
             indexer.indexerDb.getTokenInfo.withArgs('TEST').resolves(tokenInfo1);
             indexer.indexerDb.getTokenInfo.withArgs('XTEST').resolves(tokenInfo2);
             indexer.indexerDb.getListType.resolves(2);
-            indexer.indexerDb.getList.resolves(['1DestAddressXXXXXXXXXXXXXXXXXaKc5Z']);
+            indexer.indexerDb.getList.resolves(['mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM']);
             indexer.indexerDb.getAddressBalances.resolves({ 1: '1000', 2: '1000' });
             indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
             indexer.indexerDb.isActionAllowed.resolves(true);
@@ -229,7 +229,7 @@ describe('Airdrop @regression @tier2', function () {
             indexer.indexerDb.getTokenInfo.withArgs('TEST').resolves(tokenInfo1);
             indexer.indexerDb.getTokenInfo.withArgs('XTEST').resolves(tokenInfo2);
             indexer.indexerDb.getListType.resolves(2);
-            indexer.indexerDb.getList.resolves(['1DestAddressXXXXXXXXXXXXXXXXXaKc5Z']);
+            indexer.indexerDb.getList.resolves(['mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM']);
             indexer.indexerDb.getAddressBalances.resolves({ 1: '1000', 2: '1000' });
             indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
             indexer.indexerDb.isActionAllowed.resolves(true);
@@ -253,7 +253,7 @@ describe('Airdrop @regression @tier2', function () {
             const tokenInfo = createTokenInfo({ TICK: 'TEST', TICK_ID: 1, DECIMALS: 0 });
             indexer.indexerDb.getTokenInfo.resolves(tokenInfo);
             indexer.indexerDb.getListType.resolves(2);
-            indexer.indexerDb.getList.resolves(['1DestAddressXXXXXXXXXXXXXXXXXaKc5Z']);
+            indexer.indexerDb.getList.resolves(['mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM']);
             indexer.indexerDb.getAddressBalances.resolves({ 1: '1000' });
             indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
             // SOURCE is sleeping
@@ -274,7 +274,7 @@ describe('Airdrop @regression @tier2', function () {
             const tokenInfo = createTokenInfo({ TICK: 'TEST', TICK_ID: 1, DECIMALS: 0 });
             indexer.indexerDb.getTokenInfo.resolves(tokenInfo);
             indexer.indexerDb.getListType.resolves(2);
-            indexer.indexerDb.getList.resolves(['1DestAddressXXXXXXXXXXXXXXXXXaKc5Z']);
+            indexer.indexerDb.getList.resolves(['mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM']);
             indexer.indexerDb.getAddressBalances.resolves({ 1: '1000' });
             indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
             // Tick is sleeping (address=null, tick='TEST')
@@ -295,7 +295,7 @@ describe('Airdrop @regression @tier2', function () {
             const tokenInfo = createTokenInfo({ TICK: 'TEST', TICK_ID: 1, DECIMALS: 0 });
             indexer.indexerDb.getTokenInfo.resolves(tokenInfo);
             indexer.indexerDb.getListType.resolves(2);
-            indexer.indexerDb.getList.resolves(['1DestAddressXXXXXXXXXXXXXXXXXaKc5Z']);
+            indexer.indexerDb.getList.resolves(['mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM']);
             indexer.indexerDb.getAddressBalances.resolves({ 1: '1000' });
             indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
             indexer.indexerDb.isActionAllowed.resolves(true);
@@ -313,7 +313,7 @@ describe('Airdrop @regression @tier2', function () {
             const tokenInfo = createTokenInfo({ TICK: 'TEST', TICK_ID: 1, DECIMALS: 0 });
             indexer.indexerDb.getTokenInfo.resolves(tokenInfo);
             indexer.indexerDb.getListType.resolves(2);
-            indexer.indexerDb.getList.resolves(['1DestAddressXXXXXXXXXXXXXXXXXaKc5Z']);
+            indexer.indexerDb.getList.resolves(['mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM']);
             indexer.indexerDb.getAddressBalances.resolves({ 1: '1000' });
             indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
             indexer.indexerDb.isActionAllowed.resolves(true);
@@ -330,13 +330,13 @@ describe('Airdrop @regression @tier2', function () {
             const tokenInfo = createTokenInfo({ TICK: 'TEST', TICK_ID: 1, DECIMALS: 0 });
             indexer.indexerDb.getTokenInfo.resolves(tokenInfo);
             indexer.indexerDb.getListType.resolves(2);
-            indexer.indexerDb.getList.resolves(['1DestAddressXXXXXXXXXXXXXXXXXaKc5Z']);
+            indexer.indexerDb.getList.resolves(['mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM']);
             indexer.indexerDb.getAddressBalances.resolves({ 1: '1000' });
             indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
             // All recipients blocked
             indexer.indexerDb.isActionAllowed.callsFake((address, tick) => {
                 // source action checks pass, but recipient check fails
-                if (address === '1DestAddressXXXXXXXXXXXXXXXXXaKc5Z') return Promise.resolve(false);
+                if (address === 'mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM') return Promise.resolve(false);
                 return Promise.resolve(true);
             });
 
@@ -361,7 +361,7 @@ describe('Airdrop @regression @tier2', function () {
             indexer.indexerDb.getTokenInfo.withArgs('TEST').resolves(tokenInfo1);
             indexer.indexerDb.getTokenInfo.withArgs('XTEST').resolves(tokenInfo2);
             indexer.indexerDb.getListType.resolves(2);
-            indexer.indexerDb.getList.resolves(['1DestAddressXXXXXXXXXXXXXXXXXaKc5Z']);
+            indexer.indexerDb.getList.resolves(['mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM']);
             indexer.indexerDb.getAddressBalances.resolves({ 1: '1000', 2: '1000' });
             indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
             indexer.indexerDb.isActionAllowed.resolves(true);
@@ -385,7 +385,7 @@ describe('Airdrop @regression @tier2', function () {
             const tokenInfo = createTokenInfo({ TICK: 'TEST', TICK_ID: 1, DECIMALS: 0 });
             indexer.indexerDb.getTokenInfo.resolves(tokenInfo);
             indexer.indexerDb.getListType.resolves(2);
-            indexer.indexerDb.getList.resolves(['1DestAddressXXXXXXXXXXXXXXXXXaKc5Z']);
+            indexer.indexerDb.getList.resolves(['mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM']);
             indexer.indexerDb.getAddressBalances.resolves({ 1: '1000' });
             indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
             indexer.indexerDb.isActionAllowed.resolves(true);
@@ -403,7 +403,7 @@ describe('Airdrop @regression @tier2', function () {
             const tokenInfo = createTokenInfo({ TICK: 'TEST', TICK_ID: 1, DECIMALS: 0 });
             indexer.indexerDb.getTokenInfo.resolves(tokenInfo);
             indexer.indexerDb.getListType.resolves(2);
-            indexer.indexerDb.getList.resolves(['1DestAddressXXXXXXXXXXXXXXXXXaKc5Z']);
+            indexer.indexerDb.getList.resolves(['mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM']);
             indexer.indexerDb.getAddressBalances.resolves({ 1: '1000' });
             indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
             indexer.indexerDb.isActionAllowed.resolves(true);
@@ -421,7 +421,7 @@ describe('Airdrop @regression @tier2', function () {
             const tokenInfo = createTokenInfo({ TICK: 'TEST', TICK_ID: 1, DECIMALS: 0 });
             indexer.indexerDb.getTokenInfo.resolves(tokenInfo);
             indexer.indexerDb.getListType.resolves(2);
-            indexer.indexerDb.getList.resolves(['1DestAddressXXXXXXXXXXXXXXXXXaKc5Z']);
+            indexer.indexerDb.getList.resolves(['mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM']);
             indexer.indexerDb.getAddressBalances.resolves({ 1: '1000' });
             indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
             indexer.indexerDb.isActionAllowed.resolves(true);
@@ -438,7 +438,7 @@ describe('Airdrop @regression @tier2', function () {
             const tokenInfo = createTokenInfo({ TICK: 'TEST', TICK_ID: 1, DECIMALS: 0 });
             indexer.indexerDb.getTokenInfo.resolves(tokenInfo);
             indexer.indexerDb.getListType.resolves(2);
-            indexer.indexerDb.getList.resolves(['1DestAddressXXXXXXXXXXXXXXXXXaKc5Z']);
+            indexer.indexerDb.getList.resolves(['mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM']);
             indexer.indexerDb.getAddressBalances.resolves({ 1: '1000' });
             indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
             indexer.indexerDb.isActionAllowed.resolves(true);
@@ -457,7 +457,7 @@ describe('Airdrop @regression @tier2', function () {
             indexer.indexerDb.getTokenInfo.resolves(tokenInfo);
             // Return a list type not in [1, 2]
             indexer.indexerDb.getListType.resolves(99);
-            indexer.indexerDb.getList.resolves(['1DestAddressXXXXXXXXXXXXXXXXXaKc5Z']);
+            indexer.indexerDb.getList.resolves(['mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM']);
             indexer.indexerDb.getAddressBalances.resolves({ 1: '1000' });
             indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
             indexer.indexerDb.isActionAllowed.resolves(true);
@@ -474,7 +474,7 @@ describe('Airdrop @regression @tier2', function () {
             const tokenInfo = createTokenInfo({ TICK: 'TEST', TICK_ID: 1, DECIMALS: 0 });
             indexer.indexerDb.getTokenInfo.resolves(tokenInfo);
             indexer.indexerDb.getListType.resolves(2);
-            indexer.indexerDb.getList.resolves(['1DestAddressXXXXXXXXXXXXXXXXXaKc5Z']);
+            indexer.indexerDb.getList.resolves(['mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM']);
             indexer.indexerDb.getAddressBalances.resolves({ 1: '1000' });
             indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
             // SOURCE+TICK isActionAllowed returns false (the source/tick allow-list check at line 242)
@@ -499,7 +499,7 @@ describe('Airdrop @regression @tier2', function () {
             const tokenInfo = createTokenInfo({ TICK: 'TEST', TICK_ID: 1, DECIMALS: 0 });
             indexer.indexerDb.getTokenInfo.resolves(tokenInfo);
             indexer.indexerDb.getListType.resolves(2);
-            indexer.indexerDb.getList.resolves(['1DestAddressXXXXXXXXXXXXXXXXXaKc5Z']);
+            indexer.indexerDb.getList.resolves(['mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM']);
             // Balance has TEST (TICK_ID=1) but NOT XCHAIN (TICK_ID from fees.TICK_ID).
             // We also need TICK balance >= DEBIT (1 per recipient). getAddressBalances returns
             // sufficient TEST balance and zero XCHAIN balance.
@@ -532,7 +532,7 @@ describe('Airdrop @regression @tier2', function () {
             const tokenInfo = createTokenInfo({ TICK: 'TEST', TICK_ID: 1, DECIMALS: 0, SUPPLY: '1000000' });
             indexer.indexerDb.getTokenInfo.resolves(tokenInfo);
             indexer.indexerDb.getListType.resolves(2);
-            indexer.indexerDb.getList.resolves(['1DestAddressXXXXXXXXXXXXXXXXXaKc5Z']);
+            indexer.indexerDb.getList.resolves(['mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM']);
             indexer.indexerDb.getAddressBalances.resolves({ 1: '999999' });
             indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
             indexer.indexerDb.isActionAllowed.resolves(true);

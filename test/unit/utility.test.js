@@ -463,32 +463,50 @@ describe('Utility @regression @tier1', function () {
     });
 
     describe('isCryptoAddress()', function () {
-        it('should accept P2PKH address (26-35 chars)', function () {
-            assert.strictEqual(util.isCryptoAddress('1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2'), true);
+        // Env at top of file is BTC/regtest — default validation context
+        it('should accept a valid regtest P2PKH address', function () {
+            assert.strictEqual(util.isCryptoAddress('mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH'), true);
         });
-        it('should accept 26 char address', function () {
-            assert.strictEqual(util.isCryptoAddress('a'.repeat(26)), true);
+        it('should accept a valid regtest P2SH address', function () {
+            assert.strictEqual(util.isCryptoAddress('2NETsvK6gpTRsvxt3z4oJJLVof6BkA9AHmQ'), true);
         });
-        it('should accept 35 char address', function () {
-            assert.strictEqual(util.isCryptoAddress('a'.repeat(35)), true);
+        it('should accept a valid regtest bech32 segwit address', function () {
+            assert.strictEqual(util.isCryptoAddress('bcrt1qe6l04hhwjg98fmggptdm0cemj6lm7hhwzahaul'), true);
         });
-        it('should accept Segwit address (42 chars)', function () {
-            assert.strictEqual(util.isCryptoAddress('a'.repeat(42)), true);
+        it('should accept a valid regtest bech32m taproot address', function () {
+            assert.strictEqual(util.isCryptoAddress('bcrt1pxqgcx65hqkd9c7y6wulyfv2wlwawqx62n3ufwxkjhjpas2jtqxmsglytaf'), true);
+        });
+        it('should reject address-length garbage strings', function () {
+            assert.strictEqual(util.isCryptoAddress('a'.repeat(26)), false);
+            assert.strictEqual(util.isCryptoAddress('a'.repeat(34)), false);
+            assert.strictEqual(util.isCryptoAddress('a'.repeat(42)), false);
+        });
+        it('should reject a checksum-flipped address', function () {
+            // Valid regtest P2PKH with last character changed
+            assert.strictEqual(util.isCryptoAddress('mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxJ'), false);
+        });
+        it('should reject a wrong-network address (mainnet P2PKH on regtest)', function () {
+            assert.strictEqual(util.isCryptoAddress('17Roegnpwqam4FwwXsM47bX3Tf1jFyyKMt'), false);
+        });
+        it('should reject a wrong-coin segwit address (ltc1 HRP on BTC)', function () {
+            assert.strictEqual(util.isCryptoAddress('ltc1qerp5jqmc2nja6lrxw0w4e02uvk83aj89qwltym'), false);
+        });
+        it('should validate against an explicitly passed coin/network', function () {
+            assert.strictEqual(util.isCryptoAddress('17Roegnpwqam4FwwXsM47bX3Tf1jFyyKMt', 'BTC', 'mainnet'), true);
+            assert.strictEqual(util.isCryptoAddress('LYoDQ9vcZBq4hWBeiKMqVvhqs7FSQSk6ck', 'LTC', 'mainnet'), true);
+            assert.strictEqual(util.isCryptoAddress('DKueiiiESH37vowsy4nQgri8u4GDtmQfqt', 'DOGE', 'mainnet'), true);
+            assert.strictEqual(util.isCryptoAddress('DKueiiiESH37vowsy4nQgri8u4GDtmQfqt', 'BTC', 'mainnet'), false);
+        });
+        it('should reject segwit addresses on DOGE (no segwit support)', function () {
+            assert.strictEqual(util.isCryptoAddress('bc1q8uuuk4vlqc0lhkskf8lhh9r2q89n2l566uhekf', 'DOGE', 'mainnet'), false);
+        });
+        it('should reject an unknown coin', function () {
+            assert.strictEqual(util.isCryptoAddress('17Roegnpwqam4FwwXsM47bX3Tf1jFyyKMt', 'ETH', 'mainnet'), false);
         });
         it('should reject too short', function () {
             assert.strictEqual(util.isCryptoAddress('abc'), false);
         });
-        it('should reject 25 chars', function () {
-            assert.strictEqual(util.isCryptoAddress('a'.repeat(25)), false);
-        });
-        it('should reject 36-41 chars', function () {
-            assert.strictEqual(util.isCryptoAddress('a'.repeat(36)), false);
-            assert.strictEqual(util.isCryptoAddress('a'.repeat(41)), false);
-        });
-        it('should reject 43+ chars', function () {
-            assert.strictEqual(util.isCryptoAddress('a'.repeat(43)), false);
-        });
-        it('should reject a contract address (too short for a real address)', function () {
+        it('should reject a contract address (not a real on-chain address)', function () {
             assert.strictEqual(util.isCryptoAddress('C:BTC:500'), false);
         });
     });

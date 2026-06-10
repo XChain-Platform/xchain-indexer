@@ -20,7 +20,7 @@ const Batch = require('../../../src/actions/batch.js');
 describe('Batch @regression @tier3', function () {
     let indexer, actionsCtx, handler;
 
-    const SOURCE = '1SourceAddressXXXXXXXXXXXXXXXYs6gYt';
+    const SOURCE = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
 
     beforeEach(function () {
         indexer = createMockIndexer();
@@ -53,11 +53,11 @@ describe('Batch @regression @tier3', function () {
                 ACTION:    'BATCH',
                 FORMAT:    0,
                 SOURCE,
-                TX_DATA:   'BATCH|0|SEND|0|TEST|10|1DestAddressXXXXXXXXXXXXXXXXXaKc5Z;SEND|0|TEST|5|1DestAddressXXXXXXXXXXXXXXXXXaKc5Z',
+                TX_DATA:   'BATCH|0|SEND|0|TEST|10|mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM;SEND|0|TEST|5|mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM',
             });
             indexer.indexerDb.isActionAllowed.resolves(true);
 
-            const params = ['0', 'SEND|0|TEST|10|1DestAddressXXXXXXXXXXXXXXXXXaKc5Z'];
+            const params = ['0', 'SEND|0|TEST|10|mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM'];
 
             await handler.parse(params, data, null);
 
@@ -70,7 +70,7 @@ describe('Batch @regression @tier3', function () {
                 ACTION:  'BATCH',
                 FORMAT:  0,
                 SOURCE,
-                TX_DATA: 'BATCH|0|SEND|0|TEST|10|1DestAddressXXXXXXXXXXXXXXXXXaKc5Z',
+                TX_DATA: 'BATCH|0|SEND|0|TEST|10|mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM',
             });
             indexer.indexerDb.isActionAllowed.resolves(true);
 
@@ -104,7 +104,7 @@ describe('Batch @regression @tier3', function () {
                 ACTION:  'BATCH',
                 FORMAT:  0,
                 SOURCE,
-                TX_DATA: 'BATCH|0|SEND|0|TEST|5|1DestAddressXXXXXXXXXXXXXXXXXaKc5Z;SEND|0|TEST|3|1DestAddressXXXXXXXXXXXXXXXXXaKc5Z',
+                TX_DATA: 'BATCH|0|SEND|0|TEST|5|mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM;SEND|0|TEST|3|mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM',
             });
             indexer.indexerDb.isActionAllowed.resolves(true);
             indexer.indexerDb.createActionIndex.resolves(50);
@@ -127,7 +127,7 @@ describe('Batch @regression @tier3', function () {
                 ACTION:  'BATCH',
                 FORMAT:  0,
                 SOURCE,
-                TX_DATA: 'BATCH|0|BATCH|0|SEND|0|TEST|5|1DestAddressXXXXXXXXXXXXXXXXXaKc5Z',
+                TX_DATA: 'BATCH|0|BATCH|0|SEND|0|TEST|5|mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM',
             });
             indexer.indexerDb.isActionAllowed.resolves(true);
 
@@ -237,7 +237,7 @@ describe('Batch @regression @tier3', function () {
                 ACTION:  'BATCH',
                 FORMAT:  0,
                 SOURCE,
-                TX_DATA: 'BATCH|0|SEND|0|TEST|5|1DestAddressXXXXXXXXXXXXXXXXXaKc5Z',
+                TX_DATA: 'BATCH|0|SEND|0|TEST|5|mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM',
             });
             indexer.indexerDb.isActionAllowed.callsFake((address, tick, block) => {
                 if (address && !tick) return Promise.resolve(false);
@@ -262,7 +262,7 @@ describe('Batch @regression @tier3', function () {
                 ACTION:  'BATCH',
                 FORMAT:  0,
                 SOURCE,
-                TX_DATA: 'BATCH|0|BATCH|0|SEND|0|TEST|5|1DestAddressXXXXXXXXXXXXXXXXXaKc5Z',
+                TX_DATA: 'BATCH|0|BATCH|0|SEND|0|TEST|5|mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM',
             });
             indexer.indexerDb.isActionAllowed.resolves(true);
 
@@ -278,7 +278,7 @@ describe('Batch @regression @tier3', function () {
                 ACTION:  'BATCH',
                 FORMAT:  0,
                 SOURCE,
-                TX_DATA: 'BATCH|0|SEND|0|TEST|5|1DestAddressXXXXXXXXXXXXXXXXXaKc5Z',
+                TX_DATA: 'BATCH|0|SEND|0|TEST|5|mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM',
             });
             indexer.indexerDb.isActionAllowed.resolves(true);
 

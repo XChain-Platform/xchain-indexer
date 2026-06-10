@@ -40,7 +40,7 @@ describe('ORDER and DISPENSER expiration boundary tests @regression @tier2', fun
     let indexer, actionsCtx, handler;
 
     const BLOCK_TIME = 1700000000;
-    const SOURCE     = '1SourceAddressXXXXXXXXXXXXXXXYs6gYt';
+    const SOURCE     = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
 
     beforeEach(function () {
         indexer    = createMockIndexer();

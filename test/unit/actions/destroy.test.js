@@ -20,7 +20,7 @@ const Destroy = require('../../../src/actions/destroy.js');
 describe('Destroy @regression @tier1', function () {
     let indexer, actionsCtx, handler;
 
-    const SOURCE = '1SourceAddressXXXXXXXXXXXXXXXYs6gYt';
+    const SOURCE = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
 
     beforeEach(function () {
         indexer = createMockIndexer();

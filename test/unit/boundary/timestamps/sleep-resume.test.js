@@ -37,7 +37,7 @@ function makeActionsCtx(indexer) {
 describe('SLEEP RESUME_BLOCK boundary tests @regression @tier2', function () {
     let indexer, actionsCtx, handler;
 
-    const SOURCE = '1SourceAddressXXXXXXXXXXXXXXXYs6gYt';
+    const SOURCE = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
     const BLOCK  = 100;
 
     beforeEach(function () {

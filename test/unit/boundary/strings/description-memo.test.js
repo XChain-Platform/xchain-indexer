@@ -61,7 +61,7 @@ function makeIssueParams(overrides = {}) {
 }
 
 // Valid BTC addresses used in Send tests
-const DESTINATION = '1BoogrfDADPLQpq8LMASmWQUVYDp4t2hF9';
+const DESTINATION = 'mtr6NtB5KJRAxTX5AbuRtV7S4FF2PZJXUs';
 
 describe('Description & memo boundary tests @regression @tier3', function () {
 

@@ -38,8 +38,8 @@ function makeActionsCtx(indexer) {
 function makeDispenserInfo(overrides = {}) {
     return {
         ACTION_INDEX:   10,
-        SOURCE:         '1SourceAddressXXXXXXXXXXXXXXXYs6gYt',
-        GET_ADDRESS:    '1SourceAddressXXXXXXXXXXXXXXXYs6gYt',
+        SOURCE:         'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH',
+        GET_ADDRESS:    'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH',
         GIVE_COIN:      'BTC',
         GIVE_TICK:      'JDOG',
         GIVE_AMOUNT:    '1',        // dispense 1 JDOG per GET_AMOUNT unit
@@ -61,8 +61,8 @@ describe('Dispense action handler @regression @tier2', function () {
     let actionsCtx;
     let dispense;
 
-    const OWNER_ADDR  = '1SourceAddressXXXXXXXXXXXXXXXYs6gYt';
-    const BUYER_ADDR  = '1DestAddressXXXXXXXXXXXXXXXXXaKc5Z';
+    const OWNER_ADDR  = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
+    const BUYER_ADDR  = 'mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM';
     const BLOCK_TIME  = 1700000000;
 
     beforeEach(function () {

@@ -30,11 +30,11 @@ const { assertBalance, assertTokenSupply, assertTokenOwner,
         assertSanity, getToken } = require('../setup/assertion-helpers');
 
 // ---------------------------------------------------------------------------
-// Test addresses — exactly 30 characters each (26–35 passes isCryptoAddress)
+// Test addresses — valid regtest P2PKH (isCryptoAddress validates base58check)
 // ---------------------------------------------------------------------------
-const ADDR1 = 'mAddr1XXXXXXXXXXXXXXXXXXXXXXX1'; // 30 chars — primary issuer
-const ADDR2 = 'mAddr2XXXXXXXXXXXXXXXXXXXXXXX2'; // 30 chars — secondary actor
-const ADDR3 = 'mAddr3XXXXXXXXXXXXXXXXXXXXXXX3'; // 30 chars — recipient
+const ADDR1 = 'msK1rsgNVFPM4cR3X5rngczTKa6EtT4WKD'; // 30 chars — primary issuer
+const ADDR2 = 'mjifPngDYQ6HHPNQdGk1kQuFkJWEiQksQp'; // 30 chars — secondary actor
+const ADDR3 = 'mwGujTXFXMLN2YXqo4mQK4DcKy31DUcwoi'; // 30 chars — recipient
 
 // Block time baseline
 const BASE_TIME = 1700000000;
@@ -342,7 +342,7 @@ describe('ISSUE / MINT / SEND / DESTROY Token Lifecycle @regression @tier1', fun
         await seeder.seedBlock(321, BASE_TIME + 10, [
             { source: ADDR1, data: 'MINT|0|ADDRCHECK|200' }
         ]);
-        // Destination is too short to pass isCryptoAddress (< 26 chars)
+        // Destination is not a valid address (fails isCryptoAddress)
         await seeder.seedBlock(322, BASE_TIME + 20, [
             { source: ADDR1, destination: 'badaddr', data: 'SEND|0|ADDRCHECK|100|badaddr' }
         ]);

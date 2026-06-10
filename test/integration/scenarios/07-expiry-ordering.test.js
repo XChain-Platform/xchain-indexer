@@ -42,8 +42,8 @@ const {
 const { initIndexer, destroyIndexer } = require('../setup/indexer-launcher');
 
 // 30-char addresses (valid P2PKH length, matching the other scenarios)
-const PAYER = 'mPayerXXXXXXXXXXXXXXXXXXXXXXXX1';
-const PAYEE = 'mPayeeXXXXXXXXXXXXXXXXXXXXXXXX2';
+const PAYER = 'mvBF62avYXhcRZGtQsrE11qByVdDSuMhss';
+const PAYEE = 'mnNFBtAigY3EHSCJUZwpyugkphfruNiPHj';
 
 let indexer;
 

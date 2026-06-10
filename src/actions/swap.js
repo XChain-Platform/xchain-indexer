@@ -181,7 +181,7 @@ class Swap {
             error = "invalid: GET_ADDRESS";
 
         // Verify GET_ADDRESS is valid for the given GET_COIN network
-        if(!error && format==0 && !this.util.isNull(data['GET_ADDRESS']) && !this.util.isCryptoAddress(data['GET_ADDRESS']))
+        if(!error && format==0 && !this.util.isNull(data['GET_ADDRESS']) && !this.util.isCryptoAddress(data['GET_ADDRESS'], data['GET_COIN']))
             error = "invalid: GET_ADDRESS (format)";
 
         // Validate that EXPIRATION is an integer

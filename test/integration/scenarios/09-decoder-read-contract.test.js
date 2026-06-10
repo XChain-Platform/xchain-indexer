@@ -67,8 +67,8 @@ const READ_SURFACE = {
 const NORMALIZED_KEYS = ['data', 'raw_data', 'tx_hash', 'source', 'destination',
                          'amount', 'fee', 'block_index', 'block_time', 'vout', 'source_pubkey'];
 
-const SOURCE = 'mSrcAddrXXXXXXXXXXXXXXXXXXXXX1'; // 30 chars — passes isCryptoAddress
-const DEST   = 'mDstAddrXXXXXXXXXXXXXXXXXXXXX2';
+const SOURCE = 'mn2YrLgFdvZ9MUK64a7TBn3ZVDKFo13b86'; // valid regtest P2PKH (passes isCryptoAddress)
+const DEST   = 'mvQLUzhdrR1gGQmHLkMy62Y86o6ahgRo8h';
 const BASE_TIME = 1700000000;
 
 describe('Decoder->indexer DB read contract @regression @tier1', function () {

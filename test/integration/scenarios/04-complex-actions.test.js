@@ -34,10 +34,10 @@ const helpers = require('../setup/assertion-helpers');
 // ---------------------------------------------------------------------------
 // Addresses (30 chars)
 // ---------------------------------------------------------------------------
-const ADDR1 = 'mAddr1XXXXXXXXXXXXXXXXXXXXXXX1';
-const ADDR2 = 'mAddr2XXXXXXXXXXXXXXXXXXXXXXX2';
-const ADDR3 = 'mAddr3XXXXXXXXXXXXXXXXXXXXXXX3'; // sweep destination / airdrop member
-const ADDR4 = 'mAddr4XXXXXXXXXXXXXXXXXXXXXXX4'; // airdrop member
+const ADDR1 = 'msK1rsgNVFPM4cR3X5rngczTKa6EtT4WKD';
+const ADDR2 = 'mjifPngDYQ6HHPNQdGk1kQuFkJWEiQksQp';
+const ADDR3 = 'mwGujTXFXMLN2YXqo4mQK4DcKy31DUcwoi'; // sweep destination / airdrop member
+const ADDR4 = 'my5gN5QBFhAziVKAhrrVyqJDrkjwbjDKP6'; // airdrop member
 const GAS_ADDR = 'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'; // GAS address (regtest)
 
 // ---------------------------------------------------------------------------

@@ -45,8 +45,8 @@ describe('Dispenser action handler @regression @tier2', function () {
     let actionsCtx;
     let dispenser;
 
-    const OWNER_ADDR = '1SourceAddressXXXXXXXXXXXXXXXYs6gYt';
-    const OTHER_ADDR = '1DestAddressXXXXXXXXXXXXXXXXXaKc5Z';
+    const OWNER_ADDR = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
+    const OTHER_ADDR = 'mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM';
     const BLOCK_TIME  = 1700000000;
     const EXPIRATION  = BLOCK_TIME + 86400 * 30; // 30 days later
 

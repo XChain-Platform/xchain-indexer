@@ -23,12 +23,12 @@ describe('Swap_Expire action handler @regression @tier2', function () {
     function makeSwapInfo(overrides) {
         return {
             ACTION_INDEX: 10,
-            SOURCE: '1SourceAddressXXXXXXXXXXXXXXXYs6gYt',
+            SOURCE: 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH',
             GIVE_TICK: 'TEST',
             GIVE_AMOUNT: '100',
             GIVE_REMAINING: '80',
             GET_TICK: 'OTHER',
-            GET_ADDRESS: '1SourceAddressXXXXXXXXXXXXXXXYs6gYt',
+            GET_ADDRESS: 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH',
             ...overrides,
         };
     }

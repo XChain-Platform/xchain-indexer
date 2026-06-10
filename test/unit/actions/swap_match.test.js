@@ -23,11 +23,11 @@ describe('Swap_Match action handler @regression @tier2', function () {
     function makeSwapInfo(overrides) {
         return {
             ACTION_INDEX: 10,
-            SOURCE: '1SourceAddressXXXXXXXXXXXXXXXYs6gYt',
+            SOURCE: 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH',
             SWAP_STATUS: 'open',
             GIVE_COIN: 'BTC', GIVE_TICK: 'GIVE', GIVE_AMOUNT: '10',
             GET_COIN: 'BTC',  GET_TICK: 'GET',   GET_AMOUNT: '5',
-            GET_ADDRESS: '1SourceAddressXXXXXXXXXXXXXXXYs6gYt',
+            GET_ADDRESS: 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH',
             ALLOW_LIST: null, BLOCK_LIST: null,
             ...overrides,
         };
@@ -36,10 +36,10 @@ describe('Swap_Match action handler @regression @tier2', function () {
     function makeMatchInfo(overrides) {
         return {
             ACTION_INDEX: 20,
-            SOURCE: '1DestAddressXXXXXXXXXXXXXXXXXaKc5Z',
+            SOURCE: 'mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM',
             GIVE_TICK: 'GET',  GIVE_AMOUNT: '5',
             GET_TICK: 'GIVE',  GET_AMOUNT: '10',
-            GET_ADDRESS: '1DestAddressXXXXXXXXXXXXXXXXXaKc5Z',
+            GET_ADDRESS: 'mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM',
             ALLOW_LIST: null, BLOCK_LIST: null,
             ...overrides,
         };
@@ -252,7 +252,7 @@ describe('Swap_Match action handler @regression @tier2', function () {
 
     it('rejects a match whose address is on the GET-token BLOCK_LIST', async function () {
         withTokenLists({ getList: { block: 12 } });
-        indexer.indexerDb.getList.callsFake(async (id) => (id === 12 ? ['1DestAddressXXXXXXXXXXXXXXXXXaKc5Z'] : []));
+        indexer.indexerDb.getList.callsFake(async (id) => (id === 12 ? ['mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM'] : []));
         indexer.indexerDb.getSwapInfo.resolves(makeSwapInfo());
         indexer.indexerDb.findSwapMatches.resolves([makeMatchInfo()]);
         const data = createBaseData({ ACTION: 'SWAP_MATCH', ACTION_INDEX: 10, BLOCK_INDEX: 200 });
@@ -272,7 +272,7 @@ describe('Swap_Match action handler @regression @tier2', function () {
 
     it('rejects a match whose address is on the GIVE-token BLOCK_LIST', async function () {
         withTokenLists({ giveList: { block: 14 } });
-        indexer.indexerDb.getList.callsFake(async (id) => (id === 14 ? ['1DestAddressXXXXXXXXXXXXXXXXXaKc5Z'] : []));
+        indexer.indexerDb.getList.callsFake(async (id) => (id === 14 ? ['mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM'] : []));
         indexer.indexerDb.getSwapInfo.resolves(makeSwapInfo());
         indexer.indexerDb.findSwapMatches.resolves([makeMatchInfo()]);
         const data = createBaseData({ ACTION: 'SWAP_MATCH', ACTION_INDEX: 10, BLOCK_INDEX: 200 });
@@ -302,7 +302,7 @@ describe('Swap_Match action handler @regression @tier2', function () {
 
     it('rejects when the swap address is on the match BLOCK_LIST', async function () {
         const matchInfo = makeMatchInfo({ BLOCK_LIST: 41 });
-        indexer.indexerDb.getList.callsFake(async (id) => (id === 41 ? ['1SourceAddressXXXXXXXXXXXXXXXYs6gYt'] : []));
+        indexer.indexerDb.getList.callsFake(async (id) => (id === 41 ? ['mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH'] : []));
         indexer.indexerDb.getSwapInfo.resolves(makeSwapInfo());
         indexer.indexerDb.findSwapMatches.resolves([matchInfo]);
         const data = createBaseData({ ACTION: 'SWAP_MATCH', ACTION_INDEX: 10, BLOCK_INDEX: 200 });
@@ -315,7 +315,7 @@ describe('Swap_Match action handler @regression @tier2', function () {
     it('rejects when GET ALLOW_LIST has the swap address but not the match address', async function () {
         withTokenLists({ getList: { allow: 51 } });
         indexer.indexerDb.getList.callsFake(async (id) =>
-            (id === 51 ? ['1SourceAddressXXXXXXXXXXXXXXXYs6gYt'] : []));
+            (id === 51 ? ['mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH'] : []));
         indexer.indexerDb.getSwapInfo.resolves(makeSwapInfo());
         indexer.indexerDb.findSwapMatches.resolves([makeMatchInfo()]);
         const data = createBaseData({ ACTION: 'SWAP_MATCH', ACTION_INDEX: 10, BLOCK_INDEX: 200 });

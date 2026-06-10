@@ -372,33 +372,32 @@ const operators = {
             });
         },
 
-        /** isCryptoAddress: len >= 26 becomes len > 26 */
-        cryptoAddrGt26(util) {
+        /** isCryptoAddress: checksum verification removed (charset/length only) */
+        cryptoAddrNoChecksum(util) {
             return sinon.stub(util, 'isCryptoAddress').callsFake(function (address) {
-                let len = String(address).length;
-                if (len > 26 && len <= 35) return true;   // > instead of >=
-                if (len == 42) return true;
-                return false;
+                let str = String(address);
+                if (str.length < 26 || str.length > 48) return false;
+                return /^[1-9A-HJ-NP-Za-km-z]+$/.test(str);
             });
         },
 
-        /** isCryptoAddress: len <= 35 becomes len < 35 */
-        cryptoAddrLt35(util) {
+        /** isCryptoAddress: network version-byte comparison removed */
+        cryptoAddrNoVersionByte(util) {
+            const decode = util.base58CheckDecode.bind(util);
             return sinon.stub(util, 'isCryptoAddress').callsFake(function (address) {
-                let len = String(address).length;
-                if (len >= 26 && len < 35) return true;   // < instead of <=
-                if (len == 42) return true;
-                return false;
+                // Checksum still verified, but any network's version byte accepted
+                let payload = decode(address);
+                return (payload && payload.length == 21) ? true : false;
             });
         },
 
-        /** isCryptoAddress: len == 42 becomes len != 42 (Segwit rejected) */
-        cryptoAddrNot42(util) {
+        /** isCryptoAddress: segwit (bech32/bech32m) branch removed */
+        cryptoAddrNoSegwit(util) {
+            const decode = util.base58CheckDecode.bind(util);
             return sinon.stub(util, 'isCryptoAddress').callsFake(function (address) {
-                let len = String(address).length;
-                if (len >= 26 && len <= 35) return true;
-                // Segwit check removed
-                return false;
+                // Only the base58check path survives — all segwit addresses rejected
+                let payload = decode(address);
+                return (payload && payload.length == 21) ? true : false;
             });
         },
 

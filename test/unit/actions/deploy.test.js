@@ -25,7 +25,7 @@ const VALID_CODE_HEX = Buffer.from(VALID_CODE, 'utf8').toString('hex');
 describe('Deploy (DEPLOY) @regression @tier2', function () {
     let indexer, actionsCtx, handler;
 
-    const SOURCE = '1SourceAddressXXXXXXXXXXXXXXXYs6gYt';
+    const SOURCE = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
 
     function addDeployStubs(db) {
         db.createContract          = sinon.stub().resolves();

@@ -24,7 +24,7 @@ const Stake = require('../../../src/actions/stake.js');
 // Constants
 // ---------------------------------------------------------------------------
 
-const SOURCE  = '1SourceAddressXXXXXXXXXXXXXXXYs6gYt';
+const SOURCE  = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
 // Valid 64-char Ed25519 hex public key
 const PUBKEY  = 'a'.repeat(64);
 const BLOCK   = 100;

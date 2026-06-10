@@ -24,6 +24,32 @@ const crypto = require('crypto');
 const mathjs = require('mathjs');
 const fs     = require('fs');
 
+// Address encoding constants and per-coin network parameters
+// Base58 version bytes and bech32 HRPs mirror the network definitions used by
+// the coin daemons (and the encoder's CryptoNetworks). DOGE has no segwit, so
+// no HRP. DOGE/LTC regtest reuse Bitcoin-testnet base58 prefixes by design.
+const BASE58_ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+const BECH32_CHARSET  = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l';
+const BECH32_CONST    = 1;          // BIP-173 checksum constant (segwit v0)
+const BECH32M_CONST   = 0x2bc830a3; // BIP-350 checksum constant (segwit v1+)
+const ADDRESS_PARAMS  = {
+    BTC: {
+        mainnet: { p2pkh: 0x00, p2sh: 0x05, hrp: 'bc'   },
+        testnet: { p2pkh: 0x6f, p2sh: 0xc4, hrp: 'tb'   },
+        regtest: { p2pkh: 0x6f, p2sh: 0xc4, hrp: 'bcrt' }
+    },
+    LTC: {
+        mainnet: { p2pkh: 0x30, p2sh: 0x32, hrp: 'ltc'  },
+        testnet: { p2pkh: 0x6f, p2sh: 0xc4, hrp: 'tltc' },
+        regtest: { p2pkh: 0x6f, p2sh: 0xc4, hrp: 'rltc' }
+    },
+    DOGE: {
+        mainnet: { p2pkh: 0x1e, p2sh: 0x16, hrp: null },
+        testnet: { p2pkh: 0x71, p2sh: 0xc4, hrp: null },
+        regtest: { p2pkh: 0x6f, p2sh: 0xc4, hrp: null }
+    }
+};
+
 
 class Utility {
 
@@ -490,17 +516,134 @@ class Utility {
         return false;
     }
 
-    // Handle doing VERY lose validation on an address
-    // TODO: Clean this up to actually verify crypto addresses using crypto library
-    isCryptoAddress(address){
-        let len = String(address).length;
-        // Check P2PKH (26-35 chars)
-        if(len>=26 && len<=35)
-            return true;
-        // Check Segwit (42 chars)
-        if(len==42)
-            return true;
-        return false;
+    // Decode a base58check string and return its payload bytes, or false if the
+    // string is not valid base58check (bad charset, bad length, bad checksum)
+    base58CheckDecode(address){
+        let str = String(address);
+        // Reject anything outside the plausible base58check address length band
+        if(str.length<26 || str.length>48)
+            return false;
+        // Decode base58 to a big integer, rejecting any out-of-alphabet character
+        let num = 0n;
+        for(let char of str){
+            let value = BASE58_ALPHABET.indexOf(char);
+            if(value==-1)
+                return false;
+            num = num * 58n + BigInt(value);
+        }
+        // Convert integer to bytes, restoring leading zero bytes (leading '1' chars)
+        let hex = num.toString(16);
+        if(hex.length % 2)
+            hex = '0' + hex;
+        let bytes = Buffer.from(hex,'hex');
+        if(num==0n)
+            bytes = Buffer.alloc(0);
+        let leading = 0;
+        while(leading<str.length && str[leading]=='1')
+            leading++;
+        let data = Buffer.concat([Buffer.alloc(leading), bytes]);
+        // Last 4 bytes are a double-SHA256 checksum over the payload
+        if(data.length<5)
+            return false;
+        let payload  = data.subarray(0, data.length-4);
+        let checksum = data.subarray(data.length-4);
+        let hash = crypto.createHash('sha256').update(crypto.createHash('sha256').update(payload).digest()).digest();
+        if(!hash.subarray(0,4).equals(checksum))
+            return false;
+        return payload;
+    }
+
+    // Decode a bech32/bech32m string (BIP-173/BIP-350) and return
+    // { hrp, version, program } for a valid segwit address, or false
+    bech32Decode(address){
+        let str = String(address);
+        // Reject mixed case, then work in lowercase (all-uppercase is allowed)
+        if(str!=str.toLowerCase() && str!=str.toUpperCase())
+            return false;
+        str = str.toLowerCase();
+        if(str.length<8 || str.length>90)
+            return false;
+        // Split on the last '1' separator
+        let pos = str.lastIndexOf('1');
+        if(pos<1 || pos+7>str.length)
+            return false;
+        let hrp  = str.substring(0,pos);
+        let data = [];
+        for(let char of str.substring(pos+1)){
+            let value = BECH32_CHARSET.indexOf(char);
+            if(value==-1)
+                return false;
+            data.push(value);
+        }
+        // Verify the BCH checksum (BIP-173 polymod over expanded hrp + data)
+        let chk = 1;
+        let values = [];
+        for(let i=0; i<hrp.length; i++)
+            values.push(hrp.charCodeAt(i)>>5);
+        values.push(0);
+        for(let i=0; i<hrp.length; i++)
+            values.push(hrp.charCodeAt(i)&31);
+        values = values.concat(data);
+        const GEN = [0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3];
+        for(let value of values){
+            let top = chk>>25;
+            chk = ((chk&0x1ffffff)<<5)^value;
+            for(let i=0; i<5; i++)
+                if((top>>i)&1)
+                    chk ^= GEN[i];
+        }
+        // Witness version is the first data value; remaining values (minus the
+        // 6 checksum chars) are the witness program in 5-bit groups
+        let version = data[0];
+        if(version>16)
+            return false;
+        // Segwit v0 uses the bech32 constant, v1+ uses bech32m (BIP-350)
+        if(chk!=(version==0 ? BECH32_CONST : BECH32M_CONST))
+            return false;
+        // Convert the witness program from 5-bit to 8-bit groups (no padding bits set)
+        let bits = 0, acc = 0, program = [];
+        for(let value of data.slice(1, data.length-6)){
+            acc  = (acc<<5)|value;
+            bits += 5;
+            while(bits>=8){
+                bits -= 8;
+                program.push((acc>>bits)&0xff);
+            }
+        }
+        if(bits>=5 || ((acc<<(8-bits))&0xff))
+            return false;
+        // Witness program length rules (BIP-141): 2-40 bytes, v0 exactly 20 or 32
+        if(program.length<2 || program.length>40)
+            return false;
+        if(version==0 && program.length!=20 && program.length!=32)
+            return false;
+        return { hrp: hrp, version: version, program: program };
+    }
+
+    // Handle validating that an address is a real crypto address on the given
+    // COIN + NETWORK (defaults to the configured COIN/NETWORK — pass a coin
+    // explicitly for cross-chain destinations like a SWAP GET_ADDRESS).
+    // Performs full base58check (version byte + checksum) and bech32/bech32m
+    // validation so checksum typos and wrong-network addresses are rejected
+    // instead of becoming unspendable destinations.
+    isCryptoAddress(address, coin, network){
+        if(this.isNull(address))
+            return false;
+        let coins  = ADDRESS_PARAMS[(coin) ? coin : this.config['COIN']];
+        let params = (coins) ? coins[(network) ? network : this.config['NETWORK']] : false;
+        if(!params)
+            return false;
+        let str = String(address);
+        // Segwit address (only on coins with a bech32 HRP, e.g. not DOGE)
+        if(params.hrp && str.toLowerCase().startsWith(params.hrp + '1')){
+            let decoded = this.bech32Decode(str);
+            return (decoded && decoded.hrp==params.hrp) ? true : false;
+        }
+        // Base58check address (P2PKH / P2SH) — payload is version byte + hash160
+        let payload = this.base58CheckDecode(str);
+        if(!payload || payload.length!=21)
+            return false;
+        return (payload[0]==params.p2pkh || payload[0]==params.p2sh);
     }
 
     // Detect a contract's derived ledger address (e.g. "C:BTC:500"). Contracts ARE
@@ -509,8 +652,8 @@ class Utility {
     // same-chain token ORDER). It is NOT a real on-chain address: callers MUST keep
     // rejecting it anywhere native coin must actually be paid out (every DISPENSER,
     // and the native-coin side of an ORDER), since a synthetic address can't receive
-    // a UTXO. Format-only check (mirrors isCryptoAddress) — see contract address
-    // derivation in actions/execute.js (`'C:' + CHAIN + ':' + index`).
+    // a UTXO. Format-only check — see contract address derivation in
+    // actions/execute.js (`'C:' + CHAIN + ':' + index`).
     isContractAddress(address){
         return /^C:[A-Z]+:[0-9]+$/.test(String(address));
     }

@@ -21,7 +21,7 @@ const Collect = require('../../../src/actions/collect.js');
 describe('Collect (COLLECT) @regression @tier3', function () {
     let indexer, actionsCtx, handler;
 
-    const SOURCE = '1SourceAddressXXXXXXXXXXXXXXXYs6gYt';
+    const SOURCE = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
 
     function addCollectDbStubs(db) {
         db.getActiveStakeBySource  = sinon.stub().resolves({ stake_index: 1 });

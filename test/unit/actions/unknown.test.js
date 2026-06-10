@@ -61,7 +61,7 @@ describe('Unknown action handler @regression @tier3', function () {
     // ─── addAddressTicker called ──────────────────────────────────────
 
     it('adds SOURCE to the addresses list', async function () {
-        const data = createBaseData({ ACTION: 'UNKNOWN', SOURCE: '1SourceAddressXXXXXXXXXXXXXXXYs6gYt' });
+        const data = createBaseData({ ACTION: 'UNKNOWN', SOURCE: 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH' });
         await handler.parse(null, data, null);
         const addresses = indexer.util.getAddressesList();
         assert.ok(Object.keys(addresses).includes(data['SOURCE']), 'SOURCE should be in addresses list');

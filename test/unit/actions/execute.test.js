@@ -21,7 +21,7 @@ const Execute = require('../../../src/actions/execute.js');
 describe('Execute (EXECUTE) @regression @tier2', function () {
     let indexer, actionsCtx, handler;
 
-    const SOURCE   = '1SourceAddressXXXXXXXXXXXXXXXYs6gYt';
+    const SOURCE   = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
     const CONTRACT = 5;
 
     function addExecuteStubs(db) {

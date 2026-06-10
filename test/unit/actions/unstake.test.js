@@ -24,7 +24,7 @@ const Unstake = require('../../../src/actions/unstake.js');
 // Constants
 // ---------------------------------------------------------------------------
 
-const SOURCE = '1SourceAddressXXXXXXXXXXXXXXXYs6gYt';
+const SOURCE = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
 const PUBKEY = 'a'.repeat(64);
 const BLOCK  = 100;
 

@@ -172,14 +172,29 @@ describe('Tier 1 - Validation functions @tier1', function () {
             ), { numRuns: NUM_RUNS });
         });
 
-        it('returns true only for lengths 26-35 and 42', function () {
+        it('accepts generated valid addresses and rejects invalid ones', function () {
+            const { cryptoAddress, invalidAddress } = require('../generators/addresses');
+            fc.assert(fc.property(
+                cryptoAddress(),
+                (address) => {
+                    assert.strictEqual(util.isCryptoAddress(address), true);
+                }
+            ), { numRuns: NUM_RUNS });
+            fc.assert(fc.property(
+                invalidAddress(),
+                (address) => {
+                    assert.strictEqual(util.isCryptoAddress(address), false);
+                }
+            ), { numRuns: NUM_RUNS });
+        });
+
+        it('rejects random strings (no checksum collision)', function () {
             fc.assert(fc.property(
                 fc.string({ minLength: 0, maxLength: 100 }),
                 (address) => {
-                    const result = util.isCryptoAddress(address);
-                    const len = address.length;
-                    const expectedValid = (len >= 26 && len <= 35) || len === 42;
-                    assert.strictEqual(result, expectedValid);
+                    // A random string passing full base58check/bech32 validation
+                    // would require a 1-in-2^32 checksum collision
+                    assert.strictEqual(util.isCryptoAddress(address), false);
                 }
             ), { numRuns: NUM_RUNS });
         });

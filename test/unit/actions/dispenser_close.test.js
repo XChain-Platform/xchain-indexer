@@ -23,10 +23,10 @@ describe('Dispenser_Close action handler @regression @tier2', function () {
     function makeDispenser(overrides) {
         return {
             ACTION_INDEX: 50,
-            SOURCE: '1SourceAddressXXXXXXXXXXXXXXXYs6gYt',
+            SOURCE: 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH',
             GIVE_TICK: 'TEST',
             GIVE_REMAINING: '200',
-            GET_ADDRESS: '1SourceAddressXXXXXXXXXXXXXXXYs6gYt',
+            GET_ADDRESS: 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH',
             ...overrides,
         };
     }
@@ -82,7 +82,7 @@ describe('Dispenser_Close action handler @regression @tier2', function () {
     });
 
     it('credits remaining tokens to sweep destination when available', async function () {
-        const SWEEP_DEST = '1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev';
+        const SWEEP_DEST = 'mqmJDcs5nXFHrj9q7a2G5sBVmjcQTDdUZp';
         const dispenser = makeDispenser({ GIVE_REMAINING: '150' });
         indexer.indexerDb.getDispenserInfo.resolves(dispenser);
         indexer.indexerDb.getSweepDestination.resolves(SWEEP_DEST);
@@ -112,7 +112,7 @@ describe('Dispenser_Close action handler @regression @tier2', function () {
     // ─── Ownership dispenser closure paths (lines 77-89) ──────────────────────
 
     it('ownership dispenser: clearTokenEscrow when escrow matches and destination is SOURCE', async function () {
-        const SOURCE = '1SourceAddressXXXXXXXXXXXXXXXYs6gYt';
+        const SOURCE = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
         const dispenser = makeDispenser({ GIVE_OWNERSHIP: 1, ACTION_INDEX: 50, SOURCE });
         indexer.indexerDb.getDispenserInfo.resolves(dispenser);
         indexer.indexerDb.getSweepDestination.resolves(null);
@@ -128,8 +128,8 @@ describe('Dispenser_Close action handler @regression @tier2', function () {
     });
 
     it('ownership dispenser: transferTokenOwnership when escrow matches and destination differs from SOURCE', async function () {
-        const SOURCE   = '1SourceAddressXXXXXXXXXXXXXXXYs6gYt';
-        const DEST     = '1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev';
+        const SOURCE   = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
+        const DEST     = 'mqmJDcs5nXFHrj9q7a2G5sBVmjcQTDdUZp';
         const dispenser = makeDispenser({ GIVE_OWNERSHIP: 1, ACTION_INDEX: 50, SOURCE });
         indexer.indexerDb.getDispenserInfo.resolves(dispenser);
         indexer.indexerDb.getSweepDestination.resolves(DEST);  // sweep → destination != SOURCE
@@ -146,7 +146,7 @@ describe('Dispenser_Close action handler @regression @tier2', function () {
     });
 
     it('ownership dispenser: no action when escrow does not match (already cleared by DISPENSE)', async function () {
-        const SOURCE = '1SourceAddressXXXXXXXXXXXXXXXYs6gYt';
+        const SOURCE = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
         const dispenser = makeDispenser({ GIVE_OWNERSHIP: 1, ACTION_INDEX: 50, SOURCE });
         indexer.indexerDb.getDispenserInfo.resolves(dispenser);
         indexer.indexerDb.getSweepDestination.resolves(null);
@@ -163,7 +163,7 @@ describe('Dispenser_Close action handler @regression @tier2', function () {
     });
 
     it('canceller address is used as destination when no sweep and canceller set', async function () {
-        const CANCELLER = '1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev';
+        const CANCELLER = 'mqmJDcs5nXFHrj9q7a2G5sBVmjcQTDdUZp';
         const dispenser = makeDispenser({ GIVE_REMAINING: '100' });
         indexer.indexerDb.getDispenserInfo.resolves(dispenser);
         indexer.indexerDb.getSweepDestination.resolves(null);

@@ -38,7 +38,7 @@ function makeActionsCtx(indexer) {
     };
 }
 
-const SOURCE = '1SourceAddressXXXXXXXXXXXXXXXYs6gYt';
+const SOURCE = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
 
 function makeMintableToken(overrides = {}) {
     return createTokenInfo(Object.assign({

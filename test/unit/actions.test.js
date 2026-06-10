@@ -50,14 +50,14 @@ function makeProtocolChanges({ defined = true, enabled = true } = {}) {
  */
 function makeTx(overrides = {}) {
     return {
-        source:      '1SourceAddressXXXXXXXXXXXXXXXYs6gYt',
-        destination: '1DestAddressXXXXXXXXXXXXXXXXXaKc5Z',
+        source:      'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH',
+        destination: 'mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM',
         amount:      '0.00000000',
         tx_hash:     'a'.repeat(64),
         vout:        0,
         block_index: 100,
         block_time:  1700000000,
-        data:        'SEND|0|TEST|100|1DestAddressXXXXXXXXXXXXXXXXXaKc5Z',
+        data:        'SEND|0|TEST|100|mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM',
         ...overrides,
     };
 }

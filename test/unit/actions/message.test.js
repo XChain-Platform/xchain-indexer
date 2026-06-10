@@ -18,7 +18,7 @@ const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
 const Message = require('../../../src/actions/message.js');
 
 // A valid BTC-format destination address (P2PKH on mainnet; util.isCryptoAddress accepts it)
-const VALID_DEST = '1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev';
+const VALID_DEST = 'mqmJDcs5nXFHrj9q7a2G5sBVmjcQTDdUZp';
 
 describe('Message action handler @regression @tier3', function () {
     let indexer, actionsCtx, handler;

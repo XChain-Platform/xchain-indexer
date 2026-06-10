@@ -43,7 +43,7 @@ const DecoderSeeder = require('../setup/decoder-seeder');
 const { initIndexer, processBlocks, destroyIndexer } = require('../setup/indexer-launcher');
 const helpers = require('../setup/assertion-helpers');
 
-const DEPLOYER = 'mCtRctReorgDeployerXXXXXXXXXX1';
+const DEPLOYER = 'n391LfrxqfPYEdeLqB1QgHUubTjkPbmZ19';
 const PUBKEY   = 'ab'.repeat(32); // 64-hex signing pubkey for STAKE v3
 const T0  = 1700000000;
 const BLK = 600;

@@ -24,7 +24,7 @@ const Withdraw = require('../../../src/actions/withdraw.js');
 // Constants
 // ---------------------------------------------------------------------------
 
-const SOURCE           = '1SourceAddressXXXXXXXXXXXXXXXYs6gYt';
+const SOURCE           = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
 const CONTRACT_INDEX   = '7';
 const TICK             = 'TEST';
 const BLOCK            = 100;

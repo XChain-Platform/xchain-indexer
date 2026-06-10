@@ -67,7 +67,7 @@ describe('Mutation — Tier 1: Validation Functions @tier1', function () {
 
         it('UOI-003: isCryptoAddress negated — valid address rejected', function () {
             operators.UOI.negateIsCryptoAddress(util);
-            const result = util.isCryptoAddress('1BoogrfDADPLQpq8LMASmWQUVYDp4t2hF9'); // 34 chars
+            const result = util.isCryptoAddress('mtr6NtB5KJRAxTX5AbuRtV7S4FF2PZJXUs'); // 34 chars
             registry.record({
                 id: 'UOI-003', operator: 'UOI', target: 'Utility.isCryptoAddress',
                 mutation: '!isCryptoAddress — negated return', file: 'src/utility.js',
@@ -122,44 +122,47 @@ describe('Mutation — Tier 1: Validation Functions @tier1', function () {
 
     describe('BCR: Boundary Conditions in Validation', function () {
 
-        it('BCR-010: isCryptoAddress len>=26 → len>26 (26-char address rejected)', function () {
-            operators.BCR.cryptoAddrGt26(util);
-            const addr26 = 'a'.repeat(26);
-            const result = util.isCryptoAddress(addr26);
+        it('BCR-010: isCryptoAddress checksum verification removed (garbage accepted)', function () {
+            operators.BCR.cryptoAddrNoChecksum(util);
+            // Base58 charset, address length, but no valid checksum
+            const garbage = 'a'.repeat(30);
+            const result = util.isCryptoAddress(garbage);
             registry.record({
                 id: 'BCR-010', operator: 'BCR', target: 'Utility.isCryptoAddress',
-                mutation: 'len >= 26 → len > 26', file: 'src/utility.js',
-                status: result !== true ? 'killed' : 'survived',
-                killedBy: result !== true ? `26-char addr returned ${result}` : '',
-                description: 'isCryptoAddress rejects 26-char address at boundary',
+                mutation: 'base58check checksum verification removed', file: 'src/utility.js',
+                status: result === true ? 'killed' : 'survived',
+                killedBy: result === true ? `checksum-less garbage returned ${result} (real impl returns false)` : '',
+                description: 'mutant accepts checksum-invalid garbage that the real validator rejects',
             });
-            assert.notStrictEqual(result, true, 'BCR-010 survived');
+            assert.strictEqual(result, true, 'BCR-010 mutant not observable');
         });
 
-        it('BCR-011: isCryptoAddress len<=35 → len<35 (35-char address rejected)', function () {
-            operators.BCR.cryptoAddrLt35(util);
-            const addr35 = 'a'.repeat(35);
-            const result = util.isCryptoAddress(addr35);
+        it('BCR-011: isCryptoAddress version-byte check removed (wrong network accepted)', function () {
+            operators.BCR.cryptoAddrNoVersionByte(util);
+            // Valid mainnet P2PKH — must be rejected on regtest by the real impl
+            const mainnetAddr = '17Roegnpwqam4FwwXsM47bX3Tf1jFyyKMt';
+            const result = util.isCryptoAddress(mainnetAddr);
             registry.record({
                 id: 'BCR-011', operator: 'BCR', target: 'Utility.isCryptoAddress',
-                mutation: 'len <= 35 → len < 35', file: 'src/utility.js',
-                status: result !== true ? 'killed' : 'survived',
-                killedBy: result !== true ? `35-char addr returned ${result}` : '',
-                description: 'isCryptoAddress rejects 35-char address at boundary',
+                mutation: 'network version-byte comparison removed', file: 'src/utility.js',
+                status: result === true ? 'killed' : 'survived',
+                killedBy: result === true ? `wrong-network addr returned ${result} (real impl returns false)` : '',
+                description: 'mutant accepts a wrong-network address that the real validator rejects',
             });
-            assert.notStrictEqual(result, true, 'BCR-011 survived');
+            assert.strictEqual(result, true, 'BCR-011 mutant not observable');
         });
 
-        it('BCR-012: isCryptoAddress len==42 removed (Segwit rejected)', function () {
-            operators.BCR.cryptoAddrNot42(util);
-            const addr42 = 'a'.repeat(42);
-            const result = util.isCryptoAddress(addr42);
+        it('BCR-012: isCryptoAddress segwit branch removed (bech32 rejected)', function () {
+            operators.BCR.cryptoAddrNoSegwit(util);
+            // Valid regtest P2WPKH — real impl accepts it, mutant rejects it
+            const segwitAddr = 'bcrt1qe6l04hhwjg98fmggptdm0cemj6lm7hhwzahaul';
+            const result = util.isCryptoAddress(segwitAddr);
             registry.record({
                 id: 'BCR-012', operator: 'BCR', target: 'Utility.isCryptoAddress',
-                mutation: 'len == 42 check removed', file: 'src/utility.js',
+                mutation: 'bech32/bech32m branch removed', file: 'src/utility.js',
                 status: result !== true ? 'killed' : 'survived',
-                killedBy: result !== true ? `42-char addr returned ${result}` : '',
-                description: 'isCryptoAddress Segwit check removed',
+                killedBy: result !== true ? `valid segwit addr returned ${result}` : '',
+                description: 'mutant rejects a valid segwit address that the real validator accepts',
             });
             assert.notStrictEqual(result, true, 'BCR-012 survived');
         });
@@ -179,16 +182,16 @@ describe('Mutation — Tier 1: Validation Functions @tier1', function () {
             assert.notStrictEqual(result, true, 'BCR-013 survived');
         });
 
-        it('BCR-014: isCryptoAddress 30-char address unaffected by boundary mutations', function () {
-            operators.BCR.cryptoAddrGt26(util);
-            // 30 chars: > 26 = true, >= 26 = true — equivalent at non-boundary
-            const addr30 = 'a'.repeat(30);
-            const result = util.isCryptoAddress(addr30);
+        it('BCR-014: isCryptoAddress valid P2PKH unaffected by version-byte mutant', function () {
+            operators.BCR.cryptoAddrNoVersionByte(util);
+            // A correct-network address passes under both the mutant and the real impl
+            const addr = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
+            const result = util.isCryptoAddress(addr);
             registry.record({
                 id: 'BCR-014', operator: 'BCR', target: 'Utility.isCryptoAddress',
-                mutation: 'len > 26 (non-boundary 30 chars)', file: 'src/utility.js',
+                mutation: 'version-byte mutant on correct-network address (non-boundary)', file: 'src/utility.js',
                 status: result === true ? 'survived' : 'killed',
-                killedBy: result === true ? '' : `30-char addr returned ${result}`,
+                killedBy: result === true ? '' : `valid addr returned ${result}`,
                 description: 'isCryptoAddress non-boundary — equivalent mutant',
             });
             // Expected: equivalent
@@ -386,7 +389,7 @@ describe('Mutation — Tier 1: Validation Functions @tier1', function () {
 
         it('SDL-012: isCryptoAddress — both length ranges deleted (always false)', function () {
             sinon.stub(util, 'isCryptoAddress').returns(false);
-            const result = util.isCryptoAddress('1BoogrfDADPLQpq8LMASmWQUVYDp4t2hF9');
+            const result = util.isCryptoAddress('mtr6NtB5KJRAxTX5AbuRtV7S4FF2PZJXUs');
             registry.record({
                 id: 'SDL-012', operator: 'SDL', target: 'Utility.isCryptoAddress',
                 mutation: 'all length checks removed', file: 'src/utility.js',
@@ -444,7 +447,7 @@ describe('Mutation — Tier 1: Validation Functions @tier1', function () {
 
         it('EMR-011: isCryptoAddress returns null (falsy)', function () {
             operators.EMR.cryptoAddressNull(util);
-            const result = util.isCryptoAddress('1BoogrfDADPLQpq8LMASmWQUVYDp4t2hF9');
+            const result = util.isCryptoAddress('mtr6NtB5KJRAxTX5AbuRtV7S4FF2PZJXUs');
             registry.record({
                 id: 'EMR-011', operator: 'EMR', target: 'Utility.isCryptoAddress',
                 mutation: 'returns null', file: 'src/utility.js',

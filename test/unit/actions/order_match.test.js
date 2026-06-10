@@ -37,14 +37,14 @@ function makeActionsCtx(indexer) {
 function makeOrderInfo(overrides = {}) {
     return {
         ACTION_INDEX:   1,
-        SOURCE:         '1SourceAddressXXXXXXXXXXXXXXXYs6gYt',
+        SOURCE:         'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH',
         GIVE_COIN:      'BTC',
         GIVE_TICK:      'RAREPEPE',
         GIVE_REMAINING: '10',
         GET_COIN:       'BTC',
         GET_TICK:       'PEPECASH',
         GET_REMAINING:  '100',
-        GET_ADDRESS:    '1SourceAddressXXXXXXXXXXXXXXXYs6gYt',
+        GET_ADDRESS:    'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH',
         // GIVE_PRICE = GET_AMOUNT / GIVE_AMOUNT = 100/10 = 10  (PEPECASH per RAREPEPE)
         GIVE_PRICE:     '10',
         // GET_PRICE  = GIVE_AMOUNT / GET_AMOUNT = 10/100 = 0.1 (RAREPEPE per PEPECASH)
@@ -59,14 +59,14 @@ function makeOrderInfo(overrides = {}) {
 function makeMatchInfo(overrides = {}) {
     return {
         ACTION_INDEX:   2,
-        SOURCE:         '1DestAddressXXXXXXXXXXXXXXXXXaKc5Z',
+        SOURCE:         'mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM',
         GIVE_COIN:      'BTC',
         GIVE_TICK:      'PEPECASH',
         GIVE_REMAINING: '100',
         GET_COIN:       'BTC',
         GET_TICK:       'RAREPEPE',
         GET_REMAINING:  '10',
-        GET_ADDRESS:    '1DestAddressXXXXXXXXXXXXXXXXXaKc5Z',
+        GET_ADDRESS:    'mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM',
         // GET_PRICE = GIVE_AMOUNT / GET_AMOUNT = 100/10 = 10 — must be <= orderInfo.GIVE_PRICE (10)
         GET_PRICE:      '10',
         ALLOW_LIST:     null,
@@ -263,7 +263,7 @@ describe('Order_Match action handler @regression @tier2', function () {
     });
 
     it('skips match when orderInfo BLOCK_LIST includes match GET_ADDRESS', async function () {
-        const matchAddr = '1DestAddressXXXXXXXXXXXXXXXXXaKc5Z';
+        const matchAddr = 'mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM';
         indexer.indexerDb.getOrderInfo.resolves(makeOrderInfo({ BLOCK_LIST: '6' }));
         indexer.indexerDb.findOrderMatches.resolves([makeMatchInfo({ GET_ADDRESS: matchAddr })]);
         // BLOCK_LIST includes the match GET_ADDRESS
@@ -288,8 +288,8 @@ describe('Order_Match action handler @regression @tier2', function () {
     });
 
     it('processes match when both allow lists include the respective GET_ADDRESSes', async function () {
-        const orderAddr = '1SourceAddressXXXXXXXXXXXXXXXYs6gYt';
-        const matchAddr = '1DestAddressXXXXXXXXXXXXXXXXXaKc5Z';
+        const orderAddr = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
+        const matchAddr = 'mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM';
 
         indexer.indexerDb.getOrderInfo.resolves(makeOrderInfo({
             ALLOW_LIST:  '5',
@@ -397,7 +397,7 @@ describe('Order_Match action handler @regression @tier2', function () {
             GET_REMAINING:  '100',
             GIVE_PRICE:     '100000',  // 1 PEPECASH per 0.00001 BTC → high ratio
             GET_PRICE:      '0.00001',
-            SOURCE:         '1SourceAddressXXXXXXXXXXXXXXXYs6gYt',
+            SOURCE:         'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH',
         });
         const nativeMatchInfo = makeMatchInfo({
             GIVE_TICK:      'PEPECASH',
@@ -405,7 +405,7 @@ describe('Order_Match action handler @regression @tier2', function () {
             GET_TICK:       null,   // native coin side
             GET_REMAINING:  '0.001',
             GET_PRICE:      '100000',
-            GET_ADDRESS:    '1DestAddressXXXXXXXXXXXXXXXXXaKc5Z',
+            GET_ADDRESS:    'mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM',
         });
 
         indexer.indexerDb.getOrderInfo.resolves(nativeOrderInfo);
@@ -433,8 +433,8 @@ describe('Order_Match action handler @regression @tier2', function () {
             GET_REMAINING:  '0.001',
             GIVE_PRICE:     '0.0001',
             GET_PRICE:      '10000',
-            SOURCE:         '1SourceAddressXXXXXXXXXXXXXXXYs6gYt',
-            GET_ADDRESS:    '1SourceAddressXXXXXXXXXXXXXXXYs6gYt',
+            SOURCE:         'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH',
+            GET_ADDRESS:    'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH',
         });
         const matchWithNullGive = makeMatchInfo({
             GIVE_TICK:      null,  // offering native coin
@@ -442,8 +442,8 @@ describe('Order_Match action handler @regression @tier2', function () {
             GET_TICK:       'RAREPEPE',
             GET_REMAINING:  '10',
             GET_PRICE:      '0.0001',
-            SOURCE:         '1DestAddressXXXXXXXXXXXXXXXXXaKc5Z',
-            GET_ADDRESS:    '1DestAddressXXXXXXXXXXXXXXXXXaKc5Z',
+            SOURCE:         'mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM',
+            GET_ADDRESS:    'mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM',
         });
 
         indexer.indexerDb.getOrderInfo.resolves(orderWithNullGet);
@@ -639,7 +639,7 @@ describe('Order_Match action handler @regression @tier2', function () {
 
         it('logs allow/block list skip in debug mode (lines 195-197)', async function () {
             orderMatch.debug = true;
-            const matchAddr = '1DestAddressXXXXXXXXXXXXXXXXXaKc5Z';
+            const matchAddr = 'mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM';
             indexer.indexerDb.getOrderInfo.resolves(makeOrderInfo({ BLOCK_LIST: '6' }));
             indexer.indexerDb.findOrderMatches.resolves([makeMatchInfo({ GET_ADDRESS: matchAddr })]);
             indexer.indexerDb.getList.resolves([matchAddr]);
@@ -687,8 +687,8 @@ describe('Order_Match action handler @regression @tier2', function () {
     // ─── Token ALLOW_LIST / BLOCK_LIST (lines 72-77) ─────────────────────────
 
     it('token GET_TICK ALLOW_LIST set → getList called for token allow list (line 72 true branch)', async function () {
-        const orderAddr = '1SourceAddressXXXXXXXXXXXXXXXYs6gYt';
-        const matchAddr = '1DestAddressXXXXXXXXXXXXXXXXXaKc5Z';
+        const orderAddr = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
+        const matchAddr = 'mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM';
 
         // getTokenInfo for GET_TICK returns a tokenInfo with ALLOW_LIST set
         indexer.indexerDb.getTokenInfo
@@ -717,7 +717,7 @@ describe('Order_Match action handler @regression @tier2', function () {
     });
 
     it('token GIVE_TICK BLOCK_LIST set → skip when GET_ADDRESS is in block list (line 77 true branch)', async function () {
-        const matchAddr = '1DestAddressXXXXXXXXXXXXXXXXXaKc5Z';
+        const matchAddr = 'mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM';
 
         indexer.indexerDb.getTokenInfo
             .withArgs('RAREPEPE', sinon.match.any, sinon.match.any)
@@ -753,7 +753,7 @@ describe('Order_Match action handler @regression @tier2', function () {
     });
 
     it('giveTokenInfo BLOCK_LIST set → skip when GET_ADDRESS is in give-token block list (line 77, line 190 true branch)', async function () {
-        const matchAddr = '1DestAddressXXXXXXXXXXXXXXXXXaKc5Z';
+        const matchAddr = 'mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM';
 
         // giveTokenInfo has BLOCK_LIST set; GET_TICK tokenInfo has none
         indexer.indexerDb.getTokenInfo
@@ -776,7 +776,7 @@ describe('Order_Match action handler @regression @tier2', function () {
     });
 
     it('matchInfo BLOCK_LIST set → skip when order GET_ADDRESS is in match block list (lines 193-194 true branch)', async function () {
-        const orderAddr = '1SourceAddressXXXXXXXXXXXXXXXYs6gYt';
+        const orderAddr = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
 
         indexer.indexerDb.getTokenInfo
             .withArgs('RAREPEPE', sinon.match.any, sinon.match.any)
@@ -858,7 +858,7 @@ describe('Order_Match action handler @regression @tier2', function () {
                 GET_REMAINING:  '0.001',
                 GIVE_PRICE:     '0.0001',
                 GET_PRICE:      '10000',
-                GET_ADDRESS:    '1SourceAddressXXXXXXXXXXXXXXXYs6gYt',
+                GET_ADDRESS:    'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH',
             });
             const matchPaysNative = makeMatchInfo({
                 GIVE_TICK:      'PEPECASH', // non-null GIVE_TICK — not caught by first two elif branches
@@ -866,7 +866,7 @@ describe('Order_Match action handler @regression @tier2', function () {
                 GET_TICK:       'RAREPEPE',
                 GET_REMAINING:  '10',
                 GET_PRICE:      '0.0001',
-                GET_ADDRESS:    '1DestAddressXXXXXXXXXXXXXXXXXaKc5Z',
+                GET_ADDRESS:    'mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM',
             });
 
             indexer.indexerDb.getOrderInfo.resolves(orderWantsNative);
@@ -897,7 +897,7 @@ describe('Order_Match action handler @regression @tier2', function () {
                 GET_REMAINING:  '10',
                 GIVE_PRICE:     '10',
                 GET_PRICE:      '0.1',
-                GET_ADDRESS:    '1SourceAddressXXXXXXXXXXXXXXXYs6gYt',
+                GET_ADDRESS:    'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH',
             });
             const matchWantsNative = makeMatchInfo({
                 GIVE_TICK:      'RAREPEPE', // non-null GIVE_TICK
@@ -905,7 +905,7 @@ describe('Order_Match action handler @regression @tier2', function () {
                 GET_TICK:       null,        // matchInfo wants native coin
                 GET_REMAINING:  '100',
                 GET_PRICE:      '10',
-                GET_ADDRESS:    '1DestAddressXXXXXXXXXXXXXXXXXaKc5Z',
+                GET_ADDRESS:    'mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM',
             });
 
             indexer.indexerDb.getOrderInfo.resolves(orderPaysCoin);

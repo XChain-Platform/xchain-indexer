@@ -20,7 +20,7 @@ const Sleep = require('../../../src/actions/sleep.js');
 describe('Sleep @regression @tier3', function () {
     let indexer, actionsCtx, handler;
 
-    const SOURCE = '1SourceAddressXXXXXXXXXXXXXXXYs6gYt';
+    const SOURCE = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
     const OWNER  = SOURCE;
     const OTHER  = '1OtherAddressXXXXXXXXXXXXXXXXVtKwXp';
 

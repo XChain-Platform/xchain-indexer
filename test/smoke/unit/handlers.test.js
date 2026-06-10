@@ -117,7 +117,7 @@ describe('Smoke: handler instantiation and basic action processing', function ()
         indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
 
         // SEND format 0 — VERSION|TICK|AMOUNT|DESTINATION|MEMO
-        const params = ['0', 'TEST', '100', '1BoogrfDADPLQpq8LMASmWQUVYDp4t2hF9', ''];
+        const params = ['0', 'TEST', '100', 'mtr6NtB5KJRAxTX5AbuRtV7S4FF2PZJXUs', ''];
         const data   = createBaseData({ ACTION: 'SEND', FORMAT: 0, BLOCK_INDEX: 100 });
 
         await handler.parse(params, data, false);

@@ -47,8 +47,8 @@ describe('Order action handler @regression @tier2', function () {
     let order;
 
     // Default addresses used in tests
-    const OWNER_ADDR = '1SourceAddressXXXXXXXXXXXXXXXYs6gYt';
-    const OTHER_ADDR = '1DestAddressXXXXXXXXXXXXXXXXXaKc5Z';
+    const OWNER_ADDR = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
+    const OTHER_ADDR = 'mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM';
 
     // Block time fixed; expiration must be strictly greater than this
     const BLOCK_TIME  = 1700000000;

@@ -23,7 +23,7 @@ const VALID_PUBKEY2 = 'b'.repeat(64);
 describe('Delegate (DELEGATE) @regression @tier2', function () {
     let indexer, actionsCtx, handler;
 
-    const SOURCE = '1SourceAddressXXXXXXXXXXXXXXXYs6gYt';
+    const SOURCE = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
 
     function addDelegateStubs(db) {
         db.getActiveStakeBySource   = sinon.stub().resolves({ stake_index: 1 });

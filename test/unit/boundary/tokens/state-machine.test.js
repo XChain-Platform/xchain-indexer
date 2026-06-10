@@ -62,8 +62,8 @@ function makeIssueParams(overrides = {}) {
         m.MEMO];
 }
 
-const SOURCE    = '1SourceAddressXXXXXXXXXXXXXXXYs6gYt';
-const OTHER     = '1BoogrfDADPLQpq8LMASmWQUVYDp4t2hF9';
+const SOURCE    = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
+const OTHER     = 'mtr6NtB5KJRAxTX5AbuRtV7S4FF2PZJXUs';
 const LOW_BLOCK = 100; // below fee activation (862633)
 
 // ---------------------------------------------------------------------------

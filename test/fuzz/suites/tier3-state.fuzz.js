@@ -67,7 +67,7 @@ describe('Tier 3 - State transition edge cases @tier3', function () {
                 fc.constantFrom(
                     'mAddr2XXXXXXXXXXXXXXXXXXXXXXX2',
                     'mAddr3XXXXXXXXXXXXXXXXXXXXXXX3',
-                    '1BoogrfDADPLQpq8LMASmWQUVYDp4t2hF9',
+                    'mtr6NtB5KJRAxTX5AbuRtV7S4FF2PZJXUs',
                 ),
                 async (amount, dest) => {
                     const params = ['0', 'TEST', amount, dest, ''];

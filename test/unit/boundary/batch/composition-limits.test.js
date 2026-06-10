@@ -19,8 +19,8 @@ const sinon  = require('sinon');
 const { createMockIndexer, createBaseData, createTokenInfo } = require('../../../fixtures/mocks');
 const Batch = require('../../../../src/actions/batch.js');
 
-const SOURCE = '1SourceAddressXXXXXXXXXXXXXXXYs6gYt';
-const DEST   = '1BoogrfDADPLQpq8LMASmWQUVYDp4t2hF9';
+const SOURCE = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
+const DEST   = 'mtr6NtB5KJRAxTX5AbuRtV7S4FF2PZJXUs';
 
 function makeActionsCtx(indexer) {
     return {

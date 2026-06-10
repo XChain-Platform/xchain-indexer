@@ -39,8 +39,8 @@ const { getToken, getLastActionIndexByType } = require('../setup/assertion-helpe
 const { COINS, withCoin, processBlocks } = require('../setup/multi-chain');
 const Utility = require('../../../src/utility.js');
 
-const A1 = 'mMcAddr1XXXXXXXXXXXXXXXXXXXXX1'; // 30 chars
-const A2 = 'mMcAddr2XXXXXXXXXXXXXXXXXXXXX2';
+const A1 = 'mpAEYsk8fhxph1f8P9k7nYxfixstUr6LV9'; // 30 chars
+const A2 = 'mgNErQKtZ6V6ZZLrbdmtLBd5bHJzBDDC3L';
 const T  = 1700000000;
 
 async function balanceOf(address, tick) {
@@ -128,7 +128,7 @@ describe('Multi-chain action processing @regression @tier1', function () {
     // fee destination — so the behavior is already covered when the launch address is set.
     // -----------------------------------------------------------------------
     describe('fee-payment mode', function () {
-        const FEE_DEST = 'mFeeDestXXXXXXXXXXXXXXXXXXXXXX9'; // any real (non-placeholder) address
+        const FEE_DEST = 'mwEp2rWfnJuo9UEu71P7avKuEJZZvom8S5'; // any real (non-placeholder) address
 
         function utilFor(coin) {
             process.env.INDEXER_COIN    = coin;

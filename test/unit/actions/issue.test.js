@@ -170,7 +170,7 @@ describe('Issue handler @regression @tier1', function () {
         });
 
         it('MINT_SUPPLY with TRANSFER_SUPPLY triggers debit+credit to transfer address', async function () {
-            const dest   = '1BoogrfDADPLQpq8LMASmWQUVYDp4t2hF9';
+            const dest   = 'mtr6NtB5KJRAxTX5AbuRtV7S4FF2PZJXUs';
             const params = makeFormat0Params({
                 TICK:            'MYTOKEN',
                 MAX_SUPPLY:      '1000',
@@ -185,7 +185,7 @@ describe('Issue handler @regression @tier1', function () {
         });
 
         it('TRANSFER moves OWNER to transfer address', async function () {
-            const newOwner = '1BoogrfDADPLQpq8LMASmWQUVYDp4t2hF9';
+            const newOwner = 'mtr6NtB5KJRAxTX5AbuRtV7S4FF2PZJXUs';
             const params   = makeFormat0Params({ TICK: 'MYTOKEN', TRANSFER: newOwner });
             const data     = makeData({ FORMAT: 0, BLOCK_INDEX: LOW_BLOCK });
 
@@ -356,7 +356,7 @@ describe('Issue handler @regression @tier1', function () {
         });
 
         it('child TICK where parent exists and SOURCE is parent owner → valid', async function () {
-            const source     = '1SourceAddressXXXXXXXXXXXXXXXYs6gYt';
+            const source     = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
             const parentInfo = createTokenInfo({ TICK: 'PARENT', OWNER: source });
 
             // First call: parent lookup, second call: child token lookup
@@ -373,7 +373,7 @@ describe('Issue handler @regression @tier1', function () {
         });
 
         it('child TICK where SOURCE is not parent owner → invalid', async function () {
-            const source     = '1SourceAddressXXXXXXXXXXXXXXXYs6gYt';
+            const source     = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
             const parentInfo = createTokenInfo({ TICK: 'PARENT', OWNER: '1OtherOwnerXXXXXXXXXXXXXXXXXXXXXXXX' });
 
             indexer.indexerDb.getTokenInfo
@@ -423,7 +423,7 @@ describe('Issue handler @regression @tier1', function () {
         });
 
         it('DECIMALS cannot be changed once supply is issued', async function () {
-            const source    = '1SourceAddressXXXXXXXXXXXXXXXYs6gYt';
+            const source    = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
             const tokenInfo = createTokenInfo({ TICK: 'MYTOKEN', OWNER: source, DECIMALS: 0, SUPPLY: '100' });
 
             indexer.indexerDb.getTokenInfo.resolves(tokenInfo);
@@ -454,7 +454,7 @@ describe('Issue handler @regression @tier1', function () {
         });
 
         it('MAX_SUPPLY below current SUPPLY → invalid', async function () {
-            const source    = '1SourceAddressXXXXXXXXXXXXXXXYs6gYt';
+            const source    = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
             const tokenInfo = createTokenInfo({ TICK: 'MYTOKEN', OWNER: source, SUPPLY: '500' });
 
             indexer.indexerDb.getTokenInfo.resolves(tokenInfo);
@@ -469,7 +469,7 @@ describe('Issue handler @regression @tier1', function () {
         });
 
         it('MAX_SUPPLY locked and attempting to change → invalid', async function () {
-            const source    = '1SourceAddressXXXXXXXXXXXXXXXYs6gYt';
+            const source    = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
             const tokenInfo = createTokenInfo({ TICK: 'MYTOKEN', OWNER: source, MAX_SUPPLY: '1000', LOCK_MAX_SUPPLY: 1, SUPPLY: '100' });
 
             indexer.indexerDb.getTokenInfo.resolves(tokenInfo);
@@ -497,7 +497,7 @@ describe('Issue handler @regression @tier1', function () {
 
             const params = makeFormat0Params({ TICK: 'MYTOKEN' });
             const data   = makeData({ FORMAT: 0, BLOCK_INDEX: LOW_BLOCK,
-                SOURCE: '1SourceAddressXXXXXXXXXXXXXXXYs6gYt' });
+                SOURCE: 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH' });
 
             await handler.parse(params, data, null);
 
@@ -505,7 +505,7 @@ describe('Issue handler @regression @tier1', function () {
         });
 
         it('re-issuance by owner → valid', async function () {
-            const source    = '1SourceAddressXXXXXXXXXXXXXXXYs6gYt';
+            const source    = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
             const tokenInfo = createTokenInfo({ TICK: 'MYTOKEN', OWNER: source });
 
             indexer.indexerDb.getTokenInfo.resolves(tokenInfo);
@@ -526,7 +526,7 @@ describe('Issue handler @regression @tier1', function () {
     describe('lock immutability', function () {
 
         it('attempting to unlock LOCK_MINT (set from 1 to 0) → invalid', async function () {
-            const source    = '1SourceAddressXXXXXXXXXXXXXXXYs6gYt';
+            const source    = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
             const tokenInfo = createTokenInfo({ TICK: 'MYTOKEN', OWNER: source, LOCK_MINT: 1 });
 
             indexer.indexerDb.getTokenInfo.resolves(tokenInfo);
@@ -541,7 +541,7 @@ describe('Issue handler @regression @tier1', function () {
         });
 
         it('LOCK_MAX_SUPPLY can be set from 0 to 1 (valid lock) when supply exists', async function () {
-            const source    = '1SourceAddressXXXXXXXXXXXXXXXYs6gYt';
+            const source    = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
             const tokenInfo = createTokenInfo({ TICK: 'MYTOKEN', OWNER: source, LOCK_MAX_SUPPLY: 0, SUPPLY: '100' });
 
             indexer.indexerDb.getTokenInfo.resolves(tokenInfo);
@@ -557,7 +557,7 @@ describe('Issue handler @regression @tier1', function () {
         });
 
         it('LOCK_DESCRIPTION prevents description changes', async function () {
-            const source    = '1SourceAddressXXXXXXXXXXXXXXXYs6gYt';
+            const source    = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
             const tokenInfo = createTokenInfo({ TICK: 'MYTOKEN', OWNER: source, LOCK_DESCRIPTION: 1, DESCRIPTION: 'original' });
 
             indexer.indexerDb.getTokenInfo.resolves(tokenInfo);
@@ -571,7 +571,7 @@ describe('Issue handler @regression @tier1', function () {
         });
 
         it('LOCK_MAX_MINT prevents MAX_MINT changes', async function () {
-            const source    = '1SourceAddressXXXXXXXXXXXXXXXYs6gYt';
+            const source    = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
             const tokenInfo = createTokenInfo({ TICK: 'MYTOKEN', OWNER: source, LOCK_MAX_MINT: 1, MAX_MINT: '100' });
 
             indexer.indexerDb.getTokenInfo.resolves(tokenInfo);
@@ -585,7 +585,7 @@ describe('Issue handler @regression @tier1', function () {
         });
 
         it('MINT_SUPPLY locked by LOCK_MINT_SUPPLY → invalid', async function () {
-            const source    = '1SourceAddressXXXXXXXXXXXXXXXYs6gYt';
+            const source    = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
             const tokenInfo = createTokenInfo({ TICK: 'MYTOKEN', OWNER: source, LOCK_MINT_SUPPLY: 1 });
 
             indexer.indexerDb.getTokenInfo.resolves(tokenInfo);
@@ -708,7 +708,7 @@ describe('Issue handler @regression @tier1', function () {
     describe('TRANSFER_SUPPLY == SOURCE is discarded', function () {
 
         it('TRANSFER_SUPPLY equal to SOURCE is removed silently', async function () {
-            const source = '1SourceAddressXXXXXXXXXXXXXXXYs6gYt';
+            const source = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
             const params = makeFormat0Params({ TICK: 'MYTOKEN', MAX_SUPPLY: '1000', MINT_SUPPLY: '100', TRANSFER_SUPPLY: source });
             const data   = makeData({ FORMAT: 0, BLOCK_INDEX: LOW_BLOCK, SOURCE: source });
 
@@ -828,7 +828,7 @@ describe('Issue handler @regression @tier1', function () {
     describe('format 1 — brief description update', function () {
 
         it('valid format 1 description update → valid', async function () {
-            const source    = '1SourceAddressXXXXXXXXXXXXXXXYs6gYt';
+            const source    = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
             const tokenInfo = createTokenInfo({ TICK: 'MYTOKEN', OWNER: source });
 
             indexer.indexerDb.getTokenInfo.resolves(tokenInfo);
@@ -843,7 +843,7 @@ describe('Issue handler @regression @tier1', function () {
         });
 
         it('format 1 with locked DESCRIPTION → invalid', async function () {
-            const source    = '1SourceAddressXXXXXXXXXXXXXXXYs6gYt';
+            const source    = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
             const tokenInfo = createTokenInfo({ TICK: 'MYTOKEN', OWNER: source, LOCK_DESCRIPTION: 1, DESCRIPTION: 'original' });
 
             indexer.indexerDb.getTokenInfo.resolves(tokenInfo);
@@ -864,7 +864,7 @@ describe('Issue handler @regression @tier1', function () {
     describe('format 3 — lock params update', function () {
 
         it('valid format 3 lock update sets lock fields', async function () {
-            const source    = '1SourceAddressXXXXXXXXXXXXXXXYs6gYt';
+            const source    = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
             const tokenInfo = createTokenInfo({ TICK: 'MYTOKEN', OWNER: source, SUPPLY: '100' });
 
             indexer.indexerDb.getTokenInfo.resolves(tokenInfo);
@@ -953,7 +953,7 @@ describe('Issue handler @regression @tier1', function () {
     describe('CALLBACK validations', function () {
 
         it('CALLBACK_BLOCK in the past → invalid', async function () {
-            const source    = '1SourceAddressXXXXXXXXXXXXXXXYs6gYt';
+            const source    = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
             const tokenInfo = createTokenInfo({ TICK: 'MYTOKEN', OWNER: source });
 
             indexer.indexerDb.getTokenInfo.resolves(tokenInfo);
@@ -967,7 +967,7 @@ describe('Issue handler @regression @tier1', function () {
         });
 
         it('CALLBACK_BLOCK locked and attempting to change → invalid', async function () {
-            const source    = '1SourceAddressXXXXXXXXXXXXXXXYs6gYt';
+            const source    = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
             const tokenInfo = createTokenInfo({ TICK: 'MYTOKEN', OWNER: source, LOCK_CALLBACK: 1, CALLBACK_BLOCK: '500' });
 
             indexer.indexerDb.getTokenInfo.resolves(tokenInfo);

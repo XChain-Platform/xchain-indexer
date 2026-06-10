@@ -41,8 +41,8 @@ function makeActionsCtx(indexer) {
 }
 
 const LOW_BLOCK   = 100;
-const SOURCE      = '1SourceAddressXXXXXXXXXXXXXXXYs6gYt';
-const DESTINATION = '1BoogrfDADPLQpq8LMASmWQUVYDp4t2hF9';
+const SOURCE      = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
+const DESTINATION = 'mtr6NtB5KJRAxTX5AbuRtV7S4FF2PZJXUs';
 
 // Issue format 0 param builder
 function makeIssueParams(overrides = {}) {

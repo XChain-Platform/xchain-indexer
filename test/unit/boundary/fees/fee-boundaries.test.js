@@ -60,7 +60,7 @@ function makeIssueParams(overrides = {}) {
 
 // XCHAIN tick_id used in all fee scenarios
 const XCHAIN_TICK_ID = 99;
-const SOURCE = '1SourceAddressXXXXXXXXXXXXXXXYs6gYt';
+const SOURCE = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
 
 describe('Fee boundary tests @regression @tier1', function () {
     let indexer, actionsCtx, handler;
