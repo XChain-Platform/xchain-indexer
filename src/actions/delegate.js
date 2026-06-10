@@ -20,7 +20,8 @@
  *   v2 — Capability revoke (remove a previously delegated capability signing key)
  *   v3 — Contract-targeted revoke (remove a previously delegated contract-targeted signing key)
  *
- * BTC chain only.
+ * Capability flavors (v0/v2): BTC chain only.
+ * Contract-targeted flavors (v1/v3): any chain (BTC, LTC, DOGE).
  *
  * FORMATS:
  *   v0 - VERSION|NEW_SIGNING_PUBKEY                                     (capability rotate)
