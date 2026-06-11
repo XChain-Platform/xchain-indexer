@@ -39,7 +39,7 @@ if (fs.existsSync(_envPath)) {
 const DB_HOST = process.env.TEST_DB_HOST || _envVars.INDEXER_DB_HOST || '127.0.0.1';
 const DB_PORT = parseInt(process.env.TEST_DB_PORT || _envVars.INDEXER_DB_PORT || '3306');
 const DB_USER = process.env.TEST_DB_USER || _envVars.INDEXER_DB_USER || 'root';
-const DB_PASS = process.env.TEST_DB_PASS || _envVars.INDEXER_DB_PASS || 'test';
+const DB_PASS = process.env.TEST_DB_PASS || _envVars.INDEXER_DB_PASS || '';
 const DECODER_DB = process.env.TEST_DECODER_DB || 'xchain_test_decoder';
 const INDEXER_DB = process.env.TEST_INDEXER_DB || 'xchain_test_indexer';
 

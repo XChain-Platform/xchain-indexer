@@ -77,7 +77,7 @@ docker start <container_name_or_id>
 docker exec -it <container_name_or_id> /bin/bash
 
 
-CREATE USER 'xchain-node'@'%' IDENTIFIED BY 'XChain4life';
+CREATE USER 'xchain-node'@'%' IDENTIFIED BY '<password>';
 GRANT ALL PRIVILEGES ON *.* TO 'xchain-node'@'%';
 
 ```
@@ -101,5 +101,5 @@ https://i.gyazo.com/5cede373f9cda23b8cca12f16bd1008f.png
 
 xchain-node 
 db user: root
-db pass: XChain4life
+db pass: <password>
 
