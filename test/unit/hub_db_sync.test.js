@@ -286,6 +286,97 @@ describe('HubDbSync stream-position watermark @regression @tier3', function () {
     });
 });
 
+describe('HubDbSync bootstrap pagination + retry @regression @tier2', function () {
+
+    // Regression: prod incident 2026-06-11 — _bootstrapTable fetched ONE page and
+    // treated a full page as "not drained", so a hub table larger than PAGE_LIMIT
+    // (prod price_snapshots: 13k+ rows) could never drain; the heartbeat gate
+    // never opened, the stream watermark froze at 0, and the BTC mainnet indexer
+    // deferred every tip block in 60s loops (the watermark valve exists precisely
+    // to break the indexer↔oracle-anchor deadlock at the tip). And in WS mode no
+    // poll loop exists, so a partial bootstrap was never re-attempted either.
+
+    const PAGE = 10000;
+
+    function makeBootstrapSync() {
+        const doQuery = sinon.stub().resolves([{ max_id: null }]);
+        const sync = new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test', pollInterval: 50 });
+        sinon.stub(sync, '_applyRow').resolves();
+        sinon.stub(sync, '_refreshPriceSyncHeight').resolves();
+        sinon.stub(sync, '_refreshOracleSyncTimestamp').resolves();
+        sinon.stub(sync, '_refreshMatchSyncTimestamp').resolves();
+        sinon.stub(sync, '_releaseSnapshotWaiters').resolves();
+        return sync;
+    }
+
+    function fullPage(startId) {
+        return Array.from({ length: PAGE }, (_, i) => ({ id: startId + i }));
+    }
+
+    it('paginates past a full page and drains with the last page watermark', async function () {
+        const sync = makeBootstrapSync();
+        const httpGet = sinon.stub(sync, '_httpGet');
+        httpGet.onCall(0).resolves({ rows: fullPage(1),        watermark: 111 });
+        httpGet.onCall(1).resolves({ rows: [{ id: PAGE + 1 }], watermark: 222 });
+
+        const mark = await sync._bootstrapTable('price_snapshots');
+        assert.strictEqual(mark, 222, 'must drain and return the LAST page watermark');
+        assert.strictEqual(httpGet.callCount, 2);
+        assert.ok(httpGet.secondCall.args[0].includes('since_id=' + PAGE),
+            'second page must resume from the first page cursor: ' + httpGet.secondCall.args[0]);
+        assert.strictEqual(sync._applyRow.callCount, PAGE + 1, 'every row from every page applied');
+    });
+
+    it('a single short page still drains in one fetch', async function () {
+        const sync = makeBootstrapSync();
+        sinon.stub(sync, '_httpGet').resolves({ rows: [{ id: 1 }, { id: 2 }], watermark: 99 });
+        assert.strictEqual(await sync._bootstrapTable('oracle_prices'), 99);
+    });
+
+    it('returns null (gate closed) when any row fails to apply, even after paging', async function () {
+        const sync = makeBootstrapSync();
+        sync._applyRow.onFirstCall().rejects(new Error('ER_SOMETHING'));
+        const httpGet = sinon.stub(sync, '_httpGet');
+        httpGet.onCall(0).resolves({ rows: fullPage(1),        watermark: 111 });
+        httpGet.onCall(1).resolves({ rows: [{ id: PAGE + 1 }], watermark: 222 });
+        assert.strictEqual(await sync._bootstrapTable('price_snapshots'), null);
+    });
+
+    it('a partial bootstrap schedules a retry (WS mode has no poll loop)', async function () {
+        const clock = sinon.useFakeTimers();
+        try {
+            const sync = makeBootstrapSync();
+            sync.running = true;
+            const bootstrapTable = sinon.stub(sync, '_bootstrapTable');
+            bootstrapTable.onCall(0).resolves(null);    // price_snapshots fails round 1
+            bootstrapTable.resolves(123);               // everything drains afterwards
+
+            await sync._bootstrapAll();
+            assert.strictEqual(sync._bootstrapDrained, false, 'gate closed after partial drain');
+
+            await clock.tickAsync(sync.pollIntervalMs + 1);
+            assert.strictEqual(sync._bootstrapDrained, true, 'retry must re-attempt and open the gate');
+            assert.strictEqual(sync.streamWatermark, 123);
+        } finally {
+            clock.restore();
+        }
+    });
+
+    it('does not schedule retries once drained or when stopped', async function () {
+        const clock = sinon.useFakeTimers();
+        try {
+            const sync = makeBootstrapSync();
+            sync.running = false;                       // stopped: no retry even on failure
+            const bootstrapTable = sinon.stub(sync, '_bootstrapTable').resolves(null);
+            await sync._bootstrapAll();
+            await clock.tickAsync(sync.pollIntervalMs * 3);
+            assert.strictEqual(bootstrapTable.callCount, 5, 'one pass over the 5 tables, no retries');
+        } finally {
+            clock.restore();
+        }
+    });
+});
+
 describe('HubDbSync _applyRow column filtering @regression @tier2', function () {
 
     // Regression: fleet incident 2026-06-11 — the hub's state_checkpoints gained

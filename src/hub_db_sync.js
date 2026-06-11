@@ -217,24 +217,42 @@ class HubDbSync {
     // snapshot returned fewer rows than its page limit and applied cleanly),
     // the mirror provably holds everything the hub had at the OLDEST of the
     // per-table response watermarks — advance the stream watermark to it and
-    // open the heartbeat gate. Any partial drain leaves the gate closed; the
-    // next poll/reconnect re-attempts.
+    // open the heartbeat gate.
+    //
+    // A partial drain leaves the gate closed and SCHEDULES A RETRY. The retry is
+    // load-bearing in WS mode: there is no poll loop while the socket is healthy,
+    // so without it one failed table would freeze the watermark at 0 until the
+    // next reconnect — which on a stable connection is never (prod incident
+    // 2026-06-11: BTC mainnet deferred every tip block in 60s loops because the
+    // single-page bootstrap could not drain a >10k-row price_snapshots table and
+    // nothing ever re-attempted it).
     async _bootstrapAll() {
-        let marks = [];
-        let allDrained = true;
-        for (let table of ['price_snapshots', 'oracle_prices'].concat(CROSS_CHAIN_TABLES, HUB_STATE_TABLES)) {
-            try {
-                let mark = await this._bootstrapTable(table);
-                if (mark === null) allDrained = false;
-                else marks.push(mark);
-            } catch (err) {
-                allDrained = false;
-                console.warn('HubDbSync: ' + table + ' bootstrap failed:', err);
+        if (this._bootstrapping) return;                     // reconnect + retry timer may overlap
+        this._bootstrapping = true;
+        try {
+            let marks = [];
+            let allDrained = true;
+            for (let table of ['price_snapshots', 'oracle_prices'].concat(CROSS_CHAIN_TABLES, HUB_STATE_TABLES)) {
+                try {
+                    let mark = await this._bootstrapTable(table);
+                    if (mark === null) allDrained = false;
+                    else marks.push(mark);
+                } catch (err) {
+                    allDrained = false;
+                    console.warn('HubDbSync: ' + table + ' bootstrap failed:', err);
+                }
             }
-        }
-        if (allDrained && marks.length > 0) {
-            this._bootstrapDrained = true;
-            this._advanceWatermark(Math.min.apply(null, marks));
+            if (allDrained && marks.length > 0) {
+                this._bootstrapDrained = true;
+                this._advanceWatermark(Math.min.apply(null, marks));
+            } else if (this.running) {
+                console.warn('HubDbSync: bootstrap partial — retrying in ' + this.pollIntervalMs + 'ms (heartbeat gate stays closed)');
+                setTimeout(() => {
+                    if (this.running && !this._bootstrapDrained) this._bootstrapAll();
+                }, this.pollIntervalMs);
+            }
+        } finally {
+            this._bootstrapping = false;
         }
     }
 
@@ -255,6 +273,7 @@ class HubDbSync {
     // (_bootstrapAll) only advances the global watermark once every table drains.
     async _bootstrapTable(table) {
         const PAGE_LIMIT = 10000;
+        const MAX_PAGES  = 1000;                             // runaway backstop (10M rows)
         // Determine the highest existing ID in the local copy so we only fetch newer rows
         let lastId = 0;
         try {
@@ -264,20 +283,38 @@ class HubDbSync {
             // Table may not exist yet — bootstrap starts at 0
         }
 
-        let path = '/hub-db/snapshot/' + table + '?since_id=' + lastId + '&limit=' + PAGE_LIMIT;
-        let result = await this._httpGet(path);
-        if (!result || !Array.isArray(result.rows)) return null;
-
+        // Page until a SHORT page. The previous single-fetch version treated any
+        // full page as "not drained" and never fetched the rest — on a hub table
+        // larger than one page (prod price_snapshots: 13k+ rounds) the drain was
+        // structurally impossible, so the heartbeat gate never opened and the
+        // stream watermark froze at 0 (the 2026-06-11 tip-deferral incident).
         let applied = 0;
         let applyErrors = 0;
-        for (let row of result.rows) {
-            try {
-                await this._applyRow(table, row);
-                applied++;
-            } catch (err) {
-                applyErrors++;
-                console.warn('HubDbSync: failed to apply row in ' + table + ':', err);
+        let lastPageCount = 0;
+        let watermark = null;
+        for (let page = 0; page < MAX_PAGES; page++) {
+            let path = '/hub-db/snapshot/' + table + '?since_id=' + lastId + '&limit=' + PAGE_LIMIT;
+            let result = await this._httpGet(path);
+            if (!result || !Array.isArray(result.rows)) return null;
+
+            for (let row of result.rows) {
+                try {
+                    await this._applyRow(table, row);
+                    applied++;
+                } catch (err) {
+                    applyErrors++;
+                    console.warn('HubDbSync: failed to apply row in ' + table + ':', err);
+                }
+                // Advance the cursor unconditionally — a row that failed to apply is
+                // counted in applyErrors (gate stays closed; retry re-fetches it).
+                let rowId = Number(row.id);
+                if (Number.isFinite(rowId) && rowId > lastId) lastId = rowId;
             }
+            lastPageCount = result.rows.length;
+            // The LAST page's watermark is the hub's most recent "complete through ts"
+            // statement covering everything fetched so far.
+            if (Number.isFinite(Number(result.watermark))) watermark = Number(result.watermark);
+            if (result.rows.length < PAGE_LIMIT) break;      // short page = drained
         }
         console.log('HubDbSync: bootstrapped ' + applied + ' rows into ' + table);
 
@@ -316,10 +353,10 @@ class HubDbSync {
         // snapshot-presence — re-evaluate the snapshot barrier on either cross-chain table.
         if (table === 'cross_chain_matches' || table === 'capability_snapshots') await this._releaseSnapshotWaiters();
 
-        // Fully drained only if the page wasn't full and everything applied.
-        let fullyDrained = result.rows.length < PAGE_LIMIT && applyErrors === 0;
+        // Fully drained only if the final page wasn't full and everything applied.
+        let fullyDrained = lastPageCount < PAGE_LIMIT && applyErrors === 0;
         if (!fullyDrained) return null;
-        return Number.isFinite(Number(result.watermark)) ? Number(result.watermark) : 0;
+        return watermark !== null ? watermark : 0;
     }
 
     // Recompute the highest finalized price block present in the local price_snapshots
