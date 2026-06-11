@@ -236,8 +236,19 @@ class XChainIndexer {
             if(!this.util.isNull(decoderReorg) && decoderReorg.id !== lastProcessedReorgId){
                 console.log("Detected block reorganization at block #",decoderReorg.block_index);
                 await this.indexerDb.createReorg(decoderReorg.block_index, decoderReorg.id);
-                if(!this.util.isNull(lastIndexerBlock) && lastIndexerBlock >= decoderReorg.block_index)
+                if(!this.util.isNull(lastIndexerBlock) && lastIndexerBlock >= decoderReorg.block_index){
                     await this.rollback.rollback(decoderReorg.block_index);
+                    // Re-read the resume cursor: rollback() deleted every block >=
+                    // the reorg point, and lastIndexerBlock was read BEFORE the
+                    // rollback. Resuming from the stale pre-rollback tip skips the
+                    // new chain's version of the rolled-back range permanently —
+                    // observed live as single missing blocks rows after depth-1
+                    // reorgs (DOGE mainnet 6241887 et al.), each of which also
+                    // silently restarts the ledger/actions/contract hash chains
+                    // (getBlockHashes hashes the next block with previous_hash
+                    // undefined, which JSON.stringify drops).
+                    lastIndexerBlock = await this.indexerDb.getBlockIndex('indexer', 'last');
+                }
             }
 
             // If indexer has no parsed blocks, set last indexer block to first decoder block-1 
