@@ -95,7 +95,8 @@ const FEDERATION_READ_METHODS = new Set([
     'getactivevalidators',
     'getcapabilityvalidators',
     'getpendingattestation_requests',
-    'getopencrosschainorders'
+    'getopencrosschainorders',
+    'getactionconfirmations'
 ]);
 
 // Start up the API
@@ -463,6 +464,48 @@ async function startApi(){
             } catch (err) {
                 console.error('getopencrosschainorders error:', err);
                 return { error: 'failed to look up cross-chain orders' };
+            }
+        },
+
+        // Existence + confirmation depth for a single action. Lets the xchain-hub
+        // federation verify that a proposed cross-chain source action really exists
+        // on this chain — and how deep it is buried — before co-signing an
+        // attestation, instead of trusting the proposer's claim. Returns the latest
+        // indexed block in the same round-trip so depth and tip are one snapshot.
+        // Body: { action_index }
+        async getactionconfirmations({action_index}){
+            if(!indexer.indexerDb)
+                return { error: 'indexer database not ready' };
+            let idx = Number(action_index);
+            if(!Number.isInteger(idx) || idx <= 0)
+                return { error: 'action_index must be a positive integer' };
+            try {
+                let latest = await indexer.indexerDb.getLatestBlockIndex();
+                let row    = await indexer.indexerDb.getActionInfo(idx);
+                if(!row){
+                    return {
+                        coin:               indexer.config['COIN'],
+                        network:            indexer.config['NETWORK'],
+                        action_index:       idx,
+                        exists:             false,
+                        latest_block_index: latest,
+                        confirmations:      0
+                    };
+                }
+                let blockIndex = Number(row.block_index);
+                return {
+                    coin:               indexer.config['COIN'],
+                    network:            indexer.config['NETWORK'],
+                    action_index:       idx,
+                    exists:             true,
+                    action:             row.action,
+                    block_index:        blockIndex,
+                    latest_block_index: latest,
+                    confirmations:      (latest >= blockIndex) ? (latest - blockIndex + 1) : 0
+                };
+            } catch (err) {
+                console.error('getactionconfirmations error:', err);
+                return { error: 'failed to look up action confirmations' };
             }
         },
 

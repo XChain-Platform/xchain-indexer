@@ -5362,6 +5362,26 @@ class Database {
         }
     }
 
+    // Get existence + block height + type for a given action_index. Serves the
+    // getactionconfirmations API method, which lets the xchain-hub federation
+    // confirm that a proposed cross-chain source action really exists on this
+    // chain (and at what depth) before co-signing an attestation.
+    async getActionInfo(action_index){
+        let args = [action_index];
+        let sql  = `SELECT
+                        a1.action_index,
+                        a1.block_index,
+                        a2.action
+                    FROM
+                        actions a1
+                        INNER JOIN index_actions a2 ON (a2.id=a1.action_id)
+                    WHERE
+                        a1.action_index=?
+                    LIMIT 1`;
+        let results = await this.doQuery(sql, args);
+        return (results && results.length) ? results[0] : null;
+    }
+
     // Get action type for a given action_index
     async getActionType(action_index){
         let type = null;
