@@ -483,4 +483,110 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
         });
 
     });
+
+    // ─── Constructor emissions (processed through the EXECUTE pipeline) ────
+
+    describe('constructor emissions', function () {
+
+        function wireEmissionDeps(emittedActions, vmGas = 1000) {
+            indexer.indexerDb.createContractEmission = sinon.stub().resolves();
+            actionsCtx.vm = makeVm({
+                execute: sinon.stub().resolves({
+                    success: true, gasUsed: vmGas,
+                    stateChanges: [], stateDeletes: [],
+                    emittedActions,
+                }),
+            });
+            actionsCtx.actionExecute = {
+                processEmission:       sinon.stub().callsFake(async (emission) => { emission.resultActionIndex = 999; }),
+                _processSlashEmission: sinon.stub().resolves(),
+            };
+            handler = new Deploy(actionsCtx);
+            return actionsCtx;
+        }
+
+        it('routes constructor emissions through Execute.processEmission with a root context', async function () {
+            const ctx = wireEmissionDeps([{ action: 'SEND', params: { tick: 'T', quantity: '1', destination: SOURCE } }]);
+
+            const data = deployData({ FORMAT: 0, ACTION_INDEX: 42 });
+            await handler.parse(['0', VALID_CODE_HEX, '100000', 'init'], data, null);
+
+            assert.strictEqual(data['STATUS'], 'valid');
+            sinon.assert.calledOnce(ctx.actionExecute.processEmission);
+            const [emission, execCtx, position] = ctx.actionExecute.processEmission.firstCall.args;
+            assert.strictEqual(emission.action, 'SEND');
+            assert.strictEqual(position, 0);
+            assert.strictEqual(execCtx['CONTRACT_ACTION_INDEX'], 42); // the new contract emits
+            assert.strictEqual(execCtx['ACTION_INDEX'], 42);          // DEPLOY is the executing action
+            assert.strictEqual(execCtx['CALL_DEPTH'], 0);             // constructor = root execution
+            assert.strictEqual(execCtx['SOURCE'], SOURCE);            // deployer pays fees
+            // Emission link recorded against the deployment
+            sinon.assert.calledOnce(indexer.indexerDb.createContractEmission);
+            const link = indexer.indexerDb.createContractEmission.firstCall.args[0];
+            assert.strictEqual(link['EXECUTION_INDEX'], 42);
+            assert.strictEqual(link['ACTION_INDEX'], 999);
+        });
+
+        it('passes txHash / actionIndex / callDepth=0 to the constructor VM run', async function () {
+            const ctx = wireEmissionDeps([]);
+            const data = deployData({ FORMAT: 0, ACTION_INDEX: 7 });
+            await handler.parse(['0', VALID_CODE_HEX, '100000', 'init'], data, null);
+            const vmArgs = ctx.vm.execute.firstCall.args[0];
+            assert.strictEqual(vmArgs.txHash, data['TX_HASH']);
+            assert.strictEqual(vmArgs.actionIndex, 7);
+            assert.strictEqual(vmArgs.callDepth, 0);
+        });
+
+        it('nets a cross-contract callee refund out of the deployment gas', async function () {
+            const ctx = wireEmissionDeps(
+                [{ action: 'EXECUTE', params: { contractIndex: 9, method: 'm', gasLimit: 50000 } }],
+                60000 // constructor metered gas (includes the 500+50000 reservation)
+            );
+            ctx.actionExecute.processEmission = sinon.stub().callsFake(async (emission) => {
+                emission.resultActionIndex = 999;
+                emission.gasUnusedSubtree = 30000;
+            });
+            handler = new Deploy(actionsCtx);
+
+            const data = deployData({ FORMAT: 0, ACTION_INDEX: 8 });
+            await handler.parse(['0', VALID_CODE_HEX, '100000', 'init'], data, null);
+
+            assert.strictEqual(data['STATUS'], 'valid');
+            const schedule = indexer.config['GAS_SCHEDULE'];
+            const deployGas = schedule.VM_DEPLOY_BASE + Buffer.byteLength(VALID_CODE, 'utf8') * schedule.VM_DEPLOY_PER_BYTE;
+            const row = indexer.indexerDb.createContractExecution.firstCall.args[0];
+            assert.strictEqual(row['GAS_USED'], deployGas + 60000 - 30000,
+                'deployment gas must net the callee refund');
+        });
+
+        it('a failed constructor emission rolls back and fails the deployment', async function () {
+            const ctx = wireEmissionDeps([{ action: 'SEND', params: {} }]);
+            ctx.actionExecute.processEmission = sinon.stub().rejects(new Error('SEND: invalid: insufficient funds'));
+            handler = new Deploy(actionsCtx);
+
+            const data = deployData({ FORMAT: 0, ACTION_INDEX: 9 });
+            await handler.parse(['0', VALID_CODE_HEX, '100000', 'init'], data, null);
+
+            sinon.assert.calledOnce(indexer.indexerDb.rollbackToSavepoint);
+            assert.ok(indexer.indexerDb.deleteContract.called);
+            assert.ok(String(data['STATUS']).startsWith('invalid'));
+        });
+
+        it('routes SLASH emissions to the inline handler (never the generic router)', async function () {
+            const ctx = wireEmissionDeps([{ action: 'SLASH', params: { contractIndex: 10, pubkey: 'a'.repeat(64), token: 'T', amount: '1' } }]);
+            const data = deployData({ FORMAT: 0, ACTION_INDEX: 10 });
+            await handler.parse(['0', VALID_CODE_HEX, '100000', 'init'], data, null);
+            sinon.assert.calledOnce(ctx.actionExecute._processSlashEmission);
+            sinon.assert.notCalled(ctx.actionExecute.processEmission);
+        });
+
+        it('uses a deployment-unique savepoint name (emitted EXECUTEs nest their own)', async function () {
+            wireEmissionDeps([]);
+            const data = deployData({ FORMAT: 0, ACTION_INDEX: 11 });
+            await handler.parse(['0', VALID_CODE_HEX, '100000', 'init'], data, null);
+            assert.ok(indexer.indexerDb.createSavepoint.calledWith('vm_constructor_11'),
+                'got: ' + JSON.stringify(indexer.indexerDb.createSavepoint.firstCall && indexer.indexerDb.createSavepoint.firstCall.args));
+        });
+
+    });
 });

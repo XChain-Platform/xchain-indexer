@@ -244,6 +244,15 @@ class Deploy {
                 caller:           data['SOURCE'],
                 contractAddress:  contractAddress,
                 contractIndex:    data['ACTION_INDEX'],
+                // The tx hash + this DEPLOY's action_index anchor the deterministic
+                // attestation request_id (sha256(txHash:actionIndex:contractIndex:
+                // emissionIndex)) — without them a constructor-emitted ATTEST would
+                // derive over empty fields and fail the handler's re-derivation.
+                txHash:           data['TX_HASH'],
+                actionIndex:      data['ACTION_INDEX'],
+                // A constructor is a root execution: emitted cross-contract calls
+                // run at depth 1, same as calls emitted by a user EXECUTE.
+                callDepth:        0,
                 blockContext: {
                     height:    data['BLOCK_INDEX'],
                     timestamp: data['BLOCK_TIME'],
@@ -315,9 +324,16 @@ class Deploy {
         if(constructorError)
             await this.indexerDb.deleteContract(data['ACTION_INDEX']);
 
-        // Process constructor state changes and emissions if successful
+        // Process constructor state changes and emissions if successful.
+        // Emissions route through the SAME pipeline as EXECUTE emissions
+        // (Execute.processEmission): real action rows, contract-derived SOURCE,
+        // cross-contract EXECUTE support with depth/gasLimit threading. The
+        // savepoint name is unique per deployment because an emitted EXECUTE
+        // nests its own vm_execute_<idx> savepoints inside this one (MariaDB
+        // destroys a re-used savepoint name — see actions/execute.js).
+        let nestedGasUnused = 0;
         if(constructorResult && constructorResult.success){
-            let savepoint = await this.indexerDb.createSavepoint('vm_constructor');
+            let savepoint = await this.indexerDb.createSavepoint('vm_constructor_' + parseInt(data['ACTION_INDEX']));
             try {
                 for(let change of constructorResult.stateChanges){
                     await this.indexerDb.createContractState({
@@ -337,15 +353,64 @@ class Deploy {
                         ACTION_INDEX:   data['ACTION_INDEX']
                     });
                 }
+
+                // Constructor emissions. executionData mirrors what an EXECUTE
+                // would carry: the new contract is the emitter, the DEPLOY's own
+                // action_index is the executing action (parent for CALL_DEPTH and
+                // the attestation request_id derivation), the deployer pays fees.
+                let emissionContext = {
+                    CONTRACT_ACTION_INDEX: data['ACTION_INDEX'],
+                    ACTION_INDEX:          data['ACTION_INDEX'],
+                    SOURCE:                data['SOURCE'],
+                    BLOCK_INDEX:           data['BLOCK_INDEX'],
+                    BLOCK_TIME:            data['BLOCK_TIME'],
+                    TX_INDEX:              data['TX_INDEX'],
+                    TX_HASH:               data['TX_HASH'],
+                    TX_VOUT:               data['TX_VOUT'],
+                    CALL_DEPTH:            0
+                };
+                for(let i = 0; i < constructorResult.emittedActions.length; i++){
+                    let emission = constructorResult.emittedActions[i];
+
+                    if(emission.action === 'SLASH'){
+                        // Inline like execute.js (never on-wire). A just-deployed
+                        // contract has no stakes, so this is a structural no-op,
+                        // kept for pipeline parity.
+                        await this.actions.actionExecute._processSlashEmission(emission, emissionContext);
+                    } else {
+                        await this.actions.actionExecute.processEmission(emission, emissionContext, i);
+                        // Bank a cross-contract callee's unused reservation for
+                        // the fee settlement below.
+                        if(emission.action === 'EXECUTE')
+                            nestedGasUnused += Number(emission.gasUnusedSubtree) || 0;
+                    }
+
+                    await this.indexerDb.createContractEmission({
+                        EXECUTION_INDEX: data['ACTION_INDEX'],
+                        EMITTED_ACTION:  emission.action,
+                        ACTION_INDEX:    emission.resultActionIndex || null,
+                        POSITION:        i
+                    });
+                }
+
                 await this.indexerDb.releaseSavepoint(savepoint);
             } catch(e){
                 await this.indexerDb.rollbackToSavepoint(savepoint);
-                // Constructor state save failed — mark deployment as failed
+                // Constructor state/emission processing failed — the whole
+                // deployment fails (no refunds; the deployer pays full gas).
+                nestedGasUnused = 0;
                 error = 'invalid: constructor state write failed: ' + e.message;
                 status = error;
                 data['STATUS'] = status;
                 await this.indexerDb.deleteContract(data['ACTION_INDEX']);
             }
+        }
+
+        // Refund unused cross-contract reservations from constructor emissions
+        // (mirrors actions/execute.js gas settlement; no-op when no emit.execute).
+        if(nestedGasUnused > 0){
+            totalGas = Math.max(0, totalGas - nestedGasUnused);
+            fee = this.util.bcmul(totalGas, this.config['GAS_PRICE'], 8);
         }
 
         // Create execution record
