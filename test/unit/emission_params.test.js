@@ -144,4 +144,50 @@ describe('Emission Params Arity (MANDATORY) @regression @tier1', function() {
             () => processEmission.call(makeStub(), { action: 'ATTEST', params: {} }, {}, undefined),
             /EMITTER_POSITION/);
     });
+
+    // ── EXECUTE (cross-contract call) ────────────────────────────────────────
+    // The EXECUTE emission format is VARIADIC (VERSION|CONTRACT_ACTION_INDEX|
+    // METHOD|PARAMS...), so it gets a dedicated arity check instead of the
+    // fixed-arity loop above: 3 fixed slots plus one slot per method param.
+
+    it('EXECUTE: buildActionParams = 3 fixed slots + variadic method params', function() {
+        const empty = buildActionParams.call(null, 'EXECUTE', {});
+        assert.strictEqual(empty.length, 3);
+        assert.strictEqual(empty[0], 0); // VERSION
+
+        const r = buildActionParams.call(null, 'EXECUTE', {
+            contractIndex: 42, method: 'onPayment', params: ['a', 'b'], gasLimit: 50000
+        });
+        assert.strictEqual(r.length, 5);
+        assert.strictEqual(r[1], 42);          // CONTRACT_ACTION_INDEX
+        assert.strictEqual(r[2], 'onPayment'); // METHOD
+        assert.strictEqual(r[3], 'a');         // PARAMS...
+        assert.strictEqual(r[4], 'b');
+        // gasLimit must NOT appear positionally — it travels via emissionData.VM_GAS_LIMIT
+        assert.ok(!r.includes(50000), 'gasLimit leaked into positional params');
+    });
+
+    // Host-side defense in depth: processEmission re-validates the depth cap and
+    // gasLimit range so an older/compromised bundled VM cannot bypass them. Both
+    // guards run before any `this` access, so a bare context suffices.
+    it('EXECUTE: processEmission throws when the depth cap would be exceeded', async function() {
+        const processEmission = Execute.prototype.processEmission;
+        await assert.rejects(
+            () => processEmission.call(makeStub(),
+                { action: 'EXECUTE', params: { contractIndex: 1, method: 'm', gasLimit: 5000 } },
+                { CALL_DEPTH: 4 }, 0),
+            /max call depth/);
+    });
+
+    it('EXECUTE: processEmission throws on an out-of-range gasLimit', async function() {
+        const processEmission = Execute.prototype.processEmission;
+        for(const gasLimit of [undefined, 4999, 1000001, 5000.5, 'lots']){
+            await assert.rejects(
+                () => processEmission.call(makeStub(),
+                    { action: 'EXECUTE', params: { contractIndex: 1, method: 'm', gasLimit } },
+                    {}, 0),
+                /gasLimit out of range/,
+                'gasLimit=' + gasLimit + ' must be rejected host-side');
+        }
+    });
 });

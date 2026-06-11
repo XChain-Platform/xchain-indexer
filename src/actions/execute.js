@@ -36,6 +36,19 @@ const ProviderRegistry = require('../attestation/providerRegistry.js');
 // Sourced from the single provider registry so the two caps cannot drift.
 const PROVIDER_DEADLINE_WINDOWS = new ProviderRegistry().getDeadlineWindows();
 
+// Gas ceiling for a top-level EXECUTE. Must match the gasCeiling the VM is
+// constructed with in actions.js. (Previously a function-local const in
+// parse(); module-scoped now that processEmission validates against it too.)
+const GAS_CEILING = 1000000;
+
+// Cross-contract call protocol constants. Canonical:
+// xchain-documentation/protocol/constants.js (VM_MAX_CALL_DEPTH /
+// VM_MIN_CALL_GAS). The VM enforces both at emit time (gateway-emit.js);
+// these host-side checks are defense in depth so an older/compromised
+// bundled VM cannot bypass them.
+const MAX_CALL_DEPTH = 4;
+const MIN_CALL_GAS   = 5000;
+
 class Execute {
 
     // Handle constructing a class instance
@@ -156,6 +169,19 @@ class Execute {
         let emittedCount = 0;
         let vmError = null;
 
+        // Per-call gas ceiling. A cross-contract callee (reached via emit.execute)
+        // runs against its caller-funded reservation (VM_GAS_LIMIT, validated in
+        // processEmission); top-level EXECUTEs and system-injected callbacks (which
+        // carry IS_EMISSION but no VM_GAS_LIMIT) use the protocol ceiling.
+        let execCeiling = (data['IS_EMISSION'] && Number.isInteger(data['VM_GAS_LIMIT']))
+            ? data['VM_GAS_LIMIT'] : GAS_CEILING;
+
+        // Unused cross-contract gas reservations accumulated from this run's
+        // emitted EXECUTEs (each callee's gasLimit minus what it was billed).
+        // Refunded at the fee settlement below; zeroed if the emission savepoint
+        // rolls back (no refunds on a failed tree).
+        let nestedGasUnused = 0;
+
         if(!error && this.actions.vm && contractInfo){
             // Load contract state from DB
             let contractState = await this.indexerDb.getContractState(data['CONTRACT_ACTION_INDEX']);
@@ -191,6 +217,13 @@ class Execute {
                     timestamp: data['BLOCK_TIME'],
                     hash:      blockHash
                 },
+                // Cross-contract call threading: the callee's ceiling is its
+                // caller-funded reservation; depth gates emit.execute recursion;
+                // actionIndex anchors the attestation request_id preimage so two
+                // nested runs of the same contract in one tx cannot collide.
+                gasCeiling:        execCeiling,
+                callDepth:         Number(data['CALL_DEPTH']) || 0,
+                actionIndex:       data['ACTION_INDEX'],
                 balances:          null, // TODO: load balances for getBalance() when needed
                 tokenInfo:         null, // TODO: load token info for getTokenInfo() when needed
                 oracleData:        oracleData,
@@ -206,9 +239,13 @@ class Execute {
             if(!vmResult.success)
                 vmError = vmResult.error;
 
-            // Process state changes + emissions atomically via DB savepoint
+            // Process state changes + emissions atomically via DB savepoint.
+            // Name is unique per execution: savepoints NEST when an emitted EXECUTE
+            // runs a callee inside this one, and MariaDB re-uses a duplicate
+            // savepoint name by DESTROYING the earlier one — a fixed 'vm_execute'
+            // would silently invalidate the outer rollback scope.
             if(vmResult.success){
-                let savepoint = await this.indexerDb.createSavepoint('vm_execute');
+                let savepoint = await this.indexerDb.createSavepoint('vm_execute_' + parseInt(data['ACTION_INDEX']));
                 try {
                     // Write state changes
                     for(let change of vmResult.stateChanges){
@@ -241,6 +278,11 @@ class Execute {
                             await this._processSlashEmission(emission, data);
                         } else {
                             await this.processEmission(emission, data, i);
+                            // Cross-contract callee finished: bank its unused
+                            // reservation (gasLimit - billed, including its own
+                            // subtree's refunds) for this run's fee settlement.
+                            if(emission.action === 'EXECUTE')
+                                nestedGasUnused += Number(emission.gasUnusedSubtree) || 0;
                         }
 
                         // Record emission link (SLASH rows carry no resultActionIndex)
@@ -258,6 +300,10 @@ class Execute {
                     await this.indexerDb.rollbackToSavepoint(savepoint);
                     vmError = 'emission failed: ' + emissionError.message;
                     emittedCount = 0;
+                    // No refunds on a failed tree: the caller pays its full metered
+                    // gas (reservations included), mirroring the existing
+                    // caller-pays-for-failed-attempt rule.
+                    nestedGasUnused = 0;
                 }
             }
         }
@@ -280,32 +326,47 @@ class Execute {
         // older bundled VM) can never make fee = gasUsed * GAS_PRICE diverge across
         // validators → fork. The family regex MUST stay identical to util.vmFailureStatus
         // (out_of_gas is included so the two regexes never drift — it is a no-op for the
-        // fee since out_of_gas already reports gasUsed == ceiling). Gas ceiling must match
-        // the gasCeiling in actions.js.
-        const GAS_CEILING = 1000000;
+        // fee since out_of_gas already reports gasUsed == ceiling). The clamp target is
+        // this run's OWN ceiling — for a cross-contract callee that is its caller-funded
+        // reservation, not the protocol ceiling (a 1M clamp against a 50k reservation
+        // would diverge the parent's refund settlement).
         if(vmFailed && /^(out_of_gas|timeout|out_of_memory|out_of_stack|out_of_resource)\b/.test(String(vmError))){
-            gasUsed = GAS_CEILING;
+            gasUsed = execCeiling;
         }
 
-        // Recalculate fee based on actual gas used
-        fee = this.util.bcmul(gasUsed, this.config['GAS_PRICE'], 8);
+        // Gas settlement. gasBilled = this run's metered usage minus the unused
+        // reservations refunded by its completed callees — by induction each
+        // callee's gasUnusedSubtree already nets ITS children, so subtracting the
+        // direct children here settles the whole subtree. Bounds (guarded anyway):
+        // 0 <= gasBilled <= gasUsed <= execCeiling.
+        let gasBilled = Math.max(0, gasUsed - nestedGasUnused);
+
+        // Recalculate fee based on billed gas
+        fee = this.util.bcmul(gasBilled, this.config['GAS_PRICE'], 8);
+
+        // Surface this run's unused reservation to the parent processEmission
+        // (only meaningful when this parse IS a cross-contract callee).
+        if(data['IS_EMISSION'] && Number.isInteger(data['VM_GAS_LIMIT']))
+            data['VM_GAS_UNUSED_SUBTREE'] = Math.max(0, execCeiling - gasBilled);
 
         // Determine final status
         let status = error ? error : (vmStatus || 'valid');
         data['STATUS'] = status;
 
         // Print status message
-        console.log("\t EXECUTE : contract=" + data['CONTRACT_ACTION_INDEX'] + ' : method=' + data['METHOD'] + ' : gas=' + gasUsed + ' : ' + data['STATUS']);
+        console.log("\t EXECUTE : contract=" + data['CONTRACT_ACTION_INDEX'] + ' : method=' + data['METHOD'] + ' : gas=' + gasBilled + ((Number(data['CALL_DEPTH']) || 0) > 0 ? ' : depth=' + data['CALL_DEPTH'] : '') + ' : ' + data['STATUS']);
 
-        // Create execution record
+        // Create execution record. GAS_USED is the BILLED gas (metered usage net
+        // of callee refunds); GAS_LIMIT is this run's ceiling (the caller-funded
+        // reservation for a cross-contract callee, the protocol ceiling otherwise).
         await this.indexerDb.createContractExecution({
             ACTION_INDEX    : data['ACTION_INDEX'],
             CONTRACT_INDEX  : data['CONTRACT_ACTION_INDEX'],
             CALLER          : data['SOURCE'],
             METHOD_NAME     : data['METHOD'],
             INPUT_PARAMS    : data['METHOD_PARAMS'],
-            GAS_USED        : gasUsed,
-            GAS_LIMIT       : gasUsed, // TODO: user-specified gas limit
+            GAS_USED        : gasBilled,
+            GAS_LIMIT       : execCeiling,
             STATUS          : status,
             ERROR_MESSAGE   : error || vmError || null,
             EMITTED_COUNT   : emittedCount,
@@ -364,6 +425,20 @@ class Execute {
         if(action === 'ATTEST' && (position === undefined || position === null))
             throw new Error('ATTEST emission missing EMITTER_POSITION (position argument)');
 
+        // Cross-contract call emissions: re-validate depth + gasLimit HOST-side
+        // (defense in depth — the VM enforces both at emit time, but an older or
+        // compromised bundled VM must not be able to bypass them), then thread
+        // the callee's depth + caller-funded ceiling through the emission data.
+        let callDepth = (Number(executionData['CALL_DEPTH']) || 0) + 1;
+        let nestedGasLimit = null;
+        if(action === 'EXECUTE'){
+            if(callDepth > MAX_CALL_DEPTH)
+                throw new Error('EXECUTE emission exceeds max call depth (' + MAX_CALL_DEPTH + ')');
+            nestedGasLimit = Number(params.gasLimit);
+            if(!Number.isInteger(nestedGasLimit) || nestedGasLimit < MIN_CALL_GAS || nestedGasLimit > GAS_CEILING)
+                throw new Error('EXECUTE emission gasLimit out of range [' + MIN_CALL_GAS + ', ' + GAS_CEILING + ']');
+        }
+
         // Force source to the contract's derived address
         let contractAddress = 'C:' + this.config['CHAIN'] + ':' + executionData['CONTRACT_ACTION_INDEX'];
 
@@ -395,7 +470,13 @@ class Execute {
             FORMAT:             0,
             IS_EMISSION:        true,
             EMITTER:            executionData['CONTRACT_ACTION_INDEX'],
-            EMITTER_POSITION:   position    // index within this EXECUTE's emission list — used by ATTEST v0 (request) to verify deterministic request_id
+            EMITTER_POSITION:   position,   // index within this EXECUTE's emission list — used by ATTEST v0 (request) to verify deterministic request_id
+            // The emitting EXECUTE's own action_index — second input to the ATTEST
+            // request_id derivation (disambiguates nested runs of the same contract
+            // within one tx) and the parent pointer for the callee's CALL_DEPTH.
+            EMITTER_ACTION_INDEX: executionData['ACTION_INDEX'],
+            CALL_DEPTH:         callDepth,
+            VM_GAS_LIMIT:       nestedGasLimit  // null for every non-EXECUTE emission
         };
 
         // Route to the correct handler
@@ -413,6 +494,11 @@ class Execute {
 
         // Store the resulting action_index for the emission record
         emission.resultActionIndex = emissionData['ACTION_INDEX'];
+
+        // Cross-contract callee settled: hand its unused reservation
+        // (gasLimit - billed, subtree-netted) back to the calling parse loop.
+        if(action === 'EXECUTE')
+            emission.gasUnusedSubtree = Number(emissionData['VM_GAS_UNUSED_SUBTREE']) || 0;
     }
 
     // Map action names to handler instances
@@ -434,7 +520,10 @@ class Execute {
             'LINK':       this.actions.actionLink,
             'BROADCAST':  this.actions.actionBroadcast,
             'MESSAGE':    this.actions.actionMessage,
-            'ATTEST':     this.actions.actionAttest
+            'ATTEST':     this.actions.actionAttest,
+            // Cross-contract call: the callee EXECUTE routes through this same
+            // handler class (re-entrant — parse() keeps no instance state).
+            'EXECUTE':    this.actions.actionExecute
         };
         return handlers[action] || null;
     }
@@ -514,6 +603,12 @@ class Execute {
                 // FORMAT v0 (request, VM-emitted): VERSION|REQUEST_ID|PROVIDER_ID|REQUEST_PAYLOAD|CALLBACK_METHOD|CALLBACK_PARAMS_JSON|REDUNDANCY|DEADLINE_BLOCKS
                 return [0, params.requestId, params.providerId, params.requestPayload, params.callbackMethod,
                         params.callbackParams || '[]', params.redundancy, params.deadlineBlocks];
+            case 'EXECUTE':
+                // FORMAT: VERSION|CONTRACT_ACTION_INDEX|METHOD|PARAMS...
+                // (gasLimit travels via emissionData.VM_GAS_LIMIT, not the positional
+                // params — the v0 EXECUTE format has no GAS_LIMIT slot.)
+                return [0, params.contractIndex, params.method,
+                        ...(Array.isArray(params.params) ? params.params : [])];
             default:
                 throw new Error('unsupported emission action: ' + action);
         }
