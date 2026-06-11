@@ -313,42 +313,81 @@ describe('Token state machine boundary tests @regression @tier2', function () {
     });
 
     // -------------------------------------------------------------------------
-    // TOK-10: LOCK_MAX_SUPPLY with zero supply
+    // TOK-10: LOCK_MAX_SUPPLY requires a declared MAX_SUPPLY cap, not minted supply
     // -------------------------------------------------------------------------
 
-    describe('TOK-10: LOCK_MAX_SUPPLY guard with zero supply', function () {
+    describe('TOK-10: LOCK_MAX_SUPPLY guard — declared cap, not minted supply', function () {
 
-        // The LOCK_MAX_SUPPLY guard in issue.js checks:
-        //   bclt(tokenInfo['SUPPLY'], config.MIN_TOKEN_SUPPLY)   (MIN_TOKEN_SUPPLY = 10^-18)
-        // A zero-supply token must NOT be allowed to lock max supply. This previously slipped
-        // through: bclt('0', '0.000000000000000001') returned false because mathjs's comparison
-        // epsilon (~1e-12 relative) treated 0 and 1e-18 as equal, bypassing the guard. The bc*
-        // comparators now use decimal.js's exact .lt, so 0 < 1e-18 is correctly true and the
-        // guard fires.
-        it('ISSUE format 3 LOCK_MAX_SUPPLY=1 on zero-supply token → invalid (no supply)', async function () {
-            const token = createTokenInfo({
+        // The LOCK_MAX_SUPPLY guard validates the *declared cap* (from this action, else
+        // the token record), NOT minted supply — a fair-mint token must be able to issue
+        // with zero supply, public mint rules, and a permanently locked cap in one ISSUE.
+        // The only rejected case is locking with no MAX_SUPPLY declared, which would brick
+        // the TICK at a cap of zero.
+
+        function makeExistingToken(maxSupply) {
+            return createTokenInfo({
                 TICK:            'TEST',
                 TICK_ID:         1,
                 DECIMALS:        0,
                 SUPPLY:          '0',
-                MAX_SUPPLY:      '1000',
+                MAX_SUPPLY:      maxSupply,
                 MAX_MINT:        '100',
                 LOCK_MAX_SUPPLY: 0,
                 OWNER:           SOURCE,
             });
-            indexer.indexerDb.getTokenInfo.resolves(token);
+        }
+
+        // Format 3: VERSION|TICK|LOCK_MAX_SUPPLY|LOCK_MAX_MINT|LOCK_DESCRIPTION|
+        //           LOCK_SLEEP|LOCK_CALLBACK|LOCK_MINT|LOCK_MINT_SUPPLY|MEMO
+        const LOCK_EDIT_PARAMS = ['3', 'TEST', '1', '', '', '', '', '', '', ''];
+
+        it('ISSUE format 3 LOCK_MAX_SUPPLY=1 on zero-supply token with declared cap → valid', async function () {
+            indexer.indexerDb.getTokenInfo.resolves(makeExistingToken('1000'));
             indexer.indexerDb.getTokenSupply.resolves('0');
 
-            // Format 3: VERSION|TICK|LOCK_MAX_SUPPLY|LOCK_MAX_MINT|LOCK_DESCRIPTION|
-            //           LOCK_SLEEP|LOCK_CALLBACK|LOCK_MINT|LOCK_MINT_SUPPLY|MEMO
-            const params = ['3', 'TEST', '1', '', '', '', '', '', '', ''];
-            const data   = createBaseData({ ACTION: 'ISSUE', FORMAT: 3, SOURCE, BLOCK_INDEX: LOW_BLOCK });
+            const data = createBaseData({ ACTION: 'ISSUE', FORMAT: 3, SOURCE, BLOCK_INDEX: LOW_BLOCK });
+            await issueHandler.parse(LOCK_EDIT_PARAMS.slice(), data, null);
 
+            assert.strictEqual(data.STATUS, 'valid', `got: ${data.STATUS}`);
+        });
+
+        it('ISSUE format 3 LOCK_MAX_SUPPLY=1 with no declared cap → invalid (no max supply)', async function () {
+            indexer.indexerDb.getTokenInfo.resolves(makeExistingToken('0'));
+            indexer.indexerDb.getTokenSupply.resolves('0');
+
+            const data = createBaseData({ ACTION: 'ISSUE', FORMAT: 3, SOURCE, BLOCK_INDEX: LOW_BLOCK });
+            await issueHandler.parse(LOCK_EDIT_PARAMS.slice(), data, null);
+
+            assert.strictEqual(data.STATUS, 'invalid: LOCK_MAX_SUPPLY (no max supply)', `got: ${data.STATUS}`);
+        });
+
+        it('ISSUE format 0 fair-mint (zero supply, mint rules, locked cap) → valid', async function () {
+            indexer.indexerDb.getTokenInfo.resolves(null);
+            // Fee activation is irrelevant to the lock rule under test
+            actionsCtx.protocolChanges.isEnabled.withArgs('ISSUANCE_FEE', sinon.match.any).resolves(false);
+
+            const params = makeIssueParams({
+                MAX_SUPPLY:       '1000000',
+                MAX_MINT:         '1000',
+                MINT_SUPPLY:      '',
+                LOCK_MAX_SUPPLY:  '1',
+                MINT_ADDRESS_MAX: '1000',
+            });
+            const data = createBaseData({ ACTION: 'ISSUE', FORMAT: 0, SOURCE, BLOCK_INDEX: LOW_BLOCK });
             await issueHandler.parse(params, data, null);
 
-            // bclt(0, MIN_TOKEN_SUPPLY) is now exactly true → LOCK_MAX_SUPPLY guard fires →
-            // a zero-supply token is correctly rejected from locking its max supply.
-            assert.strictEqual(data.STATUS, 'invalid: LOCK_MAX_SUPPLY (no supply)', `got: ${data.STATUS}`);
+            assert.strictEqual(data.STATUS, 'valid', `got: ${data.STATUS}`);
+        });
+
+        it('ISSUE format 0 LOCK_MAX_SUPPLY=1 with MAX_SUPPLY=0 → invalid (no max supply)', async function () {
+            indexer.indexerDb.getTokenInfo.resolves(null);
+            actionsCtx.protocolChanges.isEnabled.withArgs('ISSUANCE_FEE', sinon.match.any).resolves(false);
+
+            const params = makeIssueParams({ MAX_SUPPLY: '0', LOCK_MAX_SUPPLY: '1' });
+            const data   = createBaseData({ ACTION: 'ISSUE', FORMAT: 0, SOURCE, BLOCK_INDEX: LOW_BLOCK });
+            await issueHandler.parse(params, data, null);
+
+            assert.strictEqual(data.STATUS, 'invalid: LOCK_MAX_SUPPLY (no max supply)', `got: ${data.STATUS}`);
         });
     });
 });

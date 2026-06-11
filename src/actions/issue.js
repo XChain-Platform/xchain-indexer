@@ -266,9 +266,15 @@ class Issue {
         if(!error && !this.util.isNull(data['MAX_SUPPLY']) && this.util.bcgt(data['MAX_SUPPLY'], 0) && this.util.bclt(data['MAX_SUPPLY'], await this.indexerDb.getTokenSupply(data['TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX'])))
             error = 'invalid: MAX_SUPPLY < SUPPLY';
 
-        // Verify SUPPLY is at least MIN_TOKEN_SUPPLY before allowing LOCK_MAX_SUPPLY
-        if(!error && data['LOCK_MAX_SUPPLY'] && ((tokenInfo && this.util.bclt(tokenInfo['SUPPLY'], this.config.MIN_TOKEN_SUPPLY)) || (!tokenInfo && this.util.bclt(data['MINT_SUPPLY'], this.config.MIN_TOKEN_SUPPLY))))
-            error = 'invalid: LOCK_MAX_SUPPLY (no supply)';
+        // Verify a MAX_SUPPLY cap is declared before allowing LOCK_MAX_SUPPLY — taken from
+        // this action when present, else the existing token record. Minted supply is NOT
+        // required (a fair-mint token locks its cap at issuance, before any supply exists);
+        // locking with no declared cap would permanently brick the TICK at a cap of zero.
+        if(!error && data['LOCK_MAX_SUPPLY']){
+            let lockCap = (!this.util.isNull(data['MAX_SUPPLY'])) ? data['MAX_SUPPLY'] : ((tokenInfo) ? tokenInfo['MAX_SUPPLY'] : null);
+            if(this.util.isNull(lockCap) || this.util.bclt(lockCap, this.config.MIN_TOKEN_SUPPLY))
+                error = 'invalid: LOCK_MAX_SUPPLY (no max supply)';
+        }
 
         // Verify DECIMAL min/max
         if(!error && !this.util.isNull(data['DECIMALS']) && (this.util.bclt(data['DECIMALS'], this.config.MIN_TOKEN_DECIMALS) || this.util.bcgt(data['DECIMALS'], this.config.MAX_TOKEN_DECIMALS)))
