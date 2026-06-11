@@ -33,8 +33,7 @@ dotenv.config();
 // Validate required environment variables
 const REQUIRED_ENV = [
     'DECODER_DB_HOST','DECODER_DB_PORT','DECODER_DB_NAME','DECODER_DB_USER','DECODER_DB_PASS',
-    'INDEXER_DB_HOST','INDEXER_DB_PORT','INDEXER_DB_NAME','INDEXER_DB_USER','INDEXER_DB_PASS',
-    'INDEXER_API_KEY'
+    'INDEXER_DB_HOST','INDEXER_DB_PORT','INDEXER_DB_NAME','INDEXER_DB_USER','INDEXER_DB_PASS'
 ];
 for(const key of REQUIRED_ENV){
     if(!process.env[key]){
@@ -73,7 +72,11 @@ const HUB_DB_USER = process.env.HUB_DB_USER || '';
 const HUB_DB_PASS = process.env.HUB_DB_PASS || '';
 
 // API key for write + federation read methods (e.g. hub→indexer reward pushes).
-// Required at startup — these methods fail closed (401) without a valid key.
+// Optional, matching .env.example: unset disables the gate (single-host /
+// regtest); when configured, the gated methods fail closed (401) without a
+// valid key. Hard-requiring it at boot crash-looped every xchain-node-managed
+// deployment (ConfigService injects no such var) — the same over-tightening
+// that took down the encoder pre-launch (see xchain-encoder e2bf7c4).
 const INDEXER_API_KEY = process.env.INDEXER_API_KEY || '';
 
 // Set of write methods that require the API key when one is configured
