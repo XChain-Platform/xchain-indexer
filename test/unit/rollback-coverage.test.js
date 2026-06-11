@@ -103,6 +103,13 @@ const ROLLBACK_EXEMPT = {
         'mirror side by hub_db_sync._applyRetraction (DELETE … WHERE a_/b_action_index ' +
         '>= the orphaned point, two-sided). Block replay does not re-pull it, so the ' +
         'chain-reorg path must leave its lifecycle to the hub mirror, not delete by index.',
+    oracle_prices:
+        'Hub-mirrored user-published PRICE v1 oracle rows (hub_db_sync.js), NOT produced ' +
+        'by local block/action processing — the indexer only SELECTs it (fee/oracle price ' +
+        'reads). action_index in this table refers to the row\'s SOURCE chain, which is ' +
+        'usually a DIFFERENT chain from the one this indexer reorgs, so deleting by local ' +
+        'block height would corrupt the mirror. Synced from the hub via an `id` cursor; ' +
+        'source-chain reorgs are handled mirror-side by hub_db_sync (pushpricereorg rail).',
     capability_snapshots:
         'Hub-mirrored, immutable block-boundary capability snapshots (CROSS_CHAIN_TABLES ' +
         'in hub_db_sync.js): one row per pubkey that qualified for a capability at a ' +
