@@ -216,6 +216,50 @@ describe('Order_Match action handler @regression @tier2', function () {
         sinon.assert.called(indexer.indexerDb.createOrderStatus);
     });
 
+    // ─── Indivisibility: 0-decimal (NFT) fills are integer-only ───────────
+
+    it('NFT (0-decimal) partial fill settles an integer amount, never a fractional artifact', async function () {
+        // RAREPEPE is an indivisible NFT (DECIMALS=0); PEPECASH is divisible (DECIMALS=8).
+        // The counterparty's PEPECASH remaining (3) priced at a non-terminating 1/3 ratio
+        // makes the raw derived give_amount land at 0.999999999999999999… — a sub-ULP
+        // artifact of the true value 1. The match engine must snap this onto RAREPEPE's
+        // 0-decimal grid (→ 1), never credit a fractional unit of an indivisible token.
+        indexer.indexerDb.getTokenInfo
+            .withArgs('RAREPEPE', sinon.match.any, sinon.match.any)
+            .resolves(createTokenInfo({ TICK: 'RAREPEPE', TICK_ID: 10, DECIMALS: 0, ALLOW_LIST: null, BLOCK_LIST: null }));
+        indexer.indexerDb.getTokenInfo
+            .withArgs('PEPECASH', sinon.match.any, sinon.match.any)
+            .resolves(createTokenInfo({ TICK: 'PEPECASH', TICK_ID: 20, DECIMALS: 8, ALLOW_LIST: null, BLOCK_LIST: null }));
+
+        const oneThird = '0.3333333333333333333333333333333333333333333333333333333333333333';
+        indexer.indexerDb.getOrderInfo.resolves(makeOrderInfo({
+            GIVE_TICK:      'RAREPEPE',   // NFT side
+            GIVE_REMAINING: '10',
+            GET_TICK:       'PEPECASH',
+            GET_REMAINING:  '10',
+            GIVE_PRICE:     '3',          // 3 PEPECASH per RAREPEPE
+            GET_PRICE:      oneThird,     // 1/3 RAREPEPE per PEPECASH
+        }));
+        indexer.indexerDb.findOrderMatches.resolves([makeMatchInfo({
+            GIVE_TICK:      'PEPECASH',
+            GIVE_REMAINING: '3',          // 3 PEPECASH on offer
+            GET_TICK:       'RAREPEPE',
+            GET_REMAINING:  '1',          // wants 1 RAREPEPE
+            GET_PRICE:      '3',          // <= orderInfo.GIVE_PRICE (3)
+        })]);
+
+        const data = createBaseData({ ACTION: 'ORDER_MATCH', BLOCK_TIME, ACTION_INDEX: 1 });
+        await orderMatch.parse([], data, false);
+
+        sinon.assert.calledOnce(indexer.indexerDb.createOrderMatch);
+        const settled = indexer.indexerDb.createOrderMatch.firstCall.args[0];
+        // The NFT-denominated fill must be a whole number with no fractional component.
+        // (MATCH_GIVE_AMOUNT is a bignumber; coerce to string for the grid assertions.)
+        const giveStr = String(settled['MATCH_GIVE_AMOUNT']);
+        assert.strictEqual(giveStr, '1', `NFT fill must snap to integer 1, got: ${giveStr}`);
+        assert.ok(!giveStr.includes('.'), `NFT fill must carry no fractional part, got: ${giveStr}`);
+    });
+
     // ─── Skips with zero remaining ────────────────────────────────────────
 
     it('skips match when match GIVE_REMAINING is zero', async function () {

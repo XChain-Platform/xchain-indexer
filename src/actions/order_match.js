@@ -129,25 +129,39 @@ class Order_Match {
                 //   get_amount  (orderInfo.GET_TICK = matchInfo.GIVE_TICK) is bounded by
                 //     matchInfo.GIVE_REMAINING and orderInfo.GET_REMAINING.
                 // Take whichever pair tightens first as the bottleneck, then derive the
-                // other amount from the price. bcmul precision = 18 to preserve sub-integer
-                // amounts (the default of 0 silently truncates 0.00000003 to 0).
+                // other amount from the price. The derived side is multiplied at high
+                // precision (64) — matching GET_PRICE/GIVE_PRICE's own precision — so the
+                // intermediate carries no rounding noise; final quantization happens below.
                 let max_give = this.util.bclt(matchInfo['GET_REMAINING'], orderInfo['GIVE_REMAINING'])
                     ? matchInfo['GET_REMAINING']
                     : orderInfo['GIVE_REMAINING'];
                 let max_get = this.util.bclt(matchInfo['GIVE_REMAINING'], orderInfo['GET_REMAINING'])
                     ? matchInfo['GIVE_REMAINING']
                     : orderInfo['GET_REMAINING'];
-                let give_from_get = this.util.bcmul(max_get, orderInfo['GET_PRICE'], 18);
+                let give_from_get = this.util.bcmul(max_get, orderInfo['GET_PRICE'], 64);
                 let give_amount, get_amount;
                 if (this.util.bcgt(give_from_get, max_give)) {
                     // give-side is the bottleneck — clamp give and derive get
                     give_amount = max_give;
-                    get_amount  = this.util.bcmul(max_give, orderInfo['GIVE_PRICE'], 18);
+                    get_amount  = this.util.bcmul(max_give, orderInfo['GIVE_PRICE'], 64);
                 } else {
                     // get-side is the bottleneck (or both equal) — use full max_get
                     give_amount = give_from_get;
                     get_amount  = max_get;
                 }
+
+                // Snap each settled amount onto its own tick's decimal grid. give_amount is
+                // denominated in orderInfo.GIVE_TICK (= matchInfo.GET_TICK), get_amount in
+                // orderInfo.GET_TICK (= matchInfo.GIVE_TICK); native-coin sides (null tick,
+                // null tokenInfo) use COIN_DECIMALS. This is what enforces indivisibility:
+                // a 0-decimal (NFT) tick is forced to integer fills, and any token's fill is
+                // freed of sub-unit dust. Each derived amount is <= its side's on-grid max,
+                // so rounding can never exceed the escrowed remaining. A fill that rounds to
+                // zero is dropped by the guards just below.
+                let giveDecimals = giveTokenInfo ? giveTokenInfo['DECIMALS'] : this.config['COIN_DECIMALS'];
+                let getDecimals  = getTokenInfo  ? getTokenInfo['DECIMALS']  : this.config['COIN_DECIMALS'];
+                give_amount = this.util.bcround(give_amount, giveDecimals);
+                get_amount  = this.util.bcround(get_amount,  getDecimals);
 
                 // Ignore zero quantity GIVE
                 if(this.util.bclte(give_amount, 0)){

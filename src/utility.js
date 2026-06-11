@@ -387,6 +387,22 @@ class Utility {
         return this.bcnum(mathjs.format(floored, {notation: 'fixed', precision: d}));
     }
 
+    // Round a bignumber to d decimal places, half-up, entirely in decimal.js space.
+    // Implemented as floor(n * 10^d + 0.5) / 10^d so the rounding mode is explicit and
+    // config-independent — it does NOT depend on the global decimal.js/mathjs rounding
+    // setting (the same determinism concern that motivated bcmulfloor and the exact bc*
+    // comparators). Used to snap a derived settlement amount onto its tick's decimal grid:
+    // it recovers the true value from sub-ULP precision artifacts (e.g. 1 − 1e-18 =
+    // 0.999999999999999999 → 1) and forces indivisible (0-decimal) tokens to integers.
+    bcround(num, decimals){
+        let n = (!this.isNull(num)) ? num : 0;
+        let d = (!this.isNull(decimals)) ? parseInt(decimals) : 0;
+        let scale   = mathjs.bignumber(10).pow(d);
+        let half    = mathjs.bignumber('0.5');
+        let rounded = this.bcnum(n).times(scale).plus(half).floor().div(scale);
+        return this.bcnum(mathjs.format(rounded, {notation: 'fixed', precision: d}));
+    }
+
     // Handle dividing 2 big numbers
     bcdiv(numA, numB, decimals){
         let a = (!this.isNull(numA)) ? numA : 0;

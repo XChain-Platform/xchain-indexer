@@ -286,6 +286,32 @@ describe('Utility @regression @tier1', function () {
         });
     });
 
+    describe('bcround()', function () {
+        it('recovers the true integer from a sub-ULP precision artifact (1 − 1e-18 → 1)', function () {
+            // This is the NFT-indivisibility case: order_match derives 0.999999999999999999
+            // for a 0-decimal tick; flooring would wrongly give 0, rounding gives 1.
+            assert.strictEqual(util.bcround('0.999999999999999999', 0).toString(), '1');
+        });
+        it('rounds half-up at the tie', function () {
+            assert.strictEqual(util.bcround('0.5', 0).toString(), '1');
+            assert.strictEqual(util.bcround('2.5', 0).toString(), '3');
+        });
+        it('rounds down below the midpoint', function () {
+            assert.strictEqual(util.bcround('0.4', 0).toString(), '0');
+            assert.strictEqual(util.bcround('2.49', 0).toString(), '2');
+        });
+        it('snaps to the given decimal grid (8 dp)', function () {
+            assert.strictEqual(util.bcformat(util.bcround('0.666666666666666667', 8), 8), '0.66666667');
+        });
+        it('leaves an on-grid value unchanged (numeric equality)', function () {
+            assert.ok(!util.bcgt(util.bcround('1', 0), '1') && !util.bclt(util.bcround('1', 0), '1'));
+            assert.ok(!util.bcgt(util.bcround('1', 8), '1') && !util.bclt(util.bcround('1', 8), '1'));
+        });
+        it('handles null input as zero', function () {
+            assert.strictEqual(util.bcround(null, 0).toString(), '0');
+        });
+    });
+
     describe('bcdiv()', function () {
         it('should divide two numbers', function () {
             assert.strictEqual(util.bcdiv(10, 3, 8).toString(), '3.33333333');
