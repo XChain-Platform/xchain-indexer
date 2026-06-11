@@ -190,7 +190,7 @@ class Anchor {
                 // Store as 'unverified' — recovery re-verifies from archived snapshots.
                 data['STATUS'] = 'unverified';
             } else {
-                let quorum    = (N <= 1) ? 1 : (2 * Math.floor((N - 1) / 3) + 1);
+                let quorum    = (N <= 1) ? 1 : Math.max(2 * Math.floor((N - 1) / 3) + 1, Math.ceil((N + 1) / 2));
                 let canonical = this._canonical(data);
                 let validSigs = 0, seen = new Set();
                 for(let s of sigs){

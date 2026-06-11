@@ -244,6 +244,23 @@ describe('Cross_Settle action handler @regression @tier1', function () {
         assert.ok(indexer.indexerDb.recordCrossChainSettlement.calledOnce);
     });
 
+    // ─── Majority floor: N=3 needs 2 signatures, never 1 ──────────────────
+    it('rejects a single signature at N=3 (majority floor, not bare 2f+1)', async function () {
+        const { match } = signMatch(makeMatch(), 1); // 2f+1 alone would accept this
+        indexer.indexerDb.getValidatorsByCapability.resolves([{}, {}, {}]);
+        await handler.parse(null, makeData({ MATCH: match }), null);
+        assert.ok(indexer.indexerDb.recordCrossChainSettlement.notCalled);
+    });
+
+    it('settles with 2 signatures at N=3 (majority floor met)', async function () {
+        const { match } = signMatch(makeMatch(), 2);
+        indexer.indexerDb.getValidatorsByCapability.resolves([{}, {}, {}]);
+        const data = makeData({ MATCH: match });
+        await handler.parse(null, data, null);
+        assert.strictEqual(data['STATUS'], 'valid');
+        assert.ok(indexer.indexerDb.recordCrossChainSettlement.calledOnce);
+    });
+
     // ─── Branch: null ticks fall back to '' in canonical and the coin label ──
     it('settles a native-coin leg (a_tick null) using coin as the tick label', async function () {
         const { match } = signMatch(makeMatch({ a_tick: null, b_tick: null }), 1);

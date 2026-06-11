@@ -23,7 +23,7 @@
  * v0 validation:
  *   1. Each PUBKEY must have an active price capability stake
  *   2. Each Ed25519 signature must verify against the canonical payload
- *   3. SIG_COUNT must meet PBFT quorum: >= 2 * floor((price_count - 1) / 3) + 1
+ *   3. SIG_COUNT must meet PBFT quorum: >= max(2 * floor((price_count - 1) / 3) + 1, ceil((price_count + 1) / 2))
  *
  * After validation, the indexer pushes the round to xchain-hub which
  * deduplicates by round_number into the unified price_snapshots table.
@@ -152,9 +152,10 @@ class Price {
                 validSigs++;
             }
 
-            // Compute PBFT quorum: 2 * floor((N - 1) / 3) + 1 over validators with `price` capability
+            // Compute PBFT quorum over validators with `price` capability,
+            // floored at a simple majority: max(2 * floor((N - 1) / 3) + 1, ceil((N + 1) / 2))
             let priceValidatorCount = await this.indexerDb.getActiveCapabilityCount('price', data['BLOCK_INDEX']);
-            let quorum = (priceValidatorCount <= 1) ? 1 : 2 * Math.floor((priceValidatorCount - 1) / 3) + 1;
+            let quorum = (priceValidatorCount <= 1) ? 1 : Math.max(2 * Math.floor((priceValidatorCount - 1) / 3) + 1, Math.ceil((priceValidatorCount + 1) / 2));
 
             if(validSigs < quorum)
                 error = 'invalid: insufficient PBFT quorum (' + validSigs + '/' + quorum + ')';

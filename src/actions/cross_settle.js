@@ -92,7 +92,7 @@ class Cross_Settle {
             console.log("\t CROSS_SETTLE : match=" + String(m.match_id).substring(0,16) + '... : capability snapshot not synced — deferring');
             return;
         }
-        let quorum = (N <= 1) ? 1 : (2 * Math.floor((N - 1) / 3) + 1);
+        let quorum = (N <= 1) ? 1 : Math.max(2 * Math.floor((N - 1) / 3) + 1, Math.ceil((N + 1) / 2));
 
         let sigs;
         try { sigs = JSON.parse(m.validator_signatures || '[]'); }

@@ -7683,7 +7683,7 @@ class Database {
     }
 
     // Count distinct active validators (by pubkey) qualified for the given capability.
-    // Used for PBFT quorum calculation: quorum = 2 * floor((N - 1) / 3) + 1.
+    // Used for PBFT quorum calculation: quorum = max(2 * floor((N - 1) / 3) + 1, ceil((N + 1) / 2)).
     async getActiveCapabilityCount(capability, blockIndex, minStakeOverride){
         let caps = (this.config['STAKING'] && this.config['STAKING']['CAPABILITIES']) ? this.config['STAKING']['CAPABILITIES'] : {};
         let capConfig = caps[capability];
