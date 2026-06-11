@@ -484,13 +484,36 @@ class HubDbSync {
         });
     }
 
-    // Apply a row to the local hub DB (INSERT IGNORE to keep idempotent)
+    // Apply a row to the local hub DB (INSERT IGNORE to keep idempotent).
+    // Columns are FILTERED to the local mirror table's schema: the hub may serve
+    // columns the mirror deliberately does not carry (e.g. state_checkpoints'
+    // hub-side anchor_txid audit column — see src/sql/state_checkpoints.sql), and
+    // the hub side can gain columns before this indexer updates. Without the
+    // filter, one new hub column turns every mirrored insert for that table into
+    // ER_BAD_FIELD_ERROR and silently kills the mirror (fleet incident 2026-06-11:
+    // anchor_txid landed with the ANCHOR rollout and stopped all state_checkpoints
+    // mirroring). Unknown columns are dropped, never errors.
     async _applyRow(table, row) {
-        let cols = Object.keys(row);
+        let allowed = await this._localColumns(table);
+        let cols = Object.keys(row).filter(c => allowed.has(c));
+        if (cols.length === 0) return;
         let placeholders = cols.map(() => '?').join(', ');
         let query = 'INSERT IGNORE INTO ' + table + ' (' + cols.join(', ') + ') VALUES (' + placeholders + ')';
         let args = cols.map(c => row[c]);
         await this.hubDb.doQuery(query, args);
+    }
+
+    // Local mirror table columns, cached per table for the process lifetime.
+    // Table names come only from the fixed internal mirror lists (the
+    // price_snapshots/oracle_prices pair, CROSS_CHAIN_TABLES, HUB_STATE_TABLES),
+    // never from hub input.
+    async _localColumns(table) {
+        if (!this._localColumnCache) this._localColumnCache = {};
+        if (!this._localColumnCache[table]) {
+            let rows = await this.hubDb.doQuery('SHOW COLUMNS FROM ' + table);
+            this._localColumnCache[table] = new Set((rows || []).map(r => r.Field));
+        }
+        return this._localColumnCache[table];
     }
 
     // Apply a reorg retraction to the local hub DB copy. The hub deletes price

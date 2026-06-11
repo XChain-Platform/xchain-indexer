@@ -285,3 +285,50 @@ describe('HubDbSync stream-position watermark @regression @tier3', function () {
         assert.strictEqual(sync.streamWatermark, 0, 'watermark must not advance on a partial drain');
     });
 });
+
+describe('HubDbSync _applyRow column filtering @regression @tier2', function () {
+
+    // Regression: fleet incident 2026-06-11 — the hub's state_checkpoints gained
+    // the anchor_txid audit column (ANCHOR rollout) which the indexer-side mirror
+    // schema deliberately omits; the unfiltered INSERT turned every mirrored
+    // checkpoint into ER_BAD_FIELD_ERROR and silently killed the mirror fleet-wide.
+    // _applyRow must drop hub-served columns the local table does not carry.
+
+    function makeApplySync(localCols) {
+        const doQuery = sinon.stub();
+        doQuery.withArgs(sinon.match(/^SHOW COLUMNS/)).resolves(localCols.map(f => ({ Field: f })));
+        doQuery.resolves([]); // default for the INSERT
+        const sync = new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test' });
+        return { sync, doQuery };
+    }
+
+    it('drops hub-only columns (anchor_txid) instead of erroring', async function () {
+        const { sync, doQuery } = makeApplySync(['id', 'chain', 'block_index']);
+        await sync._applyRow('state_checkpoints', { id: 1, chain: 'LTC', block_index: 5, anchor_txid: 'ff' });
+        const insert = doQuery.getCalls().find(c => /^INSERT IGNORE/.test(c.args[0]));
+        assert.ok(insert, 'INSERT must still run');
+        assert.ok(!insert.args[0].includes('anchor_txid'), 'hub-only column must be filtered out');
+        assert.deepStrictEqual(insert.args[1], [1, 'LTC', 5]);
+    });
+
+    it('passes through rows whose columns all exist locally', async function () {
+        const { sync, doQuery } = makeApplySync(['id', 'chain']);
+        await sync._applyRow('state_checkpoints', { id: 2, chain: 'BTC' });
+        const insert = doQuery.getCalls().find(c => /^INSERT IGNORE/.test(c.args[0]));
+        assert.ok(insert.args[0].includes('(id, chain)'));
+    });
+
+    it('no-ops when nothing intersects the local schema', async function () {
+        const { sync, doQuery } = makeApplySync(['id']);
+        await sync._applyRow('state_checkpoints', { mystery: 'x' });
+        assert.ok(!doQuery.getCalls().some(c => /^INSERT/.test(c.args[0])), 'no INSERT for an empty column set');
+    });
+
+    it('caches the local column set per table (one SHOW COLUMNS per table)', async function () {
+        const { sync, doQuery } = makeApplySync(['id']);
+        await sync._applyRow('state_checkpoints', { id: 1 });
+        await sync._applyRow('state_checkpoints', { id: 2 });
+        const shows = doQuery.getCalls().filter(c => /^SHOW COLUMNS/.test(c.args[0]));
+        assert.strictEqual(shows.length, 1);
+    });
+});
