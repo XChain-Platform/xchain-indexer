@@ -78,6 +78,8 @@ const HUB_DB_PASS = process.env.HUB_DB_PASS || '';
 // deployment (ConfigService injects no such var) — the same over-tightening
 // that took down the encoder pre-launch (see xchain-encoder e2bf7c4).
 const INDEXER_API_KEY = process.env.INDEXER_API_KEY || '';
+if(!INDEXER_API_KEY)
+    console.warn('WARNING: INDEXER_API_KEY is not set — write and federation-read methods are UNAUTHENTICATED. Set a key for any shared deployment.');
 
 // Set of write methods that require the API key when one is configured
 const WRITE_METHODS = new Set(['pushvalidatorrewards']);
@@ -123,14 +125,18 @@ async function startApi(){
         methods: ['POST']
     }));
 
-    // API key enforcement for write + federation read methods. Fails closed:
-    // without a configured key these methods are rejected, never left open.
+    // API key enforcement for write + federation read methods. Enforced only
+    // when a key is configured (matching .env.example): with INDEXER_API_KEY
+    // set, these methods fail closed without a valid x-api-key; unset disables
+    // the gate (single-host / regtest — no key plumbing exists in xchain-node
+    // or the hub callers yet, so failing closed with no key 401'd every
+    // federation read fleet-wide). Production deployments should set a key.
     app.use((req, res, next) => {
         let method = req.body && req.body.method;
         let normalized = method ? method.toLowerCase() : '';
-        if(method && (WRITE_METHODS.has(normalized) || FEDERATION_READ_METHODS.has(normalized))){
+        if(method && INDEXER_API_KEY && (WRITE_METHODS.has(normalized) || FEDERATION_READ_METHODS.has(normalized))){
             let provided = req.headers['x-api-key'] || '';
-            if(!INDEXER_API_KEY || provided !== INDEXER_API_KEY){
+            if(provided !== INDEXER_API_KEY){
                 return res.status(401).json({
                     jsonrpc: '2.0', id: req.body.id || null,
                     error: { code: -32001, message: 'Unauthorized' }
