@@ -29,6 +29,7 @@ const {
 } = require('../setup/db-connection');
 const DecoderSeeder    = require('../setup/decoder-seeder');
 const { initIndexer, processBlocks, destroyIndexer } = require('../setup/indexer-launcher');
+const { seedGas } = require('../setup/gas-seeder');
 const helpers = require('../setup/assertion-helpers');
 
 // ---------------------------------------------------------------------------
@@ -59,6 +60,8 @@ async function freshIndexer() {
     await resetIndexerDb();
     const seeder  = new DecoderSeeder(decoderQuery);
     const indexer = await initIndexer();
+    // Fee era: the ISSUEs in these suites need gas — seed XCHAIN to the actors
+    await seedGas(seeder, { addresses: [ADDR1, ADDR2, ADDR3] });
     return { seeder, indexer };
 }
 
@@ -110,7 +113,7 @@ describe('03 ORDER / DISPENSER integration @regression @tier2', function () {
             // Block 103 – create ORDER: give 10 ALPHA, want 50 BETA
             await seeder.seedBlock(103, T0 + 1800, [
                 { source: ADDR1, destination: null, amount: '0',
-                  data: 'ORDER|0|BTC|' + TICK_A + '|10|BTC|' + TICK_B + '|50|' + ADDR1 + '|' + T_FAR_FUTURE + '|||' },
+                  data: 'ORDER|0|BTC|' + TICK_A + '|10|0|BTC|' + TICK_B + '|50|0|' + ADDR1 + '|' + T_FAR_FUTURE + '|||' },
             ]);
 
             await processBlocks(indexer);
@@ -172,9 +175,9 @@ describe('03 ORDER / DISPENSER integration @regression @tier2', function () {
             //             ADDR2 sells 20 BETA  for 10 ALPHA  → complementary match
             await seeder.seedBlock(102, T0 + 1200, [
                 { source: ADDR1, destination: null, amount: '0',
-                  data: 'ORDER|0|BTC|' + TICK_A + '|10|BTC|' + TICK_B + '|20|' + ADDR1 + '|' + T_FAR_FUTURE + '|||' },
+                  data: 'ORDER|0|BTC|' + TICK_A + '|10|0|BTC|' + TICK_B + '|20|0|' + ADDR1 + '|' + T_FAR_FUTURE + '|||' },
                 { source: ADDR2, destination: null, amount: '0',
-                  data: 'ORDER|0|BTC|' + TICK_B + '|20|BTC|' + TICK_A + '|10|' + ADDR2 + '|' + T_FAR_FUTURE + '|||' },
+                  data: 'ORDER|0|BTC|' + TICK_B + '|20|0|BTC|' + TICK_A + '|10|0|' + ADDR2 + '|' + T_FAR_FUTURE + '|||' },
             ]);
 
             await processBlocks(indexer);
@@ -249,7 +252,7 @@ describe('03 ORDER / DISPENSER integration @regression @tier2', function () {
             // Block 102 – create order
             await seeder.seedBlock(102, T0 + 1200, [
                 { source: ADDR1, destination: null, amount: '0',
-                  data: 'ORDER|0|BTC|' + TICK_A + '|10|BTC|' + TICK_B + '|50|' + ADDR1 + '|' + T_FAR_FUTURE + '|||' },
+                  data: 'ORDER|0|BTC|' + TICK_A + '|10|0|BTC|' + TICK_B + '|50|0|' + ADDR1 + '|' + T_FAR_FUTURE + '|||' },
             ]);
 
             // Process up to this point to get the action_index
@@ -315,7 +318,7 @@ describe('03 ORDER / DISPENSER integration @regression @tier2', function () {
             const shortExpiry = T0 + 3600;
             await seeder.seedBlock(102, T0 + 1200, [
                 { source: ADDR1, destination: null, amount: '0',
-                  data: 'ORDER|0|BTC|' + TICK_A + '|10|BTC|' + TICK_B + '|50|' + ADDR1 + '|' + shortExpiry + '|||' },
+                  data: 'ORDER|0|BTC|' + TICK_A + '|10|0|BTC|' + TICK_B + '|50|0|' + ADDR1 + '|' + shortExpiry + '|||' },
             ]);
             // Block 103 – block_time is after the expiration
             await seeder.seedBlock(103, T0 + 7200, []);  // empty block, just advance time
@@ -365,8 +368,10 @@ describe('03 ORDER / DISPENSER integration @regression @tier2', function () {
             // Block 102 – create dispenser: give 10 DTOKEN per 1 BETA sent to ADDR3
             // FORMAT: DISPENSER|0|GIVE_COIN|GIVE_TICK|GIVE_AMOUNT|GIVE_ESCROW|GET_COIN|GET_TICK|GET_AMOUNT|GET_ADDRESS|FIAT_CODE|FIAT_AMOUNT|EXPIRATION|ALLOW_LIST|BLOCK_LIST|MEMO
             await seeder.seedBlock(102, T0 + 1200, [
+                { source: ADDR3, destination: null, amount: '0',
+                  data: 'ADDRESS|0|||2|' },
                 { source: ADDR1, destination: null, amount: '0',
-                  data: 'DISPENSER|0|BTC|' + TICK_D + '|10|50|BTC|' + TICK_B + '|1|' + ADDR3 + '|||' + T_FAR_FUTURE + '|||' },
+                  data: 'DISPENSER|0|BTC|' + TICK_D + '|10|0|50|BTC|' + TICK_B + '|1|' + ADDR3 + '||||' + T_FAR_FUTURE + '|||' },
             ]);
 
             await processBlocks(indexer);
@@ -427,8 +432,10 @@ describe('03 ORDER / DISPENSER integration @regression @tier2', function () {
             ]);
             // Block 102 – ADDR1 creates dispenser: give 10 DTOKEN per 1 BETA to ADDR3
             await seeder.seedBlock(102, T0 + 1200, [
+                { source: ADDR3, destination: null, amount: '0',
+                  data: 'ADDRESS|0|||2|' },
                 { source: ADDR1, destination: null, amount: '0',
-                  data: 'DISPENSER|0|BTC|' + TICK_D + '|10|50|BTC|' + TICK_B + '|1|' + ADDR3 + '|||' + T_FAR_FUTURE + '|||' },
+                  data: 'DISPENSER|0|BTC|' + TICK_D + '|10|0|50|BTC|' + TICK_B + '|1|' + ADDR3 + '||||' + T_FAR_FUTURE + '|||' },
             ]);
             // Block 103 – ADDR2 SENDs 1 BETA to ADDR3 (GET_ADDRESS) → triggers DISPENSE of 10 DTOKEN to ADDR2
             await seeder.seedBlock(103, T0 + 1800, [
@@ -496,8 +503,10 @@ describe('03 ORDER / DISPENSER integration @regression @tier2', function () {
             ]);
             // Create dispenser: give 10 DTOKEN per 1 BETA, only 10 escrowed → 1 dispense exhausts it
             await seeder.seedBlock(102, T0 + 1200, [
+                { source: ADDR3, destination: null, amount: '0',
+                  data: 'ADDRESS|0|||2|' },
                 { source: ADDR1, destination: null, amount: '0',
-                  data: 'DISPENSER|0|BTC|' + TICK_D + '|10|10|BTC|' + TICK_B + '|1|' + ADDR3 + '|||' + T_FAR_FUTURE + '|||' },
+                  data: 'DISPENSER|0|BTC|' + TICK_D + '|10|0|10|BTC|' + TICK_B + '|1|' + ADDR3 + '||||' + T_FAR_FUTURE + '|||' },
             ]);
 
             await processBlocks(indexer);

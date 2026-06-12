@@ -16,3 +16,53 @@ jobs:
     # Override the Node version for a repo if ever needed:
     # with:
     #   node-version: "20"
+
+  # The integration tier runs the real indexer against a throwaway MariaDB and
+  # asserts ledger state block-by-block. It lives outside the shared reusable
+  # workflow because it needs a DB service container and the canonical decoder
+  # schema (test/integration/setup/db-connection.js loads xchain-decoder's
+  # src/sql/*.sql so the harness can never drift from the real decoder schema).
+  # No xchain-vm is provisioned here (the dir is gitignored) — the indexer
+  # degrades gracefully and the whole tier is written to pass without a VM
+  # (EXECUTE paths are e2e-suite territory).
+  integration:
+    runs-on: ubuntu-latest
+    services:
+      mariadb:
+        image: mariadb:11.4
+        env:
+          # Throwaway fixture credential for the ephemeral CI container only.
+          MARIADB_ROOT_PASSWORD: xchain-fixture-throwaway
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=12
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check out the canonical decoder schema
+        uses: actions/checkout@v4
+        with:
+          repository: XChain-Platform/xchain-decoder
+          path: .xchain-decoder
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: if [ -f package-lock.json ]; then npm ci; else npm install; fi
+
+      - name: Run the integration tier
+        env:
+          TEST_DB_HOST: 127.0.0.1
+          TEST_DB_PORT: "3306"
+          TEST_DB_USER: root
+          TEST_DB_PASS: xchain-fixture-throwaway
+          XCHAIN_DECODER_SQL_PATH: ${{ github.workspace }}/.xchain-decoder/src/sql
+        run: npm run test:integration:ci

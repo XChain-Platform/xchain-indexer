@@ -112,6 +112,9 @@ describe('04 complex actions – BATCH, SLEEP, SWEEP, DESTROY, LIST, AIRDROP @re
             indexer   = ctx.indexer;
             const seeder = ctx.seeder;
 
+            // Fee era: the ISSUE below needs gas (file convention: seedGasToken)
+            await seedGasToken(seeder, ADDR1, '100');
+
             // Block 100 – issue XTOKEN
             await seeder.seedBlock(100, T0, [
                 { source: ADDR1, destination: null, amount: '0',
@@ -163,6 +166,9 @@ describe('04 complex actions – BATCH, SLEEP, SWEEP, DESTROY, LIST, AIRDROP @re
             indexer   = ctx.indexer;
             const seeder = ctx.seeder;
 
+            // Fee era: the ISSUE below needs gas (file convention: seedGasToken)
+            await seedGasToken(seeder, ADDR1, '100');
+
             // Block 100 – BATCH: issue XTOKEN + mint 50 XTOKEN in the same tx
             await seeder.seedBlock(100, T0, [
                 { source: ADDR1, destination: null, amount: '0',
@@ -199,6 +205,9 @@ describe('04 complex actions – BATCH, SLEEP, SWEEP, DESTROY, LIST, AIRDROP @re
             const ctx = await freshIndexer();
             indexer   = ctx.indexer;
             const seeder = ctx.seeder;
+
+            // Fee era: the ISSUE below needs gas (file convention: seedGasToken)
+            await seedGasToken(seeder, ADDR1, '100');
 
             await seeder.seedBlock(100, T0, [
                 { source: ADDR1, destination: null, amount: '0',
@@ -262,6 +271,9 @@ describe('04 complex actions – BATCH, SLEEP, SWEEP, DESTROY, LIST, AIRDROP @re
             const ctx = await freshIndexer();
             indexer   = ctx.indexer;
             const seeder = ctx.seeder;
+
+            // Fee era: the ISSUE below needs gas (file convention: seedGasToken)
+            await seedGasToken(seeder, ADDR1, '100');
 
             await seeder.seedBlock(100, T0, [
                 { source: ADDR1, destination: null, amount: '0',
@@ -360,6 +372,9 @@ describe('04 complex actions – BATCH, SLEEP, SWEEP, DESTROY, LIST, AIRDROP @re
             const ctx = await freshIndexer();
             indexer   = ctx.indexer;
             const seeder = ctx.seeder;
+
+            // Fee era: the ISSUE below needs gas (file convention: seedGasToken)
+            await seedGasToken(seeder, ADDR1, '100');
 
             await seeder.seedBlock(100, T0, [
                 { source: ADDR1, destination: null, amount: '0',

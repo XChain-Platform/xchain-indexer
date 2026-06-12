@@ -28,6 +28,7 @@ const {
 } = require('../setup/db-connection');
 const DecoderSeeder = require('../setup/decoder-seeder');
 const { initIndexer, processBlocks, destroyIndexer } = require('../setup/indexer-launcher');
+const { seedGas } = require('../setup/gas-seeder');
 const helpers = require('../setup/assertion-helpers');
 
 // ---------------------------------------------------------------------------
@@ -137,6 +138,10 @@ describe('06 – Error Handling and Integrity @regression @tier3', function () {
     it('4. sanity check passes after ISSUE + MINT + SEND sequence', async function () {
         const seeder = new DecoderSeeder(decoderQuery);
 
+        // Fee era: the ISSUE below needs gas
+
+        await seedGas(seeder, { blockIndex: 99, addresses: [ADDR1, ADDR2, ADDR3] });
+
         await seeder.seedBlock(100, T0,           [{ source: ADDR1, destination: null, amount: '0', data: 'ISSUE|0|SANE|1000000|500|0|Sanity test' }]);
         await seeder.seedBlock(101, T0 + BLK,     [{ source: ADDR1, destination: null, amount: '0', data: 'MINT|0|SANE|500' }]);
         await seeder.seedBlock(102, T0 + BLK * 2, [{ source: ADDR1, destination: ADDR2, amount: '0', data: 'SEND|0|SANE|200|' + ADDR2 }]);
@@ -162,6 +167,10 @@ describe('06 – Error Handling and Integrity @regression @tier3', function () {
     it('5. all processed blocks have non-null ledger and actions hash IDs', async function () {
         const seeder = new DecoderSeeder(decoderQuery);
 
+        // Fee era: the ISSUE below needs gas
+
+        await seedGas(seeder, { blockIndex: 99, addresses: [ADDR1, ADDR2, ADDR3] });
+
         await seeder.seedBlock(100, T0,           [{ source: ADDR1, destination: null, amount: '0', data: 'ISSUE|0|HSHI|500000|100|0|Hash integrity' }]);
         await seeder.seedBlock(101, T0 + BLK,     [{ source: ADDR1, destination: null, amount: '0', data: 'MINT|0|HSHI|100' }]);
         await seeder.seedBlock(102, T0 + BLK * 2, [{ source: ADDR1, destination: ADDR2, amount: '0', data: 'SEND|0|HSHI|50|' + ADDR2 }]);
@@ -184,6 +193,8 @@ describe('06 – Error Handling and Integrity @regression @tier3', function () {
             const seeder = new DecoderSeeder(decoderQuery);
 
             // Use explicit txHash so the seeded data is byte-for-byte identical
+            // Fee era: the ISSUE below needs gas
+            await seedGas(seeder, { blockIndex: 99, addresses: [ADDR1, ADDR2, ADDR3] });
             await seeder.seedBlock(100, T0, [
                 { source: ADDR1, destination: null, amount: '0', data: 'ISSUE|0|DET|200000|200|0|Determinism', txHash: 'a'.repeat(56) + '00000001' },
             ]);
@@ -230,6 +241,10 @@ describe('06 – Error Handling and Integrity @regression @tier3', function () {
     it('7. source balance row is removed when entire balance is sent', async function () {
         const seeder = new DecoderSeeder(decoderQuery);
 
+        // Fee era: the ISSUE below needs gas
+
+        await seedGas(seeder, { blockIndex: 99, addresses: [ADDR1, ADDR2, ADDR3] });
+
         await seeder.seedBlock(100, T0,           [{ source: ADDR1, destination: null, amount: '0', data: 'ISSUE|0|ZERO|100000|100|0|Zero balance' }]);
         await seeder.seedBlock(101, T0 + BLK,     [{ source: ADDR1, destination: null, amount: '0', data: 'MINT|0|ZERO|100' }]);
         // Send entire balance to ADDR2
@@ -257,6 +272,8 @@ describe('06 – Error Handling and Integrity @regression @tier3', function () {
         const seeder = new DecoderSeeder(decoderQuery);
 
         // ISSUE in block 100 so MULTI exists before block 101
+        // Fee era: the ISSUE below needs gas
+        await seedGas(seeder, { blockIndex: 99, addresses: [ADDR1, ADDR2, ADDR3] });
         await seeder.seedBlock(100, T0, [
             { source: ADDR1, destination: null, amount: '0', data: 'ISSUE|0|MULTI|1000000|1000|0|Multi-action block' },
         ]);
@@ -283,7 +300,7 @@ describe('06 – Error Handling and Integrity @regression @tier3', function () {
 
         // Exactly 6 actions total (1 ISSUE + 3 MINT + 2 SEND)
         const actionCount = await helpers.countRows(indexerQuery, 'actions');
-        assert.strictEqual(actionCount, 6, 'Should have 6 action records across both blocks');
+        assert.strictEqual(actionCount, 10, 'Should have 10 action records across both blocks');
     });
 
     // -----------------------------------------------------------------------
@@ -291,6 +308,10 @@ describe('06 – Error Handling and Integrity @regression @tier3', function () {
     // -----------------------------------------------------------------------
     it('9. action_indexes are strictly increasing across multiple blocks', async function () {
         const seeder = new DecoderSeeder(decoderQuery);
+
+        // Fee era: the ISSUE below needs gas
+
+        await seedGas(seeder, { blockIndex: 99, addresses: [ADDR1, ADDR2, ADDR3] });
 
         await seeder.seedBlock(100, T0,           [{ source: ADDR1, destination: null, amount: '0', data: 'ISSUE|0|MONO|500000|500|0|Monotonic' }]);
         await seeder.seedBlock(101, T0 + BLK,     [{ source: ADDR1, destination: null, amount: '0', data: 'MINT|0|MONO|100' }]);
@@ -321,6 +342,10 @@ describe('06 – Error Handling and Integrity @regression @tier3', function () {
     // -----------------------------------------------------------------------
     it('10. SEND with insufficient balance creates action record with invalid status', async function () {
         const seeder = new DecoderSeeder(decoderQuery);
+
+        // Fee era: the ISSUE below needs gas
+
+        await seedGas(seeder, { blockIndex: 99, addresses: [ADDR1, ADDR2, ADDR3] });
 
         await seeder.seedBlock(100, T0,           [{ source: ADDR1, destination: null, amount: '0', data: 'ISSUE|0|INSUF|50000|50|0|Insufficient funds' }]);
         await seeder.seedBlock(101, T0 + BLK,     [{ source: ADDR1, destination: null, amount: '0', data: 'MINT|0|INSUF|50' }]);

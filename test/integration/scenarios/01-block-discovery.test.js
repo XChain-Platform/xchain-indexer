@@ -25,6 +25,7 @@ const { decoderQuery, indexerQuery, createDatabases, createDecoderSchema,
         resetDecoderDb, resetIndexerDb, closeAll } = require('../setup/db-connection');
 const DecoderSeeder = require('../setup/decoder-seeder');
 const { initIndexer, processBlocks, destroyIndexer } = require('../setup/indexer-launcher');
+const { seedGas } = require('../setup/gas-seeder');
 const { assertBlockCount, assertHashChain, countRows,
         getActionIndex } = require('../setup/assertion-helpers');
 
@@ -66,6 +67,8 @@ describe('Block Discovery and Sync @regression @tier3', function () {
     // 1. Initial sync from empty state — seed 3 blocks, verify all processed
     // -----------------------------------------------------------------------
     it('initial sync processes all seeded blocks', async function () {
+        // Fee era: the ISSUE below needs gas
+        await seedGas(seeder, { blockIndex: 99, addresses: [ADDR1, ADDR2, ADDR3] });
         await seeder.seedBlock(100, BASE_TIME, [
             { source: ADDR1, data: 'ISSUE|0|ALPHA|1000|100|0|First token' }
         ]);
@@ -78,8 +81,8 @@ describe('Block Discovery and Sync @regression @tier3', function () {
 
         const count = await processBlocks(indexer);
 
-        assert.strictEqual(count, 3, 'Expected 3 blocks to be processed');
-        await assertBlockCount(indexerQuery, 3);
+        assert.strictEqual(count, 4, 'Expected 4 blocks to be processed (incl. gas block)');
+        await assertBlockCount(indexerQuery, 4);
     });
 
     // -----------------------------------------------------------------------
@@ -87,6 +90,8 @@ describe('Block Discovery and Sync @regression @tier3', function () {
     // -----------------------------------------------------------------------
     it('incremental sync picks up new blocks after initial sync', async function () {
         // First batch: 2 blocks
+        // Fee era: the ISSUE below needs gas
+        await seedGas(seeder, { blockIndex: 199, addresses: [ADDR1, ADDR2, ADDR3] });
         await seeder.seedBlock(200, BASE_TIME, [
             { source: ADDR1, data: 'ISSUE|0|BETA|5000|500|0|Beta token' }
         ]);
@@ -95,8 +100,8 @@ describe('Block Discovery and Sync @regression @tier3', function () {
         ]);
 
         const firstCount = await processBlocks(indexer);
-        assert.strictEqual(firstCount, 2, 'Expected 2 blocks in first pass');
-        await assertBlockCount(indexerQuery, 2);
+        assert.strictEqual(firstCount, 3, 'Expected 3 blocks in first pass (incl. gas block)');
+        await assertBlockCount(indexerQuery, 3);
 
         // Add 2 more blocks to decoder DB and process again
         await seeder.seedBlock(202, BASE_TIME + 20, [
@@ -108,7 +113,7 @@ describe('Block Discovery and Sync @regression @tier3', function () {
 
         const secondCount = await processBlocks(indexer);
         assert.strictEqual(secondCount, 2, 'Expected 2 blocks in second pass');
-        await assertBlockCount(indexerQuery, 4);
+        await assertBlockCount(indexerQuery, 5);
     });
 
     // -----------------------------------------------------------------------
@@ -145,6 +150,8 @@ describe('Block Discovery and Sync @regression @tier3', function () {
     // -----------------------------------------------------------------------
     it('processes 5 sequential blocks with varying transaction counts', async function () {
         // Block 400: 1 tx (ISSUE)
+        // Fee era: the ISSUE below needs gas
+        await seedGas(seeder, { blockIndex: 399, addresses: [ADDR1, ADDR2, ADDR3] });
         await seeder.seedBlock(400, BASE_TIME, [
             { source: ADDR1, data: 'ISSUE|0|GAMMA|10000|1000|0|Gamma token' }
         ]);
@@ -167,14 +174,16 @@ describe('Block Discovery and Sync @regression @tier3', function () {
         await seeder.seedBlock(404, BASE_TIME + 40, []);
 
         const count = await processBlocks(indexer);
-        assert.strictEqual(count, 5, 'Expected 5 blocks processed');
-        await assertBlockCount(indexerQuery, 5);
+        assert.strictEqual(count, 6, 'Expected 6 blocks processed (incl. gas block)');
+        await assertBlockCount(indexerQuery, 6);
     });
 
     // -----------------------------------------------------------------------
     // 6. Block hash chain — all blocks have ledger_hash_id and actions_hash_id
     // -----------------------------------------------------------------------
     it('every processed block has ledger and actions hash IDs', async function () {
+        // Fee era: the ISSUE below needs gas
+        await seedGas(seeder, { blockIndex: 499, addresses: [ADDR1, ADDR2, ADDR3] });
         await seeder.seedBlock(500, BASE_TIME, [
             { source: ADDR1, data: 'ISSUE|0|DELTA|2000|200|0|Delta token' }
         ]);
@@ -191,6 +200,8 @@ describe('Block Discovery and Sync @regression @tier3', function () {
     // 7. Transaction atomicity — valid blocks commit correctly
     // -----------------------------------------------------------------------
     it('each block is committed atomically — all state present after processing', async function () {
+        // Fee era: the ISSUE below needs gas
+        await seedGas(seeder, { blockIndex: 599, addresses: [ADDR1, ADDR2, ADDR3] });
         await seeder.seedBlock(600, BASE_TIME, [
             { source: ADDR1, data: 'ISSUE|0|EPSILON|3000|300|0|Epsilon token' }
         ]);
@@ -199,7 +210,7 @@ describe('Block Discovery and Sync @regression @tier3', function () {
         ]);
 
         const count = await processBlocks(indexer);
-        assert.strictEqual(count, 2);
+        assert.strictEqual(count, 3); // incl. gas block
 
         // Both blocks should be committed — verify state from both is present
         const tokenRows = await indexerQuery(
@@ -217,6 +228,8 @@ describe('Block Discovery and Sync @regression @tier3', function () {
     // 8. Action index monotonicity — action_indexes are sequential across blocks
     // -----------------------------------------------------------------------
     it('action_indexes are strictly monotonically increasing across blocks', async function () {
+        // Fee era: the ISSUE below needs gas
+        await seedGas(seeder, { blockIndex: 699, addresses: [ADDR1, ADDR2, ADDR3] });
         await seeder.seedBlock(700, BASE_TIME, [
             { source: ADDR1, data: 'ISSUE|0|ZETA|5000|500|0|Zeta token' }
         ]);
@@ -247,22 +260,26 @@ describe('Block Discovery and Sync @regression @tier3', function () {
     // 9. Single block with one transaction — baseline happy path
     // -----------------------------------------------------------------------
     it('processes a single block with one transaction', async function () {
+        // Fee era: the ISSUE below needs gas
+        await seedGas(seeder, { blockIndex: 799, addresses: [ADDR1, ADDR2, ADDR3] });
         await seeder.seedBlock(800, BASE_TIME, [
             { source: ADDR1, data: 'ISSUE|0|ETA|1000|100|0|Eta token' }
         ]);
 
         const count = await processBlocks(indexer);
-        assert.strictEqual(count, 1);
-        await assertBlockCount(indexerQuery, 1);
+        assert.strictEqual(count, 2); // incl. gas block
+        await assertBlockCount(indexerQuery, 2);
 
         const actionCount = await countRows(indexerQuery, 'actions');
-        assert.strictEqual(actionCount, 1, 'Expected exactly 1 action record');
+        assert.strictEqual(actionCount, 5, 'Expected exactly 1 action record + 4 gas-preamble actions');
     });
 
     // -----------------------------------------------------------------------
     // 10. Block with multiple transactions creates multiple action records
     // -----------------------------------------------------------------------
     it('multiple transactions in one block each produce a separate action record', async function () {
+        // Fee era: the ISSUE below needs gas
+        await seedGas(seeder, { blockIndex: 899, addresses: [ADDR1, ADDR2, ADDR3] });
         await seeder.seedBlock(900, BASE_TIME, [
             { source: ADDR1, data: 'ISSUE|0|THETA|2000|200|0|Theta' },
             { source: ADDR1, data: 'MINT|0|THETA|100' },
@@ -270,10 +287,10 @@ describe('Block Discovery and Sync @regression @tier3', function () {
         ]);
 
         await processBlocks(indexer);
-        await assertBlockCount(indexerQuery, 1);
+        await assertBlockCount(indexerQuery, 2);
 
         const actionCount = await countRows(indexerQuery, 'actions');
-        assert.strictEqual(actionCount, 3, 'Expected 3 action records from 3 transactions');
+        assert.strictEqual(actionCount, 7, 'Expected 3 action records from 3 transactions + 4 gas-preamble actions');
     });
 
     // -----------------------------------------------------------------------
@@ -281,6 +298,8 @@ describe('Block Discovery and Sync @regression @tier3', function () {
     // -----------------------------------------------------------------------
     it('indexer does not process blocks beyond what decoder has', async function () {
         // Only seed 2 blocks
+        // Fee era: the ISSUE below needs gas
+        await seedGas(seeder, { blockIndex: 999, addresses: [ADDR1, ADDR2, ADDR3] });
         await seeder.seedBlock(1000, BASE_TIME, [
             { source: ADDR1, data: 'ISSUE|0|IOTA|1000|100|0|Iota' }
         ]);
@@ -289,8 +308,8 @@ describe('Block Discovery and Sync @regression @tier3', function () {
         ]);
 
         const count = await processBlocks(indexer);
-        assert.strictEqual(count, 2, 'Should process exactly 2 blocks');
-        await assertBlockCount(indexerQuery, 2);
+        assert.strictEqual(count, 3, 'Should process exactly 3 blocks (incl. gas block)');
+        await assertBlockCount(indexerQuery, 3);
     });
 
     // -----------------------------------------------------------------------
@@ -298,6 +317,8 @@ describe('Block Discovery and Sync @regression @tier3', function () {
     // -----------------------------------------------------------------------
     it('block time is stored correctly in the indexer blocks table', async function () {
         const blockTime = 1700005000;
+        // Fee era: the ISSUE below needs gas
+        await seedGas(seeder, { blockIndex: 1099, addresses: [ADDR1, ADDR2, ADDR3] });
         await seeder.seedBlock(1100, blockTime, [
             { source: ADDR1, data: 'ISSUE|0|KAPPA|500|50|0|Kappa' }
         ]);

@@ -29,6 +29,7 @@ const { decoderQuery, indexerQuery, createDatabases, createDecoderSchema,
         resetDecoderDb, resetIndexerDb, closeAll } = require('../setup/db-connection');
 const DecoderSeeder = require('../setup/decoder-seeder');
 const { initIndexer, processBlocks, destroyIndexer } = require('../setup/indexer-launcher');
+const { seedGas } = require('../setup/gas-seeder');
 const { assertStateInvariants } = require('../setup/state-invariants');
 
 const ADDR1 = 'msK1rsgNVFPM4cR3X5rngczTKa6EtT4WKD';
@@ -69,6 +70,8 @@ describe('Whole-ledger state invariants @regression @tier3', function () {
         await resetIndexerDb();
         seeder = new DecoderSeeder(decoderQuery);
         indexer = await initIndexer();
+        // Fee era: ISSUEs below need gas — seed XCHAIN to the actors first
+        await seedGas(seeder, { addresses: [ADDR1, ADDR2, ADDR3] });
     });
 
     afterEach(async function () {

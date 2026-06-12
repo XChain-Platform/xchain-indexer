@@ -26,11 +26,11 @@
  *             deployer's token balance is fully restored (deposit + stake debits reversed).
  *
  * Note: EXECUTE (and thus contract_state / contract_emissions) is NOT exercised here —
- * xchain-vm isn't resolvable in the integration env, so contract code can't run. DEPLOY,
- * DEPOSIT and STAKE v3 don't need the VM, so this still covers the contracts /
- * contract_stakes / deposits / contract-balance rollback paths. Their rollback
- * shares the same block-scoped DELETE in rollback.js, so the EXECUTE-produced tables roll
- * back by the same mechanism.
+ * the integration tier must pass with no resolvable xchain-vm (CI provisions none), so
+ * contract code can't be assumed to run. DEPLOY, DEPOSIT and STAKE v3 don't need the VM,
+ * so this still covers the contracts / contract_stakes / deposits / contract-balance
+ * rollback paths. Their rollback shares the same block-scoped DELETE in rollback.js, so
+ * the EXECUTE-produced tables roll back by the same mechanism.
  */
 
 const assert = require('assert');
@@ -41,6 +41,7 @@ const {
 } = require('../setup/db-connection');
 const DecoderSeeder = require('../setup/decoder-seeder');
 const { initIndexer, processBlocks, destroyIndexer } = require('../setup/indexer-launcher');
+const { seedGas } = require('../setup/gas-seeder');
 const helpers = require('../setup/assertion-helpers');
 
 const DEPLOYER = 'n391LfrxqfPYEdeLqB1QgHUubTjkPbmZ19';
@@ -70,6 +71,10 @@ describe('Contract State Reorg — rollback of contract tables @regression @tier
 
     before(async function () {
         this.timeout(30000);
+        // Pin the chain — fixtures are BTC-flavored, and an earlier scenario in a
+        // consolidated run may have left a different INDEXER_COIN in process env.
+        process.env.INDEXER_COIN    = 'BTC';
+        process.env.INDEXER_NETWORK = 'regtest';
         await createDatabases();
         await createDecoderSchema();
     });
@@ -86,6 +91,10 @@ describe('Contract State Reorg — rollback of contract tables @regression @tier
 
     it('reorg below a DEPLOY clears contracts / stakes / deposits and restores balances', async function () {
         const seeder = new DecoderSeeder(decoderQuery);
+
+        // Fee era: the ISSUE and the DEPLOY (gas-priced) both draw on the
+        // deployer's XCHAIN balance.
+        await seedGas(seeder, { addresses: [DEPLOYER] });
 
         // Phase 1 — ISSUE the token to the deployer, then DEPLOY a stakeable (v1) contract.
         await seeder.seedBlock(100, T0, [

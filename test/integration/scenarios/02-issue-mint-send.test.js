@@ -28,6 +28,7 @@ const { assertBalance, assertTokenSupply, assertTokenOwner,
         assertActionStatus, getActionIndex, getLastActionIndexByType,
         countRows, assertBlockCount, assertLedgerEntry,
         assertSanity, getToken } = require('../setup/assertion-helpers');
+const { seedGas } = require('../setup/gas-seeder');
 
 // ---------------------------------------------------------------------------
 // Test addresses — valid regtest P2PKH (isCryptoAddress validates base58check)
@@ -54,6 +55,8 @@ describe('ISSUE / MINT / SEND / DESTROY Token Lifecycle @regression @tier1', fun
         await resetIndexerDb();
         seeder = new DecoderSeeder(decoderQuery);
         indexer = await initIndexer();
+        // Fee era: every ISSUE below needs gas — seed XCHAIN to the actors first
+        await seedGas(seeder, { addresses: [ADDR1, ADDR2, ADDR3] });
     });
 
     afterEach(async function () {
@@ -258,11 +261,14 @@ describe('ISSUE / MINT / SEND / DESTROY Token Lifecycle @regression @tier1', fun
 
         await processBlocks(indexer);
 
-        // Last MINT action should be invalid
+        // Last MINT action should be invalid. Scope to this test's tick —
+        // the gas preamble adds XCHAIN mint rows of its own.
         const allMints = await indexerQuery(
             `SELECT m.action_index, s.status
              FROM mints m
              INNER JOIN index_statuses s ON s.id = m.status_id
+             INNER JOIN index_tickers  t ON t.id = m.tick_id
+             WHERE t.tick = 'FULLSUP'
              ORDER BY m.action_index ASC`
         );
         assert.strictEqual(allMints.length, 2, 'Should have 2 mint records');

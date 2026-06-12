@@ -28,9 +28,9 @@
  *   1. run-twice-equal — re-deriving from a clean DB yields the identical hash chain.
  *   2. committed baseline — the chain matches INDEXER_STATE_BASELINE.json (drift = fork risk).
  *
- * Regenerate after an INTENTIONAL consensus change (review the diff!):
- *   REGEN_INDEXER_STATE_BASELINE=1 TEST_DB_HOST=127.0.0.1 TEST_DB_PORT=13307 \
- *   TEST_DB_USER=root TEST_DB_PASS=mvhtest INDEXER_COIN=BTC INDEXER_NETWORK=regtest \
+ * Regenerate after an INTENTIONAL consensus change (review the diff!) — with the
+ * usual TEST_DB_* env pointing at a disposable MariaDB:
+ *   REGEN_INDEXER_STATE_BASELINE=1 INDEXER_COIN=BTC INDEXER_NETWORK=regtest \
  *   npx mocha --no-config test/integration/scenarios/10-determinism-baseline.test.js
  */
 
@@ -44,6 +44,7 @@ const { decoderQuery, indexerQuery, createDatabases, createDecoderSchema,
         resetDecoderDb, resetIndexerDb, closeAll } = require('../setup/db-connection');
 const DecoderSeeder = require('../setup/decoder-seeder');
 const { initIndexer, processBlocks, destroyIndexer } = require('../setup/indexer-launcher');
+const { seedGas } = require('../setup/gas-seeder');
 
 const BASELINE_PATH = path.join(__dirname, '..', 'INDEXER_STATE_BASELINE.json');
 const REGEN = process.env.REGEN_INDEXER_STATE_BASELINE === '1';
@@ -85,13 +86,16 @@ async function runCorpus() {
     await resetDecoderDb();
     await resetIndexerDb();
     const seeder = new DecoderSeeder(decoderQuery);
+    // Fee-era gas preamble (block 99, part of the pinned corpus): the ISSUE at
+    // block 100 needs A1 to hold XCHAIN, and A2's SEND pays db-hit fees too.
+    await seedGas(seeder, { addresses: [A1, A2, A3] });
     for (const b of CORPUS) await seeder.seedBlock(b.block, b.time, b.txs);
 
     const indexer = await initIndexer();
     try {
         const processed = await processBlocks(indexer);
-        assert.strictEqual(processed, CORPUS.length,
-            `expected to process ${CORPUS.length} blocks, processed ${processed}`);
+        assert.strictEqual(processed, CORPUS.length + 1, // +1 = the gas preamble block
+            `expected to process ${CORPUS.length + 1} blocks, processed ${processed}`);
         const chain = await readHashChain();
         // Normalize BIGINT block_index to a plain number for stable JSON.
         return chain.map(r => ({
@@ -125,7 +129,7 @@ describe('Indexer cross-node determinism baseline @regression @tier1', function 
     });
 
     it('every block produced a ledger + actions consensus hash', function () {
-        assert.strictEqual(firstChain.length, CORPUS.length);
+        assert.strictEqual(firstChain.length, CORPUS.length + 1); // +1 = gas preamble block
         for (const row of firstChain) {
             assert.ok(row.ledger,  `block ${row.block_index} has no ledger hash`);
             assert.ok(row.actions, `block ${row.block_index} has no actions hash`);
