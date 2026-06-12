@@ -199,11 +199,11 @@ class AnchorRecovery {
                 await this.db.doQuery(
                     'UPDATE cross_chain_matches SET status = ? WHERE match_id = ?', [m.status, m.match_id]);
             } else {
-                // Rebuild under the ORIGINAL hub-assigned id when archived — it is
-                // the settlement-order key (getEffectiveUnsettledMatches ORDER BY
-                // id), so a reindexing node must settle same-block matches in the
-                // order live nodes did. Archives published before the field was
-                // added carry no id; those rows fall back to AUTO_INCREMENT.
+                // Rebuild under the ORIGINAL hub-assigned id as provenance only —
+                // settlement order is (snapshot_block, match_id), so replay does
+                // not depend on this value; keeping it preserves archive
+                // byte-parity. Archives published before the field was added carry
+                // no id; those rows fall back to AUTO_INCREMENT.
                 let hasId = Number.isFinite(Number(m.id)) && Number(m.id) > 0;
                 let idCol  = hasId ? 'id, ' : '';
                 let idMark = hasId ? '?, ' : '';
@@ -232,9 +232,9 @@ class AnchorRecovery {
                     'UPDATE cross_chain_calls SET status = ? WHERE call_id = ? AND phase = ?',
                     [c.status, c.call_id, c.phase]);
             } else {
-                // Rebuild under the ORIGINAL hub-assigned id — it is the
-                // deterministic injection-order key, so a reindexing node must
-                // inject calls in exactly the order live nodes did.
+                // Rebuild under the ORIGINAL hub-assigned id as provenance only —
+                // injection order is (snapshot_block, call_id), so replay does not
+                // depend on this value; keeping it preserves archive byte-parity.
                 await this.db.doQuery(
                     `INSERT INTO cross_chain_calls
                         (id, call_id, phase, snapshot_block, network,
