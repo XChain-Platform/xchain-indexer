@@ -96,7 +96,10 @@ const FEDERATION_READ_METHODS = new Set([
     'getcapabilityvalidators',
     'getpendingattestation_requests',
     'getopencrosschainorders',
-    'getactionconfirmations'
+    'getactionconfirmations',
+    'getpendingcrosschaincalls',
+    'getcrosschaincall',
+    'getcrosschaincallresult'
 ]);
 
 // Start up the API
@@ -464,6 +467,102 @@ async function startApi(){
             } catch (err) {
                 console.error('getopencrosschainorders error:', err);
                 return { error: 'failed to look up cross-chain orders' };
+            }
+        },
+
+        // Pending XCALL v0 (cross-chain call request) rows awaiting federation
+        // dispatch. Used by xchain-hub's CrossChainCallEngine to discover work;
+        // the hub confirmation-gates on (block_index, latest_block_index) and
+        // dedupes against its own cross_chain_calls table.
+        // Body: { limit?: number }
+        async getpendingcrosschaincalls({limit}){
+            if(!indexer.indexerDb)
+                return { error: 'indexer database not ready' };
+            let max = Number(limit);
+            if(!Number.isFinite(max) || max <= 0) max = 100;
+            if(max > 500) max = 500;
+            try {
+                let latest = await indexer.indexerDb.getLatestBlockIndex();
+                let rows   = await indexer.indexerDb.getPendingCrossChainCallRequests(max);
+                return {
+                    latest_block_index: latest,
+                    network:            indexer.config['NETWORK'],
+                    count:              rows.length,
+                    calls:              rows
+                };
+            } catch (err) {
+                console.error('getpendingcrosschaincalls error:', err);
+                return { error: 'failed to look up pending cross-chain calls' };
+            }
+        },
+
+        // Single XCALL request by call_id — the targeted re-verification a hub
+        // follower runs before co-signing a leader's proposed dispatch row
+        // (field-for-field, against its OWN view of this chain).
+        // Body: { call_id }
+        async getcrosschaincall({call_id}){
+            if(!indexer.indexerDb)
+                return { error: 'indexer database not ready' };
+            if(!call_id || !/^[0-9a-fA-F]{64}$/.test(String(call_id)))
+                return { error: 'call_id must be a 64-hex id' };
+            try {
+                let latest = await indexer.indexerDb.getLatestBlockIndex();
+                let row    = await indexer.indexerDb.getCrossChainCallRequestById(String(call_id));
+                if(!row){
+                    return { exists: false, network: indexer.config['NETWORK'], latest_block_index: latest };
+                }
+                return {
+                    exists:             true,
+                    network:            indexer.config['NETWORK'],
+                    latest_block_index: latest,
+                    call: {
+                        call_id:               row.call_id,
+                        action_index:          Number(row.action_index),
+                        block_index:           Number(row.block_index),
+                        source_contract_index: Number(row.contract_index),
+                        target_chain:          row.target_chain,
+                        target_contract_index: Number(row.target_contract_index),
+                        method:                row.method,
+                        params_json:           row.params_json,
+                        gas_limit:             Number(row.gas_limit),
+                        cross_hops:            Number(row.cross_hops),
+                        deadline_block:        Number(row.deadline_block),
+                        request_status:        row.request_status
+                    }
+                };
+            } catch (err) {
+                console.error('getcrosschaincall error:', err);
+                return { error: 'failed to look up cross-chain call' };
+            }
+        },
+
+        // Execution outcome of an injected cross-chain call on THIS (target) chain.
+        // Used by the hub to relay the result back to the source chain, and by hub
+        // followers to re-verify a proposed result row byte-for-byte.
+        // Body: { call_id }
+        async getcrosschaincallresult({call_id}){
+            if(!indexer.indexerDb)
+                return { error: 'indexer database not ready' };
+            if(!call_id || !/^[0-9a-fA-F]{64}$/.test(String(call_id)))
+                return { error: 'call_id must be a 64-hex id' };
+            try {
+                let latest = await indexer.indexerDb.getLatestBlockIndex();
+                let row    = await indexer.indexerDb.getCrossChainCallExecutionById(String(call_id));
+                if(!row){
+                    return { exists: false, network: indexer.config['NETWORK'], latest_block_index: latest };
+                }
+                return {
+                    exists:               true,
+                    network:              indexer.config['NETWORK'],
+                    latest_block_index:   latest,
+                    executed_block_index: Number(row.block_index),
+                    status:               row.result_status,
+                    return_payload_b64:   row.return_payload_b64 || '',
+                    gas_used:             Number(row.gas_used)
+                };
+            } catch (err) {
+                console.error('getcrosschaincallresult error:', err);
+                return { error: 'failed to look up cross-chain call result' };
             }
         },
 

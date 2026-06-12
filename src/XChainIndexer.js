@@ -343,10 +343,23 @@ class XChainIndexer {
                     }
                 }
 
+                // Cross-chain call sync barrier: wait until the local cross_chain_calls
+                // mirror has caught up to this block's time, so every operator of this chain
+                // injects/delivers the same cross-chain calls at the same block. No-op when
+                // sync is disabled or the mirror holds no relay rows.
+                if(this.hubDbSync){
+                    try {
+                        await this.hubDbSync.waitForCallSync(blockTime, this.priceSyncTimeoutMs);
+                    } catch(err){
+                        console.warn('Deferring block ' + blockToParse + ' (cross-chain call sync): ', err);
+                        break;
+                    }
+                }
+
                 // Cross-chain capability-snapshot barrier: wait until the capability snapshot
-                // for every effective cross-chain match has mirrored in, so a match is never
-                // skipped (and settled later at a per-operator-variable height) for a missing
-                // snapshot. Defers the block on timeout, same as the match barrier above.
+                // for every effective cross-chain match AND call relay row has mirrored in, so
+                // neither is ever skipped (and applied later at a per-operator-variable height)
+                // for a missing snapshot. Defers the block on timeout, same as the barriers above.
                 if(this.hubDbSync){
                     try {
                         await this.hubDbSync.waitForSnapshotSync(blockTime, this.priceSyncTimeoutMs);
@@ -377,6 +390,13 @@ class XChainIndexer {
                         // Settle this chain's leg of any effective cross-chain DEX matches
                         // (validator-signed, mirror-delivered; verified inside CROSS_SETTLE)
                         await this.util.processCrossChainSettlements(this.actions, this.indexerDb, blockToParse, blockTime);
+
+                        // Cross-chain contract calls: inject executions for dispatches
+                        // targeting this chain, deliver result callbacks for requests it
+                        // originated, and expire requests past their deadline (all
+                        // validator-signed / block-height-deterministic; see
+                        // utility.processCrossChainCalls)
+                        await this.util.processCrossChainCalls(this.actions, this.indexerDb, blockToParse, blockTime);
 
                         // Check for any cancelled items (dispensers)
                         await this.util.processCancellations(this.actions, this.indexerDb, blockToParse, blockTime);

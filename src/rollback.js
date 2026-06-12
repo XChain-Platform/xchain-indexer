@@ -102,6 +102,9 @@ class Rollback {
             'swap_matches',
             'swap_statuses',
             'cross_chain_settlements',
+            'cross_chain_call_executions',
+            'cross_chain_call_callbacks',
+            'xcalls',
             'sweeps',
             'tokens',
             'stakes',
@@ -388,24 +391,40 @@ class Rollback {
 
             if(firstActionIndex !== null){
 
-                // Reset request_status on ATTEST v0 (request) rows whose ATTEST v1
-                // (response) row is about to be deleted below. The forward path flips
-                // a request from 'pending' to 'fulfilled'/'errored' via a direct
-                // UPDATE on the request row (created in an EARLIER block, so its
-                // action_index < firstActionIndex and it survives the bulk delete
-                // that follows). Deleting the orphaned response row alone would
-                // leave the surviving request stuck non-'pending': on re-application
-                // the response is rejected as already-resolved, the contract
-                // callback never fires, and the deadline-expiry sweep (which only
-                // considers 'pending' requests) never re-arms. Both rows now live in
-                // the consolidated `attests` table, so this is a self-join (v0 row to
-                // its v1 row by request_id). Must run BEFORE the delete loop so the
-                // join to the soon-to-be-deleted response rows still resolves.
-                query = `UPDATE attests req
-                            INNER JOIN attests resp ON (resp.request_id = req.request_id AND resp.version = 1)
-                            SET req.request_status = 'pending'
-                            WHERE req.version = 0 AND resp.action_index >= ?`;
-                args  = [firstActionIndex];
+                // Reset ATTEST v0 (request) rows whose TERMINAL flip happened in the
+                // orphaned range. The forward path flips a request from 'pending' to
+                // 'fulfilled'/'errored' (v1 response) or 'expired' (v2 expiry) via a
+                // direct UPDATE on the request row (created in an EARLIER block, so
+                // it survives the bulk delete below). Without the reset, the
+                // surviving request is stuck non-'pending': a re-applied response is
+                // rejected as already-resolved, the contract callback never fires,
+                // and — for a reorged expiry — the deadline sweep (pending-only)
+                // never re-synthesizes the v2 row, diverging a reorged node from a
+                // fresh sync. Keyed on resolved_block (recorded at flip time) so
+                // BOTH flip paths reset; this replaced the v1-only self-join, which
+                // could not see v2 expiries (they flip without a correlated v1 row).
+                query = `UPDATE attests
+                            SET request_status = 'pending', resolved_block = NULL
+                            WHERE version = 0
+                              AND request_status IN ('fulfilled', 'errored', 'expired')
+                              AND resolved_block >= ?`;
+                args  = [block_index];
+                await this.indexerDb.doQuery(query, args);
+
+                // Reset XCALL v0 (request) rows whose terminal flip (result callback
+                // or deadline expiry) happened in the orphaned range. The flip is a
+                // direct UPDATE on the surviving request row, so the bulk delete
+                // below can't undo it — without this reset, a re-applied result row
+                // hits the already-resolved interlock and the contract's callback is
+                // silently lost (and an expiry never re-arms). Keyed on
+                // resolved_block (recorded at flip time) so BOTH flip paths reset.
+                query = `UPDATE xcalls
+                            SET request_status = 'pending', result_status = NULL,
+                                result_payload = NULL, resolved_block = NULL,
+                                callback_action_index = NULL
+                            WHERE version = 0 AND request_status IN ('completed', 'expired')
+                              AND resolved_block >= ?`;
+                args  = [block_index];
                 await this.indexerDb.doQuery(query, args);
 
                 // Loop through the data tables and delete records above the action_index
@@ -594,8 +613,9 @@ class Rollback {
         // block_index-1 (i.e. deadline_block < block_index-1) AND no *valid*
         // response survives for it (any valid response flips it out of 'pending'
         // before the deadline, so it never expires). We derive eligibility from
-        // surviving rows, NOT request_status, because rollback does not reset
-        // request_status (a response/expiry undone by the reorg leaves it stale).
+        // surviving rows, NOT request_status — the resolved_block reset above only
+        // covers flips inside the orphaned range, and deriving from rows keeps this
+        // recomputation independent of status bookkeeping either way.
         let validId = await this.indexerDb.getStatusId('valid');
         let expiredReqs = await this.indexerDb.doQuery(
             `SELECT ar.request_id, ar.provider_id, ar.redundancy, ar.block_index, ar.deadline_block

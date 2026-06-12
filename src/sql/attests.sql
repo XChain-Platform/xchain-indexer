@@ -31,6 +31,7 @@ CREATE TABLE attests (
     deadline_block                BIGINT UNSIGNED,                 -- block beyond which the request times out
     gas_escrow                    VARCHAR(60),                     -- XCHAIN reserved for the callback EXECUTE
     request_status                ENUM('pending','fulfilled','expired','errored'), -- lifecycle of the request (v0 rows only)
+    resolved_block                BIGINT UNSIGNED,                 -- block at which request_status went terminal; the reorg-rollback reset key (v0 rows only)
     -- response (version 1) fields
     response_hash                 CHAR(64),                        -- SHA256 of the canonical response body
     response_payload              MEDIUMTEXT,                      -- inlined response body

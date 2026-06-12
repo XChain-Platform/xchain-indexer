@@ -3871,3 +3871,73 @@ describe('Database.createPrice() @regression @tier1', function () {
         assert.ok(String(db.doQuery.args[1][0]).includes('UPDATE prices'));
     });
 });
+
+// ---------------------------------------------------------------------------
+// Cross-chain settlement capture + VM snapshot (crossChain.isSettled backing)
+// ---------------------------------------------------------------------------
+describe('Database.recordCrossChainSettlement() @regression @tier1', function () {
+    it('captures both leg references from the signed match', async function () {
+        const db = dbWithDoQuery([]);
+        const match = {
+            match_id: 'm'.repeat(64),
+            a_chain: 'BTC', a_action_index: '42',
+            b_chain: 'LTC', b_action_index: '99'
+        };
+        await db.recordCrossChainSettlement(777, match, 42, 200);
+        const [sql, params] = db.doQuery.firstCall.args;
+        assert.ok(String(sql).includes('INSERT IGNORE INTO cross_chain_settlements'));
+        assert.ok(String(sql).includes('a_chain'));
+        assert.deepStrictEqual(params, [777, match.match_id, 42, 200, 'BTC', 42, 'LTC', 99]);
+    });
+});
+
+describe('Database.getCrossChainDataForVM() @regression @tier1', function () {
+    it('builds settled keys for BOTH legs from the LOCAL settlements table', async function () {
+        const db = makeDb();
+        const dq = sinon.stub(db, 'doQuery');
+        dq.onCall(0).resolves([
+            { a_chain: 'BTC', a_action_index: 42, b_chain: 'LTC', b_action_index: 99 },
+            { a_chain: 'DOGE', a_action_index: 7, b_chain: 'BTC', b_action_index: 1234 }
+        ]);
+        dq.onCall(1).resolves([]);                            // xcalls (getCallResult source)
+        const snap = await db.getCrossChainDataForVM(200);
+        assert.deepStrictEqual(snap.attestations, {});
+        assert.deepStrictEqual(snap.calls, {});
+        assert.deepStrictEqual(snap.settled, {
+            'BTC:42': true, 'LTC:99': true,
+            'DOGE:7': true, 'BTC:1234': true
+        });
+        // Reads the local table (consensus rule: never the mirror), strictly
+        // earlier blocks only — uniform snapshot for every execution in a block.
+        const [sql, params] = db.doQuery.firstCall.args;
+        assert.ok(String(sql).includes('FROM cross_chain_settlements'));
+        assert.ok(String(sql).includes('block_index < ?'));
+        assert.deepStrictEqual(params, [200]);
+    });
+
+    it('builds call results from terminal xcalls rows (getCallResult source)', async function () {
+        const db = makeDb();
+        const dq = sinon.stub(db, 'doQuery');
+        dq.onCall(0).resolves([]);                            // settlements
+        dq.onCall(1).resolves([
+            { call_id: 'a'.repeat(64), result_status: 'ok', result_payload: '"42"' },
+            { call_id: 'b'.repeat(64), result_status: 'expired', result_payload: null }
+        ]);
+        const snap = await db.getCrossChainDataForVM(200);
+        assert.deepStrictEqual(snap.calls, {
+            ['a'.repeat(64)]: { status: 'ok', payload: '"42"' },
+            ['b'.repeat(64)]: { status: 'expired', payload: '' }
+        });
+        // Terminal rows only, visible from the block AFTER the resolving one.
+        const [sql, params] = db.doQuery.secondCall.args;
+        assert.ok(String(sql).includes('FROM xcalls'));
+        assert.ok(String(sql).includes('resolved_block < ?'));
+        assert.deepStrictEqual(params, [200]);
+    });
+
+    it('returns an empty snapshot when nothing has settled', async function () {
+        const db = dbWithDoQuery([]);
+        const snap = await db.getCrossChainDataForVM(200);
+        assert.deepStrictEqual(snap, { attestations: {}, settled: {}, calls: {} });
+    });
+});

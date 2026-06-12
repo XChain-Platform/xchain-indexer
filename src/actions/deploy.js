@@ -261,7 +261,7 @@ class Deploy {
                 balances:         null,
                 tokenInfo:        null,
                 oracleData:       await ((this.actions && this.actions.hubDb) || this.indexerDb).getOracleDataForVM(data['BLOCK_INDEX'], data['BLOCK_TIME'], parseInt(this.config['ORACLE_MAX_PRICE_AGE_SECONDS']) || 1800),
-                crossChainData:   await this.indexerDb.getCrossChainDataForVM(),
+                crossChainData:   await this.indexerDb.getCrossChainDataForVM(data['BLOCK_INDEX']),
                 providerDeadlines: PROVIDER_DEADLINE_WINDOWS
             });
 
@@ -367,7 +367,8 @@ class Deploy {
                     TX_INDEX:              data['TX_INDEX'],
                     TX_HASH:               data['TX_HASH'],
                     TX_VOUT:               data['TX_VOUT'],
-                    CALL_DEPTH:            0
+                    CALL_DEPTH:            0,
+                    IS_CONSTRUCTOR:        true   // cross-chain calls are disallowed from constructors (v1)
                 };
                 for(let i = 0; i < constructorResult.emittedActions.length; i++){
                     let emission = constructorResult.emittedActions[i];

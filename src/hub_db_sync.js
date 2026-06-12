@@ -68,12 +68,15 @@ const RETRACTION_COLUMNS = {
     oracle_prices:   'action_index'
 };
 
-// Tables mirrored for the cross-chain DEX. cross_chain_matches carries finalized,
-// validator-signed matches; capability_snapshots carries the block-boundary
-// cross_chain validator set the indexer verifies those matches against. Retraction
-// of cross_chain_matches is two-sided (either order leg) — handled specially in
-// _applyRetraction; capability_snapshots are immutable history and never retracted.
-const CROSS_CHAIN_TABLES = ['cross_chain_matches', 'capability_snapshots'];
+// Tables mirrored for the cross-chain DEX + cross-chain contract calls.
+// cross_chain_matches carries finalized, validator-signed matches;
+// cross_chain_calls carries quorum-signed XCALL dispatch/result relay rows;
+// capability_snapshots carries the block-boundary cross_chain validator set the
+// indexer verifies both against. Retraction of cross_chain_matches is two-sided
+// (either order leg); cross_chain_calls retracts on its source-chain request —
+// both handled specially in _applyRetraction; capability_snapshots are
+// immutable history and never retracted.
+const CROSS_CHAIN_TABLES = ['cross_chain_matches', 'cross_chain_calls', 'capability_snapshots'];
 
 // Hub federation state tables. state_checkpoints carries quorum-signed per-chain
 // state-hash commitments (the explorer/SDK verification source). Append-only,
@@ -124,6 +127,16 @@ class HubDbSync {
         this.matchSyncTimestamp = null;
         this.matchBootstrapped  = false;
         this._matchWaiters      = [];
+
+        // Highest effective_time present in the local cross_chain_calls copy — the
+        // XCALL relay's equivalent of the match barrier. The injection/callback
+        // passes use waitForCallSync(block_time) so an indexer never applies a
+        // block until its call mirror has caught up to that block's time. Same
+        // NULL-is-valid semantics and watermark escape as the match barrier
+        // (#1984 class: a quiet table must never freeze the tip).
+        this.callSyncTimestamp = null;
+        this.callBootstrapped  = false;
+        this._callWaiters      = [];
 
         // Coin this indexer settles for (e.g. 'LTC'). Used to scope the snapshot-presence
         // barrier to matches this chain will actually settle. See waitForSnapshotSync.
@@ -178,6 +191,7 @@ class HubDbSync {
         this._releasePriceWaiters();
         this._releaseOracleWaiters();
         this._releaseMatchWaiters();
+        this._releaseCallWaiters();
     }
 
     // Start: open WebSocket and await the hub's ready acknowledgement (confirming
@@ -349,9 +363,10 @@ class HubDbSync {
         if (table === 'price_snapshots')     await this._refreshPriceSyncHeight();
         if (table === 'oracle_prices')       await this._refreshOracleSyncTimestamp();
         if (table === 'cross_chain_matches') await this._refreshMatchSyncTimestamp();
-        // A new match (new required snapshot_block) or an arriving snapshot can change
-        // snapshot-presence — re-evaluate the snapshot barrier on either cross-chain table.
-        if (table === 'cross_chain_matches' || table === 'capability_snapshots') await this._releaseSnapshotWaiters();
+        if (table === 'cross_chain_calls')   await this._refreshCallSyncTimestamp();
+        // A new match/call (new required snapshot_block) or an arriving snapshot can change
+        // snapshot-presence — re-evaluate the snapshot barrier on any cross-chain table.
+        if (CROSS_CHAIN_TABLES.indexOf(table) !== -1) await this._releaseSnapshotWaiters();
 
         // Fully drained only if the final page wasn't full and everything applied.
         let fullyDrained = lastPageCount < PAGE_LIMIT && applyErrors === 0;
@@ -570,6 +585,16 @@ class HubDbSync {
             await this._refreshMatchSyncTimestamp();
             return;
         }
+        // cross_chain_calls retracts on its source-chain request (the XCALL v0 row
+        // that was reorged away). Both phases drop — a dispatch whose request
+        // vanished must never produce an execution or a callback here.
+        if (event.table === 'cross_chain_calls') {
+            await this.hubDb.doQuery(
+                'DELETE FROM cross_chain_calls WHERE source_chain = ? AND source_action_index >= ?',
+                [event.source_chain, from]);
+            await this._refreshCallSyncTimestamp();
+            return;
+        }
         let column = RETRACTION_COLUMNS[event.table];
         if (!column) return;                                   // unknown table — ignore
         let query = 'DELETE FROM ' + event.table + ' WHERE source_chain = ? AND ' + column + ' >= ?';
@@ -645,6 +670,71 @@ class HubDbSync {
         });
     }
 
+    // ── Cross-chain call sync barrier (mirrors the match barrier exactly) ──────
+
+    async _refreshCallSyncTimestamp() {
+        let ts = null;
+        try {
+            let rows = await this.hubDb.doQuery(
+                "SELECT MAX(effective_time) AS ts FROM cross_chain_calls WHERE status = 'finalized'");
+            if (rows.length > 0 && rows[0].ts !== null) ts = Number(rows[0].ts);
+        } catch (e) {
+            return;                                             // table not ready yet
+        }
+        this.callSyncTimestamp = ts;
+        this.callBootstrapped  = true;
+        this._releaseCallWaiters();
+    }
+
+    _callSyncSatisfied(blockTime) {
+        if (this.callBootstrapped && this.callSyncTimestamp === null) return true;
+        if (this.callSyncTimestamp !== null && this.callSyncTimestamp >= blockTime) return true;
+        // Stream watermark escape: calls are stamped with the hub's wall clock at
+        // finalization and broadcast immediately (same producer pattern as
+        // matches), so a watermark past this block's time plus the grace means
+        // every relay row effective at/before it is already local. Without this
+        // the FIRST cross-chain call anywhere would freeze every replica until
+        // the next one arrived (the #1984 bug class).
+        if (this.callBootstrapped && this.streamWatermark >= blockTime + this.matchWatermarkGraceS) return true;
+        return false;
+    }
+
+    _releaseCallWaiters() {
+        if (this._callWaiters.length === 0) return;
+        let stillWaiting = [];
+        for (let w of this._callWaiters) {
+            if (this._callSyncSatisfied(w.ts)) {
+                clearTimeout(w.timer);
+                w.resolve(this.callSyncTimestamp);
+            } else {
+                stillWaiting.push(w);
+            }
+        }
+        this._callWaiters = stillWaiting;
+    }
+
+    // Block-processing barrier for the cross-chain call passes. Resolves once the local
+    // cross_chain_calls copy holds every relay row effective at or before this block's
+    // time, so every operator injects/delivers the same calls at the same block. Rejects
+    // after timeoutMs so the caller can DEFER the block and retry.
+    waitForCallSync(blockTime, timeoutMs) {
+        blockTime = Number(blockTime);
+        if (!this.enabled || !Number.isFinite(blockTime)) return Promise.resolve(this.callSyncTimestamp);
+        if (this._callSyncSatisfied(blockTime))            return Promise.resolve(this.callSyncTimestamp);
+
+        let ms = parseInt(timeoutMs);
+        if (!Number.isFinite(ms) || ms <= 0) ms = 60000;
+        return new Promise((resolve, reject) => {
+            let waiter = { ts: blockTime, resolve: resolve, timer: null };
+            waiter.timer = setTimeout(() => {
+                this._callWaiters = this._callWaiters.filter(w => w !== waiter);
+                reject(new Error('call sync barrier timed out after ' + ms + 'ms waiting for block_time ' +
+                                 blockTime + ' (call mirror at ' + this.callSyncTimestamp + ')'));
+            }, ms);
+            this._callWaiters.push(waiter);
+        });
+    }
+
     // ── Cross-chain capability-snapshot presence barrier ───────────────────────
     // Companion to the match barrier. A match is only settleable once the cross_chain
     // capability snapshot at its snapshot_block has mirrored in — cross_settle verifies
@@ -680,7 +770,19 @@ class HubDbSync {
                 "AND NOT EXISTS (SELECT 1 FROM capability_snapshots s " +
                 "                WHERE s.snapshot_block = m.snapshot_block AND s.capability = 'cross_chain') " +
                 "LIMIT 1", args);
-            return missing.length === 0;
+            if (missing.length > 0) return false;
+            // Same presence rule for XCALL relay rows this chain will act on
+            // (dispatches targeting it + results it originated) — xexec.js /
+            // xcall.processResult verify signatures against these snapshots.
+            let callClause = this.coin ? 'AND (c.target_chain = ? OR c.source_chain = ?)' : '';
+            let callArgs = this.coin ? [blockTime, this.coin, this.coin] : [blockTime];
+            let missingCalls = await this.hubDb.doQuery(
+                "SELECT 1 FROM cross_chain_calls c " +
+                "WHERE c.status = 'finalized' AND c.effective_time <= ? " + callClause + " " +
+                "AND NOT EXISTS (SELECT 1 FROM capability_snapshots s " +
+                "                WHERE s.snapshot_block = c.snapshot_block AND s.capability = 'cross_chain') " +
+                "LIMIT 1", callArgs);
+            return missingCalls.length === 0;
         } catch (e) {
             return false;                                      // table not ready → wait, don't advance
         }
@@ -791,13 +893,15 @@ class HubDbSync {
                         if (event.table === 'price_snapshots')     await this._refreshPriceSyncHeight();
                         if (event.table === 'oracle_prices')       await this._refreshOracleSyncTimestamp();
                         if (event.table === 'cross_chain_matches') await this._refreshMatchSyncTimestamp();
-                        if (event.table === 'cross_chain_matches' || event.table === 'capability_snapshots') await this._releaseSnapshotWaiters();
+                        if (event.table === 'cross_chain_calls')   await this._refreshCallSyncTimestamp();
+                        if (CROSS_CHAIN_TABLES.indexOf(event.table) !== -1) await this._releaseSnapshotWaiters();
                     } else if (event.type === 'row:deleted' && event.table) {
                         await this._applyRetraction(event);
                         if (event.table === 'price_snapshots')     await this._refreshPriceSyncHeight();
                         if (event.table === 'oracle_prices')       await this._refreshOracleSyncTimestamp();
                         if (event.table === 'cross_chain_matches') await this._refreshMatchSyncTimestamp();
-                        if (event.table === 'cross_chain_matches') await this._releaseSnapshotWaiters();
+                        if (event.table === 'cross_chain_calls')   await this._refreshCallSyncTimestamp();
+                        if (event.table === 'cross_chain_matches' || event.table === 'cross_chain_calls') await this._releaseSnapshotWaiters();
                     }
                 } catch (err) {
                     console.warn('HubDbSync: failed to handle WebSocket message:', err);

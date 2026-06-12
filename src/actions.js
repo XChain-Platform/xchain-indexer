@@ -83,6 +83,11 @@ const attest             = require('./actions/attest.js');
 // ANCHOR — DOGE-only on-chain state commitments (v0=checkpoint, v1=+archive, v2=continuation)
 const anchor             = require('./actions/anchor.js');
 
+// Cross-chain contract calls — XCALL (source-chain request/expiry) + XEXEC
+// (target-chain mirror-driven execution injection)
+const xcall              = require('./actions/xcall.js');
+const xexec              = require('./actions/xexec.js');
+
 class Actions {
 
     // Handle constructing a class instance
@@ -204,6 +209,11 @@ class Actions {
 
         // ANCHOR action instance (single handler dispatches v0/v1/v2 internally)
         this.actionAnchor           = new anchor(this);
+
+        // Cross-chain contract call instances (XCALL dispatches v0/v2 internally;
+        // XEXEC is the target-chain injection handler)
+        this.actionXcall            = new xcall(this);
+        this.actionXexec            = new xexec(this);
 
         // Define ACTION aliases
         this.actionAliases = {};
@@ -374,6 +384,11 @@ class Actions {
 
         // ANCHOR — DOGE-only on-chain state commitments (v0=checkpoint, v1=+archive, v2=continuation)
         if(action=='ANCHOR')             await this.actionAnchor.parse(params, data, error);
+
+        // Cross-chain contract calls — XCALL (VM-emitted request / synthetic expiry),
+        // XEXEC (system-injected, mirror-driven target-chain execution)
+        if(action=='XCALL')              await this.actionXcall.parse(params, data, error);
+        if(action=='XEXEC')              await this.actionXexec.parse(params, data, error);
     }
 
     // Read-only estimator for the XCHAIN-denominated protocol fee ("fees.AMOUNT") an action

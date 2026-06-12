@@ -147,8 +147,11 @@ class Cross_Settle {
         }
         if(swapInfo['SWAP_STATUS'] !== 'open'){
             // Already terminal (settled via a prior pass, cancelled, or expired). Record the
-            // settlement so we stop re-evaluating it, but move no funds.
-            console.log("\t CROSS_SETTLE : match=" + String(m.match_id).substring(0,16) + '... : offer ' + coin + ':' + localActionIndex + ' not open (' + swapInfo['SWAP_STATUS'] + ') — skipping');
+            // settlement so we stop re-evaluating it, but move no funds. The record is
+            // anchored to a real internal action row so a reorg (which may revive the
+            // offer's open status) drops it and the match re-applies.
+            console.log("\t CROSS_SETTLE : match=" + String(m.match_id).substring(0,16) + '... : offer ' + coin + ':' + localActionIndex + ' not open (' + swapInfo['SWAP_STATUS'] + ') — recording no-op settlement');
+            await this._recordNoopSettlement(data, m, localActionIndex);
             return;
         }
 
@@ -173,11 +176,23 @@ class Cross_Settle {
 
         // Complete the offer and record the settlement (idempotent on match_id).
         await this.indexerDb.createSwapStatus(data['ACTION_INDEX'], localActionIndex, 'complete');
-        await this.indexerDb.recordCrossChainSettlement(data['ACTION_INDEX'], m.match_id, localActionIndex, data['BLOCK_INDEX']);
+        await this.indexerDb.recordCrossChainSettlement(data['ACTION_INDEX'], m, localActionIndex, data['BLOCK_INDEX']);
 
         let addresses = Object.keys(this.util.getAddressesList());
         await this.indexerDb.updateBalances(addresses);
 
+        await this.mapper.createMappings(data);
+    }
+
+    // Record a no-op settlement for a match whose local offer is already terminal:
+    // mint the internal CROSS_SETTLE action (the rollback anchor) and the
+    // cross_chain_settlements row, move no funds. Without the record, the match
+    // stays "effective + unsettled" and re-evaluates on every subsequent block.
+    async _recordNoopSettlement(data, m, localActionIndex){
+        let action = { ACTION: 'CROSS_SETTLE', BLOCK_INDEX: data['BLOCK_INDEX'] };
+        data['ACTION_INDEX'] = await this.indexerDb.createActionIndex(action);
+        data['STATUS'] = 'valid';
+        await this.indexerDb.recordCrossChainSettlement(data['ACTION_INDEX'], m, localActionIndex, data['BLOCK_INDEX']);
         await this.mapper.createMappings(data);
     }
 
@@ -195,8 +210,10 @@ class Cross_Settle {
         }
         if(orderInfo['ORDER_STATUS'] !== 'open'){
             // Terminal already (fully filled by a prior pass, cancelled, or expired). Record
-            // the settlement so we stop re-evaluating it, but move no funds.
-            console.log("\t CROSS_SETTLE : match=" + String(m.match_id).substring(0,16) + '... : order ' + coin + ':' + localActionIndex + ' not open (' + orderInfo['ORDER_STATUS'] + ') — skipping');
+            // the settlement so we stop re-evaluating it, but move no funds — same
+            // reorg-anchored no-op record as the swap leg above.
+            console.log("\t CROSS_SETTLE : match=" + String(m.match_id).substring(0,16) + '... : order ' + coin + ':' + localActionIndex + ' not open (' + orderInfo['ORDER_STATUS'] + ') — recording no-op settlement');
+            await this._recordNoopSettlement(data, m, localActionIndex);
             return;
         }
 
@@ -228,7 +245,7 @@ class Cross_Settle {
             await this.indexerDb.createOrderStatus(data['ACTION_INDEX'], localActionIndex, 'complete');
 
         // Record the settlement (idempotent on match_id).
-        await this.indexerDb.recordCrossChainSettlement(data['ACTION_INDEX'], m.match_id, localActionIndex, data['BLOCK_INDEX']);
+        await this.indexerDb.recordCrossChainSettlement(data['ACTION_INDEX'], m, localActionIndex, data['BLOCK_INDEX']);
 
         let addresses = Object.keys(this.util.getAddressesList());
         await this.indexerDb.updateBalances(addresses);

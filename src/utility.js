@@ -1284,6 +1284,58 @@ class Utility {
         }
     }
 
+    // Cross-chain contract call passes — all three are deterministic per block:
+    //  1. TARGET side: inject XEXEC for every effective, unexecuted dispatch row
+    //     targeting this chain, in hub-id order, capped per block (overflow
+    //     carries forward to the next block — never dropped, or operators that
+    //     raced different mirror states would diverge on the cutoff).
+    //  2. SOURCE side: deliver every effective, unprocessed result row for a
+    //     request this chain originated (verify sigs → exactly-once interlock →
+    //     inject the requester's callback), in hub-id order under the same cap.
+    //  3. SOURCE side: synthesize XCALL v2 for pending requests whose
+    //     deadline_block has passed — block-height-driven, so expiry fires
+    //     identically on every operator even with the hub down.
+    // The caller gates this on the call-sync + snapshot barriers so every operator
+    // applies the same rows at the same block.
+    async processCrossChainCalls(actions, db, block_index, block_time){
+        let coin    = db.config['COIN'];
+        let network = db.config['NETWORK'];
+        let cap     = require('./actions/xcall.js').XCALL_MAX_CALLS_PER_BLOCK;
+
+        // 1. Inject executions for dispatches targeting this chain.
+        let dispatches = await db.getEffectiveUndispatchedCalls(coin, network, block_time, cap);
+        for(let c of dispatches){
+            let data = {};
+            data['ACTION']      = 'XEXEC';
+            data['BLOCK_INDEX'] = block_index;
+            data['BLOCK_TIME']  = block_time;
+            data['CALL']        = c;
+            await actions.processAction('XEXEC', null, data, null);
+        }
+
+        // 2. Deliver results for requests this chain originated.
+        let results = await db.getEffectiveUnprocessedCallResults(coin, network, block_time, cap);
+        for(let r of results){
+            let data = {};
+            data['BLOCK_INDEX'] = block_index;
+            data['BLOCK_TIME']  = block_time;
+            await actions.actionXcall.processResult(r, data);
+        }
+
+        // 3. Expire pending requests past their deadline (mirrors processAttestationExpirations).
+        let expired = await db.getExpiredCrossChainCallRequests(block_index);
+        for(let info of expired){
+            let data = {};
+            data['ACTION']       = 'XCALL';
+            data['FORMAT']       = 2;
+            data['BLOCK_INDEX']  = block_index;
+            data['BLOCK_TIME']   = block_time;
+            data['CALL_ID']      = info.call_id;
+            data['IS_SYNTHETIC'] = true;
+            await actions.processAction('XCALL', [2, info.call_id], data, null);
+        }
+    }
+
     // Process any dispensers which have been cancelled and need to be closed
     // NOTE: We currently use block_time to expire items... not ideal as block times can be manipulated
     // TODO: Revisit this code and handle calculating block time more elegantly

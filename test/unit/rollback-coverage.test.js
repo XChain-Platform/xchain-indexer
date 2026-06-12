@@ -103,6 +103,15 @@ const ROLLBACK_EXEMPT = {
         'mirror side by hub_db_sync._applyRetraction (DELETE … WHERE a_/b_action_index ' +
         '>= the orphaned point, two-sided). Block replay does not re-pull it, so the ' +
         'chain-reorg path must leave its lifecycle to the hub mirror, not delete by index.',
+    cross_chain_calls:
+        'Hub-mirrored cross-chain contract call relay rows (CROSS_CHAIN_TABLES in ' +
+        'hub_db_sync.js), NOT produced by local block/action processing — the indexer ' +
+        'only SELECTs it (XEXEC injection / result-callback passes). Synced from the ' +
+        'hub via a monotonic `id` cursor (also the deterministic injection-order key); ' +
+        'source-chain reorgs are handled mirror-side by hub_db_sync._applyRetraction ' +
+        '(DELETE … WHERE source_action_index >= the orphaned point). The LOCAL side ' +
+        'effects (xcalls, cross_chain_call_executions, cross_chain_call_callbacks) ARE ' +
+        'dataTables and roll back normally.',
     oracle_prices:
         'Hub-mirrored user-published PRICE v1 oracle rows (hub_db_sync.js), NOT produced ' +
         'by local block/action processing — the indexer only SELECTs it (fee/oracle price ' +

@@ -302,9 +302,10 @@ class Attest {
                 console.log("\t ATTEST v1 : id=" + String(requestId).substring(0,16) + '...' +
                             ' : retryable status=' + responseStatus + ' — request left pending for retry');
             } else {
-                // Flip request status to its terminal value
+                // Flip request status to its terminal value (resolved_block anchors
+                // the flip for the reorg-rollback reset)
                 let newRequestStatus = (responseStatus === 'ok') ? 'fulfilled' : 'errored';
-                await this.indexerDb.updateAttestationRequestStatus(data['REQUEST_ID'], newRequestStatus);
+                await this.indexerDb.updateAttestationRequestStatus(data['REQUEST_ID'], newRequestStatus, data['BLOCK_INDEX']);
 
                 // Inject the callback EXECUTE. Wrapped in a savepoint so a failing callback
                 // does NOT roll back the response row.
@@ -357,8 +358,10 @@ class Attest {
                     ' : deadline=' + request.deadline_block +
                     ' : block=' + data['BLOCK_INDEX']);
 
-        // Flip request status to 'expired'
-        await this.indexerDb.updateAttestationRequestStatus(requestId, 'expired');
+        // Flip request status to 'expired' (resolved_block anchors the flip for the
+        // reorg-rollback reset — without it a reorged expiry stayed terminal and
+        // replay skipped re-synthesizing the v2 row)
+        await this.indexerDb.updateAttestationRequestStatus(requestId, 'expired', data['BLOCK_INDEX']);
 
         // Mark missed_count on each responsible validator (deterministic by SHA256(request_id || pubkey))
         try {

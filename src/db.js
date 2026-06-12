@@ -5220,11 +5220,152 @@ class Database {
 
     // Record that this chain settled its leg of a cross-chain match (idempotent on
     // match_id). The action_index is rollback-able, so a reorg drops this row and the
-    // match re-applies.
-    async recordCrossChainSettlement(action_index, match_id, local_action_index, block_index){
+    // match re-applies. Both leg references are captured here because the mirror row
+    // may later be deleted by a reorg retraction — the VM's crossChain.isSettled
+    // snapshot reads this local table, never the mirror (getCrossChainDataForVM).
+    async recordCrossChainSettlement(action_index, match, local_action_index, block_index){
         await this.doQuery(
-            `INSERT IGNORE INTO cross_chain_settlements (action_index, match_id, local_action_index, block_index) VALUES (?, ?, ?, ?)`,
-            [action_index, match_id, local_action_index, block_index]);
+            `INSERT IGNORE INTO cross_chain_settlements
+             (action_index, match_id, local_action_index, block_index, a_chain, a_action_index, b_chain, b_action_index)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            [action_index, match.match_id, local_action_index, block_index,
+             match.a_chain, Number(match.a_action_index), match.b_chain, Number(match.b_action_index)]);
+    }
+
+    // ── Cross-chain contract calls (XCALL) ──────────────────────────────────────
+
+    // Persist an XCALL v0 request row (the source-chain side of a cross-chain call).
+    async createCrossChainCallRequest(data){
+        data = this.normalizeDataValues(data);
+        let status_id = await this.createStatus(data['STATUS']);
+        await this.doQuery(
+            `INSERT INTO xcalls
+             (action_index, version, call_id, contract_index, target_chain, target_contract_index,
+              method, params_json, gas_limit, cross_hops, callback_method, callback_params_json,
+              deadline_block, request_status, block_index, status_id)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [data['ACTION_INDEX'], 0, String(data['CALL_ID']).toLowerCase(), data['CONTRACT_INDEX'],
+             data['TARGET_CHAIN'], data['TARGET_CONTRACT_INDEX'], data['METHOD'], data['PARAMS_JSON'],
+             data['GAS_LIMIT'], data['CROSS_HOPS'], data['CALLBACK_METHOD'], data['CALLBACK_PARAMS'],
+             data['DEADLINE_BLOCK'], data['REQUEST_STATUS'], data['BLOCK_INDEX'], status_id]);
+    }
+
+    // Latest VALID v0 request row for a call_id.
+    async getCrossChainCallRequestById(call_id){
+        let rows = await this.doQuery(
+            `SELECT x.* FROM xcalls x
+             JOIN index_statuses s ON s.id = x.status_id
+             WHERE x.call_id = ? AND x.version = 0 AND s.status = 'valid'
+             ORDER BY x.action_index DESC LIMIT 1`,
+            [String(call_id).toLowerCase()]);
+        return rows.length > 0 ? rows[0] : null;
+    }
+
+    // Flip a request to a terminal status and capture the delivered outcome
+    // (the exactly-once interlock + the xchain.crossChain.getCallResult source).
+    async updateCrossChainCallRequestStatus(call_id, request_status, result_status, result_payload, resolved_block){
+        await this.doQuery(
+            `UPDATE xcalls SET request_status = ?, result_status = ?, result_payload = ?, resolved_block = ?
+             WHERE call_id = ? AND version = 0`,
+            [request_status, result_status, String(result_payload == null ? '' : result_payload),
+             resolved_block, String(call_id).toLowerCase()]);
+    }
+
+    async setCrossChainCallCallbackIndex(call_id, callback_action_index){
+        await this.doQuery(
+            `UPDATE xcalls SET callback_action_index = ? WHERE call_id = ? AND version = 0`,
+            [callback_action_index, String(call_id).toLowerCase()]);
+    }
+
+    // Pending requests whose deadline has passed (drives the v2 expiry synthesis).
+    async getExpiredCrossChainCallRequests(block_index){
+        return await this.doQuery(
+            `SELECT x.call_id FROM xcalls x
+             JOIN index_statuses s ON s.id = x.status_id
+             WHERE x.version = 0 AND s.status = 'valid'
+               AND x.request_status = 'pending' AND x.deadline_block < ?
+             ORDER BY x.action_index ASC`,
+            [block_index]);
+    }
+
+    // Pending requests for the federation relay (getpendingcrosschaincalls RPC).
+    async getPendingCrossChainCallRequests(limit){
+        return await this.doQuery(
+            `SELECT x.call_id, x.action_index, x.block_index, x.contract_index AS source_contract_index,
+                    x.target_chain, x.target_contract_index, x.method, x.params_json, x.gas_limit,
+                    x.cross_hops, x.deadline_block
+             FROM xcalls x
+             JOIN index_statuses s ON s.id = x.status_id
+             WHERE x.version = 0 AND s.status = 'valid' AND x.request_status = 'pending'
+             ORDER BY x.action_index ASC LIMIT ?`,
+            [limit]);
+    }
+
+    // Effective, unexecuted dispatch rows targeting THIS chain — drives the XEXEC
+    // injection pass. cross_chain_calls is hub-mirrored (read via _mirrorDb) while
+    // cross_chain_call_executions is local, so the exclusion is filtered in JS.
+    // ORDER BY the hub-assigned id — the deterministic injection-order key — and
+    // cap per block (overflow carries forward; never dropped).
+    async getEffectiveUndispatchedCalls(coin, network, block_time, limit){
+        let calls = await this._mirrorDb().doQuery(
+            `SELECT * FROM cross_chain_calls
+             WHERE phase = 'dispatch' AND status = 'finalized' AND network = ?
+               AND target_chain = ? AND effective_time <= ?
+             ORDER BY id ASC`,
+            [network, coin, block_time]);
+        if(calls.length === 0) return [];
+        let ids = calls.map(c => c.call_id);
+        let placeholders = ids.map(() => '?').join(',');
+        let executed = await this.doQuery(
+            `SELECT call_id FROM cross_chain_call_executions WHERE call_id IN (${placeholders})`, ids);
+        let executedSet = new Set(executed.map(r => r.call_id));
+        return calls.filter(c => !executedSet.has(c.call_id)).slice(0, Number(limit) || 25);
+    }
+
+    // Effective, unprocessed result rows for requests THIS chain originated —
+    // drives the callback delivery pass. Same mirror/local split and ordering.
+    async getEffectiveUnprocessedCallResults(coin, network, block_time, limit){
+        let results = await this._mirrorDb().doQuery(
+            `SELECT * FROM cross_chain_calls
+             WHERE phase = 'result' AND status = 'finalized' AND network = ?
+               AND source_chain = ? AND effective_time <= ?
+             ORDER BY id ASC`,
+            [network, coin, block_time]);
+        if(results.length === 0) return [];
+        let ids = results.map(r => r.call_id);
+        let placeholders = ids.map(() => '?').join(',');
+        let processed = await this.doQuery(
+            `SELECT call_id FROM cross_chain_call_callbacks WHERE call_id IN (${placeholders})`, ids);
+        let processedSet = new Set(processed.map(r => r.call_id));
+        return results.filter(r => !processedSet.has(r.call_id)).slice(0, Number(limit) || 25);
+    }
+
+    // Record an injected target-chain execution (idempotent on call_id; the
+    // action_index is rollback-able so a reorg drops this row and the call re-applies).
+    async recordCrossChainCallExecution(action_index, call_id, execute_action_index, result_status, return_payload_b64, gas_used, block_index){
+        await this.doQuery(
+            `INSERT IGNORE INTO cross_chain_call_executions
+             (action_index, call_id, execute_action_index, result_status, return_payload_b64, gas_used, block_index)
+             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [action_index, String(call_id).toLowerCase(), execute_action_index,
+             result_status, return_payload_b64, gas_used, block_index]);
+    }
+
+    // Execution outcome for a call on THIS (target) chain (getcrosschaincallresult RPC).
+    async getCrossChainCallExecutionById(call_id){
+        let rows = await this.doQuery(
+            `SELECT * FROM cross_chain_call_executions WHERE call_id = ? LIMIT 1`,
+            [String(call_id).toLowerCase()]);
+        return rows.length > 0 ? rows[0] : null;
+    }
+
+    // Record a processed result row (idempotent on call_id; rollback-able).
+    async recordCrossChainCallCallback(action_index, call_id, result_status, block_index){
+        await this.doQuery(
+            `INSERT IGNORE INTO cross_chain_call_callbacks
+             (action_index, call_id, result_status, block_index)
+             VALUES (?, ?, ?, ?)`,
+            [action_index, String(call_id).toLowerCase(), result_status, block_index]);
     }
 
     // Create/Update record in `coinpays` table (fulfilled COINPay payments)
@@ -8652,11 +8793,17 @@ class Database {
     }
 
     // Update the request_status field on an ATTEST v0 (request) row
-    async updateAttestationRequestStatus(requestId, newStatus){
+    // resolvedBlock anchors a TERMINAL flip ('fulfilled'/'errored'/'expired') to the
+    // block that caused it, so the rollback pass can reset the surviving request row
+    // when that block reorgs (covers the v1-response AND v2-expiry paths — the old
+    // v1-only self-join reset left a reorged expiry stuck terminal, and replay then
+    // skipped re-synthesizing the v2 row: reorged-node vs fresh-sync divergence).
+    async updateAttestationRequestStatus(requestId, newStatus, resolvedBlock){
         let query = `UPDATE attests
-                     SET request_status = ?
+                     SET request_status = ?, resolved_block = ?
                      WHERE request_id = ? AND version = 0`;
-        await this.doQuery(query, [newStatus, String(requestId || '').toLowerCase()]);
+        await this.doQuery(query, [newStatus, (resolvedBlock != null ? resolvedBlock : null),
+                                   String(requestId || '').toLowerCase()]);
     }
 
     // List ATTEST v0 (request) rows currently in 'pending' status, ordered by
@@ -9274,11 +9421,50 @@ class Database {
     }
 
     // Cross-chain data stub — returns no-data accessors until Phase 4
-    async getCrossChainDataForVM(){
+    async getCrossChainDataForVM(block_index){
         // Serializable snapshot (plain data) — the VM worker rebuilds the
-        // getAttestation/isSettled accessors. Cross-chain reads are not yet wired,
-        // so the snapshot is empty (getAttestation→null, isSettled→false).
-        return { attestations: {}, settled: {} };
+        // getAttestation/isSettled accessors (keys are "CHAIN:action_index").
+        //
+        // CONSENSUS RULE: `settled` is built from the LOCAL cross_chain_settlements
+        // table — legs THIS chain applied — never from the mirrored cross_chain_matches.
+        // Mirror rows are deleted by reorg retraction without reorging this chain, so a
+        // mirror-derived read would diverge between live nodes and a fresh resync. The
+        // local table is action_index-anchored (drops with this chain's own reorgs) and
+        // is rebuilt identically on replay. Settlements involving only other chains are
+        // therefore NOT visible here (isSettled → false) — documented limitation.
+        //
+        // Only settlements from blocks strictly BEFORE the current one are exposed, so
+        // every execution in a block sees the same snapshot regardless of whether it
+        // runs before or after this block's settlement pass.
+        let settled = {};
+        let rows = await this.doQuery(
+            `SELECT a_chain, a_action_index, b_chain, b_action_index
+             FROM cross_chain_settlements
+             WHERE block_index < ? AND a_chain IS NOT NULL`,
+            [Number(block_index) || 0]);
+        for(let r of rows){
+            settled[String(r.a_chain) + ':' + String(r.a_action_index)] = true;
+            settled[String(r.b_chain) + ':' + String(r.b_action_index)] = true;
+        }
+        // Cross-chain call results this chain originated, keyed by call_id —
+        // backs xchain.crossChain.getCallResult(callId). Same consensus rule:
+        // LOCAL table (xcalls), terminal rows only, visible from the block AFTER
+        // the one that resolved them (resolved_block < current).
+        let calls = {};
+        let callRows = await this.doQuery(
+            `SELECT call_id, result_status, result_payload FROM xcalls
+             WHERE version = 0 AND request_status IN ('completed', 'expired')
+               AND resolved_block IS NOT NULL AND resolved_block < ?`,
+            [Number(block_index) || 0]);
+        for(let r of callRows){
+            calls[String(r.call_id)] = {
+                status:  String(r.result_status || ''),
+                payload: String(r.result_payload == null ? '' : r.result_payload)
+            };
+        }
+        // getAttestation stays unwired (null) until the federation mirrors per-action
+        // attestations; reserved by the documented API surface.
+        return { attestations: {}, settled: settled, calls: calls };
     }
 
     // Get total unclaimed rewards for a source address

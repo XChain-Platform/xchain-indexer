@@ -98,6 +98,12 @@ class ProtocolChanges {
         // (See xchain-documentation/protocol/actions/ANCHOR.md)
         this.addChange('ANCHOR',             '2.0.0',0,0,0,0,0,0);
 
+        // Cross-chain contract calls — XCALL v0=request (VM-emission-only; never
+        // decoded from the wire), v2=expire (system-synthesized). The relay rows
+        // ride the hub mirror; registered for consistency/documentation.
+        // (See xchain-documentation/protocol/actions/XCALL.md)
+        this.addChange('XCALL',              '2.0.0',0,0,0,0,0,0);
+
         // Define protocol changes (ALL LOWER Case)
         // this.addChange('name','1.0.0',0,0,0,0,0,0);
         this.addChange('UNIFIED_FEES',   '2.0.0',0,0,0,0,0,0);

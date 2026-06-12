@@ -233,42 +233,31 @@ describe('Rollback @regression @tier3', function () {
         return queries.find(q =>
             q &&
             /UPDATE\s+attests/i.test(q) &&
-            /JOIN\s+attests/i.test(q) &&
             /request_status\s*=\s*'pending'/i.test(q)
         );
     }
 
-    it('resets attestation request_status to pending for responses in the orphaned range', async function () {
+    it('resets terminal attestation requests whose flip happened in the orphaned range', async function () {
         indexer.indexerDb.doQuery.onFirstCall().resolves([{ action_index: 50 }]);
         indexer.indexerDb.doQuery.resolves([]);
         await rollback.rollback(100);
 
         const updateQuery = attestationResetUpdate();
         assert.ok(updateQuery, 'expected a companion UPDATE resetting the v0 request row request_status to pending');
-        // Self-join (v0 request row to its v1 response row) by request_id, bounded by firstActionIndex
-        assert.ok(/resp\.request_id\s*=\s*req\.request_id|req\.request_id\s*=\s*resp\.request_id/i.test(updateQuery),
-            'reset UPDATE should self-join the request row to its response row on request_id');
-        assert.ok(/action_index\s*>=\s*\?/i.test(updateQuery),
-            'reset UPDATE should be bounded by the firstActionIndex parameter');
-        // The bound argument matches the orphaned-range start
+        // Keyed on resolved_block (recorded at flip time), so BOTH terminal paths
+        // reset: a v1 response (fulfilled/errored) AND a v2 expiry (expired) — the
+        // old v1-only self-join left a reorged expiry stuck terminal, and replay
+        // then skipped re-synthesizing the v2 row (reorged-node vs fresh-sync
+        // divergence).
+        assert.ok(/resolved_block\s*>=\s*\?/i.test(updateQuery),
+            'reset UPDATE should be keyed on resolved_block');
+        assert.ok(/resolved_block\s*=\s*NULL/i.test(updateQuery),
+            'reset UPDATE should clear resolved_block');
+        assert.ok(/'fulfilled'.*'errored'.*'expired'/is.test(updateQuery),
+            'reset UPDATE should cover every terminal status, including expiry');
+        // The bound argument is the rollback target block (the flip block range).
         const call = indexer.indexerDb.doQuery.args.find(a => a[0] === updateQuery);
-        assert.deepStrictEqual(call[1], [50], 'reset UPDATE should be parameterised with firstActionIndex');
-    });
-
-    it('issues the request_status reset BEFORE deleting the response (attests) rows', async function () {
-        indexer.indexerDb.doQuery.onFirstCall().resolves([{ action_index: 50 }]);
-        indexer.indexerDb.doQuery.resolves([]);
-        await rollback.rollback(100);
-
-        const queries = indexer.indexerDb.doQuery.args.map(a => a[0]).filter(Boolean);
-        const updateIdx = queries.findIndex(q =>
-            /UPDATE\s+attests/i.test(q) && /request_status\s*=\s*'pending'/i.test(q));
-        const deleteIdx = queries.findIndex(q =>
-            /DELETE\s+FROM\s+attests\b/i.test(q));
-        assert.ok(updateIdx >= 0, 'expected the request_status reset UPDATE to be issued');
-        assert.ok(deleteIdx >= 0, 'expected the attests DELETE to be issued');
-        assert.ok(updateIdx < deleteIdx,
-            'request_status reset must run before the attests DELETE so the self-join still resolves');
+        assert.deepStrictEqual(call[1], [100], 'reset UPDATE should be parameterised with block_index');
     });
 
     it('does NOT issue the request_status reset when there is no orphaned range', async function () {

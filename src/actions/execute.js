@@ -49,6 +49,10 @@ const GAS_CEILING = 1000000;
 const MAX_CALL_DEPTH = 4;
 const MIN_CALL_GAS   = 5000;
 
+// Cross-chain call (XCALL) host-side guards — mirrored from actions/xcall.js
+// (canonical: xchain-documentation/protocol/constants.js).
+const { XCALL_MIN_GAS, XCALL_MAX_GAS, XCALL_MAX_HOPS } = require('./xcall.js');
+
 class Execute {
 
     // Handle constructing a class instance
@@ -168,6 +172,7 @@ class Execute {
         let gasUsed = gasCost;
         let emittedCount = 0;
         let vmError = null;
+        let vmReturnValue = null;
 
         // Per-call gas ceiling. A cross-contract callee (reached via emit.execute)
         // runs against its caller-funded reservation (VM_GAS_LIMIT, validated in
@@ -188,7 +193,7 @@ class Execute {
 
             // Load read-only data for gateway (price data lives in local hub DB when configured)
             let oracleData = await ((this.actions && this.actions.hubDb) || this.indexerDb).getOracleDataForVM(data['BLOCK_INDEX'], data['BLOCK_TIME'], parseInt(this.config['ORACLE_MAX_PRICE_AGE_SECONDS']) || 1800);
-            let crossChainData = await this.indexerDb.getCrossChainDataForVM();
+            let crossChainData = await this.indexerDb.getCrossChainDataForVM(data['BLOCK_INDEX']);
 
             // Pre-load contract-stake snapshot scoped to THIS contract — backs the
             // xchain.contract.{getStake,getTotalStaked,getStakers,slash} APIs synchronously.
@@ -224,6 +229,13 @@ class Execute {
                 gasCeiling:        execCeiling,
                 callDepth:         Number(data['CALL_DEPTH']) || 0,
                 actionIndex:       data['ACTION_INDEX'],
+                // Cross-chain call context: hop budget for emit.crossExecute (threaded
+                // from XEXEC injections / result callbacks), the network bound into the
+                // call_id preimage, and the cross-call flag the harness uses to enforce
+                // the target's crossCallable allowlist.
+                crossHops:         Number(data['CROSS_HOPS']) || 0,
+                isCrossCall:       Boolean(data['IS_CROSS_CALL']),
+                network:           this.config['NETWORK'],
                 balances:          null, // TODO: load balances for getBalance() when needed
                 tokenInfo:         null, // TODO: load token info for getTokenInfo() when needed
                 oracleData:        oracleData,
@@ -235,6 +247,7 @@ class Execute {
 
             gasUsed = vmResult.gasUsed;
             emittedCount = vmResult.emittedActions.length;
+            vmReturnValue = vmResult.success ? vmResult.returnValue : null;
 
             if(!vmResult.success)
                 vmError = vmResult.error;
@@ -353,6 +366,13 @@ class Execute {
         let status = error ? error : (vmStatus || 'valid');
         data['STATUS'] = status;
 
+        // Surface the run outcome for system injectors (the XEXEC handler relays
+        // these to the source chain as the cross-chain call result). Consensus-safe:
+        // all three are deterministic products of the run.
+        data['VM_RETURN_VALUE']  = (status === 'valid') ? vmReturnValue : null;
+        data['VM_ERROR_MESSAGE'] = error || vmError || null;
+        data['VM_GAS_BILLED']    = gasBilled;
+
         // Print status message
         console.log("\t EXECUTE : contract=" + data['CONTRACT_ACTION_INDEX'] + ' : method=' + data['METHOD'] + ' : gas=' + gasBilled + ((Number(data['CALL_DEPTH']) || 0) > 0 ? ' : depth=' + data['CALL_DEPTH'] : '') + ' : ' + data['STATUS']);
 
@@ -425,11 +445,16 @@ class Execute {
         if(action === 'ATTEST' && (position === undefined || position === null))
             throw new Error('ATTEST emission missing EMITTER_POSITION (position argument)');
 
+        // XCALL anchors its call_id to the emitter position the same way — mandatory.
+        if(action === 'XCALL' && (position === undefined || position === null))
+            throw new Error('XCALL emission missing EMITTER_POSITION (position argument)');
+
         // Cross-contract call emissions: re-validate depth + gasLimit HOST-side
         // (defense in depth — the VM enforces both at emit time, but an older or
         // compromised bundled VM must not be able to bypass them), then thread
         // the callee's depth + caller-funded ceiling through the emission data.
         let callDepth = (Number(executionData['CALL_DEPTH']) || 0) + 1;
+        let crossHops = Number(executionData['CROSS_HOPS']) || 0;
         let nestedGasLimit = null;
         if(action === 'EXECUTE'){
             if(callDepth > MAX_CALL_DEPTH)
@@ -437,6 +462,25 @@ class Execute {
             nestedGasLimit = Number(params.gasLimit);
             if(!Number.isInteger(nestedGasLimit) || nestedGasLimit < MIN_CALL_GAS || nestedGasLimit > GAS_CEILING)
                 throw new Error('EXECUTE emission gasLimit out of range [' + MIN_CALL_GAS + ', ' + GAS_CEILING + ']');
+        }
+
+        // Cross-chain call emissions: the hop count is HOST-derived (context + 1) —
+        // never trusted from the VM — and capped so two contracts cannot ping-pong
+        // X→Y→X forever (the injected execution on the far chain has no fee payer, so
+        // economics alone cannot bound the loop). gasLimit is re-validated against the
+        // XCALL caps (tighter than same-chain: the target-side run is fee-less there).
+        if(action === 'XCALL'){
+            // Disallowed from DEPLOY constructors in v1: a constructor has no
+            // settled execution context for the deadline/callback lifecycle.
+            if(executionData['IS_CONSTRUCTOR'])
+                throw new Error('XCALL emission is not allowed from a constructor');
+            let hostHops = crossHops + 1;
+            if(hostHops > XCALL_MAX_HOPS)
+                throw new Error('XCALL emission exceeds max cross-chain hops (' + XCALL_MAX_HOPS + ')');
+            params.crossHops = hostHops;
+            let xcallGas = Number(params.gasLimit);
+            if(!Number.isInteger(xcallGas) || xcallGas < XCALL_MIN_GAS || xcallGas > XCALL_MAX_GAS)
+                throw new Error('XCALL emission gasLimit out of range [' + XCALL_MIN_GAS + ', ' + XCALL_MAX_GAS + ']');
         }
 
         // Force source to the contract's derived address
@@ -476,7 +520,10 @@ class Execute {
             // within one tx) and the parent pointer for the callee's CALL_DEPTH.
             EMITTER_ACTION_INDEX: executionData['ACTION_INDEX'],
             CALL_DEPTH:         callDepth,
-            VM_GAS_LIMIT:       nestedGasLimit  // null for every non-EXECUTE emission
+            VM_GAS_LIMIT:       nestedGasLimit, // null for every non-EXECUTE emission
+            // Hop budget threads through same-chain emissions too: a contract calling a
+            // local library which then crossExecutes still counts against the same cap.
+            CROSS_HOPS:         crossHops
         };
 
         // Route to the correct handler
@@ -523,7 +570,9 @@ class Execute {
             'ATTEST':     this.actions.actionAttest,
             // Cross-contract call: the callee EXECUTE routes through this same
             // handler class (re-entrant — parse() keeps no instance state).
-            'EXECUTE':    this.actions.actionExecute
+            'EXECUTE':    this.actions.actionExecute,
+            // Cross-CHAIN call request (the relay rides the hub mirror from here).
+            'XCALL':      this.actions.actionXcall
         };
         return handlers[action] || null;
     }
@@ -609,6 +658,14 @@ class Execute {
                 // params — the v0 EXECUTE format has no GAS_LIMIT slot.)
                 return [0, params.contractIndex, params.method,
                         ...(Array.isArray(params.params) ? params.params : [])];
+            case 'XCALL':
+                // FORMAT v0 (request, VM-emitted): VERSION|CALL_ID|TARGET_CHAIN|TARGET_CONTRACT_INDEX|METHOD|PARAMS_JSON|GAS_LIMIT|CALLBACK_METHOD|CALLBACK_PARAMS_JSON|DEADLINE_BLOCKS|CROSS_HOPS
+                // crossHops is the HOST-derived value set above (never the VM's claim).
+                return [0, params.callId, params.targetChain, params.contractIndex, params.method,
+                        JSON.stringify(Array.isArray(params.params) ? params.params.map(String) : []),
+                        params.gasLimit, params.callbackMethod,
+                        JSON.stringify(Array.isArray(params.callbackParams) ? params.callbackParams.map(String) : []),
+                        params.deadlineBlocks, params.crossHops];
             default:
                 throw new Error('unsupported emission action: ' + action);
         }

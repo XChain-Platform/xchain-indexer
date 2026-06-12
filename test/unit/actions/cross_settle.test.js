@@ -189,12 +189,20 @@ describe('Cross_Settle action handler @regression @tier1', function () {
         assert.ok(indexer.indexerDb.recordCrossChainSettlement.notCalled);
     });
 
-    it('skips (records nothing) when the local offer is no longer open', async function () {
+    it('records a NO-OP settlement (no funds) when the local offer is no longer open', async function () {
         const { match } = signMatch(makeMatch(), 1);
         indexer.indexerDb.getValidatorsByCapability.resolves([{}]);
         indexer.indexerDb.getSwapInfo.resolves({ SOURCE: 'x', SWAP_STATUS: 'complete' });
-        await handler.parse(null, makeData({ MATCH: match }), null);
-        assert.ok(indexer.indexerDb.recordCrossChainSettlement.notCalled);
+        const data = makeData({ MATCH: match });
+        await handler.parse(null, data, null);
+        // The record stops the match re-evaluating every block; it is anchored to a
+        // real internal action row so a reorg drops it and the match re-applies.
+        assert.ok(indexer.indexerDb.recordCrossChainSettlement.calledOnceWith(777, match, 42));
+        assert.strictEqual(data['STATUS'], 'valid');
+        // ...but no funds move and the offer status is untouched.
+        assert.ok(indexer.indexerDb.createEscrow.notCalled);
+        assert.ok(indexer.indexerDb.createCredit.notCalled);
+        assert.ok(indexer.indexerDb.createSwapStatus.notCalled);
     });
 
     // ─── Happy path: fungible escrow release (ownership = 0) ───────────────
@@ -213,7 +221,8 @@ describe('Cross_Settle action handler @regression @tier1', function () {
         assert.ok(indexer.indexerDb.recordCrossChainSettlement.calledOnce);
         const recArgs = indexer.indexerDb.recordCrossChainSettlement.firstCall.args;
         assert.strictEqual(recArgs[0], 777);
-        assert.strictEqual(recArgs[1], match.match_id);
+        assert.strictEqual(recArgs[1], match);            // full match (legs captured at settle time)
+        assert.strictEqual(recArgs[1].match_id, match.match_id);
         assert.strictEqual(recArgs[2], 42);
         assert.ok(indexer.mapper.createMappings.called);
         assert.ok(indexer.indexerDb.updateBalances.called);
@@ -231,7 +240,7 @@ describe('Cross_Settle action handler @regression @tier1', function () {
         await handler.parse(null, data, null);
         // local action index is b_action_index (88); swap completed against it
         assert.ok(indexer.indexerDb.createSwapStatus.calledWith(777, 88, 'complete'));
-        assert.ok(indexer.indexerDb.recordCrossChainSettlement.calledWith(777, match.match_id, 88));
+        assert.ok(indexer.indexerDb.recordCrossChainSettlement.calledWith(777, match, 88));
     });
 
     // ─── Happy path with N>1 quorum (2f+1) ────────────────────────────────
@@ -373,12 +382,13 @@ describe('Cross_Settle action handler @regression @tier1', function () {
             assert.ok(indexer.indexerDb.createOrderStatus.calledWith(777, 42, 'complete'));
         });
 
-        it('skips when the local order is not open', async function () {
+        it('records a NO-OP settlement (no fill, no funds) when the local order is not open', async function () {
             const { match } = signMatch(orderMatch(), 1);
             indexer.indexerDb.getOrderInfo.resolves({ SOURCE: 'x', ORDER_STATUS: 'complete' });
             await handler.parse(null, makeData({ MATCH: match }), null);
             assert.ok(indexer.indexerDb.recordCrossChainOrderFill.notCalled);
-            assert.ok(indexer.indexerDb.recordCrossChainSettlement.notCalled);
+            assert.ok(indexer.indexerDb.createEscrow.notCalled);
+            assert.ok(indexer.indexerDb.recordCrossChainSettlement.calledOnce);
         });
 
         it('skips when the local order is not found', async function () {

@@ -269,7 +269,7 @@ describe('HubDbSync stream-position watermark @regression @tier3', function () {
 
     it('_bootstrapAll opens the heartbeat gate and adopts the OLDEST per-table watermark only when every table drains', async function () {
         const sync = makeWatermarkSync();
-        const marks = { price_snapshots: 900, oracle_prices: 880, cross_chain_matches: 910, capability_snapshots: 905, state_checkpoints: 920 };
+        const marks = { price_snapshots: 900, oracle_prices: 880, cross_chain_matches: 910, cross_chain_calls: 915, capability_snapshots: 905, state_checkpoints: 920 };
         sinon.stub(sync, '_bootstrapTable').callsFake(async (table) => marks[table]);
         await sync._bootstrapAll();
         assert.strictEqual(sync._bootstrapDrained, true);
@@ -370,7 +370,7 @@ describe('HubDbSync bootstrap pagination + retry @regression @tier2', function (
             const bootstrapTable = sinon.stub(sync, '_bootstrapTable').resolves(null);
             await sync._bootstrapAll();
             await clock.tickAsync(sync.pollIntervalMs * 3);
-            assert.strictEqual(bootstrapTable.callCount, 5, 'one pass over the 5 tables, no retries');
+            assert.strictEqual(bootstrapTable.callCount, 6, 'one pass over the 6 mirrored tables, no retries');
         } finally {
             clock.restore();
         }
