@@ -649,9 +649,12 @@ class Execute {
                 // DESTINATION would land in the COIN slot and the message would be malformed.
                 return [0, params.coin || '', params.destination, params.encryptionMethod || '', params.encryptionKey || ''];
             case 'ATTEST':
-                // FORMAT v0 (request, VM-emitted): VERSION|REQUEST_ID|PROVIDER_ID|REQUEST_PAYLOAD|CALLBACK_METHOD|CALLBACK_PARAMS_JSON|REDUNDANCY|DEADLINE_BLOCKS
+                // FORMAT v0 (request, VM-emitted): VERSION|REQUEST_ID|PROVIDER_ID|REQUEST_PAYLOAD|CALLBACK_METHOD|CALLBACK_PARAMS_JSON|REDUNDANCY|DEADLINE_BLOCKS|FEE_TICK|FEE_AMOUNT
+                // FEE_TICK/FEE_AMOUNT are optional trailing fields — empty when the
+                // contract requested no fee (the attest handler treats '' as null).
                 return [0, params.requestId, params.providerId, params.requestPayload, params.callbackMethod,
-                        params.callbackParams || '[]', params.redundancy, params.deadlineBlocks];
+                        params.callbackParams || '[]', params.redundancy, params.deadlineBlocks,
+                        params.feeTick || '', params.feeAmount || ''];
             case 'EXECUTE':
                 // FORMAT: VERSION|CONTRACT_ACTION_INDEX|METHOD|PARAMS...
                 // (gasLimit travels via emissionData.VM_GAS_LIMIT, not the positional

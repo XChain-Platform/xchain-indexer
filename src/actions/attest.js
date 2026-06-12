@@ -47,7 +47,12 @@ class Attest {
 
         // Per-version format strings
         this.formats = {};
-        this.formats[0] = 'VERSION|REQUEST_ID|PROVIDER_ID|REQUEST_PAYLOAD|CALLBACK_METHOD|CALLBACK_PARAMS_JSON|REDUNDANCY|DEADLINE_BLOCKS';
+        // FEE_TICK|FEE_AMOUNT are optional trailing fields (E1 paid-attestation
+        // wire prep): absent on the wire → null, and the SDK serializer trims
+        // trailing empties, so feeless requests stay byte-identical to the
+        // 8-field format. v1 consensus accepts only FEE_TICK == GAS (XCHAIN);
+        // arbitrary ticks are a post-launch rule loosening, not a wire change.
+        this.formats[0] = 'VERSION|REQUEST_ID|PROVIDER_ID|REQUEST_PAYLOAD|CALLBACK_METHOD|CALLBACK_PARAMS_JSON|REDUNDANCY|DEADLINE_BLOCKS|FEE_TICK|FEE_AMOUNT';
         this.formats[1] = 'VERSION|REQUEST_ID|PROVIDER_ID|RESPONSE_PAYLOAD|STATUS|META|SIG_COUNT|PUBKEY|SIG|...';
         this.formats[2] = 'VERSION|REQUEST_ID';
     }
@@ -80,6 +85,8 @@ class Attest {
         data['CALLBACK_PARAMS'] = params[5];
         data['REDUNDANCY']      = params[6];
         data['DEADLINE_BLOCKS'] = params[7];
+        data['FEE_TICK']        = (params[8] !== undefined && String(params[8]).trim() !== '') ? String(params[8]).trim() : null;
+        data['FEE_AMOUNT']      = (params[9] !== undefined && String(params[9]).trim() !== '') ? String(params[9]).trim() : null;
         // EMITTER carries the contract's action_index (set by execute.processEmission)
         data['CONTRACT_INDEX']  = data['EMITTER'];
 
@@ -111,6 +118,22 @@ class Attest {
         data['DEADLINE_BLOCK'] = deadlineBlock;
         if(!error && !this.providerRegistry.isDeadlineAllowed(data['PROVIDER_ID'], parseInt(data['BLOCK_INDEX']), deadlineBlock))
             error = 'invalid: DEADLINE (outside provider window)';
+
+        // Optional request fee (E1). XCHAIN-only in v1: the validator_rewards →
+        // COLLECT payout chain is GAS-denominated, so consensus pins FEE_TICK to
+        // the GAS tick. The field exists on the wire so post-launch multi-tick
+        // support is a rule loosening, not a format change.
+        if(!error && !this.util.isNull(data['FEE_TICK']) && data['FEE_TICK'] !== this.config['GAS'])
+            error = 'invalid: FEE_TICK (only ' + this.config['GAS'] + ' accepted)';
+
+        // isValidFiatFormat = isValidAmountFormat + a decimal-place cap; the fee
+        // must stay within GAS decimals (8) so the equal split stays exact.
+        if(!error && !this.util.isNull(data['FEE_AMOUNT']) && !this.util.isValidFiatFormat(8, data['FEE_AMOUNT']))
+            error = 'invalid: FEE_AMOUNT (format)';
+
+        let feePresent = !error && !this.util.isNull(data['FEE_AMOUNT']) && this.util.bcgt(data['FEE_AMOUNT'], '0');
+        if(!error && feePresent && this.util.isNull(data['FEE_TICK']))
+            error = 'invalid: FEE_TICK (required when FEE_AMOUNT > 0)';
 
         // Validate contract_index references a real contract
         if(!error && data['CONTRACT_INDEX'] != null){
@@ -152,6 +175,16 @@ class Attest {
         data['REQUEST_STATUS'] = 'pending';
         data['FEE_PAYER']      = data['FEE_PAYER'] || data['SOURCE']; // execute.processEmission carries FEE_PAYER
 
+        // Fee escrow funding check — FEE_PAYER (the EXECUTE caller) must hold the
+        // fee. Read at (BLOCK_INDEX, ACTION_INDEX) so accept/reject is identical
+        // across all validators (same determinism rule as COLLECT's pool check).
+        if(!error && feePresent){
+            let tokenInfo = await this.indexerDb.getTokenInfo(this.config['GAS'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
+            let balances  = await this.indexerDb.getAddressBalances(data['FEE_PAYER'], null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
+            if(!tokenInfo || !this.util.hasBalance(balances, tokenInfo['TICK_ID'], data['FEE_AMOUNT']))
+                error = 'invalid: insufficient funds (FEE_AMOUNT)';
+        }
+
         let status = (error) ? error : 'valid';
         data['STATUS'] = status;
 
@@ -159,9 +192,27 @@ class Attest {
                     ' : provider=' + data['PROVIDER_ID'] +
                     ' : contract=' + data['CONTRACT_INDEX'] +
                     ' : redundancy=' + data['REDUNDANCY'] +
+                    ' : fee=' + (feePresent ? data['FEE_AMOUNT'] + ' ' + data['FEE_TICK'] : 'none') +
                     ' : ' + data['STATUS']);
 
         await this.indexerDb.createAttestationRequest(data);
+
+        // Escrow the fee from FEE_PAYER (debit + escrow at this v0 action_index;
+        // released to the REWARD pool on fulfillment, refunded on expiry/error).
+        // Rollback safety is the generic path: escrows/debits delete by
+        // action_index, and the request row resets via resolved_block.
+        if(status === 'valid' && feePresent){
+            let gas = this.config['GAS'];
+            this.util.addAddressTicker(data['FEE_PAYER'], gas);
+            let debits  = [[gas, data['FEE_AMOUNT'], data['FEE_PAYER']]];
+            let escrows = [[gas, data['FEE_AMOUNT'], data['FEE_PAYER']]];
+            await this.util.processTransactionLedgerChanges(this.indexerDb, data, [], debits, escrows);
+            let tickers   = this.util.getTickersList(),
+                addresses = Object.keys(this.util.getAddressesList());
+            await this.indexerDb.updateBalances(addresses);
+            await this.indexerDb.updateTokens(tickers);
+        }
+
         await this.mapper.createMappings(data);
     }
 
@@ -307,6 +358,11 @@ class Attest {
                 let newRequestStatus = (responseStatus === 'ok') ? 'fulfilled' : 'errored';
                 await this.indexerDb.updateAttestationRequestStatus(data['REQUEST_ID'], newRequestStatus, data['BLOCK_INDEX']);
 
+                // Fee disposition (E1). Release/refund rows are written at THIS
+                // v1 action_index, so a reorg of the v1 removes them generically
+                // and the v0 escrow (earlier action_index) survives intact.
+                await this._settleRequestFee(request, data, newRequestStatus);
+
                 // Inject the callback EXECUTE. Wrapped in a savepoint so a failing callback
                 // does NOT roll back the response row.
                 try {
@@ -363,6 +419,9 @@ class Attest {
         // replay skipped re-synthesizing the v2 row)
         await this.indexerDb.updateAttestationRequestStatus(requestId, 'expired', data['BLOCK_INDEX']);
 
+        // Refund the request fee (E1) — never reached the responsible set's quorum.
+        await this._settleRequestFee(request, data, 'expired');
+
         // Mark missed_count on each responsible validator (deterministic by SHA256(request_id || pubkey))
         try {
             let responsible = await this._computeResponsibleSet(
@@ -400,6 +459,75 @@ class Attest {
         });
         withHash.sort((a, b) => (a.hash < b.hash) ? -1 : (a.hash > b.hash ? 1 : 0));
         return withHash.slice(0, Math.max(1, Number(redundancy) || 1)).map(v => v.pubkey);
+    }
+
+    // Settle the request fee escrowed at v0 (E1 paid attestations). Runs at the
+    // terminal flip and writes ledger rows at the SETTLING action's action_index
+    // (the v1 response or the synthesized v2 expire), so a reorg of the settle
+    // action removes them generically while the v0 escrow row survives.
+    //   'fulfilled'          → escrow → REWARD pool + equal validator_rewards
+    //                          split across the responsible set (floor to GAS
+    //                          decimals; remainder dust stays in the pool —
+    //                          COLLECT only ever pays what validator_rewards
+    //                          reference, so the pool stays solvent).
+    //   'errored'/'expired'  → escrow → refund to FEE_PAYER.
+    // Feeless requests (fee_amount NULL/0) are a no-op.
+    async _settleRequestFee(request, data, terminalStatus){
+        let feeAmount = String((request && request.fee_amount) || '0');
+        if(!this.util.bcgt(feeAmount, '0')) return;
+
+        let gas      = this.config['GAS'];
+        let feePayer = String(request.fee_payer || '');
+        if(!feePayer){
+            console.warn('Attestation fee settle: missing fee_payer for request ' + String(request.request_id).substring(0,16) + '... — fee left in escrow');
+            return;
+        }
+
+        // Release the escrow held against FEE_PAYER (negative escrow row, the
+        // order_expire idiom) and route the funds per the terminal status.
+        let escrows = [[gas, this.util.bcmul(feeAmount, '-1', 8), feePayer]];
+        let credits = [];
+        this.util.addAddressTicker(feePayer, gas);
+
+        if(terminalStatus === 'fulfilled'){
+            let rewardPool = this.config['ADDRESS']['REWARD'];
+            this.util.addAddressTicker(rewardPool, gas);
+            credits.push([gas, feeAmount, rewardPool]);
+
+            let responsible = await this._computeResponsibleSet(
+                String(request.request_id), request.redundancy, Number(request.block_index)
+            );
+            if(responsible.length > 0){
+                // Equal split, floored to GAS decimals — deterministic across
+                // validators (bcmulfloor exists for exactly this concern).
+                let perValidator = this.util.bcmulfloor(
+                    this.util.bcdiv(feeAmount, String(responsible.length), 18), '1', 8
+                );
+                if(this.util.bcgt(perValidator, '0')){
+                    for(let pk of responsible){
+                        // round_reference is BIGINT — key idempotency on the
+                        // REQUEST's action_index (unique per request), not the
+                        // 64-hex request_id.
+                        await this.indexerDb.createValidatorReward(
+                            pk, Number(request.action_index), 'attest_fee', perValidator, data['BLOCK_INDEX']
+                        );
+                    }
+                }
+            }
+            console.log("\t ATTEST fee : " + feeAmount + ' ' + gas + ' → REWARD pool, split ' +
+                        responsible.length + ' way(s) [request ' + String(request.request_id).substring(0,16) + '...]');
+        } else {
+            // errored / expired — service not rendered, refund the payer
+            credits.push([gas, feeAmount, feePayer]);
+            console.log("\t ATTEST fee : " + feeAmount + ' ' + gas + ' refunded to FEE_PAYER (' + terminalStatus + ')' +
+                        ' [request ' + String(request.request_id).substring(0,16) + '...]');
+        }
+
+        await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, [], escrows);
+        let tickers   = this.util.getTickersList(),
+            addresses = Object.keys(this.util.getAddressesList());
+        await this.indexerDb.updateBalances(addresses);
+        await this.indexerDb.updateTokens(tickers);
     }
 
     // Synthesize an EXECUTE that runs the contract's callback method (v1 response path).

@@ -5211,11 +5211,15 @@ class Database {
     async getEffectiveUnsettledMatches(coin, block_time){
         // network filter: a match only settles on the indexer of the network it was matched
         // + signed on (also bound into the signed canonical — see cross_settle._canonical).
+        // ORDER BY (snapshot_block, match_id) — quorum-agreed row content, so the
+        // settlement order is identical no matter which hub DB this indexer mirrors
+        // (the hub-assigned id is per-hub AUTO_INCREMENT and MUST NOT order consensus
+        // state).
         let network = this.config['NETWORK'];
         let matches = await this._mirrorDb().doQuery(
             `SELECT * FROM cross_chain_matches
              WHERE status = 'finalized' AND network = ? AND effective_time <= ? AND (a_chain = ? OR b_chain = ?)
-             ORDER BY id ASC`,
+             ORDER BY snapshot_block ASC, match_id ASC`,
             [network, block_time, coin, coin]);
         if(matches.length === 0) return [];
         let ids = matches.map(m => m.match_id);
@@ -5312,14 +5316,16 @@ class Database {
     // Effective, unexecuted dispatch rows targeting THIS chain — drives the XEXEC
     // injection pass. cross_chain_calls is hub-mirrored (read via _mirrorDb) while
     // cross_chain_call_executions is local, so the exclusion is filtered in JS.
-    // ORDER BY the hub-assigned id — the deterministic injection-order key — and
-    // cap per block (overflow carries forward; never dropped).
+    // ORDER BY (snapshot_block, call_id) — both quorum-agreed row content, so the
+    // injection order is identical no matter which hub DB this indexer mirrors
+    // (the hub-assigned id is per-hub AUTO_INCREMENT and MUST NOT order consensus
+    // state). Cap per block (overflow carries forward; never dropped).
     async getEffectiveUndispatchedCalls(coin, network, block_time, limit){
         let calls = await this._mirrorDb().doQuery(
             `SELECT * FROM cross_chain_calls
              WHERE phase = 'dispatch' AND status = 'finalized' AND network = ?
                AND target_chain = ? AND effective_time <= ?
-             ORDER BY id ASC`,
+             ORDER BY snapshot_block ASC, call_id ASC`,
             [network, coin, block_time]);
         if(calls.length === 0) return [];
         let ids = calls.map(c => c.call_id);
@@ -5337,7 +5343,7 @@ class Database {
             `SELECT * FROM cross_chain_calls
              WHERE phase = 'result' AND status = 'finalized' AND network = ?
                AND source_chain = ? AND effective_time <= ?
-             ORDER BY id ASC`,
+             ORDER BY snapshot_block ASC, call_id ASC`,
             [network, coin, block_time]);
         if(results.length === 0) return [];
         let ids = results.map(r => r.call_id);
@@ -8687,6 +8693,9 @@ class Database {
         let gas_escrow       = data['GAS_ESCROW'] || '0';
         let request_status   = data['REQUEST_STATUS'] || 'pending';
         let block_index      = data['BLOCK_INDEX'];
+        // Optional request fee (E1): tick resolved to an id (NULL = feeless)
+        let fee_tick_id      = !this.util.isNull(data['FEE_TICK']) ? await this.createTicker(data['FEE_TICK']) : null;
+        let fee_amount       = !this.util.isNull(data['FEE_AMOUNT']) ? String(data['FEE_AMOUNT']) : null;
 
         let query  = "SELECT action_index FROM attests WHERE action_index=? LIMIT 1";
         let exists = false;
@@ -8696,23 +8705,23 @@ class Database {
             query = `UPDATE attests SET
                         version=0, request_id=?, contract_index=?, fee_payer_id=?, provider_id=?, payload=?,
                         callback_method=?, callback_params_json=?, redundancy=?, deadline_block=?,
-                        gas_escrow=?, request_status=?, status_id=?, block_index=?
+                        gas_escrow=?, fee_tick_id=?, fee_amount=?, request_status=?, status_id=?, block_index=?
                     WHERE action_index=?`;
             await this.doQuery(query, [
                 request_id, contract_index, fee_payer_id, provider_id, payload,
                 callback_method, callback_params, redundancy, deadline_block,
-                gas_escrow, request_status, status_id, block_index, action_index
+                gas_escrow, fee_tick_id, fee_amount, request_status, status_id, block_index, action_index
             ]);
         } else {
             query = `INSERT INTO attests
                         (action_index, version, request_id, contract_index, fee_payer_id, provider_id, payload,
                          callback_method, callback_params_json, redundancy, deadline_block,
-                         gas_escrow, request_status, status_id, block_index)
-                    VALUES (?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+                         gas_escrow, fee_tick_id, fee_amount, request_status, status_id, block_index)
+                    VALUES (?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
             await this.doQuery(query, [
                 action_index, request_id, contract_index, fee_payer_id, provider_id, payload,
                 callback_method, callback_params, redundancy, deadline_block,
-                gas_escrow, request_status, status_id, block_index
+                gas_escrow, fee_tick_id, fee_amount, request_status, status_id, block_index
             ]);
         }
     }
@@ -8841,8 +8850,8 @@ class Database {
         let max = Number(limit) > 0 ? Number(limit) : 100;
         let query = `SELECT action_index, request_id, contract_index, fee_payer_id, provider_id,
                             payload, callback_method, callback_params_json,
-                            redundancy, deadline_block, gas_escrow, request_status,
-                            status_id, block_index
+                            redundancy, deadline_block, gas_escrow, fee_tick_id, fee_amount,
+                            request_status, status_id, block_index
                      FROM attests
                      WHERE ` + where + `
                      ORDER BY block_index ASC, action_index ASC
@@ -8857,6 +8866,7 @@ class Database {
             action_index:   typeof r.action_index   === 'bigint' ? Number(r.action_index)   : r.action_index,
             contract_index: typeof r.contract_index === 'bigint' ? Number(r.contract_index) : r.contract_index,
             fee_payer_id:   typeof r.fee_payer_id   === 'bigint' ? Number(r.fee_payer_id)   : r.fee_payer_id,
+            fee_tick_id:    typeof r.fee_tick_id    === 'bigint' ? Number(r.fee_tick_id)    : r.fee_tick_id,
             deadline_block: typeof r.deadline_block === 'bigint' ? Number(r.deadline_block) : r.deadline_block,
             status_id:      typeof r.status_id      === 'bigint' ? Number(r.status_id)      : r.status_id,
             block_index:    typeof r.block_index    === 'bigint' ? Number(r.block_index)    : r.block_index
