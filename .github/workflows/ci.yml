@@ -43,10 +43,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # xchain-decoder is still PRIVATE pre-launch, so the default GITHUB_TOKEN
+      # cannot read it — this uses a read-only deploy key scoped to that one
+      # repo (secret XCHAIN_DECODER_DEPLOY_KEY). When the repos flip public at
+      # launch, the ssh-key line can simply be dropped.
       - name: Check out the canonical decoder schema
         uses: actions/checkout@v4
         with:
           repository: XChain-Platform/xchain-decoder
+          ssh-key: ${{ secrets.XCHAIN_DECODER_DEPLOY_KEY }}
           path: .xchain-decoder
 
       - name: Use Node.js 22
