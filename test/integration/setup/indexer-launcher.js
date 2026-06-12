@@ -25,7 +25,14 @@ const { getConnectionParams } = require('./db-connection');
 // Ensure env is set before requiring indexer modules
 process.env.INDEXER_COIN    = process.env.INDEXER_COIN    || 'BTC';
 process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
-process.env.npm_package_version = process.env.npm_package_version || '1.1.0';
+// Protocol activation gates on the running version (protocol_changes.js
+// reads npm_package_version). npm sets it automatically; DIRECT mocha
+// invocations do not — and a stale hardcoded default ('1.1.0') silently
+// flipped such runs into the pre-UNIFIED_FEES legacy era, where fees are
+// per-coin and newer actions (STAKE 2.0.0+) are "not yet activated".
+// Default to the REAL package version so both invocations behave the same.
+process.env.npm_package_version = process.env.npm_package_version
+    || require('../../../package.json').version;
 process.env.npm_package_name = process.env.npm_package_name || 'xchain-indexer';
 
 const XChainIndexer = require('../../../src/XChainIndexer.js');
