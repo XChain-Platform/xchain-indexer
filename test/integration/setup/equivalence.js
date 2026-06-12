@@ -194,8 +194,63 @@ async function assertIndexerDbsEquivalent(queryA, queryB, opts = {}) {
     }
 }
 
+/**
+ * Capture a whole indexer DB as canonical table snapshots (for comparisons
+ * where both sides cannot exist at once — e.g. the multi-chain sweep, which
+ * rebuilds the SAME test DB once per coin). Returns {table: canonRows[]}.
+ */
+async function captureDbState(queryFn, opts = {}) {
+    const mode = opts.mode || 'strict';
+    const state = {};
+    for (const table of await listTables(queryFn)) {
+        state[table] = await tableCanon(queryFn, table, excludedColumns(table, mode));
+    }
+    return state;
+}
+
+/**
+ * Assert two captured states are identical. `ignoreTables` lists tables
+ * whose content differs BY CONSTRUCTION of the comparison (each entry must
+ * carry its justification at the call site).
+ */
+function assertCapturedStatesEqual(stateA, stateB, opts = {}) {
+    const labelA = opts.labelA || 'A';
+    const labelB = opts.labelB || 'B';
+    const ignore = new Set(opts.ignoreTables || []);
+    const maxDiffRows = opts.maxDiffRows || 3;
+
+    const tablesA = Object.keys(stateA).sort();
+    const tablesB = Object.keys(stateB).sort();
+    assert.deepStrictEqual(tablesB, tablesA,
+        `${labelA} and ${labelB} have different table sets`);
+
+    const diffs = [];
+    for (const table of tablesA) {
+        if (ignore.has(table)) continue;
+        const canonA = stateA[table];
+        const canonB = stateB[table];
+        if (canonA.length === canonB.length &&
+            canonA.every((r, i) => r === canonB[i])) continue;
+        const setA = new Set(canonA);
+        const setB = new Set(canonB);
+        diffs.push({
+            table,
+            [labelA + ' rows']: canonA.length,
+            [labelB + ' rows']: canonB.length,
+            ['only in ' + labelA]: canonA.filter(r => !setB.has(r)).slice(0, maxDiffRows),
+            ['only in ' + labelB]: canonB.filter(r => !setA.has(r)).slice(0, maxDiffRows),
+        });
+    }
+    if (diffs.length > 0) {
+        assert.fail(`${labelA} and ${labelB} states are NOT identical in ` +
+            diffs.map(d => d.table).join(', ') + ':\n' + JSON.stringify(diffs, null, 2));
+    }
+}
+
 module.exports = {
     readHashChain,
     assertHashChainsEqual,
     assertIndexerDbsEquivalent,
+    captureDbState,
+    assertCapturedStatesEqual,
 };
