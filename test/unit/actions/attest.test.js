@@ -676,11 +676,41 @@ describe('Attest (ATTEST) @regression @tier3', function () {
                 assert.ok(indexer.indexerDb.createEscrow.notCalled);
             });
 
-            it('rejects a malformed FEE_AMOUNT (9 decimal places)', async function () {
+            it('rejects FEE_AMOUNT finer than the GAS tick decimals (9 dp vs production 8)', async function () {
                 fundFeePayer();
+                // Production XCHAIN genesis is issued with 8 decimals; 8 is also the
+                // hard ceiling the equal split floors to.
+                indexer.indexerDb.getTokenDecimalPrecision.resolves(8);
                 const data = v0FeeData();
                 await handler.parse(v0FeeParams(data, 'XCHAIN', '1.123456789'), data, null);
-                assert.ok(String(data['STATUS']).includes('invalid: FEE_AMOUNT (format)'));
+                assert.ok(String(data['STATUS']).includes('invalid: FEE_AMOUNT (precision'));
+                assert.ok(indexer.indexerDb.createEscrow.notCalled);
+            });
+
+            it('rejects FEE_AMOUNT finer than a low-decimal GAS tick (1.234 vs 2 dp)', async function () {
+                fundFeePayer();
+                indexer.indexerDb.getTokenDecimalPrecision.resolves(2);
+                const data = v0FeeData();
+                await handler.parse(v0FeeParams(data, 'XCHAIN', '1.234'), data, null);
+                assert.ok(String(data['STATUS']).includes('invalid: FEE_AMOUNT (precision'));
+                assert.ok(indexer.indexerDb.createEscrow.notCalled);
+            });
+
+            it('accepts FEE_AMOUNT at exactly the GAS tick decimals (2 dp)', async function () {
+                fundFeePayer();
+                indexer.indexerDb.getTokenDecimalPrecision.resolves(2);
+                const data = v0FeeData();
+                await handler.parse(v0FeeParams(data, 'XCHAIN', '1.23'), data, null);
+                assert.strictEqual(data['STATUS'], 'valid');
+                assert.ok(indexer.indexerDb.createEscrow.calledOnce);
+            });
+
+            it('rejects a fractional FEE_AMOUNT against the decimals-0 regtest GAS tick', async function () {
+                fundFeePayer(); // mock getTokenDecimalPrecision defaults to 0 (regtest GAS)
+                const data = v0FeeData();
+                await handler.parse(v0FeeParams(data, 'XCHAIN', '1.5'), data, null);
+                assert.ok(String(data['STATUS']).includes('invalid: FEE_AMOUNT (precision'));
+                assert.ok(indexer.indexerDb.createEscrow.notCalled);
             });
 
             it('rejects FEE_AMOUNT > 0 without FEE_TICK', async function () {

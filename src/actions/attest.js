@@ -126,10 +126,25 @@ class Attest {
         if(!error && !this.util.isNull(data['FEE_TICK']) && data['FEE_TICK'] !== this.config['GAS'])
             error = 'invalid: FEE_TICK (only ' + this.config['GAS'] + ' accepted)';
 
-        // isValidFiatFormat = isValidAmountFormat + a decimal-place cap; the fee
-        // must stay within GAS decimals (8) so the equal split stays exact.
-        if(!error && !this.util.isNull(data['FEE_AMOUNT']) && !this.util.isValidFiatFormat(8, data['FEE_AMOUNT']))
-            error = 'invalid: FEE_AMOUNT (format)';
+        // isValidFiatFormat = isValidAmountFormat + a decimal-place cap. The fee
+        // must not carry more precision than the GAS tick is issued with: the
+        // escrow/debit/credit ledger rows round to the tick's decimals
+        // (createLedgerChangeRecord), so a finer fee would be CHARGED rounded
+        // while attests.fee_amount keeps the unrounded string — desyncing the
+        // reward split (computed from the unrounded fee_amount) from the escrow.
+        // Cap at min(8, gasDecimals): 8 is the hard ceiling the equal split
+        // floors to (bcmulfloor(...,8)); gasDecimals is the consensus precision
+        // of the GAS tick (8 for the production XCHAIN genesis issuance, 0 on
+        // the decimals-0 regtest GAS tick). Deterministic — every validator
+        // replaying from genesis reads the same issues-table state at this block.
+        if(!error && !this.util.isNull(data['FEE_AMOUNT'])){
+            let gasDecimals = await this.indexerDb.getTokenDecimalPrecision(
+                await this.indexerDb.getTickerId(this.config['GAS'])
+            );
+            let feeCap = Math.min(8, gasDecimals);
+            if(!this.util.isValidFiatFormat(feeCap, data['FEE_AMOUNT']))
+                error = 'invalid: FEE_AMOUNT (precision > ' + feeCap + ' dp)';
+        }
 
         let feePresent = !error && !this.util.isNull(data['FEE_AMOUNT']) && this.util.bcgt(data['FEE_AMOUNT'], '0');
         if(!error && feePresent && this.util.isNull(data['FEE_TICK']))
