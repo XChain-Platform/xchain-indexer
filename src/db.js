@@ -756,6 +756,14 @@ class Database {
         }
         // Set NUMBER field values to numeric or NULL
         for(let field of this.config['NUMBER_FIELDS'] ){
+            // TYPE is numeric for LIST (the list type 1/2/3) — the reason it
+            // sits in NUMBER_FIELDS — but for FILE it is the MIME type
+            // string. Numeric-normalizing it for FILE nulled every stored
+            // MIME type (files.type_id was always NULL), which also broke
+            // inline serving of on-chain media (the explorer's raw endpoint
+            // fell back to octet-stream + attachment). Storage-only: FILE
+            // validation reads the raw wire value before normalization.
+            if(field=='TYPE' && data['ACTION']=='FILE') continue;
             if(this.util.isNull(data[field]) || !this.util.isNumeric(data[field]))
                 data[field] = null;
         }

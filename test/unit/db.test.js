@@ -152,6 +152,22 @@ describe('Database.normalizeDataValues() @regression @tier1', function () {
         assert.strictEqual(out.DECIMALS, null);
     });
 
+    it('preserves a FILE action MIME string in TYPE', function () {
+        // TYPE sits in NUMBER_FIELDS for LIST's numeric list type, but for
+        // FILE it is the MIME string — numeric-normalizing it nulled every
+        // stored MIME type (files.type_id was always NULL).
+        const data = { ACTION: 'FILE', TYPE: 'application/json' };
+        const out  = normalize(data);
+        assert.strictEqual(out.TYPE, 'application/json');
+    });
+
+    it('still numeric-normalizes TYPE for LIST actions', function () {
+        const valid   = normalize({ ACTION: 'LIST', TYPE: '2' });
+        assert.strictEqual(valid.TYPE, '2');
+        const invalid = normalize({ ACTION: 'LIST', TYPE: 'image/png' });
+        assert.strictEqual(invalid.TYPE, null);
+    });
+
     // ── LOCK_FIELDS ───────────────────────────────────────────────────────
 
     it('keeps LOCK_MAX_SUPPLY when it is 0', function () {
