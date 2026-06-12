@@ -42,10 +42,14 @@ const DB_USER = process.env.TEST_DB_USER || _envVars.INDEXER_DB_USER || 'root';
 const DB_PASS = process.env.TEST_DB_PASS || _envVars.INDEXER_DB_PASS || '';
 const DECODER_DB = process.env.TEST_DECODER_DB || 'xchain_test_decoder';
 const INDEXER_DB = process.env.TEST_INDEXER_DB || 'xchain_test_indexer';
+// Second indexer DB for cross-node equivalence tests (two independent indexer
+// instances over the SAME decoder DB — scenario 13).
+const INDEXER_DB_B = process.env.TEST_INDEXER_DB_B || 'xchain_test_indexer_b';
 
 let adminPool = null;
 let decoderPool = null;
 let indexerPool = null;
+let indexerBPool = null;
 
 function getAdminPool() {
     if (!adminPool) {
@@ -88,6 +92,24 @@ async function decoderQuery(sql, args) {
 /** Run a query against the indexer DB */
 async function indexerQuery(sql, args) {
     const pool = getIndexerPool();
+    const conn = await pool.getConnection();
+    try { return await conn.query(sql, args); }
+    finally { conn.release(); }
+}
+
+function getIndexerBPool() {
+    if (!indexerBPool) {
+        indexerBPool = mariadb.createPool({
+            host: DB_HOST, port: DB_PORT, user: DB_USER, password: DB_PASS,
+            database: INDEXER_DB_B, connectionLimit: 5, insertIdAsNumber: true
+        });
+    }
+    return indexerBPool;
+}
+
+/** Run a query against the SECOND indexer DB (cross-node equivalence tests) */
+async function indexerBQuery(sql, args) {
+    const pool = getIndexerBPool();
     const conn = await pool.getConnection();
     try { return await conn.query(sql, args); }
     finally { conn.release(); }
@@ -179,27 +201,45 @@ async function resetIndexerDb() {
     if (indexerPool) { await indexerPool.end(); indexerPool = null; }
 }
 
-/** Close all connection pools */
-async function closeAll() {
-    if (decoderPool) { await decoderPool.end(); decoderPool = null; }
-    if (indexerPool) { await indexerPool.end(); indexerPool = null; }
-    if (adminPool)   { await adminPool.end(); adminPool = null; }
+/** Drop and recreate the SECOND indexer DB (cross-node equivalence tests) */
+async function resetIndexerDbB() {
+    const pool = getAdminPool();
+    const conn = await pool.getConnection();
+    try {
+        await conn.query(`DROP DATABASE IF EXISTS ${INDEXER_DB_B}`);
+        await conn.query(`CREATE DATABASE ${INDEXER_DB_B}`);
+    } finally {
+        conn.release();
+    }
+    if (indexerBPool) { await indexerBPool.end(); indexerBPool = null; }
 }
 
-/** Return connection params for use with XChainIndexer constructor */
-function getConnectionParams() {
+/** Close all connection pools */
+async function closeAll() {
+    if (decoderPool)  { await decoderPool.end(); decoderPool = null; }
+    if (indexerPool)  { await indexerPool.end(); indexerPool = null; }
+    if (indexerBPool) { await indexerBPool.end(); indexerBPool = null; }
+    if (adminPool)    { await adminPool.end(); adminPool = null; }
+}
+
+/**
+ * Return connection params for use with XChainIndexer constructor.
+ * @param {string} [indexerName] - override the indexer DB name (defaults to
+ *   the primary test indexer DB; pass INDEXER_DB_B for a second node).
+ */
+function getConnectionParams(indexerName) {
     return {
         decoderHost: DB_HOST, decoderPort: DB_PORT, decoderName: DECODER_DB,
         decoderUser: DB_USER, decoderPass: DB_PASS,
-        indexerHost: DB_HOST, indexerPort: DB_PORT, indexerName: INDEXER_DB,
+        indexerHost: DB_HOST, indexerPort: DB_PORT, indexerName: indexerName || INDEXER_DB,
         indexerUser: DB_USER, indexerPass: DB_PASS,
     };
 }
 
 module.exports = {
-    decoderQuery, indexerQuery,
+    decoderQuery, indexerQuery, indexerBQuery,
     createDatabases, createDecoderSchema,
-    resetDecoderDb, resetIndexerDb,
+    resetDecoderDb, resetIndexerDb, resetIndexerDbB,
     closeAll, getConnectionParams,
-    DB_HOST, DB_PORT, DB_USER, DB_PASS, DECODER_DB, INDEXER_DB,
+    DB_HOST, DB_PORT, DB_USER, DB_PASS, DECODER_DB, INDEXER_DB, INDEXER_DB_B,
 };

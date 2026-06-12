@@ -33,9 +33,13 @@ const XChainIndexer = require('../../../src/XChainIndexer.js');
 /**
  * Create a configured XChainIndexer instance pointing at the test databases.
  * Does NOT start it — call start() or use the helper methods below.
+ *
+ * @param {object} [opts]
+ * @param {string} [opts.indexerName] - indexer DB name override (a second
+ *   "node" for cross-node equivalence tests; the decoder DB is always shared).
  */
-function createIndexer() {
-    const p = getConnectionParams();
+function createIndexer(opts = {}) {
+    const p = getConnectionParams(opts.indexerName);
     return new XChainIndexer(
         p.decoderHost, p.decoderPort, p.decoderName, p.decoderUser, p.decoderPass,
         p.indexerHost, p.indexerPort, p.indexerName, p.indexerUser, p.indexerPass
@@ -47,9 +51,10 @@ function createIndexer() {
  * without entering the main processing loop.
  *
  * Returns the initialized indexer instance with all classes ready.
+ * Accepts the same opts as createIndexer (indexerName override).
  */
-async function initIndexer() {
-    const indexer = createIndexer();
+async function initIndexer(opts = {}) {
+    const indexer = createIndexer(opts);
 
     // Replicate the initialization portion of start() without the while(true) loop
     const config   = require('../../../src/config.js');
@@ -63,7 +68,7 @@ async function initIndexer() {
     indexer.config = config.getConfig();
     indexer.util = new Utility();
 
-    const p = getConnectionParams();
+    const p = getConnectionParams(opts.indexerName);
     indexer.decoderDb = new Database(p.decoderHost, p.decoderPort, p.decoderName, p.decoderUser, p.decoderPass, indexer);
     indexer.indexerDb = new Database(p.indexerHost, p.indexerPort, p.indexerName, p.indexerUser, p.indexerPass, indexer);
 
