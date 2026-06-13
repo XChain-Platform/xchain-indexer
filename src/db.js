@@ -1029,6 +1029,10 @@ class Database {
         let info    = [];
         let hashes  = [];
         // Get data from credits table
+        // These rows feed the consensus ledger hash, and credits/debits/escrows have no
+        // primary key: ORDER BY action_index alone leaves the order of an action's
+        // multiple rows (e.g. an ISSUE's fee credit + mint credit) engine-unspecified,
+        // which forks the hash across nodes. Sort on every selected column.
         query = `SELECT
                     c.action_index,
                     c.address_id,
@@ -1040,8 +1044,8 @@ class Database {
                     INNER JOIN transactions t ON (t.tx_index=a.tx_index)
                 WHERE
                     t.block_index=?
-                ORDER BY 
-                    c.action_index ASC`;
+                ORDER BY
+                    c.action_index ASC, c.address_id ASC, c.tick_id ASC, c.amount ASC`;
         ledger.credits = await this.doQuery(query, [block_index]);
         // Get data from debits table
         query = `SELECT
@@ -1055,8 +1059,8 @@ class Database {
                     INNER JOIN transactions t ON (t.tx_index=a.tx_index)
                 WHERE
                     t.block_index=?
-                ORDER BY 
-                    d.action_index ASC`;
+                ORDER BY
+                    d.action_index ASC, d.address_id ASC, d.tick_id ASC, d.amount ASC`;
         ledger.debits = await this.doQuery(query, [block_index]);
         // Get data from escrows table
         query = `SELECT
@@ -1070,8 +1074,8 @@ class Database {
                     INNER JOIN transactions t ON (t.tx_index=a.tx_index)
                 WHERE
                     t.block_index=?
-                ORDER BY 
-                    e.action_index ASC`;
+                ORDER BY
+                    e.action_index ASC, e.address_id ASC, e.tick_id ASC, e.amount ASC`;
         ledger.escrows = await this.doQuery(query, [block_index]);
         // Get data from actions table
         query = `SELECT
@@ -1137,7 +1141,7 @@ class Database {
                  INNER JOIN actions a ON (a.action_index=d.action_index)
                  INNER JOIN transactions t ON (t.tx_index=a.tx_index)
                  WHERE t.block_index=?
-                 ORDER BY d.action_index ASC`;
+                 ORDER BY d.action_index ASC, d.contract_index ASC, d.source_id ASC, d.tick_id ASC, d.amount ASC, d.status_id ASC`;
         contracts_data.deposits = await this.doQuery(query, [block_index]);
         // Withdrawals
         query = `SELECT w.action_index, w.contract_index, w.source_id, w.tick_id, w.amount, w.status_id
@@ -1145,7 +1149,7 @@ class Database {
                  INNER JOIN actions a ON (a.action_index=w.action_index)
                  INNER JOIN transactions t ON (t.tx_index=a.tx_index)
                  WHERE t.block_index=?
-                 ORDER BY w.action_index ASC`;
+                 ORDER BY w.action_index ASC, w.contract_index ASC, w.source_id ASC, w.tick_id ASC, w.amount ASC, w.status_id ASC`;
         contracts_data.withdrawals = await this.doQuery(query, [block_index]);
         // Subtract one block from current block
         let prev_block_index = block_index -1;
