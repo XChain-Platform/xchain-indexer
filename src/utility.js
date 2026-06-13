@@ -805,6 +805,16 @@ class Utility {
     // Detect fee payment mode from the transaction
     // Returns: 'native' if fee output present, 'xchain' if absent on BTC, 'rejected' if absent on LTC/DOGE
     detectFeePaymentMode(data, decoderDb, txOutputs){
+        // Emitted/synthesized actions (IS_EMISSION: VM emissions, XEXEC, ATTEST
+        // responses) have no transaction of their own, so they can never carry a
+        // native fee output. Their economic fee is paid from the emitting
+        // contract's XCHAIN balance on EVERY chain — including LTC/DOGE, where a
+        // top-level action with no fee output is rejected. Without this, a
+        // contract-emitted ISSUE (or any emitted economic-fee action) is
+        // unconditionally rejected on LTC/DOGE ('native coin output required'),
+        // which BTC masks via its own xchain fallback below.
+        if(data && data['IS_EMISSION']) return 'xchain';
+
         let feeDestination = this.config['ADDRESS'] ? this.config['ADDRESS']['FEE_DESTINATION'] : null;
         if(!feeDestination || feeDestination === 'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX') {
             // No fee destination configured — fall back to xchain balance deduction

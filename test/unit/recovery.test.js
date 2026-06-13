@@ -94,7 +94,10 @@ function buildBatch(batchSeq, rawMatches, oracleKeys, crossKeys, opts) {
     let snaps = [];
     for (let kp of crossKeys)  snaps.push({ snapshot_block: SNAPSHOT_BLOCK, capability: 'cross_chain',    signing_pubkey: kp.pubkey, amount: '5' });
     for (let kp of oracleKeys) snaps.push({ snapshot_block: SNAPSHOT_BLOCK, capability: 'oracle_publish', signing_pubkey: kp.pubkey, amount: '5' });
-    let json = JSON.stringify({ v: 1, network: 'regtest', batch_seq: batchSeq, matches: matches, capability_snapshots: snaps });
+    let obj = { v: 1, network: 'regtest', batch_seq: batchSeq, matches: matches };
+    if (opts.rewards) obj.rewards = opts.rewards;
+    obj.capability_snapshots = snaps;
+    let json = JSON.stringify(obj);
     let crc  = crc32Hex(json);
     let b64  = zlib.gzipSync(Buffer.from(json, 'utf8'), { level: 9 }).toString('base64url');
 
@@ -165,6 +168,24 @@ function btcDbStub(staked) {
     return { async doQuery(sql, params) { return set.has(String(params[0]).toLowerCase()) ? [{ 1: 1 }] : []; } };
 }
 
+// BTC indexer stub for the reward restore: get-or-create id maps + an INSERT
+// capture for validator_rewards (the empty pre-reindex DB case).
+function rewardBtcDbStub() {
+    let rewards = [];
+    return {
+        rewards,
+        async createAddress() { return 11; },
+        async getOrCreatePubkeyId() { return 22; },
+        async doQuery(sql, params) {
+            if (sql.includes('INSERT IGNORE INTO validator_rewards')) {
+                rewards.push({ source_id: params[0], pubkey_id: params[1], reward_type: params[2],
+                               round_reference: params[3], amount: params[4], block_index: params[5] });
+            }
+            return [];
+        }
+    };
+}
+
 describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () {
     let oracleKeys, crossKeys;
     const quiet = { log: () => {} };
@@ -227,12 +248,67 @@ describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () 
         let { v1 } = buildBatch(0, [rawMatch('m1')], oracleKeys, crossKeys);
         // All keys staked → passes. One cross_chain key unstaked → batch rejected.
         let allStaked = oracleKeys.concat(crossKeys).map(k => k.pubkey);
-        let okReport = await new AnchorRecovery(memDb([v1], []), Object.assign({ btcDb: btcDbStub(allStaked) }, quiet)).run();
+        let okReport = await new AnchorRecovery(memDb([v1], []), Object.assign({ btcDb: btcDbStub(allStaked), verifyStakes: true }, quiet)).run();
         assert.strictEqual(okReport.verified, 1);
 
         let partial = allStaked.filter(p => p !== crossKeys[0].pubkey);
-        let badReport = await new AnchorRecovery(memDb([v1], []), Object.assign({ btcDb: btcDbStub(partial) }, quiet)).run();
+        let badReport = await new AnchorRecovery(memDb([v1], []), Object.assign({ btcDb: btcDbStub(partial), verifyStakes: true }, quiet)).run();
         assert.strictEqual(badReport.verified, 0);
         assert.ok(badReport.failed[0].reason.includes('no on-chain stake'));
+    });
+
+    it('stake cross-check is gated on the explicit flag, not btcDb presence (restore runs against an EMPTY pre-reindex BTC DB)', async function () {
+        let { v1 } = buildBatch(0, [rawMatch('m1')], oracleKeys, crossKeys);
+        // btcDb present but knows NO stakes (pre-reindex) and the flag is off —
+        // the batch must still verify, or the reward-restore step of the
+        // recovery runbook would fail every batch before the reindex runs.
+        let report = await new AnchorRecovery(memDb([v1], []), Object.assign({ btcDb: rewardBtcDbStub() }, quiet)).run();
+        assert.strictEqual(report.verified, 1);
+    });
+
+    // ── Anchor-publish reward restore (BTC indexer DB) ──────────────────────
+    describe('archived rewards', function () {
+
+        function reward(overrides) {
+            return Object.assign({
+                validator_pubkey: 'a'.repeat(64), source: '1StakeAddr',
+                round_number: 7, reward_type: 'anchor_BTC',
+                amount: '10.00000000', block_index: SNAPSHOT_BLOCK
+            }, overrides || {});
+        }
+
+        it('restores archived anchor rewards into the BTC indexer DB', async function () {
+            let { v1 } = buildBatch(0, [rawMatch('m1')], oracleKeys, crossKeys,
+                                    { rewards: [reward(), reward({ reward_type: 'anchor_archive', round_number: 3 })] });
+            let btcDb = rewardBtcDbStub();
+            let report = await new AnchorRecovery(memDb([v1], []), Object.assign({ btcDb }, quiet)).run();
+            assert.strictEqual(report.verified, 1);
+            assert.strictEqual(report.rewards, 2);
+            assert.strictEqual(btcDb.rewards.length, 2);
+            assert.strictEqual(btcDb.rewards[0].reward_type, 'anchor_BTC');
+            assert.strictEqual(btcDb.rewards[0].amount, '10.00000000');
+        });
+
+        it('rejects an archive claiming a derived reward type (oracle_round must never ride the archive)', async function () {
+            let { v1 } = buildBatch(0, [rawMatch('m1')], oracleKeys, crossKeys,
+                                    { rewards: [reward({ reward_type: 'oracle_round' })] });
+            let report = await new AnchorRecovery(memDb([v1], []), Object.assign({ btcDb: rewardBtcDbStub() }, quiet)).run();
+            assert.strictEqual(report.verified, 0);
+            assert.ok(report.failed[0].reason.includes('only anchor publish rewards are archivable'));
+        });
+
+        it('fails the batch when rewards are present but no BTC DB handle was provided', async function () {
+            let { v1 } = buildBatch(0, [rawMatch('m1')], oracleKeys, crossKeys, { rewards: [reward()] });
+            let report = await new AnchorRecovery(memDb([v1], []), quiet).run();
+            assert.strictEqual(report.verified, 0);
+            assert.ok(report.failed[0].reason.includes('no BTC indexer DB handle'));
+        });
+
+        it('rejects a reward row missing its earn-time source', async function () {
+            let { v1 } = buildBatch(0, [rawMatch('m1')], oracleKeys, crossKeys, { rewards: [reward({ source: '' })] });
+            let report = await new AnchorRecovery(memDb([v1], []), Object.assign({ btcDb: rewardBtcDbStub() }, quiet)).run();
+            assert.strictEqual(report.verified, 0);
+            assert.ok(report.failed[0].reason.includes('earn-time source'));
+        });
     });
 });

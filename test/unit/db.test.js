@@ -433,10 +433,17 @@ describe('Database.normalizeDataValues() @regression @tier1', function () {
 
     // ── Return value ──────────────────────────────────────────────────────
 
-    it('returns the same data object (mutates in-place)', function () {
-        const data = { AMOUNT: '50' };
+    it('returns a copy and never mutates the caller object', function () {
+        // AIRDROP's multi-tick loop reuses one `data` across ticks — in-place
+        // stringification of TX_OUTPUTS broke fee detection for tick 2+, so
+        // normalizeDataValues now operates on a shallow copy.
+        const outputs = [{ address: 'addr1', amount: 1 }];
+        const data = { AMOUNT: '50', TX_OUTPUTS: outputs };
         const out  = normalize(data);
-        assert.strictEqual(out, data);
+        assert.notStrictEqual(out, data);
+        assert.strictEqual(data.TX_OUTPUTS, outputs);          // caller's array untouched
+        assert.strictEqual(typeof out.TX_OUTPUTS, 'string');   // copy got the stringified form
+        assert.strictEqual(out.AMOUNT, '50');
     });
 });
 
@@ -696,35 +703,38 @@ describe('Database.getValidatorsByCapability() — threshold source @regression 
         db = {
             config,
             getValidatorsByCapability: Database.prototype.getValidatorsByCapability,
+            _effectiveCapabilitySetSql: Database.prototype._effectiveCapabilitySetSql,
             getStatusId: sinon.stub().resolves(1),
             doQuery:     sinon.stub().resolves([]),
         };
     });
 
-    // The HAVING threshold is the second-to-last bound parameter — the trailing
-    // LIMIT (VALIDATOR_QUERY_LIMIT safety cap) binds after it.
-    function thresholdArg() {
-        return db.doQuery.firstCall.args[1].slice(-2)[0];
+    // The effective-set union binds the HAVING threshold twice: once for the
+    // stake-key branch (arg 5) and once for the delegated-key source-aggregate
+    // branch (arg 9). Both MUST carry the same resolved threshold.
+    function thresholdArgs() {
+        const a = db.doQuery.firstCall.args[1];
+        return [a[5], a[9]];
     }
 
     it('uses the caller-supplied override over local config', async function () {
         await db.getValidatorsByCapability.call(db, 'attestation', 100, '25000');
-        assert.strictEqual(thresholdArg(), '25000');
+        assert.deepStrictEqual(thresholdArgs(), ['25000', '25000']);
     });
 
     it('coerces a numeric override to a string', async function () {
         await db.getValidatorsByCapability.call(db, 'attestation', 100, 25000);
-        assert.strictEqual(thresholdArg(), '25000');
+        assert.deepStrictEqual(thresholdArgs(), ['25000', '25000']);
     });
 
     it('falls back to local config when no override is supplied', async function () {
         await db.getValidatorsByCapability.call(db, 'attestation', 100);
-        assert.strictEqual(thresholdArg(), '10000');
+        assert.deepStrictEqual(thresholdArgs(), ['10000', '10000']);
     });
 
     it('treats a 0 override as a real threshold (not a falsy fallback)', async function () {
         await db.getValidatorsByCapability.call(db, 'attestation', 100, 0);
-        assert.strictEqual(thresholdArg(), '0');
+        assert.deepStrictEqual(thresholdArgs(), ['0', '0']);
     });
 });
 
@@ -745,29 +755,41 @@ describe('Database.getActiveCapabilityCount() — threshold source @regression @
         db = {
             config,
             getActiveCapabilityCount: Database.prototype.getActiveCapabilityCount,
+            _effectiveCapabilitySetSql: Database.prototype._effectiveCapabilitySetSql,
             getStatusId: sinon.stub().resolves(1),
+            getLatestBlockIndex: sinon.stub().resolves(100),
             doQuery:     sinon.stub().resolves([{ cnt: 0 }]),
         };
     });
 
-    // The HAVING threshold is always the last bound parameter.
-    function thresholdArg() {
-        return db.doQuery.firstCall.args[1].slice(-1)[0];
+    // Same effective-set union as getValidatorsByCapability — the threshold
+    // binds at args 5 (stake-key branch) and 9 (delegated-key branch).
+    function thresholdArgs() {
+        const a = db.doQuery.firstCall.args[1];
+        return [a[5], a[9]];
     }
 
     it('uses the caller-supplied override over local config', async function () {
         await db.getActiveCapabilityCount.call(db, 'attestation', 100, '25000');
-        assert.strictEqual(thresholdArg(), '25000');
+        assert.deepStrictEqual(thresholdArgs(), ['25000', '25000']);
     });
 
     it('falls back to local config when no override is supplied', async function () {
         await db.getActiveCapabilityCount.call(db, 'attestation', 100);
-        assert.strictEqual(thresholdArg(), '10000');
+        assert.deepStrictEqual(thresholdArgs(), ['10000', '10000']);
     });
 
     it('treats a 0 override as a real threshold (not a falsy fallback)', async function () {
         await db.getActiveCapabilityCount.call(db, 'attestation', 100, 0);
-        assert.strictEqual(thresholdArg(), '0');
+        assert.deepStrictEqual(thresholdArgs(), ['0', '0']);
+    });
+
+    it('counts over the SAME effective-set SQL as getValidatorsByCapability (quorum agreement)', async function () {
+        await db.getActiveCapabilityCount.call(db, 'attestation', 100);
+        const sql = db.doQuery.firstCall.args[0];
+        assert.ok(sql.includes('COUNT(DISTINCT pubkey)'));
+        assert.ok(sql.includes('stake_key_revocations'));   // revoked stake keys excluded
+        assert.ok(sql.includes('delegations'));             // delegated keys included
     });
 });
 
@@ -779,14 +801,18 @@ describe('Database.hasCapability() — threshold source @regression @tier1', fun
         config.STAKING = { CAPABILITIES: { attestation: { MIN_STAKE: '10000' } } };
         db = {
             config,
-            hasCapability:          Database.prototype.hasCapability,
-            getActiveStakeByPubkey: sinon.stub().resolves({ amount: '15000' }),
-            util:                   { bcgte: sinon.stub().returns(true) },
+            hasCapability:       Database.prototype.hasCapability,
+            getStatusId:         sinon.stub().resolves(1),
+            getPubkeyId:         sinon.stub().resolves(3),
+            getLatestBlockIndex: sinon.stub().resolves(100),
+            // Stake-key branch resolves a per-pubkey aggregate of 15000
+            doQuery:             sinon.stub().resolves([{ total: '15000' }]),
+            util:                { bcgte: sinon.stub().returns(true) },
         };
     });
 
-    // hasCapability compares stake.amount against the resolved threshold via
-    // util.bcgte(amount, minStake) — the threshold is the second arg.
+    // hasCapability compares the per-pubkey stake aggregate against the
+    // resolved threshold via util.bcgte(total, minStake) — threshold is arg 2.
     function thresholdArg() {
         return db.util.bcgte.firstCall.args[1];
     }
@@ -809,6 +835,23 @@ describe('Database.hasCapability() — threshold source @regression @tier1', fun
     it('treats a 0 override as a real threshold (not a falsy fallback)', async function () {
         await db.hasCapability.call(db, 'pk', 'attestation', 100, 0);
         assert.strictEqual(thresholdArg(), '0');
+    });
+
+    it('falls through to the delegated-key branch when the stake branch misses', async function () {
+        // Stake branch: no rows. Delegation branch: source aggregate 15000.
+        db.doQuery.onFirstCall().resolves([{ total: null }]);
+        db.doQuery.onSecondCall().resolves([{ total: '15000' }]);
+        db.util.bcgte.returns(true);
+        const ok = await db.hasCapability.call(db, 'pk', 'attestation', 100);
+        assert.strictEqual(ok, true);
+        assert.strictEqual(db.doQuery.callCount, 2);
+        assert.ok(db.doQuery.secondCall.args[0].includes('delegations'));
+    });
+
+    it('returns false when neither branch qualifies', async function () {
+        db.doQuery.resolves([{ total: null }]);
+        const ok = await db.hasCapability.call(db, 'pk', 'attestation', 100);
+        assert.strictEqual(ok, false);
     });
 });
 

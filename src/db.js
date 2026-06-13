@@ -741,6 +741,17 @@ class Database {
 
     // Handle normalizing data values before inserting in the database tables
     normalizeDataValues(data){
+        // Operate on a shallow copy so the caller's object is never mutated in
+        // place. This routine stringifies object fields (e.g. the TX_OUTPUTS
+        // array) and nulls non-numeric NUMBER_FIELDS purely for storage; mutating
+        // the shared action `data` corrupts any later read of it. AIRDROP's
+        // multi-tick loop reuses one `data` across ticks — after tick 1's
+        // createAirdrop ran this in place, tick 2 saw a stringified TX_OUTPUTS, so
+        // detectFeePaymentMode's Array.isArray guard failed and the native fee
+        // output went undetected ('native coin output required' on LTC/DOGE; BTC's
+        // xchain balance fallback masked it). Every caller already reassigns from
+        // the return value, so returning a copy is transparent to them.
+        data = Object.assign({}, data);
         // Handle converting any boxed primitives (e.g. mathjs Decimal) to plain primitives.
         // Buffers (e.g. FILE raw_data) must pass through unchanged — String(buffer) would
         // UTF-8-decode the bytes and replace any invalid sequences with U+FFFD, corrupting
@@ -7753,14 +7764,81 @@ class Database {
         return true;
     }
 
+    // Create/Update record in `stake_key_revocations` table (DELEGATE v2 against
+    // the source's ORIGINAL stake signing key — the delegation-row revoke path
+    // stays in `delegations`). `deactivation_block` is when the key stops being
+    // a valid signer; a LATER re-stake of the same key (higher action_index)
+    // clears the revocation (see _effectiveCapabilitySetSql).
+    async createStakeKeyRevocation(data){
+        data                  = this.normalizeDataValues(data);
+        let status_id         = await this.createStatus(data['STATUS']);
+        let source_id         = await this.getAddressId(data['SOURCE']);
+        let signing_pubkey_id = await this.getOrCreatePubkeyId(data['SIGNING_PUBKEY']);
+        let action_index      = data['ACTION_INDEX'];
+        let block_index       = data['BLOCK_INDEX'];
+        let deactivation_block = data['DEACTIVATION_BLOCK'] || 0;
+        let query  = "SELECT action_index FROM stake_key_revocations WHERE action_index=? LIMIT 1";
+        let results = await this.doQuery(query, [action_index]);
+        let args;
+        if(results.length > 0){
+            query = `UPDATE stake_key_revocations SET
+                        source_id=?, signing_pubkey_id=?, status_id=?, block_index=?, deactivation_block=?
+                    WHERE action_index=?`;
+            args = [source_id, signing_pubkey_id, status_id, block_index, deactivation_block, action_index];
+        } else {
+            query = `INSERT INTO stake_key_revocations
+                        (source_id, signing_pubkey_id, status_id, block_index, deactivation_block, action_index)
+                    VALUES (?, ?, ?, ?, ?, ?)`;
+            args = [source_id, signing_pubkey_id, status_id, block_index, deactivation_block, action_index];
+        }
+        await this.doQuery(query, args);
+    }
+
+    // Get the latest valid stake-key revocation for (source, pubkey) that applies
+    // to stakes at or before `sinceActionIndex` (i.e. would suppress that stake row).
+    async getStakeKeyRevocation(source, pubkey, sinceActionIndex){
+        let source_id = await this.getAddressId(source);
+        let pubkey_id = await this.getPubkeyId(String(pubkey).toLowerCase());
+        if(source_id === null || pubkey_id === null) return null;
+        let valid_id = await this.getStatusId('valid');
+        let query = `SELECT * FROM stake_key_revocations
+                     WHERE source_id=? AND signing_pubkey_id=? AND status_id=?
+                       AND action_index > ?
+                     ORDER BY action_index DESC LIMIT 1`;
+        let results = await this.doQuery(query, [source_id, pubkey_id, valid_id, Number(sinceActionIndex) || 0]);
+        return results.length > 0 ? results[0] : null;
+    }
+
+    // Get the source's active stake row bound to a specific signing pubkey at a block
+    async getActiveStakeBySourceAndPubkey(source, pubkey, blockIndex){
+        let source_id = await this.getAddressId(source);
+        let pubkey_id = await this.getPubkeyId(String(pubkey).toLowerCase());
+        if(source_id === null || pubkey_id === null) return null;
+        let valid_id = await this.getStatusId('valid');
+        let query = `SELECT * FROM stakes
+                     WHERE source_id=? AND signing_pubkey_id=? AND status_id=?
+                       AND activation_block <= ?
+                       AND (deactivation_block IS NULL OR deactivation_block > ?)
+                     ORDER BY action_index DESC LIMIT 1`;
+        let results = await this.doQuery(query, [source_id, pubkey_id, valid_id, blockIndex, blockIndex]);
+        return results.length > 0 ? results[0] : null;
+    }
+
     // Create record in `reward_claims` table
-    // Create a validator reward record (called when hub pushes rewards to indexer)
+    // Create a validator reward record. Two writers:
+    //   - deterministic block processing (PRICE v0 oracle_round split, ATTEST fee
+    //     settlement) — replayable on reindex by construction
+    //   - the hub's pushvalidatorrewards RPC (anchor publish rewards) — restored
+    //     on reindex from the ANCHOR archive via recovery.js
     // pubkeyHex: 64-char hex Ed25519 signing pubkey of the validator that earned the reward
     // roundReference: round number (oracle_round) or attestation index
-    // rewardType: 'oracle_round' or 'cross_chain_attestation'
+    // rewardType: 'oracle_round', 'attest_fee', 'anchor_<chain>', 'anchor_archive'
     // amount: reward amount as decimal string
     // blockIndex: block height when the reward was earned
-    async createValidatorReward(pubkeyHex, roundReference, rewardType, amount, blockIndex){
+    // upsert: deterministic block-processing writers pass true so their value
+    //         always wins over a best-effort hub push that raced them — the
+    //         derived row is the consensus row (replay produces it byte-equal)
+    async createValidatorReward(pubkeyHex, roundReference, rewardType, amount, blockIndex, upsert){
         // Look up the source address that owns this signing pubkey via the stakes table
         let pubkey_id = await this.getPubkeyId(String(pubkeyHex).toLowerCase());
         if(pubkey_id === null){
@@ -7771,12 +7849,23 @@ class Database {
         let query = `SELECT source_id FROM stakes WHERE signing_pubkey_id=? ORDER BY action_index DESC LIMIT 1`;
         let results = await this.doQuery(query, [pubkey_id]);
         if(results.length === 0){
-            console.warn('createValidatorReward: no stake found for pubkey ' + pubkeyHex);
+            // Delegated signing key (DELEGATE v0) — resolve to the delegating source
+            query = `SELECT source_id FROM delegations WHERE signing_pubkey_id=? ORDER BY action_index DESC LIMIT 1`;
+            results = await this.doQuery(query, [pubkey_id]);
+        }
+        if(results.length === 0){
+            console.warn('createValidatorReward: no stake or delegation found for pubkey ' + pubkeyHex);
             return false;
         }
         let source_id = results[0].source_id;
-        // Insert the reward (idempotent via UNIQUE INDEX on source_id+signing_pubkey_id+reward_type+round_reference)
-        query = `INSERT IGNORE INTO validator_rewards
+        // Insert the reward (idempotent via UNIQUE INDEX on source_id+signing_pubkey_id+reward_type+round_reference).
+        // Deterministic writers upsert so their amount/block_index always win.
+        query = upsert
+            ? `INSERT INTO validator_rewards
+                    (source_id, signing_pubkey_id, reward_type, round_reference, amount, block_index)
+                 VALUES (?, ?, ?, ?, ?, ?)
+                 ON DUPLICATE KEY UPDATE amount=VALUES(amount), block_index=VALUES(block_index)`
+            : `INSERT IGNORE INTO validator_rewards
                     (source_id, signing_pubkey_id, reward_type, round_reference, amount, block_index)
                  VALUES (?, ?, ?, ?, ?, ?)`;
         let args = [source_id, pubkey_id, rewardType, roundReference, amount, blockIndex];
@@ -7854,21 +7943,16 @@ class Database {
             ? String(minStakeOverride)
             : (capConfig['MIN_STAKE'] || '0');
         let valid_id = await this.getStatusId('valid');
-        let query = `SELECT COUNT(*) AS cnt FROM (
-                        SELECT signing_pubkey_id, SUM(CAST(amount AS DECIMAL(30,8))) AS total
-                        FROM stakes
-                        WHERE status_id=?`;
-        let args = [valid_id];
-        if(blockIndex !== undefined && blockIndex !== null){
-            query += ' AND activation_block <= ? AND (deactivation_block IS NULL OR deactivation_block > ?)';
-            args.push(blockIndex);
-            args.push(blockIndex);
-        }
-        query += `   GROUP BY signing_pubkey_id
-                     HAVING total >= ?
-                  ) AS qualified`;
-        args.push(minStake);
-        let results = await this.doQuery(query, args);
+        if(valid_id === null) return 0;
+        // Count over the SAME effective signer set as getValidatorsByCapability
+        // (stake keys minus revocations, plus delegated keys) — quorum thresholds
+        // computed from this count must agree with set membership exactly.
+        // All callers pass blockIndex; a missing one means "current tip".
+        if(blockIndex === undefined || blockIndex === null)
+            blockIndex = await this.getLatestBlockIndex();
+        let eff = this._effectiveCapabilitySetSql(valid_id, blockIndex, minStake);
+        let query = `SELECT COUNT(DISTINCT pubkey) AS cnt FROM (${eff.sql}) eff`;
+        let results = await this.doQuery(query, eff.args);
         return results.length > 0 ? Number(results[0].cnt) : 0;
     }
 
@@ -8064,16 +8148,15 @@ class Database {
         // hitting it is logged so operators get early warning that the set is
         // outgrowing the assumption. Override via VALIDATOR_QUERY_LIMIT.
         let limit = parseInt(process.env.VALIDATOR_QUERY_LIMIT) || 1000;
-        let query = `SELECT ip.pubkey AS pubkey,
-                            SUM(CAST(s.amount AS DECIMAL(30,8))) AS total
-                     FROM stakes s
-                     JOIN index_pubkeys ip ON ip.id = s.signing_pubkey_id
-                     WHERE s.status_id = ?
-                       AND s.activation_block <= ?
-                       AND (s.deactivation_block IS NULL OR s.deactivation_block > ?)
-                     GROUP BY ip.pubkey
+        // Same effective-signer resolution as the capability set (DELEGATE
+        // additive-until-revoked semantics) with no MIN_STAKE floor: the
+        // governance quorum is over every staker's effective keys.
+        let eff = this._effectiveCapabilitySetSql(valid_id, blockIndex, '0');
+        let query = `SELECT pubkey, MAX(total) AS total FROM (${eff.sql}) eff
+                     GROUP BY pubkey
+                     ORDER BY pubkey
                      LIMIT ?`;
-        let rows = await this.doQuery(query, [valid_id, blockIndex, blockIndex, limit]);
+        let rows = await this.doQuery(query, [...eff.args, limit]);
         if(rows.length >= limit)
             console.warn('getActiveValidators hit the result cap of ' + limit + ' rows at block ' + blockIndex + ' — validator set may be truncated. Raise VALIDATOR_QUERY_LIMIT if the federation has grown.');
         return rows.map(r => ({
@@ -8115,23 +8198,72 @@ class Database {
         // can't return an unbounded set on a large federation. Override via
         // VALIDATOR_QUERY_LIMIT.
         let limit = parseInt(process.env.VALIDATOR_QUERY_LIMIT) || 1000;
-        let query = `SELECT ip.pubkey AS pubkey,
-                            SUM(CAST(s.amount AS DECIMAL(30,8))) AS total
-                     FROM stakes s
-                     JOIN index_pubkeys ip ON ip.id = s.signing_pubkey_id
-                     WHERE s.status_id = ?
-                       AND s.activation_block <= ?
-                       AND (s.deactivation_block IS NULL OR s.deactivation_block > ?)
-                     GROUP BY ip.pubkey
-                     HAVING total >= CAST(? AS DECIMAL(30,8))
+        let eff = this._effectiveCapabilitySetSql(valid_id, blockIndex, minStake);
+        let query = `SELECT pubkey, MAX(total) AS total FROM (${eff.sql}) eff
+                     GROUP BY pubkey
+                     ORDER BY pubkey
                      LIMIT ?`;
-        let rows = await this.doQuery(query, [valid_id, blockIndex, blockIndex, minStake, limit]);
+        let rows = await this.doQuery(query, [...eff.args, limit]);
         if(rows.length >= limit)
             console.warn('getValidatorsByCapability(' + capability + ') hit the result cap of ' + limit + ' rows at block ' + blockIndex + ' — validator set may be truncated. Raise VALIDATOR_QUERY_LIMIT if the federation has grown.');
         return rows.map(r => ({
             pubkey: String(r.pubkey),
             amount: (r.total === null || r.total === undefined) ? '0' : String(r.total)
         }));
+    }
+
+    // Effective signer set for a capability at a block (DELEGATE semantics,
+    // additive-until-revoked). A source's effective keys are:
+    //   stake keys     — per-pubkey aggregate active stake >= MIN_STAKE, EXCLUDING
+    //                    keys revoked via DELEGATE v2 (stake_key_revocations). A
+    //                    revocation only applies to stake rows that predate it
+    //                    (r.action_index > s.action_index), so re-staking the same
+    //                    key later restores it.
+    //   delegated keys — active `delegations` rows whose SOURCE's aggregate active
+    //                    stake >= MIN_STAKE. Delegated keys are backed by the
+    //                    source's whole stake; they add signers, they never change
+    //                    staked amounts (spec: DELEGATE.md).
+    // Every PBFT-quorum read (capability snapshots, signature verification, quorum
+    // counts) MUST resolve through this one query so all consumers agree —
+    // CONSENSUS-CRITICAL: any change here forks validation.
+    _effectiveCapabilitySetSql(valid_id, blockIndex, minStake){
+        let sql = `SELECT ip.pubkey AS pubkey,
+                          SUM(CAST(s.amount AS DECIMAL(30,8))) AS total
+                   FROM stakes s
+                   JOIN index_pubkeys ip ON ip.id = s.signing_pubkey_id
+                   WHERE s.status_id = ?
+                     AND s.activation_block <= ?
+                     AND (s.deactivation_block IS NULL OR s.deactivation_block > ?)
+                     AND NOT EXISTS (
+                         SELECT 1 FROM stake_key_revocations r
+                         WHERE r.source_id = s.source_id
+                           AND r.signing_pubkey_id = s.signing_pubkey_id
+                           AND r.status_id = ?
+                           AND r.deactivation_block <= ?
+                           AND r.action_index > s.action_index)
+                   GROUP BY ip.pubkey
+                   HAVING total >= CAST(? AS DECIMAL(30,8))
+                   UNION ALL
+                   SELECT ip2.pubkey AS pubkey, src.total AS total
+                   FROM delegations d
+                   JOIN index_pubkeys ip2 ON ip2.id = d.signing_pubkey_id
+                   JOIN (
+                       SELECT s2.source_id AS source_id,
+                              SUM(CAST(s2.amount AS DECIMAL(30,8))) AS total
+                       FROM stakes s2
+                       WHERE s2.status_id = ?
+                         AND s2.activation_block <= ?
+                         AND (s2.deactivation_block IS NULL OR s2.deactivation_block > ?)
+                       GROUP BY s2.source_id
+                       HAVING total >= CAST(? AS DECIMAL(30,8))
+                   ) src ON src.source_id = d.source_id
+                   WHERE d.status_id = ?
+                     AND d.activation_block <= ?
+                     AND (d.deactivation_block IS NULL OR d.deactivation_block > ?)`;
+        let args = [valid_id, blockIndex, blockIndex, valid_id, blockIndex, minStake,
+                    valid_id, blockIndex, blockIndex, minStake,
+                    valid_id, blockIndex, blockIndex];
+        return { sql, args };
     }
 
     // Whether `capability` is present in this indexer's STAKING.CAPABILITIES config.
@@ -8162,9 +8294,50 @@ class Database {
         let minStake = (minStakeOverride !== undefined && minStakeOverride !== null)
             ? String(minStakeOverride)
             : (capConfig['MIN_STAKE'] || '0');
-        let stake = await this.getActiveStakeByPubkey(pubkey, blockIndex);
-        if(!stake) return false;
-        return this.util.bcgte(stake.amount, minStake);
+        let valid_id = await this.getStatusId('valid');
+        if(valid_id === null) return false;
+        let pubkey_id = await this.getPubkeyId(String(pubkey).toLowerCase());
+        if(pubkey_id === null) return false;
+        if(blockIndex === undefined || blockIndex === null)
+            blockIndex = await this.getLatestBlockIndex();
+        // Per-pubkey membership test against the SAME effective signer set as
+        // getValidatorsByCapability (stake keys minus DELEGATE v2 revocations,
+        // plus delegated keys backed by the source's aggregate stake) — the
+        // signature-verification paths and the quorum-set paths must agree.
+        // Stake-key path: per-pubkey aggregate of active, non-revoked stakes.
+        let query = `SELECT SUM(CAST(s.amount AS DECIMAL(30,8))) AS total
+                     FROM stakes s
+                     WHERE s.signing_pubkey_id = ?
+                       AND s.status_id = ?
+                       AND s.activation_block <= ?
+                       AND (s.deactivation_block IS NULL OR s.deactivation_block > ?)
+                       AND NOT EXISTS (
+                           SELECT 1 FROM stake_key_revocations r
+                           WHERE r.source_id = s.source_id
+                             AND r.signing_pubkey_id = s.signing_pubkey_id
+                             AND r.status_id = ?
+                             AND r.deactivation_block <= ?
+                             AND r.action_index > s.action_index)`;
+        let rows = await this.doQuery(query, [pubkey_id, valid_id, blockIndex, blockIndex, valid_id, blockIndex]);
+        if(rows.length > 0 && rows[0].total !== null && this.util.bcgte(String(rows[0].total), minStake))
+            return true;
+        // Delegated-key path: an active delegation row for this pubkey qualifies
+        // iff the delegating SOURCE's aggregate active stake meets the threshold.
+        query = `SELECT SUM(CAST(s2.amount AS DECIMAL(30,8))) AS total
+                 FROM stakes s2
+                 WHERE s2.status_id = ?
+                   AND s2.activation_block <= ?
+                   AND (s2.deactivation_block IS NULL OR s2.deactivation_block > ?)
+                   AND s2.source_id IN (
+                       SELECT d.source_id FROM delegations d
+                       WHERE d.signing_pubkey_id = ?
+                         AND d.status_id = ?
+                         AND d.activation_block <= ?
+                         AND (d.deactivation_block IS NULL OR d.deactivation_block > ?))`;
+        rows = await this.doQuery(query, [valid_id, blockIndex, blockIndex, pubkey_id, valid_id, blockIndex, blockIndex]);
+        if(rows.length > 0 && rows[0].total !== null && this.util.bcgte(String(rows[0].total), minStake))
+            return true;
+        return false;
     }
 
     // Connection for hub-mirrored tables (price_snapshots, oracle_prices,
@@ -8898,6 +9071,26 @@ class Database {
         await this.doQuery(query, [callbackExecuteActionIndex, responseActionIndex]);
     }
 
+    // Get the delegation holding a pubkey, regardless of source — used for the
+    // DELEGATE v0 pubkey-collision rule ("must not already be in use by any
+    // active stake or delegation"). Pending-activation delegations already
+    // reserve the pubkey (mirrors the stake-collision semantics), so only the
+    // deactivation gate is applied: a revoked delegation frees the pubkey.
+    async getDelegationByPubkey(pubkey, blockIndex){
+        let pubkey_id = await this.getPubkeyId(String(pubkey).toLowerCase());
+        if(pubkey_id === null)
+            return null;
+        let valid_id = await this.getStatusId('valid');
+        let query = `SELECT * FROM delegations
+                     WHERE signing_pubkey_id=? AND status_id=?
+                       AND (deactivation_block IS NULL OR deactivation_block > ?)
+                     ORDER BY action_index DESC LIMIT 1`;
+        let results = await this.doQuery(query, [pubkey_id, valid_id, blockIndex]);
+        if(results.length > 0)
+            return results[0];
+        return null;
+    }
+
     // Get active delegation for a source + pubkey (gated by activation/deactivation delay)
     async getActiveDelegation(source, pubkey, blockIndex){
         let source_id = await this.getAddressId(source);
@@ -9489,17 +9682,28 @@ class Database {
         return { attestations: {}, settled: settled, calls: calls };
     }
 
-    // Get total unclaimed rewards for a source address
-    async getUnclaimedRewardTotal(source){
+    // Get total unclaimed rewards for a source address.
+    // blockIndex (optional): scope both sides to rows earned/claimed at or before
+    // that block. COLLECT validation MUST pass its BLOCK_INDEX so a replay
+    // (reindex / ANCHOR recovery) sees exactly the rewards that were visible when
+    // the COLLECT confirmed — bulk-restored rewards must not become visible to
+    // EARLIER COLLECTs than they were live (CONSENSUS). Live operation is
+    // unaffected: pushed/derived rows always carry block_index <= tip.
+    async getUnclaimedRewardTotal(source, blockIndex){
         let source_id = await this.getAddressId(source);
         if(source_id === null)
             return '0';
+        let scoped = (blockIndex !== undefined && blockIndex !== null);
         // Sum all rewards minus all claimed amounts
         let query = `SELECT
                         COALESCE(SUM(CAST(vr.amount AS DECIMAL(65,18))), 0) as total_rewards
                     FROM validator_rewards vr
                     WHERE vr.source_id=?`;
         let args = [source_id];
+        if(scoped){
+            query += ' AND vr.block_index <= ?';
+            args.push(blockIndex);
+        }
         let results = await this.doQuery(query, args);
         let totalRewards = (results.length > 0) ? String(results[0].total_rewards) : '0';
 
@@ -9509,6 +9713,10 @@ class Database {
                     INNER JOIN index_statuses s ON (s.id=rc.status_id)
                 WHERE rc.source_id=? AND s.status='valid'`;
         args = [source_id];
+        if(scoped){
+            query += ' AND rc.block_index <= ?';
+            args.push(blockIndex);
+        }
         results = await this.doQuery(query, args);
         let totalClaimed = (results.length > 0) ? String(results[0].total_claimed) : '0';
 

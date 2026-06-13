@@ -110,6 +110,16 @@ class Delegate {
                 error = 'invalid: SIGNING_PUBKEY (already in use)';
         }
 
+        // ... and not already held by another active (or pending-activation)
+        // delegation. Spec: "NEW_SIGNING_PUBKEY must not already be in use by
+        // any active stake or delegation." A revoked delegation
+        // (deactivation_block <= height) frees the pubkey for reuse.
+        if(!error){
+            let existingDelegation = await this.indexerDb.getDelegationByPubkey(data['SIGNING_PUBKEY'], data['BLOCK_INDEX']);
+            if(existingDelegation)
+                error = 'invalid: SIGNING_PUBKEY (already delegated)';
+        }
+
         // Verify SOURCE is not sleeping
         if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
             error = 'invalid: SOURCE (sleeping)';
@@ -273,11 +283,28 @@ class Delegate {
         if(!error && !/^[0-9a-fA-F]{64}$/.test(data['SIGNING_PUBKEY']))
             error = 'invalid: SIGNING_PUBKEY (format)';
 
-        // Verify SOURCE has an active delegation for this pubkey (gated by activation delay)
+        // Resolve the revocation target. v2 revokes either:
+        //   - a previously delegated key (a `delegations` row), or
+        //   - the source's ORIGINAL stake signing key — required for the
+        //     key-compromise procedure to complete (a compromised stake key must
+        //     be revocable once a replacement is delegated via v0). Recorded in
+        //     `stake_key_revocations`; re-staking the same key later (STAKE v2)
+        //     clears the revocation.
+        let stakeKeyMode = false;
         if(!error){
             let activeDelegation = await this.indexerDb.getActiveDelegation(data['SOURCE'], data['SIGNING_PUBKEY'], data['BLOCK_INDEX']);
-            if(!activeDelegation)
-                error = 'invalid: no active delegation for pubkey';
+            if(!activeDelegation){
+                let stakeRow = await this.indexerDb.getActiveStakeBySourceAndPubkey(data['SOURCE'], data['SIGNING_PUBKEY'], data['BLOCK_INDEX']);
+                if(stakeRow){
+                    let priorRevocation = await this.indexerDb.getStakeKeyRevocation(data['SOURCE'], data['SIGNING_PUBKEY'], stakeRow.action_index);
+                    if(priorRevocation)
+                        error = 'invalid: SIGNING_PUBKEY (already revoked)';
+                    else
+                        stakeKeyMode = true;
+                } else {
+                    error = 'invalid: no active delegation or stake key for pubkey';
+                }
+            }
         }
 
         // Verify SOURCE is not sleeping
@@ -287,16 +314,24 @@ class Delegate {
         let status = (error) ? error : 'valid';
         data['STATUS'] = status;
 
-        console.log("\t DELEGATE v2 (revoke) : pubkey=" + data['SIGNING_PUBKEY'] + ' : ' + data['STATUS']);
+        console.log("\t DELEGATE v2 (revoke" + (stakeKeyMode ? ', stake key' : '') + ") : pubkey=" + data['SIGNING_PUBKEY'] + ' : ' + data['STATUS']);
 
-        // Create record in delegations table (with revoked status)
-        await this.indexerDb.createRevokeDelegation(data);
+        let staking = this.config['STAKING'];
+        let activationDelay = (staking && staking['ACTIVATION_DELAY_BLOCKS']) ? staking['ACTIVATION_DELAY_BLOCKS'] : this.config['ACTIVATION_DELAY_BLOCKS'];
 
-        // Mark the parent delegation's deactivation_block (BLOCK_INDEX + activation delay)
-        if(status === 'valid'){
-            let staking = this.config['STAKING'];
-            let activationDelay = (staking && staking['ACTIVATION_DELAY_BLOCKS']) ? staking['ACTIVATION_DELAY_BLOCKS'] : this.config['ACTIVATION_DELAY_BLOCKS'];
-            await this.indexerDb.setDelegationDeactivation(data['SOURCE'], data['SIGNING_PUBKEY'], parseInt(data['BLOCK_INDEX']) + activationDelay);
+        if(stakeKeyMode){
+            // Stake-key revocation — recorded ONLY in stake_key_revocations. A
+            // delegations record here would read as an ACTIVE delegation of the
+            // revoked key and re-add it to the effective signer set.
+            data['DEACTIVATION_BLOCK'] = parseInt(data['BLOCK_INDEX']) + activationDelay;
+            await this.indexerDb.createStakeKeyRevocation(data);
+        } else {
+            // Create record in delegations table (with revoked status)
+            await this.indexerDb.createRevokeDelegation(data);
+
+            // Mark the parent delegation's deactivation_block (BLOCK_INDEX + activation delay)
+            if(status === 'valid')
+                await this.indexerDb.setDelegationDeactivation(data['SOURCE'], data['SIGNING_PUBKEY'], parseInt(data['BLOCK_INDEX']) + activationDelay);
         }
 
         // Store the SOURCE in addresses list

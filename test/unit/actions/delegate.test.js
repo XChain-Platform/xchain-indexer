@@ -28,9 +28,13 @@ describe('Delegate (DELEGATE) @regression @tier2', function () {
     function addDelegateStubs(db) {
         db.getActiveStakeBySource   = sinon.stub().resolves({ stake_index: 1 });
         db.getActiveStakeByPubkey   = sinon.stub().resolves(null);  // pubkey not in use
+        db.getDelegationByPubkey    = sinon.stub().resolves(null);  // pubkey not delegated
         db.getActiveDelegation      = sinon.stub().resolves({ delegation_index: 1 });
+        db.getActiveStakeBySourceAndPubkey = sinon.stub().resolves(null);  // v2 stake-key mode: no own-stake match
+        db.getStakeKeyRevocation    = sinon.stub().resolves(null);  // no prior stake-key revocation
         db.createDelegation         = sinon.stub().resolves();
         db.createRevokeDelegation   = sinon.stub().resolves();
+        db.createStakeKeyRevocation = sinon.stub().resolves();
         db.setDelegationDeactivation = sinon.stub().resolves();
         db.createContractDelegation = sinon.stub().resolves();
         db.getPubkeyId              = sinon.stub().resolves(null);   // pubkey unknown → no collision
@@ -117,6 +121,25 @@ describe('Delegate (DELEGATE) @regression @tier2', function () {
             assert.ok(String(data['STATUS']).includes('already in use'));
         });
 
+        it('rejects when SIGNING_PUBKEY is held by an active delegation (F9)', async function () {
+            indexer.indexerDb.getDelegationByPubkey.resolves({ delegation_index: 7 });
+            const data = delegateData({ FORMAT: 0 });
+            await handler.parse(['0', VALID_PUBKEY], data, null);
+            assert.ok(String(data['STATUS']).includes('already delegated'));
+            assert.ok(indexer.indexerDb.createDelegation.calledOnce); // row recorded with invalid status
+        });
+
+        it('delegation collision check is height-gated so revoked delegations free the pubkey (F9)', async function () {
+            const data = delegateData({ FORMAT: 0 });
+            await handler.parse(['0', VALID_PUBKEY], data, null);
+            assert.strictEqual(data['STATUS'], 'valid');
+            // The helper must receive the action's BLOCK_INDEX — the SQL frees
+            // pubkeys whose delegation deactivated at or before this height.
+            const call = indexer.indexerDb.getDelegationByPubkey.getCall(0);
+            assert.strictEqual(call.args[0], VALID_PUBKEY);
+            assert.strictEqual(call.args[1], data['BLOCK_INDEX']);
+        });
+
         it('rejects when SOURCE is sleeping', async function () {
             indexer.indexerDb.isActionAllowed.resolves(false);
             const data = delegateData({ FORMAT: 0 });
@@ -171,11 +194,60 @@ describe('Delegate (DELEGATE) @regression @tier2', function () {
             assert.ok(String(data['STATUS']).includes('SIGNING_PUBKEY'));
         });
 
-        it('rejects when no active delegation for that pubkey', async function () {
+        it('rejects when no active delegation AND no own stake key matches', async function () {
             indexer.indexerDb.getActiveDelegation.resolves(null);
             const data = delegateData({ FORMAT: 2 });
             await handler.parse(['2', VALID_PUBKEY], data, null);
-            assert.ok(String(data['STATUS']).includes('no active delegation'));
+            assert.ok(String(data['STATUS']).includes('no active delegation or stake key'));
+        });
+
+        it('stake-key mode: revoking the source\'s own stake signing key → valid, recorded in stake_key_revocations only', async function () {
+            indexer.indexerDb.getActiveDelegation.resolves(null);
+            indexer.indexerDb.getActiveStakeBySourceAndPubkey.resolves({ action_index: 50 });
+            const data = delegateData({ FORMAT: 2, BLOCK_INDEX: 1000 });
+            await handler.parse(['2', VALID_PUBKEY], data, null);
+            assert.strictEqual(data['STATUS'], 'valid');
+            assert.ok(indexer.indexerDb.createStakeKeyRevocation.calledOnce);
+            // Must NOT touch the delegations table — a delegations record here
+            // would read as an active delegation and re-add the revoked key.
+            assert.ok(indexer.indexerDb.createRevokeDelegation.notCalled);
+            assert.ok(indexer.indexerDb.setDelegationDeactivation.notCalled);
+            const delay = indexer.config['STAKING'] && indexer.config['STAKING']['ACTIVATION_DELAY_BLOCKS']
+                ? indexer.config['STAKING']['ACTIVATION_DELAY_BLOCKS']
+                : indexer.config['ACTIVATION_DELAY_BLOCKS'];
+            assert.strictEqual(data['DEACTIVATION_BLOCK'], 1000 + delay);
+        });
+
+        it('stake-key mode: prior revocation check is scoped to the stake row\'s action_index (re-stake clears it)', async function () {
+            indexer.indexerDb.getActiveDelegation.resolves(null);
+            indexer.indexerDb.getActiveStakeBySourceAndPubkey.resolves({ action_index: 50 });
+            const data = delegateData({ FORMAT: 2 });
+            await handler.parse(['2', VALID_PUBKEY], data, null);
+            const call = indexer.indexerDb.getStakeKeyRevocation.getCall(0);
+            assert.strictEqual(call.args[0], SOURCE);
+            assert.strictEqual(call.args[1], VALID_PUBKEY);
+            assert.strictEqual(call.args[2], 50);
+        });
+
+        it('stake-key mode: rejects a second revocation of the same stake key', async function () {
+            indexer.indexerDb.getActiveDelegation.resolves(null);
+            indexer.indexerDb.getActiveStakeBySourceAndPubkey.resolves({ action_index: 50 });
+            indexer.indexerDb.getStakeKeyRevocation.resolves({ action_index: 60 });
+            const data = delegateData({ FORMAT: 2 });
+            await handler.parse(['2', VALID_PUBKEY], data, null);
+            assert.ok(String(data['STATUS']).includes('already revoked'));
+            assert.ok(indexer.indexerDb.createStakeKeyRevocation.notCalled);
+        });
+
+        it('delegation-row revoke still wins when both a delegation and a stake key exist', async function () {
+            // getActiveDelegation resolves a row (default stub) — the stake-key
+            // branch must not be consulted at all.
+            const data = delegateData({ FORMAT: 2 });
+            await handler.parse(['2', VALID_PUBKEY], data, null);
+            assert.strictEqual(data['STATUS'], 'valid');
+            assert.ok(indexer.indexerDb.createRevokeDelegation.calledOnce);
+            assert.ok(indexer.indexerDb.getActiveStakeBySourceAndPubkey.notCalled);
+            assert.ok(indexer.indexerDb.createStakeKeyRevocation.notCalled);
         });
 
         it('calls setDelegationDeactivation on valid revoke', async function () {

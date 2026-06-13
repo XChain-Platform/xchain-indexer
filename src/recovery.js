@@ -60,11 +60,16 @@ class AnchorRecovery {
         this.db     = db;
         this.btcDb  = opts.btcDb || null;
         this.dryRun = !!opts.dryRun;
+        // Explicit flag, NOT btcDb presence: the reward restore runs BEFORE the
+        // BTC reindex (empty stakes table), where the stake cross-check would
+        // wrongly fail every batch. Run a --verify-stakes --dry-run pass AFTER
+        // the reindex for the cross-check.
+        this.verifyStakes = !!opts.verifyStakes;
         this.log    = opts.log || ((msg) => console.log(msg));
     }
 
     async run(){
-        let report = { batches: 0, verified: 0, failed: [], matches: 0, snapshots: 0, calls: 0 };
+        let report = { batches: 0, verified: 0, failed: [], matches: 0, snapshots: 0, calls: 0, rewards: 0 };
 
         let v1s = await this.db.doQuery(
             "SELECT * FROM anchor_actions WHERE version = 1 ORDER BY match_batch_seq ASC");
@@ -83,10 +88,11 @@ class AnchorRecovery {
                     report.matches   += archive.matches.length;
                     report.calls     += (archive.calls || []).length;
                     report.snapshots += (archive.capability_snapshots || []).length;
+                    report.rewards   += (archive.rewards || []).length;
                 }
                 report.verified++;
                 this.log('recovery: batch ' + batchSeq + ' OK (' + archive.matches.length + ' matches, ' +
-                         ((archive.calls || []).length) + ' calls)');
+                         ((archive.calls || []).length) + ' calls, ' + ((archive.rewards || []).length) + ' rewards)');
             } catch(e){
                 report.failed.push({ batch_seq: batchSeq, reason: e.message });
                 this.log('recovery: batch ' + batchSeq + ' FAILED — ' + e.message);
@@ -95,7 +101,7 @@ class AnchorRecovery {
 
         this.log('recovery: ' + report.verified + '/' + report.batches + ' batches verified, ' +
                  report.matches + ' match rows, ' + report.calls + ' call rows, ' +
-                 report.snapshots + ' snapshot rows' +
+                 report.snapshots + ' snapshot rows, ' + report.rewards + ' reward rows' +
                  (this.dryRun ? ' (dry run — nothing written)' : ''));
         return report;
     }
@@ -135,7 +141,7 @@ class AnchorRecovery {
 
         // Optional but recommended: archived validator sets must be backed by
         // real on-chain BTC stakes — fabricated sets cannot survive this.
-        if(this.btcDb) await this._verifyStakes(snaps);
+        if(this.verifyStakes && this.btcDb) await this._verifyStakes(snaps);
 
         // 1. Wrapper signatures vs the ARCHIVED oracle_publish set.
         let wrapperSet = setFor('oracle_publish', v1.snapshot_block);
@@ -159,6 +165,28 @@ class AnchorRecovery {
             let sigs = this._parseSigs(c.validator_signatures);
             if(!this._quorumVerified(this._callCanonical(c), sigs, set))
                 throw new Error('call ' + String(c.call_id).substring(0, 16) + '... (' + c.phase + ') fails quorum against the archived cross_chain set');
+        }
+
+        // 4. Shape-check archived anchor-publish rewards (absent pre-rewards
+        // archives → empty). Reward rows carry no per-row signatures; they are
+        // bound by the wrapper CRC+quorum, and the archiving followers re-derived
+        // each one from deterministic election state before co-signing. ONLY
+        // anchor publish rewards are restorable — oracle_round and attest_fee are
+        // re-derived from the chain parse itself, so an archive that claims them
+        // is malformed (or malicious) and the batch is rejected.
+        for(let r of (archive.rewards || [])){
+            if(!/^[0-9a-fA-F]{64}$/.test(String(r.validator_pubkey || '')))
+                throw new Error('reward row has malformed validator_pubkey');
+            if(!r.source || typeof r.source !== 'string')
+                throw new Error('reward row is missing its earn-time source');
+            if(!/^anchor_[A-Za-z_]+$/.test(String(r.reward_type || '')))
+                throw new Error('reward row has non-anchor reward_type "' + r.reward_type + '" — only anchor publish rewards are archivable');
+            if(!Number.isFinite(Number(r.round_number)) || Number(r.round_number) < 0)
+                throw new Error('reward row has malformed round_number');
+            if(!/^[0-9]+(\.[0-9]+)?$/.test(String(r.amount || '')) || !(Number(r.amount) > 0))
+                throw new Error('reward row has malformed amount');
+            if(!Number.isFinite(Number(r.block_index)) || Number(r.block_index) < 0)
+                throw new Error('reward row has malformed block_index');
         }
 
         return archive;
@@ -222,6 +250,35 @@ class AnchorRecovery {
             }
             report.matches++;
         }
+        // Anchor-publish rewards restore into the BTC indexer DB — they must be
+        // present BEFORE the BTC reindex replays its first COLLECT, or
+        // historically valid claims re-validate as 'no unclaimed rewards' and
+        // the recovered ledger diverges. Runbook ordering: DOGE archive extract
+        // → BTC reward restore (this) → BTC reindex.
+        let rewards = archive.rewards || [];
+        if(rewards.length > 0){
+            if(!this.btcDb)
+                throw new Error('archive carries ' + rewards.length + ' reward rows but no BTC indexer DB handle was provided (set BTC_INDEXER_DB_NAME) — restoring without them would corrupt COLLECT replay');
+            for(let r of rewards){
+                // Earn-time source resolution is pinned by the archive: the hub
+                // archived the source that earned the reward, so restore-time
+                // lookups can't drift if the pubkey was later re-staked from a
+                // different address. createAddress/getOrCreatePubkeyId are
+                // get-or-create — the id maps are append-only, so seeding them
+                // before the reindex is safe (the reindex resolves to the same ids).
+                let source_id = await this.btcDb.createAddress(String(r.source));
+                let pubkey_id = await this.btcDb.getOrCreatePubkeyId(String(r.validator_pubkey).toLowerCase());
+                if(source_id === null || pubkey_id === null)
+                    throw new Error('reward row id resolution failed for ' + String(r.validator_pubkey).substring(0, 16) + '...');
+                await this.btcDb.doQuery(
+                    `INSERT IGNORE INTO validator_rewards
+                        (source_id, signing_pubkey_id, reward_type, round_reference, amount, block_index)
+                     VALUES (?, ?, ?, ?, ?, ?)`,
+                    [source_id, pubkey_id, String(r.reward_type), Number(r.round_number), String(r.amount), Number(r.block_index)]);
+                report.rewards++;
+            }
+        }
+
         for(let c of (archive.calls || [])){
             let existing = await this.db.doQuery(
                 'SELECT call_id FROM cross_chain_calls WHERE call_id = ? AND phase = ? LIMIT 1', [c.call_id, c.phase]);
@@ -358,20 +415,25 @@ if(require.main === module){
         const indexerLike = { config: config.getConfig(), util: new Utility() };
         const db = new Database(host, port, name, user, pass, indexerLike);
 
+        // The BTC indexer DB handle serves two roles: the --verify-stakes
+        // cross-check AND the anchor-publish reward restore (rewards live in the
+        // BTC DB so COLLECT replay can find them). Archives that carry reward
+        // rows hard-require it.
         let btcDb = null;
-        if(verifyStakes){
-            const btcName = process.env.BTC_INDEXER_DB_NAME;
-            if(!btcName){
-                console.error('recovery: --verify-stakes needs BTC_INDEXER_DB_NAME (same host/credentials).');
-                process.exit(2);
-            }
+        const btcName = process.env.BTC_INDEXER_DB_NAME;
+        if(btcName){
             btcDb = new Database(host, port, btcName, user, pass, indexerLike);
+        } else if(verifyStakes){
+            console.error('recovery: --verify-stakes needs BTC_INDEXER_DB_NAME (same host/credentials).');
+            process.exit(2);
         } else {
-            console.warn('recovery: running WITHOUT --verify-stakes — archived validator sets will not be cross-checked against on-chain BTC stakes.');
+            console.warn('recovery: BTC_INDEXER_DB_NAME not set — archived validator sets will not be cross-checked, and any batch carrying anchor reward rows will FAIL (the restore needs the BTC indexer DB).');
         }
+        if(!verifyStakes)
+            console.warn('recovery: running WITHOUT --verify-stakes — archived validator sets will not be cross-checked against on-chain BTC stakes.');
 
         try {
-            const recovery = new AnchorRecovery(db, { btcDb, dryRun });
+            const recovery = new AnchorRecovery(db, { btcDb, dryRun, verifyStakes });
             const report = await recovery.run();
             process.exitCode = (report.failed.length > 0) ? 1 : 0;
         } catch(err){

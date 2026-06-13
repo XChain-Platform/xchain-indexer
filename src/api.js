@@ -608,7 +608,11 @@ async function startApi(){
             }
         },
 
-        // Receive validator reward records pushed from xchain-hub after a finalized oracle round
+        // Receive validator reward records pushed from xchain-hub (anchor publish
+        // rails only). oracle_round and attest_fee are DERIVED deterministically
+        // during block processing — accepting a push for them would let a stale
+        // hub race the derivation and open a replay-divergence window, so they
+        // are rejected outright.
         // Body: { round, reward_type, block_index, rewards: [{pubkey, amount}, ...] }
         async pushvalidatorrewards({round, reward_type, block_index, rewards}){
             if(round === undefined || round === null)
@@ -618,6 +622,8 @@ async function startApi(){
             if(!indexer.indexerDb)
                 return { error: 'indexer database not ready' };
             let type = reward_type || 'oracle_round';
+            if(!/^anchor_[A-Za-z_]+$/.test(type))
+                return { error: 'reward_type ' + type + ' is not pushable — derived during block processing' };
             let blockIdx = block_index || 0;
             let written = 0;
             let skipped = 0;
@@ -633,6 +639,66 @@ async function startApi(){
                 }
             }
             return { status: 'success', written: written, skipped: skipped };
+        },
+
+        // Resolve the staking source address that owned/delegated a signing
+        // pubkey as of a block — stakes first, then DELEGATE v0 delegations
+        // (same order as createValidatorReward). Block-scoped so every caller
+        // gets the same answer at any time: the hub archive builder pins this
+        // earn-time source into the ANCHOR archive, and follower hubs
+        // re-resolve it before co-signing.
+        // Body: { pubkey, block_index }
+        async getstakesourcebypubkey({pubkey, block_index}){
+            if(!pubkey || !/^[0-9a-fA-F]{64}$/.test(String(pubkey)))
+                return { error: 'pubkey must be 64 hex chars' };
+            let blockIdx = Number(block_index);
+            if(!Number.isFinite(blockIdx) || blockIdx < 0)
+                return { error: 'block_index is required' };
+            if(!indexer.indexerDb)
+                return { error: 'indexer database not ready' };
+            try {
+                let db = indexer.indexerDb;
+                let pubkey_id = await db.getPubkeyId(String(pubkey).toLowerCase());
+                if(pubkey_id === null) return { source: null };
+                let valid_id = await db.getStatusId('valid');
+                if(valid_id === null) return { source: null };
+                // Both legs mirror _effectiveCapabilitySetSql's active-row
+                // predicates: resolution must agree with effective-set
+                // membership at the same block. Without them an invalid row
+                // (e.g. a rejected mirror-collision STAKE) or a dead grant
+                // (deactivated/revoked, incl. v2 revoke-marker rows with
+                // activation_block=0) shadows the live one and the
+                // leader/follower archive re-derivation diverges.
+                let rows = await db.doQuery(
+                    `SELECT ia.address AS source FROM stakes s
+                     JOIN index_addresses ia ON ia.id = s.source_id
+                     WHERE s.signing_pubkey_id = ? AND s.status_id = ?
+                       AND s.block_index <= ? AND s.activation_block <= ?
+                       AND (s.deactivation_block IS NULL OR s.deactivation_block > ?)
+                       AND NOT EXISTS (
+                           SELECT 1 FROM stake_key_revocations r
+                           WHERE r.source_id = s.source_id
+                             AND r.signing_pubkey_id = s.signing_pubkey_id
+                             AND r.status_id = ?
+                             AND r.deactivation_block <= ?
+                             AND r.action_index > s.action_index)
+                     ORDER BY s.action_index DESC LIMIT 1`,
+                    [pubkey_id, valid_id, blockIdx, blockIdx, blockIdx, valid_id, blockIdx]);
+                if(!rows || rows.length === 0){
+                    rows = await db.doQuery(
+                        `SELECT ia.address AS source FROM delegations d
+                         JOIN index_addresses ia ON ia.id = d.source_id
+                         WHERE d.signing_pubkey_id = ? AND d.status_id = ?
+                           AND d.block_index <= ? AND d.activation_block <= ?
+                           AND (d.deactivation_block IS NULL OR d.deactivation_block > ?)
+                         ORDER BY d.action_index DESC LIMIT 1`,
+                        [pubkey_id, valid_id, blockIdx, blockIdx, blockIdx]);
+                }
+                return { source: (rows && rows.length > 0) ? String(rows[0].source) : null };
+            } catch (err) {
+                console.error('getstakesourcebypubkey error:', err);
+                return { error: 'failed to resolve stake source' };
+            }
         }
 
     };

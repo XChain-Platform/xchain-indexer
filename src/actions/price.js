@@ -129,6 +129,7 @@ class Price {
 
         // Verify Ed25519 signatures against the canonical payload
         // Each pubkey must have an active price capability stake at the BLOCK_INDEX of this PRICE tx
+        let qualifiedSigners = [];
         if(!error){
             let payload    = ed25519.buildPriceV0Payload(round, timestamp, pairs);
             let validSigs  = 0;
@@ -150,6 +151,7 @@ class Price {
                     continue;
 
                 validSigs++;
+                qualifiedSigners.push(s.pubkey);
             }
 
             // Compute PBFT quorum over validators with `price` capability,
@@ -171,6 +173,34 @@ class Price {
 
         // Create record in prices table
         await this.indexerDb.createPrice(data);
+
+        // Derive oracle_round rewards from the on-chain signer set (CONSENSUS).
+        // The verified, capability-qualified signature list above IS the round's
+        // signed participation record, so the reward split is a deterministic
+        // function of this action — replayable on any reindex or ANCHOR
+        // full-parse recovery, unlike the retired hub push (which credited the
+        // in-memory PBFT prepare set and could never be re-derived offline).
+        // Consequences: rewards follow the published signer set, and a round
+        // that finalizes but never lands a PRICE action earns nothing. A
+        // duplicate PRICE for an already-rewarded round upserts the same rows
+        // (same round_reference → same split), so failover double-publishes
+        // stay idempotent.
+        if(!error && data['COIN'] === 'BTC' && qualifiedSigners.length > 0){
+            let staking     = this.config['STAKING'] || {};
+            let rewardTotal = staking['ORACLE_REWARD_PER_ROUND'] || '10.00000000';
+            // Equal split, floored to GAS decimals — deterministic across
+            // validators (same pattern as the ATTEST fee split).
+            let perValidator = this.util.bcmulfloor(
+                this.util.bcdiv(rewardTotal, String(qualifiedSigners.length), 18), '1', 8
+            );
+            if(this.util.bcgt(perValidator, '0')){
+                for(let pk of qualifiedSigners){
+                    await this.indexerDb.createValidatorReward(
+                        pk, round, 'oracle_round', perValidator, data['BLOCK_INDEX'], true
+                    );
+                }
+            }
+        }
 
         // Push validated round to hub for cross-chain aggregation. The push is
         // fire-and-forget so block processing never blocks on hub latency, but a

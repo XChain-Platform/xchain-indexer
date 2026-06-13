@@ -117,6 +117,16 @@ class Stake {
             let anyStake = await this.indexerDb.getActiveStakeByPubkey(data['SIGNING_PUBKEY'], null);
             if(anyStake)
                 error = 'invalid: SIGNING_PUBKEY (already in use)';
+
+            // ... and must not be held by an active (or pending-activation)
+            // delegation — mirrors the DELEGATE v0 collision rule so a key can
+            // never be both a stake key and a delegated key (the effective
+            // signer set would double-resolve it).
+            if(!error){
+                let existingDelegation = await this.indexerDb.getDelegationByPubkey(data['SIGNING_PUBKEY'], data['BLOCK_INDEX']);
+                if(existingDelegation)
+                    error = 'invalid: SIGNING_PUBKEY (already delegated)';
+            }
         }
 
         if(!error && format === 2){

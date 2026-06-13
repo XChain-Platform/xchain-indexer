@@ -81,10 +81,14 @@ class Collect {
          * Reward Calculation
          ****************************************************************/
 
-        // Get unclaimed reward total for SOURCE
+        // Get unclaimed reward total for SOURCE, scoped to rewards earned at or
+        // before this COLLECT's block. The scope makes the claim replayable: on a
+        // reindex (or ANCHOR full-parse recovery, which bulk-restores pushed
+        // reward rows) this COLLECT must see exactly the rewards that were
+        // visible when it confirmed — not rewards earned later (CONSENSUS).
         let rewardAmount = '0';
         if(!error){
-            rewardAmount = await this.indexerDb.getUnclaimedRewardTotal(data['SOURCE']);
+            rewardAmount = await this.indexerDb.getUnclaimedRewardTotal(data['SOURCE'], data['BLOCK_INDEX']);
             if(this.util.bclte(rewardAmount, '0'))
                 error = 'invalid: no unclaimed rewards';
         }

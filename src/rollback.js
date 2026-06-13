@@ -110,6 +110,7 @@ class Rollback {
             'stakes',
             'unstakes',
             'delegations',
+            'stake_key_revocations',
             'reward_claims',
             'contracts',
             'contract_stakes',

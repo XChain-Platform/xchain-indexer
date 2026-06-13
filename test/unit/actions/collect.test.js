@@ -98,6 +98,16 @@ describe('Collect (COLLECT) @regression @tier3', function () {
         assert.ok(String(data['STATUS']).includes('no unclaimed rewards'));
     });
 
+    it('scopes the unclaimed-reward sum to the COLLECT\'s own block (replay determinism)', async function () {
+        const data = collectData();
+        await handler.parse(['0'], data, null);
+        const call = indexer.indexerDb.getUnclaimedRewardTotal.getCall(0);
+        // Without the block scope, rewards bulk-restored by ANCHOR recovery
+        // would become visible to EARLIER COLLECTs than they were live,
+        // flipping historical invalid claims to valid on reindex (CONSENSUS).
+        assert.strictEqual(call.args[1], data['BLOCK_INDEX']);
+    });
+
     it('records a reward_claims row even on an invalid collect', async function () {
         const data = collectData({ COIN: 'LTC' });
         await handler.parse(['0'], data, null);

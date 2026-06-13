@@ -34,6 +34,7 @@ describe('Price (PRICE) @regression @tier3', function () {
         db.createPrice               = sinon.stub().resolves();
         db.hasCapability             = sinon.stub().resolves(true);
         db.getActiveCapabilityCount  = sinon.stub().resolves(1);
+        db.createValidatorReward     = sinon.stub().resolves(true);
     }
 
     beforeEach(function () {
@@ -152,6 +153,65 @@ describe('Price (PRICE) @regression @tier3', function () {
             const params = ['0', '7', '1700000000', '1', 'BTC/USD', '50000', 'NaN', PUBKEY_A, SIG_A];
             await handler.parse(params, data, null);
             assert.strictEqual(data['VALIDATION_STATUS'], 'invalid');
+        });
+
+        // ── oracle_round reward derivation (consensus — replayable by construction) ──
+        describe('round rewards derived from the signer set', function () {
+
+            it('valid PRICE → equal floor split to every verified signer, upserted', async function () {
+                indexer.indexerDb.getActiveCapabilityCount.resolves(3); // quorum 2... 2*0+1=1, majority 2 → 2
+                const data = v0Data();
+                await handler.parse(v0Params(ONE_PAIR, [
+                    { pubkey: PUBKEY_A, sig: SIG_A },
+                    { pubkey: PUBKEY_B, sig: SIG_B },
+                    { pubkey: PUBKEY_C, sig: SIG_C },
+                ]), data, null);
+                assert.strictEqual(data['VALIDATION_STATUS'], 'valid');
+                assert.strictEqual(indexer.indexerDb.createValidatorReward.callCount, 3);
+                // 10 XCHAIN default / 3 signers, floored to 8dp
+                for (const pk of [PUBKEY_A, PUBKEY_B, PUBKEY_C]) {
+                    const call = indexer.indexerDb.createValidatorReward.getCalls()
+                        .find(c => c.args[0] === pk);
+                    assert.ok(call, 'reward for ' + pk.substring(0, 8));
+                    assert.strictEqual(call.args[1], 7);                    // ROUND
+                    assert.strictEqual(call.args[2], 'oracle_round');
+                    assert.strictEqual(String(call.args[3]), '3.33333333'); // floor(10/3, 8dp)
+                    assert.strictEqual(call.args[4], data['BLOCK_INDEX']);
+                    assert.strictEqual(call.args[5], true);                 // upsert — deterministic writer wins
+                }
+            });
+
+            it('invalid PRICE (quorum failure) → no rewards', async function () {
+                indexer.indexerDb.getActiveCapabilityCount.resolves(4); // quorum 3, only 1 sig
+                const data = v0Data();
+                await handler.parse(v0Params(ONE_PAIR, [{ pubkey: PUBKEY_A, sig: SIG_A }]), data, null);
+                assert.strictEqual(data['VALIDATION_STATUS'], 'invalid');
+                assert.ok(indexer.indexerDb.createValidatorReward.notCalled);
+            });
+
+            it('non-BTC chain → no rewards even if validation passes', async function () {
+                const data = v0Data({ COIN: 'LTC' });
+                await handler.parse(v0Params(ONE_PAIR, [{ pubkey: PUBKEY_A, sig: SIG_A }]), data, null);
+                assert.ok(indexer.indexerDb.createValidatorReward.notCalled);
+            });
+
+            it('duplicate-pubkey signatures earn one share, unqualified signers earn none', async function () {
+                indexer.indexerDb.getActiveCapabilityCount.resolves(1); // quorum 1
+                // PUBKEY_B lacks the capability; PUBKEY_A appears twice
+                indexer.indexerDb.hasCapability.callsFake(async (pk) => pk !== PUBKEY_B);
+                const data = v0Data();
+                await handler.parse(v0Params(ONE_PAIR, [
+                    { pubkey: PUBKEY_A, sig: SIG_A },
+                    { pubkey: PUBKEY_A, sig: SIG_B },
+                    { pubkey: PUBKEY_B, sig: SIG_B },
+                ]), data, null);
+                assert.strictEqual(data['VALIDATION_STATUS'], 'valid');
+                assert.strictEqual(indexer.indexerDb.createValidatorReward.callCount, 1);
+                const call = indexer.indexerDb.createValidatorReward.getCall(0);
+                assert.strictEqual(call.args[0], PUBKEY_A);
+                // bcmulfloor returns un-padded whole numbers ('10' not '10.00000000') — compare numerically
+                assert.strictEqual(Number(call.args[3]), 10); // sole qualified signer takes the round
+            });
         });
     });
 

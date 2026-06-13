@@ -524,7 +524,7 @@ class Attest {
                         // REQUEST's action_index (unique per request), not the
                         // 64-hex request_id.
                         await this.indexerDb.createValidatorReward(
-                            pk, Number(request.action_index), 'attest_fee', perValidator, data['BLOCK_INDEX']
+                            pk, Number(request.action_index), 'attest_fee', perValidator, data['BLOCK_INDEX'], true
                         );
                     }
                 }

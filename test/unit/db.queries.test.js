@@ -3518,13 +3518,14 @@ describe('Database.createValidatorReward() @regression @tier1', function () {
         assert.strictEqual(result, false);
     });
 
-    it('returns false when no stake found for pubkey', async function () {
+    it('returns false when neither stake nor delegation found for pubkey', async function () {
         const db = makeDb();
         sinon.stub(db, 'getPubkeyId').resolves(3);
         const dq = sinon.stub(db, 'doQuery');
-        dq.onCall(0).resolves([]);  // no stake rows
+        dq.resolves([]);  // no stake rows, no delegation rows
         const result = await db.createValidatorReward('deadbeef', 1, 'oracle_round', '10', 100);
         assert.strictEqual(result, false);
+        assert.strictEqual(dq.callCount, 2); // stakes lookup, then delegations fallback
     });
 
     it('returns true and inserts reward when stake found', async function () {
@@ -3536,6 +3537,33 @@ describe('Database.createValidatorReward() @regression @tier1', function () {
         const result = await db.createValidatorReward('deadbeef', 1, 'oracle_round', '10', 100);
         assert.strictEqual(result, true);
         assert.ok(String(dq.args[1][0]).includes('INSERT IGNORE INTO validator_rewards'));
+    });
+
+    it('falls back to delegations when no stake row uses the pubkey (DELEGATE v0 key)', async function () {
+        const db = makeDb();
+        sinon.stub(db, 'getPubkeyId').resolves(3);
+        const dq = sinon.stub(db, 'doQuery');
+        dq.onCall(0).resolves([]);                   // no stake rows
+        dq.onCall(1).resolves([{ source_id: 7 }]);   // delegation resolves the source
+        dq.onCall(2).resolves([]);                   // INSERT IGNORE
+        const result = await db.createValidatorReward('deadbeef', 1, 'oracle_round', '10', 100);
+        assert.strictEqual(result, true);
+        assert.ok(String(dq.args[1][0]).includes('FROM delegations'));
+        assert.ok(String(dq.args[2][0]).includes('INSERT IGNORE INTO validator_rewards'));
+        assert.strictEqual(dq.args[2][1][0], 7);     // source_id from the delegation row
+    });
+
+    it('upsert=true emits ON DUPLICATE KEY UPDATE so the deterministic writer wins', async function () {
+        const db = makeDb();
+        sinon.stub(db, 'getPubkeyId').resolves(3);
+        const dq = sinon.stub(db, 'doQuery');
+        dq.onCall(0).resolves([{ source_id: 2 }]);   // stake found
+        dq.onCall(1).resolves([]);                   // upsert INSERT
+        const result = await db.createValidatorReward('deadbeef', 1, 'oracle_round', '10', 100, true);
+        assert.strictEqual(result, true);
+        const sql = String(dq.args[1][0]);
+        assert.ok(sql.includes('ON DUPLICATE KEY UPDATE'));
+        assert.ok(!sql.includes('INSERT IGNORE'));
     });
 });
 

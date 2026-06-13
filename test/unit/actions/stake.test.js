@@ -67,6 +67,7 @@ describe('Stake handler @regression @tier2', function () {
         // Stubs not in default mock
         indexer.indexerDb.createStake            = sinon.stub().resolves();
         indexer.indexerDb.getActiveStakeByPubkey = sinon.stub().resolves(null);
+        indexer.indexerDb.getDelegationByPubkey  = sinon.stub().resolves(null);  // pubkey not delegated
         indexer.indexerDb.createContractStake    = sinon.stub().resolves();
         indexer.indexerDb.getContractStakeOwner  = sinon.stub().resolves(null);
         indexer.indexerDb.getContract            = sinon.stub().resolves(null);
@@ -202,6 +203,20 @@ describe('Stake handler @regression @tier2', function () {
             await handler.parse(params, data, null);
 
             assert.ok(data.STATUS.includes('already in use'));
+        });
+
+        it('pubkey held by an active delegation → invalid for v1 (mirrors the DELEGATE collision rule)', async function () {
+            indexer.indexerDb.getDelegationByPubkey.resolves({ action_index: 7 });
+
+            const params = ['1', '500.00000000', PUBKEY];
+            const data   = makeData({ FORMAT: 1 });
+
+            await handler.parse(params, data, null);
+
+            assert.ok(data.STATUS.includes('already delegated'));
+            // Height-gated: a revoked delegation frees the pubkey
+            const call = indexer.indexerDb.getDelegationByPubkey.getCall(0);
+            assert.strictEqual(call.args[1], data['BLOCK_INDEX']);
         });
 
         it('createStake is always called even on invalid', async function () {
