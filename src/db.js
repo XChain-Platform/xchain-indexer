@@ -1858,8 +1858,16 @@ class Database {
                    delete holders[row.address];
             }
         }
-        // Sort holders list from biggest to smallest
-        holders = Object.fromEntries(Object.entries(holders).sort(([, a], [, b]) => this.util.bcgt(b, a) ? 1 : this.util.bclt(b, a) ? -1 : 0));
+        // Sort holders list from biggest to smallest. Equal balances fall back to a
+        // lexicographic address tiebreak so the iteration order is deterministic across
+        // nodes — the GROUP BY queries above carry no ORDER BY, so equal-balance holders
+        // would otherwise iterate in engine-arbitrary order, forking the DIVIDEND/AIRDROP/
+        // CALLBACK credit INSERT sequence (and therefore the ledger hash) across validators.
+        holders = Object.fromEntries(Object.entries(holders).sort(([addrA, a], [addrB, b]) => {
+            if(this.util.bcgt(b, a)) return  1;
+            if(this.util.bclt(b, a)) return -1;
+            return addrA < addrB ? -1 : addrA > addrB ? 1 : 0;
+        }));
         return holders;
     }
 
