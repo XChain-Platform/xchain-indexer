@@ -248,12 +248,15 @@ class Actions {
         let block_index = tx.block_index;
         let block_time  = tx.block_time;
 
-        // Create database records and get ids for tx_hash and source address
-        await Promise.all([
-            this.indexerDb.createAddress(source),
-            this.indexerDb.createAddress(destination),
-            this.indexerDb.createTransaction(tx_hash)
-        ]);
+        // Create database records and get ids for tx_hash and source address.
+        // Address creation is sequential (NOT Promise.all) so AUTO_INCREMENT assigns
+        // address_ids in a deterministic source-before-destination order on every node.
+        // Concurrent INSERTs land on separate pool connections, where the engine may
+        // assign ids in either order, producing per-node address_id mismatches that
+        // feed the consensus ledger hash and fork it across validators.
+        await this.indexerDb.createAddress(source);
+        await this.indexerDb.createAddress(destination);
+        await this.indexerDb.createTransaction(tx_hash);
 
         // Trim whitespace from any PARAMS
         params.forEach(function(value, idx){
