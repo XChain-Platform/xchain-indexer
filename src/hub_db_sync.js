@@ -448,7 +448,18 @@ class HubDbSync {
         if (!Number.isFinite(ms) || ms <= 0) ms = 60000;
         return new Promise((resolve, reject) => {
             let waiter = { height: blockHeight, blockTime: blockTime, resolve: resolve, timer: null };
-            waiter.timer = setTimeout(() => {
+            waiter.timer = setTimeout(async () => {
+                // Self-heal before giving up: the in-memory priceSyncHeight only
+                // advances when a stream/bootstrap event drives _refreshPriceSyncHeight,
+                // so a missed refresh on a stream/reconnect edge can leave it frozen
+                // behind a local mirror DB that is actually current — and then EVERY
+                // tip block deferred the full timeout even though the data was present
+                // (BTC mainnet 2026-06-13: in-memory stuck at the restart block while
+                // price_snapshots had caught up; only a process restart cleared it).
+                // Re-read the DB here; _refreshPriceSyncHeight resolves+clears this
+                // waiter via _releasePriceWaiters if the mirror has since caught up.
+                try { await this._refreshPriceSyncHeight(); } catch (e) { /* fall through to reject */ }
+                if (this._priceSyncSatisfied(blockHeight, blockTime)) return;   // already resolved by the refresh
                 this._priceWaiters = this._priceWaiters.filter(w => w !== waiter);
                 reject(new Error('price sync barrier timed out after ' + ms + 'ms waiting for block ' +
                                  blockHeight + ' (price mirror at ' + this.priceSyncHeight +

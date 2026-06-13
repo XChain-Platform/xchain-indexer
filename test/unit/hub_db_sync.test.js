@@ -78,6 +78,22 @@ describe('HubDbSync price-sync barrier @regression @tier3', function () {
         assert.strictEqual(sync._priceWaiters.length, 0, 'timed-out waiter should be removed');
     });
 
+    it('waitForPriceSyncHeight self-heals on timeout when the DB caught up but in-memory height was stale (2026-06-13 regression)', async function () {
+        // In-memory priceSyncHeight only advances when a stream/bootstrap event drives
+        // _refreshPriceSyncHeight; a missed refresh on a stream/reconnect edge can leave
+        // it frozen behind a local mirror DB that is actually current. Before this fix,
+        // every tip block then deferred the full timeout even though the data was present
+        // (BTC mainnet: in-memory stuck at the restart block while price_snapshots had
+        // caught up; cleared only by a second process restart). The timeout path now
+        // re-reads the DB and resolves instead of rejecting when the mirror has caught up.
+        const { sync, doQuery } = makeSync(10);
+        sync.priceSyncHeight = 10;                          // in-memory frozen behind the target
+        doQuery.callsFake(async () => [{ h: 150 }]);        // but the local mirror DB is past it
+        const got = await sync.waitForPriceSyncHeight(100, 50);
+        assert.strictEqual(got, 150, 'should adopt the caught-up DB height instead of timing out');
+        assert.strictEqual(sync._priceWaiters.length, 0, 'self-healed waiter should be cleared');
+    });
+
     it('waitForPriceSyncHeight is a no-op when sync is disabled (single-host)', async function () {
         // No hub URL → enabled false → the local hub DB is the hub itself, always current.
         const sync = new HubDbSync({ doQuery: sinon.stub() }, {});
