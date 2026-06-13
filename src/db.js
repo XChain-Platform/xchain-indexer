@@ -1570,6 +1570,8 @@ class Database {
                             i.lock_description,
                             i.lock_sleep,
                             i.lock_callback,
+                            i.controller,
+                            i.lock_controller,
                             i.callback_block,
                             i.callback_amount,
                             i.mint_address_max,
@@ -1622,6 +1624,8 @@ class Database {
                     arr['LOCK_DESCRIPTION']  = row.lock_description;
                     arr['LOCK_SLEEP']        = row.lock_sleep;
                     arr['LOCK_CALLBACK']     = row.lock_callback;
+                    arr['CONTROLLER']        = row.controller;
+                    arr['LOCK_CONTROLLER']   = row.lock_controller;
                     arr['CALLBACK_TICK']     = row.callback_tick;
                     arr['CALLBACK_BLOCK']    = row.callback_block;
                     arr['CALLBACK_AMOUNT']   = row.callback_amount;
@@ -2025,6 +2029,8 @@ class Database {
         let lock_description   = data['LOCK_DESCRIPTION'];
         let lock_sleep         = data['LOCK_SLEEP'];
         let lock_callback      = data['LOCK_CALLBACK'];
+        let controller         = data['CONTROLLER'];
+        let lock_controller    = data['LOCK_CONTROLLER'];
         let callback_block     = data['CALLBACK_BLOCK'];
         let callback_amount    = data['CALLBACK_AMOUNT'];
         let allow_list         = data['ALLOW_LIST'];
@@ -2062,6 +2068,8 @@ class Database {
                         lock_description=?,
                         lock_sleep=?,
                         lock_callback=?,
+                        controller=?,
+                        lock_controller=?,
                         callback_block=?,
                         callback_tick_id=?,
                         callback_amount=?,
@@ -2072,7 +2080,7 @@ class Database {
                         mint_stop_block=?,
                         memo_id=?,
                         status_id=?
-                    WHERE 
+                    WHERE
                         action_index=?`;
         } else {
             // INSERT record
@@ -2089,23 +2097,25 @@ class Database {
                         lock_mint, 
                         lock_mint_supply, 
                         lock_max_mint, 
-                        lock_description, 
-                        lock_sleep, 
-                        lock_callback, 
-                        callback_block, 
-                        callback_tick_id, 
-                        callback_amount, 
-                        allow_list, 
-                        block_list, 
-                        mint_address_max, 
-                        mint_start_block, 
-                        mint_stop_block, 
+                        lock_description,
+                        lock_sleep,
+                        lock_callback,
+                        controller,
+                        lock_controller,
+                        callback_block,
+                        callback_tick_id,
+                        callback_amount,
+                        allow_list,
+                        block_list,
+                        mint_address_max,
+                        mint_start_block,
+                        mint_stop_block,
                         memo_id,
                         status_id,
                         action_index
-                    ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+                    ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
         }
-        args    = [tick_id, max_supply, max_mint, decimals, description, mint_supply, transfer_id, transfer_supply_id, lock_max_supply, lock_mint, lock_mint_supply, lock_max_mint, lock_description, lock_sleep, lock_callback, callback_block, callback_tick_id, callback_amount, allow_list, block_list, mint_address_max, mint_start_block, mint_stop_block, memo_id, status_id, action_index ];
+        args    = [tick_id, max_supply, max_mint, decimals, description, mint_supply, transfer_id, transfer_supply_id, lock_max_supply, lock_mint, lock_mint_supply, lock_max_mint, lock_description, lock_sleep, lock_callback, controller, lock_controller, callback_block, callback_tick_id, callback_amount, allow_list, block_list, mint_address_max, mint_start_block, mint_stop_block, memo_id, status_id, action_index ];
         results = await this.doQuery(query, args);
     }
 
@@ -2122,6 +2132,7 @@ class Database {
         let callback_amount    = (!this.util.isNull(data['CALLBACK_AMOUNT']) &&      this.util.isNumeric(data['CALLBACK_AMOUNT'])) ? data['CALLBACK_AMOUNT'] : 0;
         let allow_list         = (!this.util.isNull(data['ALLOW_LIST']) &&           this.util.isNumeric(data['ALLOW_LIST'])) ? parseInt(data['ALLOW_LIST']) : null;
         let block_list         = (!this.util.isNull(data['BLOCK_LIST']) &&           this.util.isNumeric(data['BLOCK_LIST'])) ? parseInt(data['BLOCK_LIST']) : null;
+        let controller         = (!this.util.isNull(data['CONTROLLER']) &&           this.util.isNumeric(data['CONTROLLER'])) ? parseInt(data['CONTROLLER']) : null;
         let decimals           = (!this.util.isNull(data['DECIMALS']) &&             this.util.isNumeric(data['DECIMALS'])) ? parseInt(data['DECIMALS']) : 0;
         // Force any amount values to the correct decimal precision
         if(this.util.isNumeric(decimals) && decimals >= this.config.MIN_TOKEN_DECIMALS && decimals <= this.config.MAX_TOKEN_DECIMALS){
@@ -2140,6 +2151,7 @@ class Database {
         let lock_description   = (data['LOCK_DESCRIPTION']==1) ? 1 : 0;
         let lock_sleep         = (data['LOCK_SLEEP']==1) ? 1 : 0;
         let lock_callback      = (data['LOCK_CALLBACK']==1) ? 1 : 0;
+        let lock_controller    = (data['LOCK_CONTROLLER']==1) ? 1 : 0;
         let callback_block     = (data['CALLBACK_BLOCK']>0) ? data['CALLBACK_BLOCK'] : 0;
         let callback_tick_id   = await this.createTicker(data['CALLBACK_TICK']);
         let tick_id            = await this.createTicker(data['TICK']);
@@ -2166,6 +2178,8 @@ class Database {
                         lock_description=?,
                         lock_sleep=?,
                         lock_callback=?,
+                        controller=?,
+                        lock_controller=?,
                         callback_block=?,
                         callback_tick_id=?,
                         callback_amount=?,
@@ -2177,9 +2191,9 @@ class Database {
                         supply=?,
                         owner_id=?,
                         last_action_index=?
-                    WHERE 
+                    WHERE
                         tick_id=?`;
-            args = [max_supply, max_mint, decimals, description, lock_max_supply, lock_mint, lock_max_mint,lock_description, lock_sleep, lock_callback, callback_block, callback_tick_id, callback_amount, allow_list, block_list, mint_address_max, mint_start_block, mint_stop_block, supply, owner_id, action_index, tick_id];
+            args = [max_supply, max_mint, decimals, description, lock_max_supply, lock_mint, lock_max_mint,lock_description, lock_sleep, lock_callback, controller, lock_controller, callback_block, callback_tick_id, callback_amount, allow_list, block_list, mint_address_max, mint_start_block, mint_stop_block, supply, owner_id, action_index, tick_id];
         } else {
             // INSERT record
             query = `INSERT INTO tokens (
@@ -2190,24 +2204,26 @@ class Database {
                         lock_max_supply, 
                         lock_mint, 
                         lock_max_mint,
-                        lock_description, 
-                        lock_sleep, 
-                        lock_callback, 
-                        callback_block, 
-                        callback_tick_id, 
-                        callback_amount, 
-                        allow_list, 
-                        block_list, 
-                        mint_address_max, 
-                        mint_start_block, 
-                        mint_stop_block, 
-                        supply, 
-                        owner_id, 
+                        lock_description,
+                        lock_sleep,
+                        lock_callback,
+                        controller,
+                        lock_controller,
+                        callback_block,
+                        callback_tick_id,
+                        callback_amount,
+                        allow_list,
+                        block_list,
+                        mint_address_max,
+                        mint_start_block,
+                        mint_stop_block,
+                        supply,
+                        owner_id,
                         action_index,
                         last_action_index,
-                        tick_id 
-                    ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
-            args    = [max_supply, max_mint, decimals, description, lock_max_supply, lock_mint, lock_max_mint,lock_description, lock_sleep, lock_callback, callback_block, callback_tick_id, callback_amount, allow_list, block_list, mint_address_max, mint_start_block, mint_stop_block, supply, owner_id, action_index, action_index, tick_id];
+                        tick_id
+                    ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+            args    = [max_supply, max_mint, decimals, description, lock_max_supply, lock_mint, lock_max_mint,lock_description, lock_sleep, lock_callback, controller, lock_controller, callback_block, callback_tick_id, callback_amount, allow_list, block_list, mint_address_max, mint_start_block, mint_stop_block, supply, owner_id, action_index, action_index, tick_id];
         }
         results = await this.doQuery(query, args);
 
@@ -8714,7 +8730,19 @@ class Database {
                 total = util.bcadd(total, amt, 8);
                 arr.push({ pubkey: pk, amount: amt });
             }
-            arr.sort((a, b) => (util.bcgt(b.amount, a.amount) ? 1 : (util.bcgt(a.amount, b.amount) ? -1 : 0)));
+            // Sort stakers biggest to smallest. Equal amounts fall back to a lexicographic
+            // pubkey tiebreak so the order is deterministic across nodes — the source query
+            // carries no ORDER BY, so without this, equal-amount stakers would order in
+            // engine-arbitrary row order. That matters twice: it sets the iteration order a
+            // contract's getStakers() observes, AND it decides which stakers survive the
+            // 1000-cap slice below when ties straddle the boundary — either of which would
+            // fork getStakers() membership (and any contract branching on it) across
+            // validators. pubkey is unique per tick here (aggregated), so this is a total order.
+            arr.sort((a, b) => {
+                if(util.bcgt(b.amount, a.amount)) return  1;
+                if(util.bcgt(a.amount, b.amount)) return -1;
+                return a.pubkey < b.pubkey ? -1 : a.pubkey > b.pubkey ? 1 : 0;
+            });
             totalByTick[tick]   = total;
             stakersByTick[tick] = arr.slice(0, 1000);
         }

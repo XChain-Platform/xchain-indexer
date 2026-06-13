@@ -16,6 +16,8 @@ CREATE TABLE issues (
     lock_description    VARCHAR(1),               -- Locks DESCRIPTION
     lock_sleep          VARCHAR(1),               -- Locks SLEEP
     lock_callback       VARCHAR(1),               -- Locks CALLBACK_BLOCK/TICK/AMOUNT
+    controller          BIGINT UNSIGNED,          -- action_index of guard contract bound by this ISSUE (NULL = unchanged/none)
+    lock_controller     VARCHAR(1),               -- Locks CONTROLLER
     callback_block      VARCHAR(15),              -- block_index after which CALLBACK cand be used
     callback_tick_id    BIGINT UNSIGNED,          -- id of record in index_tickers table
     callback_amount     VARCHAR(250),             -- AMOUNT users get if CALLBACK
@@ -36,4 +38,5 @@ CREATE        INDEX status_id          ON issues (status_id);
 CREATE        INDEX callback_tick_id   ON issues (callback_tick_id);
 CREATE        INDEX allow_list         ON issues (allow_list);
 CREATE        INDEX block_list         ON issues (block_list);
+CREATE        INDEX controller         ON issues (controller);
 CREATE        INDEX memo_id            ON issues (memo_id);

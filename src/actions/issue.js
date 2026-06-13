@@ -40,7 +40,10 @@
  * - MINT_ADDRESS_MAX - Maximum amount of supply any address can mint via `MINT` transactions
  * - MINT_START_BLOCK - `BLOCK_INDEX` when `MINT` transactions are allowed (begin mint)
  * - MINT_STOP_BLOCK` - `BLOCK_INDEX` when `MINT` transactions are NOT allowed (end mint)
- * 
+ * - CONTROLLER       - `ACTION_INDEX` of a deployed contract whose `guard` method must
+ *                      approve guarded native actions on this token (SEND/ORDER/SWAP/DISPENSER)
+ * - LOCK_CONTROLLER  - Lock `CONTROLLER` permanently (binding can never change/clear)
+ *
  * FORMATS :
  * - 0 = Full
  * - 1 = Brief
@@ -48,7 +51,8 @@
  * - 3 = Edit LOCK PARAMS
  * - 4 = Edit CALLBACK PARAMS
  * - 5 = Edit LIST PARAMS
- * 
+ * - 6 = Edit CONTROLLER PARAMS
+ *
  ********************************************************************/
 
 class Issue {
@@ -65,19 +69,20 @@ class Issue {
 
         // Define list of known FORMATS
         this.formats = {};
-        this.formats[0] = 'VERSION|TICK|MAX_SUPPLY|MAX_MINT|DECIMALS|DESCRIPTION|MINT_SUPPLY|TRANSFER|TRANSFER_SUPPLY|LOCK_MAX_SUPPLY|LOCK_MAX_MINT|LOCK_DESCRIPTION|LOCK_SLEEP|LOCK_CALLBACK|CALLBACK_BLOCK|CALLBACK_TICK|CALLBACK_AMOUNT|ALLOW_LIST|BLOCK_LIST|MINT_ADDRESS_MAX|MINT_START_BLOCK|MINT_STOP_BLOCK|LOCK_MINT|LOCK_MINT_SUPPLY|MEMO';
+        this.formats[0] = 'VERSION|TICK|MAX_SUPPLY|MAX_MINT|DECIMALS|DESCRIPTION|MINT_SUPPLY|TRANSFER|TRANSFER_SUPPLY|LOCK_MAX_SUPPLY|LOCK_MAX_MINT|LOCK_DESCRIPTION|LOCK_SLEEP|LOCK_CALLBACK|CALLBACK_BLOCK|CALLBACK_TICK|CALLBACK_AMOUNT|ALLOW_LIST|BLOCK_LIST|MINT_ADDRESS_MAX|MINT_START_BLOCK|MINT_STOP_BLOCK|LOCK_MINT|LOCK_MINT_SUPPLY|CONTROLLER|LOCK_CONTROLLER|MEMO';
         this.formats[1] = 'VERSION|TICK|DESCRIPTION|MEMO';
         this.formats[2] = 'VERSION|TICK|MAX_MINT|MINT_SUPPLY|TRANSFER_SUPPLY|MINT_ADDRESS_MAX|MINT_START_BLOCK|MINT_STOP_BLOCK|MEMO';
-        this.formats[3] = 'VERSION|TICK|LOCK_MAX_SUPPLY|LOCK_MAX_MINT|LOCK_DESCRIPTION|LOCK_SLEEP|LOCK_CALLBACK|LOCK_MINT|LOCK_MINT_SUPPLY|MEMO';
+        this.formats[3] = 'VERSION|TICK|LOCK_MAX_SUPPLY|LOCK_MAX_MINT|LOCK_DESCRIPTION|LOCK_SLEEP|LOCK_CALLBACK|LOCK_MINT|LOCK_MINT_SUPPLY|LOCK_CONTROLLER|MEMO';
         this.formats[4] = 'VERSION|TICK|CALLBACK_BLOCK|CALLBACK_TICK|CALLBACK_AMOUNT|MEMO';
         this.formats[5] = 'VERSION|TICK|ALLOW_LIST|BLOCK_LIST|MEMO';
+        this.formats[6] = 'VERSION|TICK|CONTROLLER|LOCK_CONTROLLER|MEMO';
 
         // Define lists of various fields
         this.fieldList = {};
 
         // Define list of AMOUNT, LOCK fields (used in validations)
         this.fieldList['AMOUNT'] = ['MAX_SUPPLY', 'MAX_MINT', 'MINT_SUPPLY', 'CALLBACK_AMOUNT', 'MINT_ADDRESS_MAX', 'MINT_START_BLOCK', 'MINT_STOP_BLOCK'];
-        this.fieldList['LOCK']   = ['LOCK_MAX_SUPPLY', 'LOCK_MINT', 'LOCK_MINT_SUPPLY', 'LOCK_MAX_MINT', 'LOCK_DESCRIPTION', 'LOCK_SLEEP', 'LOCK_CALLBACK'];
+        this.fieldList['LOCK']   = ['LOCK_MAX_SUPPLY', 'LOCK_MINT', 'LOCK_MINT_SUPPLY', 'LOCK_MAX_MINT', 'LOCK_DESCRIPTION', 'LOCK_SLEEP', 'LOCK_CALLBACK', 'LOCK_CONTROLLER'];
     }
 
     // Handle parsing the ISSUE transaction
@@ -363,6 +368,28 @@ class Issue {
         // Verify BLOCK_LIST is a valid list of addresses
         if(!error && !this.util.isNull(data['BLOCK_LIST']) && await this.indexerDb.isValidList(data['BLOCK_LIST'],2) == false)
             error = 'invalid: BLOCK_LIST (bad list)';
+
+        // Verify CONTROLLER references an existing, active contract on this chain.
+        // The bound contract's `guard` method is consulted before guarded native
+        // actions on this token settle (see Controller_Bound_Tokens.md). Mirrors the
+        // contract-active check in actions/execute.js so a token can only bind to a
+        // contract the indexer can actually execute. A guard whose `guard` method is
+        // missing/throws is fail-closed at runtime (denies the action), not here.
+        if(!error && !this.util.isNull(data['CONTROLLER'])){
+            let controllerInfo = await this.indexerDb.getContract(data['CONTROLLER']);
+            if(!controllerInfo){
+                error = 'invalid: CONTROLLER (unknown)';
+            } else {
+                let controllerStatus = await this.indexerDb.getStatusString(controllerInfo.status_id);
+                if(controllerStatus !== 'valid')
+                    error = 'invalid: CONTROLLER (not active)';
+            }
+        }
+
+        // Verify CONTROLLER can not be changed once LOCK_CONTROLLER is enabled
+        // (the generic LOCK loop above already forbids un-locking LOCK_CONTROLLER itself).
+        if(!error && tokenInfo && tokenInfo['LOCK_CONTROLLER'] && !this.util.isNull(data['CONTROLLER']) && String(data['CONTROLLER']) != String(tokenInfo['CONTROLLER']))
+            error = 'invalid: CONTROLLER (locked)';
 
         // Verify MINT_START_BLOCK is greater than or equal to current block
         if(!error && !this.util.isNull(data['MINT_START_BLOCK']) && this.util.bcgt(data['MINT_START_BLOCK'], 0) && this.util.bclt(data['MINT_START_BLOCK'], data['BLOCK_INDEX']))

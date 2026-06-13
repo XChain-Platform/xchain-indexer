@@ -146,6 +146,16 @@ class Send {
         // Get source address balances
         let balances = await this.indexerDb.getAddressBalances(data['SOURCE'], null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
 
+        // Controller-bound token gas context. A SEND of a token that declares a
+        // CONTROLLER runs the contract's `guard` method before settling; the
+        // SOURCE pays the (bounded) guard gas. Load the SOURCE's GAS balance once
+        // so a multi-send debits it cumulatively across controlled legs.
+        let gasTick      = this.config['GAS'];
+        let gasInfo      = await this.indexerDb.getTokenInfo(gasTick, data['BLOCK_INDEX'], data['ACTION_INDEX']);
+        let gasBalances  = await this.indexerDb.getAddressBalances(data['SOURCE'], gasTick, data['BLOCK_INDEX'], data['ACTION_INDEX']);
+        let guardCeiling = parseInt(this.config['GAS_SCHEDULE']['VM_GUARD_GAS_CEILING']) || 200000;
+        let maxGuardFee  = this.util.bcmul(guardCeiling, this.config['GAS_PRICE'], 8);
+
         // Store original error value
         let origError = error;
 
@@ -161,6 +171,9 @@ class Send {
 
             // Reset error to the original value
             error = origError;
+
+            // Guard gas fee billed to SOURCE for this leg (0 = uncontrolled token)
+            let guardFee = 0;
 
             // Copy base transaction data object
             let send = data;
@@ -265,6 +278,38 @@ class Send {
                 }
             }
 
+            // Controller-bound token: defer to the bound contract's `guard` method
+            // before the transfer settles. The guard may DENY (revert) or run
+            // programmable side effects (state writes, royalty/fee emissions). It is
+            // the final gate — all other validation has passed when it runs, so an
+            // allow leads directly to a valid send. SOURCE must have reserved the
+            // guard gas ceiling fee (mirrors the cross-contract-call reservation) so
+            // a cheap/denied guard never drives GAS negative; the actual metered fee
+            // is billed in the valid block below.
+            if(!error && tokenInfo && !this.util.isNull(tokenInfo['CONTROLLER'])){
+                if(gasInfo && this.util.bcgt(maxGuardFee, 0) && !this.util.hasBalance(gasBalances, gasInfo['TICK_ID'], maxGuardFee)){
+                    error = 'invalid: insufficient funds (guard gas)';
+                } else {
+                    let guard = await this.actions.actionExecute.runControllerGuard({
+                        actionType:      'SEND',
+                        controllerIndex: tokenInfo['CONTROLLER'],
+                        tick:            send['TICK'],
+                        from:            send['SOURCE'],
+                        to:              send['DESTINATION'],
+                        amount:          send['AMOUNT'],
+                        price:           '',
+                        proceedsTick:    '',
+                        hostData:        send,
+                        callDepth:       (Number(data['CALL_DEPTH']) || 0) + 1,
+                        seq:             parseInt(idx) || 0
+                    });
+                    if(!guard.allow)
+                        error = 'invalid: ' + guard.reason;
+                    else
+                        guardFee = this.util.bcmul(guard.gasBilled, this.config['GAS_PRICE'], 8);
+                }
+            }
+
             // Adjust balances to reduce by SEND AMOUNT
             if(!error)
                 balances = this.util.debitBalances(balances, tokenInfo['TICK_ID'], send['AMOUNT']);
@@ -293,6 +338,16 @@ class Send {
 
                 // Add ticker, amount, and destination to credits array
                 credits.push([send['TICK'], send['AMOUNT'], send['DESTINATION']]);
+
+                // Bill the controller-guard gas to SOURCE (in GAS). Reduce the
+                // in-memory GAS balance so a later controlled leg in this same
+                // multi-send sees the spend when it re-checks its reservation.
+                if(this.util.bcgt(guardFee, 0)){
+                    debits.push([gasTick, guardFee, send['SOURCE']]);
+                    this.util.addAddressTicker(send['SOURCE'], gasTick);
+                    if(gasInfo)
+                        gasBalances = this.util.debitBalances(gasBalances, gasInfo['TICK_ID'], guardFee);
+                }
             }
         }
 

@@ -168,7 +168,8 @@ module.exports = {
             'CALLBACK_BLOCK', 
             'COIN1_ACTION_INDEX',
             'COIN2_ACTION_INDEX',
-            'DECIMALS', 
+            'CONTROLLER',
+            'DECIMALS',
             'DISPENSER_ACTION_INDEX',
             'EDIT',
             'ENCRYPTION_METHOD',
@@ -203,8 +204,9 @@ module.exports = {
             'LOCK_MAX_MINT',
             'LOCK_DESCRIPTION',
             'LOCK_SLEEP',
-            'LOCK_CALLBACK'
-        ];        
+            'LOCK_CALLBACK',
+            'LOCK_CONTROLLER'
+        ];
 
         // Define list of LIST fields
         config['LIST_FIELDS'] = [

@@ -49,6 +49,12 @@ const GAS_CEILING = 1000000;
 const MAX_CALL_DEPTH = 4;
 const MIN_CALL_GAS   = 5000;
 
+// Reserved method name a controller-bound token's contract must export. The
+// indexer invokes it before a guarded native action (SEND/ORDER/SWAP/DISPENSER)
+// on the token settles; the contract returns normally to ALLOW or reverts to
+// DENY. Canonical: protocol/Controller_Bound_Tokens.md.
+const GUARD_METHOD = 'guard';
+
 // Cross-chain call (XCALL) host-side guards — mirrored from actions/xcall.js
 // (canonical: xchain-documentation/protocol/constants.js).
 const { XCALL_MIN_GAS, XCALL_MAX_GAS, XCALL_MAX_HOPS } = require('./xcall.js');
@@ -427,6 +433,188 @@ class Execute {
 
         // Create action mappings
         await this.mapper.createMappings(data);
+    }
+
+    /*****************************************************************
+     * Controller-bound token guard
+     *
+     * Runs the `guard` method on a token's bound CONTROLLER contract before a
+     * guarded native action (SEND/ORDER/SWAP/DISPENSER) on that token settles.
+     * The guard is a fully programmable VM execution: it may read/write its own
+     * contract state and emit token actions (e.g. split a royalty out of sale
+     * proceeds), and it may `revert` to DENY the action. The asynchronous
+     * frameworks (ATTEST/XCALL) are disabled (VM isGuard mode) so the decision
+     * is synchronous. Reuses the EXECUTE state-write + processEmission + savepoint
+     * machinery so a guard's side effects are validated and atomic exactly like
+     * a contract method's.
+     *
+     * opts:
+     *   actionType      string  SEND | ORDER_CREATE | ORDER_MATCH | SWAP_CREATE |
+     *                           SWAP_MATCH | DISPENSER_CREATE | DISPENSE
+     *   controllerIndex number  the token's CONTROLLER (contract action_index)
+     *   tick            string  the controlled token
+     *   from, to        string  counterparties (action-type dependent; '' if n/a)
+     *   amount          string  token amount moving (or order/dispenser quantity)
+     *   price           string  proceeds amount for a sale ('' for a plain SEND)
+     *   proceedsTick    string  proceeds tick for a sale ('' for a plain SEND)
+     *   hostData        object  the native action's BLOCK / TX / ACTION_INDEX / SOURCE fields
+     *   callDepth       number  guard call depth (native action depth + 1)
+     *
+     * Returns { allow, reason, gasBilled }. On allow the caller bills gasBilled
+     * GAS to the action SOURCE (which it must already have reserved
+     * GAS_SCHEDULE.VM_GUARD_GAS_CEILING fee for). On deny the caller marks the
+     * native action invalid; the guard's own state + emissions are rolled back
+     * here. Fail-closed: missing/throwing `guard`, out-of-gas, or a failed guard
+     * emission all DENY. Depth-capped by VM_MAX_CALL_DEPTH.
+     ****************************************************************/
+    async runControllerGuard(opts){
+        let chain         = this.config['CHAIN'];
+        let contractIndex = parseInt(opts.controllerIndex);
+        let hostData      = opts.hostData;
+        let callDepth     = Number(opts.callDepth) || 0;
+        let derived       = 'C:' + chain + ':' + contractIndex;
+
+        // Depth cap (defense in depth — the emit path checks too). A guard whose
+        // emit.send moves another controlled token recurses through this method.
+        if(callDepth > MAX_CALL_DEPTH)
+            return { allow:false, reason:'controller (max call depth)', gasBilled:0 };
+
+        // Load + verify the controller contract is active. Fail-closed.
+        let contractInfo = await this.indexerDb.getContract(contractIndex);
+        if(!contractInfo)
+            return { allow:false, reason:'controller (unknown)', gasBilled:0 };
+        let contractStatus = await this.indexerDb.getStatusString(contractInfo.status_id);
+        if(contractStatus !== 'valid')
+            return { allow:false, reason:'controller (not active)', gasBilled:0 };
+        if(!this.actions.vm)
+            return { allow:false, reason:'controller (vm unavailable)', gasBilled:0 };
+
+        // Guard gas ceiling (consensus param, per-chain GAS_SCHEDULE).
+        let guardCeiling = parseInt(this.config['GAS_SCHEDULE']['VM_GUARD_GAS_CEILING']) || 200000;
+
+        // Load contract state + read-only data (mirrors parse()).
+        let contractState = await this.indexerDb.getContractState(contractIndex);
+        let oracleData = await ((this.actions && this.actions.hubDb) || this.indexerDb).getOracleDataForVM(hostData['BLOCK_INDEX'], hostData['BLOCK_TIME'], parseInt(this.config['ORACLE_MAX_PRICE_AGE_SECONDS']) || 1800);
+        let crossChainData = await this.indexerDb.getCrossChainDataForVM(hostData['BLOCK_INDEX']);
+        let contractStakeData = await this.indexerDb.getContractStakeDataForVM(contractIndex, hostData['BLOCK_INDEX']);
+        let blockHash = crypto.createHash('sha256')
+            .update(String(hostData['BLOCK_INDEX']) + ':' + String(hostData['BLOCK_TIME']))
+            .digest('hex');
+
+        // Positional, all-string guard inputs. Order is consensus — see spec.
+        let guardParams = [
+            String(opts.actionType),
+            String(this.util.isNull(opts.from)         ? '' : opts.from),
+            String(this.util.isNull(opts.to)           ? '' : opts.to),
+            String(this.util.isNull(opts.tick)         ? '' : opts.tick),
+            String(this.util.isNull(opts.amount)       ? '' : opts.amount),
+            String(this.util.isNull(opts.price)        ? '' : opts.price),
+            String(this.util.isNull(opts.proceedsTick) ? '' : opts.proceedsTick)
+        ];
+
+        let vmResult;
+        try {
+            vmResult = await this.actions.vm.execute({
+                code:            contractInfo.code,
+                state:           contractState,
+                method:          GUARD_METHOD,
+                params:          guardParams,
+                caller:          hostData['SOURCE'],   // who triggered the guarded action
+                contractAddress: derived,
+                contractIndex:   contractIndex,
+                txHash:          hostData['TX_HASH'],
+                blockContext: {
+                    height:    hostData['BLOCK_INDEX'],
+                    timestamp: hostData['BLOCK_TIME'],
+                    hash:      blockHash
+                },
+                gasCeiling:        guardCeiling,
+                callDepth:         callDepth,
+                actionIndex:       hostData['ACTION_INDEX'],
+                isGuard:           true,   // disables ATTEST/XCALL in the gateway
+                network:           this.config['NETWORK'],
+                oracleData:        oracleData,
+                crossChainData:    crossChainData,
+                attestationData:   null,
+                contractStakeData: contractStakeData,
+                providerDeadlines: PROVIDER_DEADLINE_WINDOWS
+            });
+        } catch(e){
+            // A host fault (e.g. permanently broken subprocess executor) must HALT,
+            // not silently deny — rethrow so the block processor stops rather than
+            // committing a fabricated decision that could fork the chain.
+            throw e;
+        }
+
+        // The VM already clamps a resource-termination gasUsed to the ceiling;
+        // clamp again defensively so the fee can never exceed the reservation.
+        let gasBilled = Math.min(Number(vmResult.gasUsed) || 0, guardCeiling);
+
+        // Guard reverted / out-of-gas / runtime error -> DENY (fail-closed). The
+        // SOURCE is still billed gasBilled (caller-pays-for-attempt) only when the
+        // action proceeds; a denied action records no ledger change (see caller).
+        if(!vmResult.success)
+            return { allow:false, reason:'controller (' + this.util.vmFailureStatus(vmResult.error) + ')', gasBilled };
+
+        // Guard allowed. Commit its state changes + emissions atomically; any
+        // failure rolls them back and DENIES. Savepoint name is unique per
+        // (native action, controller) so nested controlled-token guards don't
+        // collide (MariaDB destroys a duplicate-named savepoint).
+        let guardCtxData = {
+            ACTION_INDEX:          hostData['ACTION_INDEX'],
+            CONTRACT_ACTION_INDEX: contractIndex,
+            SOURCE:                derived,
+            BLOCK_INDEX:           hostData['BLOCK_INDEX'],
+            BLOCK_TIME:            hostData['BLOCK_TIME'],
+            TX_INDEX:              hostData['TX_INDEX'],
+            TX_HASH:               hostData['TX_HASH'],
+            TX_VOUT:               hostData['TX_VOUT'],
+            CALL_DEPTH:            callDepth,
+            CROSS_HOPS:            0
+        };
+
+        let savepoint = await this.indexerDb.createSavepoint('controller_guard_' + parseInt(hostData['ACTION_INDEX']) + '_' + contractIndex + '_' + (parseInt(opts.seq) || 0));
+        try {
+            for(let change of vmResult.stateChanges){
+                await this.indexerDb.createContractState({
+                    CONTRACT_INDEX: contractIndex,
+                    STATE_KEY:      change.key,
+                    STATE_VALUE:    JSON.stringify(change.value),
+                    BLOCK_INDEX:    hostData['BLOCK_INDEX'],
+                    ACTION_INDEX:   hostData['ACTION_INDEX']
+                });
+            }
+            for(let key of vmResult.stateDeletes){
+                await this.indexerDb.createContractState({
+                    CONTRACT_INDEX: contractIndex,
+                    STATE_KEY:      key,
+                    STATE_VALUE:    null,
+                    BLOCK_INDEX:    hostData['BLOCK_INDEX'],
+                    ACTION_INDEX:   hostData['ACTION_INDEX']
+                });
+            }
+            for(let i = 0; i < vmResult.emittedActions.length; i++){
+                let emission = vmResult.emittedActions[i];
+                // A guard may not emit asynchronous (ATTEST/XCALL — already blocked
+                // at VM emit time) or stake-slashing (SLASH) actions. Re-check
+                // host-side as defense in depth against an older bundled VM.
+                if(emission.action === 'ATTEST' || emission.action === 'XCALL' || emission.action === 'SLASH')
+                    throw new Error('guard emission not allowed: ' + emission.action);
+                await this.processEmission(emission, guardCtxData, i);
+                await this.indexerDb.createContractEmission({
+                    EXECUTION_INDEX: hostData['ACTION_INDEX'],
+                    EMITTED_ACTION:  emission.action,
+                    ACTION_INDEX:    emission.resultActionIndex || null,
+                    POSITION:        i
+                });
+            }
+            await this.indexerDb.releaseSavepoint(savepoint);
+        } catch(emissionError){
+            await this.indexerDb.rollbackToSavepoint(savepoint);
+            return { allow:false, reason:'controller (' + emissionError.message + ')', gasBilled };
+        }
+
+        return { allow:true, reason:null, gasBilled };
     }
 
     /*****************************************************************

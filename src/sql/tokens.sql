@@ -16,6 +16,8 @@ CREATE TABLE tokens (
     lock_description   TINYINT(1) NOT NULL DEFAULT 0,        -- Locks DESCRIPTION
     lock_sleep         TINYINT(1) NOT NULL DEFAULT 0,        -- Locks SLEEP
     lock_callback      TINYINT(1) NOT NULL DEFAULT 0,        -- Locks CALLBACK_BLOCK/TICK/AMOUNT
+    controller         BIGINT UNSIGNED,                     -- action_index of contract whose guard() approves guarded native actions (NULL = uncontrolled)
+    lock_controller    TINYINT(1) NOT NULL DEFAULT 0,        -- Locks CONTROLLER (binding becomes permanent)
     callback_block     BIGINT UNSIGNED,                     -- block_index after which CALLBACK cand be used
     callback_tick_id   BIGINT UNSIGNED,                     -- id of record in index_tickers table
     callback_amount    VARCHAR(250),                         -- AMOUNT users get if CALLBACK
@@ -40,6 +42,8 @@ CREATE        INDEX lock_mint_supply ON tokens (lock_mint_supply);
 CREATE        INDEX lock_description ON tokens (lock_description);
 CREATE        INDEX lock_sleep       ON tokens (lock_sleep);
 CREATE        INDEX lock_callback    ON tokens (lock_callback);
+CREATE        INDEX lock_controller  ON tokens (lock_controller);
 CREATE        INDEX callback_tick_id ON tokens (callback_tick_id);
 CREATE        INDEX allow_list       ON tokens (allow_list);
 CREATE        INDEX block_list       ON tokens (block_list);
+CREATE        INDEX controller       ON tokens (controller);

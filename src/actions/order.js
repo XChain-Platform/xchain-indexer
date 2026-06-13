@@ -371,6 +371,39 @@ class Order {
         if(!error && (!fees['PAYMENT_MODE'] || fees['PAYMENT_MODE'] === 2))
             balances = this.util.debitBalances(balances, fees['TICK_ID'], fees['AMOUNT']);
 
+        // Controller-bound GIVE token: the bound contract's `guard` must approve
+        // LISTING this token for sale before the order opens (the "list for sale"
+        // gate). Veto-only at create (no proceeds yet); the royalty cut is taken at
+        // match time (order_match.js). Runs for both amount and ownership listings of
+        // a real local token; SOURCE pays the bounded guard gas (reserved up front).
+        let guardFee = 0;
+        if(!error && format==0 && !isNativeCoinGive && giveTokenInfo && !this.util.isNull(giveTokenInfo['CONTROLLER'])){
+            let gasInfo      = await this.indexerDb.getTokenInfo(this.config['GAS'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
+            let guardCeiling = parseInt(this.config['GAS_SCHEDULE']['VM_GUARD_GAS_CEILING']) || 200000;
+            let maxGuardFee  = this.util.bcmul(guardCeiling, this.config['GAS_PRICE'], 8);
+            if(gasInfo && this.util.bcgt(maxGuardFee, 0) && !this.util.hasBalance(balances, gasInfo['TICK_ID'], maxGuardFee)){
+                error = 'invalid: insufficient funds (guard gas)';
+            } else {
+                let guard = await this.actions.actionExecute.runControllerGuard({
+                    actionType:      'ORDER_CREATE',
+                    controllerIndex: giveTokenInfo['CONTROLLER'],
+                    tick:            data['GIVE_TICK'],
+                    from:            data['SOURCE'],
+                    to:              '',
+                    amount:          isOwnershipGive ? '' : data['GIVE_AMOUNT'],
+                    price:           data['GET_AMOUNT'],
+                    proceedsTick:    data['GET_TICK'],
+                    hostData:        data,
+                    callDepth:       (Number(data['CALL_DEPTH']) || 0) + 1,
+                    seq:             0
+                });
+                if(!guard.allow)
+                    error = 'invalid: ' + guard.reason;
+                else
+                    guardFee = this.util.bcmul(guard.gasBilled, this.config['GAS_PRICE'], 8);
+            }
+        }
+
         // Determine final status
         let status = (error) ? error : 'valid';
         data['STATUS'] = order['STATUS'] = status;
@@ -468,6 +501,12 @@ class Order {
 
             // Handle any transaction FEE according the users's ADDRESS preferences
             [credits, debits] = await this.util.processTransactionFees(this.indexerDb, credits, debits, fees);
+
+            // Bill the controller-guard gas to SOURCE (in GAS), reserved above.
+            if(this.util.bcgt(guardFee, 0)){
+                debits.push([this.config['GAS'], guardFee, data['SOURCE']]);
+                this.util.addAddressTicker(data['SOURCE'], this.config['GAS']);
+            }
 
             // Process any transaction ledger changes (credits / debits / escrows)
             await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits, escrows);

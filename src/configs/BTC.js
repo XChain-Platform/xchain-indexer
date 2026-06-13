@@ -69,7 +69,8 @@ module.exports = {
             VM_XCALL_REQUEST: 2000,    // Cross-chain call — emit one XCALL v0 request (relay cost)
             VM_XCALL_CALLBACK: 20000,  // Cross-chain call — fixed ceiling the result/expiry callback runs against
             VM_EMISSION:        500,
-            VM_COMPUTATION:     1
+            VM_COMPUTATION:     1,
+            VM_GUARD_GAS_CEILING: 200000  // Per-call gas ceiling for a controller-bound token `guard` run; SOURCE reserves this fee
         };
 
 		// Set network specific addresses
