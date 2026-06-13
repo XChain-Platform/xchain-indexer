@@ -26,6 +26,8 @@ const helmet        = require('helmet');
 const cors          = require('cors');
 const XChainIndexer = require('./XChainIndexer');
 const jsonRouter    = require('express-json-rpc-router');
+const { buildHealthResponse } = require('./health');
+const { getStakeSourceByPubkey } = require('./stake-source');
 
 // Parse in .env config data
 dotenv.config();
@@ -171,33 +173,9 @@ async function startApi(){
                 // Database unreachable — leave lastIndexedBlock null; the circuit
                 // state below tells the operator why.
             }
-            let decoderDbCircuit = indexer.decoderDb ? indexer.decoderDb.circuitState : null;
-            let indexerDbCircuit = indexer.indexerDb ? indexer.indexerDb.circuitState : null;
-            let circuitOpen = decoderDbCircuit === 'open' || indexerDbCircuit === 'open';
-            // How long ago the indexer last got a response from the hub for its config
-            // overlay. null until the first success. When the hub is down this age keeps
-            // climbing while status stays "healthy", so an operator can spot that the
-            // live-polled governance params (ACTIVATION_DELAY_BLOCKS, EXPIRATION_FEE_PER_DAY,
-            // STAKING) are frozen at their last-fetched values.
-            let lastHubConfigFetchAt = indexer.lastHubConfigFetchAt || null;
-            let hubConfigAgeSeconds  = (lastHubConfigFetchAt != null)
-                                        ? Math.floor((Date.now() - lastHubConfigFetchAt) / 1000)
-                                        : null;
-            return {
-                status:           (indexerRunning && !circuitOpen) ? "healthy" : "unhealthy",
-                running:          indexerRunning,
-                synced:           indexer.isSynced(),
-                lastIndexedBlock: lastIndexedBlock,
-                decoderBlock:     indexer.lastDecoderBlock,
-                lag:              (indexer.lastDecoderBlock != null && lastIndexedBlock != null)
-                                    ? indexer.lastDecoderBlock - lastIndexedBlock
-                                    : null,
-                decoderDbCircuit: decoderDbCircuit,
-                indexerDbCircuit: indexerDbCircuit,
-                lastHubConfigFetchAt: lastHubConfigFetchAt,
-                hubConfigAgeSeconds:  hubConfigAgeSeconds,
-                error:            indexerError ? indexerError.message : null
-            };
+            return buildHealthResponse({
+                indexer, indexerRunning, indexerError, lastIndexedBlock, now: Date.now()
+            });
         },
 
         // Look up the active stake amount + latest block index for a single pubkey.
@@ -647,58 +625,10 @@ async function startApi(){
         // gets the same answer at any time: the hub archive builder pins this
         // earn-time source into the ANCHOR archive, and follower hubs
         // re-resolve it before co-signing.
-        // Body: { pubkey, block_index }
+        // Body: { pubkey, block_index }. Logic lives in ./stake-source so it can
+        // be unit-tested without standing up the Express/JSON-RPC stack.
         async getstakesourcebypubkey({pubkey, block_index}){
-            if(!pubkey || !/^[0-9a-fA-F]{64}$/.test(String(pubkey)))
-                return { error: 'pubkey must be 64 hex chars' };
-            let blockIdx = Number(block_index);
-            if(!Number.isFinite(blockIdx) || blockIdx < 0)
-                return { error: 'block_index is required' };
-            if(!indexer.indexerDb)
-                return { error: 'indexer database not ready' };
-            try {
-                let db = indexer.indexerDb;
-                let pubkey_id = await db.getPubkeyId(String(pubkey).toLowerCase());
-                if(pubkey_id === null) return { source: null };
-                let valid_id = await db.getStatusId('valid');
-                if(valid_id === null) return { source: null };
-                // Both legs mirror _effectiveCapabilitySetSql's active-row
-                // predicates: resolution must agree with effective-set
-                // membership at the same block. Without them an invalid row
-                // (e.g. a rejected mirror-collision STAKE) or a dead grant
-                // (deactivated/revoked, incl. v2 revoke-marker rows with
-                // activation_block=0) shadows the live one and the
-                // leader/follower archive re-derivation diverges.
-                let rows = await db.doQuery(
-                    `SELECT ia.address AS source FROM stakes s
-                     JOIN index_addresses ia ON ia.id = s.source_id
-                     WHERE s.signing_pubkey_id = ? AND s.status_id = ?
-                       AND s.block_index <= ? AND s.activation_block <= ?
-                       AND (s.deactivation_block IS NULL OR s.deactivation_block > ?)
-                       AND NOT EXISTS (
-                           SELECT 1 FROM stake_key_revocations r
-                           WHERE r.source_id = s.source_id
-                             AND r.signing_pubkey_id = s.signing_pubkey_id
-                             AND r.status_id = ?
-                             AND r.deactivation_block <= ?
-                             AND r.action_index > s.action_index)
-                     ORDER BY s.action_index DESC LIMIT 1`,
-                    [pubkey_id, valid_id, blockIdx, blockIdx, blockIdx, valid_id, blockIdx]);
-                if(!rows || rows.length === 0){
-                    rows = await db.doQuery(
-                        `SELECT ia.address AS source FROM delegations d
-                         JOIN index_addresses ia ON ia.id = d.source_id
-                         WHERE d.signing_pubkey_id = ? AND d.status_id = ?
-                           AND d.block_index <= ? AND d.activation_block <= ?
-                           AND (d.deactivation_block IS NULL OR d.deactivation_block > ?)
-                         ORDER BY d.action_index DESC LIMIT 1`,
-                        [pubkey_id, valid_id, blockIdx, blockIdx, blockIdx]);
-                }
-                return { source: (rows && rows.length > 0) ? String(rows[0].source) : null };
-            } catch (err) {
-                console.error('getstakesourcebypubkey error:', err);
-                return { error: 'failed to resolve stake source' };
-            }
+            return getStakeSourceByPubkey(indexer, { pubkey, block_index });
         }
 
     };
@@ -735,6 +665,11 @@ async function startApi(){
                             ? decoderBlock - indexerBlock
                             : null,
             isSynced:     indexer.isSynced(),
+            // Why the block counter is not advancing, or null when advancing normally:
+            // a hub-sync barrier timeout (price/oracle/match/call/snapshot) or a VM
+            // executor host fault. Lets a monitoring probe tell these stalls apart from
+            // a healthy catch-up — all of which otherwise present only as a growing lag.
+            stallReason:  indexer.stallReason || null,
             lastHubConfigFetchAt: lastHubConfigFetchAt,
             hubConfigAgeSeconds:  hubConfigAgeSeconds
         });

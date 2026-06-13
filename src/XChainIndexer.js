@@ -75,6 +75,14 @@ class XChainIndexer {
         this.synced           = false;
         this.lastDecoderBlock = null;
         this.stopFlag         = false
+
+        // Short machine-readable reason the block counter is currently not advancing,
+        // or null when advancing normally. Set at each point where the catch-up loop
+        // defers a block (the hub-sync barriers below time out, or the VM executor is
+        // unavailable) and cleared the moment a block commits. Surfaced by health() so
+        // an operator can tell WHY lag is growing — a sync-barrier stall, a circuit
+        // breaker, and a host fault otherwise all look identical (a rising lag).
+        this.stallReason = null;
         this.blockchainInfoLastBlock = -1
 
         // Wall-clock (epoch ms) of the most recent SUCCESSFUL hub-config fetch — set by the
@@ -305,6 +313,7 @@ class XChainIndexer {
                         // retries this same block after the sleep interval rather than processing
                         // it against a stale price copy. No transaction is open yet.
                         console.warn('Deferring block ' + blockToParse + ' (price sync): ', err);
+                        this.stallReason = 'price_sync_barrier';
                         break;
                     }
                 }
@@ -326,6 +335,7 @@ class XChainIndexer {
                         // counter is not advanced, so this block is retried rather than settled
                         // against a stale oracle copy. No transaction is open yet.
                         console.warn('Deferring block ' + blockToParse + ' (oracle sync): ', err);
+                        this.stallReason = 'oracle_sync_barrier';
                         break;
                     }
                 }
@@ -339,6 +349,7 @@ class XChainIndexer {
                         await this.hubDbSync.waitForMatchSync(blockTime, this.priceSyncTimeoutMs);
                     } catch(err){
                         console.warn('Deferring block ' + blockToParse + ' (cross-chain match sync): ', err);
+                        this.stallReason = 'match_sync_barrier';
                         break;
                     }
                 }
@@ -352,6 +363,7 @@ class XChainIndexer {
                         await this.hubDbSync.waitForCallSync(blockTime, this.priceSyncTimeoutMs);
                     } catch(err){
                         console.warn('Deferring block ' + blockToParse + ' (cross-chain call sync): ', err);
+                        this.stallReason = 'call_sync_barrier';
                         break;
                     }
                 }
@@ -365,6 +377,7 @@ class XChainIndexer {
                         await this.hubDbSync.waitForSnapshotSync(blockTime, this.priceSyncTimeoutMs);
                     } catch(err){
                         console.warn('Deferring block ' + blockToParse + ' (cross-chain snapshot sync): ', err);
+                        this.stallReason = 'snapshot_sync_barrier';
                         break;
                     }
                 }
@@ -433,6 +446,10 @@ class XChainIndexer {
                     // lastIndexerBlock un-advanced so it is retried instead of skipped.
                     lastIndexerBlock = blockToParse;
 
+                    // A block advanced, so we are no longer stalled — clear any deferral
+                    // reason set by a barrier timeout or host fault on a prior iteration.
+                    this.stallReason = null;
+
                     // Log the total parse time for this block
                     let parseTime = this.util.getTimer(debugTimer);
                     console.log('Block Parsed' + "\t: " + lastIndexerBlock + ' [ledger:' + ledger + ' actions:' + actions + ' contracts:' + contracts + '] (' + parseTime + ')');
@@ -470,6 +487,7 @@ class XChainIndexer {
                         console.error(`HOST FAULT at block ${lastIndexerBlock}: VM executor unavailable — ` +
                             `HALTING block processing (not committing; a fabricated result would fork). ` +
                             `Retrying after ${this.config['BLOCK_CHECK_INTERVAL']}ms; will resume when the host recovers.`);
+                        this.stallReason = 'vm_executor_unavailable';
                     } else {
                         // Log the error
                         this.util.logError(`Error while parsing block data at block ${lastIndexerBlock}:`, error);
