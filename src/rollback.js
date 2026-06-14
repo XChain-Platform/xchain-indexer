@@ -34,8 +34,8 @@ class Rollback {
         // Setup alias to the utility class
         this.util      = indexer.util;
 
-        // Setup alias to the hub client (used to retract price rows seeded
-        // from rolled-back PRICE actions on the cross-chain hub)
+        // Setup alias to the hub client (used to retract price rows + cross_chain_calls
+        // relay rows seeded from rolled-back PRICE / XCALL actions on the cross-chain hub)
         this.hubClient = indexer.hubClient;
 
         // Setup alias to the indexer protocol changes instance
@@ -527,6 +527,21 @@ class Rollback {
                 await this.hubClient.retractPriceRange(this.config['COIN'], firstActionIndex);
             } catch(err) {
                 console.warn('Rollback: hub price retraction failed:', err);
+            }
+        }
+
+        // Signal the hub to retract any cross_chain_calls relay rows seeded from XCALL
+        // request actions just rolled back on this chain. The hub marks the matching relay
+        // rows 'retracted' and broadcasts deletions to indexers mirroring their local
+        // cross_chain_calls copy — so a source-chain reorg never leaves an orphaned
+        // 'finalized' relay row eligible for re-injection on the target chain. Best-effort
+        // and out-of-transaction (the rollback already committed above), exactly like the
+        // price retraction — a hub failure must not leave the local rollback half-applied.
+        if(firstActionIndex !== null && this.hubClient){
+            try {
+                await this.hubClient.retractXcallRange(this.config['COIN'], firstActionIndex);
+            } catch(err) {
+                console.warn('Rollback: hub XCALL retraction failed:', err);
             }
         }
 

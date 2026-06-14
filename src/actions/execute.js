@@ -897,8 +897,10 @@ class Execute {
         let tickId = await this.indexerDb.getTickerId(token);
         if(tickId === null) return;
 
-        // Deduct (returns actual slashed total — may be less than requested if balance lower)
-        let slashed = await this.indexerDb.slashContractStake(contractIndex, pubkeyId, tickId, amount);
+        // Deduct (returns actual slashed total — may be less than requested if balance lower).
+        // Pass BLOCK_INDEX so Pass 1 slashes only still-active stake; unstaked-but-cooling tokens are
+        // slashed from contract_unstakes (Pass 2), preventing the double-count / supply inflation.
+        let slashed = await this.indexerDb.slashContractStake(contractIndex, pubkeyId, tickId, amount, parseInt(data['BLOCK_INDEX']));
         if(!this.util.bcgt(slashed, '0')) return;
 
         // Credit destination address (BURN or user-specified)

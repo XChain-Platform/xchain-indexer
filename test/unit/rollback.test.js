@@ -99,7 +99,7 @@ describe('Rollback @regression @tier3', function () {
     // ─── Hub price retraction signal ──────────────────────────────────
 
     it('signals the hub to retract prices for the rolled-back range', async function () {
-        const hubClient = { retractPriceRange: sinon.stub().resolves() };
+        const hubClient = { retractPriceRange: sinon.stub().resolves(), retractXcallRange: sinon.stub().resolves() };
         const idx = createMockIndexer({ hubClient });
         idx.protocolChanges = { isDefined: sinon.stub().returns(true), isEnabled: sinon.stub().resolves(true) };
         const rb = new Rollback(idx);
@@ -114,7 +114,7 @@ describe('Rollback @regression @tier3', function () {
     });
 
     it('does NOT signal the hub when there are no actions in the rolled-back range', async function () {
-        const hubClient = { retractPriceRange: sinon.stub().resolves() };
+        const hubClient = { retractPriceRange: sinon.stub().resolves(), retractXcallRange: sinon.stub().resolves() };
         const idx = createMockIndexer({ hubClient });
         idx.protocolChanges = { isDefined: sinon.stub().returns(true), isEnabled: sinon.stub().resolves(true) };
         const rb = new Rollback(idx);
@@ -125,7 +125,46 @@ describe('Rollback @regression @tier3', function () {
     });
 
     it('does not throw when the hub retraction fails (best-effort)', async function () {
-        const hubClient = { retractPriceRange: sinon.stub().rejects(new Error('hub unreachable')) };
+        const hubClient = { retractPriceRange: sinon.stub().rejects(new Error('hub unreachable')), retractXcallRange: sinon.stub().resolves() };
+        const idx = createMockIndexer({ hubClient });
+        idx.protocolChanges = { isDefined: sinon.stub().returns(true), isEnabled: sinon.stub().resolves(true) };
+        const rb = new Rollback(idx);
+        idx.util.resetLists();
+        idx.indexerDb.doQuery.onFirstCall().resolves([{ action_index: 50 }]);
+        idx.indexerDb.doQuery.resolves([]);
+        await assert.doesNotReject(() => rb.rollback(100));
+        assert.ok(idx.indexerDb.commitTransaction.calledOnce, 'local rollback should still commit');
+    });
+
+    // ─── Hub XCALL (cross_chain_calls) retraction signal ──────────────
+
+    it('signals the hub to retract cross-chain calls for the rolled-back range', async function () {
+        const hubClient = { retractPriceRange: sinon.stub().resolves(), retractXcallRange: sinon.stub().resolves() };
+        const idx = createMockIndexer({ hubClient });
+        idx.protocolChanges = { isDefined: sinon.stub().returns(true), isEnabled: sinon.stub().resolves(true) };
+        const rb = new Rollback(idx);
+        idx.util.resetLists();
+        idx.indexerDb.doQuery.onFirstCall().resolves([{ action_index: 50 }]);
+        idx.indexerDb.doQuery.resolves([]);
+        await rb.rollback(100);
+        assert.ok(hubClient.retractXcallRange.calledOnce, 'expected retractXcallRange to be called once');
+        assert.strictEqual(hubClient.retractXcallRange.firstCall.args[0], rb.config['COIN']);
+        assert.strictEqual(hubClient.retractXcallRange.firstCall.args[1], 50);
+    });
+
+    it('does NOT signal the hub for XCALL retraction when the range is empty', async function () {
+        const hubClient = { retractPriceRange: sinon.stub().resolves(), retractXcallRange: sinon.stub().resolves() };
+        const idx = createMockIndexer({ hubClient });
+        idx.protocolChanges = { isDefined: sinon.stub().returns(true), isEnabled: sinon.stub().resolves(true) };
+        const rb = new Rollback(idx);
+        idx.util.resetLists();
+        idx.indexerDb.doQuery.resolves([]);
+        await rb.rollback(100);
+        assert.ok(hubClient.retractXcallRange.notCalled, 'expected no XCALL retraction when range is empty');
+    });
+
+    it('does not throw when the hub XCALL retraction fails (best-effort); local rollback still commits', async function () {
+        const hubClient = { retractPriceRange: sinon.stub().resolves(), retractXcallRange: sinon.stub().rejects(new Error('hub unreachable')) };
         const idx = createMockIndexer({ hubClient });
         idx.protocolChanges = { isDefined: sinon.stub().returns(true), isEnabled: sinon.stub().resolves(true) };
         const rb = new Rollback(idx);

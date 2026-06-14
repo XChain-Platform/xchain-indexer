@@ -7695,15 +7695,21 @@ class Database {
         await this.doQuery(query, args);
     }
 
-    // Set deactivation_block for ALL active stake rows owned by the given pubkey.
-    // Used by createUnstake to mark when all of a pubkey's stake (original + top-ups) should be removed from the active set.
-    async setStakeDeactivationByPubkey(pubkey, deactivationBlock){
+    // Set deactivation_block for the ALREADY-ACTIVE stake rows owned by the given pubkey.
+    // Used by createUnstake to mark when a pubkey's stake (original + activated top-ups) should be
+    // removed from the active set. The `currentBlock` filter (activation_block <= currentBlock) is
+    // load-bearing: the unstake AMOUNT is summed from active rows only (getActiveStakeByPubkey), so a
+    // pending-activation top-up (activation_block > currentBlock) must NOT be deactivated here — it
+    // was never counted in the unstake and the cooldown sweep would never refund it, orphaning the
+    // tokens. It correctly stays an active stake until a later UNSTAKE covers it.
+    async setStakeDeactivationByPubkey(pubkey, deactivationBlock, currentBlock){
         let pubkey_id = await this.getPubkeyId(String(pubkey).toLowerCase());
         if(pubkey_id === null) return false;
         let valid_id = await this.getStatusId('valid');
         let query = `UPDATE stakes SET deactivation_block=?
-                     WHERE signing_pubkey_id=? AND status_id=? AND deactivation_block IS NULL`;
-        await this.doQuery(query, [deactivationBlock, pubkey_id, valid_id]);
+                     WHERE signing_pubkey_id=? AND status_id=? AND deactivation_block IS NULL
+                       AND activation_block <= ?`;
+        await this.doQuery(query, [deactivationBlock, pubkey_id, valid_id, currentBlock]);
         return true;
     }
 
@@ -8533,9 +8539,12 @@ class Database {
         await this.doQuery(query, args);
     }
 
-    // Set deactivation_block for ALL active contract_stakes rows matching (target, pubkey, tick).
-    // Used by createContractUnstake to start the cooldown on all of a staker's (target, tick) rows.
-    async setContractStakeDeactivationByPubkey(targetContractIndex, pubkey, tick, deactivationBlock){
+    // Set deactivation_block for the ALREADY-ACTIVE contract_stakes rows matching (target, pubkey, tick).
+    // Used by createContractUnstake to start the cooldown on a staker's active (target, tick) rows.
+    // Same load-bearing `currentBlock` filter as setStakeDeactivationByPubkey: a pending-activation
+    // top-up (activation_block > currentBlock) is excluded from the unstake amount, so deactivating it
+    // here would orphan its tokens (cooldown sweep never refunds it). It stays active until a later UNSTAKE.
+    async setContractStakeDeactivationByPubkey(targetContractIndex, pubkey, tick, deactivationBlock, currentBlock){
         let pubkey_id = await this.getPubkeyId(String(pubkey).toLowerCase());
         if(pubkey_id === null) return false;
         let tick_id = await this.getTickerId(tick);
@@ -8543,8 +8552,9 @@ class Database {
         let valid_id = await this.getStatusId('valid');
         let query = `UPDATE contract_stakes SET deactivation_block=?
                      WHERE target_contract_index=? AND signing_pubkey_id=? AND tick_id=?
-                       AND status_id=? AND deactivation_block IS NULL`;
-        await this.doQuery(query, [deactivationBlock, Number(targetContractIndex), pubkey_id, tick_id, valid_id]);
+                       AND status_id=? AND deactivation_block IS NULL
+                       AND activation_block <= ?`;
+        await this.doQuery(query, [deactivationBlock, Number(targetContractIndex), pubkey_id, tick_id, valid_id, currentBlock]);
         return true;
     }
 
@@ -8754,17 +8764,24 @@ class Database {
     // Returns the actual amount slashed (may be less than `amount` if available balance is lower).
     // Does NOT credit the destination or emit the slash_events row — caller (_processSlashEmission)
     // wires those side effects.
-    async slashContractStake(targetContractIndex, pubkeyId, tickId, amount){
+    async slashContractStake(targetContractIndex, pubkeyId, tickId, amount, blockIndex){
         let valid_id = await this.getStatusId('valid');
         if(valid_id === null) return '0';
         let remaining = String(amount);
         let totalSlashed = '0';
-        // Pass 1: deduct from active contract_stakes rows (LIFO — highest action_index first)
+        // Pass 1: deduct from ACTIVE contract_stakes rows (LIFO — highest action_index first).
+        // The deactivation-window filter is load-bearing: after UNSTAKE v1 a row keeps its `amount`
+        // intact (only deactivation_block is set) AND its tokens are mirrored into a contract_unstakes
+        // cooldown row. Without this filter Pass 1 would slash that phantom contract_stakes copy while
+        // the cooldown sweep still refunds the full contract_unstakes row — crediting the destination
+        // AND refunding the staker against a single debit (supply inflation). Unstaked-but-cooling
+        // tokens are slashed by Pass 2 (contract_unstakes) instead, so each token is slashed once.
         let stakesQ = `SELECT action_index, amount FROM contract_stakes
                        WHERE target_contract_index=? AND signing_pubkey_id=? AND tick_id=? AND status_id=?
                          AND CAST(amount AS DECIMAL(30,8)) > 0
+                         AND (deactivation_block IS NULL OR deactivation_block > ?)
                        ORDER BY action_index DESC`;
-        let stakeRows = await this.doQuery(stakesQ, [Number(targetContractIndex), pubkeyId, tickId, valid_id]);
+        let stakeRows = await this.doQuery(stakesQ, [Number(targetContractIndex), pubkeyId, tickId, valid_id, blockIndex]);
         for(let row of stakeRows){
             if(!this.util.bcgt(remaining, '0')) break;
             let rowAmt = String(row.amount);

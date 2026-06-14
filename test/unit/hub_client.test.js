@@ -217,6 +217,36 @@ describe('HubClient', function(){
     });
 
     // -----------------------------------------------------------------------
+    // retractXcallRange
+    // -----------------------------------------------------------------------
+    describe('retractXcallRange()', function(){
+        it('returns immediately without calling _call when not enabled', async function(){
+            let c = new HubClient('', '');
+            let callStub = sinon.stub(c, '_call').resolves({});
+            let result = await c.retractXcallRange('BTC', 42);
+            assert.strictEqual(callStub.callCount, 0);
+            assert.strictEqual(result, undefined);
+        });
+
+        it('calls _call with pushxcallreorg and correct payload', async function(){
+            let c = new HubClient('http://hub.example.com', '');
+            let callStub = sinon.stub(c, '_call').resolves({});
+            await c.retractXcallRange('LTC', 999);
+            assert.strictEqual(callStub.calledOnce, true);
+            assert.strictEqual(callStub.firstCall.args[0], 'pushxcallreorg');
+            let payload = callStub.firstCall.args[1];
+            assert.strictEqual(payload.source_chain, 'LTC');
+            assert.strictEqual(payload.from_action_index, 999);
+        });
+
+        it('propagates rejection from _call', async function(){
+            let c = new HubClient('http://hub.example.com', '');
+            sinon.stub(c, '_call').rejects(new Error('xcall reorg error'));
+            await assert.rejects(() => c.retractXcallRange('BTC', 1), /xcall reorg error/);
+        });
+    });
+
+    // -----------------------------------------------------------------------
     // _call internals — http.request mocking
     //
     // These tests drive the raw socket path via a fake http.request that

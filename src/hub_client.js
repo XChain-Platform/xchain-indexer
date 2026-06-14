@@ -76,6 +76,22 @@ class HubClient {
         });
     }
 
+    // Notify the hub that a reorg rolled back XCALL request actions on this chain so it
+    // can retract any cross_chain_calls relay rows seeded from those requests. The hub
+    // marks them 'retracted' and broadcasts deletions, so every indexer mirroring its
+    // cross_chain_calls table purges the orphaned rows (otherwise a 'finalized' relay row
+    // from an orphaned request stays eligible for re-injection on the target chain).
+    // sourceChain:     the chain this indexer serves (BTC/LTC/DOGE)
+    // fromActionIndex: lowest rolled-back action_index — the hub retracts relay rows for
+    //                  this source_chain whose source_action_index is >= this value.
+    async retractXcallRange(sourceChain, fromActionIndex){
+        if(!this.enabled) return;
+        return this._call('pushxcallreorg', {
+            source_chain:      sourceChain,
+            from_action_index: fromActionIndex
+        });
+    }
+
     // Make a JSON-RPC 2.0 call to the hub
     _call(method, params){
         return new Promise((resolve, reject) => {

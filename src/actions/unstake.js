@@ -129,7 +129,8 @@ class Unstake {
         if(status === 'valid')
             await this.indexerDb.setStakeDeactivationByPubkey(
                 data['SIGNING_PUBKEY'],
-                parseInt(data['BLOCK_INDEX']) + activationDelay
+                parseInt(data['BLOCK_INDEX']) + activationDelay,
+                parseInt(data['BLOCK_INDEX'])
             );
 
         // Store the SOURCE and GAS tick in addresses list
@@ -234,7 +235,8 @@ class Unstake {
                 data['TARGET_CONTRACT_INDEX'],
                 data['SIGNING_PUBKEY'],
                 data['TICK'],
-                parseInt(data['BLOCK_INDEX']) + activationDelay
+                parseInt(data['BLOCK_INDEX']) + activationDelay,
+                parseInt(data['BLOCK_INDEX'])
             );
         }
 
