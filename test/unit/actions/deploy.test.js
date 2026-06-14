@@ -18,9 +18,9 @@ const { getTestConfig } = require('../../fixtures/config');
 
 const Deploy = require('../../../src/actions/deploy.js');
 
-// Minimal valid JS contract code — hex-encoded
+// Minimal valid JS contract code — base64-encoded
 const VALID_CODE    = 'module.exports = { run: function() { return 1; } };';
-const VALID_CODE_HEX = Buffer.from(VALID_CODE, 'utf8').toString('hex');
+const VALID_CODE_B64 = Buffer.from(VALID_CODE, 'utf8').toString('base64');
 
 describe('Deploy (DEPLOY) @regression @tier2', function () {
     let indexer, actionsCtx, handler;
@@ -94,13 +94,13 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
 
         it('rejects an unknown VERSION', async function () {
             const data = deployData({ FORMAT: 9 });
-            await handler.parse(['9', VALID_CODE_HEX, '100000', ''], data, null);
+            await handler.parse(['9', VALID_CODE_B64, '100000', ''], data, null);
             assert.ok(String(data['STATUS']).includes('VERSION'));
         });
 
         it('accepts FORMAT 0', async function () {
             const data = deployData({ FORMAT: 0 });
-            await handler.parse(['0', VALID_CODE_HEX, '100000', ''], data, null);
+            await handler.parse(['0', VALID_CODE_B64, '100000', ''], data, null);
             assert.strictEqual(data['STATUS'], 'valid');
         });
 
@@ -119,21 +119,21 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
         it('rejects code exceeding MAX_CODE_SIZE', async function () {
             // 64KiB + 1 byte
             const bigCode = 'a'.repeat(Deploy.MAX_CODE_SIZE + 1);
-            const bigHex  = Buffer.from(bigCode, 'utf8').toString('hex');
+            const bigB64  = Buffer.from(bigCode, 'utf8').toString('base64');
             const data = deployData({ FORMAT: 0 });
-            await handler.parse(['0', bigHex, '100000', ''], data, null);
+            await handler.parse(['0', bigB64, '100000', ''], data, null);
             assert.ok(String(data['STATUS']).includes('CODE_ENCODING'));
         });
 
         it('rejects missing GAS_LIMIT', async function () {
             const data = deployData({ FORMAT: 0 });
-            await handler.parse(['0', VALID_CODE_HEX, '', ''], data, null);
+            await handler.parse(['0', VALID_CODE_B64, '', ''], data, null);
             assert.ok(String(data['STATUS']).includes('GAS_LIMIT'));
         });
 
         it('rejects non-numeric GAS_LIMIT', async function () {
             const data = deployData({ FORMAT: 0 });
-            await handler.parse(['0', VALID_CODE_HEX, 'abc', ''], data, null);
+            await handler.parse(['0', VALID_CODE_B64, 'abc', ''], data, null);
             assert.ok(String(data['STATUS']).includes('GAS_LIMIT'));
         });
 
@@ -150,7 +150,7 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
             handler = new Deploy(actionsCtx);
 
             const data = deployData({ FORMAT: 0 });
-            await handler.parse(['0', VALID_CODE_HEX, '100000', ''], data, null);
+            await handler.parse(['0', VALID_CODE_B64, '100000', ''], data, null);
             assert.ok(String(data['STATUS']).includes('CODE_ENCODING'));
         });
 
@@ -159,7 +159,7 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
             handler = new Deploy(actionsCtx);
 
             const data = deployData({ FORMAT: 0 });
-            await handler.parse(['0', VALID_CODE_HEX, '100000', ''], data, null);
+            await handler.parse(['0', VALID_CODE_B64, '100000', ''], data, null);
             assert.strictEqual(data['STATUS'], 'valid');
         });
 
@@ -172,7 +172,7 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
         it('rejects when SOURCE is sleeping', async function () {
             indexer.indexerDb.isActionAllowed.resolves(false);
             const data = deployData({ FORMAT: 0 });
-            await handler.parse(['0', VALID_CODE_HEX, '100000', ''], data, null);
+            await handler.parse(['0', VALID_CODE_B64, '100000', ''], data, null);
             assert.ok(String(data['STATUS']).includes('sleeping'));
         });
 
@@ -184,26 +184,26 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
 
         it('createContract called on valid deploy', async function () {
             const data = deployData({ FORMAT: 0 });
-            await handler.parse(['0', VALID_CODE_HEX, '100000', ''], data, null);
+            await handler.parse(['0', VALID_CODE_B64, '100000', ''], data, null);
             assert.ok(indexer.indexerDb.createContract.calledOnce);
         });
 
         it('createContractExecution always called', async function () {
             const data = deployData({ FORMAT: 0 });
-            await handler.parse(['0', VALID_CODE_HEX, '100000', ''], data, null);
+            await handler.parse(['0', VALID_CODE_B64, '100000', ''], data, null);
             assert.ok(indexer.indexerDb.createContractExecution.calledOnce);
         });
 
         it('updateBalances and updateTokens called after parse', async function () {
             const data = deployData({ FORMAT: 0 });
-            await handler.parse(['0', VALID_CODE_HEX, '100000', ''], data, null);
+            await handler.parse(['0', VALID_CODE_B64, '100000', ''], data, null);
             assert.ok(indexer.indexerDb.updateBalances.calledOnce);
             assert.ok(indexer.indexerDb.updateTokens.calledOnce);
         });
 
         it('mapper.createMappings called after parse', async function () {
             const data = deployData({ FORMAT: 0 });
-            await handler.parse(['0', VALID_CODE_HEX, '100000', ''], data, null);
+            await handler.parse(['0', VALID_CODE_B64, '100000', ''], data, null);
             assert.ok(indexer.mapper.createMappings.calledOnce);
         });
 
@@ -219,7 +219,7 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
             handler = new Deploy(actionsCtx);
 
             const data = deployData({ FORMAT: 0 });
-            await handler.parse(['0', VALID_CODE_HEX, '100000', 'initparam'], data, null);
+            await handler.parse(['0', VALID_CODE_B64, '100000', 'initparam'], data, null);
             assert.ok(vm.execute.calledOnce, 'vm.execute should be called for constructor');
             assert.strictEqual(data['STATUS'], 'valid');
         });
@@ -239,7 +239,7 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
             handler = new Deploy(actionsCtx);
 
             const data = deployData({ FORMAT: 0 });
-            await handler.parse(['0', VALID_CODE_HEX, '100000', 'initparam'], data, null);
+            await handler.parse(['0', VALID_CODE_B64, '100000', 'initparam'], data, null);
             // Status is a normalised vmFailureStatus token (reverted / failed / out_of_resource)
             assert.notStrictEqual(data['STATUS'], 'valid');
         });
@@ -255,7 +255,7 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
             handler = new Deploy(actionsCtx);
 
             const data = deployData({ FORMAT: 0 });
-            await handler.parse(['0', VALID_CODE_HEX, '100000', 'initparam'], data, null);
+            await handler.parse(['0', VALID_CODE_B64, '100000', 'initparam'], data, null);
             assert.ok(indexer.indexerDb.deleteContract.calledOnce);
         });
 
@@ -267,38 +267,38 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
 
         it('valid v1 with COOLDOWN_BLOCKS sets STATUS valid', async function () {
             const data = deployData({ FORMAT: 1 });
-            await handler.parse(['1', VALID_CODE_HEX, '100000', '', '100', 'BURN'], data, null);
+            await handler.parse(['1', VALID_CODE_B64, '100000', '', '100', 'BURN'], data, null);
             assert.strictEqual(data['STATUS'], 'valid');
         });
 
         it('rejects SLASH_DESTINATION without COOLDOWN_BLOCKS', async function () {
             const data = deployData({ FORMAT: 1 });
-            await handler.parse(['1', VALID_CODE_HEX, '100000', '', '', '1SomeAddress'], data, null);
+            await handler.parse(['1', VALID_CODE_B64, '100000', '', '', '1SomeAddress'], data, null);
             assert.ok(String(data['STATUS']).includes('SLASH_DESTINATION'));
         });
 
         it('rejects non-numeric COOLDOWN_BLOCKS', async function () {
             const data = deployData({ FORMAT: 1 });
-            await handler.parse(['1', VALID_CODE_HEX, '100000', '', 'abc', ''], data, null);
+            await handler.parse(['1', VALID_CODE_B64, '100000', '', 'abc', ''], data, null);
             assert.ok(String(data['STATUS']).includes('COOLDOWN_BLOCKS'));
         });
 
         it('rejects COOLDOWN_BLOCKS of 0 (out of range)', async function () {
             const data = deployData({ FORMAT: 1 });
-            await handler.parse(['1', VALID_CODE_HEX, '100000', '', '0', ''], data, null);
+            await handler.parse(['1', VALID_CODE_B64, '100000', '', '0', ''], data, null);
             assert.ok(String(data['STATUS']).includes('COOLDOWN_BLOCKS'));
         });
 
         it('rejects COOLDOWN_BLOCKS exceeding max', async function () {
             const data = deployData({ FORMAT: 1 });
-            await handler.parse(['1', VALID_CODE_HEX, '100000', '', '999999', ''], data, null);
+            await handler.parse(['1', VALID_CODE_B64, '100000', '', '999999', ''], data, null);
             assert.ok(String(data['STATUS']).includes('COOLDOWN_BLOCKS'));
         });
 
         it('COOLDOWN_BLOCKS without SLASH_DESTINATION defaults to BURN address (line 107-109)', async function () {
             // hasCooldown=true, hasDest=false → SLASH_DESTINATION set to BURN address from config
             const data = deployData({ FORMAT: 1 });
-            await handler.parse(['1', VALID_CODE_HEX, '100000', '', '100', ''], data, null);
+            await handler.parse(['1', VALID_CODE_B64, '100000', '', '100', ''], data, null);
             assert.strictEqual(data['STATUS'], 'valid');
             // createContract should have been called (deploy succeeded)
             sinon.assert.calledOnce(indexer.indexerDb.createContract);
@@ -308,21 +308,14 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
 
     // ─── Hex decode failure (line 141-142) ───────────────────────────────
 
-    describe('hex decode failure', function () {
+    describe('base64 decode failure', function () {
 
-        it('rejects CODE_ENCODING with non-hex characters', async function () {
-            // Buffer.from with invalid hex doesn't throw in Node — it silently ignores bad chars.
-            // To hit the catch branch we need to stub Buffer.from or cause a real throw.
-            // In practice the try/catch is a defensive guard; test via stub.
-            const origBufferFrom = Buffer.from.bind(Buffer);
-            const bufferStub = sinon.stub(Buffer, 'from').callsFake((data, encoding) => {
-                if(encoding === 'hex') throw new Error('invalid hex');
-                return origBufferFrom(data, encoding);
-            });
-
+        it('rejects CODE_ENCODING that is not canonical base64', async function () {
+            // Buffer.from(...,'base64') is lenient (silently drops chars outside the
+            // alphabet), so the handler round-trips: decode then re-encode and compare.
+            // A non-canonical string fails that check without needing a stub.
             const data = deployData({ FORMAT: 0 });
-            await handler.parse(['0', 'not-valid-hex!!', '100000', ''], data, null);
-            bufferStub.restore();
+            await handler.parse(['0', 'not-valid-base64!!', '100000', ''], data, null);
 
             assert.ok(String(data['STATUS']).includes('CODE_ENCODING'));
         });
@@ -349,7 +342,7 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
             sinon.stub(localIndexer.util, 'validateNativeCoinFee').resolves({ valid: true, nativeCoinAmount: '0.0001', nativeCoin: 'BTC', oracleRound: 1 });
 
             const data = deployData({ FORMAT: 0 });
-            await h.parse(['0', VALID_CODE_HEX, '100000', ''], data, null);
+            await h.parse(['0', VALID_CODE_B64, '100000', ''], data, null);
             assert.strictEqual(data['STATUS'], 'valid');
         });
 
@@ -369,7 +362,7 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
             sinon.stub(localIndexer.util, 'validateNativeCoinFee').resolves({ valid: false, error: 'fee too small' });
 
             const data = deployData({ FORMAT: 0 });
-            await h.parse(['0', VALID_CODE_HEX, '100000', ''], data, null);
+            await h.parse(['0', VALID_CODE_B64, '100000', ''], data, null);
             assert.ok(String(data['STATUS']).includes('fee too small') || String(data['STATUS']).startsWith('invalid'));
         });
 
@@ -388,7 +381,7 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
             sinon.stub(localIndexer.util, 'detectFeePaymentMode').returns('rejected');
 
             const data = deployData({ FORMAT: 0 });
-            await h.parse(['0', VALID_CODE_HEX, '100000', ''], data, null);
+            await h.parse(['0', VALID_CODE_B64, '100000', ''], data, null);
             assert.ok(String(data['STATUS']).includes('insufficient fee'));
         });
 
@@ -409,7 +402,7 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
             sinon.stub(localIndexer.util, 'detectFeePaymentMode').returns('xchain');
 
             const data = deployData({ FORMAT: 0 });
-            await h.parse(['0', VALID_CODE_HEX, '100000', ''], data, null);
+            await h.parse(['0', VALID_CODE_B64, '100000', ''], data, null);
             assert.ok(String(data['STATUS']).includes('insufficient funds') || String(data['STATUS']).includes('GAS'));
         });
 
@@ -433,7 +426,7 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
             handler = new Deploy(actionsCtx);
 
             const data = deployData({ FORMAT: 0 });
-            await handler.parse(['0', VALID_CODE_HEX, '100000', 'initparam'], data, null);
+            await handler.parse(['0', VALID_CODE_B64, '100000', 'initparam'], data, null);
 
             // createContractState called twice (once per change)
             assert.ok(indexer.indexerDb.createContractState.callCount >= 2);
@@ -454,7 +447,7 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
             handler = new Deploy(actionsCtx);
 
             const data = deployData({ FORMAT: 0 });
-            await handler.parse(['0', VALID_CODE_HEX, '100000', 'initparam'], data, null);
+            await handler.parse(['0', VALID_CODE_B64, '100000', 'initparam'], data, null);
 
             const calls = indexer.indexerDb.createContractState.args;
             const nullCalls = calls.filter(a => a[0].STATE_VALUE === null);
@@ -478,7 +471,7 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
             handler = new Deploy(actionsCtx);
 
             const data = deployData({ FORMAT: 0 });
-            await handler.parse(['0', VALID_CODE_HEX, '100000', 'initparam'], data, null);
+            await handler.parse(['0', VALID_CODE_B64, '100000', 'initparam'], data, null);
 
             sinon.assert.calledOnce(indexer.indexerDb.rollbackToSavepoint);
             // deleteContract called (contract record cleaned up)
@@ -513,7 +506,7 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
             const ctx = wireEmissionDeps([{ action: 'SEND', params: { tick: 'T', quantity: '1', destination: SOURCE } }]);
 
             const data = deployData({ FORMAT: 0, ACTION_INDEX: 42 });
-            await handler.parse(['0', VALID_CODE_HEX, '100000', 'init'], data, null);
+            await handler.parse(['0', VALID_CODE_B64, '100000', 'init'], data, null);
 
             assert.strictEqual(data['STATUS'], 'valid');
             sinon.assert.calledOnce(ctx.actionExecute.processEmission);
@@ -534,7 +527,7 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
         it('passes txHash / actionIndex / callDepth=0 to the constructor VM run', async function () {
             const ctx = wireEmissionDeps([]);
             const data = deployData({ FORMAT: 0, ACTION_INDEX: 7 });
-            await handler.parse(['0', VALID_CODE_HEX, '100000', 'init'], data, null);
+            await handler.parse(['0', VALID_CODE_B64, '100000', 'init'], data, null);
             const vmArgs = ctx.vm.execute.firstCall.args[0];
             assert.strictEqual(vmArgs.txHash, data['TX_HASH']);
             assert.strictEqual(vmArgs.actionIndex, 7);
@@ -553,7 +546,7 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
             handler = new Deploy(actionsCtx);
 
             const data = deployData({ FORMAT: 0, ACTION_INDEX: 8 });
-            await handler.parse(['0', VALID_CODE_HEX, '100000', 'init'], data, null);
+            await handler.parse(['0', VALID_CODE_B64, '100000', 'init'], data, null);
 
             assert.strictEqual(data['STATUS'], 'valid');
             const schedule = indexer.config['GAS_SCHEDULE'];
@@ -569,7 +562,7 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
             handler = new Deploy(actionsCtx);
 
             const data = deployData({ FORMAT: 0, ACTION_INDEX: 9 });
-            await handler.parse(['0', VALID_CODE_HEX, '100000', 'init'], data, null);
+            await handler.parse(['0', VALID_CODE_B64, '100000', 'init'], data, null);
 
             sinon.assert.calledOnce(indexer.indexerDb.rollbackToSavepoint);
             assert.ok(indexer.indexerDb.deleteContract.called);
@@ -579,7 +572,7 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
         it('routes SLASH emissions to the inline handler (never the generic router)', async function () {
             const ctx = wireEmissionDeps([{ action: 'SLASH', params: { contractIndex: 10, pubkey: 'a'.repeat(64), token: 'T', amount: '1' } }]);
             const data = deployData({ FORMAT: 0, ACTION_INDEX: 10 });
-            await handler.parse(['0', VALID_CODE_HEX, '100000', 'init'], data, null);
+            await handler.parse(['0', VALID_CODE_B64, '100000', 'init'], data, null);
             sinon.assert.calledOnce(ctx.actionExecute._processSlashEmission);
             sinon.assert.notCalled(ctx.actionExecute.processEmission);
         });
@@ -587,7 +580,7 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
         it('uses a deployment-unique savepoint name (emitted EXECUTEs nest their own)', async function () {
             wireEmissionDeps([]);
             const data = deployData({ FORMAT: 0, ACTION_INDEX: 11 });
-            await handler.parse(['0', VALID_CODE_HEX, '100000', 'init'], data, null);
+            await handler.parse(['0', VALID_CODE_B64, '100000', 'init'], data, null);
             assert.ok(indexer.indexerDb.createSavepoint.calledWith('vm_constructor_11'),
                 'got: ' + JSON.stringify(indexer.indexerDb.createSavepoint.firstCall && indexer.indexerDb.createSavepoint.firstCall.args));
         });

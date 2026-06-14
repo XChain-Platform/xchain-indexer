@@ -139,13 +139,18 @@ class Deploy {
         if(!error && this.util.isNull(data['CODE_ENCODING']))
             error = 'invalid: CODE_ENCODING (required)';
 
-        // Decode code from hex
+        // Decode code from base64 (1.33x vs hex's 2x; base64 has no '|' so it is safe in
+        // the pipe-delimited action string). Buffer.from(...,'base64') is lenient, so
+        // round-trip to reject non-base64 input deterministically across nodes.
         let code = '';
         if(!error){
             try {
-                code = Buffer.from(data['CODE_ENCODING'], 'hex').toString('utf8');
+                let b64 = String(data['CODE_ENCODING']);
+                code = Buffer.from(b64, 'base64').toString('utf8');
+                if(Buffer.from(code, 'utf8').toString('base64') !== b64)
+                    error = 'invalid: CODE_ENCODING (base64 decode failed)';
             } catch(e){
-                error = 'invalid: CODE_ENCODING (hex decode failed)';
+                error = 'invalid: CODE_ENCODING (base64 decode failed)';
             }
         }
 
