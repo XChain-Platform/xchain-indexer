@@ -463,6 +463,82 @@ class Rollback {
                 args  = [firstActionIndex];
                 await this.indexerDb.doQuery(query, args);
 
+                // Re-NULL deactivation_block stamps that orphaned UNSTAKE / DELEGATE-revoke
+                // actions wrote IN PLACE on surviving parent stake/delegation rows. Each
+                // forward handler (createUnstake, the DELEGATE-revoke path,
+                // createContractUnstake, the contract-revoke path) marks an ALREADY-ACTIVE
+                // parent row — created by a much earlier STAKE/DELEGATE in a surviving block —
+                // with deactivation_block = actionBlock + activationDelay. The bulk delete
+                // below removes the orphaned action row but cannot undo that in-place UPDATE,
+                // so without this reset the surviving parent keeps a non-NULL deactivation_block.
+                // Every active-set read gates on (deactivation_block IS NULL OR
+                // deactivation_block > currentBlock), so once the new chain passes the stale
+                // value the staker/validator silently drops out of the active set on the
+                // reorged node while a from-genesis replay keeps it active — a consensus-
+                // affecting divergence (capability staking on BTC, contract staking on all chains).
+                //
+                // The reset must be PRECISE: a surviving UNSTAKE in an earlier block stamps
+                // earlierBlock + activationDelay, which can itself land at/after block_index, so
+                // a blanket `deactivation_block >= block_index` would wrongly clear legitimately-
+                // earned deactivations. We instead match the EXACT value an orphaned action
+                // wrote. For the three tables that record a child action row (stakes↔unstakes,
+                // delegations↔revoke-rows, contract_stakes↔contract_unstakes) we JOIN the
+                // surviving parent to its orphaned action row on the same keys the forward
+                // handler used and require deactivation_block = orphanBlock + activationDelay.
+                // The DELEGATE v3 contract-revoke records NO child row (a pure in-place UPDATE),
+                // so contract_delegations is keyed on the value threshold block_index +
+                // activationDelay — equivalently precise, because any surviving revoke stamps a
+                // strictly smaller value (survivingBlock < block_index).
+                let staking         = this.config['STAKING'];
+                let activationDelay = Number((staking && staking['ACTIVATION_DELAY_BLOCKS']) ? staking['ACTIVATION_DELAY_BLOCKS'] : this.config['ACTIVATION_DELAY_BLOCKS']);
+
+                // stakes ← orphaned unstakes (capability staking)
+                query = `UPDATE stakes s
+                            JOIN unstakes u ON u.signing_pubkey_id = s.signing_pubkey_id
+                            SET s.deactivation_block = NULL
+                            WHERE u.block_index >= ?
+                              AND s.deactivation_block IS NOT NULL
+                              AND s.deactivation_block = u.block_index + ?`;
+                args = [block_index, activationDelay];
+                await this.indexerDb.doQuery(query, args);
+
+                // delegations ← orphaned DELEGATE-revoke rows. A revoke is itself a delegations
+                // row keyed by its own action_index; the parent it stamped is an earlier
+                // delegations row for the same source + signing pubkey (self-join).
+                query = `UPDATE delegations p
+                            JOIN delegations r
+                              ON r.source_id = p.source_id
+                             AND r.signing_pubkey_id = p.signing_pubkey_id
+                            SET p.deactivation_block = NULL
+                            WHERE r.block_index >= ?
+                              AND p.deactivation_block IS NOT NULL
+                              AND p.deactivation_block = r.block_index + ?`;
+                args = [block_index, activationDelay];
+                await this.indexerDb.doQuery(query, args);
+
+                // contract_stakes ← orphaned contract_unstakes (contract staking, all chains)
+                query = `UPDATE contract_stakes cs
+                            JOIN contract_unstakes cu
+                              ON cu.signing_pubkey_id     = cs.signing_pubkey_id
+                             AND cu.target_contract_index = cs.target_contract_index
+                             AND cu.tick_id               = cs.tick_id
+                            SET cs.deactivation_block = NULL
+                            WHERE cu.block_index >= ?
+                              AND cs.deactivation_block IS NOT NULL
+                              AND cs.deactivation_block = cu.block_index + ?`;
+                args = [block_index, activationDelay];
+                await this.indexerDb.doQuery(query, args);
+
+                // contract_delegations ← orphaned DELEGATE v3 contract-revokes. No child row
+                // exists (pure in-place UPDATE), so key on the value threshold: anything at or
+                // above block_index + activationDelay was stamped by an orphaned revoke.
+                query = `UPDATE contract_delegations
+                            SET deactivation_block = NULL
+                            WHERE deactivation_block IS NOT NULL
+                              AND deactivation_block >= ?`;
+                args = [Number(block_index) + activationDelay];
+                await this.indexerDb.doQuery(query, args);
+
                 // Loop through the data tables and delete records above the action_index
                 for(let table of this.dataTables){
                     query = `DELETE FROM ` + table + ` WHERE action_index >= ?`;
