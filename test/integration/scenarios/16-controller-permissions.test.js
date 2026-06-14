@@ -51,6 +51,19 @@ const sha = s => crypto.createHash('sha256').update(s).digest('hex');
 const MANIFEST_C = "module.exports={ permissions:['SEND','ISSUE'], maxTakeBps:300, guard:function(){ return {}; } };";
 const BARE_C     = "module.exports={ guard:function(){ return {}; } };";
 const BAD_C      = "module.exports={ permissions:['SEND'], maxTakeBps:2.5, guard:function(){ return {}; } };";
+// Allowlist enforcement (the "all paths" decision) exercised on the CONSTRUCTOR path: each
+// constructor emits an ISSUE (needs no balance, so a denial is attributable SOLELY to the
+// allowlist, not a secondary failure). NEG permits only SEND → its constructor's ISSUE must be
+// denied → the deploy is rejected and token CTORNEG is never created. POS permits ISSUE → its
+// constructor's ISSUE goes through → the deploy is valid and token CTORPOS exists. Together they
+// prove the allowlist discriminates against a LIVE-persisted manifest (a balance-based guard
+// emission would pass even with the allowlist disabled — the e2e E2 false-green this avoids).
+// A COMPLETE, valid ISSUE emission — so when the allowlist permits it the token is really
+// created (a bare {tick} ISSUE is rejected for missing fields, which would make the negative
+// case a false green of its own).
+const issueEmit = t => `xchain.emit.issue({tick:'${t}', maxSupply:'1000', maxMint:'1000', decimals:'0', mintSupply:'1000', memo:'x'});`;
+const CTOR_NEG = `module.exports={ permissions:['SEND'],  initialize:function(){ ${issueEmit('CTORNEG')} } };`;
+const CTOR_POS = `module.exports={ permissions:['ISSUE'], initialize:function(){ ${issueEmit('CTORPOS')} } };`;
 
 describe('Phase E permissions manifest — deploy persistence (real DB + real VM) @phaseE', function () {
     this.timeout(600000);
@@ -67,6 +80,9 @@ describe('Phase E permissions manifest — deploy persistence (real DB + real VM
             { source: DEPLOYER, data: `DEPLOY|0|${hex(MANIFEST_C)}|300000|` },
             { source: DEPLOYER, data: `DEPLOY|0|${hex(BARE_C)}|300000|` },
             { source: DEPLOYER, data: `DEPLOY|0|${hex(BAD_C)}|300000|` },
+            // Non-empty CONSTRUCTOR_PARAMS so the VM runs `initialize` (the constructor emission path).
+            { source: DEPLOYER, data: `DEPLOY|0|${hex(CTOR_NEG)}|500000|init` },
+            { source: DEPLOYER, data: `DEPLOY|0|${hex(CTOR_POS)}|500000|init` },
         ]);
         indexer = await initIndexer();
         await processBlocks(indexer);
@@ -86,6 +102,23 @@ describe('Phase E permissions manifest — deploy persistence (real DB + real VM
              LEFT JOIN index_statuses s ON s.id = c.status_id
              LEFT JOIN contract_permissions cp ON cp.contract_index = c.action_index`, []);
         return rows.find(r => r.code_hash === h);
+    }
+
+    // A real token exists only if the ISSUE actually committed (the `tokens` table — NOT
+    // index_tickers, whose INSERT IGNORE / non-rewinding ids survive a rolled-back emission).
+    async function tokenExists(tick) {
+        const rows = await indexerQuery(
+            `SELECT COUNT(*) AS c FROM tokens tk JOIN index_tickers it ON it.id = tk.tick_id WHERE it.tick = ?`,
+            [tick]);
+        return Number(rows[0].c) > 0;
+    }
+
+    // All recorded contract-execution error messages (constructor runs recorded here even when
+    // the deploy was rolled back). The allowlist denial surfaces as 'manifest: action <X> not
+    // permitted'; an emission that PASSED the allowlist fails later with a different message.
+    async function execErrors() {
+        const rows = await indexerQuery(`SELECT error_message FROM contract_executions`, []);
+        return rows.map(r => r.error_message || '');
     }
 
     it('persists a declared manifest (permissions + maxTakeBps) on a clean deploy', async function () {
@@ -109,5 +142,30 @@ describe('Phase E permissions manifest — deploy persistence (real DB + real VM
         assert.ok(row, 'bad-manifest contract row exists with its (invalid) status');
         assert.ok(/CONTRACT_MANIFEST/.test(row.status || ''), 'rejected with CONTRACT_MANIFEST, got: ' + row.status);
         assert.strictEqual(row.permissions, null, 'no contract_permissions row for a rejected deploy');
+    });
+
+    it('ENFORCES the allowlist: a DISALLOWED constructor emission is denied by the manifest', async function () {
+        // CTOR_NEG permits only SEND but its constructor emits ISSUE. The allowlist check in
+        // processEmission throws BEFORE the action runs, failing the constructor → the deploy
+        // is rolled back and CTORNEG never exists. The denial surfaces as the exact allowlist
+        // error. (Regression: with the array-coercion bug the manifest read back as a non-array,
+        // the allowlist was disabled, and this denial would NOT occur.)
+        const errs = await execErrors();
+        assert.ok(errs.some(e => /action ISSUE not permitted/.test(e)),
+            'a constructor ISSUE was denied by the manifest allowlist; errors=' + JSON.stringify(errs));
+        assert.strictEqual(await tokenExists('CTORNEG'), false, 'the disallowed ISSUE never applied');
+    });
+
+    it('ENFORCES the allowlist: a PERMITTED constructor emission passes the manifest gate', async function () {
+        // CTOR_POS permits ISSUE, so its constructor ISSUE is NOT blocked by the allowlist — it
+        // gets past the gate (and only then fails downstream on the issuance FEE the unfunded
+        // contract address can't pay). The discriminating proof: exactly ONE 'not permitted'
+        // denial exists across all deploys — the CTOR_NEG one — NOT the ISSUE-permitting CTOR_POS.
+        const errs = await execErrors();
+        const denied = errs.filter(e => /not permitted/.test(e));
+        assert.strictEqual(denied.length, 1,
+            'only the ISSUE-forbidding contract was denied by the allowlist, not the ISSUE-permitting one; denied=' + JSON.stringify(denied));
+        assert.ok(errs.some(e => /CTORPOS/.test(e) || /insufficient funds/.test(e)),
+            'the permitted ISSUE reached action processing (failed later on fee, not on the allowlist)');
     });
 });
