@@ -122,8 +122,22 @@ class Rollback {
             'anchor_actions',
             'attests',
             'prices',
-            'pending_hub_pushes'
+            'pending_hub_pushes',
+            // Programmable policy layer — append-only controller bind/unbind event logs. Each event
+            // row is keyed by its own action_index and never mutated (cooldown expiry is computed at
+            // read time), so the generic action_index delete reverts orphaned binds/unbinds exactly.
+            'token_controllers',
+            'address_controllers'
         ];
+
+        // NOTE: the index_* lookup tables (index_addresses, index_tickers, index_statuses,
+        // index_actions, ...) are intentionally NOT rolled back. Their rows are created on
+        // first reference via INSERT IGNORE and their AUTO_INCREMENT ids never rewind, so a
+        // row first seen in a later-orphaned block survives the reorg. That is safe because
+        // those surrogate ids are purely local artifacts and feed NO consensus value: the
+        // block hashes resolve them to canonical strings before hashing (BLOCK_HASH_VERSION 2,
+        // see db.getBlockHashes). Do not reintroduce a raw lookup id into any hashed projection
+        // — if you do, these un-rolled-back rows will fork checkpoint hashes after a reorg.
 
     }
 
@@ -542,6 +556,21 @@ class Rollback {
                 await this.hubClient.retractXcallRange(this.config['COIN'], firstActionIndex);
             } catch(err) {
                 console.warn('Rollback: hub XCALL retraction failed:', err);
+            }
+        }
+
+        // Signal the hub to retract any cross_chain_matches rows whose retracted leg references DEX
+        // ORDER actions just rolled back on this chain. The hub marks the matching matches
+        // 'retracted', restores both legs' remaining capacity, and broadcasts deletions to indexers
+        // mirroring their local cross_chain_matches copy — so a source-chain reorg never leaves an
+        // orphaned 'finalized' match eligible for settlement against an order that no longer exists.
+        // Best-effort and out-of-transaction, exactly like the price + XCALL retractions above — a
+        // hub failure must not leave the local rollback half-applied.
+        if(firstActionIndex !== null && this.hubClient){
+            try {
+                await this.hubClient.retractMatchRange(this.config['COIN'], firstActionIndex);
+            } catch(err) {
+                console.warn('Rollback: hub DEX match retraction failed:', err);
             }
         }
 

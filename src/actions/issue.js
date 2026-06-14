@@ -40,9 +40,11 @@
  * - MINT_ADDRESS_MAX - Maximum amount of supply any address can mint via `MINT` transactions
  * - MINT_START_BLOCK - `BLOCK_INDEX` when `MINT` transactions are allowed (begin mint)
  * - MINT_STOP_BLOCK` - `BLOCK_INDEX` when `MINT` transactions are NOT allowed (end mint)
- * - CONTROLLER       - `ACTION_INDEX` of a deployed contract whose `guard` method must
- *                      approve guarded native actions on this token (SEND/ORDER/SWAP/DISPENSER)
- * - LOCK_CONTROLLER  - Lock `CONTROLLER` permanently (binding can never change/clear)
+ * - CONTROLLER       - (format 6 only) `ACTION_INDEX` of a deployed contract whose `guard`
+ *                      method gates one ACTION_CLASS of this token (programmable policy layer)
+ * - ACTION_CLASS     - (format 6 only) which class to gate: transfer|trade|burn|mint|stake
+ * - COOLDOWN_BLOCKS  - (format 6 only) drop-cooldown committed at bind; the friction on a later unbind
+ * - UNBIND           - (format 6 only) 1 = drop the live binding for ACTION_CLASS
  *
  * FORMATS :
  * - 0 = Full
@@ -51,7 +53,7 @@
  * - 3 = Edit LOCK PARAMS
  * - 4 = Edit CALLBACK PARAMS
  * - 5 = Edit LIST PARAMS
- * - 6 = Edit CONTROLLER PARAMS
+ * - 6 = Bind/unbind a controller (programmable policy layer)
  *
  ********************************************************************/
 
@@ -69,20 +71,24 @@ class Issue {
 
         // Define list of known FORMATS
         this.formats = {};
-        this.formats[0] = 'VERSION|TICK|MAX_SUPPLY|MAX_MINT|DECIMALS|DESCRIPTION|MINT_SUPPLY|TRANSFER|TRANSFER_SUPPLY|LOCK_MAX_SUPPLY|LOCK_MAX_MINT|LOCK_DESCRIPTION|LOCK_SLEEP|LOCK_CALLBACK|CALLBACK_BLOCK|CALLBACK_TICK|CALLBACK_AMOUNT|ALLOW_LIST|BLOCK_LIST|MINT_ADDRESS_MAX|MINT_START_BLOCK|MINT_STOP_BLOCK|LOCK_MINT|LOCK_MINT_SUPPLY|CONTROLLER|LOCK_CONTROLLER|MEMO';
+        this.formats[0] = 'VERSION|TICK|MAX_SUPPLY|MAX_MINT|DECIMALS|DESCRIPTION|MINT_SUPPLY|TRANSFER|TRANSFER_SUPPLY|LOCK_MAX_SUPPLY|LOCK_MAX_MINT|LOCK_DESCRIPTION|LOCK_SLEEP|LOCK_CALLBACK|CALLBACK_BLOCK|CALLBACK_TICK|CALLBACK_AMOUNT|ALLOW_LIST|BLOCK_LIST|MINT_ADDRESS_MAX|MINT_START_BLOCK|MINT_STOP_BLOCK|LOCK_MINT|LOCK_MINT_SUPPLY|MEMO';
         this.formats[1] = 'VERSION|TICK|DESCRIPTION|MEMO';
         this.formats[2] = 'VERSION|TICK|MAX_MINT|MINT_SUPPLY|TRANSFER_SUPPLY|MINT_ADDRESS_MAX|MINT_START_BLOCK|MINT_STOP_BLOCK|MEMO';
-        this.formats[3] = 'VERSION|TICK|LOCK_MAX_SUPPLY|LOCK_MAX_MINT|LOCK_DESCRIPTION|LOCK_SLEEP|LOCK_CALLBACK|LOCK_MINT|LOCK_MINT_SUPPLY|LOCK_CONTROLLER|MEMO';
+        this.formats[3] = 'VERSION|TICK|LOCK_MAX_SUPPLY|LOCK_MAX_MINT|LOCK_DESCRIPTION|LOCK_SLEEP|LOCK_CALLBACK|LOCK_MINT|LOCK_MINT_SUPPLY|MEMO';
         this.formats[4] = 'VERSION|TICK|CALLBACK_BLOCK|CALLBACK_TICK|CALLBACK_AMOUNT|MEMO';
         this.formats[5] = 'VERSION|TICK|ALLOW_LIST|BLOCK_LIST|MEMO';
-        this.formats[6] = 'VERSION|TICK|CONTROLLER|LOCK_CONTROLLER|MEMO';
+        // Programmable policy layer — bind/unbind a guard contract to one action-class of this token
+        // (append-only token_controllers model). One binding change per action; UNBIND=1 drops the
+        // live binding for ACTION_CLASS (CONTROLLER then ignored). COOLDOWN_BLOCKS is committed at
+        // bind time and is the friction on a later drop. See Controller_Bound_Tokens.md.
+        this.formats[6] = 'VERSION|TICK|CONTROLLER|ACTION_CLASS|COOLDOWN_BLOCKS|UNBIND|MEMO';
 
         // Define lists of various fields
         this.fieldList = {};
 
         // Define list of AMOUNT, LOCK fields (used in validations)
         this.fieldList['AMOUNT'] = ['MAX_SUPPLY', 'MAX_MINT', 'MINT_SUPPLY', 'CALLBACK_AMOUNT', 'MINT_ADDRESS_MAX', 'MINT_START_BLOCK', 'MINT_STOP_BLOCK'];
-        this.fieldList['LOCK']   = ['LOCK_MAX_SUPPLY', 'LOCK_MINT', 'LOCK_MINT_SUPPLY', 'LOCK_MAX_MINT', 'LOCK_DESCRIPTION', 'LOCK_SLEEP', 'LOCK_CALLBACK', 'LOCK_CONTROLLER'];
+        this.fieldList['LOCK']   = ['LOCK_MAX_SUPPLY', 'LOCK_MINT', 'LOCK_MINT_SUPPLY', 'LOCK_MAX_MINT', 'LOCK_DESCRIPTION', 'LOCK_SLEEP', 'LOCK_CALLBACK'];
     }
 
     // Handle parsing the ISSUE transaction
@@ -386,10 +392,42 @@ class Issue {
             }
         }
 
-        // Verify CONTROLLER can not be changed once LOCK_CONTROLLER is enabled
-        // (the generic LOCK loop above already forbids un-locking LOCK_CONTROLLER itself).
-        if(!error && tokenInfo && tokenInfo['LOCK_CONTROLLER'] && !this.util.isNull(data['CONTROLLER']) && String(data['CONTROLLER']) != String(tokenInfo['CONTROLLER']))
-            error = 'invalid: CONTROLLER (locked)';
+        // Programmable policy layer — token controller bind/unbind (format 6). The CONTROLLER-active
+        // check above already validated the bound contract (when CONTROLLER is set); here we validate
+        // the per-action-class binding semantics. SOURCE-is-owner is enforced by the generic
+        // "issued by another address" check above (tokenInfo is required, so it always applies).
+        if(!error && format === 6){
+            let actionClass = (this.util.isNull(data['ACTION_CLASS'])) ? null : String(data['ACTION_CLASS']).toLowerCase();
+            let isUnbind    = (String(data['UNBIND']) === '1');
+            if(!tokenInfo){
+                // Can only bind a controller to an existing token you own
+                error = 'invalid: TICK (unknown)';
+            } else if(this.config['CONTROLLER_ACTION_CLASSES'].indexOf(actionClass) === -1){
+                error = 'invalid: ACTION_CLASS (unknown)';
+            } else {
+                let tickId    = await this.indexerDb.getTickerId(data['TICK']);
+                let effective = await this.indexerDb.getEffectiveTokenController(tickId, actionClass, data['BLOCK_INDEX'], data['ACTION_INDEX']);
+                if(isUnbind){
+                    // UNBIND: an effective (still-gating) controller must exist for this class, and
+                    // it must be a live bind — a second unbind while one is already in its cooldown
+                    // window is rejected (the drop is already scheduled).
+                    if(!effective)
+                        error = 'invalid: ACTION_CLASS (not bound)';
+                    else if(Number(effective.is_unbind) === 1)
+                        error = 'invalid: ACTION_CLASS (already unbinding)';
+                } else {
+                    // BIND: CONTROLLER required, no controller may already gate this class (no
+                    // stacking; replace = unbind-then-bind, which preserves the cooldown's teeth),
+                    // and any COOLDOWN_BLOCKS given must be a non-negative integer.
+                    if(this.util.isNull(data['CONTROLLER']))
+                        error = 'invalid: CONTROLLER (null)';
+                    else if(effective)
+                        error = 'invalid: ACTION_CLASS (already bound)';
+                    else if(!this.util.isNull(issue['COOLDOWN_BLOCKS']) && !/^\d+$/.test(String(issue['COOLDOWN_BLOCKS'])))
+                        error = 'invalid: COOLDOWN_BLOCKS (format)';
+                }
+            }
+        }
 
         // Verify MINT_START_BLOCK is greater than or equal to current block
         if(!error && !this.util.isNull(data['MINT_START_BLOCK']) && this.util.bcgt(data['MINT_START_BLOCK'], 0) && this.util.bclt(data['MINT_START_BLOCK'], data['BLOCK_INDEX']))
@@ -504,6 +542,35 @@ class Issue {
 
             // Create/Update record in tokens table
             await this.indexerDb.createToken(data);
+
+            // Programmable policy layer — append the token controller bind/unbind event (format 6).
+            // The binding lives in token_controllers (not the token record); the issues row above is
+            // the audit trail. issue['CONTROLLER']/['COOLDOWN_BLOCKS'] are the raw (pre-numeric)
+            // values, which map cleanly onto the BIGINT/INT columns.
+            if(format === 6){
+                let tickId      = await this.indexerDb.getTickerId(data['TICK']);
+                let actionClass = String(data['ACTION_CLASS']).toLowerCase();
+                let boundById   = await this.indexerDb.createAddress(data['SOURCE']);
+                if(String(data['UNBIND']) === '1'){
+                    // The drop schedules at block + the live bind's committed cooldown; the controller
+                    // keeps gating until then. effective is non-null + a live bind (validated above).
+                    let effective   = await this.indexerDb.getEffectiveTokenController(tickId, actionClass, data['BLOCK_INDEX'], data['ACTION_INDEX']);
+                    let cooldown    = Number(effective.cooldown_blocks) || 0;
+                    let cooldownEnd = parseInt(data['BLOCK_INDEX']) + cooldown;
+                    await this.indexerDb.recordTokenControllerEvent({
+                        action_index: data['ACTION_INDEX'], tick_id: tickId, action_class: actionClass,
+                        contract_index: effective.contract_index, bound_by_id: boundById, is_unbind: 1,
+                        cooldown_blocks: cooldown, cooldown_end_block: cooldownEnd, block_index: data['BLOCK_INDEX']
+                    });
+                } else {
+                    let cooldown = (this.util.isNull(issue['COOLDOWN_BLOCKS'])) ? 0 : parseInt(issue['COOLDOWN_BLOCKS']);
+                    await this.indexerDb.recordTokenControllerEvent({
+                        action_index: data['ACTION_INDEX'], tick_id: tickId, action_class: actionClass,
+                        contract_index: issue['CONTROLLER'], bound_by_id: boundById, is_unbind: 0,
+                        cooldown_blocks: cooldown, cooldown_end_block: null, block_index: data['BLOCK_INDEX']
+                    });
+                }
+            }
 
             // Credit MINT_SUPPLY to source address
             if(data['MINT_SUPPLY'])

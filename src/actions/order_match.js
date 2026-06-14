@@ -315,22 +315,41 @@ class Order_Match {
                     // Ownership sides clear the escrow gate and atomically transfer
                     // tokens.owner_id via a synthetic ISSUE+TRANSFER.
 
-                    // orderInfo.GIVE side → matchInfo.GET_ADDRESS
+                    // orderInfo.GIVE side → matchInfo's proceeds (matchInfo['GET_TICK'], give_amount).
+                    // If matchInfo sold a controlled token, its stored royalty/fee split is applied to
+                    // these proceeds (seller remainder + leg credits); the escrow release is unchanged
+                    // and the split conserves give_amount exactly. applyProceedsSplit returns the lone
+                    // full credit when there are no legs, so the call is unconditional.
                     if(Number(orderInfo['GIVE_OWNERSHIP']||0) == 1){
                         await this.util.transferTokenOwnership(this.indexerDb, this.mapper, data, orderInfo['GIVE_TICK'], orderInfo['SOURCE'], matchInfo['GET_ADDRESS']);
                     } else {
                         escrows.push([matchInfo['GET_TICK'], -give_amount, matchInfo['GET_ADDRESS']]);
-                        credits.push([matchInfo['GET_TICK'],  give_amount, matchInfo['GET_ADDRESS']]);
-                        this.util.addAddressTicker(matchInfo['GET_ADDRESS'], matchInfo['GET_TICK']);
+                        let mDec = 0;
+                        if(!this.util.isNull(matchInfo['PAYOUT_LEGS'])){
+                            let mInfo = await this.indexerDb.getTokenInfo(matchInfo['GET_TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
+                            mDec = (mInfo && !this.util.isNull(mInfo['DECIMALS'])) ? parseInt(mInfo['DECIMALS']) : 0;
+                        }
+                        for(let c of this.util.applyProceedsSplit(matchInfo['GET_TICK'], give_amount, matchInfo['GET_ADDRESS'], matchInfo['PAYOUT_LEGS'], mDec, parseInt(this.config['CONTROLLER_MAX_TAKE_BPS']))){
+                            credits.push(c);
+                            this.util.addAddressTicker(c[2], c[0]);
+                        }
                     }
 
-                    // matchInfo.GIVE side → orderInfo.GET_ADDRESS
+                    // matchInfo.GIVE side → orderInfo's proceeds (orderInfo['GET_TICK'], get_amount).
+                    // Same: apply orderInfo's stored split if its sold token was controlled.
                     if(Number(matchInfo['GIVE_OWNERSHIP']||0) == 1){
                         await this.util.transferTokenOwnership(this.indexerDb, this.mapper, data, matchInfo['GIVE_TICK'], matchInfo['SOURCE'], orderInfo['GET_ADDRESS']);
                     } else {
                         escrows.push([orderInfo['GET_TICK'], -get_amount, orderInfo['GET_ADDRESS']]);
-                        credits.push([orderInfo['GET_TICK'],  get_amount, orderInfo['GET_ADDRESS']]);
-                        this.util.addAddressTicker(orderInfo['GET_ADDRESS'], orderInfo['GET_TICK']);
+                        let oDec = 0;
+                        if(!this.util.isNull(orderInfo['PAYOUT_LEGS'])){
+                            let oInfo = await this.indexerDb.getTokenInfo(orderInfo['GET_TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
+                            oDec = (oInfo && !this.util.isNull(oInfo['DECIMALS'])) ? parseInt(oInfo['DECIMALS']) : 0;
+                        }
+                        for(let c of this.util.applyProceedsSplit(orderInfo['GET_TICK'], get_amount, orderInfo['GET_ADDRESS'], orderInfo['PAYOUT_LEGS'], oDec, parseInt(this.config['CONTROLLER_MAX_TAKE_BPS']))){
+                            credits.push(c);
+                            this.util.addAddressTicker(c[2], c[0]);
+                        }
                     }
                 }
 

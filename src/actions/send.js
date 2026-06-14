@@ -146,15 +146,13 @@ class Send {
         // Get source address balances
         let balances = await this.indexerDb.getAddressBalances(data['SOURCE'], null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
 
-        // Controller-bound token gas context. A SEND of a token that declares a
-        // CONTROLLER runs the contract's `guard` method before settling; the
-        // SOURCE pays the (bounded) guard gas. Load the SOURCE's GAS balance once
-        // so a multi-send debits it cumulatively across controlled legs.
+        // Controller-bound token gas context. A SEND of a token whose `transfer` class is bound to
+        // a controller runs that contract's `guard` before settling; the SOURCE pays the (bounded)
+        // guard gas. Load the SOURCE's GAS balance once so a multi-send debits it cumulatively
+        // across controlled legs (maybeRunControllerGuard reserves the ceiling against it).
         let gasTick      = this.config['GAS'];
         let gasInfo      = await this.indexerDb.getTokenInfo(gasTick, data['BLOCK_INDEX'], data['ACTION_INDEX']);
         let gasBalances  = await this.indexerDb.getAddressBalances(data['SOURCE'], gasTick, data['BLOCK_INDEX'], data['ACTION_INDEX']);
-        let guardCeiling = parseInt(this.config['GAS_SCHEDULE']['VM_GUARD_GAS_CEILING']) || 200000;
-        let maxGuardFee  = this.util.bcmul(guardCeiling, this.config['GAS_PRICE'], 8);
 
         // Store original error value
         let origError = error;
@@ -286,28 +284,51 @@ class Send {
             // guard gas ceiling fee (mirrors the cross-contract-call reservation) so
             // a cheap/denied guard never drives GAS negative; the actual metered fee
             // is billed in the valid block below.
-            if(!error && tokenInfo && !this.util.isNull(tokenInfo['CONTROLLER'])){
-                if(gasInfo && this.util.bcgt(maxGuardFee, 0) && !this.util.hasBalance(gasBalances, gasInfo['TICK_ID'], maxGuardFee)){
-                    error = 'invalid: insufficient funds (guard gas)';
-                } else {
-                    let guard = await this.actions.actionExecute.runControllerGuard({
-                        actionType:      'SEND',
-                        controllerIndex: tokenInfo['CONTROLLER'],
-                        tick:            send['TICK'],
-                        from:            send['SOURCE'],
-                        to:              send['DESTINATION'],
-                        amount:          send['AMOUNT'],
-                        price:           '',
-                        proceedsTick:    '',
-                        hostData:        send,
-                        callDepth:       (Number(data['CALL_DEPTH']) || 0) + 1,
-                        seq:             parseInt(idx) || 0
-                    });
-                    if(!guard.allow)
-                        error = 'invalid: ' + guard.reason;
-                    else
-                        guardFee = this.util.bcmul(guard.gasBilled, this.config['GAS_PRICE'], 8);
-                }
+            if(!error && tokenInfo){
+                let result = await this.util.maybeRunControllerGuard(this.actions, this.indexerDb, {
+                    actionType:  'SEND',
+                    tick:        send['TICK'],
+                    from:        send['SOURCE'],
+                    to:          send['DESTINATION'],
+                    amount:      send['AMOUNT'],
+                    data:        send,
+                    gasInfo:     gasInfo,
+                    gasBalances: gasBalances,
+                    seq:         parseInt(idx) || 0
+                });
+                if(result.error)
+                    error = 'invalid: ' + result.error;
+                else
+                    guardFee = result.guardFee;
+            }
+
+            // Recipient-side gate: the DESTINATION's own `transfer` address-controller may refuse an
+            // incoming direct SEND it didn't solicit (spam/compliance). Refusal reverts this leg;
+            // SOURCE pays the guard gas. Its reservation runs against the GAS balance ALREADY reduced
+            // by this leg's token guardFee (a shallow clone, so gasBalances only commits in the valid
+            // block) — keeping the two-guard reservation cumulative so GAS can't be driven negative.
+            // DEX/dispense deliveries are solicited pulls, not direct sends, so they are never gated.
+            if(!error && !this.util.isNull(send['DESTINATION'])){
+                let reserveBalances = gasBalances;
+                if(gasInfo && this.util.bcgt(guardFee, 0))
+                    reserveBalances = this.util.debitBalances(Object.assign({}, gasBalances), gasInfo['TICK_ID'], guardFee);
+                let recip = await this.util.maybeRunAddressControllerGuard(this.actions, this.indexerDb, {
+                    actionType:  'SEND',
+                    actionClass: 'transfer',
+                    address:     send['DESTINATION'],
+                    tick:        send['TICK'],
+                    from:        send['SOURCE'],
+                    to:          send['DESTINATION'],
+                    amount:      send['AMOUNT'],
+                    data:        send,
+                    gasInfo:     gasInfo,
+                    gasBalances: reserveBalances,
+                    seq:         parseInt(idx) || 0
+                });
+                if(recip.error)
+                    error = 'invalid: ' + recip.error;
+                else
+                    guardFee = this.util.bcadd(guardFee, recip.guardFee, 8);
             }
 
             // Adjust balances to reduce by SEND AMOUNT

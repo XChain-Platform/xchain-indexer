@@ -23,6 +23,22 @@ const mariadb = require('mariadb');
 const fs      = require('fs');
 const path    = require('path');
 
+// Consensus block-hash scheme version. Folded into the preimage of every per-block
+// ledger/actions/contract hash (see getBlockHashes), so changing it changes every hash.
+//   v1 — hashed the raw AUTO_INCREMENT lookup-table ids (address_id/tick_id/action_id/
+//        source_id/caller_id/status_id). Those ids are assigned on first reference and
+//        survive reorgs, so a shallow reorg containing a first-seen address/ticker/etc.
+//        permanently forked id assignment between nodes and diverged the hashes.
+//   v2 — hashes the RESOLVED canonical strings (address/tick/action/status) instead, so
+//        the hashes depend only on the canonical chain and are id-independent.
+// Bumping this is a consensus break requiring a coordinated all-validator re-baseline of
+// checkpoints from an agreed height (already-anchored hashes stay on their original scheme).
+// MUST stay identical to xchain-sync/src/BlockHasher.js BLOCK_HASH_VERSION — the two hashers
+// are a byte-for-byte conformance pair (guarded by the xchain-e2e-test conformance scenario
+// and the xchain-sync block-hash-vectors golden). This is a fixed protocol constant, never
+// env-overridable.
+const BLOCK_HASH_VERSION = 2;
+
 class Database {
 
     // Handle constructing a class instance
@@ -1040,65 +1056,81 @@ class Database {
         let info    = [];
         let hashes  = [];
         // Get data from credits table
-        // These rows feed the consensus ledger hash, and credits/debits/escrows have no
-        // primary key: ORDER BY action_index alone leaves the order of an action's
-        // multiple rows (e.g. an ISSUE's fee credit + mint credit) engine-unspecified,
-        // which forks the hash across nodes. Sort on every selected column.
+        // These rows feed the consensus ledger hash. We hash the RESOLVED address/ticker
+        // strings (LEFT JOIN through the lookup tables), never the raw address_id/tick_id —
+        // those are local AUTO_INCREMENT ids that diverge across nodes after a reorg (see
+        // BLOCK_HASH_VERSION). LEFT JOIN preserves rows whose address_id/tick_id is NULL
+        // (native-coin movements) as a NULL string, matching every node.
+        // credits/debits/escrows have no primary key: ORDER BY action_index alone leaves the
+        // order of an action's multiple rows (e.g. an ISSUE's fee credit + mint credit)
+        // engine-unspecified, which forks the hash across nodes. Sort on every selected
+        // (resolved) column, pinning a BINARY collation so the order is independent of each
+        // node's default collation (index_addresses is utf8_general_ci = case/accent-folding).
         query = `SELECT
                     c.action_index,
-                    c.address_id,
-                    c.tick_id,
+                    a1.address AS address,
+                    t1.tick    AS tick,
                     c.amount
                 FROM
                     credits c
-                    INNER JOIN actions      a ON (a.action_index=c.action_index)
-                    INNER JOIN transactions t ON (t.tx_index=a.tx_index)
+                    INNER JOIN actions        a  ON (a.action_index=c.action_index)
+                    INNER JOIN transactions   t  ON (t.tx_index=a.tx_index)
+                    LEFT  JOIN index_addresses a1 ON (a1.id=c.address_id)
+                    LEFT  JOIN index_tickers   t1 ON (t1.id=c.tick_id)
                 WHERE
                     t.block_index=?
                 ORDER BY
-                    c.action_index ASC, c.address_id ASC, c.tick_id ASC, c.amount ASC`;
+                    c.action_index ASC, a1.address COLLATE utf8_bin ASC, t1.tick COLLATE utf8mb4_bin ASC, c.amount ASC`;
         ledger.credits = await this.doQuery(query, [block_index]);
         // Get data from debits table
         query = `SELECT
                     d.action_index,
-                    d.address_id,
-                    d.tick_id,
+                    a1.address AS address,
+                    t1.tick    AS tick,
                     d.amount
                 FROM
                     debits d
-                    INNER JOIN actions      a ON (a.action_index=d.action_index)
-                    INNER JOIN transactions t ON (t.tx_index=a.tx_index)
+                    INNER JOIN actions        a  ON (a.action_index=d.action_index)
+                    INNER JOIN transactions   t  ON (t.tx_index=a.tx_index)
+                    LEFT  JOIN index_addresses a1 ON (a1.id=d.address_id)
+                    LEFT  JOIN index_tickers   t1 ON (t1.id=d.tick_id)
                 WHERE
                     t.block_index=?
                 ORDER BY
-                    d.action_index ASC, d.address_id ASC, d.tick_id ASC, d.amount ASC`;
+                    d.action_index ASC, a1.address COLLATE utf8_bin ASC, t1.tick COLLATE utf8mb4_bin ASC, d.amount ASC`;
         ledger.debits = await this.doQuery(query, [block_index]);
         // Get data from escrows table
         query = `SELECT
                     e.action_index,
-                    e.address_id,
-                    e.tick_id,
+                    a1.address AS address,
+                    t1.tick    AS tick,
                     e.amount
                 FROM
                     escrows e
-                    INNER JOIN actions      a ON (a.action_index=e.action_index)
-                    INNER JOIN transactions t ON (t.tx_index=a.tx_index)
+                    INNER JOIN actions        a  ON (a.action_index=e.action_index)
+                    INNER JOIN transactions   t  ON (t.tx_index=a.tx_index)
+                    LEFT  JOIN index_addresses a1 ON (a1.id=e.address_id)
+                    LEFT  JOIN index_tickers   t1 ON (t1.id=e.tick_id)
                 WHERE
                     t.block_index=?
                 ORDER BY
-                    e.action_index ASC, e.address_id ASC, e.tick_id ASC, e.amount ASC`;
+                    e.action_index ASC, a1.address COLLATE utf8_bin ASC, t1.tick COLLATE utf8mb4_bin ASC, e.amount ASC`;
         ledger.escrows = await this.doQuery(query, [block_index]);
         // Get data from actions table
+        // Hash the RESOLVED action-type string (e.g. 'SEND'), not the raw action_id — that
+        // is an index_actions AUTO_INCREMENT id assigned on first reference (createAction)
+        // and so diverges across nodes after a reorg, exactly like address_id/tick_id.
         query = `SELECT
                     a.action_index,
                     a.tx_index,
-                    a.action_id
+                    ia.action AS action
                 FROM
                     actions a
-                    INNER JOIN transactions t ON (t.tx_index=a.tx_index)
+                    INNER JOIN transactions  t  ON (t.tx_index=a.tx_index)
+                    LEFT  JOIN index_actions ia ON (ia.id=a.action_id)
                 WHERE
                     t.block_index=?
-                ORDER BY 
+                ORDER BY
                     a.action_index ASC`;
         actions = await this.doQuery(query, [block_index]);
         // Contract hash data
@@ -1110,11 +1142,15 @@ class Database {
             deposits:    [],
             withdrawals: []
         };
-        // New deployments
-        query = `SELECT c.action_index, c.source_id, c.code_hash, c.status_id
+        // New deployments. Resolve source_id -> address and status_id -> status string
+        // (id-independent, see BLOCK_HASH_VERSION). action_index is unique on contracts so
+        // ORDER BY action_index alone is a total order.
+        query = `SELECT c.action_index, a1.address AS source_address, c.code_hash, s1.status AS status
                  FROM contracts c
                  INNER JOIN actions a ON (a.action_index=c.action_index)
                  INNER JOIN transactions t ON (t.tx_index=a.tx_index)
+                 LEFT  JOIN index_addresses a1 ON (a1.id=c.source_id)
+                 LEFT  JOIN index_statuses  s1 ON (s1.id=c.status_id)
                  WHERE t.block_index=?
                  ORDER BY c.action_index ASC`;
         contracts_data.contracts = await this.doQuery(query, [block_index]);
@@ -1129,11 +1165,14 @@ class Database {
                  ) latest ON cs.id = latest.max_id
                  ORDER BY cs.contract_index ASC, cs.state_key ASC`;
         contracts_data.state = await this.doQuery(query, [block_index]);
-        // Executions
-        query = `SELECT ce.action_index, ce.contract_index, ce.caller_id, ce.gas_used, ce.status_id, ce.emitted_count
+        // Executions. Resolve caller_id -> address and status_id -> status string. contract_index
+        // is the deploy's action_index (deterministic, not a surrogate id). action_index is unique.
+        query = `SELECT ce.action_index, ce.contract_index, a1.address AS caller_address, ce.gas_used, s1.status AS status, ce.emitted_count
                  FROM contract_executions ce
                  INNER JOIN actions a ON (a.action_index=ce.action_index)
                  INNER JOIN transactions t ON (t.tx_index=a.tx_index)
+                 LEFT  JOIN index_addresses a1 ON (a1.id=ce.caller_id)
+                 LEFT  JOIN index_statuses  s1 ON (s1.id=ce.status_id)
                  WHERE t.block_index=?
                  ORDER BY ce.action_index ASC`;
         contracts_data.executions = await this.doQuery(query, [block_index]);
@@ -1146,21 +1185,29 @@ class Database {
                  WHERE t.block_index=?
                  ORDER BY em.execution_index ASC, em.position ASC`;
         contracts_data.emissions = await this.doQuery(query, [block_index]);
-        // Deposits
-        query = `SELECT d.action_index, d.contract_index, d.source_id, d.tick_id, d.amount, d.status_id
+        // Deposits. Resolve source_id -> address, tick_id -> tick, status_id -> status. The
+        // secondary sort keys (kept from the tie-order fix) now use the resolved strings with a
+        // pinned BINARY collation so the order is id- and collation-independent across nodes.
+        query = `SELECT d.action_index, d.contract_index, a1.address AS source_address, t1.tick AS tick, d.amount, s1.status AS status
                  FROM deposits d
                  INNER JOIN actions a ON (a.action_index=d.action_index)
                  INNER JOIN transactions t ON (t.tx_index=a.tx_index)
+                 LEFT  JOIN index_addresses a1 ON (a1.id=d.source_id)
+                 LEFT  JOIN index_tickers   t1 ON (t1.id=d.tick_id)
+                 LEFT  JOIN index_statuses  s1 ON (s1.id=d.status_id)
                  WHERE t.block_index=?
-                 ORDER BY d.action_index ASC, d.contract_index ASC, d.source_id ASC, d.tick_id ASC, d.amount ASC, d.status_id ASC`;
+                 ORDER BY d.action_index ASC, d.contract_index ASC, a1.address COLLATE utf8_bin ASC, t1.tick COLLATE utf8mb4_bin ASC, d.amount ASC, s1.status COLLATE utf8_bin ASC`;
         contracts_data.deposits = await this.doQuery(query, [block_index]);
-        // Withdrawals
-        query = `SELECT w.action_index, w.contract_index, w.source_id, w.tick_id, w.amount, w.status_id
+        // Withdrawals. Same resolution + tie-order treatment as deposits.
+        query = `SELECT w.action_index, w.contract_index, a1.address AS source_address, t1.tick AS tick, w.amount, s1.status AS status
                  FROM withdrawals w
                  INNER JOIN actions a ON (a.action_index=w.action_index)
                  INNER JOIN transactions t ON (t.tx_index=a.tx_index)
+                 LEFT  JOIN index_addresses a1 ON (a1.id=w.source_id)
+                 LEFT  JOIN index_tickers   t1 ON (t1.id=w.tick_id)
+                 LEFT  JOIN index_statuses  s1 ON (s1.id=w.status_id)
                  WHERE t.block_index=?
-                 ORDER BY w.action_index ASC, w.contract_index ASC, w.source_id ASC, w.tick_id ASC, w.amount ASC, w.status_id ASC`;
+                 ORDER BY w.action_index ASC, w.contract_index ASC, a1.address COLLATE utf8_bin ASC, t1.tick COLLATE utf8mb4_bin ASC, w.amount ASC, s1.status COLLATE utf8_bin ASC`;
         contracts_data.withdrawals = await this.doQuery(query, [block_index]);
         // Subtract one block from current block
         let prev_block_index = block_index -1;
@@ -1193,6 +1240,9 @@ class Database {
             // Include the block_index and previous block hash in the hash calculation for this block hash
             data['block_index']   = block_index;
             data['previous_hash'] = hashes[table];
+            // Fold the consensus hash-scheme version into the preimage so v1 (id-based) and
+            // v2 (resolved-string) hashes can never collide or be compared as equal.
+            data['hash_version']  = BLOCK_HASH_VERSION;
             info[table] = [];
             info[table]['hash'] = this.util.getDataHash(data);
         });
@@ -1570,8 +1620,6 @@ class Database {
                             i.lock_description,
                             i.lock_sleep,
                             i.lock_callback,
-                            i.controller,
-                            i.lock_controller,
                             i.callback_block,
                             i.callback_amount,
                             i.mint_address_max,
@@ -1624,8 +1672,6 @@ class Database {
                     arr['LOCK_DESCRIPTION']  = row.lock_description;
                     arr['LOCK_SLEEP']        = row.lock_sleep;
                     arr['LOCK_CALLBACK']     = row.lock_callback;
-                    arr['CONTROLLER']        = row.controller;
-                    arr['LOCK_CONTROLLER']   = row.lock_controller;
                     arr['CALLBACK_TICK']     = row.callback_tick;
                     arr['CALLBACK_BLOCK']    = row.callback_block;
                     arr['CALLBACK_AMOUNT']   = row.callback_amount;
@@ -2029,8 +2075,6 @@ class Database {
         let lock_description   = data['LOCK_DESCRIPTION'];
         let lock_sleep         = data['LOCK_SLEEP'];
         let lock_callback      = data['LOCK_CALLBACK'];
-        let controller         = data['CONTROLLER'];
-        let lock_controller    = data['LOCK_CONTROLLER'];
         let callback_block     = data['CALLBACK_BLOCK'];
         let callback_amount    = data['CALLBACK_AMOUNT'];
         let allow_list         = data['ALLOW_LIST'];
@@ -2068,8 +2112,6 @@ class Database {
                         lock_description=?,
                         lock_sleep=?,
                         lock_callback=?,
-                        controller=?,
-                        lock_controller=?,
                         callback_block=?,
                         callback_tick_id=?,
                         callback_amount=?,
@@ -2100,8 +2142,6 @@ class Database {
                         lock_description,
                         lock_sleep,
                         lock_callback,
-                        controller,
-                        lock_controller,
                         callback_block,
                         callback_tick_id,
                         callback_amount,
@@ -2113,9 +2153,9 @@ class Database {
                         memo_id,
                         status_id,
                         action_index
-                    ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+                    ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
         }
-        args    = [tick_id, max_supply, max_mint, decimals, description, mint_supply, transfer_id, transfer_supply_id, lock_max_supply, lock_mint, lock_mint_supply, lock_max_mint, lock_description, lock_sleep, lock_callback, controller, lock_controller, callback_block, callback_tick_id, callback_amount, allow_list, block_list, mint_address_max, mint_start_block, mint_stop_block, memo_id, status_id, action_index ];
+        args    = [tick_id, max_supply, max_mint, decimals, description, mint_supply, transfer_id, transfer_supply_id, lock_max_supply, lock_mint, lock_mint_supply, lock_max_mint, lock_description, lock_sleep, lock_callback, callback_block, callback_tick_id, callback_amount, allow_list, block_list, mint_address_max, mint_start_block, mint_stop_block, memo_id, status_id, action_index ];
         results = await this.doQuery(query, args);
     }
 
@@ -2132,7 +2172,6 @@ class Database {
         let callback_amount    = (!this.util.isNull(data['CALLBACK_AMOUNT']) &&      this.util.isNumeric(data['CALLBACK_AMOUNT'])) ? data['CALLBACK_AMOUNT'] : 0;
         let allow_list         = (!this.util.isNull(data['ALLOW_LIST']) &&           this.util.isNumeric(data['ALLOW_LIST'])) ? parseInt(data['ALLOW_LIST']) : null;
         let block_list         = (!this.util.isNull(data['BLOCK_LIST']) &&           this.util.isNumeric(data['BLOCK_LIST'])) ? parseInt(data['BLOCK_LIST']) : null;
-        let controller         = (!this.util.isNull(data['CONTROLLER']) &&           this.util.isNumeric(data['CONTROLLER'])) ? parseInt(data['CONTROLLER']) : null;
         let decimals           = (!this.util.isNull(data['DECIMALS']) &&             this.util.isNumeric(data['DECIMALS'])) ? parseInt(data['DECIMALS']) : 0;
         // Force any amount values to the correct decimal precision
         if(this.util.isNumeric(decimals) && decimals >= this.config.MIN_TOKEN_DECIMALS && decimals <= this.config.MAX_TOKEN_DECIMALS){
@@ -2151,7 +2190,6 @@ class Database {
         let lock_description   = (data['LOCK_DESCRIPTION']==1) ? 1 : 0;
         let lock_sleep         = (data['LOCK_SLEEP']==1) ? 1 : 0;
         let lock_callback      = (data['LOCK_CALLBACK']==1) ? 1 : 0;
-        let lock_controller    = (data['LOCK_CONTROLLER']==1) ? 1 : 0;
         let callback_block     = (data['CALLBACK_BLOCK']>0) ? data['CALLBACK_BLOCK'] : 0;
         let callback_tick_id   = await this.createTicker(data['CALLBACK_TICK']);
         let tick_id            = await this.createTicker(data['TICK']);
@@ -2178,8 +2216,6 @@ class Database {
                         lock_description=?,
                         lock_sleep=?,
                         lock_callback=?,
-                        controller=?,
-                        lock_controller=?,
                         callback_block=?,
                         callback_tick_id=?,
                         callback_amount=?,
@@ -2193,7 +2229,7 @@ class Database {
                         last_action_index=?
                     WHERE
                         tick_id=?`;
-            args = [max_supply, max_mint, decimals, description, lock_max_supply, lock_mint, lock_max_mint,lock_description, lock_sleep, lock_callback, controller, lock_controller, callback_block, callback_tick_id, callback_amount, allow_list, block_list, mint_address_max, mint_start_block, mint_stop_block, supply, owner_id, action_index, tick_id];
+            args = [max_supply, max_mint, decimals, description, lock_max_supply, lock_mint, lock_max_mint,lock_description, lock_sleep, lock_callback, callback_block, callback_tick_id, callback_amount, allow_list, block_list, mint_address_max, mint_start_block, mint_stop_block, supply, owner_id, action_index, tick_id];
         } else {
             // INSERT record
             query = `INSERT INTO tokens (
@@ -2207,8 +2243,6 @@ class Database {
                         lock_description,
                         lock_sleep,
                         lock_callback,
-                        controller,
-                        lock_controller,
                         callback_block,
                         callback_tick_id,
                         callback_amount,
@@ -2222,8 +2256,8 @@ class Database {
                         action_index,
                         last_action_index,
                         tick_id
-                    ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
-            args    = [max_supply, max_mint, decimals, description, lock_max_supply, lock_mint, lock_max_mint,lock_description, lock_sleep, lock_callback, controller, lock_controller, callback_block, callback_tick_id, callback_amount, allow_list, block_list, mint_address_max, mint_start_block, mint_stop_block, supply, owner_id, action_index, action_index, tick_id];
+                    ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+            args    = [max_supply, max_mint, decimals, description, lock_max_supply, lock_mint, lock_max_mint,lock_description, lock_sleep, lock_callback, callback_block, callback_tick_id, callback_amount, allow_list, block_list, mint_address_max, mint_start_block, mint_stop_block, supply, owner_id, action_index, action_index, tick_id];
         }
         results = await this.doQuery(query, args);
 
@@ -3890,6 +3924,9 @@ class Database {
         let expiration     = data['EXPIRATION'];
         let allow_list     = data['ALLOW_LIST'];
         let block_list     = data['BLOCK_LIST'];
+        // Programmable policy: JSON [{to,bps}] royalty/fee split of the seller's proceeds (set as a
+        // string by the handler from the create-side guard's payoutLegs; NULL = no split).
+        let payout_legs    = (this.util.isNull(data['PAYOUT_LEGS'])) ? null : String(data['PAYOUT_LEGS']);
         // Check if record already exists for this swap
         let query  = `SELECT
                             action_index
@@ -3920,14 +3957,15 @@ class Database {
                         allow_list=?,
                         block_list=?,
                         memo_id=?,
-                        status_id=?
+                        status_id=?,
+                        payout_legs=?
                     WHERE
                         action_index=?`;
-            args = [give_coin_id, give_tick_id, give_amount, give_ownership, get_coin_id, get_tick_id, get_amount, get_ownership, get_address_id, expiration, allow_list, block_list, memo_id, status_id, action_index];
+            args = [give_coin_id, give_tick_id, give_amount, give_ownership, get_coin_id, get_tick_id, get_amount, get_ownership, get_address_id, expiration, allow_list, block_list, memo_id, status_id, payout_legs, action_index];
         } else {
             // INSERT record
-            query = `INSERT INTO swaps (give_coin_id, give_tick_id, give_amount, give_ownership, get_coin_id, get_tick_id, get_amount, get_ownership, get_address_id, expiration, allow_list, block_list, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
-            args = [give_coin_id, give_tick_id, give_amount, give_ownership, get_coin_id, get_tick_id, get_amount, get_ownership, get_address_id, expiration, allow_list, block_list, memo_id, status_id, action_index];
+            query = `INSERT INTO swaps (give_coin_id, give_tick_id, give_amount, give_ownership, get_coin_id, get_tick_id, get_amount, get_ownership, get_address_id, expiration, allow_list, block_list, memo_id, status_id, payout_legs, action_index) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+            args = [give_coin_id, give_tick_id, give_amount, give_ownership, get_coin_id, get_tick_id, get_amount, get_ownership, get_address_id, expiration, allow_list, block_list, memo_id, status_id, payout_legs, action_index];
         }
         results = await this.doQuery(query, args);
     }
@@ -4068,6 +4106,7 @@ class Database {
                         m1.memo,
                         s3.status,
                         s4.status as swap_status,
+                        s1.payout_legs,
                         b1.block_index,
                         b1.block_time
                     FROM
@@ -4326,6 +4365,9 @@ class Database {
         let expiration     = data['EXPIRATION'];
         let allow_list     = data['ALLOW_LIST'];
         let block_list     = data['BLOCK_LIST'];
+        // Programmable policy: JSON [{to,bps}] royalty/fee split of the seller's proceeds (set as a
+        // string by the handler from the create-side guard's payoutLegs; NULL = no split).
+        let payout_legs    = (this.util.isNull(data['PAYOUT_LEGS'])) ? null : String(data['PAYOUT_LEGS']);
         // Check if record already exists for this order
         let query  = `SELECT
                             action_index
@@ -4356,14 +4398,15 @@ class Database {
                         allow_list=?,
                         block_list=?,
                         memo_id=?,
-                        status_id=?
+                        status_id=?,
+                        payout_legs=?
                     WHERE
                         action_index=?`;
-            args = [give_coin_id, give_tick_id, give_amount, give_ownership, get_coin_id, get_tick_id, get_amount, get_ownership, get_address_id, expiration, allow_list, block_list, memo_id, status_id, action_index];
+            args = [give_coin_id, give_tick_id, give_amount, give_ownership, get_coin_id, get_tick_id, get_amount, get_ownership, get_address_id, expiration, allow_list, block_list, memo_id, status_id, payout_legs, action_index];
         } else {
             // INSERT record
-            query = `INSERT INTO orders (give_coin_id, give_tick_id, give_amount, give_ownership, get_coin_id, get_tick_id, get_amount, get_ownership, get_address_id, expiration, allow_list, block_list, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
-            args = [give_coin_id, give_tick_id, give_amount, give_ownership, get_coin_id, get_tick_id, get_amount, get_ownership, get_address_id, expiration, allow_list, block_list, memo_id, status_id, action_index];
+            query = `INSERT INTO orders (give_coin_id, give_tick_id, give_amount, give_ownership, get_coin_id, get_tick_id, get_amount, get_ownership, get_address_id, expiration, allow_list, block_list, memo_id, status_id, payout_legs, action_index) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+            args = [give_coin_id, give_tick_id, give_amount, give_ownership, get_coin_id, get_tick_id, get_amount, get_ownership, get_address_id, expiration, allow_list, block_list, memo_id, status_id, payout_legs, action_index];
         }
         results = await this.doQuery(query, args);
     }
@@ -4521,6 +4564,7 @@ class Database {
                         m1.memo,
                         s2.status,
                         s3.status as order_status,
+                        o1.payout_legs,
                         b1.block_index,
                         b1.block_time
                     FROM
@@ -8900,6 +8944,121 @@ class Database {
                 [completedStatusId, ...contractRowIds]
             );
         }
+    }
+
+    /*
+     * Programmable policy layer — controller bindings (token_controllers / address_controllers).
+     *
+     * A token (ISSUE format 7) or an account (ADDRESS format 1) defers a chosen action-class to a
+     * guard contract. These two tables are APPEND-ONLY event logs: every bind/unbind is one
+     * immutable row keyed by its own action_index. The EFFECTIVE controller for a (subject, class)
+     * at block X is the latest event with block_index <= X — a `bind` gates; an `unbind` gates ONLY
+     * while X < cooldown_end_block (the drop-cooldown's teeth: a thief can't instantly drop a
+     * spend-limit), and stops gating once X reaches it. Cooldown expiry is therefore computed at
+     * READ time, never swept — so no row ever mutates, and both tables roll back cleanly as plain
+     * dataTables (DELETE WHERE action_index >= orphan, then forward replay re-creates the events).
+     * "At most one live controller per (subject, class)" is enforced by the handlers: a BIND is
+     * rejected when an effective controller already gates that class (replace = unbind-then-bind,
+     * which preserves the cooldown's teeth). action_class ∈ {transfer, trade, burn, mint, stake},
+     * validated by the handler. See Controller_Bound_Tokens.md.
+     */
+
+    // Append a token controller bind/unbind event. `evt` carries action_index, tick_id, action_class,
+    // contract_index, bound_by_id, is_unbind, cooldown_blocks, cooldown_end_block, block_index.
+    async recordTokenControllerEvent(evt){
+        let query = `INSERT INTO token_controllers
+                        (action_index, tick_id, action_class, contract_index, bound_by_id,
+                         is_unbind, cooldown_blocks, cooldown_end_block, block_index)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+        await this.doQuery(query, [evt.action_index, evt.tick_id, evt.action_class, evt.contract_index,
+            evt.bound_by_id, evt.is_unbind ? 1 : 0, evt.cooldown_blocks, evt.cooldown_end_block, evt.block_index]);
+    }
+
+    // Append an address controller bind/unbind event (self-signed; no bound_by_id — the account IS
+    // the signer). `evt` carries action_index, address_id, action_class, contract_index, is_unbind,
+    // cooldown_blocks, cooldown_end_block, block_index.
+    async recordAddressControllerEvent(evt){
+        let query = `INSERT INTO address_controllers
+                        (action_index, address_id, action_class, contract_index,
+                         is_unbind, cooldown_blocks, cooldown_end_block, block_index)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`;
+        await this.doQuery(query, [evt.action_index, evt.address_id, evt.action_class, evt.contract_index,
+            evt.is_unbind ? 1 : 0, evt.cooldown_blocks, evt.cooldown_end_block, evt.block_index]);
+    }
+
+    // Latest controller event for (keyValue, action_class), bounded for a deterministic forward read
+    // (events at/before atBlock, and — for same-block ordering — strictly before atActionIndex).
+    // Returns the raw row (bind or unbind) or null. Apply controllerEventIfGating() to resolve the
+    // read-time cooldown into an effective controller.
+    async readLatestControllerEvent(table, keyColumn, keyValue, action_class, atBlock, atActionIndex){
+        let sql  = '';
+        let args = [keyValue, action_class];
+        if(!this.util.isNull(atActionIndex) && this.util.isNumeric(atActionIndex)){
+            sql += ' AND action_index < ?'; args.push(atActionIndex);
+        }
+        if(!this.util.isNull(atBlock) && this.util.isNumeric(atBlock)){
+            sql += ' AND block_index <= ?'; args.push(atBlock);
+        }
+        let query = `SELECT action_index, contract_index, is_unbind, cooldown_blocks, cooldown_end_block
+                     FROM ${table}
+                     WHERE ${keyColumn}=? AND action_class=?` + sql + `
+                     ORDER BY action_index DESC LIMIT 1`;
+        let results = await this.doQuery(query, args);
+        return (results.length > 0) ? results[0] : null;
+    }
+
+    // Read-time cooldown rule: a `bind` event gates; an `unbind` event gates only while
+    // atBlock < cooldown_end_block. Returns the row when it is still gating, else null.
+    controllerEventIfGating(row, atBlock){
+        if(!row) return null;
+        if(Number(row.is_unbind) === 1){
+            if(this.util.isNull(row.cooldown_end_block)) return null;
+            return (Number(atBlock) < Number(row.cooldown_end_block)) ? row : null;
+        }
+        return row;
+    }
+
+    // Effective (still-gating) controller for one (subject, class), or null.
+    async getEffectiveTokenController(tick_id, action_class, atBlock, atActionIndex){
+        let row = await this.readLatestControllerEvent('token_controllers', 'tick_id', tick_id, action_class, atBlock, atActionIndex);
+        return this.controllerEventIfGating(row, atBlock);
+    }
+    async getEffectiveAddressController(address_id, action_class, atBlock, atActionIndex){
+        let row = await this.readLatestControllerEvent('address_controllers', 'address_id', address_id, action_class, atBlock, atActionIndex);
+        return this.controllerEventIfGating(row, atBlock);
+    }
+
+    // Effective controllers for a subject: Map<action_class, contract_index> over the latest gating
+    // event per class (read-time cooldown applied). For Phase B enforcement reads.
+    async getTokenControllers(tick_id, atBlock, atActionIndex){
+        return this.readEffectiveControllerMap('token_controllers', 'tick_id', tick_id, atBlock, atActionIndex);
+    }
+    async getAddressControllers(address_id, atBlock, atActionIndex){
+        return this.readEffectiveControllerMap('address_controllers', 'address_id', address_id, atBlock, atActionIndex);
+    }
+    async readEffectiveControllerMap(table, keyColumn, keyValue, atBlock, atActionIndex){
+        let map  = new Map();
+        let sql  = '';
+        let args = [keyValue];
+        if(!this.util.isNull(atActionIndex) && this.util.isNumeric(atActionIndex)){
+            sql += ' AND action_index < ?'; args.push(atActionIndex);
+        }
+        if(!this.util.isNull(atBlock) && this.util.isNumeric(atBlock)){
+            sql += ' AND block_index <= ?'; args.push(atBlock);
+        }
+        let query = `SELECT action_class, action_index, contract_index, is_unbind, cooldown_end_block
+                     FROM ${table}
+                     WHERE ${keyColumn}=?` + sql + `
+                     ORDER BY action_index ASC`;
+        let results = await this.doQuery(query, args);
+        let latest = new Map();
+        for(let row of results)
+            latest.set(row.action_class, row); // highest action_index wins
+        for(let [cls, row] of latest){
+            let gating = this.controllerEventIfGating(row, atBlock);
+            if(gating) map.set(cls, Number(gating.contract_index));
+        }
+        return map;
     }
 
     /*

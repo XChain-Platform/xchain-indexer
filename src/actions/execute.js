@@ -556,6 +556,30 @@ class Execute {
         if(!vmResult.success)
             return { allow:false, reason:'controller (' + this.util.vmFailureStatus(vmResult.error) + ')', gasBilled };
 
+        // Parse the guard's return value for an optional royalty/fee split. A controlled-token SALE
+        // guard (ORDER/SWAP create) may return { payoutLegs: [{to, bps}] } — basis-point cuts of the
+        // seller's proceeds applied at match (Utility.applyProceedsSplit). Validate fail-closed BEFORE
+        // committing emissions: a malformed leg or a total over CONTROLLER_MAX_TAKE_BPS DENIES the
+        // action (no savepoint exists yet, so nothing to roll back).
+        let payoutLegs = null;
+        let ret = vmResult.returnValue;
+        if(ret && typeof ret === 'object' && Array.isArray(ret.payoutLegs) && ret.payoutLegs.length > 0){
+            let parsed = [];
+            let totalBps = 0;
+            for(let leg of ret.payoutLegs){
+                let bps = (leg && this.util.isNumeric(leg.bps)) ? parseInt(leg.bps) : NaN;
+                if(!Number.isInteger(bps) || bps < 0 || this.util.isNull(leg.to) || !this.util.isCryptoAddress(String(leg.to)))
+                    return { allow:false, reason:'controller (bad payout leg)', gasBilled };
+                totalBps += bps;
+                parsed.push({ to: String(leg.to), bps: bps });
+            }
+            let cap = parseInt(this.config['CONTROLLER_MAX_TAKE_BPS']);
+            if(!Number.isInteger(cap) || cap > 10000) cap = 10000;
+            if(totalBps > cap)
+                return { allow:false, reason:'controller (payout exceeds cap)', gasBilled };
+            payoutLegs = parsed;
+        }
+
         // Guard allowed. Commit its state changes + emissions atomically; any
         // failure rolls them back and DENIES. Savepoint name is unique per
         // (native action, controller) so nested controlled-token guards don't
@@ -570,7 +594,11 @@ class Execute {
             TX_HASH:               hostData['TX_HASH'],
             TX_VOUT:               hostData['TX_VOUT'],
             CALL_DEPTH:            callDepth,
-            CROSS_HOPS:            0
+            CROSS_HOPS:            0,
+            // Mark emissions from this guard run so they are not themselves re-guarded by their
+            // OWN controller (no guard-of-guard) — see Utility.maybeRunControllerGuard. They still
+            // carry IS_EMISSION (fee already skipped) and depth-cap on cross-controlled-token moves.
+            IS_GUARD_EMISSION:     true
         };
 
         let savepoint = await this.indexerDb.createSavepoint('controller_guard_' + parseInt(hostData['ACTION_INDEX']) + '_' + contractIndex + '_' + (parseInt(opts.seq) || 0));
@@ -614,7 +642,7 @@ class Execute {
             return { allow:false, reason:'controller (' + emissionError.message + ')', gasBilled };
         }
 
-        return { allow:true, reason:null, gasBilled };
+        return { allow:true, reason:null, gasBilled, payoutLegs };
     }
 
     /*****************************************************************
@@ -701,6 +729,10 @@ class Execute {
             TX_VOUT:            executionData['TX_VOUT'],
             FORMAT:             0,
             IS_EMISSION:        true,
+            // Propagated from a guard run's emission context (false for normal EXECUTE emissions,
+            // which ARE still subject to their token's controller). Lets maybeRunControllerGuard
+            // skip re-guarding a controller's emission of its own controlled token.
+            IS_GUARD_EMISSION:  executionData['IS_GUARD_EMISSION'] ? true : false,
             EMITTER:            executionData['CONTRACT_ACTION_INDEX'],
             EMITTER_POSITION:   position,   // index within this EXECUTE's emission list — used by ATTEST v0 (request) to verify deterministic request_id
             // The emitting EXECUTE's own action_index — second input to the ATTEST

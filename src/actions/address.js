@@ -33,7 +33,9 @@
  * - 2 = Anyone can open dispenser
  *
  * FORMATS:
- * - 0 = Full
+ * - 0 = Full (address preferences)
+ * - 1 = Controller bind/unbind — VERSION|CONTROLLER|ACTION_CLASS|COOLDOWN_BLOCKS|UNBIND|MEMO
+ *       Self-gate one action-class of this account with a guard contract (address_controllers).
  *
  ********************************************************************/
 
@@ -52,6 +54,11 @@ class Address {
         // Define list of known FORMATS
         this.formats = {};
         this.formats[0] = 'VERSION|FEE_PREFERENCE|REQUIRE_MEMO|DISPENSER_PREFERENCE|MEMO';
+        // Programmable policy layer — self-gate one action-class of THIS account by binding a guard
+        // contract (address_controllers table model). Self-signed (SOURCE is the account). One binding
+        // change per action; UNBIND=1 drops the live binding for ACTION_CLASS. COOLDOWN_BLOCKS is
+        // committed at bind time and is the friction on a later drop. See Controller_Bound_Tokens.md.
+        this.formats[1] = 'VERSION|CONTROLLER|ACTION_CLASS|COOLDOWN_BLOCKS|UNBIND|MEMO';
 
         // Define lists of various fields
         this.fieldList = {};
@@ -145,6 +152,50 @@ class Address {
         if(!error && String(data['MEMO']).length > this.config['MAX_MEMO_LENGTH'])
             error = 'invalid: MEMO (length)';
 
+        // Programmable policy layer — verify CONTROLLER references an existing, active contract on
+        // this chain (BIND only; on UNBIND the CONTROLLER field is empty and ignored). Mirrors the
+        // ISSUE/execute contract-active check; a guard whose `guard` method is missing/throws is
+        // fail-closed at runtime, not here.
+        if(!error && format === 1 && !this.util.isNull(data['CONTROLLER'])){
+            let controllerInfo = await this.indexerDb.getContract(data['CONTROLLER']);
+            if(!controllerInfo){
+                error = 'invalid: CONTROLLER (unknown)';
+            } else {
+                let controllerStatus = await this.indexerDb.getStatusString(controllerInfo.status_id);
+                if(controllerStatus !== 'valid')
+                    error = 'invalid: CONTROLLER (not active)';
+            }
+        }
+
+        // Programmable policy layer — address controller bind/unbind semantics (format 1, self-signed).
+        if(!error && format === 1){
+            let actionClass = (this.util.isNull(data['ACTION_CLASS'])) ? null : String(data['ACTION_CLASS']).toLowerCase();
+            let isUnbind    = (String(data['UNBIND']) === '1');
+            if(this.config['CONTROLLER_ACTION_CLASSES'].indexOf(actionClass) === -1){
+                error = 'invalid: ACTION_CLASS (unknown)';
+            } else {
+                let addressId = await this.indexerDb.getAddressId(data['SOURCE']);
+                let effective = (addressId === null) ? null : await this.indexerDb.getEffectiveAddressController(addressId, actionClass, data['BLOCK_INDEX'], data['ACTION_INDEX']);
+                if(isUnbind){
+                    // UNBIND: an effective (still-gating) controller must exist, and it must be a live
+                    // bind — a second unbind while one is already in its cooldown window is rejected.
+                    if(!effective)
+                        error = 'invalid: ACTION_CLASS (not bound)';
+                    else if(Number(effective.is_unbind) === 1)
+                        error = 'invalid: ACTION_CLASS (already unbinding)';
+                } else {
+                    // BIND: CONTROLLER required, no controller may already gate this class (no stacking;
+                    // replace = unbind-then-bind), and any COOLDOWN_BLOCKS given is a non-negative integer.
+                    if(this.util.isNull(data['CONTROLLER']))
+                        error = 'invalid: CONTROLLER (null)';
+                    else if(effective)
+                        error = 'invalid: ACTION_CLASS (already bound)';
+                    else if(!this.util.isNull(data['COOLDOWN_BLOCKS']) && !/^\d+$/.test(String(data['COOLDOWN_BLOCKS'])))
+                        error = 'invalid: COOLDOWN_BLOCKS (format)';
+                }
+            }
+        }
+
         // Determine final status
         let status = (error) ? error : 'valid';
         data['STATUS'] = status;
@@ -152,8 +203,39 @@ class Address {
         // Print status message 
         console.log("\t ADDRESS : " + data['SOURCE'] + ' : ' + data['STATUS']);
 
-        // Create record in addresses table
-        await this.indexerDb.createAddressOption(data);
+        // Persist the action. Format 0 writes address preferences; format 1 (controller binding)
+        // writes address_controllers and must NOT touch the preferences row (a null-preference
+        // write would be read back by getAddressPreferences as fee_preference=0). The CONTROLLER /
+        // COOLDOWN_BLOCKS fields are not in this action's NUMBER list, so they remain raw strings
+        // that map cleanly onto the BIGINT/INT columns.
+        if(format === 1){
+            if(status === 'valid'){
+                let addressId   = await this.indexerDb.createAddress(data['SOURCE']);
+                let actionClass = String(data['ACTION_CLASS']).toLowerCase();
+                if(String(data['UNBIND']) === '1'){
+                    // effective is non-null + a live bind (validated above); drop schedules at
+                    // block + its committed cooldown.
+                    let effective   = await this.indexerDb.getEffectiveAddressController(addressId, actionClass, data['BLOCK_INDEX'], data['ACTION_INDEX']);
+                    let cooldown    = Number(effective.cooldown_blocks) || 0;
+                    let cooldownEnd = parseInt(data['BLOCK_INDEX']) + cooldown;
+                    await this.indexerDb.recordAddressControllerEvent({
+                        action_index: data['ACTION_INDEX'], address_id: addressId, action_class: actionClass,
+                        contract_index: effective.contract_index, is_unbind: 1,
+                        cooldown_blocks: cooldown, cooldown_end_block: cooldownEnd, block_index: data['BLOCK_INDEX']
+                    });
+                } else {
+                    let cooldown = (this.util.isNull(data['COOLDOWN_BLOCKS'])) ? 0 : parseInt(data['COOLDOWN_BLOCKS']);
+                    await this.indexerDb.recordAddressControllerEvent({
+                        action_index: data['ACTION_INDEX'], address_id: addressId, action_class: actionClass,
+                        contract_index: data['CONTROLLER'], is_unbind: 0,
+                        cooldown_blocks: cooldown, cooldown_end_block: null, block_index: data['BLOCK_INDEX']
+                    });
+                }
+            }
+        } else {
+            // Create record in addresses table
+            await this.indexerDb.createAddressOption(data);
+        }
 
         // Store the SOURCE in addresses list
         this.util.addAddressTicker(data['SOURCE']);

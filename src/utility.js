@@ -1144,7 +1144,161 @@ class Utility {
     }
 
     // Process any transaction ledger changes (credits / debits / escrows)
+    /*****************************************************************
+     * Programmable policy layer — shared controller-guard enforcement.
+     ****************************************************************/
+
+    // Static map from a native action (in its guarded context) to the controlled action-class.
+    // Deliberately NOT derived from data['ACTION'] dynamically, so a newly added action can never
+    // silently fall into a controlled class. An unmapped action returns null (never gated).
+    controllerActionClass(actionType){
+        switch(actionType){
+            case 'SEND':             return 'transfer';
+            case 'ORDER_CREATE':
+            case 'SWAP_CREATE':
+            case 'DISPENSER_CREATE': return 'trade';
+            case 'DESTROY':          return 'burn';
+            // Stubs — the class is reserved + routable, but no handler invokes the guard for these
+            // yet (MINT supply creation / STAKE locking gating land in a later phase).
+            case 'MINT':             return 'mint';
+            case 'STAKE':            return 'stake';
+            default:                 return null;
+        }
+    }
+
+    // Run the bound controller's `guard` for one native action when the token has an effective
+    // controller for the routed action-class. Single enforcement point called at each token
+    // handler's validated→settlement boundary (replaces the per-handler ad-hoc veto blocks).
+    // Returns { error, guardFee, payoutLegs }:
+    //   - error      — non-null = DENY (caller leaves status as 'invalid: '+error, writes no ledger)
+    //   - guardFee   — GAS to debit from SOURCE when the action proceeds (metered guard gas)
+    //   - payoutLegs — reserved for the at-create royalty/fee split (Phase D; null here)
+    // No controller, an unmapped class, or a self guard-of-guard emission → { null, 0, null }.
+    async maybeRunControllerGuard(actions, db, opts){
+        let none = { error: null, guardFee: 0, payoutLegs: null };
+        let data = opts.data;
+        let actionClass = this.controllerActionClass(opts.actionType);
+        if(!actionClass) return none;
+        // Resolve the token's effective controller for this class (append-only read-time cooldown).
+        let tickId = await db.getTickerId(opts.tick);
+        if(this.isNull(tickId)) return none;
+        let effective = await db.getEffectiveTokenController(tickId, actionClass, data['BLOCK_INDEX'], data['ACTION_INDEX']);
+        if(!effective) return none;
+        // Record that this tick's controller was consulted this action (PTLC completeness assertion).
+        if(!data['_GUARDED_TICKS']) data['_GUARDED_TICKS'] = {};
+        data['_GUARDED_TICKS'][String(opts.tick)] = true;
+        return this._invokeController(actions, db, Number(effective.contract_index), opts);
+    }
+
+    // Recipient/account-side enforcement: run the SUBJECT address's controller for the given class
+    // (opts.address + opts.actionClass). The contract bound to that account gates the action — e.g.
+    // an incoming direct SEND the recipient didn't solicit (spam/compliance); refusal reverts it.
+    // Resolves by address (address_controllers); same gas-reservation + guard-of-guard semantics.
+    async maybeRunAddressControllerGuard(actions, db, opts){
+        let none = { error: null, guardFee: 0, payoutLegs: null };
+        if(!opts.actionClass) return none;
+        let addressId = await db.getAddressId(opts.address);
+        if(this.isNull(addressId)) return none;
+        let effective = await db.getEffectiveAddressController(addressId, opts.actionClass, opts.data['BLOCK_INDEX'], opts.data['ACTION_INDEX']);
+        if(!effective) return none;
+        return this._invokeController(actions, db, Number(effective.contract_index), opts);
+    }
+
+    // Shared tail for both controller kinds: the guard-of-guard skip, the gas-ceiling reservation
+    // against SOURCE, the VM guard run (fail-closed in runControllerGuard), and the fee derivation.
+    async _invokeController(actions, db, controllerIndex, opts){
+        let data = opts.data;
+        // No guard-of-guard: a controller's own emission of the gated subject is not re-guarded;
+        // cross-token / different-controller moves still guard, bounded by VM_MAX_CALL_DEPTH.
+        if(data['IS_GUARD_EMISSION'] && Number(data['EMITTER']) === Number(controllerIndex))
+            return { error: null, guardFee: 0, payoutLegs: null };
+        // Reserve the guard gas ceiling against SOURCE's GAS balance (caller-pays-for-attempt) so a
+        // cheap/denied guard can never drive GAS negative; the metered fee is billed by the caller.
+        let guardCeiling = parseInt(db.config['GAS_SCHEDULE']['VM_GUARD_GAS_CEILING']) || 200000;
+        let maxGuardFee  = this.bcmul(guardCeiling, db.config['GAS_PRICE'], 8);
+        if(opts.gasInfo && this.bcgt(maxGuardFee, 0) && !this.hasBalance(opts.gasBalances, opts.gasInfo['TICK_ID'], maxGuardFee))
+            return { error: 'insufficient funds (guard gas)', guardFee: 0, payoutLegs: null };
+        let guard = await actions.actionExecute.runControllerGuard({
+            actionType:      opts.actionType,
+            controllerIndex: Number(controllerIndex),
+            tick:            this.isNull(opts.tick)         ? '' : opts.tick,
+            from:            this.isNull(opts.from)         ? '' : opts.from,
+            to:              this.isNull(opts.to)           ? '' : opts.to,
+            amount:          this.isNull(opts.amount)       ? '' : opts.amount,
+            price:           this.isNull(opts.price)        ? '' : opts.price,
+            proceedsTick:    this.isNull(opts.proceedsTick) ? '' : opts.proceedsTick,
+            hostData:        data,
+            callDepth:       (Number(data['CALL_DEPTH']) || 0) + 1,
+            seq:             Number(opts.seq) || 0
+        });
+        if(!guard.allow)
+            return { error: guard.reason, guardFee: 0, payoutLegs: null };
+        return { error: null, guardFee: this.bcmul(guard.gasBilled, db.config['GAS_PRICE'], 8), payoutLegs: guard.payoutLegs || null };
+    }
+
+    // Programmable policy layer — apply a controlled-token sale's royalty/fee split to ONE proceeds
+    // credit at match/dispense. `legs` is the stored split (JSON string or array of {to, bps}); each
+    // leg takes bps/10000 of the ACTUAL fill `proceeds` (so partial fills split proportionally with no
+    // stored-amount scaling). Returns the credit tuples [tick, amount, address] that REPLACE the single
+    // full-proceeds credit: the seller's remainder FIRST, then one credit per non-zero leg. Conservation
+    // is exact by construction (remainder = proceeds − Σlegs). A malformed or over-cap legs set yields
+    // NO split (seller keeps full proceeds) — defensive; a buggy/rogue controller can never trap or
+    // inflate funds. `decimals` = the proceeds tick's precision; `maxTakeBps` caps Σbps (default 10000).
+    applyProceedsSplit(tick, proceeds, sellerAddress, legs, decimals, maxTakeBps){
+        let full = [[tick, proceeds, sellerAddress]];
+        let parsed = legs;
+        if(typeof legs === 'string'){
+            try { parsed = JSON.parse(legs); } catch(e){ return full; }
+        }
+        if(!Array.isArray(parsed) || parsed.length === 0) return full;
+        if(this.isNull(proceeds) || !this.bcgt(proceeds, '0')) return full;
+        let dec = (Number.isInteger(decimals) && decimals >= 0) ? decimals : 8;
+        let cap = (Number.isInteger(maxTakeBps) && maxTakeBps >= 0 && maxTakeBps <= 10000) ? maxTakeBps : 10000;
+        // Validate every leg + sum the basis points (fail-closed: any malformed leg → no split).
+        let totalBps = 0;
+        for(let leg of parsed){
+            let bps = (leg && this.isNumeric(leg.bps)) ? parseInt(leg.bps) : NaN;
+            if(!Number.isInteger(bps) || bps < 0 || this.isNull(leg.to)) return full;
+            totalBps += bps;
+        }
+        if(totalBps > cap || totalBps > 10000) return full;
+        // Compute each leg deterministically: (proceeds * bps) / 10000, truncated to tick precision.
+        let out = [];
+        let distributed = '0';
+        for(let leg of parsed){
+            let bps = parseInt(leg.bps);
+            if(bps === 0) continue;
+            let amount = this.bcdiv(this.bcmul(proceeds, String(bps), dec + 4), '10000', dec);
+            if(this.bcgt(amount, '0')){
+                out.push([tick, amount, String(leg.to)]);
+                distributed = this.bcadd(distributed, amount, dec);
+            }
+        }
+        // Seller's remainder first (deterministic ordering); remainder absorbs truncation so the
+        // split conserves the proceeds exactly.
+        let result = [[tick, this.bcsub(proceeds, distributed, dec), sellerAddress]];
+        for(let c of out) result.push(c);
+        return result;
+    }
+
     async processTransactionLedgerChanges(db, data, credits, debits, escrows){
+        // Programmable policy layer — completeness assertion (opt-in, test/audit only via
+        // ASSERT_CONTROLLER_COMPLETENESS). Anti-drift backstop: if a transfer-controlled token is
+        // debited from SOURCE but its controller was never consulted this action, a handler shipped
+        // an ungated path. OFF by default so it can never affect production or the normal suite.
+        if(db.config && db.config['ASSERT_CONTROLLER_COMPLETENESS'] && data && !data['IS_EMISSION'] && !data['IS_GUARD_EMISSION']){
+            let guarded = data['_GUARDED_TICKS'] || {};
+            for(let [tick, amount, address] of debits){
+                if(address !== data['SOURCE']) continue;
+                if(String(tick) === String(db.config['GAS'])) continue;
+                if(!this.bcgt(amount, '0')) continue;
+                let tickId = await db.getTickerId(tick);
+                if(this.isNull(tickId)) continue;
+                let eff = await db.getEffectiveTokenController(tickId, 'transfer', data['BLOCK_INDEX'], data['ACTION_INDEX']);
+                if(eff && !guarded[String(tick)])
+                    throw new Error('controller completeness: unguarded transfer-controlled debit of ' + tick + ' from SOURCE (action ' + data['ACTION_INDEX'] + ')');
+            }
+        }
         // Consolidate the credit / debit / escrow records to write as few records as possible
         debits  = this.consolidateLedgerRecords(debits);
         credits = this.consolidateLedgerRecords(credits);

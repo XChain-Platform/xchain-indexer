@@ -14,7 +14,8 @@ CREATE TABLE swaps (
     allow_list       BIGINT UNSIGNED,          -- action_index of a list from the lists table
     block_list       BIGINT UNSIGNED,          -- action_index of a list from the lists table
     memo_id          BIGINT UNSIGNED,          -- id of record in index_memos table
-    status_id        BIGINT UNSIGNED           -- id of record in index_statuses table (status of open swap tx)
+    status_id        BIGINT UNSIGNED,          -- id of record in index_statuses table (status of open swap tx)
+    payout_legs      TEXT                      -- programmable policy: JSON [{to,bps}] royalty/fee split of seller proceeds, applied at match (NULL = none)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
 CREATE UNIQUE INDEX action_index   ON swaps (action_index);

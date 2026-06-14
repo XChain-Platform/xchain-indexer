@@ -379,31 +379,24 @@ class Dispenser {
         // create; the royalty cut is taken per buy at dispense time (dispense.js).
         // SOURCE pays the bounded guard gas (reserved up front).
         let guardFee = 0;
-        if(!error && format==0 && giveTokenInfo && !this.util.isNull(giveTokenInfo['CONTROLLER'])){
-            let gasInfo      = await this.indexerDb.getTokenInfo(this.config['GAS'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
-            let guardCeiling = parseInt(this.config['GAS_SCHEDULE']['VM_GUARD_GAS_CEILING']) || 200000;
-            let maxGuardFee  = this.util.bcmul(guardCeiling, this.config['GAS_PRICE'], 8);
-            if(gasInfo && this.util.bcgt(maxGuardFee, 0) && !this.util.hasBalance(balances, gasInfo['TICK_ID'], maxGuardFee)){
-                error = 'invalid: insufficient funds (guard gas)';
-            } else {
-                let guard = await this.actions.actionExecute.runControllerGuard({
-                    actionType:      'DISPENSER_CREATE',
-                    controllerIndex: giveTokenInfo['CONTROLLER'],
-                    tick:            data['GIVE_TICK'],
-                    from:            data['SOURCE'],
-                    to:              '',
-                    amount:          isOwnershipGive ? '' : data['GIVE_ESCROW'],
-                    price:           data['GET_AMOUNT'],
-                    proceedsTick:    data['GET_TICK'],
-                    hostData:        data,
-                    callDepth:       (Number(data['CALL_DEPTH']) || 0) + 1,
-                    seq:             0
-                });
-                if(!guard.allow)
-                    error = 'invalid: ' + guard.reason;
-                else
-                    guardFee = this.util.bcmul(guard.gasBilled, this.config['GAS_PRICE'], 8);
-            }
+        if(!error && format==0 && giveTokenInfo){
+            let gasInfo = await this.indexerDb.getTokenInfo(this.config['GAS'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
+            let result  = await this.util.maybeRunControllerGuard(this.actions, this.indexerDb, {
+                actionType:   'DISPENSER_CREATE',
+                tick:         data['GIVE_TICK'],
+                from:         data['SOURCE'],
+                to:           '',
+                amount:       isOwnershipGive ? '' : data['GIVE_ESCROW'],
+                price:        data['GET_AMOUNT'],
+                proceedsTick: data['GET_TICK'],
+                data:         data,
+                gasInfo:      gasInfo,
+                gasBalances:  balances
+            });
+            if(result.error)
+                error = 'invalid: ' + result.error;
+            else
+                guardFee = result.guardFee;
         }
 
         // Determine final status

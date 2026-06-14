@@ -123,6 +123,14 @@ class Destroy {
         // Get source address balances
         let balances = await this.indexerDb.getAddressBalances(data['SOURCE'], null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
 
+        // Controller-bound token gas context. A DESTROY of a token whose `burn` class is bound to a
+        // controller runs that contract's `guard` before the burn settles; the SOURCE pays the
+        // (bounded) guard gas. Load the SOURCE's GAS balance once so a multi-destroy debits it
+        // cumulatively across controlled legs (maybeRunControllerGuard reserves the ceiling).
+        let gasTick     = this.config['GAS'];
+        let gasInfo     = await this.indexerDb.getTokenInfo(gasTick, data['BLOCK_INDEX'], data['ACTION_INDEX']);
+        let gasBalances = await this.indexerDb.getAddressBalances(data['SOURCE'], gasTick, data['BLOCK_INDEX'], data['ACTION_INDEX']);
+
         // Store original error value
         let origError = error;
 
@@ -202,6 +210,28 @@ class Destroy {
             if(!error && !this.util.hasBalance(balances, tokenInfo['TICK_ID'], destroy['AMOUNT']))
                 error = 'invalid: insufficient funds';
 
+            // Guard gas fee billed to SOURCE for this leg (0 = uncontrolled token)
+            let guardFee = 0;
+
+            // Controller-bound token: the token's `burn` controller must approve destroying it.
+            if(!error && tokenInfo){
+                let result = await this.util.maybeRunControllerGuard(this.actions, this.indexerDb, {
+                    actionType:  'DESTROY',
+                    tick:        destroy['TICK'],
+                    from:        destroy['SOURCE'],
+                    to:          '',
+                    amount:      destroy['AMOUNT'],
+                    data:        destroy,
+                    gasInfo:     gasInfo,
+                    gasBalances: gasBalances,
+                    seq:         parseInt(idx) || 0
+                });
+                if(result.error)
+                    error = 'invalid: ' + result.error;
+                else
+                    guardFee = result.guardFee;
+            }
+
             // Adjust balances to reduce by DESTROY AMOUNT
             if(!error)
                 balances = this.util.debitBalances(balances, tokenInfo['TICK_ID'], destroy['AMOUNT']);
@@ -225,6 +255,14 @@ class Destroy {
                 // Add ticker and amount to debits array
                 debits.push([destroy['TICK'], destroy['AMOUNT'], destroy['SOURCE']]);
 
+                // Bill the controller-guard gas to SOURCE (in GAS). Reduce the in-memory GAS
+                // balance so a later controlled leg in this same multi-destroy sees the spend.
+                if(this.util.bcgt(guardFee, 0)){
+                    debits.push([gasTick, guardFee, destroy['SOURCE']]);
+                    this.util.addAddressTicker(destroy['SOURCE'], gasTick);
+                    if(gasInfo)
+                        gasBalances = this.util.debitBalances(gasBalances, gasInfo['TICK_ID'], guardFee);
+                }
             }
         }
 

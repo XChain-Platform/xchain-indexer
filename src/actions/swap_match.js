@@ -132,22 +132,38 @@ class Swap_Match {
                 // Ownership sides clear the escrow gate and atomically transfer ownership;
                 // balance sides keep the existing escrow/credit pattern.
 
-                // swapInfo.GIVE side → matchInfo.GET_ADDRESS
+                // swapInfo.GIVE side → matchInfo's proceeds. If matchInfo sold a controlled token, its
+                // stored royalty/fee split applies to these proceeds (applyProceedsSplit returns the
+                // lone full credit when there are no legs, so the call is unconditional).
                 if(Number(swapInfo['GIVE_OWNERSHIP']||0) == 1){
                     await this.util.transferTokenOwnership(this.indexerDb, this.mapper, data, swapInfo['GIVE_TICK'], swapInfo['SOURCE'], matchInfo['GET_ADDRESS']);
                 } else {
                     escrows.push([matchInfo['GET_TICK'], -matchInfo['GET_AMOUNT'], matchInfo['GET_ADDRESS']]);
-                    credits.push([matchInfo['GET_TICK'],  matchInfo['GET_AMOUNT'], matchInfo['GET_ADDRESS']]);
-                    this.util.addAddressTicker(matchInfo['GET_ADDRESS'], matchInfo['GET_TICK']);
+                    let mDec = 0;
+                    if(!this.util.isNull(matchInfo['PAYOUT_LEGS'])){
+                        let mInfo = await this.indexerDb.getTokenInfo(matchInfo['GET_TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
+                        mDec = (mInfo && !this.util.isNull(mInfo['DECIMALS'])) ? parseInt(mInfo['DECIMALS']) : 0;
+                    }
+                    for(let c of this.util.applyProceedsSplit(matchInfo['GET_TICK'], matchInfo['GET_AMOUNT'], matchInfo['GET_ADDRESS'], matchInfo['PAYOUT_LEGS'], mDec, parseInt(this.config['CONTROLLER_MAX_TAKE_BPS']))){
+                        credits.push(c);
+                        this.util.addAddressTicker(c[2], c[0]);
+                    }
                 }
 
-                // matchInfo.GIVE side → swapInfo.GET_ADDRESS
+                // matchInfo.GIVE side → swapInfo's proceeds. Same: apply swapInfo's stored split.
                 if(Number(matchInfo['GIVE_OWNERSHIP']||0) == 1){
                     await this.util.transferTokenOwnership(this.indexerDb, this.mapper, data, matchInfo['GIVE_TICK'], matchInfo['SOURCE'], swapInfo['GET_ADDRESS']);
                 } else {
                     escrows.push([swapInfo['GET_TICK'], -swapInfo['GET_AMOUNT'], swapInfo['GET_ADDRESS']]);
-                    credits.push([swapInfo['GET_TICK'],  swapInfo['GET_AMOUNT'], swapInfo['GET_ADDRESS']]);
-                    this.util.addAddressTicker(swapInfo['GET_ADDRESS'], swapInfo['GET_TICK']);
+                    let sDec = 0;
+                    if(!this.util.isNull(swapInfo['PAYOUT_LEGS'])){
+                        let sInfo = await this.indexerDb.getTokenInfo(swapInfo['GET_TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
+                        sDec = (sInfo && !this.util.isNull(sInfo['DECIMALS'])) ? parseInt(sInfo['DECIMALS']) : 0;
+                    }
+                    for(let c of this.util.applyProceedsSplit(swapInfo['GET_TICK'], swapInfo['GET_AMOUNT'], swapInfo['GET_ADDRESS'], swapInfo['PAYOUT_LEGS'], sDec, parseInt(this.config['CONTROLLER_MAX_TAKE_BPS']))){
+                        credits.push(c);
+                        this.util.addAddressTicker(c[2], c[0]);
+                    }
                 }
 
                 // Process any transaction ledger changes (credits / debits / escrows)

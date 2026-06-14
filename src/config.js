@@ -169,6 +169,7 @@ module.exports = {
             'COIN1_ACTION_INDEX',
             'COIN2_ACTION_INDEX',
             'CONTROLLER',
+            'COOLDOWN_BLOCKS',
             'DECIMALS',
             'DISPENSER_ACTION_INDEX',
             'EDIT',
@@ -191,8 +192,9 @@ module.exports = {
             'OWNERSHIPS',
             'RESUME_BLOCK',
             'SWAP_ACTION_INDEX',
-            'TRANSFER_SUPPLY', 
-            'TYPE', 
+            'TRANSFER_SUPPLY',
+            'TYPE',
+            'UNBIND',
             'VALUE',
         ];
 
@@ -204,8 +206,7 @@ module.exports = {
             'LOCK_MAX_MINT',
             'LOCK_DESCRIPTION',
             'LOCK_SLEEP',
-            'LOCK_CALLBACK',
-            'LOCK_CONTROLLER'
+            'LOCK_CALLBACK'
         ];
 
         // Define list of LIST fields
@@ -213,6 +214,24 @@ module.exports = {
             'ALLOW_LIST',
             'BLOCK_LIST'
         ];
+
+        // Programmable policy layer — the action-classes a token/account may route to a guard
+        // contract. Derived by a STATIC map from the action name (never from data['ACTION']) so a
+        // future action can't accidentally fall into a controlled class. See Controller_Bound_Tokens.md.
+        config['CONTROLLER_ACTION_CLASSES'] = [
+            'transfer',
+            'trade',
+            'burn',
+            'mint',
+            'stake'
+        ];
+
+        // Programmable policy layer — hard protocol ceiling (basis points, 10000 = 100%) on the total
+        // royalty/fee a controlled-token sale guard may take from the seller's proceeds. The guard's
+        // returned payoutLegs sum to <= this at create (else the listing is denied); applyProceedsSplit
+        // re-checks conservation at match. A contract's manifest may declare a TIGHTER maxTakeBps
+        // (Phase E); this is the absolute cap. 10000 = conservation is the only binding constraint.
+        config['CONTROLLER_MAX_TAKE_BPS'] = 10000;
 
         // Define block parsing interval (default 5 seconds; override via BLOCK_CHECK_INTERVAL)
         config['BLOCK_CHECK_INTERVAL'] = parseIntMin0(process.env.BLOCK_CHECK_INTERVAL, 5000);
