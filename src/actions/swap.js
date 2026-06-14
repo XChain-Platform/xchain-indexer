@@ -366,8 +366,10 @@ class Swap {
                 guardFee = result.guardFee;
                 // Persist the guard's royalty/fee split (bps legs) on the swap row; the protocol
                 // applies it to the seller's proceeds at match (Utility.applyProceedsSplit).
+                // NB: `swap` was snapshotted (Object.assign) before the guard ran, and createSwap
+                // persists `swap` — so set the legs on BOTH or they never reach the DB.
                 if(result.payoutLegs)
-                    data['PAYOUT_LEGS'] = JSON.stringify(result.payoutLegs);
+                    data['PAYOUT_LEGS'] = swap['PAYOUT_LEGS'] = JSON.stringify(result.payoutLegs);
             }
         }
 

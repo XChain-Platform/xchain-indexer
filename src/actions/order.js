@@ -396,8 +396,10 @@ class Order {
                 guardFee = result.guardFee;
                 // Persist the guard's royalty/fee split (bps legs) on the order row; the protocol
                 // applies it to the seller's proceeds at each match (Utility.applyProceedsSplit).
+                // NB: `order` was snapshotted (Object.assign) before the guard ran, and createOrder
+                // persists `order` — so set the legs on BOTH or they never reach the DB.
                 if(result.payoutLegs)
-                    data['PAYOUT_LEGS'] = JSON.stringify(result.payoutLegs);
+                    data['PAYOUT_LEGS'] = order['PAYOUT_LEGS'] = JSON.stringify(result.payoutLegs);
             }
         }
 

@@ -562,7 +562,11 @@ class Execute {
         // committing emissions: a malformed leg or a total over CONTROLLER_MAX_TAKE_BPS DENIES the
         // action (no savepoint exists yet, so nothing to roll back).
         let payoutLegs = null;
+        // vm.execute() returns returnValue as a JSON-serialized STRING (the contract wrapper
+        // JSON-stringifies the contract's return inside the isolate), so parse before the object
+        // check below — a raw `typeof ret === 'object'` never matches and silently drops the legs.
         let ret = vmResult.returnValue;
+        if(ret && typeof ret === 'string'){ try { ret = JSON.parse(ret); } catch(e){ ret = null; } }
         if(ret && typeof ret === 'object' && Array.isArray(ret.payoutLegs) && ret.payoutLegs.length > 0){
             let parsed = [];
             let totalBps = 0;
