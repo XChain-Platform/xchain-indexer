@@ -56,6 +56,7 @@ const unknown          = require('./actions/unknown.js');
 
 // VM actions
 const deploy             = require('./actions/deploy.js');
+const deploy_chunk       = require('./actions/deploy_chunk.js');
 const execute            = require('./actions/execute.js');
 const deposit            = require('./actions/deposit.js');
 const withdraw           = require('./actions/withdraw.js');
@@ -191,6 +192,7 @@ class Actions {
 
         // VM action instances
         this.actionDeploy           = new deploy(this);
+        this.actionDeployChunk      = new deploy_chunk(this);
         this.actionExecute          = new execute(this);
         this.actionDeposit          = new deposit(this);
         this.actionWithdraw         = new withdraw(this);
@@ -369,6 +371,7 @@ class Actions {
 
         // VM actions
         if(action=='DEPLOY')             await this.actionDeploy.parse(params, data, error);
+        if(action=='DEPLOYCHUNK')        await this.actionDeployChunk.parse(params, data, error);
         if(action=='EXECUTE')            await this.actionExecute.parse(params, data, error);
         if(action=='DEPOSIT')            await this.actionDeposit.parse(params, data, error);
         if(action=='WITHDRAW')           await this.actionWithdraw.parse(params, data, error);

@@ -42,6 +42,11 @@ const PROVIDER_DEADLINE_WINDOWS = new ProviderRegistry().getDeadlineWindows();
 // exported at the bottom of this module.
 const MAX_CODE_SIZE = 65536;
 
+// Maximum chunks a chunked DEPLOY (v2/v3) may assemble. Canonical value:
+// xchain-documentation/protocol/constants.js (MAX_DEPLOY_CHUNKS); kept in lockstep
+// with the SDK + the DEPLOYCHUNK handler by the cross-service regression suite.
+const MAX_DEPLOY_CHUNKS = 16;
+
 class Deploy {
 
     // Handle constructing a class instance
@@ -60,6 +65,11 @@ class Deploy {
         // v1 adds optional staking config: COOLDOWN_BLOCKS + SLASH_DESTINATION (address or 'BURN' sentinel).
         // Contracts deployed without these fields cannot be stake targets.
         this.formats[1] = 'VERSION|CODE_ENCODING|GAS_LIMIT|CONSTRUCTOR_PARAMS|COOLDOWN_BLOCKS|SLASH_DESTINATION';
+        // Chunked (v2/v3): the code is assembled from the deployer's prior DEPLOYCHUNK actions
+        // keyed on CODE_HASH (sha256 of the assembled source) instead of carried inline. v2
+        // mirrors v0 (rest CONSTRUCTOR_PARAMS, no staking); v3 mirrors v1 (fixed staking fields).
+        this.formats[2] = 'VERSION|CODE_HASH|GAS_LIMIT|CONSTRUCTOR_PARAMS';
+        this.formats[3] = 'VERSION|CODE_HASH|GAS_LIMIT|CONSTRUCTOR_PARAMS|COOLDOWN_BLOCKS|SLASH_DESTINATION';
 
         // Maximum code size (64KB) — see the MAX_CODE_SIZE module constant above.
         this.MAX_CODE_SIZE = MAX_CODE_SIZE;
@@ -77,23 +87,30 @@ class Deploy {
         if(!error && (format===null || this.formats[format] === undefined ))
             error = 'invalid: VERSION (unknown)';
 
-        // Extract params
-        data['CODE_ENCODING']      = params[1];
-        data['GAS_LIMIT']          = params[2];
-        // CONSTRUCTOR_PARAMS is a REST field in v0: a multi-arg constructor sends each
-        // argument as its own pipe-delimited wire field (the SDK serializes
-        // `...CONSTRUCTOR_PARAMS`), exactly like EXECUTE's METHOD_PARAMS. Reading only
-        // params[3] dropped every argument after the first, reverting any multi-arg
-        // constructor. v1 cannot use a rest field here (COOLDOWN_BLOCKS +
-        // SLASH_DESTINATION trail the constructor args), so it keeps the single-field
-        // form — a multi-arg v1 constructor must sub-delimit within params[3].
-        data['CONSTRUCTOR_PARAMS'] = (format === 0) ? params.slice(3).join('|') : params[3];
-        // v1+ optional staking config
-        data['COOLDOWN_BLOCKS']    = (format >= 1) ? params[4] : null;
-        data['SLASH_DESTINATION']  = (format >= 1) ? params[5] : null;
+        // Format families. Chunked (v2/v3) carries CODE_HASH in params[1] and assembles the
+        // code from prior DEPLOYCHUNK actions; inline (v0/v1) carries the base64 source there.
+        // v0/v2 take CONSTRUCTOR_PARAMS as a rest field (a multi-arg constructor sends each arg
+        // as its own pipe segment, like EXECUTE's METHOD_PARAMS); v1/v3 keep the single-field
+        // form because COOLDOWN_BLOCKS + SLASH_DESTINATION trail the constructor args, so a
+        // multi-arg v1/v3 constructor must sub-delimit within params[3]. v1/v3 carry the
+        // optional staking config; v0/v2 do not.
+        let isChunked  = (format === 2 || format === 3);
+        let isRestCtor = (format === 0 || format === 2);
+        let hasStaking = (format === 1 || format === 3);
 
-        // Validate v1 staking config (both optional, but pairing rules apply)
-        if(!error && format === 1){
+        // Extract params
+        if(isChunked)
+            data['CODE_HASH_PARAM'] = params[1];
+        else
+            data['CODE_ENCODING']   = params[1];
+        data['GAS_LIMIT']          = params[2];
+        data['CONSTRUCTOR_PARAMS'] = isRestCtor ? params.slice(3).join('|') : params[3];
+        // v1/v3 optional staking config
+        data['COOLDOWN_BLOCKS']    = hasStaking ? params[4] : null;
+        data['SLASH_DESTINATION']  = hasStaking ? params[5] : null;
+
+        // Validate v1/v3 staking config (both optional, but pairing rules apply)
+        if(!error && hasStaking){
             let hasCooldown = !this.util.isNull(data['COOLDOWN_BLOCKS']) && data['COOLDOWN_BLOCKS'] !== '';
             let hasDest     = !this.util.isNull(data['SLASH_DESTINATION']) && data['SLASH_DESTINATION'] !== '';
             // SLASH_DESTINATION without COOLDOWN_BLOCKS is meaningless
@@ -135,22 +152,73 @@ class Deploy {
          * Code Validations
          ****************************************************************/
 
-        // Verify CODE_ENCODING is provided
-        if(!error && this.util.isNull(data['CODE_ENCODING']))
-            error = 'invalid: CODE_ENCODING (required)';
-
-        // Decode code from base64 (1.33x vs hex's 2x; base64 has no '|' so it is safe in
-        // the pipe-delimited action string). Buffer.from(...,'base64') is lenient, so
-        // round-trip to reject non-base64 input deterministically across nodes.
+        // Obtain the contract source `code`. Chunked (v2/v3) assembles base64(code) from the
+        // deployer's prior DEPLOYCHUNK rows then decodes + sha256-verifies it; inline (v0/v1)
+        // base64-decodes CODE_ENCODING directly. Either way `code` is the UTF-8 source that
+        // flows into the SHARED size / syntax / manifest / gas / constructor path below.
+        // (base64 is 1.33x vs hex's 2x and has no '|', so it is delimiter-safe; Buffer.from
+        // is lenient, so we round-trip to reject non-canonical base64 deterministically.)
         let code = '';
-        if(!error){
-            try {
-                let b64 = String(data['CODE_ENCODING']);
-                code = Buffer.from(b64, 'base64').toString('utf8');
-                if(Buffer.from(code, 'utf8').toString('base64') !== b64)
+        if(!error && isChunked){
+            let declaredHash = String(data['CODE_HASH_PARAM']);
+            if(!/^[0-9a-f]{64}$/.test(declaredHash)){
+                error = 'invalid: CODE_HASH (format)';
+            } else {
+                // Gather only VALID chunks from THIS deployer for THIS group, recorded at a
+                // LOWER action_index than this DEPLOY (assembly never consumes a chunk that
+                // does not precede it → any reorg dropping a chunk also drops the dependent
+                // DEPLOY, so rollback needs no bespoke logic). Dedup by position; the query is
+                // ordered so the first (lowest action_index) submission deterministically wins.
+                let rows  = await this.indexerDb.getDeployChunksForAssembly(data['SOURCE'], declaredHash, data['ACTION_INDEX']);
+                let parts = {};
+                let total = null;
+                for(let row of rows){
+                    let ci = Number(row.chunk_index);
+                    if(parts[ci] === undefined){
+                        parts[ci] = String(row.code_part);
+                        if(total === null) total = Number(row.total_chunks);
+                    }
+                }
+                if(total === null){
+                    error = 'invalid: CODE_HASH (no chunks)';
+                } else if(total < 1 || total > MAX_DEPLOY_CHUNKS){
+                    error = 'invalid: CODE_HASH (chunk count out of range)';
+                } else {
+                    let b64 = '';
+                    for(let i = 0; i < total; i++){
+                        if(parts[i] === undefined){ error = 'invalid: CODE_HASH (missing chunk ' + i + ')'; break; }
+                        b64 += parts[i];
+                    }
+                    if(!error){
+                        try {
+                            code = Buffer.from(b64, 'base64').toString('utf8');
+                            if(Buffer.from(code, 'utf8').toString('base64') !== b64)
+                                error = 'invalid: CODE_HASH (base64 decode failed)';
+                        } catch(e){
+                            error = 'invalid: CODE_HASH (base64 decode failed)';
+                        }
+                    }
+                    // CODE_HASH binds the assembled bytes: a wrong / missing / extra / reordered
+                    // slice changes the digest. This is the integrity gate for the whole group.
+                    if(!error){
+                        let assembledHash = crypto.createHash('sha256').update(code).digest('hex');
+                        if(assembledHash !== declaredHash)
+                            error = 'invalid: CODE_HASH (assembly mismatch)';
+                    }
+                }
+            }
+        } else if(!error){
+            if(this.util.isNull(data['CODE_ENCODING'])){
+                error = 'invalid: CODE_ENCODING (required)';
+            } else {
+                try {
+                    let b64 = String(data['CODE_ENCODING']);
+                    code = Buffer.from(b64, 'base64').toString('utf8');
+                    if(Buffer.from(code, 'utf8').toString('base64') !== b64)
+                        error = 'invalid: CODE_ENCODING (base64 decode failed)';
+                } catch(e){
                     error = 'invalid: CODE_ENCODING (base64 decode failed)';
-            } catch(e){
-                error = 'invalid: CODE_ENCODING (base64 decode failed)';
+                }
             }
         }
 
@@ -228,7 +296,10 @@ class Deploy {
 
         let schedule = this.config['GAS_SCHEDULE'];
         let codeBytes = Buffer.byteLength(code, 'utf8');
-        let gasCost = schedule.VM_DEPLOY_BASE + (codeBytes * schedule.VM_DEPLOY_PER_BYTE);
+        // Chunked (v2/v3) deploys charge base + constructor only: each DEPLOYCHUNK already
+        // paid the per-byte component for the bytes it put on-chain, so the assembly does
+        // not re-charge per byte (net ≈ a single-shot inline deploy of the same source).
+        let gasCost = schedule.VM_DEPLOY_BASE + (isChunked ? 0 : (codeBytes * schedule.VM_DEPLOY_PER_BYTE));
         let fee = this.util.bcmul(gasCost, this.config['GAS_PRICE'], 8);
 
         // Get source address balances
@@ -542,6 +613,7 @@ class Deploy {
 }
 
 module.exports = Deploy;
-// Expose the canonical code-size cap so the cross-service regression suite can
-// assert it has not drifted from the protocol constant.
+// Expose the canonical caps so the cross-service regression suite can assert they
+// have not drifted from the protocol constants.
 module.exports.MAX_CODE_SIZE = MAX_CODE_SIZE;
+module.exports.MAX_DEPLOY_CHUNKS = MAX_DEPLOY_CHUNKS;

@@ -114,6 +114,7 @@ class Rollback {
             'reward_claims',
             'contracts',
             'contract_permissions',
+            'deploy_chunks',
             'contract_stakes',
             'contract_unstakes',
             'contract_delegations',

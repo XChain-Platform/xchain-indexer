@@ -92,6 +92,9 @@ function createMockDb() {
         getAddressBalances: sinon.stub().resolves({}),
         // VM gateway ledger snapshot (getBalance / getTokenInfo backing)
         buildVmBalancesAndTokenInfo: sinon.stub().resolves({ balances: {}, tokenInfo: {} }),
+        // Chunked DEPLOY (DEPLOYCHUNK storage + DEPLOY v2/v3 assembly)
+        recordDeployChunk: sinon.stub().resolves(),
+        getDeployChunksForAssembly: sinon.stub().resolves([]),
         getAddressTableBalances: sinon.stub().resolves({}),
         getAddressCreditDebit: sinon.stub().resolves({}),
         updateBalances: sinon.stub().resolves(),
