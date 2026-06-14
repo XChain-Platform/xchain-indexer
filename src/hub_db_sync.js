@@ -374,6 +374,22 @@ class HubDbSync {
         return watermark !== null ? watermark : 0;
     }
 
+    // Re-read EVERY barrier height/timestamp from the local mirror and release the
+    // now-satisfied waiters. The in-memory heights only advance on stream/bootstrap
+    // events, so a dropped socket can leave them frozen behind a mirror that is
+    // actually current — and then deferred blocks wait out the full 60s self-heal
+    // timeout (per-block, biting faster chains hardest). Calling this on the
+    // reconnect edge clears those waiters immediately from data already local.
+    // Cheap (MAX()/MAX-timestamp reads) and idempotent; each refresh is internally
+    // guarded so one failure can't abort the others.
+    async _refreshAllSyncHeights() {
+        try { await this._refreshPriceSyncHeight(); }     catch (e) { /* internally guarded */ }
+        try { await this._refreshOracleSyncTimestamp(); } catch (e) { /* internally guarded */ }
+        try { await this._refreshMatchSyncTimestamp(); }  catch (e) { /* internally guarded */ }
+        try { await this._refreshCallSyncTimestamp(); }   catch (e) { /* internally guarded */ }
+        try { await this._releaseSnapshotWaiters(); }     catch (e) { /* internally guarded */ }
+    }
+
     // Recompute the highest finalized price block present in the local price_snapshots
     // copy and release any barrier waiters that are now satisfied. Called after every
     // successful sync of the table (bootstrap, poll, live insert, reorg retraction).
@@ -953,6 +969,14 @@ class HubDbSync {
                 // close handler — nothing more to do here.
                 return;
             }
+
+            // Proactively re-sync the barrier heights from the LOCAL mirror the
+            // instant the socket is back — before re-bootstrap. The disconnect may
+            // have frozen the in-memory heights behind a mirror that is already
+            // current (or close to it); refreshing here clears any block deferred
+            // only on that staleness immediately, instead of making each wait for
+            // re-bootstrap to redeliver rows or fall through to the 60s timeout.
+            await this._refreshAllSyncHeights();
 
             // Re-bootstrap to fill in rows missed while disconnected. _bootstrapTable
             // uses the local max-ID as since_id, so it fetches only genuinely-missing

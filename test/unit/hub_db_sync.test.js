@@ -94,6 +94,23 @@ describe('HubDbSync price-sync barrier @regression @tier3', function () {
         assert.strictEqual(sync._priceWaiters.length, 0, 'self-healed waiter should be cleared');
     });
 
+    it('reconnect edge: _refreshAllSyncHeights clears a price waiter from the current mirror without the timeout (v2)', async function () {
+        // The reconnect path now proactively re-reads the local mirror BEFORE re-bootstrap.
+        // A block deferred only because the in-memory height froze behind a mirror that is
+        // actually current clears immediately, instead of each block waiting out the 60s
+        // self-heal timeout (the earlier 5d465fa fix). Long timeout here proves the resolve
+        // comes from the proactive refresh, not the timeout.
+        const { sync, doQuery } = makeSync(10);
+        sync.priceSyncHeight = 10;                          // in-memory frozen behind the target
+        const pending = sync.waitForPriceSyncHeight(100, 60000);
+        assert.strictEqual(sync._priceWaiters.length, 1);
+        doQuery.callsFake(async () => [{ h: 150 }]);        // local mirror is actually current
+        await sync._refreshAllSyncHeights();               // simulate the reconnect-edge refresh
+        const got = await pending;
+        assert.strictEqual(got, 150, 'waiter resolves from the mirror on reconnect, not the timeout');
+        assert.strictEqual(sync._priceWaiters.length, 0, 'waiter cleared proactively');
+    });
+
     it('waitForPriceSyncHeight is a no-op when sync is disabled (single-host)', async function () {
         // No hub URL → enabled false → the local hub DB is the hub itself, always current.
         const sync = new HubDbSync({ doQuery: sinon.stub() }, {});
