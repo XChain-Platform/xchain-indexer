@@ -50,12 +50,15 @@ const Database          = require('../../src/db');
 // The tie-prone getBlockHashes queries and the FULL set of columns each one
 // SELECTs (== the set that MUST appear in its ORDER BY for a total row order).
 // ---------------------------------------------------------------------------
+// As of BLOCK_HASH_VERSION 2 these queries ORDER BY the RESOLVED lookup strings (address /
+// tick / status), not the raw *_id surrogates — so the order is id-independent across nodes.
+// Bare names are what orderByCols() extracts from the ORDER BY (alias + COLLATE stripped).
 const TIE_PRONE = {
-    credits:     ['action_index', 'address_id', 'tick_id', 'amount'],
-    debits:      ['action_index', 'address_id', 'tick_id', 'amount'],
-    escrows:     ['action_index', 'address_id', 'tick_id', 'amount'],
-    deposits:    ['action_index', 'contract_index', 'source_id', 'tick_id', 'amount', 'status_id'],
-    withdrawals: ['action_index', 'contract_index', 'source_id', 'tick_id', 'amount', 'status_id']
+    credits:     ['action_index', 'address', 'tick', 'amount'],
+    debits:      ['action_index', 'address', 'tick', 'amount'],
+    escrows:     ['action_index', 'address', 'tick', 'amount'],
+    deposits:    ['action_index', 'contract_index', 'address', 'tick', 'amount', 'status'],
+    withdrawals: ['action_index', 'contract_index', 'address', 'tick', 'amount', 'status']
 };
 
 // Which tie-prone table (if any) a query reads from.
@@ -74,6 +77,7 @@ function orderByCols(sql) {
         .split(',')
         .map(t => t.trim()
             .replace(/\s+(ASC|DESC)\s*$/i, '')
+            .replace(/\s+COLLATE\s+[A-Za-z0-9_]+/i, '') // drop the pinned binary collation
             .replace(/^[A-Za-z0-9_]+\./, '')
             .trim())
         .filter(Boolean);
@@ -157,9 +161,10 @@ describe('Database.getBlockHashes() consensus tie-order determinism (ffd061a) @r
     // (2) Property: two credits sharing an action_index hash identically no matter what
     //     physical order the engine returns them in (the ISSUE fee-credit + mint-credit case).
     it('produces an identical ledger hash regardless of tied-row return order', async function () {
-        // Same logical rows, same action_index, differing only in the disambiguating columns.
-        const feeCredit  = { action_index: 5, address_id: 10, tick_id: 1, amount: '100' };
-        const mintCredit = { action_index: 5, address_id: 20, tick_id: 1, amount: '900' };
+        // Same logical rows, same action_index, differing only in the disambiguating columns —
+        // now the RESOLVED address string (the consensus projection no longer carries address_id).
+        const feeCredit  = { action_index: 5, address: '1FeeZS6tQcSxwfxhv6XKKjcyicYA4Feev',  tick: 'JDOG', amount: '100' };
+        const mintCredit = { action_index: 5, address: '1MintZS6tQcSxwfxhv6XKKjcyicYA4Feev', tick: 'JDOG', amount: '900' };
 
         const hashAB = await ledgerHash([feeCredit, mintCredit]);
         const hashBA = await ledgerHash([mintCredit, feeCredit]);
@@ -173,8 +178,8 @@ describe('Database.getBlockHashes() consensus tie-order determinism (ffd061a) @r
     // (3) Negative control: with the PRE-FIX ordering (action_index only), the same two
     //     scrambles DO fork — proving the property test actually detects the regression.
     it('negative control: action_index-only ordering forks on the tied rows', async function () {
-        const feeCredit  = { action_index: 5, address_id: 10, tick_id: 1, amount: '100' };
-        const mintCredit = { action_index: 5, address_id: 20, tick_id: 1, amount: '900' };
+        const feeCredit  = { action_index: 5, address: '1FeeZS6tQcSxwfxhv6XKKjcyicYA4Feev',  tick: 'JDOG', amount: '100' };
+        const mintCredit = { action_index: 5, address: '1MintZS6tQcSxwfxhv6XKKjcyicYA4Feev', tick: 'JDOG', amount: '900' };
 
         const hashAB = await ledgerHash([feeCredit, mintCredit], ['action_index']);
         const hashBA = await ledgerHash([mintCredit, feeCredit], ['action_index']);
