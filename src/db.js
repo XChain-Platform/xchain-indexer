@@ -9377,6 +9377,59 @@ class Database {
         return null;
     }
 
+    // Persist a contract's declared permissions manifest (Phase E). Upsert keyed on
+    // the DEPLOY action_index (the rollback key) — mirrors createContract. PERMISSIONS
+    // is the validated array of permitted emission action types (stored as JSON) or
+    // null when the contract declared none (unrestricted); MAX_TAKE_BPS is the tighter
+    // per-contract royalty cap or null (global cap applies). deploy.js validates both
+    // before calling this; deleteContract clears the row on a failed deploy.
+    async createContractPermission(data){
+        data               = this.normalizeDataValues(data);
+        let action_index   = data['ACTION_INDEX'];
+        let contract_index = data['CONTRACT_INDEX'];
+        let permissions    = this.util.isNull(data['PERMISSIONS'])  ? null : JSON.stringify(data['PERMISSIONS']);
+        let max_take_bps   = this.util.isNull(data['MAX_TAKE_BPS']) ? null : Number(data['MAX_TAKE_BPS']);
+        let block_index    = data['BLOCK_INDEX'];
+        let query  = "SELECT action_index FROM contract_permissions WHERE action_index=? LIMIT 1";
+        let args   = [action_index];
+        let exists = false;
+        let results = await this.doQuery(query, args);
+        if(results.length > 0)
+            exists = true;
+        if(exists){
+            query = `UPDATE contract_permissions SET
+                        contract_index=?, permissions=?, max_take_bps=?, block_index=?
+                    WHERE action_index=?`;
+            args = [contract_index, permissions, max_take_bps, block_index, action_index];
+        } else {
+            query = `INSERT INTO contract_permissions
+                        (contract_index, permissions, max_take_bps, block_index, action_index)
+                    VALUES (?, ?, ?, ?, ?)`;
+            args = [contract_index, permissions, max_take_bps, block_index, action_index];
+        }
+        await this.doQuery(query, args);
+    }
+
+    // Read a contract's persisted permissions manifest (Phase E). Returns
+    //   { permissions: string[]|null, maxTakeBps: number|null }
+    // or null when the contract declared no manifest (no row) — the unrestricted,
+    // backward-compatible default the callers (processEmission / runControllerGuard)
+    // treat as "no per-contract restriction". permissions is JSON-parsed back to an
+    // array; a NULL column stays null (unrestricted).
+    async getContractPermissions(contractIndex){
+        let query = `SELECT permissions, max_take_bps FROM contract_permissions WHERE contract_index=? LIMIT 1`;
+        let results = await this.doQuery(query, [contractIndex]);
+        if(results.length === 0)
+            return null;
+        let row = results[0];
+        let permissions = null;
+        if(!this.util.isNull(row.permissions)){
+            try { permissions = JSON.parse(row.permissions); } catch(e){ permissions = null; }
+        }
+        let maxTakeBps = this.util.isNull(row.max_take_bps) ? null : Number(row.max_take_bps);
+        return { permissions, maxTakeBps };
+    }
+
     // Get status string by status_id
     async getStatusString(status_id){
         if(this.util.isNull(status_id))
@@ -9644,6 +9697,9 @@ class Database {
     async deleteContract(actionIndex){
         let query = `DELETE FROM contracts WHERE action_index=?`;
         await this.doQuery(query, [actionIndex]);
+        // A contract's permissions manifest (Phase E) is persisted under the same
+        // DEPLOY action_index, so a failed/cleaned-up deploy must drop it too.
+        await this.doQuery(`DELETE FROM contract_permissions WHERE action_index=?`, [actionIndex]);
     }
 
     // Build the balance + token-info snapshot the VM gateway exposes through

@@ -29,6 +29,7 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
 
     function addDeployStubs(db) {
         db.createContract          = sinon.stub().resolves();
+        db.createContractPermission = sinon.stub().resolves();   // Phase E manifest persistence
         db.deleteContract          = sinon.stub().resolves();
         db.createContractExecution = sinon.stub().resolves();
         db.createContractState     = sinon.stub().resolves();
@@ -44,6 +45,9 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
         return {
             validateSyntax:    sinon.stub().returns({ valid: true }),
             checkFloatWarnings:sinon.stub().returns([]),
+            // Phase E: by default a contract declares no permissions manifest
+            // (manifest null → unrestricted), so deploy behaves as pre-Phase-E.
+            readManifest:      sinon.stub().resolves({ success: true, manifest: null, error: null }),
             execute:           sinon.stub().resolves({
                 success:      true,
                 gasUsed:      0,

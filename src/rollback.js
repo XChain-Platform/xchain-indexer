@@ -113,6 +113,7 @@ class Rollback {
             'stake_key_revocations',
             'reward_claims',
             'contracts',
+            'contract_permissions',
             'contract_stakes',
             'contract_unstakes',
             'contract_delegations',

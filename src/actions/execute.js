@@ -593,6 +593,13 @@ class Execute {
             }
             let cap = parseInt(this.config['CONTROLLER_MAX_TAKE_BPS']);
             if(!Number.isInteger(cap) || cap > 10000) cap = 10000;
+            // Phase E: a contract may declare a TIGHTER per-contract royalty cap (maxTakeBps)
+            // in its deploy manifest. The effective cap is min(global, per-contract). Loaded
+            // lazily here — only guards that actually return payout legs pay the lookup.
+            let controllerManifest = await this.indexerDb.getContractPermissions(contractIndex);
+            if(controllerManifest && Number.isInteger(controllerManifest.maxTakeBps) &&
+               controllerManifest.maxTakeBps >= 0 && controllerManifest.maxTakeBps < cap)
+                cap = controllerManifest.maxTakeBps;
             if(totalBps > cap)
                 return { allow:false, reason:'controller (payout exceeds cap)', gasBilled };
             payoutLegs = parsed;
@@ -670,6 +677,22 @@ class Execute {
     async processEmission(emission, executionData, position){
         let action = emission.action;
         let params = emission.params;
+
+        // Permissions manifest (Phase E): the SINGLE choke point for every emission path —
+        // constructor (deploy.js), EXECUTE, and a controller guard all funnel through here. If
+        // the EMITTING contract declared a `permissions` allowlist at deploy time, every action
+        // it emits must be a member; a non-member throws, which rolls back the emitter's
+        // savepoint and fails the host action (deploy reject / EXECUTE revert / guard DENY) —
+        // fail-closed by construction. A contract with no manifest row (null) or a row that
+        // declared only maxTakeBps (permissions null) is unrestricted — the backward-compatible
+        // default. An explicit empty allowlist (`[]`) permits no emissions. The manifest is
+        // immutable (contract code is immutable), read by indexed lookup on contract_index.
+        let emitterIndex = executionData['CONTRACT_ACTION_INDEX'];
+        if(emitterIndex !== undefined && emitterIndex !== null){
+            let manifest = await this.indexerDb.getContractPermissions(emitterIndex);
+            if(manifest && Array.isArray(manifest.permissions) && manifest.permissions.indexOf(action) === -1)
+                throw new Error('manifest: action ' + action + ' not permitted');
+        }
 
         // ATTEST v0 (request) anchors its on-chain request_id to the emitter position, so the
         // handler can re-derive and verify it (defends against a compromised VM forging a

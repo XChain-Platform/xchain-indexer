@@ -166,6 +166,51 @@ class Deploy {
         }
 
         /*****************************************************************
+         * Permissions Manifest (Phase E)
+         *
+         * Read the contract's declared policy deterministically off its (immutable)
+         * exports — vm.readManifest instantiates the module top-level with no state,
+         * so it works even for constructor-less contracts that vm.execute() never
+         * runs. The VM surfaces typed values; ALL validation + fail-closed rejection
+         * lives here so the rule is in one place and hashes into the deploy status:
+         *   - permissions : array of action-type strings the contract may emit
+         *                   (enforced in execute.js processEmission across every
+         *                    emission path). Absent = unrestricted (legacy).
+         *   - maxTakeBps  : tighter per-contract royalty cap, integer in [0, 10000]
+         *                   (enforced in execute.js runControllerGuard). Absent =
+         *                    global CONTROLLER_MAX_TAKE_BPS applies.
+         * A malformed manifest (wrong type / out of range) REJECTS the deploy rather
+         * than silently degrading to unrestricted. A module-level throw during the
+         * read is treated as "no manifest" (today's behavior — the contract is broken
+         * and will fail at first execute anyway).
+         ****************************************************************/
+        let declaredPermissions = null;   // string[] | null
+        let declaredMaxTakeBps  = null;   // number   | null
+        if(!error && this.actions.vm){
+            let manifestRead = await this.actions.vm.readManifest(code);
+            if(manifestRead && manifestRead.success && manifestRead.manifest){
+                let m = manifestRead.manifest;
+                if(m.permissionsType !== 'undefined'){
+                    if(m.permissionsType !== 'array' || !Array.isArray(m.permissions)){
+                        error = 'invalid: CONTRACT_MANIFEST (permissions must be an array)';
+                    } else if(!m.permissions.every(p => typeof p === 'string')){
+                        error = 'invalid: CONTRACT_MANIFEST (permissions must be action-type strings)';
+                    } else {
+                        declaredPermissions = m.permissions;
+                    }
+                }
+                if(!error && m.maxTakeBpsType !== 'undefined'){
+                    let mtb = m.maxTakeBps;
+                    if(m.maxTakeBpsType !== 'number' || !Number.isInteger(mtb) || mtb < 0 || mtb > 10000){
+                        error = 'invalid: CONTRACT_MANIFEST (maxTakeBps must be an integer in [0, 10000])';
+                    } else {
+                        declaredMaxTakeBps = mtb;
+                    }
+                }
+            }
+        }
+
+        /*****************************************************************
          * Gas Fee Calculation
          ****************************************************************/
 
@@ -330,6 +375,22 @@ class Deploy {
         // If constructor failed, delete the contract record
         if(constructorError)
             await this.indexerDb.deleteContract(data['ACTION_INDEX']);
+
+        // Persist the declared permissions manifest (Phase E) BEFORE the constructor
+        // emissions are processed below, so a constructor's own emissions are checked
+        // against the contract's allowlist too (enforced in execute.js processEmission,
+        // which reads this row). Gated on a clean status — a later constructor-state
+        // failure calls deleteContract, which also clears this row, keeping the manifest
+        // table consistent with `contracts`. Written only when something was declared.
+        if(status === 'valid' && (declaredPermissions !== null || declaredMaxTakeBps !== null)){
+            await this.indexerDb.createContractPermission({
+                ACTION_INDEX   : data['ACTION_INDEX'],
+                CONTRACT_INDEX : data['ACTION_INDEX'], // contract_index = its own action_index
+                PERMISSIONS    : declaredPermissions,
+                MAX_TAKE_BPS   : declaredMaxTakeBps,
+                BLOCK_INDEX    : data['BLOCK_INDEX']
+            });
+        }
 
         // Process constructor state changes and emissions if successful.
         // Emissions route through the SAME pipeline as EXECUTE emissions

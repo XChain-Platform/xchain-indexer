@@ -34,10 +34,12 @@ describe('runControllerGuard — guard returnValue parsing (royalty payoutLegs) 
     // A valid regtest (BTC) P2PKH address so isCryptoAddress() accepts the leg.
     const ADDR = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
 
-    function buildHandler(vmResult) {
+    function buildHandler(vmResult, manifest = null) {
         const indexer = createMockIndexer();
         const db = indexer.indexerDb;
         db.getContract               = sinon.stub().resolves({ code: 'module.exports={guard:function(){}};', status_id: 7 });
+        // Phase E: per-contract manifest (null = no declared manifest → unrestricted, global cap).
+        db.getContractPermissions    = sinon.stub().resolves(manifest);
         db.getStatusString           = sinon.stub().resolves('valid');
         db.getContractState          = sinon.stub().resolves({});
         db.getOracleDataForVM        = sinon.stub().resolves({});
@@ -96,6 +98,42 @@ describe('runControllerGuard — guard returnValue parsing (royalty payoutLegs) 
         const handler = buildHandler(vmOk(JSON.stringify({ payoutLegs: [{ to: ADDR, bps: 9000 }, { to: ADDR, bps: 2000 }] })));
         const res = await handler.runControllerGuard(opts());
         assert.strictEqual(res.allow, false, 'Σbps > cap denies');
+        assert.ok(/cap|payout/.test(res.reason || ''));
+    });
+
+    // ---- Phase E: per-contract maxTakeBps tightens the effective cap ----
+
+    it('denies legs over a TIGHTER per-contract maxTakeBps (under the global cap)', async function () {
+        // Σbps = 500, well under the global 10000, but the contract's manifest caps at 300.
+        const handler = buildHandler(
+            vmOk(JSON.stringify({ payoutLegs: [{ to: ADDR, bps: 300 }, { to: ADDR, bps: 200 }] })),
+            { permissions: null, maxTakeBps: 300 }
+        );
+        const res = await handler.runControllerGuard(opts());
+        assert.strictEqual(res.allow, false, 'per-contract maxTakeBps tightens the cap');
+        assert.ok(/cap|payout/.test(res.reason || ''));
+    });
+
+    it('allows legs within a tighter per-contract maxTakeBps', async function () {
+        // Σbps = 250 <= the manifest cap 300 → allowed, legs preserved.
+        const handler = buildHandler(
+            vmOk(JSON.stringify({ payoutLegs: [{ to: ADDR, bps: 250 }] })),
+            { permissions: null, maxTakeBps: 300 }
+        );
+        const res = await handler.runControllerGuard(opts());
+        assert.strictEqual(res.allow, true, 'within the tighter cap is allowed');
+        assert.deepStrictEqual(res.payoutLegs, [{ to: ADDR, bps: 250 }]);
+    });
+
+    it('a per-contract maxTakeBps cannot RELAX the global cap', async function () {
+        // Manifest declares 10000 but Σbps = 11000 still exceeds the global 10000 — the
+        // effective cap is min(global, per-contract), never the looser of the two.
+        const handler = buildHandler(
+            vmOk(JSON.stringify({ payoutLegs: [{ to: ADDR, bps: 9000 }, { to: ADDR, bps: 2000 }] })),
+            { permissions: null, maxTakeBps: 10000 }
+        );
+        const res = await handler.runControllerGuard(opts());
+        assert.strictEqual(res.allow, false, 'global cap still binds');
         assert.ok(/cap|payout/.test(res.reason || ''));
     });
 });

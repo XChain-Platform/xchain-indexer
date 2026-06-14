@@ -26,6 +26,7 @@ describe('Execute (EXECUTE) @regression @tier2', function () {
 
     function addExecuteStubs(db) {
         db.getContract             = sinon.stub().resolves({ contract_index: CONTRACT, code: 'module.exports={}', status_id: 1 });
+        db.getContractPermissions  = sinon.stub().resolves(null);   // Phase E: no manifest → unrestricted
         db.getStatusString         = sinon.stub().resolves('valid');
         db.getContractState        = sinon.stub().resolves({});
         db.getOracleDataForVM      = sinon.stub().resolves({});
@@ -420,6 +421,51 @@ describe('Execute (EXECUTE) @regression @tier2', function () {
             await assert.rejects(
                 () => handler.processEmission(emission, execData, 0),
                 /invalid/
+            );
+        });
+
+        // ---- Phase E: permissions-manifest emission allowlist (all paths funnel here) ----
+
+        it('rejects an emission whose action is not in the contract permissions allowlist', async function () {
+            const sendHandler = { parse: sinon.stub().callsFake(async (params, data) => { data['STATUS'] = 'valid'; }) };
+            actionsCtx.actionSend = sendHandler;
+            handler = new Execute(actionsCtx);
+            // The emitter declared a manifest permitting only ISSUE — a SEND must be rejected
+            // fail-closed BEFORE the handler ever runs.
+            actionsCtx.indexerDb.getContractPermissions = sinon.stub().resolves({ permissions: ['ISSUE'], maxTakeBps: null });
+
+            const emission = { action: 'SEND', params: { tick: 'TEST', quantity: '1', destination: SOURCE } };
+            const execData = executeData({ FORMAT: 0, CONTRACT_ACTION_INDEX: CONTRACT });
+            await assert.rejects(
+                () => handler.processEmission(emission, execData, 0),
+                /manifest: action SEND not permitted/
+            );
+            assert.ok(sendHandler.parse.notCalled, 'handler is never reached for a disallowed action');
+        });
+
+        it('allows an emission whose action IS in the permissions allowlist', async function () {
+            const sendHandler = { parse: sinon.stub().callsFake(async (params, data) => { data['STATUS'] = 'valid'; }) };
+            actionsCtx.actionSend = sendHandler;
+            handler = new Execute(actionsCtx);
+            actionsCtx.indexerDb.getContractPermissions = sinon.stub().resolves({ permissions: ['SEND', 'ISSUE'], maxTakeBps: null });
+
+            const emission = { action: 'SEND', params: { tick: 'TEST', quantity: '1', destination: SOURCE } };
+            const execData = executeData({ FORMAT: 0, CONTRACT_ACTION_INDEX: CONTRACT });
+            await handler.processEmission(emission, execData, 0);
+            assert.ok(sendHandler.parse.calledOnce, 'a permitted action routes to its handler');
+        });
+
+        it('an empty permissions allowlist permits no emissions', async function () {
+            const sendHandler = { parse: sinon.stub().callsFake(async (params, data) => { data['STATUS'] = 'valid'; }) };
+            actionsCtx.actionSend = sendHandler;
+            handler = new Execute(actionsCtx);
+            actionsCtx.indexerDb.getContractPermissions = sinon.stub().resolves({ permissions: [], maxTakeBps: null });
+
+            const emission = { action: 'SEND', params: { tick: 'TEST', quantity: '1', destination: SOURCE } };
+            const execData = executeData({ FORMAT: 0, CONTRACT_ACTION_INDEX: CONTRACT });
+            await assert.rejects(
+                () => handler.processEmission(emission, execData, 0),
+                /not permitted/
             );
         });
 
