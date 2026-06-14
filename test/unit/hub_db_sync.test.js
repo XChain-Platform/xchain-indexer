@@ -456,3 +456,74 @@ describe('HubDbSync _applyRow column filtering @regression @tier2', function () 
         assert.strictEqual(shows.length, 1);
     });
 });
+
+describe('HubDbSync _applyRow price_snapshots skipped→finalized upgrade @regression @tier2', function () {
+
+    // The hub upserts a 'skipped' placeholder round to 'finalized' when a peer
+    // chain salvages it (PriceAggregator.receiveValidatedRound) and broadcasts the
+    // row. A plain INSERT IGNORE on the mirror would drop that upgrade and strand
+    // the replica at price=NULL. _applyRow must upgrade in place, keyed on the
+    // INCOMING status, and never clobber an already-finalized local row.
+
+    const PS_COLS = ['id', 'round_number', 'coin_pair', 'price', 'reference_block',
+                     'reference_chain', 'block_timestamp', 'validator_count',
+                     'consensus_round', 'consensus_proof', 'status', 'source_chain',
+                     'source_action_index', 'created_at'];
+
+    function makeApplySync(localCols) {
+        const doQuery = sinon.stub();
+        doQuery.withArgs(sinon.match(/^SHOW COLUMNS/)).resolves(localCols.map(f => ({ Field: f })));
+        doQuery.resolves([]);
+        const sync = new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test' });
+        return { sync, doQuery };
+    }
+
+    function finalizedRow() {
+        return { id: 100, round_number: 5, coin_pair: 'BTC/USD', price: '50000',
+                 reference_block: 800000, reference_chain: 'BTC', block_timestamp: 1700000000,
+                 validator_count: 3, consensus_round: 1, consensus_proof: '[]',
+                 status: 'finalized', source_chain: 'DOGE', source_action_index: 42,
+                 created_at: '2026-06-14 00:00:00' };
+    }
+
+    it('uses an ON DUPLICATE KEY UPDATE upsert (not INSERT IGNORE) for price_snapshots', async function () {
+        const { sync, doQuery } = makeApplySync(PS_COLS);
+        await sync._applyRow('price_snapshots', finalizedRow());
+        const insert = doQuery.getCalls().find(c => /price_snapshots/.test(c.args[0]) && /INSERT/.test(c.args[0]));
+        assert.ok(insert, 'an INSERT must run');
+        assert.ok(/ON DUPLICATE KEY UPDATE/.test(insert.args[0]), 'must be an upsert');
+        assert.ok(!/^INSERT IGNORE/.test(insert.args[0]), 'must NOT be a plain INSERT IGNORE');
+    });
+
+    it('guards every column on VALUES(status)=finalized and never reassigns the unique-key columns', async function () {
+        const { sync, doQuery } = makeApplySync(PS_COLS);
+        await sync._applyRow('price_snapshots', finalizedRow());
+        const sql = doQuery.getCalls().find(c => /ON DUPLICATE KEY UPDATE/.test(c.args[0])).args[0];
+        // price upgrades only when the incoming row is finalized
+        assert.ok(/`price` = IF\(VALUES\(status\) = 'finalized', VALUES\(`price`\), `price`\)/.test(sql));
+        // status flips to finalized only for an incoming finalized row
+        assert.ok(/status = IF\(VALUES\(status\) = 'finalized', 'finalized', status\)/.test(sql));
+        // the unique key + PK are never reassigned in the UPDATE clause
+        const updateClause = sql.split('ON DUPLICATE KEY UPDATE')[1];
+        assert.ok(!/`round_number` =/.test(updateClause));
+        assert.ok(!/`coin_pair` =/.test(updateClause));
+        assert.ok(!/`id` =/.test(updateClause));
+    });
+
+    it('still filters hub-only columns the local mirror does not carry', async function () {
+        const { sync, doQuery } = makeApplySync(['round_number', 'coin_pair', 'price', 'status']);
+        let row = finalizedRow();
+        row.hub_only_audit = 'xyz';
+        await sync._applyRow('price_snapshots', row);
+        const sql = doQuery.getCalls().find(c => /INSERT/.test(c.args[0])).args[0];
+        assert.ok(!sql.includes('hub_only_audit'), 'unknown column dropped');
+        assert.ok(/ON DUPLICATE KEY UPDATE/.test(sql));
+    });
+
+    it('falls back to INSERT IGNORE if the row carries no status column', async function () {
+        const { sync, doQuery } = makeApplySync(['round_number', 'coin_pair']);
+        await sync._applyRow('price_snapshots', { round_number: 5, coin_pair: 'BTC/USD' });
+        const insert = doQuery.getCalls().find(c => /INSERT/.test(c.args[0]));
+        assert.ok(/^INSERT IGNORE/.test(insert.args[0]), 'no status → plain idempotent insert');
+    });
+});

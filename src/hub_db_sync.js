@@ -577,8 +577,31 @@ class HubDbSync {
         let cols = Object.keys(row).filter(c => allowed.has(c));
         if (cols.length === 0) return;
         let placeholders = cols.map(() => '?').join(', ');
-        let query = 'INSERT IGNORE INTO ' + table + ' (' + cols.join(', ') + ') VALUES (' + placeholders + ')';
         let args = cols.map(c => row[c]);
+
+        // price_snapshots needs an in-place upgrade path, not plain INSERT IGNORE.
+        // It carries UNIQUE (round_number, coin_pair). The hub writes a 'skipped'
+        // placeholder when a BTC round had no local submissions, and the bootstrap
+        // endpoint serves it — so a replica can already hold the skipped row. When
+        // the hub later finalizes that round from a peer-chain validated round
+        // (PriceAggregator.receiveValidatedRound upserts skipped→finalized and
+        // broadcasts it), a plain INSERT IGNORE here would drop the upgrade and
+        // strand the replica at price=NULL while the master shows finalized —
+        // exactly the ledger divergence the price-sync barrier guards against.
+        // Upgrade only when the INCOMING row is finalized (keyed on VALUES(status),
+        // stable regardless of ODKU assignment order), so an already-finalized
+        // local row is never clobbered and re-delivery stays idempotent.
+        if (table === 'price_snapshots' && cols.includes('status')) {
+            let updatable = cols.filter(c => c !== 'id' && c !== 'round_number' && c !== 'coin_pair' && c !== 'status');
+            let sets = updatable.map(c => '`' + c + "` = IF(VALUES(status) = 'finalized', VALUES(`" + c + '`), `' + c + '`)');
+            sets.push("status = IF(VALUES(status) = 'finalized', 'finalized', status)");
+            let query = 'INSERT INTO price_snapshots (' + cols.map(c => '`' + c + '`').join(', ') + ') VALUES (' + placeholders + ')'
+                      + ' ON DUPLICATE KEY UPDATE ' + sets.join(', ');
+            await this.hubDb.doQuery(query, args);
+            return;
+        }
+
+        let query = 'INSERT IGNORE INTO ' + table + ' (' + cols.join(', ') + ') VALUES (' + placeholders + ')';
         await this.hubDb.doQuery(query, args);
     }
 
