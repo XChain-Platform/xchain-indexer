@@ -32,7 +32,7 @@ CREATE TABLE attests (
     gas_escrow                    VARCHAR(60),                     -- XCHAIN reserved for the callback EXECUTE
     fee_tick_id                   BIGINT UNSIGNED,                 -- FK to index_tickers (NULL = feeless; always the GAS tick in v1)
     fee_amount                    VARCHAR(60),                     -- request fee escrowed from fee_payer (NULL/0 = feeless)
-    request_status                ENUM('pending','fulfilled','expired','errored'), -- lifecycle of the request (v0 rows only)
+    request_status                ENUM('pending','fulfilled','expired','errored','rejected'), -- lifecycle of the request (v0 rows only; 'rejected' = failed structural validation, never serviceable)
     resolved_block                BIGINT UNSIGNED,                 -- block at which request_status went terminal; the reorg-rollback reset key (v0 rows only)
     -- response (version 1) fields
     response_hash                 CHAR(64),                        -- SHA256 of the canonical response body

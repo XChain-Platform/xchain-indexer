@@ -185,9 +185,11 @@ class Attest {
             }
         }
 
-        // Phase 1 placeholders (gas escrow lands in Phase 3 per spec §11)
+        // Phase 1 placeholders (gas escrow lands in Phase 3 per spec §11).
+        // REQUEST_STATUS is assigned below, once `error` is final — a structural
+        // failure must NOT enter the 'pending' pool (see the assignment after the
+        // fee-funding check).
         data['GAS_ESCROW']     = '0';
-        data['REQUEST_STATUS'] = 'pending';
         data['FEE_PAYER']      = data['FEE_PAYER'] || data['SOURCE']; // execute.processEmission carries FEE_PAYER
 
         // Fee escrow funding check — FEE_PAYER (the EXECUTE caller) must hold the
@@ -202,6 +204,21 @@ class Attest {
 
         let status = (error) ? error : 'valid';
         data['STATUS'] = status;
+
+        // Terminal request-lifecycle status. A structurally invalid request is
+        // recorded as 'rejected' (preserving the audit row) but NEVER enters the
+        // 'pending' pool: the hub poll (getPendingAttestationRequests), the
+        // deadline-expiry sweep (getExpiredAttestationRequests), and the v1
+        // response path all key solely off request_status='pending', so a
+        // 'rejected' row is invisible to every one of them. Without this branch a
+        // protocol-rejected request (oversize payload, unknown provider, bad
+        // deadline, insufficient fee funds, …) would be fetched, quorum-signed,
+        // and fire a real callback EXECUTE exactly as if it had passed validation.
+        // 'rejected' is terminal at creation (resolved_block stays NULL), so the
+        // reorg-rollback reset — which only re-pends rows that went terminal via a
+        // later block's flip (request_status IN ('fulfilled','errored','expired')
+        // AND resolved_block >= reorg point) — never promotes it back to pending.
+        data['REQUEST_STATUS'] = (error) ? 'rejected' : 'pending';
 
         console.log("\t ATTEST v0 : id=" + (data['REQUEST_ID'] ? String(data['REQUEST_ID']).substring(0,16) + '...' : '?') +
                     ' : provider=' + data['PROVIDER_ID'] +

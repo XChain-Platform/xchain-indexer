@@ -247,6 +247,40 @@ describe('Attest (ATTEST) @regression @tier3', function () {
                 'expected REQUEST_PAYLOAD rejection or an earlier guard, got: ' + data['STATUS']);
         });
 
+        it('a structurally invalid request is persisted as request_status=rejected, not pending', async function () {
+            // Regression: the lifecycle column used to be hardcoded to 'pending'
+            // before `error` was evaluated, so a protocol-rejected request entered
+            // the pending pool and was fully serviceable by the hub poll, the
+            // deadline-expiry sweep, and the v1 response path (all pending-only).
+            // An oversize http_get payload must now land as 'rejected' so none of
+            // those consumers ever pick it up.
+            const data = v0Data();
+            const reqId = deriveReqId(data['TX_HASH'], data['EMITTER_ACTION_INDEX'], data['EMITTER'], data['EMITTER_POSITION']);
+            const bigPayload = 'x'.repeat(100000); // exceeds the http_get per-provider cap
+            await handler.parse(v0Params({ requestId: reqId, payload: bigPayload }), data, null);
+
+            assert.notStrictEqual(data['STATUS'], 'valid', 'oversize payload must not validate');
+            assert.strictEqual(data['REQUEST_STATUS'], 'rejected',
+                'invalid request must carry the terminal rejected status, got: ' + data['REQUEST_STATUS']);
+            // The row is still recorded (audit trail), but with the rejected status —
+            // the createAttestationRequest call must receive REQUEST_STATUS=rejected.
+            assert.ok(indexer.indexerDb.createAttestationRequest.calledOnce, 'invalid request is still recorded');
+            const persisted = indexer.indexerDb.createAttestationRequest.firstCall.args[0];
+            assert.strictEqual(persisted['REQUEST_STATUS'], 'rejected',
+                'persisted row must be rejected so the pending-only pollers skip it');
+        });
+
+        it('a valid request is persisted as request_status=pending', async function () {
+            const data = v0Data();
+            const reqId = deriveReqId(data['TX_HASH'], data['EMITTER_ACTION_INDEX'], data['EMITTER'], data['EMITTER_POSITION']);
+            await handler.parse(v0Params({ requestId: reqId }), data, null);
+            assert.strictEqual(data['STATUS'], 'valid');
+            assert.strictEqual(data['REQUEST_STATUS'], 'pending',
+                'a valid request must remain pending so the hub can service it');
+            const persisted = indexer.indexerDb.createAttestationRequest.firstCall.args[0];
+            assert.strictEqual(persisted['REQUEST_STATUS'], 'pending');
+        });
+
         it('null REQUEST_PAYLOAD uses empty-string fallback for byteLength (line 105)', async function () {
             // A valid-otherwise v0 emission where REQUEST_PAYLOAD is null →
             // `String(data['REQUEST_PAYLOAD'] || '')` → '' → byteLength(0)
