@@ -343,6 +343,9 @@ describe('Attest (ATTEST) @regression @tier3', function () {
         });
 
         it('parses a valid multi-signature bundle → valid', async function () {
+            // Both signers are in the deterministic responsible set: universe = the two
+            // signers, redundancy 2 → top-2-of-2 = both (independent of hash order).
+            indexer.indexerDb.getValidatorsByCapability.resolves([{ pubkey: PUBKEY_A }, { pubkey: PUBKEY_B }]);
             indexer.indexerDb.getAttestationRequestById.resolves(makeRequestRow({ redundancy: 2 }));
             const data = v1Data();
             await handler.parse(v1Params([
@@ -398,6 +401,8 @@ describe('Attest (ATTEST) @regression @tier3', function () {
         // ── quorum threshold (REDUNDANCY-based) ──────────────────────────
 
         it('meets quorum when validSigs equals REDUNDANCY → valid', async function () {
+            // Universe = the two signers, redundancy 2 → both are responsible.
+            indexer.indexerDb.getValidatorsByCapability.resolves([{ pubkey: PUBKEY_A }, { pubkey: PUBKEY_B }]);
             indexer.indexerDb.getAttestationRequestById.resolves(makeRequestRow({ redundancy: 2 }));
             const data = v1Data();
             await handler.parse(v1Params([
@@ -446,6 +451,68 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             await handler.parse(v1Params([{ pubkey: PUBKEY_A, sig: SIG_A }]), data, null);
             assert.strictEqual(data['VALID_SIGS'], 0);
             assert.ok(String(data['STATUS']).includes('insufficient'));
+        });
+
+        // ── responsible-set membership (deterministic selection) ─────────
+        //
+        // Quorum requires signers from the request's deterministic responsible
+        // set — top-REDUNDANCY validators ranked by SHA256(request_id || pubkey),
+        // the same set _parseExpire charges missed_count to. Capability + a valid
+        // sig is necessary but not sufficient: otherwise any capable coalition
+        // could assemble a valid v1 (first-lands-wins, non-deterministic) and
+        // fulfilled_count would drift from missed_count.
+
+        // Rank a universe of pubkeys exactly as _computeResponsibleSet does, so the
+        // tests can pick in-set vs out-of-set coalitions without hard-coding hashes.
+        const PUBKEY_OUT1 = 'c'.repeat(64);
+        const PUBKEY_OUT2 = 'e'.repeat(64);
+        const SIG_C = '3'.repeat(128);
+        const SIG_D = '4'.repeat(128);
+        function rankResponsible(reqId, pubkeys, redundancy) {
+            return pubkeys
+                .map(pk => ({ pk, h: crypto.createHash('sha256').update(String(reqId), 'utf8').update(pk, 'utf8').digest('hex') }))
+                .sort((a, b) => (a.h < b.h ? -1 : a.h > b.h ? 1 : 0))
+                .slice(0, redundancy)
+                .map(x => x.pk);
+        }
+
+        it('rejects a v1 signed by a capable-but-not-responsible validator coalition', async function () {
+            // Four capable validators, redundancy 2 → 2 are responsible, 2 are not.
+            // The non-responsible pair signs a well-formed bundle (valid capability +
+            // valid ed25519). Pre-fix this counted toward quorum (capability + sig
+            // only) and produced a valid v1; post-fix the out-of-set signers are
+            // filtered out and the response is rejected as insufficient.
+            const universe = [PUBKEY_A, PUBKEY_B, PUBKEY_OUT1, PUBKEY_OUT2];
+            const sigByPub = { [PUBKEY_A]: SIG_A, [PUBKEY_B]: SIG_B, [PUBKEY_OUT1]: SIG_C, [PUBKEY_OUT2]: SIG_D };
+            const responsible = rankResponsible(REQ_ID.toLowerCase(), universe, 2);
+            const outsiders   = universe.filter(pk => !responsible.includes(pk));
+            assert.strictEqual(outsiders.length, 2, 'sanity: a 2-signer coalition outside the responsible set');
+
+            indexer.indexerDb.getValidatorsByCapability.resolves(universe.map(pk => ({ pubkey: pk })));
+            indexer.indexerDb.getAttestationRequestById.resolves(makeRequestRow({ redundancy: 2 }));
+            const data = v1Data();
+            await handler.parse(v1Params(outsiders.map(pk => ({ pubkey: pk, sig: sigByPub[pk] }))), data, null);
+
+            assert.strictEqual(data['VALID_SIGS'], 0, 'no out-of-set signature counts toward quorum');
+            assert.ok(String(data['STATUS']).includes('insufficient valid signatures'),
+                'capable-but-not-responsible coalition must be rejected, got: ' + data['STATUS']);
+            assert.ok(executeStub.parse.notCalled, 'no callback injected for an out-of-set coalition');
+        });
+
+        it('accepts a v1 signed by the deterministic responsible set', async function () {
+            // The complement of the test above: the SAME universe, but now the
+            // in-set pair signs → quorum is met and the response is valid.
+            const universe = [PUBKEY_A, PUBKEY_B, PUBKEY_OUT1, PUBKEY_OUT2];
+            const sigByPub = { [PUBKEY_A]: SIG_A, [PUBKEY_B]: SIG_B, [PUBKEY_OUT1]: SIG_C, [PUBKEY_OUT2]: SIG_D };
+            const responsible = rankResponsible(REQ_ID.toLowerCase(), universe, 2);
+
+            indexer.indexerDb.getValidatorsByCapability.resolves(universe.map(pk => ({ pubkey: pk })));
+            indexer.indexerDb.getAttestationRequestById.resolves(makeRequestRow({ redundancy: 2 }));
+            const data = v1Data();
+            await handler.parse(v1Params(responsible.map(pk => ({ pubkey: pk, sig: sigByPub[pk] }))), data, null);
+
+            assert.strictEqual(data['STATUS'], 'valid');
+            assert.strictEqual(data['VALID_SIGS'], 2, 'both responsible signers count');
         });
 
         // ── callback injection ───────────────────────────────────────────

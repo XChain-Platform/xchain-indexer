@@ -325,9 +325,28 @@ class Attest {
                     continue;
                 if(!ed25519.verify(canonical, s.sig, s.pubkey))
                     continue;
-                validSigs++;
                 verifiedSigs.push(s);
             }
+
+            // Restrict the verified signers to the request's deterministic
+            // responsible set — the top-REDUNDANCY validators ranked by
+            // SHA256(request_id || pubkey), the same set _parseExpire charges
+            // missed_count to. Holding the attestation capability and producing a
+            // valid ed25519 signature is necessary but NOT sufficient: without
+            // this gate any quorum of capable validators could assemble a valid
+            // v1, so two different capable coalitions could each land a response
+            // (first-lands-wins, non-deterministic) and fulfilled_count (credited
+            // to whoever signed) would diverge from missed_count (charged to the
+            // hash-selected set on expiry). Filtering here makes fulfillment
+            // deterministic and keeps the two stat columns symmetric. (request is
+            // guaranteed non-null inside this !error block — a null lookup sets
+            // 'no matching request' above and skips the loop.)
+            let responsible = new Set(await this._computeResponsibleSet(
+                String(requestId).toLowerCase(), request.redundancy, snapshotBlock
+            ));
+            verifiedSigs = verifiedSigs.filter(s => responsible.has(s.pubkey));
+            validSigs    = verifiedSigs.length;
+
             // Quorum: only REDUNDANCY validators are responsible for fetching (spec §8.2)
             let redundancy = request ? Number(request.redundancy) : 0;
             if(validSigs < redundancy)
