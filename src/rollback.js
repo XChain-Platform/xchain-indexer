@@ -442,6 +442,26 @@ class Rollback {
                 args  = [block_index];
                 await this.indexerDb.doQuery(query, args);
 
+                // Re-NULL orphaned ownership-escrow stamps on surviving token rows. When a
+                // token's ownership is offered via an ORDER / SWAP / DISPENSER carrying
+                // GIVE_OWNERSHIP, the forward path stamps tokens.escrow_action_index with the
+                // OFFER's action_index (setTokenEscrow, an in-place UPDATE on the token row that
+                // was created by a much earlier ISSUE in a surviving block). The bulk delete
+                // below removes the orphaned offer row but cannot undo that in-place stamp, and
+                // the token recompute (updateTokens → getTokenInfo → createToken) never touches
+                // the escrow column — so without this reset the surviving token keeps pointing at
+                // a now-deleted offer. isOwnershipEscrowed() then permanently returns true,
+                // rejecting every owner-only action (ISSUE, CALLBACK, SLEEP, LINK, FILE, new
+                // offers) on the reorged node while a from-genesis replay — where the offer was
+                // never re-mined — has escrow_action_index = NULL and accepts them: a consensus-
+                // affecting divergence on every chain ownership trading spans (BTC/LTC/DOGE).
+                // The stamp IS the offer's action_index, so `>= firstActionIndex` is exact — it
+                // clears only stamps whose owning offer falls in the orphaned range; surviving
+                // escrows (stamps < firstActionIndex) are untouched.
+                query = `UPDATE tokens SET escrow_action_index = NULL WHERE escrow_action_index >= ?`;
+                args  = [firstActionIndex];
+                await this.indexerDb.doQuery(query, args);
+
                 // Loop through the data tables and delete records above the action_index
                 for(let table of this.dataTables){
                     query = `DELETE FROM ` + table + ` WHERE action_index >= ?`;

@@ -343,4 +343,50 @@ describe('Rollback @regression @tier3', function () {
         await rollback.rollback(100);
         assert.ok(!attestationResetUpdate(), 'no reset UPDATE expected when the rolled-back range is empty');
     });
+
+    // ─── Ownership-escrow reset (reorg correctness) ───────────────────
+    //
+    // Regression for: a reorg that orphans an ORDER/SWAP/DISPENSER carrying
+    // GIVE_OWNERSHIP must clear the surviving token's escrow_action_index. The
+    // forward path stamps the token row (created by a much earlier ISSUE, so it
+    // survives) with the offer's action_index. The offer row is bulk-deleted in
+    // the orphaned range, but the token recompute never touches the escrow
+    // column — so without a companion UPDATE the surviving token keeps pointing
+    // at a now-deleted offer and isOwnershipEscrowed() permanently returns true,
+    // rejecting every owner-only action while a from-genesis replay (where the
+    // offer was never re-mined) accepts them. The stamp IS the offer's
+    // action_index, so the reset is keyed on firstActionIndex (>= is exact).
+
+    function escrowResetUpdate() {
+        const queries = indexer.indexerDb.doQuery.args.map(a => a[0]);
+        return queries.find(q =>
+            q &&
+            /UPDATE\s+tokens/i.test(q) &&
+            /escrow_action_index\s*=\s*NULL/i.test(q)
+        );
+    }
+
+    it('resets orphaned ownership-escrow stamps on surviving token rows', async function () {
+        indexer.indexerDb.doQuery.onFirstCall().resolves([{ action_index: 50 }]);
+        indexer.indexerDb.doQuery.resolves([]);
+        await rollback.rollback(100);
+
+        const updateQuery = escrowResetUpdate();
+        assert.ok(updateQuery, 'expected a companion UPDATE clearing escrow_action_index on surviving token rows');
+        // Keyed on escrow_action_index >= firstActionIndex — the stamp IS the
+        // offer's action_index, so this clears only escrows whose owning offer
+        // falls in the orphaned range and leaves surviving escrows untouched.
+        assert.ok(/escrow_action_index\s*>=\s*\?/i.test(updateQuery),
+            'escrow reset UPDATE should be keyed on escrow_action_index >= firstActionIndex');
+        // The bound argument is firstActionIndex (the offer's action_index), NOT
+        // the rollback target block — escrow stamps live in action_index space.
+        const call = indexer.indexerDb.doQuery.args.find(a => a[0] === updateQuery);
+        assert.deepStrictEqual(call[1], [50], 'escrow reset UPDATE should be parameterised with firstActionIndex');
+    });
+
+    it('does NOT issue the escrow reset when there is no orphaned range', async function () {
+        indexer.indexerDb.doQuery.resolves([]); // no firstActionIndex
+        await rollback.rollback(100);
+        assert.ok(!escrowResetUpdate(), 'no escrow reset UPDATE expected when the rolled-back range is empty');
+    });
 });
