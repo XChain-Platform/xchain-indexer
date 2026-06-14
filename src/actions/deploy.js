@@ -80,7 +80,14 @@ class Deploy {
         // Extract params
         data['CODE_ENCODING']      = params[1];
         data['GAS_LIMIT']          = params[2];
-        data['CONSTRUCTOR_PARAMS'] = params[3];
+        // CONSTRUCTOR_PARAMS is a REST field in v0: a multi-arg constructor sends each
+        // argument as its own pipe-delimited wire field (the SDK serializes
+        // `...CONSTRUCTOR_PARAMS`), exactly like EXECUTE's METHOD_PARAMS. Reading only
+        // params[3] dropped every argument after the first, reverting any multi-arg
+        // constructor. v1 cannot use a rest field here (COOLDOWN_BLOCKS +
+        // SLASH_DESTINATION trail the constructor args), so it keeps the single-field
+        // form — a multi-arg v1 constructor must sub-delimit within params[3].
+        data['CONSTRUCTOR_PARAMS'] = (format === 0) ? params.slice(3).join('|') : params[3];
         // v1+ optional staking config
         data['COOLDOWN_BLOCKS']    = (format >= 1) ? params[4] : null;
         data['SLASH_DESTINATION']  = (format >= 1) ? params[5] : null;

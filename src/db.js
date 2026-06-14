@@ -9744,7 +9744,14 @@ class Database {
                 }
                 if(this.util.isNull(symbol))
                     continue;
-                bySymbol[symbol] = flat[tick_id];
+                // getAddressBalances returns mathjs-bignumber OBJECTS (via bcsub/bcnum).
+                // The gateway exposes these to contracts that feed them straight into
+                // xchain.math (gte/subtract/...), and the value is copied across the
+                // isolated-vm boundary — where a bignumber object degrades to a plain
+                // object and math throws "[DecimalError] Invalid argument: [object Object]".
+                // Stringify to the canonical numeric form (matches getAddressBalances'
+                // other consumer in getBalancesForAddress).
+                bySymbol[symbol] = String(flat[tick_id]);
                 // Load token metadata once per referenced symbol (getTokenInfo
                 // returns false when the tick does not exist at this action_index).
                 if(tokenInfo[symbol] === undefined){
