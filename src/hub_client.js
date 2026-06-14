@@ -92,6 +92,22 @@ class HubClient {
         });
     }
 
+    // Notify the hub that a reorg rolled back DEX ORDER actions on this chain so it can retract
+    // any cross_chain_matches rows whose retracted leg references those orders. The hub marks the
+    // matching matches 'retracted', restores both legs' remaining capacity, and broadcasts
+    // deletions, so every indexer mirroring its cross_chain_matches table purges the orphaned rows
+    // (otherwise a 'finalized' match against an orphaned order stays eligible for settlement).
+    // sourceChain:     the chain this indexer serves (BTC/LTC/DOGE)
+    // fromActionIndex: lowest rolled-back action_index — the hub retracts matches for this
+    //                  source_chain whose a_action_index/b_action_index is >= this value.
+    async retractMatchRange(sourceChain, fromActionIndex){
+        if(!this.enabled) return;
+        return this._call('pushdexreorg', {
+            source_chain:      sourceChain,
+            from_action_index: fromActionIndex
+        });
+    }
+
     // Make a JSON-RPC 2.0 call to the hub
     _call(method, params){
         return new Promise((resolve, reject) => {
