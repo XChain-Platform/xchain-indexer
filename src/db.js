@@ -9384,10 +9384,17 @@ class Database {
     // per-contract royalty cap or null (global cap applies). deploy.js validates both
     // before calling this; deleteContract clears the row on a failed deploy.
     async createContractPermission(data){
+        // Capture the permissions ARRAY before normalizeDataValues runs: that routine
+        // safeToString()s every object-typed field, which coerces an array to a
+        // comma-joined string ('SEND,ISSUE') — JSON.stringify would then persist
+        // '"SEND,ISSUE"' instead of '["SEND","ISSUE"]', and getContractPermissions'
+        // Array.isArray check would read it back as a non-array and SILENTLY disable
+        // the emission allowlist. Stringify the raw array here so the JSON is intact.
+        let permsRaw       = data['PERMISSIONS'];
         data               = this.normalizeDataValues(data);
         let action_index   = data['ACTION_INDEX'];
         let contract_index = data['CONTRACT_INDEX'];
-        let permissions    = this.util.isNull(data['PERMISSIONS'])  ? null : JSON.stringify(data['PERMISSIONS']);
+        let permissions    = this.util.isNull(permsRaw)            ? null : JSON.stringify(permsRaw);
         let max_take_bps   = this.util.isNull(data['MAX_TAKE_BPS']) ? null : Number(data['MAX_TAKE_BPS']);
         let block_index    = data['BLOCK_INDEX'];
         let query  = "SELECT action_index FROM contract_permissions WHERE action_index=? LIMIT 1";
