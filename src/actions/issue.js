@@ -460,8 +460,12 @@ class Issue {
         // restricted to the GAS address (checked above), so this cannot be abused.
         let gasBootstrap = (String(data['TICK']).toUpperCase() === String(this.config['GAS']).toUpperCase());
 
-        // Determine if an issuance FEE is required, and what that fee is
-        if(!error && !tokenInfo && !gasBootstrap && await this.actions.protocolChanges.isEnabled('ISSUANCE_FEE', data['BLOCK_INDEX'])){
+        // Determine if an issuance FEE is required, and what that fee is.
+        // VM-emitted ISSUEs (IS_EMISSION) are fee-exempt by design — the deployer
+        // already paid DEPLOY/EXECUTE gas (base + per-byte + per-emission gas) and
+        // emissions are bounded by maxEmissions, so this is not a spam vector. This
+        // mirrors the per-tx db_hits fee, which already skips emissions.
+        if(!error && !tokenInfo && !gasBootstrap && !data['IS_EMISSION'] && await this.actions.protocolChanges.isEnabled('ISSUANCE_FEE', data['BLOCK_INDEX'])){
             let unifiedFees = await this.actions.protocolChanges.isEnabled('UNIFIED_FEES', data['BLOCK_INDEX']);
             if(unifiedFees){
                 // Unified gas schedule
