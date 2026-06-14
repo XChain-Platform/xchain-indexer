@@ -208,6 +208,15 @@ class Execute {
                 data['CONTRACT_ACTION_INDEX'], data['BLOCK_INDEX']
             );
 
+            // Balance + token-info snapshot backing xchain.getBalance / getTokenInfo.
+            // Scoped to SOURCE + this contract's derived address (pre-action state);
+            // a contract verifies its own holdings (e.g. a just-DEPOSITed amount in a
+            // BATCH) by reading getBalance(getContractAddress(), tick).
+            let contractAddr = 'C:' + this.config['CHAIN'] + ':' + data['CONTRACT_ACTION_INDEX'];
+            let vmLedger = await this.indexerDb.buildVmBalancesAndTokenInfo(
+                [data['SOURCE'], contractAddr], data['BLOCK_INDEX'], data['ACTION_INDEX']
+            );
+
             // Derive deterministic block hash from block_index + block_time
             let blockHash = crypto.createHash('sha256')
                 .update(String(data['BLOCK_INDEX']) + ':' + String(data['BLOCK_TIME']))
@@ -242,8 +251,8 @@ class Execute {
                 crossHops:         Number(data['CROSS_HOPS']) || 0,
                 isCrossCall:       Boolean(data['IS_CROSS_CALL']),
                 network:           this.config['NETWORK'],
-                balances:          null, // TODO: load balances for getBalance() when needed
-                tokenInfo:         null, // TODO: load token info for getTokenInfo() when needed
+                balances:          vmLedger.balances,
+                tokenInfo:         vmLedger.tokenInfo,
                 oracleData:        oracleData,
                 crossChainData:    crossChainData,
                 attestationData:   null, // TODO: wire getResponse() reader once response retention is in place
@@ -497,6 +506,9 @@ class Execute {
         let oracleData = await ((this.actions && this.actions.hubDb) || this.indexerDb).getOracleDataForVM(hostData['BLOCK_INDEX'], hostData['BLOCK_TIME'], parseInt(this.config['ORACLE_MAX_PRICE_AGE_SECONDS']) || 1800);
         let crossChainData = await this.indexerDb.getCrossChainDataForVM(hostData['BLOCK_INDEX']);
         let contractStakeData = await this.indexerDb.getContractStakeDataForVM(contractIndex, hostData['BLOCK_INDEX']);
+        let guardLedger = await this.indexerDb.buildVmBalancesAndTokenInfo(
+            [hostData['SOURCE'], derived], hostData['BLOCK_INDEX'], hostData['ACTION_INDEX']
+        );
         let blockHash = crypto.createHash('sha256')
             .update(String(hostData['BLOCK_INDEX']) + ':' + String(hostData['BLOCK_TIME']))
             .digest('hex');
@@ -533,6 +545,8 @@ class Execute {
                 actionIndex:       hostData['ACTION_INDEX'],
                 isGuard:           true,   // disables ATTEST/XCALL in the gateway
                 network:           this.config['NETWORK'],
+                balances:          guardLedger.balances,
+                tokenInfo:         guardLedger.tokenInfo,
                 oracleData:        oracleData,
                 crossChainData:    crossChainData,
                 attestationData:   null,

@@ -9646,6 +9646,56 @@ class Database {
         await this.doQuery(query, [actionIndex]);
     }
 
+    // Build the balance + token-info snapshot the VM gateway exposes through
+    // xchain.getBalance(address, tick) and xchain.getTokenInfo(tick). Scoped to
+    // the explicitly passed addresses (the EXECUTE/DEPLOY SOURCE + the contract's
+    // own derived address) — arbitrary-address reads inside a contract resolve to
+    // null because they cannot be pre-loaded deterministically.
+    //
+    // Determinism: every read is bounded by `action_index < ?` (pre-action ledger
+    // state — the contract's own mid-execution emissions are not yet persisted, so
+    // a contract sees the balance it held going in, identical on every validator).
+    // Amounts are mathjs-bignumber strings (no float). Reads run SERIALLY: during
+    // block processing these share the single transaction connection, which cannot
+    // serve concurrent queries (see updateAddressBalances).
+    //
+    // Returns the nested, SYMBOL-keyed shapes the gateway consumes:
+    //   balances  = { addressString: { tickSymbol: amount } }
+    //   tokenInfo = { tickSymbol: { TICK, TICK_ID, DECIMALS, SUPPLY, OWNER, ... } }
+    async buildVmBalancesAndTokenInfo(addresses, blockIndex, actionIndex){
+        let balances  = {};
+        let tokenInfo = {};
+        let tickCache = {}; // tick_id -> symbol, reused across addresses (avoids N+1)
+
+        for(let address of addresses){
+            if(this.util.isNull(address))
+                continue;
+            // Flat { tick_id: amount } at pre-action state.
+            let flat = await this.getAddressBalances(address, null, blockIndex, actionIndex);
+            let bySymbol = {};
+            for(let tick_id in flat){
+                let symbol = tickCache[tick_id];
+                if(symbol === undefined){
+                    symbol = await this.getTicker(tick_id);
+                    tickCache[tick_id] = symbol; // cache null too — avoids re-querying a missing id
+                }
+                if(this.util.isNull(symbol))
+                    continue;
+                bySymbol[symbol] = flat[tick_id];
+                // Load token metadata once per referenced symbol (getTokenInfo
+                // returns false when the tick does not exist at this action_index).
+                if(tokenInfo[symbol] === undefined){
+                    let info = await this.getTokenInfo(symbol, blockIndex, actionIndex);
+                    if(info)
+                        tokenInfo[symbol] = info;
+                }
+            }
+            balances[address] = bySymbol;
+        }
+
+        return { balances, tokenInfo };
+    }
+
     /*****************************************************************
      * VM Integration — Oracle / Cross-Chain Stubs
      ****************************************************************/

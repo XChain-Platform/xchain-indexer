@@ -236,6 +236,13 @@ class Deploy {
                 .update(String(data['BLOCK_INDEX']) + ':' + String(data['BLOCK_TIME']))
                 .digest('hex');
 
+            // SOURCE balances back getBalance() in the constructor (e.g. a deploy-time
+            // permission gate). The contract's own derived address is freshly created
+            // here, so its balance is empty — getBalance(contractAddress, ...) is null.
+            let vmLedger = await this.indexerDb.buildVmBalancesAndTokenInfo(
+                [data['SOURCE'], contractAddress], data['BLOCK_INDEX'], data['ACTION_INDEX']
+            );
+
             constructorResult = await this.actions.vm.execute({
                 code:             code,
                 state:            {},
@@ -258,8 +265,8 @@ class Deploy {
                     timestamp: data['BLOCK_TIME'],
                     hash:      blockHash
                 },
-                balances:         null,
-                tokenInfo:        null,
+                balances:         vmLedger.balances,
+                tokenInfo:        vmLedger.tokenInfo,
                 oracleData:       await ((this.actions && this.actions.hubDb) || this.indexerDb).getOracleDataForVM(data['BLOCK_INDEX'], data['BLOCK_TIME'], parseInt(this.config['ORACLE_MAX_PRICE_AGE_SECONDS']) || 1800),
                 crossChainData:   await this.indexerDb.getCrossChainDataForVM(data['BLOCK_INDEX']),
                 providerDeadlines: PROVIDER_DEADLINE_WINDOWS

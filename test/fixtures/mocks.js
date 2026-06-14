@@ -90,6 +90,8 @@ function createMockDb() {
 
         // Balance
         getAddressBalances: sinon.stub().resolves({}),
+        // VM gateway ledger snapshot (getBalance / getTokenInfo backing)
+        buildVmBalancesAndTokenInfo: sinon.stub().resolves({ balances: {}, tokenInfo: {} }),
         getAddressTableBalances: sinon.stub().resolves({}),
         getAddressCreditDebit: sinon.stub().resolves({}),
         updateBalances: sinon.stub().resolves(),
