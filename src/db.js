@@ -8578,6 +8578,58 @@ class Database {
         return false;
     }
 
+    // ── Full-node possession proofs (NODEPROOF / verified-validator tier) ──────
+    // Record that `pubkeyHex` was verified (by a quorum-signed NODEPROOF verdict)
+    // to have answered the possession challenge for `epochHeight`. Resolves the
+    // staking source the same way createValidatorReward does. Idempotent on
+    // (epoch_height, signing_pubkey) so a replayed/duplicate verdict is a no-op.
+    async createNodeProofVerification(pubkeyHex, challengeId, epochHeight, targetHeight, actionIndex, blockIndex){
+        let pubkey_id = await this.getPubkeyId(String(pubkeyHex).toLowerCase());
+        if(pubkey_id === null){
+            console.warn('createNodeProofVerification: unknown pubkey ' + pubkeyHex);
+            return false;
+        }
+        // Source = the staking address that owns this signing key (stake first, then
+        // a DELEGATE v0 delegated key) — same resolution as createValidatorReward.
+        let results = await this.doQuery(`SELECT source_id FROM stakes WHERE signing_pubkey_id=? ORDER BY action_index DESC LIMIT 1`, [pubkey_id]);
+        if(results.length === 0)
+            results = await this.doQuery(`SELECT source_id FROM delegations WHERE signing_pubkey_id=? ORDER BY action_index DESC LIMIT 1`, [pubkey_id]);
+        if(results.length === 0){
+            console.warn('createNodeProofVerification: no stake or delegation found for pubkey ' + pubkeyHex);
+            return false;
+        }
+        let source_id = results[0].source_id;
+        let query = `INSERT IGNORE INTO full_node_verifications
+                        (action_index, challenge_id, epoch_height, target_height, signing_pubkey_id, source_id, passed, block_index)
+                     VALUES (?, ?, ?, ?, ?, ?, 1, ?)`;
+        await this.doQuery(query, [actionIndex, String(challengeId).toLowerCase(), epochHeight, targetHeight, pubkey_id, source_id, blockIndex]);
+        return true;
+    }
+
+    // Validators with a `passed` possession-proof inside PROOF_WINDOW_BLOCKS of
+    // `blockIndex` — the "verified full node" set (before the live-stake intersect,
+    // which callers apply via hasCapability('full_node')). Returns one row per
+    // verified pubkey carrying its staking `source` so the equal reward split can
+    // dedupe per source (one operator = one full node = one share). Deterministic —
+    // depends only on earlier on-chain verdicts.
+    async getVerifiedFullNodeSet(blockIndex){
+        let window = parseInt((this.config['FULLNODE'] || {})['PROOF_WINDOW_BLOCKS']) || 0;
+        let low    = parseInt(blockIndex) - window;
+        let query = `SELECT DISTINCT ip.pubkey AS pubkey, sa.address AS source, fv.source_id AS source_id
+                     FROM full_node_verifications fv
+                     JOIN index_pubkeys   ip ON ip.id = fv.signing_pubkey_id
+                     JOIN index_addresses sa ON sa.id = fv.source_id
+                     WHERE fv.passed = 1
+                       AND fv.block_index >  ?
+                       AND fv.block_index <= ?`;
+        let rows = await this.doQuery(query, [low, blockIndex]);
+        return rows.map(r => ({
+            pubkey:    String(r.pubkey),
+            source:    r.source == null ? '' : String(r.source),
+            source_id: r.source_id
+        }));
+    }
+
     // Connection for hub-mirrored tables (price_snapshots, oracle_prices,
     // cross_chain_matches, capability_snapshots). In distributed deployments these live in
     // the local hub-DB copy; single-host falls back to this indexer DB. Mirrors the
@@ -9041,6 +9093,109 @@ class Database {
                      VALUES (?, ?, ?, ?, ?, ?, ?)`;
         await this.doQuery(query, [executionIndex, slashPosition, targetTable, stakeActionIndex,
                                    String(prevAmount), String(amount), blockIndex]);
+    }
+
+    // Burn an equivocating validator's ENTIRE capability bond (active `stakes` + cooldown-
+    // locked `unstakes`), recording each in-place reduction in capability_slash_debits so a
+    // reorg restores the pre-slash amounts verbatim (see rollback.js). Returns the total
+    // XCHAIN burned as a string.
+    //
+    // Unlike slashContractStake (per-contract, per-tick, partial `amount`), capability stake
+    // is a single XCHAIN bond per signing pubkey (XCHAIN-only — no contract/tick), and a
+    // cryptographic equivocation proof burns the WHOLE bond in one shot. The deactivation-
+    // window guard on Pass 1 is the same supply-inflation correctness point as the contract
+    // path: after UNSTAKE a `stakes` row keeps its `amount` intact (only deactivation_block is
+    // set) AND its tokens are mirrored into a cooldown `unstakes` row, so Pass 1 must skip that
+    // phantom copy (Pass 2 burns the cooldown row) — each token burned exactly once. The
+    // (pubkey,capability) dedup that makes a first slash idempotent lives in the SLASH handler.
+    async slashCapabilityStake(pubkeyId, blockIndex, slashActionIndex){
+        let valid_id = await this.getStatusId('valid');
+        if(valid_id === null) return '0';
+        let totalSlashed = '0';
+        // Pass 1: ACTIVE stakes rows (LIFO — highest action_index first) within the window.
+        let stakesQ = `SELECT action_index, amount FROM stakes
+                       WHERE signing_pubkey_id=? AND status_id=?
+                         AND activation_block <= ?
+                         AND CAST(amount AS DECIMAL(30,8)) > 0
+                         AND (deactivation_block IS NULL OR deactivation_block > ?)
+                       ORDER BY action_index DESC`;
+        let stakeRows = await this.doQuery(stakesQ, [pubkeyId, valid_id, blockIndex, blockIndex]);
+        for(let row of stakeRows){
+            let rowAmt = String(row.amount);
+            if(!this.util.bcgt(rowAmt, '0')) continue;
+            await this.doQuery('UPDATE stakes SET amount=? WHERE action_index=?', ['0', row.action_index]);
+            // prev_amount = the whole row (we burn it entirely); delta = the same.
+            await this.createCapabilitySlashDebit(slashActionIndex, 'stakes', row.action_index, rowAmt, rowAmt, blockIndex);
+            totalSlashed = this.util.bcadd(totalSlashed, rowAmt, 8);
+        }
+        // Pass 2: cooldown-locked unstakes rows (status valid/pending) — slashable too (closes R-4:
+        // capability unstakes are NOT slashable under the legacy contract-only path).
+        let pendingId = await this.getStatusId('pending');
+        let unstakeStatusIds = [valid_id];
+        if(pendingId !== null) unstakeStatusIds.push(pendingId);
+        let placeholders = unstakeStatusIds.map(() => '?').join(',');
+        let unstakesQ = `SELECT action_index, amount FROM unstakes
+                         WHERE signing_pubkey_id=? AND status_id IN (${placeholders})
+                           AND CAST(amount AS DECIMAL(30,8)) > 0
+                         ORDER BY action_index DESC`;
+        let unstakeRows = await this.doQuery(unstakesQ, [pubkeyId, ...unstakeStatusIds]);
+        for(let row of unstakeRows){
+            let rowAmt = String(row.amount);
+            if(!this.util.bcgt(rowAmt, '0')) continue;
+            await this.doQuery('UPDATE unstakes SET amount=? WHERE action_index=?', ['0', row.action_index]);
+            await this.createCapabilitySlashDebit(slashActionIndex, 'unstakes', row.action_index, rowAmt, rowAmt, blockIndex);
+            totalSlashed = this.util.bcadd(totalSlashed, rowAmt, 8);
+        }
+        return totalSlashed;
+    }
+
+    // Record one in-place capability-stake slash debit so a reorg can restore the row's
+    // amount byte-identically (verbatim `prev_amount` string copy — no arithmetic, so
+    // source + replica + from-genesis replay all converge). Mirrors createContractSlashDebit
+    // but keyed on the SLASH wire action_index (capability slashes are permissionless wire
+    // actions, not VM emissions — there is no execution_index/slash_position).
+    async createCapabilitySlashDebit(slashActionIndex, targetTable, stakeActionIndex, prevAmount, amount, blockIndex){
+        let query = `INSERT INTO capability_slash_debits
+                        (slash_action_index, target_table, stake_action_index, prev_amount, amount, block_index)
+                     VALUES (?, ?, ?, ?, ?, ?)`;
+        await this.doQuery(query, [slashActionIndex, targetTable, stakeActionIndex,
+                                   String(prevAmount), String(amount), blockIndex]);
+    }
+
+    // Record a capability-stake slash event (audit). Caller (the SLASH handler) has already
+    // burned the bond via slashCapabilityStake and computed the bounty/treasury split.
+    // Separate from slash_events because that table carries a non-null target_contract_index
+    // FK that capability (contract-less) slashes have no value for.
+    async createCapabilitySlashEvent(data){
+        data                  = this.normalizeDataValues(data);
+        let slash_action_index = data['SLASH_ACTION_INDEX'];
+        let signing_pubkey_id  = data['SIGNING_PUBKEY_ID'];
+        let capability         = data['CAPABILITY'];
+        let equiv_key          = data['EQUIV_KEY'];
+        let amount             = data['AMOUNT'];
+        let bounty_amount      = data['BOUNTY_AMOUNT']   || '0';
+        let treasury_amount    = data['TREASURY_AMOUNT'] || '0';
+        let submitter_id       = data['SUBMITTER_ID']    != null ? data['SUBMITTER_ID']    : null;
+        let destination_id     = data['DESTINATION_ID']  != null ? data['DESTINATION_ID']  : null;
+        let block_index        = data['BLOCK_INDEX'];
+        let query = `INSERT INTO capability_slash_events
+                        (slash_action_index, signing_pubkey_id, capability, equiv_key, amount,
+                         bounty_amount, treasury_amount, submitter_id, destination_id, block_index)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+        await this.doQuery(query, [slash_action_index, signing_pubkey_id, capability, equiv_key,
+                                   String(amount), String(bounty_amount), String(treasury_amount),
+                                   submitter_id, destination_id, block_index]);
+    }
+
+    // Whether a (pubkey, capability) pair has already been slashed — the SLASH handler's
+    // idempotency gate (a first equivocation proof burns the whole bond; later proofs for the
+    // same pair are no-ops). Block-scoped tables, so a reorg that orphans the slash also drops
+    // this row and the check re-opens deterministically.
+    async hasCapabilitySlashEvent(pubkeyId, capability){
+        let rows = await this.doQuery(
+            'SELECT id FROM capability_slash_events WHERE signing_pubkey_id=? AND capability=? LIMIT 1',
+            [pubkeyId, String(capability)]);
+        return rows.length > 0;
     }
 
     // Record a slash event row. Caller has already deducted from contract_stakes/contract_unstakes

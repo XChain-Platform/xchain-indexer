@@ -51,7 +51,12 @@ class Rollback {
             // Per-row slash debit log (one row per in-place contract_stakes/contract_unstakes
             // amount reduction). Block-scoped (rollback key = block_index, same as slash_events).
             // The restore below reads it BEFORE this generic delete drops the orphaned rows.
-            'contract_slash_debits'
+            'contract_slash_debits',
+            // Capability-stake equivocation slashing (WI-2 bump 2). Audit + per-row debit log,
+            // both block-scoped like their contract twins; the capability_slash_debits restore
+            // below runs BEFORE these generic deletes.
+            'capability_slash_events',
+            'capability_slash_debits'
         ];
 
         // List of tables that store data using action_index
@@ -116,6 +121,11 @@ class Rollback {
             'delegations',
             'stake_key_revocations',
             'reward_claims',
+            // NODEPROOF verdict rows (verified full-node tier). Keyed by the verdict's
+            // action_index (one verdict writes one row per PASS pubkey, all sharing it),
+            // so the generic action_index delete drops a reorged verdict and all its
+            // verification rows together — verified status can't survive a reorg.
+            'full_node_verifications',
             'contracts',
             'contract_permissions',
             'deploy_chunks',
@@ -536,6 +546,31 @@ class Rollback {
                                   AND d.block_index >= ?
                                   AND NOT EXISTS (
                                       SELECT 1 FROM contract_slash_debits e
+                                      WHERE e.target_table      = d.target_table
+                                        AND e.stake_action_index = d.stake_action_index
+                                        AND e.block_index >= ?
+                                        AND (e.block_index < d.block_index
+                                             OR (e.block_index = d.block_index AND e.id < d.id)))`;
+                    args = [slashTbl, block_index, block_index];
+                    await this.indexerDb.doQuery(query, args);
+                }
+
+                // Same restore for CAPABILITY-stake equivocation slashes (WI-2 bump 2):
+                // slashCapabilityStake reduces stakes/unstakes.amount IN PLACE on surviving
+                // rows and logs the pre-slash `prev_amount` in capability_slash_debits. Copy
+                // back the EARLIEST orphaned debit's prev_amount per row (min block_index, id
+                // tiebreak) — a pure string copy, byte-identical to the surviving chain and to
+                // a from-genesis replay where the SLASH was never re-mined. Earlier SURVIVING
+                // debits (block_index < block_index) stay applied. Runs BEFORE the generic
+                // deletes so both the debit rows and the target rows still exist.
+                for(let slashTbl of ['stakes', 'unstakes']){
+                    query = `UPDATE ` + slashTbl + ` t
+                                JOIN capability_slash_debits d ON d.stake_action_index = t.action_index
+                                SET t.amount = d.prev_amount
+                                WHERE d.target_table = ?
+                                  AND d.block_index >= ?
+                                  AND NOT EXISTS (
+                                      SELECT 1 FROM capability_slash_debits e
                                       WHERE e.target_table      = d.target_table
                                         AND e.stake_action_index = d.stake_action_index
                                         AND e.block_index >= ?
