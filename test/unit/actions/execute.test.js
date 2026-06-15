@@ -400,6 +400,62 @@ describe('Execute (EXECUTE) @regression @tier2', function () {
             );
         });
 
+        // ── XCALL emission host-side guards (defense-in-depth vs a compromised VM) ──
+        // All four throw before buildActionParams, so minimal emission params suffice.
+
+        it('throws when XCALL emission is missing the position argument', async function () {
+            const emission = { action: 'XCALL', params: { gasLimit: 50000 } };
+            const execData = executeData({ FORMAT: 0 });
+            await assert.rejects(
+                () => handler.processEmission(emission, execData, undefined),
+                /XCALL emission missing EMITTER_POSITION/
+            );
+        });
+
+        it('throws when XCALL is emitted from a constructor', async function () {
+            const emission = { action: 'XCALL', params: { gasLimit: 50000 } };
+            const execData = executeData({ FORMAT: 0, IS_CONSTRUCTOR: true });
+            await assert.rejects(
+                () => handler.processEmission(emission, execData, 0),
+                /XCALL emission is not allowed from a constructor/
+            );
+        });
+
+        it('throws when the host-derived hop count exceeds the cross-chain cap', async function () {
+            // CROSS_HOPS=2 → hostHops = 2+1 = 3 > XCALL_MAX_HOPS(2).
+            const emission = { action: 'XCALL', params: { gasLimit: 50000 } };
+            const execData = executeData({ FORMAT: 0, CROSS_HOPS: 2 });
+            await assert.rejects(
+                () => handler.processEmission(emission, execData, 0),
+                /exceeds max cross-chain hops/
+            );
+        });
+
+        it('re-validates the XCALL gasLimit host-side (out of range rejected)', async function () {
+            for (const gasLimit of [4999, 200001]) {
+                const emission = { action: 'XCALL', params: { gasLimit } };
+                const execData = executeData({ FORMAT: 0 });
+                await assert.rejects(
+                    () => handler.processEmission(emission, execData, 0),
+                    /XCALL emission gasLimit out of range/,
+                    'gasLimit=' + gasLimit
+                );
+            }
+        });
+
+        it('buildActionParams(XCALL) emits the v0 positional wire format', function () {
+            const out = handler.buildActionParams('XCALL', {
+                callId: 'a'.repeat(64), targetChain: 'DOGE', contractIndex: 99, method: 'onArrival',
+                params: ['x', 1], gasLimit: 50000, callbackMethod: 'onResult',
+                callbackParams: ['ctx'], deadlineBlocks: 200, crossHops: 1,
+            });
+            // VERSION|CALL_ID|TARGET_CHAIN|TARGET_CONTRACT_INDEX|METHOD|PARAMS_JSON|GAS_LIMIT|CALLBACK_METHOD|CALLBACK_PARAMS_JSON|DEADLINE_BLOCKS|CROSS_HOPS
+            assert.deepStrictEqual(out, [
+                0, 'a'.repeat(64), 'DOGE', 99, 'onArrival', '["x","1"]', 50000,
+                'onResult', '["ctx"]', 200, 1,
+            ]);
+        });
+
         it('routes a SEND emission to the wired SEND handler', async function () {
             const sendHandler = { parse: sinon.stub().callsFake(async (params, data) => { data['STATUS'] = 'valid'; }) };
             actionsCtx.actionSend = sendHandler;

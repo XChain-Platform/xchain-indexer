@@ -24,6 +24,71 @@ describe('Utility @regression @tier1', function () {
         util = new Utility();
     });
 
+    // ─── Cross-chain call orchestration (the block loop's three deterministic passes) ──
+    describe('processCrossChainCalls()', function () {
+        const COIN = 'BTC', NETWORK = 'regtest';
+        const CAP = require('../../src/actions/xcall.js').XCALL_MAX_CALLS_PER_BLOCK;
+        let actions, db, processAction, processResult;
+
+        beforeEach(function () {
+            processAction = sinon.stub().resolves();
+            processResult = sinon.stub().resolves();
+            actions = { processAction, actionXcall: { processResult } };
+            db = {
+                config: { COIN, NETWORK },
+                getEffectiveUndispatchedCalls:      sinon.stub().resolves([]),
+                getEffectiveUnprocessedCallResults: sinon.stub().resolves([]),
+                getExpiredCrossChainCallRequests:   sinon.stub().resolves([]),
+            };
+        });
+
+        it('pass 1 — injects an XEXEC for each dispatch targeting this chain', async function () {
+            const call = { call_id: 'a'.repeat(64), target_chain: 'BTC' };
+            db.getEffectiveUndispatchedCalls.resolves([call]);
+            await util.processCrossChainCalls(actions, db, 100, 1700000000);
+            assert.ok(processAction.calledOnceWith('XEXEC'));
+            const data = processAction.firstCall.args[2];
+            assert.strictEqual(data['ACTION'], 'XEXEC');
+            assert.strictEqual(data['CALL'], call);
+            assert.strictEqual(data['BLOCK_INDEX'], 100);
+        });
+
+        it('pass 2 — delivers each result via actionXcall.processResult', async function () {
+            const result = { call_id: 'b'.repeat(64) };
+            db.getEffectiveUnprocessedCallResults.resolves([result]);
+            await util.processCrossChainCalls(actions, db, 200, 1700000100);
+            assert.ok(processResult.calledOnceWith(result));
+            assert.strictEqual(processResult.firstCall.args[1]['BLOCK_INDEX'], 200);
+        });
+
+        it('pass 3 — synthesizes an XCALL v2 expiry for each past-deadline request', async function () {
+            db.getExpiredCrossChainCallRequests.resolves([{ call_id: 'c'.repeat(64) }]);
+            await util.processCrossChainCalls(actions, db, 300, 1700000200);
+            assert.ok(processAction.calledOnceWith('XCALL', [2, 'c'.repeat(64)]));
+            const data = processAction.firstCall.args[2];
+            assert.strictEqual(data['FORMAT'], 2);
+            assert.strictEqual(data['IS_SYNTHETIC'], true);
+        });
+
+        it('caps each query at XCALL_MAX_CALLS_PER_BLOCK', async function () {
+            await util.processCrossChainCalls(actions, db, 100, 1700000000);
+            assert.ok(db.getEffectiveUndispatchedCalls.calledWith(COIN, NETWORK, 1700000000, CAP));
+            assert.ok(db.getEffectiveUnprocessedCallResults.calledWith(COIN, NETWORK, 1700000000, CAP));
+        });
+
+        it('runs the three passes in order: inject → deliver → expire', async function () {
+            db.getEffectiveUndispatchedCalls.resolves([{ call_id: 'a'.repeat(64) }]);
+            db.getEffectiveUnprocessedCallResults.resolves([{ call_id: 'b'.repeat(64) }]);
+            db.getExpiredCrossChainCallRequests.resolves([{ call_id: 'c'.repeat(64) }]);
+            await util.processCrossChainCalls(actions, db, 100, 1700000000);
+            assert.strictEqual(processAction.firstCall.args[0], 'XEXEC');   // pass 1
+            assert.strictEqual(processAction.secondCall.args[0], 'XCALL');  // pass 3
+            assert.ok(processResult.calledOnce);
+            assert.ok(processResult.getCall(0).calledAfter(processAction.firstCall));   // pass 2 after pass 1
+            assert.ok(processResult.getCall(0).calledBefore(processAction.secondCall)); // pass 2 before pass 3
+        });
+    });
+
     // ─── List Management ──────────────────────────────────────────
 
     describe('resetAddressesList()', function () {
