@@ -59,6 +59,10 @@ describe('Xexec (XEXEC) @regression @tier3', function () {
         const db = indexer.indexerDb;
         db.hasCapability                  = sinon.stub().resolves(true);
         db.getValidatorsByCapability      = sinon.stub().resolves([{ pubkey: PUBKEY_A }]);
+        // regtest activates STAKE_WEIGHTED_QUORUM at genesis, so parse() takes the
+        // stake-weighted branch. One validator = one source: 3·tally(100) > 2·S(100) iff
+        // that signer is valid — reproduces the single-validator legacy outcome.
+        db.getStakeWeightsByCapability    = sinon.stub().resolves([{ pubkey: PUBKEY_A, source: 'S1', weight: '100' }]);
         db.recordCrossChainCallExecution  = sinon.stub().resolves();
         db.createSavepoint                = sinon.stub().resolves('sp1');
         db.releaseSavepoint               = sinon.stub().resolves();
@@ -179,7 +183,10 @@ describe('Xexec (XEXEC) @regression @tier3', function () {
     });
 
     it('defers when the capability snapshot is not mirrored yet', async function () {
+        // Empty BOTH sets — the stake-weighted branch (active on regtest) reads
+        // getStakeWeightsByCapability; clearing only the legacy set would not defer.
         indexer.indexerDb.getValidatorsByCapability.resolves([]);
+        indexer.indexerDb.getStakeWeightsByCapability.resolves([]);
         await handler.parse(null, Object.assign(ctx(), { CALL: makeDispatch() }), null);
         assert.ok(executeStub.parse.notCalled);
         assert.ok(indexer.indexerDb.recordCrossChainCallExecution.notCalled);

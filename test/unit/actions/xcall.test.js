@@ -44,6 +44,11 @@ describe('Xcall (XCALL) @regression @tier3', function () {
         db.recordCrossChainCallCallback       = sinon.stub().resolves();
         db.hasCapability                      = sinon.stub().resolves(true);
         db.getValidatorsByCapability          = sinon.stub().resolves([{ pubkey: PUBKEY_A }]);
+        // regtest activates STAKE_WEIGHTED_QUORUM at genesis, so processResult takes the
+        // stake-weighted branch (getStakeWeightsByCapability + meetsStakeThreshold). One
+        // validator = one source: 3·tally(100) > 2·S(100) iff that signer is valid, so the
+        // weighted rule reproduces the single-validator legacy outcome these tests assert.
+        db.getStakeWeightsByCapability        = sinon.stub().resolves([{ pubkey: PUBKEY_A, source: 'S1', weight: '100' }]);
         db.createSavepoint                    = sinon.stub().resolves('sp1');
         db.releaseSavepoint                   = sinon.stub().resolves();
         db.rollbackToSavepoint                = sinon.stub().resolves();
@@ -294,7 +299,10 @@ describe('Xcall (XCALL) @regression @tier3', function () {
         });
 
         it('defers (no idempotency row) when the capability snapshot is not mirrored yet', async function () {
+            // Empty BOTH sets — the stake-weighted branch (active on regtest) reads
+            // getStakeWeightsByCapability; clearing only the legacy set would not defer.
             indexer.indexerDb.getValidatorsByCapability.resolves([]);
+            indexer.indexerDb.getStakeWeightsByCapability.resolves([]);
             indexer.indexerDb.getCrossChainCallRequestById.resolves(makeRequestRow());
             await handler.processResult(makeResultRow(), ctx());
             assert.ok(indexer.indexerDb.recordCrossChainCallCallback.notCalled);

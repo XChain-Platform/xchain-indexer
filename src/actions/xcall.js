@@ -360,7 +360,7 @@ class Xcall {
 
         console.log("\t XCALL result : id=" + callId.substring(0,16) + '...' +
                     ' : from=' + r.target_chain + ' : status=' + resultStatus +
-                    ' : sigs=' + validSigs + '/' + quorum);
+                    ' : sigs=' + validSigners.length + '/' + N);
 
         // Flip to terminal BEFORE injecting (interlock order; also feeds getCallResult).
         await this.indexerDb.updateCrossChainCallRequestStatus(callId, 'completed', resultStatus, resultPayload, data['BLOCK_INDEX']);
