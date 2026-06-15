@@ -1,0 +1,24 @@
+-- xchain:migration mode=auto
+-- Migration: add the `source` column to capability_snapshots (STAKE_WEIGHTED_QUORUM / WI-1).
+--
+-- Stake-weighted quorum attributes voting weight to the staking ADDRESS (source),
+-- not the signing key — DELEGATE v0 is additive, so one source can authorize many
+-- keys all backed by the same aggregate stake (DELEGATE.md). A pubkey-keyed weight
+-- would let one stake vote (N+1)x by delegating N keys. The verifier therefore must
+-- dedupe by source before summing weight, and non-BTC indexers (which have no local
+-- `stakes` table) read the source from this mirrored row.
+--
+-- The `amount` column is repurposed to carry the source's aggregate weight; `source`
+-- is the new per-row discriminator. Both are consumed only by the stake-weighted
+-- quorum path, which is itself gated behind the STAKE_WEIGHTED_QUORUM activation
+-- height — so this column is inert on pre-activation blocks.
+--
+-- Self-heals automatically (capability_snapshots.sql ends with `) ENGINE ...`, so the
+-- drift reconciler adds the DEFAULT-carrying column on startup); this file is the
+-- explicit, auditable record. Safe to re-run (IF NOT EXISTS) and backfills existing
+-- rows with '' (those rows belong to pre-activation snapshots that the count path reads).
+--
+-- HOW TO RUN
+--   mariadb -u <indexer_user> -p <indexer_db> < src/sql/migrations/2026-06-14-capability-snapshots-add-source.sql
+
+ALTER TABLE capability_snapshots ADD COLUMN IF NOT EXISTS source VARCHAR(255) NOT NULL DEFAULT '' AFTER amount;

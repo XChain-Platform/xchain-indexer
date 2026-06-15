@@ -33,6 +33,7 @@
  ********************************************************************/
 
 const ed25519 = require('../ed25519.js');
+const swq     = require('../stake_weighted_quorum.js');
 
 class Cross_Settle {
 
@@ -77,9 +78,16 @@ class Cross_Settle {
             return;
         }
 
-        // ── Verify 2f+1 cross_chain signatures over the canonical match ───────
+        // ── Verify the cross_chain quorum signatures over the canonical match ──
+        // At/above STAKE_WEIGHTED_QUORUM (keyed on the BTC snapshot_block + network)
+        // the bar is summed signer STAKE > 2/3 of S, deduped by staking source;
+        // below it, the legacy 2f+1 signer COUNT. Both verify against the SAME locked
+        // snapshot the hub used, so hub and indexer agree without trust.
         let snapshotBlock = Number(m.snapshot_block);
-        let validators = await this.indexerDb.getValidatorsByCapability('cross_chain', snapshotBlock);
+        let weighted = swq.isStakeWeightedQuorumActive(snapshotBlock, m.network);
+        let validators = weighted
+            ? await this.indexerDb.getStakeWeightsByCapability('cross_chain', snapshotBlock)
+            : await this.indexerDb.getValidatorsByCapability('cross_chain', snapshotBlock);
         let N = (validators && validators.length) ? validators.length : 0;
         if(N === 0){
             // The capability snapshot for this block isn't mirrored yet. In distributed mode
@@ -92,28 +100,34 @@ class Cross_Settle {
             console.log("\t CROSS_SETTLE : match=" + String(m.match_id).substring(0,16) + '... : capability snapshot not synced — deferring');
             return;
         }
-        let quorum = (N <= 1) ? 1 : Math.max(2 * Math.floor((N - 1) / 3) + 1, Math.ceil((N + 1) / 2));
 
         let sigs;
         try { sigs = JSON.parse(m.validator_signatures || '[]'); }
         catch(_) { sigs = []; }
 
         let canonical = this._canonical(m);
-        let validSigs = 0, seen = new Set();
+        // Collect the distinct pubkeys that produced a valid signature AND are in the
+        // locked snapshot (presence in the snapshot = qualified — same membership the
+        // hub tallied). Used by both the weighted predicate and the count check.
+        let snapPubkeys = new Set(validators.map(v => String(v.pubkey).toLowerCase()));
+        let validSigners = [], seen = new Set();
         for(let s of sigs){
             let pk  = String(s.pubkey || '').toLowerCase();
             let sig = String(s.sig || '').toLowerCase();
             if(seen.has(pk)) continue;
             seen.add(pk);
             if(!/^[0-9a-f]{64}$/.test(pk) || !/^[0-9a-f]{128}$/.test(sig)) continue;
-            if(!await this.indexerDb.hasCapability(pk, 'cross_chain', snapshotBlock)) continue;
+            if(!snapPubkeys.has(pk)) continue;
             if(!ed25519.verify(canonical, sig, pk)) continue;
-            validSigs++;
+            validSigners.push(pk);
         }
-        if(validSigs < quorum){
-            // Genuinely insufficient valid signatures (the snapshot IS present). Skip — do
-            // not record a settlement; a malformed/forged match never settles.
-            console.warn("\t CROSS_SETTLE : match=" + String(m.match_id).substring(0,16) + '... : insufficient valid signatures (' + validSigs + '/' + quorum + ') — skipping');
+        let quorumMet = weighted
+            ? swq.meetsStakeThreshold(this.util, validators, validSigners)
+            : (validSigners.length >= ((N <= 1) ? 1 : Math.max(2 * Math.floor((N - 1) / 3) + 1, Math.ceil((N + 1) / 2))));
+        if(!quorumMet){
+            // Genuinely insufficient quorum (the snapshot IS present). Skip — do not
+            // record a settlement; a malformed/forged match never settles.
+            console.warn("\t CROSS_SETTLE : match=" + String(m.match_id).substring(0,16) + '... : insufficient ' + (weighted ? 'signer stake' : 'valid signatures (' + validSigners.length + '/' + N + ')') + ' — skipping');
             return;
         }
 

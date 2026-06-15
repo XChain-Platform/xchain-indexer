@@ -8340,6 +8340,111 @@ class Database {
         return { sql, args };
     }
 
+    // ── Stake-weighted quorum (STAKE_WEIGHTED_QUORUM) ─────────────────────────
+    // Source-keyed validator weights for a capability at a BTC-anchored block.
+    // Weight belongs to the staking ADDRESS (source), NOT the signing key: DELEGATE
+    // v0 is additive — one source may authorize many keys, all backed by the source's
+    // aggregate stake (DELEGATE.md "Effective signer set") — so a pubkey-keyed weight
+    // would let one stake vote (N+1)x by delegating N keys. Returns one row per
+    // effective signer key, each carrying its `source` (address) + the source's
+    // aggregate `weight`. Σ weight over DISTINCT sources = S. CONSENSUS-CRITICAL:
+    // must resolve identically on the hub and every indexer or validation forks.
+    async getStakeWeightsByCapability(capability, blockIndex, minStakeOverride){
+        // Off-BTC chains have no local capability stakes — read the source-keyed
+        // weights from the hub-mirrored capability_snapshots (same capability scoping
+        // as getValidatorsByCapability).
+        if(this.config['COIN'] !== 'BTC' && (capability === 'cross_chain' || capability === 'oracle_publish'))
+            return await this.getCapabilitySnapshotWeights(capability, blockIndex);
+        let caps = (this.config['STAKING'] && this.config['STAKING']['CAPABILITIES']) ? this.config['STAKING']['CAPABILITIES'] : {};
+        let capConfig = caps[capability];
+        if(!capConfig) return [];
+        // Caller-supplied threshold (the hub's authoritative MIN_STAKE) wins over local
+        // config — keeps every indexer computing the same set for the same block.
+        let minStake = (minStakeOverride !== undefined && minStakeOverride !== null)
+            ? String(minStakeOverride)
+            : (capConfig['MIN_STAKE'] || '0');
+        let valid_id = await this.getStatusId('valid');
+        if(valid_id === null) return [];
+        let limit = parseInt(process.env.VALIDATOR_QUERY_LIMIT) || 1000;
+        let sw = this._stakeWeightsSql(valid_id, blockIndex, minStake);
+        let query = `${sw.sql} ORDER BY source, pubkey LIMIT ?`;
+        let rows = await this.doQuery(query, [...sw.args, limit]);
+        if(rows.length >= limit)
+            console.warn('getStakeWeightsByCapability(' + capability + ') hit the result cap of ' + limit + ' rows at block ' + blockIndex + ' — set may be truncated. Raise VALIDATOR_QUERY_LIMIT if the federation has grown.');
+        return rows.map(r => ({
+            pubkey: String(r.pubkey),
+            source: String(r.source),
+            weight: (r.weight === null || r.weight === undefined) ? '0' : String(r.weight)
+        }));
+    }
+
+    // Source-keyed effective-signer query (DELEGATE.md additive model).
+    //   qualifying sources — per-source aggregate active stake >= MIN_STAKE.
+    //   effective keys     — the source's own active stake keys (EXCLUDING keys
+    //                        revoked via DELEGATE v2 in effect at the block, applied
+    //                        only to stake rows predating the revocation) UNION the
+    //                        source's active delegated keys.
+    // One output row per (effective key): { pubkey, source(address), weight(=source
+    // aggregate) }. Every key of a source carries the SAME source + weight, so a
+    // source-deduped tally counts that stake once. CONSENSUS-CRITICAL — mirrors the
+    // qualification/revocation/delegation semantics of _effectiveCapabilitySetSql.
+    _stakeWeightsSql(valid_id, blockIndex, minStake){
+        let sql = `SELECT ip.pubkey AS pubkey,
+                          sa.address AS source,
+                          q.total    AS weight
+                   FROM (
+                       SELECT s.source_id AS source_id,
+                              SUM(CAST(s.amount AS DECIMAL(30,8))) AS total
+                       FROM stakes s
+                       WHERE s.status_id = ?
+                         AND s.activation_block <= ?
+                         AND (s.deactivation_block IS NULL OR s.deactivation_block > ?)
+                       GROUP BY s.source_id
+                       HAVING total >= CAST(? AS DECIMAL(30,8))
+                   ) q
+                   JOIN index_addresses sa ON sa.id = q.source_id
+                   JOIN (
+                       SELECT s2.source_id AS source_id, s2.signing_pubkey_id AS pubkey_id
+                       FROM stakes s2
+                       WHERE s2.status_id = ?
+                         AND s2.activation_block <= ?
+                         AND (s2.deactivation_block IS NULL OR s2.deactivation_block > ?)
+                         AND NOT EXISTS (
+                             SELECT 1 FROM stake_key_revocations r
+                             WHERE r.source_id = s2.source_id
+                               AND r.signing_pubkey_id = s2.signing_pubkey_id
+                               AND r.status_id = ?
+                               AND r.deactivation_block <= ?
+                               AND r.action_index > s2.action_index)
+                       GROUP BY s2.source_id, s2.signing_pubkey_id
+                       UNION
+                       SELECT d.source_id AS source_id, d.signing_pubkey_id AS pubkey_id
+                       FROM delegations d
+                       WHERE d.status_id = ?
+                         AND d.activation_block <= ?
+                         AND (d.deactivation_block IS NULL OR d.deactivation_block > ?)
+                   ) ek ON ek.source_id = q.source_id
+                   JOIN index_pubkeys ip ON ip.id = ek.pubkey_id`;
+        let args = [valid_id, blockIndex, blockIndex, minStake,
+                    valid_id, blockIndex, blockIndex, valid_id, blockIndex,
+                    valid_id, blockIndex, blockIndex];
+        return { sql, args };
+    }
+
+    // Read the hub-mirrored SOURCE-KEYED weights for a capability at a snapshot block
+    // (non-BTC chains). Carries `source` so the verifier can dedupe by staking address.
+    async getCapabilitySnapshotWeights(capability, snapshotBlock){
+        let query = `SELECT signing_pubkey AS pubkey, source, amount AS weight
+                     FROM capability_snapshots
+                     WHERE capability = ? AND snapshot_block = ?`;
+        let rows = await this._mirrorDb().doQuery(query, [capability, snapshotBlock]);
+        return rows.map(r => ({
+            pubkey: String(r.pubkey),
+            source: r.source == null ? '' : String(r.source),
+            weight: r.amount == null ? '0' : String(r.amount)
+        }));
+    }
+
     // Whether `capability` is present in this indexer's STAKING.CAPABILITIES config.
     // Lets the hub-facing getcapabilityvalidators RPC distinguish a genuinely empty
     // validator set from a capability this indexer doesn't know about — the latter
@@ -8808,7 +8913,7 @@ class Database {
     // Returns the actual amount slashed (may be less than `amount` if available balance is lower).
     // Does NOT credit the destination or emit the slash_events row — caller (_processSlashEmission)
     // wires those side effects.
-    async slashContractStake(targetContractIndex, pubkeyId, tickId, amount, blockIndex){
+    async slashContractStake(targetContractIndex, pubkeyId, tickId, amount, blockIndex, executionIndex, slashPosition){
         let valid_id = await this.getStatusId('valid');
         if(valid_id === null) return '0';
         let remaining = String(amount);
@@ -8832,6 +8937,8 @@ class Database {
             let take = this.util.bcgte(rowAmt, remaining) ? remaining : rowAmt;
             let newAmt = this.util.bcsub(rowAmt, take, 8);
             await this.doQuery('UPDATE contract_stakes SET amount=? WHERE action_index=?', [newAmt, row.action_index]);
+            // Record the in-place debit so a reorg can restore rowAmt verbatim (see rollback.js).
+            await this.createContractSlashDebit(executionIndex, slashPosition, 'contract_stakes', row.action_index, rowAmt, take, blockIndex);
             remaining = this.util.bcsub(remaining, take, 8);
             totalSlashed = this.util.bcadd(totalSlashed, take, 8);
         }
@@ -8853,10 +8960,28 @@ class Database {
             let take = this.util.bcgte(rowAmt, remaining) ? remaining : rowAmt;
             let newAmt = this.util.bcsub(rowAmt, take, 8);
             await this.doQuery('UPDATE contract_unstakes SET amount=? WHERE action_index=?', [newAmt, row.action_index]);
+            // Record the in-place debit so a reorg can restore rowAmt verbatim (see rollback.js).
+            await this.createContractSlashDebit(executionIndex, slashPosition, 'contract_unstakes', row.action_index, rowAmt, take, blockIndex);
             remaining = this.util.bcsub(remaining, take, 8);
             totalSlashed = this.util.bcadd(totalSlashed, take, 8);
         }
         return totalSlashed;
+    }
+
+    // Record one in-place slash debit, enabling reorg restoration of stake amounts.
+    // slashContractStake reduces contract_stakes/contract_unstakes.amount IN PLACE on
+    // rows created in earlier (surviving) blocks; the generic rollback delete cannot
+    // revert that. This row captures `prev_amount` — the row's EXACT amount string
+    // before the debit — so rollback.js can copy it back verbatim (string copy, no
+    // arithmetic → byte-identical on source + replica, and identical to a from-genesis
+    // replay where the slash was never re-mined). `amount` is the per-row delta (audit).
+    async createContractSlashDebit(executionIndex, slashPosition, targetTable, stakeActionIndex, prevAmount, amount, blockIndex){
+        let query = `INSERT INTO contract_slash_debits
+                        (execution_index, slash_position, target_table, stake_action_index,
+                         prev_amount, amount, block_index)
+                     VALUES (?, ?, ?, ?, ?, ?, ?)`;
+        await this.doQuery(query, [executionIndex, slashPosition, targetTable, stakeActionIndex,
+                                   String(prevAmount), String(amount), blockIndex]);
     }
 
     // Record a slash event row. Caller has already deducted from contract_stakes/contract_unstakes
@@ -9377,7 +9502,7 @@ class Database {
         return null;
     }
 
-    // Record one DEPLOYCHUNK (a base64 slice of a chunked contract's source). Upsert keyed
+    // Record one DEPLOY v4 carrier (a base64 slice of a chunked contract's source). Upsert keyed
     // on the action_index (the rollback key) — mirrors createContract. Every chunk is stored
     // with its status (valid/invalid) so the explorer can surface it; the DEPLOY assembler
     // (getDeployChunksForAssembly) reads only the VALID rows.

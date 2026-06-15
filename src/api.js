@@ -96,6 +96,7 @@ const FEDERATION_READ_METHODS = new Set([
     'getownstake',
     'getactivevalidators',
     'getcapabilityvalidators',
+    'getstakeweightsbycapability',
     'getpendingattestation_requests',
     'getopencrosschainorders',
     'getactionconfirmations',
@@ -379,6 +380,48 @@ async function startApi(){
             } catch (err) {
                 console.error('getcapabilityvalidators error:', err);
                 return { error: 'failed to look up capability validators' };
+            }
+        },
+
+        // Source-keyed validator weights for stake-weighted quorum (STAKE_WEIGHTED_QUORUM).
+        // Like getcapabilityvalidators but returns each effective signing key's `source`
+        // (staking address) + the source's aggregate `weight`. The hub mirrors these into
+        // capability_snapshots so every validator dedupes voting weight by source — one
+        // stake counts once no matter how many keys it has delegated (DELEGATE.md).
+        async getstakeweightsbycapability({capability, block_index, min_stake}){
+            if(!capability || typeof capability !== 'string')
+                return { error: 'capability is required' };
+            if(block_index === undefined || block_index === null)
+                return { error: 'block_index is required' };
+            let blk = Number(block_index);
+            if(!Number.isInteger(blk) || blk < 0)
+                return { error: 'block_index must be a non-negative integer' };
+            if(!indexer.indexerDb)
+                return { error: 'indexer database not ready' };
+            if(!indexer.indexerDb.isCapabilityConfigured(capability))
+                return { error: 'capability not configured: ' + capability };
+            try {
+                let latestBlock = await indexer.indexerDb.getLatestBlockIndex();
+                if(blk > latestBlock)
+                    return { error: 'block_index ' + blk + ' not yet indexed (latest: ' + latestBlock + ')' };
+                let validators = await indexer.indexerDb.getStakeWeightsByCapability(capability, blk, min_stake);
+                let sources = new Set(validators.map(v => v.source));
+                let thresholdSource = (min_stake !== undefined && min_stake !== null)
+                    ? String(min_stake) + ' (caller-supplied)'
+                    : 'local-config';
+                console.log('getstakeweightsbycapability: capability=' + capability +
+                    ' block=' + blk + ' min_stake=' + thresholdSource +
+                    ' keys=' + validators.length + ' sources=' + sources.size);
+                return {
+                    capability:  capability,
+                    block_index: blk,
+                    count:       validators.length,
+                    source_count: sources.size,
+                    validators:  validators
+                };
+            } catch (err) {
+                console.error('getstakeweightsbycapability error:', err);
+                return { error: 'failed to look up stake weights' };
             }
         },
 

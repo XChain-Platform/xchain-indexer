@@ -156,6 +156,14 @@ class ProtocolChanges {
         // the e2e/regtest stack exercises VM emissions from block 0).
         this.addChange('ISSUANCE_FEE_EMISSION_EXEMPT', '2.0.0',1798761600,0,0,0,0,0);
 
+        // NOTE: STAKE_WEIGHTED_QUORUM (WI-1) is deliberately NOT registered here.
+        // Standard activations gate on the LOCAL processing block via isEnabled();
+        // stake-weighted quorum must gate on the BTC-anchored `snapshot_block`
+        // carried by each settlement (so BTC/LTC/DOGE + the hub flip on the same
+        // anchor). Registering it would invite a wrong isEnabled(localBlock) call.
+        // The gate + predicate live in src/stake_weighted_quorum.js
+        // (isStakeWeightedQuorumActive / meetsStakeThreshold). Canonical activation
+        // height: xchain-documentation/protocol/constants.js.
     }
 
     // Add protocol changes to protocol changes data object

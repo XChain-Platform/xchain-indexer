@@ -42,6 +42,7 @@
 
 const zlib    = require('zlib');
 const ed25519 = require('../ed25519.js');
+const swq     = require('../stake_weighted_quorum.js');
 
 const ALLOWED_CHAINS = ['BTC', 'LTC', 'DOGE'];
 
@@ -183,25 +184,34 @@ class Anchor {
         // the DOGE block this ANCHOR landed in.
         if(!error){
             let snapshotBlock = Number(data['SNAPSHOT_BLOCK']);
-            let validators = await this.indexerDb.getValidatorsByCapability('oracle_publish', snapshotBlock);
+            // Stake-weighted (source-deduped) at/above STAKE_WEIGHTED_QUORUM (keyed on
+            // the BTC snapshot_block + the checkpoint's network), else legacy 2f+1 count.
+            let weighted = swq.isStakeWeightedQuorumActive(snapshotBlock, data['NETWORK']);
+            let validators = weighted
+                ? await this.indexerDb.getStakeWeightsByCapability('oracle_publish', snapshotBlock)
+                : await this.indexerDb.getValidatorsByCapability('oracle_publish', snapshotBlock);
             let N = (validators && validators.length) ? validators.length : 0;
             if(N === 0){
                 // No oracle_publish snapshot mirrored locally (offline resync / no hub).
                 // Store as 'unverified' — recovery re-verifies from archived snapshots.
                 data['STATUS'] = 'unverified';
             } else {
-                let quorum    = (N <= 1) ? 1 : Math.max(2 * Math.floor((N - 1) / 3) + 1, Math.ceil((N + 1) / 2));
                 let canonical = this._canonical(data);
-                let validSigs = 0, seen = new Set();
+                let snapPubkeys = new Set(validators.map(v => String(v.pubkey).toLowerCase()));
+                let validSigners = [], seen = new Set();
                 for(let s of sigs){
-                    if(seen.has(s.pubkey)) continue;
-                    seen.add(s.pubkey);
-                    if(!await this.indexerDb.hasCapability(s.pubkey, 'oracle_publish', snapshotBlock)) continue;
+                    let pk = String(s.pubkey || '').toLowerCase();
+                    if(seen.has(pk)) continue;
+                    seen.add(pk);
+                    if(!snapPubkeys.has(pk)) continue;
                     if(!ed25519.verify(canonical, s.sig, s.pubkey)) continue;
-                    validSigs++;
+                    validSigners.push(pk);
                 }
-                if(validSigs < quorum)
-                    error = 'invalid: insufficient valid signatures (' + validSigs + '/' + quorum + ')';
+                let quorumMet = weighted
+                    ? swq.meetsStakeThreshold(this.util, validators, validSigners)
+                    : (validSigners.length >= ((N <= 1) ? 1 : Math.max(2 * Math.floor((N - 1) / 3) + 1, Math.ceil((N + 1) / 2))));
+                if(!quorumMet)
+                    error = 'invalid: insufficient ' + (weighted ? 'signer stake' : 'valid signatures (' + validSigners.length + '/' + N + ')');
             }
         }
 

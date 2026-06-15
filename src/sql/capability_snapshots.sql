@@ -3,7 +3,13 @@ CREATE TABLE capability_snapshots (
     snapshot_block BIGINT NOT NULL,                          -- BTC-anchored block boundary
     capability     VARCHAR(20)  NOT NULL,                    -- e.g. 'cross_chain'
     signing_pubkey VARCHAR(64)  NOT NULL,                    -- Ed25519 validator pubkey (64 hex)
-    amount         VARCHAR(250) NOT NULL,                    -- aggregate active stake (informational)
+    amount         VARCHAR(250) NOT NULL,                    -- source AGGREGATE active stake = the
+                                                             -- voting weight (STAKE_WEIGHTED_QUORUM).
+                                                             -- Every key of a source carries the same
+                                                             -- amount; dedupe by `source` before summing.
+    source         VARCHAR(255) NOT NULL DEFAULT '',         -- staking address (source) this key signs
+                                                             -- for. Quorum weight is per-source, NOT
+                                                             -- per-key (DELEGATE v0 is additive).
     created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     -- Presence of a row = that pubkey QUALIFIED for `capability` at `snapshot_block`
     -- (the hub only mirrors pubkeys already filtered by min_stake). Lets a non-BTC

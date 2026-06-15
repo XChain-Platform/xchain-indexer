@@ -49,6 +49,7 @@
 const zlib    = require('zlib');
 const crypto  = require('crypto');
 const ed25519 = require('./ed25519.js');
+const swq     = require('./stake_weighted_quorum.js');
 
 class AnchorRecovery {
 
@@ -65,6 +66,10 @@ class AnchorRecovery {
         // wrongly fail every batch. Run a --verify-stakes --dry-run pass AFTER
         // the reindex for the cross-check.
         this.verifyStakes = !!opts.verifyStakes;
+        // mathjs bignumber helpers (same instance the indexer uses) for the
+        // stake-weighted quorum predicate. Required when replaying archives whose
+        // snapshot_block is at/above STAKE_WEIGHTED_QUORUM.
+        this.util   = opts.util || null;
         this.log    = opts.log || ((msg) => console.log(msg));
     }
 
@@ -135,9 +140,11 @@ class AnchorRecovery {
             throw new Error('MATCH_COUNT mismatch (' + archive.matches.length + ' != ' + v1.match_count + ')');
 
         let snaps = Array.isArray(archive.capability_snapshots) ? archive.capability_snapshots : [];
+        // Source-keyed rows {pubkey, source, weight} so the weighted predicate can
+        // dedupe by staking source; the legacy count path uses only .pubkey.
         let setFor = (capability, block) => snaps
             .filter(s => s.capability === capability && Number(s.snapshot_block) === Number(block))
-            .map(s => String(s.signing_pubkey).toLowerCase());
+            .map(s => ({ pubkey: String(s.signing_pubkey).toLowerCase(), source: String(s.source != null ? s.source : ''), weight: String(s.amount != null ? s.amount : '0') }));
 
         // Optional but recommended: archived validator sets must be backed by
         // real on-chain BTC stakes — fabricated sets cannot survive this.
@@ -147,14 +154,14 @@ class AnchorRecovery {
         let wrapperSet = setFor('oracle_publish', v1.snapshot_block);
         let wrapperCanonical = this._wrapperCanonical(v1);
         let wrapperSigs = this._parseSigs(v1.validator_signatures);
-        if(!this._quorumVerified(wrapperCanonical, wrapperSigs, wrapperSet))
+        if(!this._quorumVerified(wrapperCanonical, wrapperSigs, wrapperSet, swq.isStakeWeightedQuorumActive(v1.snapshot_block, v1.network)))
             throw new Error('wrapper signatures fail quorum against the archived oracle_publish set');
 
         // 2. Every match's signatures vs the ARCHIVED cross_chain set.
         for(let m of archive.matches){
             let set  = setFor('cross_chain', m.snapshot_block);
             let sigs = this._parseSigs(m.validator_signatures);
-            if(!this._quorumVerified(this._matchCanonical(m), sigs, set))
+            if(!this._quorumVerified(this._matchCanonical(m), sigs, set, swq.isStakeWeightedQuorumActive(m.snapshot_block, m.network)))
                 throw new Error('match ' + String(m.match_id).substring(0, 16) + '... fails quorum against the archived cross_chain set');
         }
 
@@ -163,7 +170,7 @@ class AnchorRecovery {
         for(let c of (archive.calls || [])){
             let set  = setFor('cross_chain', c.snapshot_block);
             let sigs = this._parseSigs(c.validator_signatures);
-            if(!this._quorumVerified(this._callCanonical(c), sigs, set))
+            if(!this._quorumVerified(this._callCanonical(c), sigs, set, swq.isStakeWeightedQuorumActive(c.snapshot_block, c.network)))
                 throw new Error('call ' + String(c.call_id).substring(0, 16) + '... (' + c.phase + ') fails quorum against the archived cross_chain set');
         }
 
@@ -360,18 +367,23 @@ class AnchorRecovery {
         } catch(e){ return []; }
     }
 
-    _quorumVerified(canonical, sigs, validatorSet){
-        let qualified = new Set(validatorSet.map(p => String(p).toLowerCase()));
+    // validatorSet: [{pubkey, source, weight}] from the archived snapshot. When
+    // `weighted` (snapshot_block at/above STAKE_WEIGHTED_QUORUM), the bar is summed
+    // signer STAKE > 2/3 of S (source-deduped); else the legacy 2f+1 signer count.
+    _quorumVerified(canonical, sigs, validatorSet, weighted){
+        let qualified = new Set((validatorSet || []).map(v => String(v.pubkey).toLowerCase()));
         if(qualified.size === 0) return false;
-        let quorum = (qualified.size <= 1) ? 1 : Math.max(2 * Math.floor((qualified.size - 1) / 3) + 1, Math.ceil((qualified.size + 1) / 2));
-        let valid = 0, seen = new Set();
+        let validSigners = [], seen = new Set();
         for(let s of sigs){
             let pk = String(s.pubkey).toLowerCase();
             if(seen.has(pk) || !qualified.has(pk)) continue;
             seen.add(pk);
-            if(ed25519.verify(canonical, String(s.sig), pk)) valid++;
+            if(ed25519.verify(canonical, String(s.sig), pk)) validSigners.push(pk);
         }
-        return valid >= quorum;
+        if(weighted)
+            return swq.meetsStakeThreshold(this.util, validatorSet, validSigners);
+        let quorum = (qualified.size <= 1) ? 1 : Math.max(2 * Math.floor((qualified.size - 1) / 3) + 1, Math.ceil((qualified.size + 1) / 2));
+        return validSigners.length >= quorum;
     }
 
     _crc32Hex(str){
@@ -433,7 +445,7 @@ if(require.main === module){
             console.warn('recovery: running WITHOUT --verify-stakes — archived validator sets will not be cross-checked against on-chain BTC stakes.');
 
         try {
-            const recovery = new AnchorRecovery(db, { btcDb, dryRun, verifyStakes });
+            const recovery = new AnchorRecovery(db, { btcDb, dryRun, verifyStakes, util: indexerLike.util });
             const report = await recovery.run();
             process.exitCode = (report.failed.length > 0) ? 1 : 0;
         } catch(err){

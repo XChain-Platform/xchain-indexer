@@ -39,6 +39,7 @@
 
 const crypto  = require('crypto');
 const ed25519 = require('../ed25519.js');
+const swq     = require('../stake_weighted_quorum.js');
 
 // Mirrored from the canonical constants in
 // xchain-documentation/protocol/constants.js (same convention as the
@@ -293,35 +294,43 @@ class Xcall {
             return;
         }
 
-        // ── Verify 2f+1 cross_chain signatures over the result canonical ─────────
+        // ── Verify the cross_chain quorum over the result canonical ──────────────
+        // Stake-weighted (source-deduped 3·Σ>2·S) at/above STAKE_WEIGHTED_QUORUM
+        // (BTC snapshot_block + network), else legacy 2f+1 signer count.
         let snapshotBlock = Number(r.snapshot_block);
-        let validators = await this.indexerDb.getValidatorsByCapability('cross_chain', snapshotBlock);
+        let weighted = swq.isStakeWeightedQuorumActive(snapshotBlock, r.network);
+        let validators = weighted
+            ? await this.indexerDb.getStakeWeightsByCapability('cross_chain', snapshotBlock)
+            : await this.indexerDb.getValidatorsByCapability('cross_chain', snapshotBlock);
         let N = (validators && validators.length) ? validators.length : 0;
         if(N === 0){
             // Snapshot not mirrored yet — defer (the barriers front-stop this; see xexec.js).
             console.log("\t XCALL result : id=" + callId.substring(0,16) + '... : capability snapshot not synced — deferring');
             return;
         }
-        let quorum = (N <= 1) ? 1 : Math.max(2 * Math.floor((N - 1) / 3) + 1, Math.ceil((N + 1) / 2));
 
         let sigs;
         try { sigs = JSON.parse(r.validator_signatures || '[]'); }
         catch(_) { sigs = []; }
 
         let canonical = this._resultCanonical(r);
-        let validSigs = 0, seen = new Set();
+        let snapPubkeys = new Set(validators.map(v => String(v.pubkey).toLowerCase()));
+        let validSigners = [], seen = new Set();
         for(let s of sigs){
             let pk  = String(s.pubkey || '').toLowerCase();
             let sig = String(s.sig || '').toLowerCase();
             if(seen.has(pk)) continue;
             seen.add(pk);
             if(!/^[0-9a-f]{64}$/.test(pk) || !/^[0-9a-f]{128}$/.test(sig)) continue;
-            if(!await this.indexerDb.hasCapability(pk, 'cross_chain', snapshotBlock)) continue;
+            if(!snapPubkeys.has(pk)) continue;
             if(!ed25519.verify(canonical, sig, pk)) continue;
-            validSigs++;
+            validSigners.push(pk);
         }
-        if(validSigs < quorum){
-            console.warn("\t XCALL result : id=" + callId.substring(0,16) + '... : insufficient valid signatures (' + validSigs + '/' + quorum + ') — skipping');
+        let quorumMet = weighted
+            ? swq.meetsStakeThreshold(this.util, validators, validSigners)
+            : (validSigners.length >= ((N <= 1) ? 1 : Math.max(2 * Math.floor((N - 1) / 3) + 1, Math.ceil((N + 1) / 2))));
+        if(!quorumMet){
+            console.warn("\t XCALL result : id=" + callId.substring(0,16) + '... : insufficient ' + (weighted ? 'signer stake' : 'valid signatures (' + validSigners.length + '/' + N + ')') + ' — skipping');
             return;
         }
 
