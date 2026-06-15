@@ -34,8 +34,9 @@ function buildHealthResponse({ indexer, indexerRunning, indexerError, lastIndexe
     // How long ago the indexer last got a response from the hub for its config
     // overlay. null until the first success. When the hub is down this age keeps
     // climbing while status stays "healthy", so an operator can spot that the
-    // live-polled governance params (ACTIVATION_DELAY_BLOCKS, EXPIRATION_FEE_PER_DAY,
-    // STAKING) are frozen at their last-fetched values.
+    // hub config overlay is stale. (Consensus params — activation delay, expiration
+    // fee, staking — are NOT live-polled; they come from the per-chain local config.
+    // This age reflects only tunable/display params the overlay is permitted to apply.)
     let lastHubConfigFetchAt = indexer.lastHubConfigFetchAt || null;
     let hubConfigAgeSeconds  = (lastHubConfigFetchAt != null)
                                 ? Math.floor((now - lastHubConfigFetchAt) / 1000)

@@ -543,18 +543,31 @@ class XChainIndexer {
     // config object. Mutating this.config in place is what lets a re-applied overlay
     // take effect without a process restart.
     _mergeHubParams(allConfigs){
-        // GAS_SCHEDULE and GAS_PRICE are deliberately EXCLUDED from the hub-polled lists.
-        // Both feed consensus-critical fee math: GAS_SCHEDULE sets gasUsed and GAS_PRICE
-        // multiplies it into the fee charged, and both land in contract_executions rows and
-        // ultimately block hashes. The overlay applies a committed change the moment a node
-        // observes it, which happens at different wall-clock times — hence different block
-        // heights — across the federation. Polling these would let two nodes process the same
-        // block with different schedules/prices and produce divergent state (a soft fork).
-        // They come solely from the per-chain local defaults (configs/BTC.js, LTC.js, DOGE.js)
-        // and may change only via a coordinated node upgrade. Any future governance path must
-        // gate the switch on a protocol-agreed activation block height, not a live poll.
-        const SCALAR_PARAMS = ['ACTIVATION_DELAY_BLOCKS', 'EXPIRATION_FEE_PER_DAY'];
-        const BLOB_PARAMS   = ['STAKING'];
+        // CONSENSUS RULE: any param whose value feeds block-hashed state must NOT appear in
+        // these lists. The overlay applies a committed hub change the moment a node observes
+        // it, which happens at different wall-clock times — hence different block heights —
+        // across the federation. Live-polling a consensus param would let two nodes process
+        // the same on-chain transaction with different values and produce divergent
+        // block-hashed rows (a soft fork). Such values come solely from the per-chain local
+        // defaults (configs/BTC.js, LTC.js, DOGE.js) and may change only via a coordinated
+        // node upgrade; any future governance path must gate the switch on a protocol-agreed
+        // activation block height, not a live poll.
+        //
+        // Deliberately EXCLUDED for this reason:
+        //   - GAS_SCHEDULE / GAS_PRICE   — feed contract_executions fee math and block hashes.
+        //   - ACTIVATION_DELAY_BLOCKS    — stake/delegation activation_block (actions/stake.js,
+        //                                  delegate.js, unstake.js) is BLOCK_INDEX + this value.
+        //   - EXPIRATION_FEE_PER_DAY     — ORDER/SWAP/DISPENSER expiration fee debited from
+        //                                  balance rows (utility.js getExpirationFee).
+        //   - STAKING                    — carries ACTIVATION_DELAY_BLOCKS, COOLDOWN_BLOCKS, and
+        //                                  per-capability MIN_STAKE, all of which gate consensus
+        //                                  acceptance and the activation/deactivation_block math.
+        //
+        // The lists below are intentionally empty: every hub param currently classified for this
+        // coin/network feeds consensus, so none may be live-polled. Add a key here ONLY after
+        // confirming it is tunable/display-only and never reaches block-hashed state.
+        const SCALAR_PARAMS = [];
+        const BLOB_PARAMS   = [];
 
         let coin    = this.config.COIN;
         let network = this.config.NETWORK;
@@ -582,8 +595,9 @@ class XChainIndexer {
     }
 
     // Poll the hub for PBFT-committed config changes. The startup overlay runs only
-    // once; without this loop a governance-committed parameter change (e.g. EXPIRATION_FEE_PER_DAY
-    // or STAKING) would not take effect until the indexer process is restarted. We
+    // once; without this loop a governance-committed change to a tunable/display param
+    // (i.e. one safe to live-poll — see the consensus exclusion list in _mergeHubParams)
+    // would not take effect until the indexer process is restarted. We
     // re-apply the overlay only when the hub's committed sequence advances past the
     // last one we applied, so a steady-state poll is a cheap no-op. Against an older
     // hub that returns the bare map, seq stays 0 and the overlay is never re-applied

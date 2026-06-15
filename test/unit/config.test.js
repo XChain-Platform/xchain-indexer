@@ -240,11 +240,13 @@ describe('XChainIndexer hub config overlay', function () {
         delete require.cache[require.resolve('../../src/XChainIndexer.js')];
     });
 
-    it('overrides a tunable scalar param (EXPIRATION_FEE_PER_DAY) with hub-served value', async function () {
+    it('does NOT apply hub-served EXPIRATION_FEE_PER_DAY (consensus-critical, local-only)', async function () {
         indexer = makeIndexer();
         let localFee = indexer.config.EXPIRATION_FEE_PER_DAY;
 
-        // stub the hub client's _call to return a different expiration fee
+        // EXPIRATION_FEE_PER_DAY is debited from balance rows and lands in hashed state, so a
+        // live hub swap would let federation nodes charge divergent fees within the poll window
+        // (soft fork). It changes only via a coordinated node upgrade.
         let hubStub = { enabled: true, _call: sinon.stub().resolves({
             BTC: { regtest: { 'xchain-indexer': { EXPIRATION_FEE_PER_DAY: '0.00999999' } } }
         })};
@@ -252,8 +254,7 @@ describe('XChainIndexer hub config overlay', function () {
 
         await indexer._applyHubConfigOverlay();
 
-        assert.strictEqual(indexer.config.EXPIRATION_FEE_PER_DAY, '0.00999999');
-        assert.notStrictEqual(indexer.config.EXPIRATION_FEE_PER_DAY, localFee);
+        assert.strictEqual(indexer.config.EXPIRATION_FEE_PER_DAY, localFee, 'EXPIRATION_FEE_PER_DAY must stay at the local default');
     });
 
     it('does NOT apply hub-served GAS_PRICE or GAS_SCHEDULE (consensus-critical, local-only)', async function () {
@@ -293,18 +294,21 @@ describe('XChainIndexer hub config overlay', function () {
         assert.strictEqual(indexer.config.GAS_PRICE, localPrice);
     });
 
-    it('JSON-parses a STAKING blob from the hub', async function () {
+    it('does NOT apply a hub-served STAKING blob (consensus-critical, local-only)', async function () {
         indexer = makeIndexer();
-        let staking = { COOLDOWN_BLOCKS: 2000, ACTIVATION_DELAY_BLOCKS: 12 };
+        let localStaking = indexer.config.STAKING;
+        let pushed = { COOLDOWN_BLOCKS: 2000, ACTIVATION_DELAY_BLOCKS: 12 };
 
         let hubStub = { enabled: true, _call: sinon.stub().resolves({
-            BTC: { regtest: { 'xchain-indexer': { STAKING: JSON.stringify(staking) } } }
+            BTC: { regtest: { 'xchain-indexer': { STAKING: JSON.stringify(pushed) } } }
         })};
         indexer.hubClient = hubStub;
 
         await indexer._applyHubConfigOverlay();
 
-        assert.deepStrictEqual(indexer.config.STAKING, staking);
+        // STAKING (ACTIVATION_DELAY_BLOCKS / COOLDOWN_BLOCKS / MIN_STAKE) drives activation_block
+        // and capability gating in hashed state — the overlay must leave the local object intact.
+        assert.strictEqual(indexer.config.STAKING, localStaking, 'STAKING must stay the local object');
     });
 
     it('skips overlay when hub client is disabled', async function () {
@@ -322,7 +326,10 @@ describe('XChainIndexer hub config overlay', function () {
 
     it('unwraps a { configs, seq } response and records the committed seq', async function () {
         indexer = makeIndexer();
+        let localFee = indexer.config.EXPIRATION_FEE_PER_DAY;
 
+        // The wrapper's job is to record the committed seq (the health age signal depends on it);
+        // any consensus param it happens to carry must NOT be applied.
         let hubStub = { enabled: true, _call: sinon.stub().resolves({
             configs: { BTC: { regtest: { 'xchain-indexer': { EXPIRATION_FEE_PER_DAY: '0.00077000' } } } },
             seq: 5
@@ -331,41 +338,43 @@ describe('XChainIndexer hub config overlay', function () {
 
         await indexer._applyHubConfigOverlay();
 
-        assert.strictEqual(indexer.config.EXPIRATION_FEE_PER_DAY, '0.00077000');
         assert.strictEqual(indexer.lastHubConfigSeq, 5);
+        assert.strictEqual(indexer.config.EXPIRATION_FEE_PER_DAY, localFee, 'consensus param must not be applied from the overlay');
     });
 
-    it('poll re-applies the overlay only when the committed seq advances', async function () {
+    it('poll advances the committed seq but never applies a consensus param', async function () {
         indexer = makeIndexer();
+        let localFee = indexer.config.EXPIRATION_FEE_PER_DAY;
         let clock = sinon.useFakeTimers();
         try {
-            // Startup: seq 5, EXPIRATION_FEE_PER_DAY 0.00010000
+            // Startup: seq 5.
             let hubStub = { enabled: true, _call: sinon.stub() };
             hubStub._call.onCall(0).resolves({
                 configs: { BTC: { regtest: { 'xchain-indexer': { EXPIRATION_FEE_PER_DAY: '0.00010000' } } } }, seq: 5
             });
             indexer.hubClient = hubStub;
             await indexer._applyHubConfigOverlay();
-            assert.strictEqual(indexer.config.EXPIRATION_FEE_PER_DAY, '0.00010000');
             assert.strictEqual(indexer.lastHubConfigSeq, 5);
+            assert.strictEqual(indexer.config.EXPIRATION_FEE_PER_DAY, localFee);
 
             process.env.HUB_CONFIG_POLL_INTERVAL_MS = '60000';
             indexer._startHubConfigPolling();
 
-            // Tick 1: same seq (5) but different value — must NOT re-apply (stale guard).
+            // Tick 1: same seq (5) — must NOT re-apply (stale guard).
             hubStub._call.onCall(1).resolves({
                 configs: { BTC: { regtest: { 'xchain-indexer': { EXPIRATION_FEE_PER_DAY: '0.99999999' } } } }, seq: 5
             });
             await clock.tickAsync(60000);
-            assert.strictEqual(indexer.config.EXPIRATION_FEE_PER_DAY, '0.00010000', 'unchanged seq must not re-apply');
+            assert.strictEqual(indexer.lastHubConfigSeq, 5, 'unchanged seq must not advance');
 
-            // Tick 2: seq advances to 6 — now the new value takes effect without a restart.
+            // Tick 2: seq advances to 6 — bookkeeping updates, but the consensus param the hub
+            // pushes is still ignored (no soft fork even across a committed re-apply).
             hubStub._call.onCall(2).resolves({
                 configs: { BTC: { regtest: { 'xchain-indexer': { EXPIRATION_FEE_PER_DAY: '0.00022000' } } } }, seq: 6
             });
             await clock.tickAsync(60000);
-            assert.strictEqual(indexer.config.EXPIRATION_FEE_PER_DAY, '0.00022000', 'advanced seq must re-apply');
-            assert.strictEqual(indexer.lastHubConfigSeq, 6);
+            assert.strictEqual(indexer.lastHubConfigSeq, 6, 'advanced seq must update bookkeeping');
+            assert.strictEqual(indexer.config.EXPIRATION_FEE_PER_DAY, localFee, 'consensus param must remain local across re-apply');
         } finally {
             if(indexer._hubConfigPollTimer) clearInterval(indexer._hubConfigPollTimer);
             clock.restore();

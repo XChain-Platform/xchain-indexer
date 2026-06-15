@@ -54,11 +54,17 @@ const EXPECTED_VM_CONSENSUS_VERSION = '1';
 const FROZEN_STATUS_TOKENS = ['reverted', 'out_of_resource', 'failed'];
 
 // Other NODE-LOCAL consensus params (frozen with the wire format, track 8). These
-// feed fee math / tx-acceptance and land in hashed state, and — unlike the GAS_*
-// pair — they are NOT identical across chains, so the golden is PER-CHAIN.
-// DELIBERATELY EXCLUDED (hub-governed, change at runtime via PBFT overlay — see
-// XChainIndexer _applyHubConfigOverlay): ACTIVATION_DELAY_BLOCKS,
-// EXPIRATION_FEE_PER_DAY, STAKING. Freezing those would break governance.
+// feed fee math / activation-block math / tx-acceptance and land in hashed state, and
+// — unlike the GAS_* pair — they are NOT identical across chains, so the golden is
+// PER-CHAIN.
+//
+// ACTIVATION_DELAY_BLOCKS, EXPIRATION_FEE_PER_DAY and STAKING were previously left on the
+// hub config overlay's live-poll list. That was a soft-fork hazard: federation nodes
+// observe a committed hub change at different block heights, so a live push would stamp
+// divergent activation_block / expiration-fee rows for the SAME on-chain tx. They are now
+// treated like GAS_* — node-local, changeable only via a coordinated upgrade gated on an
+// activation height — and the overlay no longer polls them (see XChainIndexer
+// _mergeHubParams). The behavioural guard at the bottom of this file pins that.
 const GOLDEN_FEE_PARAMS_SHARED = {
     EXPIRATION_FEE_DEFAULT_DAYS:      90,
     EXPIRATION_FEE_FREE_DAYS:         182,
@@ -68,14 +74,23 @@ const GOLDEN_FEE_PARAMS_SHARED = {
     ORACLE_MAX_PRICE_AGE_SECONDS:     1800
 };
 const GOLDEN_FEE_PARAMS_PER_CHAIN = {
-    BTC:  { ISSUANCE_FEE_TOKEN: '1.00000000', ISSUANCE_FEE_SUBTOKEN: '0.50000000', FEE_PAYMENT_MODE: 'xchain' },
-    LTC:  { ISSUANCE_FEE_TOKEN: '0.50000000', ISSUANCE_FEE_SUBTOKEN: '0.25000000', FEE_PAYMENT_MODE: 'native' },
-    DOGE: { ISSUANCE_FEE_TOKEN: '0.25000000', ISSUANCE_FEE_SUBTOKEN: '0.10000000', FEE_PAYMENT_MODE: 'native' }
+    BTC:  { ISSUANCE_FEE_TOKEN: '1.00000000', ISSUANCE_FEE_SUBTOKEN: '0.50000000', FEE_PAYMENT_MODE: 'xchain', EXPIRATION_FEE_PER_DAY: '0.00547945' },
+    LTC:  { ISSUANCE_FEE_TOKEN: '0.50000000', ISSUANCE_FEE_SUBTOKEN: '0.25000000', FEE_PAYMENT_MODE: 'native', EXPIRATION_FEE_PER_DAY: '0.00273973' },
+    DOGE: { ISSUANCE_FEE_TOKEN: '0.25000000', ISSUANCE_FEE_SUBTOKEN: '0.10000000', FEE_PAYMENT_MODE: 'native', EXPIRATION_FEE_PER_DAY: '0.00136986' }
 };
-// The hub-governed params that must STAY excluded from the freeze (a regression
-// that moved one into the node-local frozen set would be caught by asserting the
-// overlay still lists them — see the test below).
-const HUB_GOVERNED_PARAMS = ['ACTIVATION_DELAY_BLOCKS', 'EXPIRATION_FEE_PER_DAY', 'STAKING'];
+// Per-chain staking consensus golden. ACTIVATION_DELAY_BLOCKS and COOLDOWN_BLOCKS drive
+// activation_block / deactivation_block hashed state across stake/delegate/unstake.
+// COOLDOWN_BLOCKS is shared; ACTIVATION_DELAY_BLOCKS is calibrated per-chain for ~60-min
+// reorg protection at each chain's block time.
+const GOLDEN_STAKING_PER_CHAIN = {
+    BTC:  { ACTIVATION_DELAY_BLOCKS: 6,  COOLDOWN_BLOCKS: 1000 },
+    LTC:  { ACTIVATION_DELAY_BLOCKS: 24, COOLDOWN_BLOCKS: 1000 },
+    DOGE: { ACTIVATION_DELAY_BLOCKS: 60, COOLDOWN_BLOCKS: 1000 }
+};
+// Consensus params that must NOT be live-polled by the hub config overlay — doing so races
+// the federation into a soft fork. The behavioural test below asserts the overlay ignores
+// hub attempts to change them.
+const NON_POLLED_CONSENSUS_PARAMS = ['ACTIVATION_DELAY_BLOCKS', 'EXPIRATION_FEE_PER_DAY', 'STAKING'];
 
 // Resolve the bundled VM's consensus exports, defensively: the file: dep
 // (node_modules/xchain-vm -> ./xchain-vm) is populated in prod by xchain-node,
@@ -109,18 +124,40 @@ describe('consensus parameters are frozen (track 8 guard) @regression', function
         }
     });
 
-    it('hub-governed params stay EXCLUDED from the freeze (governance must keep working)', function(){
-        // Guard against accidentally freezing a hub-governed param: the indexer's
-        // overlay must still treat these as runtime-adjustable. We assert they are
-        // NOT present in either frozen fee golden, so a future edit that hard-codes
-        // one into the golden reddens here with a clear reason.
-        const frozenKeys = new Set([
-            ...Object.keys(GOLDEN_FEE_PARAMS_SHARED),
-            ...Object.keys(GOLDEN_FEE_PARAMS_PER_CHAIN.BTC),
-            ...Object.keys(GOLDEN_GAS_SCHEDULE), 'GAS_PRICE', 'GAS_SCHEDULE'
-        ]);
-        for(const k of HUB_GOVERNED_PARAMS)
-            assert.ok(!frozenKeys.has(k), k + ' is hub-governed and must NOT be frozen');
+    it('per-chain STAKING activation/cooldown equal the golden (node-local consensus)', function(){
+        for(const coin of ['BTC', 'LTC', 'DOGE']){
+            const cfg = require('../../src/configs/' + coin + '.js').getConfig('regtest');
+            const g   = GOLDEN_STAKING_PER_CHAIN[coin];
+            assert.ok(cfg.STAKING, coin + ' STAKING missing');
+            assert.strictEqual(cfg.STAKING.ACTIVATION_DELAY_BLOCKS, g.ACTIVATION_DELAY_BLOCKS, coin + ' STAKING.ACTIVATION_DELAY_BLOCKS drifted');
+            assert.strictEqual(cfg.STAKING.COOLDOWN_BLOCKS, g.COOLDOWN_BLOCKS, coin + ' STAKING.COOLDOWN_BLOCKS drifted');
+        }
+    });
+
+    it('hub config overlay does NOT live-poll consensus params (soft-fork guard)', function(){
+        // The overlay (_mergeHubParams) must ignore hub-pushed values for any param that
+        // feeds block-hashed state. If a future edit re-adds one of NON_POLLED_CONSENSUS_PARAMS
+        // to the SCALAR_PARAMS/BLOB_PARAMS poll lists, the local consensus value below would be
+        // overwritten by the divergent hub value and this reddens.
+        let XChainIndexer;
+        try { XChainIndexer = require('../../src/XChainIndexer.js'); }
+        catch(e){ this.skip(); return; } // heavy deps (db/vm) absent in standalone CI
+        const stub = { config: {
+            COIN: 'BTC', NETWORK: 'regtest',
+            EXPIRATION_FEE_PER_DAY: '0.00547945',
+            STAKING: { ACTIVATION_DELAY_BLOCKS: 6, COOLDOWN_BLOCKS: 1000 }
+        }};
+        // Hub commits divergent values for every consensus param this finding covers.
+        const hubAttempt = { BTC: { regtest: { 'xchain-indexer': {
+            EXPIRATION_FEE_PER_DAY: '9.99999999',
+            ACTIVATION_DELAY_BLOCKS: 999,
+            STAKING: { ACTIVATION_DELAY_BLOCKS: 999, COOLDOWN_BLOCKS: 1 }
+        }}}};
+        XChainIndexer.prototype._mergeHubParams.call(stub, hubAttempt);
+        assert.strictEqual(stub.config.EXPIRATION_FEE_PER_DAY, '0.00547945', 'EXPIRATION_FEE_PER_DAY was live-polled');
+        assert.strictEqual(stub.config.STAKING.ACTIVATION_DELAY_BLOCKS, 6, 'STAKING.ACTIVATION_DELAY_BLOCKS was live-polled');
+        assert.strictEqual(stub.config.STAKING.COOLDOWN_BLOCKS, 1000, 'STAKING.COOLDOWN_BLOCKS was live-polled');
+        assert.strictEqual(stub.config.ACTIVATION_DELAY_BLOCKS, undefined, 'top-level ACTIVATION_DELAY_BLOCKS was live-polled');
     });
 
     it('vmFailureStatus maps every VM error into the frozen closed token set', function(){
