@@ -432,25 +432,11 @@ class Rollback {
                 args  = [block_index];
                 await this.indexerDb.doQuery(query, args);
 
-                // Re-NULL orphaned ownership-escrow stamps on surviving token rows. When a
-                // token's ownership is offered via an ORDER / SWAP / DISPENSER carrying
-                // GIVE_OWNERSHIP, the forward path stamps tokens.escrow_action_index with the
-                // OFFER's action_index (setTokenEscrow, an in-place UPDATE on the token row that
-                // was created by a much earlier ISSUE in a surviving block). The bulk delete
-                // below removes the orphaned offer row but cannot undo that in-place stamp, and
-                // the token recompute (updateTokens → getTokenInfo → createToken) never touches
-                // the escrow column — so without this reset the surviving token keeps pointing at
-                // a now-deleted offer. isOwnershipEscrowed() then permanently returns true,
-                // rejecting every owner-only action (ISSUE, CALLBACK, SLEEP, LINK, FILE, new
-                // offers) on the reorged node while a from-genesis replay — where the offer was
-                // never re-mined — has escrow_action_index = NULL and accepts them: a consensus-
-                // affecting divergence on every chain ownership trading spans (BTC/LTC/DOGE).
-                // The stamp IS the offer's action_index, so `>= firstActionIndex` is exact — it
-                // clears only stamps whose owning offer falls in the orphaned range; surviving
-                // escrows (stamps < firstActionIndex) are untouched.
-                query = `UPDATE tokens SET escrow_action_index = NULL WHERE escrow_action_index >= ?`;
-                args  = [firstActionIndex];
-                await this.indexerDb.doQuery(query, args);
+                // tokens.escrow_action_index (the ownership-escrow gate) is RE-DERIVED below,
+                // AFTER the dataTables delete — see rederiveTokenEscrow(). A range reset here
+                // could only handle the SET direction (offer orphaned); it cannot handle the
+                // CLEAR direction (a surviving offer whose release was orphaned), so the
+                // re-derive replaces it entirely.
 
                 // Re-NULL deactivation_block stamps that orphaned UNSTAKE / DELEGATE-revoke
                 // actions wrote IN PLACE on surviving parent stake/delegation rows. Each
@@ -576,6 +562,53 @@ class Rollback {
                 // already gone before the orphan sweep evaluates the sub-query.
                 query = `DELETE FROM icons WHERE token_id NOT IN (SELECT id FROM tokens)`;
                 await this.indexerDb.doQuery(query, []);
+
+                // Re-derive tokens.escrow_action_index (the ownership-escrow gate) for every
+                // affected token. MUST run AFTER the dataTables delete: orphaned offer rows
+                // (orders/swaps/dispensers) and their append-only status rows
+                // (order_statuses/swap_statuses/dispenser_statuses) are now gone, so a surviving
+                // offer whose closing action was orphaned has reverted to its latest surviving
+                // status. setTokenEscrow stamps the gate with the OFFER's action_index and
+                // clearTokenEscrow NULLs it on release; the in-place stamp survives the delete and
+                // updateTokens never touches the escrow column. A single re-derive collapses both
+                // rollback directions (orphaned offer -> NULL; orphaned release on a surviving
+                // offer -> re-stamp; nothing relevant orphaned -> reproduces the current value)
+                // and byte-matches a from-genesis replay (the gate is always exactly the offer's
+                // action_index). Affected set = tokens currently escrowed (Class A) UNION tokens
+                // with a surviving still-escrowed GIVE_OWNERSHIP offer (Class B) — provably
+                // complete: a token in neither cannot have a wrong escrow value. A token's gate
+                // is held while its GIVE_OWNERSHIP offer's latest status is open/cancelling/
+                // expiring (two-phase COINPay states keep escrow set); cleared only at a terminal
+                // status, written in the same action as the escrow clear. Alias `si` (not the
+                // SQL keyword `is`). The SQL between the ESCROW-REDERIVE-SQL markers is kept
+                // logically identical with xchain-sync/src/ClientRollback.js — a cross-repo drift
+                // guard (xchain-sync test/unit/rollback-coverage.test.js) asserts they match, so
+                // source + replica derive byte-identical escrow_action_index values.
+                //<ESCROW-REDERIVE-SQL>
+                const escrowAffectedTickersSql =
+                    `SELECT DISTINCT tk.tick FROM tokens t INNER JOIN index_tickers tk ON tk.id=t.tick_id WHERE t.escrow_action_index IS NOT NULL
+                     UNION
+                     SELECT DISTINCT tk.tick FROM index_tickers tk WHERE tk.id IN (
+                         SELECT o.give_tick_id FROM orders o INNER JOIN order_statuses st ON st.order_action_index=o.action_index INNER JOIN index_statuses si ON si.id=st.status_id WHERE o.give_ownership=1 AND st.action_index=(SELECT MAX(x.action_index) FROM order_statuses x WHERE x.order_action_index=o.action_index) AND si.status IN ('open','cancelling','expiring')
+                         UNION ALL
+                         SELECT s.give_tick_id FROM swaps s INNER JOIN swap_statuses st ON st.swap_action_index=s.action_index INNER JOIN index_statuses si ON si.id=st.status_id WHERE s.give_ownership=1 AND st.action_index=(SELECT MAX(x.action_index) FROM swap_statuses x WHERE x.swap_action_index=s.action_index) AND si.status IN ('open','cancelling','expiring')
+                         UNION ALL
+                         SELECT d.give_tick_id FROM dispensers d INNER JOIN dispenser_statuses st ON st.dispenser_action_index=d.action_index INNER JOIN index_statuses si ON si.id=st.status_id WHERE d.give_ownership=1 AND st.action_index=(SELECT MAX(x.action_index) FROM dispenser_statuses x WHERE x.dispenser_action_index=d.action_index) AND si.status IN ('open','cancelling','expiring')
+                     )`;
+                const escrowOpenOfferSql =
+                    `SELECT o.action_index FROM orders o INNER JOIN order_statuses st ON st.order_action_index=o.action_index INNER JOIN index_statuses si ON si.id=st.status_id INNER JOIN index_tickers tk ON tk.id=o.give_tick_id WHERE tk.tick=? AND o.give_ownership=1 AND st.action_index=(SELECT MAX(x.action_index) FROM order_statuses x WHERE x.order_action_index=o.action_index) AND si.status IN ('open','cancelling','expiring')
+                     UNION ALL
+                     SELECT s.action_index FROM swaps s INNER JOIN swap_statuses st ON st.swap_action_index=s.action_index INNER JOIN index_statuses si ON si.id=st.status_id INNER JOIN index_tickers tk ON tk.id=s.give_tick_id WHERE tk.tick=? AND s.give_ownership=1 AND st.action_index=(SELECT MAX(x.action_index) FROM swap_statuses x WHERE x.swap_action_index=s.action_index) AND si.status IN ('open','cancelling','expiring')
+                     UNION ALL
+                     SELECT d.action_index FROM dispensers d INNER JOIN dispenser_statuses st ON st.dispenser_action_index=d.action_index INNER JOIN index_statuses si ON si.id=st.status_id INNER JOIN index_tickers tk ON tk.id=d.give_tick_id WHERE tk.tick=? AND d.give_ownership=1 AND st.action_index=(SELECT MAX(x.action_index) FROM dispenser_statuses x WHERE x.dispenser_action_index=d.action_index) AND si.status IN ('open','cancelling','expiring')
+                     LIMIT 1`;
+                //</ESCROW-REDERIVE-SQL>
+                let escrowTickers = await this.indexerDb.doQuery(escrowAffectedTickersSql, []);
+                for(let row of escrowTickers){
+                    let offerRows = await this.indexerDb.doQuery(escrowOpenOfferSql, [row.tick, row.tick, row.tick]);
+                    let newEscrow = (offerRows.length > 0) ? offerRows[0].action_index : null;
+                    await this.indexerDb.doQuery("UPDATE tokens SET escrow_action_index=? WHERE tick_id=(SELECT id FROM index_tickers WHERE tick=? LIMIT 1)", [newEscrow, row.tick]);
+                }
             }
 
             // Delete data from tables using block_index

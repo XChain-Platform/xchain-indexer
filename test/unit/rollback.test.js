@@ -365,49 +365,71 @@ describe('Rollback @regression @tier3', function () {
         assert.ok(!attestationResetUpdate(), 'no reset UPDATE expected when the rolled-back range is empty');
     });
 
-    // ─── Ownership-escrow reset (reorg correctness) ───────────────────
+    // ─── Ownership-escrow RE-DERIVE (reorg correctness, TP-03 #4017) ───
     //
-    // Regression for: a reorg that orphans an ORDER/SWAP/DISPENSER carrying
-    // GIVE_OWNERSHIP must clear the surviving token's escrow_action_index. The
-    // forward path stamps the token row (created by a much earlier ISSUE, so it
-    // survives) with the offer's action_index. The offer row is bulk-deleted in
-    // the orphaned range, but the token recompute never touches the escrow
-    // column — so without a companion UPDATE the surviving token keeps pointing
-    // at a now-deleted offer and isOwnershipEscrowed() permanently returns true,
-    // rejecting every owner-only action while a from-genesis replay (where the
-    // offer was never re-mined) accepts them. The stamp IS the offer's
-    // action_index, so the reset is keyed on firstActionIndex (>= is exact).
+    // tokens.escrow_action_index (the ownership gate) is an in-place projection:
+    // a GIVE_OWNERSHIP offer stamps it with the offer's action_index; a release
+    // (match/expire/cancel/close) NULLs it. After the dataTables delete, rollback
+    // RE-DERIVES it for every affected token = the surviving still-open
+    // GIVE_OWNERSHIP offer's action_index, else NULL. One pass collapses both
+    // directions: orphaned offer -> NULL; orphaned release on a surviving offer ->
+    // re-stamp. The old SET-only `escrow_action_index >= ?` reset is removed (it
+    // could not handle the CLEAR direction).
 
-    function escrowResetUpdate() {
-        const queries = indexer.indexerDb.doQuery.args.map(a => a[0]);
-        return queries.find(q =>
-            q &&
-            /UPDATE\s+tokens/i.test(q) &&
-            /escrow_action_index\s*=\s*NULL/i.test(q)
-        );
+    const AFFECTED_SQL_RE = /escrow_action_index IS NOT NULL/i;       // affected-ticker query
+    const OPEN_OFFER_RE   = /SELECT\s+o\.action_index\s+FROM\s+orders/i; // per-ticker open-offer query
+    const REDERIVE_UPDATE_RE = /UPDATE tokens SET escrow_action_index=\?\s+WHERE tick_id=\(SELECT id FROM index_tickers/i;
+
+    function rederiveUpdateCall() {
+        return indexer.indexerDb.doQuery.args.find(a => a[0] && REDERIVE_UPDATE_RE.test(a[0]));
     }
 
-    it('resets orphaned ownership-escrow stamps on surviving token rows', async function () {
-        indexer.indexerDb.doQuery.onFirstCall().resolves([{ action_index: 50 }]);
+    it('re-stamps escrow to a surviving open GIVE_OWNERSHIP offer (orphaned release / CLEAR direction)', async function () {
         indexer.indexerDb.doQuery.resolves([]);
+        indexer.indexerDb.doQuery.onFirstCall().resolves([{ action_index: 50 }]);  // firstActionIndex
+        indexer.indexerDb.doQuery.withArgs(sinon.match(AFFECTED_SQL_RE)).resolves([{ tick: 'FOO' }]);
+        indexer.indexerDb.doQuery.withArgs(sinon.match(OPEN_OFFER_RE)).resolves([{ action_index: 30 }]);
         await rollback.rollback(100);
 
-        const updateQuery = escrowResetUpdate();
-        assert.ok(updateQuery, 'expected a companion UPDATE clearing escrow_action_index on surviving token rows');
-        // Keyed on escrow_action_index >= firstActionIndex — the stamp IS the
-        // offer's action_index, so this clears only escrows whose owning offer
-        // falls in the orphaned range and leaves surviving escrows untouched.
-        assert.ok(/escrow_action_index\s*>=\s*\?/i.test(updateQuery),
-            'escrow reset UPDATE should be keyed on escrow_action_index >= firstActionIndex');
-        // The bound argument is firstActionIndex (the offer's action_index), NOT
-        // the rollback target block — escrow stamps live in action_index space.
-        const call = indexer.indexerDb.doQuery.args.find(a => a[0] === updateQuery);
-        assert.deepStrictEqual(call[1], [50], 'escrow reset UPDATE should be parameterised with firstActionIndex');
+        const call = rederiveUpdateCall();
+        assert.ok(call, 'expected a re-derive UPDATE on tokens.escrow_action_index');
+        // surviving offer (action_index 30 < firstActionIndex 50) holds the escrow again
+        assert.deepStrictEqual(call[1], [30, 'FOO'], 're-derive should re-stamp the surviving offer action_index for the tick');
+        // The old SET-only reset must be gone.
+        assert.ok(!indexer.indexerDb.doQuery.args.some(a => a[0] && /escrow_action_index\s*>=\s*\?/i.test(a[0])),
+            'the old SET-only `escrow_action_index >= ?` reset must no longer be issued');
     });
 
-    it('does NOT issue the escrow reset when there is no orphaned range', async function () {
+    it('clears escrow when no offer survives (orphaned offer / SET direction)', async function () {
+        indexer.indexerDb.doQuery.resolves([]);
+        indexer.indexerDb.doQuery.onFirstCall().resolves([{ action_index: 50 }]);
+        indexer.indexerDb.doQuery.withArgs(sinon.match(AFFECTED_SQL_RE)).resolves([{ tick: 'BAR' }]);
+        indexer.indexerDb.doQuery.withArgs(sinon.match(OPEN_OFFER_RE)).resolves([]); // no surviving open offer
+        await rollback.rollback(100);
+
+        const call = rederiveUpdateCall();
+        assert.ok(call, 'expected a re-derive UPDATE');
+        assert.deepStrictEqual(call[1], [null, 'BAR'], 're-derive should NULL the gate when no offer survives');
+    });
+
+    it('re-derives AFTER the dataTables delete (orphaned offers/status rows already gone)', async function () {
+        indexer.indexerDb.doQuery.resolves([]);
+        indexer.indexerDb.doQuery.onFirstCall().resolves([{ action_index: 50 }]);
+        indexer.indexerDb.doQuery.withArgs(sinon.match(AFFECTED_SQL_RE)).resolves([{ tick: 'FOO' }]);
+        await rollback.rollback(100);
+
+        const queries = indexer.indexerDb.doQuery.args.map(a => a[0] || '');
+        const ordersDeleteIdx = queries.findIndex(q => /DELETE FROM orders WHERE action_index >= \?/i.test(q));
+        const affectedIdx     = queries.findIndex(q => AFFECTED_SQL_RE.test(q));
+        assert.ok(ordersDeleteIdx >= 0, 'orders dataTables delete should run');
+        assert.ok(affectedIdx > ordersDeleteIdx, 'escrow re-derive must run AFTER the dataTables delete');
+    });
+
+    it('does NOT touch escrow when there is no orphaned range', async function () {
         indexer.indexerDb.doQuery.resolves([]); // no firstActionIndex
         await rollback.rollback(100);
-        assert.ok(!escrowResetUpdate(), 'no escrow reset UPDATE expected when the rolled-back range is empty');
+        assert.ok(!rederiveUpdateCall(), 'no escrow re-derive UPDATE expected when the rolled-back range is empty');
+        assert.ok(!indexer.indexerDb.doQuery.args.some(a => a[0] && AFFECTED_SQL_RE.test(a[0])),
+            'no affected-ticker query expected when the rolled-back range is empty');
     });
 });
