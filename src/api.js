@@ -416,6 +416,43 @@ async function startApi(){
             }
         },
 
+        // Verified full-node set at a block (NODEPROOF / verified-validator tier):
+        // validators with a passed possession proof inside PROOF_WINDOW_BLOCKS of
+        // `block_index`. The hub unions this with FULLNODE.GENESIS_VERIFIERS to form
+        // the eligible-verifier set for a challenge round, matching the indexer's
+        // acceptance rule in actions/nodeproof.js. (Live-stake intersection is the
+        // caller's via the capability snapshot.)
+        async getfullnodeverifiers({block_index}){
+            if(block_index === undefined || block_index === null)
+                return { error: 'block_index is required' };
+            let blk = Number(block_index);
+            if(!Number.isInteger(blk) || blk < 0)
+                return { error: 'block_index must be a non-negative integer' };
+            if(!indexer.indexerDb)
+                return { error: 'indexer database not ready' };
+            try {
+                // Intersect the proof-window set with the LIVE full_node capability
+                // at this block — byte-identical to the eligibility rule in
+                // actions/nodeproof.js (_eligibleVerifierSet) and the reward split in
+                // actions/price.js, so the hub sizes quorum over the same set the
+                // chain will accept.
+                let raw = await indexer.indexerDb.getVerifiedFullNodeSet(blk);
+                let validators = [];
+                for(let v of raw){
+                    if(await indexer.indexerDb.hasCapability(v.pubkey, 'full_node', blk))
+                        validators.push(v);
+                }
+                return {
+                    block_index: blk,
+                    count:       validators.length,
+                    validators:  validators
+                };
+            } catch (err) {
+                console.error('getfullnodeverifiers error:', err);
+                return { error: 'failed to look up full-node verifiers' };
+            }
+        },
+
         // Source-keyed validator weights for stake-weighted quorum (STAKE_WEIGHTED_QUORUM).
         // Like getcapabilityvalidators but returns each effective signing key's `source`
         // (staking address) + the source's aggregate `weight`. The hub mirrors these into

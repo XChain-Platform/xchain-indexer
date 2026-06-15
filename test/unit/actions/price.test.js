@@ -219,6 +219,118 @@ describe('Price (PRICE) @regression @tier3', function () {
                 assert.strictEqual(Number(call.args[3]), 10); // sole qualified signer takes the round
             });
         });
+
+        // ── two-tranche full-node reward split (NODEPROOF verified tier) ──
+        // With FULLNODE.REWARD_SHARE > 0 the round budget splits into a base
+        // tranche (every signer) and a full-node tranche (verified full nodes,
+        // deduped per staking source). share == 0 keeps the legacy single pot.
+        describe('two-tranche full-node split', function () {
+            const SA = { pubkey: PUBKEY_A, source: 'addrA', source_id: 1 };
+            const SB = { pubkey: PUBKEY_B, source: 'addrB', source_id: 2 };
+
+            function rewardsByType(type) {
+                return indexer.indexerDb.createValidatorReward.getCalls().filter(c => c.args[2] === type);
+            }
+            // Only PASS pubkeys in `fullNodeSet` hold the full_node capability; every
+            // signer still holds `price`.
+            function fullNodeCapability(set) {
+                indexer.indexerDb.hasCapability.callsFake(async (pk, cap) => cap !== 'full_node' ? true : set.has(pk));
+            }
+
+            beforeEach(function () {
+                indexer.config.FULLNODE = Object.assign({}, indexer.config.FULLNODE, { REWARD_SHARE: '0.25' });
+                indexer.indexerDb.getVerifiedFullNodeSet = sinon.stub().resolves([]);
+                indexer.indexerDb.getActiveCapabilityCount.resolves(3); // quorum 2
+            });
+
+            afterEach(function () {
+                indexer.config.FULLNODE = Object.assign({}, indexer.config.FULLNODE, { REWARD_SHARE: '0' });
+            });
+
+            it('splits base (all signers) + full-node (verified, per source) tranches', async function () {
+                // A and B are verified full nodes (distinct sources); C is not.
+                indexer.indexerDb.getVerifiedFullNodeSet.resolves([SA, SB]);
+                fullNodeCapability(new Set([PUBKEY_A, PUBKEY_B]));
+                const data = v0Data();
+                await handler.parse(v0Params(ONE_PAIR, [
+                    { pubkey: PUBKEY_A, sig: SIG_A },
+                    { pubkey: PUBKEY_B, sig: SIG_B },
+                    { pubkey: PUBKEY_C, sig: SIG_C },
+                ]), data, null);
+                assert.strictEqual(data['VALIDATION_STATUS'], 'valid');
+
+                // base: 7.5 / 3 = 2.5 each, to ALL three signers
+                const base = rewardsByType('oracle_base');
+                assert.strictEqual(base.length, 3);
+                for (const c of base) assert.strictEqual(Number(c.args[3]), 2.5);
+                // full-node: 2.5 / 2 = 1.25 each, to A and B only
+                const full = rewardsByType('oracle_full_node');
+                assert.strictEqual(full.length, 2);
+                for (const c of full) assert.strictEqual(Number(c.args[3]), 1.25);
+                const fullPubs = full.map(c => c.args[0]).sort();
+                assert.deepStrictEqual(fullPubs, [PUBKEY_A, PUBKEY_B].sort());
+                // no legacy rows in two-tranche mode
+                assert.strictEqual(rewardsByType('oracle_round').length, 0);
+            });
+
+            it('rolls the full-node tranche into base when no verified full node signed', async function () {
+                indexer.indexerDb.getVerifiedFullNodeSet.resolves([]); // none verified this round
+                fullNodeCapability(new Set());
+                const data = v0Data();
+                await handler.parse(v0Params(ONE_PAIR, [
+                    { pubkey: PUBKEY_A, sig: SIG_A },
+                    { pubkey: PUBKEY_B, sig: SIG_B },
+                    { pubkey: PUBKEY_C, sig: SIG_C },
+                ]), data, null);
+                assert.strictEqual(data['VALIDATION_STATUS'], 'valid');
+                // whole 10 → base, 10/3 floored to 8dp; no full-node rows
+                const base = rewardsByType('oracle_base');
+                assert.strictEqual(base.length, 3);
+                for (const c of base) assert.strictEqual(Number(c.args[3]), 3.33333333);
+                assert.strictEqual(rewardsByType('oracle_full_node').length, 0);
+            });
+
+            it('gives one full-node share per SOURCE (delegated keys do not multi-claim)', async function () {
+                // A and B are verified but share one staking source → one full-node share,
+                // credited to the lexicographically smallest pubkey (A).
+                indexer.indexerDb.getVerifiedFullNodeSet.resolves([
+                    { pubkey: PUBKEY_A, source: 'addrShared', source_id: 1 },
+                    { pubkey: PUBKEY_B, source: 'addrShared', source_id: 1 },
+                ]);
+                fullNodeCapability(new Set([PUBKEY_A, PUBKEY_B]));
+                indexer.indexerDb.getActiveCapabilityCount.resolves(1); // quorum 1
+                const data = v0Data();
+                await handler.parse(v0Params(ONE_PAIR, [
+                    { pubkey: PUBKEY_A, sig: SIG_A },
+                    { pubkey: PUBKEY_B, sig: SIG_B },
+                ]), data, null);
+                assert.strictEqual(data['VALIDATION_STATUS'], 'valid');
+                const full = rewardsByType('oracle_full_node');
+                assert.strictEqual(full.length, 1, 'one share per source');
+                assert.strictEqual(full[0].args[0], PUBKEY_A);
+                assert.strictEqual(Number(full[0].args[3]), 2.5); // whole 2.5 tranche
+                // base: 7.5 / 2 = 3.75 each
+                const base = rewardsByType('oracle_base');
+                assert.strictEqual(base.length, 2);
+                for (const c of base) assert.strictEqual(Number(c.args[3]), 3.75);
+            });
+
+            it('share == 0 keeps the legacy oracle_round pot (no full-node lookup)', async function () {
+                indexer.config.FULLNODE = Object.assign({}, indexer.config.FULLNODE, { REWARD_SHARE: '0' });
+                const data = v0Data();
+                await handler.parse(v0Params(ONE_PAIR, [
+                    { pubkey: PUBKEY_A, sig: SIG_A },
+                    { pubkey: PUBKEY_B, sig: SIG_B },
+                    { pubkey: PUBKEY_C, sig: SIG_C },
+                ]), data, null);
+                assert.strictEqual(data['VALIDATION_STATUS'], 'valid');
+                assert.strictEqual(rewardsByType('oracle_round').length, 3);
+                assert.strictEqual(rewardsByType('oracle_base').length, 0);
+                assert.strictEqual(rewardsByType('oracle_full_node').length, 0);
+                assert.ok(indexer.indexerDb.getVerifiedFullNodeSet.notCalled,
+                    'no full-node lookup when the feature is off');
+            });
+        });
     });
 
     // ───────────────────────────────────────────────────────────────────────

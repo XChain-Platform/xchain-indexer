@@ -47,8 +47,18 @@ module.exports = {
                 price:          { MIN_STAKE: '1000.00000000' }, // Sign PRICE v0 snapshots (replaces Tier 1)
                 cross_chain:    { MIN_STAKE: '5000.00000000' }, // Cross-chain attestation (replaces Tier 2)
                 oracle_publish: { MIN_STAKE: '500.00000000'  }, // Publish price rounds to DOGE chain (replaces Tier 3)
-                attestation:    { MIN_STAKE: '1000.00000000' }  // Off-chain data attestation framework (http_get, llm, future providers)
+                attestation:    { MIN_STAKE: '1000.00000000' }, // Off-chain data attestation framework (http_get, llm, future providers)
+                full_node:      { MIN_STAKE: '2000.00000000' }  // Verified full-node tier — entrance stake; verification ALSO requires passing periodic NODEPROOF possession challenges (NODEPROOF.md)
             }
+        };
+        // Full-node possession-proof / verified-validator tier (NODEPROOF.md).
+        config['FULLNODE'] = {
+            CHALLENGE_INTERVAL_BLOCKS:    144,    // epoch cadence (~daily on BTC)
+            CONFIRM_DEPTH:                100,    // target block buried this deep (reorg-stable)
+            PROOF_WINDOW_BLOCKS:          300,    // a passed proof keeps a node "verified" this long
+            VERDICT_ACCEPT_WINDOW_BLOCKS:  24,    // a verdict must land within this many blocks of its epoch
+            REWARD_SHARE:                 '0',    // fraction of the oracle-round budget routed to verified full nodes (raise to '0.25' to enable — see price.js)
+            GENESIS_VERIFIERS:            []      // bootstrap verifier pubkeys (operator); empty = feature dormant
         };
         config['GAS_SCHEDULE'] = {
             ISSUE:              100000,

@@ -203,16 +203,75 @@ class Price {
         if(!error && data['COIN'] === 'BTC' && qualifiedSigners.length > 0){
             let staking     = this.config['STAKING'] || {};
             let rewardTotal = staking['ORACLE_REWARD_PER_ROUND'] || '10.00000000';
-            // Equal split, floored to GAS decimals — deterministic across
-            // validators (same pattern as the ATTEST fee split).
-            let perValidator = this.util.bcmulfloor(
-                this.util.bcdiv(rewardTotal, String(qualifiedSigners.length), 18), '1', 8
+            let fnShare     = String((this.config['FULLNODE'] || {})['REWARD_SHARE'] || '0');
+
+            // Two-tranche split (NODEPROOF / verified full-node tier). When
+            // FULLNODE.REWARD_SHARE > 0 the round budget is split into a BASE
+            // tranche (every qualified signer) and a FULL-NODE tranche (only
+            // signers that are VERIFIED full nodes this block, deduped per staking
+            // source — one operator = one share). When the share is 0 — or no
+            // verified full node signed this round — the whole budget pays the
+            // base set; with share == 0 that base set keeps the legacy
+            // 'oracle_round' reward_type so existing-chain replay stays
+            // byte-identical. CONSENSUS: REWARD_SHARE is a fleet-wide consensus
+            // parameter (like ORACLE_REWARD_PER_ROUND) — it MUST match across every
+            // indexer and be deployed atomically. (See NODEPROOF.md.)
+            let activeRegime = this.util.bcgt(fnShare, '0');
+
+            // Resolve the verified full-node SOURCES among THIS round's signers.
+            // Earning the bonus requires both signing the round AND being a verified
+            // full node (a recent passed possession proof + a live full_node stake),
+            // deduped to the lexicographically smallest pubkey per source.
+            let fnSources = [];   // [{ source_id, pubkey }]
+            if(activeRegime){
+                let verified = await this.indexerDb.getVerifiedFullNodeSet(data['BLOCK_INDEX']);
+                if(verified.length > 0){
+                    let verifiedByPubkey = {};
+                    for(let v of verified) verifiedByPubkey[String(v.pubkey).toLowerCase()] = v;
+                    let bySource = {};
+                    for(let pk of qualifiedSigners){
+                        let pkl = String(pk).toLowerCase();
+                        let v   = verifiedByPubkey[pkl];
+                        if(!v) continue;
+                        if(!await this.indexerDb.hasCapability(pk, 'full_node', data['BLOCK_INDEX'])) continue;
+                        let sid = String(v.source_id);
+                        if(bySource[sid] === undefined || pkl < bySource[sid]) bySource[sid] = pkl;
+                    }
+                    fnSources = Object.keys(bySource).map(sid => ({ source_id: sid, pubkey: bySource[sid] }));
+                }
+            }
+
+            // Carve the full-node tranche (floored to GAS decimals). Rolls into the
+            // base tranche when no verified full node signed this round.
+            let fullNodeTotal = (activeRegime && fnSources.length > 0)
+                ? this.util.bcmulfloor(this.util.bcmul(rewardTotal, fnShare, 18), '1', 8)
+                : '0';
+            let baseTotal = this.util.bcsub(rewardTotal, fullNodeTotal, 8);
+
+            // Base tranche — equal split across ALL qualified signers.
+            let baseType = activeRegime ? 'oracle_base' : 'oracle_round';
+            let perBase  = this.util.bcmulfloor(
+                this.util.bcdiv(baseTotal, String(qualifiedSigners.length), 18), '1', 8
             );
-            if(this.util.bcgt(perValidator, '0')){
+            if(this.util.bcgt(perBase, '0')){
                 for(let pk of qualifiedSigners){
                     await this.indexerDb.createValidatorReward(
-                        pk, round, 'oracle_round', perValidator, data['BLOCK_INDEX'], true
+                        pk, round, baseType, perBase, data['BLOCK_INDEX'], true
                     );
+                }
+            }
+
+            // Full-node tranche — equal split across the distinct verified sources.
+            if(this.util.bcgt(fullNodeTotal, '0') && fnSources.length > 0){
+                let perFull = this.util.bcmulfloor(
+                    this.util.bcdiv(fullNodeTotal, String(fnSources.length), 18), '1', 8
+                );
+                if(this.util.bcgt(perFull, '0')){
+                    for(let s of fnSources){
+                        await this.indexerDb.createValidatorReward(
+                            s.pubkey, round, 'oracle_full_node', perFull, data['BLOCK_INDEX'], true
+                        );
+                    }
                 }
             }
         }

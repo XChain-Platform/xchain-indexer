@@ -3,7 +3,7 @@ CREATE TABLE validator_rewards (
     id                  BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
     source_id           BIGINT UNSIGNED NOT NULL,        -- staking address
     signing_pubkey_id   BIGINT UNSIGNED NOT NULL,        -- FK to index_pubkeys
-    reward_type         VARCHAR(20) NOT NULL,             -- 'oracle_round', 'attest_fee', 'anchor_<chain>' (e.g. 'anchor_BTC'), 'anchor_archive'
+    reward_type         VARCHAR(20) NOT NULL,             -- 'oracle_round' (legacy/share=0), 'oracle_base' + 'oracle_full_node' (two-tranche split), 'attest_fee', 'anchor_<chain>' (e.g. 'anchor_BTC'), 'anchor_archive'
     round_reference     BIGINT UNSIGNED,                  -- round number or attestation ref
     amount              VARCHAR(250) NOT NULL,
     block_index         BIGINT UNSIGNED NOT NULL

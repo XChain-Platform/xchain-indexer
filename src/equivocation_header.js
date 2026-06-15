@@ -56,6 +56,7 @@ const ENGINE_TAGS = {
     ORACLE:     'XORACLE',
     CHECKPOINT: 'XCHECKPOINT',
     CONFIG:     'XCONFIG',
+    NODEPROOF:  'XNODEPROOF',
 };
 
 // Whether the EQUIV header is in effect for a settlement whose BTC-anchored snapshot
