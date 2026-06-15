@@ -102,6 +102,10 @@ class ProtocolChanges {
         this.addChange('UNSTAKE',            '2.0.0',0,0,0,0,0,0);
         this.addChange('DELEGATE',           '2.0.0',0,0,0,0,0,0);
         this.addChange('COLLECT',            '2.0.0',0,0,0,0,0,0);
+        // SLASH — permissionless capability-stake equivocation slashing (WI-2 bump 2). The
+        // verifier only ACCEPTS proofs whose two messages carry the EQUIV header, so slashing
+        // is naturally inert until the EQUIV flag-day (no coupling with the SLASH protocol gate).
+        this.addChange('SLASH',              '2.0.0',0,0,0,0,0,0);
 
         // PRICE action — validator oracle (v0) and user oracle (v1) pricing
         // Publishable on any chain (DOGE recommended for low fees)
@@ -121,6 +125,12 @@ class ProtocolChanges {
         // ride the hub mirror; registered for consistency/documentation.
         // (See xchain-documentation/protocol/actions/XCALL.md)
         this.addChange('XCALL',              '2.0.0',0,0,0,0,0,0);
+
+        // NODEPROOF — full-node possession-proof verdict (v0; validator-broadcast).
+        // Records which validators answered the derived possession challenge, so the
+        // verified set earns the full-node oracle-round reward tranche. BTC-only.
+        // (See xchain-documentation/protocol/actions/NODEPROOF.md)
+        this.addChange('NODEPROOF',          '2.0.0',0,0,0,0,0,0);
 
         // Define protocol changes (ALL LOWER Case)
         // this.addChange('name','1.0.0',0,0,0,0,0,0);

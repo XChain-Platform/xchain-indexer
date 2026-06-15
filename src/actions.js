@@ -73,6 +73,7 @@ const stake              = require('./actions/stake.js');
 const unstake            = require('./actions/unstake.js');
 const delegate           = require('./actions/delegate.js');
 const collect            = require('./actions/collect.js');
+const slash              = require('./actions/slash.js');
 
 // PRICE action (validator snapshots and user oracle prices)
 const price              = require('./actions/price.js');
@@ -87,6 +88,9 @@ const anchor             = require('./actions/anchor.js');
 // (target-chain mirror-driven execution injection)
 const xcall              = require('./actions/xcall.js');
 const xexec              = require('./actions/xexec.js');
+
+// Full-node possession-proof verdict (verified-validator tier)
+const nodeproof          = require('./actions/nodeproof.js');
 
 class Actions {
 
@@ -200,6 +204,7 @@ class Actions {
         this.actionUnstake          = new unstake(this);
         this.actionDelegate         = new delegate(this);
         this.actionCollect          = new collect(this);
+        this.actionSlash            = new slash(this);
 
         // PRICE action instance
         this.actionPrice            = new price(this);
@@ -209,6 +214,9 @@ class Actions {
 
         // ANCHOR action instance (single handler dispatches v0/v1/v2 internally)
         this.actionAnchor           = new anchor(this);
+
+        // NODEPROOF — full-node possession-proof verdict handler
+        this.actionNodeproof        = new nodeproof(this);
 
         // Cross-chain contract call instances (XCALL dispatches v0/v2 internally;
         // XEXEC is the target-chain injection handler)
@@ -378,6 +386,7 @@ class Actions {
         if(action=='UNSTAKE')            await this.actionUnstake.parse(params, data, error);
         if(action=='DELEGATE')           await this.actionDelegate.parse(params, data, error);
         if(action=='COLLECT')            await this.actionCollect.parse(params, data, error);
+        if(action=='SLASH')              await this.actionSlash.parse(params, data, error);
 
         // PRICE action (validator snapshots and user oracles)
         if(action=='PRICE')              await this.actionPrice.parse(params, data, error);
@@ -392,6 +401,9 @@ class Actions {
         // XEXEC (system-injected, mirror-driven target-chain execution)
         if(action=='XCALL')              await this.actionXcall.parse(params, data, error);
         if(action=='XEXEC')              await this.actionXexec.parse(params, data, error);
+
+        // Full-node possession-proof verdict (verified-validator tier)
+        if(action=='NODEPROOF')          await this.actionNodeproof.parse(params, data, error);
     }
 
     // Read-only estimator for the XCHAIN-denominated protocol fee ("fees.AMOUNT") an action
