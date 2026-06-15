@@ -303,7 +303,7 @@ class Execute {
                         // the generic emission router (no decoder/parser exists for them).
                         // Handled inline: deduct stake, credit destination, write event log.
                         if(emission.action === 'SLASH'){
-                            await this._processSlashEmission(emission, data);
+                            await this._processSlashEmission(emission, data, i);
                         } else {
                             await this.processEmission(emission, data, i);
                             // Cross-contract callee finished: bank its unused
@@ -945,7 +945,7 @@ class Execute {
     //   1. Deduct `amount` from contract_stakes (LIFO) then contract_unstakes.
     //   2. Credit the slashed amount to contracts.slash_destination_id (BURN or configured).
     //   3. Write a slash_events row keyed by execution_index for audit + wallet UX.
-    async _processSlashEmission(emission, data){
+    async _processSlashEmission(emission, data, slashPosition){
         let p = emission.params || {};
         let contractIndex = Number(p.contractIndex);
         let pubkey        = String(p.pubkey || '').toLowerCase();
@@ -973,7 +973,7 @@ class Execute {
         // Deduct (returns actual slashed total — may be less than requested if balance lower).
         // Pass BLOCK_INDEX so Pass 1 slashes only still-active stake; unstaked-but-cooling tokens are
         // slashed from contract_unstakes (Pass 2), preventing the double-count / supply inflation.
-        let slashed = await this.indexerDb.slashContractStake(contractIndex, pubkeyId, tickId, amount, parseInt(data['BLOCK_INDEX']));
+        let slashed = await this.indexerDb.slashContractStake(contractIndex, pubkeyId, tickId, amount, parseInt(data['BLOCK_INDEX']), data['ACTION_INDEX'], slashPosition);
         if(!this.util.bcgt(slashed, '0')) return;
 
         // Credit destination address (BURN or user-specified)

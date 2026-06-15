@@ -47,7 +47,11 @@ class Rollback {
             'transactions',
             'validator_rewards',
             'contract_state',
-            'slash_events'
+            'slash_events',
+            // Per-row slash debit log (one row per in-place contract_stakes/contract_unstakes
+            // amount reduction). Block-scoped (rollback key = block_index, same as slash_events).
+            // The restore below reads it BEFORE this generic delete drops the orphaned rows.
+            'contract_slash_debits'
         ];
 
         // List of tables that store data using action_index
@@ -539,6 +543,37 @@ class Rollback {
                               AND deactivation_block >= ?`;
                 args = [Number(block_index) + activationDelay];
                 await this.indexerDb.doQuery(query, args);
+
+                // Restore stake amounts an orphaned SLASH reduced IN PLACE on surviving rows.
+                // slashContractStake debits contract_stakes/contract_unstakes.amount on rows
+                // from earlier (surviving) blocks and records each debit's pre-slash
+                // `prev_amount` in contract_slash_debits. The generic deletes below drop the
+                // orphaned debit rows but cannot revert the in-place reduction, so without this
+                // a surviving row keeps its slashed amount while a from-genesis replay (slash
+                // never re-mined) keeps the original — a consensus-affecting divergence (active
+                // stake drives VM staker weighting, quorum eligibility, and cooldown refunds on
+                // all chains). We copy back the EARLIEST orphaned debit's `prev_amount` per row
+                // (min block_index, id tiebreak) — a pure string copy, so the restored value is
+                // byte-identical to the surviving chain's pre-orphaned-slash state and to a fresh
+                // replay (no arithmetic / decimal-format drift). Earlier SURVIVING debits
+                // (block_index < block_index) are intentionally left applied. Runs BEFORE the
+                // deletes so the debit rows and target rows still exist.
+                for(let slashTbl of ['contract_stakes', 'contract_unstakes']){
+                    query = `UPDATE ` + slashTbl + ` t
+                                JOIN contract_slash_debits d ON d.stake_action_index = t.action_index
+                                SET t.amount = d.prev_amount
+                                WHERE d.target_table = ?
+                                  AND d.block_index >= ?
+                                  AND NOT EXISTS (
+                                      SELECT 1 FROM contract_slash_debits e
+                                      WHERE e.target_table      = d.target_table
+                                        AND e.stake_action_index = d.stake_action_index
+                                        AND e.block_index >= ?
+                                        AND (e.block_index < d.block_index
+                                             OR (e.block_index = d.block_index AND e.id < d.id)))`;
+                    args = [slashTbl, block_index, block_index];
+                    await this.indexerDb.doQuery(query, args);
+                }
 
                 // Loop through the data tables and delete records above the action_index
                 for(let table of this.dataTables){

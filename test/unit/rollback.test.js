@@ -63,6 +63,27 @@ describe('Rollback @regression @tier3', function () {
         }
     });
 
+    it('blockTables contains contract_slash_debits so orphaned slash-debit rows are pruned', function () {
+        assert.ok(rollback.blockTables.includes('contract_slash_debits'));
+    });
+
+    it('restores slashed stake amounts from contract_slash_debits before the deletes', async function () {
+        indexer.indexerDb.doQuery.onFirstCall().resolves([{ action_index: 50 }]); // firstActionIndex
+        indexer.indexerDb.doQuery.resolves([]);
+        await rollback.rollback(100);
+        const calls = indexer.indexerDb.doQuery.getCalls();
+        const stakeRestore = calls.find(c => /UPDATE contract_stakes/.test(c.args[0]) && c.args[0].includes('contract_slash_debits') && c.args[0].includes('prev_amount'));
+        const unstakeRestore = calls.find(c => /UPDATE contract_unstakes/.test(c.args[0]) && c.args[0].includes('contract_slash_debits'));
+        assert.ok(stakeRestore, 'expected a contract_stakes slash-amount restore');
+        assert.ok(unstakeRestore, 'expected a contract_unstakes slash-amount restore');
+        assert.deepStrictEqual(stakeRestore.args[1], ['contract_stakes', 100, 100]);
+        assert.deepStrictEqual(unstakeRestore.args[1], ['contract_unstakes', 100, 100]);
+        // The restore must precede the generic delete of contract_stakes (debit rows still present)
+        const restoreIdx = calls.indexOf(stakeRestore);
+        const deleteIdx = calls.findIndex(c => /DELETE FROM contract_stakes WHERE action_index/.test(c.args[0]));
+        assert.ok(restoreIdx >= 0 && deleteIdx >= 0 && restoreIdx < deleteIdx, 'slash restore must run before the contract_stakes delete');
+    });
+
     // ─── Contract-staking pre-scan (addresses/tickers collection) ─────
 
     it('pre-scans contract-staking tables and feeds affected addresses/tickers to updateBalances/updateTokens', async function () {
