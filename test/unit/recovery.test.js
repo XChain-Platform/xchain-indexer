@@ -25,6 +25,15 @@ const crypto = require('crypto');
 const zlib   = require('zlib');
 
 const AnchorRecovery = require('../../src/recovery.js');
+const Utility        = require('../../src/utility.js');
+const eq             = require('../../src/equivocation_header.js');
+
+// Stake-weighted quorum (WI-1) is active for every regtest snapshot_block
+// (STAKE_WEIGHTED_QUORUM_ACTIVATION.regtest = 0), so recovery takes the weighted
+// predicate, which needs the indexer's bcmath. Each archived snapshot below
+// carries a DISTINCT source at equal weight, so the source-deduped threshold
+// (3·Σweight > 2·S) reduces to the legacy 2f+1 signer count.
+const util = new Utility();
 
 // ── Real Ed25519 helpers ────────────────────────────────────────────────────
 function makeKeypair() {
@@ -39,12 +48,13 @@ function signHex(kp, payload) {
 const MATCH_KEYS = ['match_id', 'snapshot_block', 'network',
     'a_chain', 'a_action_index', 'a_kind', 'a_tick', 'a_amount', 'a_filled_before', 'a_ownership', 'a_payout_addr',
     'b_chain', 'b_action_index', 'b_kind', 'b_tick', 'b_amount', 'b_filled_before', 'b_ownership', 'b_payout_addr',
-    'effective_time', 'validator_signatures', 'status'];
+    'effective_time', 'finalizing_view', 'validator_signatures', 'status'];
 function serializeMatch(m) {
     let out = {};
     for (let k of MATCH_KEYS) {
         let v = m[k];
         if (k === 'a_action_index' || k === 'b_action_index' || k === 'snapshot_block' || k === 'effective_time') out[k] = Number(v);
+        else if (k === 'finalizing_view') out[k] = Number(v) || 0;
         else if (k === 'a_ownership' || k === 'b_ownership') out[k] = Number(v) ? 1 : 0;
         else if (k === 'a_tick' || k === 'b_tick') out[k] = (v == null) ? null : String(v);
         else out[k] = String(v == null ? '' : v);
@@ -52,13 +62,61 @@ function serializeMatch(m) {
     return out;
 }
 function matchCanonical(m) {
-    return ['XMATCH', m.match_id, String(m.snapshot_block),
+    let raw = ['XMATCH', m.match_id, String(m.snapshot_block),
         m.a_chain, String(m.a_action_index), m.a_tick || '', String(m.a_amount), String(m.a_ownership), m.a_payout_addr,
         m.b_chain, String(m.b_action_index), m.b_tick || '', String(m.b_amount), String(m.b_ownership), m.b_payout_addr,
         String(m.effective_time), m.network || '',
         m.a_kind || 'swap', String(m.a_filled_before != null ? m.a_filled_before : '0'),
         m.b_kind || 'swap', String(m.b_filled_before != null ? m.b_filled_before : '0')].join('|');
+    // EQUIV active in regtest: TAG=XDEX, ROUND_ID=match_id, VIEW=finalizing_view (default 0).
+    if (eq.isEquivHeaderActive(m.snapshot_block, m.network))
+        return eq.buildEquivCanonical(eq.ENGINE_TAGS.DEX, m.match_id, (m.finalizing_view != null ? m.finalizing_view : 0), raw);
+    return raw;
 }
+// ── Publisher-faithful XCALL serialization (CALL_KEYS order) ────────────────
+const CALL_KEYS = ['id', 'call_id', 'phase', 'snapshot_block', 'network',
+    'source_chain', 'source_action_index', 'source_contract_index',
+    'target_chain', 'target_contract_index', 'method', 'params_json',
+    'gas_limit', 'cross_hops', 'effective_time', 'finalizing_view', 'result_status',
+    'return_payload_b64', 'validator_signatures', 'status'];
+function serializeCall(c) {
+    let out = {};
+    for (let k of CALL_KEYS) {
+        let v = c[k];
+        if (k === 'id' || k === 'snapshot_block' || k === 'source_action_index' || k === 'source_contract_index' ||
+            k === 'target_contract_index' || k === 'gas_limit' || k === 'cross_hops' || k === 'effective_time')
+            out[k] = Number(v);
+        else if (k === 'finalizing_view')
+            out[k] = Number(v) || 0;
+        else if (k === 'result_status' || k === 'return_payload_b64')
+            out[k] = (v == null) ? null : String(v);
+        else
+            out[k] = String(v == null ? '' : v);
+    }
+    return out;
+}
+// Byte-identical to recovery._callCanonical / hub StateAnchorPublisher._callCanonical.
+function callCanonical(c) {
+    let sha = (s) => crypto.createHash('sha256').update(String(s == null ? '' : s), 'utf8').digest('hex');
+    let phase = (c.phase === 'result') ? 'result' : 'dispatch';
+    let raw;
+    if (c.phase === 'result') {
+        raw = ['XCALL', 'RESULT', c.call_id, String(c.snapshot_block), c.network || '',
+            c.target_chain, String(c.result_status || ''),
+            sha(c.return_payload_b64), String(c.effective_time)].join('|');
+    } else {
+        raw = ['XCALL', 'DISPATCH', c.call_id, String(c.snapshot_block), c.network || '',
+            c.source_chain, String(c.source_action_index), String(c.source_contract_index),
+            c.target_chain, String(c.target_contract_index),
+            c.method, sha(c.params_json),
+            String(c.gas_limit), String(c.cross_hops), String(c.effective_time)].join('|');
+    }
+    // EQUIV active in regtest: TAG=XCALL, ROUND_ID=sha256('XCALLROUND|'+phase+'|'+call_id), VIEW=finalizing_view.
+    if (eq.isEquivHeaderActive(c.snapshot_block, c.network))
+        return eq.buildEquivCanonical(eq.ENGINE_TAGS.XCALL, sha('XCALLROUND|' + phase + '|' + c.call_id), (c.finalizing_view != null ? c.finalizing_view : 0), raw);
+    return raw;
+}
+
 function crc32Hex(str) {
     let buf = Buffer.from(str, 'utf8');
     let n;
@@ -92,10 +150,21 @@ function buildBatch(batchSeq, rawMatches, oracleKeys, crossKeys, opts) {
         return serializeMatch(m);
     });
     let snaps = [];
-    for (let kp of crossKeys)  snaps.push({ snapshot_block: SNAPSHOT_BLOCK, capability: 'cross_chain',    signing_pubkey: kp.pubkey, amount: '5' });
-    for (let kp of oracleKeys) snaps.push({ snapshot_block: SNAPSHOT_BLOCK, capability: 'oracle_publish', signing_pubkey: kp.pubkey, amount: '5' });
+    // Distinct source per signing key (no DELEGATE) at equal weight → the
+    // weighted threshold mirrors the legacy 2f+1 count.
+    for (let kp of crossKeys)  snaps.push({ snapshot_block: SNAPSHOT_BLOCK, capability: 'cross_chain',    signing_pubkey: kp.pubkey, source: 'src_' + kp.pubkey.slice(0, 16), amount: '5' });
+    for (let kp of oracleKeys) snaps.push({ snapshot_block: SNAPSHOT_BLOCK, capability: 'oracle_publish', signing_pubkey: kp.pubkey, source: 'src_' + kp.pubkey.slice(0, 16), amount: '5' });
+    let callKeys = opts.callKeys || crossKeys;   // calls must be signed by the cross_chain set
+    let calls = (opts.calls || []).map(rc => {
+        let c = Object.assign({}, rc);
+        let canon = callCanonical(c);
+        c.validator_signatures = JSON.stringify(callKeys.slice(0, opts.callSigners || 3)
+            .map(kp => ({ pubkey: kp.pubkey, sig: signHex(kp, canon) })));
+        return serializeCall(c);
+    });
     let obj = { v: 1, network: 'regtest', batch_seq: batchSeq, matches: matches };
     if (opts.rewards) obj.rewards = opts.rewards;
+    if (opts.calls) obj.calls = calls;
     obj.capability_snapshots = snaps;
     let json = JSON.stringify(obj);
     let crc  = crc32Hex(json);
@@ -106,9 +175,13 @@ function buildBatch(batchSeq, rawMatches, oracleKeys, crossKeys, opts) {
     for (let i = 0; i < b64.length; i += chunkSize) chunks.push(b64.slice(i, i + chunkSize));
     let totalChunks = chunks.length;
 
-    let wrapperCanonical = ['XCHECKPOINT', CP.chain, CP.network, String(CP.block_index), CP.block_hash,
+    let rawWrapper = ['XCHECKPOINT', CP.chain, CP.network, String(CP.block_index), CP.block_hash,
         CP.ledger_hash, CP.actions_hash, CP.contract_hash, String(CP.checkpoint_seq), String(SNAPSHOT_BLOCK),
         String(batchSeq), String(matches.length), crc, String(totalChunks)].join('|');
+    // EQUIV active in regtest (WI-2 bump 2): the v1 archive ROUND_ID appends batch_seq to
+    // the v0 round id (R-4 distinct-key fix), VIEW=0. Byte-matches recovery._wrapperCanonical.
+    let wrapperCanonical = eq.buildEquivCanonical(eq.ENGINE_TAGS.CHECKPOINT,
+        CP.chain + '|' + CP.network + '|' + CP.block_index + '|' + CP.checkpoint_seq + '|' + batchSeq, 0, rawWrapper);
     let wrapperSigs = oracleKeys.slice(0, opts.wrapperSigners || 3)
         .map(kp => ({ pubkey: kp.pubkey, sig: signHex(kp, wrapperCanonical) }));
 
@@ -128,14 +201,33 @@ function rawMatch(id, status) {
         a_filled_before: '0', a_ownership: 0, a_payout_addr: 'Lpay',
         b_chain: 'DOGE', b_action_index: 8, b_kind: 'swap', b_tick: null, b_amount: '2000',
         b_filled_before: '0', b_ownership: 0, b_payout_addr: 'Dpay',
-        effective_time: 1700000000, status: status || 'finalized' };
+        effective_time: 1700000000, finalizing_view: 0, status: status || 'finalized' };
+}
+
+// A DISPATCH or RESULT XCALL relay row, signed against the archived cross_chain
+// set (the same SNAPSHOT_BLOCK the wrapper+matches use).
+function rawCall(call_id, phase, overrides) {
+    let base = (phase === 'result')
+        ? { id: 0, call_id, phase: 'result', snapshot_block: SNAPSHOT_BLOCK, network: 'regtest',
+            source_chain: 'BTC', source_action_index: 10, source_contract_index: 2,
+            target_chain: 'LTC', target_contract_index: 3, method: 'transfer',
+            params_json: '{"to":"addr","amt":5}', gas_limit: 1000000, cross_hops: 0,
+            effective_time: 1700000000, finalizing_view: 0, result_status: 'ok', return_payload_b64: 'cmVzdWx0',
+            status: 'finalized' }
+        : { id: 0, call_id, phase: 'dispatch', snapshot_block: SNAPSHOT_BLOCK, network: 'regtest',
+            source_chain: 'BTC', source_action_index: 10, source_contract_index: 2,
+            target_chain: 'LTC', target_contract_index: 3, method: 'transfer',
+            params_json: '{"to":"addr","amt":5}', gas_limit: 1000000, cross_hops: 0,
+            effective_time: 1700000000, finalizing_view: 0, result_status: null, return_payload_b64: null,
+            status: 'finalized' };
+    return Object.assign(base, overrides || {});
 }
 
 // In-memory DOGE indexer DB for the recovery query surface.
 function memDb(v1s, v2s) {
-    let matches = [], snapshots = [];
+    let matches = [], snapshots = [], calls = [];
     return {
-        matches, snapshots,
+        matches, snapshots, calls,
         async doQuery(sql, params) {
             params = params || [];
             if (sql.startsWith('SELECT * FROM anchor_actions WHERE version = 1')) return v1s;
@@ -155,6 +247,17 @@ function memDb(v1s, v2s) {
             }
             if (sql.startsWith('INSERT INTO cross_chain_matches')) {
                 matches.push({ match_id: params[0], status: params[21] });
+                return [];
+            }
+            // ── cross_chain_calls (XCALL relay rows; keyed on call_id + phase) ──
+            if (sql.startsWith('SELECT call_id FROM cross_chain_calls'))
+                return calls.filter(r => r.call_id === params[0] && r.phase === params[1]).map(r => ({ call_id: r.call_id }));
+            if (sql.startsWith('UPDATE cross_chain_calls SET status')) {
+                for (let r of calls) if (r.call_id === params[1] && r.phase === params[2]) r.status = params[0];
+                return [];
+            }
+            if (sql.startsWith('INSERT INTO cross_chain_calls')) {
+                calls.push({ id: params[0], call_id: params[1], phase: params[2], status: params[15] });
                 return [];
             }
             return [];
@@ -188,7 +291,7 @@ function rewardBtcDbStub() {
 
 describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () {
     let oracleKeys, crossKeys;
-    const quiet = { log: () => {} };
+    const quiet = { log: () => {}, util };
 
     beforeEach(function () {
         oracleKeys = [makeKeypair(), makeKeypair(), makeKeypair(), makeKeypair()];
@@ -309,6 +412,81 @@ describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () 
             let report = await new AnchorRecovery(memDb([v1], []), Object.assign({ btcDb: rewardBtcDbStub() }, quiet)).run();
             assert.strictEqual(report.verified, 0);
             assert.ok(report.failed[0].reason.includes('earn-time source'));
+        });
+    });
+
+    // ── XCALL relay-row restore (cross_chain_calls; the XCALL recoverability leg) ──
+    describe('archived XCALL relay rows', function () {
+
+        it('round-trips both phases: a DISPATCH and a RESULT row rebuild', async function () {
+            let { v1 } = buildBatch(0, [rawMatch('m1')], oracleKeys, crossKeys,
+                                    { calls: [rawCall('c1', 'dispatch'), rawCall('c1', 'result')] });
+            let db = memDb([v1], []);
+            let report = await new AnchorRecovery(db, quiet).run();
+
+            assert.strictEqual(report.verified, 1);
+            assert.strictEqual(report.failed.length, 0);
+            assert.strictEqual(report.calls, 2);
+            assert.strictEqual(db.calls.length, 2);
+            // Same call_id, distinct phases — the composite key keeps both rows.
+            assert.deepStrictEqual(db.calls.map(c => c.phase).sort(), ['dispatch', 'result']);
+            assert.ok(db.calls.every(c => c.call_id === 'c1' && c.status === 'finalized'));
+        });
+
+        it('latest-status-wins: a later batch retracts an earlier finalized call (per phase)', async function () {
+            let b0 = buildBatch(0, [rawMatch('m1')], oracleKeys, crossKeys,
+                                { calls: [rawCall('c1', 'dispatch', { status: 'finalized' })] });
+            let b1 = buildBatch(1, [rawMatch('m2')], oracleKeys, crossKeys,
+                                { calls: [rawCall('c1', 'dispatch', { status: 'retracted' })] });
+            let db = memDb([b0.v1, b1.v1], []);
+            let report = await new AnchorRecovery(db, quiet).run();
+
+            assert.strictEqual(report.verified, 2);
+            assert.strictEqual(db.calls.length, 1);
+            assert.strictEqual(db.calls[0].status, 'retracted');
+        });
+
+        it('a RESULT does not collide with the DISPATCH of the same call_id (no spurious status move)', async function () {
+            // Batch 0 finalizes the dispatch; batch 1 lands the result. The result
+            // INSERT must not be mistaken for an UPDATE of the dispatch row.
+            let b0 = buildBatch(0, [rawMatch('m1')], oracleKeys, crossKeys,
+                                { calls: [rawCall('c1', 'dispatch', { status: 'finalized' })] });
+            let b1 = buildBatch(1, [rawMatch('m2')], oracleKeys, crossKeys,
+                                { calls: [rawCall('c1', 'result', { status: 'finalized' })] });
+            let db = memDb([b0.v1, b1.v1], []);
+            let report = await new AnchorRecovery(db, quiet).run();
+
+            assert.strictEqual(report.verified, 2);
+            assert.strictEqual(db.calls.length, 2);
+            assert.strictEqual(db.calls.filter(c => c.phase === 'dispatch').length, 1);
+            assert.strictEqual(db.calls.filter(c => c.phase === 'result').length, 1);
+        });
+
+        it('rejects a call with sub-quorum signatures against the archived cross_chain set', async function () {
+            let { v1 } = buildBatch(0, [rawMatch('m1')], oracleKeys, crossKeys,
+                                    { calls: [rawCall('c1', 'dispatch')], callSigners: 2 });   // 2 < 2f+1 = 3
+            let db = memDb([v1], []);
+            let report = await new AnchorRecovery(db, quiet).run();
+
+            assert.strictEqual(report.verified, 0);
+            assert.ok(report.failed[0].reason.includes('fails quorum against the archived cross_chain set'));
+            assert.ok(report.failed[0].reason.includes('dispatch'));
+            assert.strictEqual(db.calls.length, 0);
+        });
+
+        it('a RESULT row signed by the oracle set (not cross_chain) fails quorum', async function () {
+            // The RESULT-phase canonical must verify against the archived
+            // cross_chain set specifically — federation membership alone (e.g. a
+            // valid oracle_publish signer) is not enough to authorize a relay row.
+            let { v1 } = buildBatch(0, [rawMatch('m1')], oracleKeys, crossKeys,
+                                    { calls: [rawCall('c1', 'result')], callKeys: oracleKeys });
+            let db = memDb([v1], []);
+            let report = await new AnchorRecovery(db, quiet).run();
+
+            assert.strictEqual(report.verified, 0);
+            assert.ok(report.failed[0].reason.includes('fails quorum against the archived cross_chain set'));
+            assert.ok(report.failed[0].reason.includes('result'));
+            assert.strictEqual(db.calls.length, 0);
         });
     });
 });

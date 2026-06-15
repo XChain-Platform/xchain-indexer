@@ -21,6 +21,7 @@
  ********************************************************************/
 
 const crypto = require('crypto');
+const eq     = require('./equivocation_header.js');
 
 // ASN.1 DER prefix for Ed25519 SPKI (SubjectPublicKeyInfo) — 12 bytes
 const SPKI_ED25519_PREFIX = Buffer.from('302a300506032b6570032100', 'hex');
@@ -50,17 +51,23 @@ function verify(payload, sigHex, pubkeyHex) {
 // Build the canonical signable payload for a PRICE v0 round.
 // This must match exactly what validators sign on the hub side.
 // Format: deterministic JSON with sorted pairs by pair_id.
-function buildPriceV0Payload(round, timestamp, pairs) {
+function buildPriceV0Payload(round, timestamp, pairs, network) {
     let sortedPairs = [...pairs].sort((a, b) => {
         if (a.pair < b.pair) return -1;
         if (a.pair > b.pair) return 1;
         return 0;
     });
-    return JSON.stringify({
+    let raw = JSON.stringify({
         round:     parseInt(round),
         timestamp: parseInt(timestamp),
         pairs:     sortedPairs
     });
+    // EQUIV header (WI-2 bump 2): gated on the round (a BTC block height, carried in
+    // the signed content) + network, so the hub and every indexer flip identically.
+    // XORACLE has no view change → VIEW=0. Below the flag-day, the bare JSON (regression-safe).
+    if (eq.isEquivHeaderActive(round, network))
+        return eq.buildEquivCanonical(eq.ENGINE_TAGS.ORACLE, parseInt(round), 0, raw);
+    return raw;
 }
 
 module.exports = {

@@ -20,6 +20,7 @@ CREATE TABLE cross_chain_matches (
     b_ownership          TINYINT(1)   NOT NULL DEFAULT 0,
     b_payout_addr        VARCHAR(255) NOT NULL,
     effective_time       BIGINT NOT NULL,                         -- wall-clock instant the indexer applies at (shared clock)
+    finalizing_view      INT          NOT NULL DEFAULT 0,         -- PBFT view the round finalized at; signed into the EQUIV canonical (WI-2 bump 2) so the indexer rebuilds the exact view
     validator_signatures TEXT         NOT NULL,                   -- JSON [{pubkey,sig}] — 2f+1 over the canonical match
     status               VARCHAR(20)  NOT NULL DEFAULT 'finalized',
     batch_root           VARCHAR(64),

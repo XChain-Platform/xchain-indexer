@@ -68,5 +68,21 @@ describe('equivocation_header (indexer)', function () {
                 .EQUIV_HEADER_ACTIVATION;
             assert.deepStrictEqual(eq.EQUIV_HEADER_ACTIVATION, canonical);
         });
+        it('all 5 copies == indexer (map + tags + builder bytes)', function () {
+            // hub + indexer (server consensus) + sdk + explorer (client checkpoint
+            // verifiers). A drift in ANY copy flips the header on different blocks → fork.
+            const copies = {
+                hub:      require('../../../xchain-hub/src/equivocation_header.js'),
+                sdk:      require('../../../xchain-sdk/src/equivocation_header.js'),
+                explorer: require('../../../xchain-explorer/src/equivocation_header.js'),
+            };
+            const ref = eq.buildEquivCanonical('XDEX', 'mid', 2, 'XMATCH|mid|x');
+            for(const name of Object.keys(copies)){
+                const copy = copies[name];
+                assert.deepStrictEqual(copy.EQUIV_HEADER_ACTIVATION, eq.EQUIV_HEADER_ACTIVATION, name + ' activation map');
+                assert.deepStrictEqual(copy.ENGINE_TAGS, eq.ENGINE_TAGS, name + ' engine tags');
+                assert.strictEqual(copy.buildEquivCanonical('XDEX', 'mid', 2, 'XMATCH|mid|x'), ref, name + ' builder bytes');
+            }
+        });
     });
 });

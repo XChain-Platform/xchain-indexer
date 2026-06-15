@@ -40,6 +40,7 @@
 const crypto  = require('crypto');
 const ed25519 = require('../ed25519.js');
 const swq     = require('../stake_weighted_quorum.js');
+const eq      = require('../equivocation_header.js');
 
 // Mirrored from the canonical constants in
 // xchain-documentation/protocol/constants.js (same convention as the
@@ -263,12 +264,19 @@ class Xcall {
     // Canonical signing string for the result phase — MUST byte-match the hub's
     // CrossChainCallEngine._canonicalMatch (result branch) and the archive verifier.
     _resultCanonical(r){
-        return [
+        let raw = [
             'XCALL', 'RESULT', r.call_id, String(r.snapshot_block), r.network || '',
             r.target_chain, String(r.result_status || ''),
             crypto.createHash('sha256').update(String(r.return_payload_b64 == null ? '' : r.return_payload_b64), 'utf8').digest('hex'),
             String(r.effective_time)
         ].join('|');
+        // EQUIV (WI-2 bump 2): TAG=XCALL, ROUND_ID = sha256('XCALLROUND|result|'+call_id)
+        // (distinct from the dispatch key), VIEW = finalizing_view.
+        if(eq.isEquivHeaderActive(r.snapshot_block, r.network))
+            return eq.buildEquivCanonical(eq.ENGINE_TAGS.XCALL,
+                crypto.createHash('sha256').update('XCALLROUND|result|' + r.call_id, 'utf8').digest('hex'),
+                (r.finalizing_view != null ? r.finalizing_view : 0), raw);
+        return raw;
     }
 
     // Process one mirrored, effective result row for a request THIS chain originated

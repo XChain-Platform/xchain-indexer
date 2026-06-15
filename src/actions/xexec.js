@@ -46,6 +46,7 @@
 const crypto  = require('crypto');
 const ed25519 = require('../ed25519.js');
 const swq     = require('../stake_weighted_quorum.js');
+const eq      = require('../equivocation_header.js');
 
 // Return payloads are mirrored to every indexer AND ANCHOR-archived on DOGE —
 // hard-capped. Oversize → status 'payload_too_large', empty payload
@@ -67,13 +68,20 @@ class Xexec {
     // CrossChainCallEngine._canonicalMatch (dispatch branch) and the archive
     // verifier (StateAnchorPublisher._callCanonical).
     _canonical(c){
-        return [
+        let raw = [
             'XCALL', 'DISPATCH', c.call_id, String(c.snapshot_block), c.network || '',
             c.source_chain, String(c.source_action_index), String(c.source_contract_index),
             c.target_chain, String(c.target_contract_index),
             c.method, this._sha256(String(c.params_json == null ? '' : c.params_json)),
             String(c.gas_limit), String(c.cross_hops), String(c.effective_time)
         ].join('|');
+        // EQUIV (WI-2 bump 2): TAG=XCALL, ROUND_ID = sha256('XCALLROUND|dispatch|'+call_id)
+        // (phase folded in → dispatch/result get distinct keys), VIEW = finalizing_view.
+        if(eq.isEquivHeaderActive(c.snapshot_block, c.network))
+            return eq.buildEquivCanonical(eq.ENGINE_TAGS.XCALL,
+                crypto.createHash('sha256').update('XCALLROUND|dispatch|' + c.call_id, 'utf8').digest('hex'),
+                (c.finalizing_view != null ? c.finalizing_view : 0), raw);
+        return raw;
     }
 
     _sha256(s){

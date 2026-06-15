@@ -31,6 +31,7 @@
 const crypto  = require('crypto');
 const ed25519 = require('../ed25519.js');
 const swq     = require('../stake_weighted_quorum.js');
+const eq      = require('../equivocation_header.js');
 const ProviderRegistry = require('../attestation/providerRegistry.js');
 
 class Attest {
@@ -309,12 +310,19 @@ class Attest {
             }
         }
 
-        // Build canonical signing message
-        let responseHash = crypto.createHash('sha256').update(responseBodyBytes).digest('hex');
-        let canonical    = Buffer.from(String(requestId) + String(providerId) + responseHash + String(responseStatus) + String(meta || ''), 'utf8');
-
-        // Verify each signature against the responsible-set capability snapshot at the REQUEST's block
+        // The responsible-set capability snapshot is locked at the REQUEST's block — also
+        // the EQUIV gate input (deterministic from request_id; byte-matches the hub).
         let snapshotBlock = request ? Number(request.block_index) : Number(data['BLOCK_INDEX']);
+
+        // Build canonical signing message (UTF-8 Buffer). At/above the EQUIV flag-day
+        // (WI-2 bump 2) the raw string is wrapped in the uniform header (TAG=XATTEST,
+        // ROUND_ID=request_id, VIEW=0 — no view change), gated on the request's block +
+        // network; below it, the bare bytes. Byte-matches AttestationConsensus._buildCanonical.
+        let responseHash = crypto.createHash('sha256').update(responseBodyBytes).digest('hex');
+        let canonRaw     = String(requestId) + String(providerId) + responseHash + String(responseStatus) + String(meta || '');
+        if(eq.isEquivHeaderActive(snapshotBlock, this.config['NETWORK']))
+            canonRaw = eq.buildEquivCanonical(eq.ENGINE_TAGS.ATTEST, requestId, 0, canonRaw);
+        let canonical    = Buffer.from(canonRaw, 'utf8');
         let validSigs    = 0;
         let verifiedSigs = [];
         if(!error){

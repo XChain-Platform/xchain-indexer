@@ -34,6 +34,7 @@
 
 const ed25519 = require('../ed25519.js');
 const swq     = require('../stake_weighted_quorum.js');
+const eq      = require('../equivocation_header.js');
 
 class Cross_Settle {
 
@@ -51,7 +52,7 @@ class Cross_Settle {
     // a_amount/b_amount are the FILL settled by THIS match; *_kind + *_filled_before bind
     // sequential partial fills apart.
     _canonical(m){
-        return [
+        let raw = [
             'XMATCH', m.match_id, String(m.snapshot_block),
             m.a_chain, String(m.a_action_index), m.a_tick || '', String(m.a_amount), String(m.a_ownership), m.a_payout_addr,
             m.b_chain, String(m.b_action_index), m.b_tick || '', String(m.b_amount), String(m.b_ownership), m.b_payout_addr,
@@ -59,6 +60,12 @@ class Cross_Settle {
             m.a_kind || 'swap', String(m.a_filled_before != null ? m.a_filled_before : '0'),
             m.b_kind || 'swap', String(m.b_filled_before != null ? m.b_filled_before : '0')
         ].join('|');
+        // EQUIV (WI-2 bump 2): VIEW = the row's persisted finalizing_view (the view the
+        // hub round finalized at; == pending.view when the quorum sigs were taken). TAG=XDEX,
+        // ROUND_ID=match_id. Gate on the row's snapshot_block + network. Must byte-match the hub.
+        if(eq.isEquivHeaderActive(m.snapshot_block, m.network))
+            return eq.buildEquivCanonical(eq.ENGINE_TAGS.DEX, m.match_id, (m.finalizing_view != null ? m.finalizing_view : 0), raw);
+        return raw;
     }
 
     async parse(params, data, error){

@@ -132,7 +132,7 @@ class Price {
         // Each pubkey must have an active price capability stake at the BLOCK_INDEX of this PRICE tx
         let qualifiedSigners = [];
         if(!error){
-            let payload    = ed25519.buildPriceV0Payload(round, timestamp, pairs);
+            let payload    = ed25519.buildPriceV0Payload(round, timestamp, pairs, this.config['NETWORK']);
             let validSigs  = 0;
             let seenPubkey = new Set();
             for(let s of sigs){

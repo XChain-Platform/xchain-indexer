@@ -19,6 +19,7 @@ const { createMockIndexer } = require('../../fixtures/mocks');
 
 const Xexec   = require('../../../src/actions/xexec.js');
 const ed25519 = require('../../../src/ed25519.js');
+const eq      = require('../../../src/equivocation_header.js');
 
 const PUBKEY_A = 'a'.repeat(64);
 const SIG_A    = '1'.repeat(128);
@@ -97,11 +98,14 @@ describe('Xexec (XEXEC) @regression @tier3', function () {
         const d = makeDispatch();
         await handler.parse(null, Object.assign(ctx(), { CALL: d }), null);
 
-        const expected = [
+        const expectedRaw = [
             'XCALL', 'DISPATCH', CALL_ID, '150', 'regtest', 'DOGE', '41', '5', 'BTC', '99',
             'onArrival', crypto.createHash('sha256').update('["x","y"]', 'utf8').digest('hex'),
             '50000', '1', '1700000000'
         ].join('|');
+        // EQUIV active in regtest: TAG=XCALL, ROUND_ID=sha256('XCALLROUND|dispatch|'+call_id), VIEW=0.
+        const expected = eq.buildEquivCanonical(eq.ENGINE_TAGS.XCALL,
+            crypto.createHash('sha256').update('XCALLROUND|dispatch|' + CALL_ID, 'utf8').digest('hex'), 0, expectedRaw);
         assert.strictEqual(stub.firstCall.args[0], expected);
 
         const [params, data] = executeStub.parse.firstCall.args;

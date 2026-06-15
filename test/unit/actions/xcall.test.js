@@ -21,6 +21,7 @@ const Xcall   = require('../../../src/actions/xcall.js');
 // Same module instance Xcall holds a reference to — stubbing `verify` here
 // controls signature acceptance inside processResult.
 const ed25519 = require('../../../src/ed25519.js');
+const eq      = require('../../../src/equivocation_header.js');
 
 const PUBKEY_A = 'a'.repeat(64);
 const SIG_A    = '1'.repeat(128);
@@ -354,11 +355,14 @@ describe('Xcall (XCALL) @regression @tier3', function () {
             indexer.indexerDb.getCrossChainCallRequestById.resolves(makeRequestRow());
             const row = makeResultRow();
             await handler.processResult(row, ctx());
-            const expected = [
+            const expectedRaw = [
                 'XCALL', 'RESULT', row.call_id, '150', 'regtest', 'DOGE', 'ok',
                 crypto.createHash('sha256').update(row.return_payload_b64, 'utf8').digest('hex'),
                 '1700000000'
             ].join('|');
+            // EQUIV active in regtest: TAG=XCALL, ROUND_ID=sha256('XCALLROUND|result|'+call_id), VIEW=0.
+            const expected = eq.buildEquivCanonical(eq.ENGINE_TAGS.XCALL,
+                crypto.createHash('sha256').update('XCALLROUND|result|' + row.call_id, 'utf8').digest('hex'), 0, expectedRaw);
             assert.strictEqual(stub.firstCall.args[0], expected);
         });
 

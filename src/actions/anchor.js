@@ -43,6 +43,7 @@
 const zlib    = require('zlib');
 const ed25519 = require('../ed25519.js');
 const swq     = require('../stake_weighted_quorum.js');
+const eq      = require('../equivocation_header.js');
 
 const ALLOWED_CHAINS = ['BTC', 'LTC', 'DOGE'];
 
@@ -70,9 +71,17 @@ class Anchor {
         let base = ['XCHECKPOINT', d['CHAIN'], d['NETWORK'], String(d['BLOCK_INDEX_CHECKPOINTED']),
                     d['BLOCK_HASH'], d['LEDGER_HASH'], d['ACTIONS_HASH'], d['CONTRACT_HASH'],
                     String(d['CHECKPOINT_SEQ']), String(d['SNAPSHOT_BLOCK'])].join('|');
-        if(Number(d['FORMAT']) === 1)
+        // v0 ROUND_ID = chain|network|block|checkpoint_seq; v1 appends batch_seq so the
+        // per-block (v0) and archive (v1) canonicals — which share checkpoint_seq — get
+        // DISTINCT equivocation keys (R-4 false-slash fix). Must byte-match the hub.
+        let roundId = d['CHAIN'] + '|' + d['NETWORK'] + '|' + d['BLOCK_INDEX_CHECKPOINTED'] + '|' + d['CHECKPOINT_SEQ'];
+        if(Number(d['FORMAT']) === 1){
             base += '|' + String(d['MATCH_BATCH_SEQ']) + '|' + String(d['MATCH_COUNT']) + '|' +
                     d['BATCH_CRC32'] + '|' + String(d['TOTAL_CHUNKS']);
+            roundId += '|' + d['MATCH_BATCH_SEQ'];
+        }
+        if(eq.isEquivHeaderActive(d['SNAPSHOT_BLOCK'], d['NETWORK']))
+            return eq.buildEquivCanonical(eq.ENGINE_TAGS.CHECKPOINT, roundId, 0, base);
         return base;
     }
 

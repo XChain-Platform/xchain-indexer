@@ -21,6 +21,8 @@ const Anchor  = require('../../../src/actions/anchor.js');
 // Same module instance Anchor holds a reference to (Node module cache) — stubbing
 // `verify` here controls signature acceptance inside the handler.
 const ed25519 = require('../../../src/ed25519.js');
+const swq     = require('../../../src/stake_weighted_quorum.js');
+const eq      = require('../../../src/equivocation_header.js');
 
 const PUBKEY_A = 'a'.repeat(64);
 const PUBKEY_B = 'b'.repeat(64);
@@ -80,7 +82,7 @@ function v1Params(archiveJson, overrides = {}) {
 const ARCHIVE_JSON = JSON.stringify({ v: 1, network: 'regtest', batch_seq: 0, matches: [{ match_id: 'm1' }], capability_snapshots: [] });
 
 describe('Anchor (ANCHOR) @regression @tier3', function () {
-    let indexer, handler, verifyStub;
+    let indexer, handler, verifyStub, swqStub;
 
     function addAnchorDbStubs(db) {
         db.getValidatorsByCapability  = sinon.stub().resolves([{ pubkey: PUBKEY_A, amount: '1' }]);
@@ -99,8 +101,13 @@ describe('Anchor (ANCHOR) @regression @tier3', function () {
         addAnchorDbStubs(indexer.indexerDb);
         handler = new Anchor(indexer);
         verifyStub = sinon.stub(ed25519, 'verify').returns(true);
+        // These cases assert legacy COUNT quorum (the live mainnet path, whose
+        // activation is a far-future placeholder). Regtest has WI-1 stake-weighted
+        // quorum active at every block, so pin the legacy path — the oracle_publish
+        // mocks here carry no source/weight. Weighted coverage: StakeWeightedQuorum.test.js.
+        swqStub = sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(false);
     });
-    afterEach(function () { verifyStub.restore(); });
+    afterEach(function () { verifyStub.restore(); swqStub.restore(); });
 
     function lastWrite() { return indexer.indexerDb.createAnchorAction.lastCall.args[0]; }
 
@@ -112,8 +119,11 @@ describe('Anchor (ANCHOR) @regression @tier3', function () {
         assert.strictEqual(row['CHAIN'], 'BTC');
         assert.strictEqual(row['BLOCK_INDEX_CHECKPOINTED'], '500');
         assert.strictEqual(row['SNAPSHOT_BLOCK'], '100');
-        // Canonical covers the wire fields, byte-identical to the hub engine
-        let expected = ['XCHECKPOINT', 'BTC', 'regtest', '500', HASH('0'), HASH('1'), HASH('2'), HASH('3'), '0', '100'].join('|');
+        // Canonical covers the wire fields, byte-identical to the hub engine. EQUIV is
+        // active in regtest (WI-2 bump 2), so it is the v0 raw wrapped in the uniform
+        // header (TAG=XCHECKPOINT, ROUND_ID=chain|network|block|checkpoint_seq, VIEW=0).
+        let raw = ['XCHECKPOINT', 'BTC', 'regtest', '500', HASH('0'), HASH('1'), HASH('2'), HASH('3'), '0', '100'].join('|');
+        let expected = eq.buildEquivCanonical(eq.ENGINE_TAGS.CHECKPOINT, 'BTC|regtest|500|0', 0, raw);
         assert.strictEqual(verifyStub.firstCall.args[0], expected);
     });
 
@@ -137,7 +147,9 @@ describe('Anchor (ANCHOR) @regression @tier3', function () {
         verifyStub.callsFake((canon, sig, pk) => (pk === PUBKEY_A || pk === PUBKEY_B));
         let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 0, COIN: 'DOGE' });
         await handler.parse(v0Params({ sigs: [[PUBKEY_A, SIG], [PUBKEY_B, SIG], [PUBKEY_C, SIG]] }), data, null);
-        assert.ok(String(data['STATUS']).startsWith('invalid: insufficient valid signatures (2/3)'));
+        // Message denominator is N (total snapshot validators), not the quorum —
+        // 2 valid signatures of a 4-validator set (quorum 3) → rejected.
+        assert.ok(String(data['STATUS']).startsWith('invalid: insufficient valid signatures (2/4)'));
     });
 
     it('stores as unverified when no oracle_publish snapshot is mirrored locally', async function () {
@@ -170,9 +182,12 @@ describe('Anchor (ANCHOR) @regression @tier3', function () {
         let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 1, COIN: 'DOGE' });
         await handler.parse(v1Params(ARCHIVE_JSON), data, null);
         assert.strictEqual(data['STATUS'], 'valid');
-        // v1 canonical appends the archive fields
-        let expected = ['XCHECKPOINT', 'BTC', 'regtest', '500', HASH('0'), HASH('1'), HASH('2'), HASH('3'), '0', '100',
+        // v1 canonical appends the archive fields. EQUIV active in regtest: the v1
+        // ROUND_ID appends batch_seq (=0 here) to the v0 round id so v0 and v1 get
+        // DISTINCT equivocation keys (R-4 false-slash fix); VIEW=0.
+        let raw = ['XCHECKPOINT', 'BTC', 'regtest', '500', HASH('0'), HASH('1'), HASH('2'), HASH('3'), '0', '100',
                         '0', '1', crc32Hex(ARCHIVE_JSON), '1'].join('|');
+        let expected = eq.buildEquivCanonical(eq.ENGINE_TAGS.CHECKPOINT, 'BTC|regtest|500|0|0', 0, raw);
         assert.strictEqual(verifyStub.firstCall.args[0], expected);
 
         let data2 = createBaseData({ ACTION: 'ANCHOR', FORMAT: 1, COIN: 'DOGE', ACTION_INDEX: 2 });

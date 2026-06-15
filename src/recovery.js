@@ -50,6 +50,7 @@ const zlib    = require('zlib');
 const crypto  = require('crypto');
 const ed25519 = require('./ed25519.js');
 const swq     = require('./stake_weighted_quorum.js');
+const eq      = require('./equivocation_header.js');
 
 class AnchorRecovery {
 
@@ -320,17 +321,23 @@ class AnchorRecovery {
     // ── Canonicals (byte-identical to their producers) ──────────────────────────
 
     // Hub StateCheckpointEngine canonical + the v1 archive extension (anchor.js).
+    // v1 ROUND_ID appends batch_seq (distinct from the v0 per-block key — R-4 fix);
+    // gated on the BTC snapshot_block + network, VIEW=0. Must byte-match anchor._canonical.
     _wrapperCanonical(v1){
-        return ['XCHECKPOINT', v1.chain, v1.network, String(v1.block_index), v1.block_hash,
+        let raw = ['XCHECKPOINT', v1.chain, v1.network, String(v1.block_index), v1.block_hash,
                 v1.ledger_hash, v1.actions_hash, v1.contract_hash,
                 String(v1.checkpoint_seq), String(v1.snapshot_block),
                 String(v1.match_batch_seq), String(v1.match_count), v1.batch_crc32,
                 String(v1.total_chunks)].join('|');
+        if(eq.isEquivHeaderActive(v1.snapshot_block, v1.network))
+            return eq.buildEquivCanonical(eq.ENGINE_TAGS.CHECKPOINT,
+                v1.chain + '|' + v1.network + '|' + v1.block_index + '|' + v1.checkpoint_seq + '|' + v1.match_batch_seq, 0, raw);
+        return raw;
     }
 
     // Hub CrossChainDexEngine._canonicalMatch / indexer cross_settle._canonical.
     _matchCanonical(m){
-        return [
+        let raw = [
             'XMATCH', m.match_id, String(m.snapshot_block),
             m.a_chain, String(m.a_action_index), m.a_tick || '', String(m.a_amount), String(m.a_ownership), m.a_payout_addr,
             m.b_chain, String(m.b_action_index), m.b_tick || '', String(m.b_amount), String(m.b_ownership), m.b_payout_addr,
@@ -338,26 +345,39 @@ class AnchorRecovery {
             m.a_kind || 'swap', String(m.a_filled_before != null ? m.a_filled_before : '0'),
             m.b_kind || 'swap', String(m.b_filled_before != null ? m.b_filled_before : '0')
         ].join('|');
+        // EQUIV (WI-2 bump 2): VIEW = the archived row's finalizing_view (serialized into
+        // the archive by StateAnchorPublisher.MATCH_KEYS). TAG=XDEX, ROUND_ID=match_id.
+        if(eq.isEquivHeaderActive(m.snapshot_block, m.network))
+            return eq.buildEquivCanonical(eq.ENGINE_TAGS.DEX, m.match_id, (m.finalizing_view != null ? m.finalizing_view : 0), raw);
+        return raw;
     }
 
     // Hub CrossChainCallEngine._canonicalMatch / indexer verifiers (xexec.js
     // dispatch, xcall.js result).
     _callCanonical(c){
         let sha = (s) => crypto.createHash('sha256').update(String(s == null ? '' : s), 'utf8').digest('hex');
+        let phase = (c.phase === 'result') ? 'result' : 'dispatch';
+        let raw;
         if(c.phase === 'result'){
-            return [
+            raw = [
                 'XCALL', 'RESULT', c.call_id, String(c.snapshot_block), c.network || '',
                 c.target_chain, String(c.result_status || ''),
                 sha(c.return_payload_b64), String(c.effective_time)
             ].join('|');
+        } else {
+            raw = [
+                'XCALL', 'DISPATCH', c.call_id, String(c.snapshot_block), c.network || '',
+                c.source_chain, String(c.source_action_index), String(c.source_contract_index),
+                c.target_chain, String(c.target_contract_index),
+                c.method, sha(c.params_json),
+                String(c.gas_limit), String(c.cross_hops), String(c.effective_time)
+            ].join('|');
         }
-        return [
-            'XCALL', 'DISPATCH', c.call_id, String(c.snapshot_block), c.network || '',
-            c.source_chain, String(c.source_action_index), String(c.source_contract_index),
-            c.target_chain, String(c.target_contract_index),
-            c.method, sha(c.params_json),
-            String(c.gas_limit), String(c.cross_hops), String(c.effective_time)
-        ].join('|');
+        // EQUIV (WI-2 bump 2): TAG=XCALL, ROUND_ID = sha256('XCALLROUND|'+phase+'|'+call_id),
+        // VIEW = the archived row's finalizing_view. Byte-matches hub + xexec/xcall twins.
+        if(eq.isEquivHeaderActive(c.snapshot_block, c.network))
+            return eq.buildEquivCanonical(eq.ENGINE_TAGS.XCALL, sha('XCALLROUND|' + phase + '|' + c.call_id), (c.finalizing_view != null ? c.finalizing_view : 0), raw);
+        return raw;
     }
 
     _parseSigs(raw){
