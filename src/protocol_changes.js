@@ -119,6 +119,28 @@ class ProtocolChanges {
         // Issuance fee activation. Mainnet turns on at the historical block 862633;
         // testnet/regtest charge from block 0 so the fee path is exercisable there.
         this.addChange('ISSUANCE_FEE',   '1.0.0',0,0,0,862633,0,0);
+        // VM-emitted ISSUE (IS_EMISSION) issuance-fee exemption. A contract
+        // constructor (or EXECUTE) that emits an ISSUE has no XCHAIN balance on the
+        // freshly deployed contract address, so charging ISSUANCE_FEE against the
+        // emitted ISSUE fails fee validation and reverts the constructor — the
+        // deployer already paid the DEPLOY/EXECUTE gas (base + per-byte + per-
+        // emission), so the emitted ISSUE is fee-exempt. Gated as its own
+        // consensus rule so the change in fee behaviour switches over at a
+        // coordinated flag-day rather than implicitly the moment a node upgrades:
+        // an ungated flip charges the fee on one node version and exempts it on
+        // another at the SAME block, forking the ledger and the contract-state
+        // checkpoint on the first constructor that emits an ISSUE. Keyed on
+        // block_TIME (not block_index), mirroring DEPLOY_BASE64_CODE — emitted
+        // ISSUEs ride DEPLOY/EXECUTE, which run on BTC, LTC and DOGE whose heights
+        // diverge by millions of blocks, so no single shared block height names one
+        // cutover across all three chains, but a single timestamp does. The mainnet
+        // timestamp is the same PLACEHOLDER coordinated flag-day as the base64
+        // rollout (2027-01-01 00:00:00 UTC) and MUST be confirmed/aligned with the
+        // other contract-deploy consensus fixes shipping in this window before any
+        // affected DEPLOY is broadcast to mainnet — a wrong value is a second fork.
+        // testnet/regtest activate at genesis (no pre-exemption history to preserve;
+        // the e2e/regtest stack exercises VM emissions from block 0).
+        this.addChange('ISSUANCE_FEE_EMISSION_EXEMPT', '2.0.0',1798761600,0,0,0,0,0);
 
     }
 

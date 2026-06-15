@@ -464,8 +464,16 @@ class Issue {
         // VM-emitted ISSUEs (IS_EMISSION) are fee-exempt by design — the deployer
         // already paid DEPLOY/EXECUTE gas (base + per-byte + per-emission gas) and
         // emissions are bounded by maxEmissions, so this is not a spam vector. This
-        // mirrors the per-tx db_hits fee, which already skips emissions.
-        if(!error && !tokenInfo && !gasBootstrap && !data['IS_EMISSION'] && await this.actions.protocolChanges.isEnabled('ISSUANCE_FEE', data['BLOCK_INDEX'])){
+        // mirrors the per-tx db_hits fee, which already skips emissions. The
+        // exemption is gated by its own ISSUANCE_FEE_EMISSION_EXEMPT activation so
+        // the change in fee behaviour switches over at a coordinated flag-day rather
+        // than implicitly the moment a node upgrades (which would fork the ledger
+        // between node versions on the first constructor that emits an ISSUE).
+        // Before activation every node charges the fee (old behaviour); after it
+        // every node exempts.
+        let issuanceFeeActive = await this.actions.protocolChanges.isEnabled('ISSUANCE_FEE', data['BLOCK_INDEX']);
+        let emissionExempt    = await this.actions.protocolChanges.isEnabled('ISSUANCE_FEE_EMISSION_EXEMPT', data['BLOCK_INDEX']);
+        if(!error && !tokenInfo && !gasBootstrap && !(data['IS_EMISSION'] && emissionExempt) && issuanceFeeActive){
             let unifiedFees = await this.actions.protocolChanges.isEnabled('UNIFIED_FEES', data['BLOCK_INDEX']);
             if(unifiedFees){
                 // Unified gas schedule
