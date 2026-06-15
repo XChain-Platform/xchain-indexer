@@ -7947,6 +7947,35 @@ class Database {
         return true;
     }
 
+    // Keep exactly ONE validator_reward per (reward_type, round_reference) for
+    // anchor rewards: the row whose signing pubkey sorts lexicographically
+    // smallest — the SAME deterministic winner the hub's RewardTracker elects
+    // (recordAnchorReward). One logical anchor → one reward. In a failover
+    // double-publish the loser's pubkey can be pushed to THIS indexer before
+    // (or, because the hub's pushes are fire-and-forget, after) the winner's;
+    // the hub dedups its own DB but has no path to retract an already-pushed
+    // loser row from the indexer. Applying the identical smallest-pubkey rule
+    // here is order-independent and keeps the COLLECT rail + recovery
+    // single-winner fleet-wide (#3963). No-op for non-anchor reward types
+    // (those are derived deterministically per block and never pushed).
+    // The min-pubkey is materialised in a derived table so the DELETE doesn't
+    // self-reference its target table (MariaDB forbids that inline).
+    async reconcileAnchorRewardWinner(roundReference, rewardType){
+        if(!/^anchor_[A-Za-z_]+$/.test(String(rewardType))) return 0;
+        let query = `DELETE vr FROM validator_rewards vr
+                     JOIN index_pubkeys pk ON pk.id = vr.signing_pubkey_id
+                     JOIN (
+                         SELECT MIN(pk2.pubkey) AS min_pubkey
+                         FROM validator_rewards vr2
+                         JOIN index_pubkeys pk2 ON pk2.id = vr2.signing_pubkey_id
+                         WHERE vr2.reward_type = ? AND vr2.round_reference = ?
+                     ) m
+                     WHERE vr.reward_type = ? AND vr.round_reference = ?
+                       AND pk.pubkey > m.min_pubkey`;
+        let res = await this.doQuery(query, [rewardType, roundReference, rewardType, roundReference]);
+        return res && res.affectedRows ? res.affectedRows : 0;
+    }
+
     async createRewardClaim(data){
         data             = this.normalizeDataValues(data);
         let status_id    = await this.createStatus(data['STATUS']);

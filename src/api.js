@@ -692,6 +692,20 @@ async function startApi(){
                     skipped++;
                 }
             }
+            // Replace-on-push for anchor rewards: one logical anchor → exactly
+            // one winner. Collapse any failover-race duplicates to the
+            // deterministic (smallest-pubkey) winner so a loser row pushed to
+            // this indexer can't survive as a phantom COLLECT-claimable reward
+            // or diverge the recovery ledger hash (#3963).
+            if(written > 0 && /^anchor_[A-Za-z_]+$/.test(type)){
+                try {
+                    let removed = await indexer.indexerDb.reconcileAnchorRewardWinner(round, type);
+                    if(removed > 0)
+                        console.log('pushvalidatorrewards: retracted ' + removed + ' superseded anchor reward(s) for ' + type + ' #' + round + ' (kept deterministic winner)');
+                } catch (err) {
+                    console.warn('pushvalidatorrewards: anchor reconciliation failed for ' + type + ' #' + round + ':', err && err.message);
+                }
+            }
             return { status: 'success', written: written, skipped: skipped };
         },
 
