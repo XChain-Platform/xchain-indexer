@@ -323,7 +323,12 @@ class Order_Match {
                     if(Number(orderInfo['GIVE_OWNERSHIP']||0) == 1){
                         await this.util.transferTokenOwnership(this.indexerDb, this.mapper, data, orderInfo['GIVE_TICK'], orderInfo['SOURCE'], matchInfo['GET_ADDRESS']);
                     } else {
-                        escrows.push([matchInfo['GET_TICK'], -give_amount, matchInfo['GET_ADDRESS']]);
+                        // Negate in BigNumber space (bcsub), NOT JS unary minus: `-give_amount`
+                        // coerces the mathjs BigNumber to an IEEE-754 double, truncating digits
+                        // past ~15 sig-figs, so the escrow release would no longer equal the
+                        // intact-BigNumber credit below — per-row drift that trips the supply
+                        // SanityError on high-decimal ticks (#3736).
+                        escrows.push([matchInfo['GET_TICK'], this.util.bcsub(0, give_amount, giveDecimals), matchInfo['GET_ADDRESS']]);
                         let mDec = 0;
                         if(!this.util.isNull(matchInfo['PAYOUT_LEGS'])){
                             let mInfo = await this.indexerDb.getTokenInfo(matchInfo['GET_TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
@@ -340,7 +345,8 @@ class Order_Match {
                     if(Number(matchInfo['GIVE_OWNERSHIP']||0) == 1){
                         await this.util.transferTokenOwnership(this.indexerDb, this.mapper, data, matchInfo['GIVE_TICK'], matchInfo['SOURCE'], orderInfo['GET_ADDRESS']);
                     } else {
-                        escrows.push([orderInfo['GET_TICK'], -get_amount, orderInfo['GET_ADDRESS']]);
+                        // BigNumber-space negation (see the give-side note above) — #3736.
+                        escrows.push([orderInfo['GET_TICK'], this.util.bcsub(0, get_amount, getDecimals), orderInfo['GET_ADDRESS']]);
                         let oDec = 0;
                         if(!this.util.isNull(orderInfo['PAYOUT_LEGS'])){
                             let oInfo = await this.indexerDb.getTokenInfo(orderInfo['GET_TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
