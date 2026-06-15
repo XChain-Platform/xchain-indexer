@@ -98,6 +98,15 @@ class XChainIndexer {
         // validation is deterministic across operators. On timeout the block is deferred and
         // retried rather than validated against a stale price copy.
         this.priceSyncTimeoutMs = parseInt(process.env.HUB_PRICE_SYNC_TIMEOUT_MS || '60000');
+
+        // Direct-hub-DB call-presence barrier timeout (ms). In single-host / direct-hub-DB
+        // mode there is no HubDbSync mirror, so the cross-chain-call sync barrier is skipped —
+        // but reading the hub's MariaDB directly does NOT mean a relay row was already WRITTEN
+        // when this block was processed. Before the cross-chain-call pass, the indexer waits
+        // (bounded) for any in-flight hub write to land, so a live node and a replaying node
+        // inject at the same block. The hub-side relay margin is the primary guarantee; this
+        // is defense-in-depth. See _waitForDirectCallPresence.
+        this.callPresenceTimeoutMs = parseInt(process.env.XCALL_DIRECT_PRESENCE_TIMEOUT_MS || '10000');
     }
 
     // Handle indicating if indexer is synced
@@ -109,6 +118,45 @@ class XChainIndexer {
     stop(){
         this.stopFlag = true;
         if(this.hubPushQueue) this.hubPushQueue.stop();
+    }
+
+    // Direct-hub-DB call-presence barrier (see the call site in the block loop and the note on
+    // callPresenceTimeoutMs). Resolves the instant it is safe to read cross_chain_calls for a
+    // block at block_time, so the injection/callback pass sees the same rows a replaying node
+    // would:
+    //   • Wall-clock gate (no query, the steady-state path): once real time has reached this
+    //     block's time, every relay row effective at/before it was finalized at least the relay
+    //     margin earlier (effective_time = finalize_time + margin) and is therefore already
+    //     written to the shared hub DB. At the live tip block_time ≈ now, so this clears within
+    //     seconds; on replay block_time is in the past, so it clears immediately.
+    //   • Coverage fast-path: for a block whose timestamp is still ahead of wall-clock, proceed
+    //     early if the hub DB already holds a finalized row effective at/after it (nothing later
+    //     can be missing), or if the table is empty (nothing to wait on).
+    //   • Bound: never blocks past callPresenceTimeoutMs, and never throws. A hub that produces
+    //     no calls (or is briefly behind) can therefore never stall block processing — matching
+    //     the NULL-is-valid / no-freeze semantics of the HubDbSync call barrier. The hub-side
+    //     relay margin is the primary fork guard; proceeding here on timeout is the safe fallback.
+    async _waitForDirectCallPresence(blockTime){
+        blockTime = Number(blockTime);
+        if(!this.hubDb || !Number.isFinite(blockTime)) return;
+        let timeoutMs = Number(this.callPresenceTimeoutMs);
+        if(!Number.isFinite(timeoutMs) || timeoutMs <= 0) timeoutMs = 10000;
+        let deadline = Date.now() + timeoutMs;
+        let pollMs = 250;
+        while(true){
+            // Wall-clock gate — costs no query and is the common (tip + replay) path.
+            if(Date.now() >= blockTime * 1000) return;
+            // Future-dated block: proceed early if the hub DB already covers it.
+            try {
+                let rows = await this.hubDb.doQuery(
+                    "SELECT MAX(effective_time) AS ts FROM cross_chain_calls WHERE status = 'finalized'");
+                if(rows.length === 0 || rows[0].ts === null || Number(rows[0].ts) >= blockTime) return;
+            } catch(e){
+                // Table not ready / transient error — don't freeze the chain; fall to the timeout.
+            }
+            if(Date.now() >= deadline) return;
+            await this.util.sleep(Math.min(pollMs, Math.max(1, deadline - Date.now())));
+        }
     }
 
     // Handle starting up the XChain indexer
@@ -366,6 +414,22 @@ class XChainIndexer {
                         this.stallReason = 'call_sync_barrier';
                         break;
                     }
+                }
+
+                // Direct-hub-DB call-presence barrier: the sync barriers above only run with a
+                // HubDbSync mirror. In single-host / direct-hub-DB mode (hubDb set, no sync) the
+                // indexer reads the hub's MariaDB directly — but "the hub DB is current" does NOT
+                // mean a relay row was PRESENT when this block was processed. The hub finalizes a
+                // cross_chain_calls row at wall-clock ≈ its effective_time minus the relay margin;
+                // a node whose tip already sits at that block can pass it before the write lands,
+                // injecting the execution/callback a block late and permanently shifting its
+                // action-index counter relative to a replaying node (EMITTER_ACTION_INDEX is in the
+                // call_id preimage → ledger fork). Give in-flight hub writes a brief window to land
+                // before processCrossChainCalls reads the table. Bounded (proceeds on timeout) so a
+                // quiet/absent hub never freezes the tip — the hub-side relay margin is the primary
+                // guarantee and makes this a near-instant no-op in practice.
+                if(!this.hubDbSync && this.hubDb){
+                    await this._waitForDirectCallPresence(blockTime);
                 }
 
                 // Cross-chain capability-snapshot barrier: wait until the capability snapshot
