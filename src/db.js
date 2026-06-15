@@ -9721,65 +9721,6 @@ class Database {
         await this.doQuery(query, args);
     }
 
-    // Update contract custody balance (add or subtract)
-    async updateContractBalance(contract_index, tick_id, amount, operation){
-        // Get current balance
-        let query = `SELECT amount FROM contract_balances WHERE contract_index=? AND tick_id=? LIMIT 1`;
-        let results = await this.doQuery(query, [contract_index, tick_id]);
-        let currentBalance = (results.length > 0) ? results[0].amount : '0';
-        let newBalance;
-        if(operation === 'add')
-            newBalance = this.util.bcadd(currentBalance, amount, 18);
-        else
-            newBalance = this.util.bcsub(currentBalance, amount, 18);
-        if(results.length > 0){
-            query = `UPDATE contract_balances SET amount=? WHERE contract_index=? AND tick_id=?`;
-            await this.doQuery(query, [newBalance, contract_index, tick_id]);
-        } else {
-            query = `INSERT INTO contract_balances (contract_index, tick_id, amount) VALUES (?, ?, ?)`;
-            await this.doQuery(query, [contract_index, tick_id, newBalance]);
-        }
-    }
-
-    // Get contract custody balance for a specific tick
-    async getContractBalance(contract_index, tick_id){
-        let query = `SELECT amount FROM contract_balances WHERE contract_index=? AND tick_id=? LIMIT 1`;
-        let results = await this.doQuery(query, [contract_index, tick_id]);
-        if(results.length > 0)
-            return results[0].amount;
-        return '0';
-    }
-
-    // Recalculate contract balances from deposits/withdrawals for touched pairs
-    async updateContractBalances(touchedPairs){
-        for(let pair of touchedPairs){
-            let { contract_index, tick_id } = pair;
-            // Sum valid deposits
-            let validId = await this.getStatusId('valid');
-            let query = `SELECT COALESCE(SUM(CAST(amount AS DECIMAL(65,18))), 0) as total
-                        FROM deposits WHERE contract_index=? AND tick_id=? AND status_id=?`;
-            let results = await this.doQuery(query, [contract_index, tick_id, validId]);
-            let totalDeposits = (results.length > 0) ? String(results[0].total) : '0';
-            // Sum valid withdrawals
-            query = `SELECT COALESCE(SUM(CAST(amount AS DECIMAL(65,18))), 0) as total
-                    FROM withdrawals WHERE contract_index=? AND tick_id=? AND status_id=?`;
-            results = await this.doQuery(query, [contract_index, tick_id, validId]);
-            let totalWithdrawals = (results.length > 0) ? String(results[0].total) : '0';
-            // Calculate balance
-            let balance = this.util.bcsub(totalDeposits, totalWithdrawals, 18);
-            // Update or insert
-            query = `SELECT contract_index FROM contract_balances WHERE contract_index=? AND tick_id=? LIMIT 1`;
-            results = await this.doQuery(query, [contract_index, tick_id]);
-            if(results.length > 0){
-                query = `UPDATE contract_balances SET amount=? WHERE contract_index=? AND tick_id=?`;
-                await this.doQuery(query, [balance, contract_index, tick_id]);
-            } else if(this.util.bcgt(balance, 0)){
-                query = `INSERT INTO contract_balances (contract_index, tick_id, amount) VALUES (?, ?, ?)`;
-                await this.doQuery(query, [contract_index, tick_id, balance]);
-            }
-        }
-    }
-
     /*****************************************************************
      * VM Integration — Savepoints
      ****************************************************************/

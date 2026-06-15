@@ -1467,23 +1467,6 @@ describe('Database.getContract() @regression @tier1', function () {
 });
 
 // ---------------------------------------------------------------------------
-// getContractBalance
-// ---------------------------------------------------------------------------
-describe('Database.getContractBalance() @regression @tier1', function () {
-    it('returns "0" (string) when no balance row found', async function () {
-        // getContractBalance returns '0' as a string when no row exists
-        const db = dbWithDoQuery([]);
-        assert.strictEqual(await db.getContractBalance(1, 2), '0');
-    });
-
-    it('returns amount string when row found', async function () {
-        const db = dbWithDoQuery([{ amount: '500' }]);
-        const result = await db.getContractBalance(1, 2);
-        assert.strictEqual(result, '500');
-    });
-});
-
-// ---------------------------------------------------------------------------
 // getGatedFileRaw
 // ---------------------------------------------------------------------------
 describe('Database.getGatedFileRaw() @regression @tier1', function () {
@@ -2952,29 +2935,6 @@ describe('Database.createWithdrawal() @regression @tier1', function () {
 });
 
 // ---------------------------------------------------------------------------
-// updateContractBalance — add and sub branches
-// ---------------------------------------------------------------------------
-describe('Database.updateContractBalance() @regression @tier1', function () {
-    it('INSERTs balance when no existing row (add)', async function () {
-        const db = makeDb();
-        const dq = sinon.stub(db, 'doQuery');
-        dq.onCall(0).resolves([]);   // SELECT — no row
-        dq.onCall(1).resolves([]);   // INSERT
-        await db.updateContractBalance(400, 1, '10', 'add');
-        assert.ok(String(dq.args[1][0]).includes('INSERT INTO contract_balances'));
-    });
-
-    it('UPDATEs when existing row (subtract)', async function () {
-        const db = makeDb();
-        const dq = sinon.stub(db, 'doQuery');
-        dq.onCall(0).resolves([{ amount: '50' }]);
-        dq.onCall(1).resolves([]);
-        await db.updateContractBalance(400, 1, '10', 'sub');
-        assert.ok(String(dq.args[1][0]).includes('UPDATE contract_balances'));
-    });
-});
-
-// ---------------------------------------------------------------------------
 // createContractState
 // ---------------------------------------------------------------------------
 describe('Database.createContractState() @regression @tier1', function () {
@@ -3596,35 +3556,6 @@ describe('Database.setDelegationDeactivation() @regression @tier1', function () 
         const result = await db.setDelegationDeactivation('addr1', 'pk', 200);
         assert.strictEqual(result, true);
         assert.ok(String(dq.args[0][0]).includes('UPDATE delegations'));
-    });
-});
-
-// ---------------------------------------------------------------------------
-// updateContractBalances — touch pairs, insert when balance > 0, skip otherwise
-// ---------------------------------------------------------------------------
-describe('Database.updateContractBalances() @regression @tier1', function () {
-    it('processes each pair: deposit sum - withdrawal sum → UPDATE', async function () {
-        const db = makeDb();
-        sinon.stub(db, 'getStatusId').resolves(1);
-        const dq = sinon.stub(db, 'doQuery');
-        dq.onCall(0).resolves([{ total: '50' }]);  // deposits
-        dq.onCall(1).resolves([{ total: '10' }]);  // withdrawals
-        dq.onCall(2).resolves([{ contract_index: 400 }]); // existing row
-        dq.onCall(3).resolves([]);                  // UPDATE
-        await db.updateContractBalances([{ contract_index: 400, tick_id: 1 }]);
-        assert.ok(String(dq.args[3][0]).includes('UPDATE contract_balances'));
-    });
-
-    it('INSERTs when no row and balance > 0', async function () {
-        const db = makeDb();
-        sinon.stub(db, 'getStatusId').resolves(1);
-        const dq = sinon.stub(db, 'doQuery');
-        dq.onCall(0).resolves([{ total: '50' }]);
-        dq.onCall(1).resolves([{ total: '0' }]);
-        dq.onCall(2).resolves([]);  // no existing row
-        dq.onCall(3).resolves([]);  // INSERT
-        await db.updateContractBalances([{ contract_index: 400, tick_id: 1 }]);
-        assert.ok(String(dq.args[3][0]).includes('INSERT INTO contract_balances'));
     });
 });
 
