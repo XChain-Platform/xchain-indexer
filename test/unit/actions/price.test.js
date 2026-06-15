@@ -331,6 +331,69 @@ describe('Price (PRICE) @regression @tier3', function () {
                     'no full-node lookup when the feature is off');
             });
         });
+
+        // ── determinism (reindex-safe): rewards must be a pure function of the
+        // on-chain inputs, independent of DB row order or signer wire order, so a
+        // from-genesis replay reproduces byte-identical validator_rewards. ──
+        describe('reward derivation is order-independent', function () {
+            const D = 'd'.repeat(64);
+            // SA has two verified keys {A, C} (rep = min = A); SB has {B} (rep = B).
+            const ROWS = [
+                { pubkey: PUBKEY_A, source: 'addrA', source_id: 1 },
+                { pubkey: PUBKEY_C, source: 'addrA', source_id: 1 },
+                { pubkey: PUBKEY_B, source: 'addrB', source_id: 2 },
+            ];
+            function captured() {
+                return indexer.indexerDb.createValidatorReward.getCalls()
+                    .map(c => `${c.args[0]}|${c.args[1]}|${c.args[2]}|${String(c.args[3])}`)
+                    .sort();
+            }
+            beforeEach(function () {
+                indexer.config.FULLNODE = Object.assign({}, indexer.config.FULLNODE, { REWARD_SHARE: '0.25' });
+                indexer.indexerDb.getVerifiedFullNodeSet = sinon.stub().resolves(ROWS);
+                indexer.indexerDb.getActiveCapabilityCount.resolves(3); // quorum 2
+                indexer.indexerDb.hasCapability.callsFake(async (pk, cap) =>
+                    cap !== 'full_node' ? true : [PUBKEY_A, PUBKEY_B, PUBKEY_C].includes(pk));
+            });
+            afterEach(function () {
+                indexer.config.FULLNODE = Object.assign({}, indexer.config.FULLNODE, { REWARD_SHARE: '0' });
+            });
+
+            const SIGS = [
+                { pubkey: PUBKEY_A, sig: SIG_A },
+                { pubkey: PUBKEY_B, sig: SIG_B },
+                { pubkey: PUBKEY_C, sig: SIG_C },
+            ];
+
+            it('identical on replay (same inputs → same rows)', async function () {
+                await handler.parse(v0Params(ONE_PAIR, SIGS), v0Data(), null);
+                const first = captured();
+                indexer.indexerDb.createValidatorReward.resetHistory();
+                await handler.parse(v0Params(ONE_PAIR, SIGS), v0Data(), null);
+                assert.deepStrictEqual(captured(), first);
+            });
+
+            it('independent of getVerifiedFullNodeSet row order', async function () {
+                await handler.parse(v0Params(ONE_PAIR, SIGS), v0Data(), null);
+                const ordered = captured();
+                indexer.indexerDb.createValidatorReward.resetHistory();
+                indexer.indexerDb.getVerifiedFullNodeSet.resolves([ROWS[2], ROWS[1], ROWS[0]]); // shuffled
+                await handler.parse(v0Params(ONE_PAIR, SIGS), v0Data(), null);
+                assert.deepStrictEqual(captured(), ordered);
+                // and the per-source representatives are the lexicographically smallest
+                const full = ordered.filter(x => x.includes('oracle_full_node')).map(x => x.split('|')[0]).sort();
+                assert.deepStrictEqual(full, [PUBKEY_A, PUBKEY_B].sort());
+            });
+
+            it('independent of signer wire order (rep stays the min pubkey, not first-seen)', async function () {
+                await handler.parse(v0Params(ONE_PAIR, SIGS), v0Data(), null);
+                const ascending = captured();
+                indexer.indexerDb.createValidatorReward.resetHistory();
+                // reverse the signature order on the wire
+                await handler.parse(v0Params(ONE_PAIR, [SIGS[2], SIGS[1], SIGS[0]]), v0Data(), null);
+                assert.deepStrictEqual(captured(), ascending);
+            });
+        });
     });
 
     // ───────────────────────────────────────────────────────────────────────
