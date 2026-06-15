@@ -276,7 +276,13 @@ function createMockIndexer(overrides = {}) {
         decoderDb,
         indexerDb,
         mapper,
-        protocolChanges: null, // Set after construction if needed
+        // Default to a permissive gate (regtest is genesis-active for every flag-day,
+        // which is what this mock models). Tests that need a specific activation state
+        // reassign indexer.protocolChanges after construction.
+        protocolChanges: {
+            isDefined: sinon.stub().returns(true),
+            isEnabled: sinon.stub().resolves(true),
+        },
         ...overrides,
     };
 

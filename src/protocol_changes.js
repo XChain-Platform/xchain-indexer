@@ -156,6 +156,29 @@ class ProtocolChanges {
         // the e2e/regtest stack exercises VM emissions from block 0).
         this.addChange('ISSUANCE_FEE_EMISSION_EXEMPT', '2.0.0',1798761600,0,0,0,0,0);
 
+        // VM getBalance()/getTokenInfo() reader. Below this activation the gateway
+        // receives balances:null / tokenInfo:null in every execution path (the
+        // original VM behaviour through 2.7.10); at/above it the indexer feeds the
+        // deterministic buildVmBalancesAndTokenInfo snapshot scoped to SOURCE + the
+        // contract's derived address. Gated as its own consensus rule because the
+        // accessor is a NEW VM input: the first contract that calls getBalance or
+        // getTokenInfo computes different gas_used, emitted_count, and ledger
+        // movements on a node that feeds real balances vs one that still passes
+        // null — an ungated flip forks the contract_hash (and the federation
+        // checkpoint preimage) the moment a balance-reading contract executes, even
+        // within the 2.x line (2.2.0–2.7.10 lack the reader; 2.7.11+ have it).
+        // Keyed on block_TIME (not block_index), mirroring DEPLOY_BASE64_CODE and
+        // ISSUANCE_FEE_EMISSION_EXEMPT — DEPLOY/EXECUTE run on BTC, LTC and DOGE
+        // whose heights diverge by millions of blocks, so no single shared block
+        // height names one cutover across all three chains, but a single timestamp
+        // does. The mainnet timestamp is the same PLACEHOLDER coordinated flag-day
+        // as the other contract-deploy consensus fixes in this window (2027-01-01
+        // 00:00:00 UTC) and MUST be confirmed/aligned before any balance-reading
+        // contract is broadcast to mainnet — a wrong value is a fork. testnet/regtest
+        // activate at genesis (no pre-reader history to preserve; the e2e/regtest
+        // stack exercises VM balance reads from block 0).
+        this.addChange('VM_BALANCE_TOKENINFO', '2.0.0',1798761600,0,0,0,0,0);
+
         // NOTE: STAKE_WEIGHTED_QUORUM (WI-1) is deliberately NOT registered here.
         // Standard activations gate on the LOCAL processing block via isEnabled();
         // stake-weighted quorum must gate on the BTC-anchored `snapshot_block`

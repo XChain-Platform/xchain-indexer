@@ -251,4 +251,81 @@ describe('ProtocolChanges @regression @tier3', function () {
                 'below the 2.0.0 consensus version the gate is inactive — decode stays hex');
         });
     });
+
+    // ─── VM_BALANCE_TOKENINFO — the consensus anti-fork gate ─────────────────
+    // The VM getBalance()/getTokenInfo() reader. Below activation the gateway sees
+    // balances:null / tokenInfo:null (original ≤2.7.10 behaviour); at/above it the
+    // indexer feeds the buildVmBalancesAndTokenInfo snapshot. A regression in its
+    // registration — a zeroed/wrong mainnet flag-day, regtest/testnet flipped off
+    // genesis, or the version bumped past the shipping node — silently changes the
+    // VM input on the first balance-reading contract → gas_used / emitted_count /
+    // ledger movement → contract_hash → the federation checkpoint, forking the
+    // ledger even within the 2.x line (2.2.0–2.7.10 lack the reader; 2.7.11+ have
+    // it). execute.js/deploy.js call the REAL isEnabled() at all three VM call sites
+    // (EXECUTE primary, EXECUTE controller-guard, DEPLOY constructor), so this block
+    // guards the registration the call sites depend on. Keep in lockstep with
+    // protocol_changes.js.
+    describe('VM_BALANCE_TOKENINFO activation gate (consensus)', function () {
+        const MAINNET_FLAG_DAY = 1798761600; // 2027-01-01 00:00:00 UTC — PLACEHOLDER (see protocol_changes.js)
+
+        function pcFor(network, version = '2.0.0') {
+            process.env.npm_package_version = version; // shipping consensus version
+            process.env.INDEXER_NETWORK = network;
+            return new ProtocolChanges(indexer);
+        }
+
+        it('is registered as a v2.0.0 change keyed on block_time, not block_index', function () {
+            const change = pcFor('regtest').changes['VM_BALANCE_TOKENINFO'];
+            assert.ok(change, 'VM_BALANCE_TOKENINFO must be defined');
+            assert.strictEqual(change.version_major, 2);
+            assert.strictEqual(change.version_minor, 0);
+            assert.strictEqual(change.version_revision, 0);
+            // Time-keyed (BTC/LTC/DOGE heights diverge by millions of blocks); all block gates stay 0.
+            assert.strictEqual(change.mainnet_block, 0);
+            assert.strictEqual(change.testnet_block, 0);
+            assert.strictEqual(change.regtest_block, 0);
+            // testnet/regtest activate at genesis; mainnet on the coordinated flag-day.
+            assert.strictEqual(change.testnet_time, 0);
+            assert.strictEqual(change.regtest_time, 0);
+            assert.strictEqual(change.mainnet_time, MAINNET_FLAG_DAY,
+                'mainnet flag-day must match protocol_changes.js — a wrong value is a fork');
+        });
+
+        it('regtest: enabled from genesis (gateway gets real balances/token-info)', async function () {
+            const pc2 = pcFor('regtest');
+            indexer.decoderDb.getBlockTime.resolves(1); // earliest plausible regtest block_time
+            assert.strictEqual(await pc2.isEnabled('VM_BALANCE_TOKENINFO', 0), true);
+        });
+
+        it('testnet: enabled from genesis', async function () {
+            const pc2 = pcFor('testnet');
+            indexer.decoderDb.getBlockTime.resolves(1);
+            assert.strictEqual(await pc2.isEnabled('VM_BALANCE_TOKENINFO', 0), true);
+        });
+
+        it('mainnet: DISABLED one second below the flag-day (gateway still sees null)', async function () {
+            const pc2 = pcFor('mainnet');
+            indexer.decoderDb.getBlockTime.resolves(MAINNET_FLAG_DAY - 1);
+            assert.strictEqual(await pc2.isEnabled('VM_BALANCE_TOKENINFO', 100), false);
+        });
+
+        it('mainnet: ENABLED at exactly the flag-day boundary', async function () {
+            const pc2 = pcFor('mainnet');
+            indexer.decoderDb.getBlockTime.resolves(MAINNET_FLAG_DAY);
+            assert.strictEqual(await pc2.isEnabled('VM_BALANCE_TOKENINFO', 100), true);
+        });
+
+        it('mainnet: ENABLED above the flag-day', async function () {
+            const pc2 = pcFor('mainnet');
+            indexer.decoderDb.getBlockTime.resolves(MAINNET_FLAG_DAY + 86400);
+            assert.strictEqual(await pc2.isEnabled('VM_BALANCE_TOKENINFO', 100), true);
+        });
+
+        it('a pre-reader (v1.x) node treats it as not-yet-active — gateway stays null', async function () {
+            const pc1 = pcFor('regtest', '1.9.9');
+            indexer.decoderDb.getBlockTime.resolves(1);
+            assert.strictEqual(await pc1.isEnabled('VM_BALANCE_TOKENINFO', 0), false,
+                'below the 2.0.0 consensus version the gate is inactive — gateway sees null');
+        });
+    });
 });

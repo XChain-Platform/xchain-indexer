@@ -73,6 +73,7 @@ describe('Execute (EXECUTE) @regression @tier2', function () {
             mapper:    indexer.mapper,
             decoderDb: indexer.decoderDb,
             indexerDb: indexer.indexerDb,
+            protocolChanges: indexer.protocolChanges,
         };
         handler = new Execute(actionsCtx);
         indexer.util.resetLists();
@@ -546,6 +547,7 @@ describe('Execute (EXECUTE) @regression @tier2', function () {
                 mapper:    localIndexer.mapper,
                 decoderDb: localIndexer.decoderDb,
                 indexerDb: localIndexer.indexerDb,
+                protocolChanges: localIndexer.protocolChanges,
             };
             const h = new Execute(ctx);
 

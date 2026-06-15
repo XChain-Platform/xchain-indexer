@@ -404,9 +404,14 @@ class Deploy {
             // SOURCE balances back getBalance() in the constructor (e.g. a deploy-time
             // permission gate). The contract's own derived address is freshly created
             // here, so its balance is empty — getBalance(contractAddress, ...) is null.
-            let vmLedger = await this.indexerDb.buildVmBalancesAndTokenInfo(
-                [data['SOURCE'], contractAddress], data['BLOCK_INDEX'], data['ACTION_INDEX']
-            );
+            // Gated on the VM_BALANCE_TOKENINFO flag-day: below activation the gateway
+            // sees balances:null / tokenInfo:null (original ≤2.7.10 behaviour).
+            let vmLedger = { balances: null, tokenInfo: null };
+            if(await this.actions.protocolChanges.isEnabled('VM_BALANCE_TOKENINFO', data['BLOCK_INDEX'])){
+                vmLedger = await this.indexerDb.buildVmBalancesAndTokenInfo(
+                    [data['SOURCE'], contractAddress], data['BLOCK_INDEX'], data['ACTION_INDEX']
+                );
+            }
 
             constructorResult = await this.actions.vm.execute({
                 code:             code,

@@ -212,10 +212,16 @@ class Execute {
             // Scoped to SOURCE + this contract's derived address (pre-action state);
             // a contract verifies its own holdings (e.g. a just-DEPOSITed amount in a
             // BATCH) by reading getBalance(getContractAddress(), tick).
+            // Gated on the VM_BALANCE_TOKENINFO flag-day: below activation the gateway
+            // sees balances:null / tokenInfo:null (original ≤2.7.10 behaviour), so a
+            // heterogeneous fleet never forks on the first balance-reading contract.
             let contractAddr = 'C:' + this.config['CHAIN'] + ':' + data['CONTRACT_ACTION_INDEX'];
-            let vmLedger = await this.indexerDb.buildVmBalancesAndTokenInfo(
-                [data['SOURCE'], contractAddr], data['BLOCK_INDEX'], data['ACTION_INDEX']
-            );
+            let vmLedger = { balances: null, tokenInfo: null };
+            if(await this.actions.protocolChanges.isEnabled('VM_BALANCE_TOKENINFO', data['BLOCK_INDEX'])){
+                vmLedger = await this.indexerDb.buildVmBalancesAndTokenInfo(
+                    [data['SOURCE'], contractAddr], data['BLOCK_INDEX'], data['ACTION_INDEX']
+                );
+            }
 
             // Derive deterministic block hash from block_index + block_time
             let blockHash = crypto.createHash('sha256')
@@ -506,9 +512,13 @@ class Execute {
         let oracleData = await ((this.actions && this.actions.hubDb) || this.indexerDb).getOracleDataForVM(hostData['BLOCK_INDEX'], hostData['BLOCK_TIME'], parseInt(this.config['ORACLE_MAX_PRICE_AGE_SECONDS']) || 1800);
         let crossChainData = await this.indexerDb.getCrossChainDataForVM(hostData['BLOCK_INDEX']);
         let contractStakeData = await this.indexerDb.getContractStakeDataForVM(contractIndex, hostData['BLOCK_INDEX']);
-        let guardLedger = await this.indexerDb.buildVmBalancesAndTokenInfo(
-            [hostData['SOURCE'], derived], hostData['BLOCK_INDEX'], hostData['ACTION_INDEX']
-        );
+        // Gated on the VM_BALANCE_TOKENINFO flag-day (see primary EXECUTE path).
+        let guardLedger = { balances: null, tokenInfo: null };
+        if(await this.actions.protocolChanges.isEnabled('VM_BALANCE_TOKENINFO', hostData['BLOCK_INDEX'])){
+            guardLedger = await this.indexerDb.buildVmBalancesAndTokenInfo(
+                [hostData['SOURCE'], derived], hostData['BLOCK_INDEX'], hostData['ACTION_INDEX']
+            );
+        }
         let blockHash = crypto.createHash('sha256')
             .update(String(hostData['BLOCK_INDEX']) + ':' + String(hostData['BLOCK_TIME']))
             .digest('hex');
