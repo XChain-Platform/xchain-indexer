@@ -82,6 +82,23 @@ class ProtocolChanges {
         this.addChange('DEPOSIT',            '2.0.0',0,0,0,0,0,0);
         this.addChange('WITHDRAW',           '2.0.0',0,0,0,0,0,0);
 
+        // Inline DEPLOY (v0/v1) CODE_ENCODING format. Below this activation the inline
+        // contract source is decoded as HEX (the original format); at/above it as BASE64
+        // (1.33x the source vs hex's 2x, and base64's alphabet has no '|' so it stays safe
+        // in the pipe-delimited action string). Gated so a heterogeneous fleet and any
+        // from-genesis replay decode every historical inline DEPLOY identically: an ungated
+        // flip silently re-reads every hex-era DEPLOY as base64, which changes its code_hash
+        // → the per-block contract_hash → the federation checkpoint preimage, forking the
+        // ledger. Keyed on block_TIME (not block_index) on purpose — DEPLOY runs on BTC, LTC
+        // and DOGE, whose heights diverge by millions of blocks, so no single shared block
+        // height can name one coordinated cutover across all three chains, but a single
+        // timestamp can. testnet/regtest activate at genesis (base64-native; no pre-base64
+        // history to preserve, and the e2e/regtest stack deploys base64 from block 0).
+        // The mainnet timestamp below is a PLACEHOLDER coordinated flag-day (2027-01-01
+        // 00:00:00 UTC) that MUST be confirmed and aligned with the SDK base64 rollout
+        // before any base64 DEPLOY is broadcast to mainnet — a wrong value is a second fork.
+        this.addChange('DEPLOY_BASE64_CODE', '2.0.0',1798761600,0,0,0,0,0);
+
         // Staking actions — capability variants (STAKE v1/v2, UNSTAKE v0, DELEGATE v0/v2, COLLECT) are BTC-only;
         // contract variants (STAKE v3, UNSTAKE v1, DELEGATE v1/v3) work on any chain
         this.addChange('STAKE',              '2.0.0',0,0,0,0,0,0);

@@ -18,7 +18,8 @@
  *
  * PARAMS:
  * - VERSION            - Format Version
- * - CODE_ENCODING      - Contract code (hex-encoded)
+ * - CODE_ENCODING      - Contract code (base64-encoded at/after the DEPLOY_BASE64_CODE
+ *                        activation; hex-encoded before it — see the gated decode below)
  * - GAS_LIMIT          - Maximum gas units for deployment
  * - CONSTRUCTOR_PARAMS - Optional constructor parameters (JSON)
  *
@@ -154,10 +155,13 @@ class Deploy {
 
         // Obtain the contract source `code`. Chunked (v2/v3) assembles base64(code) from the
         // deployer's prior DEPLOYCHUNK rows then decodes + sha256-verifies it; inline (v0/v1)
-        // base64-decodes CODE_ENCODING directly. Either way `code` is the UTF-8 source that
-        // flows into the SHARED size / syntax / manifest / gas / constructor path below.
-        // (base64 is 1.33x vs hex's 2x and has no '|', so it is delimiter-safe; Buffer.from
-        // is lenient, so we round-trip to reject non-canonical base64 deterministically.)
+        // decodes CODE_ENCODING directly — as base64 at/after the DEPLOY_BASE64_CODE
+        // activation, or as hex before it (the original format), gated on block_time so a
+        // replay/heterogeneous fleet decodes historical DEPLOYs identically. Either way `code`
+        // is the UTF-8 source that flows into the SHARED size / syntax / manifest / gas /
+        // constructor path below. (base64 is 1.33x vs hex's 2x and has no '|', so it is
+        // delimiter-safe; Buffer.from is lenient, so we round-trip to reject non-canonical
+        // base64 deterministically.)
         let code = '';
         if(!error && isChunked){
             let declaredHash = String(data['CODE_HASH_PARAM']);
@@ -210,7 +214,10 @@ class Deploy {
         } else if(!error){
             if(this.util.isNull(data['CODE_ENCODING'])){
                 error = 'invalid: CODE_ENCODING (required)';
-            } else {
+            } else if(await this.actions.protocolChanges.isEnabled('DEPLOY_BASE64_CODE', data['BLOCK_INDEX'])){
+                // Post-activation: base64. 1.33x vs hex's 2x and no '|', so delimiter-safe.
+                // Buffer.from(...,'base64') is lenient, so round-trip to reject non-canonical
+                // base64 deterministically across nodes.
                 try {
                     let b64 = String(data['CODE_ENCODING']);
                     code = Buffer.from(b64, 'base64').toString('utf8');
@@ -218,6 +225,17 @@ class Deploy {
                         error = 'invalid: CODE_ENCODING (base64 decode failed)';
                 } catch(e){
                     error = 'invalid: CODE_ENCODING (base64 decode failed)';
+                }
+            } else {
+                // Pre-activation: hex. Byte-for-byte the original pre-base64 decode so a
+                // from-genesis replay reproduces every historical inline DEPLOY's code_hash
+                // exactly. Deliberately NO round-trip check — the historical nodes did not
+                // round-trip hex, and matching their (lenient) behaviour is the whole point
+                // of the gate.
+                try {
+                    code = Buffer.from(data['CODE_ENCODING'], 'hex').toString('utf8');
+                } catch(e){
+                    error = 'invalid: CODE_ENCODING (hex decode failed)';
                 }
             }
         }
