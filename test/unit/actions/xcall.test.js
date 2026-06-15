@@ -27,9 +27,9 @@ const SIG_A    = '1'.repeat(128);
 
 // Mirror the handler's deterministic call_id derivation — MUST byte-match
 // xchain-vm/src/gateway-emit.js (crossExecute).
-const deriveCallId = (network, chain, txHash, emitterActionIndex, contractIndex, position, targetChain) =>
+const deriveCallId = (network, chain, txHash, contractIndex, position, targetChain) =>
     crypto.createHash('sha256')
-        .update([network, chain, txHash, emitterActionIndex, contractIndex, position, targetChain].map(String).join(':'))
+        .update([network, chain, txHash, contractIndex, position, targetChain].map(String).join(':'))
         .digest('hex');
 
 describe('Xcall (XCALL) @regression @tier3', function () {
@@ -96,7 +96,7 @@ describe('Xcall (XCALL) @regression @tier3', function () {
         function v0Data(overrides = {}) {
             return createBaseData({
                 ACTION: 'XCALL', FORMAT: 0, IS_EMISSION: true, EMITTER: 5,
-                EMITTER_POSITION: 0, EMITTER_ACTION_INDEX: 9, BLOCK_INDEX: 100,
+                EMITTER_POSITION: 0, BLOCK_INDEX: 100,
                 ...overrides,
             });
         }
@@ -112,7 +112,7 @@ describe('Xcall (XCALL) @regression @tier3', function () {
                     p.gasLimit, p.cb, p.cbParams, p.deadline, p.hops];
         }
         const goodCallId = (data) =>
-            deriveCallId('regtest', 'BTC', data['TX_HASH'], data['EMITTER_ACTION_INDEX'],
+            deriveCallId('regtest', 'BTC', data['TX_HASH'],
                          data['EMITTER'], data['EMITTER_POSITION'], 'DOGE');
 
         it('valid request → STATUS valid, createCrossChainCallRequest called with the derived deadline', async function () {
@@ -139,7 +139,7 @@ describe('Xcall (XCALL) @regression @tier3', function () {
             const data = v0Data();
             // Same inputs but derived for LTC target — must be rejected for a DOGE call.
             const wrongTarget = deriveCallId('regtest', 'BTC', data['TX_HASH'],
-                data['EMITTER_ACTION_INDEX'], data['EMITTER'], data['EMITTER_POSITION'], 'LTC');
+                data['EMITTER'], data['EMITTER_POSITION'], 'LTC');
             await handler.parse(v0Params(wrongTarget), data, null);
             assert.match(data['STATUS'], /CALL_ID \(does not match/);
         });
@@ -153,7 +153,7 @@ describe('Xcall (XCALL) @regression @tier3', function () {
         it('rejects targeting this indexer\'s own chain', async function () {
             const data = v0Data();
             const id = deriveCallId('regtest', 'BTC', data['TX_HASH'],
-                data['EMITTER_ACTION_INDEX'], data['EMITTER'], data['EMITTER_POSITION'], 'BTC');
+                data['EMITTER'], data['EMITTER_POSITION'], 'BTC');
             await handler.parse(v0Params(id, { targetChain: 'BTC' }), data, null);
             assert.match(data['STATUS'], /TARGET_CHAIN \(must differ/);
         });

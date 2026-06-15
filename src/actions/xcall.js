@@ -161,22 +161,32 @@ class Xcall {
         }
 
         // Re-derive call_id and compare. Defends against a compromised VM by anchoring
-        // the request to (network, source chain, tx_hash, emitter_action_index,
-        // contract_index, emitter_position, target_chain). Network + chain are bound in
-        // (unlike the ATTEST preimage) because BTC-family chains share tx-hash space —
-        // a call must never collide or replay across chains/networks. MUST byte-match
-        // the VM's derivation in xchain-vm/src/gateway-emit.js (crossExecute). All
-        // inputs are REQUIRED; their absence is a hard failure (no silent bypass).
+        // the request to (network, source chain, tx_hash, contract_index,
+        // emitter_position, target_chain). Network + chain are bound in (unlike the
+        // ATTEST preimage) because BTC-family chains share tx-hash space — a call must
+        // never collide or replay across chains/networks.
+        //
+        // The emitting EXECUTE's action_index is deliberately EXCLUDED from the
+        // preimage: (tx_hash, contract_index, emitter_position) already uniquely
+        // identify an emission within a block, so action_index adds no entropy. It is
+        // also a function of injection *timing* — it advances with every synthetic
+        // action (XEXEC runs, result callbacks, expiries) the indexer injects ahead of
+        // the EXECUTE — not of chain content. Binding it in would let a single
+        // one-block shift in injection order permanently diverge every later call_id
+        // across nodes (and, because synthetic callback/relay tx-hashes are derived
+        // from call_id, never re-converge). Excluding it keeps call_id deterministic.
+        //
+        // MUST byte-match the VM's derivation in xchain-vm/src/gateway-emit.js
+        // (crossExecute). All inputs are REQUIRED; their absence is a hard failure
+        // (no silent bypass).
         if(!error){
             if(data['EMITTER_POSITION'] === undefined || data['EMITTER_POSITION'] === null){
                 error = 'invalid: EMITTER_POSITION (required for call_id derivation)';
-            } else if(data['EMITTER_ACTION_INDEX'] === undefined || data['EMITTER_ACTION_INDEX'] === null){
-                error = 'invalid: EMITTER_ACTION_INDEX (required for call_id derivation)';
             } else if(!data['TX_HASH']){
                 error = 'invalid: TX_HASH (required for call_id derivation)';
             } else {
                 let preimage = String(this.config['NETWORK']) + ':' + String(this.config['COIN']) + ':' +
-                               String(data['TX_HASH']) + ':' + String(data['EMITTER_ACTION_INDEX']) + ':' +
+                               String(data['TX_HASH']) + ':' +
                                String(data['CONTRACT_INDEX']) + ':' + String(data['EMITTER_POSITION']) + ':' +
                                String(data['TARGET_CHAIN']);
                 let expected = crypto.createHash('sha256').update(preimage).digest('hex');
