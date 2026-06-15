@@ -4277,8 +4277,13 @@ class Database {
                         ) AND
                         s1.give_coin_id=s2.get_coin_id AND
                         s1.give_tick_id=s2.get_tick_id AND
-                        s1.give_amount=s2.get_amount AND
-                        s1.get_amount=s2.give_amount AND
+                        -- Ownership legs store NULL amounts; in SQL, NULL = NULL is NULL (not
+                        -- true), so a bare equality silently drops every ownership swap
+                        -- (ownership-for-ownership = both NULL, ownership-for-balance = one
+                        -- NULL) before it can be returned. Pair on NULL-equals-NULL too, the
+                        -- way findOrderMatches handles its null sides (#3749).
+                        (s1.give_amount=s2.get_amount OR (s1.give_amount IS NULL AND s2.get_amount IS NULL)) AND
+                        (s1.get_amount=s2.give_amount OR (s1.get_amount IS NULL AND s2.give_amount IS NULL)) AND
                         s1.action_index=? AND
                         a1.source_id!=? AND
                         s4.status='open'
