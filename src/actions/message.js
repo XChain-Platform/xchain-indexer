@@ -74,9 +74,16 @@ class Message {
         if(!error)
             data = this.util.setActionParams(data, params, this.formats, format);
 
-        // Convert NUMBER fields from string value to number value so comparisons are mathematical 
+        // Convert NUMBER fields from string value to number value so comparisons are mathematical
         if(!error)
             data = this.util.setNumberFormats(data);
+
+        // MESSAGE v2 (VERSION|COIN|DESTINATION|ENCRYPTED_MESSAGE) carries no
+        // ENCRYPTION_METHOD on the wire — absence implies ECIES (1) by protocol.
+        // Stamp it so v2 rows persist a concrete method rather than null and the
+        // reader's decrypt gate stays reachable.
+        if(!error && format===2 && this.util.isNull(data['ENCRYPTION_METHOD']))
+            data['ENCRYPTION_METHOD'] = 1;
 
         // TODO : Make sure that ENCRYPTION_METHOD is a numeric value or null (stop storing 'u' in database when undefined)
 

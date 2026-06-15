@@ -62,6 +62,9 @@ describe('Message action handler @regression @tier3', function () {
         const params = ['2', 'BTC', VALID_DEST, 'ENCRYPTEDPAYLOAD'];
         await handler.parse(params, data, null);
         assert.strictEqual(data['STATUS'], 'valid');
+        // v2 carries no ENCRYPTION_METHOD on the wire — absence implies ECIES (1),
+        // so the handler must stamp 1 rather than persist null.
+        assert.strictEqual(Number(data['ENCRYPTION_METHOD']), 1);
     });
 
     it('accepts format 3 (plaintext message)', async function () {
