@@ -146,6 +146,19 @@ class Mint {
         if(!error && !this.util.isNull(data['AMOUNT']) && this.util.bcgt(data['AMOUNT'], data['MAX_MINT']))
             error = 'invalid: AMOUNT > MAX_MINT';
 
+        // GAS-tick mint policy: on mainnet, ONLY the GAS address may mint the GAS tick.
+        // This is an airtight, consensus-critical backstop that makes an open-mint gas
+        // token impossible on mainnet regardless of how the genesis ISSUE was authored
+        // (defense-in-depth over LOCK_MINT). On testnet/regtest the GAS tick is left
+        // open-mintable so developers can self-mint a little play-money gas (MINT pays
+        // no XCHAIN fee, only the native tx fee); the per-mint amount is bounded by the
+        // token's own MAX_MINT (set at genesis ISSUE) — no separate cap needed.
+        // Subtokens (e.g. XCHAIN.foo) are NOT the GAS tick and are unaffected.
+        if(!error && String(data['TICK']).toUpperCase()==this.config['GAS']
+           && this.config['NETWORK']!='regtest' && this.config['NETWORK']!='testnet'
+           && data['SOURCE']!=this.config['ADDRESS']['GAS'])
+            error = 'invalid: GAS Address (mint)';
+
         // Verify minting AMOUNT will not exceed MAX_SUPPLY
         if(!error && this.util.bcgt(this.util.bcadd(data['SUPPLY'],data['AMOUNT'],data['DECIMALS']), this.util.bcadd(data['MAX_SUPPLY'],0,data['DECIMALS'])))
             error = 'invalid: mint exceeds MAX_SUPPLY';
