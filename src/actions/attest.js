@@ -30,6 +30,7 @@
 
 const crypto  = require('crypto');
 const ed25519 = require('../ed25519.js');
+const swq     = require('../stake_weighted_quorum.js');
 const ProviderRegistry = require('../attestation/providerRegistry.js');
 
 class Attest {
@@ -500,15 +501,32 @@ class Attest {
     // Compute the responsible validator set for a given request — same deterministic rule
     // the hub uses (xchain-hub AttestationRound): sort capability validators by
     // SHA256(request_id || pubkey), take top REDUNDANCY.
+    // STAKE_WEIGHTED_QUORUM: at/above activation, dedupe the selection by staking
+    // source (one slot per source, keep each source's lowest-hash key) using the
+    // source-keyed set; below activation, the legacy per-key selection. The
+    // within-subset quorum stays count-based. CONSENSUS-CRITICAL: must match the
+    // hub's AttestationRound._computeResponsibleSet byte-for-byte or validation forks.
     async _computeResponsibleSet(requestId, redundancy, blockIndex){
-        let validators = await this.indexerDb.getValidatorsByCapability('attestation', blockIndex);
+        let weighted = swq.isStakeWeightedQuorumActive(blockIndex, this.config['NETWORK']);
+        let validators = weighted
+            ? await this.indexerDb.getStakeWeightsByCapability('attestation', blockIndex)
+            : await this.indexerDb.getValidatorsByCapability('attestation', blockIndex);
         if(!validators || validators.length === 0) return [];
         let withHash = validators.map(v => {
             let pk = String(v.pubkey).toLowerCase();
             let h  = crypto.createHash('sha256').update(String(requestId), 'utf8').update(pk, 'utf8').digest('hex');
-            return { pubkey: pk, hash: h };
+            return { pubkey: pk, source: (v.source != null ? String(v.source) : null), hash: h };
         });
         withHash.sort((a, b) => (a.hash < b.hash) ? -1 : (a.hash > b.hash ? 1 : 0));
+        if(weighted){
+            let seen = new Set();
+            withHash = withHash.filter(v => {
+                if(v.source === null) return true;
+                if(seen.has(v.source)) return false;
+                seen.add(v.source);
+                return true;
+            });
+        }
         return withHash.slice(0, Math.max(1, Number(redundancy) || 1)).map(v => v.pubkey);
     }
 

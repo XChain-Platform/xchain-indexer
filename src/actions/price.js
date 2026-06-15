@@ -31,6 +31,7 @@
  ********************************************************************/
 
 const ed25519 = require('../ed25519.js');
+const swq     = require('../stake_weighted_quorum.js');
 
 class Price {
 
@@ -154,13 +155,27 @@ class Price {
                 qualifiedSigners.push(s.pubkey);
             }
 
-            // Compute PBFT quorum over validators with `price` capability,
-            // floored at a simple majority: max(2 * floor((N - 1) / 3) + 1, ceil((N + 1) / 2))
-            let priceValidatorCount = await this.indexerDb.getActiveCapabilityCount('price', data['BLOCK_INDEX']);
-            let quorum = (priceValidatorCount <= 1) ? 1 : Math.max(2 * Math.floor((priceValidatorCount - 1) / 3) + 1, Math.ceil((priceValidatorCount + 1) / 2));
+            // STAKE_WEIGHTED_QUORUM: at/above the activation snapshot_block, finalize
+            // on the summed STAKE of the qualified signers (>2/3 of S, source-deduped)
+            // rather than their COUNT. Gated on this PRICE's BLOCK_INDEX (a BTC height —
+            // price is BTC-anchored) + the indexer's network, so the hub and every
+            // indexer flip on the same anchor. Below activation: byte-for-byte the
+            // legacy count rule. `qualifiedSigners` is the verified, capability-qualified
+            // signer set (the same input both modes tally).
+            let weighted = swq.isStakeWeightedQuorumActive(data['BLOCK_INDEX'], this.config['NETWORK']);
+            if(weighted){
+                let validators = await this.indexerDb.getStakeWeightsByCapability('price', data['BLOCK_INDEX']);
+                if(!swq.meetsStakeThreshold(this.util, validators, qualifiedSigners))
+                    error = 'invalid: insufficient signer stake';
+            } else {
+                // Compute PBFT quorum over validators with `price` capability,
+                // floored at a simple majority: max(2 * floor((N - 1) / 3) + 1, ceil((N + 1) / 2))
+                let priceValidatorCount = await this.indexerDb.getActiveCapabilityCount('price', data['BLOCK_INDEX']);
+                let quorum = (priceValidatorCount <= 1) ? 1 : Math.max(2 * Math.floor((priceValidatorCount - 1) / 3) + 1, Math.ceil((priceValidatorCount + 1) / 2));
 
-            if(validSigs < quorum)
-                error = 'invalid: insufficient PBFT quorum (' + validSigs + '/' + quorum + ')';
+                if(validSigs < quorum)
+                    error = 'invalid: insufficient PBFT quorum (' + validSigs + '/' + quorum + ')';
+            }
         }
 
         // Determine validation status

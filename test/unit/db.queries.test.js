@@ -3900,3 +3900,35 @@ describe('Database.getCrossChainDataForVM() @regression @tier1', function () {
         assert.deepStrictEqual(snap, { attestations: {}, settled: {}, calls: {} });
     });
 });
+
+// ---------------------------------------------------------------------------
+// getActiveStakeWeights — source-keyed all-staker set (STAKE_WEIGHTED_QUORUM
+// counterpart of getActiveValidators; powers the hub config-change PBFT)
+// ---------------------------------------------------------------------------
+
+describe('Database.getActiveStakeWeights() @regression @tier1', function () {
+    it('maps source-keyed rows and applies NO MIN_STAKE floor', async function () {
+        const db = dbWithDoQuery([
+            { pubkey: 'aa', source: 'src1', weight: '500' },  // two keys, one source
+            { pubkey: 'bb', source: 'src1', weight: '500' },
+            { pubkey: 'cc', source: 'src2', weight: '300' },
+        ]);
+        sinon.stub(db, 'getStatusId').resolves(1);
+        const out = await db.getActiveStakeWeights(306);
+        assert.deepStrictEqual(out, [
+            { pubkey: 'aa', source: 'src1', weight: '500' },
+            { pubkey: 'bb', source: 'src1', weight: '500' },
+            { pubkey: 'cc', source: 'src2', weight: '300' },
+        ]);
+        // No MIN_STAKE floor — the _stakeWeightsSql min-stake bind arg is '0'.
+        const args = db.doQuery.getCall(0).args[1];
+        assert.ok(args.includes('0'), 'expected min_stake 0 among the query args');
+    });
+
+    it('returns [] when the valid status id is unavailable', async function () {
+        const db = dbWithDoQuery([]);
+        sinon.stub(db, 'getStatusId').resolves(null);
+        const out = await db.getActiveStakeWeights(306);
+        assert.deepStrictEqual(out, []);
+    });
+});

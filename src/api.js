@@ -95,6 +95,7 @@ const WRITE_METHODS = new Set(['pushvalidatorrewards']);
 const FEDERATION_READ_METHODS = new Set([
     'getownstake',
     'getactivevalidators',
+    'getactivestakeweights',
     'getcapabilityvalidators',
     'getstakeweightsbycapability',
     'getpendingattestation_requests',
@@ -329,6 +330,38 @@ async function startApi(){
             } catch (err) {
                 console.error('getactivevalidators error:', err);
                 return { error: 'failed to look up active validators' };
+            }
+        },
+
+        // Source-keyed whole-federation weights at a block boundary — every staker
+        // (no capability filter, no MIN_STAKE floor) with each effective key's
+        // `source` + the source's aggregate `weight`. The STAKE_WEIGHTED_QUORUM
+        // counterpart of getactivevalidators; used by xchain-hub's Consensus
+        // (config-change PBFT) to weight governance quorum by stake.
+        // Body: { block_index }
+        async getactivestakeweights({block_index}){
+            if(block_index === undefined || block_index === null)
+                return { error: 'block_index is required' };
+            let blk = Number(block_index);
+            if(!Number.isInteger(blk) || blk < 0)
+                return { error: 'block_index must be a non-negative integer' };
+            if(!indexer.indexerDb)
+                return { error: 'indexer database not ready' };
+            try {
+                let latestBlock = await indexer.indexerDb.getLatestBlockIndex();
+                if(blk > latestBlock)
+                    return { error: 'block_index ' + blk + ' not yet indexed (latest: ' + latestBlock + ')' };
+                let validators = await indexer.indexerDb.getActiveStakeWeights(blk);
+                let sources = new Set(validators.map(v => v.source));
+                return {
+                    block_index:  blk,
+                    count:        validators.length,
+                    source_count: sources.size,
+                    validators:   validators
+                };
+            } catch (err) {
+                console.error('getactivestakeweights error:', err);
+                return { error: 'failed to look up active stake weights' };
             }
         },
 

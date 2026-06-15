@@ -17,8 +17,10 @@ const sinon  = require('sinon');
 const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
 
 const Price   = require('../../../src/actions/price.js');
-// Same cached module Price references — stubbing verify() controls sig acceptance.
+// Same cached modules Price references — stubbing verify() controls sig acceptance,
+// stubbing isStakeWeightedQuorumActive() selects the count vs stake-weighted path.
 const ed25519 = require('../../../src/ed25519.js');
+const swq     = require('../../../src/stake_weighted_quorum.js');
 
 const PUBKEY_A = 'a'.repeat(64);
 const PUBKEY_B = 'b'.repeat(64);
@@ -31,10 +33,11 @@ describe('Price (PRICE) @regression @tier3', function () {
     let indexer, actionsCtx, handler;
 
     function addPriceDbStubs(db) {
-        db.createPrice               = sinon.stub().resolves();
-        db.hasCapability             = sinon.stub().resolves(true);
-        db.getActiveCapabilityCount  = sinon.stub().resolves(1);
-        db.createValidatorReward     = sinon.stub().resolves(true);
+        db.createPrice                  = sinon.stub().resolves();
+        db.hasCapability                = sinon.stub().resolves(true);
+        db.getActiveCapabilityCount     = sinon.stub().resolves(1);
+        db.getStakeWeightsByCapability  = sinon.stub().resolves([]);
+        db.createValidatorReward        = sinon.stub().resolves(true);
     }
 
     beforeEach(function () {
@@ -78,6 +81,9 @@ describe('Price (PRICE) @regression @tier3', function () {
 
         beforeEach(function () {
             sinon.stub(ed25519, 'verify').returns(true);
+            // These cases exercise the legacy COUNT quorum (the live path on mainnet
+            // below the activation height). Weighted mode has its own describe below.
+            sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(false);
         });
 
         it('valid single-validator snapshot (quorum 1) → valid', async function () {
@@ -216,6 +222,63 @@ describe('Price (PRICE) @regression @tier3', function () {
     });
 
     // ───────────────────────────────────────────────────────────────────────
+    // v0 — STAKE_WEIGHTED_QUORUM (finalize on summed signer STAKE, source-deduped)
+    // ───────────────────────────────────────────────────────────────────────
+    describe('v0 — stake-weighted quorum', function () {
+        function v0Params(pairs, sigs) {
+            const out = ['0', '7', '1700000000', String(pairs.length)];
+            for (const pr of pairs) { out.push(pr.pair, pr.price); }
+            out.push(String(sigs.length));
+            for (const s of sigs) { out.push(s.pubkey, s.sig); }
+            return out;
+        }
+        function v0Data(overrides = {}) {
+            return createBaseData({ ACTION: 'PRICE', FORMAT: 0, BLOCK_INDEX: 100, ...overrides });
+        }
+        const ONE_PAIR = [{ pair: 'BTC/USD', price: '50000' }];
+
+        // Valid 64-hex pubkey / 128-hex sig from a byte value.
+        const pk = (n) => n.toString(16).padStart(2, '0').repeat(32);
+        const sg = (n) => n.toString(16).padStart(2, '0').repeat(64);
+
+        // One whale source holds the supermajority of stake; nine Sybil sources hold
+        // 1 each. S = 100000 + 9 = 100009.
+        const WHALE = { pubkey: PUBKEY_A, source: 'WHALE', weight: '100000' };
+        const SYBILS = [];
+        for (let i = 0; i < 9; i++) SYBILS.push({ pubkey: pk(i), source: 'SYB' + i, weight: '1' });
+        const SNAPSHOT = [WHALE].concat(SYBILS);
+
+        beforeEach(function () {
+            sinon.stub(ed25519, 'verify').returns(true);
+            sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(true);
+            indexer.indexerDb.getStakeWeightsByCapability.resolves(SNAPSHOT);
+        });
+
+        it('SECURITY: a COUNT supermajority of low-stake Sybils cannot finalize', async function () {
+            // All nine Sybils sign — a 9-of-10 COUNT landslide — but only 9/100009 stake:
+            // 3·9 = 27 !> 2·100009. Stake, not headcount, gates finalization.
+            const data = v0Data();
+            await handler.parse(v0Params(ONE_PAIR, SYBILS.map(s => ({ pubkey: s.pubkey, sig: sg(1) }))), data, null);
+            assert.strictEqual(data['VALIDATION_STATUS'], 'invalid');
+            assert.ok(String(data['STATUS']).includes('stake'));
+        });
+
+        it('a single majority-STAKE signer finalizes alone (COUNT minority of one)', async function () {
+            // The whale alone: 3·100000 = 300000 > 2·100009 = 200018 → valid.
+            const data = v0Data();
+            await handler.parse(v0Params(ONE_PAIR, [{ pubkey: PUBKEY_A, sig: SIG_A }]), data, null);
+            assert.strictEqual(data['VALIDATION_STATUS'], 'valid');
+        });
+
+        it('uses the source-keyed weight query, not the count query', async function () {
+            const data = v0Data();
+            await handler.parse(v0Params(ONE_PAIR, [{ pubkey: PUBKEY_A, sig: SIG_A }]), data, null);
+            assert.ok(indexer.indexerDb.getStakeWeightsByCapability.calledWith('price', data['BLOCK_INDEX']));
+            assert.ok(indexer.indexerDb.getActiveCapabilityCount.notCalled);
+        });
+    });
+
+    // ───────────────────────────────────────────────────────────────────────
     // v1 — user TOKEN/FIAT oracle price
     // ───────────────────────────────────────────────────────────────────────
     describe('v1 — user oracle price', function () {
@@ -278,6 +341,7 @@ describe('Price (PRICE) @regression @tier3', function () {
 
         beforeEach(function () {
             sinon.stub(ed25519, 'verify').returns(true);
+            sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(false);
         });
 
         it('valid v0 with hubClient → pushPriceRound called', async function () {

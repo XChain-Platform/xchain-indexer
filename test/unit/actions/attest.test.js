@@ -18,6 +18,7 @@ const crypto = require('crypto');
 const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
 
 const Attest  = require('../../../src/actions/attest.js');
+const swq     = require('../../../src/stake_weighted_quorum.js');
 // Same module instance Attest holds a reference to (Node module cache) — stubbing
 // `verify` here controls signature acceptance inside the handler.
 const ed25519 = require('../../../src/ed25519.js');
@@ -55,6 +56,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
         db.updateAttestationRequestStatus    = sinon.stub().resolves();
         db.setAttestationResponseCallbackIndex = sinon.stub().resolves();
         db.getValidatorsByCapability         = sinon.stub().resolves([{ pubkey: PUBKEY_A }]);
+        db.getStakeWeightsByCapability       = sinon.stub().resolves([{ pubkey: PUBKEY_A, source: 'SA', weight: '100' }]);
         db.createValidatorReward             = sinon.stub().resolves(true);
         db.createSavepoint                   = sinon.stub().resolves('sp1');
         db.releaseSavepoint                  = sinon.stub().resolves();
@@ -92,6 +94,10 @@ describe('Attest (ATTEST) @regression @tier3', function () {
         };
         handler = new Attest(actionsCtx);
         indexer.util.resetLists();
+        // Default to the legacy COUNT path (per-key responsible set). The
+        // source-deduped weighted path has its own describe below. (regtest
+        // activates weighting at genesis, so this must be stubbed off here.)
+        sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(false);
     });
 
     afterEach(function () {
@@ -1191,5 +1197,50 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             assert.strictEqual(indexer.indexerDb.incrementAttestationValidatorStat.callCount, 2);
         });
 
+    });
+
+    // ───────────────────────────────────────────────────────────────────────
+    // STAKE_WEIGHTED_QUORUM — source-deduped responsible-set selection (WI-1)
+    // The within-subset quorum stays count-based; only the SELECTION dedupes by
+    // staking source so a source's delegated keys can't occupy multiple slots.
+    // ───────────────────────────────────────────────────────────────────────
+    describe('STAKE_WEIGHTED_QUORUM — source-deduped responsible set', function () {
+        beforeEach(function () {
+            swq.isStakeWeightedQuorumActive.returns(true);   // already stubbed in outer beforeEach
+        });
+
+        it('selects at most one responsible slot per staking source', async function () {
+            // S1 delegates THREE keys; S2 and S3 one each. redundancy 3.
+            indexer.indexerDb.getStakeWeightsByCapability.resolves([
+                { pubkey: 'k1a', source: 'S1', weight: '100' },
+                { pubkey: 'k1b', source: 'S1', weight: '100' },
+                { pubkey: 'k1c', source: 'S1', weight: '100' },
+                { pubkey: 'k2',  source: 'S2', weight: '100' },
+                { pubkey: 'k3',  source: 'S3', weight: '100' },
+            ]);
+            const srcOf = { k1a: 'S1', k1b: 'S1', k1c: 'S1', k2: 'S2', k3: 'S3' };
+            const resp = await handler._computeResponsibleSet('req-1', 3, 90);
+            const sources = resp.map(pk => srcOf[pk]);
+            assert.strictEqual(new Set(sources).size, sources.length, 'a source occupied >1 responsible slot');
+            assert.deepStrictEqual([...new Set(sources)].sort(), ['S1', 'S2', 'S3']);
+        });
+
+        it('SECURITY: a source with many delegated keys cannot dominate the responsible set', async function () {
+            // S1 delegates 5 keys; only S2 besides. redundancy 3 — but just 2 sources.
+            indexer.indexerDb.getStakeWeightsByCapability.resolves([
+                ...['a', 'b', 'c', 'd', 'e'].map(s => ({ pubkey: 'k1' + s, source: 'S1', weight: '100' })),
+                { pubkey: 'k2', source: 'S2', weight: '100' },
+            ]);
+            const resp = await handler._computeResponsibleSet('req-2', 3, 90);
+            assert.strictEqual(resp.filter(pk => pk.startsWith('k1')).length, 1, 'S1 took more than one slot');
+            assert.strictEqual(resp.length, 2, 'responsible set capped at the number of distinct sources');
+        });
+
+        it('uses the source-keyed query (not the count query) when weighted', async function () {
+            indexer.indexerDb.getStakeWeightsByCapability.resolves([{ pubkey: 'k1', source: 'S1', weight: '100' }]);
+            await handler._computeResponsibleSet('req-3', 1, 90);
+            assert.ok(indexer.indexerDb.getStakeWeightsByCapability.calledWith('attestation', 90));
+            assert.ok(indexer.indexerDb.getValidatorsByCapability.notCalled);
+        });
     });
 });

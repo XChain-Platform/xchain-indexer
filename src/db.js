@@ -8239,6 +8239,31 @@ class Database {
         }));
     }
 
+    // Source-keyed all-staker weights at `blockIndex` — the STAKE_WEIGHTED_QUORUM
+    // counterpart of getActiveValidators (the config-change PBFT's whole-federation
+    // set). Every source with ANY active stake (no MIN_STAKE floor) and all its
+    // effective keys, each carrying the source address + the source's aggregate
+    // weight, so Σ weight over DISTINCT sources = S. Used by xchain-hub's Consensus
+    // when weighting governance/config quorum by stake. CONSENSUS-CRITICAL: shares
+    // the DELEGATE-additive _stakeWeightsSql with getStakeWeightsByCapability, so it
+    // resolves identically on every hub (a divergence forks config consensus).
+    async getActiveStakeWeights(blockIndex){
+        let valid_id = await this.getStatusId('valid');
+        if(valid_id === null) return [];
+        // Safety cap — see getActiveValidators.
+        let limit = parseInt(process.env.VALIDATOR_QUERY_LIMIT) || 1000;
+        let sw = this._stakeWeightsSql(valid_id, blockIndex, '0');   // no MIN_STAKE floor
+        let query = `${sw.sql} ORDER BY source, pubkey LIMIT ?`;
+        let rows = await this.doQuery(query, [...sw.args, limit]);
+        if(rows.length >= limit)
+            console.warn('getActiveStakeWeights hit the result cap of ' + limit + ' rows at block ' + blockIndex + ' — set may be truncated. Raise VALIDATOR_QUERY_LIMIT if the federation has grown.');
+        return rows.map(r => ({
+            pubkey: String(r.pubkey),
+            source: String(r.source),
+            weight: (r.weight === null || r.weight === undefined) ? '0' : String(r.weight)
+        }));
+    }
+
     // Return all pubkeys whose SUM(active stake) at `blockIndex` meets the
     // capability's MIN_STAKE. Used by xchain-hub's CapabilitySnapshot to lock
     // the validator set at a block boundary for PBFT quorum calculations —
