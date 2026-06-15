@@ -1208,6 +1208,18 @@ class Utility {
     // against SOURCE, the VM guard run (fail-closed in runControllerGuard), and the fee derivation.
     async _invokeController(actions, db, controllerIndex, opts){
         let data = opts.data;
+        // Activation gate (single shared chokepoint for both token- and address-controller
+        // guards). Until the CONTROLLER_GUARD flag-day the guard is a strict no-op on every
+        // node: no allow/deny VM run, no payout_legs, no guard contract_executions row — so a
+        // node that lacks the controller layer and one that has it settle every guarded action
+        // identically. This one check atomically gates the whole surface: the VM allow/deny in
+        // runControllerGuard, the payout_legs column write in order.js/swap.js, the match-time
+        // applyProceedsSplit in order_match.js/swap_match.js (which read the stored — now always
+        // null pre-activation — payout_legs), and the guard-emission contract_hash contribution.
+        // Without it the first guarded action forks the ledger and the federation checkpoint
+        // preimage between heterogeneous node versions. See protocol_changes.js.
+        if(!(await actions.protocolChanges.isEnabled('CONTROLLER_GUARD', data['BLOCK_INDEX'])))
+            return { error: null, guardFee: 0, payoutLegs: null };
         // No guard-of-guard: a controller's own emission of the gated subject is not re-guarded;
         // cross-token / different-controller moves still guard, bounded by VM_MAX_CALL_DEPTH.
         if(data['IS_GUARD_EMISSION'] && Number(data['EMITTER']) === Number(controllerIndex))

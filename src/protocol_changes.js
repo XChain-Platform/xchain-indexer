@@ -179,6 +179,34 @@ class ProtocolChanges {
         // stack exercises VM balance reads from block 0).
         this.addChange('VM_BALANCE_TOKENINFO', '2.0.0',1798761600,0,0,0,0,0);
 
+        // Programmable-policy controller guard. Below this activation the bound
+        // controller's `guard` method is NEVER run: every SEND/ORDER/SWAP/DISPENSER/
+        // DESTROY on a controller-bound token settles with its plain (un-guarded)
+        // semantics, no allow/deny veto, no royalty/fee payout_legs written, and no
+        // guard contract_executions row — exactly as a node that lacks the controller
+        // layer behaves. At/above it the shared chokepoint (_invokeController in
+        // utility.js) runs the guard, may DENY the action, and may attach payout_legs
+        // that the match-time proceeds split applies. Gated as its own consensus rule
+        // because the guard is a NEW, ungated acceptance + ledger rule: a node version
+        // with the controller layer and one without it process the SAME guarded action
+        // differently — one allows/redirects funds, the other settles plainly — forking
+        // the ledger AND the per-block contract_hash (guard emissions now write a guard
+        // contract_executions row, so they contribute to the checkpoint preimage) on the
+        // first guarded action. A single flag-day flips the whole surface — VM execution,
+        // payout_legs write, match-time applyProceedsSplit, and the contract_hash
+        // contribution — atomically across all nodes. Keyed on block_TIME (not
+        // block_index), mirroring DEPLOY_BASE64_CODE / ISSUANCE_FEE_EMISSION_EXEMPT /
+        // VM_BALANCE_TOKENINFO — guarded actions run on BTC, LTC and DOGE whose heights
+        // diverge by millions of blocks, so no single shared block height names one
+        // cutover across all three chains, but a single timestamp does. The mainnet
+        // timestamp is the same PLACEHOLDER coordinated flag-day as the other
+        // contract-era consensus fixes in this window (2027-01-01 00:00:00 UTC) and MUST
+        // be confirmed/aligned with the operator fleet upgrade before any CONTROLLER-bound
+        // token is issued on mainnet — a wrong value is a fork. testnet/regtest activate
+        // at genesis (no pre-guard history to preserve; the e2e/regtest stack exercises
+        // controller guards from block 0).
+        this.addChange('CONTROLLER_GUARD', '2.0.0',1798761600,0,0,0,0,0);
+
         // NOTE: STAKE_WEIGHTED_QUORUM (WI-1) is deliberately NOT registered here.
         // Standard activations gate on the LOCAL processing block via isEnabled();
         // stake-weighted quorum must gate on the BTC-anchored `snapshot_block`
