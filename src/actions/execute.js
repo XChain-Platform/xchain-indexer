@@ -646,6 +646,54 @@ class Execute {
                     ACTION_INDEX:   hostData['ACTION_INDEX']
                 });
             }
+
+            // A guard's emissions key their execution_index to the NATIVE action's
+            // action_index (a guard has no action_index of its own — it rides the
+            // guarded SEND/ORDER/SWAP/DISPENSER). The block contract_hash preimage
+            // pulls emissions via INNER JOIN contract_executions ce ON
+            // (ce.action_index = em.execution_index) — so without a parent execution
+            // row here, EVERY guard emission is silently dropped from contract_hash
+            // and two nodes that diverge on guard emissions still hash identically
+            // (a silent consensus fork). Write the parent row so the join resolves.
+            //
+            // A single native action can run MULTIPLE guards on the same action_index
+            // (a multi-leg SEND/DESTROY; or one SEND firing both the token-controller
+            // and the destination address-controller). They share this one execution
+            // row (action_index is UNIQUE — last write wins, deterministic) and their
+            // emissions all share execution_index. position is therefore offset by the
+            // count of emissions ALREADY recorded for this action so (execution_index,
+            // position) stays globally unique — keeping the preimage's
+            // ORDER BY (execution_index, position) a TOTAL order across guards (no
+            // engine-dependent tie-break = no fork). Offsetting the stored column means
+            // the existing read-side ORDER BY (here and in the sync hasher) needs no
+            // change. Rolled-back prior-guard emissions aren't counted, so positions
+            // stay gap-free and deterministic across nodes.
+            let priorEmissions = await this.indexerDb.doQuery(
+                'SELECT COUNT(*) AS cnt FROM contract_emissions WHERE execution_index=?',
+                [hostData['ACTION_INDEX']]
+            );
+            let basePosition = (priorEmissions.length > 0) ? Number(priorEmissions[0].cnt) : 0;
+
+            // Parent execution row for this guard run (mirrors runContractExecution's
+            // column set). Written inside the savepoint so a failed guard emission
+            // rolls it back alongside its emissions — a denied guard leaves no record.
+            // GAS_USED/GAS_LIMIT are the guard's billed gas + its ceiling; CALLER is
+            // who triggered the guarded action; emitted_count accumulates across guards
+            // sharing this action so the surviving row reflects the action's true total.
+            await this.indexerDb.createContractExecution({
+                ACTION_INDEX  : hostData['ACTION_INDEX'],
+                CONTRACT_INDEX: contractIndex,
+                CALLER        : hostData['SOURCE'],
+                METHOD_NAME   : GUARD_METHOD,
+                INPUT_PARAMS  : guardParams.join('|'),
+                GAS_USED      : gasBilled,
+                GAS_LIMIT     : guardCeiling,
+                STATUS        : 'valid',
+                ERROR_MESSAGE : null,
+                EMITTED_COUNT : basePosition + vmResult.emittedActions.length,
+                BLOCK_INDEX   : hostData['BLOCK_INDEX']
+            });
+
             for(let i = 0; i < vmResult.emittedActions.length; i++){
                 let emission = vmResult.emittedActions[i];
                 // A guard may not emit asynchronous (ATTEST/XCALL — already blocked
@@ -658,7 +706,7 @@ class Execute {
                     EXECUTION_INDEX: hostData['ACTION_INDEX'],
                     EMITTED_ACTION:  emission.action,
                     ACTION_INDEX:    emission.resultActionIndex || null,
-                    POSITION:        i
+                    POSITION:        basePosition + i
                 });
             }
             await this.indexerDb.releaseSavepoint(savepoint);

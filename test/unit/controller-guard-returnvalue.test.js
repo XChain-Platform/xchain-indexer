@@ -52,6 +52,10 @@ describe('runControllerGuard — guard returnValue parsing (royalty payoutLegs) 
         db.rollbackToSavepoint       = sinon.stub().resolves();
         db.createContractState       = sinon.stub().resolves();
         db.createContractEmission    = sinon.stub().resolves();
+        // The guard writes a parent contract_executions row so its emissions resolve through the
+        // contract_hash INNER JOIN; doQuery backs the per-action emission-position offset.
+        db.createContractExecution   = sinon.stub().resolves();
+        db.doQuery                   = sinon.stub().resolves([{ cnt: 0 }]);
         indexer.vm    = { execute: sinon.stub().resolves(vmResult) };
         indexer.hubDb = null;
         return new Execute(indexer);
