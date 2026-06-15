@@ -197,4 +197,51 @@ describe('SLASH action handler — equivocation verifier @regression', function 
         assert.deepStrictEqual(indexer.indexerDb.getValidatorsByCapability.firstCall.args, ['price', 150]);
         assert.ok(indexer.indexerDb.slashCapabilityStake.calledOnce);
     });
+
+    // ── Bounty / treasury split (Phase D mechanism; governance config + BURN default) ──
+    describe('_bountyTreasurySplit', function () {
+        function withSlashConfig(cfg) {
+            indexer.config.STAKING = { CAPABILITIES: { cross_chain: { MIN_STAKE: '5000', SLASH: cfg } } };
+        }
+
+        it('pure burn when no SLASH config (bounty 0, no treasury credit)', function () {
+            const s = handler._bountyTreasurySplit('cross_chain', '1000');
+            assert.strictEqual(Number(s.bounty), 0);
+            assert.strictEqual(s.treasuryAddr, null);          // null = BURN
+            assert.strictEqual(Number(s.treasury), 1000);      // the whole bond leaves circulation
+        });
+
+        it('applies BOUNTY_BPS and routes the remainder to the treasury', function () {
+            withSlashConfig({ BOUNTY_BPS: 500, TREASURY_ADDRESS: 'addrT' });   // 5%
+            const s = handler._bountyTreasurySplit('cross_chain', '1000');
+            assert.strictEqual(Number(s.bounty), 50);
+            assert.strictEqual(Number(s.treasury), 950);
+            assert.strictEqual(s.treasuryAddr, 'addrT');
+            // Conservation: bounty + treasury == burned (never mints, never loses).
+            assert.strictEqual(Number(indexer.util.bcadd(s.bounty, s.treasury, 8)), 1000);
+            assert.strictEqual(typeof s.bounty, 'string');   // ledger sees plain strings, not BigNumbers
+        });
+
+        it('clamps the bounty to BOUNTY_CAP', function () {
+            withSlashConfig({ BOUNTY_BPS: 5000, BOUNTY_CAP: '10', TREASURY_ADDRESS: 'addrT' });   // 50% capped at 10
+            const s = handler._bountyTreasurySplit('cross_chain', '1000');
+            assert.strictEqual(Number(s.bounty), 10);
+            assert.strictEqual(Number(s.treasury), 990);
+        });
+
+        it('clamps BOUNTY_BPS to 100% (never pays more than the bond)', function () {
+            withSlashConfig({ BOUNTY_BPS: 99999, TREASURY_ADDRESS: 'addrT' });
+            const s = handler._bountyTreasurySplit('cross_chain', '1000');
+            assert.strictEqual(Number(s.bounty), 1000);
+            assert.strictEqual(Number(s.treasury), 0);
+        });
+
+        it('a zero burn splits to all-zero with no treasury credit', function () {
+            withSlashConfig({ BOUNTY_BPS: 500, TREASURY_ADDRESS: 'addrT' });
+            const s = handler._bountyTreasurySplit('cross_chain', '0');
+            assert.strictEqual(Number(s.bounty), 0);
+            assert.strictEqual(Number(s.treasury), 0);
+            assert.strictEqual(s.treasuryAddr, null);
+        });
+    });
 });

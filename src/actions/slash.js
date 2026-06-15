@@ -310,12 +310,14 @@ class Slash {
 
         let bounty = '0';
         if(bps > 0){
-            bounty = this.util.bcdiv(this.util.bcmul(total, String(bps), 8), '10000', 8);
+            // bc* return mathjs BigNumbers → String() so the ledger sees plain amount strings
+            // (the convention everywhere else, e.g. STAKE's debits).
+            bounty = String(this.util.bcdiv(this.util.bcmul(total, String(bps), 8), '10000', 8));
             let cap = cfg['BOUNTY_CAP'];
             if(cap != null && this.util.bcgt(bounty, String(cap)))
                 bounty = String(cap);
         }
-        let treasury     = this.util.bcsub(total, bounty, 8);
+        let treasury     = String(this.util.bcsub(total, bounty, 8));
         let treasuryAddr = cfg['TREASURY_ADDRESS'] ? String(cfg['TREASURY_ADDRESS']) : null;  // null = BURN
         return { bounty: bounty, treasury: treasury, treasuryAddr: treasuryAddr };
     }
