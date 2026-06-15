@@ -45,7 +45,10 @@ const { seedGas } = require('../setup/gas-seeder');
 
 const DEPLOYER = 'msK1rsgNVFPM4cR3X5rngczTKa6EtT4WKD'; // valid regtest P2PKH
 const T0  = 1700000000;
-const hex = s => Buffer.from(s, 'utf8').toString('hex');
+// Inline DEPLOY CODE_ENCODING is base64 at/after DEPLOY_BASE64_CODE, which regtest
+// activates at genesis (protocol_changes.js) — so encode the fixture source as canonical
+// base64 to match the indexer's decode path (deploy.js round-trips to reject non-canonical).
+const b64 = s => Buffer.from(s, 'utf8').toString('base64');
 const sha = s => crypto.createHash('sha256').update(s).digest('hex');
 
 const MANIFEST_C = "module.exports={ permissions:['SEND','ISSUE'], maxTakeBps:300, guard:function(){ return {}; } };";
@@ -77,12 +80,12 @@ describe('Phase E permissions manifest — deploy persistence (real DB + real VM
         seeder = new DecoderSeeder(decoderQuery);
         await seedGas(seeder, { addresses: [DEPLOYER], amount: '100' });
         await seeder.seedBlock(100, T0, [
-            { source: DEPLOYER, data: `DEPLOY|0|${hex(MANIFEST_C)}|300000|` },
-            { source: DEPLOYER, data: `DEPLOY|0|${hex(BARE_C)}|300000|` },
-            { source: DEPLOYER, data: `DEPLOY|0|${hex(BAD_C)}|300000|` },
+            { source: DEPLOYER, data: `DEPLOY|0|${b64(MANIFEST_C)}|300000|` },
+            { source: DEPLOYER, data: `DEPLOY|0|${b64(BARE_C)}|300000|` },
+            { source: DEPLOYER, data: `DEPLOY|0|${b64(BAD_C)}|300000|` },
             // Non-empty CONSTRUCTOR_PARAMS so the VM runs `initialize` (the constructor emission path).
-            { source: DEPLOYER, data: `DEPLOY|0|${hex(CTOR_NEG)}|500000|init` },
-            { source: DEPLOYER, data: `DEPLOY|0|${hex(CTOR_POS)}|500000|init` },
+            { source: DEPLOYER, data: `DEPLOY|0|${b64(CTOR_NEG)}|500000|init` },
+            { source: DEPLOYER, data: `DEPLOY|0|${b64(CTOR_POS)}|500000|init` },
         ]);
         indexer = await initIndexer();
         await processBlocks(indexer);

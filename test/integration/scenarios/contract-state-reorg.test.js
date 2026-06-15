@@ -49,9 +49,11 @@ const PUBKEY   = 'ab'.repeat(32); // 64-hex signing pubkey for STAKE v3
 const T0  = 1700000000;
 const BLK = 600;
 
-// Trivial contract — never executed here (no VM); just needs to hex-decode under the size
-// cap. DEPLOY's syntax check is skipped when the VM is unavailable.
-const CODE_HEX = Buffer.from('module.exports={ping:function(){return "ok";}};', 'utf8').toString('hex');
+// Trivial contract — never executed here (no VM); just needs to base64-decode under the
+// size cap. DEPLOY's syntax check is skipped when the VM is unavailable, but the inline
+// CODE_ENCODING is still decoded as base64 (DEPLOY_BASE64_CODE is active from genesis on
+// regtest), so the source must be base64-encoded to assemble a valid contract row.
+const CODE_B64 = Buffer.from('module.exports={ping:function(){return "ok";}};', 'utf8').toString('base64');
 
 async function deleteDecoderBlocksFrom(blockIndex) {
     await decoderQuery(
@@ -104,7 +106,7 @@ describe('Contract State Reorg — rollback of contract tables @regression @tier
         await seeder.seedBlock(101, T0 + BLK, [
             // DEPLOY|1|CODE|GAS_LIMIT|CONSTRUCTOR|COOLDOWN_BLOCKS|SLASH_DESTINATION
             { source: DEPLOYER, destination: null, amount: '0',
-              data: 'DEPLOY|1|' + CODE_HEX + '|100000||100|' },
+              data: 'DEPLOY|1|' + CODE_B64 + '|100000||100|' },
         ]);
 
         let indexer = await initIndexer();
