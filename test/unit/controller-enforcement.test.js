@@ -41,8 +41,13 @@ function mkDb(effective){
         getEffectiveTokenController: async () => effective
     };
 }
-function mkActions(guardResult, calls){
-    return { actionExecute: { runControllerGuard: async (o) => { calls.push(o); return guardResult; } } };
+// guardEnabled toggles the CONTROLLER_GUARD activation gate that _invokeController consults
+// (default true = at/above the flag-day, where the control-flow tests below exercise the guard).
+function mkActions(guardResult, calls, guardEnabled){
+    return {
+        protocolChanges: { isEnabled: async () => (guardEnabled === undefined ? true : guardEnabled) },
+        actionExecute:   { runControllerGuard: async (o) => { calls.push(o); return guardResult; } }
+    };
 }
 
 describe('Programmable policy layer — Phase B enforcement @regression', function () {
@@ -201,6 +206,60 @@ describe('Programmable policy layer — Phase B enforcement @regression', functi
                 { actionType: 'SEND', tick: 'AAA', data, gasInfo: null, gasBalances: [] }
             );
             assert.ok(data._GUARDED_TICKS && data._GUARDED_TICKS['AAA'] === true);
+        });
+    });
+
+    // ─── CONTROLLER_GUARD activation gate (consensus) ────────────────────────
+    // The guard is a NEW acceptance + ledger rule: a node version that runs it and one that
+    // does not settle the SAME guarded action differently (allow/deny + payout_legs vs plain),
+    // forking the ledger and the per-block contract_hash on the first guarded action. Below the
+    // CONTROLLER_GUARD flag-day _invokeController must be a STRICT no-op on every node — no VM
+    // guard run, no fee, no payout_legs — identical to a node that lacks the controller layer.
+    // protocol_changes.test.js pins the real isEnabled() flag-day math; this block pins that the
+    // enforcement chokepoint actually HONORS the gate (a deny-returning guard must NOT run, and a
+    // royalty-attaching guard must NOT leak payout_legs, while below activation).
+    describe('CONTROLLER_GUARD activation gate honored at the chokepoint', function () {
+        const guardOpts = (data) => ({
+            actionType: 'SEND', tick: 'AAA', from: 'addr1', to: 'addr2', amount: '10',
+            data, gasInfo: null, gasBalances: []
+        });
+
+        it('below activation → strict no-op: guard never runs, no fee, no payout_legs', async function () {
+            const calls = [];
+            const res = await util.maybeRunControllerGuard(
+                // A guard that WOULD deny + attach royalties — proving none of it takes effect below the gate.
+                mkActions({ allow: false, reason: 'must-not-run', gasBilled: 9999, payoutLegs: [{ to: 'x', bps: 500 }] }, calls, false),
+                mkDb({ contract_index: 9, is_unbind: 0 }),
+                guardOpts(Object.assign({}, BASE))
+            );
+            assert.deepStrictEqual(res, { error: null, guardFee: 0, payoutLegs: null });
+            assert.strictEqual(calls.length, 0, 'guard VM must not run below the flag-day');
+        });
+
+        it('below activation → address-side controller is also a strict no-op', async function () {
+            const calls = [];
+            const mkAddrDb = { config: { GAS_SCHEDULE: { VM_GUARD_GAS_CEILING: 200000 }, GAS_PRICE: '0.00001', GAS: 'XCHAIN' },
+                getAddressId: async () => 1, getEffectiveAddressController: async () => ({ contract_index: 9, is_unbind: 0 }) };
+            const res = await util.maybeRunAddressControllerGuard(
+                mkActions({ allow: false, reason: 'must-not-run', gasBilled: 9999 }, calls, false),
+                mkAddrDb,
+                { actionType: 'SEND', actionClass: 'transfer', address: 'addrB', from: 'addrA', to: 'addrB',
+                  tick: 'AAA', amount: '10', data: Object.assign({}, BASE), gasInfo: null, gasBalances: [] }
+            );
+            assert.deepStrictEqual(res, { error: null, guardFee: 0, payoutLegs: null });
+            assert.strictEqual(calls.length, 0);
+        });
+
+        it('at/above activation → guard runs, can deny, and surfaces payout_legs', async function () {
+            const calls = [];
+            const res = await util.maybeRunControllerGuard(
+                mkActions({ allow: true, reason: null, gasBilled: 1000, payoutLegs: [{ to: 'royaltyAddr', bps: 500 }] }, calls, true),
+                mkDb({ contract_index: 9, is_unbind: 0 }),
+                guardOpts(Object.assign({}, BASE))
+            );
+            assert.strictEqual(res.error, null);
+            assert.strictEqual(calls.length, 1, 'guard VM must run at/above the flag-day');
+            assert.deepStrictEqual(res.payoutLegs, [{ to: 'royaltyAddr', bps: 500 }]);
         });
     });
 });

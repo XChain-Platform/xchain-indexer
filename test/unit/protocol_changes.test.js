@@ -328,4 +328,81 @@ describe('ProtocolChanges @regression @tier3', function () {
                 'below the 2.0.0 consensus version the gate is inactive — gateway sees null');
         });
     });
+
+    // ─── CONTROLLER_GUARD — the consensus anti-fork gate ─────────────────────
+    // The programmable-policy controller guard. Below activation the bound controller's
+    // `guard` method is NEVER run — every SEND/ORDER/SWAP/DISPENSER/DESTROY on a controlled
+    // token settles with plain semantics, no allow/deny veto, no royalty payout_legs, no guard
+    // contract_executions row — exactly like a node that lacks the controller layer. At/above
+    // it the shared chokepoint (_invokeController) runs the guard, may DENY, and may attach
+    // payout_legs the match-time split applies. A regression in its registration — a zeroed/
+    // wrong mainnet flag-day, regtest/testnet flipped off genesis, or the version bumped past
+    // the shipping node — makes a controller-layer node and a non-controller node settle the
+    // SAME guarded action differently → ledger + per-block contract_hash → federation
+    // checkpoint, forking on the first guarded action. utility.js _invokeController calls the
+    // REAL isEnabled() at the single shared chokepoint, so this block guards the registration
+    // that gate depends on. Keep in lockstep with protocol_changes.js.
+    describe('CONTROLLER_GUARD activation gate (consensus)', function () {
+        const MAINNET_FLAG_DAY = 1798761600; // 2027-01-01 00:00:00 UTC — PLACEHOLDER (see protocol_changes.js)
+
+        function pcFor(network, version = '2.0.0') {
+            process.env.npm_package_version = version; // shipping consensus version
+            process.env.INDEXER_NETWORK = network;
+            return new ProtocolChanges(indexer);
+        }
+
+        it('is registered as a v2.0.0 change keyed on block_time, not block_index', function () {
+            const change = pcFor('regtest').changes['CONTROLLER_GUARD'];
+            assert.ok(change, 'CONTROLLER_GUARD must be defined');
+            assert.strictEqual(change.version_major, 2);
+            assert.strictEqual(change.version_minor, 0);
+            assert.strictEqual(change.version_revision, 0);
+            // Time-keyed (BTC/LTC/DOGE heights diverge by millions of blocks); all block gates stay 0.
+            assert.strictEqual(change.mainnet_block, 0);
+            assert.strictEqual(change.testnet_block, 0);
+            assert.strictEqual(change.regtest_block, 0);
+            // testnet/regtest activate at genesis; mainnet on the coordinated flag-day.
+            assert.strictEqual(change.testnet_time, 0);
+            assert.strictEqual(change.regtest_time, 0);
+            assert.strictEqual(change.mainnet_time, MAINNET_FLAG_DAY,
+                'mainnet flag-day must match protocol_changes.js — a wrong value is a fork');
+        });
+
+        it('regtest: enabled from genesis (guard runs)', async function () {
+            const pc2 = pcFor('regtest');
+            indexer.decoderDb.getBlockTime.resolves(1); // earliest plausible regtest block_time
+            assert.strictEqual(await pc2.isEnabled('CONTROLLER_GUARD', 0), true);
+        });
+
+        it('testnet: enabled from genesis', async function () {
+            const pc2 = pcFor('testnet');
+            indexer.decoderDb.getBlockTime.resolves(1);
+            assert.strictEqual(await pc2.isEnabled('CONTROLLER_GUARD', 0), true);
+        });
+
+        it('mainnet: DISABLED one second below the flag-day (guard is a strict no-op)', async function () {
+            const pc2 = pcFor('mainnet');
+            indexer.decoderDb.getBlockTime.resolves(MAINNET_FLAG_DAY - 1);
+            assert.strictEqual(await pc2.isEnabled('CONTROLLER_GUARD', 100), false);
+        });
+
+        it('mainnet: ENABLED at exactly the flag-day boundary', async function () {
+            const pc2 = pcFor('mainnet');
+            indexer.decoderDb.getBlockTime.resolves(MAINNET_FLAG_DAY);
+            assert.strictEqual(await pc2.isEnabled('CONTROLLER_GUARD', 100), true);
+        });
+
+        it('mainnet: ENABLED above the flag-day', async function () {
+            const pc2 = pcFor('mainnet');
+            indexer.decoderDb.getBlockTime.resolves(MAINNET_FLAG_DAY + 86400);
+            assert.strictEqual(await pc2.isEnabled('CONTROLLER_GUARD', 100), true);
+        });
+
+        it('a pre-guard (v1.x) node treats it as not-yet-active — guard stays off', async function () {
+            const pc1 = pcFor('regtest', '1.9.9');
+            indexer.decoderDb.getBlockTime.resolves(1);
+            assert.strictEqual(await pc1.isEnabled('CONTROLLER_GUARD', 0), false,
+                'below the 2.0.0 consensus version the gate is inactive — guard never runs');
+        });
+    });
 });
