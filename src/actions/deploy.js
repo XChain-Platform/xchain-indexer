@@ -24,11 +24,17 @@
  * - CONSTRUCTOR_PARAMS - Optional constructor parameters (JSON)
  *
  * FORMATS:
- * - 0 = Deploy a contract
+ * - 0 = Deploy a contract (inline code, non-stakeable)
+ * - 1 = Deploy a contract (inline code, stakeable: COOLDOWN_BLOCKS + SLASH_DESTINATION)
+ * - 2 = Deploy a contract (chunked: code assembled from prior v4 carriers, non-stakeable)
+ * - 3 = Deploy a contract (chunked, stakeable)
+ * - 4 = Chunk carrier: store one ordered base64 slice of a chunked contract's
+ *       source (no VM run). Reassembled by a later v2/v3 keyed on CODE_HASH.
  *
  ********************************************************************/
 
 const crypto = require('crypto');
+const DeployChunk = require('./deploy_chunk.js');
 const ProviderRegistry = require('../attestation/providerRegistry.js');
 
 // Per-provider deadline windows, injected into the VM gateway so a constructor's
@@ -45,7 +51,7 @@ const MAX_CODE_SIZE = 65536;
 
 // Maximum chunks a chunked DEPLOY (v2/v3) may assemble. Canonical value:
 // xchain-documentation/protocol/constants.js (MAX_DEPLOY_CHUNKS); kept in lockstep
-// with the SDK + the DEPLOYCHUNK handler by the cross-service regression suite.
+// with the SDK + the v4 carrier handler by the cross-service regression suite.
 const MAX_DEPLOY_CHUNKS = 16;
 
 class Deploy {
@@ -66,11 +72,15 @@ class Deploy {
         // v1 adds optional staking config: COOLDOWN_BLOCKS + SLASH_DESTINATION (address or 'BURN' sentinel).
         // Contracts deployed without these fields cannot be stake targets.
         this.formats[1] = 'VERSION|CODE_ENCODING|GAS_LIMIT|CONSTRUCTOR_PARAMS|COOLDOWN_BLOCKS|SLASH_DESTINATION';
-        // Chunked (v2/v3): the code is assembled from the deployer's prior DEPLOYCHUNK actions
+        // Chunked (v2/v3): the code is assembled from the deployer's prior v4 carrier actions
         // keyed on CODE_HASH (sha256 of the assembled source) instead of carried inline. v2
         // mirrors v0 (rest CONSTRUCTOR_PARAMS, no staking); v3 mirrors v1 (fixed staking fields).
         this.formats[2] = 'VERSION|CODE_HASH|GAS_LIMIT|CONSTRUCTOR_PARAMS';
         this.formats[3] = 'VERSION|CODE_HASH|GAS_LIMIT|CONSTRUCTOR_PARAMS|COOLDOWN_BLOCKS|SLASH_DESTINATION';
+        // v4 carries one ordered base64 slice of a chunked contract's source (the chunk
+        // carrier — formerly the standalone DEPLOYCHUNK action). It never runs VM code;
+        // the slices are reassembled by a later v2/v3 keyed on CODE_HASH.
+        this.formats[4] = 'VERSION|CODE_HASH|CHUNK_INDEX|TOTAL_CHUNKS|CODE_PART';
 
         // Maximum code size (64KB) — see the MAX_CODE_SIZE module constant above.
         this.MAX_CODE_SIZE = MAX_CODE_SIZE;
@@ -78,6 +88,10 @@ class Deploy {
         // Cooldown bounds for contract-staking (DEPLOY v1+)
         this.MIN_COOLDOWN_BLOCKS = 1;
         this.MAX_COOLDOWN_BLOCKS = 100000;
+
+        // Chunk-carrier (v4) collaborator: validates + stores a single code slice.
+        // Not routed by action name — DEPLOY.parse() delegates to it for v4.
+        this.chunkStore = new DeployChunk(action);
     }
 
     // Handle parsing the DEPLOY transaction
@@ -88,8 +102,13 @@ class Deploy {
         if(!error && (format===null || this.formats[format] === undefined ))
             error = 'invalid: VERSION (unknown)';
 
+        // v4 is the chunk carrier: validate + store one code slice and return. It never
+        // runs VM code, so it bypasses the entire inline/chunked-assemble path below.
+        if(format === 4)
+            return await this.chunkStore.parse(params, data, error);
+
         // Format families. Chunked (v2/v3) carries CODE_HASH in params[1] and assembles the
-        // code from prior DEPLOYCHUNK actions; inline (v0/v1) carries the base64 source there.
+        // code from prior v4 carrier actions; inline (v0/v1) carries the base64 source there.
         // v0/v2 take CONSTRUCTOR_PARAMS as a rest field (a multi-arg constructor sends each arg
         // as its own pipe segment, like EXECUTE's METHOD_PARAMS); v1/v3 keep the single-field
         // form because COOLDOWN_BLOCKS + SLASH_DESTINATION trail the constructor args, so a
@@ -154,7 +173,7 @@ class Deploy {
          ****************************************************************/
 
         // Obtain the contract source `code`. Chunked (v2/v3) assembles base64(code) from the
-        // deployer's prior DEPLOYCHUNK rows then decodes + sha256-verifies it; inline (v0/v1)
+        // deployer's prior v4 carrier rows then decodes + sha256-verifies it; inline (v0/v1)
         // decodes CODE_ENCODING directly — as base64 at/after the DEPLOY_BASE64_CODE
         // activation, or as hex before it (the original format), gated on block_time so a
         // replay/heterogeneous fleet decodes historical DEPLOYs identically. Either way `code`
@@ -314,7 +333,7 @@ class Deploy {
 
         let schedule = this.config['GAS_SCHEDULE'];
         let codeBytes = Buffer.byteLength(code, 'utf8');
-        // Chunked (v2/v3) deploys charge base + constructor only: each DEPLOYCHUNK already
+        // Chunked (v2/v3) deploys charge base + constructor only: each v4 carrier already
         // paid the per-byte component for the bytes it put on-chain, so the assembly does
         // not re-charge per byte (net ≈ a single-shot inline deploy of the same source).
         let gasCost = schedule.VM_DEPLOY_BASE + (isChunked ? 0 : (codeBytes * schedule.VM_DEPLOY_PER_BYTE));

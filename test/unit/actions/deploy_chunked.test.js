@@ -8,7 +8,7 @@
 // license (without AGPL source-disclosure terms) is available —
 // contact legal@dankest.llc.
 //
-// Chunked DEPLOY: the DEPLOYCHUNK handler (slice validation + storage) and the
+// Chunked DEPLOY: the v4 carrier handler (slice validation + storage) and the
 // DEPLOY v2/v3 assembly branch (gather chunks → decode → sha256-verify → deploy).
 
 process.env.INDEXER_COIN = 'BTC';
@@ -44,11 +44,11 @@ function chunkRows(code, n, { source = SOURCE } = {}){
     return rows;
 }
 
-describe('Chunked DEPLOY — DEPLOYCHUNK handler @regression @tier2', function () {
+describe('Chunked DEPLOY — v4 carrier handler @regression @tier2', function () {
     let indexer, ctx, handler;
 
     function deployChunkData(overrides = {}) {
-        return createBaseData({ ACTION: 'DEPLOYCHUNK', FORMAT: 0, SOURCE, BLOCK_INDEX: 100, ACTION_INDEX: 5, ...overrides });
+        return createBaseData({ ACTION: 'DEPLOY', FORMAT: 4, SOURCE, BLOCK_INDEX: 100, ACTION_INDEX: 5, ...overrides });
     }
 
     beforeEach(function () {
@@ -69,32 +69,32 @@ describe('Chunked DEPLOY — DEPLOYCHUNK handler @regression @tier2', function (
 
     it('accepts and stores a valid chunk', async function () {
         const data = deployChunkData();
-        await handler.parse(['0', HASH, '0', '3', 'aGVsbG8='], data, null);
+        await handler.parse(['4', HASH, '0', '3', 'aGVsbG8='], data, null);
         assert.strictEqual(data['STATUS'], 'valid');
         assert.ok(indexer.indexerDb.recordDeployChunk.calledOnce);
     });
 
     it('rejects a malformed CODE_HASH', async function () {
         const data = deployChunkData();
-        await handler.parse(['0', 'NOTAHASH', '0', '3', 'aGVsbG8='], data, null);
+        await handler.parse(['4', 'NOTAHASH', '0', '3', 'aGVsbG8='], data, null);
         assert.ok(String(data['STATUS']).includes('CODE_HASH'));
     });
 
     it('rejects CHUNK_INDEX >= TOTAL_CHUNKS', async function () {
         const data = deployChunkData();
-        await handler.parse(['0', HASH, '3', '3', 'aGVsbG8='], data, null);
+        await handler.parse(['4', HASH, '3', '3', 'aGVsbG8='], data, null);
         assert.ok(String(data['STATUS']).includes('CHUNK_INDEX'));
     });
 
     it('rejects TOTAL_CHUNKS over the cap', async function () {
         const data = deployChunkData();
-        await handler.parse(['0', HASH, '0', '999', 'aGVsbG8='], data, null);
+        await handler.parse(['4', HASH, '0', '999', 'aGVsbG8='], data, null);
         assert.ok(String(data['STATUS']).includes('TOTAL_CHUNKS'));
     });
 
     it('rejects a non-base64 CODE_PART', async function () {
         const data = deployChunkData();
-        await handler.parse(['0', HASH, '0', '3', 'not base64!|'], data, null);
+        await handler.parse(['4', HASH, '0', '3', 'not base64!|'], data, null);
         assert.ok(String(data['STATUS']).includes('CODE_PART'));
     });
 });
@@ -115,6 +115,7 @@ describe('Chunked DEPLOY — DEPLOY v2/v3 assembly @regression @tier2', function
         db.getCrossChainDataForVM   = sinon.stub().resolves({});
         db.getStatusString          = sinon.stub().resolves('valid');
         db.getDeployChunksForAssembly = sinon.stub().resolves([]);
+        db.recordDeployChunk        = sinon.stub().resolves();
     }
 
     function deployData(overrides = {}) {
@@ -216,5 +217,14 @@ describe('Chunked DEPLOY — DEPLOY v2/v3 assembly @regression @tier2', function
         await handler.parse(['0', b64, '100000', ''], data, null);
         assert.strictEqual(data['STATUS'], 'valid');
         assert.ok(indexer.indexerDb.getDeployChunksForAssembly.notCalled);
+    });
+
+    it('routes a v4 carrier to chunk storage (no contract created)', async function () {
+        const data = deployData({ FORMAT: 4, ACTION_INDEX: 5 });
+        await handler.parse(['4', HASH, '0', '3', 'aGVsbG8='], data, null);
+        assert.strictEqual(data['STATUS'], 'valid');
+        // v4 stores a slice and never runs the VM-deploy path.
+        assert.ok(indexer.indexerDb.recordDeployChunk.calledOnce);
+        assert.ok(indexer.indexerDb.createContract.notCalled);
     });
 });

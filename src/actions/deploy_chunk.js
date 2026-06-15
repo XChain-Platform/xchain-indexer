@@ -12,24 +12,23 @@
  *
  **********************************************************************
  *
- * XChain Platform Action - DEPLOYCHUNK
+ * XChain Platform - DEPLOY v4 (chunk carrier)
  *
- * Carries one ordered base64 slice of a chunked contract's source. The slices
- * are reassembled by a later DEPLOY v2/v3 keyed on CODE_HASH (sha256 of the
- * assembled UTF-8 source) — see actions/deploy.js. A DEPLOYCHUNK never runs any
- * VM code; it only validates + stores its slice (and pays the per-byte gas for
- * the bytes it puts on-chain, so the assembling DEPLOY charges base+constructor
- * only and the net cost ≈ a single-shot deploy of the same code).
+ * Internal collaborator of actions/deploy.js — not routed by action name.
+ * DEPLOY.parse() delegates here when the format is v4. Carries one ordered base64
+ * slice of a chunked contract's source. The slices are reassembled by a later
+ * DEPLOY v2/v3 keyed on CODE_HASH (sha256 of the assembled UTF-8 source) — see
+ * actions/deploy.js. A v4 carrier never runs any VM code; it only validates +
+ * stores its slice (and pays the per-byte gas for the bytes it puts on-chain, so
+ * the assembling DEPLOY charges base+constructor only and the net cost ≈ a
+ * single-shot deploy of the same code).
  *
- * PARAMS:
- * - VERSION       - Format Version (0)
+ * PARAMS (DEPLOY v4):
+ * - VERSION       - Format Version (4)
  * - CODE_HASH     - sha256 hex of the assembled source (chunk-group id)
  * - CHUNK_INDEX   - 0-based position within the group
  * - TOTAL_CHUNKS  - declared group size
  * - CODE_PART     - one base64 slice of base64(code)
- *
- * FORMATS:
- * - 0 = Store a code slice
  *
  ********************************************************************/
 
@@ -51,21 +50,13 @@ class DeployChunk {
         this.util      = action.util;
         this.mapper    = action.mapper;
 
-        // Define list of known FORMATS
-        this.formats = {};
-        this.formats[0] = 'VERSION|CODE_HASH|CHUNK_INDEX|TOTAL_CHUNKS|CODE_PART';
-
         this.MAX_DEPLOY_CHUNKS          = MAX_DEPLOY_CHUNKS;
         this.MAX_DEPLOYCHUNK_PART_BYTES = MAX_DEPLOYCHUNK_PART_BYTES;
     }
 
-    // Handle parsing the DEPLOYCHUNK transaction
+    // Handle storing one chunk slice (DEPLOY v4). DEPLOY.parse() has already
+    // validated the format is known, so there is no VERSION guard here.
     async parse(params, data, error){
-
-        // Validate that format is known
-        let format = data['FORMAT'];
-        if(!error && (format===null || this.formats[format] === undefined ))
-            error = 'invalid: VERSION (unknown)';
 
         // Extract params
         data['CODE_HASH']    = params[1];
@@ -162,7 +153,7 @@ class DeployChunk {
         data['STATUS'] = status;
 
         // Print status message
-        console.log("\t DEPLOYCHUNK : hash=" + data['CODE_HASH'] + ' : ' + chunkIndex + '/' + totalChunks +
+        console.log("\t DEPLOY v4 : hash=" + data['CODE_HASH'] + ' : ' + chunkIndex + '/' + totalChunks +
             ' : bytes=' + partBytes + ' : ' + data['STATUS']);
 
         // Persist the chunk (stored valid or invalid so the explorer can surface its status;

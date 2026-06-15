@@ -72,12 +72,9 @@ class ProtocolChanges {
         this.addChange('COINPAY',        '1.0.0',0,0,0,0,0,0);
         this.addChange('COINPAY_EXPIRE', '1.0.0',0,0,0,0,0,0);
 
-        // VM actions (all chains)
+        // VM actions (all chains). DEPLOY covers inline (v0/v1), chunked-assemble
+        // (v2/v3), and the chunk carrier (v4) — all gated under this one entry.
         this.addChange('DEPLOY',             '2.0.0',0,0,0,0,0,0);
-        // DEPLOYCHUNK carries one base64 code slice for a chunked (DEPLOY v2/v3)
-        // deployment; reassembled deterministically by the indexer. Block 0 all
-        // networks (pre-launch); ships in the same build as DEPLOY v2/v3.
-        this.addChange('DEPLOYCHUNK',        '2.0.0',0,0,0,0,0,0);
         this.addChange('EXECUTE',            '2.0.0',0,0,0,0,0,0);
         this.addChange('DEPOSIT',            '2.0.0',0,0,0,0,0,0);
         this.addChange('WITHDRAW',           '2.0.0',0,0,0,0,0,0);

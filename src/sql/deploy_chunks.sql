@@ -1,6 +1,6 @@
 DROP TABLE IF EXISTS deploy_chunks;
 CREATE TABLE deploy_chunks (
-    action_index  BIGINT UNSIGNED NOT NULL,   -- the DEPLOYCHUNK action's own index (rollback key)
+    action_index  BIGINT UNSIGNED NOT NULL,   -- the carrier DEPLOY (v4)'s own index (rollback key)
     source_id     BIGINT UNSIGNED NOT NULL,   -- deployer (FK to index_addresses); assembly is source-bound
     code_hash     CHAR(64) NOT NULL,          -- chunk-group id = sha256 of the assembled UTF-8 source
     chunk_index   INT UNSIGNED NOT NULL,      -- 0-based position within the group
@@ -11,7 +11,7 @@ CREATE TABLE deploy_chunks (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
 CREATE UNIQUE INDEX action_index      ON deploy_chunks (action_index);
--- Non-unique: every DEPLOYCHUNK is stored (valid or invalid) so the explorer can
+-- Non-unique: every v4 carrier is stored (valid or invalid) so the explorer can
 -- surface each chunk's status. The DEPLOY assembler reads only VALID chunks and,
 -- if a deployer broadcasts the same (source, group, position) more than once,
 -- deterministically takes the LOWEST action_index — so a duplicate (or an invalid
