@@ -26,3 +26,6 @@ CREATE UNIQUE INDEX action_index   ON xcalls (action_index);
 CREATE        INDEX call_id        ON xcalls (call_id);
 CREATE        INDEX request_status ON xcalls (request_status, deadline_block);
 CREATE        INDEX block_index    ON xcalls (block_index);
+-- Source-contract lookup ("list cross-chain calls emitted by my contract") — used by the
+-- explorer's getXcalls(type='contract') filter; without it that query is a full table scan.
+CREATE        INDEX contract_index ON xcalls (contract_index);
