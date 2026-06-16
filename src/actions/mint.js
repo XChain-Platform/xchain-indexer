@@ -142,8 +142,13 @@ class Mint {
         if(!error && String(data['MEMO']).length > this.config['MAX_MEMO_LENGTH'])
             error = 'invalid: MEMO (length)';
 
-        // Verify AMOUNT is less than MAX_MINT
-        if(!error && !this.util.isNull(data['AMOUNT']) && this.util.bcgt(data['AMOUNT'], data['MAX_MINT']))
+        // Verify AMOUNT is less than MAX_MINT (the OPTIONAL per-tx cap). MAX_MINT is
+        // stored as 0 when the ISSUE omits it (createToken / db.js), and 0 means
+        // "no per-tx cap" — the only supply ceiling is MAX_SUPPLY (MINT.md). Guard the
+        // zero case with bcgt(MAX_MINT,0) exactly like the sibling MINT_ADDRESS_MAX /
+        // MINT_START_BLOCK / MINT_STOP_BLOCK checks below; without it bcgt(AMOUNT,0) is
+        // true for any positive AMOUNT and every mint on a no-MAX_MINT token is rejected.
+        if(!error && !this.util.isNull(data['AMOUNT']) && this.util.bcgt(data['MAX_MINT'], 0) && this.util.bcgt(data['AMOUNT'], data['MAX_MINT']))
             error = 'invalid: AMOUNT > MAX_MINT';
 
         // GAS-tick mint policy: on mainnet, ONLY the GAS address may mint the GAS tick.
