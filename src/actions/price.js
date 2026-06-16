@@ -218,26 +218,36 @@ class Price {
             // indexer and be deployed atomically. (See NODEPROOF.md.)
             let activeRegime = this.util.bcgt(fnShare, '0');
 
-            // Resolve the verified full-node SOURCES among THIS round's signers.
-            // Earning the bonus requires both signing the round AND being a verified
-            // full node (a recent passed possession proof + a live full_node stake),
-            // deduped to the lexicographically smallest pubkey per source.
+            // Resolve the full-node REWARD sources among THIS round's signers. Earning
+            // the tranche is participation-rate based (a carrot, not a stick — there is
+            // NO slashing for non-participation): a staking source qualifies only if,
+            // over the trailing REWARD_PASS_WINDOW_BLOCKS, it answered at least
+            // MIN_PASS_RATE_BPS of the challenge epochs that actually produced a verdict
+            // (db.getFullNodeParticipation). Forgiving of a missed check or two. The
+            // bonus is credited once per source, to the lexicographically smallest of
+            // its passing pubkeys that ALSO signed this round and still holds the
+            // full_node capability. Integer gate — passed*10000 >= bps*total, no floats.
             let fnSources = [];   // [{ source_id, pubkey }]
             if(activeRegime){
-                let verified = await this.indexerDb.getVerifiedFullNodeSet(data['BLOCK_INDEX']);
-                if(verified.length > 0){
-                    let verifiedByPubkey = {};
-                    for(let v of verified) verifiedByPubkey[String(v.pubkey).toLowerCase()] = v;
-                    let bySource = {};
-                    for(let pk of qualifiedSigners){
-                        let pkl = String(pk).toLowerCase();
-                        let v   = verifiedByPubkey[pkl];
-                        if(!v) continue;
-                        if(!await this.indexerDb.hasCapability(pk, 'full_node', data['BLOCK_INDEX'])) continue;
-                        let sid = String(v.source_id);
-                        if(bySource[sid] === undefined || pkl < bySource[sid]) bySource[sid] = pkl;
+                let minRateBps = parseInt((this.config['FULLNODE'] || {})['MIN_PASS_RATE_BPS']);
+                if(!Number.isFinite(minRateBps) || minRateBps < 0) minRateBps = 0;
+                let part = await this.indexerDb.getFullNodeParticipation(data['BLOCK_INDEX']);
+                if(part.totalEpochs > 0){
+                    let signed = new Set(qualifiedSigners.map(pk => String(pk).toLowerCase()));
+                    for(let src of part.sources){
+                        // Pass-rate gate: passed_epochs / totalEpochs >= minRateBps/10000.
+                        if(src.passed_epochs * 10000 < minRateBps * part.totalEpochs) continue;
+                        // Representative = lex-smallest passing pubkey that signed this
+                        // round and still holds the full_node capability at this block.
+                        let rep = null;
+                        for(let pk of Array.from(src.pubkeys).sort()){
+                            if(!signed.has(pk)) continue;
+                            if(!await this.indexerDb.hasCapability(pk, 'full_node', data['BLOCK_INDEX'])) continue;
+                            rep = pk;
+                            break;
+                        }
+                        if(rep) fnSources.push({ source_id: String(src.source_id), pubkey: rep });
                     }
-                    fnSources = Object.keys(bySource).map(sid => ({ source_id: sid, pubkey: bySource[sid] }));
                 }
             }
 

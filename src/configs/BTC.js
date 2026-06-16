@@ -79,9 +79,20 @@ module.exports = {
         config['FULLNODE'] = {
             CHALLENGE_INTERVAL_BLOCKS:    144,    // epoch cadence (~daily on BTC)
             CONFIRM_DEPTH:                100,    // target block buried this deep (reorg-stable)
-            PROOF_WINDOW_BLOCKS:          300,    // a passed proof keeps a node "verified" this long
+            PROOF_WINDOW_BLOCKS:          300,    // a passed proof keeps a node "verified" (verifier-eligible — can vouch in NODEPROOF) this long
             VERDICT_ACCEPT_WINDOW_BLOCKS:  24,    // a verdict must land within this many blocks of its epoch
             REWARD_SHARE:                 '0',    // fraction of the oracle-round budget routed to verified full nodes (raise to '0.25' to enable — see price.js)
+            // Reward eligibility is participation-rate based (carrot, not stick — there is
+            // NO slashing of full-node claimants). A staking source earns the full-node
+            // tranche only if, over the trailing REWARD_PASS_WINDOW_BLOCKS, it answered at
+            // least MIN_PASS_RATE_BPS of the challenge epochs that actually produced a
+            // verdict (the denominator counts only epochs the federation truly ran, so an
+            // outage never costs anyone). Forgiving by design — a node can miss a check or
+            // two and still earn. CONSENSUS: both are fleet-wide params (like REWARD_SHARE),
+            // deployed atomically; the gate uses integer math (passed*10000 >= bps*total),
+            // never floats. See db.getFullNodeParticipation + price.js.
+            REWARD_PASS_WINDOW_BLOCKS:   1008,    // trailing window the pass-rate is measured over (= 7 daily challenge epochs at CHALLENGE_INTERVAL_BLOCKS=144)
+            MIN_PASS_RATE_BPS:           7000,    // minimum pass rate to earn the tranche, in basis points (7000 = 70% → pass ≥5 of 7, i.e. miss up to 2)
             GENESIS_VERIFIERS:            []      // bootstrap verifier pubkeys (operator); empty = feature dormant
         };
         // REGTEST/e2e ONLY: the possession-proof cadence and the bootstrap genesis
@@ -108,6 +119,8 @@ module.exports = {
             fn['CONFIRM_DEPTH']                = envInt('FULLNODE_CONFIRM_DEPTH',                fn['CONFIRM_DEPTH']);
             fn['PROOF_WINDOW_BLOCKS']          = envInt('FULLNODE_PROOF_WINDOW_BLOCKS',          fn['PROOF_WINDOW_BLOCKS']);
             fn['VERDICT_ACCEPT_WINDOW_BLOCKS'] = envInt('FULLNODE_VERDICT_ACCEPT_WINDOW_BLOCKS', fn['VERDICT_ACCEPT_WINDOW_BLOCKS']);
+            fn['REWARD_PASS_WINDOW_BLOCKS']    = envInt('FULLNODE_REWARD_PASS_WINDOW_BLOCKS',    fn['REWARD_PASS_WINDOW_BLOCKS']);
+            fn['MIN_PASS_RATE_BPS']            = envInt('FULLNODE_MIN_PASS_RATE_BPS',            fn['MIN_PASS_RATE_BPS']);
             if(process.env['FULLNODE_REWARD_SHARE'] !== undefined && process.env['FULLNODE_REWARD_SHARE'] !== '')
                 fn['REWARD_SHARE'] = String(process.env['FULLNODE_REWARD_SHARE']);
             if(process.env['FULLNODE_GENESIS_VERIFIERS'])

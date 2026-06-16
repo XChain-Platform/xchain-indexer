@@ -222,8 +222,9 @@ describe('Price (PRICE) @regression @tier3', function () {
 
         // ── two-tranche full-node reward split (NODEPROOF verified tier) ──
         // With FULLNODE.REWARD_SHARE > 0 the round budget splits into a base
-        // tranche (every signer) and a full-node tranche (verified full nodes,
-        // deduped per staking source). share == 0 keeps the legacy single pot.
+        // tranche (every signer) and a full-node tranche (sources whose trailing
+        // pass rate ≥ MIN_PASS_RATE_BPS, deduped per staking source — a carrot, no
+        // slashing). share == 0 keeps the legacy single pot.
         describe('two-tranche full-node split', function () {
             const SA = { pubkey: PUBKEY_A, source: 'addrA', source_id: 1 };
             const SB = { pubkey: PUBKEY_B, source: 'addrB', source_id: 2 };
@@ -236,10 +237,22 @@ describe('Price (PRICE) @regression @tier3', function () {
             function fullNodeCapability(set) {
                 indexer.indexerDb.hasCapability.callsFake(async (pk, cap) => cap !== 'full_node' ? true : set.has(pk));
             }
+            // Build a getFullNodeParticipation result from verified-source rows. Each
+            // listed source is treated as having passed `passed` of `total` challenge
+            // epochs (default: all → 100% pass rate, comfortably above the gate).
+            function participation(rows, total = 7, passed = 7) {
+                const bySrc = new Map();
+                for (const r of rows) {
+                    const sid = String(r.source_id);
+                    if (!bySrc.has(sid)) bySrc.set(sid, { source_id: r.source_id, source: r.source, passed_epochs: passed, pubkeys: new Set() });
+                    bySrc.get(sid).pubkeys.add(String(r.pubkey).toLowerCase());
+                }
+                return { totalEpochs: total, sources: Array.from(bySrc.values()) };
+            }
 
             beforeEach(function () {
                 indexer.config.FULLNODE = Object.assign({}, indexer.config.FULLNODE, { REWARD_SHARE: '0.25' });
-                indexer.indexerDb.getVerifiedFullNodeSet = sinon.stub().resolves([]);
+                indexer.indexerDb.getFullNodeParticipation = sinon.stub().resolves({ totalEpochs: 0, sources: [] });
                 indexer.indexerDb.getActiveCapabilityCount.resolves(3); // quorum 2
             });
 
@@ -247,9 +260,9 @@ describe('Price (PRICE) @regression @tier3', function () {
                 indexer.config.FULLNODE = Object.assign({}, indexer.config.FULLNODE, { REWARD_SHARE: '0' });
             });
 
-            it('splits base (all signers) + full-node (verified, per source) tranches', async function () {
-                // A and B are verified full nodes (distinct sources); C is not.
-                indexer.indexerDb.getVerifiedFullNodeSet.resolves([SA, SB]);
+            it('splits base (all signers) + full-node (sufficient pass-rate, per source) tranches', async function () {
+                // A and B passed enough challenges (distinct sources); C did not.
+                indexer.indexerDb.getFullNodeParticipation.resolves(participation([SA, SB]));
                 fullNodeCapability(new Set([PUBKEY_A, PUBKEY_B]));
                 const data = v0Data();
                 await handler.parse(v0Params(ONE_PAIR, [
@@ -273,8 +286,8 @@ describe('Price (PRICE) @regression @tier3', function () {
                 assert.strictEqual(rewardsByType('oracle_round').length, 0);
             });
 
-            it('rolls the full-node tranche into base when no verified full node signed', async function () {
-                indexer.indexerDb.getVerifiedFullNodeSet.resolves([]); // none verified this round
+            it('rolls the full-node tranche into base when no source meets the pass rate', async function () {
+                indexer.indexerDb.getFullNodeParticipation.resolves({ totalEpochs: 0, sources: [] }); // no challenges / nobody qualified
                 fullNodeCapability(new Set());
                 const data = v0Data();
                 await handler.parse(v0Params(ONE_PAIR, [
@@ -290,13 +303,38 @@ describe('Price (PRICE) @regression @tier3', function () {
                 assert.strictEqual(rewardsByType('oracle_full_node').length, 0);
             });
 
+            it('excludes a source below MIN_PASS_RATE_BPS (missed too many checks)', async function () {
+                // 7 epochs ran; A passed 5 (5/7 ≈ 71% ≥ 70% → earns), B passed 4
+                // (4/7 ≈ 57% < 70% → excluded). Integer gate: passed*10000 ≥ bps*total.
+                indexer.config.FULLNODE = Object.assign({}, indexer.config.FULLNODE, { REWARD_SHARE: '0.25', MIN_PASS_RATE_BPS: 7000 });
+                indexer.indexerDb.getFullNodeParticipation.resolves({
+                    totalEpochs: 7,
+                    sources: [
+                        { source_id: 1, source: 'addrA', passed_epochs: 5, pubkeys: new Set([PUBKEY_A]) },
+                        { source_id: 2, source: 'addrB', passed_epochs: 4, pubkeys: new Set([PUBKEY_B]) },
+                    ],
+                });
+                fullNodeCapability(new Set([PUBKEY_A, PUBKEY_B]));
+                const data = v0Data();
+                await handler.parse(v0Params(ONE_PAIR, [
+                    { pubkey: PUBKEY_A, sig: SIG_A },
+                    { pubkey: PUBKEY_B, sig: SIG_B },
+                    { pubkey: PUBKEY_C, sig: SIG_C },
+                ]), data, null);
+                assert.strictEqual(data['VALIDATION_STATUS'], 'valid');
+                const full = rewardsByType('oracle_full_node');
+                assert.strictEqual(full.length, 1, 'only the ≥70% source earns');
+                assert.strictEqual(full[0].args[0], PUBKEY_A);
+                assert.strictEqual(Number(full[0].args[3]), 2.5); // whole 2.5 tranche to the one qualifier
+            });
+
             it('gives one full-node share per SOURCE (delegated keys do not multi-claim)', async function () {
-                // A and B are verified but share one staking source → one full-node share,
+                // A and B passed but share one staking source → one full-node share,
                 // credited to the lexicographically smallest pubkey (A).
-                indexer.indexerDb.getVerifiedFullNodeSet.resolves([
+                indexer.indexerDb.getFullNodeParticipation.resolves(participation([
                     { pubkey: PUBKEY_A, source: 'addrShared', source_id: 1 },
                     { pubkey: PUBKEY_B, source: 'addrShared', source_id: 1 },
-                ]);
+                ]));
                 fullNodeCapability(new Set([PUBKEY_A, PUBKEY_B]));
                 indexer.indexerDb.getActiveCapabilityCount.resolves(1); // quorum 1
                 const data = v0Data();
@@ -327,7 +365,7 @@ describe('Price (PRICE) @regression @tier3', function () {
                 assert.strictEqual(rewardsByType('oracle_round').length, 3);
                 assert.strictEqual(rewardsByType('oracle_base').length, 0);
                 assert.strictEqual(rewardsByType('oracle_full_node').length, 0);
-                assert.ok(indexer.indexerDb.getVerifiedFullNodeSet.notCalled,
+                assert.ok(indexer.indexerDb.getFullNodeParticipation.notCalled,
                     'no full-node lookup when the feature is off');
             });
         });
@@ -336,13 +374,14 @@ describe('Price (PRICE) @regression @tier3', function () {
         // on-chain inputs, independent of DB row order or signer wire order, so a
         // from-genesis replay reproduces byte-identical validator_rewards. ──
         describe('reward derivation is order-independent', function () {
-            const D = 'd'.repeat(64);
-            // SA has two verified keys {A, C} (rep = min = A); SB has {B} (rep = B).
-            const ROWS = [
-                { pubkey: PUBKEY_A, source: 'addrA', source_id: 1 },
-                { pubkey: PUBKEY_C, source: 'addrA', source_id: 1 },
-                { pubkey: PUBKEY_B, source: 'addrB', source_id: 2 },
-            ];
+            // SA has two passing keys {A, C} (rep = min = A); SB has {B} (rep = B).
+            const PART = {
+                totalEpochs: 7,
+                sources: [
+                    { source_id: 1, source: 'addrA', passed_epochs: 7, pubkeys: new Set([PUBKEY_A, PUBKEY_C]) },
+                    { source_id: 2, source: 'addrB', passed_epochs: 7, pubkeys: new Set([PUBKEY_B]) },
+                ],
+            };
             function captured() {
                 return indexer.indexerDb.createValidatorReward.getCalls()
                     .map(c => `${c.args[0]}|${c.args[1]}|${c.args[2]}|${String(c.args[3])}`)
@@ -350,7 +389,7 @@ describe('Price (PRICE) @regression @tier3', function () {
             }
             beforeEach(function () {
                 indexer.config.FULLNODE = Object.assign({}, indexer.config.FULLNODE, { REWARD_SHARE: '0.25' });
-                indexer.indexerDb.getVerifiedFullNodeSet = sinon.stub().resolves(ROWS);
+                indexer.indexerDb.getFullNodeParticipation = sinon.stub().resolves(PART);
                 indexer.indexerDb.getActiveCapabilityCount.resolves(3); // quorum 2
                 indexer.indexerDb.hasCapability.callsFake(async (pk, cap) =>
                     cap !== 'full_node' ? true : [PUBKEY_A, PUBKEY_B, PUBKEY_C].includes(pk));
@@ -373,11 +412,14 @@ describe('Price (PRICE) @regression @tier3', function () {
                 assert.deepStrictEqual(captured(), first);
             });
 
-            it('independent of getVerifiedFullNodeSet row order', async function () {
+            it('independent of getFullNodeParticipation source order', async function () {
                 await handler.parse(v0Params(ONE_PAIR, SIGS), v0Data(), null);
                 const ordered = captured();
                 indexer.indexerDb.createValidatorReward.resetHistory();
-                indexer.indexerDb.getVerifiedFullNodeSet.resolves([ROWS[2], ROWS[1], ROWS[0]]); // shuffled
+                indexer.indexerDb.getFullNodeParticipation.resolves({
+                    totalEpochs: PART.totalEpochs,
+                    sources: [PART.sources[1], PART.sources[0]], // reversed
+                });
                 await handler.parse(v0Params(ONE_PAIR, SIGS), v0Data(), null);
                 assert.deepStrictEqual(captured(), ordered);
                 // and the per-source representatives are the lexicographically smallest

@@ -8655,6 +8655,66 @@ class Database {
         }));
     }
 
+    // Participation-rate inputs for the full-node REWARD gate (price.js). Earning the
+    // full-node tranche is a carrot, not a stick — there is NO slashing; a node that
+    // doesn't run a full node simply doesn't pass challenges and doesn't get paid.
+    // Over the trailing FULLNODE.REWARD_PASS_WINDOW_BLOCKS ending at `blockIndex` this
+    // returns:
+    //   - totalEpochs: the number of DISTINCT challenge epochs that produced at least
+    //     one PASSING verdict (the denominator — counting only epochs the federation
+    //     actually ran, so an outage never penalizes a node), and
+    //   - sources: one entry per staking SOURCE that passed in the window, carrying
+    //     passed_epochs (DISTINCT epochs that source answered) and the lowercased set of
+    //     its passing pubkeys (so price.js can pick a representative round-signer).
+    // Deterministic — depends only on earlier on-chain NODEPROOF verdicts; all counts
+    // are integers (the gate compares passed*10000 >= bps*total, never floats).
+    async getFullNodeParticipation(blockIndex){
+        let fn     = this.config['FULLNODE'] || {};
+        let window = parseInt(fn['REWARD_PASS_WINDOW_BLOCKS']) || parseInt(fn['PROOF_WINDOW_BLOCKS']) || 0;
+        let result = { totalEpochs: 0, sources: [] };
+        if(window <= 0) return result;
+        let low = parseInt(blockIndex) - window;
+        // Denominator — distinct challenge epochs with >=1 passing verdict in the window.
+        let totRows = await this.doQuery(
+            `SELECT COUNT(DISTINCT epoch_height) AS epochs
+               FROM full_node_verifications
+              WHERE passed = 1 AND block_index > ? AND block_index <= ?`,
+            [low, blockIndex]);
+        result.totalEpochs = (totRows.length && totRows[0].epochs != null) ? Number(totRows[0].epochs) : 0;
+        if(result.totalEpochs === 0) return result;
+        // Numerator rows — (source, epoch, pubkey) for every passing verdict in the
+        // window. Ordered for deterministic aggregation.
+        let rows = await this.doQuery(
+            `SELECT fv.source_id AS source_id, sa.address AS source,
+                    fv.epoch_height AS epoch_height, ip.pubkey AS pubkey
+               FROM full_node_verifications fv
+               JOIN index_pubkeys   ip ON ip.id = fv.signing_pubkey_id
+               JOIN index_addresses sa ON sa.id = fv.source_id
+              WHERE fv.passed = 1 AND fv.block_index > ? AND fv.block_index <= ?
+              ORDER BY fv.source_id`,
+            [low, blockIndex]);
+        let bySource = new Map();
+        for(let r of rows){
+            let sid   = String(r.source_id);
+            let entry = bySource.get(sid);
+            if(!entry){
+                entry = { source_id: r.source_id, source: r.source == null ? '' : String(r.source),
+                          epochs: new Set(), pubkeys: new Set() };
+                bySource.set(sid, entry);
+            }
+            entry.epochs.add(Number(r.epoch_height));
+            entry.pubkeys.add(String(r.pubkey).toLowerCase());
+        }
+        for(let entry of bySource.values())
+            result.sources.push({
+                source_id:     entry.source_id,
+                source:        entry.source,
+                passed_epochs: entry.epochs.size,
+                pubkeys:       entry.pubkeys
+            });
+        return result;
+    }
+
     // Connection for hub-mirrored tables (price_snapshots, oracle_prices,
     // cross_chain_matches, capability_snapshots). In distributed deployments these live in
     // the local hub-DB copy; single-host falls back to this indexer DB. Mirrors the
