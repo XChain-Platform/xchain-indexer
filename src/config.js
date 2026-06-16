@@ -218,12 +218,28 @@ module.exports = {
         // Programmable policy layer — the action-classes a token/account may route to a guard
         // contract. Derived by a STATIC map from the action name (never from data['ACTION']) so a
         // future action can't accidentally fall into a controlled class. See Controller_Bound_Tokens.md.
+        // ROUTABLE set: an incoming action is mapped to exactly one of these (utility.controllerActionClass).
         config['CONTROLLER_ACTION_CLASSES'] = [
             'transfer',
             'trade',
             'burn',
             'mint',
             'stake'
+        ];
+
+        // BINDABLE set: the action-classes a bind (ISSUE v6 / ADDRESS v1) may target. Superset of the
+        // routable set with the catch-all 'all' class: 'all' is BINDABLE but never ROUTABLE — routing
+        // still maps an action to one of the 5 concrete classes, and resolution falls back to an 'all'
+        // binding only when no class-specific controller gates that class (most-specific-wins, single
+        // guard, no stacking). 'all' means all classes present AND future — it auto-gates mint/stake the
+        // moment those stub handlers wire their guards. See Controller_Bound_Tokens.md.
+        config['CONTROLLER_BINDABLE_CLASSES'] = [
+            'transfer',
+            'trade',
+            'burn',
+            'mint',
+            'stake',
+            'all'
         ];
 
         // Programmable policy layer — hard protocol ceiling (basis points, 10000 = 100%) on the total

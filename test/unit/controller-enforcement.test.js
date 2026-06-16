@@ -38,7 +38,10 @@ function mkDb(effective){
     return {
         config: { GAS_SCHEDULE: { VM_GUARD_GAS_CEILING: 200000 }, GAS_PRICE: '0.00001', GAS: 'XCHAIN' },
         getTickerId: async () => 1,
-        getEffectiveTokenController: async () => effective
+        getEffectiveTokenController: async () => effective,
+        // Enforcement resolves via the *ForGuard fallback resolver; the control-flow tests below
+        // don't exercise the 'all' fallback, so it delegates to the same effective row.
+        getEffectiveTokenControllerForGuard: async () => effective
     };
 }
 // guardEnabled toggles the CONTROLLER_GUARD activation gate that _invokeController consults
@@ -78,7 +81,8 @@ describe('Programmable policy layer — Phase B enforcement @regression', functi
             return {
                 config: { GAS_SCHEDULE: { VM_GUARD_GAS_CEILING: 200000 }, GAS_PRICE: '0.00001', GAS: 'XCHAIN' },
                 getAddressId: async () => 1,
-                getEffectiveAddressController: async () => effective
+                getEffectiveAddressController: async () => effective,
+                getEffectiveAddressControllerForGuard: async () => effective
             };
         }
         const recipOpts = (extra) => Object.assign({
@@ -240,6 +244,7 @@ describe('Programmable policy layer — Phase B enforcement @regression', functi
             const calls = [];
             const mkAddrDb = { config: { GAS_SCHEDULE: { VM_GUARD_GAS_CEILING: 200000 }, GAS_PRICE: '0.00001', GAS: 'XCHAIN' },
                 getAddressId: async () => 1, getEffectiveAddressController: async () => ({ contract_index: 9, is_unbind: 0 }) };
+            mkAddrDb.getEffectiveAddressControllerForGuard = async () => ({ contract_index: 9, is_unbind: 0 });
             const res = await util.maybeRunAddressControllerGuard(
                 mkActions({ allow: false, reason: 'must-not-run', gasBilled: 9999 }, calls, false),
                 mkAddrDb,
@@ -260,6 +265,49 @@ describe('Programmable policy layer — Phase B enforcement @regression', functi
             assert.strictEqual(res.error, null);
             assert.strictEqual(calls.length, 1, 'guard VM must run at/above the flag-day');
             assert.deepStrictEqual(res.payoutLegs, [{ to: 'royaltyAddr', bps: 500 }]);
+        });
+    });
+
+    // ─── 'all' action-class — most-specific-wins fallback (resolution) ───────────
+    // getEffective*ControllerForGuard is the enforcement resolver: try the action's specific class,
+    // then fall back to a catch-all 'all' binding. Exactly one row out (one guard runs, no stacking).
+    // Tested against the REAL db.js method (prototype-called over a fake exact getter — no DB needed)
+    // so the actual composition is pinned. The exact getters stay fallback-free (bind validation needs
+    // them) — that separation is what lets a specific class OVERRIDE an 'all' binding.
+    describe("getEffective*ControllerForGuard — 'all' fallback (most-specific-wins)", function () {
+        const Database = require('../../src/db.js');
+        // fake `this`: exact getter returns the row registered for a (key, class), else null.
+        function resolver(rowsByClass){
+            return { getEffectiveTokenController: async (id, cls) => (cls in rowsByClass ? rowsByClass[cls] : null) };
+        }
+        const ALL  = { contract_index: 1, is_unbind: 0 };
+        const SPEC = { contract_index: 2, is_unbind: 0 };
+        const callForGuard = (self, cls) =>
+            Database.prototype.getEffectiveTokenControllerForGuard.call(self, 9, cls, 100, 5);
+
+        it('specific-class binding overrides the catch-all (most-specific wins)', async function () {
+            const res = await callForGuard(resolver({ transfer: SPEC, all: ALL }), 'transfer');
+            assert.strictEqual(res.contract_index, 2);
+        });
+        it("'all'-only binding gates a class with no specific controller (fallback)", async function () {
+            const res = await callForGuard(resolver({ all: ALL }), 'trade');
+            assert.strictEqual(res.contract_index, 1);
+        });
+        it('no binding at all → null', async function () {
+            const res = await callForGuard(resolver({}), 'burn');
+            assert.strictEqual(res, null);
+        });
+        it("action_class === 'all' never self-recurses (single exact lookup, no fallback tail)", async function () {
+            let calls = [];
+            const self = { getEffectiveTokenController: async (id, cls) => { calls.push(cls); return null; } };
+            const res = await Database.prototype.getEffectiveTokenControllerForGuard.call(self, 9, 'all', 100, 5);
+            assert.strictEqual(res, null);
+            assert.deepStrictEqual(calls, ['all'], "must do exactly one lookup for 'all', no fallback");
+        });
+        it('the Address twin resolves identically', async function () {
+            const self = { getEffectiveAddressController: async (id, cls) => (cls === 'all' ? ALL : null) };
+            const res = await Database.prototype.getEffectiveAddressControllerForGuard.call(self, 9, 'transfer', 100, 5);
+            assert.strictEqual(res.contract_index, 1);
         });
     });
 });

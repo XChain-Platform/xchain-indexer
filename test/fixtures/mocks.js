@@ -71,6 +71,10 @@ function createMockDb() {
         // maybeRunControllerGuard bails early and uncontrolled-token behavior is unchanged).
         getEffectiveTokenController: sinon.stub().resolves(null),
         getEffectiveAddressController: sinon.stub().resolves(null),
+        // Enforcement resolver (most-specific-wins with 'all' fallback). Defaults to no controller;
+        // override per-test to exercise gating. Mirrors the real db.js *ForGuard composition.
+        getEffectiveTokenControllerForGuard: sinon.stub().resolves(null),
+        getEffectiveAddressControllerForGuard: sinon.stub().resolves(null),
         getActiveTokenControllerRow: sinon.stub().resolves(null),
         getActiveAddressControllerRow: sinon.stub().resolves(null),
         getTokenControllers: sinon.stub().resolves(new Map()),

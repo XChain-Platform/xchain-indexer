@@ -171,7 +171,7 @@ class Address {
         if(!error && format === 1){
             let actionClass = (this.util.isNull(data['ACTION_CLASS'])) ? null : String(data['ACTION_CLASS']).toLowerCase();
             let isUnbind    = (String(data['UNBIND']) === '1');
-            if(this.config['CONTROLLER_ACTION_CLASSES'].indexOf(actionClass) === -1){
+            if(this.config['CONTROLLER_BINDABLE_CLASSES'].indexOf(actionClass) === -1){
                 error = 'invalid: ACTION_CLASS (unknown)';
             } else {
                 let addressId = await this.indexerDb.getAddressId(data['SOURCE']);

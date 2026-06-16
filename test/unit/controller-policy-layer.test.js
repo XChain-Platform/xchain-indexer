@@ -102,6 +102,16 @@ describe('Programmable policy layer — Phase A binding wire contract @regressio
                 ['transfer', 'trade', 'burn', 'mint', 'stake']);
         });
 
+        it("CONTROLLER_BINDABLE_CLASSES is the five routable classes plus the catch-all 'all'", function () {
+            assert.deepStrictEqual(config.CONTROLLER_BINDABLE_CLASSES,
+                ['transfer', 'trade', 'burn', 'mint', 'stake', 'all']);
+        });
+
+        it("'all' is BINDABLE but never ROUTABLE", function () {
+            assert.ok(config.CONTROLLER_BINDABLE_CLASSES.includes('all'));
+            assert.ok(!config.CONTROLLER_ACTION_CLASSES.includes('all'));
+        });
+
         it('COOLDOWN_BLOCKS is a NUMBER field', function () {
             assert.ok(config.NUMBER_FIELDS.includes('COOLDOWN_BLOCKS'));
         });

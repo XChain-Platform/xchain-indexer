@@ -9468,6 +9468,24 @@ class Database {
         return this.controllerEventIfGating(row, atBlock);
     }
 
+    // Guard-resolution: which single controller gates an ACTION of this class. Most-specific-wins —
+    // a class-specific binding overrides the catch-all 'all' binding; if none, fall back to 'all'.
+    // Exactly one row out → one guard runs → no stacking. Enforcement-ONLY: bind/unbind validation
+    // must use the exact getters above (the fallback would falsely report a class as "already bound"
+    // when only 'all' is bound, blocking the intended specific-class override).
+    async getEffectiveTokenControllerForGuard(tick_id, action_class, atBlock, atActionIndex){
+        let row = await this.getEffectiveTokenController(tick_id, action_class, atBlock, atActionIndex);
+        if(row) return row;
+        if(action_class === 'all') return null;
+        return this.getEffectiveTokenController(tick_id, 'all', atBlock, atActionIndex);
+    }
+    async getEffectiveAddressControllerForGuard(address_id, action_class, atBlock, atActionIndex){
+        let row = await this.getEffectiveAddressController(address_id, action_class, atBlock, atActionIndex);
+        if(row) return row;
+        if(action_class === 'all') return null;
+        return this.getEffectiveAddressController(address_id, 'all', atBlock, atActionIndex);
+    }
+
     // Effective controllers for a subject: Map<action_class, contract_index> over the latest gating
     // event per class (read-time cooldown applied). For Phase B enforcement reads.
     async getTokenControllers(tick_id, atBlock, atActionIndex){

@@ -402,7 +402,7 @@ class Issue {
             if(!tokenInfo){
                 // Can only bind a controller to an existing token you own
                 error = 'invalid: TICK (unknown)';
-            } else if(this.config['CONTROLLER_ACTION_CLASSES'].indexOf(actionClass) === -1){
+            } else if(this.config['CONTROLLER_BINDABLE_CLASSES'].indexOf(actionClass) === -1){
                 error = 'invalid: ACTION_CLASS (unknown)';
             } else {
                 let tickId    = await this.indexerDb.getTickerId(data['TICK']);

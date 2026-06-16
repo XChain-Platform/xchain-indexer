@@ -1180,9 +1180,10 @@ class Utility {
         let actionClass = this.controllerActionClass(opts.actionType);
         if(!actionClass) return none;
         // Resolve the token's effective controller for this class (append-only read-time cooldown).
+        // Most-specific-wins: a class-specific binding overrides the catch-all 'all' binding.
         let tickId = await db.getTickerId(opts.tick);
         if(this.isNull(tickId)) return none;
-        let effective = await db.getEffectiveTokenController(tickId, actionClass, data['BLOCK_INDEX'], data['ACTION_INDEX']);
+        let effective = await db.getEffectiveTokenControllerForGuard(tickId, actionClass, data['BLOCK_INDEX'], data['ACTION_INDEX']);
         if(!effective) return none;
         // Record that this tick's controller was consulted this action (PTLC completeness assertion).
         if(!data['_GUARDED_TICKS']) data['_GUARDED_TICKS'] = {};
@@ -1199,7 +1200,8 @@ class Utility {
         if(!opts.actionClass) return none;
         let addressId = await db.getAddressId(opts.address);
         if(this.isNull(addressId)) return none;
-        let effective = await db.getEffectiveAddressController(addressId, opts.actionClass, opts.data['BLOCK_INDEX'], opts.data['ACTION_INDEX']);
+        // Most-specific-wins: a class-specific binding overrides the catch-all 'all' binding.
+        let effective = await db.getEffectiveAddressControllerForGuard(addressId, opts.actionClass, opts.data['BLOCK_INDEX'], opts.data['ACTION_INDEX']);
         if(!effective) return none;
         return this._invokeController(actions, db, Number(effective.contract_index), opts);
     }
@@ -1310,7 +1312,7 @@ class Utility {
                 if(!this.bcgt(amount, '0')) continue;
                 let tickId = await db.getTickerId(tick);
                 if(this.isNull(tickId)) continue;
-                let eff = await db.getEffectiveTokenController(tickId, 'transfer', data['BLOCK_INDEX'], data['ACTION_INDEX']);
+                let eff = await db.getEffectiveTokenControllerForGuard(tickId, 'transfer', data['BLOCK_INDEX'], data['ACTION_INDEX']);
                 if(eff && !guarded[String(tick)])
                     throw new Error('controller completeness: unguarded transfer-controlled debit of ' + tick + ' from SOURCE (action ' + data['ACTION_INDEX'] + ')');
             }
