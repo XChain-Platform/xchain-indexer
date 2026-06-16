@@ -376,10 +376,16 @@ class Send {
         await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits);
 
         // Get a list of tickers & addresses
-        let addresses = Object.keys(this.util.getAddressesList());
+        let tickers   = this.util.getTickersList(),
+            addresses = Object.keys(this.util.getAddressesList());
 
-        // Update address balances
+        // Update address balances and token supply. updateTokens is required because a
+        // controller guardFee is burned as a GAS debit with no offsetting credit (above) —
+        // tokens.supply (GAS) must be recomputed from the ledger or the per-block sanityCheck
+        // (ledger == supply == balances) trips and halts the indexer. Mirrors the other
+        // guarded handlers (order.js/swap.js/dispenser.js) and execute.js.
         await this.indexerDb.updateBalances(addresses);
+        await this.indexerDb.updateTokens(tickers);
 
         // Create action mappings
         await this.mapper.createMappings(data);

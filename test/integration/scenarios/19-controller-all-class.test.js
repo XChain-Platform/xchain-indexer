@@ -162,4 +162,19 @@ describe("Controller 'all' action class — fallback + override (real DB + real 
         assert.strictEqual(Number(xTransfer.contract_index), allowIdx, 'exact getter returns the transfer binding');
         assert.strictEqual(xTrade, null, "exact getter does NOT fall back to 'all' (bind validation correctness)");
     });
+
+    it('an allowed guarded SEND commits + the block passes the supply sanity check (regression: guardFee burn recomputes GAS supply)', async function () {
+        // With the 'transfer' override (allow guard) bound, this SEND routes to it, settles, and
+        // bills a guardFee — a GAS debit with no offsetting credit (a burn). send.js must call
+        // updateTokens so tokens.supply (GAS) is recomputed from the ledger; otherwise the
+        // per-block sanityCheck (ledger == supply == balances) throws and processBlocks rejects.
+        // So a green credit here IS the regression guard for the send.js guardFee-burn fix.
+        const before = Number(await balanceOf(RECIP, TICK));
+        await seeder.seedBlock(105, T0 + 500, [
+            { source: OWNER, data: `SEND|0|${TICK}|10|${RECIP}|guarded-allowed-send` },
+        ]);
+        await processBlocks(indexer); // throws on SanityError if GAS supply desyncs
+        assert.strictEqual(Number(await balanceOf(RECIP, TICK)) - before, 10,
+            'allowed guarded SEND credited the recipient and the block committed (sanity passed)');
+    });
 });
