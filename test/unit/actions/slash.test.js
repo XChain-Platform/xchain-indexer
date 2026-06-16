@@ -71,9 +71,10 @@ describe('SLASH action handler — equivocation verifier @regression', function 
         indexer.util.resetLists();
     });
 
-    // Build SLASH params from two (msg, sig) pairs.
-    function params(capability, offenderPubHex, equivKey, msgA, privA, msgB, privB) {
-        return ['0', capability, offenderPubHex, equivKey,
+    // Build SLASH params from two (msg, sig) pairs. The EQUIV key is NOT a wire field —
+    // it's derived from MSG_A's header — so it is not passed here.
+    function params(capability, offenderPubHex, msgA, privA, msgB, privB) {
+        return ['0', capability, offenderPubHex,
                 b64(msgA), sign(privA, msgA), b64(msgB), sign(privB, msgB)];
     }
     function data(extra) {
@@ -92,7 +93,7 @@ describe('SLASH action handler — equivocation verifier @regression', function 
     it('ACCEPTS a genuine DEX equivocation and burns the bond', async function () {
         const { key, msgA, msgB } = dexProof();
         const d = data();
-        await handler.parse(params('cross_chain', offender.pubHex, key, msgA, offender.privateKey, msgB, offender.privateKey), d, null);
+        await handler.parse(params('cross_chain', offender.pubHex,msgA, offender.privateKey, msgB, offender.privateKey), d, null);
 
         assert.strictEqual(d['STATUS'], 'valid');
         assert.ok(indexer.indexerDb.slashCapabilityStake.calledOnce, 'slashCapabilityStake must be called once');
@@ -107,7 +108,7 @@ describe('SLASH action handler — equivocation verifier @regression', function 
         const msgA = eq.buildEquivCanonical(eq.ENGINE_TAGS.DEX, 'm_42', 0, dexContent(100, '10'));
         const msgB = eq.buildEquivCanonical(eq.ENGINE_TAGS.DEX, 'm_42', 1, dexContent(100, '20')); // view 1
         const d = data();
-        await handler.parse(params('cross_chain', offender.pubHex, key, msgA, offender.privateKey, msgB, offender.privateKey), d, null);
+        await handler.parse(params('cross_chain', offender.pubHex,msgA, offender.privateKey, msgB, offender.privateKey), d, null);
 
         assert.ok(/EQUIV header\/key mismatch/.test(d['STATUS']), 'expected key-mismatch reject, got ' + d['STATUS']);
         assert.ok(indexer.indexerDb.slashCapabilityStake.notCalled);
@@ -117,7 +118,7 @@ describe('SLASH action handler — equivocation verifier @regression', function 
         const key = eq.equivKey(eq.ENGINE_TAGS.DEX, 'm_42', 0);
         const msg = eq.buildEquivCanonical(eq.ENGINE_TAGS.DEX, 'm_42', 0, dexContent(100, '10'));
         const d = data();
-        await handler.parse(params('cross_chain', offender.pubHex, key, msg, offender.privateKey, msg, offender.privateKey), d, null);
+        await handler.parse(params('cross_chain', offender.pubHex,msg, offender.privateKey, msg, offender.privateKey), d, null);
 
         assert.ok(/identical messages/.test(d['STATUS']), 'got ' + d['STATUS']);
         assert.ok(indexer.indexerDb.slashCapabilityStake.notCalled);
@@ -126,7 +127,7 @@ describe('SLASH action handler — equivocation verifier @regression', function 
     it('REJECTS a forged signature (sig does not verify against offender)', async function () {
         const { key, msgA, msgB } = dexProof();
         const other = genKey();   // sign msgB with a DIFFERENT key
-        const p = ['0', 'cross_chain', offender.pubHex, key,
+        const p = ['0', 'cross_chain', offender.pubHex,
                    b64(msgA), sign(offender.privateKey, msgA), b64(msgB), sign(other.privateKey, msgB)];
         const d = data();
         await handler.parse(p, d, null);
@@ -139,7 +140,7 @@ describe('SLASH action handler — equivocation verifier @regression', function 
         indexer.indexerDb.getValidatorsByCapability = sinon.stub().resolves([]);   // empty set
         const { key, msgA, msgB } = dexProof();
         const d = data();
-        await handler.parse(params('cross_chain', offender.pubHex, key, msgA, offender.privateKey, msgB, offender.privateKey), d, null);
+        await handler.parse(params('cross_chain', offender.pubHex,msgA, offender.privateKey, msgB, offender.privateKey), d, null);
 
         assert.ok(/not in capability snapshot/.test(d['STATUS']), 'got ' + d['STATUS']);
         assert.ok(indexer.indexerDb.slashCapabilityStake.notCalled);
@@ -149,7 +150,7 @@ describe('SLASH action handler — equivocation verifier @regression', function 
         indexer.indexerDb.hasCapabilitySlashEvent = sinon.stub().resolves(true);
         const { key, msgA, msgB } = dexProof();
         const d = data();
-        await handler.parse(params('cross_chain', offender.pubHex, key, msgA, offender.privateKey, msgB, offender.privateKey), d, null);
+        await handler.parse(params('cross_chain', offender.pubHex,msgA, offender.privateKey, msgB, offender.privateKey), d, null);
 
         assert.ok(/already slashed/.test(d['STATUS']), 'got ' + d['STATUS']);
         assert.ok(indexer.indexerDb.slashCapabilityStake.notCalled);
@@ -160,7 +161,7 @@ describe('SLASH action handler — equivocation verifier @regression', function 
         const msgA = eq.buildEquivCanonical(eq.ENGINE_TAGS.CONFIG, '5', 0, 'digestA');
         const msgB = eq.buildEquivCanonical(eq.ENGINE_TAGS.CONFIG, '5', 0, 'digestB');
         const d = data();
-        await handler.parse(params('cross_chain', offender.pubHex, key, msgA, offender.privateKey, msgB, offender.privateKey), d, null);
+        await handler.parse(params('cross_chain', offender.pubHex,msgA, offender.privateKey, msgB, offender.privateKey), d, null);
 
         assert.ok(/ENGINE_TAG \(not slashable\)/.test(d['STATUS']), 'got ' + d['STATUS']);
         assert.ok(indexer.indexerDb.slashCapabilityStake.notCalled);
@@ -169,7 +170,7 @@ describe('SLASH action handler — equivocation verifier @regression', function 
     it('REJECTS a CAPABILITY that does not match the engine', async function () {
         const { key, msgA, msgB } = dexProof();   // XDEX → cross_chain
         const d = data();
-        await handler.parse(params('price', offender.pubHex, key, msgA, offender.privateKey, msgB, offender.privateKey), d, null);
+        await handler.parse(params('price', offender.pubHex,msgA, offender.privateKey, msgB, offender.privateKey), d, null);
 
         assert.ok(/CAPABILITY \(does not match engine\)/.test(d['STATUS']), 'got ' + d['STATUS']);
         assert.ok(indexer.indexerDb.slashCapabilityStake.notCalled);
@@ -178,7 +179,7 @@ describe('SLASH action handler — equivocation verifier @regression', function 
     it('REJECTS when the two messages disagree on snapshot_block', async function () {
         const { key, msgA, msgB } = dexProof(100, 101);   // different snapshot_block in content
         const d = data();
-        await handler.parse(params('cross_chain', offender.pubHex, key, msgA, offender.privateKey, msgB, offender.privateKey), d, null);
+        await handler.parse(params('cross_chain', offender.pubHex,msgA, offender.privateKey, msgB, offender.privateKey), d, null);
 
         assert.ok(/snapshot_block/.test(d['STATUS']), 'got ' + d['STATUS']);
         assert.ok(indexer.indexerDb.slashCapabilityStake.notCalled);
@@ -190,7 +191,7 @@ describe('SLASH action handler — equivocation verifier @regression', function 
         const msgA  = eq.buildEquivCanonical(eq.ENGINE_TAGS.ORACLE, round, 0, '{"BTCUSD":"60000"}');
         const msgB  = eq.buildEquivCanonical(eq.ENGINE_TAGS.ORACLE, round, 0, '{"BTCUSD":"61000"}');
         const d = data();
-        await handler.parse(params('price', offender.pubHex, key, msgA, offender.privateKey, msgB, offender.privateKey), d, null);
+        await handler.parse(params('price', offender.pubHex,msgA, offender.privateKey, msgB, offender.privateKey), d, null);
 
         assert.strictEqual(d['STATUS'], 'valid');
         // membership was checked at the round's block

@@ -21,19 +21,21 @@
  * so the burn is identical fleet-wide.
  *
  * FORMAT (spec §4.1.1):
- *   v0 - VERSION|CAPABILITY|OFFENDER_PUBKEY|EQUIV_KEY|MSG_A|SIG_A|MSG_B|SIG_B
+ *   v0 - VERSION|CAPABILITY|OFFENDER_PUBKEY|MSG_A|SIG_A|MSG_B|SIG_B
  *
  *   CAPABILITY      the staking capability the equivocation was in (cross_chain /
- *                   oracle_publish / price / attestation). MUST match the engine
- *                   the EQUIV_KEY names — derived, not trusted.
+ *                   oracle_publish / price / attestation). MUST match the engine the
+ *                   EQUIV header names — derived, not trusted.
  *   OFFENDER_PUBKEY 64-hex Ed25519 capability signing key being slashed.
- *   EQUIV_KEY       ENGINE_TAG|ROUND_ID|VIEW — the header prefix the two messages
- *                   share through <VIEW>. ROUND_ID may itself contain '|' (e.g.
- *                   the checkpoint round id), so it is never field-split; both
- *                   messages must literally begin with `EQUIV|<EQUIV_KEY>||`.
  *   MSG_A/MSG_B     base64url of the two signed canonicals (each an EQUIV-headered
- *                   string). Equal through the header, DIFFERENT in <CONTENT>.
+ *                   string `EQUIV|<ENGINE_TAG|ROUND_ID|VIEW>||<CONTENT>`). Equal through
+ *                   the header, DIFFERENT in <CONTENT>.
  *   SIG_A/SIG_B     128-hex Ed25519 signatures over MSG_A/MSG_B by OFFENDER_PUBKEY.
+ *
+ *   The EQUIV key is NOT a wire field: it contains '|' (and so would shatter the
+ *   pipe-delimited action) and is fully recoverable from MSG_A's header — the verifier
+ *   derives it from the bytes after `EQUIV|` up to the first `||` (the key has no empty
+ *   segment, so that boundary is unambiguous).
  *
  * SOUNDNESS — the burn only fires when ALL hold:
  *   1. both messages carry the EQUIV header and share the EXACT same key prefix
@@ -95,7 +97,9 @@ class Slash {
         this.mapper    = action.mapper;
 
         this.formats = {};
-        this.formats[0] = 'VERSION|CAPABILITY|OFFENDER_PUBKEY|EQUIV_KEY|MSG_A|SIG_A|MSG_B|SIG_B';
+        // NOTE: the EQUIV key is NOT a wire field — it contains '|' (ENGINE_TAG|ROUND_ID|VIEW)
+        // and would shatter the pipe-delimited action. It is derived from MSG_A's header.
+        this.formats[0] = 'VERSION|CAPABILITY|OFFENDER_PUBKEY|MSG_A|SIG_A|MSG_B|SIG_B';
     }
 
     async parse(params, data, error){
@@ -108,15 +112,14 @@ class Slash {
         // Extract fields
         data['CAPABILITY']      = params[1];
         data['OFFENDER_PUBKEY'] = params[2];
-        data['EQUIV_KEY']       = params[3];
-        let msgAb64 = params[4], sigA = params[5], msgBb64 = params[6], sigB = params[7];
+        let msgAb64 = params[3], sigA = params[4], msgBb64 = params[5], sigB = params[6];
 
         // SLASH is BTC-only (capability stake is BTC-only)
         if(!error && data['COIN'] !== 'BTC')
             error = 'invalid: ACTION (BTC only)';
 
         // Field presence
-        if(!error && (this.util.isNull(data['OFFENDER_PUBKEY']) || this.util.isNull(data['EQUIV_KEY']) ||
+        if(!error && (this.util.isNull(data['OFFENDER_PUBKEY']) ||
                       this.util.isNull(msgAb64) || this.util.isNull(sigA) ||
                       this.util.isNull(msgBb64) || this.util.isNull(sigB) || this.util.isNull(data['CAPABILITY'])))
             error = 'invalid: missing field';
@@ -134,10 +137,23 @@ class Slash {
             if(msgA === null || msgB === null) error = 'invalid: MSG (base64)';
         }
 
-        // (1) Both messages carry the EQUIV header and share the EXACT same key prefix.
-        let equivKey = String(data['EQUIV_KEY']);
-        let prefix   = eq.equivPrefix(equivKey);   // 'EQUIV|<EQUIV_KEY>||'
-        if(!error && (!msgA.startsWith(prefix) || !msgB.startsWith(prefix)))
+        // (1) Derive the EQUIV key from MSG_A's header — the wire action does NOT carry it
+        // (it contains '|' and would break the pipe split). The header is
+        // `EQUIV|<ENGINE_TAG|ROUND_ID|VIEW>||<CONTENT>`; the key has no `||` (no empty
+        // segment), so the FIRST `||` is the unambiguous key/content boundary.
+        let equivKey = '', prefix = '';
+        if(!error){
+            let sep = msgA.startsWith('EQUIV|') ? msgA.indexOf('||') : -1;
+            if(sep < 0){
+                error = 'invalid: MSG_A has no EQUIV header';
+            } else {
+                prefix   = msgA.slice(0, sep + 2);            // 'EQUIV|<key>||'
+                equivKey = msgA.slice('EQUIV|'.length, sep);  // '<key>'
+            }
+        }
+
+        // Both messages must share that EXACT header prefix (same engine, round, AND view).
+        if(!error && !msgB.startsWith(prefix))
             error = 'invalid: EQUIV header/key mismatch';
 
         // (2) Their content must DIFFER (identical bytes = the same message, not equivocation).
