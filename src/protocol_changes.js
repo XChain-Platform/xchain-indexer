@@ -33,13 +33,15 @@ class ProtocolChanges {
         this.indexerDb = indexer.indexerDb;
 
         // XChain Indexer Version and network.
-        // Read from package.json (always available) rather than
-        // process.env.npm_package_version, which is only populated when the
-        // process is launched via `npm run …`. A bare `node src/api.js`
-        // (Docker entrypoints, one-off debugging) left this undefined, and
-        // isEnabled()'s this.version.split('.') then threw, rolling back and
-        // silently retrying the same block forever.
-        this.version = require('../package.json').version;
+        // Prefer process.env.npm_package_version (set under `npm run …`, and the
+        // hook tests inject it to simulate a shipping consensus version), and fall
+        // back to package.json when it is absent. A bare `node src/api.js` (Docker
+        // entrypoints, one-off debugging) does NOT set the env var, which left
+        // this.version undefined and made isEnabled()'s this.version.split('.')
+        // throw, rolling back and silently retrying the same block forever; the
+        // package.json fallback closes that crash while keeping both production
+        // launch paths (npm run / bare node) resolving to the same version.
+        this.version = process.env.npm_package_version || require('../package.json').version;
         this.network = process.env.INDEXER_NETWORK;
 
         // Setup alias to the utility class
