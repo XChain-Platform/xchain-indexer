@@ -7,7 +7,7 @@
  *
  * This file is part of XChain Platform. Licensed under the GNU Affero
  * General Public License v3.0 or later; see LICENSE.md. A commercial
- * license (without AGPL source-disclosure terms) is available —
+ * license (without AGPL source-disclosure terms) is available -
  * contact legal@dankest.llc.
  *
  **********************************************************************
@@ -32,8 +32,14 @@ class ProtocolChanges {
         this.decoderDb = indexer.decoderDb;
         this.indexerDb = indexer.indexerDb;
 
-        // XChain Indexer Version and network
-        this.version = process.env.npm_package_version;
+        // XChain Indexer Version and network.
+        // Read from package.json (always available) rather than
+        // process.env.npm_package_version, which is only populated when the
+        // process is launched via `npm run …`. A bare `node src/api.js`
+        // (Docker entrypoints, one-off debugging) left this undefined, and
+        // isEnabled()'s this.version.split('.') then threw, rolling back and
+        // silently retrying the same block forever.
+        this.version = require('../package.json').version;
         this.network = process.env.INDEXER_NETWORK;
 
         // Setup alias to the utility class
@@ -142,6 +148,10 @@ class ProtocolChanges {
         this.addChange('CROSS_CHAIN_DEX','2.0.0',0,0,0,0,0,0);
         // Issuance fee activation. Mainnet turns on at the historical block 862633;
         // testnet/regtest charge from block 0 so the fee path is exercisable there.
+        // mainnet_block=862633 is a BTC block height used as an 'always-on' activation
+        // for LTC and DOGE (both passed this height long ago). This is intentional legacy
+        // behaviour — a single cross-chain activation height chosen from BTC; see
+        // xchain-documentation/protocol/CONFIGURATION.md for the rationale.
         this.addChange('ISSUANCE_FEE',   '1.0.0',0,0,0,862633,0,0);
         // VM-emitted ISSUE (IS_EMISSION) issuance-fee exemption. A contract
         // constructor (or EXECUTE) that emits an ISSUE has no XCHAIN balance on the
