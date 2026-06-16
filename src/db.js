@@ -38,7 +38,7 @@ const { buildStateHashData } = require('./stateHash');
 // are a byte-for-byte conformance pair (guarded by the xchain-e2e-test conformance scenario
 // and the xchain-sync block-hash-vectors golden). This is a fixed protocol constant, never
 // env-overridable.
-const BLOCK_HASH_VERSION = 2;
+const BLOCK_HASH_VERSION = 1;
 
 class Database {
 
