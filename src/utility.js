@@ -1274,20 +1274,24 @@ class Utility {
             totalBps += bps;
         }
         if(totalBps > cap || totalBps > 10000) return full;
-        // Compute each leg deterministically: (proceeds * bps) / 10000, truncated to tick precision.
+        // Compute each leg deterministically: floor((proceeds * bps) / 10000) to tick precision.
+        // MUST floor, not round: bcdiv rounds half-up, so multiple legs landing on a half-fraction
+        // would each round UP and Σlegs could exceed proceeds, driving the seller's remainder
+        // NEGATIVE (a conservation break + negative balance credit). bcmulfloor guarantees
+        // distributed ≤ exact ≤ proceeds, so the remainder is always ≥ 0.
         let out = [];
         let distributed = '0';
         for(let leg of parsed){
             let bps = parseInt(leg.bps);
             if(bps === 0) continue;
-            let amount = this.bcdiv(this.bcmul(proceeds, String(bps), dec + 4), '10000', dec);
+            let amount = this.bcmulfloor(this.bcmul(proceeds, String(bps), dec + 4), '0.0001', dec);
             if(this.bcgt(amount, '0')){
                 out.push([tick, amount, String(leg.to)]);
                 distributed = this.bcadd(distributed, amount, dec);
             }
         }
-        // Seller's remainder first (deterministic ordering); remainder absorbs truncation so the
-        // split conserves the proceeds exactly.
+        // Seller's remainder first (deterministic ordering); remainder absorbs the floored-away
+        // fractions so the split conserves the proceeds exactly, and is always ≥ 0 (legs floored).
         let result = [[tick, this.bcsub(proceeds, distributed, dec), sellerAddress]];
         for(let c of out) result.push(c);
         return result;

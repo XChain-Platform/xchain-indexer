@@ -114,4 +114,19 @@ describe('Programmable policy layer — Phase D royalty/fee split @regression', 
     it('zero / null proceeds → single (zero) credit, no split', function () {
         assert.deepStrictEqual(util.applyProceedsSplit('TOK', '0', 'seller', [{ to: 'a', bps: 100 }], 0, 10000), [['TOK', '0', 'seller']]);
     });
+
+    it('SECURITY: legs are FLOORED so a multi-leg half-fraction split never over-distributes (seller remainder ≥ 0)', function () {
+        // Finding repro: with half-up rounding each 0.5-fraction leg rounded UP, so Σlegs exceeded
+        // proceeds and the seller's remainder went NEGATIVE. Flooring keeps remainder ≥ 0 + conserves.
+        // proceeds=2 (0-dec), three 25% legs: floor(0.5)=0 each → seller keeps all, no negative.
+        const a = util.applyProceedsSplit('TOK', '2', 'seller', [{ to: 'A', bps: 2500 }, { to: 'B', bps: 2500 }, { to: 'C', bps: 2500 }], 0, 10000);
+        assert.strictEqual(a[0][2], 'seller');
+        assert.ok(!String(a[0][1]).startsWith('-'), 'seller remainder must be ≥ 0, got ' + a[0][1]);
+        assert.strictEqual(sumAmounts(a, 0), '2');                  // conservation; no over-distribution
+        // proceeds=3 (0-dec), two 50% legs: floor(1.5)=1 each → seller=1, A=1, B=1.
+        const b = util.applyProceedsSplit('TOK', '3', 'seller', [{ to: 'A', bps: 5000 }, { to: 'B', bps: 5000 }], 0, 10000);
+        assert.ok(!String(b[0][1]).startsWith('-'), 'seller remainder must be ≥ 0, got ' + b[0][1]);
+        assert.strictEqual(sumAmounts(b, 0), '3');
+        assert.deepStrictEqual(norm(b), [['TOK', '1', 'seller'], ['TOK', '1', 'A'], ['TOK', '1', 'B']]);
+    });
 });
