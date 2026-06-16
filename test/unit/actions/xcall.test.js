@@ -30,9 +30,11 @@ const SIG_A    = '1'.repeat(128);
 // xchain-vm/src/gateway-emit.js (crossExecute). emitterPath is the emitting
 // execution's '>'-joined call-path (root = ''); it disambiguates two nested runs
 // of the same contract and is content-derived (stable across nodes/reorgs).
-const deriveCallId = (network, chain, txHash, contractIndex, emitterPath, position, targetChain) =>
+// ROOT_ACTION_INDEX (the per-root discriminator = the deterministic root on-chain
+// action_index) is inserted immediately after txHash in the call_id preimage.
+const deriveCallId = (network, chain, txHash, rootActionIndex, contractIndex, emitterPath, position, targetChain) =>
     crypto.createHash('sha256')
-        .update([network, chain, txHash, contractIndex, emitterPath, position, targetChain].map(String).join(':'))
+        .update([network, chain, txHash, rootActionIndex, contractIndex, emitterPath, position, targetChain].map(String).join(':'))
         .digest('hex');
 
 describe('Xcall (XCALL) @regression @tier3', function () {
@@ -104,7 +106,8 @@ describe('Xcall (XCALL) @regression @tier3', function () {
         function v0Data(overrides = {}) {
             return createBaseData({
                 ACTION: 'XCALL', FORMAT: 0, IS_EMISSION: true, EMITTER: 5,
-                EMITTER_POSITION: 0, EMITTER_PATH: '0', BLOCK_INDEX: 100,
+                EMITTER_POSITION: 0, EMITTER_PATH: '0', ROOT_ACTION_INDEX: 100,
+                BLOCK_INDEX: 100,
                 ...overrides,
             });
         }
@@ -120,7 +123,7 @@ describe('Xcall (XCALL) @regression @tier3', function () {
                     p.gasLimit, p.cb, p.cbParams, p.deadline, p.hops];
         }
         const goodCallId = (data) =>
-            deriveCallId('regtest', 'BTC', data['TX_HASH'],
+            deriveCallId('regtest', 'BTC', data['TX_HASH'], data['ROOT_ACTION_INDEX'],
                          data['EMITTER'], data['EMITTER_PATH'], data['EMITTER_POSITION'], 'DOGE');
 
         it('valid request → STATUS valid, createCrossChainCallRequest called with the derived deadline', async function () {
@@ -146,7 +149,7 @@ describe('Xcall (XCALL) @regression @tier3', function () {
         it('the derivation binds network + source chain + target chain', async function () {
             const data = v0Data();
             // Same inputs but derived for LTC target — must be rejected for a DOGE call.
-            const wrongTarget = deriveCallId('regtest', 'BTC', data['TX_HASH'],
+            const wrongTarget = deriveCallId('regtest', 'BTC', data['TX_HASH'], data['ROOT_ACTION_INDEX'],
                 data['EMITTER'], data['EMITTER_PATH'], data['EMITTER_POSITION'], 'LTC');
             await handler.parse(v0Params(wrongTarget), data, null);
             assert.match(data['STATUS'], /CALL_ID \(does not match/);
@@ -162,9 +165,12 @@ describe('Xcall (XCALL) @regression @tier3', function () {
             // Mirror of the ATTEST guard: the call_id preimage uses EMITTER_PATH, not the
             // injection-timing-dependent action_index, so a node that reorged (different
             // ACTION_INDEX) re-derives the SAME call_id — no PBFT fork.
-            const id = deriveCallId('regtest', 'BTC', 'aa', 5, '2>0', 0, 'DOGE');
-            const lo = v0Data({ TX_HASH: 'aa', EMITTER: 5, EMITTER_PATH: '2>0', EMITTER_POSITION: 0, ACTION_INDEX: 10 });
-            const hi = v0Data({ TX_HASH: 'aa', EMITTER: 5, EMITTER_PATH: '2>0', EMITTER_POSITION: 0, ACTION_INDEX: 99999 });
+            // ROOT_ACTION_INDEX is the per-root discriminator (fixed at 100 here); both
+            // nodes share it, so the call_id depends on the ROOT, not the emission
+            // action_index — they must re-derive the SAME id despite differing ACTION_INDEX.
+            const id = deriveCallId('regtest', 'BTC', 'aa', 100, 5, '2>0', 0, 'DOGE');
+            const lo = v0Data({ TX_HASH: 'aa', EMITTER: 5, EMITTER_PATH: '2>0', EMITTER_POSITION: 0, ROOT_ACTION_INDEX: 100, ACTION_INDEX: 10 });
+            const hi = v0Data({ TX_HASH: 'aa', EMITTER: 5, EMITTER_PATH: '2>0', EMITTER_POSITION: 0, ROOT_ACTION_INDEX: 100, ACTION_INDEX: 99999 });
             await handler.parse(v0Params(id), lo, null);
             await handler.parse(v0Params(id), hi, null);
             assert.strictEqual(lo['STATUS'], 'valid', 'low action_index node rejected: ' + lo['STATUS']);
@@ -177,11 +183,17 @@ describe('Xcall (XCALL) @regression @tier3', function () {
             assert.match(data['STATUS'], /EMITTER_PATH/);
         });
 
+        it('hard-fails when ROOT_ACTION_INDEX is missing (no silent derivation bypass)', async function () {
+            const data = v0Data({ ROOT_ACTION_INDEX: undefined });
+            await handler.parse(v0Params('e'.repeat(64)), data, null);
+            assert.match(data['STATUS'], /ROOT_ACTION_INDEX/);
+        });
+
         it('accepts a root-level call where EMITTER_PATH is the empty string', async function () {
             // Root on-chain execution has call-path '' — VALID; the required-field check
             // must test === undefined/null, not falsy, or every root-level call is rejected.
             const data = v0Data({ EMITTER_PATH: '' });
-            const id = deriveCallId('regtest', 'BTC', data['TX_HASH'],
+            const id = deriveCallId('regtest', 'BTC', data['TX_HASH'], data['ROOT_ACTION_INDEX'],
                 data['EMITTER'], '', data['EMITTER_POSITION'], 'DOGE');
             await handler.parse(v0Params(id), data, null);
             assert.strictEqual(data['STATUS'], 'valid',
@@ -190,7 +202,7 @@ describe('Xcall (XCALL) @regression @tier3', function () {
 
         it('rejects targeting this indexer\'s own chain', async function () {
             const data = v0Data();
-            const id = deriveCallId('regtest', 'BTC', data['TX_HASH'],
+            const id = deriveCallId('regtest', 'BTC', data['TX_HASH'], data['ROOT_ACTION_INDEX'],
                 data['EMITTER'], data['EMITTER_PATH'], data['EMITTER_POSITION'], 'BTC');
             await handler.parse(v0Params(id, { targetChain: 'BTC' }), data, null);
             assert.match(data['STATUS'], /TARGET_CHAIN \(must differ/);

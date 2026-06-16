@@ -9651,6 +9651,7 @@ class Database {
                      FROM attests ar
                      LEFT JOIN index_addresses ia ON ia.id = ar.fee_payer_id
                      WHERE ar.request_id = ? AND ar.version = 0
+                     ORDER BY ar.action_index ASC
                      LIMIT 1`;
         let rows = await this.doQuery(query, [String(requestId || '').toLowerCase()]);
         return rows.length > 0 ? rows[0] : null;

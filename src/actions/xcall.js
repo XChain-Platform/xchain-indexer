@@ -188,11 +188,15 @@ class Xcall {
                 error = 'invalid: EMITTER_POSITION (required for call_id derivation)';
             } else if(data['EMITTER_PATH'] === undefined || data['EMITTER_PATH'] === null){
                 error = 'invalid: EMITTER_PATH (required for call_id derivation)';
+            } else if(data['ROOT_ACTION_INDEX'] === undefined || data['ROOT_ACTION_INDEX'] === null){
+                // The per-root discriminator (deterministic root on-chain action_index). Required;
+                // check === undefined/null (0 is a valid index).
+                error = 'invalid: ROOT_ACTION_INDEX (required for call_id derivation)';
             } else if(!data['TX_HASH']){
                 error = 'invalid: TX_HASH (required for call_id derivation)';
             } else {
                 let preimage = String(this.config['NETWORK']) + ':' + String(this.config['COIN']) + ':' +
-                               String(data['TX_HASH']) + ':' +
+                               String(data['TX_HASH']) + ':' + String(data['ROOT_ACTION_INDEX']) + ':' +
                                String(data['CONTRACT_INDEX']) + ':' + String(data['EMITTER_PATH']) + ':' +
                                String(data['EMITTER_POSITION']) + ':' +
                                String(data['TARGET_CHAIN']);

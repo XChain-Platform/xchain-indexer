@@ -180,10 +180,14 @@ class Attest {
                 error = 'invalid: EMITTER_POSITION (required for request_id derivation)';
             } else if(data['EMITTER_PATH'] === undefined || data['EMITTER_PATH'] === null){
                 error = 'invalid: EMITTER_PATH (required for request_id derivation)';
+            } else if(data['ROOT_ACTION_INDEX'] === undefined || data['ROOT_ACTION_INDEX'] === null){
+                // The per-root discriminator (deterministic root on-chain action_index). Required
+                // for every legitimate VM emission; check === undefined/null (0 is a valid index).
+                error = 'invalid: ROOT_ACTION_INDEX (required for request_id derivation)';
             } else if(!data['TX_HASH']){
                 error = 'invalid: TX_HASH (required for request_id derivation)';
             } else {
-                let preimage = String(data['TX_HASH']) + ':' + String(data['EMITTER_PATH']) + ':' + String(data['CONTRACT_INDEX']) + ':' + String(data['EMITTER_POSITION']);
+                let preimage = String(data['TX_HASH']) + ':' + String(data['ROOT_ACTION_INDEX']) + ':' + String(data['EMITTER_PATH']) + ':' + String(data['CONTRACT_INDEX']) + ':' + String(data['EMITTER_POSITION']);
                 let expected = crypto.createHash('sha256').update(preimage).digest('hex');
                 if(expected !== String(data['REQUEST_ID']).toLowerCase())
                     error = 'invalid: REQUEST_ID (does not match deterministic derivation)';

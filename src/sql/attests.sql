@@ -19,7 +19,7 @@ DROP TABLE IF EXISTS attests;
 CREATE TABLE attests (
     action_index                  BIGINT UNSIGNED NOT NULL,        -- FK to actions (the ATTEST action that wrote this row)
     version                       TINYINT UNSIGNED NOT NULL,       -- 0=request, 1=response (matches actions.action_format)
-    request_id                    CHAR(64) NOT NULL,               -- correlation key across v0/v1 (SHA256(tx_hash||contract_index||emission_index))
+    request_id                    CHAR(64) NOT NULL,               -- correlation key across v0/v1 (SHA256(tx_hash:root_action_index:call_path:contract_index:emission_index))
     provider_id                   VARCHAR(32) NOT NULL,            -- e.g. 'http_get' (governance-registered)
     -- request (version 0) fields
     contract_index                BIGINT UNSIGNED,                 -- FK to contracts (which contract emitted the request)
@@ -47,7 +47,12 @@ CREATE TABLE attests (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
 CREATE UNIQUE INDEX action_index    ON attests (action_index);
-CREATE        INDEX request_id      ON attests (request_id);
+-- (request_id, version) is UNIQUE: with the per-root discriminator in the request_id preimage
+-- (root_action_index — see attest.js/xcall.js) each v0 request and its v1 response carry a
+-- collision-free request_id, so at most one row exists per (request_id, version). The constraint
+-- turns any residual collision (e.g. an un-threaded emission path) into a loud INSERT failure
+-- instead of a silent split-brain. Its leftmost prefix also serves request_id-only lookups.
+CREATE UNIQUE INDEX request_id_version ON attests (request_id, version);
 CREATE        INDEX version_status  ON attests (version, request_status, deadline_block);
 CREATE        INDEX contract_index  ON attests (contract_index);
 CREATE        INDEX provider_id     ON attests (provider_id);

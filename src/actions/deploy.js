@@ -428,6 +428,7 @@ class Deploy {
                 txHash:           data['TX_HASH'],
                 actionIndex:      data['ACTION_INDEX'],
                 callPath:         '',
+                rootVout:         data['TX_VOUT'] != null ? data['TX_VOUT'] : 0,   // root discriminator = the DEPLOY's on-chain output index
                 // A constructor is a root execution: emitted cross-contract calls
                 // run at depth 1, same as calls emitted by a user EXECUTE.
                 callDepth:        0,
@@ -557,6 +558,7 @@ class Deploy {
                 let emissionContext = {
                     CONTRACT_ACTION_INDEX: data['ACTION_INDEX'],
                     ACTION_INDEX:          data['ACTION_INDEX'],
+                    ROOT_TX_VOUT:          data['TX_VOUT'] != null ? data['TX_VOUT'] : 0,   // root discriminator for constructor emissions
                     SOURCE:                data['SOURCE'],
                     BLOCK_INDEX:           data['BLOCK_INDEX'],
                     BLOCK_TIME:            data['BLOCK_TIME'],
