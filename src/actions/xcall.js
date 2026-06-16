@@ -163,33 +163,38 @@ class Xcall {
         }
 
         // Re-derive call_id and compare. Defends against a compromised VM by anchoring
-        // the request to (network, source chain, tx_hash, contract_index,
+        // the request to (network, source chain, tx_hash, contract_index, emitter_path,
         // emitter_position, target_chain). Network + chain are bound in (unlike the
         // ATTEST preimage) because BTC-family chains share tx-hash space — a call must
         // never collide or replay across chains/networks.
         //
-        // The emitting EXECUTE's action_index is deliberately EXCLUDED from the
-        // preimage: (tx_hash, contract_index, emitter_position) already uniquely
-        // identify an emission within a block, so action_index adds no entropy. It is
-        // also a function of injection *timing* — it advances with every synthetic
-        // action (XEXEC runs, result callbacks, expiries) the indexer injects ahead of
-        // the EXECUTE — not of chain content. Binding it in would let a single
-        // one-block shift in injection order permanently diverge every later call_id
-        // across nodes (and, because synthetic callback/relay tx-hashes are derived
-        // from call_id, never re-converge). Excluding it keeps call_id deterministic.
+        // EMITTER_PATH (the emitting execution's deterministic call-path — the '>'-joined
+        // per-execution emission positions from the root on-chain action down to this
+        // execution, root = '') replaces the emitting EXECUTE's action_index. action_index
+        // was a function of injection *timing* (it advances with every synthetic action the
+        // indexer injects ahead of the EXECUTE) — binding it forked call_id across nodes on
+        // any injection slip and never re-converged. But dropping it entirely (the prior
+        // fix) was unsafe: (tx_hash, contract_index, emitter_position) are NOT unique because
+        // emitter_position is per-execution, so two nested runs of the SAME contract each
+        // emitting their first call collide. The call-path is BOTH content-derived (stable
+        // across nodes/reorgs) AND unique per execution in the call tree — it fixes both.
         //
         // MUST byte-match the VM's derivation in xchain-vm/src/gateway-emit.js
         // (crossExecute). All inputs are REQUIRED; their absence is a hard failure
-        // (no silent bypass).
+        // (no silent bypass). NOTE: EMITTER_PATH '' (root on-chain action) is VALID —
+        // check === undefined / null, never falsy.
         if(!error){
             if(data['EMITTER_POSITION'] === undefined || data['EMITTER_POSITION'] === null){
                 error = 'invalid: EMITTER_POSITION (required for call_id derivation)';
+            } else if(data['EMITTER_PATH'] === undefined || data['EMITTER_PATH'] === null){
+                error = 'invalid: EMITTER_PATH (required for call_id derivation)';
             } else if(!data['TX_HASH']){
                 error = 'invalid: TX_HASH (required for call_id derivation)';
             } else {
                 let preimage = String(this.config['NETWORK']) + ':' + String(this.config['COIN']) + ':' +
                                String(data['TX_HASH']) + ':' +
-                               String(data['CONTRACT_INDEX']) + ':' + String(data['EMITTER_POSITION']) + ':' +
+                               String(data['CONTRACT_INDEX']) + ':' + String(data['EMITTER_PATH']) + ':' +
+                               String(data['EMITTER_POSITION']) + ':' +
                                String(data['TARGET_CHAIN']);
                 let expected = crypto.createHash('sha256').update(preimage).digest('hex');
                 if(expected !== String(data['CALL_ID']).toLowerCase())

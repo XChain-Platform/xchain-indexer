@@ -658,12 +658,15 @@ describe('Execute (EXECUTE) @regression @tier2', function () {
             assert.strictEqual(handler.getActionHandler('EXECUTE'), actionsCtx.actionExecute);
         });
 
-        it('processEmission threads depth, gasLimit and emitter action_index to the callee', async function () {
+        it('processEmission threads depth, gasLimit and the deterministic call-path to the callee', async function () {
             const calleeHandler = { parse: sinon.stub().callsFake(async (params, data) => { data['STATUS'] = 'valid'; }) };
             actionsCtx.actionExecute = calleeHandler;
             handler = new Execute(actionsCtx);
 
-            const execData = executeData({ CONTRACT_ACTION_INDEX: CONTRACT, ACTION_INDEX: 11, CALL_DEPTH: 1 });
+            // Parent execution sits at call-path '2'; this is its emission #0, so the
+            // callee's own execution path is '2>0' and the callee re-derives any of its
+            // own request_ids against EMITTER_PATH = its execution path.
+            const execData = executeData({ CONTRACT_ACTION_INDEX: CONTRACT, ACTION_INDEX: 11, CALL_DEPTH: 1, CALL_PATH: '2' });
             await handler.processEmission(emitExecute(), execData, 0);
 
             assert.ok(calleeHandler.parse.calledOnce);
@@ -671,7 +674,8 @@ describe('Execute (EXECUTE) @regression @tier2', function () {
             assert.deepStrictEqual(params, [0, CALLEE, 'onPing', 'x']);
             assert.strictEqual(data['CALL_DEPTH'], 2);                      // parent depth + 1
             assert.strictEqual(data['VM_GAS_LIMIT'], 50000);                // caller-funded ceiling
-            assert.strictEqual(data['EMITTER_ACTION_INDEX'], 11);           // parent EXECUTE's action_index
+            assert.strictEqual(data['EMITTER_PATH'], '2');                  // the emitting execution's path
+            assert.strictEqual(data['CALL_PATH'], '2>0');                   // the callee's own execution path
             assert.strictEqual(data['IS_EMISSION'], true);
             assert.strictEqual(data['SOURCE'], 'C:' + indexer.config['CHAIN'] + ':' + CONTRACT);
         });

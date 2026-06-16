@@ -245,11 +245,14 @@ class Execute {
                 },
                 // Cross-contract call threading: the callee's ceiling is its
                 // caller-funded reservation; depth gates emit.execute recursion;
-                // actionIndex anchors the attestation request_id preimage so two
-                // nested runs of the same contract in one tx cannot collide.
+                // callPath anchors the attestation request_id + cross-chain call_id
+                // preimages so two nested runs of the same contract in one tx cannot
+                // collide — and, unlike action_index, it is content-derived so it
+                // stays byte-stable across nodes/reorgs. Root on-chain EXECUTE = ''.
                 gasCeiling:        execCeiling,
                 callDepth:         Number(data['CALL_DEPTH']) || 0,
                 actionIndex:       data['ACTION_INDEX'],
+                callPath:          data['CALL_PATH'] || '',
                 // Cross-chain call context: hop budget for emit.crossExecute (threaded
                 // from XEXEC injections / result callbacks), the network bound into the
                 // call_id preimage, and the cross-call flag the harness uses to enforce
@@ -553,6 +556,7 @@ class Execute {
                 gasCeiling:        guardCeiling,
                 callDepth:         callDepth,
                 actionIndex:       hostData['ACTION_INDEX'],
+                callPath:          '',     // a guard is a root execution for its own subtree
                 isGuard:           true,   // disables ATTEST/XCALL in the gateway
                 network:           this.config['NETWORK'],
                 balances:          guardLedger.balances,
@@ -711,12 +715,19 @@ class Execute {
                 // host-side as defense in depth against an older bundled VM.
                 if(emission.action === 'ATTEST' || emission.action === 'XCALL' || emission.action === 'SLASH')
                     throw new Error('guard emission not allowed: ' + emission.action);
-                await this.processEmission(emission, guardCtxData, i);
+                // Use the host-action-global position (basePosition + i), not the
+                // guard-local index: multiple guards share this action's emission space,
+                // so offsetting keeps each guard's call-path subtree disjoint. A guard
+                // can emit a nested EXECUTE whose callee emits ATTEST/XCALL — without the
+                // offset, two guards' first EXECUTE emissions would share call-path '0'
+                // and their callees' ids could collide. Matches the stored POSITION.
+                let pos = basePosition + i;
+                await this.processEmission(emission, guardCtxData, pos);
                 await this.indexerDb.createContractEmission({
                     EXECUTION_INDEX: hostData['ACTION_INDEX'],
                     EMITTED_ACTION:  emission.action,
                     ACTION_INDEX:    emission.resultActionIndex || null,
-                    POSITION:        basePosition + i
+                    POSITION:        pos
                 });
             }
             await this.indexerDb.releaseSavepoint(savepoint);
@@ -798,6 +809,18 @@ class Execute {
                 throw new Error('XCALL emission gasLimit out of range [' + XCALL_MIN_GAS + ', ' + XCALL_MAX_GAS + ']');
         }
 
+        // Deterministic call-path for the request_id / call_id preimages.
+        //   emitterPath = the path of the EMITTING execution (root on-chain action = '').
+        //   childPath   = emitterPath extended by this emission's position — the path of
+        //                 the execution a nested EXECUTE emission will itself run as.
+        // Encoding: '>'-joined non-negative integer positions; '>' appears in no adjacent
+        // preimage field, so the path is one injection-free token. MUST byte-match the VM
+        // (xchain-vm gateway.js attestation.request + gateway-emit.js crossExecute, which
+        // hash the running execution's callPath). EMITTER_PATH replaces the old
+        // EMITTER_ACTION_INDEX (which tracked injection timing → forked the PBFT on reorg).
+        let emitterPath = executionData['CALL_PATH'] || '';
+        let childPath   = (emitterPath === '') ? String(position) : emitterPath + '>' + String(position);
+
         // Force source to the contract's derived address
         let contractAddress = 'C:' + this.config['CHAIN'] + ':' + executionData['CONTRACT_ACTION_INDEX'];
 
@@ -834,10 +857,13 @@ class Execute {
             IS_GUARD_EMISSION:  executionData['IS_GUARD_EMISSION'] ? true : false,
             EMITTER:            executionData['CONTRACT_ACTION_INDEX'],
             EMITTER_POSITION:   position,   // index within this EXECUTE's emission list — used by ATTEST v0 (request) to verify deterministic request_id
-            // The emitting EXECUTE's own action_index — second input to the ATTEST
-            // request_id derivation (disambiguates nested runs of the same contract
-            // within one tx) and the parent pointer for the callee's CALL_DEPTH.
-            EMITTER_ACTION_INDEX: executionData['ACTION_INDEX'],
+            // The EMITTING execution's call-path — disambiguates nested runs of the same
+            // contract within one tx in the ATTEST request_id / XCALL call_id derivation,
+            // content-derived so it is byte-stable across nodes/reorgs ('' for the root).
+            EMITTER_PATH:       emitterPath,
+            // This emission's OWN call-path — if it is itself a nested EXECUTE, its
+            // execution runs at this path (threaded into vm.execute as callPath).
+            CALL_PATH:          childPath,
             CALL_DEPTH:         callDepth,
             VM_GAS_LIMIT:       nestedGasLimit, // null for every non-EXECUTE emission
             // Hop budget threads through same-chain emissions too: a contract calling a

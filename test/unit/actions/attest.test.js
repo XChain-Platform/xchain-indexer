@@ -33,13 +33,14 @@ const REQ_ID   = 'd'.repeat(64);
 const b64 = (s) => Buffer.from(s, 'utf8').toString('base64');
 
 // Mirror the handler's deterministic request_id derivation:
-//   sha256(tx_hash + ':' + emitter_action_index + ':' + contract_index + ':' + emitter_position)
-// The emitting EXECUTE's action_index disambiguates nested cross-contract runs
-// of the same contract within one tx. MUST byte-match xchain-vm/src/gateway.js.
+//   sha256(tx_hash + ':' + emitter_path + ':' + contract_index + ':' + emitter_position)
+// The emitter call-path ('>'-joined per-execution emission positions, root = '')
+// disambiguates nested cross-contract runs of the same contract within one tx and is
+// content-derived (byte-stable across nodes/reorgs). MUST byte-match xchain-vm/src/gateway.js.
 // A legitimate VM emission always supplies a REQUEST_ID equal to this digest.
-const deriveReqId = (txHash, emitterActionIndex, contractIndex, position) =>
+const deriveReqId = (txHash, emitterPath, contractIndex, position) =>
     crypto.createHash('sha256')
-        .update(String(txHash) + ':' + String(emitterActionIndex) + ':' + String(contractIndex) + ':' + String(position))
+        .update(String(txHash) + ':' + String(emitterPath) + ':' + String(contractIndex) + ':' + String(position))
         .digest('hex');
 
 describe('Attest (ATTEST) @regression @tier3', function () {
@@ -110,13 +111,14 @@ describe('Attest (ATTEST) @regression @tier3', function () {
     describe('v0 — request', function () {
 
         function v0Data(overrides = {}) {
-            // EMITTER_POSITION and EMITTER_ACTION_INDEX are required fields on every
+            // EMITTER_POSITION and EMITTER_PATH are required fields on every
             // legitimate ATTEST v0 emission (set by execute.processEmission); include
             // them by default so the fixture mirrors production. Tests that probe
-            // their absence override them back to undefined.
+            // their absence override them back to undefined. EMITTER_PATH '0' models a
+            // first-level nested emission; '' (root) is exercised by its own test.
             return createBaseData({
                 ACTION: 'ATTEST', FORMAT: 0, IS_EMISSION: true, EMITTER: 5, EMITTER_POSITION: 0,
-                EMITTER_ACTION_INDEX: 9, BLOCK_INDEX: 100,
+                EMITTER_PATH: '0', BLOCK_INDEX: 100,
                 ...overrides,
             });
         }
@@ -134,10 +136,24 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             const data = v0Data();
             // A legitimate emission carries a REQUEST_ID that matches the deterministic
             // derivation over (tx_hash, contract_index, emitter_position).
-            const reqId = deriveReqId(data['TX_HASH'], data['EMITTER_ACTION_INDEX'], data['EMITTER'], data['EMITTER_POSITION']);
+            const reqId = deriveReqId(data['TX_HASH'], data['EMITTER_PATH'], data['EMITTER'], data['EMITTER_POSITION']);
             await handler.parse(v0Params({ requestId: reqId }), data, null);
             assert.strictEqual(data['STATUS'], 'valid');
             assert.ok(indexer.indexerDb.createAttestationRequest.calledOnce);
+        });
+
+        it('request_id is independent of ACTION_INDEX (reorg / injection-order stability)', async function () {
+            // The defect this guards (#4213): emitted-action action_index is assigned by a
+            // global max+1 counter and gets NEW values on reorg replay, so binding it forked
+            // the PBFT. The preimage now uses EMITTER_PATH (content-derived) and NO action_index
+            // — a node that reorged (different ACTION_INDEX) must derive the SAME request_id.
+            const reqId = deriveReqId('aa', '2>0', 5, 0);   // depends only on path/position/tx/contract
+            const lo = v0Data({ TX_HASH: 'aa', EMITTER: 5, EMITTER_PATH: '2>0', EMITTER_POSITION: 0, ACTION_INDEX: 10 });
+            const hi = v0Data({ TX_HASH: 'aa', EMITTER: 5, EMITTER_PATH: '2>0', EMITTER_POSITION: 0, ACTION_INDEX: 99999 });
+            await handler.parse(v0Params({ requestId: reqId }), lo, null);
+            await handler.parse(v0Params({ requestId: reqId }), hi, null);
+            assert.strictEqual(lo['STATUS'], 'valid', 'low action_index node rejected: ' + lo['STATUS']);
+            assert.strictEqual(hi['STATUS'], 'valid', 'high action_index node rejected: ' + hi['STATUS']);
         });
 
         it('rejects a request missing EMITTER_POSITION instead of accepting an unverified REQUEST_ID', async function () {
@@ -151,15 +167,26 @@ describe('Attest (ATTEST) @regression @tier3', function () {
                 'expected EMITTER_POSITION rejection, got: ' + data['STATUS']);
         });
 
-        it('rejects a request missing EMITTER_ACTION_INDEX (nested-run disambiguator)', async function () {
+        it('rejects a request missing EMITTER_PATH (nested-run disambiguator)', async function () {
             // Cross-contract calls let the same contract run more than once per tx;
-            // the emitting EXECUTE's action_index is therefore part of the request_id
-            // preimage and its absence must hard-fail, never silently bypass.
-            const data = v0Data({ EMITTER_ACTION_INDEX: undefined });
+            // the emitter call-path is therefore part of the request_id preimage and
+            // its absence must hard-fail, never silently bypass.
+            const data = v0Data({ EMITTER_PATH: undefined });
             await handler.parse(v0Params(), data, null);
             assert.notStrictEqual(data['STATUS'], 'valid');
-            assert.ok(String(data['STATUS']).includes('EMITTER_ACTION_INDEX'),
-                'expected EMITTER_ACTION_INDEX rejection, got: ' + data['STATUS']);
+            assert.ok(String(data['STATUS']).includes('EMITTER_PATH'),
+                'expected EMITTER_PATH rejection, got: ' + data['STATUS']);
+        });
+
+        it('accepts a root-level request where EMITTER_PATH is the empty string', async function () {
+            // The root on-chain EXECUTE/DEPLOY has call-path '' — a VALID value. The
+            // required-field check must test === undefined/null, NOT falsy, or every
+            // root-level attestation would be wrongly rejected.
+            const data = v0Data({ EMITTER_PATH: '' });
+            const reqId = deriveReqId(data['TX_HASH'], '', data['EMITTER'], data['EMITTER_POSITION']);
+            await handler.parse(v0Params({ requestId: reqId }), data, null);
+            assert.strictEqual(data['STATUS'], 'valid',
+                'root-path ("") attestation must be accepted, got: ' + data['STATUS']);
         });
 
         it('rejects a request when TX_HASH is absent but EMITTER_POSITION is present (line 134)', async function () {
@@ -227,7 +254,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
         it('rejects when PROVIDER_ID is null in v0 params (line 93)', async function () {
             // Valid emission with null PROVIDER_ID → isNull guard fires (line 92-93)
             const data = v0Data();
-            const reqId = deriveReqId(data['TX_HASH'], data['EMITTER_ACTION_INDEX'], data['EMITTER'], data['EMITTER_POSITION']);
+            const reqId = deriveReqId(data['TX_HASH'], data['EMITTER_PATH'], data['EMITTER'], data['EMITTER_POSITION']);
             await handler.parse(v0Params({ requestId: reqId, providerId: null }), data, null);
             assert.ok(String(data['STATUS']).includes('PROVIDER_ID'),
                 'expected PROVIDER_ID rejection, got: ' + data['STATUS']);
@@ -236,7 +263,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
         it('rejects when CALLBACK_METHOD is null in v0 params (line 99)', async function () {
             // Valid emission with null CALLBACK_METHOD → isNull guard fires (line 98-99)
             const data = v0Data();
-            const reqId = deriveReqId(data['TX_HASH'], data['EMITTER_ACTION_INDEX'], data['EMITTER'], data['EMITTER_POSITION']);
+            const reqId = deriveReqId(data['TX_HASH'], data['EMITTER_PATH'], data['EMITTER'], data['EMITTER_POSITION']);
             await handler.parse(v0Params({ requestId: reqId, callback: null }), data, null);
             assert.ok(String(data['STATUS']).includes('CALLBACK_METHOD'),
                 'expected CALLBACK_METHOD rejection, got: ' + data['STATUS']);
@@ -245,7 +272,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
         it('rejects when REQUEST_PAYLOAD exceeds provider max size (lines 105-107)', async function () {
             // Pass an oversized payload — providerRegistry.isPayloadSizeAllowed returns false
             const data = v0Data();
-            const reqId = deriveReqId(data['TX_HASH'], data['EMITTER_ACTION_INDEX'], data['EMITTER'], data['EMITTER_POSITION']);
+            const reqId = deriveReqId(data['TX_HASH'], data['EMITTER_PATH'], data['EMITTER'], data['EMITTER_POSITION']);
             // http_get max payload: check providerRegistry, or pass a 100KB+ payload that exceeds any limit
             const bigPayload = 'x'.repeat(100000);
             await handler.parse(v0Params({ requestId: reqId, payload: bigPayload }), data, null);
@@ -261,7 +288,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             // An oversize http_get payload must now land as 'rejected' so none of
             // those consumers ever pick it up.
             const data = v0Data();
-            const reqId = deriveReqId(data['TX_HASH'], data['EMITTER_ACTION_INDEX'], data['EMITTER'], data['EMITTER_POSITION']);
+            const reqId = deriveReqId(data['TX_HASH'], data['EMITTER_PATH'], data['EMITTER'], data['EMITTER_POSITION']);
             const bigPayload = 'x'.repeat(100000); // exceeds the http_get per-provider cap
             await handler.parse(v0Params({ requestId: reqId, payload: bigPayload }), data, null);
 
@@ -278,7 +305,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
 
         it('a valid request is persisted as request_status=pending', async function () {
             const data = v0Data();
-            const reqId = deriveReqId(data['TX_HASH'], data['EMITTER_ACTION_INDEX'], data['EMITTER'], data['EMITTER_POSITION']);
+            const reqId = deriveReqId(data['TX_HASH'], data['EMITTER_PATH'], data['EMITTER'], data['EMITTER_POSITION']);
             await handler.parse(v0Params({ requestId: reqId }), data, null);
             assert.strictEqual(data['STATUS'], 'valid');
             assert.strictEqual(data['REQUEST_STATUS'], 'pending',
@@ -291,7 +318,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             // A valid-otherwise v0 emission where REQUEST_PAYLOAD is null →
             // `String(data['REQUEST_PAYLOAD'] || '')` → '' → byteLength(0)
             const data = v0Data();
-            const reqId = deriveReqId(data['TX_HASH'], data['EMITTER_ACTION_INDEX'], data['EMITTER'], data['EMITTER_POSITION']);
+            const reqId = deriveReqId(data['TX_HASH'], data['EMITTER_PATH'], data['EMITTER'], data['EMITTER_POSITION']);
             await handler.parse(v0Params({ requestId: reqId, payload: null }), data, null);
             // null payload is 0 bytes — should not fail the size check
             assert.ok(indexer.indexerDb.createAttestationRequest.calledOnce);
@@ -301,7 +328,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             // When DEADLINE_BLOCKS is NaN/non-finite → deadlineBlocks=0 → deadlineBlock=BLOCK_INDEX
             // The provider window check should catch this as an invalid deadline.
             const data = v0Data();
-            const reqId = deriveReqId(data['TX_HASH'], data['EMITTER_ACTION_INDEX'], data['EMITTER'], data['EMITTER_POSITION']);
+            const reqId = deriveReqId(data['TX_HASH'], data['EMITTER_PATH'], data['EMITTER'], data['EMITTER_POSITION']);
             await handler.parse(v0Params({ requestId: reqId, deadline: 'not_a_number' }), data, null);
             // deadlineBlock = BLOCK_INDEX+0 = BLOCK_INDEX; provider window likely fails → invalid
             assert.ok(String(data['STATUS']).includes('invalid'),
@@ -727,13 +754,13 @@ describe('Attest (ATTEST) @regression @tier3', function () {
         function v0FeeData(overrides = {}) {
             return createBaseData({
                 ACTION: 'ATTEST', FORMAT: 0, IS_EMISSION: true, EMITTER: 5, EMITTER_POSITION: 0,
-                EMITTER_ACTION_INDEX: 9, BLOCK_INDEX: 100, ACTION_INDEX: 40,
+                EMITTER_PATH: '0', BLOCK_INDEX: 100, ACTION_INDEX: 40,
                 ...overrides,
             });
         }
         // VERSION|...|DEADLINE_BLOCKS|FEE_TICK|FEE_AMOUNT — reqId derived per fixture
         function v0FeeParams(data, feeTick, feeAmount) {
-            const reqId = deriveReqId(data['TX_HASH'], data['EMITTER_ACTION_INDEX'], data['EMITTER'], data['EMITTER_POSITION']);
+            const reqId = deriveReqId(data['TX_HASH'], data['EMITTER_PATH'], data['EMITTER'], data['EMITTER_POSITION']);
             const base = ['0', reqId, 'http_get', 'q', 'onResult', '[]', '3', '50'];
             if (feeTick !== undefined)   base.push(feeTick);
             if (feeAmount !== undefined) base.push(feeAmount);

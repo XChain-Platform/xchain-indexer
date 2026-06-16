@@ -421,12 +421,13 @@ class Deploy {
                 caller:           data['SOURCE'],
                 contractAddress:  contractAddress,
                 contractIndex:    data['ACTION_INDEX'],
-                // The tx hash + this DEPLOY's action_index anchor the deterministic
-                // attestation request_id (sha256(txHash:actionIndex:contractIndex:
-                // emissionIndex)) — without them a constructor-emitted ATTEST would
-                // derive over empty fields and fail the handler's re-derivation.
+                // The tx hash + the (empty) root call-path anchor the deterministic
+                // attestation request_id (sha256(txHash:callPath:contractIndex:
+                // emissionIndex)) — a constructor is a root execution, so its call-path
+                // is '' (same as a top-level user EXECUTE).
                 txHash:           data['TX_HASH'],
                 actionIndex:      data['ACTION_INDEX'],
+                callPath:         '',
                 // A constructor is a root execution: emitted cross-contract calls
                 // run at depth 1, same as calls emitted by a user EXECUTE.
                 callDepth:        0,
@@ -549,8 +550,10 @@ class Deploy {
 
                 // Constructor emissions. executionData mirrors what an EXECUTE
                 // would carry: the new contract is the emitter, the DEPLOY's own
-                // action_index is the executing action (parent for CALL_DEPTH and
-                // the attestation request_id derivation), the deployer pays fees.
+                // action_index is the executing action (parent for CALL_DEPTH), and the
+                // deployer pays fees. A constructor is a root execution, so its call-path
+                // is '' — emitted ATTEST request_ids derive over (txHash:'':contractIndex:
+                // emissionIndex), matching the VM's constructor run (callPath '').
                 let emissionContext = {
                     CONTRACT_ACTION_INDEX: data['ACTION_INDEX'],
                     ACTION_INDEX:          data['ACTION_INDEX'],
@@ -560,6 +563,7 @@ class Deploy {
                     TX_INDEX:              data['TX_INDEX'],
                     TX_HASH:               data['TX_HASH'],
                     TX_VOUT:               data['TX_VOUT'],
+                    CALL_PATH:             '',
                     CALL_DEPTH:            0,
                     IS_CONSTRUCTOR:        true   // cross-chain calls are disallowed from constructors (v1)
                 };

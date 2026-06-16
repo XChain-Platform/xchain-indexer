@@ -422,9 +422,11 @@ class XChainIndexer {
                 // mean a relay row was PRESENT when this block was processed. The hub finalizes a
                 // cross_chain_calls row at wall-clock ≈ its effective_time minus the relay margin;
                 // a node whose tip already sits at that block can pass it before the write lands,
-                // injecting the execution/callback a block late and permanently shifting its
-                // action-index counter relative to a replaying node (EMITTER_ACTION_INDEX is in the
-                // call_id preimage → ledger fork). Give in-flight hub writes a brief window to land
+                // injecting the execution/callback a block late — landing the synthetic action in a
+                // different block than a node that saw the row on time, a real content divergence
+                // (ledger fork). (The request_id/call_id preimages no longer bind action_index — see
+                // attest.js/xcall.js EMITTER_PATH — but the block an injection lands in still must
+                // agree.) Give in-flight hub writes a brief window to land
                 // before processCrossChainCalls reads the table. Bounded (proceeds on timeout) so a
                 // quiet/absent hub never freezes the tip — the hub-side relay margin is the primary
                 // guarantee and makes this a near-instant no-op in practice.
