@@ -255,6 +255,13 @@ module.exports = {
         // Block processing watchdog timeout (default 5 minutes; override via BLOCK_PROCESS_TIMEOUT)
         config['BLOCK_PROCESS_TIMEOUT'] = parseIntMin0(process.env.BLOCK_PROCESS_TIMEOUT, 300000);
 
+        // Chain-tip push gate. Skip pushChainTip to the hub while the indexer is further
+        // than this many blocks behind the decoder tip. During a bulk re-index, pushing a
+        // tip for every historical block floods the hub's proxy / rate-limiter (HTTP 429)
+        // for no value — the hub only cares about the live tip. Default 100; override via
+        // CHAIN_TIP_PUSH_MAX_LAG.
+        config['CHAIN_TIP_PUSH_MAX_LAG'] = parseIntMin0(process.env.CHAIN_TIP_PUSH_MAX_LAG, 100);
+
         // Merge indexer config and COIN config into a single config object
         let fullConfig = Object.assign({}, config, coinConfig);
 

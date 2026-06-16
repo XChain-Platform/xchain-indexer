@@ -523,7 +523,14 @@ class XChainIndexer {
                     // Push chain tip to hub (fire-and-forget — never blocks indexing).
                     // Network is included so multi-network hubs scope tips correctly
                     // (older hubs ignore it; pre-network-aware behavior = 'mainnet').
-                    this.hubClient.pushChainTip(this.config['COIN'], this.config['NETWORK'], lastIndexerBlock, blockTime);
+                    // Skip while catching up: during a bulk re-index, pushing a tip for every
+                    // historical block floods the hub's proxy / rate-limiter (HTTP 429) for no
+                    // value — the hub only wants the live tip. Only push within
+                    // CHAIN_TIP_PUSH_MAX_LAG blocks of the decoder tip (lastDecoderBlock here is
+                    // the prior iteration's value, i.e. at most one block stale — fine to gate on).
+                    if(!this.util.bcgt(this.util.bcsub(lastDecoderBlock, lastIndexerBlock), this.config['CHAIN_TIP_PUSH_MAX_LAG'])){
+                        this.hubClient.pushChainTip(this.config['COIN'], this.config['NETWORK'], lastIndexerBlock, blockTime);
+                    }
 
                     // Refresh the decoder tip after each committed block. Without this the
                     // decoder tip is snapshotted once per outer-loop iteration and stays frozen
