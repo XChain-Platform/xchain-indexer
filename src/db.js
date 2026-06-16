@@ -1251,8 +1251,18 @@ class Database {
         // ledger/actions/contract, NOT in BLOCK_HASH_VERSION, NOT in getStoredBlockHashes /
         // the hub-signed checkpoint. Its sole consumer is xchain-sync's apply-time recompute,
         // which HALTS a follower that silently failed to apply one of those mutations.
+        // ACTIVATION_DELAY_BLOCKS lives nested under config['STAKING'] (calibrated per chain:
+        // BTC 6 / LTC 24 / DOGE 60); the top-level key is unset. Resolve it nested-first exactly
+        // as every other reader does (delegate.js:128, stake.js, unstake.js, rollback.js). The
+        // old top-level read returned undefined, so delay became null and buildStateHashData
+        // skipped the entire deactivation_block class on the SOURCE, while the follower (ClientSync)
+        // recomputes with the real per-chain delay and INCLUDES it: a guaranteed state-hash
+        // divergence HALT on the first deactivation-bearing block, and the feature's primary row
+        // class never hashed.
+        let staking = this.config['STAKING'];
+        let activationDelay = (staking && staking['ACTIVATION_DELAY_BLOCKS']) ? staking['ACTIVATION_DELAY_BLOCKS'] : this.config['ACTIVATION_DELAY_BLOCKS'];
         let stateData = await buildStateHashData(this, block_index, {
-            activationDelay: this.config['ACTIVATION_DELAY_BLOCKS'],
+            activationDelay: activationDelay,
             gasTick:         this.config['GAS']
         });
         info['state'] = [];
