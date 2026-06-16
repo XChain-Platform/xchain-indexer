@@ -244,17 +244,20 @@ class AnchorRecovery {
                 let idCol  = hasId ? 'id, ' : '';
                 let idMark = hasId ? '?, ' : '';
                 let idVal  = hasId ? [Number(m.id)] : [];
+                // finalizing_view rides the archive (MATCH_KEYS) and feeds the EQUIV
+                // signing canonical (_matchCanonical) exactly as for calls below —
+                // dropping it lands view>0 matches at view 0 and forks re-verification.
                 await this.db.doQuery(
                     `INSERT INTO cross_chain_matches
                         (${idCol}match_id, snapshot_block, network,
                          a_chain, a_action_index, a_kind, a_tick, a_amount, a_filled_before, a_ownership, a_payout_addr,
                          b_chain, b_action_index, b_kind, b_tick, b_amount, b_filled_before, b_ownership, b_payout_addr,
-                         effective_time, validator_signatures, status)
-                     VALUES (${idMark}?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                         effective_time, validator_signatures, status, finalizing_view)
+                     VALUES (${idMark}?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                     [...idVal, m.match_id, Number(m.snapshot_block), m.network,
                      m.a_chain, Number(m.a_action_index), m.a_kind, m.a_tick, m.a_amount, m.a_filled_before, Number(m.a_ownership), m.a_payout_addr,
                      m.b_chain, Number(m.b_action_index), m.b_kind, m.b_tick, m.b_amount, m.b_filled_before, Number(m.b_ownership), m.b_payout_addr,
-                     Number(m.effective_time), m.validator_signatures, m.status]);
+                     Number(m.effective_time), m.validator_signatures, m.status, Number(m.finalizing_view) || 0]);
             }
             report.matches++;
         }
@@ -300,19 +303,26 @@ class AnchorRecovery {
                 // Rebuild under the ORIGINAL hub-assigned id as provenance only —
                 // injection order is (snapshot_block, call_id), so replay does not
                 // depend on this value; keeping it preserves archive byte-parity.
+                // finalizing_view is signed into the EQUIV canonical (WI-2 bump 2):
+                // the indexer rebuilds the XCALL signing canonical from this column
+                // to re-verify the hub's 2f+1 sigs. Omitting it lets the NOT NULL
+                // DEFAULT 0 land every recovered row at view 0, so any call finalized
+                // at view>0 (a leader failover) fails re-verification on the recovered
+                // node — strands undelivered calls and forks re-derivation. It rides
+                // the archive (CALL_KEYS) and the verifier already trusts it.
                 await this.db.doQuery(
                     `INSERT INTO cross_chain_calls
                         (id, call_id, phase, snapshot_block, network,
                          source_chain, source_action_index, source_contract_index,
                          target_chain, target_contract_index, method, params_json,
                          gas_limit, cross_hops, effective_time, status, result_status,
-                         return_payload_b64, validator_signatures)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                         return_payload_b64, validator_signatures, finalizing_view)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                     [Number(c.id), c.call_id, c.phase, Number(c.snapshot_block), c.network,
                      c.source_chain, Number(c.source_action_index), Number(c.source_contract_index),
                      c.target_chain, Number(c.target_contract_index), c.method, c.params_json,
                      Number(c.gas_limit), Number(c.cross_hops), Number(c.effective_time), c.status,
-                     c.result_status, c.return_payload_b64, c.validator_signatures]);
+                     c.result_status, c.return_payload_b64, c.validator_signatures, Number(c.finalizing_view) || 0]);
             }
             report.calls++;
         }

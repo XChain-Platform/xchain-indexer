@@ -246,7 +246,8 @@ function memDb(v1s, v2s) {
                 return [];
             }
             if (sql.startsWith('INSERT INTO cross_chain_matches')) {
-                matches.push({ match_id: params[0], status: params[21] });
+                // finalizing_view is the last bound value (after status).
+                matches.push({ match_id: params[0], status: params[21], finalizing_view: params[params.length - 1] });
                 return [];
             }
             // ── cross_chain_calls (XCALL relay rows; keyed on call_id + phase) ──
@@ -257,7 +258,8 @@ function memDb(v1s, v2s) {
                 return [];
             }
             if (sql.startsWith('INSERT INTO cross_chain_calls')) {
-                calls.push({ id: params[0], call_id: params[1], phase: params[2], status: params[15] });
+                // finalizing_view is the last bound value (after validator_signatures).
+                calls.push({ id: params[0], call_id: params[1], phase: params[2], status: params[15], finalizing_view: params[params.length - 1] });
                 return [];
             }
             return [];
@@ -431,6 +433,23 @@ describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () 
             // Same call_id, distinct phases — the composite key keeps both rows.
             assert.deepStrictEqual(db.calls.map(c => c.phase).sort(), ['dispatch', 'result']);
             assert.ok(db.calls.every(c => c.call_id === 'c1' && c.status === 'finalized'));
+        });
+
+        it('persists finalizing_view so a view>0 round rebuilds at the correct view (#4210)', async function () {
+            // A leader failover finalized this round at view 2. The EQUIV canonical
+            // is view-bearing, so the persisted row MUST carry finalizing_view=2 or a
+            // recovered node re-verifies the hub sigs at view 0 → strands the call /
+            // forks re-derivation. The verifier passes either way (it reads the
+            // archive's view) — only the persisted column exposes the drop.
+            let { v1 } = buildBatch(0, [Object.assign(rawMatch('m1'), { finalizing_view: 2 })],
+                                    oracleKeys, crossKeys,
+                                    { calls: [rawCall('c1', 'dispatch', { finalizing_view: 2 })] });
+            let db = memDb([v1], []);
+            let report = await new AnchorRecovery(db, quiet).run();
+
+            assert.strictEqual(report.failed.length, 0);
+            assert.strictEqual(Number(db.calls[0].finalizing_view), 2, 'call view preserved');
+            assert.strictEqual(Number(db.matches[0].finalizing_view), 2, 'match view preserved');
         });
 
         it('latest-status-wins: a later batch retracts an earlier finalized call (per phase)', async function () {
