@@ -22,6 +22,7 @@
 const mariadb = require('mariadb');
 const fs      = require('fs');
 const path    = require('path');
+const { buildStateHashData } = require('./stateHash');
 
 // Consensus block-hash scheme version. Folded into the preimage of every per-block
 // ledger/actions/contract hash (see getBlockHashes), so changing it changes every hash.
@@ -1243,6 +1244,19 @@ class Database {
             info[table] = [];
             info[table]['hash'] = this.util.getDataHash(data);
         });
+        // Fourth, NON-consensus integrity hash over the in-place mutations + backdated
+        // refund credits the three hashes above structurally cannot cover (rows created in
+        // an EARLIER block, mutated in place — replicated via xchain-sync's updated_rows /
+        // cooldownCredits channels; see stateHash.js). Additive: NOT chained, NOT folded into
+        // ledger/actions/contract, NOT in BLOCK_HASH_VERSION, NOT in getStoredBlockHashes /
+        // the hub-signed checkpoint. Its sole consumer is xchain-sync's apply-time recompute,
+        // which HALTS a follower that silently failed to apply one of those mutations.
+        let stateData = await buildStateHashData(this, block_index, {
+            activationDelay: this.config['ACTIVATION_DELAY_BLOCKS'],
+            gasTick:         this.config['GAS']
+        });
+        info['state'] = [];
+        info['state']['hash'] = this.util.getDataHash(stateData);
         return info;
     }
 
@@ -1354,8 +1368,12 @@ class Database {
         let ledger_hash_id   = await this.createTransaction(hashes.ledger.hash);
         let actions_hash_id  = await this.createTransaction(hashes.actions.hash);
         let contract_hash_id = await this.createTransaction(hashes.contracts.hash);
+        // Replication-integrity state hash (additive; see getBlockHashes). Interned like the
+        // other three but stored in its own blocks.state_hash_id column — NOT part of the
+        // hub-signed checkpoint (getStoredBlockHashes does not read it back).
+        let state_hash_id    = await this.createTransaction(hashes.state.hash);
         // Create data
-        let query = "INSERT INTO blocks (block_time, ledger_hash_id, actions_hash_id, contract_hash_id, block_index) values (?, ?, ?, ?, ?)";
+        let query = "INSERT INTO blocks (block_time, ledger_hash_id, actions_hash_id, contract_hash_id, state_hash_id, block_index) values (?, ?, ?, ?, ?, ?)";
         if(block_id!=null){
             query = `UPDATE
                         blocks
@@ -1363,11 +1381,12 @@ class Database {
                         block_time=?,
                         ledger_hash_id=?,
                         actions_hash_id=?,
-                        contract_hash_id=?
+                        contract_hash_id=?,
+                        state_hash_id=?
                     WHERE
                         block_index=?`;
         }
-        let results = await this.doQuery(query, [block_time, ledger_hash_id, actions_hash_id, contract_hash_id, block_index]);
+        let results = await this.doQuery(query, [block_time, ledger_hash_id, actions_hash_id, contract_hash_id, state_hash_id, block_index]);
         // Display status message
         let ledger    = String(hashes.ledger.hash).substring(0,5);
         let actions   = String(hashes.actions.hash).substring(0,5);

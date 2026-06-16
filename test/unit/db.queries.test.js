@@ -3697,6 +3697,8 @@ describe('Database.getBlockHashes() @regression @tier1', function () {
         assert.ok(result.ledger !== undefined);
         assert.ok(result.actions !== undefined);
         assert.ok(result.contracts !== undefined);
+        // Fourth, replication-integrity state hash (additive; see stateHash.js).
+        assert.ok(result.state !== undefined && typeof result.state.hash === 'string');
     });
 });
 
@@ -3712,7 +3714,8 @@ describe('Database.createBlock() @regression @tier1', function () {
         sinon.stub(db, 'getBlockHashes').resolves({
             ledger:    { hash: 'aaa' },
             actions:   { hash: 'bbb' },
-            contracts: { hash: 'ccc' }
+            contracts: { hash: 'ccc' },
+            state:     { hash: 'ddd' }
         });
         // stub createTransaction to avoid INSERT into index_transactions
         sinon.stub(db, 'createTransaction').resolves(1);
@@ -3727,7 +3730,8 @@ describe('Database.createBlock() @regression @tier1', function () {
         sinon.stub(db, 'getBlockHashes').resolves({
             ledger:    { hash: 'aaa' },
             actions:   { hash: 'bbb' },
-            contracts: { hash: 'ccc' }
+            contracts: { hash: 'ccc' },
+            state:     { hash: 'ddd' }
         });
         sinon.stub(db, 'createTransaction').resolves(1);
         const dq = sinon.stub(db, 'doQuery').resolves([]);

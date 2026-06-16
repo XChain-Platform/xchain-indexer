@@ -5,10 +5,12 @@ CREATE TABLE blocks (
     block_time        BIGINT UNSIGNED,
     ledger_hash_id    BIGINT UNSIGNED,  -- id of record in index_transactions table (sha256 hash of credits/debits/escrow/balances data)
     actions_hash_id   BIGINT UNSIGNED,  -- id of record in index_transactions table (sha256 hash of actions data)
-    contract_hash_id  BIGINT UNSIGNED   -- id of record in index_transactions table (sha256 hash of contract data)
+    contract_hash_id  BIGINT UNSIGNED,  -- id of record in index_transactions table (sha256 hash of contract data)
+    state_hash_id     BIGINT UNSIGNED   -- id of record in index_transactions table (sha256 of in-place mutations + backdated credits; replication-integrity only, see stateHash.js)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
 CREATE INDEX block_index       ON blocks (block_index);
 CREATE INDEX ledger_hash_id    ON blocks (ledger_hash_id);
 CREATE INDEX actions_hash_id   ON blocks (actions_hash_id);
 CREATE INDEX contract_hash_id  ON blocks (contract_hash_id);
+CREATE INDEX state_hash_id     ON blocks (state_hash_id);
