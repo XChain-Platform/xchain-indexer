@@ -533,7 +533,12 @@ class Rollback {
                 // never re-mined) keeps the original — a consensus-affecting divergence (active
                 // stake drives VM staker weighting, quorum eligibility, and cooldown refunds on
                 // all chains). We copy back the EARLIEST orphaned debit's `prev_amount` per row
-                // (min block_index, id tiebreak) — a pure string copy, so the restored value is
+                // (min block_index, then (execution_index, slash_position) tiebreak — the same
+                // deterministic total order the block-hash preimage uses for contract_emissions,
+                // so it is replay-stable and identical across the source indexer and every
+                // replica; the AUTO_INCREMENT `id` is NOT, and would let two nodes restore a
+                // divergent amount on a reorg that retracts a block with ≥2 slashes against one
+                // stake row) — a pure string copy, so the restored value is
                 // byte-identical to the surviving chain's pre-orphaned-slash state and to a fresh
                 // replay (no arithmetic / decimal-format drift). Earlier SURVIVING debits
                 // (block_index < block_index) are intentionally left applied. Runs BEFORE the
@@ -550,7 +555,10 @@ class Rollback {
                                         AND e.stake_action_index = d.stake_action_index
                                         AND e.block_index >= ?
                                         AND (e.block_index < d.block_index
-                                             OR (e.block_index = d.block_index AND e.id < d.id)))`;
+                                             OR (e.block_index = d.block_index
+                                                 AND (e.execution_index < d.execution_index
+                                                      OR (e.execution_index = d.execution_index
+                                                          AND e.slash_position < d.slash_position)))))`;
                     args = [slashTbl, block_index, block_index];
                     await this.indexerDb.doQuery(query, args);
                 }
@@ -572,9 +580,10 @@ class Rollback {
                 // AUTO_INCREMENT chains were assigned in a different order (live vs from-genesis
                 // replay) restore a different prev_amount on a reorg that retracts a block with
                 // ≥2 slashes against one stake row → a stake-weight fork. (The CONTRACT twin in
-                // the restore above still uses the `id` tiebreak — tracked separately as F-18;
-                // its execution_index is a contract-emission action_index, which carries its own
-                // determinism caveat, so that twin is left for a dedicated pass.)
+                // the restore above keys on the same idea: VM-emitted slashes have no wire
+                // action_index, so it orders by (execution_index, slash_position) — the EXECUTE's
+                // on-chain action_index plus the emission-loop index, the identical deterministic
+                // total order the block-hash preimage uses for contract_emissions.)
                 for(let slashTbl of ['stakes', 'unstakes']){
                     query = `UPDATE ` + slashTbl + ` t
                                 JOIN capability_slash_debits d ON d.stake_action_index = t.action_index

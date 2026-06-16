@@ -84,6 +84,34 @@ describe('Rollback @regression @tier3', function () {
         assert.ok(restoreIdx >= 0 && deleteIdx >= 0 && restoreIdx < deleteIdx, 'slash restore must run before the contract_stakes delete');
     });
 
+    it('contract slash-restore breaks same-block ties deterministically via (execution_index, slash_position), never AUTO_INCREMENT id', async function () {
+        // When a reorg retracts a block with >=2 contract slashes against the same
+        // stake_action_index, the "earliest debit" NOT EXISTS pick must resolve to the
+        // same row on every node. The AUTO_INCREMENT `id` is assigned in physical insert
+        // order (differs live-vs-replay and indexer-vs-replica) -> divergent restored
+        // prev_amount -> stake-weight / quorum fork. The tiebreak must instead use the
+        // (execution_index, slash_position) total order the block-hash preimage already
+        // uses for contract_emissions.
+        indexer.indexerDb.doQuery.onFirstCall().resolves([{ action_index: 50 }]); // firstActionIndex
+        indexer.indexerDb.doQuery.resolves([]);
+        await rollback.rollback(100);
+        const calls = indexer.indexerDb.doQuery.getCalls();
+        const restores = calls.filter(c =>
+            /UPDATE contract_(?:un)?stakes/.test(c.args[0]) &&
+            c.args[0].includes('contract_slash_debits') &&
+            c.args[0].includes('prev_amount'));
+        assert.strictEqual(restores.length, 2, 'expected contract_stakes + contract_unstakes slash restores');
+        for (const r of restores) {
+            const sql = r.args[0];
+            assert.ok(/e\.execution_index\s*<\s*d\.execution_index/.test(sql),
+                'restore must order by execution_index for a deterministic, replay-stable tiebreak');
+            assert.ok(/e\.slash_position\s*<\s*d\.slash_position/.test(sql),
+                'restore must use slash_position as the within-EXECUTE secondary tiebreak');
+            assert.ok(!/e\.id\s*<\s*d\.id/.test(sql),
+                'restore must NOT tiebreak on the non-deterministic AUTO_INCREMENT id');
+        }
+    });
+
     it('reverses orphaned cooldown-maturity completions: deletes the refund credit + resets status_id, before the delete and balance recompute', async function () {
         indexer.indexerDb.doQuery.onFirstCall().resolves([{ action_index: 50 }]); // firstActionIndex
         indexer.indexerDb.doQuery.resolves([]);
