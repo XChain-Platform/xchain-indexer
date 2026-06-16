@@ -648,6 +648,50 @@ class Rollback {
                     await this.indexerDb.doQuery(query, [validStatusId, completedStatusId, block_index, block_index]);
                 }
 
+                // Reset an anchor archive batch's parent v1 status that an orphaned final
+                // chunk flipped to 'invalid_archive' IN PLACE on a surviving row. A chunked
+                // archive batch spans multiple blocks: a v1 parent in an early block, then v2
+                // continuation chunks in later blocks. When the LAST v2 chunk lands, anchor.js
+                // reassembles the blob and, on a CRC mismatch against the parent's signed
+                // batch_crc32, stamps the parent 'invalid_archive' via a direct UPDATE on the
+                // parent row (created in an EARLIER block, so it survives the bulk delete below).
+                // If that completing chunk is in the orphaned range, the delete removes the chunk
+                // but cannot undo the in-place stamp — leaving the surviving parent stuck
+                // 'invalid_archive' while a from-genesis replay (the bad chunk never re-mined, or
+                // re-mined validly) would re-derive the parent's pre-flip status. anchor_actions
+                // .status_id is not in any block-hash projection, so this is a state-table
+                // divergence (and could mislead the archive-integrity flag / recovery selection,
+                // which read version=1 status IN ('valid','unverified')), not a consensus fork.
+                //
+                // Reset to 'unverified' — the conservative re-verification state (anchor.js stores
+                // a v1 'unverified' whenever its signer snapshot isn't locally mirrored, and
+                // recovery re-verifies such rows from the archived snapshots), so a parent that was
+                // 'valid' before the flip is re-promoted by recovery rather than left wrongly
+                // terminal. We self-join the parent to an orphaned v2 chunk of the SAME
+                // match_batch_seq and require that chunk's status be 'valid': a completing chunk is
+                // always 'valid', and there can be at most TOTAL_CHUNKS-1 distinct valid chunks (the
+                // duplicate-index guard rejects extras as 'invalid: ...'), so a surviving orphaned
+                // VALID chunk proves fewer than the full set remain on the new chain — the batch can
+                // no longer reassemble there and the flip is not re-derivable. Filtering on 'valid'
+                // also excludes a late duplicate chunk that landed (and was rejected) AFTER a
+                // legitimate completion, which must NOT trigger a reset. Runs BEFORE the delete so
+                // both the parent and the orphaned chunk rows are still present.
+                if(firstActionIndex !== null){
+                    query = `UPDATE anchor_actions p
+                                JOIN index_statuses ps ON ps.id = p.status_id AND ps.status = 'invalid_archive'
+                                JOIN anchor_actions c
+                                  ON c.version = 2
+                                 AND c.match_batch_seq = p.match_batch_seq
+                                 AND c.action_index >= ?
+                                JOIN index_statuses cs ON cs.id = c.status_id AND cs.status = 'valid'
+                                JOIN index_statuses us ON us.status = 'unverified'
+                                SET p.status_id = us.id
+                                WHERE p.version = 1
+                                  AND p.action_index < ?`;
+                    args = [firstActionIndex, firstActionIndex];
+                    await this.indexerDb.doQuery(query, args);
+                }
+
                 // Loop through the data tables and delete records above the action_index
                 for(let table of this.dataTables){
                     query = `DELETE FROM ` + table + ` WHERE action_index >= ?`;
