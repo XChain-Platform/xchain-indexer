@@ -63,7 +63,12 @@ async function runMint({ network, source, amount, tick }){
         isActionAllowed:             async () => true,
         createMint:                  async (m) => { captured.status = m['STATUS']; },
         updateBalances:              async () => {},
-        updateTokens:                async () => {}
+        updateTokens:                async () => {},
+        // Controller-guard context (mint.js now consults a `mint`-class controller). No controller
+        // bound in this gas-mint test → a null tickId short-circuits the guard helper immediately.
+        getAddressBalances:                  async () => [],
+        getTickerId:                         async () => null,
+        getEffectiveTokenControllerForGuard: async () => null
     };
 
     const action = {

@@ -211,6 +211,82 @@ describe('Programmable policy layer — Phase B enforcement @regression', functi
             );
             assert.ok(data._GUARDED_TICKS && data._GUARDED_TICKS['AAA'] === true);
         });
+
+        // Phase C: MINT and STAKE were routable-but-never-invoked stubs (the handlers didn't call
+        // the guard). mint.js / stake.js v3 now invoke maybeRunControllerGuard, so a `mint`/`stake`
+        // (or `all`-fallback) binding gates supply creation / contract staking. Pin that the helper
+        // routes each action to its class and actually runs the guard (no longer inert).
+        function mkClassCapturingDb(effective, captured){
+            return {
+                config: { GAS_SCHEDULE: { VM_GUARD_GAS_CEILING: 200000 }, GAS_PRICE: '0.00001', GAS: 'XCHAIN' },
+                getTickerId: async () => 1,
+                getEffectiveTokenController: async () => effective,
+                getEffectiveTokenControllerForGuard: async (id, cls) => { captured.push(cls); return effective; }
+            };
+        }
+        for (const [action, cls] of [['MINT', 'mint'], ['STAKE', 'stake']]) {
+            it(`${action} routes to the '${cls}' class and invokes the guard (stub now live)`, async function () {
+                const calls = [], captured = [];
+                const res = await util.maybeRunControllerGuard(
+                    mkActions({ allow: true, reason: null, gasBilled: 1000 }, calls),
+                    mkClassCapturingDb({ contract_index: 9, is_unbind: 0 }, captured),
+                    { actionType: action, tick: 'AAA', from: 'addr1', amount: '10',
+                      data: Object.assign({}, BASE), gasInfo: null, gasBalances: [] }
+                );
+                assert.deepStrictEqual(captured, [cls], `must resolve the '${cls}' controller class`);
+                assert.strictEqual(calls.length, 1, 'guard must run (no longer an inert stub)');
+                assert.strictEqual(res.error, null);
+                assert.strictEqual(util.bcgt(res.guardFee, '0'), true);
+            });
+            it(`${action} controller DENY reverts the action`, async function () {
+                const res = await util.maybeRunControllerGuard(
+                    mkActions({ allow: false, reason: `${cls} refused`, gasBilled: 0 }, []),
+                    mkClassCapturingDb({ contract_index: 9, is_unbind: 0 }, []),
+                    { actionType: action, tick: 'AAA', data: Object.assign({}, BASE), gasInfo: null, gasBalances: [] }
+                );
+                assert.strictEqual(res.error, `${cls} refused`);
+                assert.strictEqual(res.guardFee, 0);
+            });
+        }
+    });
+
+    // Phase C: the SOURCE-outbound self-gate calls maybeRunAddressControllerGuard with the SENDER's
+    // own address as the subject (symmetric `transfer` binding — same call, address = SOURCE). Pin
+    // that the helper gates an outbound move by the source account's own controller.
+    describe('maybeRunAddressControllerGuard — SOURCE-outbound self-gate (symmetric transfer)', function () {
+        function mkAddrDb(effective, capturedIds){
+            return {
+                config: { GAS_SCHEDULE: { VM_GUARD_GAS_CEILING: 200000 }, GAS_PRICE: '0.00001', GAS: 'XCHAIN' },
+                getAddressId: async (a) => { if (capturedIds) capturedIds.push(a); return 1; },
+                getEffectiveAddressController: async () => effective,
+                getEffectiveAddressControllerForGuard: async () => effective
+            };
+        }
+        const outboundOpts = {
+            actionType: 'SEND', actionClass: 'transfer', address: 'addrA',
+            from: 'addrA', to: 'addrB', tick: 'AAA', amount: '10',
+            data: Object.assign({}, BASE), gasInfo: null, gasBalances: []
+        };
+
+        it('SOURCE-bound transfer controller DENY → reverts the outbound send', async function () {
+            const ids = [];
+            const res = await util.maybeRunAddressControllerGuard(
+                mkActions({ allow: false, reason: 'outbound blocked', gasBilled: 100 }, []),
+                mkAddrDb({ contract_index: 12, is_unbind: 0 }, ids), outboundOpts);
+            assert.strictEqual(res.error, 'outbound blocked');
+            assert.deepStrictEqual(ids, ['addrA'], 'resolves against the SOURCE account');
+        });
+
+        it('SOURCE-bound transfer controller ALLOW → guardFee, guard ran on the source contract', async function () {
+            const calls = [];
+            const res = await util.maybeRunAddressControllerGuard(
+                mkActions({ allow: true, reason: null, gasBilled: 1000 }, calls),
+                mkAddrDb({ contract_index: 12, is_unbind: 0 }), outboundOpts);
+            assert.strictEqual(res.error, null);
+            assert.strictEqual(calls.length, 1);
+            assert.strictEqual(calls[0].controllerIndex, 12);
+            assert.strictEqual(util.bcgt(res.guardFee, '0'), true);
+        });
     });
 
     // ─── CONTROLLER_GUARD activation gate (consensus) ────────────────────────

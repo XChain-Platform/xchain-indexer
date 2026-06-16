@@ -188,6 +188,31 @@ class Mint {
         if(!error && !this.util.isNull(data['MINT_STOP_BLOCK']) && this.util.bcgt(data['MINT_STOP_BLOCK'], 0) && this.util.bcgt(data['BLOCK_INDEX'], data['MINT_STOP_BLOCK']))
             error = 'invalid: MINT_STOP_BLOCK';
 
+        // Controller-bound token: a `mint`-class controller (or the catch-all `all`) may gate supply
+        // creation — deny it or run programmable side-effects — after all MINT validation, before
+        // settlement. SOURCE pays the bounded guard gas, billed as a GAS debit in the valid block
+        // below (updateTokens there recomputes GAS supply, so the per-block sanityCheck stays balanced).
+        let guardFee = 0;
+        if(!error && tokenInfo){
+            let gasTick     = this.config['GAS'];
+            let gasInfo     = await this.indexerDb.getTokenInfo(gasTick, data['BLOCK_INDEX'], data['ACTION_INDEX']);
+            let gasBalances = await this.indexerDb.getAddressBalances(data['SOURCE'], gasTick, data['BLOCK_INDEX'], data['ACTION_INDEX']);
+            let result = await this.util.maybeRunControllerGuard(this.actions, this.indexerDb, {
+                actionType:  'MINT',
+                tick:        data['TICK'],
+                from:        data['SOURCE'],
+                to:          this.util.isNull(data['DESTINATION']) ? data['SOURCE'] : data['DESTINATION'],
+                amount:      data['AMOUNT'],
+                data:        data,
+                gasInfo:     gasInfo,
+                gasBalances: gasBalances
+            });
+            if(result.error)
+                error = 'invalid: ' + result.error;
+            else
+                guardFee = result.guardFee;
+        }
+
         // Determine final status
         let status = (error) ? error : 'valid';
         data['STATUS'] = mint['STATUS'] = status;
@@ -221,6 +246,13 @@ class Mint {
                     debits.push([data['TICK'],  data['AMOUNT'], data['SOURCE']]);
                     credits.push([data['TICK'], data['AMOUNT'], data['DESTINATION']]);
                 }
+            }
+
+            // Bill the controller-guard gas to SOURCE (GAS burn, no offsetting credit). updateTokens
+            // below already recomputes GAS supply so the per-block sanityCheck stays balanced.
+            if(this.util.bcgt(guardFee, 0)){
+                debits.push([this.config['GAS'], guardFee, data['SOURCE']]);
+                this.util.addAddressTicker(data['SOURCE'], this.config['GAS']);
             }
 
             // Process any transaction ledger changes (credits / debits)

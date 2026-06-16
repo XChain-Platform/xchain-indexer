@@ -306,6 +306,29 @@ class Stake {
         data['ACTIVATION_BLOCK'] = parseInt(data['BLOCK_INDEX']) + activationDelay;
         data['VERSION'] = 3;
 
+        // Controller-bound token: a `stake`-class controller (or the catch-all `all`) on the staked
+        // TICK may gate whether the token can be locked into this contract. Runs after all validation,
+        // before settlement; SOURCE pays the bounded guard gas (billed in the valid block below).
+        // Only the v3 contract-targeted path is gated — v1/v2 capability stakes are XCHAIN-only and
+        // are never controller-gated.
+        let guardFee = 0;
+        if(!error && tickTokenInfo){
+            let gasInfo = await this.indexerDb.getTokenInfo(this.config['GAS'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
+            let result  = await this.util.maybeRunControllerGuard(this.actions, this.indexerDb, {
+                actionType:  'STAKE',
+                tick:        data['TICK'],
+                from:        data['SOURCE'],
+                amount:      data['AMOUNT'],
+                data:        data,
+                gasInfo:     gasInfo,
+                gasBalances: balances
+            });
+            if(result.error)
+                error = 'invalid: ' + result.error;
+            else
+                guardFee = result.guardFee;
+        }
+
         let status = (error) ? error : 'valid';
         data['STATUS'] = status;
 
@@ -324,8 +347,15 @@ class Stake {
         // Debit the stake amount from SOURCE
         let credits = [],
             debits  = [];
-        if(status === 'valid')
+        if(status === 'valid'){
             debits.push([data['TICK'], data['AMOUNT'], data['SOURCE']]);
+            // Bill the controller-guard gas to SOURCE (GAS burn, no offsetting credit). updateTokens
+            // below already recomputes GAS supply so the per-block sanityCheck stays balanced.
+            if(this.util.bcgt(guardFee, 0)){
+                debits.push([this.config['GAS'], guardFee, data['SOURCE']]);
+                this.util.addAddressTicker(data['SOURCE'], this.config['GAS']);
+            }
+        }
 
         await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits);
 

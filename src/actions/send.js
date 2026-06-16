@@ -302,6 +302,36 @@ class Send {
                     guardFee = result.guardFee;
             }
 
+            // SOURCE-side gate: the SENDER's own `transfer` address-controller may gate its OUTBOUND
+            // transfers (self-imposed spending controls — velocity, allowlists, compliance). Runs
+            // after the token's guard, before the recipient gate. A single `transfer` address binding
+            // is symmetric — it fires whether the account is SOURCE (here) or DESTINATION (below); the
+            // guard distinguishes direction via its from/to (from === subject ⇒ outbound). SOURCE pays
+            // the guard gas, reserved cumulatively after this leg's token guardFee (a shallow clone, so
+            // gasBalances only commits in the valid block) so GAS can't be driven negative.
+            if(!error && !this.util.isNull(send['SOURCE'])){
+                let reserveBalances = gasBalances;
+                if(gasInfo && this.util.bcgt(guardFee, 0))
+                    reserveBalances = this.util.debitBalances(Object.assign({}, gasBalances), gasInfo['TICK_ID'], guardFee);
+                let outbound = await this.util.maybeRunAddressControllerGuard(this.actions, this.indexerDb, {
+                    actionType:  'SEND',
+                    actionClass: 'transfer',
+                    address:     send['SOURCE'],
+                    tick:        send['TICK'],
+                    from:        send['SOURCE'],
+                    to:          send['DESTINATION'],
+                    amount:      send['AMOUNT'],
+                    data:        send,
+                    gasInfo:     gasInfo,
+                    gasBalances: reserveBalances,
+                    seq:         parseInt(idx) || 0
+                });
+                if(outbound.error)
+                    error = 'invalid: ' + outbound.error;
+                else
+                    guardFee = this.util.bcadd(guardFee, outbound.guardFee, 8);
+            }
+
             // Recipient-side gate: the DESTINATION's own `transfer` address-controller may refuse an
             // incoming direct SEND it didn't solicit (spam/compliance). Refusal reverts this leg;
             // SOURCE pays the guard gas. Its reservation runs against the GAS balance ALREADY reduced
