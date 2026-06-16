@@ -84,6 +84,36 @@ describe('Rollback @regression @tier3', function () {
         assert.ok(restoreIdx >= 0 && deleteIdx >= 0 && restoreIdx < deleteIdx, 'slash restore must run before the contract_stakes delete');
     });
 
+    it('reverses orphaned cooldown-maturity completions: deletes the refund credit + resets status_id, before the delete and balance recompute', async function () {
+        indexer.indexerDb.doQuery.onFirstCall().resolves([{ action_index: 50 }]); // firstActionIndex
+        indexer.indexerDb.doQuery.resolves([]);
+        await rollback.rollback(100);
+        const calls = indexer.indexerDb.doQuery.getCalls();
+
+        // Capability maturity refund (GAS) credit delete, keyed by the unstake's action_index.
+        const capCreditDel = calls.find(c => /DELETE c FROM credits c/.test(c.args[0]) && /JOIN unstakes u/.test(c.args[0]) && c.args[0].includes('cooldown_end_block'));
+        assert.ok(capCreditDel, 'expected a capability maturity-credit delete joined to unstakes');
+        assert.deepStrictEqual(capCreditDel.args[1], ['XCHAIN', 1, 100, 100]);
+
+        // Contract maturity refund credit delete, keyed by the unstake's action_index + tick.
+        const conCreditDel = calls.find(c => /DELETE c FROM credits c/.test(c.args[0]) && /JOIN contract_unstakes cu/.test(c.args[0]));
+        assert.ok(conCreditDel, 'expected a contract maturity-credit delete joined to contract_unstakes');
+        assert.deepStrictEqual(conCreditDel.args[1], [1, 100, 100]);
+
+        // Status flips back to 'valid' on both tables so the sweep re-matures the cooldown.
+        const capStatusReset = calls.find(c => /UPDATE unstakes SET status_id/.test(c.args[0]) && c.args[0].includes('cooldown_end_block'));
+        const conStatusReset = calls.find(c => /UPDATE contract_unstakes SET status_id/.test(c.args[0]) && c.args[0].includes('cooldown_end_block') && !c.args[0].includes('contract_slash_debits'));
+        assert.ok(capStatusReset, 'expected an unstakes status_id reset');
+        assert.ok(conStatusReset, 'expected a contract_unstakes status_id reset');
+
+        // The credit deletes must run BEFORE the generic credits delete and BEFORE updateBalances,
+        // or a surviving-action_index refund would be re-counted into the rolled-back balance.
+        const capCreditIdx = calls.indexOf(capCreditDel);
+        const genCreditDelIdx = calls.findIndex(c => /DELETE FROM credits WHERE action_index/.test(c.args[0]));
+        assert.ok(capCreditIdx >= 0 && genCreditDelIdx >= 0 && capCreditIdx < genCreditDelIdx, 'maturity-credit delete must precede the generic credits delete');
+        assert.ok(indexer.indexerDb.updateBalances.notCalled || capCreditIdx >= 0, 'maturity-credit delete must precede updateBalances');
+    });
+
     // ─── Contract-staking pre-scan (addresses/tickers collection) ─────
 
     it('pre-scans contract-staking tables and feeds affected addresses/tickers to updateBalances/updateTokens', async function () {

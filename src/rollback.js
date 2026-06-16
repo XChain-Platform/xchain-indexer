@@ -592,6 +592,53 @@ class Rollback {
                     await this.indexerDb.doQuery(query, args);
                 }
 
+                // Reverse cooldown-maturity completions whose maturity block was orphaned.
+                // When a capability/contract UNSTAKE cooldown elapses, processCooldownCompletions
+                // finalizes it by (1) writing a refund credit with the UNSTAKE's OWN action_index
+                // (utility.js, "for audit-trail continuity") and (2) flipping the unstake row's
+                // status_id to 'completed' IN PLACE (db.markCooldownsCompleted). The unstake row
+                // lives in an EARLIER (surviving) block, so BOTH effects carry an action_index
+                // BELOW firstActionIndex and survive the generic dataTables delete below — and the
+                // credit has no block_index column (keyed only by action_index/address/tick), so it
+                // cannot be range-deleted at all. The maturity itself fires at block =
+                // cooldown_end_block, which is in the orphaned range whenever cooldown_end_block >=
+                // block_index, so a from-genesis replay to block_index-1 would NOT have matured: it
+                // holds neither the refund credit nor the 'completed' status. Without this reset the
+                // reorged node keeps an extra refund (updateBalances re-counts it) and a 'completed'
+                // row the re-maturity sweep (status_id IN (pending,valid), db.sweepCompletedCooldowns)
+                // then skips forever — a permanent credits/balances/unstakes divergence, and a hard
+                // balance fork if a SLASH reduces the stake before the new chain re-matures.
+                // createUnstake only ever writes 'valid' (unstake.js), so the from-genesis-equivalent
+                // reset target is 'valid'. Scope to SURVIVING unstake rows (block_index < block_index);
+                // orphaned-range unstakes and their credits are removed wholesale by the dataTables
+                // delete. Runs BEFORE that delete (rows still present) and BEFORE updateBalances.
+                let completedStatusId = await this.indexerDb.getStatusId('completed');
+                let validStatusId     = await this.indexerDb.getStatusId('valid');
+                if(completedStatusId !== null && validStatusId !== null){
+                    let gasTick = this.config['GAS'];
+                    // Capability maturity refund is paid in GAS, keyed by the unstake's action_index.
+                    query = `DELETE c FROM credits c
+                                JOIN unstakes u ON u.action_index = c.action_index AND u.source_id = c.address_id
+                                JOIN index_tickers g ON g.id = c.tick_id AND g.tick = ?
+                                WHERE u.status_id = ? AND u.cooldown_end_block >= ? AND u.block_index < ?`;
+                    await this.indexerDb.doQuery(query, [gasTick, completedStatusId, block_index, block_index]);
+                    // Contract maturity refund is paid in the unstake's own tick.
+                    query = `DELETE c FROM credits c
+                                JOIN contract_unstakes cu ON cu.action_index = c.action_index
+                                                         AND cu.source_id   = c.address_id
+                                                         AND cu.tick_id     = c.tick_id
+                                WHERE cu.status_id = ? AND cu.cooldown_end_block >= ? AND cu.block_index < ?`;
+                    await this.indexerDb.doQuery(query, [completedStatusId, block_index, block_index]);
+                    // Reset the in-place 'completed' flip back to 'valid' so the sweep re-matures the
+                    // cooldown once the new chain re-reaches cooldown_end_block.
+                    query = `UPDATE unstakes SET status_id = ?
+                                WHERE status_id = ? AND cooldown_end_block >= ? AND block_index < ?`;
+                    await this.indexerDb.doQuery(query, [validStatusId, completedStatusId, block_index, block_index]);
+                    query = `UPDATE contract_unstakes SET status_id = ?
+                                WHERE status_id = ? AND cooldown_end_block >= ? AND block_index < ?`;
+                    await this.indexerDb.doQuery(query, [validStatusId, completedStatusId, block_index, block_index]);
+                }
+
                 // Loop through the data tables and delete records above the action_index
                 for(let table of this.dataTables){
                     query = `DELETE FROM ` + table + ` WHERE action_index >= ?`;
