@@ -1372,6 +1372,7 @@ class Utility {
         let sweep = await db.sweepCompletedCooldowns(block_index);
         if(!sweep || sweep.credits.length === 0) return;
         let addressesToRebalance = new Set();
+        let ticksToRebalance     = new Set();
         // Apply credits — each tuple is [tick, amount, sourceAddress]
         // The credit's action_index reuses the unstake's action_index for the audit trail.
         // We need to associate each credit with the right row, so re-derive from sweep state.
@@ -1393,6 +1394,7 @@ class Utility {
                     if(!this.bcgt(row.amount, '0')) continue;
                     await db.createCredit(row.action_index, gas, String(row.amount), row.source_address);
                     addressesToRebalance.add(row.source_address);
+                    ticksToRebalance.add(gas);
                 }
             }
             if(sweep.contractRows.length > 0){
@@ -1408,12 +1410,17 @@ class Utility {
                     if(!this.bcgt(row.amount, '0')) continue;
                     await db.createCredit(row.action_index, row.tick, String(row.amount), row.source_address);
                     addressesToRebalance.add(row.source_address);
+                    ticksToRebalance.add(row.tick);
                 }
             }
         }
-        // Update balances for all addresses that received credits
+        // Update balances AND token supply for everything the release credits touched. The credit
+        // is a net mint (the matching debit was burned at STAKE time), so tokens.supply must be
+        // recomputed from the ledger or the per-block sanityCheck (ledger == supply == balances)
+        // trips on the released tick and halts the indexer. Mirrors every other ledger-mutating path.
         if(addressesToRebalance.size > 0){
             await db.updateBalances(Array.from(addressesToRebalance));
+            await db.updateTokens(Array.from(ticksToRebalance));
         }
         // Flip the unstake rows to 'completed' so they won't be swept again
         await db.markCooldownsCompleted(sweep.capabilityRows, sweep.contractRows, sweep.completedId);
