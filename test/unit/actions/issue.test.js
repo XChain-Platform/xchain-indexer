@@ -556,6 +556,25 @@ describe('Issue handler @regression @tier1', function () {
             assert.strictEqual(data.STATUS, 'valid');
         });
 
+        it('explicit LOCK_MAX_SUPPLY=0 on an uncapped token (no MAX_SUPPLY) is a valid no-op lock', async function () {
+            const source    = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
+            // Uncapped token: no MAX_SUPPLY declared. Locking nothing (0) must not be
+            // treated as a locking intent, so the "no max supply" cap-check must not fire.
+            const tokenInfo = createTokenInfo({ TICK: 'MYTOKEN', OWNER: source, MAX_SUPPLY: null, LOCK_MAX_SUPPLY: 0, SUPPLY: '100' });
+
+            indexer.indexerDb.getTokenInfo.resolves(tokenInfo);
+            indexer.indexerDb.getTokenSupply.resolves('100');
+
+            // Format 3 lock-params edit that explicitly zero-fills LOCK_MAX_SUPPLY:
+            // VERSION|TICK|LOCK_MAX_SUPPLY|LOCK_MAX_MINT|LOCK_DESCRIPTION|LOCK_SLEEP|LOCK_CALLBACK|LOCK_MINT|LOCK_MINT_SUPPLY|MEMO
+            const params = ['3', 'MYTOKEN', '0', '', '', '', '', '', '', ''];
+            const data   = makeData({ FORMAT: 3, BLOCK_INDEX: LOW_BLOCK, SOURCE: source });
+
+            await handler.parse(params, data, null);
+
+            assert.strictEqual(data.STATUS, 'valid');
+        });
+
         it('LOCK_DESCRIPTION prevents description changes', async function () {
             const source    = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
             const tokenInfo = createTokenInfo({ TICK: 'MYTOKEN', OWNER: source, LOCK_DESCRIPTION: 1, DESCRIPTION: 'original' });
