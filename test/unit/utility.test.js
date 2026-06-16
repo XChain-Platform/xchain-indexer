@@ -24,6 +24,26 @@ describe('Utility @regression @tier1', function () {
         util = new Utility();
     });
 
+    // ─── Canonical consensus gas-key resolution (no silent magic-literal fallback) ──
+    describe('resolveGuardGasCeiling()', function () {
+        it('returns the validated positive integer from GAS_SCHEDULE', function () {
+            assert.strictEqual(util.resolveGuardGasCeiling({ GAS_SCHEDULE: { VM_GUARD_GAS_CEILING: 200000 } }), 200000);
+        });
+        it('accepts a clean numeric string', function () {
+            assert.strictEqual(util.resolveGuardGasCeiling({ GAS_SCHEDULE: { VM_GUARD_GAS_CEILING: '12345' } }), 12345);
+        });
+        it('throws (no silent default) when the key is missing — would otherwise fork a misconfigured node', function () {
+            assert.throws(() => util.resolveGuardGasCeiling({ GAS_SCHEDULE: {} }), /VM_GUARD_GAS_CEILING/);
+            assert.throws(() => util.resolveGuardGasCeiling({}), /VM_GUARD_GAS_CEILING/);
+        });
+        it('throws on mistyped / non-positive / non-integer values', function () {
+            for (const v of ['200000abc', 0, -5, 200000.5, null]) {
+                assert.throws(() => util.resolveGuardGasCeiling({ GAS_SCHEDULE: { VM_GUARD_GAS_CEILING: v } }),
+                    /VM_GUARD_GAS_CEILING/, 'expected throw for ' + JSON.stringify(v));
+            }
+        });
+    });
+
     // ─── Cross-chain call orchestration (the block loop's three deterministic passes) ──
     describe('processCrossChainCalls()', function () {
         const COIN = 'BTC', NETWORK = 'regtest';

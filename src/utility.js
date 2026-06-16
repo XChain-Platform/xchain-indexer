@@ -784,6 +784,24 @@ class Utility {
         return (data && data['IS_EMISSION']) ? '0' : amount;
     }
 
+    // Resolve the consensus-critical controller-guard gas ceiling from the gas schedule.
+    // VM_GUARD_GAS_CEILING bounds the guard fee reserved/billed against SOURCE and is
+    // committed into the ledger/contract hashes, so a node that silently fell back to a
+    // hard-coded default — because its GAS_SCHEDULE omits or mistypes the key — would bill a
+    // different amount than a correctly configured node and fork on the first guarded action
+    // after the CONTROLLER_GUARD flag-day. Treat it as a canonical key: validate (positive
+    // integer, no trailing garbage) and throw loudly rather than mint a phantom default.
+    // Read once via this single resolver at every guard-fee site so the two cannot drift.
+    resolveGuardGasCeiling(config){
+        let schedule = (config && config['GAS_SCHEDULE']) || {};
+        let raw = schedule['VM_GUARD_GAS_CEILING'];
+        let val = parseInt(raw, 10);
+        if(raw === undefined || raw === null || !Number.isInteger(val) || val <= 0 || String(raw).trim() !== String(val)){
+            throw new Error('GAS_SCHEDULE.VM_GUARD_GAS_CEILING missing or invalid (expected a positive integer, got ' + JSON.stringify(raw) + ')');
+        }
+        return val;
+    }
+
     // Calculate Transaction fee using unified gas schedule (per-recipient)
     getUnifiedTransactionFee(recipients, gasType){
         let schedule  = this.config['GAS_SCHEDULE'];
@@ -1228,7 +1246,7 @@ class Utility {
             return { error: null, guardFee: 0, payoutLegs: null };
         // Reserve the guard gas ceiling against SOURCE's GAS balance (caller-pays-for-attempt) so a
         // cheap/denied guard can never drive GAS negative; the metered fee is billed by the caller.
-        let guardCeiling = parseInt(db.config['GAS_SCHEDULE']['VM_GUARD_GAS_CEILING']) || 200000;
+        let guardCeiling = this.resolveGuardGasCeiling(db.config);
         let maxGuardFee  = this.bcmul(guardCeiling, db.config['GAS_PRICE'], 8);
         if(opts.gasInfo && this.bcgt(maxGuardFee, 0) && !this.hasBalance(opts.gasBalances, opts.gasInfo['TICK_ID'], maxGuardFee))
             return { error: 'insufficient funds (guard gas)', guardFee: 0, payoutLegs: null };

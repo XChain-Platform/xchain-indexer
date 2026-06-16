@@ -518,8 +518,10 @@ class Execute {
         if(!this.actions.vm)
             return { allow:false, reason:'controller (vm unavailable)', gasBilled:0 };
 
-        // Guard gas ceiling (consensus param, per-chain GAS_SCHEDULE).
-        let guardCeiling = parseInt(this.config['GAS_SCHEDULE']['VM_GUARD_GAS_CEILING']) || 200000;
+        // Guard gas ceiling (consensus param, per-chain GAS_SCHEDULE) — validated canonical
+        // key resolved once via the shared resolver (throws on missing/mistyped; no silent
+        // hard-coded fallback that could fork a misconfigured node).
+        let guardCeiling = this.util.resolveGuardGasCeiling(this.config);
 
         // Load contract state + read-only data (mirrors parse()).
         let contractState = await this.indexerDb.getContractState(contractIndex);
