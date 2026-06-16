@@ -52,6 +52,11 @@ const GOLDEN_GAS_SCHEDULE = {
 };
 const EXPECTED_VM_CONSENSUS_VERSION = '1';
 const FROZEN_STATUS_TOKENS = ['reverted', 'out_of_resource', 'failed'];
+// Safety cap on validator-set queries (db.js). Read on the deterministic block-processing
+// path (responsible-set / quorum gates), so it is a FROZEN node-local consensus constant —
+// identical across chains, never an env var. A per-node value forks the federation once the
+// qualifying set exceeds the smaller cap.
+const GOLDEN_VALIDATOR_QUERY_LIMIT = 1000;
 
 // Other NODE-LOCAL consensus params (frozen with the wire format, track 8). These
 // feed fee math / activation-block math / tx-acceptance and land in hashed state, and
@@ -111,6 +116,13 @@ describe('consensus parameters are frozen (track 8 guard) @regression', function
             const cfg = require('../../src/configs/' + coin + '.js').getConfig('regtest');
             assert.strictEqual(cfg.GAS_PRICE, GOLDEN_GAS_PRICE, coin + ' GAS_PRICE drifted');
             assert.deepStrictEqual(cfg.GAS_SCHEDULE, GOLDEN_GAS_SCHEDULE, coin + ' GAS_SCHEDULE drifted');
+        }
+    });
+
+    it('VALIDATOR_QUERY_LIMIT equals the golden on every chain (frozen node-local, not env-tunable)', function(){
+        for(const coin of ['BTC', 'LTC', 'DOGE']){
+            const cfg = require('../../src/configs/' + coin + '.js').getConfig('regtest');
+            assert.strictEqual(cfg.VALIDATOR_QUERY_LIMIT, GOLDEN_VALIDATOR_QUERY_LIMIT, coin + ' VALIDATOR_QUERY_LIMIT drifted');
         }
     });
 

@@ -1055,6 +1055,16 @@ class Database {
         };
         let info    = [];
         let hashes  = [];
+        // CONSENSUS: every query below scopes the block by the ACTION's own block_index
+        // (a.block_index), NOT by joining transactions on tx_index. Protocol-generated actions
+        // (ORDER_MATCH / SWAP_MATCH / *_EXPIRE, etc.) carry tx_index = NULL with no transactions
+        // row, so the old `INNER JOIN transactions ... WHERE t.block_index` silently dropped them
+        // and their ledger effects (match settlements, expiry refunds) from the hash. actions.block_index
+        // is set for EVERY row (createActionIndex) and equals the tx's block for tx-bearing actions,
+        // so this is purely additive: tx-only blocks hash identically, blocks with synthetic actions
+        // now cover them. ORDER BY action_index already gives those rows a deterministic position.
+        // (BLOCK_HASH_VERSION unchanged: same preimage structure, more rows; everything re-bases
+        // atomically pre-launch. xchain-sync/src/BlockHasher.js is the byte-for-byte conformance pair.)
         // Get data from credits table
         // These rows feed the consensus ledger hash. We hash the RESOLVED address/ticker
         // strings (LEFT JOIN through the lookup tables), never the raw address_id/tick_id —
@@ -1073,12 +1083,10 @@ class Database {
                     c.amount
                 FROM
                     credits c
-                    INNER JOIN actions        a  ON (a.action_index=c.action_index)
-                    INNER JOIN transactions   t  ON (t.tx_index=a.tx_index)
-                    LEFT  JOIN index_addresses a1 ON (a1.id=c.address_id)
+                    INNER JOIN actions        a  ON (a.action_index=c.action_index)                    LEFT  JOIN index_addresses a1 ON (a1.id=c.address_id)
                     LEFT  JOIN index_tickers   t1 ON (t1.id=c.tick_id)
                 WHERE
-                    t.block_index=?
+                    a.block_index=?
                 ORDER BY
                     c.action_index ASC, a1.address COLLATE utf8_bin ASC, t1.tick COLLATE utf8mb4_bin ASC, c.amount ASC`;
         ledger.credits = await this.doQuery(query, [block_index]);
@@ -1090,12 +1098,10 @@ class Database {
                     d.amount
                 FROM
                     debits d
-                    INNER JOIN actions        a  ON (a.action_index=d.action_index)
-                    INNER JOIN transactions   t  ON (t.tx_index=a.tx_index)
-                    LEFT  JOIN index_addresses a1 ON (a1.id=d.address_id)
+                    INNER JOIN actions        a  ON (a.action_index=d.action_index)                    LEFT  JOIN index_addresses a1 ON (a1.id=d.address_id)
                     LEFT  JOIN index_tickers   t1 ON (t1.id=d.tick_id)
                 WHERE
-                    t.block_index=?
+                    a.block_index=?
                 ORDER BY
                     d.action_index ASC, a1.address COLLATE utf8_bin ASC, t1.tick COLLATE utf8mb4_bin ASC, d.amount ASC`;
         ledger.debits = await this.doQuery(query, [block_index]);
@@ -1107,12 +1113,10 @@ class Database {
                     e.amount
                 FROM
                     escrows e
-                    INNER JOIN actions        a  ON (a.action_index=e.action_index)
-                    INNER JOIN transactions   t  ON (t.tx_index=a.tx_index)
-                    LEFT  JOIN index_addresses a1 ON (a1.id=e.address_id)
+                    INNER JOIN actions        a  ON (a.action_index=e.action_index)                    LEFT  JOIN index_addresses a1 ON (a1.id=e.address_id)
                     LEFT  JOIN index_tickers   t1 ON (t1.id=e.tick_id)
                 WHERE
-                    t.block_index=?
+                    a.block_index=?
                 ORDER BY
                     e.action_index ASC, a1.address COLLATE utf8_bin ASC, t1.tick COLLATE utf8mb4_bin ASC, e.amount ASC`;
         ledger.escrows = await this.doQuery(query, [block_index]);
@@ -1125,11 +1129,9 @@ class Database {
                     a.tx_index,
                     ia.action AS action
                 FROM
-                    actions a
-                    INNER JOIN transactions  t  ON (t.tx_index=a.tx_index)
-                    LEFT  JOIN index_actions ia ON (ia.id=a.action_id)
+                    actions a                    LEFT  JOIN index_actions ia ON (ia.id=a.action_id)
                 WHERE
-                    t.block_index=?
+                    a.block_index=?
                 ORDER BY
                     a.action_index ASC`;
         actions = await this.doQuery(query, [block_index]);
@@ -1148,10 +1150,9 @@ class Database {
         query = `SELECT c.action_index, a1.address AS source_address, c.code_hash, s1.status AS status
                  FROM contracts c
                  INNER JOIN actions a ON (a.action_index=c.action_index)
-                 INNER JOIN transactions t ON (t.tx_index=a.tx_index)
                  LEFT  JOIN index_addresses a1 ON (a1.id=c.source_id)
                  LEFT  JOIN index_statuses  s1 ON (s1.id=c.status_id)
-                 WHERE t.block_index=?
+                 WHERE a.block_index=?
                  ORDER BY c.action_index ASC`;
         contracts_data.contracts = await this.doQuery(query, [block_index]);
         // Contract state (latest value per key written in this block)
@@ -1170,10 +1171,9 @@ class Database {
         query = `SELECT ce.action_index, ce.contract_index, a1.address AS caller_address, ce.gas_used, s1.status AS status, ce.emitted_count
                  FROM contract_executions ce
                  INNER JOIN actions a ON (a.action_index=ce.action_index)
-                 INNER JOIN transactions t ON (t.tx_index=a.tx_index)
                  LEFT  JOIN index_addresses a1 ON (a1.id=ce.caller_id)
                  LEFT  JOIN index_statuses  s1 ON (s1.id=ce.status_id)
-                 WHERE t.block_index=?
+                 WHERE a.block_index=?
                  ORDER BY ce.action_index ASC`;
         contracts_data.executions = await this.doQuery(query, [block_index]);
         // Emissions (join through executions to get block scope)
@@ -1181,8 +1181,7 @@ class Database {
                  FROM contract_emissions em
                  INNER JOIN contract_executions ce ON (ce.action_index=em.execution_index)
                  INNER JOIN actions a ON (a.action_index=ce.action_index)
-                 INNER JOIN transactions t ON (t.tx_index=a.tx_index)
-                 WHERE t.block_index=?
+                 WHERE a.block_index=?
                  ORDER BY em.execution_index ASC, em.position ASC`;
         contracts_data.emissions = await this.doQuery(query, [block_index]);
         // Deposits. Resolve source_id -> address, tick_id -> tick, status_id -> status. The
@@ -1191,22 +1190,20 @@ class Database {
         query = `SELECT d.action_index, d.contract_index, a1.address AS source_address, t1.tick AS tick, d.amount, s1.status AS status
                  FROM deposits d
                  INNER JOIN actions a ON (a.action_index=d.action_index)
-                 INNER JOIN transactions t ON (t.tx_index=a.tx_index)
                  LEFT  JOIN index_addresses a1 ON (a1.id=d.source_id)
                  LEFT  JOIN index_tickers   t1 ON (t1.id=d.tick_id)
                  LEFT  JOIN index_statuses  s1 ON (s1.id=d.status_id)
-                 WHERE t.block_index=?
+                 WHERE a.block_index=?
                  ORDER BY d.action_index ASC, d.contract_index ASC, a1.address COLLATE utf8_bin ASC, t1.tick COLLATE utf8mb4_bin ASC, d.amount ASC, s1.status COLLATE utf8_bin ASC`;
         contracts_data.deposits = await this.doQuery(query, [block_index]);
         // Withdrawals. Same resolution + tie-order treatment as deposits.
         query = `SELECT w.action_index, w.contract_index, a1.address AS source_address, t1.tick AS tick, w.amount, s1.status AS status
                  FROM withdrawals w
                  INNER JOIN actions a ON (a.action_index=w.action_index)
-                 INNER JOIN transactions t ON (t.tx_index=a.tx_index)
                  LEFT  JOIN index_addresses a1 ON (a1.id=w.source_id)
                  LEFT  JOIN index_tickers   t1 ON (t1.id=w.tick_id)
                  LEFT  JOIN index_statuses  s1 ON (s1.id=w.status_id)
-                 WHERE t.block_index=?
+                 WHERE a.block_index=?
                  ORDER BY w.action_index ASC, w.contract_index ASC, a1.address COLLATE utf8_bin ASC, t1.tick COLLATE utf8mb4_bin ASC, w.amount ASC, s1.status COLLATE utf8_bin ASC`;
         contracts_data.withdrawals = await this.doQuery(query, [block_index]);
         // Subtract one block from current block
@@ -8255,7 +8252,7 @@ class Database {
         // risk. The cap is generous relative to any realistic federation size;
         // hitting it is logged so operators get early warning that the set is
         // outgrowing the assumption. Override via VALIDATOR_QUERY_LIMIT.
-        let limit = parseInt(process.env.VALIDATOR_QUERY_LIMIT) || 1000;
+        let limit = this.config['VALIDATOR_QUERY_LIMIT'];
         // Same effective-signer resolution as the capability set (DELEGATE
         // additive-until-revoked semantics) with no MIN_STAKE floor: the
         // governance quorum is over every staker's effective keys.
@@ -8266,7 +8263,7 @@ class Database {
                      LIMIT ?`;
         let rows = await this.doQuery(query, [...eff.args, limit]);
         if(rows.length >= limit)
-            console.warn('getActiveValidators hit the result cap of ' + limit + ' rows at block ' + blockIndex + ' — validator set may be truncated. Raise VALIDATOR_QUERY_LIMIT if the federation has grown.');
+            console.warn('getActiveValidators hit the result cap of ' + limit + ' rows at block ' + blockIndex + ' — validator set may be truncated. Raise the frozen VALIDATOR_QUERY_LIMIT consensus constant (coordinated fleet upgrade) if the federation has grown.');
         return rows.map(r => ({
             pubkey: String(r.pubkey),
             amount: (r.total === null || r.total === undefined) ? '0' : String(r.total)
@@ -8285,12 +8282,12 @@ class Database {
         let valid_id = await this.getStatusId('valid');
         if(valid_id === null) return [];
         // Safety cap — see getActiveValidators.
-        let limit = parseInt(process.env.VALIDATOR_QUERY_LIMIT) || 1000;
+        let limit = this.config['VALIDATOR_QUERY_LIMIT'];
         let sw = this._stakeWeightsSql(valid_id, blockIndex, '0');   // no MIN_STAKE floor
         let query = `${sw.sql} ORDER BY source, pubkey LIMIT ?`;
         let rows = await this.doQuery(query, [...sw.args, limit]);
         if(rows.length >= limit)
-            console.warn('getActiveStakeWeights hit the result cap of ' + limit + ' rows at block ' + blockIndex + ' — set may be truncated. Raise VALIDATOR_QUERY_LIMIT if the federation has grown.');
+            console.warn('getActiveStakeWeights hit the result cap of ' + limit + ' rows at block ' + blockIndex + ' — set may be truncated. Raise the frozen VALIDATOR_QUERY_LIMIT consensus constant (coordinated fleet upgrade) if the federation has grown.');
         return rows.map(r => ({
             pubkey: String(r.pubkey),
             source: String(r.source),
@@ -8330,7 +8327,7 @@ class Database {
         // cache miss (or the uncached in-process call during block processing)
         // can't return an unbounded set on a large federation. Override via
         // VALIDATOR_QUERY_LIMIT.
-        let limit = parseInt(process.env.VALIDATOR_QUERY_LIMIT) || 1000;
+        let limit = this.config['VALIDATOR_QUERY_LIMIT'];
         let eff = this._effectiveCapabilitySetSql(valid_id, blockIndex, minStake);
         let query = `SELECT pubkey, MAX(total) AS total FROM (${eff.sql}) eff
                      GROUP BY pubkey
@@ -8338,7 +8335,7 @@ class Database {
                      LIMIT ?`;
         let rows = await this.doQuery(query, [...eff.args, limit]);
         if(rows.length >= limit)
-            console.warn('getValidatorsByCapability(' + capability + ') hit the result cap of ' + limit + ' rows at block ' + blockIndex + ' — validator set may be truncated. Raise VALIDATOR_QUERY_LIMIT if the federation has grown.');
+            console.warn('getValidatorsByCapability(' + capability + ') hit the result cap of ' + limit + ' rows at block ' + blockIndex + ' — validator set may be truncated. Raise the frozen VALIDATOR_QUERY_LIMIT consensus constant (coordinated fleet upgrade) if the federation has grown.');
         return rows.map(r => ({
             pubkey: String(r.pubkey),
             amount: (r.total === null || r.total === undefined) ? '0' : String(r.total)
@@ -8424,12 +8421,12 @@ class Database {
             : (capConfig['MIN_STAKE'] || '0');
         let valid_id = await this.getStatusId('valid');
         if(valid_id === null) return [];
-        let limit = parseInt(process.env.VALIDATOR_QUERY_LIMIT) || 1000;
+        let limit = this.config['VALIDATOR_QUERY_LIMIT'];
         let sw = this._stakeWeightsSql(valid_id, blockIndex, minStake);
         let query = `${sw.sql} ORDER BY source, pubkey LIMIT ?`;
         let rows = await this.doQuery(query, [...sw.args, limit]);
         if(rows.length >= limit)
-            console.warn('getStakeWeightsByCapability(' + capability + ') hit the result cap of ' + limit + ' rows at block ' + blockIndex + ' — set may be truncated. Raise VALIDATOR_QUERY_LIMIT if the federation has grown.');
+            console.warn('getStakeWeightsByCapability(' + capability + ') hit the result cap of ' + limit + ' rows at block ' + blockIndex + ' — set may be truncated. Raise the frozen VALIDATOR_QUERY_LIMIT consensus constant (coordinated fleet upgrade) if the federation has grown.');
         return rows.map(r => ({
             pubkey: String(r.pubkey),
             source: String(r.source),
