@@ -8357,6 +8357,17 @@ class Database {
     // counts) MUST resolve through this one query so all consumers agree —
     // CONSENSUS-CRITICAL: any change here forks validation.
     _effectiveCapabilitySetSql(valid_id, blockIndex, minStake){
+        // Permanent disqualification (WI-2 bump 2): a signing key proven to have
+        // equivocated is PERMANENTLY barred from the effective signer set — not just
+        // until its current bond burns to 0, but against any future re-stake/re-delegation
+        // of the same key. The exclusion is GLOBAL (any capability the key was slashed in
+        // bars it everywhere — an equivocating key has proven byzantine) and block-gated
+        // (`cse.block_index <= ?`) so re-deriving a historical block before the slash is
+        // byte-identical, and reorg-safe (the slash event rolls back ⇒ eligibility returns).
+        // Applied identically in _stakeWeightsSql and hasCapability so every quorum read agrees.
+        const slashExcl = (keyCol) =>
+            `AND NOT EXISTS (SELECT 1 FROM capability_slash_events cse
+                             WHERE cse.signing_pubkey_id = ${keyCol} AND cse.block_index <= ?)`;
         let sql = `SELECT ip.pubkey AS pubkey,
                           SUM(CAST(s.amount AS DECIMAL(30,8))) AS total
                    FROM stakes s
@@ -8371,6 +8382,7 @@ class Database {
                            AND r.status_id = ?
                            AND r.deactivation_block <= ?
                            AND r.action_index > s.action_index)
+                     ${slashExcl('s.signing_pubkey_id')}
                    GROUP BY ip.pubkey
                    HAVING total >= CAST(? AS DECIMAL(30,8))
                    UNION ALL
@@ -8389,10 +8401,11 @@ class Database {
                    ) src ON src.source_id = d.source_id
                    WHERE d.status_id = ?
                      AND d.activation_block <= ?
-                     AND (d.deactivation_block IS NULL OR d.deactivation_block > ?)`;
-        let args = [valid_id, blockIndex, blockIndex, valid_id, blockIndex, minStake,
+                     AND (d.deactivation_block IS NULL OR d.deactivation_block > ?)
+                     ${slashExcl('d.signing_pubkey_id')}`;
+        let args = [valid_id, blockIndex, blockIndex, valid_id, blockIndex, blockIndex, minStake,
                     valid_id, blockIndex, blockIndex, minStake,
-                    valid_id, blockIndex, blockIndex];
+                    valid_id, blockIndex, blockIndex, blockIndex];
         return { sql, args };
     }
 
@@ -8445,6 +8458,12 @@ class Database {
     // source-deduped tally counts that stake once. CONSENSUS-CRITICAL — mirrors the
     // qualification/revocation/delegation semantics of _effectiveCapabilitySetSql.
     _stakeWeightsSql(valid_id, blockIndex, minStake){
+        // Permanent disqualification — see _effectiveCapabilitySetSql. Excludes equivocation-
+        // slashed keys from the effective-key set (both stake-key and delegated-key branches)
+        // so the source-deduped stake-weight tally matches the count-quorum set exactly.
+        const slashExcl = (keyCol) =>
+            `AND NOT EXISTS (SELECT 1 FROM capability_slash_events cse
+                             WHERE cse.signing_pubkey_id = ${keyCol} AND cse.block_index <= ?)`;
         let sql = `SELECT ip.pubkey AS pubkey,
                           sa.address AS source,
                           q.total    AS weight
@@ -8472,6 +8491,7 @@ class Database {
                                AND r.status_id = ?
                                AND r.deactivation_block <= ?
                                AND r.action_index > s2.action_index)
+                         ${slashExcl('s2.signing_pubkey_id')}
                        GROUP BY s2.source_id, s2.signing_pubkey_id
                        UNION
                        SELECT d.source_id AS source_id, d.signing_pubkey_id AS pubkey_id
@@ -8479,11 +8499,12 @@ class Database {
                        WHERE d.status_id = ?
                          AND d.activation_block <= ?
                          AND (d.deactivation_block IS NULL OR d.deactivation_block > ?)
+                         ${slashExcl('d.signing_pubkey_id')}
                    ) ek ON ek.source_id = q.source_id
                    JOIN index_pubkeys ip ON ip.id = ek.pubkey_id`;
         let args = [valid_id, blockIndex, blockIndex, minStake,
-                    valid_id, blockIndex, blockIndex, valid_id, blockIndex,
-                    valid_id, blockIndex, blockIndex];
+                    valid_id, blockIndex, blockIndex, valid_id, blockIndex, blockIndex,
+                    valid_id, blockIndex, blockIndex, blockIndex];
         return { sql, args };
     }
 
@@ -8535,6 +8556,10 @@ class Database {
         if(pubkey_id === null) return false;
         if(blockIndex === undefined || blockIndex === null)
             blockIndex = await this.getLatestBlockIndex();
+        // Permanent disqualification (WI-2 bump 2): an equivocation-slashed key is barred
+        // from ALL capabilities — must agree with the effective-set queries
+        // (_effectiveCapabilitySetSql / _stakeWeightsSql), which exclude it too.
+        if(await this._isPubkeySlashedAt(pubkey_id, blockIndex)) return false;
         // Per-pubkey membership test against the SAME effective signer set as
         // getValidatorsByCapability (stake keys minus DELEGATE v2 revocations,
         // plus delegated keys backed by the source's aggregate stake) — the
@@ -9192,6 +9217,22 @@ class Database {
         let rows = await this.doQuery(
             'SELECT id FROM capability_slash_events WHERE signing_pubkey_id=? AND capability=? LIMIT 1',
             [pubkeyId, String(capability)]);
+        return rows.length > 0;
+    }
+
+    // Permanent disqualification (WI-2 bump 2): whether a signing key has been slashed for
+    // equivocation in ANY capability at or before `blockIndex`. A slashed key is barred from
+    // the effective signer set everywhere — not just until its bond burns to 0, but against
+    // any future re-stake/re-delegation. GLOBAL (capability-agnostic — an equivocating key is
+    // byzantine), block-gated for deterministic historical re-derivation, and reorg-safe (the
+    // block-scoped event row rolls back ⇒ the key re-qualifies). The SQL counterpart inside
+    // _effectiveCapabilitySetSql / _stakeWeightsSql excludes it from the SET queries; this is
+    // the per-pubkey check used by hasCapability so both paths agree.
+    async _isPubkeySlashedAt(pubkeyId, blockIndex){
+        if(pubkeyId === null || pubkeyId === undefined) return false;
+        let rows = await this.doQuery(
+            'SELECT id FROM capability_slash_events WHERE signing_pubkey_id=? AND block_index<=? LIMIT 1',
+            [pubkeyId, blockIndex]);
         return rows.length > 0;
     }
 

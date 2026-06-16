@@ -181,4 +181,104 @@ describe('Integration: live SLASH equivocation drill + determinism @regression @
         assert.deepStrictEqual(second.stakeAmounts, firstRun.stakeAmounts);
         assert.deepStrictEqual(second.events, firstRun.events);
     });
+
+    // Permanent disqualification (WI-2 bump 2): a slashed key may never re-qualify, even on a
+    // FRESH stake from a DIFFERENT source — the exclusion is keyed on the signing key, global,
+    // and permanent. Drives STAKE → SLASH → re-STAKE(same key, new source) and asserts the key
+    // stays out of EVERY effective-set read (capability set, whole-federation set, per-key test).
+    it('a slashed key stays disqualified after a fresh re-stake from a new source (global + permanent)', async function () {
+        const A2 = 'n2eA5RtRGr5gQ7BJzm5xnvf8oZ9z6bK1pe';   // a second, independent staking source
+        const RESTAKE_BLOCK = 120, AFTER = 130;
+        const msgA = eq.buildEquivCanonical(eq.ENGINE_TAGS.DEX, 'm_1', 0, dexContent(SNAP, '10'));
+        const msgB = eq.buildEquivCanonical(eq.ENGINE_TAGS.DEX, 'm_1', 0, dexContent(SNAP, '20'));
+        const slash = ['SLASH', '0', 'cross_chain', offender.pubHex,
+                       b64(msgA), sign(offender.privateKey, msgA),
+                       b64(msgB), sign(offender.privateKey, msgB)].join('|');
+
+        await resetDecoderDb();
+        await resetIndexerDb();
+        const seeder = new DecoderSeeder(decoderQuery);
+        // Fund BOTH sources so each can post a > MIN_STAKE bond for the SAME signing key.
+        await seeder.seedBlock(99, T - 600, [
+            { source: FUNDER, data: 'ISSUE|0|XCHAIN|21000000|1000000|8|Gas bootstrap', txHash: 'c'.repeat(56) + '00000001' },
+            { source: A1,     data: 'MINT|0|XCHAIN|10000',                              txHash: 'c'.repeat(56) + '00000002' },
+            { source: A2,     data: 'MINT|0|XCHAIN|10000',                              txHash: 'c'.repeat(56) + '00000003' },
+        ]);
+        await seeder.seedBlock(STAKE_BLOCK,   T,        [{ source: A1, data: 'STAKE|1|' + STAKE_AMT + '|' + offender.pubHex }]);
+        await seeder.seedBlock(SLASH_BLOCK,   T + 600,  [{ source: A1, data: slash }]);
+        await seeder.seedBlock(RESTAKE_BLOCK, T + 1200, [{ source: A2, data: 'STAKE|1|' + STAKE_AMT + '|' + offender.pubHex }]);
+
+        const indexer = await initIndexer();
+        try {
+            await processBlocks(indexer);
+            const isOffender = (v) => String(v.pubkey).toLowerCase() === offender.pubHex.toLowerCase();
+
+            // The re-stake row exists and is active (activation delay 6 → active by AFTER)…
+            const restake = await indexerQuery(
+                `SELECT s.amount FROM stakes s JOIN index_pubkeys p ON p.id = s.signing_pubkey_id
+                 WHERE p.pubkey = ? AND s.source_id = (SELECT id FROM index_addresses WHERE address = ?)`,
+                [offender.pubHex, A2]);
+            assert.ok(restake.length >= 1 && Number(restake[0].amount) === Number(STAKE_AMT),
+                'the fresh re-stake row must exist at full amount (the slash does not touch a later stake)');
+
+            // …yet the key qualifies NOWHERE: capability set, whole-federation set, per-key test.
+            const capSet = await indexer.indexerDb.getValidatorsByCapability('cross_chain', AFTER);
+            assert.ok(!capSet.some(isOffender), 'slashed key must NOT re-qualify for its capability after re-stake');
+
+            const fedSet = await indexer.indexerDb.getActiveValidators(AFTER);
+            assert.ok(!fedSet.some(isOffender), 'slashed key must NOT re-enter the whole-federation set (XCONFIG membership)');
+
+            const weights = await indexer.indexerDb.getStakeWeightsByCapability('cross_chain', AFTER);
+            assert.ok(!weights.some(isOffender), 'slashed key must NOT re-enter the stake-weighted set');
+
+            assert.strictEqual(await indexer.indexerDb.hasCapability(offender.pubHex, 'cross_chain', AFTER), false,
+                'per-key membership test must also report the slashed key as disqualified');
+            // (The exclusion is block-gated in the SQL — `cse.block_index <= ?` — so a block-by-block
+            //  re-derivation never disqualifies before the slash exists; the determinism test above
+            //  exercises that path. It is not observable in a post-hoc snapshot query here because the
+            //  burn also zeroes the historical stake amount in place.)
+        } finally {
+            await destroyIndexer(indexer);
+        }
+    });
+
+    // XCONFIG (the 6th engine): config-change equivocation is slashable via the Phase-A
+    // amendment — the signed content carries the round's locked snapshot_block as
+    // `snapshot_block|digest`, and membership resolves against the WHOLE federation
+    // (getActiveValidators), not a capability subset. The bond still burns whole.
+    it('an XCONFIG equivocation burns the bond via whole-federation membership', async function () {
+        const SEQ = '5', VIEW = 0;
+        // content = `<snapshot_block>|<config_digest>`; same (seq, view) + same block, DIFFERENT digest.
+        const msgA = eq.buildEquivCanonical(eq.ENGINE_TAGS.CONFIG, SEQ, VIEW, SNAP + '|' + 'a'.repeat(64));
+        const msgB = eq.buildEquivCanonical(eq.ENGINE_TAGS.CONFIG, SEQ, VIEW, SNAP + '|' + 'b'.repeat(64));
+        const slash = ['SLASH', '0', 'config', offender.pubHex,
+                       b64(msgA), sign(offender.privateKey, msgA),
+                       b64(msgB), sign(offender.privateKey, msgB)].join('|');
+
+        await resetDecoderDb();
+        await resetIndexerDb();
+        const seeder = new DecoderSeeder(decoderQuery);
+        await seedGasRich(seeder);
+        // A modest stake is enough — the federation set has NO MIN_STAKE floor, so any active
+        // staker is a config signer. (6000 also keeps the offender a cross_chain member, fine.)
+        await seeder.seedBlock(STAKE_BLOCK, T,       [{ source: A1, data: 'STAKE|1|' + STAKE_AMT + '|' + offender.pubHex }]);
+        await seeder.seedBlock(SLASH_BLOCK, T + 600, [{ source: A1, data: slash }]);
+
+        const indexer = await initIndexer();
+        try {
+            await processBlocks(indexer);
+            const events = await indexerQuery(`SELECT capability, amount FROM capability_slash_events`);
+            assert.strictEqual(events.length, 1, 'exactly one config slash event');
+            assert.strictEqual(events[0].capability, 'config', 'event is labelled with the config sentinel');
+            assert.strictEqual(Number(events[0].amount), Number(STAKE_AMT), 'the whole bond burned');
+
+            const stakeRows = await indexerQuery(
+                `SELECT s.amount FROM stakes s JOIN index_pubkeys p ON p.id = s.signing_pubkey_id WHERE p.pubkey = ?`,
+                [offender.pubHex]);
+            for (const r of stakeRows)
+                assert.strictEqual(Number(r.amount), 0, 'config equivocation burns the whole bond to 0');
+        } finally {
+            await destroyIndexer(indexer);
+        }
+    });
 });

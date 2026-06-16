@@ -710,11 +710,12 @@ describe('Database.getValidatorsByCapability() — threshold source @regression 
     });
 
     // The effective-set union binds the HAVING threshold twice: once for the
-    // stake-key branch (arg 5) and once for the delegated-key source-aggregate
-    // branch (arg 9). Both MUST carry the same resolved threshold.
+    // stake-key branch (arg 6) and once for the delegated-key source-aggregate
+    // branch (arg 10). Both MUST carry the same resolved threshold. (Indices 6/10,
+    // not 5/9: WI-2 bump 2 inserted a slash-exclusion blockIndex arg in each branch.)
     function thresholdArgs() {
         const a = db.doQuery.firstCall.args[1];
-        return [a[5], a[9]];
+        return [a[6], a[10]];
     }
 
     it('uses the caller-supplied override over local config', async function () {
@@ -763,10 +764,11 @@ describe('Database.getActiveCapabilityCount() — threshold source @regression @
     });
 
     // Same effective-set union as getValidatorsByCapability — the threshold
-    // binds at args 5 (stake-key branch) and 9 (delegated-key branch).
+    // binds at args 6 (stake-key branch) and 10 (delegated-key branch). (Shifted
+    // from 5/9 by the WI-2 bump 2 slash-exclusion blockIndex arg in each branch.)
     function thresholdArgs() {
         const a = db.doQuery.firstCall.args[1];
-        return [a[5], a[9]];
+        return [a[6], a[10]];
     }
 
     it('uses the caller-supplied override over local config', async function () {
@@ -805,6 +807,10 @@ describe('Database.hasCapability() — threshold source @regression @tier1', fun
             getStatusId:         sinon.stub().resolves(1),
             getPubkeyId:         sinon.stub().resolves(3),
             getLatestBlockIndex: sinon.stub().resolves(100),
+            // Not slashed (WI-2 bump 2 permanent-disqualification guard) — stubbed so the
+            // threshold-source assertions exercise the stake/delegated branches; the
+            // disqualification path has its own dedicated coverage.
+            _isPubkeySlashedAt:  sinon.stub().resolves(false),
             // Stake-key branch resolves a per-pubkey aggregate of 15000
             doQuery:             sinon.stub().resolves([{ total: '15000' }]),
             util:                { bcgte: sinon.stub().returns(true) },

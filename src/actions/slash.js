@@ -23,9 +23,10 @@
  * FORMAT (spec §4.1.1):
  *   v0 - VERSION|CAPABILITY|OFFENDER_PUBKEY|MSG_A|SIG_A|MSG_B|SIG_B
  *
- *   CAPABILITY      the staking capability the equivocation was in (cross_chain /
- *                   oracle_publish / price / attestation). MUST match the engine the
- *                   EQUIV header names — derived, not trusted.
+ *   CAPABILITY      the membership label the equivocation was in (cross_chain /
+ *                   oracle_publish / price / attestation, or the sentinel 'config' for
+ *                   XCONFIG — whole-federation). MUST match the engine the EQUIV header
+ *                   names — derived, not trusted.
  *   OFFENDER_PUBKEY 64-hex Ed25519 capability signing key being slashed.
  *   MSG_A/MSG_B     base64url of the two signed canonicals (each an EQUIV-headered
  *                   string `EQUIV|<ENGINE_TAG|ROUND_ID|VIEW>||<CONTENT>`). Equal through
@@ -58,32 +59,40 @@
  * record a capability_slash_events audit row. BTC-only (capability stake is BTC-only).
  *
  * SCOPE NOTES (carried for the reviewer; see the Phase-C handover):
- *   - XCONFIG is NOT slashable here: its durable canonical is the config digest
- *     ONLY and its ROUND_ID is the config `seq` (not a block), so no snapshot_block
- *     is recoverable from the proof, and there is no `config` staking capability to
- *     resolve membership against. Slashing XCONFIG needs a Phase-A amendment (carry
- *     the snapshot_block in the XCONFIG signed preimage) + a membership rule — an
- *     OPEN operator decision. Until then a XCONFIG EQUIV_KEY is rejected.
+ *   - XCONFIG IS slashable (WI-2 bump 2, Phase-A amendment): the XCONFIG signed content
+ *     carries the round's locked snapshot_block as `snapshot_block|config_digest`, so the
+ *     proof alone yields the membership block. Because config-change PBFT is authorized by
+ *     the WHOLE federation (not a capability subset — xchain-hub Consensus._lockSnapshot),
+ *     it carries the sentinel CAPABILITY label 'config' and membership resolves against
+ *     getActiveValidators(snapshot_block), not a capability set. The whole bond still burns
+ *     (slashCapabilityStake is capability-agnostic). Inert until the EQUIV flag-day.
  *   - Bounty/treasury amounts are governance config (Phase D). Absent config this
  *     defaults to a PURE BURN (bounty 0, no treasury credit) — sound, just no payout.
- *   - PERMANENT disqualification (barring a slashed pubkey from RE-staking) requires
- *     the capability-snapshot query to also exclude pubkeys in capability_slash_events;
- *     the burn here disqualifies the CURRENT bond (stake → 0 < MIN_STAKE) but a fresh
- *     re-stake would not be barred. Deferred follow-up.
+ *   - PERMANENT disqualification: a slashed pubkey is barred from the effective signer set
+ *     GLOBALLY and permanently — db._effectiveCapabilitySetSql / _stakeWeightsSql / hasCapability
+ *     exclude any key in capability_slash_events (block-gated, reorg-safe), so a fresh re-stake
+ *     of a slashed key never re-qualifies in any capability. The burn here zeroes the CURRENT
+ *     bond; the query exclusion makes it permanent.
  *
  ********************************************************************/
 
 const ed25519 = require('../ed25519.js');
 const eq      = require('../equivocation_header.js');
 
-// ENGINE_TAG → the staking capability whose locked snapshot governs that engine's
-// signer set. XCONFIG is intentionally absent (see SCOPE NOTES).
+// ENGINE_TAG → the membership label the locked snapshot governs that engine's signer
+// set under. For the five capability-scoped engines this is the staking capability whose
+// MIN_STAKE-qualified set signed the slot. XCONFIG is the exception: config-change PBFT is
+// authorized by the WHOLE federation (every active staker, no capability subset — see
+// xchain-hub Consensus._lockSnapshot), so it carries the sentinel label 'config' and its
+// membership resolves against getActiveValidators (handled in parse()), not a capability set.
+const CONFIG_CAPABILITY = 'config';
 const ENGINE_CAPABILITY = {
     [eq.ENGINE_TAGS.DEX]:        'cross_chain',
     [eq.ENGINE_TAGS.XCALL]:      'cross_chain',
     [eq.ENGINE_TAGS.CHECKPOINT]: 'oracle_publish',
     [eq.ENGINE_TAGS.ORACLE]:     'price',
     [eq.ENGINE_TAGS.ATTEST]:     'attestation',
+    [eq.ENGINE_TAGS.CONFIG]:     CONFIG_CAPABILITY,
 };
 
 class Slash {
@@ -201,11 +210,17 @@ class Slash {
             else snapshotBlock = slot.snapshotBlock;
         }
         if(!error){
-            let validators = await this.indexerDb.getValidatorsByCapability(capability, snapshotBlock);
+            // XCONFIG is authorized by the WHOLE federation (getActiveValidators), every other
+            // engine by its capability-scoped snapshot. Both return [{pubkey,...}] at the block.
+            let validators = (capability === CONFIG_CAPABILITY)
+                ? await this.indexerDb.getActiveValidators(snapshotBlock)
+                : await this.indexerDb.getValidatorsByCapability(capability, snapshotBlock);
             let inSet = Array.isArray(validators) &&
                 validators.some(v => String(v.pubkey || '').toLowerCase() === offender);
             if(!inSet)
-                error = 'invalid: OFFENDER_PUBKEY not in capability snapshot at block ' + snapshotBlock;
+                error = 'invalid: OFFENDER_PUBKEY not in ' +
+                    (capability === CONFIG_CAPABILITY ? 'federation' : 'capability') +
+                    ' snapshot at block ' + snapshotBlock;
         }
 
         // (5) Idempotency — a first proof burns the whole bond; later (pubkey,capability)
@@ -282,6 +297,7 @@ class Slash {
             [eq.ENGINE_TAGS.DEX]:        2,   // XMATCH|match_id|snapshot_block|...
             [eq.ENGINE_TAGS.XCALL]:      3,   // XCALL|DISPATCH|call_id|snapshot_block|...  (RESULT: same index)
             [eq.ENGINE_TAGS.CHECKPOINT]: 9,   // XCHECKPOINT|chain|network|block_index|block_hash|ledger|actions|contract|checkpoint_seq|snapshot_block[|batch_seq..]
+            [eq.ENGINE_TAGS.CONFIG]:     0,   // XCONFIG content = snapshot_block|config_digest (Phase-A amendment — block carried in-content so config equivocation is slashable)
         };
         if(FIELD[engineTag] !== undefined){
             let i  = FIELD[engineTag];

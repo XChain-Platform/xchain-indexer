@@ -44,11 +44,19 @@ module.exports = {
         config['STAKING'] = {
             COOLDOWN_BLOCKS:         1000,                     // Blocks before unstaked XCHAIN is returned
             ACTIVATION_DELAY_BLOCKS: 6,                        // ~60 min reorg protection at ~10 min/block
+            // SLASH (WI-2 bump 2 — equivocation slashing): the bounty/treasury split a
+            // permissionless SLASH proof applies to a burned bond (actions/slash.js
+            // _bountyTreasurySplit). BOUNTY_BPS = whistleblower share (basis points) paid to
+            // the submitter, BOUNTY_CAP = absolute XCHAIN ceiling on that payout; the remainder
+            // is routed to TREASURY_ADDRESS, or BURNED when absent (the default below — never
+            // pays validators). GOVERNANCE PLACEHOLDERS: 5% bounty capped at one entry stake,
+            // remainder burned. Tunable; mainnet-inert until the EQUIV_HEADER flag-day, so a
+            // pre-launch value carries no risk. Absent SLASH block ⇒ pure burn (sound, no payout).
             CAPABILITIES: {
-                price:          { MIN_STAKE: '1000.00000000' }, // Sign PRICE v0 snapshots (replaces Tier 1)
-                cross_chain:    { MIN_STAKE: '5000.00000000' }, // Cross-chain attestation (replaces Tier 2)
-                oracle_publish: { MIN_STAKE: '500.00000000'  }, // Publish price rounds to DOGE chain (replaces Tier 3)
-                attestation:    { MIN_STAKE: '1000.00000000' }, // Off-chain data attestation framework (http_get, llm, future providers)
+                price:          { MIN_STAKE: '1000.00000000', SLASH: { BOUNTY_BPS: 500, BOUNTY_CAP: '1000.00000000' } }, // Sign PRICE v0 snapshots (replaces Tier 1)
+                cross_chain:    { MIN_STAKE: '5000.00000000', SLASH: { BOUNTY_BPS: 500, BOUNTY_CAP: '5000.00000000' } }, // Cross-chain attestation (replaces Tier 2)
+                oracle_publish: { MIN_STAKE: '500.00000000',  SLASH: { BOUNTY_BPS: 500, BOUNTY_CAP: '500.00000000'  } }, // Publish price rounds to DOGE chain (replaces Tier 3)
+                attestation:    { MIN_STAKE: '1000.00000000', SLASH: { BOUNTY_BPS: 500, BOUNTY_CAP: '1000.00000000' } }, // Off-chain data attestation framework (http_get, llm, future providers)
                 full_node:      { MIN_STAKE: '2000.00000000' }  // Verified full-node tier — entrance stake; verification ALSO requires passing periodic NODEPROOF possession challenges (NODEPROOF.md)
             }
         };

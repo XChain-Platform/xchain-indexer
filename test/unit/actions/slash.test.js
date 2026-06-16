@@ -54,6 +54,7 @@ describe('SLASH action handler — equivocation verifier @regression', function 
         // Stub the DB surface the verifier touches (default = a clean, slashable offender).
         const db = indexer.indexerDb;
         db.getValidatorsByCapability = sinon.stub().resolves([{ pubkey: offender.pubHex, amount: '1000' }]);
+        db.getActiveValidators       = sinon.stub().resolves([{ pubkey: offender.pubHex, amount: '1000' }]);  // whole-federation set (XCONFIG membership)
         db.getOrCreatePubkeyId       = sinon.stub().resolves(7);
         db.hasCapabilitySlashEvent   = sinon.stub().resolves(false);
         db.slashCapabilityStake      = sinon.stub().resolves('1000');
@@ -156,14 +157,56 @@ describe('SLASH action handler — equivocation verifier @regression', function 
         assert.ok(indexer.indexerDb.slashCapabilityStake.notCalled);
     });
 
-    it('REJECTS XCONFIG (not slashable — no recoverable snapshot_block)', async function () {
-        const key  = eq.equivKey(eq.ENGINE_TAGS.CONFIG, '5', 0);
-        const msgA = eq.buildEquivCanonical(eq.ENGINE_TAGS.CONFIG, '5', 0, 'digestA');
-        const msgB = eq.buildEquivCanonical(eq.ENGINE_TAGS.CONFIG, '5', 0, 'digestB');
-        const d = data();
-        await handler.parse(params('cross_chain', offender.pubHex,msgA, offender.privateKey, msgB, offender.privateKey), d, null);
+    // ── XCONFIG (the 6th engine — whole-federation membership; Phase-A amendment) ──
+    // Config content = `snapshot_block|config_digest`; equivocation = same (seq, view),
+    // same snapshot_block, DIFFERENT digest. Membership resolves against getActiveValidators
+    // (the whole federation), labelled with the sentinel capability 'config'.
+    function configProof(blk = 150, seq = '5', view = 0) {
+        const msgA = eq.buildEquivCanonical(eq.ENGINE_TAGS.CONFIG, seq, view, blk + '|digestA');
+        const msgB = eq.buildEquivCanonical(eq.ENGINE_TAGS.CONFIG, seq, view, blk + '|digestB');
+        return { msgA, msgB };
+    }
 
-        assert.ok(/ENGINE_TAG \(not slashable\)/.test(d['STATUS']), 'got ' + d['STATUS']);
+    it('ACCEPTS an XCONFIG equivocation (snapshot_block recovered from content; federation membership)', async function () {
+        const { msgA, msgB } = configProof(150);
+        const d = data();
+        await handler.parse(params('config', offender.pubHex, msgA, offender.privateKey, msgB, offender.privateKey), d, null);
+
+        assert.strictEqual(d['STATUS'], 'valid', 'got ' + d['STATUS']);
+        // membership checked against the WHOLE federation at the in-content snapshot_block
+        assert.deepStrictEqual(indexer.indexerDb.getActiveValidators.firstCall.args, [150]);
+        assert.ok(indexer.indexerDb.getValidatorsByCapability.notCalled, 'config must NOT use a capability set');
+        assert.ok(indexer.indexerDb.slashCapabilityStake.calledOnce);
+        // audit row keyed by the sentinel 'config' capability
+        assert.strictEqual(indexer.indexerDb.createCapabilitySlashEvent.firstCall.args[0]['CAPABILITY'], 'config');
+    });
+
+    it('REJECTS XCONFIG when the offender is not in the federation snapshot', async function () {
+        indexer.indexerDb.getActiveValidators = sinon.stub().resolves([]);   // empty federation set
+        const { msgA, msgB } = configProof(150);
+        const d = data();
+        await handler.parse(params('config', offender.pubHex, msgA, offender.privateKey, msgB, offender.privateKey), d, null);
+
+        assert.ok(/not in federation snapshot/.test(d['STATUS']), 'got ' + d['STATUS']);
+        assert.ok(indexer.indexerDb.slashCapabilityStake.notCalled);
+    });
+
+    it('REJECTS XCONFIG when the two messages disagree on snapshot_block', async function () {
+        const msgA = eq.buildEquivCanonical(eq.ENGINE_TAGS.CONFIG, '5', 0, '150|digestA');
+        const msgB = eq.buildEquivCanonical(eq.ENGINE_TAGS.CONFIG, '5', 0, '151|digestA');   // different block
+        const d = data();
+        await handler.parse(params('config', offender.pubHex, msgA, offender.privateKey, msgB, offender.privateKey), d, null);
+
+        assert.ok(/snapshot_block/.test(d['STATUS']), 'got ' + d['STATUS']);
+        assert.ok(indexer.indexerDb.slashCapabilityStake.notCalled);
+    });
+
+    it('REJECTS XCONFIG with a non-config CAPABILITY label (derived, not trusted)', async function () {
+        const { msgA, msgB } = configProof(150);
+        const d = data();
+        await handler.parse(params('cross_chain', offender.pubHex, msgA, offender.privateKey, msgB, offender.privateKey), d, null);
+
+        assert.ok(/CAPABILITY \(does not match engine\)/.test(d['STATUS']), 'got ' + d['STATUS']);
         assert.ok(indexer.indexerDb.slashCapabilityStake.notCalled);
     });
 
@@ -206,6 +249,9 @@ describe('SLASH action handler — equivocation verifier @regression', function 
         }
 
         it('pure burn when no SLASH config (bounty 0, no treasury credit)', function () {
+            // Explicit no-SLASH config: the real BTC.js now ships SLASH defaults, so assert
+            // the absent-config path against a config that deliberately omits the SLASH block.
+            indexer.config.STAKING = { CAPABILITIES: { cross_chain: { MIN_STAKE: '5000' } } };
             const s = handler._bountyTreasurySplit('cross_chain', '1000');
             assert.strictEqual(Number(s.bounty), 0);
             assert.strictEqual(s.treasuryAddr, null);          // null = BURN
