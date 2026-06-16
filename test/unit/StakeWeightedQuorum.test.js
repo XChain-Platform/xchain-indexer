@@ -58,6 +58,24 @@ describe('stake_weighted_quorum (indexer)', function () {
             assert.strictEqual(swq.meetsStakeThreshold(util, V, []), false);
         });
 
+        it('SECURITY: fails CLOSED when any snapshot row has a blank/missing source (no 1-of-N collapse)', function () {
+            // A blank '' source (the snapshot schema's NOT NULL DEFAULT '') or undefined source
+            // would collapse all rows into one dedupe bucket → a single signature finalizes.
+            const blank = [
+                { pubkey: 'a', source: '',   weight: '6000' },
+                { pubkey: 'b', source: '',   weight: '6000' },
+                { pubkey: 'c', source: 'S2', weight: '3000' },
+            ];
+            assert.strictEqual(swq.meetsStakeThreshold(util, blank, ['a']), false);
+            assert.strictEqual(swq.meetsStakeThreshold(util, blank, ['a', 'b', 'c']), false);
+            assert.strictEqual(swq.meetsStakeThreshold(util, [{ pubkey: 'x', weight: '9000' }], ['x']), false);            // undefined source
+            assert.strictEqual(swq.meetsStakeThreshold(util, [{ pubkey: 'y', source: '   ', weight: '9000' }], ['y']), false); // whitespace
+        });
+
+        it('a LEGITIMATE single non-blank source still finalizes on its own signature', function () {
+            assert.strictEqual(swq.meetsStakeThreshold(util, [{ pubkey: 's', source: 'S1', weight: '9000' }], ['s']), true);
+        });
+
         it('SECURITY: a source\'s multiple keys count its stake ONCE (no delegation inflation)', function () {
             // a + b are both S1 → 6000, not 12000. 3·6000 = 18000 !> 2·12000 = 24000.
             assert.strictEqual(swq.meetsStakeThreshold(util, V, ['a', 'b']), false);

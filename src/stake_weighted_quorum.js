@@ -50,11 +50,17 @@ function isStakeWeightedQuorumActive(snapshotBlock, network){
 // S = Σ(weight over DISTINCT sources). A source counts ONCE no matter how many of
 // its keys signed (DELEGATE v0 is additive). Degenerate cases fall out with no
 // special-casing: single source → 3S>2S true (finalizes on its own signature);
-// empty/zero-stake set → 0>0 false (disabled).
+// empty/zero-stake set → 0>0 false (disabled). A blank/missing source FAILS CLOSED
+// (returns false) — it is NOT a legitimate single source.
 function meetsStakeThreshold(util, validators, signerPubkeys){
     let weightBySource = new Map();   // source -> weight (first wins; all equal per source)
     let pubkeyToSource = new Map();   // pubkey(lower) -> source
     for(let v of (validators || [])){
+        // Fail CLOSED on a blank/missing source: an empty-string (the snapshot schema's
+        // NOT NULL DEFAULT '') or undefined source would collapse every row into ONE dedupe
+        // bucket, dropping stake-weighted quorum to 1-of-N (a single signature finalizes the
+        // round). A malformed snapshot must never finalize — reject the whole tally.
+        if(v.source === null || v.source === undefined || String(v.source).trim() === '') return false;
         let src = String(v.source);
         let pk  = String(v.pubkey).toLowerCase();
         pubkeyToSource.set(pk, src);
