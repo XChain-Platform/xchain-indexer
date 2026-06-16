@@ -325,30 +325,51 @@ class Slash {
         return { error: 'invalid: ENGINE_TAG (no snapshot_block rule)' };
     }
 
-    // Bounty/treasury split for a burned bond. Governance-configured (Phase D); the
-    // expected config shape mirrors the capability staking config channel:
-    //   config.STAKING.CAPABILITIES[capability].SLASH = { BOUNTY_BPS, BOUNTY_CAP, TREASURY_ADDRESS }
+    // Bounty/treasury split for a burned bond. Governance-configured (Phase D). The submitter's
+    // bounty = clamp(BOUNTY_BPS·burned, BOUNTY_FLOOR, BOUNTY_CAP), never exceeding the bond; the
+    // remainder goes to TREASURY_ADDRESS, or is BURNED when unset. Config shape:
+    //   config.STAKING.CAPABILITIES[capability].SLASH  for the 5 capability-scoped engines, or
+    //   config.CONFIG_SLASH                            for XCONFIG (capability === 'config' —
+    //                                                  whole-federation, no CAPABILITIES home)
+    //   = { BOUNTY_BPS, BOUNTY_FLOOR, BOUNTY_CAP, TREASURY_ADDRESS }  (all optional)
     // Absent / zero → PURE BURN (bounty 0, no treasury credit). Never pays validators.
     _bountyTreasurySplit(capability, burned){
         let total = String(burned || '0');
         if(!this.util.bcgt(total, '0')) return { bounty: '0', treasury: '0', treasuryAddr: null };
 
-        let caps = (this.config['STAKING'] && this.config['STAKING']['CAPABILITIES']) ? this.config['STAKING']['CAPABILITIES'] : {};
-        let cfg  = (caps[capability] && caps[capability]['SLASH']) ? caps[capability]['SLASH'] : {};
+        // XCONFIG has no staking capability, so its SLASH policy lives at config.CONFIG_SLASH;
+        // every other engine reads its capability's SLASH block.
+        let cfg;
+        if(capability === 'config'){
+            cfg = this.config['CONFIG_SLASH'] || {};
+        } else {
+            let caps = (this.config['STAKING'] && this.config['STAKING']['CAPABILITIES']) ? this.config['STAKING']['CAPABILITIES'] : {};
+            cfg = (caps[capability] && caps[capability]['SLASH']) ? caps[capability]['SLASH'] : {};
+        }
 
         let bps = Number(cfg['BOUNTY_BPS'] || 0);
         if(!Number.isFinite(bps) || bps < 0) bps = 0;
         if(bps > 10000) bps = 10000;
 
-        let bounty = '0';
-        if(bps > 0){
-            // bc* return mathjs BigNumbers → String() so the ledger sees plain amount strings
-            // (the convention everywhere else, e.g. STAKE's debits).
-            bounty = String(this.util.bcdiv(this.util.bcmul(total, String(bps), 8), '10000', 8));
-            let cap = cfg['BOUNTY_CAP'];
-            if(cap != null && this.util.bcgt(bounty, String(cap)))
-                bounty = String(cap);
-        }
+        // bc* return mathjs BigNumbers → String() so the ledger sees plain amount strings
+        // (the convention everywhere else, e.g. STAKE's debits).
+        let bounty = (bps > 0)
+            ? String(this.util.bcdiv(this.util.bcmul(total, String(bps), 8), '10000', 8))
+            : '0';
+        // FLOOR — guarantee a minimum payout so a submitter always clears the (BTC-tx + protocol)
+        // submission cost, even on a bond at MIN_STAKE. Applied before the cap; the final clamp
+        // to `total` keeps a sub-floor bond from minting (bounty = whole bond, treasury 0).
+        let floor = cfg['BOUNTY_FLOOR'];
+        if(floor != null && this.util.bcgt(String(floor), bounty))
+            bounty = String(floor);
+        // CAP — hard ceiling (detection cost is constant; don't scale the reward with whale bonds).
+        let cap = cfg['BOUNTY_CAP'];
+        if(cap != null && this.util.bcgt(bounty, String(cap)))
+            bounty = String(cap);
+        // Never pay out more than was burned.
+        if(this.util.bcgt(bounty, total))
+            bounty = total;
+
         let treasury     = String(this.util.bcsub(total, bounty, 8));
         let treasuryAddr = cfg['TREASURY_ADDRESS'] ? String(cfg['TREASURY_ADDRESS']) : null;  // null = BURN
         return { bounty: bounty, treasury: treasury, treasuryAddr: treasuryAddr };

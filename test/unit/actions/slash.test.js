@@ -290,5 +290,44 @@ describe('SLASH action handler — equivocation verifier @regression', function 
             assert.strictEqual(Number(s.treasury), 0);
             assert.strictEqual(s.treasuryAddr, null);
         });
+
+        it('raises a sub-floor bounty to BOUNTY_FLOOR (cost-coverage on small bonds)', function () {
+            withSlashConfig({ BOUNTY_BPS: 500, BOUNTY_FLOOR: '50.00000000' });   // 5% of 500 = 25 < floor 50
+            const s = handler._bountyTreasurySplit('cross_chain', '500');
+            assert.strictEqual(Number(s.bounty), 50);    // floor wins over the 25 the bps would give
+            assert.strictEqual(Number(s.treasury), 450); // remainder burned (no TREASURY_ADDRESS)
+            assert.strictEqual(s.treasuryAddr, null);
+        });
+
+        it('clamps the floor to the bond — a sub-floor bond never mints', function () {
+            withSlashConfig({ BOUNTY_BPS: 500, BOUNTY_FLOOR: '50.00000000' });
+            const s = handler._bountyTreasurySplit('cross_chain', '30');   // bond < floor
+            assert.strictEqual(Number(s.bounty), 30);    // pays the whole bond, not 50
+            assert.strictEqual(Number(s.treasury), 0);
+            // Conservation: never pays out more than was burned.
+            assert.strictEqual(Number(indexer.util.bcadd(s.bounty, s.treasury, 8)), 30);
+        });
+
+        it('the cap still wins over the floor when both are set', function () {
+            withSlashConfig({ BOUNTY_BPS: 500, BOUNTY_FLOOR: '50.00000000', BOUNTY_CAP: '40.00000000' });
+            const s = handler._bountyTreasurySplit('cross_chain', '5000');  // 5% = 250, floor 50, cap 40
+            assert.strictEqual(Number(s.bounty), 40);    // cap is the hard ceiling, applied last
+        });
+
+        it('XCONFIG reads config.CONFIG_SLASH (whole-federation, no CAPABILITIES home)', function () {
+            indexer.config.CONFIG_SLASH = { BOUNTY_BPS: 500, BOUNTY_FLOOR: '50.00000000', BOUNTY_CAP: '1000.00000000' };
+            const s = handler._bountyTreasurySplit('config', '5000');
+            assert.strictEqual(Number(s.bounty), 250);   // 5% of 5000
+            assert.strictEqual(Number(s.treasury), 4750);
+            assert.strictEqual(s.treasuryAddr, null);     // burned
+        });
+
+        it('XCONFIG is a pure burn when no CONFIG_SLASH is configured', function () {
+            delete indexer.config.CONFIG_SLASH;
+            const s = handler._bountyTreasurySplit('config', '5000');
+            assert.strictEqual(Number(s.bounty), 0);
+            assert.strictEqual(Number(s.treasury), 5000);
+            assert.strictEqual(s.treasuryAddr, null);
+        });
     });
 });

@@ -267,10 +267,14 @@ describe('Integration: live SLASH equivocation drill + determinism @regression @
         const indexer = await initIndexer();
         try {
             await processBlocks(indexer);
-            const events = await indexerQuery(`SELECT capability, amount FROM capability_slash_events`);
+            const events = await indexerQuery(`SELECT capability, amount, bounty_amount, treasury_amount FROM capability_slash_events`);
             assert.strictEqual(events.length, 1, 'exactly one config slash event');
             assert.strictEqual(events[0].capability, 'config', 'event is labelled with the config sentinel');
             assert.strictEqual(Number(events[0].amount), Number(STAKE_AMT), 'the whole bond burned');
+            // CONFIG_SLASH wired end-to-end: 5% of 6000 = 300 (above the 50 floor, below the 1000 cap),
+            // remainder to treasury (burned — no TREASURY_ADDRESS). Conservation: bounty+treasury==burned.
+            assert.strictEqual(Number(events[0].bounty_amount), 300, 'config equivocation pays the configured bounty');
+            assert.strictEqual(Number(events[0].treasury_amount), Number(STAKE_AMT) - 300, 'remainder routed to treasury (burned)');
 
             const stakeRows = await indexerQuery(
                 `SELECT s.amount FROM stakes s JOIN index_pubkeys p ON p.id = s.signing_pubkey_id WHERE p.pubkey = ?`,

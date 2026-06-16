@@ -46,20 +46,35 @@ module.exports = {
             ACTIVATION_DELAY_BLOCKS: 6,                        // ~60 min reorg protection at ~10 min/block
             // SLASH (WI-2 bump 2 — equivocation slashing): the bounty/treasury split a
             // permissionless SLASH proof applies to a burned bond (actions/slash.js
-            // _bountyTreasurySplit). BOUNTY_BPS = whistleblower share (basis points) paid to
-            // the submitter, BOUNTY_CAP = absolute XCHAIN ceiling on that payout; the remainder
-            // is routed to TREASURY_ADDRESS, or BURNED when absent (the default below — never
-            // pays validators). GOVERNANCE PLACEHOLDERS: 5% bounty capped at one entry stake,
-            // remainder burned. Tunable; mainnet-inert until the EQUIV_HEADER flag-day, so a
+            // _bountyTreasurySplit). The submitter's bounty = clamp(BOUNTY_BPS·burned,
+            // BOUNTY_FLOOR, BOUNTY_CAP), never exceeding the bond; the remainder is routed to
+            // TREASURY_ADDRESS, or BURNED when absent (the default below — never pays validators).
+            //   BOUNTY_BPS   5% — self-report always destroys ≥90% of the bond (toothless only
+            //                near 100%), enough to cover detection on mid/large bonds.
+            //   BOUNTY_FLOOR 50 XCHAIN — a guaranteed minimum so a watchtower always clears the
+            //                BTC-tx + protocol submission cost, even on a bond at the 500 oracle
+            //                MIN_STAKE (where 5% = 25 would be borderline). (=$50 at 100M supply,
+            //                $1/XCHAIN target.) Capped at the bond, so a sub-floor bond never mints.
+            //   BOUNTY_CAP   1000 XCHAIN — detection cost is CONSTANT (one tx), so the reward is
+            //                anchored to cost, not bond size; a whale equivocator still loses ~99%.
+            // Tunable governance values; mainnet-inert until the EQUIV_HEADER flag-day, so a
             // pre-launch value carries no risk. Absent SLASH block ⇒ pure burn (sound, no payout).
             CAPABILITIES: {
-                price:          { MIN_STAKE: '1000.00000000', SLASH: { BOUNTY_BPS: 500, BOUNTY_CAP: '1000.00000000' } }, // Sign PRICE v0 snapshots (replaces Tier 1)
-                cross_chain:    { MIN_STAKE: '5000.00000000', SLASH: { BOUNTY_BPS: 500, BOUNTY_CAP: '5000.00000000' } }, // Cross-chain attestation (replaces Tier 2)
-                oracle_publish: { MIN_STAKE: '500.00000000',  SLASH: { BOUNTY_BPS: 500, BOUNTY_CAP: '500.00000000'  } }, // Publish price rounds to DOGE chain (replaces Tier 3)
-                attestation:    { MIN_STAKE: '1000.00000000', SLASH: { BOUNTY_BPS: 500, BOUNTY_CAP: '1000.00000000' } }, // Off-chain data attestation framework (http_get, llm, future providers)
+                price:          { MIN_STAKE: '1000.00000000', SLASH: { BOUNTY_BPS: 500, BOUNTY_FLOOR: '50.00000000', BOUNTY_CAP: '1000.00000000' } }, // Sign PRICE v0 snapshots (replaces Tier 1)
+                cross_chain:    { MIN_STAKE: '5000.00000000', SLASH: { BOUNTY_BPS: 500, BOUNTY_FLOOR: '50.00000000', BOUNTY_CAP: '1000.00000000' } }, // Cross-chain attestation (replaces Tier 2)
+                oracle_publish: { MIN_STAKE: '500.00000000',  SLASH: { BOUNTY_BPS: 500, BOUNTY_FLOOR: '50.00000000', BOUNTY_CAP: '1000.00000000' } }, // Publish price rounds to DOGE chain (replaces Tier 3)
+                attestation:    { MIN_STAKE: '1000.00000000', SLASH: { BOUNTY_BPS: 500, BOUNTY_FLOOR: '50.00000000', BOUNTY_CAP: '1000.00000000' } }, // Off-chain data attestation framework (http_get, llm, future providers)
                 full_node:      { MIN_STAKE: '2000.00000000' }  // Verified full-node tier — entrance stake; verification ALSO requires passing periodic NODEPROOF possession challenges (NODEPROOF.md)
             }
         };
+        // CONFIG_SLASH (WI-2 bump 2): the SLASH bounty/treasury policy for XCONFIG (config-change)
+        // equivocation. Config signers are the WHOLE federation, not a staking capability, so the
+        // policy has no CAPABILITIES home — slash.js reads it here when capability === 'config'.
+        // Same shape + defaults as a capability SLASH block (5% / 50 floor / 1000 cap, remainder
+        // burned). Present because config equivocation is the most severe (it splits federation
+        // governance) and most worth paying a watchtower to catch. Absent ⇒ pure burn (deterrent
+        // intact, no submitter incentive). Mainnet-inert until the EQUIV_HEADER flag-day.
+        config['CONFIG_SLASH'] = { BOUNTY_BPS: 500, BOUNTY_FLOOR: '50.00000000', BOUNTY_CAP: '1000.00000000' };
         // Full-node possession-proof / verified-validator tier (NODEPROOF.md).
         config['FULLNODE'] = {
             CHALLENGE_INTERVAL_BLOCKS:    144,    // epoch cadence (~daily on BTC)
