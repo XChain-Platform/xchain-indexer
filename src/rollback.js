@@ -558,11 +558,23 @@ class Rollback {
                 // Same restore for CAPABILITY-stake equivocation slashes (WI-2 bump 2):
                 // slashCapabilityStake reduces stakes/unstakes.amount IN PLACE on surviving
                 // rows and logs the pre-slash `prev_amount` in capability_slash_debits. Copy
-                // back the EARLIEST orphaned debit's prev_amount per row (min block_index, id
-                // tiebreak) — a pure string copy, byte-identical to the surviving chain and to
-                // a from-genesis replay where the SLASH was never re-mined. Earlier SURVIVING
-                // debits (block_index < block_index) stay applied. Runs BEFORE the generic
-                // deletes so both the debit rows and the target rows still exist.
+                // back the EARLIEST orphaned debit's prev_amount per row (min block_index, then
+                // slash_action_index tiebreak) — a pure string copy, byte-identical to the
+                // surviving chain and to a from-genesis replay where the SLASH was never
+                // re-mined. Earlier SURVIVING debits (block_index < block_index) stay applied.
+                // Runs BEFORE the generic deletes so both the debit rows and the target rows
+                // still exist.
+                //
+                // The same-block tiebreak is slash_action_index, NOT the AUTO_INCREMENT `id`:
+                // capability slashes are permissionless SLASH WIRE actions, so slash_action_index
+                // is a deterministic, replay-stable action_index (assigned by the idempotent
+                // compound-key path, not force=true). Ordering by `id` would let two nodes whose
+                // AUTO_INCREMENT chains were assigned in a different order (live vs from-genesis
+                // replay) restore a different prev_amount on a reorg that retracts a block with
+                // ≥2 slashes against one stake row → a stake-weight fork. (The CONTRACT twin in
+                // the restore above still uses the `id` tiebreak — tracked separately as F-18;
+                // its execution_index is a contract-emission action_index, which carries its own
+                // determinism caveat, so that twin is left for a dedicated pass.)
                 for(let slashTbl of ['stakes', 'unstakes']){
                     query = `UPDATE ` + slashTbl + ` t
                                 JOIN capability_slash_debits d ON d.stake_action_index = t.action_index
@@ -575,7 +587,7 @@ class Rollback {
                                         AND e.stake_action_index = d.stake_action_index
                                         AND e.block_index >= ?
                                         AND (e.block_index < d.block_index
-                                             OR (e.block_index = d.block_index AND e.id < d.id)))`;
+                                             OR (e.block_index = d.block_index AND e.slash_action_index < d.slash_action_index)))`;
                     args = [slashTbl, block_index, block_index];
                     await this.indexerDb.doQuery(query, args);
                 }
