@@ -60,6 +60,37 @@ module.exports = {
             REWARD_SHARE:                 '0',    // fraction of the oracle-round budget routed to verified full nodes (raise to '0.25' to enable — see price.js)
             GENESIS_VERIFIERS:            []      // bootstrap verifier pubkeys (operator); empty = feature dormant
         };
+        // REGTEST/e2e ONLY: the possession-proof cadence and the bootstrap genesis
+        // verifiers are unknowable ahead of a regtest run (validator keys are
+        // generated per run). Allow the e2e harness to inject them via env on
+        // regtest exclusively — mainnet/testnet keep the frozen consensus defaults
+        // above, so real-network behavior carries NO env surface and stays
+        // byte-identical. Mirrors the federation env pattern used elsewhere.
+        if(network === 'regtest'){
+            let fn = config['FULLNODE'];
+            // (a) Optional sidecar JSON in the working dir (fullnode.regtest.json) —
+            //     lets a venue reconfigure with a plain `docker restart` (no env/
+            //     container recreate). Keys present override the defaults above.
+            try {
+                let p = require('path').resolve(process.cwd(), 'fullnode.regtest.json');
+                if(require('fs').existsSync(p)){
+                    let j = JSON.parse(require('fs').readFileSync(p, 'utf8')) || {};
+                    for(let k of Object.keys(j)) fn[k] = j[k];
+                }
+            } catch(e){ console.log('FULLNODE regtest sidecar ignored: ' + e.message); }
+            // (b) Per-key env overrides (highest precedence) — for compose/CI.
+            let envInt = (k, d) => (process.env[k] !== undefined && process.env[k] !== '') ? parseInt(process.env[k]) : d;
+            fn['CHALLENGE_INTERVAL_BLOCKS']    = envInt('FULLNODE_CHALLENGE_INTERVAL_BLOCKS',    fn['CHALLENGE_INTERVAL_BLOCKS']);
+            fn['CONFIRM_DEPTH']                = envInt('FULLNODE_CONFIRM_DEPTH',                fn['CONFIRM_DEPTH']);
+            fn['PROOF_WINDOW_BLOCKS']          = envInt('FULLNODE_PROOF_WINDOW_BLOCKS',          fn['PROOF_WINDOW_BLOCKS']);
+            fn['VERDICT_ACCEPT_WINDOW_BLOCKS'] = envInt('FULLNODE_VERDICT_ACCEPT_WINDOW_BLOCKS', fn['VERDICT_ACCEPT_WINDOW_BLOCKS']);
+            if(process.env['FULLNODE_REWARD_SHARE'] !== undefined && process.env['FULLNODE_REWARD_SHARE'] !== '')
+                fn['REWARD_SHARE'] = String(process.env['FULLNODE_REWARD_SHARE']);
+            if(process.env['FULLNODE_GENESIS_VERIFIERS'])
+                fn['GENESIS_VERIFIERS'] = process.env['FULLNODE_GENESIS_VERIFIERS'].split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+            // Genesis pubkeys are case-insensitive on the wire; normalize.
+            fn['GENESIS_VERIFIERS'] = (fn['GENESIS_VERIFIERS'] || []).map(s => String(s).toLowerCase());
+        }
         config['GAS_SCHEDULE'] = {
             ISSUE:              100000,
             ISSUE_SUBTOKEN:     50000,
