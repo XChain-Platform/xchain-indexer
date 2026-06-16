@@ -254,14 +254,16 @@ class Execute {
                 actionIndex:       data['ACTION_INDEX'],
                 callPath:          data['CALL_PATH'] || '',
                 // Per-root discriminator for the request_id/call_id preimages: the on-chain output
-                // index (TX_VOUT) of the ROOT that seeded this subtree. A top-level on-chain EXECUTE
-                // has no inherited ROOT_TX_VOUT → it IS the root, so use its own TX_VOUT; a nested
+                // index (TX_VOUT) of the ROOT that seeded this subtree. Carried under the VM opt
+                // name `rootActionIndex` (and the ROOT_ACTION_INDEX data key) that the gateway
+                // preimage and attest.js/xcall.js consume. A top-level on-chain EXECUTE has no
+                // inherited ROOT_ACTION_INDEX → it IS the root, so use its own TX_VOUT; a nested
                 // EXECUTE emission inherits the root's value, stamped on its data by processEmission.
                 // TX_VOUT is a pure on-chain output index — distinct per action within a tx and
                 // stable across reorgs (unlike the injection-timing action_index) — so two forest
                 // roots under one tx_hash (a top-level EXECUTE and a controlled-token guard, both
                 // callPath '') cannot collide.
-                rootVout:          data['ROOT_TX_VOUT'] != null ? data['ROOT_TX_VOUT'] : (data['TX_VOUT'] != null ? data['TX_VOUT'] : 0),
+                rootActionIndex:   data['ROOT_ACTION_INDEX'] != null ? data['ROOT_ACTION_INDEX'] : (data['TX_VOUT'] != null ? data['TX_VOUT'] : 0),
                 // Cross-chain call context: hop budget for emit.crossExecute (threaded
                 // from XEXEC injections / result callbacks), the network bound into the
                 // call_id preimage, and the cross-call flag the harness uses to enforce
@@ -566,9 +568,10 @@ class Execute {
                 callDepth:         callDepth,
                 actionIndex:       hostData['ACTION_INDEX'],
                 callPath:          '',     // a guard is a root execution for its own subtree
-                // Root discriminator = the guarded native action's on-chain output index (TX_VOUT).
+                // Root discriminator = the guarded native action's on-chain output index (TX_VOUT),
+                // carried under the VM opt name `rootActionIndex` the gateway preimage reads.
                 // Distinguishes this guard subtree from a co-tx top-level EXECUTE that also seeds ''.
-                rootVout:          hostData['TX_VOUT'] != null ? hostData['TX_VOUT'] : 0,
+                rootActionIndex:   hostData['TX_VOUT'] != null ? hostData['TX_VOUT'] : 0,
                 isGuard:           true,   // disables ATTEST/XCALL in the gateway
                 network:           this.config['NETWORK'],
                 balances:          guardLedger.balances,
@@ -638,8 +641,9 @@ class Execute {
         let guardCtxData = {
             ACTION_INDEX:          hostData['ACTION_INDEX'],
             // Root discriminator for this guard's emission subtree = the guarded native action's
-            // on-chain output index TX_VOUT (propagated unchanged by processEmission).
-            ROOT_TX_VOUT:          hostData['TX_VOUT'] != null ? hostData['TX_VOUT'] : 0,
+            // on-chain output index TX_VOUT, under the ROOT_ACTION_INDEX key attest.js/xcall.js
+            // read (propagated unchanged by processEmission).
+            ROOT_ACTION_INDEX:     hostData['TX_VOUT'] != null ? hostData['TX_VOUT'] : 0,
             CONTRACT_ACTION_INDEX: contractIndex,
             SOURCE:                derived,
             BLOCK_INDEX:           hostData['BLOCK_INDEX'],
@@ -838,10 +842,10 @@ class Execute {
 
         // Per-root discriminator (request_id/call_id preimage). UNLIKE childPath it is pinned at
         // the root and propagated UNCHANGED: a top-level EXECUTE's executionData carries no
-        // ROOT_TX_VOUT, so its own TX_VOUT (a pure on-chain output index, stable across reorgs) IS
-        // the root; a nested/guard executionData already carries the inherited root value. Stamped
+        // ROOT_ACTION_INDEX, so its own TX_VOUT (a pure on-chain output index, stable across reorgs)
+        // IS the root; a nested/guard executionData already carries the inherited root value. Stamped
         // onto emissionData so attest.js/xcall.js re-derive with it and nested EXECUTEs inherit it.
-        let rootVout = (executionData['ROOT_TX_VOUT'] != null) ? executionData['ROOT_TX_VOUT'] : (executionData['TX_VOUT'] != null ? executionData['TX_VOUT'] : 0);
+        let rootActionIndex = (executionData['ROOT_ACTION_INDEX'] != null) ? executionData['ROOT_ACTION_INDEX'] : (executionData['TX_VOUT'] != null ? executionData['TX_VOUT'] : 0);
 
         // Force source to the contract's derived address
         let contractAddress = 'C:' + this.config['CHAIN'] + ':' + executionData['CONTRACT_ACTION_INDEX'];
@@ -884,9 +888,10 @@ class Execute {
             // content-derived so it is byte-stable across nodes/reorgs ('' for the root).
             EMITTER_PATH:       emitterPath,
             // Per-root discriminator: the on-chain output index TX_VOUT of the root that seeded
-            // this subtree. Bound (with EMITTER_PATH) into the ATTEST request_id / XCALL call_id
-            // re-derivation, and inherited unchanged by a nested EXECUTE emission.
-            ROOT_TX_VOUT:       rootVout,
+            // this subtree, under the ROOT_ACTION_INDEX key attest.js/xcall.js read. Bound (with
+            // EMITTER_PATH) into the ATTEST request_id / XCALL call_id re-derivation, and inherited
+            // unchanged by a nested EXECUTE emission.
+            ROOT_ACTION_INDEX:  rootActionIndex,
             // This emission's OWN call-path — if it is itself a nested EXECUTE, its
             // execution runs at this path (threaded into vm.execute as callPath).
             CALL_PATH:          childPath,
