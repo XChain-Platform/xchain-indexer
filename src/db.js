@@ -8518,7 +8518,10 @@ class Database {
         return rows.map(r => ({
             pubkey: String(r.pubkey),
             source: r.source == null ? '' : String(r.source),
-            weight: r.amount == null ? '0' : String(r.amount)
+            // The query aliases `amount AS weight`, so the value lands on r.weight —
+            // reading r.amount (undefined) collapsed EVERY weight to '0', which made
+            // stake-weighted quorum fail closed (S=0) for off-BTC chains (DOGE/LTC).
+            weight: r.weight == null ? '0' : String(r.weight)
         }));
     }
 
