@@ -527,3 +527,66 @@ describe('HubDbSync _applyRow price_snapshots skipped→finalized upgrade @regre
         assert.ok(/^INSERT IGNORE/.test(insert.args[0]), 'no status → plain idempotent insert');
     });
 });
+
+describe('HubDbSync _applyRow datetime coercion @regression @tier2', function () {
+
+    // Regression: fleet incident 2026-06-16 — the hub serves rows as JSON, so a
+    // DATETIME column (price_snapshots.created_at) arrives as an ISO-8601 string
+    // ('2026-06-16T10:33:01.000Z'). MariaDB strict mode rejects the 'T'/'Z' form
+    // for a DATETIME column (ER_TRUNCATED_WRONG_VALUE, 22007) and silently kills
+    // the mirror — BTC indexers stalled at 'price mirror at 0' once the oracle
+    // resumed finalizing rounds. _applyRow must reformat ISO datetimes to MySQL
+    // 'YYYY-MM-DD HH:MM:SS' (UTC) and leave every other value untouched.
+
+    function makeApplySync(localCols) {
+        const doQuery = sinon.stub();
+        doQuery.withArgs(sinon.match(/^SHOW COLUMNS/)).resolves(localCols.map(f => ({ Field: f })));
+        doQuery.resolves([]);
+        const sync = new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test' });
+        return { sync, doQuery };
+    }
+
+    function argFor(doQuery, table, col, cols) {
+        const insert = doQuery.getCalls().find(c => /INSERT/.test(c.args[0]) && c.args[0].includes(table));
+        return insert.args[1][cols.indexOf(col)];
+    }
+
+    it('reformats an ISO-8601 created_at (T/Z) to MySQL DATETIME', async function () {
+        const cols = ['round_number', 'coin_pair', 'status', 'created_at'];
+        const { sync, doQuery } = makeApplySync(cols);
+        await sync._applyRow('price_snapshots',
+            { round_number: 5, coin_pair: 'BTC/USD', status: 'finalized', created_at: '2026-06-16T10:33:01.000Z' });
+        assert.strictEqual(argFor(doQuery, 'price_snapshots', 'created_at', cols), '2026-06-16 10:33:01');
+    });
+
+    it('normalizes a non-UTC offset to UTC wall-clock', async function () {
+        const cols = ['id', 'created_at'];
+        const { sync, doQuery } = makeApplySync(cols);
+        await sync._applyRow('oracle_prices', { id: 1, created_at: '2026-06-16T12:33:01+02:00' });
+        assert.strictEqual(argFor(doQuery, 'oracle_prices', 'created_at', cols), '2026-06-16 10:33:01');
+    });
+
+    it('leaves an already-MySQL-format datetime untouched', async function () {
+        const cols = ['id', 'created_at'];
+        const { sync, doQuery } = makeApplySync(cols);
+        await sync._applyRow('oracle_prices', { id: 1, created_at: '2026-06-14 00:00:00' });
+        assert.strictEqual(argFor(doQuery, 'oracle_prices', 'created_at', cols), '2026-06-14 00:00:00');
+    });
+
+    it('does not mangle non-datetime string columns (hashes, ticks)', async function () {
+        const cols = ['coin_pair', 'consensus_proof'];
+        const { sync, doQuery } = makeApplySync(cols);
+        const proof = '[{"pubkey":"4a523cf4ae4f","sig":"deadbeef"}]';
+        await sync._applyRow('oracle_prices', { coin_pair: 'BTC/USD', consensus_proof: proof });
+        assert.strictEqual(argFor(doQuery, 'oracle_prices', 'coin_pair', cols), 'BTC/USD');
+        assert.strictEqual(argFor(doQuery, 'oracle_prices', 'consensus_proof', cols), proof);
+    });
+
+    it('passes numeric and null values through unchanged', async function () {
+        const cols = ['reference_block', 'price'];
+        const { sync, doQuery } = makeApplySync(cols);
+        await sync._applyRow('oracle_prices', { reference_block: 800000, price: null });
+        assert.strictEqual(argFor(doQuery, 'oracle_prices', 'reference_block', cols), 800000);
+        assert.strictEqual(argFor(doQuery, 'oracle_prices', 'price', cols), null);
+    });
+});

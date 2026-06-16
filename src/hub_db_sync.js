@@ -68,6 +68,23 @@ const RETRACTION_COLUMNS = {
     oracle_prices:   'action_index'
 };
 
+// Coerce a hub-served value for a parameterized INSERT into the local mirror.
+// The hub serves rows as JSON, so DATETIME columns arrive as ISO-8601 strings
+// (e.g. price_snapshots.created_at = '2026-06-16T10:33:01.000Z'). MariaDB in
+// strict mode rejects that 'T'/'Z' form for a DATETIME column with
+// ER_TRUNCATED_WRONG_VALUE (22007), which silently kills the mirror — fleet
+// incident 2026-06-16: BTC indexers stalled at 'price mirror at 0' once the
+// oracle resumed finalizing rounds and fresh price_snapshots began streaming.
+// Reformat any ISO-8601 datetime string to MySQL 'YYYY-MM-DD HH:MM:SS' (UTC,
+// matching how the hub stores it); leave every other value untouched.
+function coerceMirrorValue(v) {
+    if (typeof v !== 'string') return v;
+    if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(v)) return v;
+    let d = new Date(v);
+    if (isNaN(d.getTime())) return v;
+    return d.toISOString().slice(0, 19).replace('T', ' ');
+}
+
 // Tables mirrored for the cross-chain DEX + cross-chain contract calls.
 // cross_chain_matches carries finalized, validator-signed matches;
 // cross_chain_calls carries quorum-signed XCALL dispatch/result relay rows;
@@ -577,7 +594,7 @@ class HubDbSync {
         let cols = Object.keys(row).filter(c => allowed.has(c));
         if (cols.length === 0) return;
         let placeholders = cols.map(() => '?').join(', ');
-        let args = cols.map(c => row[c]);
+        let args = cols.map(c => coerceMirrorValue(row[c]));
 
         // price_snapshots needs an in-place upgrade path, not plain INSERT IGNORE.
         // It carries UNIQUE (round_number, coin_pair). The hub writes a 'skipped'
