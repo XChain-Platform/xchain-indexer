@@ -289,7 +289,7 @@ class Xcall {
     }
 
     // Process one mirrored, effective result row for a request THIS chain originated
-    // (driven by utility.processCrossChainCalls in deterministic hub-id order).
+    // (driven by utility.processCrossChainCalls in (snapshot_block, call_id) order).
     // Verifies the 2f+1 signatures, applies the exactly-once interlock against the
     // deadline-expiry path, injects the requester's callback, and records the
     // processing in cross_chain_call_callbacks (idempotency + rollback anchor).

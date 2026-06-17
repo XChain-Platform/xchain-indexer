@@ -18,8 +18,8 @@
  * The health endpoint reports a growing `lag` when the indexer is not
  * advancing. A bare lag value is ambiguous: a hub-sync-barrier stall, a
  * tripped DB circuit breaker, and a VM executor host fault all present
- * identically. These tests pin down the discriminators — `stallReason`
- * plus the two circuit-state fields — so an operator can tell them apart.
+ * identically. These tests pin down the discriminators (`stallReason`
+ * plus the two circuit-state fields) so an operator can tell them apart.
  */
 
 'use strict';
@@ -35,6 +35,8 @@ const { buildHealthResponse } = require('../../src/health');
 // Build a stub indexer with sane defaults; override any field per-test. Both
 // DB connections default to a closed (healthy) circuit and the indexer is mid
 // catch-up (decoder ahead of the last indexed block) so `lag` is non-zero.
+// hubPushQueue is omitted so buildHealthResponse takes the null-safe branch
+// (no DB call) and resolves immediately.
 function makeIndexer(overrides = {}){
     return Object.assign({
         decoderDb:            { circuitState: 'closed' },
@@ -47,7 +49,8 @@ function makeIndexer(overrides = {}){
 }
 
 // Standard server-scoped args: running, no fatal error, indexer 10 blocks
-// behind the decoder tip, fixed clock.
+// behind the decoder tip, fixed clock. Returns a Promise (buildHealthResponse
+// is async to support the hub_push_queue stats fetch).
 function call(indexer, opts = {}){
     return buildHealthResponse(Object.assign({
         indexer,
@@ -64,8 +67,8 @@ function call(indexer, opts = {}){
 
 describe('health() response builder', function(){
 
-    it('(a) healthy catch-up: stallReason is null, status healthy, lag reported', function(){
-        const res = call(makeIndexer());
+    it('(a) healthy catch-up: stallReason is null, status healthy, lag reported', async function(){
+        const res = await call(makeIndexer());
         assert.strictEqual(res.status, 'healthy');
         assert.strictEqual(res.running, true);
         assert.strictEqual(res.stallReason, null);
@@ -74,44 +77,44 @@ describe('health() response builder', function(){
         assert.strictEqual(res.indexerDbCircuit, 'closed');
     });
 
-    it('(b) sync-barrier stall: stallReason names the barrier while status stays healthy', function(){
-        // A barrier timeout does not trip a circuit — both DBs are reachable,
+    it('(b) sync-barrier stall: stallReason names the barrier while status stays healthy', async function(){
+        // A barrier timeout does not trip a circuit. Both DBs are reachable;
         // the indexer is simply waiting on the hub mirror. lag grows, but the
         // operator can now read WHY from stallReason rather than guessing.
-        const res = call(makeIndexer({ stallReason: 'price_sync_barrier' }));
+        const res = await call(makeIndexer({ stallReason: 'price_sync_barrier' }));
         assert.strictEqual(res.stallReason, 'price_sync_barrier');
         assert.strictEqual(res.status, 'healthy');
         assert.strictEqual(res.decoderDbCircuit, 'closed');
         assert.strictEqual(res.indexerDbCircuit, 'closed');
     });
 
-    it('(c) DB circuit-breaker tripped: stallReason null, circuit open, status unhealthy', function(){
-        // A breaker trip is a distinct stall mode — stallReason stays null, and
+    it('(c) DB circuit-breaker tripped: stallReason null, circuit open, status unhealthy', async function(){
+        // A breaker trip is a distinct stall mode: stallReason stays null, and
         // the open circuit field plus the unhealthy status flag the cause.
-        const res = call(makeIndexer({ indexerDb: { circuitState: 'open' } }));
+        const res = await call(makeIndexer({ indexerDb: { circuitState: 'open' } }));
         assert.strictEqual(res.stallReason, null);
         assert.strictEqual(res.indexerDbCircuit, 'open');
         assert.strictEqual(res.status, 'unhealthy');
     });
 
-    it('(d) VM executor host fault: stallReason flags the halt with circuits closed', function(){
+    it('(d) VM executor host fault: stallReason flags the halt with circuits closed', async function(){
         // The host-fault halt sets stallReason without tripping a circuit, so it
         // is distinguishable from both a barrier stall and a breaker trip.
-        const res = call(makeIndexer({ stallReason: 'vm_executor_unavailable' }));
+        const res = await call(makeIndexer({ stallReason: 'vm_executor_unavailable' }));
         assert.strictEqual(res.stallReason, 'vm_executor_unavailable');
         assert.strictEqual(res.decoderDbCircuit, 'closed');
         assert.strictEqual(res.indexerDbCircuit, 'closed');
         assert.strictEqual(res.status, 'healthy');
     });
 
-    it('surfaces hub-config age in seconds from the fixed clock', function(){
-        const res = call(makeIndexer({ lastHubConfigFetchAt: 1_000_000 - 45_000 }));
+    it('surfaces hub-config age in seconds from the fixed clock', async function(){
+        const res = await call(makeIndexer({ lastHubConfigFetchAt: 1_000_000 - 45_000 }));
         assert.strictEqual(res.hubConfigAgeSeconds, 45);
         assert.strictEqual(res.lastHubConfigFetchAt, 955_000);
     });
 
-    it('reports a fatal indexer error message and unhealthy status when not running', function(){
-        const res = call(makeIndexer(), {
+    it('reports a fatal indexer error message and unhealthy status when not running', async function(){
+        const res = await call(makeIndexer(), {
             indexerRunning: false,
             indexerError:   new Error('boom')
         });

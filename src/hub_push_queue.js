@@ -20,7 +20,7 @@
  * (PRICE v1) to the hub. Those pushes are network calls and can fail when the
  * hub is restarting, overloaded, or partitioned. The raw on-chain action is
  * always retained locally in the `prices` table, but the hub never reads that
- * table — so a dropped push used to permanently remove the row from the hub's
+ * table, so a dropped push used to permanently remove the row from the hub's
  * oracle_prices / price_snapshots and from every indexer that mirrors the hub.
  *
  * To make those pushes durable, a failed push is persisted to the
@@ -54,12 +54,12 @@ class HubPushQueue {
         this.draining = false;
     }
 
-    // Begin draining on an interval. No-op when no hub is configured — in that
+    // Begin draining on an interval. No-op when no hub is configured; in that
     // case the PRICE handlers never enqueue, so there is nothing to drain.
     start(){
         if(this.timer) return;
         if(!this.hubClient || !this.hubClient.enabled){
-            console.log('HubPushQueue: no hub configured — retry queue idle');
+            console.log('HubPushQueue: no hub configured, retry queue idle');
             return;
         }
         this.timer = setInterval(() => {
@@ -102,14 +102,30 @@ class HubPushQueue {
         }
     }
 
+    // Return aggregate queue stats for the health endpoint. Runs a single
+    // pooled query so it is safe to call concurrently with drain(). Returns
+    // null when the hub is unconfigured (queue never populated).
+    async getStats(){
+        if(!this.hubClient || !this.hubClient.enabled) return null;
+        let rows = await this.indexerDb._poolQuery(
+            `SELECT status, COUNT(*) AS cnt FROM pending_hub_pushes GROUP BY status`
+        );
+        let pending = 0, failed = 0;
+        for(let r of (rows || [])){
+            if(r.status === 'pending') pending = Number(r.cnt);
+            else if(r.status === 'failed')  failed  = Number(r.cnt);
+        }
+        return { pending, failed };
+    }
+
     async _attempt(row){
         let payload;
         try {
             payload = (typeof row.payload === 'string') ? JSON.parse(row.payload) : row.payload;
         } catch (e){
-            // A payload that can't be parsed can never be delivered — mark it
+            // A payload that can't be parsed can never be delivered; mark it
             // failed immediately so it stops cycling through the queue.
-            console.warn('HubPushQueue: row ' + row.id + ' has unparseable payload — marking failed');
+            console.warn('HubPushQueue: row ' + row.id + ' has unparseable payload, marking failed');
             await this.indexerDb.recordHubPushAttempt(row.id, 'unparseable payload', 1);
             return;
         }
@@ -121,11 +137,11 @@ class HubPushQueue {
             } else if(row.push_type === 'oracle_price'){
                 await this.hubClient.pushOraclePrice(payload);
             } else {
-                console.warn('HubPushQueue: row ' + row.id + ' has unknown push_type "' + row.push_type + '" — marking failed');
+                console.warn('HubPushQueue: row ' + row.id + ' has unknown push_type "' + row.push_type + '", marking failed');
                 await this.indexerDb.recordHubPushAttempt(row.id, 'unknown push_type', 1);
                 return;
             }
-            // Success (or a hub-side dedupe of a row it already has) — drop it.
+            // Success (or a hub-side dedupe of a row it already has); drop it.
             await this.indexerDb.markHubPushDelivered(row.id);
             console.log('HubPushQueue: delivered ' + row.push_type + ' row ' + row.id + ' (attempt ' + attemptNo + ')');
         } catch (err){
