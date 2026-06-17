@@ -3544,50 +3544,49 @@ describe('Database.createValidatorReward() @regression @tier1', function () {
         assert.strictEqual(result, false);
     });
 
-    it('returns false when neither stake nor delegation found for pubkey', async function () {
+    // Source resolution moved into _resolveActiveStakeSourceId (strict active-row
+    // predicates; covered in reward-source-resolution.test.js). These cases stub the
+    // resolver so they exercise createValidatorReward's own insert/return logic only.
+    it('returns false when no active source resolves for the pubkey', async function () {
         const db = makeDb();
         sinon.stub(db, 'getPubkeyId').resolves(3);
+        sinon.stub(db, '_resolveActiveStakeSourceId').resolves(null);
         const dq = sinon.stub(db, 'doQuery');
-        dq.resolves([]);  // no stake rows, no delegation rows
         const result = await db.createValidatorReward('deadbeef', 1, 'oracle_round', '10', 100);
         assert.strictEqual(result, false);
-        assert.strictEqual(dq.callCount, 2); // stakes lookup, then delegations fallback
+        assert.strictEqual(dq.callCount, 0); // no INSERT when the source does not resolve
     });
 
-    it('returns true and inserts reward when stake found', async function () {
+    it('returns true and inserts the reward when a source resolves', async function () {
         const db = makeDb();
         sinon.stub(db, 'getPubkeyId').resolves(3);
-        const dq = sinon.stub(db, 'doQuery');
-        dq.onCall(0).resolves([{ source_id: 2 }]);  // stake found
-        dq.onCall(1).resolves([]);                   // INSERT IGNORE
+        sinon.stub(db, '_resolveActiveStakeSourceId').resolves(2);
+        const dq = sinon.stub(db, 'doQuery').resolves([]);
         const result = await db.createValidatorReward('deadbeef', 1, 'oracle_round', '10', 100);
         assert.strictEqual(result, true);
-        assert.ok(String(dq.args[1][0]).includes('INSERT IGNORE INTO validator_rewards'));
+        assert.ok(String(dq.args[0][0]).includes('INSERT IGNORE INTO validator_rewards'));
     });
 
-    it('falls back to delegations when no stake row uses the pubkey (DELEGATE v0 key)', async function () {
+    it('writes the resolved source_id into the reward row', async function () {
         const db = makeDb();
         sinon.stub(db, 'getPubkeyId').resolves(3);
-        const dq = sinon.stub(db, 'doQuery');
-        dq.onCall(0).resolves([]);                   // no stake rows
-        dq.onCall(1).resolves([{ source_id: 7 }]);   // delegation resolves the source
-        dq.onCall(2).resolves([]);                   // INSERT IGNORE
+        sinon.stub(db, '_resolveActiveStakeSourceId').resolves(7); // e.g. resolved via a DELEGATE v0 key
+        const dq = sinon.stub(db, 'doQuery').resolves([]);
         const result = await db.createValidatorReward('deadbeef', 1, 'oracle_round', '10', 100);
         assert.strictEqual(result, true);
-        assert.ok(String(dq.args[1][0]).includes('FROM delegations'));
-        assert.ok(String(dq.args[2][0]).includes('INSERT IGNORE INTO validator_rewards'));
-        assert.strictEqual(dq.args[2][1][0], 7);     // source_id from the delegation row
+        assert.ok(String(dq.args[0][0]).includes('INSERT IGNORE INTO validator_rewards'));
+        assert.strictEqual(dq.args[0][1][0], 7);  // source_id arg is the resolver's result
+        assert.strictEqual(dq.args[0][1][1], 3);  // signing_pubkey_id arg is the pubkey
     });
 
     it('upsert=true emits ON DUPLICATE KEY UPDATE so the deterministic writer wins', async function () {
         const db = makeDb();
         sinon.stub(db, 'getPubkeyId').resolves(3);
-        const dq = sinon.stub(db, 'doQuery');
-        dq.onCall(0).resolves([{ source_id: 2 }]);   // stake found
-        dq.onCall(1).resolves([]);                   // upsert INSERT
+        sinon.stub(db, '_resolveActiveStakeSourceId').resolves(2);
+        const dq = sinon.stub(db, 'doQuery').resolves([]);
         const result = await db.createValidatorReward('deadbeef', 1, 'oracle_round', '10', 100, true);
         assert.strictEqual(result, true);
-        const sql = String(dq.args[1][0]);
+        const sql = String(dq.args[0][0]);
         assert.ok(sql.includes('ON DUPLICATE KEY UPDATE'));
         assert.ok(!sql.includes('INSERT IGNORE'));
     });
