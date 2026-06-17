@@ -7942,32 +7942,74 @@ class Database {
     // rewardType: 'oracle_round', 'attest_fee', 'anchor_<chain>', 'anchor_archive'
     // amount: reward amount as decimal string
     // blockIndex: block height when the reward was earned
+    // Resolve the source_id (index_addresses id) of the active staking source
+    // backing `pubkey_id` at `blockIndex`, or null. Active-row predicates are
+    // IDENTICAL to stake-source.js getStakeSourceByPubkey (and thus to
+    // _effectiveCapabilitySetSql membership): status=valid, activation/deactivation
+    // window, stake-key revocation, permanent slash. Reward writers MUST use this so
+    // the source_id stored during block processing matches the source the ANCHOR
+    // archive pins and recovery restores, keeping validator_rewards (block-scoped
+    // replicated state) byte-identical across the recovery boundary. The earlier
+    // writers took the latest stake by action_index with no predicates, which could
+    // diverge from the archive and break byte-identical recovery.
+    async _resolveActiveStakeSourceId(pubkey_id, blockIndex){
+        if(pubkey_id === null || pubkey_id === undefined) return null;
+        let blockIdx = Number(blockIndex);
+        let valid_id = await this.getStatusId('valid');
+        if(valid_id === null) return null;
+        let rows = await this.doQuery(
+            `SELECT s.source_id AS source_id FROM stakes s
+             WHERE s.signing_pubkey_id = ? AND s.status_id = ?
+               AND s.activation_block <= ?
+               AND (s.deactivation_block IS NULL OR s.deactivation_block > ?)
+               AND NOT EXISTS (
+                   SELECT 1 FROM stake_key_revocations r
+                   WHERE r.source_id = s.source_id
+                     AND r.signing_pubkey_id = s.signing_pubkey_id
+                     AND r.status_id = ?
+                     AND r.deactivation_block <= ?
+                     AND r.action_index > s.action_index)
+               AND NOT EXISTS (
+                   SELECT 1 FROM capability_slash_events cse
+                   WHERE cse.signing_pubkey_id = s.signing_pubkey_id
+                     AND cse.block_index <= ?)
+             ORDER BY s.action_index DESC LIMIT 1`,
+            [pubkey_id, valid_id, blockIdx, blockIdx, valid_id, blockIdx, blockIdx]);
+        if(!rows || rows.length === 0){
+            rows = await this.doQuery(
+                `SELECT d.source_id AS source_id FROM delegations d
+                 WHERE d.signing_pubkey_id = ? AND d.status_id = ?
+                   AND d.activation_block <= ?
+                   AND (d.deactivation_block IS NULL OR d.deactivation_block > ?)
+                   AND NOT EXISTS (
+                       SELECT 1 FROM capability_slash_events cse
+                       WHERE cse.signing_pubkey_id = d.signing_pubkey_id
+                         AND cse.block_index <= ?)
+                 ORDER BY d.action_index DESC LIMIT 1`,
+                [pubkey_id, valid_id, blockIdx, blockIdx, blockIdx]);
+        }
+        return (rows && rows.length > 0) ? rows[0].source_id : null;
+    }
+
     // upsert: deterministic block-processing writers pass true so their value
     //         always wins over a best-effort hub push that raced them - the
     //         derived row is the consensus row (replay produces it byte-equal)
     async createValidatorReward(pubkeyHex, roundReference, rewardType, amount, blockIndex, upsert){
-        // Look up the source address that owns this signing pubkey via the stakes table
         let pubkey_id = await this.getPubkeyId(String(pubkeyHex).toLowerCase());
         if(pubkey_id === null){
             console.warn('createValidatorReward: unknown pubkey ' + pubkeyHex);
             return false;
         }
-        // Find the most recent active stake using this pubkey to determine source_id
-        let query = `SELECT source_id FROM stakes WHERE signing_pubkey_id=? ORDER BY action_index DESC LIMIT 1`;
-        let results = await this.doQuery(query, [pubkey_id]);
-        if(results.length === 0){
-            // Delegated signing key (DELEGATE v0) - resolve to the delegating source
-            query = `SELECT source_id FROM delegations WHERE signing_pubkey_id=? ORDER BY action_index DESC LIMIT 1`;
-            results = await this.doQuery(query, [pubkey_id]);
-        }
-        if(results.length === 0){
-            console.warn('createValidatorReward: no stake or delegation found for pubkey ' + pubkeyHex);
+        // Strict active-row source resolution at this reward's block, matching the
+        // ANCHOR archive + recovery (see _resolveActiveStakeSourceId).
+        let source_id = await this._resolveActiveStakeSourceId(pubkey_id, blockIndex);
+        if(source_id === null || source_id === undefined){
+            console.warn('createValidatorReward: no active stake or delegation for pubkey ' + pubkeyHex + ' at block ' + blockIndex);
             return false;
         }
-        let source_id = results[0].source_id;
         // Insert the reward (idempotent via UNIQUE INDEX on source_id+signing_pubkey_id+reward_type+round_reference).
         // Deterministic writers upsert so their amount/block_index always win.
-        query = upsert
+        let query = upsert
             ? `INSERT INTO validator_rewards
                     (source_id, signing_pubkey_id, reward_type, round_reference, amount, block_index)
                  VALUES (?, ?, ?, ?, ?, ?)
@@ -8717,16 +8759,13 @@ class Database {
             console.warn('createNodeProofVerification: unknown pubkey ' + pubkeyHex);
             return false;
         }
-        // Source = the staking address that owns this signing key (stake first, then
-        // a DELEGATE v0 delegated key) - same resolution as createValidatorReward.
-        let results = await this.doQuery(`SELECT source_id FROM stakes WHERE signing_pubkey_id=? ORDER BY action_index DESC LIMIT 1`, [pubkey_id]);
-        if(results.length === 0)
-            results = await this.doQuery(`SELECT source_id FROM delegations WHERE signing_pubkey_id=? ORDER BY action_index DESC LIMIT 1`, [pubkey_id]);
-        if(results.length === 0){
-            console.warn('createNodeProofVerification: no stake or delegation found for pubkey ' + pubkeyHex);
+        // Source = the staking address active at this block, strict active-row
+        // resolution matching createValidatorReward + the ANCHOR archive/recovery.
+        let source_id = await this._resolveActiveStakeSourceId(pubkey_id, blockIndex);
+        if(source_id === null || source_id === undefined){
+            console.warn('createNodeProofVerification: no active stake or delegation for pubkey ' + pubkeyHex + ' at block ' + blockIndex);
             return false;
         }
-        let source_id = results[0].source_id;
         let query = `INSERT IGNORE INTO full_node_verifications
                         (action_index, challenge_id, epoch_height, target_height, signing_pubkey_id, source_id, passed, block_index)
                      VALUES (?, ?, ?, ?, ?, ?, 1, ?)`;
