@@ -81,7 +81,7 @@ class ProtocolChanges {
         this.addChange('COINPAY_EXPIRE', '1.0.0',0,0,0,0,0,0);
 
         // VM actions (all chains). DEPLOY covers inline (v0/v1), chunked-assemble
-        // (v2/v3), and the chunk carrier (v4) — all gated under this one entry.
+        // (v2/v3), and the chunk carrier (v4): all gated under this one entry.
         this.addChange('DEPLOY',             '2.0.0',0,0,0,0,0,0);
         this.addChange('EXECUTE',            '2.0.0',0,0,0,0,0,0);
         this.addChange('DEPOSIT',            '2.0.0',0,0,0,0,0,0);
@@ -94,47 +94,47 @@ class ProtocolChanges {
         // from-genesis replay decode every historical inline DEPLOY identically: an ungated
         // flip silently re-reads every hex-era DEPLOY as base64, which changes its code_hash
         // → the per-block contract_hash → the federation checkpoint preimage, forking the
-        // ledger. Keyed on block_TIME (not block_index) on purpose — DEPLOY runs on BTC, LTC
+        // ledger. Keyed on block_TIME (not block_index) on purpose: DEPLOY runs on BTC, LTC
         // and DOGE, whose heights diverge by millions of blocks, so no single shared block
         // height can name one coordinated cutover across all three chains, but a single
         // timestamp can. testnet/regtest activate at genesis (base64-native; no pre-base64
         // history to preserve, and the e2e/regtest stack deploys base64 from block 0).
         // The mainnet timestamp below is a PLACEHOLDER coordinated flag-day (2027-01-01
         // 00:00:00 UTC) that MUST be confirmed and aligned with the SDK base64 rollout
-        // before any base64 DEPLOY is broadcast to mainnet — a wrong value is a second fork.
+        // before any base64 DEPLOY is broadcast to mainnet; a wrong value is a second fork.
         this.addChange('DEPLOY_BASE64_CODE', '2.0.0',1798761600,0,0,0,0,0);
 
-        // Staking actions — capability variants (STAKE v1/v2, UNSTAKE v0, DELEGATE v0/v2, COLLECT) are BTC-only;
+        // Staking actions: capability variants (STAKE v1/v2, UNSTAKE v0, DELEGATE v0/v2, COLLECT) are BTC-only;
         // contract variants (STAKE v3, UNSTAKE v1, DELEGATE v1/v3) work on any chain
         this.addChange('STAKE',              '2.0.0',0,0,0,0,0,0);
         this.addChange('UNSTAKE',            '2.0.0',0,0,0,0,0,0);
         this.addChange('DELEGATE',           '2.0.0',0,0,0,0,0,0);
         this.addChange('COLLECT',            '2.0.0',0,0,0,0,0,0);
-        // SLASH — permissionless capability-stake equivocation slashing (WI-2 bump 2). The
+        // SLASH: permissionless capability-stake equivocation slashing (WI-2 bump 2). The
         // verifier only ACCEPTS proofs whose two messages carry the EQUIV header, so slashing
         // is naturally inert until the EQUIV flag-day (no coupling with the SLASH protocol gate).
         this.addChange('SLASH',              '2.0.0',0,0,0,0,0,0);
 
-        // PRICE action — validator oracle (v0) and user oracle (v1) pricing
+        // PRICE action: validator oracle (v0) and user oracle (v1) pricing
         // Publishable on any chain (DOGE recommended for low fees)
         this.addChange('PRICE',              '2.0.0',0,0,0,0,0,0);
 
-        // External attestation framework — single ATTEST action with v0=request, v1=response, v2=expire
+        // External attestation framework: single ATTEST action with v0=request, v1=response, v2=expire
         // (See xchain-documentation/protocol/actions/ATTEST.md)
         this.addChange('ATTEST',             '2.0.0',0,0,0,0,0,0);
 
-        // ANCHOR — DOGE-only on-chain state commitments: v0=checkpoint,
+        // ANCHOR: DOGE-only on-chain state commitments: v0=checkpoint,
         // v1=checkpoint+match archive, v2=archive continuation
         // (See xchain-documentation/protocol/actions/ANCHOR.md)
         this.addChange('ANCHOR',             '2.0.0',0,0,0,0,0,0);
 
-        // Cross-chain contract calls — XCALL v0=request (VM-emission-only; never
+        // Cross-chain contract calls: XCALL v0=request (VM-emission-only; never
         // decoded from the wire), v2=expire (system-synthesized). The relay rows
         // ride the hub mirror; registered for consistency/documentation.
         // (See xchain-documentation/protocol/actions/XCALL.md)
         this.addChange('XCALL',              '2.0.0',0,0,0,0,0,0);
 
-        // NODEPROOF — full-node possession-proof verdict (v0; validator-broadcast).
+        // NODEPROOF: full-node possession-proof verdict (v0; validator-broadcast).
         // Records which validators answered the derived possession challenge, so the
         // verified set earns the full-node oracle-round reward tranche. BTC-only.
         // (See xchain-documentation/protocol/actions/NODEPROOF.md)
@@ -144,7 +144,7 @@ class ProtocolChanges {
         // this.addChange('name','1.0.0',0,0,0,0,0,0);
         this.addChange('UNIFIED_FEES',   '2.0.0',0,0,0,0,0,0);
         this.addChange('VM_ACTIONS',     '2.0.0',0,0,0,0,0,0);
-        // Cross-chain DEX gate — when enabled, ORDER/SWAP allow GET_COIN != COIN and the
+        // Cross-chain DEX gate: when enabled, ORDER/SWAP allow GET_COIN != COIN and the
         // xchain-hub federation drives cross-chain matching + mirror-delivered settlement.
         // Genesis-activated (pre-launch).
         this.addChange('CROSS_CHAIN_DEX','2.0.0',0,0,0,0,0,0);
@@ -152,13 +152,13 @@ class ProtocolChanges {
         // testnet/regtest charge from block 0 so the fee path is exercisable there.
         // mainnet_block=862633 is a BTC block height used as an 'always-on' activation
         // for LTC and DOGE (both passed this height long ago). This is intentional legacy
-        // behaviour — a single cross-chain activation height chosen from BTC; see
+        // behaviour. A single cross-chain activation height is chosen from BTC; see
         // xchain-documentation/protocol/CONFIGURATION.md for the rationale.
         this.addChange('ISSUANCE_FEE',   '1.0.0',0,0,0,862633,0,0);
         // VM-emitted ISSUE (IS_EMISSION) issuance-fee exemption. A contract
         // constructor (or EXECUTE) that emits an ISSUE has no XCHAIN balance on the
         // freshly deployed contract address, so charging ISSUANCE_FEE against the
-        // emitted ISSUE fails fee validation and reverts the constructor — the
+        // emitted ISSUE fails fee validation and reverts the constructor, so the
         // deployer already paid the DEPLOY/EXECUTE gas (base + per-byte + per-
         // emission), so the emitted ISSUE is fee-exempt. Gated as its own
         // consensus rule so the change in fee behaviour switches over at a
@@ -166,14 +166,14 @@ class ProtocolChanges {
         // an ungated flip charges the fee on one node version and exempts it on
         // another at the SAME block, forking the ledger and the contract-state
         // checkpoint on the first constructor that emits an ISSUE. Keyed on
-        // block_TIME (not block_index), mirroring DEPLOY_BASE64_CODE — emitted
+        // block_TIME (not block_index), mirroring DEPLOY_BASE64_CODE. Emitted
         // ISSUEs ride DEPLOY/EXECUTE, which run on BTC, LTC and DOGE whose heights
         // diverge by millions of blocks, so no single shared block height names one
         // cutover across all three chains, but a single timestamp does. The mainnet
         // timestamp is the same PLACEHOLDER coordinated flag-day as the base64
         // rollout (2027-01-01 00:00:00 UTC) and MUST be confirmed/aligned with the
         // other contract-deploy consensus fixes shipping in this window before any
-        // affected DEPLOY is broadcast to mainnet — a wrong value is a second fork.
+        // affected DEPLOY is broadcast to mainnet; a wrong value is a second fork.
         // testnet/regtest activate at genesis (no pre-exemption history to preserve;
         // the e2e/regtest stack exercises VM emissions from block 0).
         this.addChange('ISSUANCE_FEE_EMISSION_EXEMPT', '2.0.0',1798761600,0,0,0,0,0);
@@ -186,17 +186,17 @@ class ProtocolChanges {
         // accessor is a NEW VM input: the first contract that calls getBalance or
         // getTokenInfo computes different gas_used, emitted_count, and ledger
         // movements on a node that feeds real balances vs one that still passes
-        // null — an ungated flip forks the contract_hash (and the federation
+        // null: an ungated flip forks the contract_hash (and the federation
         // checkpoint preimage) the moment a balance-reading contract executes, even
         // within the 2.x line (2.2.0–2.7.10 lack the reader; 2.7.11+ have it).
         // Keyed on block_TIME (not block_index), mirroring DEPLOY_BASE64_CODE and
-        // ISSUANCE_FEE_EMISSION_EXEMPT — DEPLOY/EXECUTE run on BTC, LTC and DOGE
+        // ISSUANCE_FEE_EMISSION_EXEMPT. DEPLOY/EXECUTE run on BTC, LTC and DOGE
         // whose heights diverge by millions of blocks, so no single shared block
         // height names one cutover across all three chains, but a single timestamp
         // does. The mainnet timestamp is the same PLACEHOLDER coordinated flag-day
         // as the other contract-deploy consensus fixes in this window (2027-01-01
         // 00:00:00 UTC) and MUST be confirmed/aligned before any balance-reading
-        // contract is broadcast to mainnet — a wrong value is a fork. testnet/regtest
+        // contract is broadcast to mainnet; a wrong value is a fork. testnet/regtest
         // activate at genesis (no pre-reader history to preserve; the e2e/regtest
         // stack exercises VM balance reads from block 0).
         this.addChange('VM_BALANCE_TOKENINFO', '2.0.0',1798761600,0,0,0,0,0);
@@ -205,26 +205,26 @@ class ProtocolChanges {
         // controller's `guard` method is NEVER run: every SEND/ORDER/SWAP/DISPENSER/
         // DESTROY on a controller-bound token settles with its plain (un-guarded)
         // semantics, no allow/deny veto, no royalty/fee payout_legs written, and no
-        // guard contract_executions row — exactly as a node that lacks the controller
+        // guard contract_executions row, exactly as a node that lacks the controller
         // layer behaves. At/above it the shared chokepoint (_invokeController in
         // utility.js) runs the guard, may DENY the action, and may attach payout_legs
         // that the match-time proceeds split applies. Gated as its own consensus rule
         // because the guard is a NEW, ungated acceptance + ledger rule: a node version
         // with the controller layer and one without it process the SAME guarded action
-        // differently — one allows/redirects funds, the other settles plainly — forking
+        // differently (one allows/redirects funds, the other settles plainly), forking
         // the ledger AND the per-block contract_hash (guard emissions now write a guard
         // contract_executions row, so they contribute to the checkpoint preimage) on the
-        // first guarded action. A single flag-day flips the whole surface — VM execution,
+        // first guarded action. A single flag-day flips the whole surface: VM execution,
         // payout_legs write, match-time applyProceedsSplit, and the contract_hash
-        // contribution — atomically across all nodes. Keyed on block_TIME (not
+        // contribution, atomically across all nodes. Keyed on block_TIME (not
         // block_index), mirroring DEPLOY_BASE64_CODE / ISSUANCE_FEE_EMISSION_EXEMPT /
-        // VM_BALANCE_TOKENINFO — guarded actions run on BTC, LTC and DOGE whose heights
+        // VM_BALANCE_TOKENINFO. Guarded actions run on BTC, LTC and DOGE whose heights
         // diverge by millions of blocks, so no single shared block height names one
         // cutover across all three chains, but a single timestamp does. The mainnet
         // timestamp is the same PLACEHOLDER coordinated flag-day as the other
         // contract-era consensus fixes in this window (2027-01-01 00:00:00 UTC) and MUST
         // be confirmed/aligned with the operator fleet upgrade before any CONTROLLER-bound
-        // token is issued on mainnet — a wrong value is a fork. testnet/regtest activate
+        // token is issued on mainnet; a wrong value is a fork. testnet/regtest activate
         // at genesis (no pre-guard history to preserve; the e2e/regtest stack exercises
         // controller guards from block 0).
         this.addChange('CONTROLLER_GUARD', '2.0.0',1798761600,0,0,0,0,0);
@@ -257,6 +257,15 @@ class ProtocolChanges {
         // pre-activation history to preserve; the e2e/regtest stack has run with the
         // rule live, so genesis activation preserves its current behaviour).
         this.addChange('VM_BANNED_ASYNC', '2.0.0',1798761600,0,0,0,0,0);
+
+        // ISSUE validity: strict LOCK_MAX_SUPPLY guard. Before this activation the guard used
+        // a truthy check, so an explicit LOCK_MAX_SUPPLY=0 field (a no-op lock intent with no
+        // cap declared) incorrectly triggered the 'invalid: LOCK_MAX_SUPPLY (no max supply)'
+        // outcome. After activation the guard requires LOCK_MAX_SUPPLY==1, matching the field's
+        // intended semantics. Gated so a heterogeneous fleet and any from-genesis replay all
+        // switch at the same block; pre-launch chains activate at genesis (all zeros), making
+        // the strict check effective from block 0 on testnet/regtest and mainnet alike.
+        this.addChange('LOCK_MAX_SUPPLY_EXACT', '2.0.0',0,0,0,0,0,0);
 
         // NOTE: STAKE_WEIGHTED_QUORUM (WI-1) is deliberately NOT registered here.
         // Standard activations gate on the LOCAL processing block via isEnabled();
@@ -383,7 +392,7 @@ class ProtocolChanges {
         } catch (e){
             // Could-not-evaluate is NOT the same as not-enabled. Swallowing an error here
             // (e.g. a transient decoder-DB fault in getBlockTime) would mark the action as
-            // disabled on this node only — invalidating actions that healthy peers process
+            // disabled on this node only, invalidating actions that healthy peers process
             // normally and silently forking the ledger. Propagate instead so block
             // processing rolls back and retries the block with correct activation state.
             console.log('protocol error e=',e);

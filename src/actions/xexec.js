@@ -23,7 +23,7 @@
  * the target contract method as a fresh depth-0 execution under the
  * caller-funded gas ceiling.
  *
- * There is NO on-chain transaction for the injection — it is an internal
+ * There is NO on-chain transaction for the injection. It is an internal
  * action (like CROSS_SETTLE), recorded in cross_chain_call_executions for
  * idempotency + rollback. The execution outcome (status + capped return
  * payload) is recorded there too; the federation relays it back to the source
@@ -32,12 +32,12 @@
  * Failure containment: the injected execution runs inside its own savepoint.
  * A failed run (revert / out_of_gas / missing contract / not crossCallable)
  * rolls its state back but the FAILURE ITSELF is the recorded, relayed result
- * — never a skip, or operators that saw different transient states would
- * diverge on whether the call happened.
+ * (never a skip, or operators that saw different transient states would
+ * diverge on whether the call happened).
  *
  * Trust: dispatch terms are only acted on after 2f+1 `cross_chain` signatures
  * verify against the mirrored capability snapshot at the dispatch's
- * snapshot_block — a bad mirror can delay but cannot forge a call.
+ * snapshot_block. A bad mirror can delay but cannot forge a call.
  *
  * Spec: xchain-documentation/protocol/actions/XCALL.md
  *
@@ -47,10 +47,11 @@ const crypto  = require('crypto');
 const ed25519 = require('../ed25519.js');
 const swq     = require('../stake_weighted_quorum.js');
 const eq      = require('../equivocation_header.js');
+const { XCALL_MAX_HOPS } = require('./xcall.js');
 
-// Return payloads are mirrored to every indexer AND ANCHOR-archived on DOGE —
-// hard-capped. Oversize → status 'payload_too_large', empty payload
-// (deterministic truncation rule). Canonical: protocol/constants.js.
+// Return payloads are mirrored to every indexer AND ANCHOR-archived on DOGE,
+// so they are hard-capped. Oversize yields status 'payload_too_large' with an
+// empty payload (deterministic truncation rule). Canonical: protocol/constants.js.
 const XCALL_MAX_RETURN_BYTES = 1024;
 
 class Xexec {
@@ -64,7 +65,7 @@ class Xexec {
         this.mapper    = action.mapper;
     }
 
-    // Canonical signing string for the dispatch phase — MUST byte-match the hub's
+    // Canonical signing string for the dispatch phase. MUST byte-match the hub's
     // CrossChainCallEngine._canonicalMatch (dispatch branch) and the archive
     // verifier (StateAnchorPublisher._callCanonical).
     _canonical(c){
@@ -76,7 +77,7 @@ class Xexec {
             String(c.gas_limit), String(c.cross_hops), String(c.effective_time)
         ].join('|');
         // EQUIV (WI-2 bump 2): TAG=XCALL, ROUND_ID = sha256('XCALLROUND|dispatch|'+call_id)
-        // (phase folded in → dispatch/result get distinct keys), VIEW = finalizing_view.
+        // (phase folded in, so dispatch/result get distinct keys), VIEW = finalizing_view.
         if(eq.isEquivHeaderActive(c.snapshot_block, c.network))
             return eq.buildEquivCanonical(eq.ENGINE_TAGS.XCALL,
                 crypto.createHash('sha256').update('XCALLROUND|dispatch|' + c.call_id, 'utf8').digest('hex'),
@@ -94,14 +95,23 @@ class Xexec {
 
         let coin = this.config['COIN'];
 
-        // ── Network + target scope (belt-and-suspenders; the query pre-filters) ──
+        // Network + target scope (belt-and-suspenders; the query pre-filters)
         if(String(c.network || '') !== String(this.config['NETWORK'] || '')){
-            console.warn("\t XEXEC : call=" + String(c.call_id).substring(0,16) + '... : network mismatch (' + c.network + ' != ' + this.config['NETWORK'] + ') — skipping');
+            console.warn("\t XEXEC : call=" + String(c.call_id).substring(0,16) + '... : network mismatch (' + c.network + ' != ' + this.config['NETWORK'] + ') - skipping');
             return;
         }
         if(String(c.target_chain) !== String(coin)) return;                 // not our call
 
-        // ── Verify the cross_chain quorum over the dispatch canonical ────────────
+        // Defense-in-depth: re-assert the hop ceiling at injection. The cap is
+        // enforced at VM emit (gateway-emit.js) and source parse (xcall.js), but
+        // re-checking here ensures a forged or corrupted mirror row cannot bypass it.
+        // Under honest-majority this is never triggered; it guards the injection path.
+        if(Number(c.cross_hops) > XCALL_MAX_HOPS){
+            console.warn("\t XEXEC : call=" + String(c.call_id).substring(0,16) + '... : cross_hops (' + c.cross_hops + ') exceeds XCALL_MAX_HOPS (' + XCALL_MAX_HOPS + ') - skipping');
+            return;
+        }
+
+        // Verify the cross_chain quorum over the dispatch canonical.
         // Stake-weighted (source-deduped 3·Σ>2·S) at/above STAKE_WEIGHTED_QUORUM
         // (BTC snapshot_block + network), else legacy 2f+1 signer count.
         let snapshotBlock = Number(c.snapshot_block);
@@ -115,7 +125,7 @@ class Xexec {
             // front-stop this (defer the whole block); this early-return is the
             // defensive guard for the residual race / single-host path. The dispatch
             // stays effective + unexecuted and retries on a later block. NOT an error.
-            console.log("\t XEXEC : call=" + String(c.call_id).substring(0,16) + '... : capability snapshot not synced — deferring');
+            console.log("\t XEXEC : call=" + String(c.call_id).substring(0,16) + '... : capability snapshot not synced - deferring');
             return;
         }
 
@@ -140,16 +150,16 @@ class Xexec {
             ? swq.meetsStakeThreshold(this.util, validators, validSigners)
             : (validSigners.length >= ((N <= 1) ? 1 : Math.max(2 * Math.floor((N - 1) / 3) + 1, Math.ceil((N + 1) / 2))));
         if(!quorumMet){
-            console.warn("\t XEXEC : call=" + String(c.call_id).substring(0,16) + '... : insufficient ' + (weighted ? 'signer stake' : 'valid signatures (' + validSigners.length + '/' + N + ')') + ' — skipping');
+            console.warn("\t XEXEC : call=" + String(c.call_id).substring(0,16) + '... : insufficient ' + (weighted ? 'signer stake' : 'valid signatures (' + validSigners.length + '/' + N + ')') + ' - skipping');
             return;
         }
 
-        // ── Mint the internal XEXEC action (rollback anchor for the whole call) ──
+        // Mint the internal XEXEC action (rollback anchor for the whole call)
         let action = { ACTION: 'XEXEC', BLOCK_INDEX: data['BLOCK_INDEX'] };
         data['ACTION_INDEX'] = await this.indexerDb.createActionIndex(action);
         data['STATUS'] = 'valid';
 
-        // ── Run the target method as a fresh depth-0 execution ──────────────────
+        // Run the target method as a fresh depth-0 execution
         let parsedParams = [];
         try {
             let p = JSON.parse(String(c.params_json || '[]'));
@@ -169,7 +179,7 @@ class Xexec {
 
         // Synthetic, chain/network-namespaced TX_HASH: there is no real transaction
         // on this chain, but anything the execution emits (ATTEST request_ids, XCALL
-        // call_ids) derives from TX_HASH — it must be unique and collision-free
+        // call_ids) derives from TX_HASH. It must be unique and collision-free
         // against real tx hashes AND other injected calls. CROSS_HOPS threads the
         // hop budget; IS_CROSS_CALL makes the VM enforce the target's crossCallable
         // allowlist; VM_GAS_LIMIT applies the caller-funded ceiling.
@@ -207,7 +217,7 @@ class Xexec {
                     if(bytes.length > XCALL_MAX_RETURN_BYTES){
                         // Deterministic truncation rule: oversize returns become a
                         // distinct failure status with an EMPTY payload (never a
-                        // truncated one — partial JSON would be a foot-gun). The
+                        // truncated one, since partial JSON would be a foot-gun). The
                         // state changes stand (the contract ran fine); only the
                         // return payload is suppressed.
                         resultStatus = 'payload_too_large';
@@ -217,7 +227,7 @@ class Xexec {
                 }
                 await this.indexerDb.releaseSavepoint(savepoint);
             } else {
-                // The run failed — roll back any partial effects; the failure is the result.
+                // The run failed: roll back any partial effects; the failure is the result.
                 await this.indexerDb.rollbackToSavepoint(savepoint);
                 resultStatus = this._mapFailureStatus(status, executionData['VM_ERROR_MESSAGE']);
             }
@@ -235,7 +245,7 @@ class Xexec {
 
         // Record the execution (idempotent on call_id; rollback-able with this block).
         // Written OUTSIDE the execution savepoint so a rolled-back failed run still
-        // records its result — the failure must relay, and the call must not retry.
+        // records its result: the failure must relay, and the call must not retry.
         await this.indexerDb.recordCrossChainCallExecution(
             data['ACTION_INDEX'], String(c.call_id).toLowerCase(), executeActionIndex,
             resultStatus, returnPayloadB64, gasUsed, data['BLOCK_INDEX']);
@@ -244,10 +254,10 @@ class Xexec {
     }
 
     // Map an EXECUTE handler status to the relayed result status vocabulary.
-    // MUST stay deterministic — every operator derives the identical mapping.
+    // MUST stay deterministic: every operator derives the identical mapping.
     _mapFailureStatus(status, errorMessage){
         // The crossCallable allowlist violation throws the fixed marker from the
-        // contract wrapper (see xchain-vm CONTRACT_WRAPPER) — checked across ALL
+        // contract wrapper (see xchain-vm CONTRACT_WRAPPER). Checked across ALL
         // failure families because a plain wrapper throw classifies as 'failed'.
         if(/XCALL_NOT_CALLABLE/.test(String(errorMessage || ''))) return 'not_callable';
         if(/^reverted\b/.test(status))                      return 'reverted';

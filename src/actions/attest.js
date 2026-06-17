@@ -15,16 +15,16 @@
  * XChain Platform Action - ATTEST
  *
  * External-data attestation lifecycle with three version-discriminated phases:
- *   v0 — Request (VM emission only; originated by xchain.attestation.request())
- *   v1 — Response (validator-broadcast PBFT bundle with signatures)
- *   v2 — Expire (system-synthesized; never user-broadcast)
+ *   v0: Request (VM emission only; originated by xchain.attestation.request())
+ *   v1: Response (validator-broadcast PBFT bundle with signatures)
+ *   v2: Expire (system-synthesized; never user-broadcast)
  *
  * Spec: xchain-documentation/protocol/actions/ATTEST.md
  *
  * FORMATS:
  *   v0 - VERSION|REQUEST_ID|PROVIDER_ID|REQUEST_PAYLOAD|CALLBACK_METHOD|CALLBACK_PARAMS_JSON|REDUNDANCY|DEADLINE_BLOCKS
  *   v1 - VERSION|REQUEST_ID|PROVIDER_ID|RESPONSE_PAYLOAD|STATUS|META|SIG_COUNT|PUBKEY|SIG|...
- *   v2 - VERSION|REQUEST_ID         (synthesized only; REQUEST_ID is sufficient — handler looks up the row)
+ *   v2 - VERSION|REQUEST_ID         (synthesized only; REQUEST_ID is sufficient, handler looks up the row)
  *
  ********************************************************************/
 
@@ -71,7 +71,7 @@ class Attest {
         if(format === 2) return await this._parseExpire(params, data, error);
     }
 
-    // ATTEST v0 — Request (VM emission only)
+    // ATTEST v0: Request (VM emission only)
     async _parseRequest(params, data, error){
 
         // VM-emission-only: reject anything user-initiated.
@@ -132,12 +132,12 @@ class Attest {
         // must not carry more precision than the GAS tick is issued with: the
         // escrow/debit/credit ledger rows round to the tick's decimals
         // (createLedgerChangeRecord), so a finer fee would be CHARGED rounded
-        // while attests.fee_amount keeps the unrounded string — desyncing the
+        // while attests.fee_amount keeps the unrounded string, desyncing the
         // reward split (computed from the unrounded fee_amount) from the escrow.
         // Cap at min(8, gasDecimals): 8 is the hard ceiling the equal split
         // floors to (bcmulfloor(...,8)); gasDecimals is the consensus precision
         // of the GAS tick (8 for the production XCHAIN genesis issuance, 0 on
-        // the decimals-0 regtest GAS tick). Deterministic — every validator
+        // the decimals-0 regtest GAS tick). Deterministic: every validator
         // replaying from genesis reads the same issues-table state at this block.
         if(!error && !this.util.isNull(data['FEE_AMOUNT'])){
             let gasDecimals = await this.indexerDb.getTokenDecimalPrecision(
@@ -164,16 +164,16 @@ class Attest {
         // Re-derive request_id and compare. Defends against a compromised VM by anchoring
         // the on-chain request_id to (tx_hash, emitter_path, contract_index,
         // emitter_position). EMITTER_PATH (the emitting execution's deterministic call-path
-        // — the '>'-joined per-execution emission positions from the root on-chain action
+        // (the '>'-joined per-execution emission positions from the root on-chain action
         // down to this execution, root = '') is part of the preimage because cross-contract
-        // calls let the SAME contract run more than once in the SAME tx — without it, two
+        // calls let the SAME contract run more than once in the SAME tx; without it, two
         // such runs derive identical request_ids for their first attestation. Unlike the old
         // EMITTER_ACTION_INDEX it is content-derived, so it stays byte-stable across nodes
         // and reorgs (action_index advanced with synthetic-action injection timing → forked
         // the PBFT). MUST byte-match the VM's derivation in xchain-vm/src/gateway.js
         // (attestation.request). All inputs are REQUIRED for a legitimate VM emission
         // (execute.processEmission); their absence is a hard failure, not a silent bypass.
-        // NOTE: EMITTER_PATH '' (the root on-chain action) is VALID — check === undefined /
+        // NOTE: EMITTER_PATH '' (the root on-chain action) is VALID; check === undefined /
         // null, never falsy, or every root-level attestation would be rejected.
         if(!error){
             if(data['EMITTER_POSITION'] === undefined || data['EMITTER_POSITION'] === null){
@@ -195,13 +195,13 @@ class Attest {
         }
 
         // Phase 1 placeholders (gas escrow lands in Phase 3 per spec §11).
-        // REQUEST_STATUS is assigned below, once `error` is final — a structural
+        // REQUEST_STATUS is assigned below, once `error` is final; a structural
         // failure must NOT enter the 'pending' pool (see the assignment after the
         // fee-funding check).
         data['GAS_ESCROW']     = '0';
         data['FEE_PAYER']      = data['FEE_PAYER'] || data['SOURCE']; // execute.processEmission carries FEE_PAYER
 
-        // Fee escrow funding check — FEE_PAYER (the EXECUTE caller) must hold the
+        // Fee escrow funding check: FEE_PAYER (the EXECUTE caller) must hold the
         // fee. Read at (BLOCK_INDEX, ACTION_INDEX) so accept/reject is identical
         // across all validators (same determinism rule as COLLECT's pool check).
         if(!error && feePresent){
@@ -224,9 +224,9 @@ class Attest {
         // deadline, insufficient fee funds, …) would be fetched, quorum-signed,
         // and fire a real callback EXECUTE exactly as if it had passed validation.
         // 'rejected' is terminal at creation (resolved_block stays NULL), so the
-        // reorg-rollback reset — which only re-pends rows that went terminal via a
+        // reorg-rollback reset, which only re-pends rows that went terminal via a
         // later block's flip (request_status IN ('fulfilled','errored','expired')
-        // AND resolved_block >= reorg point) — never promotes it back to pending.
+        // AND resolved_block >= reorg point), never promotes it back to pending.
         data['REQUEST_STATUS'] = (error) ? 'rejected' : 'pending';
 
         console.log("\t ATTEST v0 : id=" + (data['REQUEST_ID'] ? String(data['REQUEST_ID']).substring(0,16) + '...' : '?') +
@@ -257,7 +257,7 @@ class Attest {
         await this.mapper.createMappings(data);
     }
 
-    // ATTEST v1 — Response (validator broadcast)
+    // ATTEST v1: Response (validator broadcast)
     async _parseResponse(params, data, error){
 
         // Extract fixed-position fields. RESPONSE_PAYLOAD travels as base64
@@ -317,13 +317,13 @@ class Attest {
             }
         }
 
-        // The responsible-set capability snapshot is locked at the REQUEST's block — also
+        // The responsible-set capability snapshot is locked at the REQUEST's block (also
         // the EQUIV gate input (deterministic from request_id; byte-matches the hub).
         let snapshotBlock = request ? Number(request.block_index) : Number(data['BLOCK_INDEX']);
 
         // Build canonical signing message (UTF-8 Buffer). At/above the EQUIV flag-day
         // (WI-2 bump 2) the raw string is wrapped in the uniform header (TAG=XATTEST,
-        // ROUND_ID=request_id, VIEW=0 — no view change), gated on the request's block +
+        // ROUND_ID=request_id, VIEW=0, no view change), gated on the request's block +
         // network; below it, the bare bytes. Byte-matches AttestationConsensus._buildCanonical.
         let responseHash = crypto.createHash('sha256').update(responseBodyBytes).digest('hex');
         let canonRaw     = String(requestId) + String(providerId) + responseHash + String(responseStatus) + String(meta || '');
@@ -345,7 +345,7 @@ class Attest {
             }
 
             // Restrict the verified signers to the request's deterministic
-            // responsible set — the top-REDUNDANCY validators ranked by
+            // responsible set (the top-REDUNDANCY validators ranked by
             // SHA256(request_id || pubkey), the same set _parseExpire charges
             // missed_count to. Holding the attestation capability and producing a
             // valid ed25519 signature is necessary but NOT sufficient: without
@@ -355,7 +355,7 @@ class Attest {
             // to whoever signed) would diverge from missed_count (charged to the
             // hash-selected set on expiry). Filtering here makes fulfillment
             // deterministic and keeps the two stat columns symmetric. (request is
-            // guaranteed non-null inside this !error block — a null lookup sets
+            // guaranteed non-null inside this !error block; a null lookup sets
             // 'no matching request' above and skips the loop.)
             let responsible = new Set(await this._computeResponsibleSet(
                 String(requestId).toLowerCase(), request.redundancy, snapshotBlock
@@ -382,7 +382,7 @@ class Attest {
         data['STATUS'] = status;
 
         // Inline the verified federation signatures as a JSON array on the response
-        // row (consolidated `attests` table — no separate signatures table). Only
+        // row (consolidated `attests` table, no separate signatures table). Only
         // persisted for a valid response, mirroring the prior per-row behavior.
         data['VALIDATOR_SIGNATURES'] = (status === 'valid' && verifiedSigs.length)
             ? JSON.stringify(verifiedSigs.map(s => ({ pubkey: s.pubkey, sig: s.sig })))
@@ -409,7 +409,7 @@ class Attest {
             // Retryable response statuses leave the request OPEN. no_quorum means
             // the responsible set could not agree this round; timeout / provider_error
             // mean a fetch failed transiently. In all three cases another round may
-            // still succeed before the deadline, so the request stays `pending` — the
+            // still succeed before the deadline, so the request stays `pending`; the
             // deadline-expiry handler flips it to `expired` if no quorum is ever
             // reached. Only `ok` (fulfilled) or a genuinely terminal failure closes the
             // request and fires the callback. (allowedStatuses, see above, is
@@ -418,7 +418,7 @@ class Attest {
             const RETRYABLE_STATUSES = new Set(['no_quorum', 'timeout', 'provider_error']);
             if(RETRYABLE_STATUSES.has(String(responseStatus))){
                 console.log("\t ATTEST v1 : id=" + String(requestId).substring(0,16) + '...' +
-                            ' : retryable status=' + responseStatus + ' — request left pending for retry');
+                            ' : retryable status=' + responseStatus + ', request left pending for retry');
             } else {
                 // Flip request status to its terminal value (resolved_block anchors
                 // the flip for the reorg-rollback reset)
@@ -445,11 +445,11 @@ class Attest {
         await this.mapper.createMappings(data);
     }
 
-    // ATTEST v2 — Expire (system-synthesized)
+    // ATTEST v2: Expire (system-synthesized)
     async _parseExpire(params, data, error){
 
         // System-synthesized only. The decoder accepts ATTEST in VALID_ACTION_NAMES but the
-        // user-broadcast path can't legitimately produce v2 — guard against accidental
+        // user-broadcast path can't legitimately produce v2; guard against accidental
         // synthesis from a user transaction.
         if(!data['IS_SYNTHETIC']){
             console.warn('\t ATTEST v2 : rejected (user-broadcast not allowed for synthetic expire)');
@@ -482,11 +482,11 @@ class Attest {
                     ' : block=' + data['BLOCK_INDEX']);
 
         // Flip request status to 'expired' (resolved_block anchors the flip for the
-        // reorg-rollback reset — without it a reorged expiry stayed terminal and
+        // reorg-rollback reset; without it a reorged expiry stayed terminal and
         // replay skipped re-synthesizing the v2 row)
         await this.indexerDb.updateAttestationRequestStatus(requestId, 'expired', data['BLOCK_INDEX']);
 
-        // Refund the request fee (E1) — never reached the responsible set's quorum.
+        // Refund the request fee (E1); never reached the responsible set's quorum.
         await this._settleRequestFee(request, data, 'expired');
 
         // Mark missed_count on each responsible validator (deterministic by SHA256(request_id || pubkey))
@@ -513,7 +513,7 @@ class Attest {
         await this.mapper.createMappings(data);
     }
 
-    // Compute the responsible validator set for a given request — same deterministic rule
+    // Compute the responsible validator set for a given request (same deterministic rule
     // the hub uses (xchain-hub AttestationRound): sort capability validators by
     // SHA256(request_id || pubkey), take top REDUNDANCY.
     // STAKE_WEIGHTED_QUORUM: at/above activation, dedupe the selection by staking
@@ -551,7 +551,7 @@ class Attest {
     // action removes them generically while the v0 escrow row survives.
     //   'fulfilled'          → escrow → REWARD pool + equal validator_rewards
     //                          split across the responsible set (floor to GAS
-    //                          decimals; remainder dust stays in the pool —
+    //                          decimals; remainder dust stays in the pool;
     //                          COLLECT only ever pays what validator_rewards
     //                          reference, so the pool stays solvent).
     //   'errored'/'expired'  → escrow → refund to FEE_PAYER.
@@ -563,7 +563,7 @@ class Attest {
         let gas      = this.config['GAS'];
         let feePayer = String(request.fee_payer || '');
         if(!feePayer){
-            console.warn('Attestation fee settle: missing fee_payer for request ' + String(request.request_id).substring(0,16) + '... — fee left in escrow');
+            console.warn('Attestation fee settle: missing fee_payer for request ' + String(request.request_id).substring(0,16) + '..., fee left in escrow');
             return;
         }
 
@@ -582,14 +582,19 @@ class Attest {
                 String(request.request_id), request.redundancy, Number(request.block_index)
             );
             if(responsible.length > 0){
-                // Equal split, floored to GAS decimals — deterministic across
-                // validators (bcmulfloor exists for exactly this concern).
+                // Equal split, floored to GAS decimals (feeCap = min(8, gasDecimals)),
+                // matching the precision cap applied at parse time (line 146). Deterministic
+                // across validators (bcmulfloor exists for exactly this concern).
+                let gasDecimals = await this.indexerDb.getTokenDecimalPrecision(
+                    await this.indexerDb.getTickerId(gas)
+                );
+                let feeCap = Math.min(8, gasDecimals);
                 let perValidator = this.util.bcmulfloor(
-                    this.util.bcdiv(feeAmount, String(responsible.length), 18), '1', 8
+                    this.util.bcdiv(feeAmount, String(responsible.length), 18), '1', feeCap
                 );
                 if(this.util.bcgt(perValidator, '0')){
                     for(let pk of responsible){
-                        // round_reference is BIGINT — key idempotency on the
+                        // round_reference is BIGINT; key idempotency on the
                         // REQUEST's action_index (unique per request), not the
                         // 64-hex request_id.
                         await this.indexerDb.createValidatorReward(
@@ -601,7 +606,7 @@ class Attest {
             console.log("\t ATTEST fee : " + feeAmount + ' ' + gas + ' → REWARD pool, split ' +
                         responsible.length + ' way(s) [request ' + String(request.request_id).substring(0,16) + '...]');
         } else {
-            // errored / expired — service not rendered, refund the payer
+            // errored / expired: service not rendered, refund the payer
             credits.push([gas, feeAmount, feePayer]);
             console.log("\t ATTEST fee : " + feeAmount + ' ' + gas + ' refunded to FEE_PAYER (' + terminalStatus + ')' +
                         ' [request ' + String(request.request_id).substring(0,16) + '...]');

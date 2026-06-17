@@ -936,6 +936,9 @@ describe('Attest (ATTEST) @regression @tier3', function () {
                 ]);
                 indexer.indexerDb.getAttestationRequestById.resolves(
                     feeRequestRow({ redundancy: 3, fee_amount: '1.00000001' }));
+                // _settleRequestFee reads gasDecimals to compute feeCap = min(8, gasDecimals).
+                // Production XCHAIN genesis is 8 dp; floor each share to 8 dp.
+                indexer.indexerDb.getTokenDecimalPrecision.resolves(8);
                 const data = v1FeeData();
                 await handler.parse(v1FeeParams([
                     { pubkey: PUBKEY_A, sig: SIG_A },

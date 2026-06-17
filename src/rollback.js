@@ -124,7 +124,7 @@ class Rollback {
             // NODEPROOF verdict rows (verified full-node tier). Keyed by the verdict's
             // action_index (one verdict writes one row per PASS pubkey, all sharing it),
             // so the generic action_index delete drops a reorged verdict and all its
-            // verification rows together — verified status can't survive a reorg.
+            // verification rows together (verified status cannot survive a reorg).
             'full_node_verifications',
             'contracts',
             'contract_permissions',
@@ -139,7 +139,7 @@ class Rollback {
             'attests',
             'prices',
             'pending_hub_pushes',
-            // Programmable policy layer — append-only controller bind/unbind event logs. Each event
+            // Programmable policy layer: append-only controller bind/unbind event logs. Each event
             // row is keyed by its own action_index and never mutated (cooldown expiry is computed at
             // read time), so the generic action_index delete reverts orphaned binds/unbinds exactly.
             'token_controllers',
@@ -153,7 +153,7 @@ class Rollback {
         // those surrogate ids are purely local artifacts and feed NO consensus value: the
         // block hashes resolve them to canonical strings before hashing (BLOCK_HASH_VERSION 2,
         // see db.getBlockHashes). Do not reintroduce a raw lookup id into any hashed projection
-        // — if you do, these un-rolled-back rows will fork checkpoint hashes after a reorg.
+        // doing so will cause these un-rolled-back rows to fork checkpoint hashes after a reorg.
 
     }
 
@@ -170,7 +170,7 @@ class Rollback {
 
         // Placeholder for the first action_index. Initialized to null (not a
         // falsy number) so the guards below distinguish "no actions in range"
-        // from a legitimate action_index of 0 — Number(0) is falsy, so a false
+        // from a legitimate action_index of 0 (Number(0) is falsy), so a false
         // sentinel would silently skip all rollback processing and the hub
         // price retraction whenever the lowest rolled-back action is index 0.
         let firstActionIndex = null;
@@ -392,7 +392,7 @@ class Rollback {
         let addresses = this.util.getAddressesList();
         let tickers   = this.util.getTickersList();
 
-        // Begin a transaction — all deletes and recalculations are atomic
+        // Begin a transaction; all deletes and recalculations are atomic
         await this.indexerDb.beginTransaction();
         try {
 
@@ -413,7 +413,7 @@ class Rollback {
                 // it survives the bulk delete below). Without the reset, the
                 // surviving request is stuck non-'pending': a re-applied response is
                 // rejected as already-resolved, the contract callback never fires,
-                // and — for a reorged expiry — the deadline sweep (pending-only)
+                // and, for a reorged expiry, the deadline sweep (pending-only)
                 // never re-synthesizes the v2 row, diverging a reorged node from a
                 // fresh sync. Keyed on resolved_block (recorded at flip time) so
                 // BOTH flip paths reset; this replaced the v1-only self-join, which
@@ -429,7 +429,7 @@ class Rollback {
                 // Reset XCALL v0 (request) rows whose terminal flip (result callback
                 // or deadline expiry) happened in the orphaned range. The flip is a
                 // direct UPDATE on the surviving request row, so the bulk delete
-                // below can't undo it — without this reset, a re-applied result row
+                // below can't undo it. Without this reset, a re-applied result row
                 // hits the already-resolved interlock and the contract's callback is
                 // silently lost (and an expiry never re-arms). Keyed on
                 // resolved_block (recorded at flip time) so BOTH flip paths reset.
@@ -443,7 +443,7 @@ class Rollback {
                 await this.indexerDb.doQuery(query, args);
 
                 // tokens.escrow_action_index (the ownership-escrow gate) is RE-DERIVED below,
-                // AFTER the dataTables delete — see rederiveTokenEscrow(). A range reset here
+                // AFTER the dataTables delete (see rederiveTokenEscrow()). A range reset here
                 // could only handle the SET direction (offer orphaned); it cannot handle the
                 // CLEAR direction (a surviving offer whose release was orphaned), so the
                 // re-derive replaces it entirely.
@@ -452,14 +452,14 @@ class Rollback {
                 // actions wrote IN PLACE on surviving parent stake/delegation rows. Each
                 // forward handler (createUnstake, the DELEGATE-revoke path,
                 // createContractUnstake, the contract-revoke path) marks an ALREADY-ACTIVE
-                // parent row — created by a much earlier STAKE/DELEGATE in a surviving block —
+                // parent row (created by a much earlier STAKE/DELEGATE in a surviving block)
                 // with deactivation_block = actionBlock + activationDelay. The bulk delete
                 // below removes the orphaned action row but cannot undo that in-place UPDATE,
                 // so without this reset the surviving parent keeps a non-NULL deactivation_block.
                 // Every active-set read gates on (deactivation_block IS NULL OR
                 // deactivation_block > currentBlock), so once the new chain passes the stale
                 // value the staker/validator silently drops out of the active set on the
-                // reorged node while a from-genesis replay keeps it active — a consensus-
+                // reorged node while a from-genesis replay keeps it active, a consensus-
                 // affecting divergence (capability staking on BTC, contract staking on all chains).
                 //
                 // The reset must be PRECISE: a surviving UNSTAKE in an earlier block stamps
@@ -472,8 +472,8 @@ class Rollback {
                 // handler used and require deactivation_block = orphanBlock + activationDelay.
                 // The DELEGATE v3 contract-revoke records NO child row (a pure in-place UPDATE),
                 // so contract_delegations is keyed on the value threshold block_index +
-                // activationDelay — equivalently precise, because any surviving revoke stamps a
-                // strictly smaller value (survivingBlock < block_index).
+                // activationDelay (equivalently precise, because any surviving revoke stamps a
+                // strictly smaller value, i.e. survivingBlock < block_index).
                 let staking         = this.config['STAKING'];
                 let activationDelay = Number((staking && staking['ACTIVATION_DELAY_BLOCKS']) ? staking['ACTIVATION_DELAY_BLOCKS'] : this.config['ACTIVATION_DELAY_BLOCKS']);
 
@@ -530,15 +530,15 @@ class Rollback {
                 // `prev_amount` in contract_slash_debits. The generic deletes below drop the
                 // orphaned debit rows but cannot revert the in-place reduction, so without this
                 // a surviving row keeps its slashed amount while a from-genesis replay (slash
-                // never re-mined) keeps the original — a consensus-affecting divergence (active
+                // never re-mined) keeps the original, a consensus-affecting divergence (active
                 // stake drives VM staker weighting, quorum eligibility, and cooldown refunds on
                 // all chains). We copy back the EARLIEST orphaned debit's `prev_amount` per row
-                // (min block_index, then (execution_index, slash_position) tiebreak — the same
+                // (min block_index, then (execution_index, slash_position) tiebreak, the same
                 // deterministic total order the block-hash preimage uses for contract_emissions,
                 // so it is replay-stable and identical across the source indexer and every
                 // replica; the AUTO_INCREMENT `id` is NOT, and would let two nodes restore a
                 // divergent amount on a reorg that retracts a block with ≥2 slashes against one
-                // stake row) — a pure string copy, so the restored value is
+                // stake row). This is a pure string copy, so the restored value is
                 // byte-identical to the surviving chain's pre-orphaned-slash state and to a fresh
                 // replay (no arithmetic / decimal-format drift). Earlier SURVIVING debits
                 // (block_index < block_index) are intentionally left applied. Runs BEFORE the
@@ -567,7 +567,7 @@ class Rollback {
                 // slashCapabilityStake reduces stakes/unstakes.amount IN PLACE on surviving
                 // rows and logs the pre-slash `prev_amount` in capability_slash_debits. Copy
                 // back the EARLIEST orphaned debit's prev_amount per row (min block_index, then
-                // slash_action_index tiebreak) — a pure string copy, byte-identical to the
+                // slash_action_index tiebreak). This is a pure string copy, byte-identical to the
                 // surviving chain and to a from-genesis replay where the SLASH was never
                 // re-mined. Earlier SURVIVING debits (block_index < block_index) stay applied.
                 // Runs BEFORE the generic deletes so both the debit rows and the target rows
@@ -581,7 +581,7 @@ class Rollback {
                 // replay) restore a different prev_amount on a reorg that retracts a block with
                 // ≥2 slashes against one stake row → a stake-weight fork. (The CONTRACT twin in
                 // the restore above keys on the same idea: VM-emitted slashes have no wire
-                // action_index, so it orders by (execution_index, slash_position) — the EXECUTE's
+                // action_index, so it orders by (execution_index, slash_position), i.e. the EXECUTE's
                 // on-chain action_index plus the emission-loop index, the identical deterministic
                 // total order the block-hash preimage uses for contract_emissions.)
                 for(let slashTbl of ['stakes', 'unstakes']){
@@ -607,7 +607,7 @@ class Rollback {
                 // (utility.js, "for audit-trail continuity") and (2) flipping the unstake row's
                 // status_id to 'completed' IN PLACE (db.markCooldownsCompleted). The unstake row
                 // lives in an EARLIER (surviving) block, so BOTH effects carry an action_index
-                // BELOW firstActionIndex and survive the generic dataTables delete below — and the
+                // BELOW firstActionIndex and survive the generic dataTables delete below. The
                 // credit has no block_index column (keyed only by action_index/address/tick), so it
                 // cannot be range-deleted at all. The maturity itself fires at block =
                 // cooldown_end_block, which is in the orphaned range whenever cooldown_end_block >=
@@ -615,7 +615,7 @@ class Rollback {
                 // holds neither the refund credit nor the 'completed' status. Without this reset the
                 // reorged node keeps an extra refund (updateBalances re-counts it) and a 'completed'
                 // row the re-maturity sweep (status_id IN (pending,valid), db.sweepCompletedCooldowns)
-                // then skips forever — a permanent credits/balances/unstakes divergence, and a hard
+                // then skips forever, a permanent credits/balances/unstakes divergence and a hard
                 // balance fork if a SLASH reduces the stake before the new chain re-matures.
                 // createUnstake only ever writes 'valid' (unstake.js), so the from-genesis-equivalent
                 // reset target is 'valid'. Scope to SURVIVING unstake rows (block_index < block_index);
@@ -656,14 +656,14 @@ class Rollback {
                 // batch_crc32, stamps the parent 'invalid_archive' via a direct UPDATE on the
                 // parent row (created in an EARLIER block, so it survives the bulk delete below).
                 // If that completing chunk is in the orphaned range, the delete removes the chunk
-                // but cannot undo the in-place stamp — leaving the surviving parent stuck
+                // but cannot undo the in-place stamp, leaving the surviving parent stuck
                 // 'invalid_archive' while a from-genesis replay (the bad chunk never re-mined, or
                 // re-mined validly) would re-derive the parent's pre-flip status. anchor_actions
                 // .status_id is not in any block-hash projection, so this is a state-table
                 // divergence (and could mislead the archive-integrity flag / recovery selection,
                 // which read version=1 status IN ('valid','unverified')), not a consensus fork.
                 //
-                // Reset to 'unverified' — the conservative re-verification state (anchor.js stores
+                // Reset to 'unverified', the conservative re-verification state (anchor.js stores
                 // a v1 'unverified' whenever its signer snapshot isn't locally mirrored, and
                 // recovery re-verifies such rows from the archived snapshots), so a parent that was
                 // 'valid' before the flip is re-promoted by recovery rather than left wrongly
@@ -671,7 +671,7 @@ class Rollback {
                 // match_batch_seq and require that chunk's status be 'valid': a completing chunk is
                 // always 'valid', and there can be at most TOTAL_CHUNKS-1 distinct valid chunks (the
                 // duplicate-index guard rejects extras as 'invalid: ...'), so a surviving orphaned
-                // VALID chunk proves fewer than the full set remain on the new chain — the batch can
+                // VALID chunk proves fewer than the full set remain on the new chain, so the batch can
                 // no longer reassemble there and the flip is not re-derivable. Filtering on 'valid'
                 // also excludes a late duplicate chunk that landed (and was rejected) AFTER a
                 // legitimate completion, which must NOT trigger a reset. Runs BEFORE the delete so
@@ -702,7 +702,7 @@ class Rollback {
                 // Sweep orphaned icon-cache rows. icons is a metadata cache keyed by
                 // token_id with no action_index/block_index of its own, so it escapes
                 // both delete loops. When a token row is removed above (tokens is in
-                // dataTables) any icons row pointing at it is left dangling — and with
+                // dataTables) any icons row pointing at it is left dangling. With
                 // no enforced FK the DB won't cascade the delete. A stale orphan makes
                 // the icon-fetch pipeline believe an icon already exists for a token
                 // that no longer does. Runs after the loop, so the tokens rows are
@@ -722,13 +722,13 @@ class Rollback {
                 // offer -> re-stamp; nothing relevant orphaned -> reproduces the current value)
                 // and byte-matches a from-genesis replay (the gate is always exactly the offer's
                 // action_index). Affected set = tokens currently escrowed (Class A) UNION tokens
-                // with a surviving still-escrowed GIVE_OWNERSHIP offer (Class B) — provably
+                // with a surviving still-escrowed GIVE_OWNERSHIP offer (Class B), provably
                 // complete: a token in neither cannot have a wrong escrow value. A token's gate
                 // is held while its GIVE_OWNERSHIP offer's latest status is open/cancelling/
                 // expiring (two-phase COINPay states keep escrow set); cleared only at a terminal
                 // status, written in the same action as the escrow clear. Alias `si` (not the
                 // SQL keyword `is`). The SQL between the ESCROW-REDERIVE-SQL markers is kept
-                // logically identical with xchain-sync/src/ClientRollback.js — a cross-repo drift
+                // logically identical with xchain-sync/src/ClientRollback.js; a cross-repo drift
                 // guard (xchain-sync test/unit/rollback-coverage.test.js) asserts they match, so
                 // source + replica derive byte-identical escrow_action_index values.
                 //<ESCROW-REDERIVE-SQL>
@@ -748,6 +748,7 @@ class Rollback {
                      SELECT s.action_index FROM swaps s INNER JOIN swap_statuses st ON st.swap_action_index=s.action_index INNER JOIN index_statuses si ON si.id=st.status_id INNER JOIN index_tickers tk ON tk.id=s.give_tick_id WHERE tk.tick=? AND s.give_ownership=1 AND st.action_index=(SELECT MAX(x.action_index) FROM swap_statuses x WHERE x.swap_action_index=s.action_index) AND si.status IN ('open','cancelling','expiring')
                      UNION ALL
                      SELECT d.action_index FROM dispensers d INNER JOIN dispenser_statuses st ON st.dispenser_action_index=d.action_index INNER JOIN index_statuses si ON si.id=st.status_id INNER JOIN index_tickers tk ON tk.id=d.give_tick_id WHERE tk.tick=? AND d.give_ownership=1 AND st.action_index=(SELECT MAX(x.action_index) FROM dispenser_statuses x WHERE x.dispenser_action_index=d.action_index) AND si.status IN ('open','cancelling','expiring')
+                     ORDER BY action_index ASC
                      LIMIT 1`;
                 //</ESCROW-REDERIVE-SQL>
                 let escrowTickers = await this.indexerDb.doQuery(escrowAffectedTickersSql, []);
@@ -773,8 +774,31 @@ class Rollback {
             // with status='finalized' and a from-genesis replay on the new chain
             // never regenerates those rounds, leaving replaying nodes permanently
             // divergent from surviving nodes on this table.
+            //
+            // Note: other hub-mirrored block-anchored tables (state_checkpoints,
+            // capability_snapshots) are intentionally NOT deleted here. Both are
+            // append-only with supersede-by-seq / MAX-per-height read semantics,
+            // so a stale row is harmless once the hub pushes a higher-seq
+            // replacement; convergence is hub-driven for those tables. The
+            // price_snapshots delete exists because a from-genesis replay never
+            // regenerates orphaned rounds, so hub re-mirror alone cannot close
+            // the divergence window on this table.
             query = `DELETE FROM price_snapshots WHERE reference_block >= ?`;
             args  = [block_index];
+            await this.indexerDb.doQuery(query, args);
+
+            // oracle_prices is the per-action local mirror of PRICE v1 rows
+            // (populated by hub_db_sync). Like price_snapshots, its rows are
+            // tagged by source_chain + action_index and are NOT regenerated by a
+            // from-genesis replay on the new chain. The async hub retraction
+            // (retractPriceRange below) handles convergence eventually, but a
+            // reorg concurrent with a hub blip leaves stale rows serving until
+            // the hub reconnects. Deleting them here closes that window; the
+            // later hub-driven delete is a harmless no-op. The delete MUST be
+            // qualified by source_chain (COIN) because oracle_prices holds rows
+            // from ALL chains and action_index is only unique within a chain.
+            query = `DELETE FROM oracle_prices WHERE source_chain = ? AND action_index >= ?`;
+            args  = [this.config['COIN'], firstActionIndex !== null ? firstActionIndex : Number.MAX_SAFE_INTEGER];
             await this.indexerDb.doQuery(query, args);
 
             // Re-derive attest_validator_stats for the orphaned range. This is
@@ -803,7 +827,7 @@ class Rollback {
             // Do a sanity check to verify that token supplies match data in credits/debits/escrows/balances tables
             await this.indexerDb.sanityCheck(block_index);
 
-            // Commit — the rollback is now atomically applied
+            // Commit: the rollback is now atomically applied
             await this.indexerDb.commitTransaction();
 
         } catch(e) {
@@ -818,7 +842,7 @@ class Rollback {
         // it can prune exactly the rows whose action_index falls in the orphaned
         // range. Without this, the hub (and every indexer mirroring its price
         // tables) keeps serving prices that were never finalized on-chain.
-        // Best-effort, like every other hub push — a failure here must not leave
+        // Best-effort, like every other hub push. A failure here must not leave
         // the local rollback half-applied, so we only log on error.
         //
         // One-time recovery note: prior to the null-sentinel fix above, a reorg
@@ -840,10 +864,10 @@ class Rollback {
         // Signal the hub to retract any cross_chain_calls relay rows seeded from XCALL
         // request actions just rolled back on this chain. The hub marks the matching relay
         // rows 'retracted' and broadcasts deletions to indexers mirroring their local
-        // cross_chain_calls copy — so a source-chain reorg never leaves an orphaned
+        // cross_chain_calls copy, so a source-chain reorg never leaves an orphaned
         // 'finalized' relay row eligible for re-injection on the target chain. Best-effort
         // and out-of-transaction (the rollback already committed above), exactly like the
-        // price retraction — a hub failure must not leave the local rollback half-applied.
+        // price retraction. A hub failure must not leave the local rollback half-applied.
         if(firstActionIndex !== null && this.hubClient){
             try {
                 await this.hubClient.retractXcallRange(this.config['COIN'], firstActionIndex);
@@ -855,9 +879,9 @@ class Rollback {
         // Signal the hub to retract any cross_chain_matches rows whose retracted leg references DEX
         // ORDER actions just rolled back on this chain. The hub marks the matching matches
         // 'retracted', restores both legs' remaining capacity, and broadcasts deletions to indexers
-        // mirroring their local cross_chain_matches copy — so a source-chain reorg never leaves an
+        // mirroring their local cross_chain_matches copy, so a source-chain reorg never leaves an
         // orphaned 'finalized' match eligible for settlement against an order that no longer exists.
-        // Best-effort and out-of-transaction, exactly like the price + XCALL retractions above — a
+        // Best-effort and out-of-transaction, exactly like the price + XCALL retractions above. A
         // hub failure must not leave the local rollback half-applied.
         if(firstActionIndex !== null && this.hubClient){
             try {
@@ -879,7 +903,7 @@ class Rollback {
     //   - missed_count:    +1 per responsible-set validator when a request expires.
     //   - slashed_count:   Phase 4 (no producer yet → always 0).
     // Because the table is keyed by (validator_pubkey, provider_id) and carries
-    // only counters, it can't be rolled back by deleting a row range — earlier,
+    // only counters, it can't be rolled back by deleting a row range. Earlier
     // surviving increments live in the same row as the orphaned ones. So we drop
     // every row whose last touch is in the orphaned range and rebuild those exact
     // pairs from the surviving ledger. Runs inside the rollback transaction (after
@@ -903,7 +927,7 @@ class Rollback {
             affected.add(String(r.validator_pubkey).toLowerCase() + '|' + String(r.provider_id));
 
         // Drop the stale rows. Any pair whose entire history was orphaned simply
-        // stays gone — a from-genesis replay would never have created its row.
+        // stays gone: a from-genesis replay would never have created its row.
         await this.indexerDb.doQuery(
             `DELETE FROM attest_validator_stats WHERE last_updated_block >= ?`,
             [block_index]
@@ -943,7 +967,7 @@ class Rollback {
         }
 
         // missed_count: one per responsible-set validator each time a request
-        // expired. There is no per-validator expiry row to count — the live path
+        // expired. There is no per-validator expiry row to count, as the live path
         // recomputes the responsible set deterministically and bumps each member.
         // We reproduce that over the surviving requests that WOULD have expired in
         // a replay to block_index-1: a request expires at deadline_block+1 (the
@@ -951,7 +975,7 @@ class Rollback {
         // block_index-1 (i.e. deadline_block < block_index-1) AND no *valid*
         // response survives for it (any valid response flips it out of 'pending'
         // before the deadline, so it never expires). We derive eligibility from
-        // surviving rows, NOT request_status — the resolved_block reset above only
+        // surviving rows, NOT request_status. The resolved_block reset above only
         // covers flips inside the orphaned range, and deriving from rows keeps this
         // recomputation independent of status bookkeeping either way.
         let validId = await this.indexerDb.getStatusId('valid');
@@ -960,6 +984,7 @@ class Rollback {
              FROM attests ar
              WHERE ar.version = 0
                AND ar.deadline_block < ?
+               AND ar.request_status <> 'rejected'
                AND NOT EXISTS (
                    SELECT 1 FROM attests r
                    WHERE r.version = 1
@@ -969,7 +994,7 @@ class Rollback {
             [block_index - 1, validId]
         );
 
-        // Cache the capability set per request block — getValidatorsByCapability
+        // Cache the capability set per request block; getValidatorsByCapability
         // is the same deterministic snapshot the live expiry path consulted.
         let validatorsByBlock = new Map();
         for(let req of expiredReqs){
@@ -1011,7 +1036,7 @@ class Rollback {
         }
     }
 
-    // Deterministic responsible validator set — mirrors attest.js
+    // Deterministic responsible validator set, mirrors attest.js
     // _computeResponsibleSet: sort the capability validators by
     // SHA256(request_id || pubkey), take the top REDUNDANCY.
     _responsibleSet(requestId, validators, redundancy){

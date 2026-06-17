@@ -177,7 +177,7 @@ class Database {
                 try {
                     let results = await db.query("SELECT * FROM information_schema.tables WHERE table_schema = ? AND table_name = ?",[this.dbName, table]);
                     if(results.length > 0){
-                        // Existing table — reconcile column nullability against the
+                        // Existing table - reconcile column nullability against the
                         // SQL source. Catches schemas that were updated upstream but
                         // never migrated on stacks created from an older release.
                         await this.alterTableForDrift(file, db);
@@ -201,7 +201,7 @@ class Database {
         return true;
     }
 
-    // Apply tracked, ordered schema migrations from src/sql/migrations/ — the changes
+    // Apply tracked, ordered schema migrations from src/sql/migrations/ - the changes
     // the startup drift reconciler deliberately can't/won't make on its own: data
     // backfills, destructive index/column changes, dedup-then-unique, type changes.
     // (Additive column/index drift is already auto-reconciled by verifyTables; this is
@@ -212,12 +212,12 @@ class Database {
     // first lines:
     //   -- xchain:migration mode=auto     → applied automatically at startup
     //   -- xchain:migration mode=manual   → applied only by an explicit operator run
-    // A file with NO tag is treated as `manual` — unknown DDL never auto-runs on a
+    // A file with NO tag is treated as `manual` - unknown DDL never auto-runs on a
     // validator fleet. `auto` migrations must be additive + idempotent (guard with
     // IF [NOT] EXISTS); anything that can fail on existing data (e.g. a UNIQUE index
     // needing dedup) must be `manual`.
     //
-    // opts.includeManual=true also applies pending `manual` migrations — that's the
+    // opts.includeManual=true also applies pending `manual` migrations - that's the
     // operator-initiated path (`node src/migrate.js`). The whole run holds a DB-scoped
     // advisory lock so concurrent processes/replicas can't apply the same file twice.
     // Returns { applied:[...], pending:[...] }.
@@ -255,27 +255,27 @@ class Database {
                     if(appliedByName.has(file)){
                         if(appliedByName.get(file) !== checksum){
                             // Migrations are immutable once applied. A changed checksum means
-                            // someone edited an applied file — surface it loudly; never silently re-run.
-                            console.warn('runMigrations: ' + file + ' was already applied but its content CHANGED (checksum mismatch). Migrations are immutable once applied — review manually.');
+                            // someone edited an applied file - surface it loudly; never silently re-run.
+                            console.warn('runMigrations: ' + file + ' was already applied but its content CHANGED (checksum mismatch). Migrations are immutable once applied - review manually.');
                         }
                         continue;
                     }
 
                     const mode = this._migrationMode(raw);
                     if(mode !== 'auto' && !includeManual){
-                        console.log('runMigrations: PENDING (gated, mode=' + mode + '): ' + file + ' — apply with `node src/migrate.js`.');
+                        console.log('runMigrations: PENDING (gated, mode=' + mode + '): ' + file + ' - apply with `node src/migrate.js`.');
                         result.pending.push(file);
                         continue;
                     }
 
                     // Strip `--` line comments before splitting on ';' (a ';' in a comment
-                    // header must not terminate a statement — same rule as createTable()).
+                    // header must not terminate a statement - same rule as createTable()).
                     const statements = this.stripSqlLineComments(raw).split(';').map(s => s.trim()).filter(Boolean);
                     console.log('runMigrations: applying ' + file + ' (mode=' + mode + ', ' + statements.length + ' statement(s))...');
                     try {
                         for(const stmt of statements){ await conn.query(stmt); }
                     } catch(err){
-                        // Schema is now in an unknown state — block startup rather than run on.
+                        // Schema is now in an unknown state - block startup rather than run on.
                         console.error('runMigrations: FAILED applying ' + file + ': ' + (err && err.message));
                         throw err;
                     }
@@ -294,18 +294,18 @@ class Database {
         }
 
         if(result.applied.length) console.log('runMigrations: ' + result.applied.length + ' migration(s) applied to ' + this.dbName + '.');
-        if(result.pending.length) console.log('runMigrations: ' + result.pending.length + ' manual migration(s) pending for ' + this.dbName + ' — run `node src/migrate.js` to apply.');
+        if(result.pending.length) console.log('runMigrations: ' + result.pending.length + ' manual migration(s) pending for ' + this.dbName + ' - run `node src/migrate.js` to apply.');
         return result;
     }
 
     // Read a migration file's `-- xchain:migration mode=auto|manual` header tag.
-    // Defaults to 'manual' when absent (conservative — unknown DDL never auto-runs).
+    // Defaults to 'manual' when absent (conservative - unknown DDL never auto-runs).
     _migrationMode(raw){
         const m = String(raw).match(/^\s*--\s*xchain:migration\b[^\n]*\bmode\s*=\s*(auto|manual)\b/im);
         return m ? m[1].toLowerCase() : 'manual';
     }
 
-    // Create the migration ledger if absent. Created directly (not via src/sql/) — it
+    // Create the migration ledger if absent. Created directly (not via src/sql/) - it
     // is infrastructure, not a domain table, so verifyTables() doesn't manage it.
     async _ensureMigrationsLedger(conn){
         await conn.query(
@@ -319,7 +319,7 @@ class Database {
     }
 
     // Parse a CREATE TABLE statement to extract expected column nullability.
-    // Conservative — only used for drift detection, not for full schema mgmt.
+    // Conservative - only used for drift detection, not for full schema mgmt.
     // Returns array of {name, nullable} or null when parsing can't recognize
     // the file (e.g. a non-CREATE-TABLE definition).
     parseExpectedColumns(sqlData){
@@ -337,14 +337,14 @@ class Database {
             // Strip trailing `-- comment` text
             let line = raw.replace(/--[^\n\r]*/g, '').trim();
             if(!line) continue;
-            // Skip constraint/index/key lines — column definitions only
+            // Skip constraint/index/key lines - column definitions only
             if(/^(PRIMARY|UNIQUE|INDEX|KEY|CHECK|CONSTRAINT|FOREIGN)\b/i.test(line)) continue;
             const tokens = line.split(/\s+/);
             if(tokens.length < 2) continue;
             const name = tokens[0].replace(/`/g, '');
             // SQL columns are NULL unless explicitly NOT NULL. Column-level
             // PRIMARY KEY and AUTO_INCREMENT both IMPLY NOT NULL (SQL semantics)
-            // — without this, a source line like `id BIGINT AUTO_INCREMENT
+            // - without this, a source line like `id BIGINT AUTO_INCREMENT
             // PRIMARY KEY` reads as "nullable", the reconciler "relaxes" the
             // live NOT NULL with a bare `MODIFY <type> NULL`, and that MODIFY
             // silently STRIPS the AUTO_INCREMENT attribute on every startup
@@ -356,7 +356,7 @@ class Database {
                              !/\bPRIMARY\s+KEY\b/i.test(line) &&
                              !/\bAUTO_INCREMENT\b/i.test(line);
             // Keep the full (comment-stripped) column definition so a missing
-            // column can be re-added verbatim — this preserves the DEFAULT
+            // column can be re-added verbatim - this preserves the DEFAULT
             // clause, which is what backfills existing rows on NOT NULL columns.
             const notNull    = !nullable;
             const hasDefault = /\bDEFAULT\b/i.test(line);
@@ -367,12 +367,12 @@ class Database {
 
     // Detect schema drift between the live table and its SQL source, and fix
     // it by ALTER. Two kinds of drift are handled:
-    //   1. Missing columns — a column declared in the SQL source but absent
+    //   1. Missing columns - a column declared in the SQL source but absent
     //      from the live table is added with ADD COLUMN, reusing the source
     //      definition verbatim so its DEFAULT clause backfills existing rows.
     //      (A NOT NULL column with no DEFAULT can't be backfilled safely, so
     //      it's skipped with a loud warning rather than aborting startup.)
-    //   2. Nullability — only relaxes NOT NULL -> NULL (the safe direction —
+    //   2. Nullability - only relaxes NOT NULL -> NULL (the safe direction -
     //      never strengthens to NOT NULL since live rows might hold NULLs that
     //      would block the ALTER).
     // Doesn't touch types or defaults of existing columns. Index reconciliation
@@ -385,12 +385,12 @@ class Database {
         if(!expected){
             // parseExpectedColumns returns null when the file has no recognizable
             // `CREATE TABLE ... ) ENGINE ...` block (e.g. a missing ENGINE clause).
-            // That silently disables ALL column-drift reconciliation for this table —
+            // That silently disables ALL column-drift reconciliation for this table -
             // exactly the gap that left cross_chain_matches without its Phase B columns.
             // Make it loud so a malformed source file can't hide. (Non-fatal: index
             // reconciliation and table creation are unaffected; the parse-coverage
             // unit test is the hard guardrail.)
-            console.warn('Schema drift check SKIPPED for `' + table + '`: could not parse columns from ' + file + ' — expected a `CREATE TABLE ... ) ENGINE ...` definition. Additive column/nullability drift will NOT auto-reconcile for this table until the SQL source is fixed.');
+            console.warn('Schema drift check SKIPPED for `' + table + '`: could not parse columns from ' + file + ' - expected a `CREATE TABLE ... ) ENGINE ...` definition. Additive column/nullability drift will NOT auto-reconcile for this table until the SQL source is fixed.');
             return;
         }
         const live = await db.query(
@@ -404,7 +404,7 @@ class Database {
                 // Column declared in the SQL source but absent from the live
                 // table (schema created before the column was introduced).
                 if(exp.notNull && !exp.hasDefault){
-                    console.log('Schema drift on ' + table + '.' + exp.name + ': column missing live, source is NOT NULL with no DEFAULT — cannot backfill existing rows safely. Skipping; add manually.');
+                    console.log('Schema drift on ' + table + '.' + exp.name + ': column missing live, source is NOT NULL with no DEFAULT - cannot backfill existing rows safely. Skipping; add manually.');
                     continue;
                 }
                 console.log('Schema drift on ' + table + '.' + exp.name + ': column missing live. Adding column from SQL source.');
@@ -421,7 +421,7 @@ class Database {
                 const isPk     = String(cur.COLUMN_KEY || '').toUpperCase() === 'PRI';
                 const isAutoInc = /auto_increment/i.test(String(cur.EXTRA || ''));
                 if(isPk || isAutoInc){
-                    console.log('Schema drift on ' + table + '.' + exp.name + ': live=NOT NULL, source=NULL — SKIPPING relax (' + (isPk ? 'PRIMARY KEY' : 'AUTO_INCREMENT') + ' column; a bare MODIFY would strip attributes).');
+                    console.log('Schema drift on ' + table + '.' + exp.name + ': live=NOT NULL, source=NULL - SKIPPING relax (' + (isPk ? 'PRIMARY KEY' : 'AUTO_INCREMENT') + ' column; a bare MODIFY would strip attributes).');
                     continue;
                 }
                 console.log('Schema drift on ' + table + '.' + exp.name + ': live=NOT NULL, source=NULL. Relaxing constraint.');
@@ -453,7 +453,7 @@ class Database {
     // Reconcile declared indexes against the live table. Adds any index named in the
     // SQL source that is absent live (matched by column set, so a renamed-but-equivalent
     // index is treated as present). For a UNIQUE index blocked by pre-existing duplicate
-    // rows, dedupes first (see dedupeForUniqueIndex) then retries. Never throws — a
+    // rows, dedupes first (see dedupeForUniqueIndex) then retries. Never throws - a
     // failure is logged and startup continues. On a table that already has every declared
     // index (the normal case) this is a single information_schema read and a no-op.
     async reconcileTableIndexes(file, db){
@@ -483,7 +483,7 @@ class Database {
                 const key  = idx.columns.map(c => c.toLowerCase()).join(',');
                 const live = liveByCols.get(key);
                 if(live && (!idx.unique || live.unique)) continue;          // already satisfied
-                if(liveNames.has(idx.name.toLowerCase())) continue;          // name taken by a different index — leave alone
+                if(liveNames.has(idx.name.toLowerCase())) continue;          // name taken by a different index - leave alone
                 const colList = idx.columns.map(c => '`' + c + '`').join(', ');
 
                 if(!idx.unique){
@@ -497,13 +497,13 @@ class Database {
                 } catch(e){
                     const dup = e && (Number(e.errno) === 1062 || /duplicate entry/i.test(e.message || ''));
                     if(!dup){ console.log('  could not add UNIQUE index ' + idx.name + ' on ' + table + ': ' + (e && e.message)); continue; }
-                    console.log('  ' + table + '.' + idx.name + ': duplicate rows block the UNIQUE index — deduping (keep newest id per ' + key + ') then retrying.');
+                    console.log('  ' + table + '.' + idx.name + ': duplicate rows block the UNIQUE index - deduping (keep newest id per ' + key + ') then retrying.');
                     if(!(await this.dedupeForUniqueIndex(db, table, idx.columns))) continue;
                     try {
                         await db.query('ALTER TABLE `' + table + '` ADD UNIQUE INDEX `' + idx.name + '` (' + colList + ')');
                         console.log('  added ' + idx.name + ' after dedupe.');
                     } catch(e2){
-                        console.log('  ' + table + '.' + idx.name + ' still failing after dedupe — leaving as-is: ' + (e2 && e2.message));
+                        console.log('  ' + table + '.' + idx.name + ' still failing after dedupe - leaving as-is: ' + (e2 && e2.message));
                     }
                 }
             }
@@ -514,9 +514,9 @@ class Database {
     }
 
     // Collapse duplicate rows on `columns` so a UNIQUE index can be added, keeping the
-    // row with the highest `id` in each group. For the failure this repairs — an
+    // row with the highest `id` in each group. For the failure this repairs - an
     // INSERT ... ON DUPLICATE KEY UPDATE upsert that degraded to plain INSERT because the
-    // unique index was missing — each balance change appended a fresh row with the current
+    // unique index was missing - each balance change appended a fresh row with the current
     // value, so the highest id is the live (correct) value and the older rows are stale.
     // Uses `=` (not `<=>`) so NULL tuples are left intact, matching UNIQUE semantics (a
     // UNIQUE index permits multiple NULLs). Requires a single `id` column to pick a
@@ -526,7 +526,7 @@ class Database {
             "SELECT COLUMN_NAME FROM information_schema.columns WHERE table_schema = ? AND table_name = ? AND COLUMN_NAME = 'id'",
             [this.dbName, table])).length > 0;
         if(!hasId){
-            console.log('  cannot dedupe ' + table + ' (no `id` column to pick a surviving row) — skipping unique-index add.');
+            console.log('  cannot dedupe ' + table + ' (no `id` column to pick a surviving row) - skipping unique-index add.');
             return false;
         }
         const on  = columns.map(c => 't1.`' + c + '` = t2.`' + c + '`').join(' AND ');
@@ -538,7 +538,7 @@ class Database {
     // Handle creating database tables.
     //
     // Uses raw db.query (not doQuery) because doQuery swallows non-transactional
-    // errors — a DROP TABLE that committed followed by a CREATE TABLE that
+    // errors - a DROP TABLE that committed followed by a CREATE TABLE that
     // failed on a connection blip would leave a partial-state table missing
     // (observed on LTC regtest: `dispensers` ended up missing after a transient
     // MariaDB hiccup during init, fatal-looped the indexer on every block).
@@ -579,7 +579,7 @@ class Database {
         const table   = file.substring(0, file.indexOf('.sql'));
         // Strip `--` line comments BEFORE splitting on ';'. A ';' inside a
         // comment (prose punctuation in a header block) must not be treated as
-        // a statement terminator — that truncates the comment into a bogus
+        // a statement terminator - that truncates the comment into a bogus
         // standalone query and fails schema creation (observed: a semicolon in
         // attests.sql's header split its comment, crash-looping the indexer).
         const queries = this.stripSqlLineComments(data).split(';').map(q => q.trim()).filter(q => q !== '');
@@ -621,10 +621,10 @@ class Database {
         // Circuit breaker: reject immediately if open
         if(this.circuitState === 'open'){
             if(Date.now() < this.circuitOpenUntil)
-                this.util.throwError('Circuit breaker open — database connections rejected until cooldown expires');
+                this.util.throwError('Circuit breaker open - database connections rejected until cooldown expires');
             // Cooldown expired, transition to half-open
             this.circuitState = 'half-open';
-            console.log('Circuit breaker half-open — attempting reconnection');
+            console.log('Circuit breaker half-open - attempting reconnection');
         }
         var connection    = null;
         var attempts      = 0;
@@ -638,7 +638,7 @@ class Database {
                 if(this.circuitState === 'half-open'){
                     this.circuitState = 'closed';
                     this.circuitFailures = 0;
-                    console.log('Circuit breaker closed — database connection restored');
+                    console.log('Circuit breaker closed - database connection restored');
                 }
                 this.circuitFailures = 0;
             } catch (e){
@@ -648,7 +648,7 @@ class Database {
                 if(this.circuitFailures >= this.circuitThreshold){
                     this.circuitState = 'open';
                     this.circuitOpenUntil = Date.now() + this.circuitCooldown;
-                    this.util.throwError('Circuit breaker opened after ' + this.circuitFailures + ' consecutive failures — cooling down for ' + (this.circuitCooldown / 1000) + 's');
+                    this.util.throwError('Circuit breaker opened after ' + this.circuitFailures + ' consecutive failures - cooling down for ' + (this.circuitCooldown / 1000) + 's');
                 }
                 if(attempts >= maxAttempts)
                     this.util.throwError('Could not connect to MariaDB after ' + maxAttempts + ' attempts. Giving up.');
@@ -727,7 +727,7 @@ class Database {
         let results = [];
         if(!this.util.isNull(query)){
             // Normalize args: convert any boxed primitives (e.g. mathjs BigNumber) to plain values.
-            // Skip Buffers — the mariadb driver inserts them as binary into BLOB columns; calling
+            // Skip Buffers - the mariadb driver inserts them as binary into BLOB columns; calling
             // .toString() on them would UTF-8-decode the bytes and replace invalid sequences with
             // U+FFFD, corrupting binary payloads (e.g. FILE raw_data ciphertext).
             if(Array.isArray(args)){
@@ -764,7 +764,7 @@ class Database {
         // place. This routine stringifies object fields (e.g. the TX_OUTPUTS
         // array) and nulls non-numeric NUMBER_FIELDS purely for storage; mutating
         // the shared action `data` corrupts any later read of it. AIRDROP's
-        // multi-tick loop reuses one `data` across ticks — after tick 1's
+        // multi-tick loop reuses one `data` across ticks - after tick 1's
         // createAirdrop ran this in place, tick 2 saw a stringified TX_OUTPUTS, so
         // detectFeePaymentMode's Array.isArray guard failed and the native fee
         // output went undetected ('native coin output required' on LTC/DOGE; BTC's
@@ -772,7 +772,7 @@ class Database {
         // the return value, so returning a copy is transparent to them.
         data = Object.assign({}, data);
         // Handle converting any boxed primitives (e.g. mathjs Decimal) to plain primitives.
-        // Buffers (e.g. FILE raw_data) must pass through unchanged — String(buffer) would
+        // Buffers (e.g. FILE raw_data) must pass through unchanged - String(buffer) would
         // UTF-8-decode the bytes and replace any invalid sequences with U+FFFD, corrupting
         // binary payloads like AES-GCM ciphertext.
         for(let key in data){
@@ -786,8 +786,8 @@ class Database {
         }
         // Set NUMBER field values to numeric or NULL
         for(let field of this.config['NUMBER_FIELDS'] ){
-            // TYPE is numeric for LIST (the list type 1/2/3) — the reason it
-            // sits in NUMBER_FIELDS — but for FILE it is the MIME type
+            // TYPE is numeric for LIST (the list type 1/2/3) - the reason it
+            // sits in NUMBER_FIELDS - but for FILE it is the MIME type
             // string. Numeric-normalizing it for FILE nulled every stored
             // MIME type (files.type_id was always NULL), which also broke
             // inline serving of on-chain media (the explorer's raw endpoint
@@ -913,7 +913,7 @@ class Database {
     }
 
     // Get the decoder's most-recent reorg event as { id, block_index }, or null if none.
-    // `id` is the decoder events.id — the IDENTITY used to decide whether a reorg is new.
+    // `id` is the decoder events.id - the IDENTITY used to decide whether a reorg is new.
     // Block height alone is ambiguous across repeated reorgs (heights increase), so the
     // caller compares this id rather than the block number. `block_index` is the lowest
     // block touched by the event (the rollback target).
@@ -939,7 +939,7 @@ class Database {
 
     // Get the decoder event id of the most-recent reorg the indexer has already recorded,
     // or null if none. This is the value compared against getLatestReorg().id to decide
-    // whether a new reorg needs processing — an IDENTITY check, not a block-height compare.
+    // whether a new reorg needs processing - an IDENTITY check, not a block-height compare.
     async getLastProcessedReorgId(){
         let query = `SELECT data FROM events WHERE code='REORG' ORDER BY id DESC LIMIT 1`;
         let results = await this.doQuery(query);
@@ -957,7 +957,7 @@ class Database {
 
     // Handle creating a record of a block reorg. Persists the decoder event id alongside the
     // block index so reorgs can be matched by identity (see getLastProcessedReorgId), not by
-    // block-height magnitude — which silently misses every reorg after the first.
+    // block-height magnitude - which silently misses every reorg after the first.
     async createReorg(block_index, decoder_event_id){
         let payload = JSON.stringify({ block_index: Number(block_index), decoder_event_id: Number(decoder_event_id) });
         let query = `INSERT INTO events (time, code, data) values (now(), 'REORG', ?)`;
@@ -1070,7 +1070,7 @@ class Database {
         // atomically pre-launch. xchain-sync/src/BlockHasher.js is the byte-for-byte conformance pair.)
         // Get data from credits table
         // These rows feed the consensus ledger hash. We hash the RESOLVED address/ticker
-        // strings (LEFT JOIN through the lookup tables), never the raw address_id/tick_id —
+        // strings (LEFT JOIN through the lookup tables), never the raw address_id/tick_id -
         // those are local AUTO_INCREMENT ids that diverge across nodes after a reorg (see
         // BLOCK_HASH_VERSION). LEFT JOIN preserves rows whose address_id/tick_id is NULL
         // (native-coin movements) as a NULL string, matching every node.
@@ -1124,7 +1124,7 @@ class Database {
                     e.action_index ASC, a1.address COLLATE utf8_bin ASC, t1.tick COLLATE utf8mb4_bin ASC, e.amount ASC`;
         ledger.escrows = await this.doQuery(query, [block_index]);
         // Get data from actions table
-        // Hash the RESOLVED action-type string (e.g. 'SEND'), not the raw action_id — that
+        // Hash the RESOLVED action-type string (e.g. 'SEND'), not the raw action_id - that
         // is an index_actions AUTO_INCREMENT id assigned on first reference (createAction)
         // and so diverges across nodes after a reorg, exactly like address_id/tick_id.
         query = `SELECT
@@ -1248,7 +1248,7 @@ class Database {
         });
         // Fourth, NON-consensus integrity hash over the in-place mutations + backdated
         // refund credits the three hashes above structurally cannot cover (rows created in
-        // an EARLIER block, mutated in place — replicated via xchain-sync's updated_rows /
+        // an EARLIER block, mutated in place - replicated via xchain-sync's updated_rows /
         // cooldownCredits channels; see stateHash.js). Additive: NOT chained, NOT folded into
         // ledger/actions/contract, NOT in BLOCK_HASH_VERSION, NOT in getStoredBlockHashes /
         // the hub-signed checkpoint. Its sole consumer is xchain-sync's apply-time recompute,
@@ -1273,7 +1273,7 @@ class Database {
     }
 
     // Read the STORED per-block hash triple (ledger/actions/contracts) for a block
-    // from the blocks table — the values createBlock() committed, NOT a recompute.
+    // from the blocks table - the values createBlock() committed, NOT a recompute.
     // Powers the getblockhashes RPC the hub's StateCheckpointEngine signs over.
     async getStoredBlockHashes(block_index){
         let query = `SELECT
@@ -1381,7 +1381,7 @@ class Database {
         let actions_hash_id  = await this.createTransaction(hashes.actions.hash);
         let contract_hash_id = await this.createTransaction(hashes.contracts.hash);
         // Replication-integrity state hash (additive; see getBlockHashes). Interned like the
-        // other three but stored in its own blocks.state_hash_id column — NOT part of the
+        // other three but stored in its own blocks.state_hash_id column - NOT part of the
         // hub-signed checkpoint (getStoredBlockHashes does not read it back).
         let state_hash_id    = await this.createTransaction(hashes.state.hash);
         // Create data
@@ -1423,7 +1423,7 @@ class Database {
         if(id==null){
             // INSERT IGNORE + refetch keeps this consistent with the other index_*
             // upserts. NOTE: index_actions carries only a non-unique index, so IGNORE
-            // does not itself prevent duplicate rows under true concurrency — the
+            // does not itself prevent duplicate rows under true concurrency - the
             // single-threaded block-processing loop is what serializes these inserts.
             let query = "INSERT IGNORE INTO index_actions (action) values (?)";
             await this.doQuery(query, [action]);
@@ -1599,7 +1599,7 @@ class Database {
         if(id === null){
             // INSERT IGNORE + refetch is race-safe against the UNIQUE index. The
             // get-first lookup above is retained because getTickerId() matches
-            // case-insensitively (LOWER(tick)) while the UNIQUE index is binary —
+            // case-insensitively (LOWER(tick)) while the UNIQUE index is binary -
             // refetching through getTickerId keeps that case-folding behaviour.
             let query   = "INSERT IGNORE INTO index_tickers (tick) values (?)";
             await this.doQuery(query, [tick]);
@@ -1938,7 +1938,7 @@ class Database {
         }
         // Sort holders list from biggest to smallest. Equal balances fall back to a
         // lexicographic address tiebreak so the iteration order is deterministic across
-        // nodes — the GROUP BY queries above carry no ORDER BY, so equal-balance holders
+        // nodes - the GROUP BY queries above carry no ORDER BY, so equal-balance holders
         // would otherwise iterate in engine-arbitrary order, forking the DIVIDEND/AIRDROP/
         // CALLBACK credit INSERT sequence (and therefore the ledger hash) across validators.
         holders = Object.fromEntries(Object.entries(holders).sort(([addrA, a], [addrB, b]) => {
@@ -2303,7 +2303,7 @@ class Database {
         // Without this, fractional amounts (e.g. VM gas fees calculated at 8
         // decimals against a tick issued with fewer) drift between ledger sums
         // (rounded once at SUM time) and per-address balance sums (rounded per
-        // row by updateAddressBalance) — triggering the supply SanityError.
+        // row by updateAddressBalance) - triggering the supply SanityError.
         let decimals = await this.getTokenDecimalPrecision(tick_id);
         amount = this.util.bcadd(amount, 0, decimals);
         // Convert any BigNumber amount to a plain string before inserting into the database
@@ -2384,7 +2384,7 @@ class Database {
         // Loop through addresses and update balances SERIALLY. During block
         // processing these run on the single shared transaction connection
         // (getConnection() returns this.transactionConnection mid-transaction),
-        // which cannot serve concurrent queries — a Promise.all here interleaves
+        // which cannot serve concurrent queries - a Promise.all here interleaves
         // each address's read-compute-write and corrupts balances (observed:
         // AIRDROP double-counted token supply, 200 != 100, tripping the supply
         // sanity check and crash-looping the indexer). The N+1->UPSERT win in
@@ -2574,7 +2574,7 @@ class Database {
     // Handle getting token info (supply, price, etc) and updating the `tokens` table
     async updateTokenInfo(tick){
         // createTicker and getTokenInfo are independent; run them concurrently.
-        // tick_id is unused here — createToken calls createTicker internally.
+        // tick_id is unused here - createToken calls createTicker internally.
         const [, data] = await Promise.all([this.createTicker(tick), this.getTokenInfo(tick)]);
         // Update the record in `tokens` table
         if(data)
@@ -2611,7 +2611,7 @@ class Database {
         return results[0].escrow_action_index;
     }
 
-    // Convenience wrapper — true if this tick's ownership is currently escrowed.
+    // Convenience wrapper - true if this tick's ownership is currently escrowed.
     async isOwnershipEscrowed(tick){
         return (await this.getTokenEscrow(tick)) !== null;
     }
@@ -3294,7 +3294,7 @@ class Database {
         let payment_mode       = data['PAYMENT_MODE'] || 2;
         let fee_preference     = data['FEE_PREFERENCE'] || method || 2;
         let fee_version        = data['FEE_VERSION'] || 1;
-        // Native coin fields (Track B — null for XCHAIN balance payments)
+        // Native coin fields (Track B - null for XCHAIN balance payments)
         let native_coin_amount = data['NATIVE_COIN_AMOUNT'] || null;
         let native_coin        = data['NATIVE_COIN'] || null;
         let oracle_round       = data['ORACLE_ROUND'] || null;
@@ -3373,7 +3373,7 @@ class Database {
     // Get tokens owned by a given address. Ticks whose ownership is currently
     // escrowed by an open ORDER/SWAP/DISPENSER (escrow_action_index set) are in
     // protocol custody, not in the address's ownership records, so they are
-    // excluded — per SWEEP.md, escrowed ownership is reachable only through the
+    // excluded - per SWEEP.md, escrowed ownership is reachable only through the
     // offer-close path, never through the OWNERSHIPS snapshot.
     async getAddressOwnerships(address){
         let id   = await this.createAddress(address);
@@ -3893,7 +3893,7 @@ class Database {
         // NUMBER_FIELD, so the non-numeric string 'TICK'/'ADDRESS' gets nulled
         // there. Reading it after normalize made (data['TYPE']=='TICK') always
         // false, so every TICK sleep (SLEEP v1) was stored as an ADDRESS sleep
-        // (type=1) — wrongly sleeping the token owner's whole address and never
+        // (type=1) - wrongly sleeping the token owner's whole address and never
         // pausing the tick (isTickSleeping looks for type=2).
         let type         = (data['TYPE']=='TICK') ? 2 : 1;
         data             = this.normalizeDataValues(data);
@@ -4113,7 +4113,7 @@ class Database {
     // Resolve a single swap by its (locally-unique) action_index. `coin` matches the
     // swap's GET coin (same-chain: the local coin; cross-chain: the counterparty coin).
     // Pass the counterparty coin (e.g. cross_settle) to assert the get side, or null to
-    // look up purely by action_index — what cancel/expire must do, since they operate on
+    // look up purely by action_index - what cancel/expire must do, since they operate on
     // a local swap by index and cannot assume its get_coin is local.
     async getSwapInfo(coin, action_index){
         let swap = false;
@@ -4575,7 +4575,7 @@ class Database {
     // order's GET coin: for a SAME-chain order get_coin == the local coin, and for a
     // CROSS-chain order get_coin == the counterparty coin. Pass the counterparty coin
     // (e.g. cross_settle) to assert the get side, or pass null to look up purely by
-    // action_index — which is what cancel/expire/edit must do, since those operate on a
+    // action_index - which is what cancel/expire/edit must do, since those operate on a
     // local order by index and cannot assume its get_coin is local (that assumption is
     // exactly what hid cross-chain offers from the cancel/expire paths).
     async getOrderInfo(coin, action_index){
@@ -5155,7 +5155,7 @@ class Database {
     // List this chain's OPEN cross-chain SWAP offers (give_coin != get_coin) for the
     // xchain-hub federation's matching view. Paginates by keyset on action_index.
     // @param {limit}             integer Max rows (caller clamps)
-    // @param {after_action_index} integer Keyset cursor — return rows with action_index > this
+    // @param {after_action_index} integer Keyset cursor - return rows with action_index > this
     // @param {to_coin}           string  Optional filter: only offers whose GET_COIN equals this
     async getOpenCrossChainSwaps(limit, after_action_index, to_coin){
         let where = [
@@ -5204,7 +5204,7 @@ class Database {
             action_index:   Number(row.action_index),
             give_coin:      row.give_coin,
             give_tick:      row.give_tick,
-            // Ownership offers carry no amount — expose virtual '1' so the hub's committed
+            // Ownership offers carry no amount - expose virtual '1' so the hub's committed
             // ledger + amount compare work uniformly (matches getOrderInfo's convention).
             give_amount:    (Number(row.give_ownership) === 1 && this.util.isNull(row.give_amount)) ? '1' : row.give_amount,
             give_ownership: Number(row.give_ownership),
@@ -5269,8 +5269,8 @@ class Database {
         let results = await this.doQuery(query, args);
         let orders = [];
         for(let row of results){
-            // Remaining (give/get) reflects all fills — local order_matches AND cross-chain
-            // settlements (both recorded in order_matches) — so the hub's reservation is exact.
+            // Remaining (give/get) reflects all fills - local order_matches AND cross-chain
+            // settlements (both recorded in order_matches) - so the hub's reservation is exact.
             let [give_remaining, get_remaining] = await this.getOrderAmountsRemaining(row.action_index);
             let isOwnGive = (Number(row.give_ownership) === 1 && this.util.isNull(row.give_amount));
             let isOwnGet  = (Number(row.get_ownership)  === 1 && this.util.isNull(row.get_amount));
@@ -5299,7 +5299,7 @@ class Database {
     }
 
     // Record a cross-chain ORDER partial fill in order_matches so getOrderAmountsRemaining
-    // deducts it — the single source of truth for an order's remaining (local fills and
+    // deducts it - the single source of truth for an order's remaining (local fills and
     // cross-chain fills both live here, so the offer book + completion logic stay consistent).
     // The local order is the GET side of the synthetic row (get_action_index = local order),
     // so the subtract loop maps give_amount→give_remaining and get_amount→get_remaining.
@@ -5322,12 +5322,12 @@ class Database {
     // Finalized cross-chain matches that involve THIS chain, are effective at/before
     // block_time, and have not yet been settled locally. Drives the settlement pass.
     // cross_chain_matches is a hub-mirrored table (read via _mirrorDb), while
-    // cross_chain_settlements is a local indexer table (read via this) — so we filter in JS
+    // cross_chain_settlements is a local indexer table (read via this) - so we filter in JS
     // rather than join across two databases.
     async getEffectiveUnsettledMatches(coin, block_time){
         // network filter: a match only settles on the indexer of the network it was matched
-        // + signed on (also bound into the signed canonical — see cross_settle._canonical).
-        // ORDER BY (snapshot_block, match_id) — quorum-agreed row content, so the
+        // + signed on (also bound into the signed canonical - see cross_settle._canonical).
+        // ORDER BY (snapshot_block, match_id) - quorum-agreed row content, so the
         // settlement order is identical no matter which hub DB this indexer mirrors
         // (the hub-assigned id is per-hub AUTO_INCREMENT and MUST NOT order consensus
         // state).
@@ -5349,7 +5349,7 @@ class Database {
     // Record that this chain settled its leg of a cross-chain match (idempotent on
     // match_id). The action_index is rollback-able, so a reorg drops this row and the
     // match re-applies. Both leg references are captured here because the mirror row
-    // may later be deleted by a reorg retraction — the VM's crossChain.isSettled
+    // may later be deleted by a reorg retraction - the VM's crossChain.isSettled
     // snapshot reads this local table, never the mirror (getCrossChainDataForVM).
     async recordCrossChainSettlement(action_index, match, local_action_index, block_index){
         await this.doQuery(
@@ -5429,10 +5429,10 @@ class Database {
             [limit]);
     }
 
-    // Effective, unexecuted dispatch rows targeting THIS chain — drives the XEXEC
+    // Effective, unexecuted dispatch rows targeting THIS chain - drives the XEXEC
     // injection pass. cross_chain_calls is hub-mirrored (read via _mirrorDb) while
     // cross_chain_call_executions is local, so the exclusion is filtered in JS.
-    // ORDER BY (snapshot_block, call_id) — both quorum-agreed row content, so the
+    // ORDER BY (snapshot_block, call_id) - both quorum-agreed row content, so the
     // injection order is identical no matter which hub DB this indexer mirrors
     // (the hub-assigned id is per-hub AUTO_INCREMENT and MUST NOT order consensus
     // state). Cap per block (overflow carries forward; never dropped).
@@ -5452,7 +5452,7 @@ class Database {
         return calls.filter(c => !executedSet.has(c.call_id)).slice(0, Number(limit) || 25);
     }
 
-    // Effective, unprocessed result rows for requests THIS chain originated —
+    // Effective, unprocessed result rows for requests THIS chain originated -
     // drives the callback delivery pass. Same mirror/local split and ordering.
     async getEffectiveUnprocessedCallResults(coin, network, block_time, limit){
         let results = await this._mirrorDb().doQuery(
@@ -7087,7 +7087,7 @@ class Database {
     // @param {action_index}            integer Action index of action
     // @param {dispenser_action_index}  integer Action index of dispenser
     // @param {status}                  string  Status of the referenced dispenser (open/complete/closing/cancelled/expired)
-    // @param {cancelled_by}            string  (optional) Address that triggered the cancel — recorded for the 'cancelling' status so dispenser_close can route escrow correctly
+    // @param {cancelled_by}            string  (optional) Address that triggered the cancel - recorded for the 'cancelling' status so dispenser_close can route escrow correctly
     async createDispenserStatus(action_index, dispenser_action_index, status, cancelled_by){
         // Normalize data
         let status_id       = await this.createStatus(status);
@@ -7776,7 +7776,7 @@ class Database {
     // Used by createUnstake to mark when a pubkey's stake (original + activated top-ups) should be
     // removed from the active set. The `currentBlock` filter (activation_block <= currentBlock) is
     // load-bearing: the unstake AMOUNT is summed from active rows only (getActiveStakeByPubkey), so a
-    // pending-activation top-up (activation_block > currentBlock) must NOT be deactivated here — it
+    // pending-activation top-up (activation_block > currentBlock) must NOT be deactivated here - it
     // was never counted in the unstake and the cooldown sweep would never refund it, orphaning the
     // tokens. It correctly stays an active stake until a later UNSTAKE covers it.
     async setStakeDeactivationByPubkey(pubkey, deactivationBlock, currentBlock){
@@ -7872,7 +7872,7 @@ class Database {
     }
 
     // Create/Update record in `stake_key_revocations` table (DELEGATE v2 against
-    // the source's ORIGINAL stake signing key — the delegation-row revoke path
+    // the source's ORIGINAL stake signing key - the delegation-row revoke path
     // stays in `delegations`). `deactivation_block` is when the key stops being
     // a valid signer; a LATER re-stake of the same key (higher action_index)
     // clears the revocation (see _effectiveCapabilitySetSql).
@@ -7934,8 +7934,8 @@ class Database {
     // Create record in `reward_claims` table
     // Create a validator reward record. Two writers:
     //   - deterministic block processing (PRICE v0 oracle_round split, ATTEST fee
-    //     settlement) — replayable on reindex by construction
-    //   - the hub's pushvalidatorrewards RPC (anchor publish rewards) — restored
+    //     settlement) - replayable on reindex by construction
+    //   - the hub's pushvalidatorrewards RPC (anchor publish rewards) - restored
     //     on reindex from the ANCHOR archive via recovery.js
     // pubkeyHex: 64-char hex Ed25519 signing pubkey of the validator that earned the reward
     // roundReference: round number (oracle_round) or attestation index
@@ -7943,7 +7943,7 @@ class Database {
     // amount: reward amount as decimal string
     // blockIndex: block height when the reward was earned
     // upsert: deterministic block-processing writers pass true so their value
-    //         always wins over a best-effort hub push that raced them — the
+    //         always wins over a best-effort hub push that raced them - the
     //         derived row is the consensus row (replay produces it byte-equal)
     async createValidatorReward(pubkeyHex, roundReference, rewardType, amount, blockIndex, upsert){
         // Look up the source address that owns this signing pubkey via the stakes table
@@ -7956,7 +7956,7 @@ class Database {
         let query = `SELECT source_id FROM stakes WHERE signing_pubkey_id=? ORDER BY action_index DESC LIMIT 1`;
         let results = await this.doQuery(query, [pubkey_id]);
         if(results.length === 0){
-            // Delegated signing key (DELEGATE v0) — resolve to the delegating source
+            // Delegated signing key (DELEGATE v0) - resolve to the delegating source
             query = `SELECT source_id FROM delegations WHERE signing_pubkey_id=? ORDER BY action_index DESC LIMIT 1`;
             results = await this.doQuery(query, [pubkey_id]);
         }
@@ -7982,7 +7982,7 @@ class Database {
 
     // Keep exactly ONE validator_reward per (reward_type, round_reference) for
     // anchor rewards: the row whose signing pubkey sorts lexicographically
-    // smallest — the SAME deterministic winner the hub's RewardTracker elects
+    // smallest - the SAME deterministic winner the hub's RewardTracker elects
     // (recordAnchorReward). One logical anchor → one reward. In a failover
     // double-publish the loser's pubkey can be pushed to THIS indexer before
     // (or, because the hub's pushes are fire-and-forget, after) the winner's;
@@ -8081,7 +8081,7 @@ class Database {
         let valid_id = await this.getStatusId('valid');
         if(valid_id === null) return 0;
         // Count over the SAME effective signer set as getValidatorsByCapability
-        // (stake keys minus revocations, plus delegated keys) — quorum thresholds
+        // (stake keys minus revocations, plus delegated keys) - quorum thresholds
         // computed from this count must agree with set membership exactly.
         // All callers pass blockIndex; a missing one means "current tip".
         if(blockIndex === undefined || blockIndex === null)
@@ -8187,7 +8187,7 @@ class Database {
     }
 
     // Fetch the oldest pending rows for the poller to consider (it applies the
-    // per-row backoff gate in JS). `failed` rows are excluded — they are
+    // per-row backoff gate in JS). `failed` rows are excluded - they are
     // terminal.
     async getPendingHubPushes(limit){
         let max = Number(limit);
@@ -8223,12 +8223,22 @@ class Database {
     // Get aggregate active stake info for a pubkey (SUM of amount across all active rows).
     // Returns { source_id, signing_pubkey_id, signing_pubkey, amount, activation_block, ... } or null.
     // blockIndex enforces the 6-block activation/deactivation delay for BTC reorg safety.
+    // Mirrors the effective-set semantics of hasCapability: applies DELEGATE v2 key-revocation
+    // exclusions on the direct-stake path, and adds the delegated-key path so a delegatee-only
+    // hub correctly sees itself as staked. Without these, a hub whose only stake authority comes
+    // via DELEGATE returns amount:'0'/has_stake:false from getownstake even though the federation
+    // sees it as qualified via _effectiveCapabilitySetSql; conversely, a revoked key is still
+    // counted. Both cause the hub's self-qualification to diverge from the federation's view.
     async getActiveStakeByPubkey(pubkey, blockIndex){
         let pubkey_id = await this.getPubkeyId(String(pubkey).toLowerCase());
         if(pubkey_id === null)
             return null;
         let valid_id = await this.getStatusId('valid');
-        let query = `SELECT
+        let blk = (blockIndex !== undefined && blockIndex !== null) ? blockIndex : null;
+
+        // Path 1: direct stake key, excluding any revocations active at blk.
+        // Mirrors the stake-key branch of hasCapability (stake_key_revocations NOT-EXISTS).
+        let q1 = `SELECT
                         MIN(s.source_id)                       AS source_id,
                         s.signing_pubkey_id                    AS signing_pubkey_id,
                         SUM(CAST(s.amount AS DECIMAL(30,8)))   AS amount,
@@ -8238,26 +8248,73 @@ class Database {
                         ip.pubkey                              AS signing_pubkey
                      FROM stakes s
                          LEFT JOIN index_pubkeys ip ON (ip.id = s.signing_pubkey_id)
-                     WHERE s.signing_pubkey_id=? AND s.status_id=?`;
-        let args = [pubkey_id, valid_id];
-        if(blockIndex !== undefined && blockIndex !== null){
-            query += ' AND s.activation_block <= ? AND (s.deactivation_block IS NULL OR s.deactivation_block > ?)';
-            args.push(blockIndex);
-            args.push(blockIndex);
+                     WHERE s.signing_pubkey_id=? AND s.status_id=?
+                       AND NOT EXISTS (
+                           SELECT 1 FROM stake_key_revocations r
+                           WHERE r.source_id = s.source_id
+                             AND r.signing_pubkey_id = s.signing_pubkey_id
+                             AND r.status_id = ?
+                             AND r.deactivation_block <= ?
+                             AND r.action_index > s.action_index)`;
+        let a1 = [pubkey_id, valid_id, valid_id, blk !== null ? blk : 0];
+        if(blk !== null){
+            q1 += ' AND s.activation_block <= ? AND (s.deactivation_block IS NULL OR s.deactivation_block > ?)';
+            a1.push(blk, blk);
         }
-        query += ' GROUP BY s.signing_pubkey_id, ip.pubkey LIMIT 1';
-        let results = await this.doQuery(query, args);
-        if(results.length === 0) return null;
-        let row = results[0];
-        return {
-            source_id:         row.source_id,
-            signing_pubkey_id: row.signing_pubkey_id,
-            signing_pubkey:    row.signing_pubkey,
-            amount:            (row.amount === null || row.amount === undefined) ? '0' : String(row.amount),
-            activation_block:  row.activation_block,
-            block_index:       row.block_index,
-            status_id:         row.status_id
-        };
+        q1 += ' GROUP BY s.signing_pubkey_id, ip.pubkey LIMIT 1';
+        let results = await this.doQuery(q1, a1);
+        if(results.length > 0){
+            let row = results[0];
+            return {
+                source_id:         row.source_id,
+                signing_pubkey_id: row.signing_pubkey_id,
+                signing_pubkey:    row.signing_pubkey,
+                amount:            (row.amount === null || row.amount === undefined) ? '0' : String(row.amount),
+                activation_block:  row.activation_block,
+                block_index:       row.block_index,
+                status_id:         row.status_id
+            };
+        }
+
+        // Path 2: delegated key. If this pubkey has an active delegation row, return the
+        // delegating source's aggregate active stake (mirrors the delegated-key branch of
+        // hasCapability). The returned amount is the source's total so the hub self-qualifies
+        // when delegation-only; source_id/activation_block are from the delegation row.
+        let q2 = `SELECT d.source_id AS source_id,
+                         d.signing_pubkey_id AS signing_pubkey_id,
+                         ip.pubkey AS signing_pubkey,
+                         d.activation_block AS activation_block,
+                         d.block_index AS block_index,
+                         d.status_id AS status_id,
+                         SUM(CAST(s2.amount AS DECIMAL(30,8))) AS amount
+                  FROM delegations d
+                  JOIN stakes s2 ON s2.source_id = d.source_id
+                  LEFT JOIN index_pubkeys ip ON ip.id = d.signing_pubkey_id
+                  WHERE d.signing_pubkey_id = ?
+                    AND d.status_id = ?
+                    AND s2.status_id = ?`;
+        let a2 = [pubkey_id, valid_id, valid_id];
+        if(blk !== null){
+            q2 += ' AND d.activation_block <= ? AND (d.deactivation_block IS NULL OR d.deactivation_block > ?)';
+            q2 += ' AND s2.activation_block <= ? AND (s2.deactivation_block IS NULL OR s2.deactivation_block > ?)';
+            a2.push(blk, blk, blk, blk);
+        }
+        q2 += ' GROUP BY d.source_id, d.signing_pubkey_id LIMIT 1';
+        let drows = await this.doQuery(q2, a2);
+        if(drows.length > 0 && drows[0].amount !== null){
+            let row = drows[0];
+            return {
+                source_id:         row.source_id,
+                signing_pubkey_id: row.signing_pubkey_id,
+                signing_pubkey:    row.signing_pubkey,
+                amount:            String(row.amount),
+                activation_block:  row.activation_block,
+                block_index:       row.block_index,
+                status_id:         row.status_id
+            };
+        }
+
+        return null;
     }
 
     // Latest parsed block index (highest entry in blocks table), or 0 if none.
@@ -8270,7 +8327,7 @@ class Database {
 
     // Return all pubkeys with ANY active stake at `blockIndex`, regardless
     // of capability. Used by xchain-hub's Consensus (config-change PBFT) to
-    // snapshot the whole-federation validator set at a block boundary —
+    // snapshot the whole-federation validator set at a block boundary -
     // governance/config quorum is over every staker, not just a capability
     // subset (OracleConsensus uses getValidatorsByCapability('price', ...)
     // when the quorum is capability-scoped).
@@ -8293,15 +8350,16 @@ class Database {
                      ORDER BY pubkey
                      LIMIT ?`;
         let rows = await this.doQuery(query, [...eff.args, limit]);
-        if(rows.length >= limit)
-            console.warn('getActiveValidators hit the result cap of ' + limit + ' rows at block ' + blockIndex + ' — validator set may be truncated. Raise the frozen VALIDATOR_QUERY_LIMIT consensus constant (coordinated fleet upgrade) if the federation has grown.');
+        let truncated = rows.length >= limit;
+        if(truncated)
+            console.warn('getActiveValidators hit the result cap of ' + limit + ' rows at block ' + blockIndex + ' - validator set may be truncated. Raise the frozen VALIDATOR_QUERY_LIMIT consensus constant (coordinated fleet upgrade) if the federation has grown.');
         return rows.map(r => ({
             pubkey: String(r.pubkey),
             amount: (r.total === null || r.total === undefined) ? '0' : String(r.total)
         }));
     }
 
-    // Source-keyed all-staker weights at `blockIndex` — the STAKE_WEIGHTED_QUORUM
+    // Source-keyed all-staker weights at `blockIndex` - the STAKE_WEIGHTED_QUORUM
     // counterpart of getActiveValidators (the config-change PBFT's whole-federation
     // set). Every source with ANY active stake (no MIN_STAKE floor) and all its
     // effective keys, each carrying the source address + the source's aggregate
@@ -8312,13 +8370,14 @@ class Database {
     async getActiveStakeWeights(blockIndex){
         let valid_id = await this.getStatusId('valid');
         if(valid_id === null) return [];
-        // Safety cap — see getActiveValidators.
+        // Safety cap - see getActiveValidators.
         let limit = this.config['VALIDATOR_QUERY_LIMIT'];
         let sw = this._stakeWeightsSql(valid_id, blockIndex, '0');   // no MIN_STAKE floor
         let query = `${sw.sql} ORDER BY source, pubkey LIMIT ?`;
         let rows = await this.doQuery(query, [...sw.args, limit]);
-        if(rows.length >= limit)
-            console.warn('getActiveStakeWeights hit the result cap of ' + limit + ' rows at block ' + blockIndex + ' — set may be truncated. Raise the frozen VALIDATOR_QUERY_LIMIT consensus constant (coordinated fleet upgrade) if the federation has grown.');
+        let truncated = rows.length >= limit;
+        if(truncated)
+            console.warn('getActiveStakeWeights hit the result cap of ' + limit + ' rows at block ' + blockIndex + ' - set may be truncated. Raise the frozen VALIDATOR_QUERY_LIMIT consensus constant (coordinated fleet upgrade) if the federation has grown.');
         return rows.map(r => ({
             pubkey: String(r.pubkey),
             source: String(r.source),
@@ -8328,7 +8387,7 @@ class Database {
 
     // Return all pubkeys whose SUM(active stake) at `blockIndex` meets the
     // capability's MIN_STAKE. Used by xchain-hub's CapabilitySnapshot to lock
-    // the validator set at a block boundary for PBFT quorum calculations —
+    // the validator set at a block boundary for PBFT quorum calculations -
     // every hub independently calling this against the same blockIndex must
     // arrive at the same set, so consensus on quorum N is deterministic.
     // Spec: claude/reports/specs/2026-05-24_capability-staking-model.md §6
@@ -8354,7 +8413,7 @@ class Database {
             : (capConfig['MIN_STAKE'] || '0');
         let valid_id = await this.getStatusId('valid');
         if(valid_id === null) return [];
-        // Safety cap — see getActiveValidators. Bounds the result set so a
+        // Safety cap - see getActiveValidators. Bounds the result set so a
         // cache miss (or the uncached in-process call during block processing)
         // can't return an unbounded set on a large federation. Override via
         // VALIDATOR_QUERY_LIMIT.
@@ -8365,34 +8424,37 @@ class Database {
                      ORDER BY pubkey
                      LIMIT ?`;
         let rows = await this.doQuery(query, [...eff.args, limit]);
-        if(rows.length >= limit)
-            console.warn('getValidatorsByCapability(' + capability + ') hit the result cap of ' + limit + ' rows at block ' + blockIndex + ' — validator set may be truncated. Raise the frozen VALIDATOR_QUERY_LIMIT consensus constant (coordinated fleet upgrade) if the federation has grown.');
-        return rows.map(r => ({
+        let truncated = rows.length >= limit;
+        if(truncated)
+            console.warn('getValidatorsByCapability(' + capability + ') hit the result cap of ' + limit + ' rows at block ' + blockIndex + ' - validator set may be truncated. Raise the frozen VALIDATOR_QUERY_LIMIT consensus constant (coordinated fleet upgrade) if the federation has grown.');
+        let result = rows.map(r => ({
             pubkey: String(r.pubkey),
             amount: (r.total === null || r.total === undefined) ? '0' : String(r.total)
         }));
+        result.truncated = truncated;
+        return result;
     }
 
     // Effective signer set for a capability at a block (DELEGATE semantics,
     // additive-until-revoked). A source's effective keys are:
-    //   stake keys     — per-pubkey aggregate active stake >= MIN_STAKE, EXCLUDING
+    //   stake keys     - per-pubkey aggregate active stake >= MIN_STAKE, EXCLUDING
     //                    keys revoked via DELEGATE v2 (stake_key_revocations). A
     //                    revocation only applies to stake rows that predate it
     //                    (r.action_index > s.action_index), so re-staking the same
     //                    key later restores it.
-    //   delegated keys — active `delegations` rows whose SOURCE's aggregate active
+    //   delegated keys - active `delegations` rows whose SOURCE's aggregate active
     //                    stake >= MIN_STAKE. Delegated keys are backed by the
     //                    source's whole stake; they add signers, they never change
     //                    staked amounts (spec: DELEGATE.md).
     // Every PBFT-quorum read (capability snapshots, signature verification, quorum
-    // counts) MUST resolve through this one query so all consumers agree —
+    // counts) MUST resolve through this one query so all consumers agree -
     // CONSENSUS-CRITICAL: any change here forks validation.
     _effectiveCapabilitySetSql(valid_id, blockIndex, minStake){
         // Permanent disqualification (WI-2 bump 2): a signing key proven to have
-        // equivocated is PERMANENTLY barred from the effective signer set — not just
+        // equivocated is PERMANENTLY barred from the effective signer set - not just
         // until its current bond burns to 0, but against any future re-stake/re-delegation
         // of the same key. The exclusion is GLOBAL (any capability the key was slashed in
-        // bars it everywhere — an equivocating key has proven byzantine) and block-gated
+        // bars it everywhere - an equivocating key has proven byzantine) and block-gated
         // (`cse.block_index <= ?`) so re-deriving a historical block before the slash is
         // byte-identical, and reorg-safe (the slash event rolls back ⇒ eligibility returns).
         // Applied identically in _stakeWeightsSql and hasCapability so every quorum read agrees.
@@ -8443,14 +8505,14 @@ class Database {
     // ── Stake-weighted quorum (STAKE_WEIGHTED_QUORUM) ─────────────────────────
     // Source-keyed validator weights for a capability at a BTC-anchored block.
     // Weight belongs to the staking ADDRESS (source), NOT the signing key: DELEGATE
-    // v0 is additive — one source may authorize many keys, all backed by the source's
-    // aggregate stake (DELEGATE.md "Effective signer set") — so a pubkey-keyed weight
+    // v0 is additive - one source may authorize many keys, all backed by the source's
+    // aggregate stake (DELEGATE.md "Effective signer set") - so a pubkey-keyed weight
     // would let one stake vote (N+1)x by delegating N keys. Returns one row per
     // effective signer key, each carrying its `source` (address) + the source's
     // aggregate `weight`. Σ weight over DISTINCT sources = S. CONSENSUS-CRITICAL:
     // must resolve identically on the hub and every indexer or validation forks.
     async getStakeWeightsByCapability(capability, blockIndex, minStakeOverride){
-        // Off-BTC chains have no local capability stakes — read the source-keyed
+        // Off-BTC chains have no local capability stakes - read the source-keyed
         // weights from the hub-mirrored capability_snapshots (same capability scoping
         // as getValidatorsByCapability).
         if(this.config['COIN'] !== 'BTC' && (capability === 'cross_chain' || capability === 'oracle_publish'))
@@ -8459,37 +8521,47 @@ class Database {
         let capConfig = caps[capability];
         if(!capConfig) return [];
         // Caller-supplied threshold (the hub's authoritative MIN_STAKE) wins over local
-        // config — keeps every indexer computing the same set for the same block.
-        let minStake = (minStakeOverride !== undefined && minStakeOverride !== null)
-            ? String(minStakeOverride)
-            : (capConfig['MIN_STAKE'] || '0');
+        // config - keeps every indexer computing the same set for the same block.
+        // Floor: same as getValidatorsByCapability - reject sub-floor values to prevent
+        // an untrusted caller from inflating the weighted-quorum set.
+        let localFloor = capConfig['MIN_STAKE'] || '0';
+        let minStake;
+        if(minStakeOverride !== undefined && minStakeOverride !== null){
+            let caller = String(minStakeOverride);
+            minStake = this.util.bcgte(caller, localFloor) ? caller : localFloor;
+        } else {
+            minStake = localFloor;
+        }
         let valid_id = await this.getStatusId('valid');
         if(valid_id === null) return [];
         let limit = this.config['VALIDATOR_QUERY_LIMIT'];
         let sw = this._stakeWeightsSql(valid_id, blockIndex, minStake);
         let query = `${sw.sql} ORDER BY source, pubkey LIMIT ?`;
         let rows = await this.doQuery(query, [...sw.args, limit]);
-        if(rows.length >= limit)
-            console.warn('getStakeWeightsByCapability(' + capability + ') hit the result cap of ' + limit + ' rows at block ' + blockIndex + ' — set may be truncated. Raise the frozen VALIDATOR_QUERY_LIMIT consensus constant (coordinated fleet upgrade) if the federation has grown.');
-        return rows.map(r => ({
+        let truncated = rows.length >= limit;
+        if(truncated)
+            console.warn('getStakeWeightsByCapability(' + capability + ') hit the result cap of ' + limit + ' rows at block ' + blockIndex + ' - set may be truncated. Raise the frozen VALIDATOR_QUERY_LIMIT consensus constant (coordinated fleet upgrade) if the federation has grown.');
+        let result = rows.map(r => ({
             pubkey: String(r.pubkey),
             source: String(r.source),
             weight: (r.weight === null || r.weight === undefined) ? '0' : String(r.weight)
         }));
+        result.truncated = truncated;
+        return result;
     }
 
     // Source-keyed effective-signer query (DELEGATE.md additive model).
-    //   qualifying sources — per-source aggregate active stake >= MIN_STAKE.
-    //   effective keys     — the source's own active stake keys (EXCLUDING keys
+    //   qualifying sources - per-source aggregate active stake >= MIN_STAKE.
+    //   effective keys     - the source's own active stake keys (EXCLUDING keys
     //                        revoked via DELEGATE v2 in effect at the block, applied
     //                        only to stake rows predating the revocation) UNION the
     //                        source's active delegated keys.
     // One output row per (effective key): { pubkey, source(address), weight(=source
     // aggregate) }. Every key of a source carries the SAME source + weight, so a
-    // source-deduped tally counts that stake once. CONSENSUS-CRITICAL — mirrors the
+    // source-deduped tally counts that stake once. CONSENSUS-CRITICAL - mirrors the
     // qualification/revocation/delegation semantics of _effectiveCapabilitySetSql.
     _stakeWeightsSql(valid_id, blockIndex, minStake){
-        // Permanent disqualification — see _effectiveCapabilitySetSql. Excludes equivocation-
+        // Permanent disqualification - see _effectiveCapabilitySetSql. Excludes equivocation-
         // slashed keys from the effective-key set (both stake-key and delegated-key branches)
         // so the source-deduped stake-weight tally matches the count-quorum set exactly.
         const slashExcl = (keyCol) =>
@@ -8549,7 +8621,7 @@ class Database {
         return rows.map(r => ({
             pubkey: String(r.pubkey),
             source: r.source == null ? '' : String(r.source),
-            // The query aliases `amount AS weight`, so the value lands on r.weight —
+            // The query aliases `amount AS weight`, so the value lands on r.weight -
             // reading r.amount (undefined) collapsed EVERY weight to '0', which made
             // stake-weighted quorum fail closed (S=0) for off-BTC chains (DOGE/LTC).
             weight: r.weight == null ? '0' : String(r.weight)
@@ -8558,7 +8630,7 @@ class Database {
 
     // Whether `capability` is present in this indexer's STAKING.CAPABILITIES config.
     // Lets the hub-facing getcapabilityvalidators RPC distinguish a genuinely empty
-    // validator set from a capability this indexer doesn't know about — the latter
+    // validator set from a capability this indexer doesn't know about - the latter
     // signals config drift during a capability rollout and must surface as an error
     // rather than an empty set that looks identical to "no qualified validators".
     isCapabilityConfigured(capability){
@@ -8591,12 +8663,12 @@ class Database {
         if(blockIndex === undefined || blockIndex === null)
             blockIndex = await this.getLatestBlockIndex();
         // Permanent disqualification (WI-2 bump 2): an equivocation-slashed key is barred
-        // from ALL capabilities — must agree with the effective-set queries
+        // from ALL capabilities - must agree with the effective-set queries
         // (_effectiveCapabilitySetSql / _stakeWeightsSql), which exclude it too.
         if(await this._isPubkeySlashedAt(pubkey_id, blockIndex)) return false;
         // Per-pubkey membership test against the SAME effective signer set as
         // getValidatorsByCapability (stake keys minus DELEGATE v2 revocations,
-        // plus delegated keys backed by the source's aggregate stake) — the
+        // plus delegated keys backed by the source's aggregate stake) - the
         // signature-verification paths and the quorum-set paths must agree.
         // Stake-key path: per-pubkey aggregate of active, non-revoked stakes.
         let query = `SELECT SUM(CAST(s.amount AS DECIMAL(30,8))) AS total
@@ -8646,7 +8718,7 @@ class Database {
             return false;
         }
         // Source = the staking address that owns this signing key (stake first, then
-        // a DELEGATE v0 delegated key) — same resolution as createValidatorReward.
+        // a DELEGATE v0 delegated key) - same resolution as createValidatorReward.
         let results = await this.doQuery(`SELECT source_id FROM stakes WHERE signing_pubkey_id=? ORDER BY action_index DESC LIMIT 1`, [pubkey_id]);
         if(results.length === 0)
             results = await this.doQuery(`SELECT source_id FROM delegations WHERE signing_pubkey_id=? ORDER BY action_index DESC LIMIT 1`, [pubkey_id]);
@@ -8663,10 +8735,10 @@ class Database {
     }
 
     // Validators with a `passed` possession-proof inside PROOF_WINDOW_BLOCKS of
-    // `blockIndex` — the "verified full node" set (before the live-stake intersect,
+    // `blockIndex` - the "verified full node" set (before the live-stake intersect,
     // which callers apply via hasCapability('full_node')). Returns one row per
     // verified pubkey carrying its staking `source` so the equal reward split can
-    // dedupe per source (one operator = one full node = one share). Deterministic —
+    // dedupe per source (one operator = one full node = one share). Deterministic -
     // depends only on earlier on-chain verdicts.
     async getVerifiedFullNodeSet(blockIndex){
         let window = parseInt((this.config['FULLNODE'] || {})['PROOF_WINDOW_BLOCKS']) || 0;
@@ -8687,17 +8759,17 @@ class Database {
     }
 
     // Participation-rate inputs for the full-node REWARD gate (price.js). Earning the
-    // full-node tranche is a carrot, not a stick — there is NO slashing; a node that
+    // full-node tranche is a carrot, not a stick - there is NO slashing; a node that
     // doesn't run a full node simply doesn't pass challenges and doesn't get paid.
     // Over the trailing FULLNODE.REWARD_PASS_WINDOW_BLOCKS ending at `blockIndex` this
     // returns:
     //   - totalEpochs: the number of DISTINCT challenge epochs that produced at least
-    //     one PASSING verdict (the denominator — counting only epochs the federation
+    //     one PASSING verdict (the denominator - counting only epochs the federation
     //     actually ran, so an outage never penalizes a node), and
     //   - sources: one entry per staking SOURCE that passed in the window, carrying
     //     passed_epochs (DISTINCT epochs that source answered) and the lowercased set of
     //     its passing pubkeys (so price.js can pick a representative round-signer).
-    // Deterministic — depends only on earlier on-chain NODEPROOF verdicts; all counts
+    // Deterministic - depends only on earlier on-chain NODEPROOF verdicts; all counts
     // are integers (the gate compares passed*10000 >= bps*total, never floats).
     async getFullNodeParticipation(blockIndex){
         let fn     = this.config['FULLNODE'] || {};
@@ -8705,7 +8777,7 @@ class Database {
         let result = { totalEpochs: 0, sources: [] };
         if(window <= 0) return result;
         let low = parseInt(blockIndex) - window;
-        // Denominator — distinct challenge epochs with >=1 passing verdict in the window.
+        // Denominator - distinct challenge epochs with >=1 passing verdict in the window.
         let totRows = await this.doQuery(
             `SELECT COUNT(DISTINCT epoch_height) AS epochs
                FROM full_node_verifications
@@ -8713,7 +8785,7 @@ class Database {
             [low, blockIndex]);
         result.totalEpochs = (totRows.length && totRows[0].epochs != null) ? Number(totRows[0].epochs) : 0;
         if(result.totalEpochs === 0) return result;
-        // Numerator rows — (source, epoch, pubkey) for every passing verdict in the
+        // Numerator rows - (source, epoch, pubkey) for every passing verdict in the
         // window. Ordered for deterministic aggregation.
         let rows = await this.doQuery(
             `SELECT fv.source_id AS source_id, sa.address AS source,
@@ -8826,7 +8898,7 @@ class Database {
         }
     }
 
-    // Highest VALID checkpoint_seq recorded for (chain, network) — the ANCHOR
+    // Highest VALID checkpoint_seq recorded for (chain, network) - the ANCHOR
     // replay guard. Only status 'valid'/'unverified' rows count (an 'invalid: ...'
     // replay attempt must not poison the watermark).
     async getMaxAnchorCheckpointSeq(chain, network){
@@ -8839,7 +8911,7 @@ class Database {
         return (rows.length > 0 && rows[0].max_seq != null) ? Number(rows[0].max_seq) : null;
     }
 
-    // Highest VALID archive batch seq recorded — the v1 batch replay guard
+    // Highest VALID archive batch seq recorded - the v1 batch replay guard
     // (mirrors getMaxAnchorCheckpointSeq).
     async getMaxAnchorBatchSeq(){
         let query = `SELECT MAX(a.match_batch_seq) AS max_seq
@@ -8850,7 +8922,7 @@ class Database {
         return (rows.length > 0 && rows[0].max_seq != null) ? Number(rows[0].max_seq) : null;
     }
 
-    // The v1 anchor that started an archive batch (status irrelevant — chunk
+    // The v1 anchor that started an archive batch (status irrelevant - chunk
     // geometry checks belong to the caller).
     async getAnchorV1ByBatchSeq(batchSeq){
         let rows = await this.doQuery(
@@ -8978,7 +9050,7 @@ class Database {
     }
 
     // Check whether the (target, source) combination already owns an active stake for (pubkey, tick).
-    // Used by STAKE v3 to detect "new vs. top-up" — top-up requires the existing stake be owned by the same source.
+    // Used by STAKE v3 to detect "new vs. top-up" - top-up requires the existing stake be owned by the same source.
     async getContractStakeOwner(targetContractIndex, pubkey, tick){
         let pubkey_id = await this.getPubkeyId(String(pubkey).toLowerCase());
         if(pubkey_id === null) return null;
@@ -9068,7 +9140,7 @@ class Database {
     // returned to the VM execution context. Methods on the returned object are
     // synchronous since they query the pre-loaded snapshot only.
     //
-    // The snapshot is scoped to THIS contract (targetContractIndex) — a contract
+    // The snapshot is scoped to THIS contract (targetContractIndex) - a contract
     // calling xchain.contract.* cannot see other contracts' stakes through this
     // accessor (implicit slash authorization). The 1000-staker cap on getStakers
     // is applied here at query time (LIMIT clause).
@@ -9117,11 +9189,11 @@ class Database {
                 arr.push({ pubkey: pk, amount: amt });
             }
             // Sort stakers biggest to smallest. Equal amounts fall back to a lexicographic
-            // pubkey tiebreak so the order is deterministic across nodes — the source query
+            // pubkey tiebreak so the order is deterministic across nodes - the source query
             // carries no ORDER BY, so without this, equal-amount stakers would order in
             // engine-arbitrary row order. That matters twice: it sets the iteration order a
             // contract's getStakers() observes, AND it decides which stakers survive the
-            // 1000-cap slice below when ties straddle the boundary — either of which would
+            // 1000-cap slice below when ties straddle the boundary - either of which would
             // fork getStakers() membership (and any contract branching on it) across
             // validators. pubkey is unique per tick here (aggregated), so this is a total order.
             arr.sort((a, b) => {
@@ -9138,18 +9210,18 @@ class Database {
     // Slash a staker. Deducts `amount` from active contract_stakes rows first (LIFO by
     // activation_block / action_index), then from contract_unstakes rows if any remainder.
     // Returns the actual amount slashed (may be less than `amount` if available balance is lower).
-    // Does NOT credit the destination or emit the slash_events row — caller (_processSlashEmission)
+    // Does NOT credit the destination or emit the slash_events row - caller (_processSlashEmission)
     // wires those side effects.
     async slashContractStake(targetContractIndex, pubkeyId, tickId, amount, blockIndex, executionIndex, slashPosition){
         let valid_id = await this.getStatusId('valid');
         if(valid_id === null) return '0';
         let remaining = String(amount);
         let totalSlashed = '0';
-        // Pass 1: deduct from ACTIVE contract_stakes rows (LIFO — highest action_index first).
+        // Pass 1: deduct from ACTIVE contract_stakes rows (LIFO - highest action_index first).
         // The deactivation-window filter is load-bearing: after UNSTAKE v1 a row keeps its `amount`
         // intact (only deactivation_block is set) AND its tokens are mirrored into a contract_unstakes
         // cooldown row. Without this filter Pass 1 would slash that phantom contract_stakes copy while
-        // the cooldown sweep still refunds the full contract_unstakes row — crediting the destination
+        // the cooldown sweep still refunds the full contract_unstakes row - crediting the destination
         // AND refunding the staker against a single debit (supply inflation). Unstaked-but-cooling
         // tokens are slashed by Pass 2 (contract_unstakes) instead, so each token is slashed once.
         let stakesQ = `SELECT action_index, amount FROM contract_stakes
@@ -9198,8 +9270,8 @@ class Database {
     // Record one in-place slash debit, enabling reorg restoration of stake amounts.
     // slashContractStake reduces contract_stakes/contract_unstakes.amount IN PLACE on
     // rows created in earlier (surviving) blocks; the generic rollback delete cannot
-    // revert that. This row captures `prev_amount` — the row's EXACT amount string
-    // before the debit — so rollback.js can copy it back verbatim (string copy, no
+    // revert that. This row captures `prev_amount` - the row's EXACT amount string
+    // before the debit - so rollback.js can copy it back verbatim (string copy, no
     // arithmetic → byte-identical on source + replica, and identical to a from-genesis
     // replay where the slash was never re-mined). `amount` is the per-row delta (audit).
     async createContractSlashDebit(executionIndex, slashPosition, targetTable, stakeActionIndex, prevAmount, amount, blockIndex){
@@ -9217,18 +9289,18 @@ class Database {
     // XCHAIN burned as a string.
     //
     // Unlike slashContractStake (per-contract, per-tick, partial `amount`), capability stake
-    // is a single XCHAIN bond per signing pubkey (XCHAIN-only — no contract/tick), and a
+    // is a single XCHAIN bond per signing pubkey (XCHAIN-only - no contract/tick), and a
     // cryptographic equivocation proof burns the WHOLE bond in one shot. The deactivation-
     // window guard on Pass 1 is the same supply-inflation correctness point as the contract
     // path: after UNSTAKE a `stakes` row keeps its `amount` intact (only deactivation_block is
     // set) AND its tokens are mirrored into a cooldown `unstakes` row, so Pass 1 must skip that
-    // phantom copy (Pass 2 burns the cooldown row) — each token burned exactly once. The
+    // phantom copy (Pass 2 burns the cooldown row) - each token burned exactly once. The
     // (pubkey,capability) dedup that makes a first slash idempotent lives in the SLASH handler.
     async slashCapabilityStake(pubkeyId, blockIndex, slashActionIndex){
         let valid_id = await this.getStatusId('valid');
         if(valid_id === null) return '0';
         let totalSlashed = '0';
-        // Pass 1: ACTIVE stakes rows (LIFO — highest action_index first) within the window.
+        // Pass 1: ACTIVE stakes rows (LIFO - highest action_index first) within the window.
         let stakesQ = `SELECT action_index, amount FROM stakes
                        WHERE signing_pubkey_id=? AND status_id=?
                          AND activation_block <= ?
@@ -9244,7 +9316,7 @@ class Database {
             await this.createCapabilitySlashDebit(slashActionIndex, 'stakes', row.action_index, rowAmt, rowAmt, blockIndex);
             totalSlashed = this.util.bcadd(totalSlashed, rowAmt, 8);
         }
-        // Pass 2: cooldown-locked unstakes rows (status valid/pending) — slashable too (closes R-4:
+        // Pass 2: cooldown-locked unstakes rows (status valid/pending) - slashable too (closes R-4:
         // capability unstakes are NOT slashable under the legacy contract-only path).
         let pendingId = await this.getStatusId('pending');
         let unstakeStatusIds = [valid_id];
@@ -9266,10 +9338,10 @@ class Database {
     }
 
     // Record one in-place capability-stake slash debit so a reorg can restore the row's
-    // amount byte-identically (verbatim `prev_amount` string copy — no arithmetic, so
+    // amount byte-identically (verbatim `prev_amount` string copy - no arithmetic, so
     // source + replica + from-genesis replay all converge). Mirrors createContractSlashDebit
     // but keyed on the SLASH wire action_index (capability slashes are permissionless wire
-    // actions, not VM emissions — there is no execution_index/slash_position).
+    // actions, not VM emissions - there is no execution_index/slash_position).
     async createCapabilitySlashDebit(slashActionIndex, targetTable, stakeActionIndex, prevAmount, amount, blockIndex){
         let query = `INSERT INTO capability_slash_debits
                         (slash_action_index, target_table, stake_action_index, prev_amount, amount, block_index)
@@ -9303,7 +9375,7 @@ class Database {
                                    submitter_id, destination_id, block_index]);
     }
 
-    // Whether a (pubkey, capability) pair has already been slashed — the SLASH handler's
+    // Whether a (pubkey, capability) pair has already been slashed - the SLASH handler's
     // idempotency gate (a first equivocation proof burns the whole bond; later proofs for the
     // same pair are no-ops). Block-scoped tables, so a reorg that orphans the slash also drops
     // this row and the check re-opens deterministically.
@@ -9316,8 +9388,8 @@ class Database {
 
     // Permanent disqualification (WI-2 bump 2): whether a signing key has been slashed for
     // equivocation in ANY capability at or before `blockIndex`. A slashed key is barred from
-    // the effective signer set everywhere — not just until its bond burns to 0, but against
-    // any future re-stake/re-delegation. GLOBAL (capability-agnostic — an equivocating key is
+    // the effective signer set everywhere - not just until its bond burns to 0, but against
+    // any future re-stake/re-delegation. GLOBAL (capability-agnostic - an equivocating key is
     // byzantine), block-gated for deterministic historical re-derivation, and reorg-safe (the
     // block-scoped event row rolls back ⇒ the key re-qualifies). The SQL counterpart inside
     // _effectiveCapabilitySetSql / _stakeWeightsSql excludes it from the SET queries; this is
@@ -9360,7 +9432,7 @@ class Database {
         let pendingId = await this.getStatusId('pending');
         let validId = await this.getStatusId('valid');
         let completedId = await this.createStatus('completed');
-        // Status filter — most existing unstakes carry 'valid' since createStatus normalizes that way.
+        // Status filter - most existing unstakes carry 'valid' since createStatus normalizes that way.
         let statusIds = [];
         if(pendingId !== null) statusIds.push(pendingId);
         if(validId !== null) statusIds.push(validId);
@@ -9418,15 +9490,15 @@ class Database {
     }
 
     /*
-     * Programmable policy layer — controller bindings (token_controllers / address_controllers).
+     * Programmable policy layer - controller bindings (token_controllers / address_controllers).
      *
      * A token (ISSUE format 7) or an account (ADDRESS format 1) defers a chosen action-class to a
      * guard contract. These two tables are APPEND-ONLY event logs: every bind/unbind is one
      * immutable row keyed by its own action_index. The EFFECTIVE controller for a (subject, class)
-     * at block X is the latest event with block_index <= X — a `bind` gates; an `unbind` gates ONLY
+     * at block X is the latest event with block_index <= X - a `bind` gates; an `unbind` gates ONLY
      * while X < cooldown_end_block (the drop-cooldown's teeth: a thief can't instantly drop a
      * spend-limit), and stops gating once X reaches it. Cooldown expiry is therefore computed at
-     * READ time, never swept — so no row ever mutates, and both tables roll back cleanly as plain
+     * READ time, never swept - so no row ever mutates, and both tables roll back cleanly as plain
      * dataTables (DELETE WHERE action_index >= orphan, then forward replay re-creates the events).
      * "At most one live controller per (subject, class)" is enforced by the handlers: a BIND is
      * rejected when an effective controller already gates that class (replace = unbind-then-bind,
@@ -9445,7 +9517,7 @@ class Database {
             evt.bound_by_id, evt.is_unbind ? 1 : 0, evt.cooldown_blocks, evt.cooldown_end_block, evt.block_index]);
     }
 
-    // Append an address controller bind/unbind event (self-signed; no bound_by_id — the account IS
+    // Append an address controller bind/unbind event (self-signed; no bound_by_id - the account IS
     // the signer). `evt` carries action_index, address_id, action_class, contract_index, is_unbind,
     // cooldown_blocks, cooldown_end_block, block_index.
     async recordAddressControllerEvent(evt){
@@ -9458,7 +9530,7 @@ class Database {
     }
 
     // Latest controller event for (keyValue, action_class), bounded for a deterministic forward read
-    // (events at/before atBlock, and — for same-block ordering — strictly before atActionIndex).
+    // (events at/before atBlock, and - for same-block ordering - strictly before atActionIndex).
     // Returns the raw row (bind or unbind) or null. Apply controllerEventIfGating() to resolve the
     // read-time cooldown into an effective controller.
     async readLatestControllerEvent(table, keyColumn, keyValue, action_class, atBlock, atActionIndex){
@@ -9499,7 +9571,7 @@ class Database {
         return this.controllerEventIfGating(row, atBlock);
     }
 
-    // Guard-resolution: which single controller gates an ACTION of this class. Most-specific-wins —
+    // Guard-resolution: which single controller gates an ACTION of this class. Most-specific-wins -
     // a class-specific binding overrides the catch-all 'all' binding; if none, fall back to 'all'.
     // Exactly one row out → one guard runs → no stacking. Enforcement-ONLY: bind/unbind validation
     // must use the exact getters above (the fallback would falsely report a class as "already bound"
@@ -9551,7 +9623,7 @@ class Database {
     }
 
     /*
-     * External attestation framework — see specs/2026-05-24_external-attestation-framework.md
+     * External attestation framework - see specs/2026-05-24_external-attestation-framework.md
      */
 
     // Create/Update an ATTEST v0 (request) row in the consolidated `attests` table
@@ -9606,7 +9678,7 @@ class Database {
 
     // Create/Update an ATTEST v1 (response) row in the consolidated `attests` table.
     // The verified federation signatures ride in the validator_signatures JSON
-    // column (data['VALIDATOR_SIGNATURES'] — a JSON array string, or null) rather
+    // column (data['VALIDATOR_SIGNATURES'] - a JSON array string, or null) rather
     // than in a separate child table.
     async createAttestationResponse(data){
         data                 = this.normalizeDataValues(data);
@@ -9651,7 +9723,7 @@ class Database {
     // to the counter columns so callers can't inject arbitrary SQL.
     //
     // Reorg note: the table is append-monotone (counters only), so the standard
-    // `DELETE WHERE block_index >= ?` pattern can't roll it back — a row's
+    // `DELETE WHERE block_index >= ?` pattern can't roll it back - a row's
     // earlier, surviving increments live alongside the orphaned ones. Rollback
     // therefore recomputes affected pairs from the surviving ledger rather than
     // deleting by index: Rollback._recomputeAttestationValidatorStats() drops the
@@ -9691,7 +9763,7 @@ class Database {
     // Update the request_status field on an ATTEST v0 (request) row
     // resolvedBlock anchors a TERMINAL flip ('fulfilled'/'errored'/'expired') to the
     // block that caused it, so the rollback pass can reset the surviving request row
-    // when that block reorgs (covers the v1-response AND v2-expiry paths — the old
+    // when that block reorgs (covers the v1-response AND v2-expiry paths - the old
     // v1-only self-join reset left a reorged expiry stuck terminal, and replay then
     // skipped re-synthesizing the v2 row: reorged-node vs fresh-sync divergence).
     async updateAttestationRequestStatus(requestId, newStatus, resolvedBlock){
@@ -9718,7 +9790,7 @@ class Database {
         // (block_index, action_index) it has already consumed, return only rows
         // strictly after it. This lets a poller page through more than `limit`
         // pending requests across successive calls instead of being permanently
-        // pinned to the oldest `limit` rows — without a cursor, a backlog larger
+        // pinned to the oldest `limit` rows - without a cursor, a backlog larger
         // than `limit` starves every newer request until the oldest ones drain.
         let afterBlock  = cursor ? Number(cursor.after_block_index)  : NaN;
         let afterAction = cursor ? Number(cursor.after_action_index) : NaN;
@@ -9773,7 +9845,7 @@ class Database {
         await this.doQuery(query, [callbackExecuteActionIndex, responseActionIndex]);
     }
 
-    // Get the delegation holding a pubkey, regardless of source — used for the
+    // Get the delegation holding a pubkey, regardless of source - used for the
     // DELEGATE v0 pubkey-collision rule ("must not already be in use by any
     // active stake or delegation"). Pending-activation delegations already
     // reserve the pubkey (mirrors the stake-collision semantics), so only the
@@ -9868,7 +9940,7 @@ class Database {
     }
 
     // Record one DEPLOY v4 carrier (a base64 slice of a chunked contract's source). Upsert keyed
-    // on the action_index (the rollback key) — mirrors createContract. Every chunk is stored
+    // on the action_index (the rollback key) - mirrors createContract. Every chunk is stored
     // with its status (valid/invalid) so the explorer can surface it; the DEPLOY assembler
     // (getDeployChunksForAssembly) reads only the VALID rows.
     async recordDeployChunk(data){
@@ -9897,7 +9969,7 @@ class Database {
 
     // Gather the VALID chunk parts a chunked DEPLOY (v2/v3) may assemble: same deployer
     // (source), same code_hash group, recorded at a LOWER action_index than the assembling
-    // DEPLOY (so a DEPLOY only ever consumes chunks that precede it — any reorg removing a
+    // DEPLOY (so a DEPLOY only ever consumes chunks that precede it - any reorg removing a
     // chunk also removes the dependent DEPLOY, keeping rollback trivial). Ordered by
     // chunk_index then action_index so a duplicated position deterministically resolves to
     // its first submission on every node. Returns raw rows; deploy.js does the contiguity +
@@ -9914,7 +9986,7 @@ class Database {
     }
 
     // Persist a contract's declared permissions manifest (Phase E). Upsert keyed on
-    // the DEPLOY action_index (the rollback key) — mirrors createContract. PERMISSIONS
+    // the DEPLOY action_index (the rollback key) - mirrors createContract. PERMISSIONS
     // is the validated array of permitted emission action types (stored as JSON) or
     // null when the contract declared none (unrestricted); MAX_TAKE_BPS is the tighter
     // per-contract royalty cap or null (global cap applies). deploy.js validates both
@@ -9922,7 +9994,7 @@ class Database {
     async createContractPermission(data){
         // Capture the permissions ARRAY before normalizeDataValues runs: that routine
         // safeToString()s every object-typed field, which coerces an array to a
-        // comma-joined string ('SEND,ISSUE') — JSON.stringify would then persist
+        // comma-joined string ('SEND,ISSUE') - JSON.stringify would then persist
         // '"SEND,ISSUE"' instead of '["SEND","ISSUE"]', and getContractPermissions'
         // Array.isArray check would read it back as a non-array and SILENTLY disable
         // the emission allowlist. Stringify the raw array here so the JSON is intact.
@@ -9955,7 +10027,7 @@ class Database {
 
     // Read a contract's persisted permissions manifest (Phase E). Returns
     //   { permissions: string[]|null, maxTakeBps: number|null }
-    // or null when the contract declared no manifest (no row) — the unrestricted,
+    // or null when the contract declared no manifest (no row) - the unrestricted,
     // backward-compatible default the callers (processEmission / runControllerGuard)
     // treat as "no per-contract restriction". permissions is JSON-parsed back to an
     // array; a NULL column stays null (unrestricted).
@@ -10087,7 +10159,7 @@ class Database {
     }
 
     /*****************************************************************
-     * VM Integration — Savepoints
+     * VM Integration - Savepoints
      ****************************************************************/
 
     // Create a savepoint within the current transaction
@@ -10113,7 +10185,7 @@ class Database {
     }
 
     /*****************************************************************
-     * VM Integration — Contract State
+     * VM Integration - Contract State
      ****************************************************************/
 
     // Get the current state of a contract as a { key: value } object
@@ -10132,7 +10204,7 @@ class Database {
         let results = await this.doQuery(query, [contractIndex]);
         // Null-prototype object so adversarial keys round-trip faithfully. A
         // plain {} would route state['__proto__'] = value through the __proto__
-        // setter — a no-op for non-object values (silently dropping the key) or
+        // setter - a no-op for non-object values (silently dropping the key) or
         // a prototype reassignment for object values. The VM's StateManager
         // already uses Object.create(null) and lets contracts state.set('__proto__'),
         // so the reload path must preserve it too, else that key vanishes on the
@@ -10148,7 +10220,7 @@ class Database {
         return state;
     }
 
-    // Append a new state row (append-only — rollback via DELETE WHERE block_index >= ?)
+    // Append a new state row (append-only - rollback via DELETE WHERE block_index >= ?)
     async createContractState(data){
         let query = `INSERT INTO contract_state
                         (contract_index, state_key, state_value, block_index, action_index)
@@ -10189,11 +10261,11 @@ class Database {
     // Build the balance + token-info snapshot the VM gateway exposes through
     // xchain.getBalance(address, tick) and xchain.getTokenInfo(tick). Scoped to
     // the explicitly passed addresses (the EXECUTE/DEPLOY SOURCE + the contract's
-    // own derived address) — arbitrary-address reads inside a contract resolve to
+    // own derived address) - arbitrary-address reads inside a contract resolve to
     // null because they cannot be pre-loaded deterministically.
     //
     // Determinism: every read is bounded by `action_index < ?` (pre-action ledger
-    // state — the contract's own mid-execution emissions are not yet persisted, so
+    // state - the contract's own mid-execution emissions are not yet persisted, so
     // a contract sees the balance it held going in, identical on every validator).
     // Amounts are mathjs-bignumber strings (no float). Reads run SERIALLY: during
     // block processing these share the single transaction connection, which cannot
@@ -10217,14 +10289,14 @@ class Database {
                 let symbol = tickCache[tick_id];
                 if(symbol === undefined){
                     symbol = await this.getTicker(tick_id);
-                    tickCache[tick_id] = symbol; // cache null too — avoids re-querying a missing id
+                    tickCache[tick_id] = symbol; // cache null too - avoids re-querying a missing id
                 }
                 if(this.util.isNull(symbol))
                     continue;
                 // getAddressBalances returns mathjs-bignumber OBJECTS (via bcsub/bcnum).
                 // The gateway exposes these to contracts that feed them straight into
                 // xchain.math (gte/subtract/...), and the value is copied across the
-                // isolated-vm boundary — where a bignumber object degrades to a plain
+                // isolated-vm boundary - where a bignumber object degrades to a plain
                 // object and math throws "[DecimalError] Invalid argument: [object Object]".
                 // Stringify to the canonical numeric form (matches getAddressBalances'
                 // other consumer in getBalancesForAddress).
@@ -10244,10 +10316,10 @@ class Database {
     }
 
     /*****************************************************************
-     * VM Integration — Oracle / Cross-Chain Stubs
+     * VM Integration - Oracle / Cross-Chain Stubs
      ****************************************************************/
 
-    // Oracle data accessor — reads from price_snapshots table
+    // Oracle data accessor - reads from price_snapshots table
     // Returns an accessor object that the VM gateway uses for xchain.oracle.*
     //
     // blockTime is the unix-second timestamp of the block being processed; together with
@@ -10278,7 +10350,7 @@ class Database {
         // The VM runs in a forked worker; read-only data must cross the IPC
         // boundary, so we PRE-LOAD here and let xchain-vm/src/readonly-accessors.js
         // rebuild the synchronous getPrice/getPriceAtRound/getSnapshotAge accessors
-        // inside the worker. (These were previously async DB closures — incompatible
+        // inside the worker. (These were previously async DB closures - incompatible
         // with the VM's synchronous applySync bridge, so oracle reads silently
         // resolved a Promise. This conversion also fixes that latent bug.)
         let blockCap = blockIndex || 999999999;
@@ -10309,7 +10381,7 @@ class Database {
         }
 
         // getPriceAtRound(): historical finalized rounds at/<= block. NOTE: this
-        // now respects block causality (reference_block <= block) — an improvement
+        // now respects block causality (reference_block <= block) - an improvement
         // over the old unfiltered query (which was non-functional anyway). Capped
         // for safety; a hit is LOGGED, never silently truncated.
         let rounds = {};
@@ -10322,7 +10394,7 @@ class Database {
         let roundRows = await this.doQuery(roundQuery, [blockCap]);
         if(roundRows.length >= MAX_ORACLE_ROUNDS)
             console.error('[oracle snapshot] round set capped at ' + MAX_ORACLE_ROUNDS +
-                ' rows for block ' + blockIndex + ' — getPriceAtRound may miss older rounds');
+                ' rows for block ' + blockIndex + ' - getPriceAtRound may miss older rounds');
         for(let r of roundRows){
             let cp = String(r.coin_pair);
             if(!rounds[cp]) rounds[cp] = {};
@@ -10364,7 +10436,7 @@ class Database {
         let rows = await this.doQuery(query, args);
         if(rows.length === 0) return null;
 
-        // Staleness guard (opt-in via opts) — see method comment.
+        // Staleness guard (opt-in via opts) - see method comment.
         if(opts){
             let refTime = parseInt(opts.blockTime);
             let maxAge  = parseInt(opts.maxAgeSeconds);
@@ -10383,7 +10455,7 @@ class Database {
 
     // Get the latest effective oracle price for a (sourceAddress, coin, tick, fiat) combination
     // gated by blockTime so two nodes processing the same block see the same price.
-    // The 24-hour lock window is enforced by `effective_at` — only prices whose effective_at <= blockTime are returned.
+    // The 24-hour lock window is enforced by `effective_at` - only prices whose effective_at <= blockTime are returned.
     async getOraclePrice(sourceAddress, coin, tick, fiat, blockTime){
         let query = `SELECT id, source_address, source_chain, coin, tick, fiat, value, fee, memo,
                             block_time, effective_at, action_index
@@ -10444,18 +10516,18 @@ class Database {
         }));
     }
 
-    // Cross-chain data stub — returns no-data accessors until Phase 4
+    // Cross-chain data stub - returns no-data accessors until Phase 4
     async getCrossChainDataForVM(block_index){
-        // Serializable snapshot (plain data) — the VM worker rebuilds the
+        // Serializable snapshot (plain data) - the VM worker rebuilds the
         // getAttestation/isSettled accessors (keys are "CHAIN:action_index").
         //
         // CONSENSUS RULE: `settled` is built from the LOCAL cross_chain_settlements
-        // table — legs THIS chain applied — never from the mirrored cross_chain_matches.
+        // table - legs THIS chain applied - never from the mirrored cross_chain_matches.
         // Mirror rows are deleted by reorg retraction without reorging this chain, so a
         // mirror-derived read would diverge between live nodes and a fresh resync. The
         // local table is action_index-anchored (drops with this chain's own reorgs) and
         // is rebuilt identically on replay. Settlements involving only other chains are
-        // therefore NOT visible here (isSettled → false) — documented limitation.
+        // therefore NOT visible here (isSettled → false) - documented limitation.
         //
         // Only settlements from blocks strictly BEFORE the current one are exposed, so
         // every execution in a block sees the same snapshot regardless of whether it
@@ -10470,7 +10542,7 @@ class Database {
             settled[String(r.a_chain) + ':' + String(r.a_action_index)] = true;
             settled[String(r.b_chain) + ':' + String(r.b_action_index)] = true;
         }
-        // Cross-chain call results this chain originated, keyed by call_id —
+        // Cross-chain call results this chain originated, keyed by call_id -
         // backs xchain.crossChain.getCallResult(callId). Same consensus rule:
         // LOCAL table (xcalls), terminal rows only, visible from the block AFTER
         // the one that resolved them (resolved_block < current).
@@ -10495,7 +10567,7 @@ class Database {
     // blockIndex (optional): scope both sides to rows earned/claimed at or before
     // that block. COLLECT validation MUST pass its BLOCK_INDEX so a replay
     // (reindex / ANCHOR recovery) sees exactly the rewards that were visible when
-    // the COLLECT confirmed — bulk-restored rewards must not become visible to
+    // the COLLECT confirmed - bulk-restored rewards must not become visible to
     // EARLIER COLLECTs than they were live (CONSENSUS). Live operation is
     // unaffected: pushed/derived rows always carry block_index <= tip.
     async getUnclaimedRewardTotal(source, blockIndex){

@@ -55,7 +55,7 @@ const MIN_CALL_GAS   = 5000;
 // DENY. Canonical: protocol/Controller_Bound_Tokens.md.
 const GUARD_METHOD = 'guard';
 
-// Cross-chain call (XCALL) host-side guards — mirrored from actions/xcall.js
+// Cross-chain call (XCALL) host-side guards, mirrored from actions/xcall.js
 // (canonical: xchain-documentation/protocol/constants.js).
 const { XCALL_MIN_GAS, XCALL_MAX_GAS, XCALL_MAX_HOPS } = require('./xcall.js');
 
@@ -137,7 +137,7 @@ class Execute {
 
         // Validate gas fee payment (native coin or XCHAIN balance).
         // System-injected EXECUTEs (e.g. attestation callbacks via attestation_response.js)
-        // skip fee accounting — those run against the request's gas_escrow, not the
+        // skip fee accounting: those run against the request's gas_escrow, not the
         // synthetic SOURCE's wallet. Pre-escrow (Phase 1) means fee is simply skipped;
         // Phase 3 economics deducts the actual cost from gas_escrow on the request row.
         let feePaymentMode = 2; // default: xchain balance
@@ -201,7 +201,7 @@ class Execute {
             let oracleData = await ((this.actions && this.actions.hubDb) || this.indexerDb).getOracleDataForVM(data['BLOCK_INDEX'], data['BLOCK_TIME'], parseInt(this.config['ORACLE_MAX_PRICE_AGE_SECONDS']) || 1800);
             let crossChainData = await this.indexerDb.getCrossChainDataForVM(data['BLOCK_INDEX']);
 
-            // Pre-load contract-stake snapshot scoped to THIS contract — backs the
+            // Pre-load contract-stake snapshot scoped to THIS contract. Backs the
             // xchain.contract.{getStake,getTotalStaked,getStakers,slash} APIs synchronously.
             // Implicit slash authorization: the accessor only knows this contract's stakes.
             let contractStakeData = await this.indexerDb.getContractStakeDataForVM(
@@ -213,7 +213,7 @@ class Execute {
             // a contract verifies its own holdings (e.g. a just-DEPOSITed amount in a
             // BATCH) by reading getBalance(getContractAddress(), tick).
             // Gated on the VM_BALANCE_TOKENINFO flag-day: below activation the gateway
-            // sees balances:null / tokenInfo:null (original ≤2.7.10 behaviour), so a
+            // sees balances:null / tokenInfo:null (original <=2.7.10 behaviour), so a
             // heterogeneous fleet never forks on the first balance-reading contract.
             let contractAddr = 'C:' + this.config['CHAIN'] + ':' + data['CONTRACT_ACTION_INDEX'];
             let vmLedger = { balances: null, tokenInfo: null };
@@ -247,22 +247,23 @@ class Execute {
                 // caller-funded reservation; depth gates emit.execute recursion;
                 // callPath anchors the attestation request_id + cross-chain call_id
                 // preimages so two nested runs of the same contract in one tx cannot
-                // collide — and, unlike action_index, it is content-derived so it
+                // collide, and unlike action_index it is content-derived so it
                 // stays byte-stable across nodes/reorgs. Root on-chain EXECUTE = ''.
                 gasCeiling:        execCeiling,
                 callDepth:         Number(data['CALL_DEPTH']) || 0,
                 actionIndex:       data['ACTION_INDEX'],
                 callPath:          data['CALL_PATH'] || '',
-                // Per-root discriminator for the request_id/call_id preimages: the on-chain output
-                // index (TX_VOUT) of the ROOT that seeded this subtree. Carried under the VM opt
-                // name `rootActionIndex` (and the ROOT_ACTION_INDEX data key) that the gateway
-                // preimage and attest.js/xcall.js consume. A top-level on-chain EXECUTE has no
-                // inherited ROOT_ACTION_INDEX → it IS the root, so use its own TX_VOUT; a nested
-                // EXECUTE emission inherits the root's value, stamped on its data by processEmission.
-                // TX_VOUT is a pure on-chain output index — distinct per action within a tx and
-                // stable across reorgs (unlike the injection-timing action_index) — so two forest
-                // roots under one tx_hash (a top-level EXECUTE and a controlled-token guard, both
-                // callPath '') cannot collide.
+                // Per-root discriminator for the request_id/call_id preimages. The value is
+                // TX_VOUT: the on-chain output index of the ROOT that seeded this subtree.
+                // NOTE: the VM opt key is named `rootActionIndex` and the data key is
+                // ROOT_ACTION_INDEX for historical reasons, but the value is always the
+                // output index (TX_VOUT), NOT the action_index. Do not "correct" one side
+                // to the true action_index without updating the full preimage on both sides;
+                // that would silently fork the hash. A top-level on-chain EXECUTE has no
+                // inherited ROOT_ACTION_INDEX so it IS the root and uses its own TX_VOUT; a
+                // nested EXECUTE emission inherits the root's value via processEmission.
+                // TX_VOUT is distinct per action within a tx and stable across reorgs, so
+                // two forest roots under one tx_hash cannot collide.
                 rootActionIndex:   data['ROOT_ACTION_INDEX'] != null ? data['ROOT_ACTION_INDEX'] : (data['TX_VOUT'] != null ? data['TX_VOUT'] : 0),
                 // Cross-chain call context: hop budget for emit.crossExecute (threaded
                 // from XEXEC injections / result callbacks), the network bound into the
@@ -290,8 +291,8 @@ class Execute {
             // Process state changes + emissions atomically via DB savepoint.
             // Name is unique per execution: savepoints NEST when an emitted EXECUTE
             // runs a callee inside this one, and MariaDB re-uses a duplicate
-            // savepoint name by DESTROYING the earlier one — a fixed 'vm_execute'
-            // would silently invalidate the outer rollback scope.
+            // savepoint name by DESTROYING the earlier one. A fixed 'vm_execute'
+            // name would silently invalidate the outer rollback scope.
             if(vmResult.success){
                 let savepoint = await this.indexerDb.createSavepoint('vm_execute_' + parseInt(data['ACTION_INDEX']));
                 try {
@@ -319,7 +320,7 @@ class Execute {
                     for(let i = 0; i < vmResult.emittedActions.length; i++){
                         let emission = vmResult.emittedActions[i];
 
-                        // SLASH emissions are internal — never on-wire, never run through
+                        // SLASH emissions are internal: never on-wire, never run through
                         // the generic emission router (no decoder/parser exists for them).
                         // Handled inline: deduct stake, credit destination, write event log.
                         if(emission.action === 'SLASH'){
@@ -358,13 +359,13 @@ class Execute {
 
         // A VM-execution failure (revert / out_of_gas / timeout / runtime error) is NOT a
         // pre-VM rejection: the contract DID run and consumed gas, so the caller pays for the
-        // failed attempt (see the gas-debit note below). Atomicity is preserved — state changes
+        // failed attempt (see the gas-debit note below). Atomicity is preserved: state changes
         // and emissions are applied only on vmResult.success. We record a dedicated execution
         // status ('reverted' / 'out_of_gas' / 'out_of_resource' / 'failed', via
         // util.vmFailureStatus) and deliberately leave
         // `error` null so the gas debit fires, mirroring the in-memory debit taken before the
         // VM ran. (Leaving it as a generic 'invalid:' error would skip the debit, letting any
-        // caller burn up to the gas ceiling / CPU limit for free — a node-DoS vector.)
+        // caller burn up to the gas ceiling / CPU limit for free, which is a node-DoS vector.)
         let vmFailed = Boolean(vmError) && !error;
         let vmStatus = vmFailed ? this.util.vmFailureStatus(vmError) : null;
 
@@ -372,10 +373,10 @@ class Execute {
         // captured at a machine-/GC-/stack-/timing-dependent point. The VM already
         // clamps these to the ceiling, but clamp here too so a VM regression (or an
         // older bundled VM) can never make fee = gasUsed * GAS_PRICE diverge across
-        // validators → fork. The family regex MUST stay identical to util.vmFailureStatus
-        // (out_of_gas is included so the two regexes never drift — it is a no-op for the
+        // validators and fork. The family regex MUST stay identical to util.vmFailureStatus
+        // (out_of_gas is included so the two regexes never drift; it is a no-op for the
         // fee since out_of_gas already reports gasUsed == ceiling). The clamp target is
-        // this run's OWN ceiling — for a cross-contract callee that is its caller-funded
+        // this run's OWN ceiling: for a cross-contract callee that is its caller-funded
         // reservation, not the protocol ceiling (a 1M clamp against a 50k reservation
         // would diverge the parent's refund settlement).
         if(vmFailed && /^(out_of_gas|timeout|out_of_memory|out_of_stack|out_of_resource)\b/.test(String(vmError))){
@@ -383,7 +384,7 @@ class Execute {
         }
 
         // Gas settlement. gasBilled = this run's metered usage minus the unused
-        // reservations refunded by its completed callees — by induction each
+        // reservations refunded by its completed callees. By induction each
         // callee's gasUnusedSubtree already nets ITS children, so subtracting the
         // direct children here settles the whole subtree. Bounds (guarded anyway):
         // 0 <= gasBilled <= gasUsed <= execCeiling.
@@ -445,7 +446,7 @@ class Execute {
         // (insufficient GAS funds / inactive contract / sleeping source) sets `error`
         // and must NOT record a ledger debit: burning gas the source never had drops
         // ledger supply while getAddressBalances (which only iterates credit ticks)
-        // leaves the balances projection unchanged — balance = ledger + 1, SanityError.
+        // leaves the balances projection unchanged (balance = ledger + 1, SanityError).
         if(!error && !skipFee && tokenInfo && feePaymentMode === 2)
             debits.push([gas, fee, data['SOURCE']]);
 
@@ -503,7 +504,7 @@ class Execute {
         let callDepth     = Number(opts.callDepth) || 0;
         let derived       = 'C:' + chain + ':' + contractIndex;
 
-        // Depth cap (defense in depth — the emit path checks too). A guard whose
+        // Depth cap (defense in depth; the emit path checks too). A guard whose
         // emit.send moves another controlled token recurses through this method.
         if(callDepth > MAX_CALL_DEPTH)
             return { allow:false, reason:'controller (max call depth)', gasBilled:0 };
@@ -518,7 +519,7 @@ class Execute {
         if(!this.actions.vm)
             return { allow:false, reason:'controller (vm unavailable)', gasBilled:0 };
 
-        // Guard gas ceiling (consensus param, per-chain GAS_SCHEDULE) — validated canonical
+        // Guard gas ceiling (consensus param, per-chain GAS_SCHEDULE). Validated canonical
         // key resolved once via the shared resolver (throws on missing/mistyped; no silent
         // hard-coded fallback that could fork a misconfigured node).
         let guardCeiling = this.util.resolveGuardGasCeiling(this.config);
@@ -539,7 +540,7 @@ class Execute {
             .update(String(hostData['BLOCK_INDEX']) + ':' + String(hostData['BLOCK_TIME']))
             .digest('hex');
 
-        // Positional, all-string guard inputs. Order is consensus — see spec.
+        // Positional, all-string guard inputs. Order is consensus; see spec.
         let guardParams = [
             String(opts.actionType),
             String(this.util.isNull(opts.from)         ? '' : opts.from),
@@ -586,7 +587,7 @@ class Execute {
             });
         } catch(e){
             // A host fault (e.g. permanently broken subprocess executor) must HALT,
-            // not silently deny — rethrow so the block processor stops rather than
+            // not silently deny. Rethrow so the block processor stops rather than
             // committing a fabricated decision that could fork the chain.
             throw e;
         }
@@ -602,14 +603,14 @@ class Execute {
             return { allow:false, reason:'controller (' + this.util.vmFailureStatus(vmResult.error) + ')', gasBilled };
 
         // Parse the guard's return value for an optional royalty/fee split. A controlled-token SALE
-        // guard (ORDER/SWAP create) may return { payoutLegs: [{to, bps}] } — basis-point cuts of the
-        // seller's proceeds applied at match (Utility.applyProceedsSplit). Validate fail-closed BEFORE
-        // committing emissions: a malformed leg or a total over CONTROLLER_MAX_TAKE_BPS DENIES the
-        // action (no savepoint exists yet, so nothing to roll back).
+        // guard (ORDER/SWAP create) may return { payoutLegs: [{to, bps}] } with basis-point cuts of
+        // the seller's proceeds applied at match (Utility.applyProceedsSplit). Validate fail-closed
+        // BEFORE committing emissions: a malformed leg or a total over CONTROLLER_MAX_TAKE_BPS DENIES
+        // the action (no savepoint exists yet, so nothing to roll back).
         let payoutLegs = null;
         // vm.execute() returns returnValue as a JSON-serialized STRING (the contract wrapper
         // JSON-stringifies the contract's return inside the isolate), so parse before the object
-        // check below — a raw `typeof ret === 'object'` never matches and silently drops the legs.
+        // check below. A raw `typeof ret === 'object'` never matches and silently drops the legs.
         let ret = vmResult.returnValue;
         if(ret && typeof ret === 'string'){ try { ret = JSON.parse(ret); } catch(e){ ret = null; } }
         if(ret && typeof ret === 'object' && Array.isArray(ret.payoutLegs) && ret.payoutLegs.length > 0){
@@ -626,7 +627,7 @@ class Execute {
             if(!Number.isInteger(cap) || cap > 10000) cap = 10000;
             // Phase E: a contract may declare a TIGHTER per-contract royalty cap (maxTakeBps)
             // in its deploy manifest. The effective cap is min(global, per-contract). Loaded
-            // lazily here — only guards that actually return payout legs pay the lookup.
+            // lazily here: only guards that actually return payout legs pay the lookup.
             let controllerManifest = await this.indexerDb.getContractPermissions(contractIndex);
             if(controllerManifest && Number.isInteger(controllerManifest.maxTakeBps) &&
                controllerManifest.maxTakeBps >= 0 && controllerManifest.maxTakeBps < cap)
@@ -656,7 +657,7 @@ class Execute {
             CALL_DEPTH:            callDepth,
             CROSS_HOPS:            0,
             // Mark emissions from this guard run so they are not themselves re-guarded by their
-            // OWN controller (no guard-of-guard) — see Utility.maybeRunControllerGuard. They still
+            // OWN controller (no guard-of-guard): see Utility.maybeRunControllerGuard. They still
             // carry IS_EMISSION (fee already skipped) and depth-cap on cross-controlled-token moves.
             IS_GUARD_EMISSION:     true
         };
@@ -683,10 +684,10 @@ class Execute {
             }
 
             // A guard's emissions key their execution_index to the NATIVE action's
-            // action_index (a guard has no action_index of its own — it rides the
+            // action_index (a guard has no action_index of its own; it rides the
             // guarded SEND/ORDER/SWAP/DISPENSER). The block contract_hash preimage
             // pulls emissions via INNER JOIN contract_executions ce ON
-            // (ce.action_index = em.execution_index) — so without a parent execution
+            // (ce.action_index = em.execution_index). Without a parent execution
             // row here, EVERY guard emission is silently dropped from contract_hash
             // and two nodes that diverge on guard emissions still hash identically
             // (a silent consensus fork). Write the parent row so the join resolves.
@@ -694,10 +695,10 @@ class Execute {
             // A single native action can run MULTIPLE guards on the same action_index
             // (a multi-leg SEND/DESTROY; or one SEND firing both the token-controller
             // and the destination address-controller). They share this one execution
-            // row (action_index is UNIQUE — last write wins, deterministic) and their
+            // row (action_index is UNIQUE: last write wins, deterministic) and their
             // emissions all share execution_index. position is therefore offset by the
             // count of emissions ALREADY recorded for this action so (execution_index,
-            // position) stays globally unique — keeping the preimage's
+            // position) stays globally unique, keeping the preimage's
             // ORDER BY (execution_index, position) a TOTAL order across guards (no
             // engine-dependent tie-break = no fork). Offsetting the stored column means
             // the existing read-side ORDER BY (here and in the sync hasher) needs no
@@ -711,7 +712,7 @@ class Execute {
 
             // Parent execution row for this guard run (mirrors runContractExecution's
             // column set). Written inside the savepoint so a failed guard emission
-            // rolls it back alongside its emissions — a denied guard leaves no record.
+            // rolls it back alongside its emissions: a denied guard leaves no record.
             // GAS_USED/GAS_LIMIT are the guard's billed gas + its ceiling; CALLER is
             // who triggered the guarded action; emitted_count accumulates across guards
             // sharing this action so the surviving row reflects the action's true total.
@@ -731,7 +732,7 @@ class Execute {
 
             for(let i = 0; i < vmResult.emittedActions.length; i++){
                 let emission = vmResult.emittedActions[i];
-                // A guard may not emit asynchronous (ATTEST/XCALL — already blocked
+                // A guard may not emit asynchronous (ATTEST/XCALL, already blocked
                 // at VM emit time) or stake-slashing (SLASH) actions. Re-check
                 // host-side as defense in depth against an older bundled VM.
                 if(emission.action === 'ATTEST' || emission.action === 'XCALL' || emission.action === 'SLASH')
@@ -739,7 +740,7 @@ class Execute {
                 // Use the host-action-global position (basePosition + i), not the
                 // guard-local index: multiple guards share this action's emission space,
                 // so offsetting keeps each guard's call-path subtree disjoint. A guard
-                // can emit a nested EXECUTE whose callee emits ATTEST/XCALL — without the
+                // can emit a nested EXECUTE whose callee emits ATTEST/XCALL. Without the
                 // offset, two guards' first EXECUTE emissions would share call-path '0'
                 // and their callees' ids could collide. Matches the stored POSITION.
                 let pos = basePosition + i;
@@ -761,21 +762,21 @@ class Execute {
     }
 
     /*****************************************************************
-     * Emission Processing — Routes emitted actions to existing handlers
+     * Emission Processing - Routes emitted actions to existing handlers
      ****************************************************************/
 
     async processEmission(emission, executionData, position){
         let action = emission.action;
         let params = emission.params;
 
-        // Permissions manifest (Phase E): the SINGLE choke point for every emission path —
-        // constructor (deploy.js), EXECUTE, and a controller guard all funnel through here. If
+        // Permissions manifest (Phase E): the SINGLE choke point for every emission path.
+        // Constructor (deploy.js), EXECUTE, and a controller guard all funnel through here. If
         // the EMITTING contract declared a `permissions` allowlist at deploy time, every action
         // it emits must be a member; a non-member throws, which rolls back the emitter's
-        // savepoint and fails the host action (deploy reject / EXECUTE revert / guard DENY) —
-        // fail-closed by construction. A contract with no manifest row (null) or a row that
-        // declared only maxTakeBps (permissions null) is unrestricted — the backward-compatible
-        // default. An explicit empty allowlist (`[]`) permits no emissions. The manifest is
+        // savepoint and fails the host action (deploy reject / EXECUTE revert / guard DENY).
+        // Fail-closed by construction. A contract with no manifest row (null) or a row that
+        // declared only maxTakeBps (permissions null) is unrestricted (the backward-compatible
+        // default). An explicit empty allowlist (`[]`) permits no emissions. The manifest is
         // immutable (contract code is immutable), read by indexed lookup on contract_index.
         let emitterIndex = executionData['CONTRACT_ACTION_INDEX'];
         if(emitterIndex !== undefined && emitterIndex !== null){
@@ -786,18 +787,18 @@ class Execute {
 
         // ATTEST v0 (request) anchors its on-chain request_id to the emitter position, so the
         // handler can re-derive and verify it (defends against a compromised VM forging a
-        // request_id). EMITTER_POSITION is therefore mandatory for ATTEST emissions — fail
+        // request_id). EMITTER_POSITION is therefore mandatory for ATTEST emissions: fail
         // loudly at the source if a caller ever omits it rather than letting the handler fall
         // back to accepting an unverified request_id.
         if(action === 'ATTEST' && (position === undefined || position === null))
             throw new Error('ATTEST emission missing EMITTER_POSITION (position argument)');
 
-        // XCALL anchors its call_id to the emitter position the same way — mandatory.
+        // XCALL anchors its call_id to the emitter position the same way; mandatory.
         if(action === 'XCALL' && (position === undefined || position === null))
             throw new Error('XCALL emission missing EMITTER_POSITION (position argument)');
 
         // Cross-contract call emissions: re-validate depth + gasLimit HOST-side
-        // (defense in depth — the VM enforces both at emit time, but an older or
+        // (defense in depth; the VM enforces both at emit time, but an older or
         // compromised bundled VM must not be able to bypass them), then thread
         // the callee's depth + caller-funded ceiling through the emission data.
         let callDepth = (Number(executionData['CALL_DEPTH']) || 0) + 1;
@@ -811,11 +812,11 @@ class Execute {
                 throw new Error('EXECUTE emission gasLimit out of range [' + MIN_CALL_GAS + ', ' + GAS_CEILING + ']');
         }
 
-        // Cross-chain call emissions: the hop count is HOST-derived (context + 1) —
-        // never trusted from the VM — and capped so two contracts cannot ping-pong
-        // X→Y→X forever (the injected execution on the far chain has no fee payer, so
-        // economics alone cannot bound the loop). gasLimit is re-validated against the
-        // XCALL caps (tighter than same-chain: the target-side run is fee-less there).
+        // Cross-chain call emissions: the hop count is HOST-derived (context + 1),
+        // never trusted from the VM, and capped so two contracts cannot ping-pong
+        // X->Y->X forever (the injected execution on the far chain is fee-less there,
+        // so economics alone cannot bound the loop). gasLimit is re-validated against
+        // the XCALL caps (tighter than same-chain).
         if(action === 'XCALL'){
             // Disallowed from DEPLOY constructors in v1: a constructor has no
             // settled execution context for the deadline/callback lifecycle.
@@ -832,13 +833,13 @@ class Execute {
 
         // Deterministic call-path for the request_id / call_id preimages.
         //   emitterPath = the path of the EMITTING execution (root on-chain action = '').
-        //   childPath   = emitterPath extended by this emission's position — the path of
-        //                 the execution a nested EXECUTE emission will itself run as.
+        //   childPath   = emitterPath extended by this emission's position (the path of
+        //                 the execution a nested EXECUTE emission will itself run as).
         // Encoding: '>'-joined non-negative integer positions; '>' appears in no adjacent
         // preimage field, so the path is one injection-free token. MUST byte-match the VM
         // (xchain-vm gateway.js attestation.request + gateway-emit.js crossExecute, which
         // hash the running execution's callPath). EMITTER_PATH replaces the old
-        // EMITTER_ACTION_INDEX (which tracked injection timing → forked the PBFT on reorg).
+        // EMITTER_ACTION_INDEX (which tracked injection timing -> forked the PBFT on reorg).
         let emitterPath = executionData['CALL_PATH'] || '';
         let childPath   = (emitterPath === '') ? String(position) : emitterPath + '>' + String(position);
 
@@ -884,8 +885,8 @@ class Execute {
             // skip re-guarding a controller's emission of its own controlled token.
             IS_GUARD_EMISSION:  executionData['IS_GUARD_EMISSION'] ? true : false,
             EMITTER:            executionData['CONTRACT_ACTION_INDEX'],
-            EMITTER_POSITION:   position,   // index within this EXECUTE's emission list — used by ATTEST v0 (request) to verify deterministic request_id
-            // The EMITTING execution's call-path — disambiguates nested runs of the same
+            EMITTER_POSITION:   position,   // index within this EXECUTE's emission list; used by ATTEST v0 (request) to verify deterministic request_id
+            // The EMITTING execution's call-path. Disambiguates nested runs of the same
             // contract within one tx in the ATTEST request_id / XCALL call_id derivation,
             // content-derived so it is byte-stable across nodes/reorgs ('' for the root).
             EMITTER_PATH:       emitterPath,
@@ -894,7 +895,7 @@ class Execute {
             // EMITTER_PATH) into the ATTEST request_id / XCALL call_id re-derivation, and inherited
             // unchanged by a nested EXECUTE emission.
             ROOT_ACTION_INDEX:  rootActionIndex,
-            // This emission's OWN call-path — if it is itself a nested EXECUTE, its
+            // This emission's OWN call-path: if it is itself a nested EXECUTE, its
             // execution runs at this path (threaded into vm.execute as callPath).
             CALL_PATH:          childPath,
             CALL_DEPTH:         callDepth,
@@ -909,7 +910,7 @@ class Execute {
         if(!handler)
             throw new Error('unknown emission action: ' + action);
 
-        // Parse through the existing handler — same validation as user-submitted actions
+        // Parse through the existing handler; same validation as user-submitted actions.
         let emissionError = null;
         await handler.parse(actionParams, emissionData, emissionError);
 
@@ -947,7 +948,7 @@ class Execute {
             'MESSAGE':    this.actions.actionMessage,
             'ATTEST':     this.actions.actionAttest,
             // Cross-contract call: the callee EXECUTE routes through this same
-            // handler class (re-entrant — parse() keeps no instance state).
+            // handler class (re-entrant; parse() keeps no instance state).
             'EXECUTE':    this.actions.actionExecute,
             // Cross-CHAIN call request (the relay rides the hub mirror from here).
             'XCALL':      this.actions.actionXcall
@@ -1023,12 +1024,12 @@ class Execute {
                 return [0, params.message || '', params.value || ''];
             case 'MESSAGE':
                 // FORMAT: VERSION|COIN|DESTINATION|ENCRYPTION_METHOD|ENCRYPTION_KEY
-                // COIN (destination network) is optional — empty = unscoped. Without it the
+                // COIN (destination network) is optional; empty = unscoped. Without it the
                 // DESTINATION would land in the COIN slot and the message would be malformed.
                 return [0, params.coin || '', params.destination, params.encryptionMethod || '', params.encryptionKey || ''];
             case 'ATTEST':
                 // FORMAT v0 (request, VM-emitted): VERSION|REQUEST_ID|PROVIDER_ID|REQUEST_PAYLOAD|CALLBACK_METHOD|CALLBACK_PARAMS_JSON|REDUNDANCY|DEADLINE_BLOCKS|FEE_TICK|FEE_AMOUNT
-                // FEE_TICK/FEE_AMOUNT are optional trailing fields — empty when the
+                // FEE_TICK/FEE_AMOUNT are optional trailing fields; empty when the
                 // contract requested no fee (the attest handler treats '' as null).
                 return [0, params.requestId, params.providerId, params.requestPayload, params.callbackMethod,
                         params.callbackParams || '[]', params.redundancy, params.deadlineBlocks,
@@ -1036,7 +1037,7 @@ class Execute {
             case 'EXECUTE':
                 // FORMAT: VERSION|CONTRACT_ACTION_INDEX|METHOD|PARAMS...
                 // (gasLimit travels via emissionData.VM_GAS_LIMIT, not the positional
-                // params — the v0 EXECUTE format has no GAS_LIMIT slot.)
+                // params; the v0 EXECUTE format has no GAS_LIMIT slot.)
                 return [0, params.contractIndex, params.method,
                         ...(Array.isArray(params.params) ? params.params : [])];
             case 'XCALL':
@@ -1054,7 +1055,7 @@ class Execute {
 
     // Process a SLASH emission from inside the VM. The emission carries:
     //   { action: 'SLASH', params: { contractIndex, pubkey, token, amount } }
-    // Authorization is implicit — the gateway's contractStakeData accessor is scoped
+    // Authorization is implicit: the gateway's contractStakeData accessor is scoped
     // to the executing contract, so SLASH can only target stakes against that contract.
     // We still defense-in-depth verify contractIndex matches data['CONTRACT_ACTION_INDEX'].
     //
@@ -1069,7 +1070,7 @@ class Execute {
         let token         = String(p.token || '');
         let amount        = String(p.amount || '0');
 
-        // Defense in depth — caller mismatch should never happen if the gateway
+        // Defense in depth: caller mismatch should never happen if the gateway
         // closure is sourced correctly, but throw if it does (rolls back the savepoint).
         if(contractIndex !== Number(data['CONTRACT_ACTION_INDEX']))
             throw new Error('SLASH emission contractIndex mismatch: ' + contractIndex + ' vs ' + data['CONTRACT_ACTION_INDEX']);
@@ -1083,15 +1084,32 @@ class Execute {
 
         // Resolve FKs
         let pubkeyId = await this.indexerDb.getPubkeyId(pubkey);
-        if(pubkeyId === null) return; // pubkey not staked here — nothing to slash, silent no-op
+        if(pubkeyId === null){
+            // pubkey is not known to index_pubkeys at all: not staked anywhere on this
+            // chain. Nothing to deduct; log for auditability so the no-op is visible.
+            console.log('\t SLASH (no-op): pubkey not found in index_pubkeys: ' + pubkey +
+                ' contract=' + contractIndex + ' token=' + token);
+            return;
+        }
         let tickId = await this.indexerDb.getTickerId(token);
-        if(tickId === null) return;
+        if(tickId === null){
+            // token is unknown. Nothing to deduct; log for auditability.
+            console.log('\t SLASH (no-op): token not found: ' + token +
+                ' pubkey=' + pubkey + ' contract=' + contractIndex);
+            return;
+        }
 
-        // Deduct (returns actual slashed total — may be less than requested if balance lower).
+        // Deduct (returns actual slashed total; may be less than requested if balance lower).
         // Pass BLOCK_INDEX so Pass 1 slashes only still-active stake; unstaked-but-cooling tokens are
         // slashed from contract_unstakes (Pass 2), preventing the double-count / supply inflation.
         let slashed = await this.indexerDb.slashContractStake(contractIndex, pubkeyId, tickId, amount, parseInt(data['BLOCK_INDEX']), data['ACTION_INDEX'], slashPosition);
-        if(!this.util.bcgt(slashed, '0')) return;
+        if(!this.util.bcgt(slashed, '0')){
+            // pubkey + token exist but no active stake on this contract to deduct.
+            // Log the attempted vs actual amounts so the no-op is visible in the audit trail.
+            console.log('\t SLASH (no-op): zero slashed (no active stake): pubkey=' + pubkey +
+                ' token=' + token + ' requested=' + amount + ' contract=' + contractIndex);
+            return;
+        }
 
         // Credit destination address (BURN or user-specified)
         let destQ = await this.indexerDb.doQuery(

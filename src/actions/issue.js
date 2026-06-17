@@ -77,7 +77,7 @@ class Issue {
         this.formats[3] = 'VERSION|TICK|LOCK_MAX_SUPPLY|LOCK_MAX_MINT|LOCK_DESCRIPTION|LOCK_SLEEP|LOCK_CALLBACK|LOCK_MINT|LOCK_MINT_SUPPLY|MEMO';
         this.formats[4] = 'VERSION|TICK|CALLBACK_BLOCK|CALLBACK_TICK|CALLBACK_AMOUNT|MEMO';
         this.formats[5] = 'VERSION|TICK|ALLOW_LIST|BLOCK_LIST|MEMO';
-        // Programmable policy layer — bind/unbind a guard contract to one action-class of this token
+        // Programmable policy layer: bind/unbind a guard contract to one action-class of this token
         // (append-only token_controllers model). One binding change per action; UNBIND=1 drops the
         // live binding for ACTION_CLASS (CONTROLLER then ignored). COOLDOWN_BLOCKS is committed at
         // bind time and is the friction on a later drop. See Controller_Bound_Tokens.md.
@@ -277,11 +277,21 @@ class Issue {
         if(!error && !this.util.isNull(data['MAX_SUPPLY']) && this.util.bcgt(data['MAX_SUPPLY'], 0) && this.util.bclt(data['MAX_SUPPLY'], await this.indexerDb.getTokenSupply(data['TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX'])))
             error = 'invalid: MAX_SUPPLY < SUPPLY';
 
-        // Verify a MAX_SUPPLY cap is declared before allowing LOCK_MAX_SUPPLY — taken from
+        // Verify a MAX_SUPPLY cap is declared before allowing LOCK_MAX_SUPPLY. The cap is taken from
         // this action when present, else the existing token record. Minted supply is NOT
         // required (a fair-mint token locks its cap at issuance, before any supply exists);
         // locking with no declared cap would permanently brick the TICK at a cap of zero.
-        if(!error && data['LOCK_MAX_SUPPLY']==1){
+        //
+        // Gate: LOCK_MAX_SUPPLY_EXACT changes the guard from a truthy check to a strict ==1
+        // check, fixing a false-positive where an explicit LOCK_MAX_SUPPLY=0 field (a no-op
+        // lock intent) triggered the cap validation and produced an invalid outcome. The change
+        // is gated so that a heterogeneous fleet and any from-genesis replay all switch over at
+        // the same coordinated block, avoiding a ledger fork on any block carrying an explicit
+        // LOCK_MAX_SUPPLY=0 field. Pre-launch chains activate at genesis (all zeros), so the
+        // strict check is in force from block 0.
+        let lockMaxSupplyExact = await this.actions.protocolChanges.isEnabled('LOCK_MAX_SUPPLY_EXACT', data['BLOCK_INDEX']);
+        let lockMaxSupplySet   = lockMaxSupplyExact ? (data['LOCK_MAX_SUPPLY']==1) : data['LOCK_MAX_SUPPLY'];
+        if(!error && lockMaxSupplySet){
             let lockCap = (!this.util.isNull(data['MAX_SUPPLY'])) ? data['MAX_SUPPLY'] : ((tokenInfo) ? tokenInfo['MAX_SUPPLY'] : null);
             if(this.util.isNull(lockCap) || this.util.bclt(lockCap, this.config.MIN_TOKEN_SUPPLY))
                 error = 'invalid: LOCK_MAX_SUPPLY (no max supply)';
@@ -392,7 +402,7 @@ class Issue {
             }
         }
 
-        // Programmable policy layer — token controller bind/unbind (format 6). The CONTROLLER-active
+        // Programmable policy layer: token controller bind/unbind (format 6). The CONTROLLER-active
         // check above already validated the bound contract (when CONTROLLER is set); here we validate
         // the per-action-class binding semantics. SOURCE-is-owner is enforced by the generic
         // "issued by another address" check above (tokenInfo is required, so it always applies).
@@ -409,7 +419,7 @@ class Issue {
                 let effective = await this.indexerDb.getEffectiveTokenController(tickId, actionClass, data['BLOCK_INDEX'], data['ACTION_INDEX']);
                 if(isUnbind){
                     // UNBIND: an effective (still-gating) controller must exist for this class, and
-                    // it must be a live bind — a second unbind while one is already in its cooldown
+                    // it must be a live bind. A second unbind while one is already in its cooldown
                     // window is rejected (the drop is already scheduled).
                     if(!effective)
                         error = 'invalid: ACTION_CLASS (not bound)';
@@ -454,14 +464,14 @@ class Issue {
             error = 'invalid: MEMO (length)';
 
         // The GAS token itself cannot pay an XCHAIN issuance fee to come into
-        // existence (chicken-and-egg) — its genesis issuance is fee-exempt.
+        // existence (chicken-and-egg), so its genesis issuance is fee-exempt.
         // Only the exact GAS tick qualifies (subtokens like XCHAIN.foo do not),
         // and only its first issuance (!tokenInfo). Off regtest, GAS issuance is
         // restricted to the GAS address (checked above), so this cannot be abused.
         let gasBootstrap = (String(data['TICK']).toUpperCase() === String(this.config['GAS']).toUpperCase());
 
         // Determine if an issuance FEE is required, and what that fee is.
-        // VM-emitted ISSUEs (IS_EMISSION) are fee-exempt by design — the deployer
+        // VM-emitted ISSUEs (IS_EMISSION) are fee-exempt by design: the deployer
         // already paid DEPLOY/EXECUTE gas (base + per-byte + per-emission gas) and
         // emissions are bounded by maxEmissions, so this is not a spam vector. This
         // mirrors the per-tx db_hits fee, which already skips emissions. The
@@ -495,7 +505,7 @@ class Issue {
         if(!error && this.util.bcgt(fees['AMOUNT'], 0)){
             let paymentMode = this.util.detectFeePaymentMode(data, this.decoderDb, data['TX_OUTPUTS']);
             if(paymentMode === 'native'){
-                // Native coin fee — validate against oracle price
+                // Native coin fee: validate against oracle price
                 let validation = await this.util.validateNativeCoinFee(data, fees, this.indexerDb, data['TX_OUTPUTS']);
                 if(!validation.valid){
                     error = 'invalid: ' + (validation.error || 'native coin fee validation failed');
@@ -555,7 +565,7 @@ class Issue {
             // Create/Update record in tokens table
             await this.indexerDb.createToken(data);
 
-            // Programmable policy layer — append the token controller bind/unbind event (format 6).
+            // Programmable policy layer: append the token controller bind/unbind event (format 6).
             // The binding lives in token_controllers (not the token record); the issues row above is
             // the audit trail. issue['CONTROLLER']/['COOLDOWN_BLOCKS'] are the raw (pre-numeric)
             // values, which map cleanly onto the BIGINT/INT columns.

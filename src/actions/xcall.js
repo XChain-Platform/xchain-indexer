@@ -16,16 +16,16 @@
  *
  * Source-chain side of a cross-chain contract call, with two
  * version-discriminated phases (mirrors ATTEST's lifecycle shape):
- *   v0 — Request (VM emission only; originated by xchain.emit.crossExecute()).
- *        A system action row derived from the user's EXECUTE tx — recoverable
+ *   v0: Request (VM emission only; originated by xchain.emit.crossExecute()).
+ *        A system action row derived from the user's EXECUTE tx (recoverable
  *        from a pure chain parse by replaying the emitting execution.
- *   v2 — Expire (system-synthesized; never user-broadcast). Fires the
+ *   v2: Expire (system-synthesized; never user-broadcast). Fires the
  *        requester's callback with status='expired' when deadline_block
- *        passes without a relayed result — deterministic from block height
+ *        passes without a relayed result (deterministic from block height
  *        alone, so federation censorship is liveness-bounded.
  *
  * The relay itself (dispatch to the target chain, result back) rides the
- * hub-DB mirror as quorum-signed cross_chain_calls rows — see
+ * hub-DB mirror as quorum-signed cross_chain_calls rows; see
  * utility.processCrossChainCalls (injection passes) and actions/xexec.js
  * (target-chain execution).
  *
@@ -33,7 +33,7 @@
  *
  * FORMATS:
  *   v0 - VERSION|CALL_ID|TARGET_CHAIN|TARGET_CONTRACT_INDEX|METHOD|PARAMS_JSON|GAS_LIMIT|CALLBACK_METHOD|CALLBACK_PARAMS_JSON|DEADLINE_BLOCKS|CROSS_HOPS
- *   v2 - VERSION|CALL_ID            (synthesized only; CALL_ID is sufficient — handler looks up the row)
+ *   v2 - VERSION|CALL_ID            (synthesized only; CALL_ID is sufficient, handler looks up the row)
  *
  ********************************************************************/
 
@@ -51,7 +51,7 @@ const XCALL_MAX_GAS             = 200000;   // target-side ceiling cap (calls ar
 const XCALL_MAX_HOPS            = 2;        // user→Y = 1, Y→back = 2; further hops need a fresh user tx
 const XCALL_MIN_DEADLINE_BLOCKS = 10;
 const XCALL_MAX_DEADLINE_BLOCKS = 4000;     // generous: must cover both chains' confirmation depths + relay rounds
-const XCALL_MAX_CALLS_PER_BLOCK = 25;       // deterministic per-block injection cap (overflow carries forward — never dropped)
+const XCALL_MAX_CALLS_PER_BLOCK = 25;       // deterministic per-block injection cap (overflow carries forward; never dropped)
 
 const ALLOWED_CHAINS = ['BTC', 'LTC', 'DOGE'];
 
@@ -82,7 +82,7 @@ class Xcall {
         if(format === 2) return await this._parseExpire(params, data, error);
     }
 
-    // XCALL v0 — Request (VM emission only)
+    // XCALL v0: Request (VM emission only)
     async _parseRequest(params, data, error){
 
         // VM-emission-only: reject anything user-initiated.
@@ -124,7 +124,7 @@ class Xcall {
         if(!error && Buffer.byteLength(String(data['METHOD']), 'utf8') > 64)
             error = 'invalid: METHOD (too long)';
 
-        // PARAMS_JSON must be a JSON array of strings (≤32 entries, each ≤1024 bytes) —
+        // PARAMS_JSON must be a JSON array of strings (≤32 entries, each ≤1024 bytes);
         // same caps as same-chain emit.execute params.
         if(!error){
             let parsed = null;
@@ -165,23 +165,23 @@ class Xcall {
         // Re-derive call_id and compare. Defends against a compromised VM by anchoring
         // the request to (network, source chain, tx_hash, contract_index, emitter_path,
         // emitter_position, target_chain). Network + chain are bound in (unlike the
-        // ATTEST preimage) because BTC-family chains share tx-hash space — a call must
+        // ATTEST preimage) because BTC-family chains share tx-hash space; a call must
         // never collide or replay across chains/networks.
         //
-        // EMITTER_PATH (the emitting execution's deterministic call-path — the '>'-joined
+        // EMITTER_PATH (the emitting execution's deterministic call-path, the '>'-joined
         // per-execution emission positions from the root on-chain action down to this
         // execution, root = '') replaces the emitting EXECUTE's action_index. action_index
         // was a function of injection *timing* (it advances with every synthetic action the
-        // indexer injects ahead of the EXECUTE) — binding it forked call_id across nodes on
+        // indexer injects ahead of the EXECUTE); binding it forked call_id across nodes on
         // any injection slip and never re-converged. But dropping it entirely (the prior
         // fix) was unsafe: (tx_hash, contract_index, emitter_position) are NOT unique because
         // emitter_position is per-execution, so two nested runs of the SAME contract each
         // emitting their first call collide. The call-path is BOTH content-derived (stable
-        // across nodes/reorgs) AND unique per execution in the call tree — it fixes both.
+        // across nodes/reorgs) AND unique per execution in the call tree; it fixes both.
         //
         // MUST byte-match the VM's derivation in xchain-vm/src/gateway-emit.js
         // (crossExecute). All inputs are REQUIRED; their absence is a hard failure
-        // (no silent bypass). NOTE: EMITTER_PATH '' (root on-chain action) is VALID —
+        // (no silent bypass). NOTE: EMITTER_PATH '' (root on-chain action) is VALID;
         // check === undefined / null, never falsy.
         if(!error){
             if(data['EMITTER_POSITION'] === undefined || data['EMITTER_POSITION'] === null){
@@ -223,10 +223,10 @@ class Xcall {
         await this.mapper.createMappings(data);
     }
 
-    // XCALL v2 — Expire (system-synthesized)
+    // XCALL v2: Expire (system-synthesized)
     async _parseExpire(params, data, error){
 
-        // System-synthesized only — guard against accidental synthesis from a user tx.
+        // System-synthesized only; guard against accidental synthesis from a user tx.
         if(!data['IS_SYNTHETIC']){
             console.warn('\t XCALL v2 : rejected (user-broadcast not allowed for synthetic expire)');
             data['STATUS'] = 'invalid: XCALL v2 must be system-synthesized';
@@ -270,7 +270,7 @@ class Xcall {
         await this.mapper.createMappings(data);
     }
 
-    // Canonical signing string for the result phase — MUST byte-match the hub's
+    // Canonical signing string for the result phase; MUST byte-match the hub's
     // CrossChainCallEngine._canonicalMatch (result branch) and the archive verifier.
     _resultCanonical(r){
         let raw = [
@@ -300,14 +300,14 @@ class Xcall {
         if(String(r.network || '') !== String(this.config['NETWORK'] || '')) return;
 
         // The result must correspond to a request THIS chain knows, with matching
-        // routing — a forged result for someone else's call_id can never deliver.
+        // routing: a forged result for someone else's call_id can never deliver.
         let request = await this.indexerDb.getCrossChainCallRequestById(callId);
         if(!request){
-            console.warn("\t XCALL result : id=" + callId.substring(0,16) + '... : no matching local request — skipping');
+            console.warn("\t XCALL result : id=" + callId.substring(0,16) + '... : no matching local request, skipping');
             return;
         }
         if(String(request.target_chain) !== String(r.target_chain)){
-            console.warn("\t XCALL result : id=" + callId.substring(0,16) + '... : target_chain mismatch — skipping');
+            console.warn("\t XCALL result : id=" + callId.substring(0,16) + '... : target_chain mismatch, skipping');
             return;
         }
 
@@ -321,8 +321,8 @@ class Xcall {
             : await this.indexerDb.getValidatorsByCapability('cross_chain', snapshotBlock);
         let N = (validators && validators.length) ? validators.length : 0;
         if(N === 0){
-            // Snapshot not mirrored yet — defer (the barriers front-stop this; see xexec.js).
-            console.log("\t XCALL result : id=" + callId.substring(0,16) + '... : capability snapshot not synced — deferring');
+            // Snapshot not mirrored yet; defer (the barriers front-stop this; see xexec.js).
+            console.log("\t XCALL result : id=" + callId.substring(0,16) + '... : capability snapshot not synced, deferring');
             return;
         }
 
@@ -347,7 +347,7 @@ class Xcall {
             ? swq.meetsStakeThreshold(this.util, validators, validSigners)
             : (validSigners.length >= ((N <= 1) ? 1 : Math.max(2 * Math.floor((N - 1) / 3) + 1, Math.ceil((N + 1) / 2))));
         if(!quorumMet){
-            console.warn("\t XCALL result : id=" + callId.substring(0,16) + '... : insufficient ' + (weighted ? 'signer stake' : 'valid signatures (' + validSigners.length + '/' + N + ')') + ' — skipping');
+            console.warn("\t XCALL result : id=" + callId.substring(0,16) + '... : insufficient ' + (weighted ? 'signer stake' : 'valid signatures (' + validSigners.length + '/' + N + ')') + ', skipping');
             return;
         }
 
@@ -369,7 +369,7 @@ class Xcall {
         // result row is never re-evaluated (idempotency row below) but the contract
         // hears exactly one outcome.
         if(request.request_status !== 'pending'){
-            console.log("\t XCALL result : id=" + callId.substring(0,16) + '... : request already ' + request.request_status + ' — recording skip');
+            console.log("\t XCALL result : id=" + callId.substring(0,16) + '... : request already ' + request.request_status + ', recording skip');
             await this.indexerDb.recordCrossChainCallCallback(
                 data['ACTION_INDEX'], callId, 'skipped:' + request.request_status, data['BLOCK_INDEX']);
             return;
@@ -400,16 +400,21 @@ class Xcall {
     // Synthesize the callback EXECUTE delivering a cross-chain call outcome to the
     // requesting contract. Shared by the result pass (utility.processCrossChainCalls)
     // and the expiry path above. Runs under the fixed callback gas ceiling the caller
-    // pre-paid at emit time, inside its own savepoint — a failing callback never rolls
+    // pre-paid at emit time, inside its own savepoint; a failing callback never rolls
     // back the result/expiry bookkeeping. Returns the callback EXECUTE's action_index.
     //
     // Callback signature: callbackMethod(call_id, target_chain, status, return_payload, ...callbackParams)
     async _injectCallback(request, contextData, resultStatus, resultPayload){
         if(!this.actions.actionExecute) return null;
 
-        // Fixed X-side callback ceiling, pre-paid at emit time (see the canonical
-        // constants file; mirrored in xchain-vm gateway-emit.js crossExecute).
-        const XCALL_CALLBACK_GAS = 20000;
+        // Callback ceiling: read from the gas schedule so it stays in sync with
+        // the VM_XCALL_CALLBACK amount charged at emit time (gateway-emit.js crossExecute).
+        // Falls back to 20000 matching the schedule default; the schedule knob controls both.
+        let schedule = (this.config && this.config['GAS_SCHEDULE']) || {};
+        let xcallCallbackGasRaw = schedule['VM_XCALL_CALLBACK'];
+        const XCALL_CALLBACK_GAS = (Number.isInteger(xcallCallbackGasRaw) && xcallCallbackGasRaw > 0)
+            ? xcallCallbackGasRaw
+            : 20000;
 
         let callbackParams = [];
         if(request.callback_params_json){

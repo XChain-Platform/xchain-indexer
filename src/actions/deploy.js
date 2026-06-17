@@ -19,7 +19,7 @@
  * PARAMS:
  * - VERSION            - Format Version
  * - CODE_ENCODING      - Contract code (base64-encoded at/after the DEPLOY_BASE64_CODE
- *                        activation; hex-encoded before it — see the gated decode below)
+ *                        activation; hex-encoded before it (see the gated decode below)
  * - GAS_LIMIT          - Maximum gas units for deployment
  * - CONSTRUCTOR_PARAMS - Optional constructor parameters (JSON)
  *
@@ -54,6 +54,13 @@ const MAX_CODE_SIZE = 65536;
 // with the SDK + the v4 carrier handler by the cross-service regression suite.
 const MAX_DEPLOY_CHUNKS = 16;
 
+// Gas ceiling for the constructor clamp below. Must stay in lockstep with
+// GAS_CEILING in actions/execute.js: if the ceiling ever changes, both files
+// must move together or validators fork on the first resource-terminated
+// constructor (the clamped value flows into contract_executions.gas_used, which
+// is consensus-hashed via contract_hash).
+const GAS_CEILING = 1000000;
+
 class Deploy {
 
     // Handle constructing a class instance
@@ -78,11 +85,11 @@ class Deploy {
         this.formats[2] = 'VERSION|CODE_HASH|GAS_LIMIT|CONSTRUCTOR_PARAMS';
         this.formats[3] = 'VERSION|CODE_HASH|GAS_LIMIT|CONSTRUCTOR_PARAMS|COOLDOWN_BLOCKS|SLASH_DESTINATION';
         // v4 carries one ordered base64 slice of a chunked contract's source (the chunk
-        // carrier — formerly the standalone DEPLOYCHUNK action). It never runs VM code;
+        // carrier, formerly the standalone DEPLOYCHUNK action). It never runs VM code;
         // the slices are reassembled by a later v2/v3 keyed on CODE_HASH.
         this.formats[4] = 'VERSION|CODE_HASH|CHUNK_INDEX|TOTAL_CHUNKS|CODE_PART';
 
-        // Maximum code size (64KB) — see the MAX_CODE_SIZE module constant above.
+        // Maximum code size (64KB); see the MAX_CODE_SIZE module constant above.
         this.MAX_CODE_SIZE = MAX_CODE_SIZE;
 
         // Cooldown bounds for contract-staking (DEPLOY v1+)
@@ -90,7 +97,7 @@ class Deploy {
         this.MAX_COOLDOWN_BLOCKS = 100000;
 
         // Chunk-carrier (v4) collaborator: validates + stores a single code slice.
-        // Not routed by action name — DEPLOY.parse() delegates to it for v4.
+        // Not routed by action name; DEPLOY.parse() delegates to it for v4.
         this.chunkStore = new DeployChunk(action);
     }
 
@@ -147,9 +154,14 @@ class Deploy {
                     }
                 }
             }
-            // If contract opted into staking but didn't name a destination, default to BURN
+            // If contract opted into staking but didn't name a destination, default to BURN.
+            // Validate identically to the explicit 'BURN' sentinel below: a missing BURN
+            // address must reject here too, or the contract is stakeable but permanently
+            // un-slashable (slash throws at runtime because slash_destination is NULL).
             if(!error && hasCooldown && !hasDest){
                 data['SLASH_DESTINATION'] = (this.config['ADDRESS'] && this.config['ADDRESS']['BURN']) || null;
+                if(this.util.isNull(data['SLASH_DESTINATION']))
+                    error = 'invalid: SLASH_DESTINATION (BURN address not configured)';
             }
             // Resolve BURN sentinel to the configured BURN address
             if(!error && data['SLASH_DESTINATION'] === 'BURN'){
@@ -174,13 +186,12 @@ class Deploy {
 
         // Obtain the contract source `code`. Chunked (v2/v3) assembles base64(code) from the
         // deployer's prior v4 carrier rows then decodes + sha256-verifies it; inline (v0/v1)
-        // decodes CODE_ENCODING directly — as base64 at/after the DEPLOY_BASE64_CODE
-        // activation, or as hex before it (the original format), gated on block_time so a
-        // replay/heterogeneous fleet decodes historical DEPLOYs identically. Either way `code`
-        // is the UTF-8 source that flows into the SHARED size / syntax / manifest / gas /
-        // constructor path below. (base64 is 1.33x vs hex's 2x and has no '|', so it is
-        // delimiter-safe; Buffer.from is lenient, so we round-trip to reject non-canonical
-        // base64 deterministically.)
+        // decodes CODE_ENCODING directly. Post-activation the encoding is base64; pre-activation
+        // it is hex (the original format), gated on block_time so a replay/heterogeneous fleet
+        // decodes historical DEPLOYs identically. Either way `code` is the UTF-8 source that
+        // flows into the SHARED size / syntax / manifest / gas / constructor path below.
+        // (base64 is 1.33x vs hex's 2x and has no '|', so it is delimiter-safe;
+        // Buffer.from is lenient, so we round-trip to reject non-canonical base64 deterministically.)
         let code = '';
         if(!error && isChunked){
             let declaredHash = String(data['CODE_HASH_PARAM']);
@@ -189,7 +200,7 @@ class Deploy {
             } else {
                 // Gather only VALID chunks from THIS deployer for THIS group, recorded at a
                 // LOWER action_index than this DEPLOY (assembly never consumes a chunk that
-                // does not precede it → any reorg dropping a chunk also drops the dependent
+                // does not precede it, so any reorg dropping a chunk also drops the dependent
                 // DEPLOY, so rollback needs no bespoke logic). Dedup by position; the query is
                 // ordered so the first (lowest action_index) submission deterministically wins.
                 let rows  = await this.indexerDb.getDeployChunksForAssembly(data['SOURCE'], declaredHash, data['ACTION_INDEX']);
@@ -248,7 +259,7 @@ class Deploy {
             } else {
                 // Pre-activation: hex. Byte-for-byte the original pre-base64 decode so a
                 // from-genesis replay reproduces every historical inline DEPLOY's code_hash
-                // exactly. Deliberately NO round-trip check — the historical nodes did not
+                // exactly. Deliberately NO round-trip check; the historical nodes did not
                 // round-trip hex, and matching their (lenient) behaviour is the whole point
                 // of the gate.
                 try {
@@ -292,7 +303,7 @@ class Deploy {
          * Permissions Manifest (Phase E)
          *
          * Read the contract's declared policy deterministically off its (immutable)
-         * exports — vm.readManifest instantiates the module top-level with no state,
+         * exports. vm.readManifest instantiates the module top-level with no state,
          * so it works even for constructor-less contracts that vm.execute() never
          * runs. The VM surfaces typed values; ALL validation + fail-closed rejection
          * lives here so the rule is in one place and hashes into the deploy status:
@@ -304,8 +315,8 @@ class Deploy {
          *                    global CONTROLLER_MAX_TAKE_BPS applies.
          * A malformed manifest (wrong type / out of range) REJECTS the deploy rather
          * than silently degrading to unrestricted. A module-level throw during the
-         * read is treated as "no manifest" (today's behavior — the contract is broken
-         * and will fail at first execute anyway).
+         * read is treated as "no manifest" (the contract is broken and will fail at
+         * first execute anyway).
          ****************************************************************/
         let declaredPermissions = null;   // string[] | null
         let declaredMaxTakeBps  = null;   // number   | null
@@ -409,7 +420,7 @@ class Deploy {
 
             // SOURCE balances back getBalance() in the constructor (e.g. a deploy-time
             // permission gate). The contract's own derived address is freshly created
-            // here, so its balance is empty — getBalance(contractAddress, ...) is null.
+            // here, so its balance is empty; getBalance(contractAddress, ...) is null.
             // Gated on the VM_BALANCE_TOKENINFO flag-day: below activation the gateway
             // sees balances:null / tokenInfo:null (original ≤2.7.10 behaviour).
             let vmLedger = { balances: null, tokenInfo: null };
@@ -429,7 +440,7 @@ class Deploy {
                 contractIndex:    data['ACTION_INDEX'],
                 // The tx hash + the (empty) root call-path anchor the deterministic
                 // attestation request_id (sha256(txHash:callPath:contractIndex:
-                // emissionIndex)) — a constructor is a root execution, so its call-path
+                // emissionIndex)). A constructor is a root execution, so its call-path
                 // is '' (same as a top-level user EXECUTE).
                 txHash:           data['TX_HASH'],
                 actionIndex:      data['ACTION_INDEX'],
@@ -451,14 +462,14 @@ class Deploy {
             });
 
             // Defense-in-depth (consensus): mirror the gasUsed clamp in actions/execute.js so a
-            // resource termination in the constructor can never make totalGas — hashed via
-            // contract_executions.gas_used → contract_hash — diverge across validators. The
+            // resource termination in the constructor can never cause totalGas (hashed via
+            // contract_executions.gas_used into contract_hash) to diverge across validators. The
             // VM already clamps these; this guards a VM regression. Keep the family regex
             // identical to util.vmFailureStatus and execute.js (out_of_gas included so the
-            // regexes never drift — a no-op for the fee since out_of_gas == ceiling already).
+            // regexes never drift; it is a no-op for the fee since out_of_gas == ceiling already).
             let constructorGas = constructorResult.gasUsed;
             if(!constructorResult.success && /^(out_of_gas|timeout|out_of_memory|out_of_stack|out_of_resource)\b/.test(String(constructorResult.error)))
-                constructorGas = 1000000;
+                constructorGas = GAS_CEILING;
             totalGas += constructorGas;
 
             if(!constructorResult.success){
@@ -471,9 +482,9 @@ class Deploy {
         fee = this.util.bcmul(totalGas, this.config['GAS_PRICE'], 8);
 
         // Determine final status. This is consensus-hashed (contracts.status_id /
-        // contract_executions.status_id → contract_hash), so it MUST be deterministic. A
+        // contract_executions.status_id into contract_hash), so it MUST be deterministic. A
         // failed constructor's raw VM error is timing-/memory-/arch-dependent (V8 abort vs
-        // isolate wall-clock vs parent watchdog — see util.vmFailureStatus), so normalize it to
+        // isolate wall-clock vs parent watchdog; see util.vmFailureStatus), so normalize it to
         // a stable token instead of storing the raw 'invalid: constructor failed: <vm error>'
         // string. Pre-VM rejections keep their deterministic 'invalid: ...' message; a clean
         // deploy is 'valid'. The raw detail is preserved (un-hashed) in
@@ -512,7 +523,7 @@ class Deploy {
         // Persist the declared permissions manifest (Phase E) BEFORE the constructor
         // emissions are processed below, so a constructor's own emissions are checked
         // against the contract's allowlist too (enforced in execute.js processEmission,
-        // which reads this row). Gated on a clean status — a later constructor-state
+        // which reads this row). Gated on a clean status: a later constructor-state
         // failure calls deleteContract, which also clears this row, keeping the manifest
         // table consistent with `contracts`. Written only when something was declared.
         if(status === 'valid' && (declaredPermissions !== null || declaredMaxTakeBps !== null)){
@@ -531,7 +542,7 @@ class Deploy {
         // cross-contract EXECUTE support with depth/gasLimit threading. The
         // savepoint name is unique per deployment because an emitted EXECUTE
         // nests its own vm_execute_<idx> savepoints inside this one (MariaDB
-        // destroys a re-used savepoint name — see actions/execute.js).
+        // destroys a re-used savepoint name; see actions/execute.js).
         let nestedGasUnused = 0;
         if(constructorResult && constructorResult.success){
             let savepoint = await this.indexerDb.createSavepoint('vm_constructor_' + parseInt(data['ACTION_INDEX']));
@@ -559,8 +570,8 @@ class Deploy {
                 // would carry: the new contract is the emitter, the DEPLOY's own
                 // action_index is the executing action (parent for CALL_DEPTH), and the
                 // deployer pays fees. A constructor is a root execution, so its call-path
-                // is '' — emitted ATTEST request_ids derive over (txHash:'':contractIndex:
-                // emissionIndex), matching the VM's constructor run (callPath '').
+                // is '' (emitted ATTEST request_ids derive over (txHash:'':contractIndex:
+                // emissionIndex), matching the VM's constructor run at callPath '').
                 let emissionContext = {
                     CONTRACT_ACTION_INDEX: data['ACTION_INDEX'],
                     ACTION_INDEX:          data['ACTION_INDEX'],
@@ -602,8 +613,8 @@ class Deploy {
                 await this.indexerDb.releaseSavepoint(savepoint);
             } catch(e){
                 await this.indexerDb.rollbackToSavepoint(savepoint);
-                // Constructor state/emission processing failed — the whole
-                // deployment fails (no refunds; the deployer pays full gas).
+                // Constructor state/emission processing failed. The whole deployment
+                // fails (no refunds; the deployer pays full gas).
                 nestedGasUnused = 0;
                 error = 'invalid: constructor state write failed: ' + e.message;
                 status = error;
@@ -641,12 +652,12 @@ class Deploy {
         let credits = [],
             debits  = [];
 
-        // Debit gas fee from SOURCE — mirror the in-memory balance debit above
+        // Debit gas fee from SOURCE. Mirror the in-memory balance debit above
         // EXACTLY (!error && feePaymentMode === 2). Recording a ledger debit for a
         // rejected deploy (e.g. one rejected for insufficient GAS funds) burns gas
         // the source never had: the ledger supply drops but getAddressBalances only
         // iterates credit ticks, so the debit-only tick is invisible to the balances
-        // projection — leaving balance = ledger + 1 and tripping the supply SanityError.
+        // projection, leaving balance = ledger + 1 and tripping the supply SanityError.
         if(!error && tokenInfo && feePaymentMode === 2)
             debits.push([gas, fee, data['SOURCE']]);
 

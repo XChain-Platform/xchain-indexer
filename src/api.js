@@ -7,7 +7,7 @@
  *
  * This file is part of XChain Platform. Licensed under the GNU Affero
  * General Public License v3.0 or later; see LICENSE.md. A commercial
- * license (without AGPL source-disclosure terms) is available —
+ * license (without AGPL source-disclosure terms) is available -
  * contact legal@dankest.llc.
  *
  **********************************************************************
@@ -19,6 +19,11 @@
  ********************************************************************/
 
 // Load required libraries
+// Note: express-rate-limit is intentionally omitted; the indexer API is
+// internal-only (hub + xchain-node managed deployments) and is expected to
+// sit behind a network perimeter or INDEXER_API_KEY auth gate rather than
+// being exposed directly. Add rate limiting here if this API is ever
+// publicly accessible (see sibling services: decoder, encoder, explorer, hub).
 const dotenv        = require('dotenv');
 const express       = require('express');
 const bodyParser    = require('body-parser');
@@ -48,7 +53,7 @@ for(const key of REQUIRED_ENV){
 const INDEXER_API_PORT = process.env.INDEXER_API_PORT;
 const INDEXER_NETWORK  = process.env.INDEXER_NETWORK;
 
-// xchain-utxo-tracker config (optional — required by DISPENSER fresh-address check)
+// xchain-utxo-tracker config (optional, required by DISPENSER fresh-address check)
 const UTXO_TRACKER_URL      = process.env.UTXO_TRACKER_URL || '';
 const UTXO_TRACKER_API_PORT = process.env.UTXO_TRACKER_API_PORT || '';
 
@@ -66,7 +71,7 @@ const INDEXER_DB_NAME  = process.env.INDEXER_DB_NAME;
 const INDEXER_DB_USER  = process.env.INDEXER_DB_USER;
 const INDEXER_DB_PASS  = process.env.INDEXER_DB_PASS;
 
-// Hub database config (optional — local read-only copy of cross-chain data)
+// Hub database config (optional, local read-only copy of cross-chain data)
 const HUB_DB_HOST = process.env.HUB_DB_HOST || '';
 const HUB_DB_PORT = process.env.HUB_DB_PORT || '';
 const HUB_DB_NAME = process.env.HUB_DB_NAME || '';
@@ -77,11 +82,11 @@ const HUB_DB_PASS = process.env.HUB_DB_PASS || '';
 // Optional, matching .env.example: unset disables the gate (single-host /
 // regtest); when configured, the gated methods fail closed (401) without a
 // valid key. Hard-requiring it at boot crash-looped every xchain-node-managed
-// deployment (ConfigService injects no such var) — the same over-tightening
+// deployment (ConfigService injects no such var); the same over-tightening
 // that took down the encoder pre-launch (see xchain-encoder e2bf7c4).
 const INDEXER_API_KEY = process.env.INDEXER_API_KEY || '';
 if(!INDEXER_API_KEY)
-    console.warn('WARNING: INDEXER_API_KEY is not set — write and federation-read methods are UNAUTHENTICATED. Set a key for any shared deployment.');
+    console.warn('WARNING: INDEXER_API_KEY is not set; write and federation-read methods are UNAUTHENTICATED. Set a key for any shared deployment.');
 
 // Set of write methods that require the API key when one is configured
 const WRITE_METHODS = new Set(['pushvalidatorrewards']);
@@ -89,7 +94,7 @@ const WRITE_METHODS = new Set(['pushvalidatorrewards']);
 // Set of federation read methods that require the API key when one is
 // configured. These expose the staked validator set and the pending
 // attestation work queue (including provider URLs queued for external
-// fetch), so they are gated to authenticated federation callers only —
+// fetch), so they are gated to authenticated federation callers only;
 // preventing unauthenticated enumeration and attestation pre-fetch
 // contamination. Hub callers attach the key via the x-api-key header.
 const FEDERATION_READ_METHODS = new Set([
@@ -137,7 +142,7 @@ async function startApi(){
     // API key enforcement for write + federation read methods. Enforced only
     // when a key is configured (matching .env.example): with INDEXER_API_KEY
     // set, these methods fail closed without a valid x-api-key; unset disables
-    // the gate (single-host / regtest — no key plumbing exists in xchain-node
+    // the gate (single-host / regtest; no key plumbing exists in xchain-node
     // or the hub callers yet, so failing closed with no key 401'd every
     // federation read fleet-wide). Production deployments should set a key.
     app.use((req, res, next) => {
@@ -173,7 +178,7 @@ async function startApi(){
                 if(indexer.indexerDb)
                     lastIndexedBlock = await indexer.indexerDb.getLatestBlockIndex();
             } catch (err) {
-                // Database unreachable — leave lastIndexedBlock null; the circuit
+                // Database unreachable; leave lastIndexedBlock null. The circuit
                 // state below tells the operator why.
             }
             return buildHealthResponse({
@@ -231,7 +236,7 @@ async function startApi(){
         },
 
         // The stored per-block state-hash triple (+ the chain block hash from the
-        // decoder DB) for a height — what the hub's StateCheckpointEngine reads,
+        // decoder DB) for a height; what the hub's StateCheckpointEngine reads,
         // independently re-fetches on every peer, and quorum-signs into the
         // XCHECKPOINT canonical (spec: protocol/actions/ANCHOR.md). Omitting
         // block_index returns the latest indexed block. Public read: these hashes
@@ -273,7 +278,7 @@ async function startApi(){
         // Read-only native-coin fee pre-flight. Given an action + its wire params (and
         // optionally a proposed FEE_DESTINATION output value in satoshis), value the action's
         // XCHAIN protocol fee in the native coin at current oracle prices and judge a proposed
-        // output against the on-chain tolerance — WITHOUT persisting anything. Lets a client size
+        // output against the on-chain tolerance, WITHOUT persisting anything. Lets a client size
         // the fee output and refuse to broadcast a doomed (under-sized / stale-priced) native-fee
         // tx, which would otherwise forfeit the fee. Public read (surfaced to wallets/SDK via the
         // explorer proxy); not a write or federation method.
@@ -305,7 +310,7 @@ async function startApi(){
             }
         },
 
-        // Whole-federation validator-set snapshot at a block boundary —
+        // Whole-federation validator-set snapshot at a block boundary:
         // every pubkey with ANY active stake at the block, regardless of
         // capability. Used by xchain-hub's Consensus (config-change PBFT)
         // where quorum is over all stakers, not a capability subset.
@@ -334,7 +339,7 @@ async function startApi(){
             }
         },
 
-        // Source-keyed whole-federation weights at a block boundary — every staker
+        // Source-keyed whole-federation weights at a block boundary; every staker
         // (no capability filter, no MIN_STAKE floor) with each effective key's
         // `source` + the source's aggregate `weight`. The STAKE_WEIGHTED_QUORUM
         // counterpart of getactivevalidators; used by xchain-hub's Consensus
@@ -368,7 +373,7 @@ async function startApi(){
 
         // Return the validator-set snapshot for a capability at a block boundary.
         // Used by xchain-hub's CapabilitySnapshot to lock PBFT quorum N for a
-        // consensus round. Deterministic — every hub at the same block sees
+        // consensus round. Deterministic: every hub at the same block sees
         // the same set, so all hubs compute the same quorum.
         // Body: { capability, block_index, min_stake? }
         // min_stake (optional) lets a caller (the hub) supply its own authoritative
@@ -433,7 +438,7 @@ async function startApi(){
                 return { error: 'indexer database not ready' };
             try {
                 // Intersect the proof-window set with the LIVE full_node capability
-                // at this block — byte-identical to the eligibility rule in
+                // at this block (byte-identical to the eligibility rule in
                 // actions/nodeproof.js (_eligibleVerifierSet) and the reward split in
                 // actions/price.js, so the hub sizes quorum over the same set the
                 // chain will accept.
@@ -457,7 +462,7 @@ async function startApi(){
         // Source-keyed validator weights for stake-weighted quorum (STAKE_WEIGHTED_QUORUM).
         // Like getcapabilityvalidators but returns each effective signing key's `source`
         // (staking address) + the source's aggregate `weight`. The hub mirrors these into
-        // capability_snapshots so every validator dedupes voting weight by source — one
+        // capability_snapshots so every validator dedupes voting weight by source; one
         // stake counts once no matter how many keys it has delegated (DELEGATE.md).
         async getstakeweightsbycapability({capability, block_index, min_stake}){
             if(!capability || typeof capability !== 'string')
@@ -588,7 +593,7 @@ async function startApi(){
             }
         },
 
-        // Single XCALL request by call_id — the targeted re-verification a hub
+        // Single XCALL request by call_id; the targeted re-verification a hub
         // follower runs before co-signing a leader's proposed dispatch row
         // (field-for-field, against its OWN view of this chain).
         // Body: { call_id }
@@ -660,7 +665,7 @@ async function startApi(){
 
         // Existence + confirmation depth for a single action. Lets the xchain-hub
         // federation verify that a proposed cross-chain source action really exists
-        // on this chain — and how deep it is buried — before co-signing an
+        // on this chain (and how deep it is buried) before co-signing an
         // attestation, instead of trusting the proposer's claim. Returns the latest
         // indexed block in the same round-trip so depth and tip are one snapshot.
         // Body: { action_index }
@@ -702,7 +707,7 @@ async function startApi(){
 
         // Receive validator reward records pushed from xchain-hub (anchor publish
         // rails only). oracle_round and attest_fee are DERIVED deterministically
-        // during block processing — accepting a push for them would let a stale
+        // during block processing; accepting a push for them would let a stale
         // hub race the derivation and open a replay-divergence window, so they
         // are rejected outright.
         // Body: { round, reward_type, block_index, rewards: [{pubkey, amount}, ...] }
@@ -715,7 +720,7 @@ async function startApi(){
                 return { error: 'indexer database not ready' };
             let type = reward_type || 'oracle_round';
             if(!/^anchor_[A-Za-z_]+$/.test(type))
-                return { error: 'reward_type ' + type + ' is not pushable — derived during block processing' };
+                return { error: 'reward_type ' + type + ' is not pushable (derived during block processing)' };
             let blockIdx = block_index || 0;
             let written = 0;
             let skipped = 0;
@@ -748,7 +753,7 @@ async function startApi(){
         },
 
         // Resolve the staking source address that owned/delegated a signing
-        // pubkey as of a block — stakes first, then DELEGATE v0 delegations
+        // pubkey as of a block; stakes first, then DELEGATE v0 delegations
         // (same order as createValidatorReward). Block-scoped so every caller
         // gets the same answer at any time: the hub archive builder pins this
         // earn-time source into the ANCHOR archive, and follower hubs
@@ -762,7 +767,7 @@ async function startApi(){
     };
 
     // Plain REST status endpoint for monitoring tools that poll over a simple
-    // GET — uptime checks, container liveness/readiness probes, and load-balancer
+    // GET: uptime checks, container liveness/readiness probes, and load-balancer
     // health checks that cannot speak the JSON-RPC envelope the methods above
     // require. Surfaces the indexer's current block height, the decoder's current
     // tip, the computed indexer→decoder lag, and the sync flag, so quantitative
@@ -775,10 +780,18 @@ async function startApi(){
             if(indexer.indexerDb)
                 indexerBlock = await indexer.indexerDb.getLatestBlockIndex();
         } catch (err) {
-            // Database unreachable — leave indexerBlock null so lag stays null
+            // Database unreachable; leave indexerBlock null so lag stays null
             // rather than reporting a misleading figure.
         }
-        let decoderBlock = (indexer.lastDecoderBlock != null) ? Number(indexer.lastDecoderBlock) : null;
+        let decoderBlock = null;
+        try {
+            if(indexer.decoderDb)
+                decoderBlock = await indexer.decoderDb.getBlockIndex('decoder', 'last');
+            if(decoderBlock != null) decoderBlock = Number(decoderBlock);
+        } catch (err) {
+            // Database unreachable; use in-memory snapshot as fallback
+            decoderBlock = (indexer.lastDecoderBlock != null) ? Number(indexer.lastDecoderBlock) : null;
+        }
         // Age of the last successful hub-config fetch (null until the first success). A
         // climbing age here while the indexer otherwise looks synced is the signal that
         // the hub is unreachable and the live-polled governance params are stale.
@@ -796,7 +809,7 @@ async function startApi(){
             // Why the block counter is not advancing, or null when advancing normally:
             // a hub-sync barrier timeout (price/oracle/match/call/snapshot) or a VM
             // executor host fault. Lets a monitoring probe tell these stalls apart from
-            // a healthy catch-up — all of which otherwise present only as a growing lag.
+            // a healthy catch-up, all of which otherwise present only as a growing lag.
             stallReason:  indexer.stallReason || null,
             lastHubConfigFetchAt: lastHubConfigFetchAt,
             hubConfigAgeSeconds:  hubConfigAgeSeconds

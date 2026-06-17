@@ -904,8 +904,11 @@ describe('Database.getActiveStakeByPubkey() @regression @tier1', function () {
         const q = sinon.stub(db, 'doQuery').resolves([]);
         await db.getActiveStakeByPubkey('pk', null);
         const args = q.firstCall.args[1];
-        // Without blockIndex the args should be [pubkey_id, valid_id]
-        assert.strictEqual(args.length, 2);
+        // Without blockIndex: [pubkey_id, valid_id] for the stake WHERE clause, plus
+        // [valid_id, 0] for the revocation NOT EXISTS subquery (status_id and deactivation_block
+        // sentinel when no block bound is in effect). Activation/deactivation range filter is
+        // NOT appended (that only fires when blockIndex is non-null).
+        assert.strictEqual(args.length, 4);
     });
 });
 

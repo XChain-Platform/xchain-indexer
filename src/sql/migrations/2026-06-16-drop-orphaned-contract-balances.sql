@@ -1,0 +1,21 @@
+-- xchain:migration mode=auto
+-- Migration: drop the orphaned `contract_balances` table from deployed databases.
+--
+-- The `contract_balances` materialized cache was removed in commit 7d25e6c: contract
+-- token balances are now derived on-demand from the standard address credits/debits
+-- ledger via getAddressBalances(). All write paths (deposit.js, withdraw.js) and the
+-- rollback recompute (rebuildContractBalances) have been removed. The matching
+-- xchain-sync ClientRollback path was also removed.
+--
+-- Deployed databases that were running before the removal still carry the table as a
+-- frozen, zero-write relic. Because xchain-sync snapshots the full indexer DB on
+-- bootstrap, this orphaned table rides every snapshot to new followers as dead weight.
+-- Dropping it removes the relic and keeps bootstrap snapshots clean.
+--
+-- The DROP is guarded with IF EXISTS so this migration is idempotent on databases
+-- that already had the table dropped or were installed post-removal.
+--
+-- HOW TO RUN (manual path)
+--   mariadb -u <indexer_user> -p <indexer_db> < src/sql/migrations/2026-06-16-drop-orphaned-contract-balances.sql
+
+DROP TABLE IF EXISTS contract_balances;

@@ -7,7 +7,7 @@
  *
  * This file is part of XChain Platform. Licensed under the GNU Affero
  * General Public License v3.0 or later; see LICENSE.md. A commercial
- * license (without AGPL source-disclosure terms) is available —
+ * license (without AGPL source-disclosure terms) is available -
  * contact legal@dankest.llc.
  *
  **********************************************************************
@@ -103,11 +103,11 @@ class Utility {
         return new Promise((resolve) => setTimeout(resolve, ms));
     }
 
-    // Safely convert a value to string — returns null if the value can't be converted.
+    // Safely convert a value to string; returns null if the value can't be converted.
     // mathjs bignumbers serialize via String() in scientific notation for very small
     // / very large magnitudes ("3e-8" for 0.00000003), which breaks downstream string
     // comparisons against the wire-format value. Format bignumbers in fixed notation.
-    // (We don't pass a `precision` arg — that would also right-pad trailing zeros
+    // (We don't pass a `precision` arg, because that would also right-pad trailing zeros
     // that may or may not have been present in the original. Callers that care about
     // a specific digit count should normalize at write time.)
     safeToString(val) {
@@ -122,7 +122,7 @@ class Utility {
         try { return String(val); } catch(e){ return null; }
     }
 
-    // Run a promise with a timeout — rejects with an error if the promise doesn't resolve in time
+    // Run a promise with a timeout; rejects with an error if the promise doesn't resolve in time
     withTimeout(promise, ms, label) {
         let timer;
         const timeout = new Promise((_, reject) => {
@@ -174,7 +174,7 @@ class Utility {
     // ceiling fires is not a consensus input, so it must not affect the token. gasUsed is
     // already clamped to the ceiling on every path, so the fee stays fork-safe; the raw
     // out_of_gas-vs-timeout detail is preserved (un-hashed) in contract_executions.error_message.
-    // reverted (contract-controlled) and failed (deterministic runtime throw) stay distinct —
+    // reverted (contract-controlled) and failed (deterministic runtime throw) stay distinct;
     // they are not host-timing races.
     //
     // The family regex MUST stay identical to the gas-clamp regex in actions/execute.js and
@@ -389,7 +389,7 @@ class Utility {
 
     // Round a bignumber to d decimal places, half-up, entirely in decimal.js space.
     // Implemented as floor(n * 10^d + 0.5) / 10^d so the rounding mode is explicit and
-    // config-independent — it does NOT depend on the global decimal.js/mathjs rounding
+    // config-independent: it does NOT depend on the global decimal.js/mathjs rounding
     // setting (the same determinism concern that motivated bcmulfloor and the exact bc*
     // comparators). Used to snap a derived settlement amount onto its tick's decimal grid:
     // it recovers the true value from sub-ULP precision artifacts (e.g. 1 − 1e-18 =
@@ -413,11 +413,11 @@ class Utility {
         return this.bcnum(mathjs.format(mathjs.divide(mathjs.bignumber(a),mathjs.bignumber(b)),{notation: 'fixed', precision: d}));
     }
 
-    // Floor a bignumber to a JS integer in bignumber space — avoids the
+    // Floor a bignumber to a JS integer in bignumber space; avoids the
     // Math.floor(Number(bignumber)) trap where the implicit Number() coercion
     // goes through IEEE 754 and can round a value like 2.9999…964 down to 2
     // instead of returning the correct 3. Note: uses decimal.js's native
-    // .floor(), NOT mathjs.floor() — the latter is configured with a default
+    // .floor(), NOT mathjs.floor() (the latter is configured with a default
     // precision that rounds 137.99999999999 up to 138.
     bcfloor(num){
         return this.bcnum(num).floor().toNumber();
@@ -429,7 +429,7 @@ class Utility {
     // mathjs.larger/smaller/largerEq/smallerEq, which apply mathjs's comparison
     // epsilon (~1e-12) and treat any two amounts differing by less than that as
     // EQUAL. For 18-decimal tokens that silently corrupts every comparison of
-    // sub-1e-12 amounts — e.g. bcgt('0.000000000000001', '0') returned false,
+    // sub-1e-12 amounts: e.g. bcgt('0.000000000000001', '0') returned false,
     // so a dust balance read as "not greater than zero". These must be exact.
     bcgt(numA, numB){
         return this.bcnum(numA).gt(this.bcnum(numB));
@@ -637,7 +637,7 @@ class Utility {
     }
 
     // Handle validating that an address is a real crypto address on the given
-    // COIN + NETWORK (defaults to the configured COIN/NETWORK — pass a coin
+    // COIN + NETWORK (defaults to the configured COIN/NETWORK; pass a coin
     // explicitly for cross-chain destinations like a SWAP GET_ADDRESS).
     // Performs full base58check (version byte + checksum) and bech32/bech32m
     // validation so checksum typos and wrong-network addresses are rejected
@@ -655,7 +655,7 @@ class Utility {
             let decoded = this.bech32Decode(str);
             return (decoded && decoded.hrp==params.hrp) ? true : false;
         }
-        // Base58check address (P2PKH / P2SH) — payload is version byte + hash160
+        // Base58check address (P2PKH / P2SH): payload is version byte + hash160
         let payload = this.base58CheckDecode(str);
         if(!payload || payload.length!=21)
             return false;
@@ -668,7 +668,7 @@ class Utility {
     // same-chain token ORDER). It is NOT a real on-chain address: callers MUST keep
     // rejecting it anywhere native coin must actually be paid out (every DISPENSER,
     // and the native-coin side of an ORDER), since a synthetic address can't receive
-    // a UTXO. Format-only check — see contract address derivation in
+    // a UTXO. Format-only check; see contract address derivation in
     // actions/execute.js (`'C:' + CHAIN + ':' + index`).
     isContractAddress(address){
         return /^C:[A-Z]+:[0-9]+$/.test(String(address));
@@ -703,7 +703,7 @@ class Utility {
     // Validate if a balances array holds a certain amount of a tick token
     hasBalance(balances, tick_id, amount){
         let balance = (!this.isNull(balances[tick_id])) ? balances[tick_id] : 0;
-        if(mathjs.largerEq(this.bcnum(balance), this.bcnum(amount)))
+        if(this.bcgte(balance, amount))
             return true;
         return false;
     }
@@ -778,7 +778,7 @@ class Utility {
     // EXECUTE tx's fee-destination outputs, which don't belong to a synthesized action (no
     // native fee output, and the contract SOURCE need not hold XCHAIN). Returns the computed
     // fee for normal on-wire actions, 0 for emissions. Mirrors execute.js's
-    // `skipFee = Boolean(IS_EMISSION)`. NOTE: this is the per-tx processing fee only — it does
+    // `skipFee = Boolean(IS_EMISSION)`. NOTE: this is the per-tx processing fee only; it does
     // NOT cover deliberate economic fees (e.g. the ISSUE issuance fee), which are left intact.
     feeForAction(amount, data){
         return (data && data['IS_EMISSION']) ? '0' : amount;
@@ -787,7 +787,7 @@ class Utility {
     // Resolve the consensus-critical controller-guard gas ceiling from the gas schedule.
     // VM_GUARD_GAS_CEILING bounds the guard fee reserved/billed against SOURCE and is
     // committed into the ledger/contract hashes, so a node that silently fell back to a
-    // hard-coded default — because its GAS_SCHEDULE omits or mistypes the key — would bill a
+    // hard-coded default (because its GAS_SCHEDULE omits or mistypes the key) would bill a
     // different amount than a correctly configured node and fork on the first guarded action
     // after the CONTROLLER_GUARD flag-day. Treat it as a canonical key: validate (positive
     // integer, no trailing garbage) and throw loudly rather than mint a phantom default.
@@ -826,7 +826,7 @@ class Utility {
         // Emitted/synthesized actions (IS_EMISSION: VM emissions, XEXEC, ATTEST
         // responses) have no transaction of their own, so they can never carry a
         // native fee output. Their economic fee is paid from the emitting
-        // contract's XCHAIN balance on EVERY chain — including LTC/DOGE, where a
+        // contract's XCHAIN balance on EVERY chain (including LTC/DOGE, where a
         // top-level action with no fee output is rejected. Without this, a
         // contract-emitted ISSUE (or any emitted economic-fee action) is
         // unconditionally rejected on LTC/DOGE ('native coin output required'),
@@ -835,7 +835,7 @@ class Utility {
 
         let feeDestination = this.config['ADDRESS'] ? this.config['ADDRESS']['FEE_DESTINATION'] : null;
         if(!feeDestination || feeDestination === 'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX') {
-            // No fee destination configured — fall back to xchain balance deduction
+            // No fee destination configured; fall back to xchain balance deduction
             return 'xchain';
         }
 
@@ -851,16 +851,16 @@ class Utility {
         }
 
         if(feeOutput){
-            return 'native'; // Fee output found — native coin payment
+            return 'native'; // Fee output found: native coin payment
         }
 
-        // No fee output — implicit detection
+        // No fee output; implicit detection
         let coin = this.config['COIN'] || data['COIN'];
         if(coin === 'BTC'){
             return 'xchain'; // BTC allows XCHAIN balance deduction as fallback
         }
 
-        // LTC/DOGE: native coin is the only option — missing fee output = rejected
+        // LTC/DOGE: native coin is the only option; missing fee output = rejected
         return 'rejected';
     }
 
@@ -891,7 +891,7 @@ class Utility {
         if(db.indexer && db.indexer.hubDb){
             priceDb = db.indexer.hubDb;
         } else {
-            // No hub DB connection configured — price_snapshots / oracle_prices are read from
+            // No hub DB connection configured; price_snapshots / oracle_prices are read from
             // the indexer's own database instead. This is the intended single-host setup (the
             // local DB holds the synced hub copy). In a distributed deployment it almost always
             // means HUB_DB_HOST / HUB_DB_NAME are unset or misconfigured, in which case fee
@@ -900,7 +900,7 @@ class Utility {
             priceDb = db;
             if(!this._hubDbFallbackWarned){
                 this._hubDbFallbackWarned = true;
-                console.warn('WARNING: getFeeOraclePrices — no hub DB configured (HUB_DB_HOST/HUB_DB_NAME unset); ' +
+                console.warn('WARNING: getFeeOraclePrices: no hub DB configured (HUB_DB_HOST/HUB_DB_NAME unset); ' +
                     'falling back to the local indexer DB for price_snapshots/oracle_prices. ' +
                     'Expected for single-host deployments; on a distributed node this means price data may be stale or absent.');
             }
@@ -929,7 +929,7 @@ class Utility {
     }
 
     // Validate a native coin fee output against oracle price
-    // db parameter accepts the indexer DB or hub DB connection — if a hubDb is available
+    // db parameter accepts the indexer DB or hub DB connection; if a hubDb is available
     // on the action context, callers should prefer it (price_snapshots lives in the local hub DB).
     // Returns: { valid, nativeCoinAmount, oracleRound, error }
     async validateNativeCoinFee(data, fees, db, txOutputs){
@@ -960,14 +960,14 @@ class Utility {
         // Get the XCHAIN fee amount (already calculated by the action handler)
         let xchainAmount = this.bcnum(fees['AMOUNT']);
         if(this.bclte(xchainAmount, 0)){
-            // No fee required — accept
+            // No fee required; accept
             return { valid: true, nativeCoinAmount: '0', oracleRound: 0 };
         }
 
         // Get oracle prices: XCHAIN/USD and COIN/USD.
         // Gate by BLOCK_INDEX so two nodes processing the same block see the same price, and
         // reject silently stale prices against the block's own timestamp (deterministic during
-        // consensus replay) — see db.getLatestPrice and getFeeOraclePrices.
+        // consensus replay); see db.getLatestPrice and getFeeOraclePrices.
         let coin = this.config['COIN'] || data['COIN'];
         let maxPriceAgeSeconds = parseInt(this.config['ORACLE_MAX_PRICE_AGE_SECONDS']) || 1800;
         let prices = await this.getFeeOraclePrices(db, coin, data['BLOCK_INDEX'], data['BLOCK_TIME'], maxPriceAgeSeconds);
@@ -998,7 +998,7 @@ class Utility {
     // Converting "0.00000003" or "100.00000000" to a bignumber and back loses both
     // (scientific-notation on round-trip, trailing zeros that the original wire
     // value committed to). Math functions (bcmul/bcsub/bclt/bcgt/...) already
-    // call bcnum on their inputs, so leaving strings is safe — and lets the
+    // call bcnum on their inputs, so leaving strings is safe, and lets the
     // string-form survive into the DB write so post-broadcast polls can match it.
     setNumberFormats(data){
         for(let name of this.config['NUMBER_FIELDS']){
@@ -1009,7 +1009,7 @@ class Utility {
         return data;
     }
 
-    // Calculate expiration fee (legacy — per-chain rate)
+    // Calculate expiration fee (legacy per-chain rate)
     getExpirationFee(data, info){
         let fee    = 0,
             format = data['FORMAT'];
@@ -1115,8 +1115,8 @@ class Utility {
             let paymentMode = fees['PAYMENT_MODE'] || 2;
 
             if(paymentMode === 1){
-                // Native coin payment mode — fee is paid via on-chain output
-                // No XCHAIN debit or credit — the native coin is already in the fee destination address
+                // Native coin payment mode: fee is paid via on-chain output
+                // No XCHAIN debit or credit; the native coin is already in the fee destination address
                 // Just record the fee in the fees table
             } else {
                 // XCHAIN balance deduction mode (default / Track A)
@@ -1163,7 +1163,7 @@ class Utility {
 
     // Process any transaction ledger changes (credits / debits / escrows)
     /*****************************************************************
-     * Programmable policy layer — shared controller-guard enforcement.
+     * Programmable policy layer: shared controller-guard enforcement.
      ****************************************************************/
 
     // Static map from a native action (in its guarded context) to the controlled action-class.
@@ -1176,7 +1176,7 @@ class Utility {
             case 'SWAP_CREATE':
             case 'DISPENSER_CREATE': return 'trade';
             case 'DESTROY':          return 'burn';
-            // Stubs — the class is reserved + routable, but no handler invokes the guard for these
+            // Stubs: the class is reserved + routable, but no handler invokes the guard for these
             // yet (MINT supply creation / STAKE locking gating land in a later phase).
             case 'MINT':             return 'mint';
             case 'STAKE':            return 'stake';
@@ -1188,9 +1188,9 @@ class Utility {
     // controller for the routed action-class. Single enforcement point called at each token
     // handler's validated→settlement boundary (replaces the per-handler ad-hoc veto blocks).
     // Returns { error, guardFee, payoutLegs }:
-    //   - error      — non-null = DENY (caller leaves status as 'invalid: '+error, writes no ledger)
-    //   - guardFee   — GAS to debit from SOURCE when the action proceeds (metered guard gas)
-    //   - payoutLegs — reserved for the at-create royalty/fee split (Phase D; null here)
+    //   - error      : non-null = DENY (caller leaves status as 'invalid: '+error, writes no ledger)
+    //   - guardFee   : GAS to debit from SOURCE when the action proceeds (metered guard gas)
+    //   - payoutLegs : reserved for the at-create royalty/fee split (Phase D; null here)
     // No controller, an unmapped class, or a self guard-of-guard emission → { null, 0, null }.
     async maybeRunControllerGuard(actions, db, opts){
         let none = { error: null, guardFee: 0, payoutLegs: null };
@@ -1210,7 +1210,7 @@ class Utility {
     }
 
     // Recipient/account-side enforcement: run the SUBJECT address's controller for the given class
-    // (opts.address + opts.actionClass). The contract bound to that account gates the action — e.g.
+    // (opts.address + opts.actionClass). The contract bound to that account gates the action; e.g.
     // an incoming direct SEND the recipient didn't solicit (spam/compliance); refusal reverts it.
     // Resolves by address (address_controllers); same gas-reservation + guard-of-guard semantics.
     async maybeRunAddressControllerGuard(actions, db, opts){
@@ -1230,12 +1230,12 @@ class Utility {
         let data = opts.data;
         // Activation gate (single shared chokepoint for both token- and address-controller
         // guards). Until the CONTROLLER_GUARD flag-day the guard is a strict no-op on every
-        // node: no allow/deny VM run, no payout_legs, no guard contract_executions row — so a
+        // node: no allow/deny VM run, no payout_legs, no guard contract_executions row, so a
         // node that lacks the controller layer and one that has it settle every guarded action
         // identically. This one check atomically gates the whole surface: the VM allow/deny in
         // runControllerGuard, the payout_legs column write in order.js/swap.js, the match-time
-        // applyProceedsSplit in order_match.js/swap_match.js (which read the stored — now always
-        // null pre-activation — payout_legs), and the guard-emission contract_hash contribution.
+        // applyProceedsSplit in order_match.js/swap_match.js (which read the stored, now always
+        // null pre-activation, payout_legs), and the guard-emission contract_hash contribution.
         // Without it the first guarded action forks the ledger and the federation checkpoint
         // preimage between heterogeneous node versions. See protocol_changes.js.
         if(!(await actions.protocolChanges.isEnabled('CONTROLLER_GUARD', data['BLOCK_INDEX'])))
@@ -1268,13 +1268,13 @@ class Utility {
         return { error: null, guardFee: this.bcmul(guard.gasBilled, db.config['GAS_PRICE'], 8), payoutLegs: guard.payoutLegs || null };
     }
 
-    // Programmable policy layer — apply a controlled-token sale's royalty/fee split to ONE proceeds
+    // Programmable policy layer: apply a controlled-token sale's royalty/fee split to ONE proceeds
     // credit at match/dispense. `legs` is the stored split (JSON string or array of {to, bps}); each
     // leg takes bps/10000 of the ACTUAL fill `proceeds` (so partial fills split proportionally with no
     // stored-amount scaling). Returns the credit tuples [tick, amount, address] that REPLACE the single
     // full-proceeds credit: the seller's remainder FIRST, then one credit per non-zero leg. Conservation
     // is exact by construction (remainder = proceeds − Σlegs). A malformed or over-cap legs set yields
-    // NO split (seller keeps full proceeds) — defensive; a buggy/rogue controller can never trap or
+    // NO split (seller keeps full proceeds); defensive: a buggy/rogue controller can never trap or
     // inflate funds. `decimals` = the proceeds tick's precision; `maxTakeBps` caps Σbps (default 10000).
     applyProceedsSplit(tick, proceeds, sellerAddress, legs, decimals, maxTakeBps){
         let full = [[tick, proceeds, sellerAddress]];
@@ -1318,7 +1318,7 @@ class Utility {
     }
 
     async processTransactionLedgerChanges(db, data, credits, debits, escrows){
-        // Programmable policy layer — completeness assertion (opt-in, test/audit only via
+        // Programmable policy layer: completeness assertion (opt-in, test/audit only via
         // ASSERT_CONTROLLER_COMPLETENESS). Anti-drift backstop: if a transfer-controlled token is
         // debited from SOURCE but its controller was never consulted this action, a handler shipped
         // an ungated path. OFF by default so it can never affect production or the normal suite.
@@ -1391,10 +1391,10 @@ class Utility {
         if(!sweep || sweep.credits.length === 0) return;
         let addressesToRebalance = new Set();
         let ticksToRebalance     = new Set();
-        // Apply credits — each tuple is [tick, amount, sourceAddress]
+        // Apply credits: each tuple is [tick, amount, sourceAddress]
         // The credit's action_index reuses the unstake's action_index for the audit trail.
         // We need to associate each credit with the right row, so re-derive from sweep state.
-        // capabilityRows and contractRows preserve action_index order — re-query for tick/amount/address.
+        // capabilityRows and contractRows preserve action_index order; re-query for tick/amount/address.
         if(sweep.capabilityRows.length > 0 || sweep.contractRows.length > 0){
             // Re-fetch with action_index so each credit gets its own action_index trail
             let placeholdersCap = sweep.capabilityRows.map(() => '?').join(',');
@@ -1491,16 +1491,17 @@ class Utility {
         }
     }
 
-    // Cross-chain contract call passes — all three are deterministic per block:
+    // Cross-chain contract call passes (all three are deterministic per block):
     //  1. TARGET side: inject XEXEC for every effective, unexecuted dispatch row
-    //     targeting this chain, in hub-id order, capped per block (overflow
-    //     carries forward to the next block — never dropped, or operators that
-    //     raced different mirror states would diverge on the cutoff).
+    //     targeting this chain, in (snapshot_block, call_id) order, capped per block
+    //     (overflow carries forward to the next block; never dropped, or operators
+    //     that raced different mirror states would diverge on the cutoff).
     //  2. SOURCE side: deliver every effective, unprocessed result row for a
     //     request this chain originated (verify sigs → exactly-once interlock →
-    //     inject the requester's callback), in hub-id order under the same cap.
+    //     inject the requester's callback), in (snapshot_block, call_id) order under
+    //     the same cap.
     //  3. SOURCE side: synthesize XCALL v2 for pending requests whose
-    //     deadline_block has passed — block-height-driven, so expiry fires
+    //     deadline_block has passed (block-height-driven, so expiry fires
     //     identically on every operator even with the hub down.
     // The caller gates this on the call-sync + snapshot barriers so every operator
     // applies the same rows at the same block.

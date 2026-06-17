@@ -15,7 +15,7 @@
  * Per-block state-hash preimage (in-place mutations + backdated credits)
  *
  * The three consensus hashes (ledger/actions/contract) cover only rows scoped
- * by actions.block_index = B — new, immutable rows. They deliberately CANNOT see
+ * by actions.block_index = B (new, immutable rows). They deliberately CANNOT see
  * the in-place mutations the replication "updated_rows" channel carries on
  * SURVIVING (earlier-block) rows, nor the backdated cooldown-refund credits that
  * reuse an earlier-block action_index. A follower that silently fails to apply
@@ -29,12 +29,13 @@
  *   - v0 request_status flips (attests/xcalls)
  *   - cooldown-maturity status flips (unstakes/contract_unstakes)
  *   - backdated cooldown refund credits (capability GAS + contract own-tick)
+ *   - invalid_archive stamp on anchor_actions v1 parent rows (CRC-failed chunked batches)
  *
  * CONSENSUS-STYLE DETERMINISM (mirrors db.js getBlockHashes):
  *   - surrogate AUTO_INCREMENT ids (address_id/tick_id/status_id) are NEVER hashed;
  *     they are resolved to canonical strings via LEFT JOIN (they diverge across
- *     nodes after a reorg — the reason BLOCK_HASH_VERSION exists). action_index is
- *     the deterministic on-chain index, safe to hash raw.
+ *     nodes after a reorg, which is the reason BLOCK_HASH_VERSION exists).
+ *     action_index is the deterministic on-chain index, safe to hash raw.
  *   - every row set is ORDER BY'd with BINARY-collation-pinned tie-breaks so the
  *     order is independent of each node's default collation.
  *   - the preimage object's key order is fixed in code; the caller hashes it with
@@ -52,7 +53,7 @@
 // Bump ONLY on a deliberate preimage change; folded into the hash so two schemes
 // can never compare equal. Independent of BLOCK_HASH_VERSION (the three-hash
 // baseline is untouched by this additive, non-consensus integrity hash).
-const STATE_HASH_VERSION = 1;
+const STATE_HASH_VERSION = 2;
 
 const DEACTIVATION_TABLES = ['stakes', 'delegations', 'contract_stakes', 'contract_delegations'];
 const SLASH_SPECS = [
@@ -90,7 +91,7 @@ async function buildStateHashData(db, blockIndex, opts){
         } catch(e){ /* table/column may not exist on older schemas */ }
     }
 
-    // 2. SLASH amount cuts — the slashed row reached via its debit-log entry for
+    // 2. SLASH amount cuts: the slashed row reached via its debit-log entry for
     //    this block. DISTINCT collapses multiple debits for one stake (amount is
     //    functionally determined by action_index).
     let slashes = {};
@@ -117,7 +118,7 @@ async function buildStateHashData(db, blockIndex, opts){
         } catch(e){ /* table/column may not exist on older schemas */ }
     }
 
-    // 4. cooldown-maturity status flips — keyed by the maturity block. status_id
+    // 4. cooldown-maturity status flips, keyed by the maturity block. status_id
     //    resolved to its canonical status string.
     let cooldown = {};
     for(let t of COOLDOWN_TABLES){
@@ -131,11 +132,11 @@ async function buildStateHashData(db, blockIndex, opts){
         } catch(e){ /* table/column may not exist on older schemas */ }
     }
 
-    // 5. backdated cooldown refund credits — capability (GAS) + contract (own tick),
+    // 5. backdated cooldown refund credits: capability (GAS) + contract (own tick),
     //    keyed by the matured unstake's cooldown_end_block (the forward mirror of
     //    cooldownCredits.js). address_id/tick_id resolved; ordered with the same
     //    BINARY-collation-pinned keys as the ledger credit hash. A null gasTick makes
-    //    the GAS join match nothing (capability branch empties) — contract still runs.
+    //    the GAS join match nothing (capability branch empties); contract still runs.
     let credits = [];
     if(completedStatusId != null && completedStatusId !== undefined){
         try {
@@ -160,7 +161,25 @@ async function buildStateHashData(db, blockIndex, opts){
         } catch(e){ /* table may not exist on older schemas */ }
     }
 
-    // Fixed key order — the hash preimage. NOT chained on a previous state_hash
+    // 6. invalid_archive stamp on anchor_actions v1 parent rows. When the final v2
+    //    chunk of a chunked archive batch lands at block B and the reassembled blob
+    //    fails its CRC check, anchor.js stamps the v1 parent 'invalid_archive' in
+    //    place. The parent's action_index is in an earlier block, so it is invisible
+    //    to the action-scoped consensus hashes and to the per-block stream. Resolved
+    //    via the status name (not status_id) to stay id-independent across nodes.
+    let anchor_invalid = [];
+    try {
+        anchor_invalid = await db.doQuery(
+            "SELECT p.action_index, s.status AS status FROM anchor_actions p " +
+            "JOIN anchor_actions c ON c.version = 2 AND c.match_batch_seq = p.match_batch_seq " +
+            "JOIN index_statuses s ON s.id = p.status_id AND s.status = 'invalid_archive' " +
+            "JOIN index_statuses cs ON cs.id = c.status_id AND cs.status = 'valid' " +
+            "WHERE p.version = 1 AND c.block_index BETWEEN ? AND ? " +
+            "ORDER BY p.action_index ASC",
+            [B, B]);
+    } catch(e){ /* table/columns may not exist on older schemas */ }
+
+    // Fixed key order: the hash preimage. NOT chained on a previous state_hash
     // (the adjacent three hashes already carry chain-continuity; a chain would only
     // make NULL-backfill of historical blocks poison every successor).
     return {
@@ -169,6 +188,7 @@ async function buildStateHashData(db, blockIndex, opts){
         request_status:     request_status,
         cooldown:           cooldown,
         credits:            credits,
+        anchor_invalid:     anchor_invalid,
         block_index:        B,
         state_hash_version: STATE_HASH_VERSION
     };
