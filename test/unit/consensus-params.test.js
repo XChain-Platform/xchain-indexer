@@ -50,7 +50,26 @@ const GOLDEN_GAS_SCHEDULE = {
     VM_EMISSION:        500,
     VM_COMPUTATION:     1
 };
-const EXPECTED_VM_CONSENSUS_VERSION = '1';
+const EXPECTED_VM_CONSENSUS_VERSION = '2';
+// Frozen digest of the bundled VM's deploy/execution contract surface, asserted in
+// lockstep with the version above. Any change to the sandbox strip set or the deploy
+// validator's CONSENSUS_RULES must bump EXPECTED_VM_CONSENSUS_VERSION (and the VM's
+// CONSENSUS_VERSION) and regenerate these goldens together — closing the structural
+// blind spot where a sandbox/lint consensus change could ship while the guard checked
+// only the version integer. The authoritative digest lives VM-side (the strip set sits
+// behind isolated-vm); these mirror it for the cross-repo coupling and are only checked
+// when the bundled VM exposes them (a standalone indexer CI checkout skips the coupling).
+const EXPECTED_VM_STRIPPED_GLOBAL_NAMES = [
+    'Atomics', 'BigInt', 'Date', 'FinalizationRegistry', 'Intl',
+    'Promise', 'Proxy', 'Reflect', 'SharedArrayBuffer', 'Temporal',
+    'WeakRef', 'WebSocket', 'XMLHttpRequest', 'clearImmediate', 'clearInterval',
+    'clearTimeout', 'fetch', 'performance', 'queueMicrotask', 'setImmediate',
+    'setInterval', 'setTimeout', 'structuredClone'
+];
+const EXPECTED_VM_CONSENSUS_RULES = [
+    'banned-async', 'banned-literal', 'banned-math',
+    'invalid-type', 'reserved-identifier', 'unsupported-syntax'
+];
 const FROZEN_STATUS_TOKENS = ['reverted', 'out_of_resource', 'failed'];
 // Safety cap on validator-set queries (db.js). Read on the deterministic block-processing
 // path (responsible-set / quorum gates), so it is a FROZEN node-local consensus constant —
@@ -200,5 +219,20 @@ describe('consensus parameters are frozen (track 8 guard) @regression', function
             'bundled VM CONSENSUS_VERSION != indexer expectation — bump both together');
         assert.deepStrictEqual(vm.CONSENSUS_STATUS_TOKENS, FROZEN_STATUS_TOKENS,
             'VM status vocabulary drifted from the indexer mapping');
+
+        // Surface coupling: the sandbox strip set and the deploy CONSENSUS_RULES are
+        // consensus surface frozen with the same epoch. The integer-only check above
+        // is structurally blind to a strip-list / rule-set change; these digests close
+        // that gap so a sandbox/lint edit reddens unless CONSENSUS_VERSION is bumped +
+        // these goldens regenerated in lockstep. Guarded on presence: the consensus-
+        // runtime-only fallback (standalone CI) does not export these.
+        if(vm.STRIPPED_GLOBAL_NAMES){
+            assert.deepStrictEqual([...vm.STRIPPED_GLOBAL_NAMES].sort(), EXPECTED_VM_STRIPPED_GLOBAL_NAMES,
+                'VM sandbox strip set drifted from the indexer expectation — bump CONSENSUS_VERSION + regolden in both repos');
+        }
+        if(vm.CONSENSUS_RULES){
+            assert.deepStrictEqual([...vm.CONSENSUS_RULES].sort(), EXPECTED_VM_CONSENSUS_RULES,
+                'VM deploy CONSENSUS_RULES drifted from the indexer expectation — bump CONSENSUS_VERSION + regolden in both repos');
+        }
     });
 });

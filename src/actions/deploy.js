@@ -273,7 +273,13 @@ class Deploy {
 
         let floatWarnings = [];
         if(!error && this.actions.vm){
-            let syntaxResult = this.actions.vm.validateSyntax(code);
+            // banned-async (async/await/Promise) is a consensus-gated deploy rule:
+            // below the VM_BANNED_ASYNC flag-day such a contract was ACCEPTED, so a
+            // from-genesis replay must reproduce that historical verdict. Resolve the
+            // activation for THIS block and pass it through; all other consensus rules
+            // are always enforced.
+            let enforceBannedAsync = await this.actions.protocolChanges.isEnabled('VM_BANNED_ASYNC', data['BLOCK_INDEX']);
+            let syntaxResult = this.actions.vm.validateSyntax(code, { enforceBannedAsync });
             if(!syntaxResult.valid)
                 error = 'invalid: CODE_ENCODING (' + syntaxResult.error + ')';
 

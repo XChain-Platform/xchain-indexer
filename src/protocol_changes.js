@@ -229,6 +229,35 @@ class ProtocolChanges {
         // controller guards from block 0).
         this.addChange('CONTROLLER_GUARD', '2.0.0',1798761600,0,0,0,0,0);
 
+        // Async/Promise contract surface (VM CONSENSUS_VERSION '2'). Below this
+        // activation the on-chain deploy validator (validateSyntax) ACCEPTS a
+        // contract that uses async/await or references the global Promise, and the
+        // VM executes it with the Promise global present — the original pre-2.x.y
+        // behaviour. At/above it the deploy validator REJECTS such a contract
+        // (CODE_ENCODING: banned async surface) and the sandbox strips the Promise
+        // global at execution. Gated as its own consensus rule because the change
+        // flips both a deploy verdict (the resolved status string is hashed into the
+        // block, and the contract's registration/non-registration is hashed state)
+        // and an execution result (a Promise-referencing contract gets a different
+        // gasUsed/status/emission set → contract_hash → federation checkpoint
+        // preimage): an ungated flip forks a heterogeneous fleet on the first such
+        // DEPLOY/EXECUTE, and a from-genesis replay on a new build would otherwise
+        // produce a different verdict than the original live processing. The indexer
+        // threads the resolved activation into vm.validateSyntax(code, {enforceBannedAsync})
+        // (deploy.js); the matching execution-side Promise strip is gated VM-side on
+        // the same flag-day (xchain-vm ASYNC_SURFACE_GATE_BLOCK_TIME). Keyed on
+        // block_TIME (not block_index), mirroring DEPLOY_BASE64_CODE: DEPLOY/EXECUTE
+        // run on BTC, LTC and DOGE whose heights diverge by millions of blocks, so no
+        // single shared block height names one cutover across all three chains, but a
+        // single timestamp does. The mainnet timestamp is the same PLACEHOLDER
+        // coordinated flag-day as the other contract-era consensus fixes in this
+        // window (2027-01-01 00:00:00 UTC) and MUST be confirmed/aligned with the
+        // fleet upgrade before any async/Promise-relevant DEPLOY is broadcast to
+        // mainnet; a wrong value is a fork. testnet/regtest activate at genesis (no
+        // pre-activation history to preserve; the e2e/regtest stack has run with the
+        // rule live, so genesis activation preserves its current behaviour).
+        this.addChange('VM_BANNED_ASYNC', '2.0.0',1798761600,0,0,0,0,0);
+
         // NOTE: STAKE_WEIGHTED_QUORUM (WI-1) is deliberately NOT registered here.
         // Standard activations gate on the LOCAL processing block via isEnabled();
         // stake-weighted quorum must gate on the BTC-anchored `snapshot_block`
