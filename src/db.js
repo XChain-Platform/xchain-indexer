@@ -26,15 +26,17 @@ const { buildStateHashData } = require('./stateHash');
 
 // Consensus block-hash scheme version. Folded into the preimage of every per-block
 // ledger/actions/contract hash (see getBlockHashes), so changing it changes every hash.
-//   v1 — hashed the raw AUTO_INCREMENT lookup-table ids (address_id/tick_id/action_id/
-//        source_id/caller_id/status_id). Those ids are assigned on first reference and
-//        survive reorgs, so a shallow reorg containing a first-seen address/ticker/etc.
-//        permanently forked id assignment between nodes and diverged the hashes.
-//   v2 — hashes the RESOLVED canonical strings (address/tick/action/status) instead, so
-//        the hashes depend only on the canonical chain and are id-independent.
+// The scheme hashes the RESOLVED canonical strings (address/tick/action/status) rather
+// than the raw AUTO_INCREMENT lookup ids (address_id/tick_id/action_id/source_id/
+// caller_id/status_id). Hashing raw ids was considered and rejected: ids are assigned on
+// first reference and survive reorgs, so a shallow reorg containing a first-seen address/
+// ticker/etc. would permanently fork id assignment between nodes and diverge the hashes.
+// Resolving to canonical strings makes the hashes depend only on the canonical chain
+// (id-independent). The resolved-string scheme is the only one that has ever shipped, so
+// it is version 1; the id-based design never carried a version number.
 // Bumping this is a consensus break requiring a coordinated all-validator re-baseline of
 // checkpoints from an agreed height (already-anchored hashes stay on their original scheme).
-// MUST stay identical to xchain-sync/src/BlockHasher.js BLOCK_HASH_VERSION — the two hashers
+// MUST stay identical to xchain-sync/src/BlockHasher.js BLOCK_HASH_VERSION; the two hashers
 // are a byte-for-byte conformance pair (guarded by the xchain-e2e-test conformance scenario
 // and the xchain-sync block-hash-vectors golden). This is a fixed protocol constant, never
 // env-overridable.
@@ -1238,8 +1240,8 @@ class Database {
             // Include the block_index and previous block hash in the hash calculation for this block hash
             data['block_index']   = block_index;
             data['previous_hash'] = hashes[table];
-            // Fold the consensus hash-scheme version into the preimage so v1 (id-based) and
-            // v2 (resolved-string) hashes can never collide or be compared as equal.
+            // Fold the consensus hash-scheme version into the preimage so a future scheme
+            // change can never collide with or be compared as equal to the current scheme.
             data['hash_version']  = BLOCK_HASH_VERSION;
             info[table] = [];
             info[table]['hash'] = this.util.getDataHash(data);
