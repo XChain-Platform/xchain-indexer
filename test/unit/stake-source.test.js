@@ -13,7 +13,7 @@
  **********************************************************************
  * test/unit/stake-source.test.js
  *
- * Unit tests for getStakeSourceByPubkey() — the stake-source resolution behind
+ * Unit tests for getStakeSourceByPubkey(), the stake-source resolution behind
  * the getstakesourcebypubkey RPC. Federation hubs (leader + followers) must all
  * derive the same source for an ANCHOR archive, so every input/branch is locked.
  */
@@ -104,10 +104,16 @@ describe('getStakeSourceByPubkey()', function () {
         assert.strictEqual(db.doQuery.callCount, 1); // only the stakes leg ran
         // pubkey is lowercased before id resolution
         assert.strictEqual(db.getPubkeyId.firstCall.args[0], PUB.toLowerCase());
-        // stakes-leg params: [pubkey_id, valid_id, blockIdx, blockIdx, blockIdx, valid_id, blockIdx]
+        // stakes-leg params mirror membership: [pubkey_id, valid_id, activation, deactivation, revoke_status, revoke_deactivation, slash]
+        const sql  = db.doQuery.firstCall.args[0];
         const args = db.doQuery.firstCall.args[1];
-        assert.deepStrictEqual(args, [7, 1, 850000, 850000, 850000, 1, 850000]);
-        assert.match(db.doQuery.firstCall.args[0], /FROM stakes/);
+        assert.deepStrictEqual(args, [7, 1, 850000, 850000, 1, 850000, 850000]);
+        assert.match(sql, /FROM stakes/);
+        // Must NOT gate on the recording block_index (membership does not), and must
+        // apply the permanent-slash exclusion. A stricter resolver strands a counted
+        // key as source-unresolved, deferring its anchor reward and blocking publish.
+        assert.doesNotMatch(sql, /s\.block_index\s*<=/);
+        assert.match(sql, /capability_slash_events/);
     });
 
     it('falls back to delegations when no stake row matches', async function () {
@@ -118,9 +124,14 @@ describe('getStakeSourceByPubkey()', function () {
         const r = await getStakeSourceByPubkey(indexer, { pubkey: PUB, block_index: 900 });
         assert.deepStrictEqual(r, { source: 'delAddr' });
         assert.strictEqual(db.doQuery.callCount, 2);
-        assert.match(db.doQuery.secondCall.args[0], /FROM delegations/);
-        // delegations-leg params: [pubkey_id, valid_id, blockIdx, blockIdx, blockIdx]
+        const delSql = db.doQuery.secondCall.args[0];
+        assert.match(delSql, /FROM delegations/);
+        // delegations-leg params mirror membership: [pubkey_id, valid_id, activation, deactivation, slash]
         assert.deepStrictEqual(db.doQuery.secondCall.args[1], [7, 1, 900, 900, 900]);
+        // Same invariant as the stakes leg: no recording-block_index gate, slash applied.
+        // This is the exact bug that stranded delegated keys as source-unresolved.
+        assert.doesNotMatch(delSql, /d\.block_index\s*<=/);
+        assert.match(delSql, /capability_slash_events/);
     });
 
     it('returns {source:null} when neither stake nor delegation matches', async function () {
