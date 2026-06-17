@@ -26,7 +26,7 @@
  * GET_COIN               - `COIN` name (BTC, LTC, DOGE, etc)
  * GET_TICK               - Ticker name or Ticker ID
  * GET_AMOUNT             - Quantity of `GET_COIN` or `GET_TICK` required to `DISPENSE`
- * ADDRESS                - Address for dispenser to operate on (default=`SOURCE`)
+ * GET_ADDRESS             - Address for dispenser to operate on (default=`SOURCE`)
  * FIAT_CODE              - Code for `FIAT` currency your dispenser is priced in (USD, JPY, GPB, etc.)
  * FIAT_AMOUNT            - Amount of `FIAT` currency required to trigger a `DISPENSE` (ignored when ORACLE_ADDRESS is set)
  * ORACLE_ADDRESS         - Optional address of a user oracle (PRICE v1) that prices the dispensed token in `FIAT_CODE`
@@ -145,7 +145,7 @@ class Dispenser {
             error = "invalid: GIVE_COIN (network)";
 
         // validate GET_COIN network is current COIN network
-        // TODO: Remove this and allow support for cross-chain dispensers once xchain-hub is finished and working properly
+        // TODO: cross-chain dispensers (GET_COIN != GIVE_COIN) are not currently wired; this guard enforces same-chain only
         if(!error && format==0 && this.config['COIN']!=data['GET_COIN'])
             error = "invalid: GET_COIN (network)";
 
@@ -315,7 +315,7 @@ class Dispenser {
             }
         }
 
-        // Verify SOURCE has enough balances to cover GIVE_ESCROW (skip for ownership — no balance to escrow)
+        // Verify SOURCE has enough balances to cover GIVE_ESCROW (skip for ownership: no balance to escrow)
         if(!error && !isOwnershipGive && !this.util.isNull(data['GIVE_ESCROW']) && !this.util.hasBalance(balances, giveTokenInfo['TICK_ID'], data['GIVE_ESCROW']))
             error = 'invalid: insufficient funds (GIVE_ESCROW)';
 
@@ -323,7 +323,7 @@ class Dispenser {
         if(!error && !isOwnershipGive && !this.util.isNull(data['GIVE_ESCROW']))
             balances = this.util.debitBalances(balances, giveTokenInfo['TICK_ID'], data['GIVE_ESCROW']);
 
-        // Calculate total fee for this dispenser — expiration + ownership-escrow premium (create only)
+        // Calculate total fee for this dispenser (expiration + ownership-escrow premium, create only)
         fees['AMOUNT'] = 0;
 
         if(!error){
@@ -460,7 +460,7 @@ class Dispenser {
             // Format 0 - Create Dispenser
             if(format==0){
                 if(isOwnershipGive){
-                    // Ownership dispenser: no balance escrow — mark the tick as ownership-escrowed
+                    // Ownership dispenser: no balance escrow; mark the tick as ownership-escrowed
                     // for this dispenser. tokens.owner_id stays at SOURCE; admin actions are gated
                     // by escrow_action_index until DISPENSE / cancel / expire clears it.
                     await this.indexerDb.setTokenEscrow(data['GIVE_TICK'], data['ACTION_INDEX']);

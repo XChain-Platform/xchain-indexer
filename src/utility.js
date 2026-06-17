@@ -160,7 +160,7 @@ class Utility {
     // Map a raw VM execution error ("revert: ...", "out_of_gas: ...", "timeout: ...",
     // "out_of_resource: ...", "error: ...") to a deterministic, consensus-stable status
     // token. The token is interned in index_statuses and hashed into contract_hash (via
-    // contracts_data.executions.status_id in db.getBlockHashes), so it MUST be a pure
+    // the resolved status string s1.status in db.getBlockHashes), so it MUST be a pure
     // function of consensus inputs.
     //
     // The resource-exhaustion family (out_of_gas / timeout / out_of_memory / out_of_stack /
@@ -217,7 +217,7 @@ class Utility {
         console.log(niceString);
     }
 
-    // Create nice human readable time string based on miliiseconds
+    // Create nice human readable time string based on milliseconds
     millisecondsToTimeString(ms){
         var milliseconds = Math.floor((ms % 1000) / 100),
             seconds      = Math.floor((ms / 1000) % 60),

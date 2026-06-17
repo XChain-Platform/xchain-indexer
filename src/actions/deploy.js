@@ -438,10 +438,11 @@ class Deploy {
                 caller:           data['SOURCE'],
                 contractAddress:  contractAddress,
                 contractIndex:    data['ACTION_INDEX'],
-                // The tx hash + the (empty) root call-path anchor the deterministic
-                // attestation request_id (sha256(txHash:callPath:contractIndex:
-                // emissionIndex)). A constructor is a root execution, so its call-path
-                // is '' (same as a top-level user EXECUTE).
+                // The tx hash + root action index + empty call-path anchor the
+                // deterministic attestation request_id:
+                //   sha256(txHash:rootActionIndex:callPath:contractIndex:emissionIndex)
+                // A constructor is a root execution, so its call-path is ''
+                // (same as a top-level user EXECUTE).
                 txHash:           data['TX_HASH'],
                 actionIndex:      data['ACTION_INDEX'],
                 callPath:         '',

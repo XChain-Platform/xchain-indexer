@@ -136,10 +136,10 @@ class Execute {
         let balances = await this.indexerDb.getAddressBalances(data['SOURCE'], null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
 
         // Validate gas fee payment (native coin or XCHAIN balance).
-        // System-injected EXECUTEs (e.g. attestation callbacks via attestation_response.js)
-        // skip fee accounting: those run against the request's gas_escrow, not the
-        // synthetic SOURCE's wallet. Pre-escrow (Phase 1) means fee is simply skipped;
-        // Phase 3 economics deducts the actual cost from gas_escrow on the request row.
+        // System-injected EXECUTEs (e.g. attestation callbacks injected by
+        // attest.js:_injectCallbackExecute) skip fee accounting: those run against
+        // the request's gas_escrow, not the synthetic SOURCE's wallet. Fee deduction
+        // from gas_escrow on the request row is not currently wired.
         let feePaymentMode = 2; // default: xchain balance
         let skipFee = Boolean(data['IS_EMISSION']);
         if(!error && !skipFee && tokenInfo && this.util.bcgt(fee, 0)){
@@ -276,7 +276,7 @@ class Execute {
                 tokenInfo:         vmLedger.tokenInfo,
                 oracleData:        oracleData,
                 crossChainData:    crossChainData,
-                attestationData:   null, // TODO: wire getResponse() reader once response retention is in place
+                attestationData:   null, // TODO: getResponse() reader not currently wired into the VM context
                 contractStakeData: contractStakeData,
                 providerDeadlines: PROVIDER_DEADLINE_WINDOWS
             });
@@ -357,11 +357,11 @@ class Execute {
             }
         }
 
-        // A VM-execution failure (revert / out_of_gas / timeout / runtime error) is NOT a
+        // A VM-execution failure (revert / timeout / runtime error) is NOT a
         // pre-VM rejection: the contract DID run and consumed gas, so the caller pays for the
         // failed attempt (see the gas-debit note below). Atomicity is preserved: state changes
         // and emissions are applied only on vmResult.success. We record a dedicated execution
-        // status ('reverted' / 'out_of_gas' / 'out_of_resource' / 'failed', via
+        // status ('reverted' / 'out_of_resource' / 'failed', via
         // util.vmFailureStatus) and deliberately leave
         // `error` null so the gas debit fires, mirroring the in-memory debit taken before the
         // VM ran. (Leaving it as a generic 'invalid:' error would skip the debit, letting any

@@ -44,7 +44,7 @@ class Attest {
         this.util      = action.util;
         this.mapper    = action.mapper;
 
-        // Phase 1 stub. Phase 2 swaps for hub-backed governance registry.
+        // Providers are registered in-process via ProviderRegistry (http_get and llm supported).
         this.providerRegistry = new ProviderRegistry();
 
         // Per-version format strings
@@ -194,10 +194,10 @@ class Attest {
             }
         }
 
-        // Phase 1 placeholders (gas escrow lands in Phase 3 per spec §11).
-        // REQUEST_STATUS is assigned below, once `error` is final; a structural
-        // failure must NOT enter the 'pending' pool (see the assignment after the
-        // fee-funding check).
+        // GAS_ESCROW is not yet deducted from the fee-payer's balance at request time;
+        // the fee-funding check below validates the payer holds the amount, and
+        // REQUEST_STATUS is assigned once `error` is final so structural failures
+        // do not enter the 'pending' pool (see the assignment after the fee-funding check).
         data['GAS_ESCROW']     = '0';
         data['FEE_PAYER']      = data['FEE_PAYER'] || data['SOURCE']; // execute.processEmission carries FEE_PAYER
 

@@ -63,7 +63,7 @@ class Price {
         if(format === 1)
             return this._parseV1(params, data, error);
 
-        // Unknown format — record as invalid
+        // Unknown format: record as invalid
         data['VERSION']           = format;
         data['VALIDATION_STATUS'] = 'invalid';
         data['STATUS']            = error || 'invalid: VERSION (unknown)';
@@ -71,7 +71,7 @@ class Price {
         await this.mapper.createMappings(data);
     }
 
-    // Parse PRICE v0 — validator COIN/FIAT snapshot
+    // Parse PRICE v0: validator COIN/FIAT snapshot
     async _parseV0(params, data, error){
         data['VERSION'] = 0;
 
@@ -137,7 +137,7 @@ class Price {
             let seenPubkey = new Set();
             for(let s of sigs){
                 if(seenPubkey.has(s.pubkey)){
-                    // Duplicate pubkey signature — count only once
+                    // Duplicate pubkey signature: count only once
                     continue;
                 }
                 seenPubkey.add(s.pubkey);
@@ -157,7 +157,7 @@ class Price {
 
             // STAKE_WEIGHTED_QUORUM: at/above the activation snapshot_block, finalize
             // on the summed STAKE of the qualified signers (>2/3 of S, source-deduped)
-            // rather than their COUNT. Gated on this PRICE's BLOCK_INDEX (a BTC height —
+            // rather than their COUNT. Gated on this PRICE's BLOCK_INDEX (a BTC height,
             // price is BTC-anchored) + the indexer's network, so the hub and every
             // indexer flip on the same anchor. Below activation: byte-for-byte the
             // legacy count rule. `qualifiedSigners` is the verified, capability-qualified
@@ -192,7 +192,7 @@ class Price {
         // Derive oracle_round rewards from the on-chain signer set (CONSENSUS).
         // The verified, capability-qualified signature list above IS the round's
         // signed participation record, so the reward split is a deterministic
-        // function of this action — replayable on any reindex or ANCHOR
+        // function of this action, replayable on any reindex or ANCHOR
         // full-parse recovery, unlike the retired hub push (which credited the
         // in-memory PBFT prepare set and could never be re-derived offline).
         // Consequences: rewards follow the published signer set, and a round
@@ -209,24 +209,24 @@ class Price {
             // FULLNODE.REWARD_SHARE > 0 the round budget is split into a BASE
             // tranche (every qualified signer) and a FULL-NODE tranche (only
             // signers that are VERIFIED full nodes this block, deduped per staking
-            // source — one operator = one share). When the share is 0 — or no
-            // verified full node signed this round — the whole budget pays the
+            // source; one operator = one share). When the share is 0, or no
+            // verified full node signed this round, the whole budget pays the
             // base set; with share == 0 that base set keeps the legacy
             // 'oracle_round' reward_type so existing-chain replay stays
             // byte-identical. CONSENSUS: REWARD_SHARE is a fleet-wide consensus
-            // parameter (like ORACLE_REWARD_PER_ROUND) — it MUST match across every
+            // parameter (like ORACLE_REWARD_PER_ROUND) and MUST match across every
             // indexer and be deployed atomically. (See NODEPROOF.md.)
             let activeRegime = this.util.bcgt(fnShare, '0');
 
             // Resolve the full-node REWARD sources among THIS round's signers. Earning
-            // the tranche is participation-rate based (a carrot, not a stick — there is
+            // the tranche is participation-rate based (a carrot, not a stick; there is
             // NO slashing for non-participation): a staking source qualifies only if,
             // over the trailing REWARD_PASS_WINDOW_BLOCKS, it answered at least
             // MIN_PASS_RATE_BPS of the challenge epochs that actually produced a verdict
             // (db.getFullNodeParticipation). Forgiving of a missed check or two. The
             // bonus is credited once per source, to the lexicographically smallest of
             // its passing pubkeys that ALSO signed this round and still holds the
-            // full_node capability. Integer gate — passed*10000 >= bps*total, no floats.
+            // full_node capability. Integer gate: passed*10000 >= bps*total, no floats.
             let fnSources = [];   // [{ source_id, pubkey }]
             if(activeRegime){
                 let minRateBps = parseInt((this.config['FULLNODE'] || {})['MIN_PASS_RATE_BPS']);
@@ -258,7 +258,7 @@ class Price {
                 : '0';
             let baseTotal = this.util.bcsub(rewardTotal, fullNodeTotal, 8);
 
-            // Base tranche — equal split across ALL qualified signers.
+            // Base tranche: equal split across ALL qualified signers.
             let baseType = activeRegime ? 'oracle_base' : 'oracle_round';
             let perBase  = this.util.bcmulfloor(
                 this.util.bcdiv(baseTotal, String(qualifiedSigners.length), 18), '1', 8
@@ -271,7 +271,7 @@ class Price {
                 }
             }
 
-            // Full-node tranche — equal split across the distinct verified sources.
+            // Full-node tranche: equal split across the distinct verified sources.
             if(this.util.bcgt(fullNodeTotal, '0') && fnSources.length > 0){
                 let perFull = this.util.bcmulfloor(
                     this.util.bcdiv(fullNodeTotal, String(fnSources.length), 18), '1', 8
@@ -312,8 +312,9 @@ class Price {
         await this.mapper.createMappings(data);
     }
 
-    // Parse PRICE v1 — user TOKEN/FIAT oracle price
-    // Phase 4 implements the 24-hour lock window logic; for Phase 3 this is a stub that records the action.
+    // Parse PRICE v1: user TOKEN/FIAT oracle price.
+    // Records the action and pushes to hub for cross-chain aggregation.
+    // The 24-hour lock window is not yet enforced.
     async _parseV1(params, data, error){
         data['VERSION'] = 1;
 

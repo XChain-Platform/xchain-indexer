@@ -22,7 +22,7 @@
  * - MAX_SUPPLY       - Maximum token supply 
  * - MAX_MINT         - Maximum amount of supply a `MINT` transaction can issue
  * - DECIMALS         - Number of decimal places token should have (max: 18, default: 0)
- * - DESCRIPTION      - Description of token (250 chars max) 
+ * - DESCRIPTION      - Description of token (max 249 chars)
  * - MINT_SUPPLY      - Amount of token supply to mint in immediately (default:0)
  * - TRANSFER         - Address to transfer ownership of the `token` to (owner can perform future actions on token)
  * - TRANSFER_SUPPLY  - Address to transfer `MINT_SUPPLY` to (mint initial supply and transfer to address)
@@ -341,7 +341,7 @@ class Issue {
         if(!error && tokenInfo && tokenInfo['LOCK_MAX_MINT'] && !this.util.isNull(data['MAX_MINT']) && String(data['MAX_MINT']) != String(tokenInfo['MAX_MINT']))
             error = 'invalid: MAX_MINT (locked)';
 
-        // Verify DESCRIPTION is less than or equal to MAX_TOKEN_DESCRIPTION
+        // Verify DESCRIPTION is under MAX_TOKEN_DESCRIPTION (rejects at exactly 250; effective max is 249 chars)
         if(!error && data['DESCRIPTION'] && String(data['DESCRIPTION']).length >= this.config.MAX_TOKEN_DESCRIPTION)
             error = 'invalid: DESCRIPTION (length)';
 
