@@ -57,7 +57,7 @@ describe('HubDbSync price-sync barrier @regression @tier3', function () {
 
     it('waitForPriceSyncHeight resolves once a later sync raises the height', async function () {
         const { sync, doQuery } = makeSync(80);
-        // Target not yet reached — the promise should stay pending.
+        // Target not yet reached; the promise should stay pending.
         const pending = sync.waitForPriceSyncHeight(100, 2000);
         assert.strictEqual(sync._priceWaiters.length, 1);
         // A subsequent sync delivers a round anchored at/after the target.
@@ -192,7 +192,7 @@ describe('HubDbSync oracle-sync barrier @regression @tier3', function () {
     it('waitForOracleSyncTimestamp is a no-op once the mirror is known to be empty (no FIAT oracles)', async function () {
         const { sync } = makeOracleSync(null);
         await sync._refreshOracleSyncTimestamp();      // empty table → bootstrapped, timestamp null
-        // Must resolve immediately for any block time — otherwise non-oracle deployments stall.
+        // Must resolve immediately for any block time, otherwise non-oracle deployments stall.
         const got = await sync.waitForOracleSyncTimestamp(9999999999, 50);
         assert.strictEqual(got, null);
     });
@@ -306,7 +306,7 @@ describe('HubDbSync stream-position watermark @regression @tier3', function () {
         sinon.stub(sync, '_bootstrapTable').callsFake(async (table) => marks[table]);
         await sync._bootstrapAll();
         assert.strictEqual(sync._bootstrapDrained, true);
-        assert.strictEqual(sync.streamWatermark, 880, 'min across tables — no table may be certified past its own drain');
+        assert.strictEqual(sync.streamWatermark, 880, 'min across tables; no table may be certified past its own drain');
     });
 
     it('_bootstrapAll keeps the gate closed when any table fails to drain', async function () {
@@ -317,11 +317,28 @@ describe('HubDbSync stream-position watermark @regression @tier3', function () {
         assert.strictEqual(sync._bootstrapDrained, false);
         assert.strictEqual(sync.streamWatermark, 0, 'watermark must not advance on a partial drain');
     });
+
+    it('_bootstrapAll drains oracle_prices BEFORE price_snapshots so the oracle barrier arms early', async function () {
+        // Regression for the LTC-testnet cold-start stall: oracle_prices must bootstrap
+        // first so oracleBootstrapped (the empty-mirror fast path for the per-block oracle
+        // barrier) flips within ~1s instead of waiting behind a multi-minute price_snapshots
+        // drain. On a cold mirror at chain tip with an empty oracle, the wrong order defers
+        // every block 60s for the whole price_snapshots bootstrap. Order is consensus-neutral
+        // (the global watermark still advances only after ALL tables drain).
+        const sync = makeWatermarkSync();
+        const order = [];
+        sinon.stub(sync, '_bootstrapTable').callsFake(async (table) => { order.push(table); return 900; });
+        await sync._bootstrapAll();
+        const oi = order.indexOf('oracle_prices');
+        const pi = order.indexOf('price_snapshots');
+        assert.ok(oi !== -1 && pi !== -1, 'both tables bootstrapped');
+        assert.ok(oi < pi, 'oracle_prices must bootstrap before price_snapshots (got ' + order.join(',') + ')');
+    });
 });
 
 describe('HubDbSync bootstrap pagination + retry @regression @tier2', function () {
 
-    // Regression: prod incident 2026-06-11 — _bootstrapTable fetched ONE page and
+    // Regression (prod incident 2026-06-11): _bootstrapTable fetched ONE page and
     // treated a full page as "not drained", so a hub table larger than PAGE_LIMIT
     // (prod price_snapshots: 13k+ rows) could never drain; the heartbeat gate
     // never opened, the stream watermark froze at 0, and the BTC mainnet indexer
@@ -412,7 +429,7 @@ describe('HubDbSync bootstrap pagination + retry @regression @tier2', function (
 
 describe('HubDbSync _applyRow column filtering @regression @tier2', function () {
 
-    // Regression: fleet incident 2026-06-11 — the hub's state_checkpoints gained
+    // Regression (fleet incident 2026-06-11): the hub's state_checkpoints gained
     // the anchor_txid audit column (ANCHOR rollout) which the indexer-side mirror
     // schema deliberately omits; the unfiltered INSERT turned every mirrored
     // checkpoint into ER_BAD_FIELD_ERROR and silently killed the mirror fleet-wide.
@@ -530,11 +547,11 @@ describe('HubDbSync _applyRow price_snapshots skipped→finalized upgrade @regre
 
 describe('HubDbSync _applyRow datetime coercion @regression @tier2', function () {
 
-    // Regression: fleet incident 2026-06-16 — the hub serves rows as JSON, so a
+    // Regression (fleet incident 2026-06-16): the hub serves rows as JSON, so a
     // DATETIME column (price_snapshots.created_at) arrives as an ISO-8601 string
     // ('2026-06-16T10:33:01.000Z'). MariaDB strict mode rejects the 'T'/'Z' form
     // for a DATETIME column (ER_TRUNCATED_WRONG_VALUE, 22007) and silently kills
-    // the mirror — BTC indexers stalled at 'price mirror at 0' once the oracle
+    // the mirror; BTC indexers stalled at 'price mirror at 0' once the oracle
     // resumed finalizing rounds. _applyRow must reformat ISO datetimes to MySQL
     // 'YYYY-MM-DD HH:MM:SS' (UTC) and leave every other value untouched.
 
