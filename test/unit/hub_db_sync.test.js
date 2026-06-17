@@ -318,21 +318,27 @@ describe('HubDbSync stream-position watermark @regression @tier3', function () {
         assert.strictEqual(sync.streamWatermark, 0, 'watermark must not advance on a partial drain');
     });
 
-    it('_bootstrapAll drains oracle_prices BEFORE price_snapshots so the oracle barrier arms early', async function () {
-        // Regression for the LTC-testnet cold-start stall: oracle_prices must bootstrap
-        // first so oracleBootstrapped (the empty-mirror fast path for the per-block oracle
-        // barrier) flips within ~1s instead of waiting behind a multi-minute price_snapshots
-        // drain. On a cold mirror at chain tip with an empty oracle, the wrong order defers
-        // every block 60s for the whole price_snapshots bootstrap. Order is consensus-neutral
-        // (the global watermark still advances only after ALL tables drain).
+    it('_bootstrapAll drains price_snapshots LAST so every per-block barrier arms before the heavy table', async function () {
+        // Regression for the cold-start stall: the heavy price_snapshots table must bootstrap
+        // last so the empty-mirror fast paths for ALL per-block barriers that gate processing
+        // (oracle, cross-chain match, cross-chain call, capability snapshot) arm in ~1s instead
+        // of waiting out a multi-minute price_snapshots drain. Each barrier's no-op-on-empty
+        // path needs its own <x>Bootstrapped flag, which only flips after that table drains;
+        // serialized behind price_snapshots they all stay false and the indexer defers every
+        // block 60s on the first unarmed barrier. Ordering price_snapshots merely after
+        // oracle_prices only relocated the stall to the match barrier, so assert it is LAST.
         const sync = makeWatermarkSync();
         const order = [];
         sinon.stub(sync, '_bootstrapTable').callsFake(async (table) => { order.push(table); return 900; });
         await sync._bootstrapAll();
-        const oi = order.indexOf('oracle_prices');
         const pi = order.indexOf('price_snapshots');
-        assert.ok(oi !== -1 && pi !== -1, 'both tables bootstrapped');
-        assert.ok(oi < pi, 'oracle_prices must bootstrap before price_snapshots (got ' + order.join(',') + ')');
+        assert.ok(pi !== -1, 'price_snapshots bootstrapped');
+        assert.strictEqual(pi, order.length - 1, 'price_snapshots must bootstrap LAST (got ' + order.join(',') + ')');
+        // The barrier-critical tables must all precede it (oracle + both cross-chain mirrors).
+        for (const t of ['oracle_prices', 'cross_chain_matches', 'cross_chain_calls']) {
+            const ti = order.indexOf(t);
+            assert.ok(ti !== -1 && ti < pi, t + ' must bootstrap before price_snapshots (got ' + order.join(',') + ')');
+        }
     });
 });
 

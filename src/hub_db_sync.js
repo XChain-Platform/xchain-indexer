@@ -270,16 +270,23 @@ class HubDbSync {
         try {
             let marks = [];
             let allDrained = true;
-            // oracle_prices FIRST so the per-block oracle barrier (waitForOracleSyncTimestamp,
-            // gates every chain) arms its empty-mirror fast path within ~1s instead of waiting
-            // behind a multi-minute price_snapshots drain. On a cold mirror at chain tip with an
-            // empty oracle, an at-tip non-BTC indexer otherwise defers every block for the whole
-            // price_snapshots bootstrap (LTC-testnet 2026-06-16: 37,032-row price_snapshots drain
-            // = 3.5 min of 60s oracle-barrier deferrals before oracleBootstrapped flipped true).
-            // price_snapshots' own barrier (waitForPriceSyncHeight) is BTC-only, so demoting it
-            // here costs BTC nothing the per-block retry doesn't already absorb. Order is
-            // consensus-neutral: the global stream watermark still advances only after ALL drain.
-            for (let table of ['oracle_prices', 'price_snapshots'].concat(CROSS_CHAIN_TABLES, HUB_STATE_TABLES)) {
+            // price_snapshots bootstraps LAST so EVERY per-block barrier that gates block
+            // processing (oracle, cross-chain match, cross-chain call, capability snapshot)
+            // arms its empty-mirror fast path before the one heavy table drains. Each of those
+            // barriers' "no-op on an empty mirror" path requires its OWN <x>Bootstrapped flag,
+            // which only flips after that table's bootstrap completes; serialized behind a
+            // multi-minute price_snapshots drain they all stay false, so a cold-start indexer at
+            // chain tip with empty hub mirrors defers every block 60s on the FIRST unarmed
+            // barrier (LTC-testnet 2026-06-16: a 37,032-row price_snapshots drain held the oracle
+            // barrier at 'oracle mirror at null' for 3.5 min). Ordering price_snapshots first
+            // only relocated that stall to the next barrier in sequence; draining it last lets
+            // the small barrier tables (typically empty on non-BTC chains) arm in ~1s. The
+            // price_snapshots barrier (waitForPriceSyncHeight) is BTC-only and runs FIRST in the
+            // block loop, so BTC waits for price_snapshots there regardless of bootstrap order;
+            // draining it last means BTC waits ONCE (its price barrier) instead of twice (price
+            // then match). Consensus-neutral: the global stream watermark still advances only
+            // after ALL tables drain, independent of order.
+            for (let table of ['oracle_prices'].concat(CROSS_CHAIN_TABLES, HUB_STATE_TABLES, ['price_snapshots'])) {
                 try {
                     let mark = await this._bootstrapTable(table);
                     if (mark === null) allDrained = false;
