@@ -904,11 +904,73 @@ describe('Database.getActiveStakeByPubkey() @regression @tier1', function () {
         const q = sinon.stub(db, 'doQuery').resolves([]);
         await db.getActiveStakeByPubkey('pk', null);
         const args = q.firstCall.args[1];
-        // Without blockIndex: [pubkey_id, valid_id] for the stake WHERE clause, plus
-        // [valid_id, 0] for the revocation NOT EXISTS subquery (status_id and deactivation_block
-        // sentinel when no block bound is in effect). Activation/deactivation range filter is
-        // NOT appended (that only fires when blockIndex is non-null).
-        assert.strictEqual(args.length, 4);
+        // Direct-stake-only (stake-ownership) view: without blockIndex the args are just
+        // [pubkey_id, valid_id]. No revocation NOT EXISTS subquery and no activation/deactivation
+        // range filter (that only fires when blockIndex is non-null).
+        assert.strictEqual(args.length, 2);
+    });
+
+    it('does NOT resolve a delegated-only key (returns null when no direct stake row)', async function () {
+        // Stake-ownership view must stay direct-stake-only: a key with no rows in `stakes`
+        // returns null even if it holds a delegation. This is the consensus guard that keeps
+        // a delegated-only key out of UNSTAKE/STAKE/DELEGATE (no Path 2 here).
+        const db = makeDb();
+        sinon.stub(db, 'getPubkeyId').resolves(7);
+        sinon.stub(db, 'getStatusId').resolves(1);
+        const q = sinon.stub(db, 'doQuery').resolves([]);
+        assert.strictEqual(await db.getActiveStakeByPubkey('delegonly', 100), null);
+        // Exactly one query (the direct-stake path); no delegated fallback query.
+        assert.strictEqual(q.callCount, 1);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// getEffectiveStakeByPubkey (federation effective-set view; getownstake RPC only)
+// ---------------------------------------------------------------------------
+describe('Database.getEffectiveStakeByPubkey() @regression @tier1', function () {
+    it('returns null when pubkey not found in index_pubkeys', async function () {
+        const db = makeDb();
+        sinon.stub(db, 'getPubkeyId').resolves(null);
+        assert.strictEqual(await db.getEffectiveStakeByPubkey('deadbeef', 100), null);
+    });
+
+    it('returns the direct-stake row (Path 1) when present', async function () {
+        const db = makeDb();
+        sinon.stub(db, 'getPubkeyId').resolves(3);
+        sinon.stub(db, 'getStatusId').resolves(1);
+        const q = sinon.stub(db, 'doQuery').resolves([{
+            source_id: 10, signing_pubkey_id: 3, signing_pubkey: 'pk',
+            amount: '5000.00000000', activation_block: 100, block_index: 100, status_id: 1
+        }]);
+        const stake = await db.getEffectiveStakeByPubkey('pk', 200);
+        assert.strictEqual(stake.amount, '5000.00000000');
+        assert.strictEqual(q.callCount, 1);   // Path 1 hit, no delegated fallback
+    });
+
+    it('falls back to the delegating source aggregate (Path 2) for a delegated-only key', async function () {
+        const db = makeDb();
+        sinon.stub(db, 'getPubkeyId').resolves(8);
+        sinon.stub(db, 'getStatusId').resolves(1);
+        const q = sinon.stub(db, 'doQuery');
+        q.onCall(0).resolves([]);                                   // no direct stake (Path 1 empty)
+        q.onCall(1).resolves([{                                     // delegated -> source aggregate
+            source_id: 42, signing_pubkey_id: 8, signing_pubkey: 'delegkey',
+            amount: '9000.00000000', activation_block: 50, block_index: 50, status_id: 1
+        }]);
+        const stake = await db.getEffectiveStakeByPubkey('delegkey', 200);
+        assert.strictEqual(stake.amount, '9000.00000000');
+        assert.strictEqual(stake.source_id, 42);
+        assert.strictEqual(q.callCount, 2);   // Path 1 then Path 2
+    });
+
+    it('returns null when neither a direct stake nor a delegation resolves', async function () {
+        const db = makeDb();
+        sinon.stub(db, 'getPubkeyId').resolves(9);
+        sinon.stub(db, 'getStatusId').resolves(1);
+        const q = sinon.stub(db, 'doQuery');
+        q.onCall(0).resolves([]);
+        q.onCall(1).resolves([]);
+        assert.strictEqual(await db.getEffectiveStakeByPubkey('orphan', 200), null);
     });
 });
 

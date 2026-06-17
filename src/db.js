@@ -8262,16 +8262,67 @@ class Database {
         await this._poolQuery(query, [errMsg, max, id]);
     }
 
-    // Get aggregate active stake info for a pubkey (SUM of amount across all active rows).
-    // Returns { source_id, signing_pubkey_id, signing_pubkey, amount, activation_block, ... } or null.
-    // blockIndex enforces the 6-block activation/deactivation delay for BTC reorg safety.
-    // Mirrors the effective-set semantics of hasCapability: applies DELEGATE v2 key-revocation
-    // exclusions on the direct-stake path, and adds the delegated-key path so a delegatee-only
-    // hub correctly sees itself as staked. Without these, a hub whose only stake authority comes
-    // via DELEGATE returns amount:'0'/has_stake:false from getownstake even though the federation
-    // sees it as qualified via _effectiveCapabilitySetSql; conversely, a revoked key is still
-    // counted. Both cause the hub's self-qualification to diverge from the federation's view.
+    // Get aggregate DIRECT active stake for a pubkey (SUM of amount across the pubkey's own
+    // active stake rows). Returns { source_id, signing_pubkey_id, signing_pubkey, amount,
+    // activation_block, ... } or null. blockIndex enforces the 6-block activation/deactivation
+    // delay for BTC reorg safety.
+    //
+    // CONSENSUS-PATH, stake-ownership view. This is the load-bearing primitive for STAKE/UNSTAKE/
+    // DELEGATE block processing (unstake.js, stake.js, delegate.js): it answers "does THIS pubkey
+    // own a direct stake, and how much" for collision, ownership and unstake-AMOUNT decisions. It
+    // deliberately does NOT apply the DELEGATE v2 revocation exclusion or resolve delegated keys to
+    // their backing source. Those are capability-membership semantics that belong to the federation
+    // effective-set view (getEffectiveStakeByPubkey / _effectiveCapabilitySetSql), not to stake
+    // ownership: an UNSTAKE on a delegated-only key has no stake rows to deactivate, so crediting
+    // the source's aggregate here would inflate balances (the cooldown sweep credits unstakes.AMOUNT
+    // regardless of what was deactivated). Keep this query direct-stake-only.
     async getActiveStakeByPubkey(pubkey, blockIndex){
+        let pubkey_id = await this.getPubkeyId(String(pubkey).toLowerCase());
+        if(pubkey_id === null)
+            return null;
+        let valid_id = await this.getStatusId('valid');
+        let query = `SELECT
+                        MIN(s.source_id)                       AS source_id,
+                        s.signing_pubkey_id                    AS signing_pubkey_id,
+                        SUM(CAST(s.amount AS DECIMAL(30,8)))   AS amount,
+                        MIN(s.activation_block)                AS activation_block,
+                        MIN(s.block_index)                     AS block_index,
+                        MIN(s.status_id)                       AS status_id,
+                        ip.pubkey                              AS signing_pubkey
+                     FROM stakes s
+                         LEFT JOIN index_pubkeys ip ON (ip.id = s.signing_pubkey_id)
+                     WHERE s.signing_pubkey_id=? AND s.status_id=?`;
+        let args = [pubkey_id, valid_id];
+        if(blockIndex !== undefined && blockIndex !== null){
+            query += ' AND s.activation_block <= ? AND (s.deactivation_block IS NULL OR s.deactivation_block > ?)';
+            args.push(blockIndex);
+            args.push(blockIndex);
+        }
+        query += ' GROUP BY s.signing_pubkey_id, ip.pubkey LIMIT 1';
+        let results = await this.doQuery(query, args);
+        if(results.length === 0) return null;
+        let row = results[0];
+        return {
+            source_id:         row.source_id,
+            signing_pubkey_id: row.signing_pubkey_id,
+            signing_pubkey:    row.signing_pubkey,
+            amount:            (row.amount === null || row.amount === undefined) ? '0' : String(row.amount),
+            activation_block:  row.activation_block,
+            block_index:       row.block_index,
+            status_id:         row.status_id
+        };
+    }
+
+    // Effective-set / capability view of a pubkey's stake, mirroring _effectiveCapabilitySetSql.
+    // Returns { source_id, signing_pubkey_id, signing_pubkey, amount, activation_block, ... } or null.
+    //
+    // READ-ONLY (federation self-qualification). Used by the getownstake RPC so a hub whose only
+    // stake authority comes via DELEGATE still sees itself as qualified, matching the federation's
+    // view. NOT a consensus block-processing primitive: do NOT call this from STAKE/UNSTAKE/DELEGATE
+    // handlers (use getActiveStakeByPubkey for stake-ownership there).
+    //   Path 1: direct stake key, excluding DELEGATE v2 revocations active at blk.
+    //   Path 2: delegated-only key, resolving to the delegating source's aggregate active stake.
+    async getEffectiveStakeByPubkey(pubkey, blockIndex){
         let pubkey_id = await this.getPubkeyId(String(pubkey).toLowerCase());
         if(pubkey_id === null)
             return null;

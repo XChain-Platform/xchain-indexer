@@ -198,7 +198,11 @@ async function startApi(){
             let pk = String(pubkey).toLowerCase();
             try {
                 let blockIndex = await indexer.indexerDb.getLatestBlockIndex();
-                let stake = await indexer.indexerDb.getActiveStakeByPubkey(pk, blockIndex);
+                // Effective-set view (direct stake minus revocations, plus delegated-key
+                // resolution) so a delegation-only hub self-qualifies in step with the
+                // federation. This is the federation-read-only consumer; consensus handlers
+                // use getActiveStakeByPubkey (direct stake ownership) instead.
+                let stake = await indexer.indexerDb.getEffectiveStakeByPubkey(pk, blockIndex);
                 return {
                     pubkey:      pk,
                     block_index: blockIndex,
