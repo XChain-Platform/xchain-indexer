@@ -9663,6 +9663,18 @@ class Database {
                 gas_escrow, fee_tick_id, fee_amount, request_status, status_id, block_index, action_index
             ]);
         } else {
+            // v0 single-request integrity. The (request_id, version) index was relaxed to
+            // non-unique so multiple v1 response rounds can coexist (#4373); that also drops
+            // the DB-level guard against a second v0 for one request_id. The request_id preimage
+            // is collision-free, so this should never fire, but guard deterministically against
+            // an un-threaded emission path: keep the first v0 row canonical and skip the
+            // duplicate rather than splitting one request across two rows.
+            let priorV0 = await this.doQuery("SELECT action_index FROM attests WHERE request_id=? AND version=0 LIMIT 1", [request_id]);
+            if(priorV0.length > 0){
+                console.warn('createAttestationRequest: duplicate v0 for request_id=' + request_id +
+                             ' (keeping action_index=' + priorV0[0].action_index + ', skipping ' + action_index + ')');
+                return;
+            }
             query = `INSERT INTO attests
                         (action_index, version, request_id, contract_index, fee_payer_id, provider_id, payload,
                          callback_method, callback_params_json, redundancy, deadline_block,
@@ -9679,7 +9691,10 @@ class Database {
     // Create/Update an ATTEST v1 (response) row in the consolidated `attests` table.
     // The verified federation signatures ride in the validator_signatures JSON
     // column (data['VALIDATOR_SIGNATURES'] - a JSON array string, or null) rather
-    // than in a separate child table.
+    // than in a separate child table. Keyed on action_index: the retry-then-ok
+    // lifecycle (#4373) produces MULTIPLE v1 rows per request_id (one per PBFT round,
+    // a retryable round then the terminal ok), each its own immutable action-indexed
+    // row, so (request_id, version) is intentionally NOT unique.
     async createAttestationResponse(data){
         data                 = this.normalizeDataValues(data);
         let status_id        = await this.createStatus(data['STATUS']);

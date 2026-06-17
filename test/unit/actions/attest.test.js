@@ -608,18 +608,36 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             });
         });
 
-        it('still fulfills a request after an earlier retryable round left it pending', async function () {
-            // Simulate the hub broadcasting no_quorum, then succeeding on a later round.
-            // The request row stays `pending` throughout (the indexer never flipped it),
-            // so the replay guard at the top of the handler admits the second response.
+        it('records both rounds and fulfills on the ok after an earlier retryable left it pending', async function () {
+            // #4373: a retryable no_quorum round leaves the request pending; a later ok round
+            // must also persist and fulfill it. This drives the REAL persistence path against a
+            // fake `attests` store that models the post-fix schema (UNIQUE(action_index) only,
+            // request_id+version NON-unique). The old UNIQUE(request_id, version) would have
+            // rejected the second v1 INSERT and stranded the request; here both rounds coexist.
+            const rows = [];
+            indexer.indexerDb.createAttestationResponse = sinon.stub().callsFake(async (d) => {
+                const ai  = d['ACTION_INDEX'];
+                let row = rows.find(r => r.action_index === ai);   // UNIQUE(action_index)
+                if(!row){ row = { action_index: ai }; rows.push(row); }
+                row.version         = 1;
+                row.request_id      = String(d['REQUEST_ID'] || '').toLowerCase();
+                row.response_status = d['RESPONSE_STATUS'];
+            });
             indexer.indexerDb.getAttestationRequestById.resolves(makeRequestRow({ redundancy: 1 }));
 
-            const round1 = v1Data();
+            const round1 = v1Data({ ACTION_INDEX: 7 });
             await handler.parse(v1Params([{ pubkey: PUBKEY_A, sig: SIG_A }], { status: 'no_quorum' }), round1, null);
             assert.ok(indexer.indexerDb.updateAttestationRequestStatus.notCalled, 'no_quorum must not close the request');
 
-            const round2 = v1Data();
+            const round2 = v1Data({ ACTION_INDEX: 8 });
             await handler.parse(v1Params([{ pubkey: PUBKEY_A, sig: SIG_A }], { status: 'ok' }), round2, null);
+
+            // Both v1 rounds coexist as distinct rows under the same request_id.
+            const v1Rows = rows.filter(r => r.version === 1 && r.request_id === REQ_ID.toLowerCase());
+            assert.strictEqual(v1Rows.length, 2, 'both the no_quorum and ok rounds are recorded');
+            assert.deepStrictEqual(v1Rows.map(r => r.response_status).sort(), ['no_quorum', 'ok']);
+            assert.notStrictEqual(v1Rows[0].action_index, v1Rows[1].action_index, 'distinct action_index per round');
+
             assert.ok(indexer.indexerDb.updateAttestationRequestStatus.calledOnceWith(REQ_ID.toLowerCase(), 'fulfilled'),
                 'the later ok response fulfills the still-pending request');
             assert.ok(executeStub.parse.calledOnce, 'callback fires exactly once, on the fulfilling response');

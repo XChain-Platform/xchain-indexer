@@ -2982,8 +2982,8 @@ describe('Database.createAttestationRequest() @regression @tier1', function () {
         sinon.stub(db, 'createStatus').resolves(1);
         sinon.stub(db, 'getAddressId').resolves(2);
         const dq = sinon.stub(db, 'doQuery');
-        dq.onCall(0).resolves(existsRows);
-        dq.onCall(1).resolves([]);
+        dq.onCall(0).resolves(existsRows);   // action_index existence probe
+        dq.onCall(1).resolves([]);           // v0-dedup guard probe (no prior v0 for this request_id)
         return db;
     }
 
@@ -2992,7 +2992,8 @@ describe('Database.createAttestationRequest() @regression @tier1', function () {
         await db.createAttestationRequest({ ACTION_INDEX: 500, STATUS: 'valid', FEE_PAYER: 'addr1',
                                              REQUEST_ID: 'aabbcc', CONTRACT_INDEX: 400, PROVIDER_ID: 'http_get',
                                              CALLBACK_METHOD: 'onResult', BLOCK_INDEX: 300 });
-        assert.ok(String(db.doQuery.args[1][0]).includes('INSERT INTO attests'));
+        assert.ok(db.doQuery.args.some(a => String(a[0]).includes('INSERT INTO attests')),
+            'an INSERT INTO attests was issued');
     });
 
     it('UPDATEs when exists', async function () {

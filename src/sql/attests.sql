@@ -1,17 +1,17 @@
 -- Consolidated ATTEST action table. One row per ATTEST action_index, covering
 -- all three version-discriminated phases of the external-data attestation
 -- lifecycle (mirrors how `messages` holds every MESSAGE variant in one table):
---   version 0 — Request  (VM-emitted via xchain.attestation.request)
---   version 1 — Response (validator-broadcast PBFT bundle, verified sigs inlined as JSON)
+--   version 0: Request  (VM-emitted via xchain.attestation.request)
+--   version 1: Response (validator-broadcast PBFT bundle, verified sigs inlined as JSON)
 -- A v0 request row and its v1 response row are separate rows correlated by
 -- request_id (each ATTEST action keeps its own action_index). ATTEST v2 (expire)
--- is system-synthesized and only flips the v0 row's request_status — it writes no
+-- is system-synthesized and only flips the v0 row's request_status; it writes no
 -- row of its own, matching the pre-consolidation behavior.
 --
 -- The validator signatures that backed a v1 response live in `validator_signatures`
 -- as a JSON array ([{"pubkey","sig"}, ...]) on the response row rather than in a
 -- separate child table. Per-validator accountability tallies (fulfilled/missed/
--- slashed) live in `attest_validator_stats` — a cross-attestation rollup that can't
+-- slashed) live in `attest_validator_stats`, a cross-attestation rollup that can't
 -- fold in here (its missed/slashed counts aren't derivable from response rows).
 --
 -- Spec: xchain-documentation/protocol/actions/ATTEST.md
@@ -23,7 +23,7 @@ CREATE TABLE attests (
     provider_id                   VARCHAR(32) NOT NULL,            -- e.g. 'http_get' (governance-registered)
     -- request (version 0) fields
     contract_index                BIGINT UNSIGNED,                 -- FK to contracts (which contract emitted the request)
-    fee_payer_id                  BIGINT UNSIGNED,                 -- FK to index_addresses (original EXECUTE caller — billed for callback gas)
+    fee_payer_id                  BIGINT UNSIGNED,                 -- FK to index_addresses (original EXECUTE caller, billed for callback gas)
     payload                       MEDIUMTEXT,                      -- inlined request payload (URL for http_get, JSON envelope for llm)
     callback_method               VARCHAR(64),                     -- method on the contract to invoke on response
     callback_params_json          TEXT,                            -- developer-supplied params, echoed back to callback
@@ -47,12 +47,16 @@ CREATE TABLE attests (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
 CREATE UNIQUE INDEX action_index    ON attests (action_index);
--- (request_id, version) is UNIQUE: with the per-root discriminator in the request_id preimage
--- (root_action_index — see attest.js/xcall.js) each v0 request and its v1 response carry a
--- collision-free request_id, so at most one row exists per (request_id, version). The constraint
--- turns any residual collision (e.g. an un-threaded emission path) into a loud INSERT failure
--- instead of a silent split-brain. Its leftmost prefix also serves request_id-only lookups.
-CREATE UNIQUE INDEX request_id_version ON attests (request_id, version);
+-- (request_id, version) is a NON-UNIQUE lookup index. A v0 request has exactly one row,
+-- but the retry-then-ok response lifecycle (#4373) legitimately produces MULTIPLE v1 rows
+-- for one request_id: each PBFT round (a retryable no_quorum/timeout/provider_error round,
+-- then the terminal ok) is its own immutable, action-indexed on-chain action. A UNIQUE
+-- (request_id, version) here rejected the later ok INSERT and stranded the request. Each v1
+-- round is covered by the action-scoped consensus hash and rolled back by action_index, so
+-- multiple rows stay deterministic and reorg-safe. v0 single-request integrity is enforced in
+-- code (createAttestationRequest skips a duplicate v0 for an existing request_id). The
+-- leftmost prefix still serves request_id-only lookups.
+CREATE INDEX request_id_version ON attests (request_id, version);
 CREATE        INDEX version_status  ON attests (version, request_status, deadline_block);
 CREATE        INDEX contract_index  ON attests (contract_index);
 CREATE        INDEX provider_id     ON attests (provider_id);
