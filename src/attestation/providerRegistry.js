@@ -18,9 +18,9 @@
  * The indexer uses this registry to validate ATTEST v0 (request) actions
  * (provider_id known, redundancy in allowed list, payload within max).
  *
- * Phase 1 ships with `http_get` only. Phase 2 swaps this stub for a
- * hub-backed registry that pulls governance-approved provider definitions
- * from on-chain ATTESTATION_PROVIDER:{id} configs.
+ * Ships with `http_get` and `llm` providers. A future phase swaps this
+ * hard-coded registry for a hub-backed one that pulls governance-approved
+ * provider definitions from on-chain ATTESTATION_PROVIDER:{id} configs.
  *
  * Spec: claude/reports/specs/2026-05-24_external-attestation-framework.md
  *
@@ -37,7 +37,7 @@ const PROVIDERS = {
         deadline_window_blocks: 100
     },
     // Spec: claude/reports/specs/2026-05-24_llm-attestation-provider.md §3.
-    // The indexer's job here is structural validation only — provider_id
+    // The indexer's job here is structural validation only: provider_id
     // is in the registry, the payload fits, redundancy is allowed, deadline
     // is within window. The hub side does the actual LLM API call + consensus.
     llm: {
