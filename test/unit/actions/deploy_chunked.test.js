@@ -201,6 +201,23 @@ describe('Chunked DEPLOY — DEPLOY v2/v3 assembly @regression @tier2', function
         assert.strictEqual(data['STATUS'], 'valid');
     });
 
+    it('assembles deterministically when chunk rows arrive out of position order', async function () {
+        // Determinism pin: the same chunks returned in a shuffled order, with action_index
+        // NOT correlated to chunk_index. Assembly keys strictly on chunk_index (position) and
+        // walks 0..total-1, so the reassembled bytes and the CODE_HASH are identical regardless
+        // of the row/delivery order. Guards the chunked-DEPLOY assembled-code path against any
+        // accidental dependence on result-set ordering (TP-02 chunked-deploy determinism).
+        const ordered  = chunkRows(CODE, 4);
+        const shuffled = [ordered[2], ordered[0], ordered[3], ordered[1]];
+        indexer.indexerDb.getDeployChunksForAssembly.resolves(shuffled);
+        const data = deployData({ FORMAT: 2 });
+        await handler.parse(['2', HASH, '100000', ''], data, null);
+        assert.strictEqual(data['STATUS'], 'valid');
+        const args = indexer.indexerDb.createContract.firstCall.args[0];
+        assert.strictEqual(args.CODE, CODE);
+        assert.strictEqual(args.CODE_HASH, HASH);
+    });
+
     it('assembles a stakeable chunked contract (v3) with staking metadata', async function () {
         indexer.indexerDb.getDeployChunksForAssembly.resolves(chunkRows(CODE, 2));
         const data = deployData({ FORMAT: 3 });

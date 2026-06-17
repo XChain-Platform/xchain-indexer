@@ -857,7 +857,22 @@ class Rollback {
             try {
                 await this.hubClient.retractPriceRange(this.config['COIN'], firstActionIndex);
             } catch(err) {
-                console.warn('Rollback: hub price retraction failed:', err);
+                // Durability: a dropped retraction permanently diverges the hub's
+                // oracle_prices / price_snapshots (and every mirroring indexer) from
+                // chain truth, with nothing left locally to reconcile it (the orphaned
+                // forward-push rows were just purged by this rollback). Park it on the
+                // same durable queue the forward PRICE pushes use so HubPushQueue
+                // retries it with backoff; pushpricereorg is idempotent over a replayed
+                // range. Enqueued after the rollback commit, so it is NOT caught by this
+                // rollback's own orphan purge; a deeper later reorg supersedes it with a
+                // lower-index retraction.
+                console.warn('Rollback: hub price retraction failed, queueing for retry:', err && err.message);
+                try {
+                    await this.indexerDb.enqueueHubPush('price_retraction',
+                        { coin: this.config['COIN'], action_index: firstActionIndex });
+                } catch(e) {
+                    console.error('Rollback: failed to enqueue price retraction for retry:', e && e.message);
+                }
             }
         }
 

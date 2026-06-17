@@ -1150,6 +1150,11 @@ class Database {
         // New deployments. Resolve source_id -> address and status_id -> status string
         // (id-independent, see BLOCK_HASH_VERSION). action_index is unique on contracts so
         // ORDER BY action_index alone is a total order.
+        // NOTE: `deploy_chunks` is intentionally NOT a checkpoint-hash input. A chunked
+        // DEPLOY's assembled `code` (every consumed chunk's bytes, in pinned order) is
+        // sha256-bound into `c.code_hash` at assembly time (actions/deploy.js), so the
+        // chunk bytes are already covered here via code_hash. The table itself holds only
+        // un-consumed/orphan chunk metadata, derived identically on same-version nodes.
         query = `SELECT c.action_index, a1.address AS source_address, c.code_hash, s1.status AS status
                  FROM contracts c
                  INNER JOIN actions a ON (a.action_index=c.action_index)
@@ -1383,6 +1388,12 @@ class Database {
         // Replication-integrity state hash (additive; see getBlockHashes). Interned like the
         // other three but stored in its own blocks.state_hash_id column - NOT part of the
         // hub-signed checkpoint (getStoredBlockHashes does not read it back).
+        // NOTE: this column was added after genesis with no historical backfill, so a
+        // long-running node keeps state_hash_id = NULL for blocks indexed BEFORE the feature
+        // shipped, while a from-genesis replay computes it for every block. A whole-table
+        // `blocks` diff on state_hash_id for that pre-feature band is EXPECTED and is not a
+        // rollback/consensus defect (it is outside any reorg window and the column is not
+        // hub-signed). A live TP-03 blocks comparison should scope to the post-feature band.
         let state_hash_id    = await this.createTransaction(hashes.state.hash);
         // Create data
         let query = "INSERT INTO blocks (block_time, ledger_hash_id, actions_hash_id, contract_hash_id, state_hash_id, block_index) values (?, ?, ?, ?, ?, ?)";
@@ -8654,6 +8665,12 @@ class Database {
     // source-deduped tally counts that stake once. CONSENSUS-CRITICAL - mirrors the
     // qualification/revocation/delegation semantics of _effectiveCapabilitySetSql.
     _stakeWeightsSql(valid_id, blockIndex, minStake){
+        // Precision: DECIMAL(30,8) (22 integer digits, 8 fractional) is sufficient because the
+        // staking tick is XCHAIN at 8 decimals and total supply stays far below 10^22; every
+        // same-version node truncates identically, so the stake-weight tally is deterministic.
+        // If a >8-decimal staking tick is ever introduced, widen these casts to
+        // DECIMAL(60, <tick-decimals>) AND pin a consistent sql_mode fleet-wide (an overflow at
+        // >22 integer digits is otherwise sql_mode-dependent) before that tick can stake.
         // Permanent disqualification - see _effectiveCapabilitySetSql. Excludes equivocation-
         // slashed keys from the effective-key set (both stake-key and delegated-key branches)
         // so the source-deduped stake-weight tally matches the count-quorum set exactly.

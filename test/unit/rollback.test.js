@@ -215,6 +215,23 @@ describe('Rollback @regression @tier3', function () {
         assert.ok(idx.indexerDb.commitTransaction.calledOnce, 'local rollback should still commit');
     });
 
+    it('parks a durable price_retraction on the queue when the hub retraction RPC fails', async function () {
+        const hubClient = { retractPriceRange: sinon.stub().rejects(new Error('hub unreachable')), retractXcallRange: sinon.stub().resolves(), retractMatchRange: sinon.stub().resolves() };
+        const idx = createMockIndexer({ hubClient });
+        idx.protocolChanges = { isDefined: sinon.stub().returns(true), isEnabled: sinon.stub().resolves(true) };
+        idx.indexerDb.enqueueHubPush = sinon.stub().resolves();
+        const rb = new Rollback(idx);
+        idx.util.resetLists();
+        idx.indexerDb.doQuery.onFirstCall().resolves([{ action_index: 50 }]);
+        idx.indexerDb.doQuery.resolves([]);
+        await assert.doesNotReject(() => rb.rollback(100));
+        assert.ok(idx.indexerDb.enqueueHubPush.calledOnce, 'failed retraction should park on the durable queue');
+        const [pushType, payload] = idx.indexerDb.enqueueHubPush.firstCall.args;
+        assert.strictEqual(pushType, 'price_retraction');
+        assert.strictEqual(payload.coin, rb.config['COIN']);
+        assert.strictEqual(payload.action_index, 50);
+    });
+
     // ─── Hub XCALL (cross_chain_calls) retraction signal ──────────────
 
     it('signals the hub to retract cross-chain calls for the rolled-back range', async function () {

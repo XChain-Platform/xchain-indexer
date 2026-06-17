@@ -27,7 +27,8 @@ function makeIndexer(hubClientOpts){
     let hubClient = Object.assign({
         enabled:        true,
         pushPriceRound: sinon.stub().resolves(),
-        pushOraclePrice: sinon.stub().resolves()
+        pushOraclePrice: sinon.stub().resolves(),
+        retractPriceRange: sinon.stub().resolves()
     }, hubClientOpts || {});
 
     let indexerDb = {
@@ -331,6 +332,17 @@ describe('HubPushQueue', function(){
             assert.strictEqual(indexer.hubClient.pushOraclePrice.calledOnce, true);
             assert.deepStrictEqual(indexer.hubClient.pushOraclePrice.firstCall.args[0], payload);
             assert.strictEqual(indexer.indexerDb.markHubPushDelivered.calledWith(2), true);
+        });
+
+        it('calls retractPriceRange for price_retraction rows and marks delivered', async function(){
+            let indexer = makeIndexer();
+            let q = new HubPushQueue(indexer);
+            let payload = { coin: 'BTC', action_index: 4200 };
+            let row = makeRow({ id: 7, push_type: 'price_retraction', payload: JSON.stringify(payload) });
+            await q._attempt(row);
+            assert.strictEqual(indexer.hubClient.retractPriceRange.calledOnce, true);
+            assert.deepStrictEqual(indexer.hubClient.retractPriceRange.firstCall.args, ['BTC', 4200]);
+            assert.strictEqual(indexer.indexerDb.markHubPushDelivered.calledWith(7), true);
         });
 
         it('marks row failed for unknown push_type', async function(){

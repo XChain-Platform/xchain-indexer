@@ -136,6 +136,10 @@ class HubPushQueue {
                 await this.hubClient.pushPriceRound(payload);
             } else if(row.push_type === 'oracle_price'){
                 await this.hubClient.pushOraclePrice(payload);
+            } else if(row.push_type === 'price_retraction'){
+                // Reorg retraction parked by rollback.js when the live RPC failed.
+                // pushpricereorg is idempotent over a replayed range.
+                await this.hubClient.retractPriceRange(payload.coin, payload.action_index);
             } else {
                 console.warn('HubPushQueue: row ' + row.id + ' has unknown push_type "' + row.push_type + '", marking failed');
                 await this.indexerDb.recordHubPushAttempt(row.id, 'unknown push_type', 1);
