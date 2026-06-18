@@ -14,7 +14,7 @@
  * The indexer half of the frozen consensus surface: GAS_SCHEDULE + GAS_PRICE
  * (which feed fee = gasUsed × GAS_PRICE AND contract_hash via executions), and
  * the status vocabulary mapped by utility.vmFailureStatus. These are golden
- * literals — any drift reddens here. A real change must bump the VM's
+ * literals; any drift reddens here. A real change must bump the VM's
  * CONSENSUS_VERSION + a new golden in BOTH repos and, post-launch, a
  * protocol_changes.js block-height activation.
  * See claude/reports/launch/CONSENSUS-ACTIVATION-RUNBOOK.md.
@@ -54,7 +54,7 @@ const EXPECTED_VM_CONSENSUS_VERSION = '2';
 // Frozen digest of the bundled VM's deploy/execution contract surface, asserted in
 // lockstep with the version above. Any change to the sandbox strip set or the deploy
 // validator's CONSENSUS_RULES must bump EXPECTED_VM_CONSENSUS_VERSION (and the VM's
-// CONSENSUS_VERSION) and regenerate these goldens together — closing the structural
+// CONSENSUS_VERSION) and regenerate these goldens together, closing the structural
 // blind spot where a sandbox/lint consensus change could ship while the guard checked
 // only the version integer. The authoritative digest lives VM-side (the strip set sits
 // behind isolated-vm); these mirror it for the cross-repo coupling and are only checked
@@ -72,22 +72,22 @@ const EXPECTED_VM_CONSENSUS_RULES = [
 ];
 const FROZEN_STATUS_TOKENS = ['reverted', 'out_of_resource', 'failed'];
 // Safety cap on validator-set queries (db.js). Read on the deterministic block-processing
-// path (responsible-set / quorum gates), so it is a FROZEN node-local consensus constant —
-// identical across chains, never an env var. A per-node value forks the federation once the
+// path (responsible-set / quorum gates), so it is a FROZEN node-local consensus constant
+// (identical across chains, never an env var). A per-node value forks the federation once the
 // qualifying set exceeds the smaller cap.
 const GOLDEN_VALIDATOR_QUERY_LIMIT = 1000;
 
 // Other NODE-LOCAL consensus params (frozen with the wire format, track 8). These
 // feed fee math / activation-block math / tx-acceptance and land in hashed state, and
-// — unlike the GAS_* pair — they are NOT identical across chains, so the golden is
+// unlike the GAS_* pair, they are NOT identical across chains, so the golden is
 // PER-CHAIN.
 //
 // ACTIVATION_DELAY_BLOCKS, EXPIRATION_FEE_PER_DAY and STAKING were previously left on the
 // hub config overlay's live-poll list. That was a soft-fork hazard: federation nodes
 // observe a committed hub change at different block heights, so a live push would stamp
 // divergent activation_block / expiration-fee rows for the SAME on-chain tx. They are now
-// treated like GAS_* — node-local, changeable only via a coordinated upgrade gated on an
-// activation height — and the overlay no longer polls them (see XChainIndexer
+// treated like GAS_*: node-local, changeable only via a coordinated upgrade gated on an
+// activation height. The overlay no longer polls them (see XChainIndexer
 // _mergeHubParams). The behavioural guard at the bottom of this file pins that.
 const GOLDEN_FEE_PARAMS_SHARED = {
     EXPIRATION_FEE_DEFAULT_DAYS:      90,
@@ -111,7 +111,7 @@ const GOLDEN_STAKING_PER_CHAIN = {
     LTC:  { ACTIVATION_DELAY_BLOCKS: 24, COOLDOWN_BLOCKS: 1000 },
     DOGE: { ACTIVATION_DELAY_BLOCKS: 60, COOLDOWN_BLOCKS: 1000 }
 };
-// Consensus params that must NOT be live-polled by the hub config overlay — doing so races
+// Consensus params that must NOT be live-polled by the hub config overlay; doing so races
 // the federation into a soft fork. The behavioural test below asserts the overlay ignores
 // hub attempts to change them.
 const NON_POLLED_CONSENSUS_PARAMS = ['ACTIVATION_DELAY_BLOCKS', 'EXPIRATION_FEE_PER_DAY', 'STAKING'];
@@ -119,7 +119,7 @@ const NON_POLLED_CONSENSUS_PARAMS = ['ACTIVATION_DELAY_BLOCKS', 'EXPIRATION_FEE_
 // Resolve the bundled VM's consensus exports, defensively: the file: dep
 // (node_modules/xchain-vm -> ./xchain-vm) is populated in prod by xchain-node,
 // and the sibling exists in the monorepo, but a standalone indexer CI checkout
-// has neither — there we SKIP the cross-repo coupling rather than fail.
+// has neither; there we SKIP the cross-repo coupling rather than fail.
 function resolveVmConsensus(){
     const tries = ['xchain-vm', '../../../xchain-vm/src/consensus-runtime.js'];
     for(const t of tries){
@@ -216,7 +216,7 @@ describe('consensus parameters are frozen (track 8 guard) @regression', function
         const vm = resolveVmConsensus();
         if(!vm){ this.skip(); return; } // standalone CI without the VM present
         assert.strictEqual(vm.CONSENSUS_VERSION, EXPECTED_VM_CONSENSUS_VERSION,
-            'bundled VM CONSENSUS_VERSION != indexer expectation — bump both together');
+            'bundled VM CONSENSUS_VERSION != indexer expectation (bump both together)');
         assert.deepStrictEqual(vm.CONSENSUS_STATUS_TOKENS, FROZEN_STATUS_TOKENS,
             'VM status vocabulary drifted from the indexer mapping');
 
@@ -228,11 +228,11 @@ describe('consensus parameters are frozen (track 8 guard) @regression', function
         // runtime-only fallback (standalone CI) does not export these.
         if(vm.STRIPPED_GLOBAL_NAMES){
             assert.deepStrictEqual([...vm.STRIPPED_GLOBAL_NAMES].sort(), EXPECTED_VM_STRIPPED_GLOBAL_NAMES,
-                'VM sandbox strip set drifted from the indexer expectation — bump CONSENSUS_VERSION + regolden in both repos');
+                'VM sandbox strip set drifted from the indexer expectation (bump CONSENSUS_VERSION + regolden in both repos)');
         }
         if(vm.CONSENSUS_RULES){
             assert.deepStrictEqual([...vm.CONSENSUS_RULES].sort(), EXPECTED_VM_CONSENSUS_RULES,
-                'VM deploy CONSENSUS_RULES drifted from the indexer expectation — bump CONSENSUS_VERSION + regolden in both repos');
+                'VM deploy CONSENSUS_RULES drifted from the indexer expectation (bump CONSENSUS_VERSION + regolden in both repos)');
         }
     });
 });

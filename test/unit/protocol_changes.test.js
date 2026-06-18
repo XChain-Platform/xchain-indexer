@@ -179,15 +179,15 @@ describe('ProtocolChanges @regression @tier3', function () {
         });
     });
 
-    // ─── DEPLOY_BASE64_CODE — the consensus anti-fork gate ───────────────────
-    // The inline-DEPLOY base64 cutover. A regression in its registration — a zeroed
+    // ─── DEPLOY_BASE64_CODE: the consensus anti-fork gate ───────────────────
+    // The inline-DEPLOY base64 cutover. A regression in its registration (a zeroed
     // or wrong mainnet flag-day, regtest/testnet flipped off genesis, or the version
-    // bumped past the shipping node — silently changes how historical CODE_ENCODING
+    // bumped past the shipping node) silently changes how historical CODE_ENCODING
     // decodes → code_hash → contract_hash → the federation checkpoint, forking the
     // ledger. deploy.test.js stubs isEnabled(), so ONLY this block guards the REAL
     // registration. Keep these assertions in lockstep with protocol_changes.js.
     describe('DEPLOY_BASE64_CODE activation gate (consensus)', function () {
-        const MAINNET_FLAG_DAY = 1798761600; // 2027-01-01 00:00:00 UTC — PLACEHOLDER (see protocol_changes.js)
+        const MAINNET_FLAG_DAY = 1798761600; // 2027-01-01 00:00:00 UTC PLACEHOLDER (see protocol_changes.js)
 
         // The constructor reads INDEXER_NETWORK + npm_package_version fresh, so a new
         // instance per network/version is all that's needed (no module-cache reset).
@@ -211,7 +211,7 @@ describe('ProtocolChanges @regression @tier3', function () {
             assert.strictEqual(change.testnet_time, 0);
             assert.strictEqual(change.regtest_time, 0);
             assert.strictEqual(change.mainnet_time, MAINNET_FLAG_DAY,
-                'mainnet flag-day must match protocol_changes.js — a wrong value is a second fork');
+                'mainnet flag-day must match protocol_changes.js; a wrong value is a second fork');
         });
 
         it('regtest: enabled from genesis (every block decodes base64)', async function () {
@@ -244,20 +244,20 @@ describe('ProtocolChanges @regression @tier3', function () {
             assert.strictEqual(await pc2.isEnabled('DEPLOY_BASE64_CODE', 100), true);
         });
 
-        it('a pre-consensus (v1.x) node treats it as not-yet-active — no premature base64', async function () {
+        it('a pre-consensus (v1.x) node treats it as not-yet-active; no premature base64', async function () {
             const pc1 = pcFor('regtest', '1.9.9');
             indexer.decoderDb.getBlockTime.resolves(1);
             assert.strictEqual(await pc1.isEnabled('DEPLOY_BASE64_CODE', 0), false,
-                'below the 2.0.0 consensus version the gate is inactive — decode stays hex');
+                'below the 2.0.0 consensus version the gate is inactive; decode stays hex');
         });
     });
 
-    // ─── VM_BALANCE_TOKENINFO — the consensus anti-fork gate ─────────────────
+    // ─── VM_BALANCE_TOKENINFO: the consensus anti-fork gate ─────────────────
     // The VM getBalance()/getTokenInfo() reader. Below activation the gateway sees
     // balances:null / tokenInfo:null (original ≤2.7.10 behaviour); at/above it the
     // indexer feeds the buildVmBalancesAndTokenInfo snapshot. A regression in its
-    // registration — a zeroed/wrong mainnet flag-day, regtest/testnet flipped off
-    // genesis, or the version bumped past the shipping node — silently changes the
+    // registration (a zeroed/wrong mainnet flag-day, regtest/testnet flipped off
+    // genesis, or the version bumped past the shipping node) silently changes the
     // VM input on the first balance-reading contract → gas_used / emitted_count /
     // ledger movement → contract_hash → the federation checkpoint, forking the
     // ledger even within the 2.x line (2.2.0–2.7.10 lack the reader; 2.7.11+ have
@@ -266,7 +266,7 @@ describe('ProtocolChanges @regression @tier3', function () {
     // guards the registration the call sites depend on. Keep in lockstep with
     // protocol_changes.js.
     describe('VM_BALANCE_TOKENINFO activation gate (consensus)', function () {
-        const MAINNET_FLAG_DAY = 1798761600; // 2027-01-01 00:00:00 UTC — PLACEHOLDER (see protocol_changes.js)
+        const MAINNET_FLAG_DAY = 1798761600; // 2027-01-01 00:00:00 UTC PLACEHOLDER (see protocol_changes.js)
 
         function pcFor(network, version = '2.0.0') {
             process.env.npm_package_version = version; // shipping consensus version
@@ -288,7 +288,7 @@ describe('ProtocolChanges @regression @tier3', function () {
             assert.strictEqual(change.testnet_time, 0);
             assert.strictEqual(change.regtest_time, 0);
             assert.strictEqual(change.mainnet_time, MAINNET_FLAG_DAY,
-                'mainnet flag-day must match protocol_changes.js — a wrong value is a fork');
+                'mainnet flag-day must match protocol_changes.js; a wrong value is a fork');
         });
 
         it('regtest: enabled from genesis (gateway gets real balances/token-info)', async function () {
@@ -321,29 +321,29 @@ describe('ProtocolChanges @regression @tier3', function () {
             assert.strictEqual(await pc2.isEnabled('VM_BALANCE_TOKENINFO', 100), true);
         });
 
-        it('a pre-reader (v1.x) node treats it as not-yet-active — gateway stays null', async function () {
+        it('a pre-reader (v1.x) node treats it as not-yet-active; gateway stays null', async function () {
             const pc1 = pcFor('regtest', '1.9.9');
             indexer.decoderDb.getBlockTime.resolves(1);
             assert.strictEqual(await pc1.isEnabled('VM_BALANCE_TOKENINFO', 0), false,
-                'below the 2.0.0 consensus version the gate is inactive — gateway sees null');
+                'below the 2.0.0 consensus version the gate is inactive; gateway sees null');
         });
     });
 
-    // ─── CONTROLLER_GUARD — the consensus anti-fork gate ─────────────────────
+    // ─── CONTROLLER_GUARD: the consensus anti-fork gate ─────────────────────
     // The programmable-policy controller guard. Below activation the bound controller's
-    // `guard` method is NEVER run — every SEND/ORDER/SWAP/DISPENSER/DESTROY on a controlled
+    // `guard` method is NEVER run; every SEND/ORDER/SWAP/DISPENSER/DESTROY on a controlled
     // token settles with plain semantics, no allow/deny veto, no royalty payout_legs, no guard
-    // contract_executions row — exactly like a node that lacks the controller layer. At/above
+    // contract_executions row, exactly like a node that lacks the controller layer. At/above
     // it the shared chokepoint (_invokeController) runs the guard, may DENY, and may attach
-    // payout_legs the match-time split applies. A regression in its registration — a zeroed/
+    // payout_legs the match-time split applies. A regression in its registration (a zeroed/
     // wrong mainnet flag-day, regtest/testnet flipped off genesis, or the version bumped past
-    // the shipping node — makes a controller-layer node and a non-controller node settle the
+    // the shipping node) makes a controller-layer node and a non-controller node settle the
     // SAME guarded action differently → ledger + per-block contract_hash → federation
     // checkpoint, forking on the first guarded action. utility.js _invokeController calls the
     // REAL isEnabled() at the single shared chokepoint, so this block guards the registration
     // that gate depends on. Keep in lockstep with protocol_changes.js.
     describe('CONTROLLER_GUARD activation gate (consensus)', function () {
-        const MAINNET_FLAG_DAY = 1798761600; // 2027-01-01 00:00:00 UTC — PLACEHOLDER (see protocol_changes.js)
+        const MAINNET_FLAG_DAY = 1798761600; // 2027-01-01 00:00:00 UTC PLACEHOLDER (see protocol_changes.js)
 
         function pcFor(network, version = '2.0.0') {
             process.env.npm_package_version = version; // shipping consensus version
@@ -365,7 +365,7 @@ describe('ProtocolChanges @regression @tier3', function () {
             assert.strictEqual(change.testnet_time, 0);
             assert.strictEqual(change.regtest_time, 0);
             assert.strictEqual(change.mainnet_time, MAINNET_FLAG_DAY,
-                'mainnet flag-day must match protocol_changes.js — a wrong value is a fork');
+                'mainnet flag-day must match protocol_changes.js; a wrong value is a fork');
         });
 
         it('regtest: enabled from genesis (guard runs)', async function () {
@@ -398,11 +398,11 @@ describe('ProtocolChanges @regression @tier3', function () {
             assert.strictEqual(await pc2.isEnabled('CONTROLLER_GUARD', 100), true);
         });
 
-        it('a pre-guard (v1.x) node treats it as not-yet-active — guard stays off', async function () {
+        it('a pre-guard (v1.x) node treats it as not-yet-active; guard stays off', async function () {
             const pc1 = pcFor('regtest', '1.9.9');
             indexer.decoderDb.getBlockTime.resolves(1);
             assert.strictEqual(await pc1.isEnabled('CONTROLLER_GUARD', 0), false,
-                'below the 2.0.0 consensus version the gate is inactive — guard never runs');
+                'below the 2.0.0 consensus version the gate is inactive; guard never runs');
         });
     });
 });

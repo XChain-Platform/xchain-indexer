@@ -16,7 +16,7 @@
  * ECONOMIC REGRESSION GUARD for the UNSTAKE pending-activation-top-up orphan.
  *
  * The unstake AMOUNT is summed from ACTIVATED rows only (activation_block <= blockIndex), but the
- * deactivation setters used to mark EVERY undeactivated row — so a pending-activation top-up
+ * deactivation setters used to mark EVERY undeactivated row, so a pending-activation top-up
  * (activation_block > blockIndex) got deactivated yet was excluded from the unstake amount; the
  * cooldown sweep (reads only unstakes/contract_unstakes) never refunds it → tokens orphaned.
  *

@@ -24,7 +24,7 @@ const assert = require('assert');
 const sinon = require('sinon');
 const { createChaosDb, FakeConnection } = require('../setup/harness');
 
-describe('Chaos — Circuit Breaker', function () {
+describe('Chaos: Circuit Breaker', function () {
     this.timeout(10000);
 
     let db;

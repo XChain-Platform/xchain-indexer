@@ -16,7 +16,7 @@
  *
  * Full-node possession-proof verdict. A quorum of verifying full nodes attests,
  * on-chain, which validators correctly answered a deterministically-DERIVED
- * possession challenge — proving those validators run a real coin full node
+ * possession challenge, proving those validators run a real coin full node
  * rather than mirroring the decoder/indexer DBs via xchain-sync. The verified
  * set earns the full-node tranche of the oracle-round reward (see price.js).
  *
@@ -60,7 +60,7 @@ class NodeProof {
         if(format === 0) return await this._parseVerdict(params, data, error);
     }
 
-    // NODEPROOF v0 — quorum-signed verdict over who answered the epoch's challenge.
+    // NODEPROOF v0: quorum-signed verdict over who answered the epoch's challenge.
     async _parseVerdict(params, data, error){
 
         // BTC-only: capability staking + oracle-round rewards are BTC-only, so the
@@ -207,7 +207,7 @@ class NodeProof {
 
     // Eligible verifier universe at `blockIndex`: previously-verified full nodes
     // (passed proof in window AND live full_node stake) ∪ configured genesis
-    // verifiers. Deterministic — depends only on earlier on-chain verdicts + config.
+    // verifiers. Deterministic: depends only on earlier on-chain verdicts + config.
     async _eligibleVerifierSet(blockIndex){
         let set = new Set();
         let genesis = this._fnConfig()['GENESIS_VERIFIERS'] || [];

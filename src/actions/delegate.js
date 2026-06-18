@@ -15,10 +15,10 @@
  * XChain Platform Action - DELEGATE
  *
  * Manages the signing key bound to a staked validator. Four flavors:
- *   v0 — Capability rotate (rotate the signing key for a capability stake)
- *   v1 — Contract-targeted rotate (rotate the signing key for a contract-targeted stake)
- *   v2 — Capability revoke (remove a previously delegated capability signing key)
- *   v3 — Contract-targeted revoke (remove a previously delegated contract-targeted signing key)
+ *   v0: Capability rotate (rotate the signing key for a capability stake)
+ *   v1: Contract-targeted rotate (rotate the signing key for a contract-targeted stake)
+ *   v2: Capability revoke (remove a previously delegated capability signing key)
+ *   v3: Contract-targeted revoke (remove a previously delegated contract-targeted signing key)
  *
  * Capability flavors (v0/v2): BTC chain only.
  * Contract-targeted flavors (v1/v3): any chain (BTC, LTC, DOGE).
@@ -161,7 +161,7 @@ class Delegate {
         await this.mapper.createMappings(data);
     }
 
-    // DELEGATE v1 — rotate signing key for a contract-targeted stake.
+    // DELEGATE v1: rotate signing key for a contract-targeted stake.
     // Scoped to (target_contract_index, tick); pubkey-collision check is restricted to
     // contract_* tables so a single pubkey CAN serve as both a capability validator
     // and a contract staker simultaneously (see plan §12.5).
@@ -186,10 +186,10 @@ class Delegate {
         if(!error && this.util.isNull(data['TICK']))
             error = 'invalid: TICK (required)';
 
-        // Source must own an active contract-stake for (target, *, tick) — any pubkey on this slot
+        // Source must own an active contract-stake for (target, *, tick); any pubkey on this slot
         if(!error){
             // Reuse getActiveContractStakeByPubkey requires a known pubkey; instead check via owner lookup.
-            // We don't know the OLD pubkey from the wire — pubkey rotation just claims a new one.
+            // We don't know the OLD pubkey from the wire; pubkey rotation just claims a new one.
             // Validate by sweep: does SOURCE own ANY active contract_stakes row for (target, tick)?
             let sourceId = await this.indexerDb.getAddressId(data['SOURCE']);
             if(sourceId === null){
@@ -209,7 +209,7 @@ class Delegate {
             }
         }
 
-        // Pubkey-collision check — scoped to contract_stakes and contract_delegations only.
+        // Pubkey-collision check: scoped to contract_stakes and contract_delegations only.
         // A pubkey can be a capability validator AND a contract staker; only block reuse within contract scope.
         if(!error){
             let valid_id = await this.indexerDb.getStatusId('valid');
@@ -263,7 +263,7 @@ class Delegate {
         await this.mapper.createMappings(data);
     }
 
-    // DELEGATE v2 — capability revoke. Removes a previously delegated signing key
+    // DELEGATE v2: capability revoke. Removes a previously delegated signing key
     // without replacing it. Marks `deactivation_block` (BLOCK_INDEX + activation delay)
     // on the matching capability delegation row.
     async _parseCapabilityRevoke(params, data, error){
@@ -285,8 +285,8 @@ class Delegate {
 
         // Resolve the revocation target. v2 revokes either:
         //   - a previously delegated key (a `delegations` row), or
-        //   - the source's ORIGINAL stake signing key — required for the
-        //     key-compromise procedure to complete (a compromised stake key must
+        //   - the source's ORIGINAL stake signing key (required for the
+        //     key-compromise procedure to complete: a compromised stake key must
         //     be revocable once a replacement is delegated via v0). Recorded in
         //     `stake_key_revocations`; re-staking the same key later (STAKE v2)
         //     clears the revocation.
@@ -320,7 +320,7 @@ class Delegate {
         let activationDelay = (staking && staking['ACTIVATION_DELAY_BLOCKS']) ? staking['ACTIVATION_DELAY_BLOCKS'] : this.config['ACTIVATION_DELAY_BLOCKS'];
 
         if(stakeKeyMode){
-            // Stake-key revocation — recorded ONLY in stake_key_revocations. A
+            // Stake-key revocation: recorded ONLY in stake_key_revocations. A
             // delegations record here would read as an ACTIVE delegation of the
             // revoked key and re-add it to the effective signer set.
             data['DEACTIVATION_BLOCK'] = parseInt(data['BLOCK_INDEX']) + activationDelay;
@@ -349,7 +349,7 @@ class Delegate {
         await this.mapper.createMappings(data);
     }
 
-    // DELEGATE v3 — contract-targeted revoke. Removes a previously delegated signing key
+    // DELEGATE v3: contract-targeted revoke. Removes a previously delegated signing key
     // scoped to (target_contract_index, signing_pubkey, tick) without replacing it.
     // Marks `deactivation_block` on the matching contract_delegations row.
     async _parseContractRevoke(params, data, error){

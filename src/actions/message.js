@@ -79,7 +79,7 @@ class Message {
             data = this.util.setNumberFormats(data);
 
         // MESSAGE v2 (VERSION|COIN|DESTINATION|ENCRYPTED_MESSAGE) carries no
-        // ENCRYPTION_METHOD on the wire — absence implies ECIES (1) by protocol.
+        // ENCRYPTION_METHOD on the wire; absence implies ECIES (1) by protocol.
         // Stamp it so v2 rows persist a concrete method rather than null and the
         // reader's decrypt gate stays reachable.
         if(!error && format===2 && this.util.isNull(data['ENCRYPTION_METHOD']))

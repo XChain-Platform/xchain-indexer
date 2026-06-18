@@ -103,10 +103,10 @@ class Coinpay_Expire {
             ? await this.indexerDb.getOrderSweepDestination(sellerOrder['ACTION_INDEX'])
             : null;
 
-        // Release escrowed tokens back to the seller's order — or to the sweep
+        // Release escrowed tokens back to the seller's order, or to the sweep
         // DESTINATION when applicable. For balance orders this restores the seller's
         // GIVE_REMAINING via a ledger credit. For ownership orders there's nothing
-        // in the balance ledger — either release the escrow gate back to the seller,
+        // in the balance ledger: either release the escrow gate back to the seller,
         // or atomically transfer ownership to the sweep DESTINATION.
         if(Number(sellerOrder['GIVE_OWNERSHIP']||0) == 1){
             if(sweepDest){
@@ -130,7 +130,7 @@ class Coinpay_Expire {
         // Update ORDER_MATCH status to 'expired'
         await this.indexerDb.createOrderStatus(data['ACTION_INDEX'], obligationInfo['ACTION_INDEX'], 'expired');
 
-        // The coin-offering party's order stays open — it can match with other sellers.
+        // The coin-offering party's order stays open; it can match with other sellers.
         // Only the ORDER_MATCH is expired, not the order itself.
 
         // Check if the seller's order is in a transitional state and can be finalized
@@ -138,11 +138,11 @@ class Coinpay_Expire {
         if(sellerStatus == 'cancelling' || sellerStatus == 'expiring'){
             let pendingObligations = await this.indexerDb.getPendingCoinpayObligationsByOrder(sellerOrder['ACTION_INDEX']);
             if(pendingObligations.length == 0){
-                // No more pending obligations — finalize the seller's order
+                // No more pending obligations. Finalize the seller's order.
                 let finalStatus = (sellerStatus == 'cancelling') ? 'cancelled' : 'expired';
                 await this.indexerDb.createOrderStatus(data['ACTION_INDEX'], sellerOrder['ACTION_INDEX'], finalStatus);
 
-                // Release any remaining escrowed tokens back to the seller — or to the
+                // Release any remaining escrowed tokens back to the seller, or to the
                 // sweep DESTINATION when finalizing a SWEEP-triggered cancel. Ownership
                 // orders are single-fill: no remaining balance, and the gate was already
                 // cleared or transferred above.

@@ -95,7 +95,7 @@ describe('Token state machine boundary tests @regression @tier2', function () {
     describe('TOK-01: Issue reserved tick from non-GAS address', function () {
 
         it("ISSUE TICK='BTC' from non-GAS address → invalid (reserved)", async function () {
-            // RESERVED_TICKS rejection is a mainnet rule — issue.js exempts regtest.
+            // RESERVED_TICKS rejection is a mainnet rule; issue.js exempts regtest.
             indexer.config.NETWORK = 'mainnet';
             indexer.indexerDb.getTokenInfo.resolves(null);
 
@@ -316,10 +316,10 @@ describe('Token state machine boundary tests @regression @tier2', function () {
     // TOK-10: LOCK_MAX_SUPPLY requires a declared MAX_SUPPLY cap, not minted supply
     // -------------------------------------------------------------------------
 
-    describe('TOK-10: LOCK_MAX_SUPPLY guard — declared cap, not minted supply', function () {
+    describe('TOK-10: LOCK_MAX_SUPPLY guard : declared cap, not minted supply', function () {
 
         // The LOCK_MAX_SUPPLY guard validates the *declared cap* (from this action, else
-        // the token record), NOT minted supply — a fair-mint token must be able to issue
+        // the token record), NOT minted supply : a fair-mint token must be able to issue
         // with zero supply, public mint rules, and a permanently locked cap in one ISSUE.
         // The only rejected case is locking with no MAX_SUPPLY declared, which would brick
         // the TICK at a cap of zero.

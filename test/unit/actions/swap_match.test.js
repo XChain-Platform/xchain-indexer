@@ -310,7 +310,7 @@ describe('Swap_Match action handler @regression @tier2', function () {
         assert.ok(indexer.indexerDb.createSwapMatch.notCalled);
     });
 
-    // ALLOW_LIST that contains the swap's GET_ADDRESS but NOT the match address —
+    // ALLOW_LIST that contains the swap's GET_ADDRESS but NOT the match address;
     // drives the second operand of the allow-list short-circuit.
     it('rejects when GET ALLOW_LIST has the swap address but not the match address', async function () {
         withTokenLists({ getList: { allow: 51 } });

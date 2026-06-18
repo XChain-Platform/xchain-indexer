@@ -45,7 +45,7 @@ describe('Airdrop @regression @tier2', function () {
 
     // ─── Format 0 (Single Airdrop) ───────────────────────────────────
 
-    describe('format 0 — single airdrop', function () {
+    describe('format 0: single airdrop', function () {
 
         it('valid airdrop to address list creates airdrop record', async function () {
             const tokenInfo = createTokenInfo({ TICK: 'TEST', TICK_ID: 1, DECIMALS: 0, SUPPLY: '500' });
@@ -187,7 +187,7 @@ describe('Airdrop @regression @tier2', function () {
 
             await handler.parse(params, data, null);
 
-            // FORMAT 99 is unknown — but airdrops array will be empty so we just check no crash
+            // FORMAT 99 is unknown; airdrops array will be empty so we just check no crash
             assert.ok(true);
         });
 
@@ -195,7 +195,7 @@ describe('Airdrop @regression @tier2', function () {
 
     // ─── Format 1 (Multi-Airdrop Brief) ──────────────────────────────
 
-    describe('format 1 — multi-airdrop brief', function () {
+    describe('format 1: multi-airdrop brief', function () {
 
         it('valid multi-airdrop brief processes all ticks', async function () {
             const tokenInfo1 = createTokenInfo({ TICK: 'TEST', TICK_ID: 1, DECIMALS: 0 });
@@ -221,7 +221,7 @@ describe('Airdrop @regression @tier2', function () {
 
     // ─── Format 2 (Multi-Airdrop Full) ───────────────────────────────
 
-    describe('format 2 — multi-airdrop full', function () {
+    describe('format 2: multi-airdrop full', function () {
 
         it('valid multi-airdrop full processes multiple TICK/LIST pairs', async function () {
             const tokenInfo1 = createTokenInfo({ TICK: 'TEST', TICK_ID: 1, DECIMALS: 0 });
@@ -326,7 +326,7 @@ describe('Airdrop @regression @tier2', function () {
             assert.ok(indexer.mapper.createMappings.called, 'createMappings should be called');
         });
 
-        it('empty recipient list (all filtered by isActionAllowed) — no credits generated', async function () {
+        it('empty recipient list (all filtered by isActionAllowed): no credits generated', async function () {
             const tokenInfo = createTokenInfo({ TICK: 'TEST', TICK_ID: 1, DECIMALS: 0 });
             indexer.indexerDb.getTokenInfo.resolves(tokenInfo);
             indexer.indexerDb.getListType.resolves(2);
@@ -353,7 +353,7 @@ describe('Airdrop @regression @tier2', function () {
 
     // ─── Format 3 (Multi-Airdrop Full with Multiple Memos) ───────────
 
-    describe('format 3 — multi-airdrop full with multiple memos', function () {
+    describe('format 3: multi-airdrop full with multiple memos', function () {
 
         it('valid format-3 multi-airdrop processes TICK/LIST/MEMO triples', async function () {
             const tokenInfo1 = createTokenInfo({ TICK: 'TEST',  TICK_ID: 1, DECIMALS: 0 });
@@ -515,7 +515,7 @@ describe('Airdrop @regression @tier2', function () {
 
             await handler.parse(params, data, null);
 
-            // Either 'invalid: insufficient funds (FEE)' or valid — depends on whether
+            // Either 'invalid: insufficient funds (FEE)' or valid, depending on whether
             // XCHAIN balance was zero; just confirm no crash and createAirdrop called
             assert.ok(indexer.indexerDb.createAirdrop.called);
         });
@@ -538,7 +538,7 @@ describe('Airdrop @regression @tier2', function () {
             indexer.indexerDb.isActionAllowed.resolves(true);
         }
 
-        it('legacy fee path (UNIFIED_FEES=false) — getTransactionFee called and fee computed', async function () {
+        it('legacy fee path (UNIFIED_FEES=false): getTransactionFee called and fee computed', async function () {
             // Make isEnabled return false so the legacy db_hits branch (lines 273-277) runs
             actionsCtx.protocolChanges.isEnabled.resolves(false);
             setupFeeScenario();
@@ -548,13 +548,13 @@ describe('Airdrop @regression @tier2', function () {
 
             await handler.parse(params, data, null);
 
-            // The legacy branch sets fees['AMOUNT'] via getTransactionFee — the XCHAIN balance
+            // The legacy branch sets fees['AMOUNT'] via getTransactionFee. The XCHAIN balance
             // check runs (no native fee stub) and because the mock balance has XCHAIN, it
             // should succeed and reach valid or run to the fee-check with the mock balances.
             assert.ok(indexer.indexerDb.createAirdrop.called, 'createAirdrop should still be called');
         });
 
-        it('native coin fee payment mode — valid validation → STATUS valid, PAYMENT_MODE=1 recorded', async function () {
+        it('native coin fee payment mode: valid validation results in STATUS valid, PAYMENT_MODE=1 recorded', async function () {
             // Force UNIFIED_FEES=false so fee>0 is always set (legacy db_hits) and fee amount is
             // deterministic. We then stub detectFeePaymentMode → 'native' and validateNativeCoinFee
             // → valid to exercise lines 293-302.
@@ -580,7 +580,7 @@ describe('Airdrop @regression @tier2', function () {
             assert.ok(indexer.indexerDb.createAirdrop.called);
         });
 
-        it('native coin fee payment mode — invalid validation → STATUS starts with invalid', async function () {
+        it('native coin fee payment mode: invalid validation causes STATUS to start with invalid', async function () {
             actionsCtx.protocolChanges.isEnabled.resolves(false);
             setupFeeScenario();
 

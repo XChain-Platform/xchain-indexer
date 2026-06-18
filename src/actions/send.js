@@ -252,7 +252,7 @@ class Send {
             // Gated-content rule: if TICK has any active gated FILEs, this
             // SEND must be inside the same tx as a MESSAGE v2 addressed to
             // DESTINATION carrying the key handoff payload. The indexer only
-            // checks structural presence — the wallet verifies cryptographic
+            // checks structural presence; the wallet verifies cryptographic
             // correctness at unlock time.
             // See xchain-documentation/protocol/TOKEN_GATED_CONTENT.md.
             if(!error){
@@ -279,7 +279,7 @@ class Send {
             // Controller-bound token: defer to the bound contract's `guard` method
             // before the transfer settles. The guard may DENY (revert) or run
             // programmable side effects (state writes, royalty/fee emissions). It is
-            // the final gate — all other validation has passed when it runs, so an
+            // the final gate: all other validation has passed when it runs, so an
             // allow leads directly to a valid send. SOURCE must have reserved the
             // guard gas ceiling fee (mirrors the cross-contract-call reservation) so
             // a cheap/denied guard never drives GAS negative; the actual metered fee
@@ -303,9 +303,9 @@ class Send {
             }
 
             // SOURCE-side gate: the SENDER's own `transfer` address-controller may gate its OUTBOUND
-            // transfers (self-imposed spending controls — velocity, allowlists, compliance). Runs
+            // transfers (self-imposed spending controls: velocity, allowlists, compliance). Runs
             // after the token's guard, before the recipient gate. A single `transfer` address binding
-            // is symmetric — it fires whether the account is SOURCE (here) or DESTINATION (below); the
+            // it fires whether the account is SOURCE (here) or DESTINATION (below); the
             // guard distinguishes direction via its from/to (from === subject ⇒ outbound). SOURCE pays
             // the guard gas, reserved cumulatively after this leg's token guardFee (a shallow clone, so
             // gasBalances only commits in the valid block) so GAS can't be driven negative.
@@ -336,7 +336,7 @@ class Send {
             // incoming direct SEND it didn't solicit (spam/compliance). Refusal reverts this leg;
             // SOURCE pays the guard gas. Its reservation runs against the GAS balance ALREADY reduced
             // by this leg's token guardFee (a shallow clone, so gasBalances only commits in the valid
-            // block) — keeping the two-guard reservation cumulative so GAS can't be driven negative.
+            // block), keeping the two-guard reservation cumulative so GAS can't be driven negative.
             // DEX/dispense deliveries are solicited pulls, not direct sends, so they are never gated.
             if(!error && !this.util.isNull(send['DESTINATION'])){
                 let reserveBalances = gasBalances;
@@ -410,7 +410,7 @@ class Send {
             addresses = Object.keys(this.util.getAddressesList());
 
         // Update address balances and token supply. updateTokens is required because a
-        // controller guardFee is burned as a GAS debit with no offsetting credit (above) —
+        // controller guardFee is burned as a GAS debit with no offsetting credit (above);
         // tokens.supply (GAS) must be recomputed from the ledger or the per-block sanityCheck
         // (ledger == supply == balances) trips and halts the indexer. Mirrors the other
         // guarded handlers (order.js/swap.js/dispenser.js) and execute.js.

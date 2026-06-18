@@ -90,7 +90,7 @@ describe('Tier 1 - BATCH handler @tier1', function () {
                     const data = makeData(fullData);
                     await handler.parse(['0', cmds], data, null);
                 }
-            ), { numRuns: 20 }); // fewer runs — each iteration is expensive
+            ), { numRuns: 20 }); // fewer runs (each iteration is expensive)
         });
     });
 

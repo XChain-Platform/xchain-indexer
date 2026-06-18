@@ -15,12 +15,12 @@
  * XChain Platform Action - UNSTAKE
  *
  * Begins the unstaking cooldown for an active stake.
- *   v0 (capability) — BTC-only; unwinds all rows for the pubkey (original + top-ups).
- *   v1 (contract)   — any chain; scoped to a single (target, pubkey, tick) triple.
+ *   v0 (capability): BTC-only; unwinds all rows for the pubkey (original + top-ups).
+ *   v1 (contract):   any chain; scoped to a single (target, pubkey, tick) triple.
  *
  * FORMATS:
- *   v0 - VERSION|SIGNING_PUBKEY                                       (capability stake — all rows for pubkey)
- *   v1 - VERSION|SIGNING_PUBKEY|TARGET_CONTRACT_INDEX|TICK            (contract-targeted stake — per (target, tick))
+ *   v0 - VERSION|SIGNING_PUBKEY                                       (capability stake, all rows for pubkey)
+ *   v1 - VERSION|SIGNING_PUBKEY|TARGET_CONTRACT_INDEX|TICK            (contract-targeted stake, per (target, tick))
  *
  ********************************************************************/
 
@@ -49,7 +49,7 @@ class Unstake {
         if(!error && (format===null || this.formats[format] === undefined))
             error = 'invalid: VERSION (unknown)';
 
-        // v1 = contract-targeted unstake — dispatch to its own handler
+        // v1 = contract-targeted unstake; dispatch to its own handler
         if(!error && format === 1){
             return await this._parseContractUnstake(params, data, error);
         }
@@ -156,7 +156,7 @@ class Unstake {
         await this.mapper.createMappings(data);
     }
 
-    // UNSTAKE v1 — contract-targeted unstake. Writes to contract_unstakes table,
+    // UNSTAKE v1: contract-targeted unstake. Writes to contract_unstakes table,
     // sets deactivation_block on the matching contract_stakes rows, uses the contract's
     // own cooldown_blocks (vs. the global 1000 used for capability staking).
     async _parseContractUnstake(params, data, error){
@@ -240,7 +240,7 @@ class Unstake {
             );
         }
 
-        // Tickers/addresses tracking (no credits/debits at unstake time — funds are released by block-end sweep)
+        // Tickers/addresses tracking (no credits/debits at unstake time; funds are released by block-end sweep)
         this.util.addAddressTicker(data['SOURCE'], data['TICK']);
         let credits = [],
             debits  = [];

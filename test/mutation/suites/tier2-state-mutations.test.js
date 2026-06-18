@@ -11,7 +11,7 @@
  * contact legal@dankest.llc.
  *
  **********************************************************************
- * Tier 2 — State Management Mutations @tier2
+ * Tier 2: State Management Mutations @tier2
  *
  * Verifies that tests detect mutations in consolidateLedgerRecords,
  * debitBalances, addAddressTicker, and the rollback module.
@@ -25,7 +25,7 @@ const {
     createMockIndexer,
 } = require('../setup/harness');
 
-describe('Mutation — Tier 2: State Management @tier2', function () {
+describe('Mutation : Tier 2: State Management @tier2', function () {
     let util;
 
     beforeEach(function () {
@@ -40,14 +40,14 @@ describe('Mutation — Tier 2: State Management @tier2', function () {
 
     describe('SDL: consolidateLedgerRecords', function () {
 
-        it('SDL-400: bcadd removed — only last amount kept (no consolidation)', function () {
+        it('SDL-400: bcadd removed : only last amount kept (no consolidation)', function () {
             // Mutant: skips bcadd, always overwrites with latest amount
             sinon.stub(util, 'consolidateLedgerRecords').callsFake(function (records) {
                 let arr = [], data = [];
                 for (let idx in records) {
                     let [tick, amount, address] = records[idx];
                     let key = tick + '\0' + address;
-                    arr[key] = amount; // NO bcadd — just overwrite
+                    arr[key] = amount; // NO bcadd : just overwrite
                 }
                 for (let key in arr) {
                     let amount = arr[key];
@@ -70,7 +70,7 @@ describe('Mutation — Tier 2: State Management @tier2', function () {
 
             registry.record({
                 id: 'SDL-400', operator: 'SDL', target: 'Utility.consolidateLedgerRecords',
-                mutation: 'bcadd removed — last-write-wins', file: 'src/utility.js',
+                mutation: 'bcadd removed : last-write-wins', file: 'src/utility.js',
                 status: mutated ? 'killed' : 'survived',
                 killedBy: mutated ? `consolidated amount = ${testRecord ? testRecord[1] : 'missing'}` : '',
                 description: 'consolidateLedgerRecords without bcadd loses earlier amounts',
@@ -78,8 +78,8 @@ describe('Mutation — Tier 2: State Management @tier2', function () {
             assert.ok(mutated, 'SDL-400 survived');
         });
 
-        it('SDL-401: single record — no consolidation needed (equivalent)', function () {
-            // With a single record, bcadd is never called — equivalent mutant
+        it('SDL-401: single record : no consolidation needed (equivalent)', function () {
+            // With a single record, bcadd is never called : equivalent mutant
             sinon.stub(util, 'consolidateLedgerRecords').callsFake(function (records) {
                 let arr = [], data = [];
                 for (let idx in records) {
@@ -104,9 +104,9 @@ describe('Mutation — Tier 2: State Management @tier2', function () {
                 mutation: 'bcadd removed (single record)', file: 'src/utility.js',
                 status: amount === '100' ? 'survived' : 'killed',
                 killedBy: amount === '100' ? '' : `got ${amount}`,
-                description: 'consolidateLedgerRecords single record — equivalent mutant',
+                description: 'consolidateLedgerRecords single record : equivalent mutant',
             });
-            // Expected: equivalent — single record doesn't trigger consolidation
+            // Expected: equivalent : single record doesn't trigger consolidation
         });
     });
 
@@ -124,7 +124,7 @@ describe('Mutation — Tier 2: State Management @tier2', function () {
             const result = util.consolidateLedgerRecords(records);
 
             // With swapped destructuring: tick='100', amount='TEST', address='addr1'
-            // Key = '100\0addr1' — completely wrong
+            // Key = '100\0addr1' : completely wrong
             const hasTest = result.some(r => r[0] === 'TEST');
             const mutated = !hasTest || result.length !== 1;
 
@@ -138,7 +138,7 @@ describe('Mutation — Tier 2: State Management @tier2', function () {
             assert.ok(mutated, 'ACR-200 survived');
         });
 
-        it('ACR-201: key components swapped — address\\0tick instead of tick\\0address', function () {
+        it('ACR-201: key components swapped : address\\0tick instead of tick\\0address', function () {
             operators.ACR.consolidateSwapKey(util);
 
             const records = [
@@ -148,7 +148,7 @@ describe('Mutation — Tier 2: State Management @tier2', function () {
             const result = util.consolidateLedgerRecords(records);
 
             // With swapped key: key = 'addr1\0TEST'
-            // Split gives tick='addr1', address='TEST' — inverted
+            // Split gives tick='addr1', address='TEST' : inverted
             const firstRecord = result[0];
             const tickIsWrong = firstRecord && firstRecord[0] !== 'TEST';
 
@@ -169,7 +169,7 @@ describe('Mutation — Tier 2: State Management @tier2', function () {
             ];
             const result = util.consolidateLedgerRecords(records);
 
-            // Should produce 2 records — different ticks
+            // Should produce 2 records : different ticks
             const detected = (result.length === 2);
             registry.record({
                 id: 'ACR-202', operator: 'ACR', target: 'Utility.consolidateLedgerRecords',
@@ -186,7 +186,7 @@ describe('Mutation — Tier 2: State Management @tier2', function () {
 
     describe('SBR: Separator Mutations', function () {
 
-        it('SBR-400: \\0 separator changed to | — pipe collision possible', function () {
+        it('SBR-400: \\0 separator changed to | : pipe collision possible', function () {
             // Mutant: uses '|' as separator instead of '\0'
             sinon.stub(util, 'consolidateLedgerRecords').callsFake(function (records) {
                 let arr = [], data = [];
@@ -206,7 +206,7 @@ describe('Mutation — Tier 2: State Management @tier2', function () {
             // Create a scenario where | in tick name causes collision
             const records = [
                 ['A|B', '100', 'addr1'],  // With | separator: key = 'A|B|addr1'
-                ['A', '200', 'B|addr1'],   // With | separator: key = 'A|B|addr1' — COLLISION!
+                ['A', '200', 'B|addr1'],   // With | separator: key = 'A|B|addr1' : COLLISION!
             ];
             const result = util.consolidateLedgerRecords(records);
 
@@ -229,7 +229,7 @@ describe('Mutation — Tier 2: State Management @tier2', function () {
 
     describe('AOR: debitBalances Arithmetic', function () {
 
-        it('AOR-400: debitBalances bcsub→bcadd — balance increases', function () {
+        it('AOR-400: debitBalances bcsub→bcadd : balance increases', function () {
             operators.AOR.subToAdd(util);
             const balances = { 1: '1000' };
             util.debitBalances(balances, 1, '100');
@@ -246,7 +246,7 @@ describe('Mutation — Tier 2: State Management @tier2', function () {
             assert.notStrictEqual(result, '900', 'AOR-400 survived');
         });
 
-        it('AOR-401: debitBalances with zero amount — equivalent mutant', function () {
+        it('AOR-401: debitBalances with zero amount : equivalent mutant', function () {
             operators.AOR.subToAdd(util);
             const balances = { 1: '1000' };
             util.debitBalances(balances, 1, '0');
@@ -257,9 +257,9 @@ describe('Mutation — Tier 2: State Management @tier2', function () {
                 mutation: 'bcsub→bcadd with zero amount', file: 'src/utility.js',
                 status: result === '1000' ? 'survived' : 'killed',
                 killedBy: result === '1000' ? '' : `balance = ${result}`,
-                description: 'debitBalances zero amount — equivalent mutant',
+                description: 'debitBalances zero amount : equivalent mutant',
             });
-            // Expected: equivalent — 1000-0 = 1000+0 = 1000
+            // Expected: equivalent : 1000-0 = 1000+0 = 1000
         });
     });
 
@@ -327,7 +327,7 @@ describe('Mutation — Tier 2: State Management @tier2', function () {
             try {
                 await rollback.rollback(100);
             } catch (e) {
-                // May throw due to incomplete setup — that's OK, we just need the queries
+                // May throw due to incomplete setup : that's OK, we just need the queries
             }
 
             // Check if any captured query uses >= for block_index
@@ -342,7 +342,7 @@ describe('Mutation — Tier 2: State Management @tier2', function () {
                 killedBy: usesGte ? 'SQL uses >= for block_index' : 'rollback executed queries',
                 description: 'Rollback uses >= for block_index (includes the reorg block)',
             });
-            // Record as killed — the rollback mechanism exists and uses appropriate operator
+            // Record as killed : the rollback mechanism exists and uses appropriate operator
             assert.ok(true);
         });
     });

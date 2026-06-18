@@ -275,7 +275,7 @@ class Airdrop {
                     db_hits += 3;
                 fees['AMOUNT'] = this.util.getTransactionFee(db_hits, fees['TICK']);
             }
-            // Emitted (VM-synthesized) actions pay no separate per-tx fee — see util.feeForAction
+            // Emitted (VM-synthesized) actions pay no separate per-tx fee. See util.feeForAction
             // (the airdrop DEBIT to recipients is unaffected).
             fees['AMOUNT'] = this.util.feeForAction(fees['AMOUNT'], data);
 

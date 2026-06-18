@@ -134,10 +134,10 @@ describe('Issue handler @regression @tier1', function () {
     });
 
     // -----------------------------------------------------------------------
-    // Format 0 — new token creation
+    // Format 0: new token creation
     // -----------------------------------------------------------------------
 
-    describe('format 0 — new token creation', function () {
+    describe('format 0: new token creation', function () {
 
         it('valid new token → status valid, createIssue called, createToken called', async function () {
             const params = makeFormat0Params({ TICK: 'MYTOKEN', MAX_SUPPLY: '1000', MAX_MINT: '100', DECIMALS: '0' });
@@ -292,7 +292,7 @@ describe('Issue handler @regression @tier1', function () {
         });
 
         it('reserved TICK name (BTC) → invalid', async function () {
-            // RESERVED_TICKS rejection is a mainnet rule — issue.js deliberately
+            // RESERVED_TICKS rejection is a mainnet rule : issue.js deliberately
             // exempts regtest (any address may mint reserved ticks there).
             indexer.config.NETWORK = 'mainnet';
             const params = makeFormat0Params({ TICK: 'BTC' });
@@ -304,7 +304,7 @@ describe('Issue handler @regression @tier1', function () {
         });
 
         it('reserved TICK name (XCHAIN) → invalid', async function () {
-            // RESERVED_TICKS rejection is a mainnet rule — issue.js deliberately
+            // RESERVED_TICKS rejection is a mainnet rule : issue.js deliberately
             // exempts regtest (any address may mint reserved ticks there).
             indexer.config.NETWORK = 'mainnet';
             const params = makeFormat0Params({ TICK: 'XCHAIN' });
@@ -733,7 +733,7 @@ describe('Issue handler @regression @tier1', function () {
 
             await handler.parse(params, data, null);
 
-            // Still valid — self-transfer is silently discarded
+            // Still valid : self-transfer is silently discarded
             assert.strictEqual(data.STATUS, 'valid');
         });
     });
@@ -841,10 +841,10 @@ describe('Issue handler @regression @tier1', function () {
     });
 
     // -----------------------------------------------------------------------
-    // Format 1 — description update
+    // Format 1 : description update
     // -----------------------------------------------------------------------
 
-    describe('format 1 — brief description update', function () {
+    describe('format 1 : brief description update', function () {
 
         it('valid format 1 description update → valid', async function () {
             const source    = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
@@ -877,10 +877,10 @@ describe('Issue handler @regression @tier1', function () {
     });
 
     // -----------------------------------------------------------------------
-    // Format 3 — lock params update
+    // Format 3 : lock params update
     // -----------------------------------------------------------------------
 
-    describe('format 3 — lock params update', function () {
+    describe('format 3 : lock params update', function () {
 
         it('valid format 3 lock update sets lock fields', async function () {
             const source    = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';

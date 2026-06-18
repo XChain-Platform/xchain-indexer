@@ -8,7 +8,7 @@
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
 //
-// SLASH action handler — the deterministic equivocation verifier (WI-2 bump 2,
+// SLASH action handler: the deterministic equivocation verifier (WI-2 bump 2,
 // Phase C). Exercises the consensus-critical accept/reject decision with REAL
 // Ed25519 signatures and a stubbed DB (no mariadb → runs on any Node). The burn
 // itself (slashCapabilityStake) is unit-tested separately; here we assert the
@@ -35,7 +35,7 @@ function sign(privateKey, msg) {
 }
 const b64 = (s) => Buffer.from(s, 'utf8').toString('base64url');
 
-// A realistic XMATCH (DEX) raw canonical — snapshot_block is field index 2.
+// A realistic XMATCH (DEX) raw canonical; snapshot_block is field index 2.
 function dexContent(snap, aAmount) {
     return ['XMATCH', 'm_42', String(snap),
             'BTC', '1', 'TICKA', String(aAmount), '0', 'addrA',
@@ -43,7 +43,7 @@ function dexContent(snap, aAmount) {
             '1700000000', 'regtest', 'swap', '0', 'swap', '0'].join('|');
 }
 
-describe('SLASH action handler — equivocation verifier @regression', function () {
+describe('SLASH action handler: equivocation verifier @regression', function () {
     let indexer, ctx, handler, offender;
 
     beforeEach(function () {
@@ -72,8 +72,8 @@ describe('SLASH action handler — equivocation verifier @regression', function 
         indexer.util.resetLists();
     });
 
-    // Build SLASH params from two (msg, sig) pairs. The EQUIV key is NOT a wire field —
-    // it's derived from MSG_A's header — so it is not passed here.
+    // Build SLASH params from two (msg, sig) pairs. The EQUIV key is NOT a wire field;
+    // it's derived from MSG_A's header and is not passed here.
     function params(capability, offenderPubHex, msgA, privA, msgB, privB) {
         return ['0', capability, offenderPubHex,
                 b64(msgA), sign(privA, msgA), b64(msgB), sign(privB, msgB)];
@@ -157,7 +157,7 @@ describe('SLASH action handler — equivocation verifier @regression', function 
         assert.ok(indexer.indexerDb.slashCapabilityStake.notCalled);
     });
 
-    // ── XCONFIG (the 6th engine — whole-federation membership; Phase-A amendment) ──
+    // ── XCONFIG (the 6th engine: whole-federation membership; Phase-A amendment) ──
     // Config content = `snapshot_block|config_digest`; equivocation = same (seq, view),
     // same snapshot_block, DIFFERENT digest. Membership resolves against getActiveValidators
     // (the whole federation), labelled with the sentinel capability 'config'.
@@ -299,7 +299,7 @@ describe('SLASH action handler — equivocation verifier @regression', function 
             assert.strictEqual(s.treasuryAddr, null);
         });
 
-        it('clamps the floor to the bond — a sub-floor bond never mints', function () {
+        it('clamps the floor to the bond: a sub-floor bond never mints', function () {
             withSlashConfig({ BOUNTY_BPS: 500, BOUNTY_FLOOR: '50.00000000' });
             const s = handler._bountyTreasurySplit('cross_chain', '30');   // bond < floor
             assert.strictEqual(Number(s.bounty), 30);    // pays the whole bond, not 50

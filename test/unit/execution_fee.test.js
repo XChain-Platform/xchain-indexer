@@ -19,8 +19,8 @@
  * (src/db.js getTokenDecimalPrecision + the balance SELECT), so the amount a caller
  * ACTUALLY pays is that 8-dp fee rounded to the gas TOKEN's own decimals.
  *
- * Consequence (consensus/economic): with a 0-decimal gas token — which is exactly how
- * the e2e XCHAIN token is issued (initialCheck.test.js: decimals=0) — every fee below
+ * Consequence (consensus/economic): with a 0-decimal gas token (exactly how
+ * the e2e XCHAIN token is issued, see initialCheck.test.js: decimals=0) every fee below
  * 0.5 rounds to ZERO, so at GAS_PRICE=0.00001 any execution under ~50,000 gas is
  * effectively FREE. This was masking real gas accounting on regtest. A production gas
  * token with decimals>0 charges the fractional fee in full.
@@ -34,12 +34,12 @@
 
 const assert = require('assert');
 
-// Utility loads coin config in its constructor — set before require (mirrors utility.test.js).
+// Utility loads coin config in its constructor; set before require (mirrors utility.test.js).
 process.env.INDEXER_COIN = 'BTC';
 process.env.INDEXER_NETWORK = 'regtest';
 const Utility = require('../../src/utility.js');
 
-describe('Execution fee — formula + token-decimal masking @regression @tier1', function () {
+describe('Execution fee: formula + token-decimal masking @regression @tier1', function () {
     let util;
     beforeEach(function () { util = new Utility(); });
 
@@ -63,7 +63,7 @@ describe('Execution fee — formula + token-decimal masking @regression @tier1',
         assert.strictEqual(fee(1000001), '10.00001'); // gas-ceiling / out-of-gas case
     });
 
-    it('0-decimal gas token (e2e XCHAIN): sub-0.5 fees round to 0 — effectively free', function () {
+    it('0-decimal gas token (e2e XCHAIN): sub-0.5 fees round to 0 (effectively free)', function () {
         assert.strictEqual(paid(1,     0), '0'); // 0.00001 -> 0
         assert.strictEqual(paid(100,   0), '0'); // 0.001   -> 0
         assert.strictEqual(paid(49999, 0), '0'); // 0.49999 -> 0  (just under the threshold)

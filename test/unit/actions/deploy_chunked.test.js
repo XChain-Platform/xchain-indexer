@@ -44,7 +44,7 @@ function chunkRows(code, n, { source = SOURCE } = {}){
     return rows;
 }
 
-describe('Chunked DEPLOY — v4 carrier handler @regression @tier2', function () {
+describe('Chunked DEPLOY: v4 carrier handler @regression @tier2', function () {
     let indexer, ctx, handler;
 
     function deployChunkData(overrides = {}) {
@@ -99,7 +99,7 @@ describe('Chunked DEPLOY — v4 carrier handler @regression @tier2', function ()
     });
 });
 
-describe('Chunked DEPLOY — DEPLOY v2/v3 assembly @regression @tier2', function () {
+describe('Chunked DEPLOY : DEPLOY v2/v3 assembly @regression @tier2', function () {
     let indexer, ctx, handler;
 
     function addDeployStubs(db) {
@@ -193,7 +193,7 @@ describe('Chunked DEPLOY — DEPLOY v2/v3 assembly @regression @tier2', function
 
     it('dedupes duplicate positions by lowest action_index', async function () {
         const good = chunkRows(CODE, 2);
-        // Append a duplicate of position 0 carrying garbage at a HIGHER action_index — must be ignored.
+        // Append a duplicate of position 0 carrying garbage at a HIGHER action_index : must be ignored.
         const rows = good.concat([{ chunk_index: 0, total_chunks: 2, code_part: 'GARBAGE=', action_index: 999 }]);
         indexer.indexerDb.getDeployChunksForAssembly.resolves(rows);
         const data = deployData({ FORMAT: 2 });

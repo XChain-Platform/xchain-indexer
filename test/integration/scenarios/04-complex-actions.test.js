@@ -102,7 +102,7 @@ describe('04 complex actions – BATCH, SLEEP, SWEEP, DESTROY, LIST, AIRDROP @re
     this.timeout(60000);
 
     // -----------------------------------------------------------------------
-    // 1. BATCH with two SENDs — both processed, balances updated
+    // 1. BATCH with two SENDs: both processed, balances updated
     // -----------------------------------------------------------------------
     describe('BATCH – two SENDs in one transaction', function () {
         let indexer;
@@ -156,7 +156,7 @@ describe('04 complex actions – BATCH, SLEEP, SWEEP, DESTROY, LIST, AIRDROP @re
     });
 
     // -----------------------------------------------------------------------
-    // 2. BATCH with ISSUE + MINT — both valid
+    // 2. BATCH with ISSUE + MINT: both valid
     // -----------------------------------------------------------------------
     describe('BATCH – ISSUE + MINT in one transaction', function () {
         let indexer;
@@ -196,7 +196,7 @@ describe('04 complex actions – BATCH, SLEEP, SWEEP, DESTROY, LIST, AIRDROP @re
     });
 
     // -----------------------------------------------------------------------
-    // 3. SLEEP address then SEND fails — SEND invalid because source is sleeping
+    // 3. SLEEP address then SEND fails: SEND invalid because source is sleeping
     // -----------------------------------------------------------------------
     describe('SLEEP format 0 – sleeping address cannot send', function () {
         let indexer;
@@ -222,7 +222,7 @@ describe('04 complex actions – BATCH, SLEEP, SWEEP, DESTROY, LIST, AIRDROP @re
                 { source: ADDR1, destination: null, amount: '0',
                   data: 'SLEEP|0|200|' },
             ]);
-            // Block 103 – ADDR1 attempts a SEND (should fail — source sleeping)
+            // Block 103 – ADDR1 attempts a SEND (should fail: source sleeping)
             await seeder.seedBlock(103, T0 + 1800, [
                 { source: ADDR1, destination: null, amount: '0',
                   data: 'SEND|0|' + TICK_X + '|10|' + ADDR2 + '|' },
@@ -307,7 +307,7 @@ describe('04 complex actions – BATCH, SLEEP, SWEEP, DESTROY, LIST, AIRDROP @re
     });
 
     // -----------------------------------------------------------------------
-    // 5. SWEEP balances to new address — all tokens moved
+    // 5. SWEEP balances to new address: all tokens moved
     // -----------------------------------------------------------------------
     describe('SWEEP format 0 – sweep all balances to ADDR2', function () {
         let indexer;

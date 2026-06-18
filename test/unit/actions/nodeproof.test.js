@@ -18,7 +18,7 @@ const crypto = require('crypto');
 const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
 
 const NodeProof = require('../../../src/actions/nodeproof.js');
-// Same cached module NodeProof references — stubbing verify() controls which
+// Same cached module NodeProof references; stubbing verify() controls which
 // verifier signatures the handler accepts toward quorum.
 const ed25519   = require('../../../src/ed25519.js');
 
@@ -237,7 +237,7 @@ describe('NodeProof (NODEPROOF) @regression @tier3', function () {
     });
 
     // ── chain scope ────────────────────────────────────────────────────────────
-    it('is BTC-only — rejects on a non-BTC chain', async function () {
+    it('is BTC-only : rejects on a non-BTC chain', async function () {
         indexer.config.COIN = 'DOGE';
         const data = v0Data();
         await handler.parse(v0Params({

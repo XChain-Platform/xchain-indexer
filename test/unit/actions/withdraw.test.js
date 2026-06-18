@@ -385,7 +385,7 @@ describe('Withdraw handler @regression @tier2', function () {
         it('invalid withdraw: no ledger changes (no debit or credit)', async function () {
             const ledgerSpy = sinon.spy(indexer.util, 'processTransactionLedgerChanges');
 
-            indexer.indexerDb.getTokenInfo.resolves(null); // invalid — no token
+            indexer.indexerDb.getTokenInfo.resolves(null); // invalid: no token
 
             const params = ['0', CONTRACT_INDEX, TICK, '100'];
             const data   = makeData({ FORMAT: 0 });

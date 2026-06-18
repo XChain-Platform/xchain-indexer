@@ -13,7 +13,7 @@
  * contact legal@dankest.llc.
  *
  **********************************************************************
- * Integration tests — 06: Error handling and integrity verification
+ * Integration tests, 06: Error handling and integrity verification
  *
  * Tests that the indexer gracefully handles malformed/unknown actions,
  * records invalid actions correctly, and maintains ledger integrity across
@@ -32,7 +32,7 @@ const { seedGas } = require('../setup/gas-seeder');
 const helpers = require('../setup/assertion-helpers');
 
 // ---------------------------------------------------------------------------
-// Addresses — 30-char strings
+// Addresses (30-char strings)
 // ---------------------------------------------------------------------------
 const ADDR1 = 'msK1rsgNVFPM4cR3X5rngczTKa6EtT4WKD';
 const ADDR2 = 'mjifPngDYQ6HHPNQdGk1kQuFkJWEiQksQp';
@@ -66,7 +66,7 @@ describe('06 – Error Handling and Integrity @regression @tier3', function () {
     });
 
     // -----------------------------------------------------------------------
-    // 1. Empty block — no transactions, block record still created
+    // 1. Empty block: no transactions, block record still created
     // -----------------------------------------------------------------------
     it('1. empty block processes without error and creates a block record', async function () {
         const seeder = new DecoderSeeder(decoderQuery);
@@ -86,7 +86,7 @@ describe('06 – Error Handling and Integrity @regression @tier3', function () {
     });
 
     // -----------------------------------------------------------------------
-    // 2. Malformed action data — garbage data field recorded as UNKNOWN
+    // 2. Malformed action data: garbage data field recorded as UNKNOWN
     // -----------------------------------------------------------------------
     it('2. malformed action data is recorded as an UNKNOWN action', async function () {
         const seeder = new DecoderSeeder(decoderQuery);
@@ -111,7 +111,7 @@ describe('06 – Error Handling and Integrity @regression @tier3', function () {
     });
 
     // -----------------------------------------------------------------------
-    // 3. Unknown action type — 'FOOBAR|0|param1' processed as UNKNOWN
+    // 3. Unknown action type: 'FOOBAR|0|param1' processed as UNKNOWN
     // -----------------------------------------------------------------------
     it('3. unknown action type creates a record with invalid status', async function () {
         const seeder = new DecoderSeeder(decoderQuery);
@@ -133,7 +133,7 @@ describe('06 – Error Handling and Integrity @regression @tier3', function () {
     });
 
     // -----------------------------------------------------------------------
-    // 4. Sanity check after ISSUE + MINT + SEND — supply consistency
+    // 4. Sanity check after ISSUE + MINT + SEND: supply consistency
     // -----------------------------------------------------------------------
     it('4. sanity check passes after ISSUE + MINT + SEND sequence', async function () {
         const seeder = new DecoderSeeder(decoderQuery);
@@ -162,7 +162,7 @@ describe('06 – Error Handling and Integrity @regression @tier3', function () {
     });
 
     // -----------------------------------------------------------------------
-    // 5. Block hash integrity — all blocks have non-null hash IDs
+    // 5. Block hash integrity: all blocks have non-null hash IDs
     // -----------------------------------------------------------------------
     it('5. all processed blocks have non-null ledger and actions hash IDs', async function () {
         const seeder = new DecoderSeeder(decoderQuery);
@@ -184,7 +184,7 @@ describe('06 – Error Handling and Integrity @regression @tier3', function () {
     });
 
     // -----------------------------------------------------------------------
-    // 6. Block hash determinism — same input data produces the same hashes
+    // 6. Block hash determinism: same input data produces the same hashes
     // -----------------------------------------------------------------------
     it('6. processing the same data twice produces identical block hashes', async function () {
         this.timeout(90000);
@@ -236,7 +236,7 @@ describe('06 – Error Handling and Integrity @regression @tier3', function () {
     });
 
     // -----------------------------------------------------------------------
-    // 7. Zero-balance cleanup — after full SEND, source balance row deleted
+    // 7. Zero-balance cleanup: after full SEND, source balance row deleted
     // -----------------------------------------------------------------------
     it('7. source balance row is removed when entire balance is sent', async function () {
         const seeder = new DecoderSeeder(decoderQuery);
@@ -266,7 +266,7 @@ describe('06 – Error Handling and Integrity @regression @tier3', function () {
     });
 
     // -----------------------------------------------------------------------
-    // 8. Multiple actions in same block — all processed correctly
+    // 8. Multiple actions in same block: all processed correctly
     // -----------------------------------------------------------------------
     it('8. five actions in one block are all processed correctly', async function () {
         const seeder = new DecoderSeeder(decoderQuery);
@@ -304,7 +304,7 @@ describe('06 – Error Handling and Integrity @regression @tier3', function () {
     });
 
     // -----------------------------------------------------------------------
-    // 9. Action index monotonicity — strictly increasing across blocks
+    // 9. Action index monotonicity: strictly increasing across blocks
     // -----------------------------------------------------------------------
     it('9. action_indexes are strictly increasing across multiple blocks', async function () {
         const seeder = new DecoderSeeder(decoderQuery);
@@ -349,7 +349,7 @@ describe('06 – Error Handling and Integrity @regression @tier3', function () {
 
         await seeder.seedBlock(100, T0,           [{ source: ADDR1, destination: null, amount: '0', data: 'ISSUE|0|INSUF|50000|50|0|Insufficient funds' }]);
         await seeder.seedBlock(101, T0 + BLK,     [{ source: ADDR1, destination: null, amount: '0', data: 'MINT|0|INSUF|50' }]);
-        // ADDR1 has 50; attempt to send 9999 — way more than balance
+        // ADDR1 has 50; attempt to send 9999 (way more than balance)
         await seeder.seedBlock(102, T0 + BLK * 2, [{ source: ADDR1, destination: ADDR2, amount: '0', data: 'SEND|0|INSUF|9999|' + ADDR2 }]);
 
         const indexer = await initIndexer();

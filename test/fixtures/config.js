@@ -11,7 +11,7 @@
  * contact legal@dankest.llc.
  *
  **********************************************************************
- * Test configuration fixture — loads real BTC regtest config
+ * Test configuration fixture: loads real BTC regtest config
  * without requiring any environment variables beyond INDEXER_COIN/INDEXER_NETWORK
  */
 

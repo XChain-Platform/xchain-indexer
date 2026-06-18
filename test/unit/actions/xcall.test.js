@@ -18,7 +18,7 @@ const crypto = require('crypto');
 const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
 
 const Xcall   = require('../../../src/actions/xcall.js');
-// Same module instance Xcall holds a reference to — stubbing `verify` here
+// Same module instance Xcall holds a reference to; stubbing `verify` here
 // controls signature acceptance inside processResult.
 const ed25519 = require('../../../src/ed25519.js');
 const eq      = require('../../../src/equivocation_header.js');
@@ -26,7 +26,7 @@ const eq      = require('../../../src/equivocation_header.js');
 const PUBKEY_A = 'a'.repeat(64);
 const SIG_A    = '1'.repeat(128);
 
-// Mirror the handler's deterministic call_id derivation — MUST byte-match
+// Mirror the handler's deterministic call_id derivation (MUST byte-match)
 // xchain-vm/src/gateway-emit.js (crossExecute). emitterPath is the emitting
 // execution's '>'-joined call-path (root = ''); it disambiguates two nested runs
 // of the same contract and is content-derived (stable across nodes/reorgs).
@@ -99,9 +99,9 @@ describe('Xcall (XCALL) @regression @tier3', function () {
     });
 
     // ───────────────────────────────────────────────────────────────────────
-    // v0 — Request (VM emission only)
+    // v0: Request (VM emission only)
     // ───────────────────────────────────────────────────────────────────────
-    describe('v0 — request', function () {
+    describe('v0: request', function () {
 
         function v0Data(overrides = {}) {
             return createBaseData({
@@ -148,7 +148,7 @@ describe('Xcall (XCALL) @regression @tier3', function () {
 
         it('the derivation binds network + source chain + target chain', async function () {
             const data = v0Data();
-            // Same inputs but derived for LTC target — must be rejected for a DOGE call.
+            // Same inputs but derived for LTC target; must be rejected for a DOGE call.
             const wrongTarget = deriveCallId('regtest', 'BTC', data['TX_HASH'], data['ROOT_ACTION_INDEX'],
                 data['EMITTER'], data['EMITTER_PATH'], data['EMITTER_POSITION'], 'LTC');
             await handler.parse(v0Params(wrongTarget), data, null);
@@ -164,10 +164,10 @@ describe('Xcall (XCALL) @regression @tier3', function () {
         it('call_id is independent of ACTION_INDEX (reorg / injection-order stability)', async function () {
             // Mirror of the ATTEST guard: the call_id preimage uses EMITTER_PATH, not the
             // injection-timing-dependent action_index, so a node that reorged (different
-            // ACTION_INDEX) re-derives the SAME call_id — no PBFT fork.
+            // ACTION_INDEX) re-derives the SAME call_id (no PBFT fork).
             // ROOT_ACTION_INDEX is the per-root discriminator (fixed at 100 here); both
             // nodes share it, so the call_id depends on the ROOT, not the emission
-            // action_index — they must re-derive the SAME id despite differing ACTION_INDEX.
+            // action_index; they must re-derive the SAME id despite differing ACTION_INDEX.
             const id = deriveCallId('regtest', 'BTC', 'aa', 100, 5, '2>0', 0, 'DOGE');
             const lo = v0Data({ TX_HASH: 'aa', EMITTER: 5, EMITTER_PATH: '2>0', EMITTER_POSITION: 0, ROOT_ACTION_INDEX: 100, ACTION_INDEX: 10 });
             const hi = v0Data({ TX_HASH: 'aa', EMITTER: 5, EMITTER_PATH: '2>0', EMITTER_POSITION: 0, ROOT_ACTION_INDEX: 100, ACTION_INDEX: 99999 });
@@ -190,7 +190,7 @@ describe('Xcall (XCALL) @regression @tier3', function () {
         });
 
         it('accepts a root-level call where EMITTER_PATH is the empty string', async function () {
-            // Root on-chain execution has call-path '' — VALID; the required-field check
+            // Root on-chain execution has call-path '' (VALID); the required-field check
             // must test === undefined/null, not falsy, or every root-level call is rejected.
             const data = v0Data({ EMITTER_PATH: '' });
             const id = deriveCallId('regtest', 'BTC', data['TX_HASH'], data['ROOT_ACTION_INDEX'],
@@ -306,9 +306,9 @@ describe('Xcall (XCALL) @regression @tier3', function () {
     });
 
     // ───────────────────────────────────────────────────────────────────────
-    // v2 — Expire (system-synthesized) + exactly-once interlock
+    // v2: Expire (system-synthesized) + exactly-once interlock
     // ───────────────────────────────────────────────────────────────────────
-    describe('v2 — expire', function () {
+    describe('v2: expire', function () {
 
         function v2Data(overrides = {}) {
             return createBaseData({
@@ -359,7 +359,7 @@ describe('Xcall (XCALL) @regression @tier3', function () {
     });
 
     // ───────────────────────────────────────────────────────────────────────
-    // processResult — mirror-driven result delivery
+    // processResult: mirror-driven result delivery
     // ───────────────────────────────────────────────────────────────────────
     describe('processResult', function () {
 
@@ -420,7 +420,7 @@ describe('Xcall (XCALL) @regression @tier3', function () {
         });
 
         it('defers (no idempotency row) when the capability snapshot is not mirrored yet', async function () {
-            // Empty BOTH sets — the stake-weighted branch (active on regtest) reads
+            // Empty BOTH sets; the stake-weighted branch (active on regtest) reads
             // getStakeWeightsByCapability; clearing only the legacy set would not defer.
             indexer.indexerDb.getValidatorsByCapability.resolves([]);
             indexer.indexerDb.getStakeWeightsByCapability.resolves([]);

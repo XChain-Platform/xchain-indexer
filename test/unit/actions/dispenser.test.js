@@ -60,7 +60,7 @@ describe('Dispenser action handler @regression @tier2', function () {
             .withArgs('JDOG', sinon.match.any, sinon.match.any)
             .resolves(createTokenInfo({ TICK: 'JDOG', TICK_ID: 10, DECIMALS: 0, ALLOW_LIST: null, BLOCK_LIST: null }));
 
-        // Default GET token (coin-denominated; GET_TICK empty so getTokenInfo returns null — that is fine)
+        // Default GET token (coin-denominated; GET_TICK empty so getTokenInfo returns null, that is fine)
         indexer.indexerDb.getTokenInfo
             .withArgs('', sinon.match.any, sinon.match.any)
             .resolves(null);
@@ -88,7 +88,7 @@ describe('Dispenser action handler @regression @tier2', function () {
         sinon.restore();
     });
 
-    // ─── Format 0 — Create Dispenser ───────────────────────────────────────
+    // ─── Format 0: Create Dispenser ───────────────────────────────────────
 
     describe('Format 0 – Create Dispenser', function () {
 
@@ -233,7 +233,7 @@ describe('Dispenser action handler @regression @tier2', function () {
         });
     });
 
-    // ─── Format 1 — Cancel Dispenser ───────────────────────────────────────
+    // ─── Format 1: Cancel Dispenser ───────────────────────────────────────
 
     describe('Format 1 – Cancel Dispenser', function () {
 
@@ -294,7 +294,7 @@ describe('Dispenser action handler @regression @tier2', function () {
 
         it('cancel of unknown dispenser (getDispenserInfo returns null) throws before validation', async function () {
             // When dispenserInfo is null, the code crashes at line 99 of dispenser.js (info['GIVE_TICK'])
-            // before the validation check can run — this is a known code limitation.
+            // before the validation check can run (this is a known code limitation).
             // We verify that the error is propagated as a rejection.
             indexer.indexerDb.getDispenserInfo.resolves(null);
 
@@ -331,7 +331,7 @@ describe('Dispenser action handler @regression @tier2', function () {
         });
     });
 
-    // ─── Format 2 — Edit Dispenser ─────────────────────────────────────────
+    // ─── Format 2: Edit Dispenser ─────────────────────────────────────────
 
     describe('Format 2 – Edit Dispenser', function () {
 
@@ -574,7 +574,7 @@ describe('Dispenser action handler @regression @tier2', function () {
 
             await dispenser.parse(params, data, false);
 
-            // If UNIFIED_FEES branches covered — status valid means fee path was exercised
+            // If UNIFIED_FEES branches covered; status valid means fee path was exercised
             assert.strictEqual(data['STATUS'], 'valid');
         });
     });
@@ -591,7 +591,7 @@ describe('Dispenser action handler @regression @tier2', function () {
 
             await dispenser.parse(params, data, false);
 
-            // valid or invalid depending on fee — key point is legacy branch was executed
+            // valid or invalid depending on fee; key point is legacy branch was executed
             sinon.assert.calledOnce(indexer.indexerDb.createDispenser);
         });
     });

@@ -11,12 +11,12 @@
  * contact legal@dankest.llc.
  *
  **********************************************************************
- * EXECUTE host-fault propagation — halt-vs-fabricate (consensus).
+ * EXECUTE host-fault propagation: halt-vs-fabricate (consensus).
  *
  * When the out-of-process VM executor is permanently broken (worker can never
  * start: fork EAGAIN, isolated-vm load failure) it REJECTS with a HostFaultError
  * (code EXECUTOR_UNAVAILABLE) rather than fabricating an out_of_resource result.
- * The EXECUTE handler must NOT swallow that into a committed status — it must let
+ * The EXECUTE handler must NOT swallow that into a committed status; it must let
  * it propagate so the block loop (XChainIndexer.js) HALTS and retries instead of
  * committing a fabricated result that would diverge this node's contract_hash and
  * fork it off the fleet. This pins that propagation contract.
@@ -33,7 +33,7 @@ class HostFaultError extends Error {
     constructor(reason) { super(reason || 'executor unavailable'); this.name = 'HostFaultError'; this.code = 'EXECUTOR_UNAVAILABLE'; }
 }
 
-describe('EXECUTE host-fault propagation — halt, not fabricate @regression @tier1', function () {
+describe('EXECUTE host-fault propagation: halt, not fabricate @regression @tier1', function () {
 
     function buildHandler(vmExecute) {
         const config = getTestConfig();
@@ -51,7 +51,7 @@ describe('EXECUTE host-fault propagation — halt, not fabricate @regression @ti
         db.getCrossChainDataForVM  = sinon.stub().resolves({});
         db.getContractStakeDataForVM = sinon.stub().resolves({});
         // If the handler ever reached commit (it must NOT on a host fault), surface it:
-        db.createContractExecution = sinon.stub().rejects(new Error('reached commit — host fault was swallowed!'));
+        db.createContractExecution = sinon.stub().rejects(new Error('reached commit: host fault was swallowed!'));
 
         indexer.vm    = { execute: vmExecute };
         indexer.hubDb = null;
@@ -71,7 +71,7 @@ describe('EXECUTE host-fault propagation — halt, not fabricate @regression @ti
     });
 
     it('still COMMITS for a normal VM failure result (fabricate path unchanged)', async function () {
-        // A genuine resource exhaustion is a deterministic contract outcome — the
+        // A genuine resource exhaustion is a deterministic contract outcome; the
         // handler must record it and advance, NOT halt. (Sanity that the propagation
         // branch is scoped to host faults only.)
         const handler = buildHandler(sinon.stub().resolves({

@@ -32,7 +32,7 @@ describe('Utility @regression @tier1', function () {
         it('accepts a clean numeric string', function () {
             assert.strictEqual(util.resolveGuardGasCeiling({ GAS_SCHEDULE: { VM_GUARD_GAS_CEILING: '12345' } }), 12345);
         });
-        it('throws (no silent default) when the key is missing — would otherwise fork a misconfigured node', function () {
+        it('throws (no silent default) when the key is missing: would otherwise fork a misconfigured node', function () {
             assert.throws(() => util.resolveGuardGasCeiling({ GAS_SCHEDULE: {} }), /VM_GUARD_GAS_CEILING/);
             assert.throws(() => util.resolveGuardGasCeiling({}), /VM_GUARD_GAS_CEILING/);
         });
@@ -62,7 +62,7 @@ describe('Utility @regression @tier1', function () {
             };
         });
 
-        it('pass 1 — injects an XEXEC for each dispatch targeting this chain', async function () {
+        it('pass 1: injects an XEXEC for each dispatch targeting this chain', async function () {
             const call = { call_id: 'a'.repeat(64), target_chain: 'BTC' };
             db.getEffectiveUndispatchedCalls.resolves([call]);
             await util.processCrossChainCalls(actions, db, 100, 1700000000);
@@ -73,7 +73,7 @@ describe('Utility @regression @tier1', function () {
             assert.strictEqual(data['BLOCK_INDEX'], 100);
         });
 
-        it('pass 2 — delivers each result via actionXcall.processResult', async function () {
+        it('pass 2: delivers each result via actionXcall.processResult', async function () {
             const result = { call_id: 'b'.repeat(64) };
             db.getEffectiveUnprocessedCallResults.resolves([result]);
             await util.processCrossChainCalls(actions, db, 200, 1700000100);
@@ -81,7 +81,7 @@ describe('Utility @regression @tier1', function () {
             assert.strictEqual(processResult.firstCall.args[1]['BLOCK_INDEX'], 200);
         });
 
-        it('pass 3 — synthesizes an XCALL v2 expiry for each past-deadline request', async function () {
+        it('pass 3: synthesizes an XCALL v2 expiry for each past-deadline request', async function () {
             db.getExpiredCrossChainCallRequests.resolves([{ call_id: 'c'.repeat(64) }]);
             await util.processCrossChainCalls(actions, db, 300, 1700000200);
             assert.ok(processAction.calledOnceWith('XCALL', [2, 'c'.repeat(64)]));
@@ -353,7 +353,7 @@ describe('Utility @regression @tier1', function () {
     describe('bcmulfloor()', function () {
         it('should floor a midpoint fractional result rather than rounding up', function () {
             // holders balance = 3, dividend amount = 0.5, decimals = 0
-            // full-precision product = 1.5 — banker's rounding gives 2, floor gives 1
+            // full-precision product = 1.5: banker's rounding gives 2, floor gives 1
             assert.strictEqual(util.bcmulfloor('3', '0.5', 0).toString(), '1');
         });
         it('should floor a non-midpoint fractional result', function () {
@@ -574,7 +574,7 @@ describe('Utility @regression @tier1', function () {
     });
 
     describe('isCryptoAddress()', function () {
-        // Env at top of file is BTC/regtest — default validation context
+        // Env at top of file is BTC/regtest: default validation context
         it('should accept a valid regtest P2PKH address', function () {
             assert.strictEqual(util.isCryptoAddress('mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH'), true);
         });
@@ -928,7 +928,7 @@ describe('Utility @regression @tier1', function () {
         it('leaves numeric STRING fields as strings (string is the canonical form)', function () {
             // setNumberFormats only coerces non-string numerics to bignumber
             // (guard: typeof value !== 'string'). Wire/amount values are strings
-            // everywhere, so they pass through untouched — no float/bignumber drift.
+            // everywhere, so they pass through untouched: no float/bignumber drift.
             const data = { AMOUNT: '100', DECIMALS: '8' };
             const result = util.setNumberFormats(data);
             assert.strictEqual(typeof result.AMOUNT, 'string');

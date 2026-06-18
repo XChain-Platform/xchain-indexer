@@ -85,7 +85,7 @@ class Collect {
         // before this COLLECT's block. The scope makes the claim replayable: on a
         // reindex (or ANCHOR full-parse recovery, which bulk-restores pushed
         // reward rows) this COLLECT must see exactly the rewards that were
-        // visible when it confirmed — not rewards earned later (CONSENSUS).
+        // visible when it confirmed, not rewards earned later (CONSENSUS).
         let rewardAmount = '0';
         if(!error){
             rewardAmount = await this.indexerDb.getUnclaimedRewardTotal(data['SOURCE'], data['BLOCK_INDEX']);
@@ -96,8 +96,8 @@ class Collect {
         // Verify the reward pool can cover this claim. Rewards are paid by debiting the
         // pre-funded REWARD address (never minted), so a claim that would overdraw the pool
         // is rejected here. Because this sets `error` before STATUS is computed below, the
-        // claim is recorded as invalid and getUnclaimedRewardTotal() keeps it unclaimed —
-        // the validator can COLLECT again once the pool is topped up. The balance is read at
+        // claim is recorded as invalid and getUnclaimedRewardTotal() keeps it unclaimed.
+        // The validator can COLLECT again once the pool is topped up. The balance is read at
         // (BLOCK_INDEX, ACTION_INDEX) so accept/reject is identical across all validators.
         if(!error){
             let rewardPool = this.config['ADDRESS']['REWARD'];
@@ -130,7 +130,7 @@ class Collect {
             debits  = [];
 
         // If valid, pay the reward by debiting the pre-funded pool and crediting SOURCE
-        // (no minting — total XCHAIN supply is unchanged by COLLECT)
+        // (no minting; total XCHAIN supply is unchanged by COLLECT)
         if(status === 'valid'){
             debits.push([gas, rewardAmount, rewardPool]);
             credits.push([gas, rewardAmount, data['SOURCE']]);

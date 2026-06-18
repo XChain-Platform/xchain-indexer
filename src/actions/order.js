@@ -168,11 +168,11 @@ class Order {
         if(!error && format==0 && isNativeCoinGive && isNativeCoinGet)
             error = 'invalid: cannot trade native coin for native coin';
 
-        // Validate GIVE_TICK exists (skip for native coin — no token to validate)
+        // Validate GIVE_TICK exists (skip for native coin; no token to validate)
         if(!error && format==0 && !isNativeCoinGive && !giveTokenInfo)
             error = 'invalid: GIVE_TICK (unknown)';
 
-        // Validate GET_TICK exists (skip for native coin — no token to validate — and for
+        // Validate GET_TICK exists (skip for native coin; no token to validate; and skip for
         // cross-chain, where GET_TICK lives on another COIN network and is validated by the
         // xchain-hub federation, not locally)
         if(!error && format==0 && !isNativeCoinGet && !isCrossChain && !getTokenInfo)
@@ -274,7 +274,7 @@ class Order {
         if(!error && String(data['MEMO']).length > this.config['MAX_MEMO_LENGTH'])
             error = 'invalid: MEMO (length)';
 
-        // Verify TICK action is allowed from SOURCE (allow/block lists) — skip for native coin
+        // Verify TICK action is allowed from SOURCE (allow/block lists); skip for native coin
         if(!error && format==0 && !isNativeCoinGive && await this.indexerDb.isActionAllowed(data['SOURCE'], data['GIVE_TICK']) == false)
             error = 'invalid: SOURCE (not authorized)';
 
@@ -312,7 +312,7 @@ class Order {
             }
         }
 
-        // Verify SOURCE has enough balances to cover GIVE_AMOUNT (skip for native coin and ownership — no balance to escrow)
+        // Verify SOURCE has enough balances to cover GIVE_AMOUNT (skip for native coin and ownership; no balance to escrow)
         if(!error && format==0 && !isNativeCoinGive && !isOwnershipGive && !this.util.hasBalance(balances, giveTokenInfo['TICK_ID'], data['GIVE_AMOUNT']))
             error = 'invalid: insufficient funds (GIVE_AMOUNT)';
 
@@ -320,7 +320,7 @@ class Order {
         if(!error && format==0 && !isNativeCoinGive && !isOwnershipGive)
             balances = this.util.debitBalances(balances, giveTokenInfo['TICK_ID'], data['GIVE_AMOUNT']);
 
-        // Calculate total fee for this order — expiration + ownership-escrow premium (create only)
+        // Calculate total fee for this order: expiration + ownership-escrow premium (create only)
         fees['AMOUNT'] = 0;
 
         if(!error && (format==0 || format==2)){
@@ -397,7 +397,7 @@ class Order {
                 // Persist the guard's royalty/fee split (bps legs) on the order row; the protocol
                 // applies it to the seller's proceeds at each match (Utility.applyProceedsSplit).
                 // NB: `order` was snapshotted (Object.assign) before the guard ran, and createOrder
-                // persists `order` — so set the legs on BOTH or they never reach the DB.
+                // persists `order`, so set the legs on BOTH or they never reach the DB.
                 if(result.payoutLegs)
                     data['PAYOUT_LEGS'] = order['PAYOUT_LEGS'] = JSON.stringify(result.payoutLegs);
             }
@@ -456,7 +456,7 @@ class Order {
             // Format 0 - Create Order
             if(format==0){
                 if(isOwnershipGive){
-                    // Selling ownership: no balance escrow — mark the tick as ownership-escrowed
+                    // Selling ownership: no balance escrow. Mark the tick as ownership-escrowed
                     // for this order. tokens.owner_id stays at SOURCE; admin actions are gated by
                     // escrow_action_index until cancel / expire / match clears it.
                     await this.indexerDb.setTokenEscrow(data['GIVE_TICK'], data['ACTION_INDEX']);
@@ -465,7 +465,7 @@ class Order {
                     debits.push([data['GIVE_TICK'], data['GIVE_AMOUNT'], data['SOURCE']]);
                     escrows.push([data['GIVE_TICK'], data['GIVE_AMOUNT'], data['SOURCE']]);
                 }
-                // (Native coin GIVE: no escrow — obligation created at match time via COINPay)
+                // (Native coin GIVE: no escrow; obligation created at match time via COINPay)
 
                 // Create record in the orders_statuses table
                 await this.indexerDb.createOrderStatus(data['ACTION_INDEX'], data['ACTION_INDEX'], 'open');
@@ -478,13 +478,13 @@ class Order {
                 let pendingObligations = await this.indexerDb.getPendingCoinpayObligationsByOrder(orderInfo['ACTION_INDEX']);
 
                 if(pendingObligations.length > 0){
-                    // Two-phase cancel: set status to 'cancelling' — blocks new matches, pending obligations must resolve first
+                    // Two-phase cancel: set status to 'cancelling'. Blocks new matches; pending obligations must resolve first.
                     // Ownership escrow stays set; coinpay.js will release it when the final obligation resolves.
                     await this.indexerDb.createOrderStatus(data['ACTION_INDEX'], orderInfo['ACTION_INDEX'], 'cancelling');
                 } else {
-                    // No pending obligations — cancel immediately
+                    // No pending obligations. Cancel immediately.
                     if(orderInfo['GIVE_OWNERSHIP']==1){
-                        // Release ownership escrow back to the seller (tokens.owner_id is unchanged — only the gate clears)
+                        // Release ownership escrow back to the seller (tokens.owner_id is unchanged; only the gate clears)
                         await this.indexerDb.clearTokenEscrow(orderInfo['GIVE_TICK']);
                     } else if(!this.util.isNull(orderInfo['GIVE_TICK'])){
                         // Debit token from escrows and credit back to seller
@@ -524,7 +524,7 @@ class Order {
         await this.mapper.createMappings(data);
 
         // Check to see if we have any matches for this order. Cross-chain orders are NOT
-        // matched locally — the counterparty lives in another chain's indexer DB, invisible
+        // matched locally; the counterparty lives in another chain's indexer DB, invisible
         // to the local ORDER_MATCH query. The xchain-hub federation matches them and delivers
         // a validator-signed fill via the hub mirror, which the indexer settles from escrow
         // (see the cross-chain settlement pass). GIVE stays escrowed until filled/cancelled/expired.

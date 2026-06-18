@@ -17,7 +17,7 @@
  * exercises the start/stop lifecycle, and verifies the synced flag.
  *
  * Requires running MariaDB instances with decoder and indexer databases
- * already created and populated (or empty — empty is fine).
+ * already created and populated (or empty; empty is fine).
  *
  * SM-14: stop() causes start() to resolve cleanly
  * SM-15: isSynced() becomes true when the indexer is caught up
@@ -66,7 +66,7 @@ function buildIndexer() {
 async function closeIndexerPools(indexer) {
     try {
         if (indexer.decoderDb && indexer.decoderDb.pool) await indexer.decoderDb.pool.end();
-    } catch (_) { /* ignore — pool may already be closed */ }
+    } catch (_) { /* ignore: pool may already be closed */ }
     try {
         if (indexer.indexerDb && indexer.indexerDb.pool) await indexer.indexerDb.pool.end();
     } catch (_) { /* ignore */ }
@@ -98,7 +98,7 @@ describe('Smoke: indexer lifecycle @regression @tier3', function () {
 
         const indexer = buildIndexer();
 
-        // Fire the loop without awaiting — it runs until stopFlag is set
+        // Fire the loop without awaiting: it runs until stopFlag is set
         const startPromise = indexer.start();
 
         // Allow time for DB init and the first loop iteration to complete
@@ -125,7 +125,7 @@ describe('Smoke: indexer lifecycle @regression @tier3', function () {
         // Start the loop in the background
         const startPromise = indexer.start();
 
-        // Poll for synced state — should happen quickly when decoder DB is empty
+        // Poll for synced state: should happen quickly when decoder DB is empty
         // or already fully indexed. Give up to 10 s before asserting.
         const becameSynced = await waitFor(() => indexer.isSynced(), 10000, 200);
 

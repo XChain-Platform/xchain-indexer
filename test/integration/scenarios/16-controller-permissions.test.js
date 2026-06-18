@@ -11,7 +11,7 @@
  * contact legal@dankest.llc.
  *
  **********************************************************************
- * Integration: Phase E permissions manifest — deploy persistence.
+ * Integration: Phase E permissions manifest (deploy persistence).
  *
  * Drives real DEPLOY actions through the full indexer pipeline (decoder seed →
  * processBlocks) against a real MariaDB + the real (isolated-vm) VM. Verifies the
@@ -46,7 +46,7 @@ const { seedGas } = require('../setup/gas-seeder');
 const DEPLOYER = 'msK1rsgNVFPM4cR3X5rngczTKa6EtT4WKD'; // valid regtest P2PKH
 const T0  = 1700000000;
 // Inline DEPLOY CODE_ENCODING is base64 at/after DEPLOY_BASE64_CODE, which regtest
-// activates at genesis (protocol_changes.js) — so encode the fixture source as canonical
+// activates at genesis (protocol_changes.js), so encode the fixture source as canonical
 // base64 to match the indexer's decode path (deploy.js round-trips to reject non-canonical).
 const b64 = s => Buffer.from(s, 'utf8').toString('base64');
 const sha = s => crypto.createHash('sha256').update(s).digest('hex');
@@ -60,15 +60,15 @@ const BAD_C      = "module.exports={ permissions:['SEND'], maxTakeBps:2.5, guard
 // denied → the deploy is rejected and token CTORNEG is never created. POS permits ISSUE → its
 // constructor's ISSUE goes through → the deploy is valid and token CTORPOS exists. Together they
 // prove the allowlist discriminates against a LIVE-persisted manifest (a balance-based guard
-// emission would pass even with the allowlist disabled — the e2e E2 false-green this avoids).
-// A COMPLETE, valid ISSUE emission — so when the allowlist permits it the token is really
+// emission would pass even with the allowlist disabled (the e2e E2 false-green this avoids).
+// A COMPLETE, valid ISSUE emission: when the allowlist permits it the token is really
 // created (a bare {tick} ISSUE is rejected for missing fields, which would make the negative
 // case a false green of its own).
 const issueEmit = t => `xchain.emit.issue({tick:'${t}', maxSupply:'1000', maxMint:'1000', decimals:'0', mintSupply:'1000', memo:'x'});`;
 const CTOR_NEG = `module.exports={ permissions:['SEND'],  initialize:function(){ ${issueEmit('CTORNEG')} } };`;
 const CTOR_POS = `module.exports={ permissions:['ISSUE'], initialize:function(){ ${issueEmit('CTORPOS')} } };`;
 
-describe('Phase E permissions manifest — deploy persistence (real DB + real VM) @phaseE', function () {
+describe('Phase E permissions manifest: deploy persistence (real DB + real VM) @phaseE', function () {
     this.timeout(600000);
     let seeder, indexer;
 
@@ -107,8 +107,8 @@ describe('Phase E permissions manifest — deploy persistence (real DB + real VM
         return rows.find(r => r.code_hash === h);
     }
 
-    // A real token exists only if the ISSUE actually committed (the `tokens` table — NOT
-    // index_tickers, whose INSERT IGNORE / non-rewinding ids survive a rolled-back emission).
+    // A real token exists only if the ISSUE actually committed. Check the `tokens` table, NOT
+    // index_tickers, whose INSERT IGNORE / non-rewinding ids survive a rolled-back emission.
     async function tokenExists(tick) {
         const rows = await indexerQuery(
             `SELECT COUNT(*) AS c FROM tokens tk JOIN index_tickers it ON it.id = tk.tick_id WHERE it.tick = ?`,
@@ -160,10 +160,10 @@ describe('Phase E permissions manifest — deploy persistence (real DB + real VM
     });
 
     it('ENFORCES the allowlist: a PERMITTED constructor emission passes the manifest gate', async function () {
-        // CTOR_POS permits ISSUE, so its constructor ISSUE is NOT blocked by the allowlist — it
+        // CTOR_POS permits ISSUE, so its constructor ISSUE is NOT blocked by the allowlist. It
         // gets past the gate (and only then fails downstream on the issuance FEE the unfunded
         // contract address can't pay). The discriminating proof: exactly ONE 'not permitted'
-        // denial exists across all deploys — the CTOR_NEG one — NOT the ISSUE-permitting CTOR_POS.
+        // denial exists across all deploys: the CTOR_NEG one, not the ISSUE-permitting CTOR_POS.
         const errs = await execErrors();
         const denied = errs.filter(e => /not permitted/.test(e));
         assert.strictEqual(denied.length, 1,

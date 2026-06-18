@@ -76,7 +76,7 @@ describe('Callback @regression @tier3', function () {
 
     describe('valid callback', function () {
 
-        it('owner can callback — createCallback called with valid status', async function () {
+        it('owner can callback: createCallback called with valid status', async function () {
             const tokenInfo   = makeTokenInfo();
             const cbTokenInfo = makeCallbackTokenInfo();
 
@@ -118,7 +118,7 @@ describe('Callback @regression @tier3', function () {
             assert.ok(indexer.indexerDb.updateBalances.called);
         });
 
-        it('source not in holders — no debit for source', async function () {
+        it('source not in holders: no debit for source', async function () {
             const tokenInfo   = makeTokenInfo();
             const cbTokenInfo = makeCallbackTokenInfo();
 
@@ -126,7 +126,7 @@ describe('Callback @regression @tier3', function () {
             indexer.indexerDb.getTokenInfo.withArgs('CBTEST').resolves(cbTokenInfo);
             indexer.indexerDb.getAddressBalances.resolves({ 1: '1', 2: '50' });
             indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
-            // holders list includes source — source should be skipped
+            // holders list includes source; source should be skipped
             indexer.indexerDb.getHolders.resolves({ [OWNER]: '100', [HOLDER1]: '50' });
             indexer.indexerDb.getList.resolves([]);
             indexer.indexerDb.isActionAllowed.resolves(true);

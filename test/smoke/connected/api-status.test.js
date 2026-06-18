@@ -66,7 +66,7 @@ function buildApp(indexer) {
             if(indexer.indexerDb)
                 indexerBlock = await indexer.indexerDb.getLatestBlockIndex();
         } catch (err) {
-            // Database unreachable — leave indexerBlock null so lag stays null.
+            // Database unreachable; leave indexerBlock null so lag stays null.
         }
         let decoderBlock = (indexer.lastDecoderBlock != null) ? Number(indexer.lastDecoderBlock) : null;
         res.json({

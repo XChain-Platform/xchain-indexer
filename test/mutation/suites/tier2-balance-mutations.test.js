@@ -11,7 +11,7 @@
  * contact legal@dankest.llc.
  *
  **********************************************************************
- * Tier 2 — Balance & Ledger Mutations @tier2
+ * Tier 2: Balance & Ledger Mutations @tier2
  *
  * Verifies that tests detect mutations in getTokenSupply formula,
  * createCredit/Debit/Escrow delegation, createLedgerChangeRecord
@@ -88,7 +88,7 @@ function createLedgerTestContext() {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('Mutation — Tier 2: Balance & Ledger @tier2', function () {
+describe('Mutation: Tier 2: Balance & Ledger @tier2', function () {
 
     afterEach(function () {
         sinon.restore();
@@ -142,7 +142,7 @@ describe('Mutation — Tier 2: Balance & Ledger @tier2', function () {
             assert.notStrictEqual(formatted, '750', 'AOR-201 survived');
         });
 
-        it('AOR-202: supply formula with zero debits — bcsub mutation still detected', async function () {
+        it('AOR-202: supply formula with zero debits; bcsub mutation still detected', async function () {
             const { ctx, getTokenSupply, util } = createSupplyTestContext('500', '0', '100');
             operators.AOR.subToAdd(util);
             ctx.util = util;
@@ -150,18 +150,18 @@ describe('Mutation — Tier 2: Balance & Ledger @tier2', function () {
             const supply = await getTokenSupply('TEST');
             const formatted = util.bcformat(supply, 0);
             // Original: (500 - 0) + 100 = 600
-            // Mutant:   (500 + 0) + 100 = 600 — EQUIVALENT when debits=0!
+            // Mutant:   (500 + 0) + 100 = 600 (EQUIVALENT when debits=0!)
             registry.record({
                 id: 'AOR-202', operator: 'AOR', target: 'Database.getTokenSupply',
                 mutation: 'bcsub→bcadd with zero debits', file: 'src/db.js',
                 status: formatted === '600' ? 'survived' : 'killed',
                 killedBy: formatted === '600' ? '' : `supply = ${formatted}`,
-                description: 'getTokenSupply bcsub mutation — equivalent when debits=0',
+                description: 'getTokenSupply bcsub mutation, equivalent when debits=0',
             });
             // Expected: equivalent when debits are zero
         });
 
-        it('AOR-203: supply formula with zero escrows — bcadd mutation still detected', async function () {
+        it('AOR-203: supply formula with zero escrows; bcadd mutation still detected', async function () {
             const { ctx, getTokenSupply, util } = createSupplyTestContext('1000', '300', '0');
             operators.AOR.addToSub(util);
             ctx.util = util;
@@ -169,13 +169,13 @@ describe('Mutation — Tier 2: Balance & Ledger @tier2', function () {
             const supply = await getTokenSupply('TEST');
             const formatted = util.bcformat(supply, 0);
             // Original: (1000 - 300) + 0 = 700
-            // Mutant:   (1000 - 300) - 0 = 700 — EQUIVALENT when escrows=0!
+            // Mutant:   (1000 - 300) - 0 = 700 (EQUIVALENT when escrows=0!)
             registry.record({
                 id: 'AOR-203', operator: 'AOR', target: 'Database.getTokenSupply',
                 mutation: 'bcadd→bcsub with zero escrows', file: 'src/db.js',
                 status: formatted === '700' ? 'survived' : 'killed',
                 killedBy: formatted === '700' ? '' : `supply = ${formatted}`,
-                description: 'getTokenSupply bcadd mutation — equivalent when escrows=0',
+                description: 'getTokenSupply bcadd mutation, equivalent when escrows=0',
             });
             // Expected: equivalent when escrows are zero
         });

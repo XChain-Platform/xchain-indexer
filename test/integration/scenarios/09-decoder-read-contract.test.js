@@ -16,7 +16,7 @@
  * The indexer reads block data from the decoder's database via a single hand-written
  * JOIN query (db.js:getDecoderBlockData). The decoder produces that schema from its own
  * canonical DDL (xchain-decoder/src/sql/*.sql). These are two independent code paths in
- * two independent repos — nothing structurally guarantees the columns the indexer SELECTs
+ * two independent repos; nothing structurally guarantees the columns the indexer SELECTs
  * still exist in what the decoder produces.
  *
  * That seam has already bitten us: a test harness that was missing transactions.raw_data,
@@ -27,8 +27,8 @@
  *
  * This test pins the contract against the decoder's REAL production DDL (loaded by
  * createDecoderSchema from xchain-decoder/src/sql) in two ways:
- *   A. Static  — every column getDecoderBlockData() reads exists in the decoder schema.
- *   B. Behavioral — the actual query executes against that schema and returns the
+ *   A. Static: every column getDecoderBlockData() reads exists in the decoder schema.
+ *   B. Behavioral: the actual query executes against that schema and returns the
  *      normalized shape, with pubkey / raw_data / fee round-tripping through the JOIN.
  *
  * Run with the disposable test DB (handoff runbook):
@@ -51,7 +51,7 @@ const Database = require('../../../src/db.js');
 
 // ---------------------------------------------------------------------------
 // THE CONTRACT: the decoder columns the indexer's getDecoderBlockData() reads.
-// Keep this in lock-step with src/db.js:getDecoderBlockData — if you change the
+// Keep this in lock-step with src/db.js:getDecoderBlockData. If you change the
 // SELECT, change this map, and this test re-validates it against the real schema.
 // ---------------------------------------------------------------------------
 const READ_SURFACE = {
@@ -101,7 +101,7 @@ describe('Decoder->indexer DB read contract @regression @tier1', function () {
     });
 
     // -----------------------------------------------------------------------
-    // A. Static contract — declared read surface ⊆ decoder's real columns.
+    // A. Static contract: declared read surface ⊆ decoder's real columns.
     // -----------------------------------------------------------------------
     it('every column getDecoderBlockData() reads exists in the decoder production schema', async function () {
         for (const [table, cols] of Object.entries(READ_SURFACE)) {
@@ -119,7 +119,7 @@ describe('Decoder->indexer DB read contract @regression @tier1', function () {
     });
 
     // -----------------------------------------------------------------------
-    // B. Behavioral contract — the real query runs against the real schema and
+    // B. Behavioral contract: the real query runs against the real schema and
     //    returns the normalized shape. This is the guard that fails LOUD on the
     //    exact bug class (missing column -> query throws -> 0 actions silently).
     // -----------------------------------------------------------------------
@@ -142,7 +142,7 @@ describe('Decoder->indexer DB read contract @regression @tier1', function () {
         assert.ok(rows.length >= 1, 'expected at least one decoded row for the seeded block');
         const row = rows[0];
 
-        // Every promised key present — a renamed/dropped column surfaces here.
+        // Every promised key must be present (a renamed/dropped column surfaces here).
         for (const key of NORMALIZED_KEYS) {
             assert.ok(key in row, `getDecoderBlockData() result is missing promised key: "${key}"`);
         }
@@ -159,7 +159,7 @@ describe('Decoder->indexer DB read contract @regression @tier1', function () {
     });
 
     it('returns an empty array (not an error) for a block with no transactions', async function () {
-        // The query must still be schema-valid even when nothing matches — proves the
+        // The query must still be schema-valid even when nothing matches; this proves the
         // JOINs/columns resolve independent of whether rows exist.
         const rows = await decoderDb.getDecoderBlockData(999999);
         assert.deepStrictEqual(rows, []);

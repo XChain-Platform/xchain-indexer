@@ -16,29 +16,29 @@
  * Compares two indexer databases produced by INDEPENDENT indexer instances
  * over the same decoder data. Two comparison modes:
  *
- *   'strict'  — every table must be row-for-row, byte-for-byte identical,
+ *   'strict': every table must be row-for-row, byte-for-byte identical,
  *               surrogate ids included. This is the contract for two nodes
  *               with IDENTICAL processing histories (no reorg on either):
  *               id assignment is first-touch order, which identical inputs
  *               make deterministic.
  *
- *   'content' — for a reorg SURVIVOR vs a FRESH re-parse of the surviving
+ *   'content': for a reorg SURVIVOR vs a FRESH re-parse of the surviving
  *               chain. Three classes of local artifact legitimately differ:
- *                 1. AUTO_INCREMENT surrogate `id` columns — rollback deletes
+ *                 1. AUTO_INCREMENT surrogate `id` columns: rollback deletes
  *                    data rows but the counter keeps its high-water mark, so
  *                    re-inserted rows get higher ids on the survivor.
- *                 2. index_* dedup tables — rollback.js never deletes index
+ *                 2. index_* dedup tables: rollback.js never deletes index
  *                    rows, so the survivor retains residue created by
  *                    orphaned blocks; the fresh side must be a SUBSET.
  *                 3. Columns pointing INTO index_transactions (blocks'
- *                    *_hash_id, tx_hash_id) — the survivor's id-space
+ *                    *_hash_id, tx_hash_id); the survivor's id-space
  *                    contains orphan residue (orphaned tx hashes + orphaned
  *                    block-hash strings), shifting pointer values. The
  *                    referenced STRINGS are verified instead: the hash chain
  *                    is compared resolved (readHashChain), and tx hashes
  *                    come verbatim from the shared decoder corpus.
  *
- * In BOTH modes the consensus commitment is the resolved hash chain —
+ * In BOTH modes the consensus commitment is the resolved hash chain.
  * assertHashChainsEqual. Because getBlockHashes folds raw address_id /
  * tick_id / action_id / status_id values into the hashes, hash equality
  * transitively pins identical dedup-id ASSIGNMENT for all consensus-
@@ -50,7 +50,7 @@
 
 const assert = require('assert');
 
-// Wall-clock columns the indexer writes with NOW()/CURRENT_TIMESTAMP —
+// Wall-clock columns the indexer writes with NOW()/CURRENT_TIMESTAMP:
 // local artifacts, never consensus data.
 const GLOBAL_COLUMN_EXCLUSIONS = ['created_at', 'created', 'updated', 'logged_at'];
 const TABLE_COLUMN_EXCLUSIONS = { events: ['time'] };
@@ -63,8 +63,8 @@ const INDEX_TABLES = new Set([
 ]);
 
 // 'content'-mode exclusions: surrogate ids + pointers into index_transactions
-// (see header). Everything else — including raw address_id/tick_id/status_id
-// values — is still compared byte-wise.
+// (see header). Everything else, including raw address_id/tick_id/status_id,
+// values, is still compared byte-wise.
 const CONTENT_MODE_TABLE_EXCLUSIONS = {
     blocks: ['ledger_hash_id', 'actions_hash_id', 'contract_hash_id'],
 };
@@ -135,7 +135,7 @@ function assertHashChainsEqual(chainA, chainB, labelA = 'node A', labelB = 'node
             `${a.block_index} vs ${b.block_index}`);
         for (const field of ['ledger', 'actions', 'contracts']) {
             assert.strictEqual(a[field], b[field],
-                `CONSENSUS FORK: ${field} hash diverges at block ${a.block_index} — ` +
+                `CONSENSUS FORK: ${field} hash diverges at block ${a.block_index}: ` +
                 `${labelA}=${a[field]} ${labelB}=${b[field]} (first divergent block; ` +
                 `all earlier blocks agree)`);
         }
@@ -148,7 +148,7 @@ function assertHashChainsEqual(chainA, chainB, labelA = 'node A', labelB = 'node
  * Assert two indexer DBs are equivalent (see header for modes).
  *
  * @param {function} queryA - query fn for node A (in 'content' mode this MUST
- *   be the reorg SURVIVOR — the side allowed to hold index_* residue)
+ *   be the reorg SURVIVOR (the side allowed to hold index_* residue)
  * @param {function} queryB - query fn for node B (the fresh re-parse)
  * @param {object} [opts] {mode: 'strict'|'content', labelA, labelB, maxDiffRows}
  */
@@ -196,7 +196,7 @@ async function assertIndexerDbsEquivalent(queryA, queryB, opts = {}) {
 
 /**
  * Capture a whole indexer DB as canonical table snapshots (for comparisons
- * where both sides cannot exist at once — e.g. the multi-chain sweep, which
+ * where both sides cannot exist at once, e.g. the multi-chain sweep, which
  * rebuilds the SAME test DB once per coin). Returns {table: canonRows[]}.
  */
 async function captureDbState(queryFn, opts = {}) {

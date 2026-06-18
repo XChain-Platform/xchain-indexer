@@ -88,7 +88,7 @@ describe('ORDER and DISPENSER expiration boundary tests @regression @tier2', fun
     });
 
     it('TS-04: EXPIRATION at 183 days charges a fee and is valid when balance covers it', async function () {
-        // Tick ID 99 is the gas (XCHAIN) ticker — provide enough balance
+        // Tick ID 99 is the gas (XCHAIN) ticker; provide enough balance
         indexer.indexerDb.getAddressBalances.resolves({ 10: '100', 99: '1000' });
         const EXPIRATION = BLOCK_TIME + (183 * 86400);
         const params = makeParams('0|BTC|RAREPEPE|1||BTC|PEPECASH|10||' + SOURCE + '|' + EXPIRATION + '|||');

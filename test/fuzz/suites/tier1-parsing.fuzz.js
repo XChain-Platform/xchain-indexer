@@ -62,7 +62,7 @@ describe('Tier 1 - processTransaction crash safety @tier1', function () {
         sinon.restore();
     });
 
-    // Helper: process tx and log crashes (does not assert — crash logging only)
+    // Helper: process tx and log crashes (does not assert; crash logging only)
     async function processAndLog(tx) {
         try {
             await actions.processTransaction(tx);

@@ -11,7 +11,7 @@
  * contact legal@dankest.llc.
  *
  **********************************************************************
- * Tier 1 — Validation Function Mutations @tier1
+ * Tier 1: Validation Function Mutations @tier1
  *
  * Verifies that tests detect mutations in isValidAmountFormat, isValidFiatFormat,
  * isCryptoAddress, hasBalance, isNull, isNumeric, isValidLockValue, isValidLock.
@@ -24,7 +24,7 @@ const {
     registry, operators, Utility, sinon, mathjs,
 } = require('../setup/harness');
 
-describe('Mutation — Tier 1: Validation Functions @tier1', function () {
+describe('Mutation: Tier 1 - Validation Functions @tier1', function () {
     let util;
 
     beforeEach(function () {
@@ -39,80 +39,80 @@ describe('Mutation — Tier 1: Validation Functions @tier1', function () {
 
     describe('UOI: Unary Operator Negation', function () {
 
-        it('UOI-001: isNull negated — null appears non-null', function () {
+        it('UOI-001: isNull negated (null appears non-null)', function () {
             operators.UOI.negateIsNull(util);
             const result = util.isNull(null);
             registry.record({
                 id: 'UOI-001', operator: 'UOI', target: 'Utility.isNull',
-                mutation: '!isNull(null) — negated return', file: 'src/utility.js',
+                mutation: '!isNull(null) negated return', file: 'src/utility.js',
                 status: result !== true ? 'killed' : 'survived',
                 killedBy: result !== true ? `isNull(null) returned ${result}` : '',
-                description: 'isNull negated — null is not null',
+                description: 'isNull negated: null is not null',
             });
             assert.notStrictEqual(result, true, 'UOI-001 survived');
         });
 
-        it('UOI-002: isNumeric negated — valid number rejected', function () {
+        it('UOI-002: isNumeric negated (valid number rejected)', function () {
             operators.UOI.negateIsNumeric(util);
             const result = util.isNumeric(42);
             registry.record({
                 id: 'UOI-002', operator: 'UOI', target: 'Utility.isNumeric',
-                mutation: '!isNumeric(42) — negated return', file: 'src/utility.js',
+                mutation: '!isNumeric(42) negated return', file: 'src/utility.js',
                 status: result !== true ? 'killed' : 'survived',
                 killedBy: result !== true ? `isNumeric(42) returned ${result}` : '',
-                description: 'isNumeric negated — number rejected',
+                description: 'isNumeric negated: number rejected',
             });
             assert.notStrictEqual(result, true, 'UOI-002 survived');
         });
 
-        it('UOI-003: isCryptoAddress negated — valid address rejected', function () {
+        it('UOI-003: isCryptoAddress negated (valid address rejected)', function () {
             operators.UOI.negateIsCryptoAddress(util);
             const result = util.isCryptoAddress('mtr6NtB5KJRAxTX5AbuRtV7S4FF2PZJXUs'); // 34 chars
             registry.record({
                 id: 'UOI-003', operator: 'UOI', target: 'Utility.isCryptoAddress',
-                mutation: '!isCryptoAddress — negated return', file: 'src/utility.js',
+                mutation: '!isCryptoAddress negated return', file: 'src/utility.js',
                 status: result !== true ? 'killed' : 'survived',
                 killedBy: result !== true ? `isCryptoAddress returned ${result}` : '',
-                description: 'isCryptoAddress negated — valid P2PKH rejected',
+                description: 'isCryptoAddress negated: valid P2PKH rejected',
             });
             assert.notStrictEqual(result, true, 'UOI-003 survived');
         });
 
-        it('UOI-004: isValidAmountFormat negated — valid amount rejected', function () {
+        it('UOI-004: isValidAmountFormat negated (valid amount rejected)', function () {
             operators.UOI.negateIsValidAmountFormat(util);
             const result = util.isValidAmountFormat(0, '100');
             registry.record({
                 id: 'UOI-004', operator: 'UOI', target: 'Utility.isValidAmountFormat',
-                mutation: '!isValidAmountFormat — negated return', file: 'src/utility.js',
+                mutation: '!isValidAmountFormat negated return', file: 'src/utility.js',
                 status: result !== true ? 'killed' : 'survived',
                 killedBy: result !== true ? `isValidAmountFormat(0,'100') returned ${result}` : '',
-                description: 'isValidAmountFormat negated — valid amount rejected',
+                description: 'isValidAmountFormat negated: valid amount rejected',
             });
             assert.notStrictEqual(result, true, 'UOI-004 survived');
         });
 
-        it('UOI-005: hasBalance negated — sufficient balance denied', function () {
+        it('UOI-005: hasBalance negated (sufficient balance denied)', function () {
             operators.UOI.negateHasBalance(util);
             const result = util.hasBalance({ 1: '1000' }, 1, '100');
             registry.record({
                 id: 'UOI-005', operator: 'UOI', target: 'Utility.hasBalance',
-                mutation: '!hasBalance — negated return', file: 'src/utility.js',
+                mutation: '!hasBalance negated return', file: 'src/utility.js',
                 status: result !== true ? 'killed' : 'survived',
                 killedBy: result !== true ? `hasBalance(1000,100) returned ${result}` : '',
-                description: 'hasBalance negated — sufficient balance denied',
+                description: 'hasBalance negated: sufficient balance denied',
             });
             assert.notStrictEqual(result, true, 'UOI-005 survived');
         });
 
-        it('UOI-006: isValidLockValue negated — valid lock value rejected', function () {
+        it('UOI-006: isValidLockValue negated (valid lock value rejected)', function () {
             operators.UOI.negateIsValidLockValue(util);
             const result = util.isValidLockValue(0);
             registry.record({
                 id: 'UOI-006', operator: 'UOI', target: 'Utility.isValidLockValue',
-                mutation: '!isValidLockValue — negated return', file: 'src/utility.js',
+                mutation: '!isValidLockValue negated return', file: 'src/utility.js',
                 status: result !== true ? 'killed' : 'survived',
                 killedBy: result !== true ? `isValidLockValue(0) returned ${result}` : '',
-                description: 'isValidLockValue negated — 0 rejected',
+                description: 'isValidLockValue negated: 0 rejected',
             });
             assert.notStrictEqual(result, true, 'UOI-006 survived');
         });
@@ -139,7 +139,7 @@ describe('Mutation — Tier 1: Validation Functions @tier1', function () {
 
         it('BCR-011: isCryptoAddress version-byte check removed (wrong network accepted)', function () {
             operators.BCR.cryptoAddrNoVersionByte(util);
-            // Valid mainnet P2PKH — must be rejected on regtest by the real impl
+            // Valid mainnet P2PKH: must be rejected on regtest by the real impl
             const mainnetAddr = '17Roegnpwqam4FwwXsM47bX3Tf1jFyyKMt';
             const result = util.isCryptoAddress(mainnetAddr);
             registry.record({
@@ -154,7 +154,7 @@ describe('Mutation — Tier 1: Validation Functions @tier1', function () {
 
         it('BCR-012: isCryptoAddress segwit branch removed (bech32 rejected)', function () {
             operators.BCR.cryptoAddrNoSegwit(util);
-            // Valid regtest P2WPKH — real impl accepts it, mutant rejects it
+            // Valid regtest P2WPKH: real impl accepts it, mutant rejects it
             const segwitAddr = 'bcrt1qe6l04hhwjg98fmggptdm0cemj6lm7hhwzahaul';
             const result = util.isCryptoAddress(segwitAddr);
             registry.record({
@@ -170,7 +170,7 @@ describe('Mutation — Tier 1: Validation Functions @tier1', function () {
         it('BCR-013: isValidFiatFormat sats.length > → >= (off-by-one)', function () {
             operators.BCR.fiatFormatGte(util);
             // 2 decimals allowed, amount '1.55' has 2 decimal digits
-            // > 2 = false (valid), >= 2 = true (invalid — mutation rejects it)
+            // > 2 = false (valid), >= 2 = true (invalid; mutation rejects it)
             const result = util.isValidFiatFormat(2, '1.55');
             registry.record({
                 id: 'BCR-013', operator: 'BCR', target: 'Utility.isValidFiatFormat',
@@ -192,23 +192,23 @@ describe('Mutation — Tier 1: Validation Functions @tier1', function () {
                 mutation: 'version-byte mutant on correct-network address (non-boundary)', file: 'src/utility.js',
                 status: result === true ? 'survived' : 'killed',
                 killedBy: result === true ? '' : `valid addr returned ${result}`,
-                description: 'isCryptoAddress non-boundary — equivalent mutant',
+                description: 'isCryptoAddress non-boundary: equivalent mutant',
             });
             // Expected: equivalent
         });
 
         it('BCR-015: isValidFiatFormat with excess precision still detected', function () {
             operators.BCR.fiatFormatGte(util);
-            // 2 decimals, amount '1.555' has 3 digits: > 2 = true, >= 2 = true — both reject
+            // 2 decimals, amount '1.555' has 3 digits: > 2 = true, >= 2 = true (both reject)
             const result = util.isValidFiatFormat(2, '1.555');
             registry.record({
                 id: 'BCR-015', operator: 'BCR', target: 'Utility.isValidFiatFormat',
                 mutation: 'sats.length >= (excess precision)', file: 'src/utility.js',
                 status: result === false ? 'survived' : 'killed',
                 killedBy: result === false ? '' : `isValidFiatFormat(2,'1.555') returned ${result}`,
-                description: 'isValidFiatFormat excess precision — equivalent mutant',
+                description: 'isValidFiatFormat excess precision: equivalent mutant',
             });
-            // Expected: equivalent — both original and mutant reject
+            // Expected: equivalent. Both original and mutant reject.
         });
     });
 
@@ -216,7 +216,7 @@ describe('Mutation — Tier 1: Validation Functions @tier1', function () {
 
     describe('SBR: String/Boolean Replacement', function () {
 
-        it('SBR-001: isValidLockValue [0,1] → [1] — unlock (0) rejected', function () {
+        it('SBR-001: isValidLockValue [0,1] → [1] (unlock (0) rejected)', function () {
             operators.SBR.lockValueOnlyOne(util);
             const result = util.isValidLockValue(0);
             registry.record({
@@ -237,9 +237,9 @@ describe('Mutation — Tier 1: Validation Functions @tier1', function () {
                 mutation: 'valid=[1] (locking path)', file: 'src/utility.js',
                 status: result === true ? 'survived' : 'killed',
                 killedBy: result === true ? '' : `isValidLockValue(1) returned ${result}`,
-                description: 'isValidLockValue lock path — equivalent mutant',
+                description: 'isValidLockValue lock path: equivalent mutant',
             });
-            // Expected: equivalent — both accept 1
+            // Expected: equivalent. Both accept 1.
         });
 
         it('SBR-003: isNull no longer treats empty string as null', function () {
@@ -255,7 +255,7 @@ describe('Mutation — Tier 1: Validation Functions @tier1', function () {
             assert.notStrictEqual(result, true, 'SBR-003 survived');
         });
 
-        it('SBR-004: isValidAmountFormat divisible flipped — DECIMALS=0 accepts decimals', function () {
+        it('SBR-004: isValidAmountFormat divisible flipped (DECIMALS=0 accepts decimals)', function () {
             operators.SBR.amountDivisibleFlip(util);
             // DECIMALS=0 means indivisible: '100.5' should be invalid
             // With flip: divisible=true, so '100.5' becomes valid
@@ -265,7 +265,7 @@ describe('Mutation — Tier 1: Validation Functions @tier1', function () {
                 mutation: 'divisible flipped for DECIMALS=0', file: 'src/utility.js',
                 status: result !== false ? 'killed' : 'survived',
                 killedBy: result !== false ? `isValidAmountFormat(0,'100.5') returned ${result}` : '',
-                description: 'isValidAmountFormat divisible flip — decimal accepted for indivisible token',
+                description: 'isValidAmountFormat divisible flip: decimal accepted for indivisible token',
             });
             assert.notStrictEqual(result, false, 'SBR-004 survived');
         });
@@ -275,7 +275,7 @@ describe('Mutation — Tier 1: Validation Functions @tier1', function () {
 
     describe('SVR: Statement Value Replacement', function () {
 
-        it('SVR-010: isValidAmountFormat always true — objects accepted', function () {
+        it('SVR-010: isValidAmountFormat always true (objects accepted)', function () {
             operators.SVR.amountFormatAlwaysTrue(util);
             const result = util.isValidAmountFormat(0, { malicious: true });
             registry.record({
@@ -288,7 +288,7 @@ describe('Mutation — Tier 1: Validation Functions @tier1', function () {
             assert.strictEqual(result, true, 'SVR-010 survived');
         });
 
-        it('SVR-011: isValidAmountFormat always true — negatives accepted', function () {
+        it('SVR-011: isValidAmountFormat always true (negatives accepted)', function () {
             operators.SVR.amountFormatAlwaysTrue(util);
             const result = util.isValidAmountFormat(0, '-100');
             registry.record({
@@ -301,7 +301,7 @@ describe('Mutation — Tier 1: Validation Functions @tier1', function () {
             assert.strictEqual(result, true, 'SVR-011 survived');
         });
 
-        it('SVR-012: isCryptoAddress always true — empty string accepted', function () {
+        it('SVR-012: isCryptoAddress always true (empty string accepted)', function () {
             operators.SVR.cryptoAddressAlwaysTrue(util);
             const result = util.isCryptoAddress('');
             registry.record({
@@ -314,7 +314,7 @@ describe('Mutation — Tier 1: Validation Functions @tier1', function () {
             assert.strictEqual(result, true, 'SVR-012 survived');
         });
 
-        it('SVR-013: isValidLock always true — relocking allowed', function () {
+        it('SVR-013: isValidLock always true (relocking allowed)', function () {
             operators.SVR.lockAlwaysTrue(util);
             // Token has LOCK_MAX_SUPPLY=1, trying to unlock (value=0) should be invalid
             const tokenInfo = { LOCK_MAX_SUPPLY: 1 };
@@ -325,7 +325,7 @@ describe('Mutation — Tier 1: Validation Functions @tier1', function () {
                 mutation: 'always returns true', file: 'src/utility.js',
                 status: result === true ? 'killed' : 'survived',
                 killedBy: result === true ? 'relocking permitted' : '',
-                description: 'isValidLock returns true — unlock after lock allowed',
+                description: 'isValidLock returns true: unlock after lock allowed',
             });
             assert.strictEqual(result, true, 'SVR-013 survived');
         });
@@ -373,7 +373,7 @@ describe('Mutation — Tier 1: Validation Functions @tier1', function () {
                     return true;
                 return false;
             });
-            // Object with no safeToString — original returns false, mutant may not
+            // Object with no safeToString: original returns false, mutant may not
             const badObj = { toString() { return '[object Object]'; } };
             const result = util.isValidAmountFormat(0, badObj);
             // Both original and mutant reject because isNumeric('[object Object]') is false
@@ -382,12 +382,12 @@ describe('Mutation — Tier 1: Validation Functions @tier1', function () {
                 mutation: 'object type check removed', file: 'src/utility.js',
                 status: result === false ? 'survived' : 'killed',
                 killedBy: result === false ? '' : `object amount returned ${result}`,
-                description: 'isValidAmountFormat object check — may be equivalent',
+                description: 'isValidAmountFormat object check: may be equivalent',
             });
             // May survive if isNumeric catches it
         });
 
-        it('SDL-012: isCryptoAddress — both length ranges deleted (always false)', function () {
+        it('SDL-012: isCryptoAddress with both length ranges deleted (always false)', function () {
             sinon.stub(util, 'isCryptoAddress').returns(false);
             const result = util.isCryptoAddress('mtr6NtB5KJRAxTX5AbuRtV7S4FF2PZJXUs');
             registry.record({
@@ -400,7 +400,7 @@ describe('Mutation — Tier 1: Validation Functions @tier1', function () {
             assert.notStrictEqual(result, true, 'SDL-012 survived');
         });
 
-        it('SDL-013: isValidAmountFormat decimal sats check removed — excess precision accepted', function () {
+        it('SDL-013: isValidAmountFormat decimal sats check removed (excess precision accepted)', function () {
             sinon.stub(util, 'isValidAmountFormat').callsFake(function (decimals, amount) {
                 if (amount !== null && amount !== undefined && typeof amount === 'object' && this.safeToString(amount) === null)
                     return false;
@@ -440,7 +440,7 @@ describe('Mutation — Tier 1: Validation Functions @tier1', function () {
                 mutation: 'returns null', file: 'src/utility.js',
                 status: !result ? 'killed' : 'survived',
                 killedBy: !result ? `returned ${result}` : '',
-                description: 'isValidAmountFormat returns null — always falsy',
+                description: 'isValidAmountFormat returns null, always falsy',
             });
             assert.ok(!result, 'EMR-010 survived');
         });
@@ -453,7 +453,7 @@ describe('Mutation — Tier 1: Validation Functions @tier1', function () {
                 mutation: 'returns null', file: 'src/utility.js',
                 status: !result ? 'killed' : 'survived',
                 killedBy: !result ? `returned ${result}` : '',
-                description: 'isCryptoAddress returns null — always falsy',
+                description: 'isCryptoAddress returns null, always falsy',
             });
             assert.ok(!result, 'EMR-011 survived');
         });
@@ -466,7 +466,7 @@ describe('Mutation — Tier 1: Validation Functions @tier1', function () {
                 mutation: 'returns null', file: 'src/utility.js',
                 status: !result ? 'killed' : 'survived',
                 killedBy: !result ? `returned ${result}` : '',
-                description: 'hasBalance returns null — always denies',
+                description: 'hasBalance returns null, always denies',
             });
             assert.ok(!result, 'EMR-012 survived');
         });
@@ -479,7 +479,7 @@ describe('Mutation — Tier 1: Validation Functions @tier1', function () {
                 mutation: 'returns null', file: 'src/utility.js',
                 status: result !== true ? 'killed' : 'survived',
                 killedBy: result !== true ? `isNull(null) returned ${result}` : '',
-                description: 'isNull returns null — falsy for all inputs',
+                description: 'isNull returns null, falsy for all inputs',
             });
             assert.notStrictEqual(result, true, 'EMR-013 survived');
         });

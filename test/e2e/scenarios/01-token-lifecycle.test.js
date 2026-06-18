@@ -29,7 +29,7 @@ const { createClient } = require('../setup/api-client');
 const { assertApiOk, assertListResponse, assertTokenFields,
         assertBalanceEntry, assertDataContains } = require('../setup/api-assertions');
 
-// Test addresses (30 chars each — valid crypto address length)
+// Test addresses (30 chars each, valid crypto address length)
 const ADDR1 = 'mAddr1XXXXXXXXXXXXXXXXXXXXXXX1'; // issuer
 const ADDR2 = 'mAddr2XXXXXXXXXXXXXXXXXXXXXXX2'; // minter/recipient
 const ADDR3 = 'mAddr3XXXXXXXXXXXXXXXXXXXXXXX3'; // recipient

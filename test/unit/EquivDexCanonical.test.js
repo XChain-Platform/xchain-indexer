@@ -8,12 +8,12 @@
 // This file is part of XChain Platform. Licensed under the GNU Affero
 // General Public License v3.0 or later; see LICENSE.md.
 
-// EQUIV header (WI-2 bump 2) — cross-chain DEX (XDEX) round-trip.
+// EQUIV header (WI-2 bump 2): cross-chain DEX (XDEX) round-trip.
 // CONSENSUS-CRITICAL: the XMATCH canonical is rebuilt by the hub
 // (CrossChainDexEngine._canonicalMatch, with the live pending.view) and the
 // indexer/archive twins (cross_settle / StateAnchorPublisher / recovery, with the
 // persisted finalizing_view). DEX is view-bearing: putting <view> in the EQUIV
-// header is the R-3 defense — a legitimate view change re-signs the SAME content
+// header is the R-3 defense: a legitimate view change re-signs the SAME content
 // at a HIGHER view, so its bytes (and equivocation key) differ from the prior
 // view's, distinguishing it from a true double-sign.
 const assert = require('assert');

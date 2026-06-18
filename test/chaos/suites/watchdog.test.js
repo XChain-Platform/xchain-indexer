@@ -23,7 +23,7 @@ process.env.INDEXER_NETWORK = 'regtest';
 const assert = require('assert');
 const Utility = require('../../../src/utility.js');
 
-describe('Chaos — Watchdog Timeout', function () {
+describe('Chaos: Watchdog Timeout', function () {
     this.timeout(10000);
 
     let util;
@@ -74,7 +74,7 @@ describe('Chaos — Watchdog Timeout', function () {
         } catch (e) {
             assert.ok(e.message.includes('Watchdog timeout'));
         }
-        // Timer should be cleared by .finally() — no dangling timers
+        // Timer should be cleared by .finally() (no dangling timers)
     });
 
     it('WD-06: very short timeout rejects near-immediately', async function () {

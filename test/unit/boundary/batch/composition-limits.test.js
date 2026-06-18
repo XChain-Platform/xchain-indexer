@@ -140,7 +140,7 @@ describe('BATCH composition limit boundary tests @regression @tier3', function (
     });
 
     it('BAT-07: BATCH with empty action name followed by a valid SEND is handled gracefully', async function () {
-        // The empty segment becomes action '' — no limit defined for it, so the
+        // The empty segment becomes action '': no limit defined for it, so the
         // batch remains valid. processAction is called twice: once for '' and once for 'SEND'.
         const TX_DATA = 'BATCH|0||;SEND|0|TEST|100|' + DEST + '|';
         const params  = ['0'];

@@ -147,10 +147,10 @@ describe('Stake handler @regression @tier2', function () {
     });
 
     // -----------------------------------------------------------------------
-    // v1 — Create new capability stake
+    // v1: Create new capability stake
     // -----------------------------------------------------------------------
 
-    describe('v1 — create new capability stake', function () {
+    describe('v1: create new capability stake', function () {
 
         it('valid v1 stake → STATUS valid, createStake called', async function () {
             indexer.indexerDb.getActiveStakeByPubkey.resolves(null); // no existing stake
@@ -352,10 +352,10 @@ describe('Stake handler @regression @tier2', function () {
     });
 
     // -----------------------------------------------------------------------
-    // v2 — Top-up existing capability stake
+    // v2 : Top-up existing capability stake
     // -----------------------------------------------------------------------
 
-    describe('v2 — top-up existing capability stake', function () {
+    describe('v2 : top-up existing capability stake', function () {
 
         it('valid v2 top-up → STATUS valid', async function () {
             // Active stake exists and is owned by SOURCE (source_id=42)
@@ -370,7 +370,7 @@ describe('Stake handler @regression @tier2', function () {
             assert.strictEqual(data.STATUS, 'valid');
         });
 
-        it('v2 top-up — no active stake → invalid', async function () {
+        it('v2 top-up : no active stake → invalid', async function () {
             indexer.indexerDb.getActiveStakeByPubkey.resolves(null);
 
             const params = ['2', '100.00000000', PUBKEY];
@@ -381,7 +381,7 @@ describe('Stake handler @regression @tier2', function () {
             assert.ok(data.STATUS.includes('no active stake to top up'));
         });
 
-        it('v2 top-up — stake owned by different source → invalid', async function () {
+        it('v2 top-up : stake owned by different source → invalid', async function () {
             indexer.indexerDb.getActiveStakeByPubkey.resolves({ source_id: 99, amount: '500' });
             indexer.indexerDb.getAddressId.resolves(42); // current SOURCE id=42, not 99
 
@@ -393,7 +393,7 @@ describe('Stake handler @regression @tier2', function () {
             assert.ok(data.STATUS.includes('does not own this stake'));
         });
 
-        it('v2 top-up — source address id null → invalid', async function () {
+        it('v2 top-up : source address id null → invalid', async function () {
             indexer.indexerDb.getActiveStakeByPubkey.resolves({ source_id: 42, amount: '500' });
             indexer.indexerDb.getAddressId.resolves(null); // source not found
 
@@ -407,10 +407,10 @@ describe('Stake handler @regression @tier2', function () {
     });
 
     // -----------------------------------------------------------------------
-    // v3 — Contract-targeted stake
+    // v3 : Contract-targeted stake
     // -----------------------------------------------------------------------
 
-    describe('v3 — contract-targeted stake', function () {
+    describe('v3 : contract-targeted stake', function () {
 
         const CONTRACT_INDEX = '5';
         const CONTRACT_TICK  = 'TEST';
@@ -579,7 +579,7 @@ describe('Stake handler @regression @tier2', function () {
         });
 
         it('v3 amount exceeds token decimals → invalid', async function () {
-            // Token with 0 decimals — fractional amount is invalid
+            // Token with 0 decimals : fractional amount is invalid
             indexer.indexerDb.getTokenInfo.resolves(createTokenInfo({ TICK: CONTRACT_TICK, TICK_ID: 2, DECIMALS: 0 }));
             indexer.indexerDb.getAddressBalances.resolves({ 2: '1000' });
 

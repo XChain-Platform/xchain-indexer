@@ -18,7 +18,7 @@
  * After UNSTAKE v1 a contract_stakes row keeps its `amount` intact (only deactivation_block is set)
  * while the same tokens are mirrored into a contract_unstakes cooldown row. Pass 1 used to select
  * contract_stakes with no deactivation filter, so it slashed that phantom copy AND credited the
- * destination, while the cooldown sweep still refunded the full contract_unstakes row — destination
+ * destination, while the cooldown sweep still refunded the full contract_unstakes row; destination
  * +X and staker +X against one debit (supply inflation → fatal supply-sanity halt or silent mint).
  *
  * Fix: Pass 1 filters `deactivation_block IS NULL OR deactivation_block > blockIndex`, so a slash of a
@@ -67,7 +67,7 @@ describe('Database.slashContractStake() mid-cooldown double-count guard @regress
 
         const slashed = await db.slashContractStake(1, 10, 1, '100', 306);
 
-        // The whole 100 is slashed — but from contract_unstakes (Pass 2), not the phantom stake row.
+        // The whole 100 is slashed from contract_unstakes (Pass 2), not the phantom stake row.
         assert.strictEqual(String(slashed), '100');
 
         const pass1 = calls.find(c => /SELECT[\s\S]*FROM\s+contract_stakes/i.test(c.sql));

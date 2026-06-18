@@ -126,7 +126,7 @@ class Swap_Match {
                 // Create a record of this SWAP_MATCH action in the actions table
                 data['ACTION_INDEX'] = await this.indexerDb.createActionIndex(action);
 
-                // Settlement — two sides settle independently:
+                // Settlement: two sides settle independently:
                 //   - swapInfo.GIVE → matchInfo.GET_ADDRESS
                 //   - matchInfo.GIVE → swapInfo.GET_ADDRESS
                 // Ownership sides clear the escrow gate and atomically transfer ownership;

@@ -154,7 +154,7 @@ describe('Mint handler @regression @tier1', function () {
 
         it('TICK not found → invalid (token issued in prior block so null-guard path reached)', async function () {
             // NOTE: mint.js line 80 accesses tokenInfo['BLOCK_INDEX'] before the null guard on line 84.
-            // When tokenInfo is truly null this throws a TypeError — that is a production bug.
+            // When tokenInfo is truly null this throws a TypeError; that is a production bug.
             // We test the "unknown TICK" scenario by returning a token issued at a different block
             // then overriding validTickerBeforeTxIndex to force tokenInfo to be set to null inside the handler.
             //

@@ -11,11 +11,11 @@
  * contact legal@dankest.llc.
  *
  **********************************************************************
- * Integration tests — 14: MULTI-CHAIN FULL-STATE PARITY (P3, test-framework
+ * Integration tests - 14: MULTI-CHAIN FULL-STATE PARITY (P3, test-framework
  * program)
  *
  * The protocol's promise: action processing is chain-parameterized only
- * through the per-coin configs — identical input must produce IDENTICAL
+ * through the per-coin configs; identical input must produce IDENTICAL
  * indexer state on BTC, LTC and DOGE, down to the consensus hash chain.
  *
  * Scenario 11 asserts this for a 4-field projection of ISSUE/MINT/SEND.
@@ -39,17 +39,17 @@
  *     which would reject fee-bearing actions absent fee outputs).
  *
  * Exactly THREE per-chain artifacts remain, all normalized (not ignored)
- * before comparison — anything else that differs is a chain-dependence bug:
+ * before comparison; anything else that differs is a chain-dependence bug:
  *   1. transactions.data stores the raw ACTION string, which contains the
  *      run's coin literal (ORDER/DISPENSER give+get fields).
  *   2. index_coins holds that same literal as the deduped coin row.
  *   3. index_addresses holds the chain's own special addresses (the ISSUE
  *      fee is credited to the per-coin DONATE1 constant from config.ADDRESS).
- *      Their POSITIONS (ids) must still match — referencing rows compare raw.
+ *      Their POSITIONS (ids) must still match; referencing rows compare raw.
  *
  * NOTE: this parity holds only in the UNIFIED_FEES era (active since 2.0.0).
  * The pre-2.0.0 LEGACY fee constants are per-coin BY DESIGN (BTC issuance
- * 1.0 vs LTC 0.5 XCHAIN), so the running version matters — the launcher
+ * 1.0 vs LTC 0.5 XCHAIN), so the running version matters; the launcher
  * defaults npm_package_version to the real package version precisely so
  * direct-mocha and npm invocations both run in the shipping era.
  */
@@ -125,7 +125,7 @@ describe('14 – Multi-chain full-state parity @regression @tier1', function () 
             s.replace('"' + coin + '"', '"<COIN>"')).sort();
         out.index_addresses = state.index_addresses.map(s => {
             // The harness's gas-bootstrap funder happens to BE the BTC
-            // regtest GAS address — normalize it FIRST so the BTC run does
+            // regtest GAS address: normalize it FIRST so the BTC run does
             // not collapse it into <GAS> while other coins keep it raw.
             s = s.replace('"' + GAS_FUNDER + '"', '"<GAS_FUNDER>"');
             for (const [key, addr] of Object.entries(specialAddresses)) {
@@ -168,7 +168,7 @@ describe('14 – Multi-chain full-state parity @regression @tier1', function () 
             const actions = states[coin].index_actions.join(' ');
             for (const sys of ['ORDER_MATCH', 'ORDER_EXPIRE', 'DISPENSER', 'DESTROY']) {
                 assert.ok(actions.includes(sys),
-                    `${coin}: corpus never produced a ${sys} action — parity would be vacuous`);
+                    `${coin}: corpus never produced a ${sys} action; parity would be vacuous`);
             }
         }
     });

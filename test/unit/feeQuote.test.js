@@ -38,7 +38,7 @@ function makeUtil(coin, feeDestination){
     return util;
 }
 
-// Indexer DB stub. getLatestPrice ignores the staleness opts (mirrors nativeCoinFee.test.js) —
+// Indexer DB stub. getLatestPrice ignores the staleness opts (mirrors nativeCoinFee.test.js);
 // a pair set to null models a missing/stale price.
 function makeDb({ tokenExists = false, prices = {}, blockIndex = 100, blockTime = 1000 } = {}){
     return {

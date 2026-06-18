@@ -144,7 +144,7 @@ class Mint {
 
         // Verify AMOUNT is less than MAX_MINT (the OPTIONAL per-tx cap). MAX_MINT is
         // stored as 0 when the ISSUE omits it (createToken / db.js), and 0 means
-        // "no per-tx cap" — the only supply ceiling is MAX_SUPPLY (MINT.md). Guard the
+        // "no per-tx cap": the only supply ceiling is MAX_SUPPLY (MINT.md). Guard the
         // zero case with bcgt(MAX_MINT,0) exactly like the sibling MINT_ADDRESS_MAX /
         // MINT_START_BLOCK / MINT_STOP_BLOCK checks below; without it bcgt(AMOUNT,0) is
         // true for any positive AMOUNT and every mint on a no-MAX_MINT token is rejected.
@@ -157,7 +157,7 @@ class Mint {
         // (defense-in-depth over LOCK_MINT). On testnet/regtest the GAS tick is left
         // open-mintable so developers can self-mint a little play-money gas (MINT pays
         // no XCHAIN fee, only the native tx fee); the per-mint amount is bounded by the
-        // token's own MAX_MINT (set at genesis ISSUE) — no separate cap needed.
+        // token's own MAX_MINT (set at genesis ISSUE). No separate cap needed.
         // Subtokens (e.g. XCHAIN.foo) are NOT the GAS tick and are unaffected.
         if(!error && String(data['TICK']).toUpperCase()==this.config['GAS']
            && this.config['NETWORK']!='regtest' && this.config['NETWORK']!='testnet'
@@ -189,7 +189,7 @@ class Mint {
             error = 'invalid: MINT_STOP_BLOCK';
 
         // Controller-bound token: a `mint`-class controller (or the catch-all `all`) may gate supply
-        // creation — deny it or run programmable side-effects — after all MINT validation, before
+        // creation: deny it or run programmable side-effects. After all MINT validation, before
         // settlement. SOURCE pays the bounded guard gas, billed as a GAS debit in the valid block
         // below (updateTokens there recomputes GAS supply, so the per-block sanityCheck stays balanced).
         let guardFee = 0;

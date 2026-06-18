@@ -94,9 +94,9 @@ describe('Security: malformed parameter injection @regression @tier4', function 
 
         // Empty string is treated as null by isNull(), skipping AMOUNT format validation.
         // bcnum() now safely returns 0 for non-numeric inputs instead of crashing.
-        // A zero-amount SEND proceeds without error — this is safe (no state change).
+        // A zero-amount SEND proceeds without error; this is safe (no state change).
         await handler.parse(params, data, null);
-        // Key assertion: no crash — the handler completes regardless of status
+        // Key assertion: no crash; the handler completes regardless of status
         assert.ok(data.STATUS !== undefined, 'Handler should complete without crashing');
     });
 
@@ -124,7 +124,7 @@ describe('Security: malformed parameter injection @regression @tier4', function 
         const handler = new Issue(actionsCtx);
         indexer.indexerDb.getTokenInfo.resolves(null);
         // Pipe in TICK would have been split during parsing, so the params array
-        // would be misaligned — handler should not crash
+        // would be misaligned: handler should not crash
         const params  = makeIssueParams({ TICK: 'BAD|TICK' });
         const data    = createBaseData({ ACTION: 'ISSUE', FORMAT: 0, BLOCK_INDEX: LOW_BLOCK, SOURCE });
 

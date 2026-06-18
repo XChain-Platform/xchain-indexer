@@ -19,7 +19,7 @@ const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
 
 const Attest  = require('../../../src/actions/attest.js');
 const swq     = require('../../../src/stake_weighted_quorum.js');
-// Same module instance Attest holds a reference to (Node module cache) — stubbing
+// Same module instance Attest holds a reference to (Node module cache); stubbing
 // `verify` here controls signature acceptance inside the handler.
 const ed25519 = require('../../../src/ed25519.js');
 
@@ -108,9 +108,9 @@ describe('Attest (ATTEST) @regression @tier3', function () {
     });
 
     // ───────────────────────────────────────────────────────────────────────
-    // v0 — Request (VM emission only)
+    // v0: Request (VM emission only)
     // ───────────────────────────────────────────────────────────────────────
-    describe('v0 — request', function () {
+    describe('v0: request', function () {
 
         function v0Data(overrides = {}) {
             // EMITTER_POSITION and EMITTER_PATH are required fields on every
@@ -148,10 +148,10 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             // The defect this guards (#4213): emitted-action action_index is assigned by a
             // global max+1 counter and gets NEW values on reorg replay, so binding it forked
             // the PBFT. The preimage now uses EMITTER_PATH (content-derived) and NO action_index
-            // — a node that reorged (different ACTION_INDEX) must derive the SAME request_id.
+            // A node that reorged (different ACTION_INDEX) must derive the SAME request_id.
             // ROOT_ACTION_INDEX is the per-root discriminator (fixed at 100); both nodes
             // share it, so request_id depends on the ROOT, not the emission action_index.
-            const reqId = deriveReqId('aa', 100, '2>0', 5, 0);   // depends on root/path/position/tx/contract — not action_index
+            const reqId = deriveReqId('aa', 100, '2>0', 5, 0);   // depends on root/path/position/tx/contract (not action_index)
             const lo = v0Data({ TX_HASH: 'aa', EMITTER: 5, EMITTER_PATH: '2>0', EMITTER_POSITION: 0, ROOT_ACTION_INDEX: 100, ACTION_INDEX: 10 });
             const hi = v0Data({ TX_HASH: 'aa', EMITTER: 5, EMITTER_PATH: '2>0', EMITTER_POSITION: 0, ROOT_ACTION_INDEX: 100, ACTION_INDEX: 99999 });
             await handler.parse(v0Params({ requestId: reqId }), lo, null);
@@ -194,7 +194,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
         });
 
         it('accepts a root-level request where EMITTER_PATH is the empty string', async function () {
-            // The root on-chain EXECUTE/DEPLOY has call-path '' — a VALID value. The
+            // The root on-chain EXECUTE/DEPLOY has call-path '' (a VALID value). The
             // required-field check must test === undefined/null, NOT falsy, or every
             // root-level attestation would be wrongly rejected.
             const data = v0Data({ EMITTER_PATH: '' });
@@ -285,7 +285,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
         });
 
         it('rejects when REQUEST_PAYLOAD exceeds provider max size (lines 105-107)', async function () {
-            // Pass an oversized payload — providerRegistry.isPayloadSizeAllowed returns false
+            // Pass an oversized payload; providerRegistry.isPayloadSizeAllowed returns false
             const data = v0Data();
             const reqId = deriveReqId(data['TX_HASH'], data['ROOT_ACTION_INDEX'], data['EMITTER_PATH'], data['EMITTER'], data['EMITTER_POSITION']);
             // http_get max payload: check providerRegistry, or pass a 100KB+ payload that exceeds any limit
@@ -310,7 +310,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             assert.notStrictEqual(data['STATUS'], 'valid', 'oversize payload must not validate');
             assert.strictEqual(data['REQUEST_STATUS'], 'rejected',
                 'invalid request must carry the terminal rejected status, got: ' + data['REQUEST_STATUS']);
-            // The row is still recorded (audit trail), but with the rejected status —
+            // The row is still recorded (audit trail), but with the rejected status.
             // the createAttestationRequest call must receive REQUEST_STATUS=rejected.
             assert.ok(indexer.indexerDb.createAttestationRequest.calledOnce, 'invalid request is still recorded');
             const persisted = indexer.indexerDb.createAttestationRequest.firstCall.args[0];
@@ -335,7 +335,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             const data = v0Data();
             const reqId = deriveReqId(data['TX_HASH'], data['ROOT_ACTION_INDEX'], data['EMITTER_PATH'], data['EMITTER'], data['EMITTER_POSITION']);
             await handler.parse(v0Params({ requestId: reqId, payload: null }), data, null);
-            // null payload is 0 bytes — should not fail the size check
+            // null payload is 0 bytes; should not fail the size check
             assert.ok(indexer.indexerDb.createAttestationRequest.calledOnce);
         });
 
@@ -352,13 +352,13 @@ describe('Attest (ATTEST) @regression @tier3', function () {
     });
 
     // ───────────────────────────────────────────────────────────────────────
-    // v1 — Response (validator broadcast). The security-critical path.
+    // v1: Response (validator broadcast). The security-critical path.
     //
-    // NOTE on quorum: ATTEST v1 quorum is REDUNDANCY-based — a response is valid
+    // NOTE on quorum: ATTEST v1 quorum is REDUNDANCY-based; a response is valid
     // when validSigs >= request.redundancy (attest.js _parseResponse). The
     // 2f+1 PBFT formula lives in PRICE v0, not here; see price.test.js.
     // ───────────────────────────────────────────────────────────────────────
-    describe('v1 — response', function () {
+    describe('v1: response', function () {
 
         function v1Data(overrides = {}) {
             return createBaseData({
@@ -504,7 +504,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
         // ── responsible-set membership (deterministic selection) ─────────
         //
         // Quorum requires signers from the request's deterministic responsible
-        // set — top-REDUNDANCY validators ranked by SHA256(request_id || pubkey),
+        // set: top-REDUNDANCY validators ranked by SHA256(request_id || pubkey),
         // the same set _parseExpire charges missed_count to. Capability + a valid
         // sig is necessary but not sufficient: otherwise any capable coalition
         // could assemble a valid v1 (first-lands-wins, non-deterministic) and
@@ -699,13 +699,13 @@ describe('Attest (ATTEST) @regression @tier3', function () {
         });
 
         it('null meta in v1 params is handled without crash (canonical uses empty string, line 223)', async function () {
-            // meta=null → String(null || '') = '' in canonical — must not throw
+            // meta=null → String(null || '') = '' in canonical; must not throw
             indexer.indexerDb.getAttestationRequestById.resolves(makeRequestRow({ redundancy: 1 }));
             const data = v1Data();
             // Override v1Params to pass null meta
             const params = ['1', REQ_ID, 'http_get', b64('hi'), 'ok', null, '1', PUBKEY_A, SIG_A];
             await handler.parse(params, data, null);
-            // No throw — even if it ends invalid, the handler must complete
+            // No throw: even if it ends invalid, the handler must complete
             assert.ok(indexer.indexerDb.createAttestationResponse.calledOnce);
         });
 
@@ -730,9 +730,9 @@ describe('Attest (ATTEST) @regression @tier3', function () {
     });
 
     // ───────────────────────────────────────────────────────────────────────
-    // v2 — Expire (system-synthesized)
+    // v2: Expire (system-synthesized)
     // ───────────────────────────────────────────────────────────────────────
-    describe('v2 — expire', function () {
+    describe('v2: expire', function () {
 
         function v2Data(overrides = {}) {
             return createBaseData({
@@ -775,9 +775,9 @@ describe('Attest (ATTEST) @regression @tier3', function () {
     });
 
     // ───────────────────────────────────────────────────────────────────────
-    // E1 — request fees (FEE_TICK|FEE_AMOUNT optional trailing fields)
+    // E1: request fees (FEE_TICK|FEE_AMOUNT optional trailing fields)
     // ───────────────────────────────────────────────────────────────────────
-    describe('E1 — request fees', function () {
+    describe('E1: request fees', function () {
 
         const FEE_PAYER = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH'; // createBaseData SOURCE
         const POOL      = 'mrewardshQqD1ptkEBZGjPDF77L5uKJQmk'; // config ADDRESS.REWARD (regtest)
@@ -791,7 +791,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
                 ...overrides,
             });
         }
-        // VERSION|...|DEADLINE_BLOCKS|FEE_TICK|FEE_AMOUNT — reqId derived per fixture
+        // VERSION|...|DEADLINE_BLOCKS|FEE_TICK|FEE_AMOUNT; reqId derived per fixture
         function v0FeeParams(data, feeTick, feeAmount) {
             const reqId = deriveReqId(data['TX_HASH'], data['ROOT_ACTION_INDEX'], data['EMITTER_PATH'], data['EMITTER'], data['EMITTER_POSITION']);
             const base = ['0', reqId, 'http_get', 'q', 'onResult', '[]', '3', '50'];
@@ -819,7 +819,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             return head.concat(tail);
         }
 
-        describe('v0 — fee validation + escrow', function () {
+        describe('v0: fee validation + escrow', function () {
 
             it('valid fee → escrows + debits FEE_AMOUNT from FEE_PAYER, STATUS valid', async function () {
                 fundFeePayer();
@@ -913,7 +913,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             });
         });
 
-        describe('v1 — fee settlement on the terminal flip', function () {
+        describe('v1: fee settlement on the terminal flip', function () {
 
             beforeEach(function () {
                 sinon.stub(ed25519, 'verify').returns(true);
@@ -967,7 +967,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
                 assert.strictEqual(indexer.indexerDb.createValidatorReward.callCount, 3);
                 for (const call of indexer.indexerDb.createValidatorReward.getCalls())
                     assert.strictEqual(String(call.args[3]), '0.33333333', 'floor to GAS decimals');
-                // pool was credited the FULL fee; rewards reference 0.99999999 — dust stays
+                // pool was credited the FULL fee; rewards reference 0.99999999 (dust stays)
                 assert.strictEqual(String(indexer.indexerDb.createCredit.firstCall.args[2]), '1.00000001');
             });
 
@@ -1003,7 +1003,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             });
         });
 
-        describe('v2 — fee refund on expiry', function () {
+        describe('v2: fee refund on expiry', function () {
 
             function v2FeeData(overrides = {}) {
                 return createBaseData({
@@ -1090,7 +1090,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
         });
 
         it('callback_params_json with invalid JSON → catch branch fires, callbackParams stays []', async function () {
-            // Provide a request with malformed callback_params_json — the JSON.parse try/catch
+            // Provide a request with malformed callback_params_json; the JSON.parse try/catch
             // in _injectCallbackExecute (lines 404-406) must fire without throwing.
             indexer.indexerDb.getAttestationRequestById.resolves(
                 makeRequestRow({ redundancy: 1, callback_params_json: '<<<invalid json>>>' })
@@ -1214,7 +1214,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             indexer.indexerDb.getAttestationRequestById.resolves(makeRequestRow({ request_status: 'pending' }));
             const data = v2Data();
 
-            // The outer catch swallows the error — no re-throw
+            // The outer catch swallows the error (no re-throw)
             await assert.doesNotReject(
                 () => handler.parse(['2', REQ_ID], data, null)
             );
@@ -1246,7 +1246,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
         it('multiple validators → _computeResponsibleSet sorts and picks top redundancy (line 392)', async function () {
             // Provide 3 validators so the sort runs with multiple elements, exercising the
             // comparator including the a.hash < b.hash and a.hash > b.hash branches.
-            // (The equal branch is a SHA256 collision — genuinely unreachable in practice.)
+            // (The equal branch is a SHA256 collision, genuinely unreachable in practice.)
             indexer.indexerDb.getValidatorsByCapability.resolves([
                 { pubkey: PUBKEY_A },
                 { pubkey: PUBKEY_B },
@@ -1263,11 +1263,11 @@ describe('Attest (ATTEST) @regression @tier3', function () {
     });
 
     // ───────────────────────────────────────────────────────────────────────
-    // STAKE_WEIGHTED_QUORUM — source-deduped responsible-set selection (WI-1)
+    // STAKE_WEIGHTED_QUORUM: source-deduped responsible-set selection (WI-1)
     // The within-subset quorum stays count-based; only the SELECTION dedupes by
     // staking source so a source's delegated keys can't occupy multiple slots.
     // ───────────────────────────────────────────────────────────────────────
-    describe('STAKE_WEIGHTED_QUORUM — source-deduped responsible set', function () {
+    describe('STAKE_WEIGHTED_QUORUM: source-deduped responsible set', function () {
         beforeEach(function () {
             swq.isStakeWeightedQuorumActive.returns(true);   // already stubbed in outer beforeEach
         });
@@ -1289,7 +1289,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
         });
 
         it('SECURITY: a source with many delegated keys cannot dominate the responsible set', async function () {
-            // S1 delegates 5 keys; only S2 besides. redundancy 3 — but just 2 sources.
+            // S1 delegates 5 keys; only S2 besides. redundancy 3, but just 2 sources.
             indexer.indexerDb.getStakeWeightsByCapability.resolves([
                 ...['a', 'b', 'c', 'd', 'e'].map(s => ({ pubkey: 'k1' + s, source: 'S1', weight: '100' })),
                 { pubkey: 'k2', source: 'S2', weight: '100' },

@@ -378,7 +378,7 @@ describe('Execute (EXECUTE) @regression @tier2', function () {
 
     });
 
-    // ─── processEmission — emission routing ───────────────────────────────
+    // ─── processEmission: emission routing ───────────────────────────────
 
     describe('processEmission', function () {
 
@@ -487,7 +487,7 @@ describe('Execute (EXECUTE) @regression @tier2', function () {
             const sendHandler = { parse: sinon.stub().callsFake(async (params, data) => { data['STATUS'] = 'valid'; }) };
             actionsCtx.actionSend = sendHandler;
             handler = new Execute(actionsCtx);
-            // The emitter declared a manifest permitting only ISSUE — a SEND must be rejected
+            // The emitter declared a manifest permitting only ISSUE; a SEND must be rejected
             // fail-closed BEFORE the handler ever runs.
             actionsCtx.indexerDb.getContractPermissions = sinon.stub().resolves({ permissions: ['ISSUE'], maxTakeBps: null });
 
@@ -528,9 +528,9 @@ describe('Execute (EXECUTE) @regression @tier2', function () {
 
     });
 
-    // ─── IS_EMISSION — skip fee ───────────────────────────────────────────
+    // ─── IS_EMISSION: skip fee ───────────────────────────────────────────
 
-    describe('IS_EMISSION — fee skip', function () {
+    describe('IS_EMISSION: fee skip', function () {
 
         it('skips gas fee debit when IS_EMISSION is true', async function () {
             const config = getTestConfig();
@@ -539,7 +539,7 @@ describe('Execute (EXECUTE) @regression @tier2', function () {
             addExecuteStubs(localIndexer.indexerDb);
             localIndexer.indexerDb.isActionAllowed.resolves(true);
             localIndexer.indexerDb.getTokenInfo.resolves({ TICK_ID: 1 });
-            localIndexer.indexerDb.getAddressBalances.resolves({ 1: '0' }); // zero balance — would fail without skip
+            localIndexer.indexerDb.getAddressBalances.resolves({ 1: '0' }); // zero balance, would fail without skip
 
             const ctx = {
                 config:    localIndexer.config,

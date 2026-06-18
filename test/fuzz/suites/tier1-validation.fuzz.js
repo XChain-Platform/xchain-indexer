@@ -334,7 +334,7 @@ describe('Tier 1 - Validation functions @tier1', function () {
             assert.strictEqual(util.getFormatVersion([]), null);
         });
 
-        it('returns an integer, 0, or null — never NaN or undefined', function () {
+        it('returns an integer, 0, or null (never NaN or undefined)', function () {
             fc.assert(fc.property(
                 fc.oneof(fc.string(), fc.integer(), fc.float(), fc.constant(undefined), fc.constant(null)),
                 (format) => {

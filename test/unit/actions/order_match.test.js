@@ -67,7 +67,7 @@ function makeMatchInfo(overrides = {}) {
         GET_TICK:       'RAREPEPE',
         GET_REMAINING:  '10',
         GET_ADDRESS:    'mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM',
-        // GET_PRICE = GIVE_AMOUNT / GET_AMOUNT = 100/10 = 10 — must be <= orderInfo.GIVE_PRICE (10)
+        // GET_PRICE = GIVE_AMOUNT / GET_AMOUNT = 100/10 = 10 : must be <= orderInfo.GIVE_PRICE (10)
         GET_PRICE:      '10',
         ALLOW_LIST:     null,
         BLOCK_LIST:     null,
@@ -118,7 +118,7 @@ describe('Order_Match action handler @regression @tier2', function () {
         sinon.assert.notCalled(indexer.indexerDb.createOrderMatch);
     });
 
-    it('no matches found — createOrderMatch is never called', async function () {
+    it('no matches found, createOrderMatch is never called', async function () {
         indexer.indexerDb.getOrderInfo.resolves(makeOrderInfo());
         indexer.indexerDb.findOrderMatches.resolves([]);
 
@@ -132,7 +132,7 @@ describe('Order_Match action handler @regression @tier2', function () {
     // ─── Price validation ────────────────────────────────────────────────
 
     it('skips match when matchInfo.GET_PRICE > orderInfo.GIVE_PRICE', async function () {
-        // GIVE_PRICE=5, but match wants GET_PRICE=10 — mismatch → skip
+        // GIVE_PRICE=5, but match wants GET_PRICE=10 : mismatch → skip
         indexer.indexerDb.getOrderInfo.resolves(makeOrderInfo({ GIVE_PRICE: '5', GET_PRICE: '0.2' }));
         indexer.indexerDb.findOrderMatches.resolves([makeMatchInfo({ GET_PRICE: '10' })]);
 
@@ -192,7 +192,7 @@ describe('Order_Match action handler @regression @tier2', function () {
 
     // ─── Partial fill ────────────────────────────────────────────────────
 
-    it('partial fill — only the filled side is marked complete', async function () {
+    it('partial fill : only the filled side is marked complete', async function () {
         // Match has 50 PEPECASH (half of order's GET_REMAINING 100):
         // give_amount = 50 * 0.1 = 5 (5 RAREPEPE out of 10 remaining in order → order partially filled)
         // get_amount  = 5  * 10  = 50 (50 PEPECASH = all of match's GIVE_REMAINING → match fully filled)
@@ -221,7 +221,7 @@ describe('Order_Match action handler @regression @tier2', function () {
     it('NFT (0-decimal) partial fill settles an integer amount, never a fractional artifact', async function () {
         // RAREPEPE is an indivisible NFT (DECIMALS=0); PEPECASH is divisible (DECIMALS=8).
         // The counterparty's PEPECASH remaining (3) priced at a non-terminating 1/3 ratio
-        // makes the raw derived give_amount land at 0.999999999999999999… — a sub-ULP
+        // makes the raw derived give_amount land at 0.999999999999999999… : a sub-ULP
         // artifact of the true value 1. The match engine must snap this onto RAREPEPE's
         // 0-decimal grid (→ 1), never credit a fractional unit of an indivisible token.
         indexer.indexerDb.getTokenInfo
@@ -676,7 +676,7 @@ describe('Order_Match action handler @regression @tier2', function () {
             const data = createBaseData({ ACTION: 'ORDER_MATCH', BLOCK_TIME, ACTION_INDEX: 1 });
             await orderMatch.parse([], data, false);
 
-            // Either zero-get skip or price mismatch skip — both are valid debug paths
+            // Either zero-get skip or price mismatch skip : both are valid debug paths
             // Main goal: hit debug=true code path without crashing
             assert.ok(true, 'no crash in debug mode with zero GET amount scenario');
         });
@@ -702,7 +702,7 @@ describe('Order_Match action handler @regression @tier2', function () {
             const data = createBaseData({ ACTION: 'ORDER_MATCH', BLOCK_TIME, ACTION_INDEX: 1 });
             await orderMatch.parse([], data, false);
 
-            // Line 208 fires after remaining update — match succeeds
+            // Line 208 fires after remaining update : match succeeds
             sinon.assert.calledOnce(indexer.indexerDb.createOrderMatch);
         });
 
@@ -905,7 +905,7 @@ describe('Order_Match action handler @regression @tier2', function () {
                 GET_ADDRESS:    'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH',
             });
             const matchPaysNative = makeMatchInfo({
-                GIVE_TICK:      'PEPECASH', // non-null GIVE_TICK — not caught by first two elif branches
+                GIVE_TICK:      'PEPECASH', // non-null GIVE_TICK : not caught by first two elif branches
                 GIVE_REMAINING: '100',
                 GET_TICK:       'RAREPEPE',
                 GET_REMAINING:  '10',
@@ -995,7 +995,7 @@ describe('Order_Match action handler @regression @tier2', function () {
         const data = createBaseData({ ACTION: 'ORDER_MATCH', BLOCK_TIME, ACTION_INDEX: 1 });
         await orderMatch.parse([], data, false);
 
-        // Single-fill enforcement — must skip partial matches for ownership orders
+        // Single-fill enforcement : must skip partial matches for ownership orders
         sinon.assert.notCalled(indexer.indexerDb.createOrderMatch);
     });
 });
@@ -1007,7 +1007,7 @@ describe('Order_Match action handler @regression @tier2', function () {
 // (`-give_amount`), which coerces the mathjs BigNumber to an IEEE-754 double and
 // truncates digits past ~15 sig-figs, while the paired credit kept the intact
 // BigNumber. On a high-decimal tick the escrow magnitude then no longer equalled
-// the credit — per-row drift that trips the supply SanityError. The fix negates
+// the credit : per-row drift that trips the supply SanityError. The fix negates
 // in BigNumber space (bcsub), so the magnitudes are bit-identical.
 describe('Order_Match escrow/credit precision parity @regression @tier1', function () {
     let indexer, actionsCtx, orderMatch, ledgerSpy;

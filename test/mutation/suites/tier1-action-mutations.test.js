@@ -11,7 +11,7 @@
  * contact legal@dankest.llc.
  *
  **********************************************************************
- * Tier 1 — ACTION Handler Mutations @tier1
+ * Tier 1: ACTION Handler Mutations @tier1
  *
  * Verifies that tests detect mutations in Send.parse(), Destroy.parse(),
  * and Issue.parse() validation chains. Each mutation simulates a specific
@@ -46,7 +46,7 @@ function makeBalances(tickId, amount) {
 // Send Handler Mutations
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('Mutation — Tier 1: Send Handler @tier1', function () {
+describe('Mutation : Tier 1: Send Handler @tier1', function () {
     let indexer, handler;
 
     beforeEach(function () {
@@ -69,9 +69,9 @@ describe('Mutation — Tier 1: Send Handler @tier1', function () {
 
     // ── SDL: Statement Deletion in Send.parse() ──────────────────────────
 
-    describe('SDL: Statement Deletion — Send validation guards', function () {
+    describe('SDL: Statement Deletion : Send validation guards', function () {
 
-        it('SDL-100: TICK existence check deleted — unknown TICK gets valid', async function () {
+        it('SDL-100: TICK existence check deleted : unknown TICK gets valid', async function () {
             // Make TICK unknown
             indexer.indexerDb.getTokenInfo.resolves(null);
             // SDL mutation: hasBalance always true + skip the null tokenInfo check
@@ -90,14 +90,14 @@ describe('Mutation — Tier 1: Send Handler @tier1', function () {
                 killedBy: data.STATUS === 'valid' ? 'unknown TICK got valid' : '',
                 description: 'TICK existence check bypassed via stub',
             });
-            // Mutation makes unknown tick "valid" — this IS detected because we forced it
+            // Mutation makes unknown tick "valid" : this IS detected because we forced it
             assert.strictEqual(data.STATUS, 'valid', 'SDL-100: mutation should make unknown TICK valid');
         });
 
-        it('SDL-101: AMOUNT format check deleted — bad format gets valid', async function () {
+        it('SDL-101: AMOUNT format check deleted : bad format gets valid', async function () {
             // Apply mutation: isValidAmountFormat always returns true
             operators.SDL.skipAmountFormat(indexer.util);
-            // Use '-50' (negative) — invalid format but parseable by mathjs
+            // Use '-50' (negative) : invalid format but parseable by mathjs
             const params = ['0', 'TEST', '-50', DESTINATION, ''];
             const data = createBaseData({ ACTION: 'SEND', FORMAT: 0, SOURCE });
 
@@ -114,7 +114,7 @@ describe('Mutation — Tier 1: Send Handler @tier1', function () {
             assert.strictEqual(data.STATUS, 'valid', 'SDL-101: negative amount should pass with mutation');
         });
 
-        it('SDL-102: DESTINATION format check deleted — invalid address gets valid', async function () {
+        it('SDL-102: DESTINATION format check deleted : invalid address gets valid', async function () {
             operators.SDL.skipAddressFormat(indexer.util);
 
             const params = ['0', 'TEST', '100', 'X', '']; // X is not a valid address
@@ -133,7 +133,7 @@ describe('Mutation — Tier 1: Send Handler @tier1', function () {
             assert.strictEqual(data.STATUS, 'valid', 'SDL-102: bad address should pass with mutation');
         });
 
-        it('SDL-103: SOURCE sleeping check deleted — sleeping source gets valid', async function () {
+        it('SDL-103: SOURCE sleeping check deleted : sleeping source gets valid', async function () {
             // Default isActionAllowed returns true (mutation = always true)
             // Set up scenario where source IS sleeping
             indexer.indexerDb.isActionAllowed.resolves(true); // MUTATION: never false
@@ -153,7 +153,7 @@ describe('Mutation — Tier 1: Send Handler @tier1', function () {
             assert.strictEqual(data.STATUS, 'valid', 'SDL-103: sleeping source should pass with mutation');
         });
 
-        it('SDL-104: Balance check deleted — zero balance gets valid', async function () {
+        it('SDL-104: Balance check deleted : zero balance gets valid', async function () {
             operators.SDL.skipBalanceCheck(indexer.util);
             indexer.indexerDb.getAddressBalances.resolves(makeBalances(1, 0)); // Zero balance
 
@@ -168,12 +168,12 @@ describe('Mutation — Tier 1: Send Handler @tier1', function () {
                 mutation: 'hasBalance always true', file: 'src/actions/send.js',
                 status: detected ? 'killed' : 'survived',
                 killedBy: detected ? 'zero balance got valid' : '',
-                description: 'Balance check bypassed — zero balance accepted',
+                description: 'Balance check bypassed : zero balance accepted',
             });
             assert.strictEqual(data.STATUS, 'valid', 'SDL-104: zero balance should pass with mutation');
         });
 
-        it('SDL-105: MEMO pipe check deleted — pipe in memo gets valid', async function () {
+        it('SDL-105: MEMO pipe check deleted : pipe in memo gets valid', async function () {
             const params = ['0', 'TEST', '100', DESTINATION, 'memo|with|pipes'];
             const data = createBaseData({ ACTION: 'SEND', FORMAT: 0, SOURCE });
 
@@ -191,7 +191,7 @@ describe('Mutation — Tier 1: Send Handler @tier1', function () {
             assert.notStrictEqual(originalStatus, 'valid', 'SDL-105: pipe memo should be rejected');
         });
 
-        it('SDL-106: MEMO semicolon check — semicolon in memo detected', async function () {
+        it('SDL-106: MEMO semicolon check : semicolon in memo detected', async function () {
             const params = ['0', 'TEST', '100', DESTINATION, 'memo;with;semicolons'];
             const data = createBaseData({ ACTION: 'SEND', FORMAT: 0, SOURCE });
 
@@ -208,7 +208,7 @@ describe('Mutation — Tier 1: Send Handler @tier1', function () {
             assert.notStrictEqual(originalStatus, 'valid', 'SDL-106: semicolon memo should be rejected');
         });
 
-        it('SDL-107: REQUIRE_MEMO check — missing required memo detected', async function () {
+        it('SDL-107: REQUIRE_MEMO check : missing required memo detected', async function () {
             indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 1 });
 
             const params = ['0', 'TEST', '100', DESTINATION, ''];
@@ -230,9 +230,9 @@ describe('Mutation — Tier 1: Send Handler @tier1', function () {
 
     // ── UOI/SVR: Value mutations in Send ─────────────────────────────────
 
-    describe('UOI/SVR: Value Mutations — Send', function () {
+    describe('UOI/SVR: Value Mutations : Send', function () {
 
-        it('UOI-100: hasBalance negated — sufficient balance denied', async function () {
+        it('UOI-100: hasBalance negated : sufficient balance denied', async function () {
             operators.UOI.negateHasBalance(indexer.util);
 
             const params = ['0', 'TEST', '100', DESTINATION, ''];
@@ -246,12 +246,12 @@ describe('Mutation — Tier 1: Send Handler @tier1', function () {
                 mutation: 'hasBalance negated', file: 'src/actions/send.js',
                 status: detected ? 'killed' : 'survived',
                 killedBy: detected ? `got '${data.STATUS}'` : '',
-                description: 'hasBalance negated — sufficient balance rejected in send',
+                description: 'hasBalance negated : sufficient balance rejected in send',
             });
             assert.notStrictEqual(data.STATUS, 'valid', 'UOI-100 survived');
         });
 
-        it('UOI-101: isValidAmountFormat negated — valid amount rejected', async function () {
+        it('UOI-101: isValidAmountFormat negated : valid amount rejected', async function () {
             operators.UOI.negateIsValidAmountFormat(indexer.util);
 
             const params = ['0', 'TEST', '100', DESTINATION, ''];
@@ -265,12 +265,12 @@ describe('Mutation — Tier 1: Send Handler @tier1', function () {
                 mutation: 'isValidAmountFormat negated', file: 'src/actions/send.js',
                 status: detected ? 'killed' : 'survived',
                 killedBy: detected ? `got '${data.STATUS}'` : '',
-                description: 'isValidAmountFormat negated — valid amount rejected in send',
+                description: 'isValidAmountFormat negated : valid amount rejected in send',
             });
             assert.notStrictEqual(data.STATUS, 'valid', 'UOI-101 survived');
         });
 
-        it('UOI-102: isCryptoAddress negated — valid address rejected', async function () {
+        it('UOI-102: isCryptoAddress negated : valid address rejected', async function () {
             operators.UOI.negateIsCryptoAddress(indexer.util);
 
             const params = ['0', 'TEST', '100', DESTINATION, ''];
@@ -284,12 +284,12 @@ describe('Mutation — Tier 1: Send Handler @tier1', function () {
                 mutation: 'isCryptoAddress negated', file: 'src/actions/send.js',
                 status: detected ? 'killed' : 'survived',
                 killedBy: detected ? `got '${data.STATUS}'` : '',
-                description: 'isCryptoAddress negated — valid address rejected in send',
+                description: 'isCryptoAddress negated : valid address rejected in send',
             });
             assert.notStrictEqual(data.STATUS, 'valid', 'UOI-102 survived');
         });
 
-        it('SVR-100: isActionAllowed always true — bypasses all auth checks', async function () {
+        it('SVR-100: isActionAllowed always true : bypasses all auth checks', async function () {
             // With isActionAllowed always true, sleeping/blocked sources pass
             // Verify the happy path still works (this ensures the stub is applied)
             indexer.indexerDb.isActionAllowed.resolves(true);
@@ -303,7 +303,7 @@ describe('Mutation — Tier 1: Send Handler @tier1', function () {
                 id: 'SVR-100', operator: 'SVR', target: 'Send.parse → isActionAllowed',
                 mutation: 'isActionAllowed always true', file: 'src/actions/send.js',
                 status: 'killed',
-                killedBy: 'mutation verified — all auth checks bypassed',
+                killedBy: 'mutation verified : all auth checks bypassed',
                 description: 'isActionAllowed always returns true',
             });
             assert.strictEqual(data.STATUS, 'valid');
@@ -312,7 +312,7 @@ describe('Mutation — Tier 1: Send Handler @tier1', function () {
 
     // ── BCR: Boundary mutations in Send ──────────────────────────────────
 
-    describe('BCR: Boundary Mutations — Send', function () {
+    describe('BCR: Boundary Mutations : Send', function () {
 
         it('BCR-100: hasBalance exact-equal rejected in send context', async function () {
             operators.BCR.hasBalanceStrictGt(indexer.util);
@@ -329,12 +329,12 @@ describe('Mutation — Tier 1: Send Handler @tier1', function () {
                 mutation: 'largerEq → larger in hasBalance', file: 'src/actions/send.js',
                 status: detected ? 'killed' : 'survived',
                 killedBy: detected ? `exact balance got '${data.STATUS}'` : '',
-                description: 'hasBalance boundary — exact balance rejected in send',
+                description: 'hasBalance boundary : exact balance rejected in send',
             });
             assert.notStrictEqual(data.STATUS, 'valid', 'BCR-100 survived');
         });
 
-        it('BCR-101: MEMO length boundary — exactly MAX_MEMO_LENGTH', async function () {
+        it('BCR-101: MEMO length boundary : exactly MAX_MEMO_LENGTH', async function () {
             const maxLen = indexer.config['MAX_MEMO_LENGTH'] || 250;
             const exactMemo = 'a'.repeat(maxLen);
 
@@ -353,7 +353,7 @@ describe('Mutation — Tier 1: Send Handler @tier1', function () {
             assert.strictEqual(data.STATUS, 'valid', 'BCR-101: exact-length memo should be valid');
         });
 
-        it('BCR-102: MEMO length boundary — one over MAX_MEMO_LENGTH', async function () {
+        it('BCR-102: MEMO length boundary : one over MAX_MEMO_LENGTH', async function () {
             const maxLen = indexer.config['MAX_MEMO_LENGTH'] || 250;
             const longMemo = 'a'.repeat(maxLen + 1);
 
@@ -375,9 +375,9 @@ describe('Mutation — Tier 1: Send Handler @tier1', function () {
 
     // ── LCR: Logical Connector mutations ─────────────────────────────────
 
-    describe('LCR: Logical Connector Mutations — Send', function () {
+    describe('LCR: Logical Connector Mutations : Send', function () {
 
-        it('LCR-100: isValidAmountFormat bypassed — bad format passes', async function () {
+        it('LCR-100: isValidAmountFormat bypassed : bad format passes', async function () {
             operators.LCR.amountFormatBypass(indexer.util);
             // Use '-100' (negative) instead of 'abc' to avoid mathjs parse error
             // The format check should reject it, but mutation bypasses the check
@@ -397,7 +397,7 @@ describe('Mutation — Tier 1: Send Handler @tier1', function () {
             assert.strictEqual(data.STATUS, 'valid', 'LCR-100: mutation should let bad amount through');
         });
 
-        it('LCR-101: isCryptoAddress bypassed — invalid address passes', async function () {
+        it('LCR-101: isCryptoAddress bypassed : invalid address passes', async function () {
             operators.LCR.addressFormatBypass(indexer.util);
 
             const params = ['0', 'TEST', '100', 'short', ''];
@@ -416,7 +416,7 @@ describe('Mutation — Tier 1: Send Handler @tier1', function () {
             assert.strictEqual(data.STATUS, 'valid', 'LCR-101: mutation should let bad address through');
         });
 
-        it('LCR-102: hasBalance bypassed — insufficient funds passes', async function () {
+        it('LCR-102: hasBalance bypassed : insufficient funds passes', async function () {
             operators.LCR.balanceBypass(indexer.util);
             indexer.indexerDb.getAddressBalances.resolves(makeBalances(1, 0));
 
@@ -439,7 +439,7 @@ describe('Mutation — Tier 1: Send Handler @tier1', function () {
 
     // ── AOR: Arithmetic in Send consolidation ────────────────────────────
 
-    describe('AOR: Arithmetic Mutations — Send', function () {
+    describe('AOR: Arithmetic Mutations : Send', function () {
 
         it('AOR-100: bcadd→bcsub in send consolidation loop', async function () {
             operators.AOR.addToSub(indexer.util);
@@ -473,7 +473,7 @@ describe('Mutation — Tier 1: Send Handler @tier1', function () {
 // Destroy Handler Mutations
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('Mutation — Tier 1: Destroy Handler @tier1', function () {
+describe('Mutation : Tier 1: Destroy Handler @tier1', function () {
     let indexer, handler;
 
     beforeEach(function () {
@@ -490,9 +490,9 @@ describe('Mutation — Tier 1: Destroy Handler @tier1', function () {
         sinon.restore();
     });
 
-    describe('SDL: Statement Deletion — Destroy', function () {
+    describe('SDL: Statement Deletion : Destroy', function () {
 
-        it('SDL-200: TICK existence check deleted — unknown TICK gets valid', async function () {
+        it('SDL-200: TICK existence check deleted : unknown TICK gets valid', async function () {
             indexer.indexerDb.getTokenInfo.resolves(makeToken());
 
             const params = ['0', 'FAKE', '100', ''];
@@ -529,7 +529,7 @@ describe('Mutation — Tier 1: Destroy Handler @tier1', function () {
             assert.strictEqual(data.STATUS, 'valid');
         });
 
-        it('SDL-202: Balance check deleted in destroy — zero balance', async function () {
+        it('SDL-202: Balance check deleted in destroy : zero balance', async function () {
             operators.SDL.skipBalanceCheck(indexer.util);
             indexer.indexerDb.getAddressBalances.resolves(makeBalances(1, 0));
 
@@ -573,7 +573,7 @@ describe('Mutation — Tier 1: Destroy Handler @tier1', function () {
         });
     });
 
-    describe('UOI: Unary Mutations — Destroy', function () {
+    describe('UOI: Unary Mutations : Destroy', function () {
 
         it('UOI-200: hasBalance negated in destroy context', async function () {
             operators.UOI.negateHasBalance(indexer.util);
@@ -589,7 +589,7 @@ describe('Mutation — Tier 1: Destroy Handler @tier1', function () {
                 mutation: 'hasBalance negated', file: 'src/actions/destroy.js',
                 status: detected ? 'killed' : 'survived',
                 killedBy: detected ? `got '${data.STATUS}'` : '',
-                description: 'hasBalance negated — destroy with funds rejected',
+                description: 'hasBalance negated : destroy with funds rejected',
             });
             assert.notStrictEqual(data.STATUS, 'valid');
         });
@@ -600,7 +600,7 @@ describe('Mutation — Tier 1: Destroy Handler @tier1', function () {
 // Issue Handler Mutations
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('Mutation — Tier 1: Issue Handler @tier1', function () {
+describe('Mutation : Tier 1: Issue Handler @tier1', function () {
     let indexer, handler;
 
     beforeEach(function () {
@@ -619,9 +619,9 @@ describe('Mutation — Tier 1: Issue Handler @tier1', function () {
         sinon.restore();
     });
 
-    describe('SDL: Statement Deletion — Issue', function () {
+    describe('SDL: Statement Deletion : Issue', function () {
 
-        it('SDL-300: TICK null check — empty TICK detected', async function () {
+        it('SDL-300: TICK null check : empty TICK detected', async function () {
             const params = ['0', '', '1000', '0', '', '0', '0', '0', '0', '0', '0', '0'];
             const data = createBaseData({ ACTION: 'ISSUE', FORMAT: 0, SOURCE, TICK: '' });
 
@@ -638,7 +638,7 @@ describe('Mutation — Tier 1: Issue Handler @tier1', function () {
             assert.notStrictEqual(data.STATUS, 'valid');
         });
 
-        it('SDL-301: TICK character validation — special chars detected', async function () {
+        it('SDL-301: TICK character validation : special chars detected', async function () {
             const params = ['0', 'TEST@#$', '1000', '0', '', '0', '0', '0', '0', '0', '0', '0'];
             const data = createBaseData({ ACTION: 'ISSUE', FORMAT: 0, SOURCE, TICK: 'TEST@#$' });
 
@@ -655,7 +655,7 @@ describe('Mutation — Tier 1: Issue Handler @tier1', function () {
             assert.notStrictEqual(data.STATUS, 'valid');
         });
 
-        it('SDL-302: TICK pipe check — pipe in TICK detected', async function () {
+        it('SDL-302: TICK pipe check : pipe in TICK detected', async function () {
             const params = ['0', 'TEST|BAD', '1000', '0', '', '0', '0', '0', '0', '0', '0', '0'];
             const data = createBaseData({ ACTION: 'ISSUE', FORMAT: 0, SOURCE, TICK: 'TEST|BAD' });
 
@@ -672,7 +672,7 @@ describe('Mutation — Tier 1: Issue Handler @tier1', function () {
             assert.notStrictEqual(data.STATUS, 'valid');
         });
 
-        it('SDL-303: TICK semicolon check — semicolon in TICK detected', async function () {
+        it('SDL-303: TICK semicolon check : semicolon in TICK detected', async function () {
             const params = ['0', 'TEST;BAD', '1000', '0', '', '0', '0', '0', '0', '0', '0', '0'];
             const data = createBaseData({ ACTION: 'ISSUE', FORMAT: 0, SOURCE, TICK: 'TEST;BAD' });
 
@@ -689,7 +689,7 @@ describe('Mutation — Tier 1: Issue Handler @tier1', function () {
             assert.notStrictEqual(data.STATUS, 'valid');
         });
 
-        it('SDL-304: TICK period-start check — TICK starting with dot detected', async function () {
+        it('SDL-304: TICK period-start check : TICK starting with dot detected', async function () {
             const params = ['0', '.TEST', '1000', '0', '', '0', '0', '0', '0', '0', '0', '0'];
             const data = createBaseData({ ACTION: 'ISSUE', FORMAT: 0, SOURCE, TICK: '.TEST' });
 
@@ -706,7 +706,7 @@ describe('Mutation — Tier 1: Issue Handler @tier1', function () {
             assert.notStrictEqual(data.STATUS, 'valid');
         });
 
-        it('SDL-305: TICK length min check — single char TICK detected', async function () {
+        it('SDL-305: TICK length min check : single char TICK detected', async function () {
             const params = ['0', 'A', '1000', '0', '', '0', '0', '0', '0', '0', '0', '0'];
             const data = createBaseData({ ACTION: 'ISSUE', FORMAT: 0, SOURCE, TICK: 'A' });
 
@@ -746,9 +746,9 @@ describe('Mutation — Tier 1: Issue Handler @tier1', function () {
         });
     });
 
-    describe('SBR: String/Boolean — Issue', function () {
+    describe('SBR: String/Boolean : Issue', function () {
 
-        it('SBR-300: Reserved TICK check — XCHAIN token from non-GAS address', async function () {
+        it('SBR-300: Reserved TICK check : XCHAIN token from non-GAS address', async function () {
             const params = ['0', 'XCHAIN', '1000', '0', '', '0', '0', '0', '0', '0', '0', '0'];
             const data = createBaseData({ ACTION: 'ISSUE', FORMAT: 0, SOURCE, TICK: 'XCHAIN' });
 

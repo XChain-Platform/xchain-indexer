@@ -25,7 +25,7 @@ const assert = require('assert');
 const sinon = require('sinon');
 const { createChaosDb, FakeConnection } = require('../setup/harness');
 
-describe('Chaos — Query Error Propagation', function () {
+describe('Chaos: Query Error Propagation', function () {
     this.timeout(10000);
 
     let db, conn;

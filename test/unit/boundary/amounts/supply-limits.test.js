@@ -99,7 +99,7 @@ describe('Supply & amount boundary tests @regression @tier1', function () {
             actionsCtx = makeActionsCtx(indexer);
             handler    = new Issue(actionsCtx);
 
-            // New token — not previously issued
+            // New token (not previously issued)
             indexer.indexerDb.getTokenInfo.resolves(null);
             indexer.indexerDb.isActionAllowed.resolves(true);
             indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
@@ -175,7 +175,7 @@ describe('Supply & amount boundary tests @regression @tier1', function () {
 
         // 10^21 + 1 exceeds MAX_TOKEN_SUPPLY (10^21) and must be rejected. This previously
         // slipped through: the overflow guard bcgt(MAX_SUPPLY, MAX_TOKEN_SUPPLY) used mathjs's
-        // comparison epsilon (~1e-12 relative), which treated 10^21+1 as equal to 10^21 — NOT a
+        // comparison epsilon (~1e-12 relative), which treated 10^21+1 as equal to 10^21 (NOT a
         // bignumber storage limit (bignumber stores it exactly), a comparison-epsilon bug. The
         // bc* comparators now use decimal.js's exact .gt/.lt, so the overflow is correctly caught.
         it('MAX_SUPPLY = 10^21 + 1 exceeds MAX_TOKEN_SUPPLY → invalid', async function () {
@@ -360,7 +360,7 @@ describe('Supply & amount boundary tests @regression @tier1', function () {
             indexer.indexerDb.getTokenInfo.resolves(token);
             indexer.indexerDb.isActionAllowed.resolves(true);
             indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
-            // Balance of 100 — sending 101 should fail
+            // Balance of 100; sending 101 should fail
             indexer.indexerDb.getAddressBalances.resolves({ 1: '100' });
             indexer.indexerDb.findMatchingDispensers.resolves([]);
             indexer.indexerDb.findDispenserSends.resolves([]);

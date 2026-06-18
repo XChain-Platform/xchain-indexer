@@ -135,7 +135,7 @@ describe('Dispenser_Close action handler @regression @tier2', function () {
         indexer.indexerDb.getSweepDestination.resolves(DEST);  // sweep → destination != SOURCE
         indexer.indexerDb.getTokenEscrow = sinon.stub().resolves(50);
         indexer.indexerDb.clearTokenEscrow = sinon.stub().resolves();
-        // transferTokenOwnership is a util method — stub it
+        // transferTokenOwnership is a util method; stub it
         sinon.stub(indexer.util, 'transferTokenOwnership').resolves();
 
         const data = createBaseData({ ACTION: 'DISPENSER_CLOSE', DISPENSER_ACTION_INDEX: 50, BLOCK_INDEX: 200, DISPENSER_STATUS: 'closed' });

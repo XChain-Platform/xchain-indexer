@@ -16,7 +16,7 @@
  *
  * This action withdraws tokens from a contract's custody back to the owner.
  * Only the contract owner (deployer) can withdraw.
- * No gas fee — on-chain transaction cost is sufficient.
+ * No gas fee; on-chain transaction cost is sufficient.
  *
  * PARAMS:
  * - VERSION              - Format Version

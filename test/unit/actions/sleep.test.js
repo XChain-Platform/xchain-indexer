@@ -48,9 +48,9 @@ describe('Sleep @regression @tier3', function () {
 
     // ─── Format 0: Sleep ADDRESS ──────────────────────────────────────
 
-    describe('format 0 — sleep ADDRESS', function () {
+    describe('format 0: sleep ADDRESS', function () {
 
-        it('valid address sleep — createSleep called with valid status', async function () {
+        it('valid address sleep: createSleep called with valid status', async function () {
             indexer.indexerDb.getTokenInfo.resolves(null);
             indexer.indexerDb.isActionAllowed.resolves(true);
 
@@ -140,9 +140,9 @@ describe('Sleep @regression @tier3', function () {
 
     // ─── Format 1: Sleep TICK ─────────────────────────────────────────
 
-    describe('format 1 — sleep TICK', function () {
+    describe('format 1: sleep TICK', function () {
 
-        it('valid tick sleep by owner — createSleep called with valid status', async function () {
+        it('valid tick sleep by owner: createSleep called with valid status', async function () {
             const tokenInfo = createTokenInfo({ TICK: 'TEST', TICK_ID: 1, OWNER });
             indexer.indexerDb.getTokenInfo.resolves(tokenInfo);
             indexer.indexerDb.isActionAllowed.resolves(true);
@@ -256,7 +256,7 @@ describe('Sleep @regression @tier3', function () {
             indexer.indexerDb.isActionAllowed.resolves(true);
 
             const data   = createBaseData({ ACTION: 'SLEEP', FORMAT: 0, SOURCE, BLOCK_INDEX: 100 });
-            // Past block — invalid
+            // Past block (invalid)
             const params = ['0', '50', null];
 
             await handler.parse(params, data, null);

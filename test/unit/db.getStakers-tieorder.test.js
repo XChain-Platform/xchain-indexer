@@ -19,8 +19,8 @@
  * xchain.contract.getStakers(). The source query carries NO ORDER BY, so MariaDB returns
  * equal-amount stakers in engine-arbitrary row order. The sort used to compare amounts only, so
  * Node's stable sort preserved that arbitrary order on ties. That forks consensus twice:
- *   (1) iteration order — a contract iterating getStakers() observes a different order per node;
- *   (2) the 1000-staker cap — `arr.slice(0, 1000)` keeps a DIFFERENT membership per node when
+ *   (1) iteration order: a contract iterating getStakers() observes a different order per node;
+ *   (2) the 1000-staker cap: `arr.slice(0, 1000)` keeps a DIFFERENT membership per node when
  *       ties straddle the 1000th position.
  * Either diverges getStakers() output (and any contract branching on it) across validators.
  * This is the staking sibling of the getHolders / getBlockHashes tie-order forks guarded by
@@ -105,7 +105,7 @@ describe('getContractStakeDataForVM() staker tie-order determinism @regression @
     //     1001 equal-amount stakers: the lexicographically-largest pubkey is the one dropped,
     //     identically for any input order.
     it('applies the 1000-staker cap to a deterministic membership regardless of input order', async function () {
-        // pk0000..pk1000 — zero-padded so lexicographic order == numeric order.
+        // pk0000..pk1000, zero-padded so lexicographic order == numeric order.
         const pubkeys = [];
         for (let i = 0; i <= 1000; i++) pubkeys.push('pk' + String(i).padStart(4, '0'));
         const inOrder  = pubkeys.map(pk => stakeRow(pk, '100'));

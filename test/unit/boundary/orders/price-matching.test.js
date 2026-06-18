@@ -292,7 +292,7 @@ describe('ORDER_MATCH price-boundary tests @regression @tier2', function () {
     // ORD-05: Multiple matches, best price matched first
     // -----------------------------------------------------------------------
 
-    describe('ORD-05: Multiple matches returned — better price processed first', function () {
+    describe('ORD-05: Multiple matches returned, better price processed first', function () {
         let indexer, actionsCtx, handler;
 
         beforeEach(function () {

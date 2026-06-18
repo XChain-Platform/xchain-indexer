@@ -84,7 +84,7 @@ describe('Order action handler @regression @tier2', function () {
         sinon.restore();
     });
 
-    // ─── Format 0 — Create Order ───────────────────────────────────────────
+    // ─── Format 0: Create Order ───────────────────────────────────────────
 
     describe('Format 0 – Create Order', function () {
 
@@ -181,7 +181,7 @@ describe('Order action handler @regression @tier2', function () {
         });
 
         it('insufficient balance for GIVE_AMOUNT returns invalid', async function () {
-            // Balance is 0 — insufficient for GIVE_AMOUNT of 1
+            // Balance is 0: insufficient for GIVE_AMOUNT of 1
             indexer.indexerDb.getAddressBalances.resolves({ 10: '0', 20: '999999' });
 
             const params = makeParams(`0|BTC|RAREPEPE|1||BTC|PEPECASH|10||${OWNER_ADDR}|${EXPIRATION}|||`);
@@ -249,7 +249,7 @@ describe('Order action handler @regression @tier2', function () {
         it('MEMO with pipe character returns invalid', async function () {
             // The MEMO field is the last param (index 11). Embed a pipe inside it via
             // a crafted TX_DATA string so setActionParams picks it up. Because pipe is
-            // the field delimiter the MEMO value itself cannot contain a pipe — the
+            // the field delimiter the MEMO value itself cannot contain a pipe; the
             // validation checks data['MEMO'] AFTER setActionParams runs.
             // We replicate the same effect by passing the already-parsed MEMO directly
             // into the data object BEFORE calling parse, which tests the validation path.
@@ -304,7 +304,7 @@ describe('Order action handler @regression @tier2', function () {
         });
     });
 
-    // ─── Format 1 — Cancel Order ───────────────────────────────────────────
+    // ─── Format 1: Cancel Order ───────────────────────────────────────────
 
     describe('Format 1 – Cancel Order', function () {
 
@@ -391,7 +391,7 @@ describe('Order action handler @regression @tier2', function () {
         });
     });
 
-    // ─── Format 2 — Edit Order ─────────────────────────────────────────────
+    // ─── Format 2: Edit Order ─────────────────────────────────────────────
 
     describe('Format 2 – Edit Order', function () {
 
@@ -584,7 +584,7 @@ describe('Order action handler @regression @tier2', function () {
 
             await order.parse(params, data, false);
 
-            // Still valid — getExpirationFee returns 0 at default GAS_PRICE=0.00001 for short windows
+            // Still valid: getExpirationFee returns 0 at default GAS_PRICE=0.00001 for short windows
             assert.ok(data['STATUS'] === 'valid' || data['STATUS'].startsWith('invalid'));
             sinon.assert.calledOnce(indexer.indexerDb.createOrder);
         });
@@ -649,7 +649,7 @@ describe('Order action handler @regression @tier2', function () {
     describe('GIVE_OWNERSHIP=1 (ownership order)', function () {
 
         beforeEach(function () {
-            // setTokenEscrow is not in the shared mock — add it here
+            // setTokenEscrow is not in the shared mock; add it here
             indexer.indexerDb.setTokenEscrow = sinon.stub().resolves();
         });
 
@@ -700,7 +700,7 @@ describe('Order action handler @regression @tier2', function () {
         });
     });
 
-    // ─── Format 1 Cancel — two-phase and ownership-cancel paths ──────────
+    // ─── Format 1 Cancel: two-phase and ownership-cancel paths ──────────
 
     describe('Format 1 – two-phase cancel and ownership-cancel paths', function () {
 
@@ -749,7 +749,7 @@ describe('Order action handler @regression @tier2', function () {
         });
 
         it('standard cancel with null GIVE_TICK: no debit/escrow (defensive branch)', async function () {
-            // GIVE_TICK is null — isNull returns true so the debit/escrow is skipped
+            // GIVE_TICK is null; isNull returns true so the debit/escrow is skipped
             indexer.indexerDb.getOrderInfo.resolves(makeOrderInfo({ GIVE_TICK: null, GIVE_REMAINING: '0' }));
             indexer.indexerDb.getPendingCoinpayObligationsByOrder.resolves([]);
 

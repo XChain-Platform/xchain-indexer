@@ -54,7 +54,7 @@ describe('Coinpay (COINPAY) @regression @tier2', function () {
         return {
             ACTION_INDEX:    11,
             SOURCE:          BUYER,
-            GIVE_TICK:       null,   // native coin side — no tick
+            GIVE_TICK:       null,   // native coin side: no tick
             GIVE_REMAINING:  '0.001',
             GET_REMAINING:   '50',
             GET_ADDRESS:     BUYER,
@@ -417,7 +417,7 @@ describe('Coinpay (COINPAY) @regression @tier2', function () {
     describe('seller vs coin order role determination', function () {
 
         it('giveOrderInfo GIVE_TICK is a real token (not null/COIN) → giveOrder is seller, getOrder is coin', async function () {
-            // giveOrderInfo has GIVE_TICK='TEST' (a real token) — falls through to the else branch
+            // giveOrderInfo has GIVE_TICK='TEST' (a real token): falls through to the else branch
             // (lines 136-138): coinOrder=getOrderInfo, sellerOrder=giveOrderInfo
             const giveOrder = makeOrderInfo({ ACTION_INDEX: 11, GIVE_TICK: 'TEST', SOURCE: SELLER, GET_ADDRESS: BUYER });
             const getOrder  = makeCoinOrderInfo({ ACTION_INDEX: 10, GIVE_TICK: null, GET_ADDRESS: BUYER });
@@ -442,7 +442,7 @@ describe('Coinpay (COINPAY) @regression @tier2', function () {
             });
             await handler.parse(['0', '42'], data, null);
 
-            // Settlement should have completed — createCoinpayStatus with 'fulfilled'
+            // Settlement should have completed: createCoinpayStatus with 'fulfilled'
             assert.ok(indexer.indexerDb.createCoinpayStatus.calledOnce);
             const [, , st] = indexer.indexerDb.createCoinpayStatus.firstCall.args;
             assert.strictEqual(st, 'fulfilled');

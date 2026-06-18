@@ -13,7 +13,7 @@
 // AnchorRecovery round-trip: build an archive batch exactly as the hub's
 // StateAnchorPublisher serializes it (fixed key order, gzip+base64url, CRC32,
 // chunking, REAL Ed25519 signatures), feed it through a mocked anchor_actions
-// table, and assert cross_chain_matches + capability_snapshots rebuild — plus
+// table, and assert cross_chain_matches + capability_snapshots rebuild, plus
 // the failure modes: CRC corruption, sub-quorum wrapper, fabricated validator
 // sets (the on-chain stake cross-check), and latest-status-wins retraction.
 
@@ -364,7 +364,7 @@ describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () 
 
     it('stake cross-check is gated on the explicit flag, not btcDb presence (restore runs against an EMPTY pre-reindex BTC DB)', async function () {
         let { v1 } = buildBatch(0, [rawMatch('m1')], oracleKeys, crossKeys);
-        // btcDb present but knows NO stakes (pre-reindex) and the flag is off —
+        // btcDb present but knows NO stakes (pre-reindex) and the flag is off;
         // the batch must still verify, or the reward-restore step of the
         // recovery runbook would fail every batch before the reindex runs.
         let report = await new AnchorRecovery(memDb([v1], []), Object.assign({ btcDb: rewardBtcDbStub() }, quiet)).run();
@@ -430,7 +430,7 @@ describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () 
             assert.strictEqual(report.failed.length, 0);
             assert.strictEqual(report.calls, 2);
             assert.strictEqual(db.calls.length, 2);
-            // Same call_id, distinct phases — the composite key keeps both rows.
+            // Same call_id, distinct phases: the composite key keeps both rows.
             assert.deepStrictEqual(db.calls.map(c => c.phase).sort(), ['dispatch', 'result']);
             assert.ok(db.calls.every(c => c.call_id === 'c1' && c.status === 'finalized'));
         });
@@ -440,7 +440,7 @@ describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () 
             // is view-bearing, so the persisted row MUST carry finalizing_view=2 or a
             // recovered node re-verifies the hub sigs at view 0 → strands the call /
             // forks re-derivation. The verifier passes either way (it reads the
-            // archive's view) — only the persisted column exposes the drop.
+            // archive's view); only the persisted column exposes the drop.
             let { v1 } = buildBatch(0, [Object.assign(rawMatch('m1'), { finalizing_view: 2 })],
                                     oracleKeys, crossKeys,
                                     { calls: [rawCall('c1', 'dispatch', { finalizing_view: 2 })] });
@@ -495,7 +495,7 @@ describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () 
 
         it('a RESULT row signed by the oracle set (not cross_chain) fails quorum', async function () {
             // The RESULT-phase canonical must verify against the archived
-            // cross_chain set specifically — federation membership alone (e.g. a
+            // cross_chain set specifically: federation membership alone (e.g. a
             // valid oracle_publish signer) is not enough to authorize a relay row.
             let { v1 } = buildBatch(0, [rawMatch('m1')], oracleKeys, crossKeys,
                                     { calls: [rawCall('c1', 'result')], callKeys: oracleKeys });

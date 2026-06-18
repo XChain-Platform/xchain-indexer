@@ -92,8 +92,8 @@ class Swap {
             if(data['GET_COIN']==this.config['COIN']){
                 getTokenInfo = await this.indexerDb.getTokenInfo(data['GET_TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
             }
-            // (Cross-chain GET_TICK lives on another COIN network — it cannot be validated
-            //  locally; the xchain-hub federation validates it before matching/settlement.)
+            // (Cross-chain GET_TICK lives on another COIN network; it cannot be validated
+            //  locally. The xchain-hub federation validates it before matching/settlement.)
         }
 
         // Detect a cross-chain swap (GET side settles on a different COIN network). The GIVE
@@ -159,7 +159,7 @@ class Swap {
         if(!error && isCrossChain && !crossChainEnabled)
             error = 'invalid: GET_COIN (cross-chain not enabled)';
 
-        // Validate GET_TICK exists (local validation only — a cross-chain GET_TICK is
+        // Validate GET_TICK exists (local validation only; a cross-chain GET_TICK is
         // validated by the xchain-hub federation, so skip the local existence check)
         if(!error && format==0 && !isCrossChain && !getTokenInfo)
             error = 'invalid: GET_TICK (unknown)';
@@ -212,7 +212,7 @@ class Swap {
         }
 
         // Bidding for ownership: GET_AMOUNT must be empty. GET_TICK existence is only verifiable
-        // on the current chain — cross-chain GET_TICK validation lives in xchain-hub.
+        // on the current chain; cross-chain GET_TICK validation lives in xchain-hub.
         if(!error && isOwnershipGet){
             if(!this.util.isNull(data['GET_AMOUNT']))
                 error = "invalid: GET_AMOUNT (must be empty when GET_OWNERSHIP=1)";
@@ -282,7 +282,7 @@ class Swap {
             }
         }
 
-        // Verify SOURCE has enough balances to cover GIVE_AMOUNT (skip for ownership — no balance to escrow)
+        // Verify SOURCE has enough balances to cover GIVE_AMOUNT (skip for ownership; no balance to escrow)
         if(!error && format==0 && !isOwnershipGive && !this.util.hasBalance(balances, giveTokenInfo['TICK_ID'], data['GIVE_AMOUNT']))
             error = 'invalid: insufficient funds (GIVE_AMOUNT)';
 
@@ -290,7 +290,7 @@ class Swap {
         if(!error && format==0 && !isOwnershipGive)
             balances = this.util.debitBalances(balances, giveTokenInfo['TICK_ID'], data['GIVE_AMOUNT']);
 
-        // Calculate total fee for this swap — expiration + ownership-escrow premium (create only)
+        // Calculate total fee for this swap: expiration + ownership-escrow premium (create only)
         fees['AMOUNT'] = 0;
 
         if(!error && (format==0 || format==2)){
@@ -367,7 +367,7 @@ class Swap {
                 // Persist the guard's royalty/fee split (bps legs) on the swap row; the protocol
                 // applies it to the seller's proceeds at match (Utility.applyProceedsSplit).
                 // NB: `swap` was snapshotted (Object.assign) before the guard ran, and createSwap
-                // persists `swap` — so set the legs on BOTH or they never reach the DB.
+                // persists `swap`, so set the legs on BOTH or they never reach the DB.
                 if(result.payoutLegs)
                     data['PAYOUT_LEGS'] = swap['PAYOUT_LEGS'] = JSON.stringify(result.payoutLegs);
             }
@@ -426,7 +426,7 @@ class Swap {
             // Format 0 - Create Swap
             if(format==0){
                 if(isOwnershipGive){
-                    // Selling ownership: no balance escrow — mark the tick as ownership-escrowed
+                    // Selling ownership: no balance escrow. Mark the tick as ownership-escrowed
                     // for this swap. tokens.owner_id stays at SOURCE; admin actions are gated by
                     // escrow_action_index until cancel / expire / match clears it.
                     await this.indexerDb.setTokenEscrow(data['GIVE_TICK'], data['ACTION_INDEX']);
@@ -488,7 +488,7 @@ class Swap {
         this.util.resetLists();
 
         // Check to see if we have a match for this swap.
-        // Cross-chain swaps are NOT matched locally — the counterparty lives in another
+        // Cross-chain swaps are NOT matched locally; the counterparty lives in another
         // chain's indexer DB, invisible to the local SWAP_MATCH query. The xchain-hub
         // federation matches them and delivers a validator-signed match via the hub mirror,
         // which the indexer settles from escrow (see the cross-chain settlement pass).

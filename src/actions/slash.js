@@ -12,10 +12,10 @@
  *
  **********************************************************************
  *
- * XChain Platform Action - SLASH (WI-2 bump 2 — equivocation slashing)
+ * XChain Platform Action - SLASH (WI-2 bump 2: equivocation slashing)
  *
  * A PERMISSIONLESS, submitter-driven proof that a capability validator
- * EQUIVOCATED — signed two CONFLICTING values for the same protocol slot
+ * EQUIVOCATED (signed two CONFLICTING values for the same protocol slot
  * (same engine, same round, same view). The proof is self-contained and
  * verified deterministically on every BTC indexer with no cross-chain data,
  * so the burn is identical fleet-wide.
@@ -25,8 +25,8 @@
  *
  *   CAPABILITY      the membership label the equivocation was in (cross_chain /
  *                   oracle_publish / price / attestation, or the sentinel 'config' for
- *                   XCONFIG — whole-federation). MUST match the engine the EQUIV header
- *                   names — derived, not trusted.
+ *                   XCONFIG, whole-federation scope). MUST match the engine the EQUIV header
+ *                   names (derived, not trusted).
  *   OFFENDER_PUBKEY 64-hex Ed25519 capability signing key being slashed.
  *   MSG_A/MSG_B     base64url of the two signed canonicals (each an EQUIV-headered
  *                   string `EQUIV|<ENGINE_TAG|ROUND_ID|VIEW>||<CONTENT>`). Equal through
@@ -34,23 +34,23 @@
  *   SIG_A/SIG_B     128-hex Ed25519 signatures over MSG_A/MSG_B by OFFENDER_PUBKEY.
  *
  *   The EQUIV key is NOT a wire field: it contains '|' (and so would shatter the
- *   pipe-delimited action) and is fully recoverable from MSG_A's header — the verifier
+ *   pipe-delimited action) and is fully recoverable from MSG_A's header. The verifier
  *   derives it from the bytes after `EQUIV|` up to the first `||` (the key has no empty
  *   segment, so that boundary is unambiguous).
  *
- * SOUNDNESS — the burn only fires when ALL hold:
+ * SOUNDNESS: the burn only fires when ALL hold:
  *   1. both messages carry the EQUIV header and share the EXACT same key prefix
- *      `EQUIV|<EQUIV_KEY>||` (same engine, round, AND view — the R-3 defence: an
+ *      `EQUIV|<EQUIV_KEY>||` (same engine, round, AND view; the R-3 defence: an
  *      honest view change re-signs under a DIFFERENT view, so it can never be
- *      paired here; and v0/v1 checkpoints have DISTINCT keys — the R-4 fix — so
+ *      paired here; and v0/v1 checkpoints have DISTINCT keys, the R-4 fix, so
  *      they can never be falsely paired either);
  *   2. their <CONTENT> differs (identical bytes = the same message, e.g. PREPARE
- *      then COMMIT — not equivocation);
+ *      then COMMIT, which is not equivocation);
  *   3. BOTH signatures verify against OFFENDER_PUBKEY;
  *   4. OFFENDER_PUBKEY was in the locked capability snapshot for CAPABILITY at the
- *      slot's snapshot_block (recovered deterministically from the proof itself —
+ *      slot's snapshot_block (recovered deterministically from the proof itself;
  *      see _resolveSlot);
- *   5. not already slashed for (pubkey, capability) — a first proof burns the whole
+ *   5. not already slashed for (pubkey, capability): a first proof burns the whole
  *      bond; later proofs are no-ops (idempotent, reorg-safe).
  *
  * On success: burn the offender's ENTIRE capability bond (active stakes + cooldown-
@@ -62,14 +62,14 @@
  *   - XCONFIG IS slashable (WI-2 bump 2, Phase-A amendment): the XCONFIG signed content
  *     carries the round's locked snapshot_block as `snapshot_block|config_digest`, so the
  *     proof alone yields the membership block. Because config-change PBFT is authorized by
- *     the WHOLE federation (not a capability subset — xchain-hub Consensus._lockSnapshot),
+ *     the WHOLE federation (not a capability subset; see xchain-hub Consensus._lockSnapshot),
  *     it carries the sentinel CAPABILITY label 'config' and membership resolves against
  *     getActiveValidators(snapshot_block), not a capability set. The whole bond still burns
  *     (slashCapabilityStake is capability-agnostic). Inert until the EQUIV flag-day.
  *   - Bounty/treasury amounts are governance config (Phase D). Absent config this
- *     defaults to a PURE BURN (bounty 0, no treasury credit) — sound, just no payout.
+ *     defaults to a PURE BURN (bounty 0, no treasury credit). Sound, just no payout.
  *   - PERMANENT disqualification: a slashed pubkey is barred from the effective signer set
- *     GLOBALLY and permanently — db._effectiveCapabilitySetSql / _stakeWeightsSql / hasCapability
+ *     GLOBALLY and permanently. db._effectiveCapabilitySetSql / _stakeWeightsSql / hasCapability
  *     exclude any key in capability_slash_events (block-gated, reorg-safe), so a fresh re-stake
  *     of a slashed key never re-qualifies in any capability. The burn here zeroes the CURRENT
  *     bond; the query exclusion makes it permanent.
@@ -82,7 +82,7 @@ const eq      = require('../equivocation_header.js');
 // ENGINE_TAG → the membership label the locked snapshot governs that engine's signer
 // set under. For the five capability-scoped engines this is the staking capability whose
 // MIN_STAKE-qualified set signed the slot. XCONFIG is the exception: config-change PBFT is
-// authorized by the WHOLE federation (every active staker, no capability subset — see
+// authorized by the WHOLE federation (every active staker, no capability subset; see
 // xchain-hub Consensus._lockSnapshot), so it carries the sentinel label 'config' and its
 // membership resolves against getActiveValidators (handled in parse()), not a capability set.
 const CONFIG_CAPABILITY = 'config';
@@ -106,7 +106,7 @@ class Slash {
         this.mapper    = action.mapper;
 
         this.formats = {};
-        // NOTE: the EQUIV key is NOT a wire field — it contains '|' (ENGINE_TAG|ROUND_ID|VIEW)
+        // NOTE: the EQUIV key is NOT a wire field. It contains '|' (ENGINE_TAG|ROUND_ID|VIEW)
         // and would shatter the pipe-delimited action. It is derived from MSG_A's header.
         this.formats[0] = 'VERSION|CAPABILITY|OFFENDER_PUBKEY|MSG_A|SIG_A|MSG_B|SIG_B';
     }
@@ -146,7 +146,7 @@ class Slash {
             if(msgA === null || msgB === null) error = 'invalid: MSG (base64)';
         }
 
-        // (1) Derive the EQUIV key from MSG_A's header — the wire action does NOT carry it
+        // (1) Derive the EQUIV key from MSG_A's header. The wire action does NOT carry it
         // (it contains '|' and would break the pipe split). The header is
         // `EQUIV|<ENGINE_TAG|ROUND_ID|VIEW>||<CONTENT>`; the key has no `||` (no empty
         // segment), so the FIRST `||` is the unambiguous key/content boundary.
@@ -223,7 +223,7 @@ class Slash {
                     ' snapshot at block ' + snapshotBlock;
         }
 
-        // (5) Idempotency — a first proof burns the whole bond; later (pubkey,capability)
+        // (5) Idempotency: a first proof burns the whole bond; later (pubkey,capability)
         // proofs are no-ops.
         let pubkeyId = null;
         if(!error){
@@ -251,7 +251,7 @@ class Slash {
 
             // Bounty re-enters circulation to the submitter; treasury to its destination
             // (a configured address, else BURN = no credit). Burned stake left circulation
-            // at STAKE time, so there is NO debit here — only the redirected credits.
+            // at STAKE time, so there is NO debit here; only the redirected credits.
             let gas = this.config['GAS'];
             if(this.util.bcgt(split.bounty, '0'))
                 credits.push([gas, split.bounty, data['SOURCE']]);
@@ -297,7 +297,7 @@ class Slash {
             [eq.ENGINE_TAGS.DEX]:        2,   // XMATCH|match_id|snapshot_block|...
             [eq.ENGINE_TAGS.XCALL]:      3,   // XCALL|DISPATCH|call_id|snapshot_block|...  (RESULT: same index)
             [eq.ENGINE_TAGS.CHECKPOINT]: 9,   // XCHECKPOINT|chain|network|block_index|block_hash|ledger|actions|contract|checkpoint_seq|snapshot_block[|batch_seq..]
-            [eq.ENGINE_TAGS.CONFIG]:     0,   // XCONFIG content = snapshot_block|config_digest (Phase-A amendment — block carried in-content so config equivocation is slashable)
+            [eq.ENGINE_TAGS.CONFIG]:     0,   // XCONFIG content = snapshot_block|config_digest (Phase-A amendment: block carried in-content so config equivocation is slashable)
         };
         if(FIELD[engineTag] !== undefined){
             let i  = FIELD[engineTag];
@@ -313,7 +313,7 @@ class Slash {
                 return { error: 'invalid: ORACLE round (not a block)' };
             return { snapshotBlock: Number(roundId) };
         }
-        // XATTEST: the canonical is delimiter-less and carries no block — recover it from
+        // XATTEST: the canonical is delimiter-less and carries no block. Recover it from
         // the mirrored request row keyed by the ROUND_ID (= request_id). Deterministic
         // (the request is indexed state present on every BTC indexer).
         if(engineTag === eq.ENGINE_TAGS.ATTEST){
@@ -329,8 +329,8 @@ class Slash {
     // bounty = clamp(BOUNTY_BPS·burned, BOUNTY_FLOOR, BOUNTY_CAP), never exceeding the bond; the
     // remainder goes to TREASURY_ADDRESS, or is BURNED when unset. Config shape:
     //   config.STAKING.CAPABILITIES[capability].SLASH  for the 5 capability-scoped engines, or
-    //   config.CONFIG_SLASH                            for XCONFIG (capability === 'config' —
-    //                                                  whole-federation, no CAPABILITIES home)
+    //   config.CONFIG_SLASH                            for XCONFIG (capability === 'config',
+    //                                                  whole-federation scope, no CAPABILITIES home)
     //   = { BOUNTY_BPS, BOUNTY_FLOOR, BOUNTY_CAP, TREASURY_ADDRESS }  (all optional)
     // Absent / zero → PURE BURN (bounty 0, no treasury credit). Never pays validators.
     _bountyTreasurySplit(capability, burned){
@@ -356,13 +356,13 @@ class Slash {
         let bounty = (bps > 0)
             ? String(this.util.bcdiv(this.util.bcmul(total, String(bps), 8), '10000', 8))
             : '0';
-        // FLOOR — guarantee a minimum payout so a submitter always clears the (BTC-tx + protocol)
+        // FLOOR: guarantee a minimum payout so a submitter always clears the (BTC-tx + protocol)
         // submission cost, even on a bond at MIN_STAKE. Applied before the cap; the final clamp
         // to `total` keeps a sub-floor bond from minting (bounty = whole bond, treasury 0).
         let floor = cfg['BOUNTY_FLOOR'];
         if(floor != null && this.util.bcgt(String(floor), bounty))
             bounty = String(floor);
-        // CAP — hard ceiling (detection cost is constant; don't scale the reward with whale bonds).
+        // CAP: hard ceiling (detection cost is constant; don't scale the reward with whale bonds).
         let cap = cfg['BOUNTY_CAP'];
         if(cap != null && this.util.bcgt(bounty, String(cap)))
             bounty = String(cap);

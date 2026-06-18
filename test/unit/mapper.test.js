@@ -182,7 +182,7 @@ describe('Mapper @regression @tier3', function () {
         const FILE_INDEX  = 7;
         const ISSUE_INDEX = 8;
         const OWNER_ADDR  = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
-        // action1 = ISSUE, action2 = FILE — exercises the second arm of the FILE/ISSUE
+        // action1 = ISSUE, action2 = FILE; exercises the second arm of the FILE/ISSUE
         // detection and the reversed tick/index ternaries.
         indexer.indexerDb.getActionData.callsFake(async (actionIndex) => {
             if (actionIndex == ISSUE_INDEX) return { action: 'ISSUE', action_index: ISSUE_INDEX, tick: 'REVTOK' };

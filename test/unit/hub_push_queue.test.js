@@ -138,7 +138,7 @@ describe('HubPushQueue', function(){
             assert.strictEqual(q.timer, null);
         });
 
-        it('is idempotent — calling start() twice leaves one timer', function(){
+        it('is idempotent: calling start() twice leaves one timer', function(){
             let indexer = makeIndexer();
             let q = new HubPushQueue(indexer, { intervalMs: 60000 });
             q.start();

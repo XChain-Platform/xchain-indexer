@@ -155,7 +155,7 @@ describe('Smoke: database connectivity @regression @tier3', function () {
             conn.release();
         }
 
-        // Result is always one row; value is null when the table is empty — both are fine
+        // Result is always one row; value is null when the table is empty. Both are fine.
         assert.strictEqual(rows.length, 1, 'Expected exactly one result row');
         const maxBlock = rows[0].max_block;
         assert.ok(maxBlock === null || typeof maxBlock === 'number' || typeof maxBlock === 'bigint',

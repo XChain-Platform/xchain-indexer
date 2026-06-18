@@ -23,7 +23,7 @@
  * action_index ASC to derive the per-block ledger hash. If the gather query has
  * no ORDER BY, two honest validators can process same-block expirations in
  * different orders, assign action_index values differently, and derive
- * divergent ledger hashes for the same block — a consensus split.
+ * divergent ledger hashes for the same block (a consensus split).
  *
  * Contract under test: the coinpay gather queries are ordered by
  * co.action_index ASC. We seed obligations whose action_index values are

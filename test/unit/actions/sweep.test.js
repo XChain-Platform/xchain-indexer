@@ -72,7 +72,7 @@ describe('Sweep @regression @tier3', function () {
             assert.ok(indexer.indexerDb.createSweep.called);
         });
 
-        it('createSweep called — balances debited from SOURCE, credited to DESTINATION', async function () {
+        it('createSweep called: balances debited from SOURCE, credited to DESTINATION', async function () {
             indexer.indexerDb.getAddressBalances.resolves({ 1: '1' });
             indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
             indexer.indexerDb.getAddressOwnerships.resolves([]);
@@ -113,7 +113,7 @@ describe('Sweep @regression @tier3', function () {
             assert.ok(indexer.indexerDb.createIssue.callCount >= 2, 'createIssue called for each ownership');
         });
 
-        it('ownership transferred — updateTokens called per tick', async function () {
+        it('ownership transferred: updateTokens called per tick', async function () {
             indexer.indexerDb.getAddressBalances.resolves({ 1: '1' });
             indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
             indexer.indexerDb.getAddressOwnerships.resolves(['TEST']);
@@ -148,7 +148,7 @@ describe('Sweep @regression @tier3', function () {
             indexer.indexerDb.isActionAllowed.resolves(true);
 
             const data = createBaseData({ ACTION: 'SWEEP', FORMAT: 0, SOURCE });
-            // Provide ESCROWS via data override after parsing — we set data directly
+            // Provide ESCROWS via data override after parsing; we set data directly
             // Use null params so BALANCES/OWNERSHIPS/ESCROWS default
             const params = ['0', DESTINATION]; // BALANCES/OWNERSHIPS/ESCROWS omitted → default to null → use defaults
 
@@ -376,7 +376,7 @@ describe('Sweep @regression @tier3', function () {
             // The real getAddressOwnerships query excludes escrowed ticks, but even
             // with a stale snapshot that still contains the tick (stubbed here), the
             // handler must not write a second ownership-transfer ISSUE after the
-            // order-cancel path already delivered it — a duplicate ISSUE would
+            // order-cancel path already delivered it; a duplicate ISSUE would
             // change the per-block actions hash.
             indexer.indexerDb.getAddressBalances.resolves({ 1: '1' });
             indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });

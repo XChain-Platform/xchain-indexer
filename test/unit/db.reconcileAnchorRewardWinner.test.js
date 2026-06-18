@@ -13,7 +13,7 @@
  **********************************************************************
  * test/unit/db.reconcileAnchorRewardWinner.test.js
  *
- * CONSENSUS REGRESSION GUARD for reconcileAnchorRewardWinner() — the
+ * CONSENSUS REGRESSION GUARD for reconcileAnchorRewardWinner(): the
  * replace-on-push collapse that keeps exactly ONE validator_rewards row per
  * (reward_type, round_reference) for anchor rewards (#3963).
  *
@@ -74,7 +74,7 @@ describe('reconcileAnchorRewardWinner() @regression @tier1', function () {
         const [sql, args] = query.firstCall.args;
         // Deletes from validator_rewards, keyed by the lexicographically-smallest
         // signing pubkey, with the min materialised in a derived table (so the
-        // DELETE does not self-reference its target table — MariaDB forbids that).
+        // DELETE does not self-reference its target table : MariaDB forbids that).
         assert.match(sql, /DELETE\s+vr\s+FROM\s+validator_rewards\s+vr/i);
         assert.match(sql, /JOIN\s+index_pubkeys\s+pk\s+ON\s+pk\.id\s*=\s*vr\.signing_pubkey_id/i);
         assert.match(sql, /MIN\(pk2\.pubkey\)\s+AS\s+min_pubkey/i);

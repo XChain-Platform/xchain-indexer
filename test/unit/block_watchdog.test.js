@@ -17,7 +17,7 @@
  * `util.withTimeout(blockProcessing, BLOCK_PROCESS_TIMEOUT, 'block N')` (src/
  * XChainIndexer.js). If processing hangs (deadlock, pathological contract that burns
  * the CPU budget), the watchdog must REJECT so the surrounding catch fires: it rolls
- * back the block's writes and — crucially — does NOT advance `lastIndexerBlock` (that
+ * back the block's writes and (crucially) does NOT advance `lastIndexerBlock` (that
  * assignment runs only after a successful commit), so the same block is retried on the
  * next loop rather than silently skipped. A watchdog that failed to reject would hang
  * the indexer on one block forever with no recovery path.
@@ -28,7 +28,7 @@
  *   3. a block that throws (e.g. SanityError) -> its own rejection propagates (also
  *      rolls back; the timeout doesn't swallow real errors)
  *
- * Note: a timed-out block is retried, not skipped — by design (never silently drop a
+ * Note: a timed-out block is retried, not skipped. By design this never silently drops a
  * block). The halt risk from a block that ALWAYS times out is mitigated upstream by the
  * VM's deterministic gas/CPU bounds + the BigInt/RegExp restriction (see xchain-vm
  * vmRestrict / native-dos suites), so no single EXECUTE can sit in this timeout.

@@ -82,7 +82,7 @@ describe('Fee boundary tests @regression @tier1', function () {
     afterEach(function () { sinon.restore(); });
 
     it('FEE-01: Issue at block 862632 (one before activation) requires no fee even with no XCHAIN balance', async function () {
-        // Block is one before fee activation — no fee should be charged
+        // Block is one before fee activation; no fee should be charged
         indexer.indexerDb.getAddressBalances.resolves({}); // no XCHAIN
 
         const params = makeIssueParams({ TICK: 'NOTOK' });
@@ -117,8 +117,8 @@ describe('Fee boundary tests @regression @tier1', function () {
         assert.ok(data.STATUS.startsWith('invalid'), `expected invalid but got: ${data.STATUS}`);
     });
 
-    it('FEE-04: Issue at block 862633 with exact XCHAIN balance drains account to zero — valid', async function () {
-        // Balance equals fee exactly — fee is charged, leaving zero XCHAIN
+    it('FEE-04: Issue at block 862633 with exact XCHAIN balance drains account to zero : valid', async function () {
+        // Balance equals fee exactly : fee is charged, leaving zero XCHAIN
         indexer.indexerDb.getAddressBalances.resolves({ [XCHAIN_TICK_ID]: '1.00000000' });
 
         const params = makeIssueParams({ TICK: 'EXACT' });
@@ -144,7 +144,7 @@ describe('Fee boundary tests @regression @tier1', function () {
         assert.strictEqual(data.STATUS, 'valid', `expected valid but got: ${data.STATUS}`);
     });
 
-    it('FEE-06: Sub-token issuance charges ISSUANCE_FEE_SUBTOKEN (0.5 XCHAIN) — valid with exact balance', async function () {
+    it('FEE-06: Sub-token issuance charges ISSUANCE_FEE_SUBTOKEN (0.5 XCHAIN) : valid with exact balance', async function () {
         // TICK = 'PARENT.CHILD' → detected as sub-token because parts.length > 1
         // Parent tick must exist and be owned by SOURCE
         indexer.indexerDb.getTokenInfo

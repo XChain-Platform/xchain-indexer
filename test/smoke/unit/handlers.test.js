@@ -37,7 +37,7 @@ function makeIndexerForActions(indexer) {
 }
 
 // Build the ctx object that individual action handlers (Issue, Send, etc.) receive.
-// Individual handlers receive an "actions" object — the same shape as Actions instance.
+// Individual handlers receive an "actions" object (the same shape as Actions instance).
 function makeActionsCtx(indexer) {
     return {
         config:          indexer.config,
@@ -83,7 +83,7 @@ describe('Smoke: handler instantiation and basic action processing', function ()
         const ctx     = makeActionsCtx(indexer);
         const handler = new Issue(ctx);
 
-        // New token — no existing tokenInfo
+        // New token (no existing tokenInfo)
         indexer.indexerDb.getTokenInfo.resolves(null);
         indexer.indexerDb.isActionAllowed.resolves(true);
         indexer.indexerDb.isDistributed.resolves(false);
@@ -93,7 +93,7 @@ describe('Smoke: handler instantiation and basic action processing', function ()
         // getTickerId must resolve for createFeesObject (util.createFeesObject calls indexerDb.getTickerId)
         indexer.indexerDb.getTickerId.resolves(1);
 
-        // ISSUE format 0 — full params (25 fields after VERSION)
+        // ISSUE format 0: full params (25 fields after VERSION)
         const params = ['0', 'SMOKETEST', '1000', '100', '0', 'Smoke test token', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', ''];
         const data   = createBaseData({ ACTION: 'ISSUE', FORMAT: 0, BLOCK_INDEX: 100 });
 
@@ -116,7 +116,7 @@ describe('Smoke: handler instantiation and basic action processing', function ()
         indexer.indexerDb.isActionAllowed.resolves(true);
         indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
 
-        // SEND format 0 — VERSION|TICK|AMOUNT|DESTINATION|MEMO
+        // SEND format 0: VERSION|TICK|AMOUNT|DESTINATION|MEMO
         const params = ['0', 'TEST', '100', 'mtr6NtB5KJRAxTX5AbuRtV7S4FF2PZJXUs', ''];
         const data   = createBaseData({ ACTION: 'SEND', FORMAT: 0, BLOCK_INDEX: 100 });
 

@@ -67,7 +67,7 @@ function createMockDb() {
         getTickerId: sinon.stub().resolves(1),
         createTicker: sinon.stub().resolves(1),
 
-        // Programmable policy layer — controller bindings (default: no controller bound, so
+        // Programmable policy layer: controller bindings (default: no controller bound, so
         // maybeRunControllerGuard bails early and uncontrolled-token behavior is unchanged).
         getEffectiveTokenController: sinon.stub().resolves(null),
         getEffectiveAddressController: sinon.stub().resolves(null),

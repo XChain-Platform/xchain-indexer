@@ -13,7 +13,7 @@
  * contact legal@dankest.llc.
  *
  **********************************************************************
- * Action field-format contract tests (Phase 1a — field-format layer).
+ * Action field-format contract tests (Phase 1a, field-format layer).
  *
  * On the wire an ACTION is a pipe-delimited string `ACTION|VERSION|FIELD…`,
  * and the indexer decodes it with `String(data).split('|')` (actions.js:201),
@@ -21,7 +21,7 @@
  * template. This locks the wire contract those templates define:
  *
  *   1. every handler's format templates are well-formed (start with VERSION,
- *      tokens are uppercase field names) — drift here silently mis-parses an
+ *      tokens are uppercase field names); drift here silently mis-parses an
  *      action across the whole network;
  *   2. the field codec is delimiter-clean: pipe-free fields survive
  *      join('|') → split('|') for every fixed-arity template, and an embedded
@@ -101,7 +101,7 @@ describe('Action field-format contract', function () {
             }
         });
 
-        it('an embedded pipe provably changes arity — fields must be pipe-free', function () {
+        it('an embedded pipe provably changes arity; fields must be pipe-free', function () {
             const clean = ['0', 'XCP', '100', 'addr', 'memo'];
             assert.strictEqual(clean.join('|').split('|').length, 5);
             const dirty = ['0', 'XCP', '100', 'addr', 'me|mo'];   // memo contains a pipe

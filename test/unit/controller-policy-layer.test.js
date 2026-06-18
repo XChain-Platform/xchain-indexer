@@ -13,13 +13,13 @@
  * contact legal@dankest.llc.
  *
  **********************************************************************
- * Programmable policy layer — Phase A binding wire contract.
+ * Programmable policy layer: Phase A binding wire contract.
  *
  * The table model (token_controllers / address_controllers) routes ONE action-class
  * per action to a guard contract. These tests pin the wire/field contract for that
  * binding: ISSUE format 7, ADDRESS format 1, the action-class taxonomy, and the field
- * classifications the handlers rely on. They are PURE — handlers are built with a stub
- * context (no DB, no VM) — so they run on any Node version. The db-layer bind/unbind/
+ * classifications the handlers rely on. They are PURE: handlers are built with a stub
+ * context (no DB, no VM) so they run on any Node version. The db-layer bind/unbind/
  * cooldown-sweep behavior is consensus-critical and exercised on Node 22 / test-host regtest
  * (this Mac is Node 24, where isolated-vm / mariadb cannot load).
  *
@@ -33,12 +33,12 @@ const Address = require('../../src/actions/address.js');
 
 const STUB = { config: {}, decoderDb: null, indexerDb: null, util: null, mapper: null };
 
-describe('Programmable policy layer — Phase A binding wire contract @regression', function () {
+describe('Programmable policy layer : Phase A binding wire contract @regression', function () {
 
     const issue   = new Issue(STUB);
     const address = new Address(STUB);
 
-    describe('ISSUE format 6 — token controller bind/unbind', function () {
+    describe('ISSUE format 6 : token controller bind/unbind', function () {
         it('has the exact one-binding-per-action layout', function () {
             assert.strictEqual(issue.formats[6], 'VERSION|TICK|CONTROLLER|ACTION_CLASS|COOLDOWN_BLOCKS|UNBIND|MEMO');
         });
@@ -62,7 +62,7 @@ describe('Programmable policy layer — Phase A binding wire contract @regressio
         });
     });
 
-    describe('ADDRESS format 1 — self-gating controller bind/unbind', function () {
+    describe('ADDRESS format 1 : self-gating controller bind/unbind', function () {
         it('has the exact layout (self-signed; no FEE/MEMO preferences)', function () {
             assert.strictEqual(address.formats[1], 'VERSION|CONTROLLER|ACTION_CLASS|COOLDOWN_BLOCKS|UNBIND|MEMO');
         });
@@ -88,7 +88,7 @@ describe('Programmable policy layer — Phase A binding wire contract @regressio
         });
     });
 
-    describe('config — action-class taxonomy + field classifications', function () {
+    describe('config : action-class taxonomy + field classifications', function () {
         let config;
         before(function () {
             process.env.INDEXER_COIN = 'BTC';

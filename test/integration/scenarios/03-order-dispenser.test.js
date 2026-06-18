@@ -47,7 +47,7 @@ const TICK_B = 'BETA';    // issued by ADDR2
 const TICK_D = 'DTOKEN';  // used in dispenser tests
 
 // ---------------------------------------------------------------------------
-// Block times — start far enough in the past so expirations can be set
+// Block times: start far enough in the past so expirations can be set
 // ---------------------------------------------------------------------------
 const T0 = 1700000000;        // base time
 const T_FAR_FUTURE = T0 + 90 * 86400 + 1; // > 90 days ahead → triggers fee, still valid
@@ -60,7 +60,7 @@ async function freshIndexer() {
     await resetIndexerDb();
     const seeder  = new DecoderSeeder(decoderQuery);
     const indexer = await initIndexer();
-    // Fee era: the ISSUEs in these suites need gas — seed XCHAIN to the actors
+    // Fee era: the ISSUEs in these suites need gas; seed XCHAIN to the actors
     await seedGas(seeder, { addresses: [ADDR1, ADDR2, ADDR3] });
     return { seeder, indexer };
 }
@@ -85,7 +85,7 @@ describe('03 ORDER / DISPENSER integration @regression @tier2', function () {
     this.timeout(60000);
 
     // -----------------------------------------------------------------------
-    // 1. Create ORDER — escrow deducted, order record created, status 'open'
+    // 1. Create ORDER (escrow deducted, order record created, status 'open')
     // -----------------------------------------------------------------------
     describe('ORDER format 0 – create order', function () {
         let indexer;
@@ -228,7 +228,7 @@ describe('03 ORDER / DISPENSER integration @regression @tier2', function () {
     });
 
     // -----------------------------------------------------------------------
-    // 3. Order cancel — escrow returned, status updated to cancelled
+    // 3. Order cancel: escrow returned, status updated to cancelled
     // -----------------------------------------------------------------------
     describe('ORDER format 1 – cancel order', function () {
         let indexer;
@@ -294,7 +294,7 @@ describe('03 ORDER / DISPENSER integration @regression @tier2', function () {
     });
 
     // -----------------------------------------------------------------------
-    // 4. Order expiration — create with past expiration block_time, process next block
+    // 4. Order expiration: create with past expiration block_time, process next block
     // -----------------------------------------------------------------------
     describe('ORDER expiration – order expires when block_time passes EXPIRATION', function () {
         let indexer;
@@ -340,7 +340,7 @@ describe('03 ORDER / DISPENSER integration @regression @tier2', function () {
     });
 
     // -----------------------------------------------------------------------
-    // 5. Create DISPENSER — escrow deducted from source
+    // 5. Create DISPENSER (escrow deducted from source)
     //
     // Uses a token-for-token dispenser:
     //   Give DTOKEN in exchange for BETA (GET_TICK). ADDR2 sends BETA to ADDR3

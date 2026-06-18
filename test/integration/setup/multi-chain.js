@@ -16,12 +16,12 @@
  * Multi-chain test harness for integration scenarios.
  *
  * The indexer's behavior is chain-parameterized through process.env.INDEXER_COIN /
- * INDEXER_NETWORK, which config.getConfig() RE-READS on every call (src/config.js:31 —
+ * INDEXER_NETWORK, which config.getConfig() RE-READS on every call (src/config.js:31,
  * no memoization). Address validation is length-only with no chain prefixes
  * (src/utility.js isCryptoAddress), and the indexer DB schema is identical across
  * coins. Together that means we can sweep BTC/LTC/DOGE in a SINGLE mocha process by
  * setting the coin, rebuilding a fresh indexer against a clean DB, and reusing generic
- * test addresses — no per-chain address generation needed.
+ * test addresses (no per-chain address generation needed).
  *
  *   const { COINS, withCoin } = require('../setup/multi-chain');
  *   for (const coin of COINS) {

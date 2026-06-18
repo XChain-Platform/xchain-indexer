@@ -64,7 +64,7 @@ describe('Block Discovery and Sync @regression @tier3', function () {
     });
 
     // -----------------------------------------------------------------------
-    // 1. Initial sync from empty state — seed 3 blocks, verify all processed
+    // 1. Initial sync from empty state: seed 3 blocks, verify all processed
     // -----------------------------------------------------------------------
     it('initial sync processes all seeded blocks', async function () {
         // Fee era: the ISSUE below needs gas
@@ -86,7 +86,7 @@ describe('Block Discovery and Sync @regression @tier3', function () {
     });
 
     // -----------------------------------------------------------------------
-    // 2. Incremental sync — process first batch, then extend with more blocks
+    // 2. Incremental sync: process first batch, then extend with more blocks
     // -----------------------------------------------------------------------
     it('incremental sync picks up new blocks after initial sync', async function () {
         // First batch: 2 blocks
@@ -117,7 +117,7 @@ describe('Block Discovery and Sync @regression @tier3', function () {
     });
 
     // -----------------------------------------------------------------------
-    // 3. No new blocks — process with no decoder data, verify 0 blocks processed
+    // 3. No new blocks: process with no decoder data, verify 0 blocks processed
     // -----------------------------------------------------------------------
     it('returns 0 when decoder DB has no blocks', async function () {
         const count = await processBlocks(indexer);
@@ -126,7 +126,7 @@ describe('Block Discovery and Sync @regression @tier3', function () {
     });
 
     // -----------------------------------------------------------------------
-    // 4. Empty block (no transactions) — verify block record created with hashes
+    // 4. Empty block (no transactions): verify block record created with hashes
     // -----------------------------------------------------------------------
     it('processes an empty block and creates a block record with hashes', async function () {
         await seeder.seedBlock(300, BASE_TIME, []); // no transactions
@@ -146,7 +146,7 @@ describe('Block Discovery and Sync @regression @tier3', function () {
     });
 
     // -----------------------------------------------------------------------
-    // 5. Multiple blocks sequential — seed 5 blocks each with 1-3 txs
+    // 5. Multiple blocks sequential: seed 5 blocks each with 1-3 txs
     // -----------------------------------------------------------------------
     it('processes 5 sequential blocks with varying transaction counts', async function () {
         // Block 400: 1 tx (ISSUE)
@@ -179,7 +179,7 @@ describe('Block Discovery and Sync @regression @tier3', function () {
     });
 
     // -----------------------------------------------------------------------
-    // 6. Block hash chain — all blocks have ledger_hash_id and actions_hash_id
+    // 6. Block hash chain: all blocks have ledger_hash_id and actions_hash_id
     // -----------------------------------------------------------------------
     it('every processed block has ledger and actions hash IDs', async function () {
         // Fee era: the ISSUE below needs gas
@@ -197,9 +197,9 @@ describe('Block Discovery and Sync @regression @tier3', function () {
     });
 
     // -----------------------------------------------------------------------
-    // 7. Transaction atomicity — valid blocks commit correctly
+    // 7. Transaction atomicity: valid blocks commit correctly
     // -----------------------------------------------------------------------
-    it('each block is committed atomically — all state present after processing', async function () {
+    it('each block is committed atomically (all state present after processing)', async function () {
         // Fee era: the ISSUE below needs gas
         await seedGas(seeder, { blockIndex: 599, addresses: [ADDR1, ADDR2, ADDR3] });
         await seeder.seedBlock(600, BASE_TIME, [
@@ -212,7 +212,7 @@ describe('Block Discovery and Sync @regression @tier3', function () {
         const count = await processBlocks(indexer);
         assert.strictEqual(count, 3); // incl. gas block
 
-        // Both blocks should be committed — verify state from both is present
+        // Both blocks should be committed; verify state from both is present
         const tokenRows = await indexerQuery(
             `SELECT t.supply
              FROM tokens t
@@ -225,7 +225,7 @@ describe('Block Discovery and Sync @regression @tier3', function () {
     });
 
     // -----------------------------------------------------------------------
-    // 8. Action index monotonicity — action_indexes are sequential across blocks
+    // 8. Action index monotonicity: action_indexes are sequential across blocks
     // -----------------------------------------------------------------------
     it('action_indexes are strictly monotonically increasing across blocks', async function () {
         // Fee era: the ISSUE below needs gas
@@ -257,7 +257,7 @@ describe('Block Discovery and Sync @regression @tier3', function () {
     });
 
     // -----------------------------------------------------------------------
-    // 9. Single block with one transaction — baseline happy path
+    // 9. Single block with one transaction: baseline happy path
     // -----------------------------------------------------------------------
     it('processes a single block with one transaction', async function () {
         // Fee era: the ISSUE below needs gas

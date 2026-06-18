@@ -11,12 +11,12 @@
  * contact legal@dankest.llc.
  *
  **********************************************************************
- * createContractPermission — permissions array survives as JSON (Phase E).
+ * createContractPermission: permissions array survives as JSON (Phase E).
  *
  * REGRESSION GUARD for a real bug an integration run caught that the mocked
  * guard/enforcement unit tests missed: db.normalizeDataValues() safeToString()s
  * every object-typed field, so an array PERMISSIONS was coerced to a comma-joined
- * string ('SEND,ISSUE') BEFORE JSON.stringify — persisting '"SEND,ISSUE"' instead
+ * string ('SEND,ISSUE') BEFORE JSON.stringify, persisting '"SEND,ISSUE"' instead
  * of '["SEND","ISSUE"]'. On read-back getContractPermissions' Array.isArray check
  * then fails, SILENTLY disabling the emission allowlist for every contract. This
  * pins the persisted JSON using the REAL normalizeDataValues. Pure (stubs doQuery);
@@ -28,7 +28,7 @@ const config = require('../../src/config.js');
 const Utility = require('../../src/utility.js');
 const Database = require('../../src/db.js');
 
-describe('createContractPermission — permissions JSON integrity @regression @tier1', function () {
+describe('createContractPermission: permissions JSON integrity @regression @tier1', function () {
 
     function makeDb() {
         // Lazy-connecting Database (pool is created on first query, which we stub away).

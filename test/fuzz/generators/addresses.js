@@ -31,7 +31,7 @@ function charString(chars, minLen, maxLen) {
         .map(a => a.join(''));
 }
 
-// Test-side base58check encoder (independent of src/utility.js) — builds a
+// Test-side base58check encoder (independent of src/utility.js): builds a
 // real address from a version byte + 20-byte hash so generated addresses
 // carry a valid checksum.
 function base58CheckEncode(version, hash20) {

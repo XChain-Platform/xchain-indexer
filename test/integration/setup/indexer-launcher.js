@@ -14,8 +14,8 @@
  * Indexer launcher for integration tests.
  *
  * Provides two modes:
- *   1. processBlocks() — processes all pending blocks synchronously, then returns
- *   2. startAndWaitForSync() — starts the full loop, waits for sync, then stops
+ *   1. processBlocks(): processes all pending blocks synchronously, then returns
+ *   2. startAndWaitForSync(): starts the full loop, waits for sync, then stops
  *
  * Both modes use the real XChainIndexer code against real MariaDB databases.
  */
@@ -27,7 +27,7 @@ process.env.INDEXER_COIN    = process.env.INDEXER_COIN    || 'BTC';
 process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
 // Protocol activation gates on the running version (protocol_changes.js
 // reads npm_package_version). npm sets it automatically; DIRECT mocha
-// invocations do not — and a stale hardcoded default ('1.1.0') silently
+// invocations do not; a stale hardcoded default ('1.1.0') silently
 // flipped such runs into the pre-UNIFIED_FEES legacy era, where fees are
 // per-coin and newer actions (STAKE 2.0.0+) are "not yet activated".
 // Default to the REAL package version so both invocations behave the same.
@@ -39,7 +39,7 @@ const XChainIndexer = require('../../../src/XChainIndexer.js');
 
 /**
  * Create a configured XChainIndexer instance pointing at the test databases.
- * Does NOT start it — call start() or use the helper methods below.
+ * Does NOT start it. Call start() or use the helper methods below.
  *
  * @param {object} [opts]
  * @param {string} [opts.indexerName] - indexer DB name override (a second
@@ -103,7 +103,7 @@ async function initIndexer(opts = {}) {
 async function processBlocks(indexer) {
     let blocksProcessed = 0;
 
-    // Get reorg state — match the decoder's reorg event by IDENTITY (events.id),
+    // Get reorg state: match the decoder's reorg event by IDENTITY (events.id),
     // not block-height magnitude, so consecutive higher-block reorgs are not missed.
     const decoderReorg         = await indexer.decoderDb.getLatestReorg();
     const lastProcessedReorgId = await indexer.indexerDb.getLastProcessedReorgId();

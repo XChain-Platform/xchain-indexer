@@ -95,7 +95,7 @@ describe('HubClient', function(){
     });
 
     // -----------------------------------------------------------------------
-    // pushChainTip — public-method guard + _call stubbing
+    // pushChainTip: public-method guard + _call stubbing
     // -----------------------------------------------------------------------
     describe('pushChainTip()', function(){
         it('returns immediately without calling _call when not enabled', async function(){
@@ -277,7 +277,7 @@ describe('HubClient', function(){
     });
 
     // -----------------------------------------------------------------------
-    // _call internals — http.request mocking
+    // _call internals: http.request mocking
     //
     // These tests drive the raw socket path via a fake http.request that
     // returns an EventEmitter-shaped fake request and fires fake response events.

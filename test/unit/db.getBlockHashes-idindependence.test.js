@@ -18,13 +18,13 @@
  * from the raw AUTO_INCREMENT lookup-table surrogate ids (address_id, tick_id, action_id,
  * source_id, caller_id, status_id).
  *
- * WHY THIS MATTERS — the reorg fork:
+ * WHY THIS MATTERS: the reorg fork:
  *   index_addresses / index_tickers / index_statuses / index_actions rows are created on
  *   first reference (INSERT IGNORE) and are NEVER rolled back; InnoDB AUTO_INCREMENT never
  *   rewinds. So a node that processed a later-orphaned block containing a first-seen
  *   address/ticker keeps that lookup row, and every value first referenced afterward gets an
  *   id offset relative to a node that never saw the orphan. If those ids feed the hash, two
- *   honest nodes on the SAME canonical chain compute DIFFERENT hashes forever — a permanent
+ *   honest nodes on the SAME canonical chain compute DIFFERENT hashes forever (a permanent
  *   checkpoint-quorum break. Hashing the resolved strings removes the id from the preimage,
  *   so the hash depends only on the canonical chain. (BLOCK_HASH_VERSION bumped to 2.)
  *
@@ -84,18 +84,18 @@ describe('Database.getBlockHashes() consensus id-independence (reorg fork fix) @
         });
         await db.getBlockHashes(306);
         assert.strictEqual(offenders.length, 0,
-            'consensus hash projection selected a lookup surrogate id (reorg-divergent) — hash the ' +
+            'consensus hash projection selected a lookup surrogate id (reorg-divergent); hash the ' +
             'resolved string instead:\n' + JSON.stringify(offenders, null, 2));
     });
 
     // (2) Property: identical canonical content under DIFFERENT local id assignment hashes
-    //     identically. Two "operators" — one reorg-exposed (offset ids), one never-exposed —
+    //     identically. Two "operators", one reorg-exposed (offset ids) and one never-exposed,
     //     resolve the same canonical addresses/ticks, so the projected rows (and hashes) match.
     //     Because the projection no longer carries ids, the id offset is invisible by construction;
     //     this asserts that invariant end-to-end through getBlockHashes.
     it('produces identical block hashes for the same canonical chain regardless of local id assignment', async function () {
         // The resolved rows a node returns for block 306. (Ids are gone from the projection; what
-        // remains is purely canonical — so both operators return byte-identical rows.)
+        // remains is purely canonical, so both operators return byte-identical rows.)
         const creditsRows = [{ action_index: 1, address: '1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev', tick: 'JDOG', amount: '1000' }];
 
         async function blockHashesFor(rows) {
@@ -111,7 +111,7 @@ describe('Database.getBlockHashes() consensus id-independence (reorg fork fix) @
             'same canonical chain must yield the same ledger hash on a reorg-exposed and a never-exposed node');
 
         // Non-vacuity control: a genuinely DIFFERENT canonical address (not a mere id offset) MUST
-        // change the hash — proving the hash still binds canonical content, just not the surrogate id.
+        // change the hash (proving the hash still binds canonical content, just not the surrogate id).
         const different = await blockHashesFor([{ action_index: 1, address: '1OtherZS6tQcSxwfxhv6XKKjcyicYA4Fe', tick: 'JDOG', amount: '1000' }]);
         assert.notStrictEqual(different.ledger, operatorNeverReorged.ledger,
             'a different canonical address MUST change the ledger hash (else the hash is content-blind)');

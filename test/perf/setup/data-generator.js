@@ -16,7 +16,7 @@ const DecoderSeeder = require('../../integration/setup/decoder-seeder');
 const GAS_ADDR = 'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX';
 const TICK_GAS = 'XCHAIN';
 
-// 10 test addresses — valid regtest P2PKH (isCryptoAddress verifies base58check)
+// 10 test addresses, valid regtest P2PKH (isCryptoAddress verifies base58check)
 const PERF_ADDRS = [
     'mq69zWDZmUo27UV2kBEizTBmKP8qoBRDH5', 'muFL6KMd9eEkxcuNHTKbSmkZj6TqBfQMdm',
     'n13R1eZGMyjzfG1txVRH1H2RFkdathxhWe', 'n2t9NyzYAREoWkoqZxJYpEjbHq4jzNHntf',
@@ -207,7 +207,7 @@ class DataGenerator extends DecoderSeeder {
     _profileHeavyDex(count, blockIdx, blockTime) {
         const txs = [];
         const addrs = this.state.addresses;
-        const expiry = blockTime + 90 * 86400; // 90 days — within fee-free window
+        const expiry = blockTime + 90 * 86400; // 90 days, within fee-free window
         for (let i = 0; i < count; i++) {
             const from = addrs[i % addrs.length];
             const giveAmount = 1 + (i % 10);

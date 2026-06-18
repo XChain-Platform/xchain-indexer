@@ -74,14 +74,14 @@ function buildActions(protocolChangesOverrides = {}) {
 
     // Stub every handler's parse() with a resolved stub.
     //
-    // The list is derived from the live Actions instance — any `action*`
-    // property exposing a parse() method — rather than hardcoded. A hardcoded
+    // The list is derived from the live Actions instance : any `action*`
+    // property exposing a parse() method : rather than hardcoded. A hardcoded
     // list drifts: handlers get added to Actions (e.g. COLLECT, PRICE, ATTEST)
     // without a matching stub, so routing for them runs the real handler against
     // a mock DB; conversely a renamed/removed handler leaves a stale key that
     // makes sinon.stub() throw on undefined and breaks the whole file. Deriving
     // keeps the stub set in lockstep with what Actions actually registers.
-    // (actionAliases is excluded automatically — it has no parse() method.)
+    // (actionAliases is excluded automatically : it has no parse() method.)
     const handlerKeys = Object.keys(actions).filter(
         (key) => key.startsWith('action')
             && actions[key]
@@ -97,7 +97,7 @@ function buildActions(protocolChangesOverrides = {}) {
 }
 
 // ---------------------------------------------------------------------------
-// describe: processTransaction — action routing
+// describe: processTransaction - action routing
 // ---------------------------------------------------------------------------
 describe('Actions.processTransaction() @regression @tier3', function () {
     afterEach(function () {
@@ -283,7 +283,7 @@ describe('Actions.processTransaction() @regression @tier3', function () {
 
     it('inserts version 0 for legacy ISSUE format where TICK is first param', async function () {
         const { actions, stubs } = buildActions();
-        // Legacy: no version, TICK comes first — e.g. "ISSUE|TEST|1000|100|8"
+        // Legacy: no version, TICK comes first : e.g. "ISSUE|TEST|1000|100|8"
         const tx = makeTx({ data: 'ISSUE|TEST|1000|100|8' });
         await actions.processTransaction(tx);
         const [params, data] = stubs.actionIssue.firstCall.args;
@@ -315,9 +315,9 @@ describe('Actions.processTransaction() @regression @tier3', function () {
         const tx = makeTx({ data: 'SEND|0|TEST|100|addr' });
         await actions.processTransaction(tx);
         const [params, data] = stubs.actionSend.firstCall.args;
-        // FORMAT is extracted from params[0] but params is NOT shifted — version string stays
+        // FORMAT is extracted from params[0] but params is NOT shifted : version string stays
         assert.strictEqual(data.FORMAT, 0);
-        // params still contains ['0', 'TEST', '100', 'addr'] — version is at index 0
+        // params still contains ['0', 'TEST', '100', 'addr'] : version is at index 0
         assert.strictEqual(params[0], '0');
         assert.strictEqual(params[1], 'TEST');
     });
@@ -439,7 +439,7 @@ describe('Actions.processTransaction() @regression @tier3', function () {
 });
 
 // ---------------------------------------------------------------------------
-// describe: processAction — handler dispatch + resetLists
+// describe: processAction : handler dispatch + resetLists
 // ---------------------------------------------------------------------------
 describe('Actions.processAction() @regression @tier3', function () {
     let actions;

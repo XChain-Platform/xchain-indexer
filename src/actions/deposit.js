@@ -15,7 +15,7 @@
  * XChain Platform Action - DEPOSIT
  *
  * This action transfers tokens from a user to a contract's custody.
- * No gas fee — on-chain transaction cost is sufficient.
+ * No gas fee; on-chain transaction cost is sufficient.
  *
  * PARAMS:
  * - VERSION              - Format Version

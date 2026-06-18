@@ -17,7 +17,7 @@ describe('Config @regression @tier3', function () {
         delete require.cache[require.resolve('../../src/config.js')];
     });
 
-    describe('getConfig() — BTC', function () {
+    describe('getConfig() - BTC', function () {
         let config;
 
         before(function () {
@@ -150,7 +150,7 @@ describe('Config @regression @tier3', function () {
         });
     });
 
-    describe('getConfig() — LTC', function () {
+    describe('getConfig() - LTC', function () {
         let config;
 
         before(function () {
@@ -176,7 +176,7 @@ describe('Config @regression @tier3', function () {
         });
     });
 
-    describe('getConfig() — DOGE', function () {
+    describe('getConfig() - DOGE', function () {
         let config;
 
         before(function () {
@@ -201,7 +201,7 @@ describe('Config @regression @tier3', function () {
         });
     });
 
-    describe('getConfig() — invalid coin', function () {
+    describe('getConfig() - invalid coin', function () {
         it('should throw for missing coin config file', function () {
             process.env.INDEXER_COIN = 'ETH';
             process.env.INDEXER_NETWORK = 'regtest';
@@ -307,7 +307,7 @@ describe('XChainIndexer hub config overlay', function () {
         await indexer._applyHubConfigOverlay();
 
         // STAKING (ACTIVATION_DELAY_BLOCKS / COOLDOWN_BLOCKS / MIN_STAKE) drives activation_block
-        // and capability gating in hashed state — the overlay must leave the local object intact.
+        // and capability gating in hashed state; the overlay must leave the local object intact.
         assert.strictEqual(indexer.config.STAKING, localStaking, 'STAKING must stay the local object');
     });
 
@@ -360,14 +360,14 @@ describe('XChainIndexer hub config overlay', function () {
             process.env.HUB_CONFIG_POLL_INTERVAL_MS = '60000';
             indexer._startHubConfigPolling();
 
-            // Tick 1: same seq (5) — must NOT re-apply (stale guard).
+            // Tick 1: same seq (5); must NOT re-apply (stale guard).
             hubStub._call.onCall(1).resolves({
                 configs: { BTC: { regtest: { 'xchain-indexer': { EXPIRATION_FEE_PER_DAY: '0.99999999' } } } }, seq: 5
             });
             await clock.tickAsync(60000);
             assert.strictEqual(indexer.lastHubConfigSeq, 5, 'unchanged seq must not advance');
 
-            // Tick 2: seq advances to 6 — bookkeeping updates, but the consensus param the hub
+            // Tick 2: seq advances to 6. Bookkeeping updates, but the consensus param the hub
             // pushes is still ignored (no soft fork even across a committed re-apply).
             hubStub._call.onCall(2).resolves({
                 configs: { BTC: { regtest: { 'xchain-indexer': { EXPIRATION_FEE_PER_DAY: '0.00022000' } } } }, seq: 6
@@ -382,7 +382,7 @@ describe('XChainIndexer hub config overlay', function () {
         }
     });
 
-    // ─── parseIntMin0 — non-negative integer env parsing ──────────────────
+    // ─── parseIntMin0: non-negative integer env parsing ──────────────────
     describe('parseIntMin0 (BLOCK_CHECK_INTERVAL / BLOCK_PROCESS_TIMEOUT)', function () {
 
         function loadWith(env) {

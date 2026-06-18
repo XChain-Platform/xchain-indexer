@@ -70,7 +70,7 @@ describe('Utility isCryptoAddress() boundary tests @regression @tier3', function
         assert.strictEqual(util.isCryptoAddress('bcrt1pxqgcx65hqkd9c7y6wulyfv2wlwawqx62n3ufwxkjhjpas2jtqxmsglytaf'), true);
     });
 
-    // Checksum boundaries — a single flipped character must invalidate
+    // Checksum boundaries: a single flipped character must invalidate
     it('isCryptoAddress: base58 checksum flip → invalid', function () {
         assert.strictEqual(util.isCryptoAddress(SOURCE.slice(0, -1) + (SOURCE.endsWith('H') ? 'J' : 'H')), false);
     });
@@ -106,7 +106,7 @@ describe('Utility isCryptoAddress() boundary tests @regression @tier3', function
 });
 
 // ---------------------------------------------------------------------------
-// SEND DESTINATION validation — end-to-end through the Send handler
+// SEND DESTINATION validation (end-to-end through the Send handler)
 // ---------------------------------------------------------------------------
 
 describe('Address validation boundary tests via SEND handler @regression @tier3', function () {

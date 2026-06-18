@@ -39,7 +39,7 @@ describe('Delegate (DELEGATE) @regression @tier2', function () {
         db.createContractDelegation = sinon.stub().resolves();
         db.getPubkeyId              = sinon.stub().resolves(null);   // pubkey unknown → no collision
         db.getStatusId              = sinon.stub().resolves(1);
-        db.doQuery                  = sinon.stub().resolves([]);     // contract stake lookup — empty by default
+        db.doQuery                  = sinon.stub().resolves([]);     // contract stake lookup, empty by default
     }
 
     function delegateData(overrides = {}) {
@@ -66,9 +66,9 @@ describe('Delegate (DELEGATE) @regression @tier2', function () {
         sinon.restore();
     });
 
-    // ─── v0 — Capability rotate ───────────────────────────────────────────
+    // ─── v0: Capability rotate ───────────────────────────────────────────
 
-    describe('v0 — capability rotate', function () {
+    describe('v0: capability rotate', function () {
 
         it('valid delegation → STATUS valid and createDelegation called', async function () {
             const data = delegateData({ FORMAT: 0 });
@@ -133,7 +133,7 @@ describe('Delegate (DELEGATE) @regression @tier2', function () {
             const data = delegateData({ FORMAT: 0 });
             await handler.parse(['0', VALID_PUBKEY], data, null);
             assert.strictEqual(data['STATUS'], 'valid');
-            // The helper must receive the action's BLOCK_INDEX — the SQL frees
+            // The helper must receive the action's BLOCK_INDEX; the SQL frees
             // pubkeys whose delegation deactivated at or before this height.
             const call = indexer.indexerDb.getDelegationByPubkey.getCall(0);
             assert.strictEqual(call.args[0], VALID_PUBKEY);
@@ -171,9 +171,9 @@ describe('Delegate (DELEGATE) @regression @tier2', function () {
 
     });
 
-    // ─── v2 — Capability revoke ────────────────────────────────────────
+    // ─── v2: Capability revoke ────────────────────────────────────────
 
-    describe('v2 — capability revoke', function () {
+    describe('v2: capability revoke', function () {
 
         it('valid revoke → STATUS valid and createRevokeDelegation called', async function () {
             const data = delegateData({ FORMAT: 2 });
@@ -208,7 +208,7 @@ describe('Delegate (DELEGATE) @regression @tier2', function () {
             await handler.parse(['2', VALID_PUBKEY], data, null);
             assert.strictEqual(data['STATUS'], 'valid');
             assert.ok(indexer.indexerDb.createStakeKeyRevocation.calledOnce);
-            // Must NOT touch the delegations table — a delegations record here
+            // Must NOT touch the delegations table; a delegations record here
             // would read as an active delegation and re-add the revoked key.
             assert.ok(indexer.indexerDb.createRevokeDelegation.notCalled);
             assert.ok(indexer.indexerDb.setDelegationDeactivation.notCalled);
@@ -240,7 +240,7 @@ describe('Delegate (DELEGATE) @regression @tier2', function () {
         });
 
         it('delegation-row revoke still wins when both a delegation and a stake key exist', async function () {
-            // getActiveDelegation resolves a row (default stub) — the stake-key
+            // getActiveDelegation resolves a row (default stub); the stake-key
             // branch must not be consulted at all.
             const data = delegateData({ FORMAT: 2 });
             await handler.parse(['2', VALID_PUBKEY], data, null);
@@ -265,9 +265,9 @@ describe('Delegate (DELEGATE) @regression @tier2', function () {
 
     });
 
-    // ─── v1 — Contract-targeted rotate ───────────────────────────────────
+    // ─── v1: Contract-targeted rotate ───────────────────────────────────
 
-    describe('v1 — contract-targeted rotate', function () {
+    describe('v1: contract-targeted rotate', function () {
 
         function v1Data() { return delegateData({ FORMAT: 1 }); }
 
@@ -313,7 +313,7 @@ describe('Delegate (DELEGATE) @regression @tier2', function () {
         });
 
         it('rejects when SOURCE has no active contract stake', async function () {
-            // doQuery returns empty — no matching contract_stakes row
+            // doQuery returns empty (no matching contract_stakes row)
             indexer.indexerDb.doQuery.resolves([]);
             indexer.indexerDb.getAddressId.resolves(1);
             const data = v1Data();
@@ -335,9 +335,9 @@ describe('Delegate (DELEGATE) @regression @tier2', function () {
 
     });
 
-    // ─── v3 — Contract-targeted revoke ───────────────────────────────────
+    // ─── v3: Contract-targeted revoke ───────────────────────────────────
 
-    describe('v3 — contract-targeted revoke', function () {
+    describe('v3: contract-targeted revoke', function () {
 
         function v3Data() { return delegateData({ FORMAT: 3 }); }
 

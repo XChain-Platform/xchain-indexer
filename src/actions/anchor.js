@@ -14,21 +14,21 @@
  *
  * XChain Platform Action - ANCHOR (validator-broadcast, DOGE-only)
  *
- * On-chain commitment of federation state — quorum-signed checkpoints (v0),
+ * On-chain commitment of federation state: quorum-signed checkpoints (v0),
  * the cross-chain match archive (v1), and archive continuation chunks (v2).
  * Parsed rows land in anchor_actions: the permanent on-chain record that
  * makes every checkpoint + the complete match archive recoverable from a
  * full chain parse alone (src/recovery.js). Live indexers keep settling
- * from the hub mirror — ANCHOR has NO ledger effect (no credits/debits/
+ * from the hub mirror. ANCHOR has NO ledger effect (no credits/debits/
  * escrows) and charges NO protocol fee (validator action, like PRICE v0).
  *
  * Verification: each signature must belong to the `oracle_publish`
  * capability snapshot at the payload's SNAPSHOT_BLOCK (a BTC height,
- * resolved on DOGE from the hub-mirrored capability_snapshots — same path
+ * resolved on DOGE from the hub-mirrored capability_snapshots (same path
  * cross_settle uses for `cross_chain`) and Ed25519-verify over the
  * XCHECKPOINT canonical. Quorum 2f+1. When no snapshot is mirrored locally
- * (e.g. a from-scratch resync with no hub), the row is stored 'unverified'
- * — recovery re-verifies from the ARCHIVED snapshots, so chain-parse
+ * (e.g. a from-scratch resync with no hub), the row is stored 'unverified';
+ * recovery re-verifies from the ARCHIVED snapshots, so chain-parse
  * recovery never depends on the mirror.
  *
  * Spec: xchain-documentation/protocol/actions/ANCHOR.md
@@ -64,7 +64,7 @@ class Anchor {
         this.formats[2] = 'VERSION|MATCH_BATCH_SEQ|CHUNK_INDEX|TOTAL_CHUNKS|ARCHIVE_B64_CHUNK';
     }
 
-    // Canonical signing string — MUST byte-match the hub's
+    // Canonical signing string: MUST byte-match the hub's
     // StateCheckpointEngine.canonicalCheckpoint (+ the archive extension for v1)
     // and the SDK CheckpointVerifier.
     _canonical(d){
@@ -72,7 +72,7 @@ class Anchor {
                     d['BLOCK_HASH'], d['LEDGER_HASH'], d['ACTIONS_HASH'], d['CONTRACT_HASH'],
                     String(d['CHECKPOINT_SEQ']), String(d['SNAPSHOT_BLOCK'])].join('|');
         // v0 ROUND_ID = chain|network|block|checkpoint_seq; v1 appends batch_seq so the
-        // per-block (v0) and archive (v1) canonicals — which share checkpoint_seq — get
+        // per-block (v0) and archive (v1) canonicals (which share checkpoint_seq) get
         // DISTINCT equivocation keys (R-4 false-slash fix). Must byte-match the hub.
         let roundId = d['CHAIN'] + '|' + d['NETWORK'] + '|' + d['BLOCK_INDEX_CHECKPOINTED'] + '|' + d['CHECKPOINT_SEQ'];
         if(Number(d['FORMAT']) === 1){
@@ -91,7 +91,7 @@ class Anchor {
         if(!error && (format === null || this.formats[format] === undefined))
             error = 'invalid: VERSION (unknown)';
 
-        // ANCHOR is valid only on the anchor chain — DOGE (all networks).
+        // ANCHOR is valid only on the anchor chain: DOGE (all networks).
         if(!error && String(this.config['COIN']) !== 'DOGE')
             error = 'invalid: ANCHOR only valid on DOGE';
 
@@ -99,7 +99,7 @@ class Anchor {
         return await this._parseCheckpoint(params, data, error, format);
     }
 
-    // ANCHOR v0/v1 — checkpoint (+ optional archive segment)
+    // ANCHOR v0/v1: checkpoint (+ optional archive segment)
     async _parseCheckpoint(params, data, error, format){
 
         data['CHAIN']                   = String(params[1] || '').toUpperCase();
@@ -166,18 +166,18 @@ class Anchor {
         }
 
         // ── Replay guards: never accept a seq BELOW the recorded max. Equal is
-        // allowed — a v0 and its v1 share the same checkpoint_seq by design
+        // allowed: a v0 and its v1 share the same checkpoint_seq by design
         // (same wrapper), and an exact replay is signature-bound to identical
         // content, so it can only produce a harmless duplicate row. ──────────
         if(!error){
             let maxSeq = await this.indexerDb.getMaxAnchorCheckpointSeq(data['CHAIN'], data['NETWORK']);
             if(maxSeq !== null && Number(data['CHECKPOINT_SEQ']) < maxSeq)
-                error = 'invalid: CHECKPOINT_SEQ (stale — replay of an older checkpoint)';
+                error = 'invalid: CHECKPOINT_SEQ (stale; replay of an older checkpoint)';
         }
         if(!error && format === 1){
             let maxBatch = await this.indexerDb.getMaxAnchorBatchSeq();
             if(maxBatch !== null && Number(data['MATCH_BATCH_SEQ']) < maxBatch)
-                error = 'invalid: MATCH_BATCH_SEQ (stale — replay of an older archive batch)';
+                error = 'invalid: MATCH_BATCH_SEQ (stale; replay of an older archive batch)';
         }
 
         // ── v1 archive integrity (single-chunk batches verify inline; chunked
@@ -189,7 +189,7 @@ class Anchor {
         }
 
         // ── Verify 2f+1 oracle_publish signatures over the canonical ─────────
-        // SNAPSHOT_BLOCK comes from the wire payload (a BTC height) — NOT from
+        // SNAPSHOT_BLOCK comes from the wire payload (a BTC height), NOT from
         // the DOGE block this ANCHOR landed in.
         if(!error){
             let snapshotBlock = Number(data['SNAPSHOT_BLOCK']);
@@ -202,7 +202,7 @@ class Anchor {
             let N = (validators && validators.length) ? validators.length : 0;
             if(N === 0){
                 // No oracle_publish snapshot mirrored locally (offline resync / no hub).
-                // Store as 'unverified' — recovery re-verifies from archived snapshots.
+                // Store as 'unverified'; recovery re-verifies from archived snapshots.
                 data['STATUS'] = 'unverified';
             } else {
                 let canonical = this._canonical(data);
@@ -236,7 +236,7 @@ class Anchor {
         await this.mapper.createMappings(data);
     }
 
-    // ANCHOR v2 — archive continuation chunk (authenticated by its parent v1)
+    // ANCHOR v2: archive continuation chunk (authenticated by its parent v1)
     async _parseContinuation(params, data, error){
 
         data['MATCH_BATCH_SEQ'] = params[1];
@@ -287,7 +287,7 @@ class Anchor {
                 for(let c of chunks.sort((a, b) => Number(a.chunk_index) - Number(b.chunk_index))) b64 += c.archive_b64;
                 let crc = this._archiveCrc(b64);
                 if(crc === null || crc !== String(parent.batch_crc32)){
-                    console.warn("\t ANCHOR v2 : batch " + data['MATCH_BATCH_SEQ'] + ' reassembly CRC mismatch — flagging invalid_archive');
+                    console.warn("\t ANCHOR v2 : batch " + data['MATCH_BATCH_SEQ'] + ' reassembly CRC mismatch, flagging invalid_archive');
                     await this.indexerDb.setAnchorArchiveStatus(Number(parent.action_index), 'invalid_archive');
                 }
             }

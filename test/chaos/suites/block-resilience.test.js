@@ -25,7 +25,7 @@ const assert = require('assert');
 const sinon = require('sinon');
 const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
 
-describe('Chaos — Block Processing Resilience', function () {
+describe('Chaos: Block Processing Resilience', function () {
     this.timeout(10000);
 
     let indexer, mockActions;
@@ -88,7 +88,7 @@ describe('Chaos — Block Processing Resilience', function () {
 
     /**
      * Helper: faithfully mirror the inner catch-up `while` loop in XChainIndexer.run(),
-     * INCLUDING the parts processBlock() omits — the block counter and loop control flow.
+     * INCLUDING the parts processBlock() omits (the block counter and loop control flow).
      * This is what guards against the silent block-skip class of bug: the counter must
      * advance only after a successful commit, and a failure must `break` out to the
      * (simulated) outer loop rather than falling through to the next block.
@@ -210,14 +210,14 @@ describe('Chaos — Block Processing Resilience', function () {
         const ctx = { indexer, actions: mockActions };
         const tx = createBaseData({ ACTION: 'SEND' });
 
-        // Should not throw — the error is caught and logged
+        // Should not throw: the error is caught and logged
         try {
             const result = await processBlock(ctx, [tx], 1700000000, 100);
-            // If rollback throws, it propagates out of the catch — that's the current behavior
+            // If rollback throws, it propagates out of the catch; that's the current behavior
             // This test documents that behavior
             assert.strictEqual(result.success, false);
         } catch (e) {
-            // Rollback failure propagates — this is acceptable since the block loop
+            // Rollback failure propagates; this is acceptable since the block loop
             // in XChainIndexer catches it at a higher level
             assert.ok(e.message.includes('rollback also failed'));
         }
@@ -238,15 +238,15 @@ describe('Chaos — Block Processing Resilience', function () {
         assert.ok(indexer.indexerDb.commitTransaction.calledOnce);
     });
 
-    it('BK-09: @regression a failing block is NOT skipped — the loop halts at it instead of advancing', async function () {
+    it('BK-09: @regression a failing block is NOT skipped; the loop halts at it instead of advancing', async function () {
         // Indexer at block 99, decoder has data through 105. Block 100 fails to process.
-        // The inner loop must stop AT block 100 and must never attempt 101..105 — otherwise
+        // The inner loop must stop AT block 100 and must never attempt 101..105; otherwise
         // block 100 would be permanently skipped (the silent block-skip bug).
         const ctx = { indexer, actions: mockActions };
         const { attempted, committed, lastIndexerBlock } =
             await runInnerCatchUpLoop(ctx, 99, 105, (b) => b === 100);
 
-        assert.deepStrictEqual(attempted, [100], 'should attempt only block 100, then break — not skip ahead');
+        assert.deepStrictEqual(attempted, [100], 'should attempt only block 100, then break (not skip ahead)');
         assert.deepStrictEqual(committed, [], 'no block should commit when block 100 fails');
         assert.strictEqual(lastIndexerBlock, 99, 'counter must NOT advance past the failed block');
         assert.ok(indexer.indexerDb.commitTransaction.notCalled, 'nothing should commit');
@@ -255,7 +255,7 @@ describe('Chaos — Block Processing Resilience', function () {
     it('BK-10: @regression a transient failure is retried on the next pass with no gap in committed blocks', async function () {
         // Simulate the outer loop re-fetching lastIndexerBlock from the DB after each inner pass.
         // Block 100 fails on the first attempt, then succeeds. The committed sequence must be
-        // contiguous (100..105) — block 100 must not be lost.
+        // contiguous (100..105): block 100 must not be lost.
         const ctx = { indexer, actions: mockActions };
         const decoderLast = 105;
         const failOnce = new Set([100]); // clears after first attempt → transient
@@ -265,7 +265,7 @@ describe('Chaos — Block Processing Resilience', function () {
         for (let pass = 0; pass < 5; pass++) {
             const res = await runInnerCatchUpLoop(ctx, lastIndexerBlock, decoderLast, (b) => failOnce.delete(b));
             committedAll.push(...res.committed);
-            // Outer loop re-fetches MAX(block_index) — equals the last committed block (un-advanced on failure).
+            // Outer loop re-fetches MAX(block_index), which equals the last committed block (un-advanced on failure).
             lastIndexerBlock = res.lastIndexerBlock;
             if (lastIndexerBlock >= decoderLast) break;
         }

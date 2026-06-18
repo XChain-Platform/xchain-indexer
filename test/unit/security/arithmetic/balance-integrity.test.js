@@ -61,7 +61,7 @@ describe('Security: balance integrity and adversarial arithmetic @regression @ti
 
     it('SEC-33: bcsub(\'100\', \'200\', 18) → negative result (documented behavior)', function () {
         const result = util.bcsub('100', '200', 18);
-        // Result should be -100 — bcsub does not prevent negative results
+        // Result should be -100; bcsub does not prevent negative results
         assert.strictEqual(util.bcformat(result, 18), '-100.000000000000000000');
     });
 
@@ -85,7 +85,7 @@ describe('Security: balance integrity and adversarial arithmetic @regression @ti
         // If a negative amount reaches bcsub as the second argument, it ADDS instead of subtracts
         const result = util.bcsub('100', '-100', 18);
         assert.strictEqual(util.bcformat(result, 18), '200.000000000000000000',
-            'subtracting a negative number adds — this is why input validation must reject negatives');
+            'subtracting a negative number adds : this is why input validation must reject negatives');
     });
 
     // -----------------------------------------------------------------------

@@ -27,7 +27,7 @@
  *   See claude/reports/2026-06-12_p3b-phase3-three-chain-parity-tip.md §2.
  *
  * Technique mirrors db.queries.test.js: stub doQuery on a prototype-borrowed Database so the
- * real getBlockHashes logic runs against injected rows — no live MariaDB required. Because the
+ * real getBlockHashes logic runs against injected rows; no live MariaDB required. Because the
  * stub bypasses the engine's ORDER BY, the determinism property test re-derives the sort order
  * FROM THE ACTUAL QUERY STRING (orderByCols) and applies it in JS; if a future edit drops a
  * disambiguating column, the modeled sort drops it too and the property fails. A negative
@@ -51,7 +51,7 @@ const Database          = require('../../src/db');
 // SELECTs (== the set that MUST appear in its ORDER BY for a total row order).
 // ---------------------------------------------------------------------------
 // As of BLOCK_HASH_VERSION 2 these queries ORDER BY the RESOLVED lookup strings (address /
-// tick / status), not the raw *_id surrogates — so the order is id-independent across nodes.
+// tick / status), not the raw *_id surrogates : so the order is id-independent across nodes.
 // Bare names are what orderByCols() extracts from the ORDER BY (alias + COLLATE stripped).
 const TIE_PRONE = {
     credits:     ['action_index', 'address', 'tick', 'amount'],
@@ -84,7 +84,7 @@ function orderByCols(sql) {
 }
 
 // Deterministic numeric-aware sort that is STABLE on a full tie (returns 0), so a query
-// ordering by too-few columns leaves the injected scramble order intact — the whole point.
+// ordering by too-few columns leaves the injected scramble order intact : the whole point.
 function sortByCols(rows, cols) {
     return rows.slice().sort((a, b) => {
         for (const c of cols) {
@@ -135,7 +135,7 @@ afterEach(function () { sinon.restore(); });
 describe('Database.getBlockHashes() consensus tie-order determinism (ffd061a) @regression @tier1', function () {
 
     // (1) Structural guard: every SELECTed column of each tie-prone query must participate
-    //     in its ORDER BY. Survives future query edits — drop a column and this fails.
+    //     in its ORDER BY. Survives future query edits : drop a column and this fails.
     it('orders every tie-prone ledger/contract query by all of its projected columns', async function () {
         const db   = makeDb();
         const seen = {};
@@ -152,7 +152,7 @@ describe('Database.getBlockHashes() consensus tie-order determinism (ffd061a) @r
                 assert.ok(
                     seen[table].includes(col),
                     `getBlockHashes '${table}' ORDER BY must include '${col}' for tie-order ` +
-                    `determinism (ffd061a) — got [${seen[table].join(', ')}]`
+                    `determinism (ffd061a) : got [${seen[table].join(', ')}]`
                 );
             }
         }
@@ -161,7 +161,7 @@ describe('Database.getBlockHashes() consensus tie-order determinism (ffd061a) @r
     // (2) Property: two credits sharing an action_index hash identically no matter what
     //     physical order the engine returns them in (the ISSUE fee-credit + mint-credit case).
     it('produces an identical ledger hash regardless of tied-row return order', async function () {
-        // Same logical rows, same action_index, differing only in the disambiguating columns —
+        // Same logical rows, same action_index, differing only in the disambiguating columns :
         // now the RESOLVED address string (the consensus projection no longer carries address_id).
         const feeCredit  = { action_index: 5, address: '1FeeZS6tQcSxwfxhv6XKKjcyicYA4Feev',  tick: 'JDOG', amount: '100' };
         const mintCredit = { action_index: 5, address: '1MintZS6tQcSxwfxhv6XKKjcyicYA4Feev', tick: 'JDOG', amount: '900' };
@@ -176,7 +176,7 @@ describe('Database.getBlockHashes() consensus tie-order determinism (ffd061a) @r
     });
 
     // (3) Negative control: with the PRE-FIX ordering (action_index only), the same two
-    //     scrambles DO fork — proving the property test actually detects the regression.
+    //     scrambles DO fork : proving the property test actually detects the regression.
     it('negative control: action_index-only ordering forks on the tied rows', async function () {
         const feeCredit  = { action_index: 5, address: '1FeeZS6tQcSxwfxhv6XKKjcyicYA4Feev',  tick: 'JDOG', amount: '100' };
         const mintCredit = { action_index: 5, address: '1MintZS6tQcSxwfxhv6XKKjcyicYA4Feev', tick: 'JDOG', amount: '900' };

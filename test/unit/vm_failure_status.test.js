@@ -18,8 +18,8 @@
  * committed to the TransparencyLog Merkle root that validators compare. So it MUST be a
  * pure, deterministic function of the VM error.
  *
- * The critical invariant: the entire resource-exhaustion family — out_of_gas, timeout,
- * out_of_memory, out_of_stack, and out_of_resource (host crash / watchdog) — collapses to
+ * The critical invariant: the entire resource-exhaustion family (out_of_gas, timeout,
+ * out_of_memory, out_of_stack, and out_of_resource for host crash / watchdog) collapses to
  * ONE token. Which of these backstops actually fires for a given contract is
  * timing-/memory-/arch-dependent (proven by the cross-arch determinism run: ARM hits V8
  * abort → 'out_of_resource: ...(signal SIGABRT)', x86 hits the isolate wall-clock →
@@ -40,12 +40,12 @@
 
 const assert = require('assert');
 
-// Utility loads coin config in its constructor — set before require (mirrors utility.test.js).
+// Utility loads coin config in its constructor; set before require (mirrors utility.test.js).
 process.env.INDEXER_COIN = 'BTC';
 process.env.INDEXER_NETWORK = 'regtest';
 const Utility = require('../../src/utility.js');
 
-describe('VM failure status mapping — consensus stability @regression @tier1', function () {
+describe('VM failure status mapping: consensus stability @regression @tier1', function () {
     let util;
     beforeEach(function () { util = new Utility(); });
 

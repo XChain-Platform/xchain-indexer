@@ -17,7 +17,7 @@
  *
  * ISSUANCE_FEE is active from block 0 on regtest, so any scenario that
  * ISSUEs a token needs its source address to hold XCHAIN (the gas tick)
- * first — mirroring the live e2e suites' "seed gas for fresh addresses"
+ * first, mirroring the live e2e suites' "seed gas for fresh addresses"
  * convention. Issuing the gas tick itself is fee-exempt (gasBootstrap in
  * actions/issue.js), and regtest exempts the official-GAS-address-only
  * issuer rule, so the preamble is fully self-contained:
@@ -28,7 +28,7 @@
  * Seed this BEFORE the scenario's own blocks (default block 99, directly
  * below the conventional 100 start): one processBlocks() pass then handles
  * gas + scenario blocks in order, so callers only add this one line to
- * beforeEach. Contiguity matters — the indexer walks every index between
+ * beforeEach. Contiguity matters: the indexer walks every index between
  * its first and last decoder block, so a gap (e.g. gas at 90, scenario at
  * 100) would add phantom empty blocks 91-99 to block counts.
  *
@@ -53,7 +53,7 @@ const GAS_ISSUE = `ISSUE|0|${GAS_TICK}|21000000|1000|8|Gas bootstrap`;
  * @param {DecoderSeeder} seeder
  * @param {object} opts { blockIndex=99, blockTime=1699999000, addresses=[], amount='100' }
  *                 Pass blockIndex explicitly when the scenario's blocks do
- *                 not start at 100 — keep it contiguous (first block − 1).
+ *                 not start at 100; keep it contiguous (first block - 1).
  */
 async function seedGas(seeder, opts = {}) {
     const blockIndex = opts.blockIndex || 99;
@@ -62,8 +62,8 @@ async function seedGas(seeder, opts = {}) {
     const amount     = opts.amount     || '100';
 
     // Explicit tx hashes in a 'b'-prefixed space: the seeder's auto-generated
-    // hashes AND several tests' hand-pinned hashes both live in 'aaa…NN' —
-    // colliding there reuses a tx_hash_id and trips the transactions table's
+    // hashes and several tests' hand-pinned hashes both live in 'aaa...NN',
+    // so colliding there reuses a tx_hash_id and trips the transactions table's
     // UNIQUE key (observed via 06's determinism test).
     const txs = [{ source: GAS_FUNDER, data: GAS_ISSUE,
                    txHash: 'b'.repeat(56) + '00000001' }];

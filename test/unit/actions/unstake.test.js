@@ -116,7 +116,7 @@ describe('Unstake handler @regression @tier2', function () {
     });
 
     // -----------------------------------------------------------------------
-    // Chain restriction (v0 capability unstake — BTC only)
+    // Chain restriction (v0 capability unstake, BTC only)
     // -----------------------------------------------------------------------
 
     describe('chain restriction', function () {
@@ -141,10 +141,10 @@ describe('Unstake handler @regression @tier2', function () {
     });
 
     // -----------------------------------------------------------------------
-    // v0 — Capability unstake
+    // v0 : Capability unstake
     // -----------------------------------------------------------------------
 
-    describe('v0 — capability unstake', function () {
+    describe('v0 : capability unstake', function () {
 
         it('valid v0 unstake → STATUS valid, createUnstake called', async function () {
             indexer.indexerDb.getActiveStakeByPubkey.resolves({ source_id: 42, amount: '500.00000000' });
@@ -239,7 +239,7 @@ describe('Unstake handler @regression @tier2', function () {
         });
 
         it('createUnstake called even on invalid', async function () {
-            indexer.indexerDb.getActiveStakeByPubkey.resolves(null); // invalid — no stake
+            indexer.indexerDb.getActiveStakeByPubkey.resolves(null); // invalid : no stake
 
             const params = ['0', PUBKEY];
             const data   = makeData({ FORMAT: 0 });
@@ -309,10 +309,10 @@ describe('Unstake handler @regression @tier2', function () {
     });
 
     // -----------------------------------------------------------------------
-    // v1 — Contract-targeted unstake
+    // v1 : Contract-targeted unstake
     // -----------------------------------------------------------------------
 
-    describe('v1 — contract-targeted unstake', function () {
+    describe('v1 : contract-targeted unstake', function () {
 
         const CONTRACT_INDEX = '5';
         const TICK           = 'TEST';

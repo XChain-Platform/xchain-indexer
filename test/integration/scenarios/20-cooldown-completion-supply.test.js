@@ -15,7 +15,7 @@
  *
  * STAKE debits the bond from SOURCE (a net removal from circulating supply) and
  * recomputes tokens.supply via updateTokens. When the cooldown elapses,
- * util.processCooldownCompletions credits the bond back — a net mint. It must
+ * util.processCooldownCompletions credits the bond back (a net mint). It must
  * recompute tokens.supply too, or the per-block sanityCheck (ledger == supply ==
  * balances, run every block by the real XChainIndexer loop) trips on the GAS tick
  * and halts the indexer.
@@ -54,7 +54,7 @@ function genPubHex() {
     return Buffer.from(der.slice(-32)).toString('hex');
 }
 
-describe('Unstake cooldown completion — GAS supply conservation (real DB + real VM) @phaseE', function () {
+describe('Unstake cooldown completion: GAS supply conservation (real DB + real VM) @phaseE', function () {
     this.timeout(600000);
     let seeder, indexer;
     const GAS = 'XCHAIN';
@@ -76,7 +76,7 @@ describe('Unstake cooldown completion — GAS supply conservation (real DB + rea
         await createDecoderSchema();
         seeder = new DecoderSeeder(decoderQuery);
 
-        // Gas bootstrap (issuing/minting the gas tick is fee-exempt) — A1 holds enough to bond.
+        // Gas bootstrap (issuing/minting the gas tick is fee-exempt); A1 holds enough to bond.
         await seeder.seedBlock(99, T - 600, [
             { source: FUNDER, data: 'ISSUE|0|XCHAIN|21000000|1000000|8|Gas bootstrap', txHash: 'b'.repeat(56) + '00000001' },
             { source: A1,     data: 'MINT|0|XCHAIN|10000',                              txHash: 'b'.repeat(56) + '00000002' },

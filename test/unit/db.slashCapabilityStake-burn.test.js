@@ -18,8 +18,8 @@
  * `stakes`, Pass 2 over cooldown-locked `unstakes`. The same deactivation-window guard
  * as the contract path prevents the mid-cooldown double-count (a deactivated stakes
  * row whose tokens already mirrored into a cooldown unstakes row must be burned by
- * Pass 2 only — never both). Every in-place amount->0 logs a verbatim-prev_amount
- * debit for byte-exact reorg restore. DB is stubbed (no MariaDB) — runs on any Node.
+ * Pass 2 only (never both). Every in-place amount->0 logs a verbatim-prev_amount
+ * debit for byte-exact reorg restore. DB is stubbed (no MariaDB); runs on any Node.
  */
 
 'use strict';
@@ -91,7 +91,7 @@ describe('Database.slashCapabilityStake() equivocation burn @regression @tier1',
         assert.strictEqual(d[0].args[3], '1000');        // prev_amount (verbatim)
     });
 
-    it('mid-cooldown: a deactivated stakes row is excluded — the bond burns from unstakes only', async function () {
+    it('mid-cooldown: a deactivated stakes row is excluded; the bond burns from unstakes only', async function () {
         const db = makeDb();
         // Pass 1 SELECT returns [] (the active-window filter excludes the deactivated phantom);
         // the tokens live in the cooldown unstakes row.
@@ -109,7 +109,7 @@ describe('Database.slashCapabilityStake() equivocation burn @regression @tier1',
         assert.strictEqual(d[0].args[1], 'unstakes');
     });
 
-    it('burns the WHOLE bond — active stakes AND cooldown unstakes together', async function () {
+    it('burns the WHOLE bond (active stakes AND cooldown unstakes together)', async function () {
         const db = makeDb();
         const calls = wire(db, {
             stakes:   [{ action_index: 7, amount: '1000' }],
@@ -136,7 +136,7 @@ describe('Database.slashCapabilityStake() equivocation burn @regression @tier1',
         assert.ok(sel, 'Pass 2 select ran');
         assert.ok(/status_id\s+IN\s*\(/i.test(sel.sql), 'Pass 2 must filter unstakes by a status set');
         assert.ok(sel.args.includes(1) && sel.args.includes(2),
-            'Pass 2 must bind BOTH the valid + pending status ids (cooldown rows are slashable — R-4)');
+            'Pass 2 must bind BOTH the valid + pending status ids (cooldown rows are slashable, R-4)');
     });
 
     it('returns 0 and writes no debit when the validator has no bond', async function () {

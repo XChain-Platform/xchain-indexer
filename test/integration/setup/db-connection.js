@@ -25,7 +25,7 @@ const mariadb = require('mariadb');
 const path    = require('path');
 const fs      = require('fs');
 
-// Read .env manually for DB credentials only — avoid polluting INDEXER_COIN/NETWORK
+// Read .env manually for DB credentials only, to avoid polluting INDEXER_COIN/NETWORK
 const _envVars = {};
 const _envPath = path.resolve(__dirname, '../../../.env');
 if (fs.existsSync(_envPath)) {
@@ -43,7 +43,7 @@ const DB_PASS = process.env.TEST_DB_PASS || _envVars.INDEXER_DB_PASS || '';
 const DECODER_DB = process.env.TEST_DECODER_DB || 'xchain_test_decoder';
 const INDEXER_DB = process.env.TEST_INDEXER_DB || 'xchain_test_indexer';
 // Second indexer DB for cross-node equivalence tests (two independent indexer
-// instances over the SAME decoder DB — scenario 13).
+// instances over the SAME decoder DB (scenario 13).
 const INDEXER_DB_B = process.env.TEST_INDEXER_DB_B || 'xchain_test_indexer_b';
 
 let adminPool = null;
@@ -135,10 +135,10 @@ const DECODER_SQL_DIR = process.env.XCHAIN_DECODER_SQL_PATH
     || path.resolve(__dirname, '../../../../xchain-decoder/src/sql');
 
 /**
- * Create the decoder DB schema from xchain-decoder's canonical src/sql/*.sql — the SAME
- * declarative schema the decoder itself creates via db.verifyTables(). Loading the real
+ * Create the decoder DB schema from xchain-decoder's canonical src/sql/*.sql (the SAME
+ * declarative schema the decoder itself creates via db.verifyTables()). Loading the real
  * files (instead of a hand-maintained copy) means this harness can never silently drift
- * from the decoder schema again — the previous hand-rolled copy had fallen behind (missing
+ * from the decoder schema. The previous hand-rolled copy had fallen behind (missing
  * pubkeys, transactions.raw_data, transactions.fee), breaking the integration suite.
  *
  * Each canonical .sql begins with DROP TABLE IF EXISTS and seeds its sentinel rows, so this
@@ -148,7 +148,7 @@ const DECODER_SQL_DIR = process.env.XCHAIN_DECODER_SQL_PATH
 async function createDecoderSchema() {
     if (!fs.existsSync(DECODER_SQL_DIR)) {
         throw new Error('Decoder schema dir not found: ' + DECODER_SQL_DIR +
-            ' — set XCHAIN_DECODER_SQL_PATH to the xchain-decoder src/sql directory.');
+            '. Set XCHAIN_DECODER_SQL_PATH to the xchain-decoder src/sql directory.');
     }
     const pool = getDecoderPool();
     const conn = await pool.getConnection();
@@ -156,7 +156,7 @@ async function createDecoderSchema() {
         await conn.query('SET FOREIGN_KEY_CHECKS = 0');
         // Drop every existing table first so the load is clean regardless of whether each
         // canonical .sql opens with its own DROP TABLE IF EXISTS (some do, some are bare
-        // CREATE or CREATE IF NOT EXISTS — re-running those would otherwise error).
+        // CREATE or CREATE IF NOT EXISTS; re-running those would otherwise error).
         const existing = await conn.query('SHOW TABLES');
         for (const row of existing) {
             await conn.query('DROP TABLE IF EXISTS `' + Object.values(row)[0] + '`');
@@ -164,7 +164,7 @@ async function createDecoderSchema() {
         const files = fs.readdirSync(DECODER_SQL_DIR).filter(f => f.endsWith('.sql')).sort();
         for (const file of files) {
             // Strip `--` line comments (a ';' in comment prose must not split a statement),
-            // then run each statement — mirrors xchain-decoder/src/db.js createTable().
+            // then run each statement. Mirrors xchain-decoder/src/db.js createTable().
             const sql = fs.readFileSync(path.join(DECODER_SQL_DIR, file), 'utf8')
                 .replace(/--[^\n]*/g, '');
             for (let stmt of sql.split(';')) {
@@ -187,7 +187,7 @@ async function resetDecoderDb() {
     await createDecoderSchema();
 }
 
-/** Drop and recreate the indexer DB (clean slate — indexer creates its own tables) */
+/** Drop and recreate the indexer DB (clean slate; indexer creates its own tables) */
 async function resetIndexerDb() {
     const pool = getAdminPool();
     const conn = await pool.getConnection();

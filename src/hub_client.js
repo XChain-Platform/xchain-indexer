@@ -16,7 +16,7 @@
  *
  * Lightweight JSON-RPC client for pushing data to xchain-hub.
  * Uses Node's built-in http/https module to avoid adding dependencies.
- * All calls are best-effort — failures are logged but never block indexing.
+ * All calls are best-effort; failures are logged but never block indexing.
  *
  ********************************************************************/
 
@@ -33,7 +33,7 @@ class HubClient {
     }
 
     // Push a chain tip update to the hub (fire-and-forget). Network is
-    // optional — older hubs ignore it; newer ones use it to scope the
+    // optional; older hubs ignore it, newer ones use it to scope the
     // chain_tips entry so multi-network hubs don't collide on 'mainnet'.
     async pushChainTip(coin, network, blockHeight, blockTime){
         if(!this.enabled) return;
@@ -45,7 +45,7 @@ class HubClient {
                 block_time:   blockTime
             });
         } catch (err) {
-            // Best-effort — log and continue
+            // Best-effort: log and continue
             console.warn('HubClient: pushChainTip failed:', err);
         }
     }
@@ -66,7 +66,7 @@ class HubClient {
     // Notify the hub that a reorg rolled back PRICE actions on this chain so it can
     // retract any price_snapshots / oracle_prices rows seeded from those actions.
     // sourceChain:     the chain this indexer serves (BTC/LTC/DOGE)
-    // fromActionIndex: lowest rolled-back action_index — the hub deletes rows for
+    // fromActionIndex: lowest rolled-back action_index; the hub deletes rows for
     //                  this source_chain whose action_index is >= this value.
     async retractPriceRange(sourceChain, fromActionIndex){
         if(!this.enabled) return;
@@ -82,7 +82,7 @@ class HubClient {
     // cross_chain_calls table purges the orphaned rows (otherwise a 'finalized' relay row
     // from an orphaned request stays eligible for re-injection on the target chain).
     // sourceChain:     the chain this indexer serves (BTC/LTC/DOGE)
-    // fromActionIndex: lowest rolled-back action_index — the hub retracts relay rows for
+    // fromActionIndex: lowest rolled-back action_index; the hub retracts relay rows for
     //                  this source_chain whose source_action_index is >= this value.
     async retractXcallRange(sourceChain, fromActionIndex){
         if(!this.enabled) return;
@@ -98,7 +98,7 @@ class HubClient {
     // deletions, so every indexer mirroring its cross_chain_matches table purges the orphaned rows
     // (otherwise a 'finalized' match against an orphaned order stays eligible for settlement).
     // sourceChain:     the chain this indexer serves (BTC/LTC/DOGE)
-    // fromActionIndex: lowest rolled-back action_index — the hub retracts matches for this
+    // fromActionIndex: lowest rolled-back action_index; the hub retracts matches for this
     //                  source_chain whose a_action_index/b_action_index is >= this value.
     async retractMatchRange(sourceChain, fromActionIndex){
         if(!this.enabled) return;

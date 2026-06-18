@@ -11,7 +11,7 @@
  * contact legal@dankest.llc.
  *
  **********************************************************************
- * Chaos test harness — shared helpers for resilience testing
+ * Chaos test harness: shared helpers for resilience testing
  *
  * Provides FakePool, FakeConnection, and createChaosDb() so we can
  * test real Database class logic with a controllable fake pool.
@@ -25,7 +25,7 @@ const { getTestConfig } = require('../../fixtures/config');
 const Utility = require('../../../src/utility.js');
 
 /**
- * Fake MariaDB connection — mimics the interface returned by pool.getConnection()
+ * Fake MariaDB connection: mimics the interface returned by pool.getConnection()
  */
 class FakeConnection {
     constructor() {
@@ -38,12 +38,12 @@ class FakeConnection {
 }
 
 /**
- * Fake MariaDB pool — controllable mock of mariadb.createPool() return value
+ * Fake MariaDB pool: controllable mock of mariadb.createPool() return value
  *
  * Usage:
- *   pool.setFailures(3)        — next 3 calls to getConnection() throw, then succeed
- *   pool.setAlwaysFail(true)   — all calls throw until disabled
- *   pool.setConnection(conn)   — return a specific FakeConnection instance
+ *   pool.setFailures(3)        -- next 3 calls to getConnection() throw, then succeed
+ *   pool.setAlwaysFail(true)   -- all calls throw until disabled
+ *   pool.setConnection(conn)   -- return a specific FakeConnection instance
  */
 class FakePool {
     constructor() {
@@ -86,8 +86,8 @@ class FakePool {
  * and backoff logic without needing a real MariaDB.
  *
  * Options:
- *   circuitThreshold  — override circuit breaker threshold (default 10)
- *   circuitCooldown   — override circuit breaker cooldown ms (default 30000)
+ *   circuitThreshold  -- override circuit breaker threshold (default 10)
+ *   circuitCooldown   -- override circuit breaker cooldown ms (default 30000)
  */
 function createChaosDb(options = {}) {
     const Database = require('../../../src/db.js');
@@ -97,7 +97,7 @@ function createChaosDb(options = {}) {
     // Create a minimal indexer object to satisfy the Database constructor
     const indexer = { config, util };
 
-    // Instantiate the real Database — this creates a real mariadb pool
+    // Instantiate the real Database (this creates a real mariadb pool
     const db = new Database('localhost', 3306, 'test_db', 'root', '', indexer);
 
     // Replace the real pool with our fake

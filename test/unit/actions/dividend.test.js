@@ -50,7 +50,7 @@ describe('Dividend @regression @tier2', function () {
 
     describe('valid dividend', function () {
 
-        it('valid dividend — createDividend called with valid status', async function () {
+        it('valid dividend: createDividend called with valid status', async function () {
             const tokenInfo     = createTokenInfo({ TICK: 'TEST',   TICK_ID: 1, DECIMALS: 0 });
             const divTokenInfo  = createTokenInfo({ TICK: 'DIVTOK', TICK_ID: 2, DECIMALS: 0, ALLOW_LIST: null, BLOCK_LIST: null });
 
@@ -98,7 +98,7 @@ describe('Dividend @regression @tier2', function () {
 
             indexer.indexerDb.getTokenInfo.withArgs('TEST').resolves(tokenInfo);
             indexer.indexerDb.getTokenInfo.withArgs('DIVTOK').resolves(divTokenInfo);
-            // Source in holders — should be excluded from recipients
+            // Source in holders; should be excluded from recipients
             indexer.indexerDb.getAddressBalances.resolves({ 1: '1', 2: '100' });
             indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
             indexer.indexerDb.getHolders.resolves({ [SOURCE]: '50', [HOLDER1]: '50' });
@@ -225,7 +225,7 @@ describe('Dividend @regression @tier2', function () {
 
             await handler.parse(params, data, null);
 
-            // Should still be valid — HOLDER1 just doesn't receive
+            // Should still be valid; HOLDER1 just doesn't receive
             assert.strictEqual(data['STATUS'], 'valid');
         });
 

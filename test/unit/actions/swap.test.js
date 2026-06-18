@@ -213,7 +213,7 @@ describe('Swap action handler @regression @tier2', function () {
         const params = makeCreateParams('GIVE', '10', 'GET', '5', FUTURE_EXPIRATION, '');
         await handler.parse(params, data, null);
 
-        // Status valid or invalid — coverage of the legacy fee path is the goal
+        // Status valid or invalid: coverage of the legacy fee path is the goal
         assert.ok(indexer.indexerDb.createSwap.calledOnce, 'createSwap should be called');
     });
 
@@ -316,7 +316,7 @@ describe('Swap action handler @regression @tier2', function () {
         // NOTE: swap.js lines 217-218 (the GET_COIN==local-coin && !getTokenInfo guard
         // inside the ownership-bid block) are pre-empted by the GET_TICK existence check
         // at line 162 in the same-chain case, and the cross-chain case trips the GIVE_COIN
-        // network guard first — i.e. this is a defensive, effectively-unreachable branch.
+        // network guard first: i.e. this is a defensive, effectively-unreachable branch.
         // Left uncovered intentionally; documented in claude/reports/coverage/HANDOVER.md.
     });
 

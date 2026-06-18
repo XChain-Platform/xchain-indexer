@@ -22,7 +22,7 @@ const sinon  = require('sinon');
 
 describe('Security: ledger table name whitelist @regression @tier4', function () {
 
-    // The whitelist validation is a simple array check — test it directly
+    // The whitelist validation is a simple array check; test it directly
     const VALID_LEDGER_TABLES = ['credits', 'debits', 'escrows'];
 
     it('SEC-25: table = \'credits\' → allowed', function () {

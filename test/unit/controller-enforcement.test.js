@@ -13,12 +13,12 @@
  * contact legal@dankest.llc.
  *
  **********************************************************************
- * Programmable policy layer — Phase B enforcement helper.
+ * Programmable policy layer: Phase B enforcement helper.
  *
  * Utility.maybeRunControllerGuard is the single enforcement point the token handlers
  * (SEND/ORDER/SWAP/DISPENSER) call at their validated→settlement boundary. These tests
  * pin its CONTROL FLOW with fakes (fake db.getEffectiveTokenController + fake
- * actions.actionExecute.runControllerGuard) — no DB, no VM — so they run on any Node.
+ * actions.actionExecute.runControllerGuard); no DB, no VM, so they run on any Node.
  * The real guard run (VM execution, gas metering) is exercised on Node 22 / test-host.
  *
  * Spec: xchain-documentation/protocol/Controller_Bound_Tokens.md
@@ -53,9 +53,9 @@ function mkActions(guardResult, calls, guardEnabled){
     };
 }
 
-describe('Programmable policy layer — Phase B enforcement @regression', function () {
+describe('Programmable policy layer : Phase B enforcement @regression', function () {
 
-    describe('controllerActionClass — static action→class map', function () {
+    describe('controllerActionClass : static action→class map', function () {
         it('SEND → transfer', function () {
             assert.strictEqual(util.controllerActionClass('SEND'), 'transfer');
         });
@@ -76,7 +76,7 @@ describe('Programmable policy layer — Phase B enforcement @regression', functi
         });
     });
 
-    describe('maybeRunAddressControllerGuard — recipient/account-side', function () {
+    describe('maybeRunAddressControllerGuard : recipient/account-side', function () {
         function mkAddrDb(effective){
             return {
                 config: { GAS_SCHEDULE: { VM_GUARD_GAS_CEILING: 200000 }, GAS_PRICE: '0.00001', GAS: 'XCHAIN' },
@@ -123,7 +123,7 @@ describe('Programmable policy layer — Phase B enforcement @regression', functi
         });
     });
 
-    describe('maybeRunControllerGuard — control flow', function () {
+    describe('maybeRunControllerGuard : control flow', function () {
         it('no controller bound → skip (no error/fee, guard never runs)', async function () {
             const calls = [];
             const res = await util.maybeRunControllerGuard(mkActions(null, calls), mkDb(null), {
@@ -251,9 +251,9 @@ describe('Programmable policy layer — Phase B enforcement @regression', functi
     });
 
     // Phase C: the SOURCE-outbound self-gate calls maybeRunAddressControllerGuard with the SENDER's
-    // own address as the subject (symmetric `transfer` binding — same call, address = SOURCE). Pin
+    // own address as the subject (symmetric `transfer` binding : same call, address = SOURCE). Pin
     // that the helper gates an outbound move by the source account's own controller.
-    describe('maybeRunAddressControllerGuard — SOURCE-outbound self-gate (symmetric transfer)', function () {
+    describe('maybeRunAddressControllerGuard : SOURCE-outbound self-gate (symmetric transfer)', function () {
         function mkAddrDb(effective, capturedIds){
             return {
                 config: { GAS_SCHEDULE: { VM_GUARD_GAS_CEILING: 200000 }, GAS_PRICE: '0.00001', GAS: 'XCHAIN' },
@@ -293,8 +293,8 @@ describe('Programmable policy layer — Phase B enforcement @regression', functi
     // The guard is a NEW acceptance + ledger rule: a node version that runs it and one that
     // does not settle the SAME guarded action differently (allow/deny + payout_legs vs plain),
     // forking the ledger and the per-block contract_hash on the first guarded action. Below the
-    // CONTROLLER_GUARD flag-day _invokeController must be a STRICT no-op on every node — no VM
-    // guard run, no fee, no payout_legs — identical to a node that lacks the controller layer.
+    // CONTROLLER_GUARD flag-day _invokeController must be a STRICT no-op on every node : no VM
+    // guard run, no fee, no payout_legs : identical to a node that lacks the controller layer.
     // protocol_changes.test.js pins the real isEnabled() flag-day math; this block pins that the
     // enforcement chokepoint actually HONORS the gate (a deny-returning guard must NOT run, and a
     // royalty-attaching guard must NOT leak payout_legs, while below activation).
@@ -307,7 +307,7 @@ describe('Programmable policy layer — Phase B enforcement @regression', functi
         it('below activation → strict no-op: guard never runs, no fee, no payout_legs', async function () {
             const calls = [];
             const res = await util.maybeRunControllerGuard(
-                // A guard that WOULD deny + attach royalties — proving none of it takes effect below the gate.
+                // A guard that WOULD deny + attach royalties : proving none of it takes effect below the gate.
                 mkActions({ allow: false, reason: 'must-not-run', gasBilled: 9999, payoutLegs: [{ to: 'x', bps: 500 }] }, calls, false),
                 mkDb({ contract_index: 9, is_unbind: 0 }),
                 guardOpts(Object.assign({}, BASE))
@@ -344,13 +344,13 @@ describe('Programmable policy layer — Phase B enforcement @regression', functi
         });
     });
 
-    // ─── 'all' action-class — most-specific-wins fallback (resolution) ───────────
+    // ─── 'all' action-class : most-specific-wins fallback (resolution) ───────────
     // getEffective*ControllerForGuard is the enforcement resolver: try the action's specific class,
     // then fall back to a catch-all 'all' binding. Exactly one row out (one guard runs, no stacking).
-    // Tested against the REAL db.js method (prototype-called over a fake exact getter — no DB needed)
+    // Tested against the REAL db.js method (prototype-called over a fake exact getter : no DB needed)
     // so the actual composition is pinned. The exact getters stay fallback-free (bind validation needs
-    // them) — that separation is what lets a specific class OVERRIDE an 'all' binding.
-    describe("getEffective*ControllerForGuard — 'all' fallback (most-specific-wins)", function () {
+    // them) : that separation is what lets a specific class OVERRIDE an 'all' binding.
+    describe("getEffective*ControllerForGuard : 'all' fallback (most-specific-wins)", function () {
         const Database = require('../../src/db.js');
         // fake `this`: exact getter returns the row registered for a (key, class), else null.
         function resolver(rowsByClass){

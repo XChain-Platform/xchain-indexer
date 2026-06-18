@@ -152,7 +152,7 @@ class Sweep {
             db_hits += (data['OWNERSHIPS']) ? this.util.bcmul(Object.keys(ownerships).length,2,0)                                            : 0;   // 1 issue, 1 tokens
 
         // Determine total transaction FEE based on database hits. Emitted (VM-synthesized)
-        // actions pay no separate per-tx fee — see util.feeForAction. Without this,
+        // actions pay no separate per-tx fee. See util.feeForAction. Without this,
         // getTransactionFee > 0 + detectFeePaymentMode('xchain') rejects every contract-emitted
         // SWEEP as 'insufficient funds (FEE)'.
         fees['AMOUNT'] = this.util.feeForAction(this.util.getTransactionFee(db_hits, fees['TICK']), data);
@@ -210,7 +210,7 @@ class Sweep {
 
             // Ticks whose ownership the ORDERS/SWAPS loops below deliver to
             // DESTINATION. The OWNERSHIPS loop must never transfer these a
-            // second time — escrowed ownership is routed by the offer-close
+            // second time: escrowed ownership is routed by the offer-close
             // path only (see SWEEP.md), and a duplicate ISSUE would change the
             // per-block actions hash. getAddressOwnerships already excludes
             // escrowed ticks from the snapshot; this set guards the same
@@ -225,20 +225,20 @@ class Sweep {
             [credits, debits] = await this.util.processTransactionFees(this.indexerDb, credits, debits, fees);
 
             // Cancel open ORDERs. If the order has pending COINPay obligations, use the
-            // two-phase 'cancelling' path (matches order.js v1 cancel behavior) — escrow
+            // two-phase 'cancelling' path (matches order.js v1 cancel behavior): escrow
             // stays locked until obligations resolve via coinpay.js / coinpay_expire.js,
             // which look up db.getOrderSweepDestination() to route residual escrow (or
             // ownership) to this SWEEP's DESTINATION on finalization. Otherwise cancel
             // immediately and route escrow to DESTINATION.
             for(let escrow of orderEscrows){
                 // Null coin: look up by the (local) escrow action_index. SWEEP cancels the
-                // SOURCE's open orders whose give-escrow is locked on THIS chain — including
+                // SOURCE's open orders whose give-escrow is locked on THIS chain, including
                 // cross-chain orders (get_coin = counterparty), which the local-COIN filter
                 // would otherwise skip, silently stranding their escrow.
                 let info = await this.indexerDb.getOrderInfo(null, escrow.action_index);
                 let pendingObligations = await this.indexerDb.getPendingCoinpayObligationsByOrder(info['ACTION_INDEX']);
                 if(pendingObligations.length > 0){
-                    // Defer — let coinpay.js finalize once obligations resolve
+                    // Defer: let coinpay.js finalize once obligations resolve
                     await this.indexerDb.createOrderStatus(data['ACTION_INDEX'], info['ACTION_INDEX'], 'cancelling');
                 } else {
                     // Immediate cancel: route the escrow to DESTINATION
@@ -326,7 +326,7 @@ class Sweep {
                 for(let tick of ownerships){
 
                     // Ownership already delivered to DESTINATION by the
-                    // ORDERS/SWAPS escrow-close path above — never issue a
+                    // ORDERS/SWAPS escrow-close path above: never issue a
                     // second transfer for it.
                     if(ownershipsTransferred.has(tick))
                         continue;

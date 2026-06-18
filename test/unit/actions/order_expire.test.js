@@ -92,7 +92,7 @@ describe('Order_Expire action handler @regression @tier2', function () {
         assert.ok(indexer.mapper.createMappings.calledOnce);
     });
 
-    // ─── Pending COINPay obligations — two-phase expiration ──────────
+    // ─── Pending COINPay obligations: two-phase expiration ──────────
 
     it('sets status to expiring (not expired) when pending COINPay obligations exist', async function () {
         const orderInfo = makeOrderInfo();
@@ -117,7 +117,7 @@ describe('Order_Expire action handler @regression @tier2', function () {
         assert.ok(indexer.indexerDb.createOrderExpire.calledOnce);
     });
 
-    // ─── GIVE_OWNERSHIP=1 — release ownership escrow ─────────────────
+    // ─── GIVE_OWNERSHIP=1: release ownership escrow ─────────────────
 
     it('calls clearTokenEscrow when GIVE_OWNERSHIP=1 and no pending obligations', async function () {
         indexer.indexerDb.clearTokenEscrow = sinon.stub().resolves();
@@ -145,7 +145,7 @@ describe('Order_Expire action handler @regression @tier2', function () {
 
     // ─── Native coin GIVE (null GIVE_TICK) ───────────────────────────
 
-    it('null GIVE_TICK (native coin order) — no escrow credit on expire', async function () {
+    it('null GIVE_TICK (native coin order): no escrow credit on expire', async function () {
         // When GIVE_TICK is null, the else-if branch skips escrow/credit setup
         const orderInfo = makeOrderInfo({ GIVE_TICK: null });
         indexer.indexerDb.getOrderInfo.resolves(orderInfo);

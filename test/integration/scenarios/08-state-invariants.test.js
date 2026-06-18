@@ -15,7 +15,7 @@
  *
  * Drives a real ISSUE → MINT → SEND → SEND lifecycle through the actual indexer,
  * then asserts the conservation / non-negativity invariants hold over the
- * resulting DB state — and, critically, that the checker is NOT vacuous: it
+ * resulting DB state (and, critically, that the checker is NOT vacuous: it
  * must FAIL on a deliberately corrupted ledger.
  *
  * Exercises the full decoder→indexer pipeline (relies on the createDecoderSchema
@@ -70,7 +70,7 @@ describe('Whole-ledger state invariants @regression @tier3', function () {
         await resetIndexerDb();
         seeder = new DecoderSeeder(decoderQuery);
         indexer = await initIndexer();
-        // Fee era: ISSUEs below need gas — seed XCHAIN to the actors first
+        // Fee era: ISSUEs below need gas. Seed XCHAIN to the actors first.
         await seedGas(seeder, { addresses: [ADDR1, ADDR2, ADDR3] });
     });
 

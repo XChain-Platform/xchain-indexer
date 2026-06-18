@@ -11,7 +11,7 @@
  * contact legal@dankest.llc.
  *
  **********************************************************************
- * Mutation Testing Harness — engine, operator factories, and reporter
+ * Mutation Testing Harness: engine, operator factories, and reporter
  *
  * Provides runtime mutation operators that apply sinon stubs to swap,
  * negate, or remove logic in the production code. Each mutation test
@@ -110,7 +110,7 @@ function printMutationReport() {
     const lines = [
         '',
         '════════════════════════════════════════════════════════',
-        '  MUTATION TEST REPORT — xchain-indexer',
+        '  MUTATION TEST REPORT: xchain-indexer',
         `  Run at: ${new Date().toISOString()}`,
         '════════════════════════════════════════════════════════',
         '',
@@ -395,7 +395,7 @@ const operators = {
         cryptoAddrNoSegwit(util) {
             const decode = util.base58CheckDecode.bind(util);
             return sinon.stub(util, 'isCryptoAddress').callsFake(function (address) {
-                // Only the base58check path survives — all segwit addresses rejected
+                // Only the base58check path survives; all segwit addresses rejected
                 let payload = decode(address);
                 return (payload && payload.length == 21) ? true : false;
             });
@@ -578,7 +578,7 @@ const operators = {
                 let a = (!this.isNull(numA)) ? numA : 0;
                 let b = (!this.isNull(numB)) ? numB : 0;
                 let d = (!this.isNull(decimals)) ? parseInt(decimals) : 0;
-                // NO zero check — will throw on divide by zero
+                // NO zero check (will throw on divide by zero)
                 return this.bcnum(mathjs.format(mathjs.divide(mathjs.bignumber(a), mathjs.bignumber(b)), { notation: 'fixed', precision: d }));
             });
         },
@@ -593,17 +593,17 @@ const operators = {
     // Simulated by making guard predicates return values that bypass checks
 
     LCR: {
-        /** isValidAmountFormat always true — simulates && to || on negative branch */
+        /** isValidAmountFormat always true: simulates && to || on negative branch */
         amountFormatBypass(util) {
             return sinon.stub(util, 'isValidAmountFormat').returns(true);
         },
 
-        /** isCryptoAddress always true — simulates && to || on address branch */
+        /** isCryptoAddress always true: simulates && to || on address branch */
         addressFormatBypass(util) {
             return sinon.stub(util, 'isCryptoAddress').returns(true);
         },
 
-        /** hasBalance always true — simulates && to || on balance branch */
+        /** hasBalance always true: simulates && to || on balance branch */
         balanceBypass(util) {
             return sinon.stub(util, 'hasBalance').returns(true);
         },

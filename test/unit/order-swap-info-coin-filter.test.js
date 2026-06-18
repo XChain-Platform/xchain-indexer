@@ -20,7 +20,7 @@
  * the local coin; for a CROSS-chain offer get_coin is the counterparty coin.
  *
  * The cancel / edit / expire / sweep paths operate on a LOCAL offer by index and
- * must pass `null` — they cannot assume the get_coin is local. Passing the local
+ * must pass `null`; they cannot assume the get_coin is local. Passing the local
  * COIN there (the old behavior) silently excluded every cross-chain offer, so a
  * cross-chain ORDER/SWAP could never be cancelled, expired, or swept. The strict
  * paths (cross_settle / order_match / sweep-of-same-chain / coinpay) still pass a
@@ -65,7 +65,7 @@ const COIN_CLAUSE = /c1\.coin\s*=\s*\?/;
             const cap = {};
             await fn.call(makeDb(cap), null, 42);
             assert.ok(!COIN_CLAUSE.test(cap.query),
-                name + ' must NOT constrain by c1.coin when coin is null — that is what hid cross-chain offers from cancel/expire/sweep');
+                name + ' must NOT constrain by c1.coin when coin is null (that is what hid cross-chain offers from cancel/expire/sweep)');
             assert.ok(new RegExp(pk.replace('.', '\\.') + '\\s*=\\s*\\?').test(cap.query), 'should match by action_index');
             assert.deepStrictEqual(cap.args, [42]);
         });

@@ -29,7 +29,7 @@ const BLOCKS_PER_BATCH = 50;
 const BASE_TIME        = 1700000000;
 
 describe('03 Sustained Load', function () {
-    this.timeout(0); // no timeout — duration controlled by PERF_SUSTAINED_MS
+    this.timeout(0); // no timeout; duration controlled by PERF_SUSTAINED_MS
 
     const reporter = new ReportGenerator();
 

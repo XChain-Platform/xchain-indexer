@@ -13,13 +13,13 @@
  **********************************************************************
  * test/unit/db.getFullNodeParticipation.test.js
  *
- * Full-node REWARD participation inputs (carrot, not stick — no slashing). Over the
+ * Full-node REWARD participation inputs (carrot, not stick; no slashing). Over the
  * trailing FULLNODE.REWARD_PASS_WINDOW_BLOCKS, getFullNodeParticipation returns the
- * number of DISTINCT challenge epochs that produced a passing verdict (the denominator
- * — only epochs the federation actually ran), and per staking SOURCE the DISTINCT
+ * number of DISTINCT challenge epochs that produced a passing verdict (the denominator,
+ * i.e. only epochs the federation actually ran), and per staking SOURCE the DISTINCT
  * epochs it answered plus its passing pubkeys. price.js gates the tranche on
  * passed_epochs/totalEpochs >= MIN_PASS_RATE_BPS/10000 (integer math). DB is stubbed
- * (no MariaDB) — runs on any Node.
+ * (no MariaDB); runs on any Node.
  */
 
 'use strict';

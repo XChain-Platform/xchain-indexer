@@ -10,7 +10,7 @@
  *
  **********************************************************************
  *
- * XChain Indexer — Equivocation Header (EQUIV_HEADER / WI-2 bump 2)
+ * XChain Indexer: Equivocation Header (EQUIV_HEADER / WI-2 bump 2)
  *
  * The single, CONSENSUS-CRITICAL implementation of the uniform signed header that
  * prefixes every consensus canonical at/above the activation flag-day:
@@ -27,7 +27,7 @@
  * Both `EQUIV_KEY` (= ENGINE_TAG|ROUND_ID|VIEW) and the canonical may contain `|`
  * (the checkpoint round id is `chain|network|block_index|checkpoint_seq`, and every
  * settlement canonical is pipe-joined). Consumers MUST NOT field-split to recover the
- * key — they match the literal prefix `EQUIV|<EQUIV_KEY>||` via startsWith (the `||`
+ * key; they match the literal prefix `EQUIV|<EQUIV_KEY>||` via startsWith (the `||`
  * is the unambiguous key/content boundary; `buildEquivCanonical` is the only producer).
  *
  * Gated on the BTC-anchored snapshot_block + network so every chain + the hub flip on
@@ -39,11 +39,11 @@
  ********************************************************************/
 
 // Per-network activation height (LOCAL COPY of the canonical map in
-// xchain-documentation/protocol/constants.js — kept equal by the cross-service
+// xchain-documentation/protocol/constants.js, kept equal by the cross-service
 // regression suite). Keyed on the BTC-anchored snapshot_block, NOT the local
 // processing height, so every chain + the hub flip on the same anchor.
 const EQUIV_HEADER_ACTIVATION = {
-    mainnet: 999999999,   // PLACEHOLDER — set the real BTC flag-day height before mainnet enable
+    mainnet: 999999999,   // PLACEHOLDER: set the real BTC flag-day height before mainnet enable
     testnet: 0,
     regtest: 0,
 };

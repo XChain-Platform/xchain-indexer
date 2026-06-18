@@ -13,7 +13,7 @@
  * contact legal@dankest.llc.
  *
  **********************************************************************
- * Schema migration runner — pure-logic contract tests (no live DB).
+ * Schema migration runner: pure-logic contract tests (no live DB).
  *
  * Covers the gate that decides whether a migration runs unattended at startup:
  * _migrationMode() header parsing, and the invariant that every committed migration
@@ -28,7 +28,7 @@ const path   = require('path');
 
 const Database = require('../../src/db');
 
-// _migrationMode is a pure string function — bind it to a bare object.
+// _migrationMode is a pure string function : bind it to a bare object.
 const modeOf = Database.prototype._migrationMode.bind({});
 
 describe('Database._migrationMode() @regression @tier1', function () {

@@ -13,7 +13,7 @@
  * contact legal@dankest.llc.
  *
  **********************************************************************
- * Integration tests — 05: Chain Reorganization handling
+ * Integration tests - 05: Chain Reorganization handling
  *
  * Tests that the indexer correctly detects reorg events from the decoder DB,
  * rolls back affected state, and re-indexes replacement blocks.
@@ -39,7 +39,7 @@ const { seedGas } = require('../setup/gas-seeder');
 const helpers = require('../setup/assertion-helpers');
 
 // ---------------------------------------------------------------------------
-// Addresses — 30-char strings, safe for the indexer's address validation
+// Addresses (30-char strings, safe for the indexer's address validation)
 // ---------------------------------------------------------------------------
 const ADDR1 = 'msK1rsgNVFPM4cR3X5rngczTKa6EtT4WKD';
 const ADDR2 = 'mjifPngDYQ6HHPNQdGk1kQuFkJWEiQksQp';
@@ -91,11 +91,11 @@ describe('05 – Chain Reorganization @regression @tier3', function () {
     });
 
     // -----------------------------------------------------------------------
-    // 1. Simple reorg — 5 blocks indexed, reorg to block 102, verify rollback
+    // 1. Simple reorg: 5 blocks indexed, reorg to block 102, verify rollback
     // -----------------------------------------------------------------------
     it('1. simple reorg removes blocks above reorg point', async function () {
         const seeder = new DecoderSeeder(decoderQuery);
-        // Fee era: ISSUEs below need gas — seed XCHAIN to the actors first
+        // Fee era: ISSUEs below need gas; seed XCHAIN to the actors first
         await seedGas(seeder, { blockIndex: 99, addresses: [ADDR1, ADDR2, ADDR3] });
 
         // Phase 1: seed five blocks with ISSUE and MINTs, then process
@@ -125,7 +125,7 @@ describe('05 – Chain Reorganization @regression @tier3', function () {
         await processBlocks(indexer);
         await destroyIndexer(indexer);
 
-        // Phase 4: blocks 103-104 gone; supply = 100 + 200 (from block 101 mint) — wait, let's recalculate:
+        // Phase 4: blocks 103-104 gone; supply = 100 + 200 (from block 101 mint). Recalculate:
         // block 100: ISSUE (supply 0 at rest), block 101: MINT 100 → supply 100
         // Reorg at 102 → rollback removes block 102+ actions → supply back to 100
         // Replacement block 102: MINT 50 → supply 150
@@ -134,11 +134,11 @@ describe('05 – Chain Reorganization @regression @tier3', function () {
     });
 
     // -----------------------------------------------------------------------
-    // 2. Reorg with balance changes — SEND in reorged block reverted
+    // 2. Reorg with balance changes: SEND in reorged block reverted
     // -----------------------------------------------------------------------
     it('2. reorg reverts balance changes from rolled-back blocks', async function () {
         const seeder = new DecoderSeeder(decoderQuery);
-        // Fee era: ISSUEs below need gas — seed XCHAIN to the actors first
+        // Fee era: ISSUEs below need gas; seed XCHAIN to the actors first
         await seedGas(seeder, { blockIndex: 199, addresses: [ADDR1, ADDR2, ADDR3] });
 
         // Phase 1
@@ -171,11 +171,11 @@ describe('05 – Chain Reorganization @regression @tier3', function () {
     });
 
     // -----------------------------------------------------------------------
-    // 3. Reorg replaces data — replacement blocks have DIFFERENT sends
+    // 3. Reorg replaces data: replacement blocks have DIFFERENT sends
     // -----------------------------------------------------------------------
     it('3. replacement blocks after reorg produce correct final balances', async function () {
         const seeder = new DecoderSeeder(decoderQuery);
-        // Fee era: ISSUEs below need gas — seed XCHAIN to the actors first
+        // Fee era: ISSUEs below need gas; seed XCHAIN to the actors first
         await seedGas(seeder, { blockIndex: 299, addresses: [ADDR1, ADDR2, ADDR3] });
 
         // Phase 1: ISSUE + MINT + SEND to ADDR2
@@ -193,7 +193,7 @@ describe('05 – Chain Reorganization @regression @tier3', function () {
         await helpers.assertBalance(indexerQuery, ADDR2, 'RPLD', '400');
         await helpers.assertBalance(indexerQuery, ADDR3, 'RPLD', '100');
 
-        // Phase 2: reorg at 302 — replacement sends go to ADDR3 instead
+        // Phase 2: reorg at 302; replacement sends go to ADDR3 instead
         await seeder.seedReorgEvent([302]);
         await deleteDecoderBlocksFrom(302);
         await seeder.seedBlock(302, T0 + BLK * 2, [{ source: ADDR1, destination: ADDR3, amount: '0', data: 'SEND|0|RPLD|750|' + ADDR3 }]);
@@ -211,11 +211,11 @@ describe('05 – Chain Reorganization @regression @tier3', function () {
     });
 
     // -----------------------------------------------------------------------
-    // 4. Reorg to first block — effectively clears all indexed data
+    // 4. Reorg to first block (effectively clears all indexed data)
     // -----------------------------------------------------------------------
     it('4. reorg to first block clears all subsequent state', async function () {
         const seeder = new DecoderSeeder(decoderQuery);
-        // Fee era: ISSUEs below need gas — seed XCHAIN to the actors first
+        // Fee era: ISSUEs below need gas; seed XCHAIN to the actors first
         await seedGas(seeder, { blockIndex: 399, addresses: [ADDR1, ADDR2, ADDR3] });
 
         // Phase 1: three blocks
@@ -229,7 +229,7 @@ describe('05 – Chain Reorganization @regression @tier3', function () {
 
         await helpers.assertBlockCount(indexerQuery, 4);
 
-        // Phase 2: reorg at first block (400) — deletes everything from 400 onwards,
+        // Phase 2: reorg at first block (400), deletes everything from 400 onwards,
         // then seeds a completely different block 400
         await seeder.seedReorgEvent([400]);
         await deleteDecoderBlocksFrom(400);
@@ -251,11 +251,11 @@ describe('05 – Chain Reorganization @regression @tier3', function () {
     });
 
     // -----------------------------------------------------------------------
-    // 5. Sanity check passes after reorg — supply consistency after rollback
+    // 5. Sanity check passes after reorg: supply consistency after rollback
     // -----------------------------------------------------------------------
     it('5. sanity check passes after rollback and reindex', async function () {
         const seeder = new DecoderSeeder(decoderQuery);
-        // Fee era: ISSUEs below need gas — seed XCHAIN to the actors first
+        // Fee era: ISSUEs below need gas; seed XCHAIN to the actors first
         await seedGas(seeder, { blockIndex: 499, addresses: [ADDR1, ADDR2, ADDR3] });
 
         // Phase 1
@@ -295,7 +295,7 @@ describe('05 – Chain Reorganization @regression @tier3', function () {
     // -----------------------------------------------------------------------
     it('6. block hash chain is valid and non-null after reorg', async function () {
         const seeder = new DecoderSeeder(decoderQuery);
-        // Fee era: ISSUEs below need gas — seed XCHAIN to the actors first
+        // Fee era: ISSUEs below need gas; seed XCHAIN to the actors first
         await seedGas(seeder, { blockIndex: 599, addresses: [ADDR1, ADDR2, ADDR3] });
 
         // Phase 1
@@ -326,11 +326,11 @@ describe('05 – Chain Reorganization @regression @tier3', function () {
     });
 
     // -----------------------------------------------------------------------
-    // 7. Multiple reorgs — two successive reorgs handled correctly
+    // 7. Multiple reorgs: two successive reorgs handled correctly
     // -----------------------------------------------------------------------
     it('7. two successive reorgs converge to correct final state', async function () {
         const seeder = new DecoderSeeder(decoderQuery);
-        // Fee era: ISSUEs below need gas — seed XCHAIN to the actors first
+        // Fee era: ISSUEs below need gas; seed XCHAIN to the actors first
         await seedGas(seeder, { blockIndex: 699, addresses: [ADDR1, ADDR2, ADDR3] });
 
         // Phase 1: four blocks
@@ -358,7 +358,7 @@ describe('05 – Chain Reorganization @regression @tier3', function () {
         await helpers.assertBalance(indexerQuery, ADDR2, 'DBL', '150');
         await helpers.assertBalance(indexerQuery, ADDR3, 'DBL', '150');
 
-        // SECOND reorg at 703 — undo the last SEND
+        // SECOND reorg at 703: undo the last SEND
         await seeder.seedReorgEvent([703]);
         await deleteDecoderBlocksFrom(703);
         await seeder.seedBlock(703, T0 + BLK * 3, [{ source: ADDR1, destination: ADDR3, amount: '0', data: 'SEND|0|DBL|700|' + ADDR3 }]);
@@ -368,7 +368,7 @@ describe('05 – Chain Reorganization @regression @tier3', function () {
         await destroyIndexer(indexer);
 
         // After second reorg: ADDR1 sent all 700 to ADDR3
-        await helpers.assertBalance(indexerQuery, ADDR1, 'DBL', null); // zero balance — row removed
+        await helpers.assertBalance(indexerQuery, ADDR1, 'DBL', null); // zero balance (row removed)
         await helpers.assertBalance(indexerQuery, ADDR2, 'DBL', '300'); // unchanged from post-first-reorg
         await helpers.assertBalance(indexerQuery, ADDR3, 'DBL', '700');
     });
@@ -378,7 +378,7 @@ describe('05 – Chain Reorganization @regression @tier3', function () {
     // -----------------------------------------------------------------------
     it('8. actions in blocks before reorg point are preserved', async function () {
         const seeder = new DecoderSeeder(decoderQuery);
-        // Fee era: ISSUEs below need gas — seed XCHAIN to the actors first
+        // Fee era: ISSUEs below need gas; seed XCHAIN to the actors first
         await seedGas(seeder, { blockIndex: 799, addresses: [ADDR1, ADDR2, ADDR3] });
 
         // Phase 1
@@ -415,7 +415,7 @@ describe('05 – Chain Reorganization @regression @tier3', function () {
     // -----------------------------------------------------------------------
     it('9. reorg with empty replacement blocks leaves only pre-reorg data', async function () {
         const seeder = new DecoderSeeder(decoderQuery);
-        // Fee era: ISSUEs below need gas — seed XCHAIN to the actors first
+        // Fee era: ISSUEs below need gas; seed XCHAIN to the actors first
         await seedGas(seeder, { blockIndex: 899, addresses: [ADDR1, ADDR2, ADDR3] });
 
         // Phase 1
@@ -451,7 +451,7 @@ describe('05 – Chain Reorganization @regression @tier3', function () {
     // -----------------------------------------------------------------------
     it('10. action_indexes are monotonically increasing after reorg', async function () {
         const seeder = new DecoderSeeder(decoderQuery);
-        // Fee era: ISSUEs below need gas — seed XCHAIN to the actors first
+        // Fee era: ISSUEs below need gas; seed XCHAIN to the actors first
         await seedGas(seeder, { blockIndex: 999, addresses: [ADDR1, ADDR2, ADDR3] });
 
         // Phase 1

@@ -18,14 +18,14 @@
  * the GAS tick there) regardless of how the genesis ISSUE was authored, while
  * leaving the GAS tick open-mintable on testnet/regtest so developers can
  * self-mint a little play-money gas. Per-mint amount is bounded by the token's
- * own MAX_MINT (set at genesis ISSUE) — there is no separate cap mechanism.
+ * own MAX_MINT (set at genesis ISSUE); there is no separate cap mechanism.
  *
  * Drives Mint.parse() with the real utility and a stubbed DB layer, so it runs
  * on any Node version.
  ********************************************************************/
 
 // The Utility constructor loads the indexer config from env. The gate under test
-// reads the per-case action.config we inject below, not this — these just satisfy
+// reads the per-case action.config we inject below, not this : these just satisfy
 // the constructor so Utility's bignumber/format helpers are available.
 process.env.INDEXER_COIN    = process.env.INDEXER_COIN    || 'BTC';
 process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
@@ -43,7 +43,7 @@ async function runMint({ network, source, amount, tick }){
 
     const util = new Utility();
 
-    // The only util method that touches the DB on the valid path — stub to a no-op.
+    // The only util method that touches the DB on the valid path : stub to a no-op.
     util.processTransactionLedgerChanges = async () => {};
 
     // An unlocked, open-mint token with a high MAX_MINT (mirrors the regtest XCHAIN
@@ -100,7 +100,7 @@ async function runMint({ network, source, amount, tick }){
 
 describe('GAS-tick MINT network gate @regression @security', function () {
 
-    describe('mainnet — only the GAS address may mint the GAS tick', function () {
+    describe('mainnet : only the GAS address may mint the GAS tick', function () {
         it('rejects a non-GAS address minting the GAS tick', async function () {
             assert.strictEqual(
                 await runMint({ network: 'mainnet', source: DEV_ADDR, amount: '5', tick: 'XCHAIN' }),
@@ -119,7 +119,7 @@ describe('GAS-tick MINT network gate @regression @security', function () {
         });
     });
 
-    describe('testnet — GAS tick is open-mintable (dev gas), bounded only by MAX_MINT', function () {
+    describe('testnet : GAS tick is open-mintable (dev gas), bounded only by MAX_MINT', function () {
         it('any address may mint the GAS tick', async function () {
             assert.strictEqual(await runMint({ network: 'testnet', source: DEV_ADDR, amount: '5',  tick: 'XCHAIN' }), 'valid');
         });
@@ -131,7 +131,7 @@ describe('GAS-tick MINT network gate @regression @security', function () {
         });
     });
 
-    describe('regtest — GAS tick is open-mintable (preserves e2e gas seeding)', function () {
+    describe('regtest : GAS tick is open-mintable (preserves e2e gas seeding)', function () {
         it('any address may mint the GAS tick', async function () {
             assert.strictEqual(await runMint({ network: 'regtest', source: DEV_ADDR, amount: '90000', tick: 'XCHAIN' }), 'valid');
         });

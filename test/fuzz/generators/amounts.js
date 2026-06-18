@@ -61,7 +61,7 @@ function invalidAmount() {
 }
 
 /**
- * Union of valid and invalid amounts — for crash-safety tests.
+ * Union of valid and invalid amounts, for crash-safety tests.
  */
 function anyAmount() {
     return fc.oneof(
@@ -74,7 +74,7 @@ function anyAmount() {
 }
 
 /**
- * Generate decimals values — both valid (0–18) and invalid.
+ * Generate decimals values: both valid (0-18) and invalid.
  */
 function decimalsValue() {
     return fc.oneof(

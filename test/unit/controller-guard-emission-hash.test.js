@@ -11,20 +11,20 @@
  * contact legal@dankest.llc.
  *
  **********************************************************************
- * CONSENSUS REGRESSION GUARD — controller-guard emissions must enter contract_hash.
+ * CONSENSUS REGRESSION GUARD: controller-guard emissions must enter contract_hash.
  *
  * A controller guard's emitted actions (royalty/fee splits, etc.) write contract_emissions
- * keyed (execution_index) to the NATIVE action's action_index — a guard has no action_index
- * of its own. The block contract_hash preimage pulls emissions via
+ * keyed (execution_index) to the NATIVE action's action_index (a guard has no action_index
+ * of its own). The block contract_hash preimage pulls emissions via
  *   INNER JOIN contract_executions ce ON (ce.action_index = em.execution_index)
  * so a guard that writes NO parent contract_executions row drops every one of its emissions
- * from contract_hash: two nodes that diverge on guard emissions still hash identically — a
- * silent consensus fork. runControllerGuard must therefore write the parent execution row.
+ * from contract_hash: two nodes that diverge on guard emissions still hash identically,
+ * creating a silent consensus fork. runControllerGuard must therefore write the parent execution row.
  *
  * A single native action can run MULTIPLE guards on the same action_index (a multi-leg
  * SEND/DESTROY; or one SEND firing both the token-controller and the destination
  * address-controller). They share one execution row (action_index is UNIQUE), and their
- * emissions share execution_index — so position is offset by the count of emissions already
+ * emissions share execution_index; position is offset by the count of emissions already
  * recorded for the action, keeping (execution_index, position) globally unique. That preserves
  * a TOTAL order under the preimage's ORDER BY (execution_index, position) with no read-side
  * query change (same property the credits/debits tie-order fix ffd061a relies on).
@@ -37,7 +37,7 @@ const sinon  = require('sinon');
 const { createMockIndexer } = require('../fixtures/mocks');
 const Execute = require('../../src/actions/execute.js');
 
-describe('runControllerGuard — guard emissions enter contract_hash @regression @tier1', function () {
+describe('runControllerGuard: guard emissions enter contract_hash @regression @tier1', function () {
 
     const ADDR = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
 
@@ -124,7 +124,7 @@ describe('runControllerGuard — guard emissions enter contract_hash @regression
 
         const positions = db.createContractEmission.getCalls().map(c => c.args[0].POSITION);
         assert.deepStrictEqual(positions, [2, 3],
-            'this guard\'s emissions must start AFTER the prior guard\'s — else (execution_index, position) collides and ORDER BY is not a total order (fork)');
+            'this guard\'s emissions must start AFTER the prior guard\'s; otherwise (execution_index, position) collides and ORDER BY is not a total order (fork)');
 
         // emitted_count accumulates so the surviving (last-write-wins) parent row reflects the
         // action's true total emission count.

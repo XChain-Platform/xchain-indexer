@@ -215,7 +215,7 @@ module.exports = {
             'BLOCK_LIST'
         ];
 
-        // Programmable policy layer — the action-classes a token/account may route to a guard
+        // Programmable policy layer: the action-classes a token/account may route to a guard
         // contract. Derived by a STATIC map from the action name (never from data['ACTION']) so a
         // future action can't accidentally fall into a controlled class. See Controller_Bound_Tokens.md.
         // ROUTABLE set: an incoming action is mapped to exactly one of these (utility.controllerActionClass).
@@ -228,10 +228,10 @@ module.exports = {
         ];
 
         // BINDABLE set: the action-classes a bind (ISSUE v6 / ADDRESS v1) may target. Superset of the
-        // routable set with the catch-all 'all' class: 'all' is BINDABLE but never ROUTABLE — routing
+        // routable set with the catch-all 'all' class: 'all' is BINDABLE but never ROUTABLE; routing
         // still maps an action to one of the 5 concrete classes, and resolution falls back to an 'all'
         // binding only when no class-specific controller gates that class (most-specific-wins, single
-        // guard, no stacking). 'all' means all classes present AND future — it auto-gates mint/stake the
+        // guard, no stacking). 'all' means all classes present AND future; it auto-gates mint/stake the
         // moment those stub handlers wire their guards. See Controller_Bound_Tokens.md.
         config['CONTROLLER_BINDABLE_CLASSES'] = [
             'transfer',
@@ -242,7 +242,7 @@ module.exports = {
             'all'
         ];
 
-        // Programmable policy layer — hard protocol ceiling (basis points, 10000 = 100%) on the total
+        // Programmable policy layer: hard protocol ceiling (basis points, 10000 = 100%) on the total
         // royalty/fee a controlled-token sale guard may take from the seller's proceeds. The guard's
         // returned payoutLegs sum to <= this at create (else the listing is denied); applyProceedsSplit
         // re-checks conservation at match. A contract's manifest may declare a TIGHTER maxTakeBps
@@ -258,7 +258,7 @@ module.exports = {
         // Chain-tip push gate. Skip pushChainTip to the hub while the indexer is further
         // than this many blocks behind the decoder tip. During a bulk re-index, pushing a
         // tip for every historical block floods the hub's proxy / rate-limiter (HTTP 429)
-        // for no value — the hub only cares about the live tip. Default 100; override via
+        // for no value; the hub only cares about the live tip. Default 100; override via
         // CHAIN_TIP_PUSH_MAX_LAG.
         config['CHAIN_TIP_PUSH_MAX_LAG'] = parseIntMin0(process.env.CHAIN_TIP_PUSH_MAX_LAG, 100);
 

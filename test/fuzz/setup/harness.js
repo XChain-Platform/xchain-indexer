@@ -11,7 +11,7 @@
  * contact legal@dankest.llc.
  *
  **********************************************************************
- * Fuzz test harness — shared helpers for all fuzz suites
+ * Fuzz test harness: shared helpers for all fuzz suites
  *
  * Provides mock indexer setup, action context construction, and
  * a normalizeDataValues binding for property-based testing.

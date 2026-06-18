@@ -21,11 +21,11 @@
  * utility.js processCrossChainSettlements), verifies the signatures locally, and
  * releases the local offer's escrow to the counterparty's payout address.
  *
- * There is NO on-chain transaction for the settlement — it is an internal action
+ * There is NO on-chain transaction for the settlement; it is an internal action
  * (like SWAP_MATCH), recorded in cross_chain_settlements for idempotency + rollback.
  *
  * Trust: the match terms are only acted on after 2f+1 `cross_chain` signatures
- * verify against the mirrored capability snapshot at the match's snapshot_block —
+ * verify against the mirrored capability snapshot at the match's snapshot_block;
  * a bad mirror can delay but cannot forge a settlement.
  *
  * Spec: xchain-documentation/protocol/Cross_Chain_DEX.md
@@ -47,7 +47,7 @@ class Cross_Settle {
         this.mapper    = action.mapper;
     }
 
-    // Canonical signing string — MUST byte-match the hub's CrossChainDexEngine._canonicalMatch.
+    // Canonical signing string. MUST byte-match the hub's CrossChainDexEngine._canonicalMatch.
     // Phase B appends the fill fields after `network` (Phase-A field order preserved):
     // a_amount/b_amount are the FILL settled by THIS match; *_kind + *_filled_before bind
     // sequential partial fills apart.
@@ -81,7 +81,7 @@ class Cross_Settle {
         // its row is mirrored in. getEffectiveUnsettledMatches already filters on
         // network; this is the security boundary's belt-and-suspenders guard.
         if(String(m.network || '') !== String(this.config['NETWORK'] || '')){
-            console.warn("\t CROSS_SETTLE : match=" + String(m.match_id).substring(0,16) + '... : network mismatch (' + m.network + ' != ' + this.config['NETWORK'] + ') — skipping');
+            console.warn("\t CROSS_SETTLE : match=" + String(m.match_id).substring(0,16) + '... : network mismatch (' + m.network + ' != ' + this.config['NETWORK'] + ') : skipping');
             return;
         }
 
@@ -103,8 +103,8 @@ class Cross_Settle {
             // settles the match at the same height; this early-return is a defensive guard for
             // the residual race / single-host path. The match stays unsettled + effective and
             // retries on a later block. NOT an error. (Deterministic quorum-N under PARTIAL
-            // snapshot arrival is sealed separately by the multi-node design — presence here.)
-            console.log("\t CROSS_SETTLE : match=" + String(m.match_id).substring(0,16) + '... : capability snapshot not synced — deferring');
+            // snapshot arrival is sealed separately by the multi-node design; presence here.)
+            console.log("\t CROSS_SETTLE : match=" + String(m.match_id).substring(0,16) + '... : capability snapshot not synced : deferring');
             return;
         }
 
@@ -114,7 +114,7 @@ class Cross_Settle {
 
         let canonical = this._canonical(m);
         // Collect the distinct pubkeys that produced a valid signature AND are in the
-        // locked snapshot (presence in the snapshot = qualified — same membership the
+        // locked snapshot (presence in the snapshot = qualified, same membership the
         // hub tallied). Used by both the weighted predicate and the count check.
         let snapPubkeys = new Set(validators.map(v => String(v.pubkey).toLowerCase()));
         let validSigners = [], seen = new Set();
@@ -132,9 +132,9 @@ class Cross_Settle {
             ? swq.meetsStakeThreshold(this.util, validators, validSigners)
             : (validSigners.length >= ((N <= 1) ? 1 : Math.max(2 * Math.floor((N - 1) / 3) + 1, Math.ceil((N + 1) / 2))));
         if(!quorumMet){
-            // Genuinely insufficient quorum (the snapshot IS present). Skip — do not
+            // Genuinely insufficient quorum (the snapshot IS present). Do not
             // record a settlement; a malformed/forged match never settles.
-            console.warn("\t CROSS_SETTLE : match=" + String(m.match_id).substring(0,16) + '... : insufficient ' + (weighted ? 'signer stake' : 'valid signatures (' + validSigners.length + '/' + N + ')') + ' — skipping');
+            console.warn("\t CROSS_SETTLE : match=" + String(m.match_id).substring(0,16) + '... : insufficient ' + (weighted ? 'signer stake' : 'valid signatures (' + validSigners.length + '/' + N + ')') + ' : skipping');
             return;
         }
 
@@ -163,7 +163,7 @@ class Cross_Settle {
         // A cross-chain swap stores get_coin = counterparty coin, so getSwapInfo resolves it.
         let swapInfo = await this.indexerDb.getSwapInfo(counterpartyCoin, localActionIndex);
         if(!swapInfo){
-            console.warn("\t CROSS_SETTLE : match=" + String(m.match_id).substring(0,16) + '... : local offer ' + coin + ':' + localActionIndex + ' not found — skipping');
+            console.warn("\t CROSS_SETTLE : match=" + String(m.match_id).substring(0,16) + '... : local offer ' + coin + ':' + localActionIndex + ' not found : skipping');
             return;
         }
         if(swapInfo['SWAP_STATUS'] !== 'open'){
@@ -171,7 +171,7 @@ class Cross_Settle {
             // settlement so we stop re-evaluating it, but move no funds. The record is
             // anchored to a real internal action row so a reorg (which may revive the
             // offer's open status) drops it and the match re-applies.
-            console.log("\t CROSS_SETTLE : match=" + String(m.match_id).substring(0,16) + '... : offer ' + coin + ':' + localActionIndex + ' not open (' + swapInfo['SWAP_STATUS'] + ') — recording no-op settlement');
+            console.log("\t CROSS_SETTLE : match=" + String(m.match_id).substring(0,16) + '... : offer ' + coin + ':' + localActionIndex + ' not open (' + swapInfo['SWAP_STATUS'] + ') : recording no-op settlement');
             await this._recordNoopSettlement(data, m, localActionIndex);
             return;
         }
@@ -226,14 +226,14 @@ class Cross_Settle {
         // filters by get_coin) resolves it under the counterparty coin.
         let orderInfo = await this.indexerDb.getOrderInfo(counterpartyCoin, localActionIndex);
         if(!orderInfo){
-            console.warn("\t CROSS_SETTLE : match=" + String(m.match_id).substring(0,16) + '... : local order ' + coin + ':' + localActionIndex + ' not found — skipping');
+            console.warn("\t CROSS_SETTLE : match=" + String(m.match_id).substring(0,16) + '... : local order ' + coin + ':' + localActionIndex + ' not found : skipping');
             return;
         }
         if(orderInfo['ORDER_STATUS'] !== 'open'){
             // Terminal already (fully filled by a prior pass, cancelled, or expired). Record
-            // the settlement so we stop re-evaluating it, but move no funds — same
-            // reorg-anchored no-op record as the swap leg above.
-            console.log("\t CROSS_SETTLE : match=" + String(m.match_id).substring(0,16) + '... : order ' + coin + ':' + localActionIndex + ' not open (' + orderInfo['ORDER_STATUS'] + ') — recording no-op settlement');
+            // the settlement so we stop re-evaluating it but move no funds (same
+            // reorg-anchored no-op record as the swap leg above).
+            console.log("\t CROSS_SETTLE : match=" + String(m.match_id).substring(0,16) + '... : order ' + coin + ':' + localActionIndex + ' not open (' + orderInfo['ORDER_STATUS'] + ') : recording no-op settlement');
             await this._recordNoopSettlement(data, m, localActionIndex);
             return;
         }

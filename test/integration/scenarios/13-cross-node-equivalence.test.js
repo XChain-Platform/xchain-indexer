@@ -11,7 +11,7 @@
  * contact legal@dankest.llc.
  *
  **********************************************************************
- * Integration tests — 13: CROSS-NODE EQUIVALENCE (P2a, test-framework program)
+ * Integration tests: 13 - CROSS-NODE EQUIVALENCE (P2a, test-framework program)
  *
  * Two INDEPENDENT indexer instances (separate indexer DBs) process the SAME
  * decoder DB. The consensus property: their resolved hash chains must be
@@ -21,7 +21,7 @@
  * Scenario 10 pins the hash chain of ONE node against a committed baseline
  * (sequential re-runs through the same DB). This suite is the cross-NODE
  * statement: two simultaneous nodes (1), a live-follower vs a catch-up
- * node (2), and — the June prod bug class — a node that LIVED THROUGH a
+ * node (2), and (the June prod bug class) a node that LIVED THROUGH a
  * reorg vs a node that fresh-parses the surviving chain afterwards (3, 4).
  *
  * Case 4 is the sharp edge: getBlockHashes folds raw dedup ids
@@ -58,7 +58,7 @@ const T_FAR_FUTURE = T0 + 86400 * 30;
 
 // ---------------------------------------------------------------------------
 // Deterministic base corpus: ledger movement, escrows (ORDER match,
-// DISPENSER), token destruction — blocks 100..107 (gas preamble at 99).
+// DISPENSER), token destruction: blocks 100..107 (gas preamble at 99).
 // ---------------------------------------------------------------------------
 function baseCorpus() {
     return [
@@ -78,7 +78,7 @@ function baseCorpus() {
         ] },
         { block: 105, time: T0 + BLK * 5, txs: [
             // ADDR3 permits third-party dispensers at its address (ADDRESS
-            // option 2), then ADDR1 opens one — escrows 50 EQTA.
+            // option 2), then ADDR1 opens one (escrows 50 EQTA).
             { source: ADDR3, data: 'ADDRESS|0|||2|' },
             { source: ADDR1, data: 'DISPENSER|0|BTC|EQTA|10|0|50|BTC|EQTB|1|' + ADDR3 + '||||' + T_FAR_FUTURE + '|||' },
         ] },
@@ -157,7 +157,7 @@ describe('13 – Cross-node equivalence @regression @tier1', function () {
     });
 
     // -----------------------------------------------------------------------
-    // 2. Live-follower vs catch-up node — processing SCHEDULE is irrelevant
+    // 2. Live-follower vs catch-up node: processing SCHEDULE is irrelevant
     // -----------------------------------------------------------------------
     it('2. a block-by-block follower equals a single catch-up pass', async function () {
         const seeder = new DecoderSeeder(decoderQuery);
@@ -185,7 +185,7 @@ describe('13 – Cross-node equivalence @regression @tier1', function () {
     });
 
     // -----------------------------------------------------------------------
-    // 3. Reorg survivor vs fresh resync — replacement reuses known entities
+    // 3. Reorg survivor vs fresh resync: replacement reuses known entities
     // -----------------------------------------------------------------------
     it('3. a reorg survivor equals a fresh re-parse (replacement reuses known entities)', async function () {
         const seeder = new DecoderSeeder(decoderQuery);
@@ -222,7 +222,7 @@ describe('13 – Cross-node equivalence @regression @tier1', function () {
     });
 
     // -----------------------------------------------------------------------
-    // 4. Reorg survivor vs fresh resync — ORPHANS introduced novel entities
+    // 4. Reorg survivor vs fresh resync: ORPHANS introduced novel entities
     //
     // The orphaned block ISSUEs a token (ORPH) that the surviving chain never
     // has. The survivor's index_tickers retains the ORPH row as residue; the
@@ -232,7 +232,7 @@ describe('13 – Cross-node equivalence @regression @tier1', function () {
     // hash, and the two nodes FORK. A resynced validator could then never
     // rejoin, and ANCHOR's recover-from-chain-parse promise breaks.
     //
-    // SKIPPED — CONFIRMED CONSENSUS FORK (2026-06-12, P2a finding #1):
+    // SKIPPED: CONFIRMED CONSENSUS FORK (2026-06-12, P2a finding #1):
     // the ledger hash diverges at the first post-reorg block whose ledger
     // rows reference a dedup id assigned AFTER the orphan residue (here:
     // MINT|POST at block 109; survivor=5d4ba04f… resync=5ab75916….).
@@ -242,7 +242,7 @@ describe('13 – Cross-node equivalence @regression @tier1', function () {
     // source/destination address (or tick/action type/status) was first seen
     // in the orphan shifts every later first-seen id on the survivor.
     // Un-skip after the consensus-side decision (hash resolved strings
-    // instead of raw ids, or purge index residue on rollback) — see
+    // instead of raw ids, or purge index residue on rollback). See
     // claude/reports/2026-06-12_p2a-cross-node-equivalence.md.
     // -----------------------------------------------------------------------
     it.skip('4. survivor equals resync even when ORPHANED blocks introduced novel entities', async function () {

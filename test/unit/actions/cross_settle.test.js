@@ -71,7 +71,7 @@ describe('Cross_Settle action handler @regression @tier1', function () {
     }
 
     // A cross_chain validator snapshot of size N that INCLUDES every pubkey that
-    // signed `match` — WI-1 counts only snapshot members (snapPubkeys.has) — and
+    // signed `match`; WI-1 counts only snapshot members (snapPubkeys.has), and
     // pads to N with distinct non-signing keys so N drives the (legacy, swqStub-
     // pinned) majority-floor quorum. A bare placeholder snapshot (e.g. [{}])
     // deliberately omits the signers, modelling a non-member.
@@ -102,12 +102,12 @@ describe('Cross_Settle action handler @regression @tier1', function () {
         // These cases assert legacy COUNT quorum (the live mainnet path, whose
         // activation height is a far-future placeholder). On regtest, WI-1
         // stake-weighted quorum is active at every block, so pin the legacy path
-        // explicitly — the validator mocks below carry no source/weight and the
+        // explicitly : the validator mocks below carry no source/weight and the
         // weighted predicate diverges from the majority floor at N=3. Weighted
         // coverage lives in StakeWeightedQuorum.test.js.
         swqStub = sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(false);
 
-        // Cross-chain DB methods not present in the shared mock — add neutral stubs.
+        // Cross-chain DB methods not present in the shared mock : add neutral stubs.
         indexer.indexerDb.getValidatorsByCapability = sinon.stub().resolves([]);
         indexer.indexerDb.hasCapability = sinon.stub().resolves(true);
         indexer.indexerDb.recordCrossChainSettlement = sinon.stub().resolves();
@@ -123,7 +123,7 @@ describe('Cross_Settle action handler @regression @tier1', function () {
         indexer.indexerDb.createActionIndex.resolves(777);
     });
 
-    // Restores swqStub plus the per-test stubs created in beforeEach — without
+    // Restores swqStub plus the per-test stubs created in beforeEach : without
     // this the default sandbox accumulates across cases (sinon leak warning).
     afterEach(function () { sinon.restore(); });
 
@@ -166,12 +166,12 @@ describe('Cross_Settle action handler @regression @tier1', function () {
         const canonical = handler._canonical(match);
         const v = genValidator();
         const goodSig = signCanonical(v.privateKey, canonical);
-        // 1 valid signer, but duplicated + a malformed entry — only counts once,
+        // 1 valid signer, but duplicated + a malformed entry : only counts once,
         // below quorum 3 for N=4.
         match.validator_signatures = JSON.stringify([
             { pubkey: v.pubkey, sig: goodSig },
-            { pubkey: v.pubkey, sig: goodSig },          // duplicate pk — skipped
-            { pubkey: 'zz', sig: 'short' },              // malformed — skipped
+            { pubkey: v.pubkey, sig: goodSig },          // duplicate pk : skipped
+            { pubkey: 'zz', sig: 'short' },              // malformed : skipped
         ]);
         indexer.indexerDb.getValidatorsByCapability.resolves(snapFor(match, 4));
         await handler.parse(null, makeData({ MATCH: match }), null);

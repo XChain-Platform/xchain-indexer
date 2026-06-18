@@ -117,8 +117,8 @@ describe('Database.updateAddressBalance @unit @regression', function () {
 
     it('rollback: deletes old_balances entries absent from recomputed balances', async function () {
         const db = makeDb();
-        // tick 10 is in recomputed balances with a positive balance — rollback should leave it alone
-        // tick 11 has no entry at all in recomputed balances — rollback should delete it
+        // tick 10 is in recomputed balances with a positive balance; rollback should leave it alone
+        // tick 11 has no entry at all in recomputed balances; rollback should delete it
         db.getAddressBalances.resolves({ 10: '100.000000000000000000' });
         db.getAddressTableBalances.resolves({ 10: '80', 11: '75' });
 

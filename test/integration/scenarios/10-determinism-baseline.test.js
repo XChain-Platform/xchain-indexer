@@ -17,7 +17,7 @@
  * decoder blocks MUST derive byte-identical indexer state, or the network forks.
  * The indexer already commits to its state with chained per-block hashes
  * (blocks.ledger_hash_id / actions_hash_id / contract_hash_id -> index_transactions.hash,
- * each folding in the previous block's hashes — see db.js:getBlockHashes). Those
+ * each folding in the previous block's hashes (see db.js:getBlockHashes)). Those
  * hashes ARE the consensus commitment.
  *
  * The existing xchain-vm determinism-baseline pins single-contract VM output. This is
@@ -25,10 +25,10 @@
  * action corpus, so a semantic change in action processing (ledger math, ordering,
  * status assignment, hashing) is caught even though each run is still internally
  * deterministic. Two guards:
- *   1. run-twice-equal — re-deriving from a clean DB yields the identical hash chain.
- *   2. committed baseline — the chain matches INDEXER_STATE_BASELINE.json (drift = fork risk).
+ *   1. run-twice-equal: re-deriving from a clean DB yields the identical hash chain.
+ *   2. committed baseline: the chain matches INDEXER_STATE_BASELINE.json (drift = fork risk).
  *
- * Regenerate after an INTENTIONAL consensus change (review the diff!) — with the
+ * Regenerate after an INTENTIONAL consensus change (review the diff!), using
  * usual TEST_DB_* env pointing at a disposable MariaDB:
  *   REGEN_INDEXER_STATE_BASELINE=1 INDEXER_COIN=BTC INDEXER_NETWORK=regtest \
  *   npx mocha --no-config test/integration/scenarios/10-determinism-baseline.test.js
@@ -55,7 +55,7 @@ const A3 = 'mvuKWKvgzrkxh8QgNZ91vMBZUKN5BFYmo3';
 const BASE_TIME = 1700000000;
 
 // ---------------------------------------------------------------------------
-// Fixed, deterministic action corpus. Order and contents are the contract —
+// Fixed, deterministic action corpus. Order and contents are the contract:
 // changing them invalidates the baseline (regenerate deliberately).
 // ---------------------------------------------------------------------------
 const CORPUS = [
@@ -139,7 +139,7 @@ describe('Indexer cross-node determinism baseline @regression @tier1', function 
     it('re-deriving the corpus from a clean DB yields the identical hash chain (determinism)', async function () {
         const secondChain = await runCorpus();
         assert.deepStrictEqual(secondChain, firstChain,
-            'indexer produced different consensus hashes for the same input — non-determinism = fork risk');
+            'indexer produced different consensus hashes for the same input: non-determinism = fork risk');
     });
 
     it('hash chain matches the committed baseline (no consensus drift)', function () {

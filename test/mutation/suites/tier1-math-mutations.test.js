@@ -11,7 +11,7 @@
  * contact legal@dankest.llc.
  *
  **********************************************************************
- * Tier 1 — Math Function Mutations @tier1
+ * Tier 1: Math Function Mutations @tier1
  *
  * Verifies that tests detect mutations in bcadd/bcsub/bcmul/bcdiv,
  * comparison functions bcgt/bclt/bcgte/bclte, and compound operations
@@ -28,7 +28,7 @@ const {
 // Register the report hook once (only the first loaded file needs this)
 setupReportHook();
 
-describe('Mutation — Tier 1: Math Functions @tier1', function () {
+describe('Mutation: Tier 1: Math Functions @tier1', function () {
     let util;
 
     beforeEach(function () {
@@ -99,7 +99,7 @@ describe('Mutation — Tier 1: Math Functions @tier1', function () {
             assert.notStrictEqual(result, '2', 'AOR-004 survived');
         });
 
-        it('AOR-005: bcadd with decimals — mutation changes decimal result', function () {
+        it('AOR-005: bcadd with decimals: mutation changes decimal result', function () {
             operators.AOR.addToSub(util);
             const result = util.bcformat(util.bcadd('1.50', '0.25', 2), 2);
             const expected = '1.75';
@@ -199,7 +199,7 @@ describe('Mutation — Tier 1: Math Functions @tier1', function () {
                 mutation: 'mathjs.larger → mathjs.largerEq', file: 'src/utility.js',
                 status: result !== false ? 'killed' : 'survived',
                 killedBy: result !== false ? `bcgt(5,5) returned ${result}` : '',
-                description: 'bcgt uses largerEq — boundary mutation at equality',
+                description: 'bcgt uses largerEq: boundary mutation at equality',
             });
             assert.notStrictEqual(result, false, 'ROR-005 survived');
         });
@@ -213,7 +213,7 @@ describe('Mutation — Tier 1: Math Functions @tier1', function () {
                 mutation: 'mathjs.smaller → mathjs.smallerEq', file: 'src/utility.js',
                 status: result !== false ? 'killed' : 'survived',
                 killedBy: result !== false ? `bclt(5,5) returned ${result}` : '',
-                description: 'bclt uses smallerEq — boundary mutation at equality',
+                description: 'bclt uses smallerEq: boundary mutation at equality',
             });
             assert.notStrictEqual(result, false, 'ROR-006 survived');
         });
@@ -251,7 +251,7 @@ describe('Mutation — Tier 1: Math Functions @tier1', function () {
 
     describe('BCR: Boundary Conditions on Math', function () {
 
-        it('BCR-001: hasBalance exact-equal case — >= becomes >', function () {
+        it('BCR-001: hasBalance exact-equal case: >= becomes >', function () {
             operators.BCR.hasBalanceStrictGt(util);
             // balance=100, amount=100: >= returns true, > returns false
             const result = util.hasBalance({ 1: '100' }, 1, '100');
@@ -265,7 +265,7 @@ describe('Mutation — Tier 1: Math Functions @tier1', function () {
             assert.notStrictEqual(result, true, 'BCR-001 survived');
         });
 
-        it('BCR-002: bcgte at equality — >= becomes >', function () {
+        it('BCR-002: bcgte at equality: >= becomes >', function () {
             operators.BCR.gteToGt(util);
             // 5 >= 5 should be true, mutant: 5 > 5 = false
             const result = util.bcgte('5', '5');
@@ -279,7 +279,7 @@ describe('Mutation — Tier 1: Math Functions @tier1', function () {
             assert.notStrictEqual(result, true, 'BCR-002 survived');
         });
 
-        it('BCR-003: bclte at equality — <= becomes <', function () {
+        it('BCR-003: bclte at equality: <= becomes <', function () {
             operators.BCR.lteToLt(util);
             // 5 <= 5 should be true, mutant: 5 < 5 = false
             const result = util.bclte('5', '5');
@@ -297,15 +297,15 @@ describe('Mutation — Tier 1: Math Functions @tier1', function () {
             operators.BCR.hasBalanceStrictGt(util);
             // balance=200, amount=100: both >= and > return true
             const result = util.hasBalance({ 1: '200' }, 1, '100');
-            // This is an equivalent mutant at non-boundary — record appropriately
+            // This is an equivalent mutant at non-boundary; record appropriately
             registry.record({
                 id: 'BCR-004', operator: 'BCR', target: 'Utility.hasBalance',
                 mutation: 'largerEq → larger (surplus case)', file: 'src/utility.js',
                 status: result === true ? 'survived' : 'killed',
                 killedBy: result === true ? '' : `hasBalance(200,100) returned ${result}`,
-                description: 'hasBalance surplus case — equivalent mutant expected',
+                description: 'hasBalance surplus case: equivalent mutant expected',
             });
-            // This SHOULD survive — it's equivalent at non-boundary values
+            // This SHOULD survive: it's equivalent at non-boundary values
             // Don't assert.fail here; it proves the boundary test (BCR-001) is essential
         });
     });
@@ -346,16 +346,16 @@ describe('Mutation — Tier 1: Math Functions @tier1', function () {
 
         it('PRM-003: bcsub with equal args is equivalent (sanity)', function () {
             operators.PRM.bcsubSwapArgs(util);
-            // 5 - 5 = 0, mutant: 5 - 5 = 0 (symmetric case — equivalent)
+            // 5 - 5 = 0, mutant: 5 - 5 = 0 (symmetric case, equivalent)
             const result = util.bcformat(util.bcsub('5', '5', 0), 0);
             registry.record({
                 id: 'PRM-003', operator: 'PRM', target: 'Utility.bcsub',
-                mutation: 'bcsub(a,a) swap — equivalent mutant', file: 'src/utility.js',
+                mutation: 'bcsub(a,a) swap: equivalent mutant', file: 'src/utility.js',
                 status: result === '0' ? 'survived' : 'killed',
                 killedBy: result === '0' ? '' : `got '${result}'`,
-                description: 'bcsub equal-arg swap — equivalent mutant expected',
+                description: 'bcsub equal-arg swap: equivalent mutant expected',
             });
-            // Expected to survive — equivalent mutant
+            // Expected to survive: equivalent mutant
         });
 
         it('PRM-004: bcdiv with decimal precision detects swap', function () {
@@ -379,7 +379,7 @@ describe('Mutation — Tier 1: Math Functions @tier1', function () {
 
     describe('EMR: Empty Return Mutation', function () {
 
-        it('EMR-001: bcadd returns null — detected by format failure', function () {
+        it('EMR-001: bcadd returns null: detected by format failure', function () {
             operators.EMR.bcaddNull(util);
             const result = util.bcadd('10', '5', 0);
             registry.record({
@@ -392,7 +392,7 @@ describe('Mutation — Tier 1: Math Functions @tier1', function () {
             assert.strictEqual(result, null, 'EMR-001 survived: bcadd did not return null');
         });
 
-        it('EMR-002: bcsub returns null — detected by value check', function () {
+        it('EMR-002: bcsub returns null: detected by value check', function () {
             operators.EMR.bcsubNull(util);
             const result = util.bcsub('10', '3', 0);
             registry.record({
@@ -405,7 +405,7 @@ describe('Mutation — Tier 1: Math Functions @tier1', function () {
             assert.strictEqual(result, null, 'EMR-002 survived');
         });
 
-        it('EMR-003: bcnum returns null — downstream bcformat fails', function () {
+        it('EMR-003: bcnum returns null: downstream bcformat fails', function () {
             operators.EMR.bcnumNull(util);
             let threw = false;
             try {
@@ -420,12 +420,12 @@ describe('Mutation — Tier 1: Math Functions @tier1', function () {
                 mutation: 'bcnum returns null', file: 'src/utility.js',
                 status: detected ? 'killed' : 'survived',
                 killedBy: detected ? 'bcnum returned null or downstream threw' : '',
-                description: 'bcnum returns null — breaks all math chains',
+                description: 'bcnum returns null: breaks all math chains',
             });
             assert.ok(detected, 'EMR-003 survived');
         });
 
-        it('EMR-004: hasBalance returns null (falsy) — always denies', function () {
+        it('EMR-004: hasBalance returns null (falsy): always denies', function () {
             operators.EMR.hasBalanceNull(util);
             const result = util.hasBalance({ 1: '1000' }, 1, '100');
             registry.record({
@@ -433,7 +433,7 @@ describe('Mutation — Tier 1: Math Functions @tier1', function () {
                 mutation: 'hasBalance returns null', file: 'src/utility.js',
                 status: !result ? 'killed' : 'survived',
                 killedBy: !result ? `hasBalance returned ${result}` : '',
-                description: 'hasBalance returns null — always falsy',
+                description: 'hasBalance returns null: always falsy',
             });
             assert.ok(!result, 'EMR-004 survived');
         });
@@ -443,7 +443,7 @@ describe('Mutation — Tier 1: Math Functions @tier1', function () {
 
     describe('EHR: Error Handling Removal', function () {
 
-        it('EHR-001: bcdiv without zero-guard — bcnum catches Infinity (equivalent mutant)', function () {
+        it('EHR-001: bcdiv without zero-guard: bcnum catches Infinity (equivalent mutant)', function () {
             operators.EHR.bcdivNoZeroGuard(util);
             // Without guard, mathjs.divide returns Infinity, but bcnum converts it back to 0.
             // This is an equivalent mutant: the zero-guard is redundant due to bcnum's fallback.
@@ -453,14 +453,14 @@ describe('Mutation — Tier 1: Math Functions @tier1', function () {
                 id: 'EHR-001', operator: 'EHR', target: 'Utility.bcdiv',
                 mutation: 'remove divide-by-zero guard', file: 'src/utility.js',
                 status: 'killed', // Defense-in-depth: guard exists for safety, bcnum is backup
-                killedBy: 'equivalent mutant — bcnum catches Infinity; guard is defense-in-depth',
-                description: 'bcdiv zero guard removed — equivalent due to bcnum Infinity→0',
+                killedBy: 'equivalent mutant: bcnum catches Infinity; guard is defense-in-depth',
+                description: 'bcdiv zero guard removed: equivalent due to bcnum Infinity→0',
             });
             // Verify the defense-in-depth works: result is still 0
             assert.strictEqual(formatted, '0', 'bcnum should convert Infinity to 0');
         });
 
-        it('EHR-002: bcdiv zero-guard removed — non-zero still works', function () {
+        it('EHR-002: bcdiv zero-guard removed: non-zero still works', function () {
             operators.EHR.bcdivNoZeroGuard(util);
             const result = util.bcformat(util.bcdiv('10', '5', 0), 0);
             // Non-zero divisor: mutant behaves identically (equivalent mutant for non-zero)
@@ -469,7 +469,7 @@ describe('Mutation — Tier 1: Math Functions @tier1', function () {
                 mutation: 'zero-guard removed (non-zero divisor)', file: 'src/utility.js',
                 status: result === '2' ? 'survived' : 'killed',
                 killedBy: result === '2' ? '' : `got '${result}'`,
-                description: 'bcdiv without zero guard — equivalent for non-zero divisor',
+                description: 'bcdiv without zero guard: equivalent for non-zero divisor',
             });
             // Expected: equivalent mutant for non-zero case
         });
@@ -517,7 +517,7 @@ describe('Mutation — Tier 1: Math Functions @tier1', function () {
 
         it('AOR-009: bcmul→bcdiv in fee calculation detected', function () {
             operators.AOR.mulToDiv(util);
-            // Fee = bcmul(some_rate, some_hits) — simulate with direct call
+            // Fee = bcmul(some_rate, some_hits): simulate with direct call
             const result = util.bcformat(util.bcmul('10', '5', 0), 0);
             const mutated = (result !== '50');
             registry.record({
@@ -590,7 +590,7 @@ describe('Mutation — Tier 1: Math Functions @tier1', function () {
         });
 
         it('MISC-003: bcnum for valid input unaffected by fallback mutation', function () {
-            // Same mutation but for valid input — should be equivalent
+            // Same mutation but for valid input: should be equivalent
             sinon.stub(util, 'bcnum').callsFake(function (num) {
                 let str = String(num).trim();
                 if (str === 'NaN' || str === 'Infinity' || str === '-Infinity' || !this.isNumeric(num))
@@ -603,16 +603,16 @@ describe('Mutation — Tier 1: Math Functions @tier1', function () {
                 mutation: 'NaN fallback (valid input path)', file: 'src/utility.js',
                 status: result === '42' ? 'survived' : 'killed',
                 killedBy: result === '42' ? '' : `got '${result}'`,
-                description: 'bcnum valid-input path — equivalent for valid numbers',
+                description: 'bcnum valid-input path: equivalent for valid numbers',
             });
             // Expected: equivalent mutant for valid inputs
         });
 
-        it('MISC-004: bcformat null handling — isNull negation breaks fallback', function () {
+        it('MISC-004: bcformat null handling: isNull negation breaks fallback', function () {
             // Mutate: bcformat treats null decimals as non-null
             sinon.stub(util, 'bcformat').callsFake(function (num, decimals) {
-                // Remove the isNull fallback — pass undefined directly
-                let d = parseInt(decimals); // No isNull check — NaN if undefined
+                // Remove the isNull fallback: pass undefined directly
+                let d = parseInt(decimals); // No isNull check: NaN if undefined
                 if (isNaN(d)) d = 99; // Wrong default
                 return mathjs.format(this.bcnum(num), { notation: 'fixed', precision: d });
             });

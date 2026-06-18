@@ -17,11 +17,11 @@
  * every whole-ledger invariant after EVERY block.
  *
  * A seeded model generates mostly-valid ISSUE/MINT/SEND/DESTROY sequences
- * (with deliberate invalid attempts mixed in — over-mints, overspends),
+ * (with deliberate invalid attempts mixed in: over-mints, overspends),
  * drives them through the REAL indexer block by block, and asserts the
  * state-invariants sweep (conservation, supply>=0, escrow>=0, no negative
  * balances) after each block. The model only steers generation toward
- * validity — correctness is judged solely by the DB-level invariants, so
+ * validity; correctness is judged solely by the DB-level invariants, so
  * a model/indexer disagreement (e.g. an action the model thought valid
  * being rejected, or fees the model didn't track) cannot mask a real
  * conservation break.
@@ -80,7 +80,7 @@ class Model {
         return ACTORS.filter(a => (this.balances[a] && this.balances[a][tick] || 0) > 0);
     }
 
-    // Produce one action { source, data, note } — ~85% intended-valid,
+    // Produce one action { source, data, note }: ~85% intended-valid,
     // ~15% deliberately invalid (must be rejected without breaking invariants).
     nextAction() {
         const ticks = Object.keys(this.tokens);
@@ -102,7 +102,7 @@ class Model {
         if (roll < 0.50) {                                             // MINT
             const headroom = t.maxSupply - t.supply;
             if (headroom <= 0 || this.rand() < 0.15) {
-                // deliberate over-mint (or no headroom left) — expect rejection
+                // deliberate over-mint (or no headroom left): expect rejection
                 return { source: this.pick(ACTORS),
                          data: `MINT|0|${tick}|${t.maxMint}`,
                          note: 'over-MINT ' + tick };
@@ -117,7 +117,7 @@ class Model {
         if (roll < 0.85) {                                             // SEND
             const holders = this.holders(tick);
             if (holders.length === 0 || this.rand() < 0.15) {
-                // overspend from a (possibly empty) address — expect rejection
+                // overspend from a (possibly empty) address: expect rejection
                 return { source: this.pick(ACTORS),
                          data: `SEND|0|${tick}|999999|${this.pick(ACTORS)}`,
                          note: 'over-SEND ' + tick };

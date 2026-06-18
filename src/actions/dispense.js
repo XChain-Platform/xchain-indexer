@@ -124,7 +124,7 @@ class Dispense {
                 error = 'invalid: SOURCE and GET_ADDRESS can not be same';
 
             // Ownership dispensers are single-shot: cap multiplier at 1 regardless of overpayment
-            // (extra coin is absorbed as a tip — matches the existing overpayment behavior).
+            // (extra coin is absorbed as a tip, matching the existing overpayment behavior).
             let isOwnershipDispenser = (Number(dispenser['GIVE_OWNERSHIP']||0) == 1);
             if(isOwnershipDispenser && multiplier > 1)
                 multiplier = 1;

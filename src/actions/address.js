@@ -34,7 +34,7 @@
  *
  * FORMATS:
  * - 0 = Full (address preferences)
- * - 1 = Controller bind/unbind — VERSION|CONTROLLER|ACTION_CLASS|COOLDOWN_BLOCKS|UNBIND|MEMO
+ * - 1 = Controller bind/unbind: VERSION|CONTROLLER|ACTION_CLASS|COOLDOWN_BLOCKS|UNBIND|MEMO
  *       Self-gate one action-class of this account with a guard contract (address_controllers).
  *
  ********************************************************************/
@@ -54,7 +54,7 @@ class Address {
         // Define list of known FORMATS
         this.formats = {};
         this.formats[0] = 'VERSION|FEE_PREFERENCE|REQUIRE_MEMO|DISPENSER_PREFERENCE|MEMO';
-        // Programmable policy layer — self-gate one action-class of THIS account by binding a guard
+        // Programmable policy layer: self-gate one action-class of THIS account by binding a guard
         // contract (address_controllers table model). Self-signed (SOURCE is the account). One binding
         // change per action; UNBIND=1 drops the live binding for ACTION_CLASS. COOLDOWN_BLOCKS is
         // committed at bind time and is the friction on a later drop. See Controller_Bound_Tokens.md.
@@ -152,7 +152,7 @@ class Address {
         if(!error && String(data['MEMO']).length > this.config['MAX_MEMO_LENGTH'])
             error = 'invalid: MEMO (length)';
 
-        // Programmable policy layer — verify CONTROLLER references an existing, active contract on
+        // Programmable policy layer: verify CONTROLLER references an existing, active contract on
         // this chain (BIND only; on UNBIND the CONTROLLER field is empty and ignored). Mirrors the
         // ISSUE/execute contract-active check; a guard whose `guard` method is missing/throws is
         // fail-closed at runtime, not here.
@@ -167,7 +167,7 @@ class Address {
             }
         }
 
-        // Programmable policy layer — address controller bind/unbind semantics (format 1, self-signed).
+        // Programmable policy layer: address controller bind/unbind semantics (format 1, self-signed).
         if(!error && format === 1){
             let actionClass = (this.util.isNull(data['ACTION_CLASS'])) ? null : String(data['ACTION_CLASS']).toLowerCase();
             let isUnbind    = (String(data['UNBIND']) === '1');
@@ -178,7 +178,7 @@ class Address {
                 let effective = (addressId === null) ? null : await this.indexerDb.getEffectiveAddressController(addressId, actionClass, data['BLOCK_INDEX'], data['ACTION_INDEX']);
                 if(isUnbind){
                     // UNBIND: an effective (still-gating) controller must exist, and it must be a live
-                    // bind — a second unbind while one is already in its cooldown window is rejected.
+                    // bind. A second unbind while one is already in its cooldown window is rejected.
                     if(!effective)
                         error = 'invalid: ACTION_CLASS (not bound)';
                     else if(Number(effective.is_unbind) === 1)

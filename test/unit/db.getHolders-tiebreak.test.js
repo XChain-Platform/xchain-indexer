@@ -28,7 +28,7 @@
  * holders share a balance, giving a total order independent of GROUP BY return order.
  *
  * Technique mirrors db.queries.test.js / db.getBlockHashes-tieorder.test.js: stub doQuery on a
- * prototype-borrowed Database so the real getHolders logic runs against injected rows — no live
+ * prototype-borrowed Database so the real getHolders logic runs against injected rows; no live
  * MariaDB. A negative control (balance-only comparator = the pre-fix sort) proves the test has
  * teeth: it leaves the injected scramble intact and therefore forks.
  */

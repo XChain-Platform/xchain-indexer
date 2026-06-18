@@ -11,16 +11,16 @@
  * contact legal@dankest.llc.
  *
  **********************************************************************
- * runControllerGuard — guard return-value (royalty payoutLegs) parsing.
+ * runControllerGuard: guard return-value (royalty payoutLegs) parsing.
  *
  * REGRESSION GUARD for a real bug: vm.execute() returns `returnValue` as a
  * JSON-SERIALIZED STRING (the contract wrapper JSON-stringifies the contract's
  * return inside the isolate), but runControllerGuard read it as an object
  * (`typeof ret === 'object'`), so the payoutLegs branch was dead code and the
- * guard's royalty/fee legs were silently dropped — Phase D royalty was a no-op.
+ * guard's royalty/fee legs were silently dropped (Phase D royalty was a no-op).
  * The original royalty unit test fed a mock returnValue as an OBJECT, so it
  * never exercised the real string shape (mock-vs-reality). This pins the string
- * path end-to-end through runControllerGuard. Pure (fakes the VM + DB) — runs on
+ * path end-to-end through runControllerGuard. Pure (fakes the VM + DB); runs on
  * any Node.
  ********************************************************************/
 
@@ -29,7 +29,7 @@ const sinon  = require('sinon');
 const { createMockIndexer } = require('../fixtures/mocks');
 const Execute = require('../../src/actions/execute.js');
 
-describe('runControllerGuard — guard returnValue parsing (royalty payoutLegs) @regression @tier1', function () {
+describe('runControllerGuard: guard returnValue parsing (royalty payoutLegs) @regression @tier1', function () {
 
     // A valid regtest (BTC) P2PKH address so isCryptoAddress() accepts the leg.
     const ADDR = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
@@ -130,7 +130,7 @@ describe('runControllerGuard — guard returnValue parsing (royalty payoutLegs) 
     });
 
     it('a per-contract maxTakeBps cannot RELAX the global cap', async function () {
-        // Manifest declares 10000 but Σbps = 11000 still exceeds the global 10000 — the
+        // Manifest declares 10000 but Σbps = 11000 still exceeds the global 10000; the
         // effective cap is min(global, per-contract), never the looser of the two.
         const handler = buildHandler(
             vmOk(JSON.stringify({ payoutLegs: [{ to: ADDR, bps: 9000 }, { to: ADDR, bps: 2000 }] })),

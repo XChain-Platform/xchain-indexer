@@ -18,8 +18,8 @@
  *
  * Indexer startup auto-applies only `auto`-tagged schema migrations (additive,
  * idempotent). This is the explicit, operator-initiated path that ALSO applies
- * pending `manual` migrations — the destructive / data-backfill / dedup-then-unique
- * ones that must not run unattended across a validator fleet. Idempotent and
+ * pending `manual` migrations (the destructive / data-backfill / dedup-then-unique
+ * ones that must not run unattended across a validator fleet). Idempotent and
  * ledger-tracked (schema_migrations), so re-running only applies what's pending.
  *
  *   node src/migrate.js          # or: npm run migrate
@@ -56,7 +56,7 @@ async function main(){
         const res = await db.runMigrations({ includeManual: true });
         console.log('migrate: done. applied=' + JSON.stringify(res.applied) + ' still-pending=' + JSON.stringify(res.pending));
     } catch(err){
-        console.error('migrate: FAILED — ' + ((err && err.stack) || err));
+        console.error('migrate: FAILED: ' + ((err && err.stack) || err));
         process.exitCode = 1;
     } finally {
         try { if(db.pool) await db.pool.end(); } catch(_){}

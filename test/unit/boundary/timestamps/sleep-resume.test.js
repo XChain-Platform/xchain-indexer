@@ -66,15 +66,15 @@ describe('SLEEP RESUME_BLOCK boundary tests @regression @tier2', function () {
     });
 
     it('TS-13: SLEEP with RESUME_BLOCK = 50 (past, non-special) when BLOCK_INDEX = 100 is invalid', async function () {
-        // 50 < 100 and 50 is not in SLEEP_IMMEDIATE_METHODS — must be rejected
+        // 50 < 100 and 50 is not in SLEEP_IMMEDIATE_METHODS: must be rejected
         const params = ['0', '50', ''];
         const data   = createBaseData({ ACTION: 'SLEEP', FORMAT: 0, BLOCK_INDEX: BLOCK, SOURCE });
         await handler.parse(params, data, null);
         assert.ok(data.STATUS.startsWith('invalid'), `expected invalid but got: ${data.STATUS}`);
     });
 
-    it('SLEEP with RESUME_BLOCK = BLOCK_INDEX (exactly current block) — documents boundary behavior', async function () {
-        // The check is bclt(RESUME_BLOCK, BLOCK_INDEX) — strictly less-than.
+    it('SLEEP with RESUME_BLOCK = BLOCK_INDEX (exactly current block): documents boundary behavior', async function () {
+        // The check is bclt(RESUME_BLOCK, BLOCK_INDEX): strictly less-than.
         // RESUME_BLOCK == BLOCK_INDEX is NOT less-than, so the guard does NOT fire → valid.
         const params = ['0', String(BLOCK), ''];
         const data   = createBaseData({ ACTION: 'SLEEP', FORMAT: 0, BLOCK_INDEX: BLOCK, SOURCE });

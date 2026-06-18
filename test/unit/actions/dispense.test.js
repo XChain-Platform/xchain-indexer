@@ -97,7 +97,7 @@ describe('Dispense action handler @regression @tier2', function () {
 
     // ─── No matching dispensers ───────────────────────────────────────────
 
-    it('no matching dispensers — deleteActionIndex called, createDispense not called', async function () {
+    it('no matching dispensers: deleteActionIndex called, createDispense not called', async function () {
         indexer.indexerDb.findMatchingDispensers.resolves([]);
 
         const data = createBaseData({
@@ -115,7 +115,7 @@ describe('Dispense action handler @regression @tier2', function () {
 
     // ─── Valid dispense ───────────────────────────────────────────────────
 
-    it('valid dispense — createDispense called with status valid', async function () {
+    it('valid dispense: createDispense called with status valid', async function () {
         const data = createBaseData({
             ACTION:      'DISPENSE',
             SOURCE:      BUYER_ADDR,
@@ -262,7 +262,7 @@ describe('Dispense action handler @regression @tier2', function () {
 
     // ─── Allow/block list checks ─────────────────────────────────────────
 
-    it('dispenser ALLOW_LIST excludes SOURCE — dispense invalid', async function () {
+    it('dispenser ALLOW_LIST excludes SOURCE: dispense invalid', async function () {
         indexer.indexerDb.getDispenserInfo.resolves(makeDispenserInfo({ ALLOW_LIST: '5' }));
         // The list does NOT include BUYER_ADDR
         indexer.indexerDb.getList.resolves([OWNER_ADDR]);
@@ -280,7 +280,7 @@ describe('Dispense action handler @regression @tier2', function () {
         assert.ok(dispenseRecord['STATUS'] !== 'valid');
     });
 
-    it('dispenser BLOCK_LIST includes SOURCE — dispense invalid', async function () {
+    it('dispenser BLOCK_LIST includes SOURCE: dispense invalid', async function () {
         indexer.indexerDb.getDispenserInfo.resolves(makeDispenserInfo({ BLOCK_LIST: '6' }));
         // BLOCK_LIST includes BUYER_ADDR
         indexer.indexerDb.getList.resolves([BUYER_ADDR]);
@@ -298,7 +298,7 @@ describe('Dispense action handler @regression @tier2', function () {
         assert.ok(dispenseRecord['STATUS'] !== 'valid');
     });
 
-    it('GIVE_TOKEN ALLOW_LIST includes SOURCE — dispense valid', async function () {
+    it('GIVE_TOKEN ALLOW_LIST includes SOURCE: dispense valid', async function () {
         // Give token has an ALLOW_LIST that includes both BUYER and OWNER
         indexer.indexerDb.getTokenInfo
             .withArgs('JDOG', sinon.match.any, sinon.match.any)
@@ -324,7 +324,7 @@ describe('Dispense action handler @regression @tier2', function () {
         assert.strictEqual(dispenseRecord['STATUS'], 'valid');
     });
 
-    it('GIVE_TOKEN BLOCK_LIST includes SOURCE — dispense invalid', async function () {
+    it('GIVE_TOKEN BLOCK_LIST includes SOURCE: dispense invalid', async function () {
         indexer.indexerDb.getTokenInfo
             .withArgs('JDOG', sinon.match.any, sinon.match.any)
             .resolves(createTokenInfo({
@@ -351,7 +351,7 @@ describe('Dispense action handler @regression @tier2', function () {
 
     // ─── Multiple dispensers ──────────────────────────────────────────────
 
-    it('multiple matching dispensers — createDispense called for each', async function () {
+    it('multiple matching dispensers: createDispense called for each', async function () {
         const dispenser2 = makeDispenserInfo({ ACTION_INDEX: 11, GET_ADDRESS: OWNER_ADDR });
         indexer.indexerDb.findMatchingDispensers.resolves([10, 11]);
         indexer.indexerDb.getDispenserInfo

@@ -19,7 +19,7 @@
  *
  * A COINPAY transaction includes both the action data (OP_RETURN)
  * and a native coin output paying the seller. The indexer processes
- * each output separately — only the output matching the obligation's
+ * each output separately; only the output matching the obligation's
  * payee address and amount triggers settlement.
  *
  * Format: COINPAY|0|ORDER_MATCH_ACTION_INDEX
@@ -73,14 +73,14 @@ class Coinpay {
 
         // Early exit: if this output's destination doesn't match the payee address
         if(data['COIN_DESTINATION'] != obligationInfo['PAYEE_ADDRESS']){
-            console.log("\t COINPAY (skip): destination mismatch — tx=" + data['COIN_DESTINATION'] + " payee=" + obligationInfo['PAYEE_ADDRESS']);
+            console.log("\t COINPAY (skip): destination mismatch tx=" + data['COIN_DESTINATION'] + " payee=" + obligationInfo['PAYEE_ADDRESS']);
             await this.indexerDb.deleteActionIndex(data['ACTION_INDEX']);
             return;
         }
 
         // Early exit: if this output's amount is less than the obligation amount
         if(this.util.bclt(data['COIN_AMOUNT'], obligationInfo['COIN_AMOUNT'])){
-            console.log("\t COINPAY (skip): amount short — tx=" + data['COIN_AMOUNT'] + " owed=" + obligationInfo['COIN_AMOUNT']);
+            console.log("\t COINPAY (skip): amount short tx=" + data['COIN_AMOUNT'] + " owed=" + obligationInfo['COIN_AMOUNT']);
             await this.indexerDb.deleteActionIndex(data['ACTION_INDEX']);
             return;
         }
@@ -158,10 +158,10 @@ class Coinpay {
             // The match's give_amount or get_amount depends on which side is the seller
             // give_action_index = match order, get_action_index = original order
             if(sellerOrder['ACTION_INDEX'] == matchQuery.get_action_index){
-                // Seller is the original order (get side) — token amount is give_amount
+                // Seller is the original order (get side): token amount is give_amount
                 tokenAmount = matchQuery.give_amount;
             } else {
-                // Seller is the match order (give side) — token amount is get_amount
+                // Seller is the match order (give side): token amount is get_amount
                 tokenAmount = matchQuery.get_amount;
             }
         }
@@ -169,7 +169,7 @@ class Coinpay {
         if(tokenAmount){
             if(Number(sellerOrder['GIVE_OWNERSHIP']||0) == 1){
                 // Ownership delivery: clear the escrow gate and transfer ownership to
-                // the buyer's GET_ADDRESS. No balance ledger change — the asset is the
+                // the buyer's GET_ADDRESS. No balance ledger change (the asset is the
                 // ownership record itself.
                 await this.util.transferTokenOwnership(this.indexerDb, this.mapper, data, sellerOrder['GIVE_TICK'], sellerOrder['SOURCE'], buyerGetAddress);
             } else {
@@ -203,7 +203,7 @@ class Coinpay {
                     let finalStatus = (sellerStatus == 'cancelling') ? 'cancelled' : 'expired';
                     await this.indexerDb.createOrderStatus(data['ACTION_INDEX'], sellerOrder['ACTION_INDEX'], finalStatus);
 
-                    // Release any remaining escrowed tokens back to the seller — or to
+                    // Release any remaining escrowed tokens back to the seller, or to
                     // the SWEEP DESTINATION if the cancelling state was triggered by a
                     // SWEEP with ORDERS=1. Ownership orders are single-fill, so no
                     // remaining balance exists and the escrow gate was already cleared

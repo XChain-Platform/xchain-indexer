@@ -140,7 +140,7 @@ describe('FORMAT_VERSION boundary tests (via ISSUE) @regression @tier2', functio
     });
 
     it('TS-14: FORMAT_VERSION = 255 (max value getFormatVersion accepts, but unknown to Issue) is invalid', async function () {
-        // getFormatVersion returns 255 for numeric 255 — it is within range but Issue has no formats[255]
+        // getFormatVersion returns 255 for numeric 255; it is within range but Issue has no formats[255]
         const params = makeMinimalIssueParams();
         const data   = createBaseData({ ACTION: 'ISSUE', FORMAT: 255 });
         await issueHandler.parse(params, data, null);

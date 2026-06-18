@@ -54,17 +54,17 @@ describe('04 Spike Load', function () {
         // Process bootstrap
         await processBlocksInstrumented(indexer, collector);
 
-        // Phase 1: Quiet — 20 blocks at 1 tx/block
+        // Phase 1: Quiet - 20 blocks at 1 tx/block
         await gen.generateBlocks(20, 1, 'send-only', nextBlock, baseTime);
         nextBlock += 20; baseTime += 20 * 600;
         await processBlocksInstrumented(indexer, collector);
 
-        // Phase 2: Spike — 20 blocks at 100 tx/block
+        // Phase 2: Spike - 20 blocks at 100 tx/block
         await gen.generateBlocks(20, 100, 'mixed-heavy', nextBlock, baseTime);
         nextBlock += 20; baseTime += 20 * 600;
         await processBlocksInstrumented(indexer, collector);
 
-        // Phase 3: Return to quiet — 20 blocks at 1 tx/block
+        // Phase 3: Return to quiet - 20 blocks at 1 tx/block
         await gen.generateBlocks(20, 1, 'send-only', nextBlock, baseTime);
         await processBlocksInstrumented(indexer, collector);
 

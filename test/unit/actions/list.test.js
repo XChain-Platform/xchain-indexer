@@ -48,9 +48,9 @@ describe('List @regression @tier3', function () {
 
     // ─── Format 0: Create LIST ────────────────────────────────────────
 
-    describe('format 0 — create LIST', function () {
+    describe('format 0: create LIST', function () {
 
-        it('create address list — createList, createListItem called for each address', async function () {
+        it('create address list: createList, createListItem called for each address', async function () {
             indexer.indexerDb.getTokenInfo.resolves(null);
             indexer.indexerDb.isActionAllowed.resolves(true);
 
@@ -65,7 +65,7 @@ describe('List @regression @tier3', function () {
             assert.ok(indexer.indexerDb.createListItem.callCount >= 2, 'createListItem called for each address');
         });
 
-        it('create tick list — createList, createListItem called for each tick', async function () {
+        it('create tick list: createList, createListItem called for each tick', async function () {
             const tokenInfo = createTokenInfo({ TICK: 'TEST', TICK_ID: 1 });
             indexer.indexerDb.getTokenInfo.withArgs('TEST').resolves(tokenInfo);
             indexer.indexerDb.isActionAllowed.resolves(true);
@@ -107,9 +107,9 @@ describe('List @regression @tier3', function () {
 
     // ─── Format 1: Edit LIST ──────────────────────────────────────────
 
-    describe('format 1 — edit LIST', function () {
+    describe('format 1: edit LIST', function () {
 
-        it('add address to existing list — createListEdit called', async function () {
+        it('add address to existing list: createListEdit called', async function () {
             indexer.indexerDb.getListType.resolves(2);
             indexer.indexerDb.getList.resolves([ADDR1]);
             indexer.indexerDb.isActionAllowed.resolves(true);
@@ -125,7 +125,7 @@ describe('List @regression @tier3', function () {
             assert.ok(indexer.indexerDb.createListEdit.called, 'createListEdit should be called');
         });
 
-        it('remove address from existing list — createListEdit called', async function () {
+        it('remove address from existing list: createListEdit called', async function () {
             indexer.indexerDb.getListType.resolves(2);
             indexer.indexerDb.getList.resolves([ADDR1, ADDR2]);
             indexer.indexerDb.isActionAllowed.resolves(true);
@@ -171,7 +171,7 @@ describe('List @regression @tier3', function () {
 
     // ─── Type 1 (TICK) validation ────────────────────────────────────
 
-    describe('type 1 — TICK item validation', function () {
+    describe('type 1: TICK item validation', function () {
 
         it('unknown TICK in list → createListItemInvalid called', async function () {
             // Token not found for the item
@@ -204,7 +204,7 @@ describe('List @regression @tier3', function () {
             assert.ok(!indexer.indexerDb.createListItemInvalid.called, 'createListItemInvalid should not be called for valid tick');
         });
 
-        it('mix of valid and invalid TICKs — valid gets createListItem, invalid gets createListItemInvalid', async function () {
+        it('mix of valid and invalid TICKs: valid gets createListItem, invalid gets createListItemInvalid', async function () {
             const tokenInfo = createTokenInfo({ TICK: 'TEST', TICK_ID: 1 });
             indexer.indexerDb.getTokenInfo.withArgs('TEST').resolves(tokenInfo);
             indexer.indexerDb.getTokenInfo.withArgs('INVALID').resolves(null);
@@ -224,7 +224,7 @@ describe('List @regression @tier3', function () {
 
     // ─── Type 2 (ADDRESS) validation ─────────────────────────────────
 
-    describe('type 2 — ADDRESS item validation', function () {
+    describe('type 2: ADDRESS item validation', function () {
 
         it('invalid address format → createListItemInvalid called', async function () {
             indexer.indexerDb.isActionAllowed.resolves(true);

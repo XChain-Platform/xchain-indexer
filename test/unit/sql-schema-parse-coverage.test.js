@@ -20,7 +20,7 @@
  * ADD COLUMN-ing any column declared in the source but missing live. It relies on
  * parseExpectedColumns(), whose regex only recognizes a `CREATE TABLE ... ) ENGINE`
  * definition. If a source file can't be parsed (e.g. a missing ENGINE clause), the
- * reconciler SILENTLY skips that whole table — which is exactly how cross_chain_matches
+ * reconciler SILENTLY skips that whole table; this is exactly how cross_chain_matches
  * shipped without its Phase B partial-fill columns on databases created before the
  * release.
  *
@@ -37,7 +37,7 @@ const path   = require('path');
 
 const Database = require('../../src/db');
 
-// parseExpectedColumns + stripSqlLineComments are pure string functions — no DB,
+// parseExpectedColumns + stripSqlLineComments are pure string functions (no DB,
 // config, or util needed. Bind them onto a bare object so we can call them in isolation.
 const parser = {
     stripSqlLineComments: Database.prototype.stripSqlLineComments,
@@ -61,14 +61,14 @@ describe('src/sql schema parse-coverage @regression @tier1', function () {
 
             it('is parseable by the drift reconciler (non-null)', function () {
                 assert.ok(cols !== null,
-                    file + ' could not be parsed by parseExpectedColumns — the column-drift ' +
+                    file + ' could not be parsed by parseExpectedColumns; the column-drift ' +
                     'reconciler would SILENTLY skip this table. Ensure the CREATE TABLE ends with ' +
                     'a `) ENGINE=...` clause (matching the other src/sql files).');
             });
 
             it('yields at least one column', function () {
                 assert.ok(Array.isArray(cols) && cols.length > 0,
-                    file + ' parsed to zero columns — drift reconciliation would be a no-op.');
+                    file + ' parsed to zero columns; drift reconciliation would be a no-op.');
             });
 
             it('every parsed column has a name and a definition', function () {

@@ -11,19 +11,19 @@
  * contact legal@dankest.llc.
  *
  **********************************************************************
- * Integration test: db.buildVmBalancesAndTokenInfo — the loader that backs the
+ * Integration test: db.buildVmBalancesAndTokenInfo, the loader that backs the
  * VM gateway's xchain.getBalance(address, tick) and xchain.getTokenInfo(tick).
  *
  * Before this wiring the EXECUTE/DEPLOY paths passed `balances: null` /
- * `tokenInfo: null`, so a contract could never read what it held — the blocker
- * for every value-custody contract (escrow, vesting, AMM, ...). This test pins
+ * `tokenInfo: null`, so a contract could never read what it held (the blocker
+ * for every value-custody contract: escrow, vesting, AMM, ...). This test pins
  * the loader's two responsibilities directly (the harness runs VM-less, so the
  * full DEPOSIT->EXECUTE->getBalance flow lives in the regtest e2e):
  *
- *   1. SHAPE — re-keys the indexer's flat { tick_id: amount } into the nested,
+ *   1. SHAPE: re-keys the indexer's flat { tick_id: amount } into the nested,
  *      SYMBOL-keyed { address: { tickSymbol: amount } } the gateway consumes,
  *      and loads { tickSymbol: tokenInfo } for every referenced tick.
- *   2. PRE-ACTION BOUND (determinism) — balances reflect state strictly BEFORE
+ *   2. PRE-ACTION BOUND (determinism): balances reflect state strictly BEFORE
  *      the passed action_index (a contract sees what it held going in; its own
  *      mid-execution emissions are not yet persisted), identical on every node.
  *
@@ -49,9 +49,9 @@ const ADDR2 = 'mjifPngDYQ6HHPNQdGk1kQuFkJWEiQksQp'; // recipient (stands in for 
 const NOBODY = 'mvQLUzhdrR1gGQmHLkMy62Y86o6ahgRo8h'; // never holds anything
 const T0  = 1700000000;
 const BLK = 600;
-const HIGH_ACTION = 999999999; // action_index ceiling — `< ?` includes every prior action
+const HIGH_ACTION = 999999999; // action_index ceiling: `< ?` includes every prior action
 
-describe('VM ledger-read loader — buildVmBalancesAndTokenInfo @regression @tier2', function () {
+describe('VM ledger-read loader: buildVmBalancesAndTokenInfo @regression @tier2', function () {
     this.timeout(240000); // cold-DB schema creation (verifyTables builds ~60 tables) needs headroom
 
     before(async function () {
@@ -94,7 +94,7 @@ describe('VM ledger-read loader — buildVmBalancesAndTokenInfo @regression @tie
             await processBlocks(indexer);
             const db = indexer.indexerDb;
 
-            // The SEND's action_index — the bound that should EXCLUDE the SEND credit.
+            // The SEND's action_index: the bound that should EXCLUDE the SEND credit.
             const sendIdx = await getLastActionIndexByType(indexerQuery, 'SEND');
             assert.ok(sendIdx !== null, 'SEND action_index should exist');
 

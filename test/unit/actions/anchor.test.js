@@ -18,7 +18,7 @@ const zlib   = require('zlib');
 const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
 
 const Anchor  = require('../../../src/actions/anchor.js');
-// Same module instance Anchor holds a reference to (Node module cache) — stubbing
+// Same module instance Anchor holds a reference to (Node module cache); stubbing
 // `verify` here controls signature acceptance inside the handler.
 const ed25519 = require('../../../src/ed25519.js');
 const swq     = require('../../../src/stake_weighted_quorum.js');
@@ -103,7 +103,7 @@ describe('Anchor (ANCHOR) @regression @tier3', function () {
         verifyStub = sinon.stub(ed25519, 'verify').returns(true);
         // These cases assert legacy COUNT quorum (the live mainnet path, whose
         // activation is a far-future placeholder). Regtest has WI-1 stake-weighted
-        // quorum active at every block, so pin the legacy path — the oracle_publish
+        // quorum active at every block, so pin the legacy path: the oracle_publish
         // mocks here carry no source/weight. Weighted coverage: StakeWeightedQuorum.test.js.
         swqStub = sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(false);
     });
@@ -147,7 +147,7 @@ describe('Anchor (ANCHOR) @regression @tier3', function () {
         verifyStub.callsFake((canon, sig, pk) => (pk === PUBKEY_A || pk === PUBKEY_B));
         let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 0, COIN: 'DOGE' });
         await handler.parse(v0Params({ sigs: [[PUBKEY_A, SIG], [PUBKEY_B, SIG], [PUBKEY_C, SIG]] }), data, null);
-        // Message denominator is N (total snapshot validators), not the quorum —
+        // Message denominator is N (total snapshot validators), not the quorum;
         // 2 valid signatures of a 4-validator set (quorum 3) → rejected.
         assert.ok(String(data['STATUS']).startsWith('invalid: insufficient valid signatures (2/4)'));
     });
@@ -178,7 +178,7 @@ describe('Anchor (ANCHOR) @regression @tier3', function () {
         assert.ok(String(data['STATUS']).startsWith('invalid: MATCH_BATCH_SEQ (stale'));
     });
 
-    it('v1 single-chunk: CRC binds the archive — valid blob accepted, mismatch rejected', async function () {
+    it('v1 single-chunk: CRC binds the archive, valid blob accepted, mismatch rejected', async function () {
         let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 1, COIN: 'DOGE' });
         await handler.parse(v1Params(ARCHIVE_JSON), data, null);
         assert.strictEqual(data['STATUS'], 'valid');
@@ -229,7 +229,7 @@ describe('Anchor (ANCHOR) @regression @tier3', function () {
         let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 2, COIN: 'DOGE', ACTION_INDEX: 5 });
         await handler.parse(['2', '9', '2', '3', b64.slice(cut2)], data, null);
         assert.strictEqual(data['STATUS'], 'valid');
-        assert.ok(indexer.indexerDb.setAnchorArchiveStatus.notCalled);        // CRC matched — no flag
+        assert.ok(indexer.indexerDb.setAnchorArchiveStatus.notCalled);        // CRC matched: no flag
 
         // Same reassembly with a corrupted parent CRC → batch flagged invalid_archive
         parent.batch_crc32 = '00000000';

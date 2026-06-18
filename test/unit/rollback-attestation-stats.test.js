@@ -22,14 +22,14 @@
  * surviving blocks. Rollback._recomputeAttestationValidatorStats() therefore
  * drops only the rows whose most-recent touch is in the orphaned range and
  * rebuilds them from the surviving ledger (verified signatures on STATUS='ok'
- * responses + responsible-set members of expired requests) — matching exactly
+ * responses + responsible-set members of expired requests), matching exactly
  * what a from-genesis replay to block_index-1 would have produced.
  *
  * If that path ever silently reverts to the old append-monotone behaviour, two
  * operators with different reorg histories diverge on these counters and (once
  * Phase 4 slashing consumes them) on ledger_hash. This test drives the real
  * recompute against an in-memory model of the source tables and asserts the
- * rebuilt rows equal a fresh aggregation — the precise invariant a reorg must
+ * rebuilt rows equal a fresh aggregation: the precise invariant a reorg must
  * preserve.
  */
 
@@ -81,7 +81,7 @@ describe('Rollback attest_validator_stats recompute @regression @tier3', functio
         ]);
 
         // Surviving STATUS='ok' response rows whose validator_signatures JSON column
-        // holds the verified sigs (block_index < N — the block deletes already pruned
+        // holds the verified sigs (block_index < N : the block deletes already pruned
         // the rest). pkA appears on two ok responses (earns 2, last block 90); pkC
         // earned none post-rollback (its only signatures were orphaned).
         const okResponses = [
@@ -155,14 +155,14 @@ describe('Rollback attest_validator_stats recompute @regression @tier3', functio
             last_updated_block: 90, // max(last fulfilled block 90, expiry block 51)
         }, 'pkA must be rebuilt to its fresh aggregate, discarding orphaned increments');
 
-        // pkB: never touched in the orphaned range — left byte-for-byte intact.
+        // pkB: never touched in the orphaned range : left byte-for-byte intact.
         assert.deepStrictEqual(result[`${pkB}|${PROV}`], {
             validator_pubkey: pkB, provider_id: PROV,
             fulfilled_count: 3, missed_count: 0,
             slashed_count: 0, quality_score: 0, last_updated_block: 98,
         }, 'pkB was not in the orphaned range and must not be modified');
 
-        // pkC: entire history orphaned, no surviving source rows — row stays gone,
+        // pkC: entire history orphaned, no surviving source rows : row stays gone,
         // exactly as a from-genesis replay would never have created it.
         assert.ok(!(`${pkC}|${PROV}` in result),
             'pkC had no surviving ledger rows and must not be reinserted');

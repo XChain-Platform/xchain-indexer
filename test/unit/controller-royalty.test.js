@@ -13,13 +13,13 @@
  * contact legal@dankest.llc.
  *
  **********************************************************************
- * Programmable policy layer — Phase D royalty/fee split (applyProceedsSplit).
+ * Programmable policy layer: Phase D royalty/fee split (applyProceedsSplit).
  *
  * A controlled-token sale guard returns payoutLegs [{to, bps}] at create; the protocol
  * applies them to the SELLER's proceeds at each match via Utility.applyProceedsSplit.
  * These tests pin the split math: basis-point cuts of the actual fill, exact conservation
  * (seller remainder + legs == proceeds), and the fail-closed fallbacks (malformed / over-cap
- * legs → seller keeps everything). Pure — no DB/VM — so they run on any Node version. The
+ * legs → seller keeps everything). Pure (no DB/VM) so they run on any Node version. The
  * end-to-end match settlement is exercised on Node 22 / test-host.
  *
  * Spec: xchain-documentation/protocol/Controller_Bound_Tokens.md
@@ -45,7 +45,7 @@ function sumAmounts(credits, dec) {
     return String(total);
 }
 
-describe('Programmable policy layer — Phase D royalty/fee split @regression', function () {
+describe('Programmable policy layer: Phase D royalty/fee split @regression', function () {
 
     it('no legs → a single full-proceeds credit to the seller', function () {
         const out = util.applyProceedsSplit('TOK', '1000', 'seller', null, 8, 10000);

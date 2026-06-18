@@ -86,7 +86,7 @@ describe('Smoke: API liveness', function () {
 
         app.use(jsonRouter({ methods: jsonRpcController }));
 
-        // Port 0 lets the OS pick a free port — avoids conflicts
+        // Port 0 lets the OS pick a free port, avoiding conflicts
         server = app.listen(0, '127.0.0.1', () => {
             port = server.address().port;
             done();

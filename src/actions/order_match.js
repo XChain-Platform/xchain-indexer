@@ -130,7 +130,7 @@ class Order_Match {
                 //     matchInfo.GIVE_REMAINING and orderInfo.GET_REMAINING.
                 // Take whichever pair tightens first as the bottleneck, then derive the
                 // other amount from the price. The derived side is multiplied at high
-                // precision (64) — matching GET_PRICE/GIVE_PRICE's own precision — so the
+                // precision (64), matching GET_PRICE/GIVE_PRICE's own precision, so the
                 // intermediate carries no rounding noise; final quantization happens below.
                 let max_give = this.util.bclt(matchInfo['GET_REMAINING'], orderInfo['GIVE_REMAINING'])
                     ? matchInfo['GET_REMAINING']
@@ -141,11 +141,11 @@ class Order_Match {
                 let give_from_get = this.util.bcmul(max_get, orderInfo['GET_PRICE'], 64);
                 let give_amount, get_amount;
                 if (this.util.bcgt(give_from_get, max_give)) {
-                    // give-side is the bottleneck — clamp give and derive get
+                    // give-side is the bottleneck: clamp give and derive get
                     give_amount = max_give;
                     get_amount  = this.util.bcmul(max_give, orderInfo['GIVE_PRICE'], 64);
                 } else {
-                    // get-side is the bottleneck (or both equal) — use full max_get
+                    // get-side is the bottleneck (or both equal): use full max_get
                     give_amount = give_from_get;
                     get_amount  = max_get;
                 }
@@ -254,7 +254,7 @@ class Order_Match {
 
                 if(isNativeCoinMatch){
                     // Two-phase settlement: create COINPay obligation
-                    // Tokens stay escrowed — no credits/escrow changes until COINPay fulfills or expires
+                    // Tokens stay escrowed; no credits/escrow changes until COINPay fulfills or expires
 
                     // Determine which side is the coin offerer and which is the token seller
                     let coinOrder, sellerOrder, nativeCoinAmount;
@@ -269,7 +269,7 @@ class Order_Match {
                         sellerOrder = orderInfo;
                         nativeCoinAmount = get_amount;
                     } else {
-                        // GET_TICK is null on one side — the coin requester's counterparty is the coin payer
+                        // GET_TICK is null on one side; the coin requester's counterparty is the coin payer
                         if(this.util.isNull(orderInfo['GET_TICK'])){
                             // orderInfo wants native coin, matchInfo must pay it
                             coinOrder   = matchInfo;
@@ -326,7 +326,7 @@ class Order_Match {
                         // Negate in BigNumber space (bcsub), NOT JS unary minus: `-give_amount`
                         // coerces the mathjs BigNumber to an IEEE-754 double, truncating digits
                         // past ~15 sig-figs, so the escrow release would no longer equal the
-                        // intact-BigNumber credit below — per-row drift that trips the supply
+                        // intact-BigNumber credit below; per-row drift that trips the supply
                         // SanityError on high-decimal ticks (#3736).
                         escrows.push([matchInfo['GET_TICK'], this.util.bcsub(0, give_amount, giveDecimals), matchInfo['GET_ADDRESS']]);
                         let mDec = 0;
@@ -345,7 +345,7 @@ class Order_Match {
                     if(Number(matchInfo['GIVE_OWNERSHIP']||0) == 1){
                         await this.util.transferTokenOwnership(this.indexerDb, this.mapper, data, matchInfo['GIVE_TICK'], matchInfo['SOURCE'], orderInfo['GET_ADDRESS']);
                     } else {
-                        // BigNumber-space negation (see the give-side note above) — #3736.
+                        // BigNumber-space negation (see the give-side note above), #3736.
                         escrows.push([orderInfo['GET_TICK'], this.util.bcsub(0, get_amount, getDecimals), orderInfo['GET_ADDRESS']]);
                         let oDec = 0;
                         if(!this.util.isNull(orderInfo['PAYOUT_LEGS'])){

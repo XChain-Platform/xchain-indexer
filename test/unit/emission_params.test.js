@@ -16,7 +16,7 @@
  * When a contract emits an action from inside the VM, Execute.buildActionParams()
  * turns the emission's named params into the POSITIONAL params array that the
  * target action handler's parser expects. That array MUST have exactly as many
- * slots as the handler's `formats[0]` has pipe-delimited fields — otherwise the
+ * slots as the handler's `formats[0]` has pipe-delimited fields; otherwise the
  * emitted action silently misaligns (a value lands in the wrong column) or the
  * parser under/over-reads.
  *
@@ -30,14 +30,14 @@
  * so a change to EITHER without the other fails here, before production.
  *
  * (The previous version of this test copied buildActionParams into the test file
- * and hard-coded the field counts — both drifted stale and it could never have
+ * and hard-coded the field counts : both drifted stale and it could never have
  * caught the very class of bug it was meant to. Do not reintroduce a local copy.)
  ********************************************************************/
 
 const assert  = require('assert');
 const Execute = require('../../src/actions/execute.js');
 
-// Every action that can be emitted from a VM contract — must stay in lock-step
+// Every action that can be emitted from a VM contract : must stay in lock-step
 // with Execute.getActionHandler()'s map and the buildActionParams() switch.
 // Maps the action name to its handler module.
 const EMITTABLE_HANDLERS = {
@@ -64,7 +64,7 @@ const EMITTABLE_HANDLERS = {
 const buildActionParams = Execute.prototype.buildActionParams;
 
 // Handler constructors only read properties off the `action` registry and assign
-// them — they never call into the deps during construction — so a recursive stub
+// them : they never call into the deps during construction : so a recursive stub
 // that answers any property access (and any call) lets us reach `this.formats`
 // without standing up a DB / config / util layer.
 function makeStub(){
@@ -89,7 +89,7 @@ describe('Emission Params Arity (MANDATORY) @regression @tier1', function() {
             const built = buildActionParams.call(null, action, {});
             assert.strictEqual(built.length, expected,
                 action + ': buildActionParams produced ' + built.length + ' positional params but ' +
-                'handler formats[0] declares ' + expected + ' fields — emission would misalign. ' +
+                'handler formats[0] declares ' + expected + ' fields : emission would misalign. ' +
                 'Update Execute.buildActionParams (src/actions/execute.js) to match the handler format.');
             // VERSION slot is always 0 (format[0] handlers).
             assert.strictEqual(built[0], 0, action + ': first positional param (VERSION) must be 0');
@@ -163,7 +163,7 @@ describe('Emission Params Arity (MANDATORY) @regression @tier1', function() {
         assert.strictEqual(r[2], 'onPayment'); // METHOD
         assert.strictEqual(r[3], 'a');         // PARAMS...
         assert.strictEqual(r[4], 'b');
-        // gasLimit must NOT appear positionally — it travels via emissionData.VM_GAS_LIMIT
+        // gasLimit must NOT appear positionally : it travels via emissionData.VM_GAS_LIMIT
         assert.ok(!r.includes(50000), 'gasLimit leaked into positional params');
     });
 

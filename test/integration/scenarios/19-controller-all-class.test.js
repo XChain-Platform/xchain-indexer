@@ -11,11 +11,11 @@
  * contact legal@dankest.llc.
  *
  **********************************************************************
- * Integration: programmable-policy layer — the catch-all 'all' action class.
+ * Integration: programmable-policy layer - the catch-all 'all' action class.
  *
  * Drives real bind + SEND actions through the full indexer pipeline (decoder seed
  * → processBlocks) against a real MariaDB + the real (isolated-vm) VM. Proves the
- * 'all'-class most-specific-wins fallback end to end — the behavior the unit tests
+ * 'all'-class most-specific-wins fallback end to end (the behavior the unit tests
  * mock (getEffectiveTokenControllerForGuard) here runs over real DB rows + a real
  * guard VM:
  *   - one 'all' binding gates a SEND (transfer) via the fallback (no transfer-
@@ -52,7 +52,7 @@ const sha = s => crypto.createHash('sha256').update(s).digest('hex');
 const DENY_ALL = "module.exports={ guard:function(){ xchain.revert('all-class denied'); } };";
 const ALLOW    = "module.exports={ guard:function(){ return {}; } };";
 
-describe("Controller 'all' action class — fallback + override (real DB + real VM) @phaseE", function () {
+describe("Controller 'all' action class: fallback + override (real DB + real VM) @phaseE", function () {
     this.timeout(600000);
     let seeder, indexer, denyIdx, allowIdx;
 
@@ -131,7 +131,7 @@ describe("Controller 'all' action class — fallback + override (real DB + real 
 
     it("a class-specific 'transfer' binding overrides 'all' for that class only (most-specific wins)", async function () {
         // Bind a specific 'transfer' -> permissive guard ON TOP of the live 'all' binding.
-        // (Binding a specific class while 'all' is bound must be ALLOWED — it is the override,
+        // (Binding a specific class while 'all' is bound must be ALLOWED: it is the override,
         // not "already bound", because bind validation uses the exact-class getter. A green
         // ISSUE v6 here proves that.)
         await seeder.seedBlock(103, T0 + 300, [
@@ -142,7 +142,7 @@ describe("Controller 'all' action class — fallback + override (real DB + real 
         assert.ok(ev.some(e => e.action_class === 'transfer' && Number(e.is_unbind) === 0),
             "specific 'transfer' bind accepted on top of 'all' (not rejected as already-bound)");
 
-        // Resolution proof against the REAL DB rows (no second guarded SEND — that path is
+        // Resolution proof against the REAL DB rows (no second guarded SEND here, since that path is
         // exercised by test 2's real-VM deny; a second guard-fee'd SEND would also trip an
         // unrelated guard-fee gas-conservation sanity check in this minimal harness).
         const tickId  = await indexer.indexerDb.getTickerId(TICK);
@@ -165,7 +165,7 @@ describe("Controller 'all' action class — fallback + override (real DB + real 
 
     it('an allowed guarded SEND commits + the block passes the supply sanity check (regression: guardFee burn recomputes GAS supply)', async function () {
         // With the 'transfer' override (allow guard) bound, this SEND routes to it, settles, and
-        // bills a guardFee — a GAS debit with no offsetting credit (a burn). send.js must call
+        // bills a guardFee (a GAS debit with no offsetting credit, i.e. a burn). send.js must call
         // updateTokens so tokens.supply (GAS) is recomputed from the ledger; otherwise the
         // per-block sanityCheck (ledger == supply == balances) throws and processBlocks rejects.
         // So a green credit here IS the regression guard for the send.js guardFee-burn fix.

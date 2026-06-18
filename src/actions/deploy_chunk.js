@@ -14,10 +14,10 @@
  *
  * XChain Platform - DEPLOY v4 (chunk carrier)
  *
- * Internal collaborator of actions/deploy.js — not routed by action name.
+ * Internal collaborator of actions/deploy.js (not routed by action name).
  * DEPLOY.parse() delegates here when the format is v4. Carries one ordered base64
  * slice of a chunked contract's source. The slices are reassembled by a later
- * DEPLOY v2/v3 keyed on CODE_HASH (sha256 of the assembled UTF-8 source) — see
+ * DEPLOY v2/v3 keyed on CODE_HASH (sha256 of the assembled UTF-8 source); see
  * actions/deploy.js. A v4 carrier never runs any VM code; it only validates +
  * stores its slice (and pays the per-byte gas for the bytes it puts on-chain, so
  * the assembling DEPLOY charges base+constructor only and the net cost ≈ a
@@ -90,7 +90,7 @@ class DeployChunk {
             error = 'invalid: CHUNK_INDEX (out of range)';
 
         // CODE_PART must be present and a base64-alphabet string. It is a SLICE of
-        // base64(code) — not necessarily independently decodable — so we validate the
+        // base64(code), not necessarily independently decodable, so we validate the
         // alphabet only; the assembling DEPLOY concatenates all parts then decodes +
         // sha256-verifies the whole.
         if(!error && this.util.isNull(data['CODE_PART']))
@@ -98,7 +98,7 @@ class DeployChunk {
         if(!error && !/^[A-Za-z0-9+/]*={0,2}$/.test(String(data['CODE_PART'])))
             error = 'invalid: CODE_PART (base64)';
 
-        // CODE_PART must stay within the per-chunk byte budget (belt-and-suspenders —
+        // CODE_PART must stay within the per-chunk byte budget (belt-and-suspenders:
         // the decoder already drops any action whose compiled push exceeds the cap)
         if(!error && Buffer.byteLength(String(data['CODE_PART']), 'utf8') > this.MAX_DEPLOYCHUNK_PART_BYTES)
             error = 'invalid: CODE_PART (exceeds max size)';
@@ -121,7 +121,7 @@ class DeployChunk {
         let tokenInfo = await this.indexerDb.getTokenInfo(gas, data['BLOCK_INDEX'], data['ACTION_INDEX']);
         let balances  = await this.indexerDb.getAddressBalances(data['SOURCE'], null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
 
-        // Validate gas fee payment (native coin or XCHAIN balance) — mirrors deploy.js
+        // Validate gas fee payment (native coin or XCHAIN balance); mirrors deploy.js
         let feePaymentMode = 2; // default: xchain balance
         if(!error && tokenInfo && this.util.bcgt(fee, 0)){
             let pmMode = this.util.detectFeePaymentMode(data, this.decoderDb, data['TX_OUTPUTS']);
@@ -176,7 +176,7 @@ class DeployChunk {
         let credits = [],
             debits  = [];
 
-        // Debit gas fee from SOURCE (XCHAIN deduction mode only) — mirror deploy.js exactly
+        // Debit gas fee from SOURCE (XCHAIN deduction mode only); mirrors deploy.js exactly
         // (!error && feePaymentMode === 2) so a rejected chunk never burns gas the source
         // never had (which would trip the per-block supply SanityError).
         if(!error && tokenInfo && feePaymentMode === 2)

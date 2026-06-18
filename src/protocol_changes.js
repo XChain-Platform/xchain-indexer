@@ -232,7 +232,7 @@ class ProtocolChanges {
         // Async/Promise contract surface (VM CONSENSUS_VERSION '2'). Below this
         // activation the on-chain deploy validator (validateSyntax) ACCEPTS a
         // contract that uses async/await or references the global Promise, and the
-        // VM executes it with the Promise global present — the original pre-2.x.y
+        // VM executes it with the Promise global present; the original pre-2.x.y
         // behaviour. At/above it the deploy validator REJECTS such a contract
         // (CODE_ENCODING: banned async surface) and the sandbox strips the Promise
         // global at execution. Gated as its own consensus rule because the change

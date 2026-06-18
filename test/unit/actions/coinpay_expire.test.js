@@ -214,7 +214,7 @@ describe('Coinpay_Expire (COINPAY_EXPIRE) @regression @tier2', function () {
         });
 
         it('open seller order is not finalised (no cancelling/expiring state)', async function () {
-            // Default seller is in 'open' status — no finalisation needed
+            // Default seller is in 'open' status (no finalisation needed)
             const data = createBaseData({ ACTION: 'COINPAY_EXPIRE', ACTION_INDEX: 42 });
             await handler.parse(null, data, null);
             // createOrderStatus is called for the ORDER_MATCH (expired), but not for the seller itself

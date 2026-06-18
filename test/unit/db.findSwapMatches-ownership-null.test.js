@@ -18,7 +18,7 @@
  * Ownership swaps store NULL give_amount/get_amount. The match query paired
  * swaps with bare amount equality (s1.give_amount=s2.get_amount), but SQL
  * NULL = NULL is NULL (not true), so every ownership swap was dropped by the
- * WHERE before it could be returned — ownership swaps escrowed but never filled.
+ * WHERE before it could be returned; ownership swaps escrowed but never filled.
  * The fix makes the two amount equalities NULL-aware (pair when both sides are
  * NULL), mirroring findOrderMatches' null-side handling.
  *

@@ -31,11 +31,11 @@ const { assertBalance, assertTokenSupply, assertTokenOwner,
 const { seedGas } = require('../setup/gas-seeder');
 
 // ---------------------------------------------------------------------------
-// Test addresses — valid regtest P2PKH (isCryptoAddress validates base58check)
+// Test addresses: valid regtest P2PKH (isCryptoAddress validates base58check)
 // ---------------------------------------------------------------------------
-const ADDR1 = 'msK1rsgNVFPM4cR3X5rngczTKa6EtT4WKD'; // 30 chars — primary issuer
-const ADDR2 = 'mjifPngDYQ6HHPNQdGk1kQuFkJWEiQksQp'; // 30 chars — secondary actor
-const ADDR3 = 'mwGujTXFXMLN2YXqo4mQK4DcKy31DUcwoi'; // 30 chars — recipient
+const ADDR1 = 'msK1rsgNVFPM4cR3X5rngczTKa6EtT4WKD'; // 30 chars, primary issuer
+const ADDR2 = 'mjifPngDYQ6HHPNQdGk1kQuFkJWEiQksQp'; // 30 chars, secondary actor
+const ADDR3 = 'mwGujTXFXMLN2YXqo4mQK4DcKy31DUcwoi'; // 30 chars, recipient
 
 // Block time baseline
 const BASE_TIME = 1700000000;
@@ -55,7 +55,7 @@ describe('ISSUE / MINT / SEND / DESTROY Token Lifecycle @regression @tier1', fun
         await resetIndexerDb();
         seeder = new DecoderSeeder(decoderQuery);
         indexer = await initIndexer();
-        // Fee era: every ISSUE below needs gas — seed XCHAIN to the actors first
+        // Fee era: every ISSUE below needs gas; seed XCHAIN to the actors first
         await seedGas(seeder, { addresses: [ADDR1, ADDR2, ADDR3] });
     });
 
@@ -68,7 +68,7 @@ describe('ISSUE / MINT / SEND / DESTROY Token Lifecycle @regression @tier1', fun
     });
 
     // -----------------------------------------------------------------------
-    // 1. ISSUE creates token — verify issues table, tokens table, index_tickers
+    // 1. ISSUE creates token: verify issues table, tokens table, index_tickers
     // -----------------------------------------------------------------------
     it('ISSUE creates records in issues, tokens, and index_tickers', async function () {
         await seeder.seedBlock(100, BASE_TIME, [
@@ -99,7 +99,7 @@ describe('ISSUE / MINT / SEND / DESTROY Token Lifecycle @regression @tier1', fun
     });
 
     // -----------------------------------------------------------------------
-    // 2. ISSUE with all fields — MAX_SUPPLY, MAX_MINT, DECIMALS, DESCRIPTION
+    // 2. ISSUE with all fields: MAX_SUPPLY, MAX_MINT, DECIMALS, DESCRIPTION
     // -----------------------------------------------------------------------
     it('ISSUE stores MAX_SUPPLY, MAX_MINT, DECIMALS, DESCRIPTION correctly', async function () {
         // Format 0: VERSION|TICK|MAX_SUPPLY|MAX_MINT|DECIMALS|DESCRIPTION
@@ -177,7 +177,7 @@ describe('ISSUE / MINT / SEND / DESTROY Token Lifecycle @regression @tier1', fun
     });
 
     // -----------------------------------------------------------------------
-    // 5. ISSUE reserved tick name (BTC) — status invalid
+    // 5. ISSUE reserved tick name (BTC): status invalid
     // -----------------------------------------------------------------------
     it('ISSUE of reserved tick BTC is rejected (except on regtest, which is exempt)', async function () {
         await seeder.seedBlock(130, BASE_TIME, [
@@ -198,7 +198,7 @@ describe('ISSUE / MINT / SEND / DESTROY Token Lifecycle @regression @tier1', fun
     });
 
     // -----------------------------------------------------------------------
-    // 6. MINT creates supply — verify credits, balances, tokens.supply
+    // 6. MINT creates supply: verify credits, balances, tokens.supply
     // -----------------------------------------------------------------------
     it('MINT creates credit, updates balance, and increments token supply', async function () {
         await seeder.seedBlock(200, BASE_TIME, [
@@ -221,14 +221,14 @@ describe('ISSUE / MINT / SEND / DESTROY Token Lifecycle @regression @tier1', fun
     });
 
     // -----------------------------------------------------------------------
-    // 7. MINT exceeding MAX_MINT — status invalid
+    // 7. MINT exceeding MAX_MINT: status invalid
     // -----------------------------------------------------------------------
     it('MINT exceeding MAX_MINT is marked invalid', async function () {
         // MAX_MINT is 100
         await seeder.seedBlock(210, BASE_TIME, [
             { source: ADDR1, data: 'ISSUE|0|CAPTOKEN|5000|100|0|Capped minting' }
         ]);
-        // Attempt to mint 101 — exceeds MAX_MINT
+        // Attempt to mint 101: exceeds MAX_MINT
         await seeder.seedBlock(211, BASE_TIME + 10, [
             { source: ADDR1, data: 'MINT|0|CAPTOKEN|101' }
         ]);
@@ -243,7 +243,7 @@ describe('ISSUE / MINT / SEND / DESTROY Token Lifecycle @regression @tier1', fun
     });
 
     // -----------------------------------------------------------------------
-    // 8. MINT after MAX_SUPPLY reached — status invalid
+    // 8. MINT after MAX_SUPPLY reached: status invalid
     // -----------------------------------------------------------------------
     it('MINT that would exceed MAX_SUPPLY is marked invalid', async function () {
         // MAX_SUPPLY=100, MAX_MINT=100
@@ -254,14 +254,14 @@ describe('ISSUE / MINT / SEND / DESTROY Token Lifecycle @regression @tier1', fun
         await seeder.seedBlock(221, BASE_TIME + 10, [
             { source: ADDR1, data: 'MINT|0|FULLSUP|100' }
         ]);
-        // Try to mint 1 more — should fail
+        // Try to mint 1 more: should fail
         await seeder.seedBlock(222, BASE_TIME + 20, [
             { source: ADDR1, data: 'MINT|0|FULLSUP|1' }
         ]);
 
         await processBlocks(indexer);
 
-        // Last MINT action should be invalid. Scope to this test's tick —
+        // Last MINT action should be invalid. Scope to this test's tick:
         // the gas preamble adds XCHAIN mint rows of its own.
         const allMints = await indexerQuery(
             `SELECT m.action_index, s.status
@@ -281,7 +281,7 @@ describe('ISSUE / MINT / SEND / DESTROY Token Lifecycle @regression @tier1', fun
     });
 
     // -----------------------------------------------------------------------
-    // 9. SEND transfers balance — credits, debits, balances for both addresses
+    // 9. SEND transfers balance: credits, debits, balances for both addresses
     // -----------------------------------------------------------------------
     it('SEND debits source and credits destination with correct amounts', async function () {
         await seeder.seedBlock(300, BASE_TIME, [
@@ -305,7 +305,7 @@ describe('ISSUE / MINT / SEND / DESTROY Token Lifecycle @regression @tier1', fun
     });
 
     // -----------------------------------------------------------------------
-    // 10. SEND insufficient balance — status invalid, no ledger changes
+    // 10. SEND insufficient balance: status invalid, no ledger changes
     // -----------------------------------------------------------------------
     it('SEND with insufficient balance is marked invalid and creates no ledger entries', async function () {
         await seeder.seedBlock(310, BASE_TIME, [
@@ -314,7 +314,7 @@ describe('ISSUE / MINT / SEND / DESTROY Token Lifecycle @regression @tier1', fun
         await seeder.seedBlock(311, BASE_TIME + 10, [
             { source: ADDR1, data: 'MINT|0|SCARCE|50' }
         ]);
-        // Try to send 100 — ADDR1 only has 50
+        // Try to send 100: ADDR1 only has 50
         await seeder.seedBlock(312, BASE_TIME + 20, [
             { source: ADDR1, destination: ADDR2, data: 'SEND|0|SCARCE|100|' + ADDR2 }
         ]);
@@ -339,7 +339,7 @@ describe('ISSUE / MINT / SEND / DESTROY Token Lifecycle @regression @tier1', fun
     });
 
     // -----------------------------------------------------------------------
-    // 11. SEND to invalid address — status invalid
+    // 11. SEND to invalid address: status invalid
     // -----------------------------------------------------------------------
     it('SEND to an invalid destination address is marked invalid', async function () {
         await seeder.seedBlock(320, BASE_TIME, [
@@ -393,7 +393,7 @@ describe('ISSUE / MINT / SEND / DESTROY Token Lifecycle @regression @tier1', fun
     });
 
     // -----------------------------------------------------------------------
-    // 13. DESTROY reduces supply — only debits created, supply decremented
+    // 13. DESTROY reduces supply: only debits created, supply decremented
     // -----------------------------------------------------------------------
     it('DESTROY creates a debit record and decrements token supply', async function () {
         await seeder.seedBlock(500, BASE_TIME, [
@@ -425,7 +425,7 @@ describe('ISSUE / MINT / SEND / DESTROY Token Lifecycle @regression @tier1', fun
     });
 
     // -----------------------------------------------------------------------
-    // 14. DESTROY insufficient balance — invalid
+    // 14. DESTROY insufficient balance: invalid
     // -----------------------------------------------------------------------
     it('DESTROY with insufficient balance is marked invalid', async function () {
         await seeder.seedBlock(510, BASE_TIME, [
@@ -434,7 +434,7 @@ describe('ISSUE / MINT / SEND / DESTROY Token Lifecycle @regression @tier1', fun
         await seeder.seedBlock(511, BASE_TIME + 10, [
             { source: ADDR1, data: 'MINT|0|UNBURNABLE|100' }
         ]);
-        // Try to destroy 500 — only has 100
+        // Try to destroy 500: only has 100
         await seeder.seedBlock(512, BASE_TIME + 20, [
             { source: ADDR1, data: 'DESTROY|0|UNBURNABLE|500' }
         ]);
@@ -469,7 +469,7 @@ describe('ISSUE / MINT / SEND / DESTROY Token Lifecycle @regression @tier1', fun
     });
 
     // -----------------------------------------------------------------------
-    // 16. Token with 8 decimals — amounts stored correctly
+    // 16. Token with 8 decimals: amounts stored correctly
     // -----------------------------------------------------------------------
     it('token with 8 decimals stores and retrieves fractional amounts correctly', async function () {
         // MAX_SUPPLY and MAX_MINT with decimal values
@@ -491,7 +491,7 @@ describe('ISSUE / MINT / SEND / DESTROY Token Lifecycle @regression @tier1', fun
     });
 
     // -----------------------------------------------------------------------
-    // 17. MINT with DESTINATION — credit goes to destination, not source
+    // 17. MINT with DESTINATION: credit goes to destination, not source
     // -----------------------------------------------------------------------
     it('MINT with DESTINATION credits the destination address, not source', async function () {
         await seeder.seedBlock(800, BASE_TIME, [
@@ -514,7 +514,7 @@ describe('ISSUE / MINT / SEND / DESTROY Token Lifecycle @regression @tier1', fun
     });
 
     // -----------------------------------------------------------------------
-    // 18. Lock immutability — ISSUE with LOCK_MINT=1, then MINT fails
+    // 18. Lock immutability: ISSUE with LOCK_MINT=1, then MINT fails
     // -----------------------------------------------------------------------
     it('ISSUE with LOCK_MINT=1 causes subsequent MINT to be invalid', async function () {
         // Create token with LOCK_MINT=1 using full format 0.
@@ -542,7 +542,7 @@ describe('ISSUE / MINT / SEND / DESTROY Token Lifecycle @regression @tier1', fun
         const mintActionIndex = await getLastActionIndexByType(indexerQuery, 'MINT');
         await assertActionStatus(indexerQuery, 'mints', mintActionIndex, 'invalid: LOCK_MINT');
 
-        // Supply should be 0 — no MINT_SUPPLY was provided, and MINT is blocked
+        // Supply should be 0: no MINT_SUPPLY was provided, and MINT is blocked
         await assertTokenSupply(indexerQuery, 'LOCKTOKEN', '0');
     });
 
@@ -560,7 +560,7 @@ describe('ISSUE / MINT / SEND / DESTROY Token Lifecycle @regression @tier1', fun
     });
 
     // -----------------------------------------------------------------------
-    // 20. Multiple tokens coexist independently — balances do not cross
+    // 20. Multiple tokens coexist independently: balances do not cross
     // -----------------------------------------------------------------------
     it('two independently issued tokens maintain separate balances', async function () {
         await seeder.seedBlock(1100, BASE_TIME, [

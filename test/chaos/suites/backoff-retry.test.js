@@ -24,7 +24,7 @@ const assert = require('assert');
 const sinon = require('sinon');
 const { createChaosDb } = require('../setup/harness');
 
-describe('Chaos — Exponential Backoff & Retry', function () {
+describe('Chaos: Exponential Backoff & Retry', function () {
     this.timeout(10000);
 
     let db, sleepStub;
@@ -89,7 +89,7 @@ describe('Chaos — Exponential Backoff & Retry', function () {
             await db.getConnection();
             assert.fail('Should have thrown');
         } catch (e) {
-            // Could be circuit breaker or max attempts — both are valid exits
+            // Could be circuit breaker or max attempts (both are valid exits)
             assert.ok(
                 e.message.includes('30 attempts') || e.message.includes('Circuit breaker'),
                 'Should mention attempts or circuit breaker: ' + e.message
@@ -102,7 +102,7 @@ describe('Chaos — Exponential Backoff & Retry', function () {
         const conn = await db.getConnection();
         assert.ok(conn);
         assert.strictEqual(sleepStub.callCount, 5);
-        // No leftover state — next call should succeed immediately
+        // No leftover state; next call should succeed immediately
         const conn2 = await db.getConnection();
         assert.ok(conn2);
         assert.strictEqual(sleepStub.callCount, 5); // no additional sleeps
@@ -123,7 +123,7 @@ describe('Chaos — Exponential Backoff & Retry', function () {
         sinon.stub(Math, 'random').returns(0);
         await db.getConnection();
         assert.strictEqual(sleepStub.callCount, 3);
-        // Second call: 2 failures then success — delays should start from base again
+        // Second call: 2 failures then success; delays should start from base again
         db.pool.setFailures(2);
         await db.getConnection();
         assert.strictEqual(sleepStub.callCount, 5);

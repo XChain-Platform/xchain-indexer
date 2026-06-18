@@ -13,7 +13,7 @@
  * contact legal@dankest.llc.
  *
  **********************************************************************
- * Whole-ledger state invariants (Phase 1b — indexer state-invariants).
+ * Whole-ledger state invariants (Phase 1b: indexer state-invariants).
  *
  * Generalizes the per-tick assertSanity (and db.js:sanityCheck) into a sweep
  * over the ENTIRE current indexer state, asserting the properties that define a
@@ -27,7 +27,7 @@
  *                          (UNIQUE addr_tick + ON DUPLICATE KEY UPDATE), so no
  *                          row may hold a negative amount.
  *
- * Pure SQL over an indexerQuery(sql, args) function — pair with the integration
+ * Pure SQL over an indexerQuery(sql, args) function; pair with the integration
  * harness (drive the real indexer, then assert) or any seeded indexer DB.
  */
 
@@ -39,7 +39,7 @@ const mathjs = require('mathjs');
 // MAX_TOKEN_SUPPLY) and below ~1e-15, so a real 1e-18 discrepancy between two
 // large supplies is invisible (false pass) and 10^21+1 can't be told from
 // 10^21 (false fail). We keep every value as an exact bignumber string from
-// SQL and compare with decimal.js's exact .eq — never `parseFloat` or `===`.
+// SQL and compare with decimal.js's exact .eq (never `parseFloat` or `===`).
 const bn = (s) => mathjs.bignumber(String(s == null ? 0 : s));
 
 async function _sum(indexerQuery, table, tickId) {

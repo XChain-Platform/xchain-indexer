@@ -16,7 +16,7 @@ const fc = require('fast-check');
 const Utility = require('../../src/utility');
 
 // The bignumber amount layer (utility.bc*) is where the platform's money math
-// lives — and where two production precision bugs surfaced (the SDK parseFloat
+// lives, and where two production precision bugs surfaced (the SDK parseFloat
 // truncation / "1e-18" scientific-notation bug, and the CAST(SUM(varchar))
 // double-promotion behind the 18-decimal supply HALT). These tests fuzz the
 // math over the real amount domain (up to 10^21, down to 1e-18) and pin the

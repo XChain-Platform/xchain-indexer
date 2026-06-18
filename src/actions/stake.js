@@ -14,8 +14,8 @@
  *
  * XChain Platform Action - STAKE
  *
- * Stakes tokens for hub validation (v1/v2 — BTC + XCHAIN only) or against
- * a smart contract (v3 — any chain, any registered token).
+ * Stakes tokens for hub validation (v1/v2, BTC + XCHAIN only) or against
+ * a smart contract (v3, any chain, any registered token).
  *
  * The protocol does not assign tiers. Capabilities (price, cross_chain,
  * oracle_publish, attestation) auto-qualify when stake amount meets the
@@ -63,7 +63,7 @@ class Stake {
         if(!error && (format===null || this.formats[format] === undefined))
             error = 'invalid: VERSION (unknown)';
 
-        // v3 = contract-targeted stake — dispatch to its own handler (separate machinery)
+        // v3 = contract-targeted stake; dispatch to its own handler (separate machinery)
         if(!error && format === 3){
             return await this._parseContractStake(params, data, error);
         }
@@ -119,8 +119,8 @@ class Stake {
                 error = 'invalid: SIGNING_PUBKEY (already in use)';
 
             // ... and must not be held by an active (or pending-activation)
-            // delegation — mirrors the DELEGATE v0 collision rule so a key can
-            // never be both a stake key and a delegated key (the effective
+            // delegation (mirrors the DELEGATE v0 collision rule so a key can
+            // never be both a stake key and a delegated key, because the effective
             // signer set would double-resolve it).
             if(!error){
                 let existingDelegation = await this.indexerDb.getDelegationByPubkey(data['SIGNING_PUBKEY'], data['BLOCK_INDEX']);
@@ -205,7 +205,7 @@ class Stake {
         await this.mapper.createMappings(data);
     }
 
-    // STAKE v3 — contract-targeted stake. Separate machinery from v1/v2 capability
+    // STAKE v3: contract-targeted stake. Separate machinery from v1/v2 capability
     // staking; writes to contract_stakes table and supports any token (not just XCHAIN).
     async _parseContractStake(params, data, error){
 
@@ -236,7 +236,7 @@ class Stake {
         if(!error && (!/^[0-9]+$/.test(String(data['TARGET_CONTRACT_INDEX'])) || Number(data['TARGET_CONTRACT_INDEX']) <= 0))
             error = 'invalid: TARGET_CONTRACT_INDEX (format)';
 
-        // Look up the target contract — must exist, be valid, and have opted into staking (cooldown_blocks NOT NULL)
+        // Look up the target contract: must exist, be valid, and have opted into staking (cooldown_blocks NOT NULL)
         let contractInfo = null;
         if(!error){
             contractInfo = await this.indexerDb.getContract(data['TARGET_CONTRACT_INDEX']);
@@ -251,7 +251,7 @@ class Stake {
             }
         }
 
-        // Look up the tick — must exist
+        // Look up the tick (must exist)
         let tickTokenInfo = null;
         if(!error){
             tickTokenInfo = await this.indexerDb.getTokenInfo(data['TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
@@ -259,7 +259,7 @@ class Stake {
                 error = 'invalid: TICK (unknown)';
         }
 
-        // AMOUNT validation — positive decimal, precision bounded by the token's decimals.
+        // AMOUNT validation: positive decimal, precision bounded by the token's decimals.
         // Trailing zeros in the fractional part are tolerated (so '200.00000000' against
         // a 0-decimal token reads as 200, semantically valid).
         if(!error){
@@ -269,7 +269,7 @@ class Stake {
             } else {
                 let decimals = (tickTokenInfo && tickTokenInfo['DECIMALS'] !== undefined) ? Number(tickTokenInfo['DECIMALS']) : 8;
                 let parts = amountStr.split('.');
-                // Strip trailing zeros from fractional part — they don't add precision
+                // Strip trailing zeros from fractional part (they add no precision)
                 let fracDigits = parts.length > 1 ? parts[1].replace(/0+$/, '').length : 0;
                 if(fracDigits > decimals)
                     error = 'invalid: AMOUNT (exceeds token decimals)';
@@ -278,7 +278,7 @@ class Stake {
         if(!error && !this.util.bcgt(data['AMOUNT'], '0'))
             error = 'invalid: AMOUNT (must be greater than 0)';
 
-        // Top-up vs. new — if (target, pubkey, tick) already has an active row,
+        // Top-up vs. new: if (target, pubkey, tick) already has an active row,
         // it MUST be owned by the same SOURCE (otherwise reject pubkey-collision).
         if(!error){
             let ownerId = await this.indexerDb.getContractStakeOwner(
@@ -291,7 +291,7 @@ class Stake {
             }
         }
 
-        // Balance check — source must hold the TICK amount
+        // Balance check: source must hold the TICK amount
         let balances = await this.indexerDb.getAddressBalances(data['SOURCE'], null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
         if(!error && tickTokenInfo && !this.util.hasBalance(balances, tickTokenInfo['TICK_ID'], data['AMOUNT']))
             error = 'invalid: insufficient funds (TICK)';
@@ -300,7 +300,8 @@ class Stake {
         if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
             error = 'invalid: SOURCE (sleeping)';
 
-        // Activation delay — each chain sets its own calibrated default in STAKING (BTC 6 / LTC 24 / DOGE 60, ~60 min reorg protection per chain)
+        // Activation delay: each chain sets its own calibrated default in STAKING
+        // (BTC 6 / LTC 24 / DOGE 60, roughly 60 min reorg protection per chain)
         let staking = this.config['STAKING'];
         let activationDelay = (staking && staking['ACTIVATION_DELAY_BLOCKS']) ? staking['ACTIVATION_DELAY_BLOCKS'] : this.config['ACTIVATION_DELAY_BLOCKS'];
         data['ACTIVATION_BLOCK'] = parseInt(data['BLOCK_INDEX']) + activationDelay;
@@ -309,7 +310,7 @@ class Stake {
         // Controller-bound token: a `stake`-class controller (or the catch-all `all`) on the staked
         // TICK may gate whether the token can be locked into this contract. Runs after all validation,
         // before settlement; SOURCE pays the bounded guard gas (billed in the valid block below).
-        // Only the v3 contract-targeted path is gated — v1/v2 capability stakes are XCHAIN-only and
+        // Only the v3 contract-targeted path is gated; v1/v2 capability stakes are XCHAIN-only and
         // are never controller-gated.
         let guardFee = 0;
         if(!error && tickTokenInfo){

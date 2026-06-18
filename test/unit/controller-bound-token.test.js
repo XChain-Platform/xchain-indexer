@@ -13,15 +13,15 @@
  * contact legal@dankest.llc.
  *
  **********************************************************************
- * Controller-bound token — retirement of the Phase-1 single-column model.
+ * Controller-bound token: retirement of the Phase-1 single-column model.
  *
  * The original feature bolted a single CONTROLLER / LOCK_CONTROLLER pair onto the
  * full ISSUE format (and the tokens/issues tables). That model was superseded by
  * the append-only token_controllers / address_controllers tables (per-action-class,
- * always-droppable with a read-time cooldown — see controller-policy-layer.test.js).
+ * always-droppable with a read-time cooldown; see controller-policy-layer.test.js).
  * These tests pin the RETIREMENT: the permanent-lock and the single-column wire
  * fields are gone, while the reusable guard engine (runControllerGuard +
- * VM_GUARD_GAS_CEILING) remains. Pure — no DB/VM — so they run on any Node version.
+ * VM_GUARD_GAS_CEILING) remains. Pure (no DB/VM) so they run on any Node version.
  *
  * Spec: xchain-documentation/protocol/Controller_Bound_Tokens.md
  ********************************************************************/
@@ -33,7 +33,7 @@ const Execute = require('../../src/actions/execute.js');
 
 const STUB = { config: {}, decoderDb: null, indexerDb: null, util: null, mapper: null };
 
-describe('Controller-bound token — Phase-1 single-column model retired @regression', function () {
+describe('Controller-bound token: Phase-1 single-column model retired @regression', function () {
 
     const issue = new Issue(STUB);
 
@@ -60,7 +60,7 @@ describe('Controller-bound token — Phase-1 single-column model retired @regres
     describe('the single-column CONTROLLER no longer rides the token-edit formats', function () {
         it('ISSUE format 0 (full) does not carry CONTROLLER', function () {
             assert.ok(!issue.formats[0].split('|').includes('CONTROLLER'),
-                'format 0 must not carry the controller binding — that is format 6 only now');
+                'format 0 must not carry the controller binding: that is format 6 only now');
         });
 
         it('CONTROLLER lives only on the dedicated binding format (6)', function () {

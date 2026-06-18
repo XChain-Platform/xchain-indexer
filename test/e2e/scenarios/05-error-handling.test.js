@@ -109,7 +109,7 @@ describe('E2E: Error Handling @regression @tier3', function () {
         await seeder.seedBlock(101, BASE_TIME + 10, [
             { source: ADDR1, data: 'MINT|0|DOUBLE|100' }
         ]);
-        // Two sends in the same block — first should succeed, second should fail
+        // Two sends in the same block: first should succeed, second should fail
         await seeder.seedBlock(102, BASE_TIME + 20, [
             { source: ADDR1, data: 'SEND|0|DOUBLE|80|' + ADDR2 },
             { source: ADDR1, data: 'SEND|0|DOUBLE|80|' + ADDR3 }

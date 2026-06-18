@@ -68,12 +68,12 @@ class Order_Expire {
         let pendingObligations = await this.indexerDb.getPendingCoinpayObligationsByOrder(orderInfo['ACTION_INDEX']);
 
         if(pendingObligations.length > 0){
-            // Two-phase expiration: set status to 'expiring' — blocks new matches, pending obligations must resolve first
+            // Two-phase expiration: set status to 'expiring', which blocks new matches; pending obligations must resolve first.
             // Ownership escrow stays set; coinpay.js releases it when the final obligation resolves.
             await this.indexerDb.createOrderExpire(data['ACTION_INDEX'], orderInfo['ACTION_INDEX'], data['STATUS']);
             await this.indexerDb.createOrderStatus(data['ACTION_INDEX'], orderInfo['ACTION_INDEX'], 'expiring');
         } else {
-            // No pending obligations — expire immediately
+            // No pending obligations; expire immediately.
             if(orderInfo['GIVE_OWNERSHIP']==1){
                 // Release ownership escrow back to the seller (tokens.owner_id is unchanged)
                 await this.indexerDb.clearTokenEscrow(orderInfo['GIVE_TICK']);

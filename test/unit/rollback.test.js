@@ -419,7 +419,7 @@ describe('Rollback @regression @tier3', function () {
         const updateQuery = attestationResetUpdate();
         assert.ok(updateQuery, 'expected a companion UPDATE resetting the v0 request row request_status to pending');
         // Keyed on resolved_block (recorded at flip time), so BOTH terminal paths
-        // reset: a v1 response (fulfilled/errored) AND a v2 expiry (expired) — the
+        // reset: a v1 response (fulfilled/errored) AND a v2 expiry (expired); the
         // old v1-only self-join left a reorged expiry stuck terminal, and replay
         // then skipped re-synthesizing the v2 row (reorged-node vs fresh-sync
         // divergence).

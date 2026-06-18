@@ -46,9 +46,9 @@ describe('Destroy @regression @tier1', function () {
 
     // ─── Format 0 (Single Destroy) ────────────────────────────────────
 
-    describe('format 0 — single destroy', function () {
+    describe('format 0: single destroy', function () {
 
-        it('valid destroy — createDestroy called with valid status', async function () {
+        it('valid destroy: createDestroy called with valid status', async function () {
             const tokenInfo = createTokenInfo({ TICK: 'TEST', TICK_ID: 1, DECIMALS: 0 });
             indexer.indexerDb.getTokenInfo.resolves(tokenInfo);
             indexer.indexerDb.getAddressBalances.resolves({ 1: '500' });
@@ -63,7 +63,7 @@ describe('Destroy @regression @tier1', function () {
             assert.ok(indexer.indexerDb.createDestroy.called);
         });
 
-        it('valid destroy — debit created, no credit created', async function () {
+        it('valid destroy: debit created, no credit created', async function () {
             const tokenInfo = createTokenInfo({ TICK: 'TEST', TICK_ID: 1, DECIMALS: 0 });
             indexer.indexerDb.getTokenInfo.resolves(tokenInfo);
             indexer.indexerDb.getAddressBalances.resolves({ 1: '500' });
@@ -156,9 +156,9 @@ describe('Destroy @regression @tier1', function () {
 
     // ─── Format 1 (Multi-Destroy Full) ───────────────────────────────
 
-    describe('format 1 — multi-destroy full', function () {
+    describe('format 1: multi-destroy full', function () {
 
-        it('valid multi-destroy — createDestroy called for each distinct TICK', async function () {
+        it('valid multi-destroy: createDestroy called for each distinct TICK', async function () {
             const tokenInfo1 = createTokenInfo({ TICK: 'TEST',  TICK_ID: 1, DECIMALS: 0 });
             const tokenInfo2 = createTokenInfo({ TICK: 'XTEST', TICK_ID: 2, DECIMALS: 0 });
             indexer.indexerDb.getTokenInfo.withArgs('TEST').resolves(tokenInfo1);
@@ -260,7 +260,7 @@ describe('Destroy @regression @tier1', function () {
             assert.ok(indexer.mapper.createMappings.called);
         });
 
-        it('pre-existing error passed through — invalid status', async function () {
+        it('pre-existing error passed through: invalid status', async function () {
             const tokenInfo = createTokenInfo({ TICK: 'TEST', TICK_ID: 1, DECIMALS: 0 });
             indexer.indexerDb.getTokenInfo.resolves(tokenInfo);
             indexer.indexerDb.getAddressBalances.resolves({ 1: '500' });

@@ -62,10 +62,10 @@ class Dispenser_Close {
                 escrows = [];
 
             // Determine where escrow gets credited. Priority:
-            //   1. Sweep destination — if the cancel was driven by a SWEEP, honor the chosen destination.
-            //   2. Recorded canceller — per DISPENSER.md, escrow returns to whoever cancelled
+            //   1. Sweep destination: if the cancel was driven by a SWEEP, honor the chosen destination.
+            //   2. Recorded canceller: per DISPENSER.md, escrow returns to whoever cancelled
             //      (GET_ADDRESS or SOURCE). Recorded by createDispenserStatus when status='cancelling'.
-            //   3. SOURCE — fallback for paths with no canceller (auto-expire reaches dispenser_expire,
+            //   3. SOURCE: fallback for paths with no canceller (auto-expire reaches dispenser_expire,
             //      not here, but covered for safety).
             let sweepDest = await this.indexerDb.getSweepDestination(data['DISPENSER_ACTION_INDEX']);
             let canceller = (!this.util.isNull(sweepDest)) ? null : await this.indexerDb.getDispenserCanceller(data['DISPENSER_ACTION_INDEX']);
@@ -75,7 +75,7 @@ class Dispenser_Close {
 
             if(Number(dispenser['GIVE_OWNERSHIP']||0) == 1){
                 // Ownership dispenser closure. If the escrow is still set, this is a
-                // cancel/expire/sweep path (no successful DISPENSE) — release the gate;
+                // cancel/expire/sweep path (no successful DISPENSE), so release the gate;
                 // if the destination differs from SOURCE, transfer ownership accordingly.
                 // If the escrow has already been cleared (because DISPENSE settled and
                 // triggered the auto-close), no further action is needed.

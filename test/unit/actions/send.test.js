@@ -94,10 +94,10 @@ describe('Send handler @regression @tier1', function () {
     });
 
     // -----------------------------------------------------------------------
-    // Format 0 — single send
+    // Format 0: single send
     // -----------------------------------------------------------------------
 
-    describe('format 0 — single send', function () {
+    describe('format 0: single send', function () {
 
         it('valid single send → STATUS valid, createSend called', async function () {
             // params after ACTION stripped: [VERSION, TICK, AMOUNT, DESTINATION, MEMO]
@@ -223,7 +223,7 @@ describe('Send handler @regression @tier1', function () {
         });
 
         it('AMOUNT with wrong decimal format (too many decimals for token) → invalid', async function () {
-            // Token has 0 decimals — fractional amount invalid
+            // Token has 0 decimals: fractional amount invalid
             const params = ['0', 'TEST', '1.5', DESTINATION, ''];
             const data   = makeData({ FORMAT: 0, SOURCE });
 
@@ -402,10 +402,10 @@ describe('Send handler @regression @tier1', function () {
     });
 
     // -----------------------------------------------------------------------
-    // Format 1 — multi-send (brief): same TICK, multiple destinations
+    // Format 1: multi-send (brief): same TICK, multiple destinations
     // -----------------------------------------------------------------------
 
-    describe('format 1 — multi-send brief', function () {
+    describe('format 1: multi-send brief', function () {
 
         it('valid multi-send brief (two destinations) → two createSend calls', async function () {
             // Format 1: VERSION|TICK|AMOUNT|DEST|AMOUNT|DEST|MEMO
@@ -433,10 +433,10 @@ describe('Send handler @regression @tier1', function () {
     });
 
     // -----------------------------------------------------------------------
-    // Format 2 — multi-send full (different TICKs)
+    // Format 2: multi-send full (different TICKs)
     // -----------------------------------------------------------------------
 
-    describe('format 2 — multi-send full', function () {
+    describe('format 2: multi-send full', function () {
 
         it('valid multi-send full with two different ticks → two createSend calls', async function () {
             const token2 = makeToken({ TICK: 'OTHER', TICK_ID: 2, DECIMALS: 0 });
@@ -460,10 +460,10 @@ describe('Send handler @regression @tier1', function () {
     });
 
     // -----------------------------------------------------------------------
-    // Format 3 — multi-send with individual memos
+    // Format 3: multi-send with individual memos
     // -----------------------------------------------------------------------
 
-    describe('format 3 — multi-send with memos', function () {
+    describe('format 3: multi-send with memos', function () {
 
         it('valid format 3 with two sends and separate memos → two createSend calls', async function () {
             // Format 3: VERSION|TICK|AMOUNT|DEST|MEMO|TICK|AMOUNT|DEST|MEMO

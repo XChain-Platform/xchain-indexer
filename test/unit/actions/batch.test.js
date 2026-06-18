@@ -82,7 +82,7 @@ describe('Batch @regression @tier3', function () {
             assert.ok(indexer.indexerDb.createBatch.called);
         });
 
-        it('single command batch — processAction called once', async function () {
+        it('single command batch, processAction called once', async function () {
             const data = createBaseData({
                 ACTION:  'BATCH',
                 FORMAT:  0,
