@@ -151,8 +151,8 @@ class Rollback {
         // first reference via INSERT IGNORE and their AUTO_INCREMENT ids never rewind, so a
         // row first seen in a later-orphaned block survives the reorg. That is safe because
         // those surrogate ids are purely local artifacts and feed NO consensus value: the
-        // block hashes resolve them to canonical strings before hashing (BLOCK_HASH_VERSION 2,
-        // see db.getBlockHashes). Do not reintroduce a raw lookup id into any hashed projection
+        // block hashes resolve them to canonical strings before hashing (the current
+        // BLOCK_HASH_VERSION, see db.getBlockHashes). Do not reintroduce a raw lookup id into any hashed projection
         // doing so will cause these un-rolled-back rows to fork checkpoint hashes after a reorg.
 
     }
@@ -887,7 +887,22 @@ class Rollback {
             try {
                 await this.hubClient.retractXcallRange(this.config['COIN'], firstActionIndex);
             } catch(err) {
-                console.warn('Rollback: hub XCALL retraction failed:', err);
+                // Durability: a dropped XCALL retraction permanently diverges the hub's
+                // cross_chain_calls (and every mirroring indexer) from chain truth, leaving
+                // an orphaned 'finalized' relay row eligible for re-injection on the target
+                // chain, with nothing left locally to reconcile it. Park it on the same
+                // durable queue the forward pushes use so HubPushQueue retries it with
+                // backoff; retractXcallRange is idempotent over a replayed range. Enqueued
+                // after the rollback commit, so it is NOT caught by this rollback's own
+                // orphan purge; a deeper later reorg supersedes it with a lower-index
+                // retraction.
+                console.warn('Rollback: hub XCALL retraction failed, queueing for retry:', err && err.message);
+                try {
+                    await this.indexerDb.enqueueHubPush('xcall_retraction',
+                        { coin: this.config['COIN'], action_index: firstActionIndex });
+                } catch(e) {
+                    console.error('Rollback: failed to enqueue XCALL retraction for retry:', e && e.message);
+                }
             }
         }
 
@@ -902,7 +917,22 @@ class Rollback {
             try {
                 await this.hubClient.retractMatchRange(this.config['COIN'], firstActionIndex);
             } catch(err) {
-                console.warn('Rollback: hub DEX match retraction failed:', err);
+                // Durability: a dropped match retraction permanently diverges the hub's
+                // cross_chain_matches (and every mirroring indexer) from chain truth, leaving
+                // an orphaned 'finalized' match eligible for settlement against an order that
+                // no longer exists, with nothing left locally to reconcile it. Park it on the
+                // same durable queue the forward pushes use so HubPushQueue retries it with
+                // backoff; retractMatchRange is idempotent over a replayed range. Enqueued
+                // after the rollback commit, so it is NOT caught by this rollback's own
+                // orphan purge; a deeper later reorg supersedes it with a lower-index
+                // retraction.
+                console.warn('Rollback: hub DEX match retraction failed, queueing for retry:', err && err.message);
+                try {
+                    await this.indexerDb.enqueueHubPush('match_retraction',
+                        { coin: this.config['COIN'], action_index: firstActionIndex });
+                } catch(e) {
+                    console.error('Rollback: failed to enqueue DEX match retraction for retry:', e && e.message);
+                }
             }
         }
 
@@ -1005,6 +1035,7 @@ class Rollback {
                    WHERE r.version = 1
                      AND r.request_id = ar.request_id
                      AND r.status_id = ?
+                     AND r.response_status IN ('ok', 'expired')
                )`,
             [block_index - 1, validId]
         );

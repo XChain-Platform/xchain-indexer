@@ -79,23 +79,27 @@ class Price {
         //   params[0] = '0' (version)
         //   params[1] = ROUND
         //   params[2] = TIMESTAMP
-        //   params[3] = PAIR_COUNT (N)
-        //   params[4..4+2N-1] = N pairs of (PAIR_ID, PAIR_PRICE)
-        //   params[4+2N] = SIG_COUNT (M)
-        //   params[4+2N+1..4+2N+2M] = M pairs of (PUBKEY, SIG)
-        let round, timestamp, pairCount, pairs = [], sigCount, sigs = [];
+        //   params[3] = BTC_BLOCK_HEIGHT (the round's BTC anchor; in the signed payload)
+        //   params[4] = PAIR_COUNT (N)
+        //   params[5..5+2N-1] = N pairs of (PAIR_ID, PAIR_PRICE)
+        //   params[5+2N] = SIG_COUNT (M)
+        //   params[5+2N+1..5+2N+2M] = M pairs of (PUBKEY, SIG)
+        let round, timestamp, btcBlockHeight, pairCount, pairs = [], sigCount, sigs = [];
         try {
-            round     = parseInt(params[1]);
-            timestamp = parseInt(params[2]);
-            pairCount = parseInt(params[3]);
+            round          = parseInt(params[1]);
+            timestamp      = parseInt(params[2]);
+            btcBlockHeight = parseInt(params[3]);
+            pairCount      = parseInt(params[4]);
             if(!Number.isFinite(round) || round < 0)
                 throw new Error('invalid ROUND');
             if(!Number.isFinite(timestamp) || timestamp < 0)
                 throw new Error('invalid TIMESTAMP');
+            if(!Number.isFinite(btcBlockHeight) || btcBlockHeight < 0)
+                throw new Error('invalid BTC_BLOCK_HEIGHT');
             if(!Number.isFinite(pairCount) || pairCount < 1)
                 throw new Error('invalid PAIR_COUNT');
 
-            let idx = 4;
+            let idx = 5;
             for(let i = 0; i < pairCount; i++){
                 let pair  = params[idx++];
                 let price = params[idx++];
@@ -121,9 +125,10 @@ class Price {
             if(!error) error = 'invalid: ' + e.message;
         }
 
-        data['ROUND']      = round;
-        data['TIMESTAMP']  = timestamp;
-        data['PAIR_COUNT'] = pairCount;
+        data['ROUND']            = round;
+        data['TIMESTAMP']        = timestamp;
+        data['BTC_BLOCK_HEIGHT'] = btcBlockHeight;
+        data['PAIR_COUNT']       = pairCount;
         data['PAIRS_JSON'] = pairs.length > 0 ? JSON.stringify(pairs) : null;
         data['SIG_COUNT']  = sigCount;
         data['SIGS_JSON']  = sigs.length  > 0 ? JSON.stringify(sigs)  : null;
@@ -132,7 +137,7 @@ class Price {
         // Each pubkey must have an active price capability stake at the BLOCK_INDEX of this PRICE tx
         let qualifiedSigners = [];
         if(!error){
-            let payload    = ed25519.buildPriceV0Payload(round, timestamp, pairs, this.config['NETWORK']);
+            let payload    = ed25519.buildPriceV0Payload(round, timestamp, pairs, this.config['NETWORK'], btcBlockHeight);
             let validSigs  = 0;
             let seenPubkey = new Set();
             for(let s of sigs){
@@ -293,13 +298,14 @@ class Price {
         // round_number, so a later replay it already has is a safe no-op.
         if(!error && this.hubClient){
             let payload = {
-                source_chain: data['COIN'],
-                round:        round,
-                timestamp:    timestamp,
-                pairs:        pairs,
-                sigs:         sigs,
-                action_index: data['ACTION_INDEX'],
-                block_index:  data['BLOCK_INDEX']
+                source_chain:     data['COIN'],
+                round:            round,
+                timestamp:        timestamp,
+                btc_block_height: btcBlockHeight,
+                pairs:            pairs,
+                sigs:             sigs,
+                action_index:     data['ACTION_INDEX'],
+                block_index:      data['BLOCK_INDEX']
             };
             this.hubClient.pushPriceRound(payload).catch(err => {
                 console.warn('PRICE v0: hub push failed, queued for retry:', err.message);

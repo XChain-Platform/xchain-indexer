@@ -154,7 +154,7 @@ describe('Database.normalizeDataValues() @regression @tier1', function () {
 
     it('preserves a FILE action MIME string in TYPE', function () {
         // TYPE sits in NUMBER_FIELDS for LIST's numeric list type, but for
-        // FILE it is the MIME string — numeric-normalizing it nulled every
+        // FILE it is the MIME string; numeric-normalizing it nulled every
         // stored MIME type (files.type_id was always NULL).
         const data = { ACTION: 'FILE', TYPE: 'application/json' };
         const out  = normalize(data);
@@ -348,7 +348,7 @@ describe('Database.normalizeDataValues() @regression @tier1', function () {
     // ── MESSAGE truncation ────────────────────────────────────────────────
 
     it('MESSAGE: ENCRYPTION_METHOD validated by NUMBER_FIELDS (kept if numeric)', function () {
-        // ENCRYPTION_METHOD is in NUMBER_FIELDS — kept as-is if numeric, nullified otherwise.
+        // ENCRYPTION_METHOD is in NUMBER_FIELDS: kept as-is if numeric, nullified otherwise.
         // Truncation removed to prevent converting valid numbers to invalid strings.
         const data = { ACTION: 'MESSAGE', ENCRYPTION_METHOD: '12' };
         const out  = normalize(data);
@@ -434,7 +434,7 @@ describe('Database.normalizeDataValues() @regression @tier1', function () {
     // ── Return value ──────────────────────────────────────────────────────
 
     it('returns a copy and never mutates the caller object', function () {
-        // AIRDROP's multi-tick loop reuses one `data` across ticks — in-place
+        // AIRDROP's multi-tick loop reuses one `data` across ticks; in-place
         // stringification of TX_OUTPUTS broke fee detection for tick 2+, so
         // normalizeDataValues now operates on a shallow copy.
         const outputs = [{ address: 'addr1', amount: 1 }];
@@ -448,9 +448,9 @@ describe('Database.normalizeDataValues() @regression @tier1', function () {
 });
 
 // ---------------------------------------------------------------------------
-// describe: getBlockIndex — input validation only (mocked doQuery)
+// describe: getBlockIndex (input validation only, mocked doQuery)
 // ---------------------------------------------------------------------------
-describe('Database.getBlockIndex() — input validation @regression @tier1', function () {
+describe('Database.getBlockIndex() input validation @regression @tier1', function () {
     let db;
 
     beforeEach(function () {
@@ -539,15 +539,15 @@ describe('Database.getBlockIndex() — input validation @regression @tier1', fun
 });
 
 // ---------------------------------------------------------------------------
-// describe: getBlockIndex — decoder reorg parsing (mocked doQuery)
+// describe: getBlockIndex (decoder reorg parsing, mocked doQuery)
 //
 // The decoder stores REORG events as a JSON-serialised array of
 // {block_index, block_hash} objects. getBlockIndex('decoder','reorg') must
 // unwrap the numeric block_index from each element and return the lowest one
-// as a number — not the raw object. A regression here breaks the rollback
+// as a number, not the raw object. A regression here breaks the rollback
 // trigger check, so rollbacks silently never fire.
 // ---------------------------------------------------------------------------
-describe('Database.getBlockIndex() — decoder reorg parsing @regression @tier1', function () {
+describe('Database.getBlockIndex() decoder reorg parsing @regression @tier1', function () {
     let db;
 
     beforeEach(function () {
@@ -686,15 +686,16 @@ describe('Database reorg identity detection @regression @tier1', function () {
 });
 
 // ---------------------------------------------------------------------------
-// describe: getValidatorsByCapability — MIN_STAKE threshold source
+// describe: getValidatorsByCapability (MIN_STAKE threshold source)
 // ---------------------------------------------------------------------------
 // Regression guard: the validator-set snapshot must filter by the caller-supplied
-// threshold (the hub's authoritative MIN_STAKE) when one is provided, and only
-// fall back to this indexer's local config when it is absent. If the local config
-// could override a supplied threshold, two hubs pointing at differently-configured
-// indexers would compute different validator sets for the same block and break
-// PBFT quorum determinism.
-describe('Database.getValidatorsByCapability() — threshold source @regression @tier1', function () {
+// threshold (the hub's authoritative MIN_STAKE) VERBATIM when one is provided, and
+// only fall back to this indexer's local config when it is absent. The local floor
+// must NEVER clamp an explicit caller value: if it did, two hubs pointing at
+// differently-configured indexers would compute different validator sets for the
+// same block and break PBFT quorum determinism. Anti-inflation lives at the hub +
+// on-chain-validation layers, not in this read path.
+describe('Database.getValidatorsByCapability() threshold source @regression @tier1', function () {
     let db;
 
     beforeEach(function () {
@@ -706,6 +707,9 @@ describe('Database.getValidatorsByCapability() — threshold source @regression 
             _effectiveCapabilitySetSql: Database.prototype._effectiveCapabilitySetSql,
             getStatusId: sinon.stub().resolves(1),
             doQuery:     sinon.stub().resolves([]),
+            // The caller value is honoured verbatim (no clamp), so util.bcgte is
+            // not exercised on the threshold-resolution path. Stubbed for parity.
+            util: { bcgte: sinon.stub().callsFake((a, b) => parseFloat(a) >= parseFloat(b)) },
         };
     });
 
@@ -734,20 +738,25 @@ describe('Database.getValidatorsByCapability() — threshold source @regression 
     });
 
     it('treats a 0 override as a real threshold (not a falsy fallback)', async function () {
+        // 0 is an explicit caller value and is honoured VERBATIM (no clamp to the
+        // local floor). This matches getStakeWeightsByCapability, so both the count
+        // and weight paths resolve the identical qualifying set; cross-indexer
+        // determinism is preserved because no path reads this indexer's local floor
+        // when the hub passes an explicit threshold.
         await db.getValidatorsByCapability.call(db, 'attestation', 100, 0);
         assert.deepStrictEqual(thresholdArgs(), ['0', '0']);
     });
 });
 
 // ---------------------------------------------------------------------------
-// describe: getActiveCapabilityCount / hasCapability — threshold source
+// describe: getActiveCapabilityCount / hasCapability (threshold source)
 // ---------------------------------------------------------------------------
 // Companions to getValidatorsByCapability: both expose the same optional
 // caller-supplied MIN_STAKE override (falling back to local config when absent)
 // so the API is symmetric and a future hub caller can drive the threshold the
 // same way the validator-set snapshot already does. Current internal callers
 // (price/attest block processing) omit the override and keep using local config.
-describe('Database.getActiveCapabilityCount() — threshold source @regression @tier1', function () {
+describe('Database.getActiveCapabilityCount() threshold source @regression @tier1', function () {
     let db;
 
     beforeEach(function () {
@@ -760,10 +769,13 @@ describe('Database.getActiveCapabilityCount() — threshold source @regression @
             getStatusId: sinon.stub().resolves(1),
             getLatestBlockIndex: sinon.stub().resolves(100),
             doQuery:     sinon.stub().resolves([{ cnt: 0 }]),
+            // The caller value is honoured verbatim (no clamp); util.bcgte stubbed
+            // for parity but not exercised on the threshold-resolution path.
+            util: { bcgte: sinon.stub().callsFake((a, b) => parseFloat(a) >= parseFloat(b)) },
         };
     });
 
-    // Same effective-set union as getValidatorsByCapability — the threshold
+    // Same effective-set union as getValidatorsByCapability: the threshold
     // binds at args 6 (stake-key branch) and 10 (delegated-key branch). (Shifted
     // from 5/9 by the WI-2 bump 2 slash-exclusion blockIndex arg in each branch.)
     function thresholdArgs() {
@@ -782,6 +794,8 @@ describe('Database.getActiveCapabilityCount() — threshold source @regression @
     });
 
     it('treats a 0 override as a real threshold (not a falsy fallback)', async function () {
+        // 0 is an explicit caller value, honoured VERBATIM (no clamp to the local
+        // floor) so this count matches the set membership every other indexer resolves.
         await db.getActiveCapabilityCount.call(db, 'attestation', 100, 0);
         assert.deepStrictEqual(thresholdArgs(), ['0', '0']);
     });
@@ -795,7 +809,7 @@ describe('Database.getActiveCapabilityCount() — threshold source @regression @
     });
 });
 
-describe('Database.hasCapability() — threshold source @regression @tier1', function () {
+describe('Database.hasCapability() threshold source @regression @tier1', function () {
     let db;
 
     beforeEach(function () {
@@ -807,20 +821,24 @@ describe('Database.hasCapability() — threshold source @regression @tier1', fun
             getStatusId:         sinon.stub().resolves(1),
             getPubkeyId:         sinon.stub().resolves(3),
             getLatestBlockIndex: sinon.stub().resolves(100),
-            // Not slashed (WI-2 bump 2 permanent-disqualification guard) — stubbed so the
+            // Not slashed (WI-2 bump 2 permanent-disqualification guard): stubbed so the
             // threshold-source assertions exercise the stake/delegated branches; the
             // disqualification path has its own dedicated coverage.
             _isPubkeySlashedAt:  sinon.stub().resolves(false),
             // Stake-key branch resolves a per-pubkey aggregate of 15000
             doQuery:             sinon.stub().resolves([{ total: '15000' }]),
-            util:                { bcgte: sinon.stub().returns(true) },
+            // The caller value is honoured verbatim (no clamp); util.bcgte is used
+            // only for the stake comparison bcgte(total, minStake).
+            util:                { bcgte: sinon.stub().callsFake((a, b) => parseFloat(a) >= parseFloat(b)) },
         };
     });
 
-    // hasCapability compares the per-pubkey stake aggregate against the
-    // resolved threshold via util.bcgte(total, minStake) — threshold is arg 2.
+    // hasCapability resolves the threshold, then calls util.bcgte(total, minStake)
+    // for each branch (stake key, then delegated key). The threshold is honoured
+    // verbatim, so bcgte's second arg is the resolved minStake; lastCall reads the
+    // threshold used in the actual stake comparison regardless of call count.
     function thresholdArg() {
-        return db.util.bcgte.firstCall.args[1];
+        return db.util.bcgte.lastCall.args[1];
     }
 
     it('uses the caller-supplied override over local config', async function () {
@@ -839,6 +857,9 @@ describe('Database.hasCapability() — threshold source @regression @tier1', fun
     });
 
     it('treats a 0 override as a real threshold (not a falsy fallback)', async function () {
+        // 0 is an explicit caller value, honoured VERBATIM (no clamp to the local
+        // floor) so this per-pubkey test agrees with the qualifying set resolved
+        // by every other indexer for the block.
         await db.hasCapability.call(db, 'pk', 'attestation', 100, 0);
         assert.strictEqual(thresholdArg(), '0');
     });
@@ -862,7 +883,7 @@ describe('Database.hasCapability() — threshold source @regression @tier1', fun
 });
 
 // ---------------------------------------------------------------------------
-// describe: isCapabilityConfigured — config-drift signal for the hub RPC
+// describe: isCapabilityConfigured (config-drift signal for the hub RPC)
 // ---------------------------------------------------------------------------
 // The getcapabilityvalidators RPC uses this to distinguish a capability this
 // indexer doesn't know about (config drift during a rollout) from one that
@@ -892,7 +913,7 @@ describe('Database.isCapabilityConfigured() @regression @tier1', function () {
 });
 
 // ---------------------------------------------------------------------------
-// describe: getContractState — adversarial state keys (__proto__) must
+// describe: getContractState (adversarial state keys like __proto__ must
 // round-trip faithfully into the VM's initialState. A plain {} would route
 // state['__proto__'] = value through the __proto__ setter (no-op for strings,
 // prototype reassignment for objects), silently losing the key on reload.
@@ -932,7 +953,7 @@ describe('Database.getContractState() adversarial keys @regression @tier1', func
         db = makeDb([row('__proto__', { nested: true })]);
         const state = await db.getContractState.call(db, 1);
         // With a plain {}, state['__proto__'] = {nested:true} would set the
-        // object's [[Prototype]] instead of an own key — corrupting the state.
+        // object's [[Prototype]] instead of an own key, corrupting the state.
         assert.strictEqual(Object.getPrototypeOf(state), null,
             'assigning an object to __proto__ must NOT reassign the prototype');
         assert.deepStrictEqual(state['__proto__'], { nested: true });

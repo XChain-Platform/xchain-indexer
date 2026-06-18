@@ -103,6 +103,7 @@ const FEDERATION_READ_METHODS = new Set([
     'getactivestakeweights',
     'getcapabilityvalidators',
     'getstakeweightsbycapability',
+    'getstakesourcebypubkey',
     'getfullnodeverifiers',
     'getpendingattestation_requests',
     'getopencrosschainorders',
@@ -335,6 +336,9 @@ async function startApi(){
                 return {
                     block_index: blk,
                     count:       validators.length,
+                    // Additive: true when the result hit VALIDATOR_QUERY_LIMIT, so a
+                    // hub can alarm rather than silently consume a truncated set.
+                    truncated:   validators.truncated === true,
                     validators:  validators
                 };
             } catch (err) {
@@ -367,6 +371,9 @@ async function startApi(){
                     block_index:  blk,
                     count:        validators.length,
                     source_count: sources.size,
+                    // Additive: true when the result hit VALIDATOR_QUERY_LIMIT, so a
+                    // hub can alarm rather than silently consume a truncated set.
+                    truncated:    validators.truncated === true,
                     validators:   validators
                 };
             } catch (err) {
@@ -418,6 +425,9 @@ async function startApi(){
                     capability:  capability,
                     block_index: blk,
                     count:       validators.length,
+                    // Additive: true when the result hit VALIDATOR_QUERY_LIMIT, so a
+                    // hub can alarm rather than silently consume a truncated set.
+                    truncated:   validators.truncated === true,
                     validators:  validators
                 };
             } catch (err) {
@@ -497,6 +507,9 @@ async function startApi(){
                     block_index: blk,
                     count:       validators.length,
                     source_count: sources.size,
+                    // Additive: true when the result hit VALIDATOR_QUERY_LIMIT, so a
+                    // hub can alarm rather than silently consume a truncated set.
+                    truncated:   validators.truncated === true,
                     validators:  validators
                 };
             } catch (err) {

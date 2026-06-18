@@ -22,7 +22,7 @@
  * with a mocked DB; the live e2e (multiHubNodeProof) proves only the NODEPROOF
  * participation accrual and intentionally skips a real PRICE oracle round. Neither
  * proves the reward ROWS replay byte-identical through the REAL DB pipeline from a
- * genesis reindex — this does.
+ * genesis reindex - this does.
  *
  * Drives the whole reward path end-to-end through the REAL indexer against a real DB:
  *   1. STAKE four validators above full_node MIN_STAKE (2000). V1+V2 share staking
@@ -30,7 +30,7 @@
  *      from A2, V4 from A3.
  *   2. Two challenge epochs of REAL Ed25519 NODEPROOF verdicts. V1,V2,V3 pass BOTH
  *      epochs; V4 passes only ONE (→ pass-rate 50% < 70%, excluded from the tranche).
- *      challenge_id = sha256(network:epoch:ledger_hash:target) — re-derived from the
+ *      challenge_id = sha256(network:epoch:ledger_hash:target) - re-derived from the
  *      indexer's own stored epoch ledger hash, so the corpus is a deterministic
  *      function of earlier on-chain state (the property under test).
  *   3. A REAL signed PRICE v0 round (REWARD_SHARE=0.25) that all four sign → the
@@ -125,14 +125,15 @@ function buildNodeproofWire(epoch, ledgerHash, passKeys, verifiers) {
 }
 
 // Build a signed PRICE v0 wire action over the canonical payload (ed25519.buildPriceV0Payload
-// applies the regtest ORACLE equiv header itself).
-function buildPriceWire(round, timestamp, pairs, signers) {
-    const payload = Buffer.from(ed25519.buildPriceV0Payload(round, timestamp, pairs, NETWORK), 'utf8');
+// applies the regtest ORACLE equiv header itself, gated on btcHeight per #4232).
+// Wire: PRICE|0|ROUND|TIMESTAMP|BTC_BLOCK_HEIGHT|PAIR_COUNT|...|SIG_COUNT|...
+function buildPriceWire(round, timestamp, pairs, signers, btcHeight) {
+    const payload = Buffer.from(ed25519.buildPriceV0Payload(round, timestamp, pairs, NETWORK, btcHeight), 'utf8');
     const pairFields = [];
     for (const p of pairs) pairFields.push(p.pair, p.price);
     const sigFields = [];
     for (const s of signers) { sigFields.push(s.pub, signHex(s.privateKey, payload)); }
-    return ['PRICE', '0', String(round), String(timestamp),
+    return ['PRICE', '0', String(round), String(timestamp), String(btcHeight),
             String(pairs.length), ...pairFields,
             String(signers.length), ...sigFields].join('|');
 }
@@ -149,14 +150,14 @@ describe('Integration: full-node reward-tranche determinism @regression @tier1',
         await resetIndexerDb();
         const seeder = new DecoderSeeder(decoderQuery);
 
-        // Block 99 — gas bootstrap (issuing/minting the gas tick is fee-exempt).
+        // Block 99 - gas bootstrap (issuing/minting the gas tick is fee-exempt).
         await seeder.seedBlock(99, T - 600, [
             { source: FUNDER, data: 'ISSUE|0|XCHAIN|21000000|1000000|8|Gas bootstrap' },
             { source: A1,     data: 'MINT|0|XCHAIN|12000' },
             { source: A2,     data: 'MINT|0|XCHAIN|8000'  },
             { source: A3,     data: 'MINT|0|XCHAIN|8000'  },
         ]);
-        // Blocks 100/101 — stake the four validators (V1+V2 share source A1).
+        // Blocks 100/101 - stake the four validators (V1+V2 share source A1).
         await seeder.seedBlock(100, T, [
             { source: A1, data: 'STAKE|1|' + STAKE_AMT + '|' + V1.pub },
             { source: A1, data: 'STAKE|1|' + STAKE_AMT + '|' + V2.pub },
@@ -165,7 +166,7 @@ describe('Integration: full-node reward-tranche determinism @regression @tier1',
             { source: A2, data: 'STAKE|1|' + STAKE_AMT + '|' + V3.pub },
             { source: A3, data: 'STAKE|1|' + STAKE_AMT + '|' + V4.pub },
         ]);
-        // Block 116 — a trivial tx so the decoder tip ≥ 116; blocks 102–115 (incl. the two
+        // Block 116 - a trivial tx so the decoder tip ≥ 116; blocks 102–115 (incl. the two
         // epoch heights) are processed as empty blocks and each gets a stored ledger hash.
         await seeder.seedBlock(116, T + 1200, [
             { source: A1, destination: A2, data: 'SEND|0|XCHAIN|0.00000001|' + A2 },
@@ -173,10 +174,10 @@ describe('Integration: full-node reward-tranche determinism @regression @tier1',
 
         const indexer = await initIndexer();
         try {
-            // Phase A — process through 116 so the epoch ledger hashes exist.
+            // Phase A - process through 116 so the epoch ledger hashes exist.
             await processBlocks(indexer);
 
-            // Phase B — derive each epoch's challenge from its stored ledger hash, build +
+            // Phase B - derive each epoch's challenge from its stored ledger hash, build +
             // sign the NODEPROOF verdicts. V1,V2,V3 pass both epochs; V4 passes only 110.
             const passByEpoch = { 110: [V1, V2, V3, V4], 115: [V1, V2, V3] };
             const verdictBlk  = { 110: V110_BLK, 115: V115_BLK };
@@ -189,9 +190,9 @@ describe('Integration: full-node reward-tranche determinism @regression @tier1',
             }
             await processBlocks(indexer);   // process the verdict blocks → full_node_verifications
 
-            // Phase C — a signed PRICE v0 round; the indexer derives the two-tranche reward split.
+            // Phase C - a signed PRICE v0 round; the indexer derives the two-tranche reward split.
             const priceWire = buildPriceWire(ROUND, T + 3600,
-                [{ pair: 'BTC/USD', price: '50000' }], [V1, V2, V3, V4]);
+                [{ pair: 'BTC/USD', price: '50000' }], [V1, V2, V3, V4], PRICE_BLK);
             await seeder.seedBlock(PRICE_BLK, T + 3600, [{ source: A1, data: priceWire }]);
             await processBlocks(indexer);
 
@@ -208,11 +209,11 @@ describe('Integration: full-node reward-tranche determinism @regression @tier1',
                  JOIN index_pubkeys   ip ON ip.id = vr.signing_pubkey_id
                  JOIN index_addresses ia ON ia.id = vr.source_id
                  ORDER BY vr.reward_type, ip.pubkey`);
-            // PRICE round status (sanity — the reward path only runs on a VALID round).
+            // PRICE round status (sanity - the reward path only runs on a VALID round).
             const priceStatus = await indexerQuery(
                 `SELECT validation_status AS status FROM prices
                  WHERE round_number = ? LIMIT 1`, [ROUND]);
-            // DISTINCT passing epochs per source — the participation numerator the gate reads.
+            // DISTINCT passing epochs per source - the participation numerator the gate reads.
             const participation = await indexerQuery(
                 `SELECT ia.address AS source, COUNT(DISTINCT fv.epoch_height) AS epochs
                  FROM full_node_verifications fv
@@ -236,7 +237,7 @@ describe('Integration: full-node reward-tranche determinism @regression @tier1',
 
     before(async function () {
         // One fixed set of keys, reused across BOTH runs (the genesis verifiers can't be
-        // random — the indexer's FULLNODE_GENESIS_VERIFIERS must name them). Regenerate
+        // random - the indexer's FULLNODE_GENESIS_VERIFIERS must name them). Regenerate
         // until V1<V2 lexically so the per-source representative is deterministically V1.
         do { V1 = genKey(); V2 = genKey(); } while (!(V1.pub < V2.pub));
         V3 = genKey(); V4 = genKey();
@@ -272,14 +273,14 @@ describe('Integration: full-node reward-tranche determinism @regression @tier1',
         const base = firstRun.rewards.filter(r => r.reward_type === 'oracle_base');
         const full = firstRun.rewards.filter(r => r.reward_type === 'oracle_full_node');
 
-        // Base tranche — one row per qualified signer (all four).
+        // Base tranche - one row per qualified signer (all four).
         assert.strictEqual(base.length, 4, 'one oracle_base row per signer');
         assert.deepStrictEqual(new Set(base.map(r => r.pubkey)),
             new Set([V1, V2, V3, V4].map(v => v.pub)), 'base tranche covers every signer');
         assert.ok(base.every(r => r.amount === base[0].amount), 'base split is equal');
         assert.notStrictEqual(Number(base[0].amount), 0, 'base reward is non-zero');
 
-        // Full-node tranche — one row per QUALIFYING source (A1, A2). A3 (V4, 50% < 70%)
+        // Full-node tranche - one row per QUALIFYING source (A1, A2). A3 (V4, 50% < 70%)
         // is excluded; A1 is deduped to its lex-smallest passing signer (V1).
         assert.strictEqual(full.length, 2, 'one oracle_full_node row per qualifying source');
         assert.deepStrictEqual(new Set(full.map(r => r.pubkey)), new Set([V1.pub, V3.pub]),
@@ -293,9 +294,9 @@ describe('Integration: full-node reward-tranche determinism @regression @tier1',
     it('re-deriving from a clean DB yields IDENTICAL reward rows + hash chain (determinism = no fork)', async function () {
         const second = await runCorpus();
         assert.deepStrictEqual(second.rewards, firstRun.rewards,
-            'reward derivation produced different validator_rewards rows for the same input — fork risk');
+            'reward derivation produced different validator_rewards rows for the same input - fork risk');
         assert.deepStrictEqual(second.chain, firstRun.chain,
-            'reward processing produced different consensus hashes for the same input — fork risk');
+            'reward processing produced different consensus hashes for the same input - fork risk');
         assert.deepStrictEqual(second.participation, firstRun.participation);
     });
 });

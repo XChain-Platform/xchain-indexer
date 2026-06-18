@@ -14,7 +14,7 @@ const ed = require('../../src/ed25519.js');
 
 // Mint a REAL Ed25519 keypair and expose the 32-byte raw pubkey as hex,
 // exactly as xchain-hub/src/ValidatorIdentity.js does. These tests exercise
-// the genuine primitive — unlike the action tests, which stub verify().
+// the genuine primitive - unlike the action tests, which stub verify().
 function realKey() {
     const { publicKey, privateKey } = crypto.generateKeyPairSync('ed25519');
     const spki = publicKey.export({ format: 'der', type: 'spki' }); // 12-byte prefix + 32-byte key
@@ -81,7 +81,7 @@ describe('ed25519 @crypto @regression', function () {
             const sig = sign('msg', privateKey);
             // 'f'*64 passes the hex-length guards; Node imports any 32 bytes as an Ed25519
             // key and crypto.verify just returns false for the bad point (it does not throw),
-            // so this exercises the normal false return — the try/catch is defensive only.
+            // so this exercises the normal false return - the try/catch is defensive only.
             assert.strictEqual(ed.verify('msg', sig, 'f'.repeat(64)), false);
         });
     });
@@ -94,11 +94,12 @@ describe('ed25519 @crypto @regression', function () {
             assert.ok(a.indexOf('AAA_USD') < a.indexOf('BTC_USD'));
         });
 
-        it('coerces round and timestamp to integers', function () {
-            const payload = ed.buildPriceV0Payload('42', '1700000000', []);
+        it('coerces round, timestamp and btc_block_height to integers', function () {
+            const payload = ed.buildPriceV0Payload('42', '1700000000', [], undefined, '799000');
             const obj = JSON.parse(payload);
             assert.strictEqual(obj.round, 42);
             assert.strictEqual(obj.timestamp, 1700000000);
+            assert.strictEqual(obj.btc_block_height, 799000);
         });
 
         it('sorts pairs deterministically regardless of input order (both comparator branches)', function () {

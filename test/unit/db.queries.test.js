@@ -17,7 +17,7 @@
  *
  * Technique: stub doQuery on the prototype-borrowed object so every
  * method under test exercises real method logic against injected SQL
- * results — no live MariaDB required.
+ * results; no live MariaDB required.
  */
 
 'use strict';
@@ -66,9 +66,9 @@ afterEach(function () {
 });
 
 // ---------------------------------------------------------------------------
-// getConnection — circuit-breaker
+// getConnection (circuit-breaker)
 // ---------------------------------------------------------------------------
-describe('Database.getConnection() — circuit breaker @regression @tier1', function () {
+describe('Database.getConnection() circuit breaker @regression @tier1', function () {
     it('returns a connection on first successful pool.getConnection()', async function () {
         const db   = makeDb();
         const conn = { query: sinon.stub(), release: sinon.stub().resolves() };
@@ -887,7 +887,9 @@ describe('Database.getActiveValidators() @regression @tier1', function () {
         const db = makeDb();
         sinon.stub(db, 'getStatusId').resolves(2);
         sinon.stub(db, 'doQuery').resolves([]);
-        assert.deepStrictEqual(await db.getActiveValidators(100), []);
+        const empty = await db.getActiveValidators(100);
+        assert.deepStrictEqual([...empty], []);
+        assert.strictEqual(empty.truncated, false);
     });
 });
 
@@ -1800,7 +1802,7 @@ describe('Database.setAttestationResponseCallbackIndex() @regression @tier1', fu
 // savepoint methods
 // ---------------------------------------------------------------------------
 describe('Database savepoint methods @regression @tier1', function () {
-    // Savepoints require an active transactionConnection — calling them
+    // Savepoints require an active transactionConnection; calling them
     // without one throws rather than silently doing nothing.
 
     function makeActiveDb() {
@@ -1984,7 +1986,7 @@ describe('Database.validTickerBeforeTxIndex() @regression @tier1', function () {
 // getFirstIssueActionIndex
 // ---------------------------------------------------------------------------
 describe('Database.getFirstIssueActionIndex() @regression @tier1', function () {
-    it('returns false (not null) when not found — characterization', async function () {
+    it('returns false (not null) when not found (characterization)', async function () {
         // NOTE: method initialises action_index = false and returns it unchanged when
         // no row is found. Returns false rather than null.
         const db = makeDb();
@@ -2044,7 +2046,7 @@ describe('Database.getAddressOwnerships() @regression @tier1', function () {
     });
 
     it('returns array of tick strings when found', async function () {
-        // getAddressOwnerships returns data.push(row.tick) — an array of strings
+        // getAddressOwnerships returns data.push(row.tick), an array of strings
         const db   = makeDb();
         const stub = sinon.stub(db, 'doQuery');
         stub.onCall(0).resolves([{ id: 2 }]);
@@ -2054,7 +2056,7 @@ describe('Database.getAddressOwnerships() @regression @tier1', function () {
     });
 
     it('excludes ticks whose ownership is escrowed by an open offer', async function () {
-        // Escrowed ownership is in protocol custody — it must never appear in an
+        // Escrowed ownership is in protocol custody and must never appear in an
         // address's ownership snapshot (SWEEP OWNERSHIPS=1 reaches it only via
         // the offer-close path). Pin the SQL predicate so the guard can't be
         // dropped silently.
@@ -2070,7 +2072,7 @@ describe('Database.getAddressOwnerships() @regression @tier1', function () {
 });
 
 // ---------------------------------------------------------------------------
-// createIssue — INSERT branch
+// createIssue: INSERT branch
 // ---------------------------------------------------------------------------
 describe('Database.createIssue() @regression @tier1', function () {
     function makeHelperDb(existsRows) {
@@ -2103,7 +2105,7 @@ describe('Database.createIssue() @regression @tier1', function () {
 });
 
 // ---------------------------------------------------------------------------
-// createToken — INSERT and UPDATE
+// createToken: INSERT and UPDATE
 // ---------------------------------------------------------------------------
 describe('Database.createToken() @regression @tier1', function () {
     function makeTokenDb(existsRows) {
@@ -2136,7 +2138,7 @@ describe('Database.createToken() @regression @tier1', function () {
 });
 
 // ---------------------------------------------------------------------------
-// createMint — INSERT and UPDATE
+// createMint: INSERT and UPDATE
 // ---------------------------------------------------------------------------
 describe('Database.createMint() @regression @tier1', function () {
     function makeMintDb(existsRows) {
@@ -2165,7 +2167,7 @@ describe('Database.createMint() @regression @tier1', function () {
 });
 
 // ---------------------------------------------------------------------------
-// createSend — INSERT and UPDATE
+// createSend: INSERT and UPDATE
 // ---------------------------------------------------------------------------
 describe('Database.createSend() @regression @tier1', function () {
     function makeSendDb(existsRows) {
@@ -2194,7 +2196,7 @@ describe('Database.createSend() @regression @tier1', function () {
 });
 
 // ---------------------------------------------------------------------------
-// createBroadcast — INSERT and UPDATE
+// createBroadcast: INSERT and UPDATE
 // ---------------------------------------------------------------------------
 describe('Database.createBroadcast() @regression @tier1', function () {
     function makeBroadcastDb(existsRows) {
@@ -2221,7 +2223,7 @@ describe('Database.createBroadcast() @regression @tier1', function () {
 });
 
 // ---------------------------------------------------------------------------
-// createMessage — INSERT and UPDATE
+// createMessage: INSERT and UPDATE
 // ---------------------------------------------------------------------------
 describe('Database.createMessage() @regression @tier1', function () {
     function makeMessageDb(existsRows) {
@@ -2252,7 +2254,7 @@ describe('Database.createMessage() @regression @tier1', function () {
 });
 
 // ---------------------------------------------------------------------------
-// createSleep — INSERT, UPDATE, and TYPE flag
+// createSleep: INSERT, UPDATE, and TYPE flag
 // ---------------------------------------------------------------------------
 describe('Database.createSleep() @regression @tier1', function () {
     function makeSleepDb(existsRows) {
@@ -2288,7 +2290,7 @@ describe('Database.createSleep() @regression @tier1', function () {
 });
 
 // ---------------------------------------------------------------------------
-// createAirdrop — INSERT and UPDATE
+// createAirdrop: INSERT and UPDATE
 // ---------------------------------------------------------------------------
 describe('Database.createAirdrop() @regression @tier1', function () {
     function makeAirdropDb(existsRows) {
@@ -2316,7 +2318,7 @@ describe('Database.createAirdrop() @regression @tier1', function () {
 });
 
 // ---------------------------------------------------------------------------
-// createFeeRecord — INSERT and UPDATE
+// createFeeRecord: INSERT and UPDATE
 // ---------------------------------------------------------------------------
 describe('Database.createFeeRecord() @regression @tier1', function () {
     function makeFeeDb(existsRows) {
@@ -2343,7 +2345,7 @@ describe('Database.createFeeRecord() @regression @tier1', function () {
 });
 
 // ---------------------------------------------------------------------------
-// createDestroy — INSERT and UPDATE
+// createDestroy: INSERT and UPDATE
 // ---------------------------------------------------------------------------
 describe('Database.createDestroy() @regression @tier1', function () {
     function makeDestroyDb(existsRows) {
@@ -2371,7 +2373,7 @@ describe('Database.createDestroy() @regression @tier1', function () {
 });
 
 // ---------------------------------------------------------------------------
-// createSweep — INSERT and UPDATE
+// createSweep: INSERT and UPDATE
 // ---------------------------------------------------------------------------
 describe('Database.createSweep() @regression @tier1', function () {
     function makeSweepDb(existsRows) {
@@ -2400,7 +2402,7 @@ describe('Database.createSweep() @regression @tier1', function () {
 });
 
 // ---------------------------------------------------------------------------
-// createDividend — INSERT and UPDATE
+// createDividend: INSERT and UPDATE
 // ---------------------------------------------------------------------------
 describe('Database.createDividend() @regression @tier1', function () {
     function makeDividendDb(existsRows) {
@@ -2428,7 +2430,7 @@ describe('Database.createDividend() @regression @tier1', function () {
 });
 
 // ---------------------------------------------------------------------------
-// createCallback — INSERT and UPDATE
+// createCallback: INSERT and UPDATE
 // ---------------------------------------------------------------------------
 describe('Database.createCallback() @regression @tier1', function () {
     function makeCallbackDb(existsRows) {
@@ -2456,7 +2458,7 @@ describe('Database.createCallback() @regression @tier1', function () {
 });
 
 // ---------------------------------------------------------------------------
-// createFile — INSERT and UPDATE
+// createFile: INSERT and UPDATE
 // ---------------------------------------------------------------------------
 describe('Database.createFile() @regression @tier1', function () {
     function makeFileDb(existsRows) {
@@ -2484,7 +2486,7 @@ describe('Database.createFile() @regression @tier1', function () {
 });
 
 // ---------------------------------------------------------------------------
-// createGatedFile — INSERT and UPDATE
+// createGatedFile: INSERT and UPDATE
 // ---------------------------------------------------------------------------
 describe('Database.createGatedFile() @regression @tier1', function () {
     function makeGatedFileDb(existsRows) {
@@ -2510,7 +2512,7 @@ describe('Database.createGatedFile() @regression @tier1', function () {
 });
 
 // ---------------------------------------------------------------------------
-// createLink — INSERT and UPDATE
+// createLink: INSERT and UPDATE
 // ---------------------------------------------------------------------------
 describe('Database.createLink() @regression @tier1', function () {
     function makeLinkDb(existsRows) {
@@ -2538,7 +2540,7 @@ describe('Database.createLink() @regression @tier1', function () {
 });
 
 // ---------------------------------------------------------------------------
-// createSwap — INSERT and UPDATE
+// createSwap: INSERT and UPDATE
 // ---------------------------------------------------------------------------
 describe('Database.createSwap() @regression @tier1', function () {
     function makeSwapDb(existsRows) {
@@ -2572,7 +2574,7 @@ describe('Database.createSwap() @regression @tier1', function () {
 });
 
 // ---------------------------------------------------------------------------
-// createSwapStatus — INSERT and UPDATE
+// createSwapStatus: INSERT and UPDATE
 // ---------------------------------------------------------------------------
 describe('Database.createSwapStatus() @regression @tier1', function () {
     it('INSERTs when not found', async function () {
@@ -2597,7 +2599,7 @@ describe('Database.createSwapStatus() @regression @tier1', function () {
 });
 
 // ---------------------------------------------------------------------------
-// createSwapCancel — INSERT and UPDATE
+// createSwapCancel: INSERT and UPDATE
 // ---------------------------------------------------------------------------
 describe('Database.createSwapCancel() @regression @tier1', function () {
     function makeSwapCancelDb(existsRows) {
@@ -2624,7 +2626,7 @@ describe('Database.createSwapCancel() @regression @tier1', function () {
 });
 
 // ---------------------------------------------------------------------------
-// createSwapExpire — INSERT and UPDATE
+// createSwapExpire: INSERT and UPDATE
 // ---------------------------------------------------------------------------
 describe('Database.createSwapExpire() @regression @tier1', function () {
     it('INSERTs when not found', async function () {
@@ -2649,7 +2651,7 @@ describe('Database.createSwapExpire() @regression @tier1', function () {
 });
 
 // ---------------------------------------------------------------------------
-// createOrder — INSERT and UPDATE
+// createOrder: INSERT and UPDATE
 // ---------------------------------------------------------------------------
 describe('Database.createOrder() @regression @tier1', function () {
     function makeOrderDb(existsRows) {
@@ -2683,7 +2685,7 @@ describe('Database.createOrder() @regression @tier1', function () {
 });
 
 // ---------------------------------------------------------------------------
-// createOrderStatus — INSERT and UPDATE
+// createOrderStatus: INSERT and UPDATE
 // ---------------------------------------------------------------------------
 describe('Database.createOrderStatus() @regression @tier1', function () {
     it('INSERTs when not found', async function () {
@@ -2708,7 +2710,7 @@ describe('Database.createOrderStatus() @regression @tier1', function () {
 });
 
 // ---------------------------------------------------------------------------
-// createOrderExpire — INSERT and UPDATE
+// createOrderExpire: INSERT and UPDATE
 // ---------------------------------------------------------------------------
 describe('Database.createOrderExpire() @regression @tier1', function () {
     it('INSERTs when not found', async function () {
@@ -2733,7 +2735,7 @@ describe('Database.createOrderExpire() @regression @tier1', function () {
 });
 
 // ---------------------------------------------------------------------------
-// createDispenser — INSERT and UPDATE
+// createDispenser: INSERT and UPDATE
 // ---------------------------------------------------------------------------
 describe('Database.createDispenser() @regression @tier1', function () {
     function makeDispenserDb(existsRows) {
@@ -2768,7 +2770,7 @@ describe('Database.createDispenser() @regression @tier1', function () {
 });
 
 // ---------------------------------------------------------------------------
-// createDispenserStatus — INSERT and UPDATE
+// createDispenserStatus: INSERT and UPDATE
 // ---------------------------------------------------------------------------
 describe('Database.createDispenserStatus() @regression @tier1', function () {
     it('INSERTs when not found', async function () {
@@ -2795,7 +2797,7 @@ describe('Database.createDispenserStatus() @regression @tier1', function () {
 });
 
 // ---------------------------------------------------------------------------
-// createAddressOption — INSERT and UPDATE
+// createAddressOption: INSERT and UPDATE
 // ---------------------------------------------------------------------------
 describe('Database.createAddressOption() @regression @tier1', function () {
     function makeAddressOptionDb(existsRows) {
@@ -2822,7 +2824,7 @@ describe('Database.createAddressOption() @regression @tier1', function () {
 });
 
 // ---------------------------------------------------------------------------
-// createBatch — INSERT and UPDATE
+// createBatch: INSERT and UPDATE
 // ---------------------------------------------------------------------------
 describe('Database.createBatch() @regression @tier1', function () {
     it('INSERTs when not found', async function () {
@@ -2847,7 +2849,7 @@ describe('Database.createBatch() @regression @tier1', function () {
 });
 
 // ---------------------------------------------------------------------------
-// createStake — INSERT and UPDATE
+// createStake: INSERT and UPDATE
 // ---------------------------------------------------------------------------
 describe('Database.createStake() @regression @tier1', function () {
     function makeStakeDb(existsRows) {
@@ -2875,7 +2877,7 @@ describe('Database.createStake() @regression @tier1', function () {
 });
 
 // ---------------------------------------------------------------------------
-// createUnstake — INSERT and UPDATE
+// createUnstake: INSERT and UPDATE
 // ---------------------------------------------------------------------------
 describe('Database.createUnstake() @regression @tier1', function () {
     function makeUnstakeDb(existsRows) {
@@ -2903,7 +2905,7 @@ describe('Database.createUnstake() @regression @tier1', function () {
 });
 
 // ---------------------------------------------------------------------------
-// createDelegation — INSERT and UPDATE; createRevokeDelegation delegates
+// createDelegation: INSERT and UPDATE; createRevokeDelegation delegates
 // ---------------------------------------------------------------------------
 describe('Database.createDelegation() @regression @tier1', function () {
     function makeDelegationDb(existsRows) {
@@ -2938,7 +2940,7 @@ describe('Database.createDelegation() @regression @tier1', function () {
 });
 
 // ---------------------------------------------------------------------------
-// createContract — INSERT and UPDATE
+// createContract: INSERT and UPDATE
 // ---------------------------------------------------------------------------
 describe('Database.createContract() @regression @tier1', function () {
     function makeContractDb(existsRows) {
@@ -2966,7 +2968,7 @@ describe('Database.createContract() @regression @tier1', function () {
 });
 
 // ---------------------------------------------------------------------------
-// createContractExecution — INSERT and UPDATE
+// createContractExecution: INSERT and UPDATE
 // ---------------------------------------------------------------------------
 describe('Database.createContractExecution() @regression @tier1', function () {
     function makeExecDb(existsRows) {
@@ -2997,7 +2999,7 @@ describe('Database.createContractExecution() @regression @tier1', function () {
 });
 
 // ---------------------------------------------------------------------------
-// createDeposit — INSERT and UPDATE
+// createDeposit: INSERT and UPDATE
 // ---------------------------------------------------------------------------
 describe('Database.createDeposit() @regression @tier1', function () {
     function makeDepositDb(existsRows) {
@@ -3025,7 +3027,7 @@ describe('Database.createDeposit() @regression @tier1', function () {
 });
 
 // ---------------------------------------------------------------------------
-// createWithdrawal — INSERT and UPDATE
+// createWithdrawal: INSERT and UPDATE
 // ---------------------------------------------------------------------------
 describe('Database.createWithdrawal() @regression @tier1', function () {
     function makeWithdrawalDb(existsRows) {
@@ -3089,7 +3091,7 @@ describe('Database.deleteContract() @regression @tier1', function () {
 });
 
 // ---------------------------------------------------------------------------
-// createAttestationRequest — INSERT and UPDATE
+// createAttestationRequest: INSERT and UPDATE
 // ---------------------------------------------------------------------------
 describe('Database.createAttestationRequest() @regression @tier1', function () {
     function makeAttestreqDb(existsRows) {
@@ -3121,7 +3123,7 @@ describe('Database.createAttestationRequest() @regression @tier1', function () {
 });
 
 // ---------------------------------------------------------------------------
-// createAttestationResponse — INSERT and UPDATE
+// createAttestationResponse: INSERT and UPDATE
 // ---------------------------------------------------------------------------
 describe('Database.createAttestationResponse() @regression @tier1', function () {
     function makeAttestrespDb(existsRows) {
@@ -3151,7 +3153,7 @@ describe('Database.createAttestationResponse() @regression @tier1', function () 
 });
 
 // ---------------------------------------------------------------------------
-// createContractStake — INSERT and UPDATE
+// createContractStake: INSERT and UPDATE
 // ---------------------------------------------------------------------------
 describe('Database.createContractStake() @regression @tier1', function () {
     function makeCSDb(existsRows) {
@@ -3184,7 +3186,7 @@ describe('Database.createContractStake() @regression @tier1', function () {
 });
 
 // ---------------------------------------------------------------------------
-// createRewardClaim — INSERT and UPDATE
+// createRewardClaim: INSERT and UPDATE
 // ---------------------------------------------------------------------------
 describe('Database.createRewardClaim() @regression @tier1', function () {
     function makeRCDb(existsRows) {
@@ -3211,7 +3213,7 @@ describe('Database.createRewardClaim() @regression @tier1', function () {
 });
 
 // ---------------------------------------------------------------------------
-// createList — INSERT and UPDATE
+// createList: INSERT and UPDATE
 // ---------------------------------------------------------------------------
 describe('Database.createList() @regression @tier1', function () {
     it('INSERTs when not found', async function () {
@@ -3236,7 +3238,7 @@ describe('Database.createList() @regression @tier1', function () {
 });
 
 // ---------------------------------------------------------------------------
-// createListEdit — INSERT only when not found; skip when exists
+// createListEdit: INSERT only when not found; skip when exists
 // ---------------------------------------------------------------------------
 describe('Database.createListEdit() @regression @tier1', function () {
     it('INSERTs when not found (TYPE=1 tick)', async function () {
@@ -3273,7 +3275,7 @@ describe('Database.createListEdit() @regression @tier1', function () {
 });
 
 // ---------------------------------------------------------------------------
-// createListItem — INSERT only; skip when exists
+// createListItem: INSERT only; skip when exists
 // ---------------------------------------------------------------------------
 describe('Database.createListItem() @regression @tier1', function () {
     it('INSERTs when not found (TYPE=1)', async function () {
@@ -3297,7 +3299,7 @@ describe('Database.createListItem() @regression @tier1', function () {
 });
 
 // ---------------------------------------------------------------------------
-// createListItemInvalid — INSERT only; skip when exists
+// createListItemInvalid: INSERT only; skip when exists
 // ---------------------------------------------------------------------------
 describe('Database.createListItemInvalid() @regression @tier1', function () {
     it('INSERTs when not found', async function () {
@@ -3323,7 +3325,7 @@ describe('Database.createListItemInvalid() @regression @tier1', function () {
 });
 
 // ---------------------------------------------------------------------------
-// createMimeType — null bypass; found; not found → INSERT+refetch
+// createMimeType: null bypass; found; not found -> INSERT+refetch
 // ---------------------------------------------------------------------------
 describe('Database.createMimeType() @regression @tier1', function () {
     it('returns null for null type', async function () {
@@ -3352,7 +3354,7 @@ describe('Database.createMimeType() @regression @tier1', function () {
 });
 
 // ---------------------------------------------------------------------------
-// createCoin — null bypass; found; not found → INSERT+refetch
+// createCoin: null bypass; found; not found -> INSERT+refetch
 // ---------------------------------------------------------------------------
 describe('Database.createCoin() @regression @tier1', function () {
     it('returns null for null coin', async function () {
@@ -3380,7 +3382,7 @@ describe('Database.createCoin() @regression @tier1', function () {
 });
 
 // ---------------------------------------------------------------------------
-// createFiat — null bypass; found; not found → INSERT+refetch
+// createFiat: null bypass; found; not found -> INSERT+refetch
 // ---------------------------------------------------------------------------
 describe('Database.createFiat() @regression @tier1', function () {
     it('returns null for null code', async function () {
@@ -3408,7 +3410,7 @@ describe('Database.createFiat() @regression @tier1', function () {
 });
 
 // ---------------------------------------------------------------------------
-// createLedgerChangeRecord — invalid table, INSERT, UPDATE
+// createLedgerChangeRecord: invalid table, INSERT, UPDATE
 // ---------------------------------------------------------------------------
 describe('Database.createLedgerChangeRecord() @regression @tier1', function () {
     it('throws on invalid table name', async function () {
@@ -3466,7 +3468,7 @@ describe('Database.createLedgerChangeRecord() @regression @tier1', function () {
 });
 
 // ---------------------------------------------------------------------------
-// getListType — null action_index returns false; found
+// getListType: null action_index returns false; found
 // ---------------------------------------------------------------------------
 describe('Database.getListType() @regression @tier1', function () {
     it('returns false for null action_index', async function () {
@@ -3489,7 +3491,7 @@ describe('Database.getListType() @regression @tier1', function () {
 });
 
 // ---------------------------------------------------------------------------
-// getList — delegates to getListType; builds from rows
+// getList: delegates to getListType; builds from rows
 // ---------------------------------------------------------------------------
 describe('Database.getList() @regression @tier1', function () {
     it('returns empty array for unknown list', async function () {
@@ -3517,7 +3519,7 @@ describe('Database.getList() @regression @tier1', function () {
 });
 
 // ---------------------------------------------------------------------------
-// isValidList — delegates to getListType
+// isValidList: delegates to getListType
 // ---------------------------------------------------------------------------
 describe('Database.isValidList() @regression @tier1', function () {
     it('returns true when types match', async function () {
@@ -3534,7 +3536,7 @@ describe('Database.isValidList() @regression @tier1', function () {
 });
 
 // ---------------------------------------------------------------------------
-// getAddressPreferences — defaults + query branch
+// getAddressPreferences: defaults + query branch
 // ---------------------------------------------------------------------------
 describe('Database.getAddressPreferences() @regression @tier1', function () {
     it('returns defaults when no rows found', async function () {
@@ -3559,7 +3561,7 @@ describe('Database.getAddressPreferences() @regression @tier1', function () {
 });
 
 // ---------------------------------------------------------------------------
-// getAddressEscrows — returns combined list
+// getAddressEscrows: returns combined list
 // ---------------------------------------------------------------------------
 describe('Database.getAddressEscrows() @regression @tier1', function () {
     it('returns empty array when no escrows', async function () {
@@ -3587,7 +3589,7 @@ describe('Database.getAddressEscrows() @regression @tier1', function () {
 });
 
 // ---------------------------------------------------------------------------
-// createValidatorReward — unknown pubkey, no stake, success
+// createValidatorReward: unknown pubkey, no stake, success
 // ---------------------------------------------------------------------------
 describe('Database.createValidatorReward() @regression @tier1', function () {
     it('returns false when pubkey not found', async function () {
@@ -3646,7 +3648,7 @@ describe('Database.createValidatorReward() @regression @tier1', function () {
 });
 
 // ---------------------------------------------------------------------------
-// setDelegationDeactivation — returns false when source or pubkey missing
+// setDelegationDeactivation: returns false when source or pubkey missing
 // ---------------------------------------------------------------------------
 describe('Database.setDelegationDeactivation() @regression @tier1', function () {
     it('returns false when source address not found', async function () {
@@ -3678,7 +3680,7 @@ describe('Database.setDelegationDeactivation() @regression @tier1', function () 
 });
 
 // ---------------------------------------------------------------------------
-// getTokenSupply — basics (delegates through doQuery)
+// getTokenSupply: basics (delegates through doQuery)
 // ---------------------------------------------------------------------------
 describe('Database.getTokenSupply() @regression @tier1', function () {
     it('returns supply via credits - debits + escrows (zeros)', async function () {
@@ -3695,7 +3697,7 @@ describe('Database.getTokenSupply() @regression @tier1', function () {
 });
 
 // ---------------------------------------------------------------------------
-// getExpiredItems — empty returns []
+// getExpiredItems: empty returns []
 // ---------------------------------------------------------------------------
 describe('Database.getExpiredItems() @regression @tier1', function () {
     it('returns empty array when no open items', async function () {
@@ -3706,10 +3708,10 @@ describe('Database.getExpiredItems() @regression @tier1', function () {
 });
 
 // ---------------------------------------------------------------------------
-// updateBalances — string, array, boolean branches
+// updateBalances: string, array, boolean branches
 // ---------------------------------------------------------------------------
 describe('Database.updateBalances() @regression @tier1', function () {
-    it('handles string address — calls updateAddressBalance once', async function () {
+    it('handles string address, calls updateAddressBalance once', async function () {
         const db = makeDb();
         const stub = sinon.stub(db, 'updateAddressBalance').resolves();
         await db.updateBalances('addr1', false);
@@ -3723,7 +3725,7 @@ describe('Database.updateBalances() @regression @tier1', function () {
         assert.strictEqual(stub.callCount, 2);
     });
 
-    it('handles boolean true — fetches all addresses then calls once per row', async function () {
+    it('handles boolean true, fetches all addresses then calls once per row', async function () {
         const db = makeDb();
         sinon.stub(db, 'doQuery').resolves([{ address: 'addr1' }, { address: 'addr2' }]);
         const stub = sinon.stub(db, 'updateAddressBalance').resolves();
@@ -3733,7 +3735,7 @@ describe('Database.updateBalances() @regression @tier1', function () {
 });
 
 // ---------------------------------------------------------------------------
-// setContractStakeDeactivationByPubkey — early-returns when pk/tick null
+// setContractStakeDeactivationByPubkey: early-returns when pk/tick null
 // ---------------------------------------------------------------------------
 describe('Database.setContractStakeDeactivationByPubkey() @regression @tier1', function () {
     it('returns false when pubkey not found', async function () {
@@ -3764,7 +3766,7 @@ describe('Database.setContractStakeDeactivationByPubkey() @regression @tier1', f
 });
 
 // ---------------------------------------------------------------------------
-// incrementAttestationValidatorStat — field whitelist + upsert
+// incrementAttestationValidatorStat: field whitelist + upsert
 // ---------------------------------------------------------------------------
 describe('Database.incrementAttestationValidatorStat() @regression @tier1', function () {
     it('throws on unsupported field', async function () {
@@ -3791,7 +3793,7 @@ describe('Database.incrementAttestationValidatorStat() @regression @tier1', func
 });
 
 // ---------------------------------------------------------------------------
-// getDecoderBlockData — returns empty array when not found (characterization)
+// getDecoderBlockData: returns empty array when not found (characterization)
 // ---------------------------------------------------------------------------
 describe('Database.getDecoderBlockData() @regression @tier1', function () {
     it('returns empty array when not found', async function () {
@@ -3803,7 +3805,7 @@ describe('Database.getDecoderBlockData() @regression @tier1', function () {
 });
 
 // ---------------------------------------------------------------------------
-// getBlockHashes — complex method; stub all doQuery calls to return []
+// getBlockHashes: complex method; stub all doQuery calls to return []
 // ---------------------------------------------------------------------------
 describe('Database.getBlockHashes() @regression @tier1', function () {
     it('returns info object with ledger/actions/contracts hash arrays', async function () {
@@ -3821,7 +3823,7 @@ describe('Database.getBlockHashes() @regression @tier1', function () {
 });
 
 // ---------------------------------------------------------------------------
-// createBlock — stub getBlockHashes to avoid complex deps
+// createBlock: stub getBlockHashes to avoid complex deps
 // ---------------------------------------------------------------------------
 describe('Database.createBlock() @regression @tier1', function () {
     it('INSERTs when not found', async function () {
@@ -3859,7 +3861,7 @@ describe('Database.createBlock() @regression @tier1', function () {
 });
 
 // ---------------------------------------------------------------------------
-// createAction — INSERT action record
+// createAction: INSERT action record
 // ---------------------------------------------------------------------------
 describe('Database.createAction() @regression @tier1', function () {
     it('INSERTs when not found', async function () {
@@ -3874,7 +3876,7 @@ describe('Database.createAction() @regression @tier1', function () {
 });
 
 // ---------------------------------------------------------------------------
-// createTxIndex — when tx not found, inserts
+// createTxIndex: when tx not found, inserts
 // ---------------------------------------------------------------------------
 describe('Database.createTxIndex() @regression @tier1', function () {
     it('INSERTs tx record when not found', async function () {
@@ -3899,7 +3901,7 @@ describe('Database.createTxIndex() @regression @tier1', function () {
 });
 
 // ---------------------------------------------------------------------------
-// createActionIndex — force=false INSERT
+// createActionIndex: force=false INSERT
 // ---------------------------------------------------------------------------
 describe('Database.createActionIndex() @regression @tier1', function () {
     it('INSERTs when getActionIndex returns null', async function () {
@@ -3923,7 +3925,7 @@ describe('Database.createActionIndex() @regression @tier1', function () {
 });
 
 // ---------------------------------------------------------------------------
-// createPrice — INSERT and UPDATE
+// createPrice: INSERT and UPDATE
 // ---------------------------------------------------------------------------
 describe('Database.createPrice() @regression @tier1', function () {
     function makePriceDb(existsRows) {
@@ -3989,7 +3991,7 @@ describe('Database.getCrossChainDataForVM() @regression @tier1', function () {
             'DOGE:7': true, 'BTC:1234': true
         });
         // Reads the local table (consensus rule: never the mirror), strictly
-        // earlier blocks only — uniform snapshot for every execution in a block.
+        // earlier blocks only; uniform snapshot for every execution in a block.
         const [sql, params] = db.doQuery.firstCall.args;
         assert.ok(String(sql).includes('FROM cross_chain_settlements'));
         assert.ok(String(sql).includes('block_index < ?'));
@@ -4024,7 +4026,7 @@ describe('Database.getCrossChainDataForVM() @regression @tier1', function () {
 });
 
 // ---------------------------------------------------------------------------
-// getActiveStakeWeights — source-keyed all-staker set (STAKE_WEIGHTED_QUORUM
+// getActiveStakeWeights: source-keyed all-staker set (STAKE_WEIGHTED_QUORUM
 // counterpart of getActiveValidators; powers the hub config-change PBFT)
 // ---------------------------------------------------------------------------
 
@@ -4037,12 +4039,14 @@ describe('Database.getActiveStakeWeights() @regression @tier1', function () {
         ]);
         sinon.stub(db, 'getStatusId').resolves(1);
         const out = await db.getActiveStakeWeights(306);
-        assert.deepStrictEqual(out, [
+        // Spread to a plain array so deepStrictEqual ignores the additive truncated property.
+        assert.deepStrictEqual([...out], [
             { pubkey: 'aa', source: 'src1', weight: '500' },
             { pubkey: 'bb', source: 'src1', weight: '500' },
             { pubkey: 'cc', source: 'src2', weight: '300' },
         ]);
-        // No MIN_STAKE floor — the _stakeWeightsSql min-stake bind arg is '0'.
+        assert.strictEqual(out.truncated, false);
+        // No MIN_STAKE floor; the _stakeWeightsSql min-stake bind arg is '0'.
         const args = db.doQuery.getCall(0).args[1];
         assert.ok(args.includes('0'), 'expected min_stake 0 among the query args');
     });

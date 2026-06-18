@@ -140,6 +140,14 @@ class HubPushQueue {
                 // Reorg retraction parked by rollback.js when the live RPC failed.
                 // pushpricereorg is idempotent over a replayed range.
                 await this.hubClient.retractPriceRange(payload.coin, payload.action_index);
+            } else if(row.push_type === 'xcall_retraction'){
+                // Reorg XCALL relay retraction parked by rollback.js when the live RPC
+                // failed. retractXcallRange is idempotent over a replayed range.
+                await this.hubClient.retractXcallRange(payload.coin, payload.action_index);
+            } else if(row.push_type === 'match_retraction'){
+                // Reorg DEX cross-chain match retraction parked by rollback.js when the
+                // live RPC failed. retractMatchRange is idempotent over a replayed range.
+                await this.hubClient.retractMatchRange(payload.coin, payload.action_index);
             } else {
                 console.warn('HubPushQueue: row ' + row.id + ' has unknown push_type "' + row.push_type + '", marking failed');
                 await this.indexerDb.recordHubPushAttempt(row.id, 'unknown push_type', 1);

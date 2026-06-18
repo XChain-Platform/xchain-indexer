@@ -17,7 +17,7 @@ const sinon  = require('sinon');
 const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
 
 const Price   = require('../../../src/actions/price.js');
-// Same cached modules Price references — stubbing verify() controls sig acceptance,
+// Same cached modules Price references - stubbing verify() controls sig acceptance,
 // stubbing isStakeWeightedQuorumActive() selects the count vs stake-weighted path.
 const ed25519 = require('../../../src/ed25519.js');
 const swq     = require('../../../src/stake_weighted_quorum.js');
@@ -61,14 +61,15 @@ describe('Price (PRICE) @regression @tier3', function () {
     });
 
     // ───────────────────────────────────────────────────────────────────────
-    // v0 — validator COIN/FIAT snapshot (PBFT 2f+1 quorum over price-capable set)
+    // v0 - validator COIN/FIAT snapshot (PBFT 2f+1 quorum over price-capable set)
     // ───────────────────────────────────────────────────────────────────────
-    describe('v0 — validator snapshot', function () {
+    describe('v0 - validator snapshot', function () {
 
-        // PRICE|0|ROUND|TIMESTAMP|PAIR_COUNT|PAIR_ID|PAIR_PRICE|...|SIG_COUNT|PUBKEY|SIG|...
+        // PRICE|0|ROUND|TIMESTAMP|BTC_BLOCK_HEIGHT|PAIR_COUNT|PAIR_ID|PAIR_PRICE|...|SIG_COUNT|PUBKEY|SIG|...
+        // BTC_BLOCK_HEIGHT (#4232): the round's BTC anchor, in the signed payload and the EQUIV gate input.
         function v0Params(pairs, sigs, overrides = {}) {
-            const p = { round: '7', timestamp: '1700000000', ...overrides };
-            const out = ['0', p.round, p.timestamp, String(pairs.length)];
+            const p = { round: '7', timestamp: '1700000000', btcHeight: '799000', ...overrides };
+            const out = ['0', p.round, p.timestamp, p.btcHeight, String(pairs.length)];
             for (const pr of pairs) { out.push(pr.pair, pr.price); }
             out.push(String(sigs.length));
             for (const s of sigs) { out.push(s.pubkey, s.sig); }
@@ -155,13 +156,13 @@ describe('Price (PRICE) @regression @tier3', function () {
 
         it('rejects a malformed SIG_COUNT', async function () {
             const data = v0Data();
-            // hand-craft: SIG_COUNT non-numeric
-            const params = ['0', '7', '1700000000', '1', 'BTC/USD', '50000', 'NaN', PUBKEY_A, SIG_A];
+            // hand-craft: SIG_COUNT non-numeric (PRICE|0|ROUND|TIMESTAMP|BTC_BLOCK_HEIGHT|PAIR_COUNT|...)
+            const params = ['0', '7', '1700000000', '799000', '1', 'BTC/USD', '50000', 'NaN', PUBKEY_A, SIG_A];
             await handler.parse(params, data, null);
             assert.strictEqual(data['VALIDATION_STATUS'], 'invalid');
         });
 
-        // ── oracle_round reward derivation (consensus — replayable by construction) ──
+        // ── oracle_round reward derivation (consensus - replayable by construction) ──
         describe('round rewards derived from the signer set', function () {
 
             it('valid PRICE → equal floor split to every verified signer, upserted', async function () {
@@ -183,7 +184,7 @@ describe('Price (PRICE) @regression @tier3', function () {
                     assert.strictEqual(call.args[2], 'oracle_round');
                     assert.strictEqual(String(call.args[3]), '3.33333333'); // floor(10/3, 8dp)
                     assert.strictEqual(call.args[4], data['BLOCK_INDEX']);
-                    assert.strictEqual(call.args[5], true);                 // upsert — deterministic writer wins
+                    assert.strictEqual(call.args[5], true);                 // upsert - deterministic writer wins
                 }
             });
 
@@ -215,7 +216,7 @@ describe('Price (PRICE) @regression @tier3', function () {
                 assert.strictEqual(indexer.indexerDb.createValidatorReward.callCount, 1);
                 const call = indexer.indexerDb.createValidatorReward.getCall(0);
                 assert.strictEqual(call.args[0], PUBKEY_A);
-                // bcmulfloor returns un-padded whole numbers ('10' not '10.00000000') — compare numerically
+                // bcmulfloor returns un-padded whole numbers ('10' not '10.00000000') - compare numerically
                 assert.strictEqual(Number(call.args[3]), 10); // sole qualified signer takes the round
             });
         });
@@ -223,7 +224,7 @@ describe('Price (PRICE) @regression @tier3', function () {
         // ── two-tranche full-node reward split (NODEPROOF verified tier) ──
         // With FULLNODE.REWARD_SHARE > 0 the round budget splits into a base
         // tranche (every signer) and a full-node tranche (sources whose trailing
-        // pass rate ≥ MIN_PASS_RATE_BPS, deduped per staking source — a carrot, no
+        // pass rate ≥ MIN_PASS_RATE_BPS, deduped per staking source - a carrot, no
         // slashing). share == 0 keeps the legacy single pot.
         describe('two-tranche full-node split', function () {
             const SA = { pubkey: PUBKEY_A, source: 'addrA', source_id: 1 };
@@ -439,11 +440,11 @@ describe('Price (PRICE) @regression @tier3', function () {
     });
 
     // ───────────────────────────────────────────────────────────────────────
-    // v0 — STAKE_WEIGHTED_QUORUM (finalize on summed signer STAKE, source-deduped)
+    // v0 - STAKE_WEIGHTED_QUORUM (finalize on summed signer STAKE, source-deduped)
     // ───────────────────────────────────────────────────────────────────────
-    describe('v0 — stake-weighted quorum', function () {
+    describe('v0 - stake-weighted quorum', function () {
         function v0Params(pairs, sigs) {
-            const out = ['0', '7', '1700000000', String(pairs.length)];
+            const out = ['0', '7', '1700000000', '799000', String(pairs.length)];
             for (const pr of pairs) { out.push(pr.pair, pr.price); }
             out.push(String(sigs.length));
             for (const s of sigs) { out.push(s.pubkey, s.sig); }
@@ -472,7 +473,7 @@ describe('Price (PRICE) @regression @tier3', function () {
         });
 
         it('SECURITY: a COUNT supermajority of low-stake Sybils cannot finalize', async function () {
-            // All nine Sybils sign — a 9-of-10 COUNT landslide — but only 9/100009 stake:
+            // All nine Sybils sign - a 9-of-10 COUNT landslide - but only 9/100009 stake:
             // 3·9 = 27 !> 2·100009. Stake, not headcount, gates finalization.
             const data = v0Data();
             await handler.parse(v0Params(ONE_PAIR, SYBILS.map(s => ({ pubkey: s.pubkey, sig: sg(1) }))), data, null);
@@ -496,9 +497,9 @@ describe('Price (PRICE) @regression @tier3', function () {
     });
 
     // ───────────────────────────────────────────────────────────────────────
-    // v1 — user TOKEN/FIAT oracle price
+    // v1 - user TOKEN/FIAT oracle price
     // ───────────────────────────────────────────────────────────────────────
-    describe('v1 — user oracle price', function () {
+    describe('v1 - user oracle price', function () {
 
         // PRICE|1|COIN|TICK|FIAT|VALUE|FEE|MEMO
         function v1Params(overrides = {}) {
@@ -546,9 +547,9 @@ describe('Price (PRICE) @regression @tier3', function () {
     // Hub push paths (hubClient present)
     // ───────────────────────────────────────────────────────────────────────
 
-    describe('hub push — v0', function () {
+    describe('hub push - v0', function () {
         function v0Params(pairs, sigs) {
-            const out = ['0', '7', '1700000000', String(pairs.length)];
+            const out = ['0', '7', '1700000000', '799000', String(pairs.length)];
             for (const pr of pairs) { out.push(pr.pair, pr.price); }
             out.push(String(sigs.length));
             for (const s of sigs) { out.push(s.pubkey, s.sig); }
@@ -580,10 +581,14 @@ describe('Price (PRICE) @regression @tier3', function () {
 
             assert.strictEqual(data['VALIDATION_STATUS'], 'valid');
             assert.ok(mockHubClient.pushPriceRound.calledOnce);
+            // #4232: the push must carry the round's BTC anchor so the hub re-verify
+            // (PriceAggregator) reconstructs the identical signed bytes and gates the
+            // EQUIV header on the same height.
+            assert.strictEqual(mockHubClient.pushPriceRound.firstCall.args[0].btc_block_height, 799000);
         });
 
-        it('valid v0 with hubClient — hub push failure queues retry', async function () {
-            // pushPriceRound rejects — should queue via enqueueHubPush (fire-and-forget)
+        it('valid v0 with hubClient - hub push failure queues retry', async function () {
+            // pushPriceRound rejects - should queue via enqueueHubPush (fire-and-forget)
             indexer.indexerDb.enqueueHubPush = sinon.stub().resolves();
             const mockHubClient = { pushPriceRound: sinon.stub().rejects(new Error('network timeout')) };
             indexer.indexerDb.getActiveCapabilityCount.resolves(1);
@@ -631,7 +636,7 @@ describe('Price (PRICE) @regression @tier3', function () {
         });
     });
 
-    describe('hub push — v1', function () {
+    describe('hub push - v1', function () {
         function v1Params(overrides = {}) {
             const p = { coin: 'BTC', tick: 'TEST', fiat: 'USD', value: '1.50', fee: '0', memo: 'm', ...overrides };
             return ['1', p.coin, p.tick, p.fiat, p.value, p.fee, p.memo];
@@ -670,7 +675,7 @@ describe('Price (PRICE) @regression @tier3', function () {
             };
             const localHandler = new Price(localActionsCtx);
 
-            // Invalid — unsupported FIAT
+            // Invalid - unsupported FIAT
             const data = createBaseData({ ACTION: 'PRICE', FORMAT: 1 });
             await localHandler.parse(v1Params({ fiat: 'ZZZ' }), data, null);
 
@@ -678,7 +683,7 @@ describe('Price (PRICE) @regression @tier3', function () {
             assert.ok(!mockHubClient.pushOraclePrice.called);
         });
 
-        it('valid v1 with hubClient — hub push failure queued for retry (no throw)', async function () {
+        it('valid v1 with hubClient - hub push failure queued for retry (no throw)', async function () {
             indexer.indexerDb.enqueueHubPush = sinon.stub().resolves();
             const mockHubClient = { pushOraclePrice: sinon.stub().rejects(new Error('hub down')) };
 
@@ -693,7 +698,7 @@ describe('Price (PRICE) @regression @tier3', function () {
             const localHandler = new Price(localActionsCtx);
 
             const data = createBaseData({ ACTION: 'PRICE', FORMAT: 1 });
-            // Fire-and-forget — must not throw
+            // Fire-and-forget - must not throw
             await localHandler.parse(v1Params(), data, null);
 
             assert.strictEqual(data['VALIDATION_STATUS'], 'valid');

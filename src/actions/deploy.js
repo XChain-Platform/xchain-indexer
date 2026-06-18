@@ -457,6 +457,7 @@ class Deploy {
                 },
                 balances:         vmLedger.balances,
                 tokenInfo:        vmLedger.tokenInfo,
+                network:          this.config['NETWORK'],
                 oracleData:       await ((this.actions && this.actions.hubDb) || this.indexerDb).getOracleDataForVM(data['BLOCK_INDEX'], data['BLOCK_TIME'], parseInt(this.config['ORACLE_MAX_PRICE_AGE_SECONDS']) || 1800),
                 crossChainData:   await this.indexerDb.getCrossChainDataForVM(data['BLOCK_INDEX']),
                 providerDeadlines: PROVIDER_DEADLINE_WINDOWS

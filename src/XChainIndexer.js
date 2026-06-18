@@ -121,21 +121,28 @@ class XChainIndexer {
     }
 
     // Direct-hub-DB call-presence barrier (see the call site in the block loop and the note on
-    // callPresenceTimeoutMs). Resolves the instant it is safe to read cross_chain_calls for a
-    // block at block_time, so the injection/callback pass sees the same rows a replaying node
-    // would:
-    //   * Wall-clock gate (no query, the steady-state path): once real time has reached this
-    //     block's time, every relay row effective at/before it was finalized at least the relay
-    //     margin earlier (effective_time = finalize_time + margin) and is therefore already
-    //     written to the shared hub DB. At the live tip block_time ~= now, so this clears within
-    //     seconds; on replay block_time is in the past, so it clears immediately.
-    //   * Coverage fast-path: for a block whose timestamp is still ahead of wall-clock, proceed
-    //     early if the hub DB already holds a finalized row effective at/after it (nothing later
-    //     can be missing), or if the table is empty (nothing to wait on).
-    //   * Bound: never blocks past callPresenceTimeoutMs, and never throws. A hub that produces
-    //     no calls (or is briefly behind) can therefore never stall block processing, matching
-    //     the NULL-is-valid / no-freeze semantics of the HubDbSync call barrier. The hub-side
-    //     relay margin is the primary fork guard; proceeding here on timeout is the safe fallback.
+    // callPresenceTimeoutMs). Resolves only when it is safe to read cross_chain_calls for a block
+    // at block_time, so the injection/callback pass sees EXACTLY the finalized rows with
+    // effective_time <= block_time that canonical hub state holds, never a smaller (partial) set:
+    //   * Coverage condition (proceed): the local hub mirror covers this block once
+    //     MAX(effective_time) over finalized rows >= block_time. Nothing later than block_time can
+    //     change the effective-at/before set, so reading now matches a node that saw every row on
+    //     time. This is the SOLE proceed condition; the prior wall-clock gate is removed.
+    //   * Empty-table fast path (proceed): no finalized rows means there is nothing to wait on.
+    //   * Mirror-lags (defer): if the highest finalized effective_time is still BELOW block_time
+    //     the mirror is genuinely behind, so this block's call set would be incomplete. We do NOT
+    //     proceed with that partial set. Instead we poll the mirror with a bounded sleep loop
+    //     (mirroring the indexer's other sync barriers) and, if it has not caught up within
+    //     callPresenceTimeoutMs, THROW so the caller defers the block and retries it from the top
+    //     of the loop (lastIndexerBlock is not advanced). This is wait-then-retry, not
+    //     throw-and-halt: a behind mirror blocks block PROCESSING (the consensus-correct outcome)
+    //     until it catches up, rather than committing a divergent, partial-set block.
+    //
+    // CRITICAL fast path: the common cases (regtest single shared hub DB already current, or no
+    // pending lag) hit the coverage / empty-table condition on the very first query and return
+    // with zero added latency. Only a genuinely-lagging distributed mirror enters the poll loop.
+    // A wall-clock proceed (Date.now) is deliberately NOT used: it let a lagging node proceed with
+    // fewer cross-chain calls than canonical and diverge the actions hash (the bug this fixes).
     async _waitForDirectCallPresence(blockTime){
         blockTime = Number(blockTime);
         if(!this.hubDb || !Number.isFinite(blockTime)) return;
@@ -143,18 +150,33 @@ class XChainIndexer {
         if(!Number.isFinite(timeoutMs) || timeoutMs <= 0) timeoutMs = 10000;
         let deadline = Date.now() + timeoutMs;
         let pollMs = 250;
+        let lastTs = null;          // last observed mirror watermark, for the timeout diagnostic
         while(true){
-            // Wall-clock gate: costs no query and is the common (tip + replay) path.
-            if(Date.now() >= blockTime * 1000) return;
-            // Future-dated block: proceed early if the hub DB already covers it.
+            // Coverage check: proceed the instant the local hub mirror covers block_time, i.e.
+            // the highest finalized effective_time is at/after it, or there is nothing to wait on.
+            // A query error means the table is not ready yet, which reads as NOT covered so the
+            // barrier waits (it never proceeds against an unread table).
+            let covered = false;
             try {
                 let rows = await this.hubDb.doQuery(
                     "SELECT MAX(effective_time) AS ts FROM cross_chain_calls WHERE status = 'finalized'");
-                if(rows.length === 0 || rows[0].ts === null || Number(rows[0].ts) >= blockTime) return;
+                if(rows.length === 0 || rows[0].ts === null){
+                    covered = true;                         // no finalized rows: nothing to wait on
+                } else {
+                    lastTs = Number(rows[0].ts);
+                    if(lastTs >= blockTime) covered = true; // mirror covers this block
+                }
             } catch(e){
-                // Table not ready / transient error: don't freeze the chain; fall to the timeout.
+                // Table not ready / transient error: treat as not covered and keep waiting.
             }
-            if(Date.now() >= deadline) return;
+            if(covered) return;
+            // Mirror is behind. Defer the block rather than proceed with a partial set: once the
+            // bound is exhausted, throw so the caller retries this block from the top of the loop.
+            if(Date.now() >= deadline)
+                this.util.throwError('direct call-presence barrier timed out after ' + timeoutMs +
+                    'ms waiting for block_time ' + blockTime + ' (call mirror at ' + lastTs + ')');
+            console.log('Waiting on hub call mirror: block_time ' + blockTime +
+                ' not yet covered (mirror at ' + lastTs + '); retrying...');
             await this.util.sleep(Math.min(pollMs, Math.max(1, deadline - Date.now())));
         }
     }
@@ -471,9 +493,11 @@ class XChainIndexer {
                 // different block than a node that saw the row on time (a real content divergence /
                 // ledger fork). The request_id/call_id preimages no longer bind action_index (see
                 // attest.js/xcall.js EMITTER_PATH), but the block an injection lands in still must
-                // agree. Give in-flight hub writes a window to land before processCrossChainCalls
-                // reads the table; defer-and-retry on timeout so the quiet/absent-hub case never
-                // produces a spuriously empty call set.
+                // agree. Block until the local hub mirror covers block_time (its highest finalized
+                // effective_time >= block_time) before processCrossChainCalls reads the table; a
+                // lagging mirror defers-and-retries (the barrier throws on timeout) so this node
+                // never injects a partial call set, while the already-current single-shared-DB
+                // (regtest) case clears on the first query with no added latency.
                 if(!this.hubDbSync && this.hubDb){
                     try {
                         await this._waitForDirectCallPresence(blockTime);

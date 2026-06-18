@@ -17,7 +17,7 @@
  * Rebuilds every attest_validator_stats row from scratch by aggregating the
  * surviving ledger. attest_validator_stats is a monotone aggregate
  * (fulfilled/missed/slashed counters per validator/provider) that, before the
- * rollback fix landed, was not cleaned up on chain reorganization — so any node
+ * rollback fix landed, was not cleaned up on chain reorganization. Any node
  * that processed a reorg may carry permanently overcounted fulfilled/missed
  * counts. Run this ONCE against such a deployment to bring the table back in line
  * with a from-genesis replay.
@@ -25,7 +25,7 @@
  * It is idempotent and safe to run on a healthy DB: the recomputed values equal
  * what a clean replay produces. Reads DB connection settings from the same
  * environment variables the indexer uses (INDEXER_DB_HOST/PORT/NAME/USER/PASS,
- * INDEXER_COIN, INDEXER_NETWORK) — run it from the indexer root with the same
+ * INDEXER_COIN, INDEXER_NETWORK). Run it from the indexer root with the same
  * .env in place.
  *
  * Usage:  node scripts/repair-validator-stats.js
@@ -41,7 +41,7 @@ const Utility  = require('../src/utility.js');
 
 dotenv.config();
 
-// Deterministic responsible validator set — mirrors attest.js
+// Deterministic responsible validator set (mirrors attest.js
 // _computeResponsibleSet: sort the capability validators by
 // SHA256(request_id || pubkey), take the top REDUNDANCY.
 function responsibleSet(requestId, validators, redundancy){
@@ -115,17 +115,17 @@ async function main(){
     }
 
     // missed_count: one per responsible-set validator each time a request expired
-    // (attest.js _parseExpire). There is no per-validator expiry row to count — we
+    // (attest.js _parseExpire). There is no per-validator expiry row to count, so we
     // reproduce the responsible set deterministically and bump each member, exactly
     // as the live path does. A request counts as expired iff (a) its expiry sweep
-    // has actually happened — a request expires at deadline_block+1, so the sweep
-    // occurred iff deadline_block+1 <= tip (i.e. deadline_block < tip), where tip is
+    // has actually happened (a request expires at deadline_block+1, so the sweep
+    // occurred iff deadline_block+1 <= tip, i.e. deadline_block < tip, where tip is
     // the latest parsed block; a request still inside its deadline window is
-    // 'pending' and has recorded zero misses — and (b) no *valid* v1 response
+    // 'pending' and has recorded zero misses) and (b) no *valid* v1 response
     // survives for it (any valid response flips it out of 'pending' before the
     // deadline). We derive eligibility from the surviving v0 rows, NOT
     // request_status, because a reorg-undone response/expiry leaves request_status
-    // stale — the same staleness hazard a post-reorg repair must avoid. This mirrors
+    // stale. This is the same staleness hazard a post-reorg repair must avoid. This mirrors
     // Rollback._recomputeAttestationValidatorStats with the rollback target replaced
     // by tip+1, so its cutoff `deadline_block < block_index-1` becomes
     // `deadline_block < tip` over the whole surviving chain.
@@ -136,6 +136,7 @@ async function main(){
          FROM attests ar
          WHERE ar.version = 0
            AND ar.deadline_block < ?
+           AND ar.request_status <> 'rejected'
            AND NOT EXISTS (
                SELECT 1 FROM attests r
                WHERE r.version = 1

@@ -8125,12 +8125,15 @@ class Database {
         let caps = (this.config['STAKING'] && this.config['STAKING']['CAPABILITIES']) ? this.config['STAKING']['CAPABILITIES'] : {};
         let capConfig = caps[capability];
         if(!capConfig) return 0;
-        // A caller-supplied threshold takes precedence over this indexer's local
-        // config (see getValidatorsByCapability). Internal block-processing callers
-        // omit it and get the local fallback unchanged.
+        // A caller-supplied threshold (the hub's authoritative MIN_STAKE) is
+        // honoured VERBATIM (see getValidatorsByCapability). The local floor is
+        // only the default when NO override is supplied; it is never used to clamp
+        // an explicit caller value, so the quorum N counted here matches the
+        // qualifying set membership of every other hub/indexer for the same block.
+        let localFloor = capConfig['MIN_STAKE'] || '0';
         let minStake = (minStakeOverride !== undefined && minStakeOverride !== null)
             ? String(minStakeOverride)
-            : (capConfig['MIN_STAKE'] || '0');
+            : localFloor;
         let valid_id = await this.getStatusId('valid');
         if(valid_id === null) return 0;
         // Count over the SAME effective signer set as getValidatorsByCapability
@@ -8359,8 +8362,12 @@ class Database {
                              AND r.signing_pubkey_id = s.signing_pubkey_id
                              AND r.status_id = ?
                              AND r.deactivation_block <= ?
-                             AND r.action_index > s.action_index)`;
-        let a1 = [pubkey_id, valid_id, valid_id, blk !== null ? blk : 0];
+                             AND r.action_index > s.action_index)
+                       AND NOT EXISTS (
+                           SELECT 1 FROM capability_slash_events cse
+                           WHERE cse.signing_pubkey_id = s.signing_pubkey_id
+                             AND cse.block_index <= ?)`;
+        let a1 = [pubkey_id, valid_id, valid_id, blk !== null ? blk : 0, blk !== null ? blk : 0];
         if(blk !== null){
             q1 += ' AND s.activation_block <= ? AND (s.deactivation_block IS NULL OR s.deactivation_block > ?)';
             a1.push(blk, blk);
@@ -8396,8 +8403,12 @@ class Database {
                   LEFT JOIN index_pubkeys ip ON ip.id = d.signing_pubkey_id
                   WHERE d.signing_pubkey_id = ?
                     AND d.status_id = ?
-                    AND s2.status_id = ?`;
-        let a2 = [pubkey_id, valid_id, valid_id];
+                    AND s2.status_id = ?
+                    AND NOT EXISTS (
+                        SELECT 1 FROM capability_slash_events cse
+                        WHERE cse.signing_pubkey_id = d.signing_pubkey_id
+                          AND cse.block_index <= ?)`;
+        let a2 = [pubkey_id, valid_id, valid_id, blk !== null ? blk : 0];
         if(blk !== null){
             q2 += ' AND d.activation_block <= ? AND (d.deactivation_block IS NULL OR d.deactivation_block > ?)';
             q2 += ' AND s2.activation_block <= ? AND (s2.deactivation_block IS NULL OR s2.deactivation_block > ?)';
@@ -8457,10 +8468,14 @@ class Database {
         let truncated = rows.length >= limit;
         if(truncated)
             console.warn('getActiveValidators hit the result cap of ' + limit + ' rows at block ' + blockIndex + ' - validator set may be truncated. Raise the frozen VALIDATOR_QUERY_LIMIT consensus constant (coordinated fleet upgrade) if the federation has grown.');
-        return rows.map(r => ({
+        let result = rows.map(r => ({
             pubkey: String(r.pubkey),
             amount: (r.total === null || r.total === undefined) ? '0' : String(r.total)
         }));
+        // Surface truncation to callers (the RPC layer alarms on it) the same way
+        // the capability variants do - the console.warn alone is invisible to a hub.
+        result.truncated = truncated;
+        return result;
     }
 
     // Source-keyed all-staker weights at `blockIndex` - the STAKE_WEIGHTED_QUORUM
@@ -8482,11 +8497,15 @@ class Database {
         let truncated = rows.length >= limit;
         if(truncated)
             console.warn('getActiveStakeWeights hit the result cap of ' + limit + ' rows at block ' + blockIndex + ' - set may be truncated. Raise the frozen VALIDATOR_QUERY_LIMIT consensus constant (coordinated fleet upgrade) if the federation has grown.');
-        return rows.map(r => ({
+        let result = rows.map(r => ({
             pubkey: String(r.pubkey),
             source: String(r.source),
             weight: (r.weight === null || r.weight === undefined) ? '0' : String(r.weight)
         }));
+        // Surface truncation to callers (the RPC layer alarms on it) the same way
+        // the capability variants do - the console.warn alone is invisible to a hub.
+        result.truncated = truncated;
+        return result;
     }
 
     // Return all pubkeys whose SUM(active stake) at `blockIndex` meets the
@@ -8507,14 +8526,23 @@ class Database {
         let caps = (this.config['STAKING'] && this.config['STAKING']['CAPABILITIES']) ? this.config['STAKING']['CAPABILITIES'] : {};
         let capConfig = caps[capability];
         if(!capConfig) return [];
-        // A caller-supplied threshold (the hub passes its own authoritative
-        // MIN_STAKE) takes precedence over this indexer's local config. The local
-        // config can drift between independently-operated indexers, so honouring
-        // the caller's value keeps every hub computing the same validator set for
-        // the same block. Non-hub callers omit it and get the local fallback.
+        // A caller-supplied threshold (the hub passes its own authoritative,
+        // signed/governance-anchored MIN_STAKE) is honoured VERBATIM on both the
+        // count path and the weight path. The local config can drift between
+        // independently-operated indexers, so honouring the caller's value (never
+        // clamping it to this indexer's own floor) keeps every hub/indexer
+        // computing the SAME qualifying set for the same block - that cross-hub /
+        // cross-indexer determinism is the consensus invariant. The local floor is
+        // ONLY the default when NO override is supplied (non-hub callers); it is
+        // never a clamp on an explicit caller value. Anti-inflation is enforced at
+        // the hub layer (signed/governance-anchored MIN_STAKE) and by on-chain
+        // validation (which uses the local floor), NOT by this read-path clamp.
+        // getStakeWeightsByCapability resolves minStake identically, so the
+        // count/set-membership path and the weight path stay symmetric.
+        let localFloor = capConfig['MIN_STAKE'] || '0';
         let minStake = (minStakeOverride !== undefined && minStakeOverride !== null)
             ? String(minStakeOverride)
-            : (capConfig['MIN_STAKE'] || '0');
+            : localFloor;
         let valid_id = await this.getStatusId('valid');
         if(valid_id === null) return [];
         // Safety cap - see getActiveValidators. Bounds the result set so a
@@ -8624,18 +8652,18 @@ class Database {
         let caps = (this.config['STAKING'] && this.config['STAKING']['CAPABILITIES']) ? this.config['STAKING']['CAPABILITIES'] : {};
         let capConfig = caps[capability];
         if(!capConfig) return [];
-        // Caller-supplied threshold (the hub's authoritative MIN_STAKE) wins over local
-        // config - keeps every indexer computing the same set for the same block.
-        // Floor: same as getValidatorsByCapability - reject sub-floor values to prevent
-        // an untrusted caller from inflating the weighted-quorum set.
+        // Caller-supplied threshold (the hub's authoritative, signed/governance-
+        // anchored MIN_STAKE) is honoured VERBATIM, identically to
+        // getValidatorsByCapability/getActiveCapabilityCount/hasCapability - this
+        // keeps the count path and weight path symmetric AND keeps every indexer
+        // computing the same set for the same block (cross-hub/cross-indexer
+        // determinism). The local floor is ONLY the default when no override is
+        // supplied; it never clamps an explicit caller value. Anti-inflation lives
+        // at the hub + on-chain-validation layers, not in this read path.
         let localFloor = capConfig['MIN_STAKE'] || '0';
-        let minStake;
-        if(minStakeOverride !== undefined && minStakeOverride !== null){
-            let caller = String(minStakeOverride);
-            minStake = this.util.bcgte(caller, localFloor) ? caller : localFloor;
-        } else {
-            minStake = localFloor;
-        }
+        let minStake = (minStakeOverride !== undefined && minStakeOverride !== null)
+            ? String(minStakeOverride)
+            : localFloor;
         let valid_id = await this.getStatusId('valid');
         if(valid_id === null) return [];
         let limit = this.config['VALIDATOR_QUERY_LIMIT'];
@@ -8760,12 +8788,15 @@ class Database {
         let caps = (this.config['STAKING'] && this.config['STAKING']['CAPABILITIES']) ? this.config['STAKING']['CAPABILITIES'] : {};
         let capConfig = caps[capability];
         if(!capConfig) return false;
-        // A caller-supplied threshold takes precedence over this indexer's local
-        // config (see getValidatorsByCapability). Internal block-processing callers
-        // omit it and get the local fallback unchanged.
+        // A caller-supplied threshold (the hub's authoritative MIN_STAKE) is
+        // honoured VERBATIM (see getValidatorsByCapability). The local floor is
+        // only the default when NO override is supplied; it never clamps an
+        // explicit caller value, so this per-pubkey membership test agrees with
+        // the qualifying set that every other hub/indexer resolves for the block.
+        let localFloor = capConfig['MIN_STAKE'] || '0';
         let minStake = (minStakeOverride !== undefined && minStakeOverride !== null)
             ? String(minStakeOverride)
-            : (capConfig['MIN_STAKE'] || '0');
+            : localFloor;
         let valid_id = await this.getStatusId('valid');
         if(valid_id === null) return false;
         let pubkey_id = await this.getPubkeyId(String(pubkey).toLowerCase());

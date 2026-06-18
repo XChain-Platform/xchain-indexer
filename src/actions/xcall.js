@@ -409,12 +409,16 @@ class Xcall {
 
         // Callback ceiling: read from the gas schedule so it stays in sync with
         // the VM_XCALL_CALLBACK amount charged at emit time (gateway-emit.js crossExecute).
-        // Falls back to 20000 matching the schedule default; the schedule knob controls both.
+        // Hard-fail on a missing or non-positive value: a silent default would allow the
+        // injected ceiling to diverge from the amount the VM charged at emit time if the
+        // schedule is misconfigured, producing an ok/out_of_gas split across validators.
         let schedule = (this.config && this.config['GAS_SCHEDULE']) || {};
         let xcallCallbackGasRaw = schedule['VM_XCALL_CALLBACK'];
-        const XCALL_CALLBACK_GAS = (Number.isInteger(xcallCallbackGasRaw) && xcallCallbackGasRaw > 0)
-            ? xcallCallbackGasRaw
-            : 20000;
+        let xcallCallbackGasVal = parseInt(xcallCallbackGasRaw, 10);
+        if(xcallCallbackGasRaw === undefined || xcallCallbackGasRaw === null || !Number.isInteger(xcallCallbackGasVal) || xcallCallbackGasVal <= 0 || String(xcallCallbackGasRaw).trim() !== String(xcallCallbackGasVal)){
+            throw new Error('GAS_SCHEDULE.VM_XCALL_CALLBACK missing or invalid (expected a positive integer, got ' + JSON.stringify(xcallCallbackGasRaw) + ')');
+        }
+        const XCALL_CALLBACK_GAS = xcallCallbackGasVal;
 
         let callbackParams = [];
         if(request.callback_params_json){
