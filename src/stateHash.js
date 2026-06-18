@@ -50,10 +50,14 @@
  *
  ********************************************************************/
 
-// Bump ONLY on a deliberate preimage change; folded into the hash so two schemes
-// can never compare equal. Independent of BLOCK_HASH_VERSION (the three-hash
-// baseline is untouched by this additive, non-consensus integrity hash).
-const STATE_HASH_VERSION = 2;
+// Launch genesis version = 1. Folded into the hash so two preimage schemes can
+// never compare equal. A dev iteration briefly numbered a changed preimage 2;
+// pre-launch that was collapsed back to 1 (mirroring the BLOCK_HASH_VERSION 2->1
+// collapse) because there is no launch-committed state to migrate, only a clean
+// fleet-wide reindex. Bump ONLY on a deliberate preimage change AFTER launch.
+// Independent of BLOCK_HASH_VERSION (the three-hash baseline is untouched by this
+// additive, non-consensus integrity hash).
+const STATE_HASH_VERSION = 1;
 
 const DEACTIVATION_TABLES = ['stakes', 'delegations', 'contract_stakes', 'contract_delegations'];
 const SLASH_SPECS = [
