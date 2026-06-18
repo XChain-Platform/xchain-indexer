@@ -1605,6 +1605,17 @@ class Database {
         return tick;
     }
 
+    // Cached tick_id -> canonical name resolver for the light-client touched-key
+    // set. The mapping is immutable (a tick_id always names the same tick), so the
+    // cache persists for the connection lifetime.
+    async _smtTickName(tick_id){
+        if(!this._smtTickNameCache) this._smtTickNameCache = new Map();
+        if(this._smtTickNameCache.has(tick_id)) return this._smtTickNameCache.get(tick_id);
+        let name = await this.getTicker(tick_id);
+        this._smtTickNameCache.set(tick_id, name);
+        return name;
+    }
+
     // Lookup a record in the `index_tickers` table and return record id
     async getTickerId(tick){
         let id  = null;
@@ -2332,16 +2343,24 @@ class Database {
         const VALID_LEDGER_TABLES = ['credits', 'debits', 'escrows'];
         if(!VALID_LEDGER_TABLES.includes(table))
             throw new Error('Invalid ledger table: ' + table);
-        // Light-client SMT touched-key accumulation (SPV spec §4). Record the
-        // (address, tick) identity actually mutated this block so stateCommitment
-        // updates only touched balance/escrow leaves. Capturing at this single
-        // ledger choke point is robust to backdated cooldown-refund credits (which
-        // reuse an EARLIER block's action_index, so a block-range query would miss
-        // them). Active only while the indexer has installed a per-block set.
-        if(this._smtTouched && address != null && tick != null && tick !== '')
-            this._smtTouched.add(address + '\t' + tick);
         let tick_id    = await this.createTicker(tick);
         let address_id = await this.createAddress(address);
+        // Light-client SMT touched-key accumulation (SPV spec §4). Record the
+        // (address, CANONICAL tick name) identity actually mutated this block so
+        // stateCommitment updates the right balance leaf. The `tick` argument may
+        // be a NAME or a "^TICK_ID" reference, and NAME refs resolve case-
+        // insensitively, but the SMT balance leaf is keyed by the canonical stored
+        // name: capturing the raw, unresolved tick let ^id / case-variant sends
+        // silently miss their leaf (incremental balances_root drift). Resolve
+        // through tick_id first. Capturing at this single ledger choke point is
+        // robust to backdated cooldown-refund credits (which reuse an EARLIER
+        // block's action_index, so a block-range query would miss them). Active
+        // only while the indexer has installed a per-block set.
+        if(this._smtTouched && address != null && tick_id != null){
+            let canonTick = await this._smtTickName(tick_id);
+            if(canonTick != null && canonTick !== '')
+                this._smtTouched.add(address + '\t' + canonTick);
+        }
         // Round amount to the tick's actual decimal precision before storing.
         // Without this, fractional amounts (e.g. VM gas fees calculated at 8
         // decimals against a tick issued with fewer) drift between ledger sums

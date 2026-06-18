@@ -178,15 +178,18 @@ async function getNetBalance(db, address, tick){
     return db.util.bcsub(cr, dr, 18);
 }
 
-async function getLockedEscrow(db, address, tick){
-    const rows = await db.doQuery(
-        `SELECT COALESCE(SUM(CAST(e.amount AS DECIMAL(60,18))),0) AS esc FROM escrows e
-            INNER JOIN index_addresses a ON a.id=e.address_id
-            INNER JOIN index_tickers   t ON t.id=e.tick_id
-            WHERE a.address=? AND t.tick=?`,
-        [address, tick]);
-    return rows.length ? String(rows[0].esc) : '0';
-}
+// Locked-escrow leaf is DEFERRED out of v1 (SPV spec §4.2 D2, revised). The
+// escrows table keys a lock (+amount) to the order SOURCE but keys the match
+// release (-amount) to the recipient GET_ADDRESS (order.js:466 vs
+// order_match.js:331/349), so SUM(escrows) per (address, tick) does NOT net to
+// zero on a match: the locker key is left stale-positive and the recipient key
+// goes negative. Only the per-tick GLOBAL sum nets to zero (which is all the
+// aggregate supply sanityCheck verifies). A per-address locked leaf therefore
+// cannot be derived from SUM(escrows): it both crashes the non-negative amount
+// encoder on the negative key and mis-reports a stale lock on the locker key.
+// balances_root commits ONLY the net-spendable balance leaf in v1 (already net
+// of escrow, so it stays correct); a true per-address locked-balance commitment
+// is deferred to Phase 2 with an open-order-derived source.
 
 // ---- Stakes sub-tree (BTC-only, §4.1) ---------------------------------------
 // Built fresh each BTC block from the authoritative capability stake-weight query
@@ -245,8 +248,9 @@ async function computeBlockMerkleRoot(db, blockIndex){
 
 // ---- Full balances-tree initialization (flag-day cutover, §4.3) -------------
 // One-time at the activation boundary block: seed the balances SMT from ALL
-// pre-existing nonzero net balances + nonzero locked escrows. (At genesis
-// activation this is just the boundary block's own effects.) Persists nodes.
+// pre-existing nonzero net balances (escrow leaf deferred from v1, see note
+// above). (At genesis activation this is just the boundary block's own
+// effects.) Persists nodes.
 async function buildFullBalancesRoot(db, chain, network){
     const smt = new PersistentSMT(new DbNodeStore(db));
     let root = EMPTY_ROOT_HEX;
@@ -266,18 +270,7 @@ async function buildFullBalancesRoot(db, chain, network){
         if(leaf == null) continue;
         root = await smt.update(root, M.balanceKey(chain, network, r.address, r.tick), leaf);
     }
-    const escs = await db.doQuery(
-        `SELECT a.address AS address, t.tick AS tick, CAST(SUM(CAST(e.amount AS DECIMAL(60,18))) AS CHAR) AS esc FROM escrows e
-         INNER JOIN index_addresses a ON a.id=e.address_id
-         INNER JOIN index_tickers   t ON t.id=e.tick_id
-         GROUP BY e.address_id, e.tick_id
-         HAVING SUM(CAST(e.amount AS DECIMAL(60,18))) <> 0`, []);
-    for(const r of escs){
-        if(r.address == null || r.tick == null) continue;
-        const leaf = _leafOrNull(r.esc);
-        if(leaf == null) continue;
-        root = await smt.update(root, M.escrowKey(chain, network, r.address, r.tick), leaf);
-    }
+    // Escrow (locked) leaf intentionally omitted from v1 (see deferral note above).
     return root;
 }
 
@@ -302,8 +295,7 @@ async function computeAndStoreRoots(db, chain, network, blockIndex, isActivation
             const [address, tick] = entry.split('\t');
             const balLeaf = _leafOrNull(await getNetBalance(db, address, tick));
             root = await smt.update(root, M.balanceKey(chain, network, address, tick), balLeaf);
-            const escLeaf = _leafOrNull(await getLockedEscrow(db, address, tick));
-            root = await smt.update(root, M.escrowKey(chain, network, address, tick), escLeaf);
+            // Escrow (locked) leaf intentionally omitted from v1 (see deferral note above).
         }
         balancesRoot = root;
     }
@@ -337,7 +329,6 @@ module.exports = {
     PersistentSMT,
     assembleStateRoot,
     getNetBalance,
-    getLockedEscrow,
     gatherStakeEntries,
     computeBlockMerkleRoot,
     buildFullBalancesRoot,
