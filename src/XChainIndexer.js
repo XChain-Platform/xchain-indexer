@@ -26,6 +26,8 @@ const actions   = require('./actions.js');
 const util      = require('./utility.js');
 const rollback  = require('./rollback.js');
 const mapper    = require('./mapper.js');
+const stateCommitment   = require('./stateCommitment.js');
+const stateCommitAct    = require('./state_commitment_activation.js');
 const HubClient    = require('./hub_client.js');
 const HubDbSync    = require('./hub_db_sync.js');
 const HubPushQueue = require('./hub_push_queue.js');
@@ -524,6 +526,12 @@ class XChainIndexer {
 
                 // Begin a transaction: all indexer DB writes for this block are atomic.
                 await this.indexerDb.beginTransaction();
+                // Light-client state commitment (SPV spec §4): when active, install a
+                // fresh per-block touched-key set so the ledger choke point
+                // (db.createLedgerChangeRecord) records every (address, tick) mutated
+                // this block; cleared/null when inactive so the hook is inert.
+                let stateCommitActive = stateCommitAct.isStateCommitmentActive(blockToParse, this.config['NETWORK']);
+                this.indexerDb._smtTouched = stateCommitActive ? new Set() : null;
                 try {
 
                     // Process the block with a watchdog timeout to detect deadlocks or infinite loops
@@ -572,6 +580,15 @@ class XChainIndexer {
 
                         // Do a sanity check to verify that token supplies match data in credits/debits/escrows/balances tables
                         await this.indexerDb.sanityCheck(blockToParse);
+
+                        // Light-client state commitment (SPV spec §4/§5): compute + persist
+                        // the additive state_root + block_merkle_root atomically with the
+                        // block, after sanityCheck and before commit. Gated by the flag-day;
+                        // a throw here rolls the whole block back like any other failure.
+                        if(stateCommitActive){
+                            let isActivation = stateCommitAct.isStateCommitmentActivationBlock(blockToParse, this.config['NETWORK']);
+                            await stateCommitment.computeAndStoreRoots(this.indexerDb, this.config['COIN'], this.config['NETWORK'], blockToParse, isActivation);
+                        }
 
                         return [ledger, actions, contracts];
                     })();

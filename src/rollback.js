@@ -56,7 +56,13 @@ class Rollback {
             // both block-scoped like their contract twins; the capability_slash_debits restore
             // below runs BEFORE these generic deletes.
             'capability_slash_events',
-            'capability_slash_debits'
+            'capability_slash_debits',
+            // Light-client per-block state commitments (SPV spec §4/§5). Delete the
+            // roots for orphaned blocks; the surviving fork-point row (block_index-1)
+            // is the root the re-applied chain builds forward on. The content-addressed
+            // state_tree_nodes are NOT deleted here (COW; orphans are pruned later) -
+            // see ROLLBACK_EXEMPT in rollback-coverage.test.js.
+            'state_tree_roots'
         ];
 
         // List of tables that store data using action_index
@@ -1018,8 +1024,10 @@ class Rollback {
         // a replay to block_index-1: a request expires at deadline_block+1 (the
         // first sweep past its deadline), so it counts iff deadline_block+1 <=
         // block_index-1 (i.e. deadline_block < block_index-1) AND no *valid*
-        // response survives for it (any valid response flips it out of 'pending'
-        // before the deadline, so it never expires). We derive eligibility from
+        // response survives for it. Only a *terminal* valid v1 response
+        // (response_status IN ('ok','expired')) excludes a request; a retryable
+        // round (timeout/no_quorum/provider_error) leaves it 'pending' so it
+        // still expires and charges missed_count via the v2 sweep. We derive eligibility from
         // surviving rows, NOT request_status. The resolved_block reset above only
         // covers flips inside the orphaned range, and deriving from rows keeps this
         // recomputation independent of status bookkeeping either way.

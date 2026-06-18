@@ -1,0 +1,178 @@
+{
+  "merkle_version": 1,
+  "state_root_version": 1,
+  "block_merkle_version": 1,
+  "smt_depth": 256,
+  "chain": "BTC",
+  "network": "regtest",
+  "constants": {
+    "empty_0": "7d0eefdcd395118b3a5c35e09d967d4c8f3ccc6db2a7ba96fbb4a9689d9151dd",
+    "empty_1": "f883205469c0b06a6e429f91fe4dc4fb27b76ce7cc97606fb777dc3a2205550c",
+    "empty_255": "2d4c4f019ddb70dc0e833b8828f9e58947eba161d2a4cd8849e741a8ade8c06e",
+    "empty_smt_root": "c59a65441e85aa19393ca1ecf1c6d9e92bd5250dac74318a264eefb0dc0595a8"
+  },
+  "primitives": {
+    "leaf_hello": "8a2a5c9b768827de5a9552c38a044c66959c68f6d2f21b5260af54d2f87db827",
+    "node_empty_pair": "f883205469c0b06a6e429f91fe4dc4fb27b76ce7cc97606fb777dc3a2205550c"
+  },
+  "canonical_amount": [
+    {
+      "in": "0",
+      "out": "0.000000000000000000"
+    },
+    {
+      "in": "1000.5",
+      "out": "1000.500000000000000000"
+    },
+    {
+      "in": "00042",
+      "out": "42.000000000000000000"
+    },
+    {
+      "in": "0.000000000000000001",
+      "out": "0.000000000000000001"
+    },
+    {
+      "in": "7777777.123456789012345678",
+      "out": "7777777.123456789012345678"
+    }
+  ],
+  "keys": {
+    "member_balance_key": "48d2a5a24e5e585e0ed27170a81314efcccbd921870ae8ba551c750ecfbed0ff",
+    "stake_key_example": "3243f41660075e1077ca68aeb8e6143f709308ad59bf936bd0a384055e5d0a44"
+  },
+  "smt": {
+    "bal_entries": [
+      {
+        "address": "1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev",
+        "tick": "XCHAIN",
+        "amount": "1000.5"
+      },
+      {
+        "address": "1FuckButtZ6tQcSxwfxhv6XKKjcyiabcde",
+        "tick": "JDOG",
+        "amount": "0.000000000000000001"
+      },
+      {
+        "address": "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa",
+        "tick": "XCHAIN",
+        "amount": "42"
+      },
+      {
+        "address": "1BoatSLRHtKNngkdXEeobR76b53LETtpyT",
+        "tick": "PEPE",
+        "amount": "7777777.123456789012345678"
+      }
+    ],
+    "stake_entries": [
+      {
+        "pubkey": "02a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f901",
+        "capability": "oracle_publish",
+        "amount": "5000"
+      },
+      {
+        "pubkey": "03f1e2d3c4b5a6978869504132231415e6d7c8b9a0f1e2d3c4b5a697886950413",
+        "capability": "cross_chain",
+        "amount": "3000"
+      }
+    ],
+    "balances_root": "9d6c046a4a5918eb50f79e09ed61fa0c575f64ac0e684c3d2d553d8f6c03bca1",
+    "stakes_root": "ca218380752dbfda0c0a51a30de71578fbd668fda2830c1b6713afabac7550dc",
+    "membership": {
+      "target": {
+        "address": "1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev",
+        "tick": "XCHAIN",
+        "amount": "1000.5"
+      },
+      "leaf_value": "e3669b6569cf7df2286807720b1bafa1f989098ef4636a1b0511f28a02eb4d6d",
+      "compressed": {
+        "bitmap": "c000000000000000000000000000000000000000000000000000000000000000",
+        "siblings": [
+          "dd037f60dfcba6c47d2a47c4c152e19834d38b7f8c11d0b3fcd7bc86cbb4dd5f",
+          "a5d0dfba5747ca9fc90f32f514039b699a680bf1e8ed1042bfe209db6a54d0d6"
+        ]
+      }
+    },
+    "nonmembership": {
+      "target": {
+        "address": "1NOTPRESENTxxxxxxxxxxxxxxxxxxxxxxxx",
+        "tick": "GHOST"
+      },
+      "compressed": {
+        "bitmap": "e000000000000000000000000000000000000000000000000000000000000000",
+        "siblings": [
+          "dd037f60dfcba6c47d2a47c4c152e19834d38b7f8c11d0b3fcd7bc86cbb4dd5f",
+          "0dbf2c13017bfa4b4eb4caf47571f789f74e5a387e293e04860b5f7c5bceb06d",
+          "e0382fbe03d21f2299987faaf63f8bfc76246a1d548b6e1c187c7bb1b2d7ed7a"
+        ]
+      }
+    },
+    "delete_target": {
+      "address": "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa",
+      "tick": "XCHAIN",
+      "amount": "42"
+    },
+    "balances_root_after_delete": "56579813303cb7b290d40a3c94ce93822ebdf24b59670ebf7d54f43df3aed743",
+    "balances_root_reinserted": "9d6c046a4a5918eb50f79e09ed61fa0c575f64ac0e684c3d2d553d8f6c03bca1"
+  },
+  "state_root": {
+    "balances_root": "9d6c046a4a5918eb50f79e09ed61fa0c575f64ac0e684c3d2d553d8f6c03bca1",
+    "stakes_root": "ca218380752dbfda0c0a51a30de71578fbd668fda2830c1b6713afabac7550dc",
+    "root": "9bd666dde6b461ce93a8b3d42cde43c27735d1093543498d07c8e4eb74cfbcd3",
+    "sub_root_path_balances": {
+      "index": 0,
+      "siblings": [
+        "ca218380752dbfda0c0a51a30de71578fbd668fda2830c1b6713afabac7550dc",
+        "7cea8987bbc711deebe72e5a5238482c2ef6d20455e02225c5fe3cfbfbd43226",
+        "38d4beabe8d6a4ee8903bbfff449322c0dc7f4b53a12775faa9bb4dee9e20b0f"
+      ]
+    }
+  },
+  "block_merkle": {
+    "ledger_rows": [
+      {
+        "kind": "credit",
+        "action_index": 10,
+        "address": "1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev",
+        "tick": "XCHAIN",
+        "amount": "1000.5"
+      },
+      {
+        "kind": "debit",
+        "action_index": 10,
+        "address": "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa",
+        "tick": "XCHAIN",
+        "amount": "42"
+      },
+      {
+        "kind": "escrow",
+        "action_index": 11,
+        "address": "1BoatSLRHtKNngkdXEeobR76b53LETtpyT",
+        "tick": "PEPE",
+        "amount": "5"
+      }
+    ],
+    "actions_rows": [
+      {
+        "action_index": 10,
+        "tx_index": 0,
+        "action": "SEND"
+      },
+      {
+        "action_index": 11,
+        "tx_index": null,
+        "action": "ORDER"
+      }
+    ],
+    "root": "a850ac2f75433d77b4952fe36f7d94e51f2a11f979c1ffd1c6d5d0160e036d16",
+    "include_index": 1,
+    "include_proof": {
+      "index": 1,
+      "siblings": [
+        "c4ef476eb0304ee31668683e699271919d27ae0f52a69aa8bbc9b2a3aae226eb",
+        "fdebe4ca34e025147078409e32155817b906937f43b29b688ccb02865a54eec3",
+        "1e5b4b8cbbe6461ed31f850fe7fe644ac1a408c985f7e1c3657ca9c5f113654e"
+      ]
+    }
+  }
+}

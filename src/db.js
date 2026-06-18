@@ -1214,6 +1214,12 @@ class Database {
                  WHERE a.block_index=?
                  ORDER BY w.action_index ASC, w.contract_index ASC, a1.address COLLATE utf8_bin ASC, t1.tick COLLATE utf8mb4_bin ASC, w.amount ASC, s1.status COLLATE utf8_bin ASC`;
         contracts_data.withdrawals = await this.doQuery(query, [block_index]);
+        // Stash the gathered canonical rows so the light-client block_merkle_root
+        // (stateCommitment.js, SPV spec §5) can build leaves over the EXACT same
+        // rows + ORDER BY as these flat hashes, without re-querying or duplicating
+        // the consensus SQL. createBlock() calls getBlockHashes() once per block
+        // just before the state-commitment hook runs, so this stash is warm.
+        this._lastGatheredBlockRows = { block_index: block_index, ledger: ledger, actions: actions, contracts: contracts_data };
         // Subtract one block from current block
         let prev_block_index = block_index -1;
         // Get hashes from the previous block to include in this blocks hash
@@ -1280,22 +1286,40 @@ class Database {
     // Read the STORED per-block hash triple (ledger/actions/contracts) for a block
     // from the blocks table - the values createBlock() committed, NOT a recompute.
     // Powers the getblockhashes RPC the hub's StateCheckpointEngine signs over.
+    // LEFT JOINs the additive light-client roots (state_tree_roots): null before
+    // the STATE_COMMITMENT flag-day, present after. Additive: the three flat hashes
+    // above are unchanged whether or not the roots exist.
     async getStoredBlockHashes(block_index){
         let query = `SELECT
                 b.block_index,
                 b.block_time,
                 t1.hash as ledger_hash,
                 t2.hash as actions_hash,
-                t3.hash as contract_hash
+                t3.hash as contract_hash,
+                str.balances_root,
+                str.stakes_root,
+                str.state_root,
+                str.block_merkle_root
             FROM
                 blocks b
                 LEFT JOIN index_transactions t1 ON (t1.id=b.ledger_hash_id)
                 LEFT JOIN index_transactions t2 ON (t2.id=b.actions_hash_id)
                 LEFT JOIN index_transactions t3 ON (t3.id=b.contract_hash_id)
+                LEFT JOIN state_tree_roots  str ON (str.block_index=b.block_index)
             WHERE
                 b.block_index=?`;
         let results = await this.doQuery(query, [block_index]);
         return results.length > 0 ? results[0] : null;
+    }
+
+    // Return the canonical per-block leaf rows (ledger/actions/contracts) in the
+    // EXACT order getBlockHashes hashes them, for the light-client block_merkle_root
+    // (SPV spec §5.1). Reuses the warm getBlockHashes stash; recomputes only if the
+    // stash is cold/stale (e.g. a standalone proof-rebuild path).
+    async getBlockLeafRows(block_index){
+        if(!this._lastGatheredBlockRows || Number(this._lastGatheredBlockRows.block_index) !== Number(block_index))
+            await this.getBlockHashes(block_index);
+        return this._lastGatheredBlockRows;
     }
 
     // Lookup a record in the `index_transactions` table and return record id
@@ -2308,6 +2332,14 @@ class Database {
         const VALID_LEDGER_TABLES = ['credits', 'debits', 'escrows'];
         if(!VALID_LEDGER_TABLES.includes(table))
             throw new Error('Invalid ledger table: ' + table);
+        // Light-client SMT touched-key accumulation (SPV spec §4). Record the
+        // (address, tick) identity actually mutated this block so stateCommitment
+        // updates only touched balance/escrow leaves. Capturing at this single
+        // ledger choke point is robust to backdated cooldown-refund credits (which
+        // reuse an EARLIER block's action_index, so a block-range query would miss
+        // them). Active only while the indexer has installed a per-block set.
+        if(this._smtTouched && address != null && tick != null && tick !== '')
+            this._smtTouched.add(address + '\t' + tick);
         let tick_id    = await this.createTicker(tick);
         let address_id = await this.createAddress(address);
         // Round amount to the tick's actual decimal precision before storing.
@@ -8454,7 +8486,8 @@ class Database {
         // result on an unexpectedly large validator set is a latency/liveness
         // risk. The cap is generous relative to any realistic federation size;
         // hitting it is logged so operators get early warning that the set is
-        // outgrowing the assumption. Override via VALIDATOR_QUERY_LIMIT.
+        // outgrowing the assumption. VALIDATOR_QUERY_LIMIT is a frozen consensus
+        // constant; raising it requires a coordinated fleet upgrade, not a per-node override.
         let limit = this.config['VALIDATOR_QUERY_LIMIT'];
         // Same effective-signer resolution as the capability set (DELEGATE
         // additive-until-revoked semantics) with no MIN_STAKE floor: the

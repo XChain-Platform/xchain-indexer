@@ -15,25 +15,25 @@
  *
  * Rollback coverage guard.
  *
- * Every table the indexer owns is defined by a file in src/sql/ — that is the
+ * Every table the indexer owns is defined by a file in src/sql/ (that is the
  * exact set verifyTables() creates (table name = filename minus ".sql"). On a
  * chain reorg, Rollback.rollback() must do *something* deliberate with each of
  * those tables, or rows written in the orphaned block range survive and the
  * indexer DB silently diverges from chain truth (and from other validators).
  *
- * Historically tables shipped before they were wired into the rollback set —
+ * Historically tables shipped before they were wired into the rollback set.
  * e.g. gated_files (table 2026-05-22, rollback 2026-05-28, a 6-day window) and
  * slash_events (2-day window). Invisible on regtest; silent corruption on
  * mainnet. This test closes the *class*: a new src/sql/<table>.sql that nobody
  * classifies fails here instead of shipping.
  *
  * To satisfy this test, a new table must land in exactly one of these buckets:
- *   - dataTables   — deleted by `action_index >= ?`  (per-action rows)
- *   - blockTables  — deleted by `block_index >= ?`   (per-block rows)
- *   - RECOMPUTED   — not deleted by index; fully rebuilt during rollback()
- *   - SPECIAL_CASE — deleted by bespoke logic in rollback() (cascades, etc.)
- *   - ROLLBACK_EXEMPT — intentionally never rolled back (must carry a reason)
- *   - the `index_` prefix — append-only, id-keyed dedup lookups; orphaned rows
+ *   - dataTables   - deleted by `action_index >= ?`  (per-action rows)
+ *   - blockTables  - deleted by `block_index >= ?`   (per-block rows)
+ *   - RECOMPUTED   - not deleted by index; fully rebuilt during rollback()
+ *   - SPECIAL_CASE - deleted by bespoke logic in rollback() (cascades, etc.)
+ *   - ROLLBACK_EXEMPT - intentionally never rolled back (must carry a reason)
+ *   - the `index_` prefix - append-only, id-keyed dedup lookups; orphaned rows
  *     are harmless because they are only ever referenced by id.
  *
  * Pick the bucket by understanding the table, not by silencing the test.
@@ -69,9 +69,9 @@ const UNIVERSE = fs.readdirSync(SQL_DIR)
 // Tables not deleted by index but fully recomputed from surviving ledger rows
 // inside rollback() (updateBalances / updateTokens / updateMarkets;
 // attest_validator_stats via
-// _recomputeAttestationValidatorStats — drops rows last touched in the orphaned
+// _recomputeAttestationValidatorStats: drops rows last touched in the orphaned
 // range, then rebuilds them from surviving signatures + expired requests).
-// `tokens` is ALSO in dataTables — listing it here is harmless; coverage is a
+// `tokens` is ALSO in dataTables; listing it here is harmless, as coverage is a
 // union, not a partition.
 const RECOMPUTED = ['balances', 'tokens', 'markets', 'attest_validator_stats'];
 
@@ -88,24 +88,24 @@ const SPECIAL_CASE = ['contract_emissions', 'price_snapshots', 'icons'];
 // asserted below to actually exist (so this list can't rot with stale names).
 const ROLLBACK_EXEMPT = {
     events:
-        'Append-only operational audit log — it records the REORG event itself. ' +
+        'Append-only operational audit log; it records the REORG event itself. ' +
         'Rolling it back would erase the evidence of the rollback.',
     pubkeys:
         'Idempotent address_id → pubkey registry (createPubkey: INSERT IGNORE, ' +
-        'address_id PRIMARY KEY). Content-addressed — a given address always has ' +
-        'the same pubkey — and keyed on the append-only address registry (stable ' +
+        'address_id PRIMARY KEY). Content-addressed: a given address always has ' +
+        'the same pubkey, keyed on the append-only address registry (stable ' +
         'ids), so a row surviving a reorg is harmless: re-applying the same blocks ' +
         're-inserts it as a no-op. Never block-height state, so nothing to undo.',
     cross_chain_matches:
         'Hub-mirrored cross-chain DEX state (CROSS_CHAIN_TABLES in hub_db_sync.js), ' +
-        'NOT produced by local block/action processing — the indexer only SELECTs it. ' +
+        'NOT produced by local block/action processing; the indexer only SELECTs it. ' +
         'It is synced from the hub via a monotonic `id` cursor and retracted on the ' +
         'mirror side by hub_db_sync._applyRetraction (DELETE … WHERE a_/b_action_index ' +
         '>= the orphaned point, two-sided). Block replay does not re-pull it, so the ' +
         'chain-reorg path must leave its lifecycle to the hub mirror, not delete by index.',
     cross_chain_calls:
         'Hub-mirrored cross-chain contract call relay rows (CROSS_CHAIN_TABLES in ' +
-        'hub_db_sync.js), NOT produced by local block/action processing — the indexer ' +
+        'hub_db_sync.js), NOT produced by local block/action processing; the indexer ' +
         'only SELECTs it (XEXEC injection / result-callback passes). Synced from the ' +
         'hub via a monotonic `id` cursor (also the deterministic injection-order key); ' +
         'source-chain reorgs are handled mirror-side by hub_db_sync._applyRetraction ' +
@@ -114,7 +114,7 @@ const ROLLBACK_EXEMPT = {
         'dataTables and roll back normally.',
     oracle_prices:
         'Hub-mirrored user-published PRICE v1 oracle rows (hub_db_sync.js), NOT produced ' +
-        'by local block/action processing — the indexer only SELECTs it (fee/oracle price ' +
+        'by local block/action processing; the indexer only SELECTs it (fee/oracle price ' +
         'reads). action_index in this table refers to the row\'s SOURCE chain, which is ' +
         'usually a DIFFERENT chain from the one this indexer reorgs, so deleting by local ' +
         'block height would corrupt the mirror. Synced from the hub via an `id` cursor; ' +
@@ -128,12 +128,21 @@ const ROLLBACK_EXEMPT = {
         'not delete it.',
     state_checkpoints:
         'Hub-mirrored, quorum-signed state checkpoints (hub_db_sync.js), NOT produced ' +
-        'by local block/action processing — the indexer only SELECTs it for the ' +
+        'by local block/action processing; the indexer only SELECTs it for the ' +
         'explorer/SDK verification APIs. Synced from the hub via an `id` cursor and ' +
         'never retracted (a reorged height is superseded by a re-broadcast row with a ' +
         'higher checkpoint_seq). Block replay does not recreate it, so the chain-reorg ' +
         'path must not delete it. (The on-chain ANCHOR record, anchor_actions, IS ' +
         'action-indexed and rolls back normally as a dataTable.)',
+    state_tree_nodes:
+        'Content-addressed, copy-on-write SMT node store for the light-client state ' +
+        'commitment (SPV spec §4.3). Nodes are keyed by their own hash, so a node that ' +
+        'survives a reorg is harmless: re-applying the new chain INSERT-IGNOREs the same ' +
+        'hashes (no-op) and the surviving fork-point root in state_tree_roots (which IS ' +
+        'block-indexed and rolls back) anchors the correct tree. Orphaned nodes become ' +
+        'unreferenced garbage that a later mark-and-sweep pruner reclaims; deleting them ' +
+        'by block height is both unnecessary and impossible (a node carries no block_index, ' +
+        'and the same node may be shared by surviving blocks).',
 };
 
 // Convention: append-only, id-keyed dedup lookups. Orphaned rows are inert
@@ -207,7 +216,7 @@ describe('Rollback coverage guard @regression', function () {
             [],
             inBoth.length
                 ? `Tables keyed by BOTH action_index and block_index deletes: ${inBoth.join(', ')}. ` +
-                  `Pick one — a row has one or the other, and a double delete signals a modelling mistake.`
+                  `Pick one: a row has one or the other, and a double delete signals a modelling mistake.`
                 : undefined
         );
     });
