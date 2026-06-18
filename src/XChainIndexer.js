@@ -196,10 +196,15 @@ class XChainIndexer {
             // Enable by setting HUB_DB_SYNC_ENABLED=true (default off).
             if(process.env.HUB_DB_SYNC_ENABLED === 'true'){
                 this.hubDbSync = new HubDbSync(this.hubDb, { coin: this.config['COIN'] });
-                // Start it in the background; failures don't block indexer startup.
-                this.hubDbSync.start().catch(err => {
-                    console.warn('HubDbSync: start failed:', err.message);
-                });
+                // NOTE: do NOT start() here. The hub-mirror tables (price_snapshots,
+                // oracle_prices, cross_chain_*, capability_snapshots, state_checkpoints)
+                // are not created until verifyTables() runs further below. Starting the
+                // bootstrap before those tables exist races their creation: the bootstrap's
+                // SHOW COLUMNS probe comes back empty (doQuery swallows the missing-table
+                // 1146 for non-transactional reads and returns []), the mirror silently
+                // no-ops every row, and the BTC-only price-sync barrier defers every block
+                // until a process restart (prod rollout attempt 2026-06-17). Started below,
+                // after verifyTables()/runMigrations() guarantee the tables exist.
             }
         } else {
             // No hub DB credentials supplied. Hub-owned tables (price_snapshots, oracle_prices,
@@ -280,6 +285,16 @@ class XChainIndexer {
             // gated for an explicit operator run (`node src/migrate.js`). Recorded in the
             // schema_migrations ledger, so this is a no-op once applied.
             await this.indexerDb.runMigrations();
+
+            // Now that the indexer tables exist (including every hub-mirror table the
+            // sync client writes into), start the hub DB sync in the background.
+            // Deferred from construction above so the bootstrap never inserts into a
+            // not-yet-created mirror table. Failures don't block indexer startup.
+            if(this.hubDbSync){
+                this.hubDbSync.start().catch(err => {
+                    console.warn('HubDbSync: start failed:', err.message);
+                });
+            }
         }
 
         // Start the durable hub-push retry queue. Both PRICE hub pushes (v0 round

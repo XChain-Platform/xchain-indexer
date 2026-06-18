@@ -613,3 +613,50 @@ describe('HubDbSync _applyRow datetime coercion @regression @tier2', function ()
         assert.strictEqual(argFor(doQuery, 'oracle_prices', 'price', cols), null);
     });
 });
+
+describe('HubDbSync mirror-table cold-start (missing table) @regression @tier2', function () {
+
+    // Prod rollout abort 2026-06-17: on a fresh `reset`, hub_db_sync began
+    // bootstrapping before the indexer's verifyTables() had created price_snapshots.
+    // doQuery swallows the 1146 (missing table) for non-transactional reads and
+    // returns [], so _localColumns cached an EMPTY column set for the whole process
+    // lifetime; every _applyRow then filtered to zero columns and silently no-op'd
+    // (while still counting the row as "applied", hence "bootstrapped 44614 rows"),
+    // the mirror stayed at 0, and the BTC-only price barrier deferred every block
+    // until a process restart. The fix: never cache an empty/failed column lookup,
+    // and bail-to-retry instead of poisoning the mirror.
+
+    it('_localColumns refuses to cache an empty column set and throws (table not ready)', async function () {
+        const doQuery = sinon.stub().resolves([]);              // SHOW COLUMNS on a missing table
+        const sync = new HubDbSync({ doQuery }, {});
+        await assert.rejects(() => sync._localColumns('price_snapshots'), /not available yet/);
+        assert.ok(!sync._localColumnCache || !sync._localColumnCache['price_snapshots'],
+            'an empty/failed lookup must NOT be cached (else it poisons the mirror until restart)');
+    });
+
+    it('_bootstrapTable bails to retry (returns null) when the mirror table is absent', async function () {
+        const doQuery = sinon.stub().resolves([]);              // table missing -> empty SHOW COLUMNS
+        const sync = new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test' });
+        const httpGet = sinon.stub(sync, '_httpGet');
+        assert.strictEqual(await sync._bootstrapTable('price_snapshots'), null,
+            'an absent table must report not-drained so _bootstrapAll schedules a retry');
+        assert.strictEqual(httpGet.callCount, 0,
+            'must not fetch from the hub at all when the local table is absent');
+    });
+
+    it('recovers WITHOUT a restart once the table exists (cache was never poisoned)', async function () {
+        const doQuery = sinon.stub();
+        doQuery.onCall(0).resolves([]);                                       // round 1 SHOW COLUMNS: absent
+        doQuery.onCall(1).resolves([{ Field: 'id' }, { Field: 'status' }]);  // round 2 SHOW COLUMNS: present
+        doQuery.resolves([{ max_id: null }]);                                // subsequent MAX(id)
+        const sync = new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test' });
+        sinon.stub(sync, '_applyRow').resolves();
+        sinon.stub(sync, '_refreshPriceSyncHeight').resolves();
+        sinon.stub(sync, '_httpGet').resolves({ rows: [{ id: 1 }], watermark: 77 });
+
+        assert.strictEqual(await sync._bootstrapTable('price_snapshots'), null,
+            'round 1: table absent -> not-drained');
+        assert.strictEqual(await sync._bootstrapTable('price_snapshots'), 77,
+            'round 2: table now present -> drains cleanly (no restart needed)');
+    });
+});

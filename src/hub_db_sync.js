@@ -328,6 +328,21 @@ class HubDbSync {
     async _bootstrapTable(table) {
         const PAGE_LIMIT = 10000;
         const MAX_PAGES  = 1000;                             // runaway backstop (10M rows)
+
+        // Prime (and validate) the local column cache once, up front. If the mirror
+        // table does not exist yet, _localColumns throws (it refuses to cache an empty
+        // column set); bail as "not drained" so _bootstrapAll schedules a retry once
+        // the indexer's verifyTables() has created it. Doing this here (rather than
+        // letting each row fail in _applyRow) avoids a SHOW COLUMNS storm + a misleading
+        // "bootstrapped N rows" log when the whole page silently no-ops. Self-heals the
+        // cold-start race without a process restart.
+        try {
+            await this._localColumns(table);
+        } catch (e) {
+            console.warn('HubDbSync: ' + table + ' not ready for bootstrap (' + e.message + '), will retry');
+            return null;
+        }
+
         // Determine the highest existing ID in the local copy so we only fetch newer rows
         let lastId = 0;
         try {
@@ -641,6 +656,28 @@ class HubDbSync {
             return;
         }
 
+        // cross_chain_calls needs the same in-place upgrade path as price_snapshots,
+        // not plain INSERT IGNORE. It carries UNIQUE (call_id, phase). A replica can
+        // already hold an old or 'retracted' row for that key (a source-chain reorg
+        // marked it retracted via the deletion event). When the hub later re-finalizes
+        // the re-mined call (CrossChainCallEngine._writeFinalizedRow upserts the
+        // current quorum's content via ON DUPLICATE KEY UPDATE and rebroadcasts), a
+        // plain INSERT IGNORE here would drop the upgrade and strand the replica on the
+        // stale/retracted row. Because effective_time is in the signed canonical and
+        // gates the injection block, a divergent copy would inject at a different block.
+        // Upgrade only when the INCOMING row is finalized (keyed on VALUES(status),
+        // stable regardless of ODKU assignment order), so an already-finalized local
+        // row is never clobbered and re-delivery stays idempotent.
+        if (table === 'cross_chain_calls' && cols.includes('status')) {
+            let updatable = cols.filter(c => c !== 'id' && c !== 'call_id' && c !== 'phase' && c !== 'status');
+            let sets = updatable.map(c => '`' + c + "` = IF(VALUES(status) = 'finalized', VALUES(`" + c + '`), `' + c + '`)');
+            sets.push("status = IF(VALUES(status) = 'finalized', 'finalized', status)");
+            let query = 'INSERT INTO cross_chain_calls (' + cols.map(c => '`' + c + '`').join(', ') + ') VALUES (' + placeholders + ')'
+                      + ' ON DUPLICATE KEY UPDATE ' + sets.join(', ');
+            await this.hubDb.doQuery(query, args);
+            return;
+        }
+
         let query = 'INSERT IGNORE INTO ' + table + ' (' + cols.join(', ') + ') VALUES (' + placeholders + ')';
         await this.hubDb.doQuery(query, args);
     }
@@ -653,7 +690,18 @@ class HubDbSync {
         if (!this._localColumnCache) this._localColumnCache = {};
         if (!this._localColumnCache[table]) {
             let rows = await this.hubDb.doQuery('SHOW COLUMNS FROM ' + table);
-            this._localColumnCache[table] = new Set((rows || []).map(r => r.Field));
+            // doQuery swallows a missing-table error (1146) for non-transactional
+            // reads and returns [] instead of throwing. Caching an empty set here
+            // would poison the mirror for the entire process lifetime: every
+            // _applyRow would filter to zero columns and silently no-op, so a table
+            // that is merely not-created-yet (startup race with the indexer's
+            // verifyTables() on a fresh reset) would never mirror a single row until
+            // a restart (prod rollout attempt 2026-06-17). A real mirror table always
+            // has columns, so an empty result means "not ready": do NOT cache it, and
+            // throw so the caller treats this bootstrap as not-drained and retries.
+            if (!rows || rows.length === 0)
+                throw new Error('local mirror table ' + table + ' not available yet (no columns)');
+            this._localColumnCache[table] = new Set(rows.map(r => r.Field));
         }
         return this._localColumnCache[table];
     }
