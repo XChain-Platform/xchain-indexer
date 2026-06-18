@@ -175,7 +175,7 @@ class Issue {
         }
 
         // Verify any TICK ID given is valid tick ID
-        let tid = str.substring(1,str.length-1); // Possible TICK ID
+        let tid = str.substring(1); // Possible TICK ID (everything after the ^ prefix)
         if(!error && str.substring(0,1)=='^' && !this.util.isNumeric(tid))
             error = 'invalid: TICK (id)';
 

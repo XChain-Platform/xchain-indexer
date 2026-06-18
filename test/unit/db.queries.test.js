@@ -401,13 +401,22 @@ describe('Database getTicker/getTickerId @regression @tier1', function () {
         assert.strictEqual(await db.getTicker(3), 'PEPE');
     });
 
-    it('getTickerId for ^N literal: returns pid=str.substring(1,len-1) — characterization (strips last char too)', async function () {
-        // BUG: For '^42', len=3, pid=str.substring(1,2)='4' — strips the '^' prefix AND the
-        // last character. The caller-visible id is '4', not '42'. Recorded as a characterization.
+    it('getTickerId for ^N literal: strips only the ^ prefix and returns the full id', async function () {
+        // A `^<id>` reference resolves directly to TICK_ID <id> without a DB lookup.
+        // Everything after the caret is the id, including the final digit.
         const db = makeDb();
         sinon.stub(db, 'doQuery').resolves([]);
-        const id = await db.getTickerId('^42');
-        assert.strictEqual(String(id), '4');
+        assert.strictEqual(String(await db.getTickerId('^42')),   '42');
+        assert.strictEqual(String(await db.getTickerId('^1234')), '1234');
+        assert.strictEqual(String(await db.getTickerId('^7')),    '7');  // single-digit id
+    });
+
+    it('getTickerId for ^N with a non-numeric body falls through to a name lookup', async function () {
+        // '^abc' is not a valid id reference; it is not treated as TICK_ID and the
+        // DB name lookup (stubbed empty) yields null rather than a truncated id.
+        const db = makeDb();
+        sinon.stub(db, 'doQuery').resolves([]);
+        assert.strictEqual(await db.getTickerId('^abc'), null);
     });
 
     it('getTickerId returns null when no row found', async function () {
@@ -420,6 +429,50 @@ describe('Database getTicker/getTickerId @regression @tier1', function () {
         const db = makeDb();
         sinon.stub(db, 'doQuery').resolves([{ id: 7 }]);
         assert.strictEqual(await db.getTickerId('PEPE'), 7);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// TICK_ID (^N) <-> ticker-name equivalence
+// ---------------------------------------------------------------------------
+// The protocol lets any action reference a token by its full name (PEPE) or by
+// its immutable numeric id with a caret prefix (^7). Both MUST resolve to the
+// same token. Every action processor (SEND, MINT, DIVIDEND, ORDER, SWAP,
+// DISPENSER, ...) funnels its token lookups through createTicker()/getTickerId(),
+// so proving convergence at this chokepoint proves both forms are interchangeable
+// platform-wide. This is consensus-critical: divergent resolution would split state.
+describe('TICK_ID (^N) and ticker name resolve identically @regression @tier1', function () {
+    it('getTickerId: a name lookup and its ^id resolve to the same numeric id', async function () {
+        const db = makeDb();
+        // 'PEPE' is registered in index_tickers as id 7; '^7' references it directly.
+        sinon.stub(db, 'doQuery').resolves([{ id: 7 }]);
+        const byName = Number(await db.getTickerId('PEPE'));
+        const byId   = Number(await db.getTickerId('^7'));
+        assert.strictEqual(byName, 7);
+        assert.strictEqual(byId,   7);
+        assert.strictEqual(byName, byId);
+    });
+
+    it('getTickerId: multi-digit ^id is not truncated (regression for substring bug)', async function () {
+        const db = makeDb();
+        sinon.stub(db, 'doQuery').resolves([{ id: 1234 }]);
+        const byName = Number(await db.getTickerId('SOMECOIN'));   // name -> 1234
+        const byId   = Number(await db.getTickerId('^1234'));      // ^id  -> 1234 (NOT 123)
+        assert.strictEqual(byId, 1234);
+        assert.strictEqual(byName, byId);
+    });
+
+    it('createTicker: name and ^id return the same id, and ^id never INSERTs a phantom row', async function () {
+        const db = makeDb();
+        const doQuery = sinon.stub(db, 'doQuery').resolves([{ id: 7 }]);
+        const byName = await db.createTicker('PEPE');
+        const byId   = await db.createTicker('^7');
+        assert.strictEqual(byName, 7);
+        assert.strictEqual(byId,   7);
+        // The ^id path resolves without any lookup or INSERT, so referencing a token
+        // by id can never mint a phantom ticker named "^7".
+        const inserts = doQuery.getCalls().filter(c => /INSERT/i.test(String(c.args[0])));
+        assert.strictEqual(inserts.length, 0);
     });
 });
 

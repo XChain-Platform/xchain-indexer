@@ -1585,7 +1585,7 @@ class Database {
     async getTickerId(tick){
         let id  = null;
         let str = String(tick);
-        let pid = str.substring(1,str.length-1); // Possible TICK ID
+        let pid = str.substring(1); // Possible TICK ID (everything after the ^ prefix)
         // Determine if TICK is actually a TICK ID
         if(str.substring(0,1)=='^' && this.util.isNumeric(pid))
             id = pid;
