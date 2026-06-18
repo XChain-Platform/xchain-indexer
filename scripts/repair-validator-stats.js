@@ -122,8 +122,10 @@ async function main(){
     // occurred iff deadline_block+1 <= tip, i.e. deadline_block < tip, where tip is
     // the latest parsed block; a request still inside its deadline window is
     // 'pending' and has recorded zero misses) and (b) no *valid* v1 response
-    // survives for it (any valid response flips it out of 'pending' before the
-    // deadline). We derive eligibility from the surviving v0 rows, NOT
+    // survives for it. Only a *terminal* valid v1 response
+    // (response_status IN ('ok','expired')) excludes a request; a retryable round
+    // (timeout/no_quorum/provider_error) leaves it 'pending' so it still expires.
+    // We derive eligibility from the surviving v0 rows, NOT
     // request_status, because a reorg-undone response/expiry leaves request_status
     // stale. This is the same staleness hazard a post-reorg repair must avoid. This mirrors
     // Rollback._recomputeAttestationValidatorStats with the rollback target replaced
@@ -142,6 +144,7 @@ async function main(){
                WHERE r.version = 1
                  AND r.request_id = ar.request_id
                  AND r.status_id = ?
+                 AND r.response_status IN ('ok', 'expired')
            )`,
         [tip, validId]
     );
