@@ -65,7 +65,10 @@ const CANON_AMOUNTS = [
 const LEDGER_ROWS = [
     { kind: 'credit', action_index: 10, address: '1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev', tick: 'XCHAIN', amount: '1000.5' },
     { kind: 'debit',  action_index: 10, address: '1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa', tick: 'XCHAIN', amount: '42'     },
-    { kind: 'escrow', action_index: 11, address: '1BoatSLRHtKNngkdXEeobR76b53LETtpyT', tick: 'PEPE',   amount: '5'      }
+    { kind: 'escrow', action_index: 11, address: '1BoatSLRHtKNngkdXEeobR76b53LETtpyT', tick: 'PEPE',   amount: '5'      },
+    // Negative escrow row: the release idiom (order_expire/swap_expire/attest settle).
+    // Locks the leaf encoding for signed amounts (raw stored string, not canonicalAmount).
+    { kind: 'escrow', action_index: 12, address: '1BoatSLRHtKNngkdXEeobR76b53LETtpyT', tick: 'PEPE',   amount: '-5'     }
 ];
 const ACTIONS_ROWS = [
     { action_index: 10, tx_index: 0,    action: 'SEND'  },

@@ -150,6 +150,13 @@
         "address": "1BoatSLRHtKNngkdXEeobR76b53LETtpyT",
         "tick": "PEPE",
         "amount": "5"
+      },
+      {
+        "kind": "escrow",
+        "action_index": 12,
+        "address": "1BoatSLRHtKNngkdXEeobR76b53LETtpyT",
+        "tick": "PEPE",
+        "amount": "-5"
       }
     ],
     "actions_rows": [
@@ -164,14 +171,14 @@
         "action": "ORDER"
       }
     ],
-    "root": "a850ac2f75433d77b4952fe36f7d94e51f2a11f979c1ffd1c6d5d0160e036d16",
+    "root": "65125d4275d35a4456c19553628fbe5a68a8b744f1d1d4f88d8bdfb51b144d09",
     "include_index": 1,
     "include_proof": {
       "index": 1,
       "siblings": [
-        "c4ef476eb0304ee31668683e699271919d27ae0f52a69aa8bbc9b2a3aae226eb",
-        "fdebe4ca34e025147078409e32155817b906937f43b29b688ccb02865a54eec3",
-        "1e5b4b8cbbe6461ed31f850fe7fe644ac1a408c985f7e1c3657ca9c5f113654e"
+        "451dfad590f0c9b1336098d99bc80804b33af1b375b10cca7661df3cfdd36486",
+        "aa9dd5bfe685bffafa01008ed3d08cf7531f561e5a88fd50ae490c6fae0c8e9c",
+        "6a9ff80d5660476b4517b937bf01907fb28a1ce2ec3667dce09c466553df5be9"
       ]
     }
   }

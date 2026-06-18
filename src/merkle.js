@@ -314,8 +314,16 @@ function stateRootProof(subRoots, name){
 // Frozen cross-kind total order (§5.1): all ledger leaves, then actions, then
 // contracts; within each kind the existing getBlockHashes deterministic order.
 // tx_index NULL is encoded as the empty string (block-hash covers tx-NULL rows).
+// Amount is hashed as the RAW stored string (not canonicalAmount): block_merkle_root
+// is a content commitment over the exact rows, in parity with the consensus
+// ledger_hash, which also hashes the stored amount string. This is required for
+// correctness, not just style: escrow rows are legitimately NEGATIVE (the release
+// idiom: a +amount lock is offset by a -amount release row, so SUM(escrows)=locked),
+// and the non-negative canonicalAmount throws on them. The stored string is already
+// deterministic (createLedgerChangeRecord rounds to tick decimals + mathjs String()),
+// matching contractLeaf, which likewise hashes its amount fields raw.
 function ledgerLeaf(row){
-    return leafHash(joinFields(['L', row.kind, row.action_index, row.address, row.tick, canonicalAmount(row.amount)]));
+    return leafHash(joinFields(['L', row.kind, row.action_index, row.address, row.tick, row.amount]));
 }
 function actionsLeaf(row){
     const txi = (row.tx_index == null) ? '' : row.tx_index;
