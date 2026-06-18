@@ -33,6 +33,7 @@ const XChainIndexer = require('./XChainIndexer');
 const jsonRouter    = require('express-json-rpc-router');
 const { buildHealthResponse } = require('./health');
 const { getStakeSourceByPubkey } = require('./stake-source');
+const merkle        = require('./merkle');
 
 // Parse in .env config data
 dotenv.config();
@@ -275,11 +276,16 @@ async function startApi(){
                     contract_hash: stored.contract_hash || null,
                     // Additive light-client roots (SPV spec §4/§5): null before the
                     // STATE_COMMITMENT flag-day, present after. Phase 2's checkpoint
-                    // engine signs over state_root + block_merkle_root.
-                    balances_root:     stored.balances_root     || null,
-                    stakes_root:       stored.stakes_root       || null,
-                    state_root:        stored.state_root        || null,
-                    block_merkle_root: stored.block_merkle_root || null
+                    // engine signs over state_root + block_merkle_root. The version
+                    // bytes travel WITH their root (the frozen merkle.js scheme
+                    // version under which the stored root was computed) so the hub
+                    // signs root+version as a unit; null whenever the root is null.
+                    balances_root:        stored.balances_root     || null,
+                    stakes_root:          stored.stakes_root       || null,
+                    state_root:           stored.state_root        || null,
+                    state_root_version:   stored.state_root        ? merkle.STATE_ROOT_VERSION   : null,
+                    block_merkle_root:    stored.block_merkle_root || null,
+                    block_merkle_version: stored.block_merkle_root ? merkle.BLOCK_MERKLE_VERSION : null
                 };
             } catch (err) {
                 console.error('getblockhashes error:', err);

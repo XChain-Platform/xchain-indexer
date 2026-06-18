@@ -79,6 +79,24 @@ function v1Params(archiveJson, overrides = {}) {
     return p;
 }
 
+// ANCHOR v3 params (SPV Phase 2): v0 fields + the two light-client roots + version
+// bytes appended before SIG_COUNT.
+function v3Params(overrides = {}) {
+    let f = Object.assign({
+        chain: 'BTC', network: 'regtest', block_index: '500', block_hash: HASH('0'),
+        ledger: HASH('1'), actions: HASH('2'), contracts: HASH('3'),
+        seq: '0', snapshot: '100',
+        state_root: HASH('d'), state_root_version: '1',
+        block_merkle_root: HASH('e'), block_merkle_version: '1',
+        sigs: [[PUBKEY_A, SIG]]
+    }, overrides);
+    let p = ['3', f.chain, f.network, f.block_index, f.block_hash, f.ledger, f.actions, f.contracts,
+             f.seq, f.snapshot, f.state_root, f.state_root_version, f.block_merkle_root, f.block_merkle_version,
+             String(f.sigs.length)];
+    for (let [pk, sg] of f.sigs) p.push(pk, sg);
+    return p;
+}
+
 const ARCHIVE_JSON = JSON.stringify({ v: 1, network: 'regtest', batch_seq: 0, matches: [{ match_id: 'm1' }], capability_snapshots: [] });
 
 describe('Anchor (ANCHOR) @regression @tier3', function () {
@@ -125,6 +143,55 @@ describe('Anchor (ANCHOR) @regression @tier3', function () {
         let raw = ['XCHECKPOINT', 'BTC', 'regtest', '500', HASH('0'), HASH('1'), HASH('2'), HASH('3'), '0', '100'].join('|');
         let expected = eq.buildEquivCanonical(eq.ENGINE_TAGS.CHECKPOINT, 'BTC|regtest|500|0', 0, raw);
         assert.strictEqual(verifyStub.firstCall.args[0], expected);
+    });
+
+    it('v3 (SPV Phase 2) with a quorum of valid sigs is valid, commits + stores the roots', async function () {
+        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 3, COIN: 'DOGE' });
+        await handler.parse(v3Params(), data, null);
+        assert.strictEqual(data['STATUS'], 'valid');
+        let row = lastWrite();
+        assert.strictEqual(row['CHAIN'], 'BTC');
+        assert.strictEqual(row['STATE_ROOT'], HASH('d'));
+        assert.strictEqual(String(row['STATE_ROOT_VERSION']), '1');
+        assert.strictEqual(row['BLOCK_MERKLE_ROOT'], HASH('e'));
+        assert.strictEqual(String(row['BLOCK_MERKLE_VERSION']), '1');
+        // The signed canonical is the v0 raw + the SPV root suffix, EQUIV-wrapped (regtest).
+        let raw = ['XCHECKPOINT', 'BTC', 'regtest', '500', HASH('0'), HASH('1'), HASH('2'), HASH('3'), '0', '100',
+                   HASH('d'), '1', HASH('e'), '1'].join('|');
+        let expected = eq.buildEquivCanonical(eq.ENGINE_TAGS.CHECKPOINT, 'BTC|regtest|500|0', 0, raw);
+        assert.strictEqual(verifyStub.firstCall.args[0], expected);
+    });
+
+    it('v3 canonical appends the root suffix to the v0 base (hub byte-parity covered in e2e parity suite)', function () {
+        // The hub<->indexer<->SDK byte-identity is asserted in the cross-service suite
+        // (xchain-e2e-test .../parity/checkpointCommitmentParity.test.js); here we lock the
+        // indexer's own v3 canonical shape: v0 base + |STATE_ROOT|VER|BLOCK_MERKLE|VER, wrapped.
+        let d = {
+            FORMAT: 3, CHAIN: 'BTC', NETWORK: 'regtest', BLOCK_INDEX_CHECKPOINTED: 500,
+            BLOCK_HASH: HASH('0'), LEDGER_HASH: HASH('1'), ACTIONS_HASH: HASH('2'), CONTRACT_HASH: HASH('3'),
+            CHECKPOINT_SEQ: 0, SNAPSHOT_BLOCK: 100,
+            STATE_ROOT: HASH('d'), STATE_ROOT_VERSION: 1, BLOCK_MERKLE_ROOT: HASH('e'), BLOCK_MERKLE_VERSION: 1
+        };
+        let raw = ['XCHECKPOINT', 'BTC', 'regtest', '500', HASH('0'), HASH('1'), HASH('2'), HASH('3'), '0', '100',
+                   HASH('d'), '1', HASH('e'), '1'].join('|');
+        let expected = eq.buildEquivCanonical(eq.ENGINE_TAGS.CHECKPOINT, 'BTC|regtest|500|0', 0, raw);
+        assert.strictEqual(handler._canonical(d), expected);
+    });
+
+    it('v3 rejects a malformed STATE_ROOT', async function () {
+        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 3, COIN: 'DOGE' });
+        await handler.parse(v3Params({ state_root: 'nothex' }), data, null);
+        assert.ok(String(data['STATUS']).startsWith('invalid: STATE_ROOT'));
+    });
+
+    it('v3 is rejected before the CHECKPOINT_COMMITMENT flag-day', async function () {
+        let ckptStub = sinon.stub(require('../../../src/checkpoint_commitment_activation.js'),
+            'isCheckpointCommitmentActive').returns(false);
+        try {
+            let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 3, COIN: 'DOGE' });
+            await handler.parse(v3Params(), data, null);
+            assert.ok(String(data['STATUS']).startsWith('invalid: ANCHOR v3 before CHECKPOINT_COMMITMENT flag-day'));
+        } finally { ckptStub.restore(); }
     });
 
     it('rejects ANCHOR on a non-DOGE chain', async function () {

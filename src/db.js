@@ -9059,6 +9059,10 @@ class Database {
             data['CONTRACT_HASH'] || null,
             (data['CHECKPOINT_SEQ'] != null) ? Number(data['CHECKPOINT_SEQ']) : null,
             (data['SNAPSHOT_BLOCK'] != null) ? Number(data['SNAPSHOT_BLOCK']) : null,
+            data['STATE_ROOT'] || null,
+            (data['STATE_ROOT_VERSION'] != null) ? Number(data['STATE_ROOT_VERSION']) : null,
+            data['BLOCK_MERKLE_ROOT'] || null,
+            (data['BLOCK_MERKLE_VERSION'] != null) ? Number(data['BLOCK_MERKLE_VERSION']) : null,
             (data['MATCH_BATCH_SEQ'] != null) ? Number(data['MATCH_BATCH_SEQ']) : null,
             (data['MATCH_COUNT'] != null) ? Number(data['MATCH_COUNT']) : null,
             data['BATCH_CRC32'] || null,
@@ -9074,6 +9078,7 @@ class Database {
             await this.doQuery(
                 `UPDATE anchor_actions SET version=?, chain=?, network=?, block_index=?, block_hash=?,
                         ledger_hash=?, actions_hash=?, contract_hash=?, checkpoint_seq=?, snapshot_block=?,
+                        state_root=?, state_root_version=?, block_merkle_root=?, block_merkle_version=?,
                         match_batch_seq=?, match_count=?, batch_crc32=?, total_chunks=?, chunk_index=?,
                         archive_b64=?, validator_signatures=?, status_id=?, block_index_doge=?
                  WHERE action_index=?`, args.concat([action_index]));
@@ -9081,10 +9086,11 @@ class Database {
             await this.doQuery(
                 `INSERT INTO anchor_actions
                         (version, chain, network, block_index, block_hash, ledger_hash, actions_hash,
-                         contract_hash, checkpoint_seq, snapshot_block, match_batch_seq, match_count,
+                         contract_hash, checkpoint_seq, snapshot_block, state_root, state_root_version,
+                         block_merkle_root, block_merkle_version, match_batch_seq, match_count,
                          batch_crc32, total_chunks, chunk_index, archive_b64, validator_signatures,
                          status_id, block_index_doge, action_index)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, args.concat([action_index]));
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, args.concat([action_index]));
         }
     }
 
@@ -9095,7 +9101,7 @@ class Database {
         let query = `SELECT MAX(a.checkpoint_seq) AS max_seq
                      FROM anchor_actions a
                      JOIN index_statuses s ON s.id = a.status_id
-                     WHERE a.chain = ? AND a.network = ? AND a.version IN (0, 1)
+                     WHERE a.chain = ? AND a.network = ? AND a.version IN (0, 1, 3)
                        AND s.status IN ('valid', 'unverified')`;
         let rows = await this.doQuery(query, [chain, network]);
         return (rows.length > 0 && rows[0].max_seq != null) ? Number(rows[0].max_seq) : null;

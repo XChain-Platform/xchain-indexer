@@ -1,15 +1,16 @@
--- ANCHOR action rows — the permanent ON-CHAIN record of federation state
+-- ANCHOR action rows: the permanent ON-CHAIN record of federation state
 -- commitments, parsed from the DOGE-only ANCHOR action (one row per
 -- action_index; rolled back by action_index like any data table):
---   version 0 — checkpoint (quorum-signed per-chain state-hash commitment)
---   version 1 — checkpoint + match-archive segment (chunk 0 of the batch)
---   version 2 — archive continuation chunk (no signatures of its own)
+--   version 0: checkpoint (quorum-signed per-chain state-hash commitment)
+--   version 1: checkpoint + match-archive segment (chunk 0 of the batch)
+--   version 2: archive continuation chunk (no signatures of its own)
+--   version 3: checkpoint + SPV light-client roots (state_root + block_merkle_root)
 --
 -- The live verification source for explorers/wallets is the hub-mirrored
 -- state_checkpoints table; this table exists so a full chain parse alone
 -- recovers every checkpoint + the complete cross-chain match archive
 -- (src/recovery.js). Status semantics: 'valid' (sigs verified at quorum),
--- 'unverified' (no capability snapshot available locally — recovery
+-- 'unverified' (no capability snapshot available locally, so recovery
 -- re-verifies from the ARCHIVED snapshots), or an 'invalid: ...' reason.
 --
 -- Spec: xchain-documentation/protocol/actions/ANCHOR.md
@@ -26,6 +27,10 @@ CREATE TABLE anchor_actions (
     contract_hash        VARCHAR(64),                     -- indexer blocks.contract_hash
     checkpoint_seq       BIGINT UNSIGNED,                 -- monotonic per (chain, network); replay guard
     snapshot_block       BIGINT UNSIGNED,                 -- BTC block selecting the oracle_publish set
+    state_root           CHAR(64),                        -- SPV light-client state_root carried by ANCHOR v3; NULL for v0/v1/v2
+    state_root_version   TINYINT UNSIGNED,                -- merkle.js STATE_ROOT_VERSION (v3 only)
+    block_merkle_root    CHAR(64),                        -- SPV per-block content Merkle root carried by ANCHOR v3; NULL otherwise
+    block_merkle_version TINYINT UNSIGNED,                -- merkle.js BLOCK_MERKLE_VERSION (v3 only)
     match_batch_seq      BIGINT UNSIGNED,                 -- archive batch id (v1/v2)
     match_count          INT UNSIGNED,                    -- match records in the batch (v1)
     batch_crc32          VARCHAR(8),                      -- CRC32 of the UNCOMPRESSED archive JSON (v1)

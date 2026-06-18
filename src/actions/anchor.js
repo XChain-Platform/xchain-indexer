@@ -44,6 +44,7 @@ const zlib    = require('zlib');
 const ed25519 = require('../ed25519.js');
 const swq     = require('../stake_weighted_quorum.js');
 const eq      = require('../equivocation_header.js');
+const ckpt    = require('../checkpoint_commitment_activation.js');
 
 const ALLOWED_CHAINS = ['BTC', 'LTC', 'DOGE'];
 
@@ -62,6 +63,11 @@ class Anchor {
         this.formats[0] = 'VERSION|CHAIN|NETWORK|BLOCK_INDEX|BLOCK_HASH|LEDGER_HASH|ACTIONS_HASH|CONTRACT_HASH|CHECKPOINT_SEQ|SNAPSHOT_BLOCK|SIG_COUNT|PUBKEY|SIG|...';
         this.formats[1] = 'VERSION|CHAIN|NETWORK|BLOCK_INDEX|BLOCK_HASH|LEDGER_HASH|ACTIONS_HASH|CONTRACT_HASH|CHECKPOINT_SEQ|SNAPSHOT_BLOCK|MATCH_BATCH_SEQ|MATCH_COUNT|BATCH_CRC32|TOTAL_CHUNKS|ARCHIVE_B64|SIG_COUNT|PUBKEY|SIG|...';
         this.formats[2] = 'VERSION|MATCH_BATCH_SEQ|CHUNK_INDEX|TOTAL_CHUNKS|ARCHIVE_B64_CHUNK';
+        // v3 (SPV Phase 2, spec §6.3 / D6): v0 checkpoint PLUS the two light-client roots
+        // + their version bytes, appended before SIG_COUNT (positional, never inserted
+        // mid-string). The signatures cover the post-flag-day checkpoint canonical, which
+        // includes the same roots, so they are signed, not just transported.
+        this.formats[3] = 'VERSION|CHAIN|NETWORK|BLOCK_INDEX|BLOCK_HASH|LEDGER_HASH|ACTIONS_HASH|CONTRACT_HASH|CHECKPOINT_SEQ|SNAPSHOT_BLOCK|STATE_ROOT|STATE_ROOT_VERSION|BLOCK_MERKLE_ROOT|BLOCK_MERKLE_VERSION|SIG_COUNT|PUBKEY|SIG|...';
     }
 
     // Canonical signing string: MUST byte-match the hub's
@@ -76,9 +82,20 @@ class Anchor {
         // DISTINCT equivocation keys (R-4 false-slash fix). Must byte-match the hub.
         let roundId = d['CHAIN'] + '|' + d['NETWORK'] + '|' + d['BLOCK_INDEX_CHECKPOINTED'] + '|' + d['CHECKPOINT_SEQ'];
         if(Number(d['FORMAT']) === 1){
+            // Archive (v1): rootless checkpoint base + archive extension. Byte-matches the
+            // hub's _archiveCanonical, which nests the bare _rawCanonicalCheckpoint.
             base += '|' + String(d['MATCH_BATCH_SEQ']) + '|' + String(d['MATCH_COUNT']) + '|' +
                     d['BATCH_CRC32'] + '|' + String(d['TOTAL_CHUNKS']);
             roundId += '|' + d['MATCH_BATCH_SEQ'];
+        } else if(Number(d['FORMAT']) === 3){
+            // SPV Phase 2 (spec §6.1/§6.3): v3 IS the root-carrying checkpoint, so its
+            // canonical always appends the root suffix. Byte-matches the hub's post-flag-day
+            // canonicalCheckpoint suffix + the SDK/explorer reconstructions. Gating on the
+            // VERSION (not the flag-day) keeps a legacy v0 rootless even after the flag-day:
+            // v0 sigs were produced over the rootless canonical, and post-flag-day the hub
+            // emits v3 (carrying roots), never v0. v3 itself is rejected pre-flag-day in parse.
+            base += '|' + [String(d['STATE_ROOT'] || '').toLowerCase(), String(d['STATE_ROOT_VERSION']),
+                           String(d['BLOCK_MERKLE_ROOT'] || '').toLowerCase(), String(d['BLOCK_MERKLE_VERSION'])].join('|');
         }
         if(eq.isEquivHeaderActive(d['SNAPSHOT_BLOCK'], d['NETWORK']))
             return eq.buildEquivCanonical(eq.ENGINE_TAGS.CHECKPOINT, roundId, 0, base);
@@ -120,6 +137,13 @@ class Anchor {
             data['TOTAL_CHUNKS']    = params[13];
             data['ARCHIVE_B64']     = String(params[14] || '');
             sigBase = 15;
+        } else if(format === 3){
+            // SPV Phase 2: the two light-client roots + version bytes, before SIG_COUNT.
+            data['STATE_ROOT']           = String(params[10] || '').toLowerCase();
+            data['STATE_ROOT_VERSION']   = params[11];
+            data['BLOCK_MERKLE_ROOT']    = String(params[12] || '').toLowerCase();
+            data['BLOCK_MERKLE_VERSION'] = params[13];
+            sigBase = 14;
         }
 
         // ── Structural validation ─────────────────────────────────────────────
@@ -144,6 +168,19 @@ class Anchor {
                 error = 'invalid: BATCH_CRC32 (format)';
             else if(!data['ARCHIVE_B64'] || !/^[0-9a-zA-Z_-]+$/.test(String(data['ARCHIVE_B64'])))
                 error = 'invalid: ARCHIVE_B64 (format)';
+        }
+        if(!error && format === 3){
+            // v3 may only appear at/above the CHECKPOINT_COMMITMENT flag-day (else its
+            // signed canonical would have no root suffix, so the sigs could never verify).
+            if(!ckpt.isCheckpointCommitmentActive(Number(data['SNAPSHOT_BLOCK']), data['NETWORK']))
+                error = 'invalid: ANCHOR v3 before CHECKPOINT_COMMITMENT flag-day';
+            else if(!/^[0-9a-f]{64}$/.test(String(data['STATE_ROOT'])))
+                error = 'invalid: STATE_ROOT (format)';
+            else if(!/^[0-9a-f]{64}$/.test(String(data['BLOCK_MERKLE_ROOT'])))
+                error = 'invalid: BLOCK_MERKLE_ROOT (format)';
+            else if(!/^[0-9]+$/.test(String(data['STATE_ROOT_VERSION'])) ||
+                    !/^[0-9]+$/.test(String(data['BLOCK_MERKLE_VERSION'])))
+                error = 'invalid: STATE_ROOT_VERSION / BLOCK_MERKLE_VERSION (format)';
         }
 
         // ── Parse the signature list ──────────────────────────────────────────
