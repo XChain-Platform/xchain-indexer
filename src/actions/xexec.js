@@ -147,7 +147,7 @@ class Xexec {
             validSigners.push(pk);
         }
         let quorumMet = weighted
-            ? swq.meetsStakeThreshold(this.util, validators, validSigners)
+            ? swq.meetsStakeThreshold(validators, validSigners)
             : (validSigners.length >= ((N <= 1) ? 1 : Math.max(2 * Math.floor((N - 1) / 3) + 1, Math.ceil((N + 1) / 2))));
         if(!quorumMet){
             console.warn("\t XEXEC : call=" + String(c.call_id).substring(0,16) + '... : insufficient ' + (weighted ? 'signer stake' : 'valid signatures (' + validSigners.length + '/' + N + ')') + ' - skipping');

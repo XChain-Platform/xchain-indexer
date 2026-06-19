@@ -10,19 +10,23 @@
  *
  **********************************************************************
  *
- * XChain Indexer: Equivocation Header (EQUIV_HEADER / WI-2 bump 2)
+ * XChain Platform: Equivocation Header (EQUIV_HEADER / WI-2 bump 2)
  *
- * The single, CONSENSUS-CRITICAL implementation of the uniform signed header that
+ * THE single, CONSENSUS-CRITICAL implementation of the uniform signed header that
  * prefixes every consensus canonical at/above the activation flag-day:
  *
  *     EQUIV|<ENGINE_TAG>|<ROUND_ID>|<VIEW>||<CONTENT>
  *
- * The indexer re-derives these canonicals to re-verify quorum signatures in the
- * settlement gates (cross_settle, xexec, xcall, anchor, price, attest) and the
- * recovery verifier, and the SLASH v0 action verifies equivocation proofs against
- * them. Adding `<VIEW>` makes equivocation provable WITHOUT false-positiving honest
- * view changes (which re-sign different content for the same round under a different
- * view). Equivocation = same (engine, round, view), different content.
+ * The canonical source of record is
+ * xchain-documentation/protocol/reference-impl/equivocation_header.js; it is
+ * vendored BYTE-IDENTICALLY into xchain-hub, xchain-indexer, xchain-explorer,
+ * xchain-sdk and xchain-sync. Every PBFT/consensus engine prefixes its canonical
+ * through here, the settlement gates (cross_settle, xexec, xcall, anchor, price,
+ * attest) and the recovery verifier re-derive it to re-verify quorum signatures,
+ * and the SLASH v0 action verifies equivocation proofs against it. Adding `<VIEW>`
+ * makes equivocation provable WITHOUT false-positiving honest view changes (which
+ * re-sign different content for the same round under a different view). Equivocation
+ * = same (engine, round, view), different content.
  *
  * Both `EQUIV_KEY` (= ENGINE_TAG|ROUND_ID|VIEW) and the canonical may contain `|`
  * (the checkpoint round id is `chain|network|block_index|checkpoint_seq`, and every
@@ -31,10 +35,11 @@
  * is the unambiguous key/content boundary; `buildEquivCanonical` is the only producer).
  *
  * Gated on the BTC-anchored snapshot_block + network so every chain + the hub flip on
- * the same anchor. The hub keeps a byte-equivalent copy in
- * xchain-hub/src/equivocation_header.js; the cross-service regression suite asserts the
- * activation map matches the canonical in xchain-documentation/protocol/constants.js
- * (a divergence forks the chain).
+ * the same anchor. The cross-service conformance suite
+ * (ConsensusPrimitiveConformance.test.js, driven by
+ * xchain-documentation/protocol/test-vectors) runs in every repo and asserts BOTH the
+ * behavior (canonical vectors) AND byte-identity of the local copy to this canonical
+ * source, so any unmirrored edit fails CI everywhere (a divergence forks the chain).
  *
  ********************************************************************/
 
@@ -60,12 +65,12 @@ const ENGINE_TAGS = {
 };
 
 // Whether the EQUIV header is in effect for a settlement whose BTC-anchored snapshot
-// is at `snapshotBlock` on `network`. Below this → legacy headerless bytes.
+// is at `snapshotBlock` on `network`. Below this -> legacy headerless bytes.
 function isEquivHeaderActive(snapshotBlock, network){
     let sb = parseInt(snapshotBlock);
     if(!Number.isFinite(sb)) return false;
     let threshold = EQUIV_HEADER_ACTIVATION[network];
-    if(threshold === undefined) return false;   // unknown network → off (safe)
+    if(threshold === undefined) return false;   // unknown network -> off (safe)
     return sb >= threshold;
 }
 

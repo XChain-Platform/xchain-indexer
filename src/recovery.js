@@ -413,7 +413,7 @@ class AnchorRecovery {
             if(ed25519.verify(canonical, String(s.sig), pk)) validSigners.push(pk);
         }
         if(weighted)
-            return swq.meetsStakeThreshold(this.util, validatorSet, validSigners);
+            return swq.meetsStakeThreshold(validatorSet, validSigners);
         let quorum = (qualified.size <= 1) ? 1 : Math.max(2 * Math.floor((qualified.size - 1) / 3) + 1, Math.ceil((qualified.size + 1) / 2));
         return validSigners.length >= quorum;
     }

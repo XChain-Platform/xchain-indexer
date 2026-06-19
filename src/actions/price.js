@@ -170,7 +170,7 @@ class Price {
             let weighted = swq.isStakeWeightedQuorumActive(data['BLOCK_INDEX'], this.config['NETWORK']);
             if(weighted){
                 let validators = await this.indexerDb.getStakeWeightsByCapability('price', data['BLOCK_INDEX']);
-                if(!swq.meetsStakeThreshold(this.util, validators, qualifiedSigners))
+                if(!swq.meetsStakeThreshold(validators, qualifiedSigners))
                     error = 'invalid: insufficient signer stake';
             } else {
                 // Compute PBFT quorum over validators with `price` capability,

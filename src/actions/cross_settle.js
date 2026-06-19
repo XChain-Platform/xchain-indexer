@@ -129,7 +129,7 @@ class Cross_Settle {
             validSigners.push(pk);
         }
         let quorumMet = weighted
-            ? swq.meetsStakeThreshold(this.util, validators, validSigners)
+            ? swq.meetsStakeThreshold(validators, validSigners)
             : (validSigners.length >= ((N <= 1) ? 1 : Math.max(2 * Math.floor((N - 1) / 3) + 1, Math.ceil((N + 1) / 2))));
         if(!quorumMet){
             // Genuinely insufficient quorum (the snapshot IS present). Do not

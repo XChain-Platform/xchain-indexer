@@ -17,12 +17,13 @@
  *
  * CONSENSUS-CRITICAL: this predicate decides every cross-chain settlement gate
  * (cross_settle, xexec, xcall, anchor) + the recovery verifier under
- * STAKE_WEIGHTED_QUORUM. The hub keeps a byte-equivalent copy
- * (xchain-hub/src/stake_weighted_quorum.js). The two MUST agree case-for-case
- * or a divergence forks the chain, so this suite mirrors the hub's cases against
- * the indexer copy, exercised through the REAL indexer bcmath (Utility), which is
- * where the two implementations could silently drift (mathjs vs the hub's
- * bcmath). The final block also asserts the indexer's activation map equals the
+ * STAKE_WEIGHTED_QUORUM. The copy is vendored byte-identically across five repos
+ * from xchain-documentation/protocol/reference-impl; the byte-identity is enforced
+ * by ConsensusPrimitiveConformance.test.js. This suite adds behavioral property
+ * coverage (sybil resistance, delegation source-dedup, 500-snapshot cross-repo
+ * agreement vs the hub copy) beyond the canonical vectors, with the expected stake
+ * total recomputed through the indexer's own bcmath (Utility) as an independent
+ * oracle. The final block also asserts the indexer's activation map equals the
  * canonical xchain-documentation/protocol/constants.js value (drift = fork).
  */
 
@@ -55,7 +56,7 @@ describe('stake_weighted_quorum (indexer)', function () {
     describe('meetsStakeThreshold', function () {
 
         it('returns false for an empty signer set', function () {
-            assert.strictEqual(swq.meetsStakeThreshold(util, V, []), false);
+            assert.strictEqual(swq.meetsStakeThreshold(V, []), false);
         });
 
         it('SECURITY: fails CLOSED when any snapshot row has a blank/missing source (no 1-of-N collapse)', function () {
@@ -66,19 +67,19 @@ describe('stake_weighted_quorum (indexer)', function () {
                 { pubkey: 'b', source: '',   weight: '6000' },
                 { pubkey: 'c', source: 'S2', weight: '3000' },
             ];
-            assert.strictEqual(swq.meetsStakeThreshold(util, blank, ['a']), false);
-            assert.strictEqual(swq.meetsStakeThreshold(util, blank, ['a', 'b', 'c']), false);
-            assert.strictEqual(swq.meetsStakeThreshold(util, [{ pubkey: 'x', weight: '9000' }], ['x']), false);            // undefined source
-            assert.strictEqual(swq.meetsStakeThreshold(util, [{ pubkey: 'y', source: '   ', weight: '9000' }], ['y']), false); // whitespace
+            assert.strictEqual(swq.meetsStakeThreshold(blank, ['a']), false);
+            assert.strictEqual(swq.meetsStakeThreshold(blank, ['a', 'b', 'c']), false);
+            assert.strictEqual(swq.meetsStakeThreshold([{ pubkey: 'x', weight: '9000' }], ['x']), false);            // undefined source
+            assert.strictEqual(swq.meetsStakeThreshold([{ pubkey: 'y', source: '   ', weight: '9000' }], ['y']), false); // whitespace
         });
 
         it('a LEGITIMATE single non-blank source still finalizes on its own signature', function () {
-            assert.strictEqual(swq.meetsStakeThreshold(util, [{ pubkey: 's', source: 'S1', weight: '9000' }], ['s']), true);
+            assert.strictEqual(swq.meetsStakeThreshold([{ pubkey: 's', source: 'S1', weight: '9000' }], ['s']), true);
         });
 
         it('SECURITY: a source\'s multiple keys count its stake ONCE (no delegation inflation)', function () {
             // a + b are both S1 → 6000, not 12000. 3·6000 = 18000 !> 2·12000 = 24000.
-            assert.strictEqual(swq.meetsStakeThreshold(util, V, ['a', 'b']), false);
+            assert.strictEqual(swq.meetsStakeThreshold(V, ['a', 'b']), false);
         });
 
         it('exactly 2/3 of stake is NOT enough (strictly greater required)', function () {
@@ -87,38 +88,38 @@ describe('stake_weighted_quorum (indexer)', function () {
                 { pubkey: 'p', source: 'P', weight: '5000.00000000' },
                 { pubkey: 'q', source: 'Q', weight: '2500.00000000' },
             ];
-            assert.strictEqual(swq.meetsStakeThreshold(util, D, ['p']), false);        // 3·5000 = 15000 !> 2·7500 = 15000
-            assert.strictEqual(swq.meetsStakeThreshold(util, D, ['p', 'q']), true);
+            assert.strictEqual(swq.meetsStakeThreshold(D, ['p']), false);        // 3·5000 = 15000 !> 2·7500 = 15000
+            assert.strictEqual(swq.meetsStakeThreshold(D, ['p', 'q']), true);
         });
 
         it('strictly more than 2/3 finalizes', function () {
             // S1 + S2 = 9000 of 12000 = 3/4. 3·9000 = 27000 > 24000.
-            assert.strictEqual(swq.meetsStakeThreshold(util, V, ['a', 'c']), true);
+            assert.strictEqual(swq.meetsStakeThreshold(V, ['a', 'c']), true);
         });
 
         it('counts a source once even when several of its keys sign, plus another source', function () {
-            assert.strictEqual(swq.meetsStakeThreshold(util, V, ['a', 'b', 'c']), true); // 6000 + 3000
+            assert.strictEqual(swq.meetsStakeThreshold(V, ['a', 'b', 'c']), true); // 6000 + 3000
         });
 
         it('ignores duplicate signer pubkeys', function () {
-            assert.strictEqual(swq.meetsStakeThreshold(util, V, ['a', 'a']), false);
+            assert.strictEqual(swq.meetsStakeThreshold(V, ['a', 'a']), false);
         });
 
         it('ignores signers not present in the snapshot', function () {
-            assert.strictEqual(swq.meetsStakeThreshold(util, V, ['zzz']), false);
+            assert.strictEqual(swq.meetsStakeThreshold(V, ['zzz']), false);
         });
 
         it('a single source IS the whole snapshot: finalizes on its own signature', function () {
             const one = [{ pubkey: 'x', source: 'X', weight: '5000' }];
-            assert.strictEqual(swq.meetsStakeThreshold(util, one, ['x']), true);        // 3·5000 > 2·5000
+            assert.strictEqual(swq.meetsStakeThreshold(one, ['x']), true);        // 3·5000 > 2·5000
         });
 
         it('S = 0 (empty snapshot) is disabled and never finalizes', function () {
-            assert.strictEqual(swq.meetsStakeThreshold(util, [], ['x']), false);
+            assert.strictEqual(swq.meetsStakeThreshold([], ['x']), false);
         });
 
         it('is case-insensitive on signer pubkeys', function () {
-            assert.strictEqual(swq.meetsStakeThreshold(util, V, ['A', 'C']), true);
+            assert.strictEqual(swq.meetsStakeThreshold(V, ['A', 'C']), true);
         });
     });
 
@@ -176,15 +177,17 @@ describe('stake_weighted_quorum (indexer)', function () {
 
             // All 40 Sybils sign: 3·40000 = 120000 !> 2·130000 = 260000 → cannot finalize,
             // even though 40 signatures would trivially win a COUNT-based 2f+1 vote.
-            assert.strictEqual(swq.meetsStakeThreshold(util, V, sybils.map(s => s.pubkey)), false);
+            assert.strictEqual(swq.meetsStakeThreshold(V, sybils.map(s => s.pubkey)), false);
             // Three honest sources alone: 3·90000 = 270000 > 260000 → finalize.
-            assert.strictEqual(swq.meetsStakeThreshold(util, V, honest.map(h => h.pubkey)), true);
+            assert.strictEqual(swq.meetsStakeThreshold(V, honest.map(h => h.pubkey)), true);
         });
     });
 
     describe('cross-engine determinism (§3.7)', function () {
-        // Independent bcmath: the hub predicate carries its own bcmath; the
-        // indexer predicate takes `util` (mathjs). A drift in either forks the chain.
+        // Cross-repo agreement: the hub and indexer copies are vendored
+        // byte-identically from xchain-documentation/protocol/reference-impl, so this
+        // asserts on 500 random snapshots that the two physical copies agree. A drift
+        // in either forks the chain (also gated by the byte-identity conformance suite).
         const hubSwq = require('../../../xchain-hub/src/stake_weighted_quorum.js');
 
         // Deterministic PRNG (mulberry32): fixed seed, reproducible fixtures.
@@ -216,7 +219,7 @@ describe('stake_weighted_quorum (indexer)', function () {
             const rand = rng(0x5EED1);
             for (let i = 0; i < 500; i++) {
                 const { validators, signers } = fixture(rand);
-                const idx = swq.meetsStakeThreshold(util, validators, signers);
+                const idx = swq.meetsStakeThreshold(validators, signers);
                 const hub = hubSwq.meetsStakeThreshold(validators, signers);
                 assert.strictEqual(idx, hub,
                     `engine disagreement on fixture #${i}: indexer=${idx} hub=${hub} ` +
@@ -275,8 +278,8 @@ describe('stake_weighted_quorum (indexer)', function () {
                 const allKeys = validators.filter(v => v.source === 'FAT').map(v => v.pubkey)
                     .concat(oneKey.filter(pk => !pk.startsWith('fat')));
                 assert.strictEqual(
-                    swq.meetsStakeThreshold(util, validators, oneKey),
-                    swq.meetsStakeThreshold(util, validators, allKeys),
+                    swq.meetsStakeThreshold(validators, oneKey),
+                    swq.meetsStakeThreshold(validators, allKeys),
                     `delegation inflation on fixture #${i}: signing extra keys of one source changed the outcome`);
             }
         });

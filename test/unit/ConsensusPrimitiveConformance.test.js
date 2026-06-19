@@ -1,33 +1,41 @@
 'use strict';
 
 // Cross-service conformance guard (item 4535). The stake-weighted quorum
-// predicate and the equivocation-header builder are hand-copied across five
-// services in three bignum dialects; a divergence in their logic forks the
-// chain. These vectors are the single source of truth (xchain-documentation/
-// protocol/test-vectors); every repo runs them against its own local copy so
-// behavioral drift is machine-detectable. When the sibling documentation repo
-// is not checked out, skip rather than fail (cross-repo guard convention).
+// predicate and the equivocation-header builder are CONSENSUS-CRITICAL and
+// vendored byte-identically into five services (xchain-hub, xchain-indexer,
+// xchain-explorer, xchain-sdk, xchain-sync); a divergence in their logic forks
+// the chain. The canonical source of record lives in xchain-documentation
+// (protocol/reference-impl + protocol/test-vectors). This guard runs in every
+// repo and asserts BOTH:
+//   1. BEHAVIOR  - the local copy matches the canonical vectors.
+//   2. IDENTITY  - the local copy is byte-identical to the canonical source.
+// (1) catches a logic change that happens to pass the local unit suite; (2)
+// catches ANY edit to one copy that was not propagated to the others. When the
+// sibling xchain-documentation repo is not checked out (standalone deploy), skip
+// rather than fail, matching the existing cross-repo guard convention.
 
 const assert = require('assert');
-
-// Loads BTC/regtest config into the env so new Utility() can resolve its coin
-// config (same fixture the quorum + db unit tests use).
-require('../fixtures/config').getTestConfig();
-const Utility = require('../../src/utility');
+const fs     = require('fs');
+const path   = require('path');
 
 const swq   = require('../../src/stake_weighted_quorum.js');
 const equiv = require('../../src/equivocation_header.js');
 
+const LOCAL_DIR = path.join(__dirname, '..', '..', 'src');
+const CANON_DIR = path.join(__dirname, '..', '..', '..', 'xchain-documentation', 'protocol', 'reference-impl');
+const VEC_DIR   = path.join(__dirname, '..', '..', '..', 'xchain-documentation', 'protocol', 'test-vectors');
+
 let quorumVec = null, equivVec = null;
 try {
-    quorumVec = require('../../../xchain-documentation/protocol/test-vectors/stake_weighted_quorum.json');
-    equivVec  = require('../../../xchain-documentation/protocol/test-vectors/equivocation_header.json');
+    quorumVec = require(path.join(VEC_DIR, 'stake_weighted_quorum.json'));
+    equivVec  = require(path.join(VEC_DIR, 'equivocation_header.json'));
 } catch(e){ /* sibling xchain-documentation absent */ }
 
-// Per-repo adapter: the indexer copy injects its bignum util:
-// meetsStakeThreshold(util, validators, signerPubkeys). It does not export totalStake.
-const util = new Utility();
-function meets(c){ return swq.meetsStakeThreshold(util, c.validators, c.signers); }
+const CANON_PRESENT = fs.existsSync(CANON_DIR);
+
+// Every copy now shares ONE signature: meetsStakeThreshold(validators, signers),
+// and every copy exports totalStake(). No per-repo adapter remains.
+function meets(c){ return swq.meetsStakeThreshold(c.validators, c.signers); }
 
 describe('consensus-primitive conformance: canonical vectors @regression', function(){
     before(function(){ if(!quorumVec || !equivVec) this.skip(); });
@@ -35,6 +43,15 @@ describe('consensus-primitive conformance: canonical vectors @regression', funct
     describe('stake_weighted_quorum.meetsStakeThreshold', function(){
         (quorumVec ? quorumVec.meetsStakeThreshold : []).forEach(function(c){
             it(c.name, function(){ assert.strictEqual(meets(c), c.expected); });
+        });
+    });
+
+    describe('stake_weighted_quorum.totalStake', function(){
+        (quorumVec ? quorumVec.totalStake : []).forEach(function(c){
+            it(c.name, function(){
+                if(c.throws) assert.throws(() => swq.totalStake(c.validators));
+                else assert.strictEqual(String(swq.totalStake(c.validators)), c.expected);
+            });
         });
     });
 
@@ -56,6 +73,20 @@ describe('consensus-primitive conformance: canonical vectors @regression', funct
             it('buildEquivCanonical: ' + c.name, function(){
                 assert.strictEqual(equiv.buildEquivCanonical(c.engineTag, c.roundId, c.view, c.content), c.expected);
             });
+        });
+    });
+});
+
+describe('consensus-primitive conformance: byte-identity to canonical source @regression', function(){
+    before(function(){ if(!CANON_PRESENT) this.skip(); });
+
+    ['stake_weighted_quorum.js', 'equivocation_header.js'].forEach(function(f){
+        it(f + ' is byte-identical to xchain-documentation/protocol/reference-impl', function(){
+            const local = fs.readFileSync(path.join(LOCAL_DIR, f), 'utf8');
+            const canon = fs.readFileSync(path.join(CANON_DIR, f), 'utf8');
+            assert.strictEqual(local, canon,
+                'this repo\'s ' + f + ' has drifted from the canonical source; ' +
+                'edit xchain-documentation/protocol/reference-impl/' + f + ' and re-vendor all five copies.');
         });
     });
 });
