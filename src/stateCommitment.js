@@ -202,12 +202,23 @@ async function gatherStakeEntries(db, blockIndex){
     const entries = [];
     for(const capability of caps){
         const rows = await db.getStakeWeightsByCapability(capability, blockIndex);
+        const seenSource = new Map();   // source -> weight (first wins; equal per source)
         for(const r of (rows || [])){
             if(!r || r.pubkey == null) continue;
-            const leaf = _leafOrNull(r.weight);
-            if(leaf == null) continue;   // zero weight cannot qualify; defensive
-            entries.push([ M.toHex(M.stakeKey(String(r.pubkey), capability)), leaf ]);
+            if(_nz(String(r.weight == null ? '0' : r.weight)) === ZERO_CANON) continue;   // zero cannot qualify
+            const source = String(r.source);
+            // Member leaf commits SOURCE + weight so a light client can source-dedupe
+            // signer stake exactly as swq.meetsStakeThreshold does (validator-set proof).
+            entries.push([ M.toHex(M.stakeKey(String(r.pubkey), capability)),
+                           M.toHex(M.stakeMemberLeaf(source, String(r.weight))) ]);
+            if(!seenSource.has(source)) seenSource.set(source, String(r.weight));
         }
+        // Total leaf: the source-deduped quorum denominator S, so a client can check
+        // 3·Σ(signer-source weight) > 2·S without enumerating the full set (spec §7).
+        const total = M.sumCanonicalAmounts(Array.from(seenSource.values()));
+        if(_nz(total) !== ZERO_CANON)
+            entries.push([ M.toHex(M.stakeKey(M.STAKE_TOTAL_PUBKEY, capability)),
+                           M.toHex(M.stakeTotalLeaf(total)) ]);
     }
     return entries;
 }

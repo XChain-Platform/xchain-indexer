@@ -135,6 +135,37 @@ function amountLeaf(amount){
     return leafHash(canonicalAmount(amount));
 }
 
+// ---- stakes_root value leaves (validator-set proof, spec §7) -----------------
+// The weighted quorum (stake_weighted_quorum.meetsStakeThreshold) is SOURCE-deduped:
+// 3·Σ(distinct signer-source weight) > 2·S, with S = Σ over distinct sources. So the
+// stakes_root must let a light client (a) recover each signer's SOURCE (to dedupe)
+// and (b) read the committed total S. Two leaf kinds, both keyed by stakeKey():
+//   member: stakeKey(pubkey, capability)      -> stakeMemberLeaf(source, weight)
+//   total:  stakeKey(STAKE_TOTAL_PUBKEY, cap) -> stakeTotalLeaf(S)
+// STAKE_TOTAL_PUBKEY cannot collide with a real signer (pubkeys are 64-hex).
+const STAKE_TOTAL_PUBKEY = '__total__';
+function stakeMemberLeaf(source, weight){
+    return leafHash(joinFields(['STK', source, canonicalAmount(weight)]));
+}
+function stakeTotalLeaf(total){
+    return leafHash(joinFields(['STKTOTAL', canonicalAmount(total)]));
+}
+// Exact sum of canonical 18-dp amounts via integer (BigInt) scaling, so the
+// source-deduped total S is byte-identical across the indexer + xchain-sync twins
+// regardless of each repo's bignumber config. Returns a canonicalAmount string.
+function sumCanonicalAmounts(amounts){
+    let acc = 0n;
+    for(const a of (amounts || [])){
+        const [i, f] = canonicalAmount(String(a)).split('.');
+        acc += BigInt(i) * 1000000000000000000n + BigInt(f);
+    }
+    const s    = acc.toString();
+    const frac = s.length > 18 ? s.slice(-18) : s.padStart(18, '0');
+    let   intp = s.length > 18 ? s.slice(0, -18) : '0';
+    intp = intp.replace(/^0+(?=\d)/, '');
+    return intp + '.' + frac;
+}
+
 // ---- Bit access on a key path (MSB-first) -----------------------------------
 function bitAt(keyBuf, i){
     return (keyBuf[i >> 3] >> (7 - (i & 7))) & 1;
@@ -383,6 +414,7 @@ module.exports = {
     sha256, leafHash, nodeHash, toBuf, toHex,
     // encodings
     canonicalAmount, joinFields, smtKey, balanceKey, escrowKey, stakeKey, amountLeaf, bitAt,
+    STAKE_TOTAL_PUBKEY, stakeMemberLeaf, stakeTotalLeaf, sumCanonicalAmounts,
     // SMT
     SparseMerkleTree, verifySmtProof,
     compressSmtProof, decompressSmtProof, verifyCompressedSmtProof,
