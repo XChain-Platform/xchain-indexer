@@ -146,8 +146,12 @@ const ROLLBACK_EXEMPT = {
 };
 
 // Convention: append-only, id-keyed dedup lookups. Orphaned rows are inert
-// because data tables reference them only by id.
-const isLookupTable = (t) => t.startsWith('index_');
+// because data tables reference them only by id. EXCEPTION: index_addresses and
+// index_tickers can be named by a wire ^<id> reference, so their ids ARE
+// consensus-relevant and they are rolled back (rollback.indexTables); they must be
+// asserted as covered, not silently exempted as inert lookups.
+const ROLLED_BACK_INDEX = ['index_addresses', 'index_tickers'];
+const isLookupTable = (t) => t.startsWith('index_') && !ROLLED_BACK_INDEX.includes(t);
 
 // ---------------------------------------------------------------------------
 
@@ -173,6 +177,7 @@ describe('Rollback coverage guard @regression', function () {
         const covered = new Set([
             ...rollback.dataTables,
             ...rollback.blockTables,
+            ...rollback.indexTables,
             ...RECOMPUTED,
             ...SPECIAL_CASE,
             ...Object.keys(ROLLBACK_EXEMPT),
@@ -196,7 +201,7 @@ describe('Rollback coverage guard @regression', function () {
 
     it('every rollback.js table reference points at a real src/sql table (no stale/renamed names)', function () {
         const universeSet = new Set(UNIVERSE);
-        const dangling = [...rollback.dataTables, ...rollback.blockTables]
+        const dangling = [...rollback.dataTables, ...rollback.blockTables, ...rollback.indexTables]
             .filter(t => !universeSet.has(t));
 
         assert.deepStrictEqual(

@@ -1,0 +1,32 @@
+-- xchain:migration mode=auto
+-- Migration: add the `block_index` column to index_addresses and index_tickers.
+--
+-- WHY
+-- ---
+-- A wire address/ticker reference may be compacted to ^<id> (e.g. ^57), which the
+-- indexer resolves directly to the numeric index id. For that to be consensus-safe,
+-- the same ^<id> must resolve to the same entity on every node. The id is now
+-- assigned by an explicit dense counter (db.getNextAddressId / getNextTickerId) and
+-- must be ROLLED BACK on reorg so a reapply of the canonical chain reproduces it
+-- identically. block_index records the block at which each id was first assigned so
+-- rollback.js can delete index rows created in orphaned blocks
+-- (DELETE FROM index_addresses WHERE block_index >= ?).
+--
+-- This column is purely a rollback/assignment artifact: it is NOT part of any block
+-- hash preimage (getBlockHashes resolves ids to canonical strings, never reads
+-- block_index), so adding it changes no checkpoint hash.
+--
+-- BACKFILL
+-- --------
+-- Existing rows keep block_index = NULL (no historical backfill). A NULL row is
+-- never matched by `block_index >= ?`, so it is never rolled back (it retains the
+-- legacy never-rewound behaviour). Pre-launch the standard is a full reindex from
+-- genesis (see the rollout plan), which assigns every id a concrete block_index, so
+-- no NULL rows remain on a freshly reindexed DB. Live DBs that are NOT reindexed
+-- keep NULL on pre-migration rows; that is acceptable only while ^<id> address
+-- references are not yet active on that network.
+--
+-- Idempotent (ADD COLUMN IF NOT EXISTS); additive; runs automatically at startup.
+
+ALTER TABLE index_addresses ADD COLUMN IF NOT EXISTS block_index BIGINT NULL AFTER address;
+ALTER TABLE index_tickers   ADD COLUMN IF NOT EXISTS block_index BIGINT NULL AFTER tick;

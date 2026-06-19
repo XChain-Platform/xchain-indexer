@@ -152,14 +152,31 @@ class Rollback {
             'address_controllers'
         ];
 
-        // NOTE: the index_* lookup tables (index_addresses, index_tickers, index_statuses,
-        // index_actions, ...) are intentionally NOT rolled back. Their rows are created on
-        // first reference via INSERT IGNORE and their AUTO_INCREMENT ids never rewind, so a
-        // row first seen in a later-orphaned block survives the reorg. That is safe because
-        // those surrogate ids are purely local artifacts and feed NO consensus value: the
-        // block hashes resolve them to canonical strings before hashing (the current
-        // BLOCK_HASH_VERSION, see db.getBlockHashes). Do not reintroduce a raw lookup id into any hashed projection
-        // doing so will cause these un-rolled-back rows to fork checkpoint hashes after a reorg.
+        // Lookup tables that ARE rolled back (block-scoped, keyed by their block_index).
+        // Unlike the other index_* tables, these can be named by a wire ^<id> reference, so
+        // their ids are consensus-relevant and must rewind on reorg (see the NOTE below and
+        // the dedicated delete loop at the end of rollback()).
+        this.indexTables = [
+            'index_addresses',
+            'index_tickers'
+        ];
+
+        // NOTE: index_addresses and index_tickers ARE rolled back (block-scoped delete at
+        // the end of rollback(), keyed by index_*.block_index). Once an address/ticker can
+        // be referenced on the wire as ^<id>, its index id is consensus-relevant: a ^<id>
+        // is stored verbatim into a *_id column and resolved to a canonical string at
+        // block-hash time, so the same ^<id> must name the same entity on every node. Their
+        // ids are now assigned by an explicit dense counter (db.getNextAddressId /
+        // getNextTickerId), never lazily by AUTO_INCREMENT, so deleting the ids first seen
+        // in orphaned blocks and reapplying the canonical chain reproduces them identically.
+        //
+        // The OTHER index_* lookup tables (index_statuses, index_actions, index_coins,
+        // index_fiats, ...) remain intentionally NOT rolled back: none of them can be named
+        // by a wire ^<id>, and the block hashes resolve their ids to canonical strings
+        // before hashing (see db.getBlockHashes / BLOCK_HASH_VERSION), so a row first seen
+        // in a later-orphaned block survives the reorg harmlessly. Do not reintroduce a raw
+        // lookup id from one of those tables into any hashed projection, and do not add a new
+        // ^<id>-style wire reference for one without also rolling its table back here.
 
     }
 
@@ -794,6 +811,28 @@ class Rollback {
 
             // Delete data from tables using block_index
             for(let table of this.blockTables){
+                query = `DELETE FROM ` + table + ` WHERE block_index >= ?`;
+                args  = [block_index];
+                await this.indexerDb.doQuery(query, args);
+            }
+
+            // Roll back the index id lookups (index_addresses / index_tickers).
+            //
+            // These ids became consensus-relevant once an address/ticker can be referenced
+            // on the wire as ^<id>: a wire ^<id> is stored verbatim into a *_id column and
+            // resolved back to a string at block-hash time, so the SAME ^<id> must name the
+            // SAME entity on every node. The ids are assigned by an explicit dense counter
+            // (db.getNextAddressId / getNextTickerId), so deleting the ids first seen in the
+            // orphaned blocks lets the surviving MAX(id)+1 reproduce them deterministically
+            // when the canonical chain is reapplied. (Pre-^id, these tables were intentionally
+            // NOT rolled back: their AUTO_INCREMENT ids never rewound and fed no hashed value.
+            // That is now a fork vector, so they ARE rolled back.)
+            //
+            // MUST run AFTER the action_index and block_index data deletes above: every row
+            // that referenced an orphaned-block id has already been removed, so no surviving
+            // row is left pointing at a deleted id. Rows whose block_index is NULL
+            // (pre-migration / never stamped) are never matched and are left untouched.
+            for(let table of this.indexTables){
                 query = `DELETE FROM ` + table + ` WHERE block_index >= ?`;
                 args  = [block_index];
                 await this.indexerDb.doQuery(query, args);

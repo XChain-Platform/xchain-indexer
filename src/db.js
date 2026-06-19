@@ -100,6 +100,12 @@ class Database {
         this.pool = mariadb.createPool(this.connectionPoolParams);
         this.transactionConnection = null;
 
+        // Block currently being processed. Set by the block loop (XChainIndexer) right
+        // after beginTransaction so createAddress/createTicker can stamp the block at
+        // which each index id is first assigned (index_addresses/index_tickers.block_index),
+        // which rollback uses to delete and deterministically reassign ids on reorg.
+        this.blockIndex = null;
+
         // Serializes DB transactions across the block-processing loop, the reorg rollback
         // path, and the read-only feequote dry-run (Actions.computeFeeQuoteDryRun). The
         // indexer's own paths are single-threaded and never contend, so the lock is always
@@ -1391,16 +1397,46 @@ class Database {
 
     // Lookup a record in the `index_addresses` table and return record id
     async getAddressId(address){
-        let id    = null;
-        let query = "SELECT id FROM index_addresses WHERE `address`=? LIMIT 1"
-        let results = await this.doQuery(query, [address]);
+        let id  = null;
+        let str = String(address);
+        let pid = str.substring(1); // Possible ADDRESS ID (everything after the ^ prefix)
+        // A wire ^<id> address reference resolves directly to the numeric id
+        // (mirrors getTickerId). Real crypto addresses (base58/bech32) and the
+        // contract-derived C:<CHAIN>:<index> form never begin with '^', so this
+        // caret check cannot collide with a legitimate address string.
+        if(str.substring(0,1)=='^' && this.util.isNumeric(pid))
+            id = Number(pid);
+        // Otherwise look the id up by the canonical address string.
+        if(this.util.isNull(id)){
+            let query   = "SELECT id FROM index_addresses WHERE `address`=? LIMIT 1";
+            let results = await this.doQuery(query, [address]);
+            if(results.length > 0)
+                id = Number(results[0].id);
+        }
+        return id;
+    }
+
+    // Handle returning the next explicit id for the `index_addresses` table.
+    // Mirrors getNextActionIndex: the surviving MAX(id)+1 (1 on an empty table).
+    // Assigning ids explicitly (rather than via AUTO_INCREMENT, which never rewinds
+    // on DELETE) lets rollback delete orphaned-block ids and a reapply reproduce the
+    // exact same ids, so a wire ^<id> address reference resolves identically on every
+    // node. The block-processing loop is single-threaded, so reading MAX then
+    // inserting cannot race.
+    async getNextAddressId(){
+        let id      = 0;
+        let results = await this.doQuery("SELECT id FROM index_addresses ORDER BY id DESC LIMIT 1");
         if(results.length > 0)
             id = Number(results[0].id);
+        id++;
         return id;
     }
 
     // Create records in the 'index_addresses' table and return record id
-    async createAddress(address){
+    // @param {address}     string  Address string (or already-resolved value)
+    // @param {blockIndex}  integer Block at which the id is first assigned (defaults to
+    //                              the block-processing context, this.blockIndex)
+    async createAddress(address, blockIndex){
         // Ignore empty address and return NULL
         if(this.util.isNull(address))
             return null;
@@ -1409,12 +1445,29 @@ class Database {
         let id = await this.getAddressId(address);
         // Create address if it does not already exist
         if(id === null){
-            // INSERT IGNORE + refetch is race-safe against the UNIQUE index: a
-            // concurrent insert of the same address is skipped (no duplicate-key throw),
-            // and the refetch resolves to the canonical row id.
-            let query   = "INSERT IGNORE INTO index_addresses (`address`) values (?)";
-            await this.doQuery(query, [address]);
-            id = await this.getAddressId(address);
+            if(this.transactionConnection != null){
+                // Block-processing context: assign a deterministic dense id and stamp the
+                // block, so the id is reorg-reproducible and ^<id> resolves identically on
+                // every node. Ids are assigned in caller order; Actions.assignActionAddressIds
+                // registers an action's new wire-field addresses FIRST, in byte-sorted VALUE
+                // order, so the within-action id order is pinned by value, not field layout.
+                // INSERT IGNORE keeps this race-safe against the UNIQUE address index (a
+                // concurrent same-address insert is skipped; the refetch resolves the row);
+                // the explicit id is MAX(id)+1 so it cannot collide with an existing row.
+                let bi = (blockIndex !== undefined && blockIndex !== null) ? blockIndex : this.blockIndex;
+                id = await this.getNextAddressId();
+                let query = "INSERT IGNORE INTO index_addresses (`id`, `address`, `block_index`) values (?, ?, ?)";
+                await this.doQuery(query, [id, address, (this.util.isNull(bi) ? null : bi)]);
+                id = await this.getAddressId(address);
+            } else {
+                // Outside block processing (API read paths, recovery seed): keep the legacy
+                // AUTO_INCREMENT path with a NULL block_index. These ids are not assigned
+                // during consensus block processing, so they are not part of the
+                // deterministic/rollback-tracked set.
+                let query = "INSERT IGNORE INTO index_addresses (`address`) values (?)";
+                await this.doQuery(query, [address]);
+                id = await this.getAddressId(address);
+            }
         }
         // Convert id to a number
         if(id !== null)
@@ -1669,21 +1722,48 @@ class Database {
         return id;
     }
 
+    // Handle returning the next explicit id for the `index_tickers` table.
+    // Same deterministic dense-counter role as getNextAddressId (see its note): a wire
+    // ^<id> ticker reference resolves through this id, so it must be rollback-reproducible.
+    async getNextTickerId(){
+        let id      = 0;
+        let results = await this.doQuery("SELECT id FROM index_tickers ORDER BY id DESC LIMIT 1");
+        if(results.length > 0)
+            id = Number(results[0].id);
+        id++;
+        return id;
+    }
+
     // Create records in the 'index_tickers' table and return record id
-    async createTicker(tick){
+    // @param {tick}        string  Ticker name (or already-resolved value)
+    // @param {blockIndex}  integer Block at which the id is first assigned (defaults to
+    //                              the block-processing context, this.blockIndex)
+    async createTicker(tick, blockIndex){
         // Ignore empty tick and return NULL
         if(this.util.isNull(tick))
             return null;
         let id = await this.getTickerId(tick);
         // Create ticker if it does not already exist
         if(id === null){
-            // INSERT IGNORE + refetch is race-safe against the UNIQUE index. The
-            // get-first lookup above is retained because getTickerId() matches
-            // case-insensitively (LOWER(tick)) while the UNIQUE index is binary -
-            // refetching through getTickerId keeps that case-folding behaviour.
-            let query   = "INSERT IGNORE INTO index_tickers (tick) values (?)";
-            await this.doQuery(query, [tick]);
-            id = await this.getTickerId(tick);
+            if(this.transactionConnection != null){
+                // Block-processing context: assign a deterministic dense id and stamp the
+                // block (reorg-reproducible; see createAddress). One ISSUE introduces one
+                // new tick under its own action_index, so action ordering already pins the
+                // tick id order; the explicit counter + block_index make it rollback-safe.
+                // The get-first lookup is retained because getTickerId() matches
+                // case-insensitively (LOWER(tick)) while the UNIQUE index is binary;
+                // refetching through getTickerId keeps that case-folding behaviour.
+                let bi = (blockIndex !== undefined && blockIndex !== null) ? blockIndex : this.blockIndex;
+                id = await this.getNextTickerId();
+                let query = "INSERT IGNORE INTO index_tickers (`id`, `tick`, `block_index`) values (?, ?, ?)";
+                await this.doQuery(query, [id, tick, (this.util.isNull(bi) ? null : bi)]);
+                id = await this.getTickerId(tick);
+            } else {
+                // Outside block processing: keep the legacy AUTO_INCREMENT path (NULL block_index).
+                let query = "INSERT IGNORE INTO index_tickers (tick) values (?)";
+                await this.doQuery(query, [tick]);
+                id = await this.getTickerId(tick);
+            }
         }
         // Convert id to a number
         if(id !== null)

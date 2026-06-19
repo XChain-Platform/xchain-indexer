@@ -21,6 +21,9 @@
  * 
  ********************************************************************/
 
+// Canonical ADDRESS-reference field map (consensus surface; byte-identical copy in xchain-sdk)
+const { ADDRESS_REF_FIELDS } = require('./addressRefFields.js');
+
 // Load indexer actions
 const address          = require('./actions/address.js');
 const airdrop          = require('./actions/airdrop.js');
@@ -347,6 +350,15 @@ class Actions {
         // Reset the address/tickers/transactions list on each parse
         this.util.resetLists();
 
+        // Deterministic index-id pre-pass: register the NEW wire-field addresses this
+        // action introduces, in byte-sorted VALUE order, BEFORE the handler runs. This
+        // pins each new address's index id to the VALUE it carries rather than to the
+        // order the handler happens to intern it, so the wire ^<id> address form resolves
+        // identically on every node and across code refactors. Runs after createActionIndex
+        // (which already registered SOURCE first) and covers the BATCH path too, since
+        // batch.js dispatches each sub-action back through processAction.
+        await this.assignActionAddressIds(action, params, data);
+
         // Process the action with the correct handler
         if(action=='ADDRESS')            await this.actionAddress.parse(params, data, error);
         if(action=='AIRDROP')            await this.actionAirdrop.parse(params, data, error);
@@ -409,6 +421,94 @@ class Actions {
 
         // Full-node possession-proof verdict (verified-validator tier)
         if(action=='NODEPROOF')          await this.actionNodeproof.parse(params, data, error);
+    }
+
+    // Map an ACTION name to the handler whose `formats` strings (and setActionParams
+    // positional layout) define the wire fields. Only handlers that parse with
+    // util.setActionParams are listed: their fixed positional layout lets the pre-pass
+    // extract field values IDENTICALLY to the handler. SEND / ISSUE / SWEEP / DEPLOY use
+    // bespoke parsing (repeating recipients, variable-length constructor params, etc.),
+    // so they are deliberately absent here and their new addresses keep deterministic
+    // handler-order assignment (still reorg-safe via the explicit index-id counter).
+    _setActionParamHandler(action){
+        switch(action){
+            case 'MINT':      return this.actionMint;
+            case 'MESSAGE':   return this.actionMessage;
+            case 'DISPENSER': return this.actionDispenser;
+            case 'ORDER':     return this.actionOrder;
+            case 'SWAP':      return this.actionSwap;
+            case 'ADDRESS':   return this.actionAddress;
+            default:          return null;
+        }
+    }
+
+    // Pre-pass: assign deterministic, value-sorted index ids to the NEW wire-field
+    // addresses an action introduces. See the call site in processAction and the
+    // consensus note in src/addressRefFields.js.
+    async assignActionAddressIds(action, params, data){
+        // Only assign during block processing: createAddress only does explicit-counter
+        // (deterministic) assignment inside a transaction. Outside one this is a no-op.
+        if(this.indexerDb.transactionConnection == null)
+            return;
+        let specs = ADDRESS_REF_FIELDS[action];
+        if(!specs || specs.length === 0)
+            return;
+        // Resolve the wire fields exactly as the handler will. Multi-value (repeating
+        // SEND recipients) and type-gated (LIST.ITEM) fields are skipped here and keep
+        // handler-order assignment; the handler interns them in a fixed, cross-node
+        // deterministic order. Only handlers with a fixed setActionParams layout are
+        // resolved (see _setActionParamHandler).
+        let handler = this._setActionParamHandler(action);
+        if(!handler || !handler.formats)
+            return;
+        let format = data['FORMAT'];
+        if(format === null || format === undefined || handler.formats[format] === undefined)
+            return;
+        let fields = this.util.setActionParams({}, params, handler.formats, format);
+        // Collect single-value candidate address strings.
+        let candidates = [];
+        for(let spec of specs){
+            if(spec.multi || spec.listType)
+                continue;
+            let val = fields[spec.field];
+            if(this.util.isNull(val) || val === '')
+                continue;
+            // DEPLOY's BURN sentinel never reaches here (DEPLOY is not a setActionParams
+            // handler), so no BURN resolution is needed in this path.
+            candidates.push(String(val));
+        }
+        if(candidates.length === 0)
+            return;
+        // Drop already-known references and addresses that already hold an id; dedupe by
+        // string value.
+        let pending = [];
+        let seen    = new Set();
+        for(let val of candidates){
+            // A wire ^<id> is already a reference to an existing id; never a new assignment.
+            if(val.substring(0,1) === '^')
+                continue;
+            // Only real crypto addresses get index ids (contract C:<CHAIN>:<idx> and
+            // config-pinned addresses are created on their own deterministic paths).
+            if(!this.util.isCryptoAddress(val))
+                continue;
+            if(seen.has(val))
+                continue;
+            seen.add(val);
+            // Already assigned (an earlier block, or SOURCE created in createActionIndex,
+            // or an earlier candidate this action) -> skip.
+            let existing = await this.indexerDb.getAddressId(val);
+            if(existing != null)
+                continue;
+            pending.push(val);
+        }
+        if(pending.length === 0)
+            return;
+        // Byte (binary) sort by value: the consensus tiebreak (matches the utf8_bin
+        // collation intent; independent of field layout and of any DB collation).
+        pending.sort((a, b) => Buffer.compare(Buffer.from(a, 'utf8'), Buffer.from(b, 'utf8')));
+        // Assign each the next explicit dense id, in sorted order, stamped at this block.
+        for(let addr of pending)
+            await this.indexerDb.createAddress(addr, data['BLOCK_INDEX']);
     }
 
     // Read-only estimator for the XCHAIN-denominated protocol fee ("fees.AMOUNT") an action

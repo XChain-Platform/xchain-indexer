@@ -526,6 +526,11 @@ class XChainIndexer {
 
                 // Begin a transaction: all indexer DB writes for this block are atomic.
                 await this.indexerDb.beginTransaction();
+                // Record the block being processed so createAddress/createTicker stamp
+                // index_addresses/index_tickers.block_index with the block at which each
+                // id is first assigned (used by rollback to delete + deterministically
+                // reassign ids on reorg, keeping wire ^<id> references fork-safe).
+                this.indexerDb.blockIndex = blockToParse;
                 // Light-client state commitment (SPV spec §4): when active, install a
                 // fresh per-block touched-key set so the ledger choke point
                 // (db.createLedgerChangeRecord) records every (address, tick) mutated
