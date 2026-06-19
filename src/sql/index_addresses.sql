@@ -13,3 +13,9 @@ CREATE TABLE index_addresses (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
 CREATE UNIQUE INDEX address on index_addresses (address);
+-- Secondary index on block_index. Used by the advisory index-map parity checksum
+-- (xchain-sync BlockHasher.computeIndexMapChecksum), which selects the deterministic
+-- subset `WHERE block_index IS NOT NULL AND block_index <= ?`. Without it that scan
+-- is a full table scan per /status poll on a large table. Rollback also filters by
+-- block_index, so the index helps reorg deletes as well.
+CREATE INDEX block_index on index_addresses (block_index);
