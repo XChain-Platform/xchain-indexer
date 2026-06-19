@@ -142,6 +142,30 @@ describe('Rollback @regression @tier3', function () {
         assert.ok(indexer.indexerDb.updateBalances.notCalled || capCreditIdx >= 0, 'maturity-credit delete must precede updateBalances');
     });
 
+    it('feeds the reversed-maturity source address + tick into the balance/supply recompute', async function () {
+        // The reversed unstake rows live in surviving blocks (action_index < firstActionIndex),
+        // so the read-phase scan never collected them. The reversal block must pre-scan them and
+        // feed (address, GAS) / (address, tick) into updateBalances/updateTokens, or the deleted
+        // refund credit lingers in the cached balance + token supply (the 4608 divergence).
+        indexer.indexerDb.doQuery.callsFake(async (query) => {
+            if (/FROM\s+actions\s+a/i.test(query) && /a\.action_index/i.test(query)) return [{ action_index: 50 }];
+            // Capability maturity pre-scan: SELECT ... FROM unstakes u ... cooldown_end_block
+            if (query.includes('FROM unstakes u') && query.includes('cooldown_end_block') && /SELECT/i.test(query)) return [{ address: 'capSrc' }];
+            // Contract maturity pre-scan: SELECT ... FROM contract_unstakes cu ... cooldown_end_block
+            if (query.includes('FROM contract_unstakes cu') && query.includes('cooldown_end_block') && /SELECT/i.test(query)) return [{ address: 'conSrc', tick: 'CTICK' }];
+            return [];
+        });
+
+        await rollback.rollback(100);
+
+        const balanceArg = indexer.indexerDb.updateBalances.firstCall.args[0];
+        assert.ok(balanceArg.includes('capSrc'), 'updateBalances should receive the capability unstake source address');
+        assert.ok(balanceArg.includes('conSrc'), 'updateBalances should receive the contract unstake source address');
+        const tokenArg = indexer.indexerDb.updateTokens.firstCall.args[0];
+        assert.ok(tokenArg.includes('XCHAIN'), 'updateTokens should receive GAS for the capability maturity refund');
+        assert.ok(tokenArg.includes('CTICK'), 'updateTokens should receive the contract unstake tick');
+    });
+
     // ─── Contract-staking pre-scan (addresses/tickers collection) ─────
 
     it('pre-scans contract-staking tables and feeds affected addresses/tickers to updateBalances/updateTokens', async function () {

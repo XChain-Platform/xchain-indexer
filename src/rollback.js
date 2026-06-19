@@ -631,6 +631,33 @@ class Rollback {
                 let validStatusId     = await this.indexerDb.getStatusId('valid');
                 if(completedStatusId !== null && validStatusId !== null){
                     let gasTick = this.config['GAS'];
+                    // Feed the affected source address + tick of every reversed maturity into the
+                    // balance/supply recompute set. These unstake rows live in surviving blocks
+                    // (action_index < firstActionIndex), so the read-phase scan above never saw them
+                    // and neither `addresses` nor `tickers` holds them. The refund credit is a net
+                    // mint (its STAKE-time debit was burned), so deleting it must drop both the
+                    // source's cached balance AND the tick's tokens.supply; without seeding the
+                    // recompute here, updateBalances/updateTokens below skip these rows and the cached
+                    // projection keeps the now-deleted refund, re-opening the very divergence this
+                    // block exists to close (and tripping the per-block supply sanityCheck). Collect
+                    // BEFORE the status reset below, which clears the status_id = 'completed' filter.
+                    let capAffected = await this.indexerDb.doQuery(
+                        `SELECT a.address
+                            FROM unstakes u
+                                JOIN index_addresses a ON a.id = u.source_id
+                            WHERE u.status_id = ? AND u.cooldown_end_block >= ? AND u.block_index < ?`,
+                        [completedStatusId, block_index, block_index]);
+                    for(let row of capAffected)
+                        this.util.addAddressTicker(row.address, gasTick);
+                    let conAffected = await this.indexerDb.doQuery(
+                        `SELECT a.address, t.tick
+                            FROM contract_unstakes cu
+                                JOIN index_addresses a ON a.id = cu.source_id
+                                JOIN index_tickers   t ON t.id = cu.tick_id
+                            WHERE cu.status_id = ? AND cu.cooldown_end_block >= ? AND cu.block_index < ?`,
+                        [completedStatusId, block_index, block_index]);
+                    for(let row of conAffected)
+                        this.util.addAddressTicker(row.address, row.tick);
                     // Capability maturity refund is paid in GAS, keyed by the unstake's action_index.
                     query = `DELETE c FROM credits c
                                 JOIN unstakes u ON u.action_index = c.action_index AND u.source_id = c.address_id
