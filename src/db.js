@@ -100,6 +100,16 @@ class Database {
         this.pool = mariadb.createPool(this.connectionPoolParams);
         this.transactionConnection = null;
 
+        // Serializes DB transactions across the block-processing loop, the reorg rollback
+        // path, and the read-only feequote dry-run (Actions.computeFeeQuoteDryRun). The
+        // indexer's own paths are single-threaded and never contend, so the lock is always
+        // free for them; it only matters when an API-path dry-run opens a forced-rollback
+        // transaction that would otherwise collide with live block processing on the shared
+        // transactionConnection. Simple non-reentrant async mutex: beginTransaction acquires,
+        // commit/rollback release. Held only during active processing (barrier stalls happen
+        // before beginTransaction), so it never blocks on a stalled indexer.
+        this._txLock = { locked: false, queue: [] };
+
         // Circuit breaker state for database connections
         this.circuitState     = 'closed';  // closed | open | half-open
         this.circuitFailures  = 0;         // consecutive connection failures
@@ -673,16 +683,37 @@ class Database {
         }  
     }
 
+    // Acquire the transaction mutex (this._txLock). Resolves once the lock is held.
+    // Non-reentrant: a single flow must not call this twice before releasing.
+    _acquireTxLock(){
+        if(!this._txLock.locked){
+            this._txLock.locked = true;
+            return Promise.resolve();
+        }
+        return new Promise(resolve => this._txLock.queue.push(resolve));
+    }
+
+    // Release the transaction mutex, handing it to the next waiter (if any).
+    _releaseTxLock(){
+        let next = this._txLock.queue.shift();
+        if(next) next();
+        else this._txLock.locked = false;
+    }
+
     // Handle beginning a SQL transaction
     async beginTransaction(){
+        await this._acquireTxLock();
         if(this.transactionConnection != null)
             await this.releaseConnection();
-        this.transactionConnection = await this.getConnection();
         try {
+            this.transactionConnection = await this.getConnection();
             await this.transactionConnection.beginTransaction();
         } catch(e){
-            await this.transactionConnection.release();
-            this.transactionConnection = null;
+            if(this.transactionConnection != null){
+                try { await this.transactionConnection.release(); } catch(_){}
+                this.transactionConnection = null;
+            }
+            this._releaseTxLock();
             this.util.throwError('beginTransaction error=' + e);
         }
     }
@@ -696,6 +727,7 @@ class Database {
             } finally {
                 await this.transactionConnection.release();
                 this.transactionConnection = null;
+                this._releaseTxLock();
             }
         }
     }
@@ -707,6 +739,7 @@ class Database {
                 await this.transactionConnection.commit();
                 await this.transactionConnection.release();
                 this.transactionConnection = null;
+                this._releaseTxLock();
                 return true;
             } catch (e){
                 console.error('Error committing transaction:', e)
@@ -715,6 +748,7 @@ class Database {
                 } finally {
                     await this.transactionConnection.release();
                     this.transactionConnection = null;
+                    this._releaseTxLock();
                 }
                 this.util.throwError('commitTransaction error=' + e);
             }

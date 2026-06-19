@@ -314,6 +314,25 @@ async function startApi(){
             }
         },
 
+        // OPT-IN phase-2 dry-run: runs the REAL action handler against current state inside a
+        // forced-rollback transaction and returns authoritative { valid, error, status } for ANY
+        // action (feequote's estimator only covers the create-action subset). Native-fee sizing is
+        // merged in from computeFeeQuote. Never persists. See computeFeeQuoteDryRun for the trial
+        // caveat (AUTO_INCREMENT skew); intended for an isolated regtest indexer for now.
+        // Body: { action, params, source, feeOutputs? }
+        async feequotedryrun({action, params, source, feeOutputs}){
+            if(!action || typeof action !== 'string')
+                return { error: 'action is required' };
+            if(!indexer.indexerDb || !indexer.actions)
+                return { error: 'indexer not ready' };
+            try {
+                return await indexer.actions.computeFeeQuoteDryRun({ action, params, source, feeOutputs });
+            } catch (err) {
+                console.error('feequotedryrun error:', err);
+                return { error: 'dry-run failed: ' + ((err && err.message) ? err.message : String(err)) };
+            }
+        },
+
         // Read-only native-coin fee schedule + current oracle prices. Lets a client display the
         // gas schedule / tolerance band and rough-estimate a native fee before a per-action
         // feequote. Public read (surfaced to wallets/SDK via the explorer proxy).

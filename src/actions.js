@@ -335,6 +335,10 @@ class Actions {
 
         // Process the specific ACTION commands
         await this.processAction(action, params, data, error);
+
+        // Return the populated data object. The block loop ignores this; the read-only
+        // feequote dry-run (computeFeeQuoteDryRun) reads data['STATUS'] to report validity.
+        return data;
     }
 
     // Generalized function to handle parsing and processing a specific ACTION
@@ -583,6 +587,83 @@ class Actions {
             maxAcceptable:     this.util.bcformat(band.maxAcceptable, 8),
             requiredFeeNative: requiredFeeNative,
             requiredFeeSats:   requiredFeeSats
+        });
+    }
+
+    // Read-only "phase-2" fee/validity dry-run. Runs the REAL action handler against current
+    // committed state inside a forced-rollback transaction (serialized against the block loop +
+    // reorg path via the db transaction mutex), so it reports AUTHORITATIVE validity for ANY
+    // action, not just the estimateActionFee create-action subset. Native-fee sizing is taken
+    // from computeFeeQuote (which covers the supported create actions); extracting the
+    // handler-computed fee for every action is a follow-up. Never persists (always rolls back).
+    //
+    // TRIAL CAVEAT: InnoDB does NOT roll back AUTO_INCREMENT, so a dry-run that inserts a novel
+    // index_* row (always at least the synthetic tx_hash) advances that counter even after
+    // rollback. Safe on an isolated single-node regtest indexer; do NOT enable on a live
+    // consensus node until the id-vs-string block-hash question is resolved. Spec:
+    // claude/reports/specs/2026-06-01_native-coin-fee-phase2-dryrun.md
+    async computeFeeQuoteDryRun({ action, params, source, feeOutputs }){
+        action = String(action || '').toUpperCase();
+        if(!Array.isArray(params)) params = String(params == null ? '' : params).split('|');
+        params = params.map(v => String(v).trim());
+
+        // Native-fee sizing (oracle-priced) for the supported create actions; non-fatal when the
+        // action is outside the estimator's set (the dry-run still reports handler validity).
+        let feeQuote;
+        try {
+            feeQuote = await this.computeFeeQuote({ action, params, source });
+        } catch(e){
+            feeQuote = { supported: false, valid: false, error: 'fee quote failed: ' + ((e && e.message) ? e.message : e) };
+        }
+
+        // Pre-check: refuse an un-indexed source so the dry-run never burns an index_addresses
+        // AUTO_INCREMENT slot for an address the real chain never created (id-skew mitigation).
+        let sourceId = this.util.isNull(source) ? null : await this.indexerDb.getAddressId(source);
+        if(this.util.isNull(source) || this.util.isNull(sourceId))
+            return Object.assign({}, feeQuote, { dryRun: false, valid: false, status: null, error: 'source address not indexed (dry-run requires a known source)' });
+
+        let blockIndex = await this.indexerDb.getLatestBlockIndex();
+        let blockTime  = await this.indexerDb.getBlockTime(blockIndex);
+
+        // Synthetic transaction mirroring what the decoder feeds processTransaction. The tx_hash
+        // is unique + clearly marked; it and any handler writes vanish on rollback.
+        let syntheticTx = {
+            data:          [action].concat(params).join('|'),
+            source:        source,
+            destination:   null,
+            amount:        null,
+            tx_hash:       'DRYRUN-' + blockIndex + '-' + (this._dryRunSeq = (this._dryRunSeq || 0) + 1),
+            vout:          0,
+            block_index:   blockIndex,
+            block_time:    blockTime,
+            fee:           null,
+            source_pubkey: null,
+            tx_outputs:    Array.isArray(feeOutputs) ? feeOutputs : [],
+            raw_data:      null
+        };
+
+        let status = null, dryRunError = null;
+        // beginTransaction acquires the db transaction mutex (serializes against block processing
+        // and reorgs); the finally guarantees rollback + lock release even on a handler throw.
+        await this.indexerDb.beginTransaction();
+        try {
+            let resultData = await this.processTransaction(syntheticTx);
+            status = (resultData && resultData['STATUS'] !== undefined) ? resultData['STATUS'] : null;
+        } catch(e){
+            dryRunError = 'handler threw: ' + ((e && e.message) ? e.message : e);
+        } finally {
+            await this.indexerDb.rollbackTransaction();
+        }
+
+        let valid = (status === 'valid');
+        return Object.assign({}, feeQuote, {
+            dryRun:            true,
+            blockIndex:        blockIndex,
+            valid:             valid,
+            status:            status,
+            error:             valid ? null : (dryRunError || status || 'dry-run produced no status'),
+            requiredFeeNative: (feeQuote && feeQuote.supported) ? feeQuote.requiredFeeNative : null,
+            feeSupported:      !!(feeQuote && feeQuote.supported)
         });
     }
 
