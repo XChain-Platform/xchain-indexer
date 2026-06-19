@@ -215,35 +215,12 @@ async function gatherStakeEntries(db, blockIndex){
 // ---- Block-content Merkle root (§5) -----------------------------------------
 // Leaves over the EXACT canonical rows + order the flat hashes cover (db
 // getBlockLeafRows reuses the getBlockHashes stash), in the frozen cross-kind
-// total order: all ledger (credits, debits, escrows), then actions, then the six
-// contract sub-tables. Null fields coerce to '' (matching actionsLeaf's tx_index).
-function _c(x){ return (x == null) ? '' : x; }
-
+// total order. The ordering itself lives in merkle.blockMerkleLeaves (the
+// twin-guarded module) so the explorer proof server locates a row's leaf index
+// with byte-identical logic; this just hashes the assembled vector.
 async function computeBlockMerkleRoot(db, blockIndex){
     const rows = await db.getBlockLeafRows(blockIndex);
-    const leaves = [];
-    for(const kind of ['credit', 'debit', 'escrow']){
-        const arr = rows.ledger[kind + 's'] || [];   // credits / debits / escrows
-        for(const r of arr)
-            leaves.push(M.ledgerLeaf({ kind, action_index: r.action_index,
-                address: _c(r.address), tick: _c(r.tick), amount: r.amount }));
-    }
-    for(const r of (rows.actions || []))
-        leaves.push(M.actionsLeaf({ action_index: r.action_index, tx_index: r.tx_index, action: _c(r.action) }));
-    const C = rows.contracts;
-    for(const r of (C.contracts || []))
-        leaves.push(M.contractLeaf('contracts', [r.action_index, _c(r.source_address), _c(r.code_hash), _c(r.status)]));
-    for(const r of (C.state || []))
-        leaves.push(M.contractLeaf('state', [r.contract_index, _c(r.state_key), _c(r.state_value)]));
-    for(const r of (C.executions || []))
-        leaves.push(M.contractLeaf('executions', [r.action_index, r.contract_index, _c(r.caller_address), _c(r.gas_used), _c(r.status), _c(r.emitted_count)]));
-    for(const r of (C.emissions || []))
-        leaves.push(M.contractLeaf('emissions', [r.execution_index, _c(r.emitted_action), r.action_index, r.position]));
-    for(const r of (C.deposits || []))
-        leaves.push(M.contractLeaf('deposits', [r.action_index, r.contract_index, _c(r.source_address), _c(r.tick), r.amount, _c(r.status)]));
-    for(const r of (C.withdrawals || []))
-        leaves.push(M.contractLeaf('withdrawals', [r.action_index, r.contract_index, _c(r.source_address), _c(r.tick), r.amount, _c(r.status)]));
-    return M.toHex(M.blockMerkleRoot(leaves));
+    return M.toHex(M.blockMerkleRoot(M.blockMerkleLeaves(rows)));
 }
 
 // ---- Full balances-tree initialization (flag-day cutover, §4.3) -------------
