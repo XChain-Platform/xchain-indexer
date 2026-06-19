@@ -106,6 +106,17 @@ class Database {
         // which rollback uses to delete and deterministically reassign ids on reorg.
         this.blockIndex = null;
 
+        // Read-only guard for the rollback refresh phase. When true, createAddress /
+        // createTicker resolve an existing id but NEVER insert a new one (they return
+        // null for an unknown entity instead of assigning the next dense id). Rollback
+        // sets it around updateBalances/updateTokens/updateMarkets/sanityCheck: those
+        // helpers are fed entities collected from the orphaned range, and an entity that
+        // existed ONLY in rolled-back blocks has just had its index id deleted. Creating
+        // it again here would resurrect that id (a fresh-from-genesis node never had it,
+        // so the id stays free there) and re-open the exact wire ^<id> fork the index-row
+        // delete just closed. Default false: forward block processing is unaffected.
+        this.suppressIndexIdCreation = false;
+
         // Serializes DB transactions across the block-processing loop, the reorg rollback
         // path, and the read-only feequote dry-run (Actions.computeFeeQuoteDryRun). The
         // indexer's own paths are single-threaded and never contend, so the lock is always
@@ -1445,6 +1456,13 @@ class Database {
         let id = await this.getAddressId(address);
         // Create address if it does not already exist
         if(id === null){
+            // Rollback refresh phase: resolve-only, never assign a new id. An address that
+            // no longer exists here existed only in the just-rolled-back blocks; recreating
+            // it would resurrect the deleted id and re-open the wire ^<id> fork. See
+            // suppressIndexIdCreation (constructor) and rollback.js. Returns null; the
+            // refresh callers treat a null address_id as a no-op (no balances to update).
+            if(this.suppressIndexIdCreation)
+                return null;
             if(this.transactionConnection != null){
                 // Block-processing context: assign a deterministic dense id and stamp the
                 // block, so the id is reorg-reproducible and ^<id> resolves identically on
@@ -1775,6 +1793,13 @@ class Database {
         let id = await this.getTickerId(tick);
         // Create ticker if it does not already exist
         if(id === null){
+            // Rollback refresh phase: resolve-only, never assign a new id. A tick that no
+            // longer exists here existed only in the just-rolled-back blocks; recreating it
+            // would resurrect the deleted id and re-open the wire ^<id> fork. See
+            // suppressIndexIdCreation (constructor) and rollback.js. Returns null; the
+            // refresh callers treat a null tick_id as a no-op (getTokenInfo finds no row).
+            if(this.suppressIndexIdCreation)
+                return null;
             if(this.transactionConnection != null){
                 // Block-processing context: assign a deterministic dense id and stamp the
                 // block (reorg-reproducible; see createAddress). One ISSUE introduces one

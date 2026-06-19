@@ -887,17 +887,39 @@ class Rollback {
             // await this.indexerDb.updateBalances(true, true);
             // await this.indexerDb.updateTokens(true, true);
 
-            // Update address balances to get back to sane balances based on credits/debits
-            await this.indexerDb.updateBalances(Object.keys(addresses), true);
+            // The refresh helpers below resolve addresses/tickers collected from the
+            // orphaned range (the read phase ran before the deletes). An entity that
+            // existed ONLY in rolled-back blocks has just had its index_addresses /
+            // index_tickers row removed by the indexTables delete above. Without this
+            // guard, createAddress/createTicker (reached via updateAddressBalance and
+            // updateTokenInfo -> getTokenInfo) would RE-CREATE that lookup row, resurrecting
+            // the just-deleted id at the surviving MAX(id)+1. A fresh-from-genesis node
+            // never had that entity, so the same id stays free there and a wire ^<id>
+            // reference resolves to a different entity -> the exact consensus fork this
+            // rollback delete set out to close. suppressIndexIdCreation makes the create
+            // helpers resolve-only for the duration: surviving entities still resolve to
+            // their existing id; orphaned-only entities resolve to null and the refresh is
+            // a harmless no-op (their data rows are already gone). Reset in finally so a
+            // throw (e.g. sanityCheck supply mismatch) never leaks the read-only mode into
+            // the next forward block.
+            this.indexerDb.suppressIndexIdCreation = true;
+            try {
 
-            // Update token information
-            await this.indexerDb.updateTokens(tickers, true);
+                // Update address balances to get back to sane balances based on credits/debits
+                await this.indexerDb.updateBalances(Object.keys(addresses), true);
 
-            // Update market information
-            await this.indexerDb.updateMarkets(markets, block_index);
+                // Update token information
+                await this.indexerDb.updateTokens(tickers, true);
 
-            // Do a sanity check to verify that token supplies match data in credits/debits/escrows/balances tables
-            await this.indexerDb.sanityCheck(block_index);
+                // Update market information
+                await this.indexerDb.updateMarkets(markets, block_index);
+
+                // Do a sanity check to verify that token supplies match data in credits/debits/escrows/balances tables
+                await this.indexerDb.sanityCheck(block_index);
+
+            } finally {
+                this.indexerDb.suppressIndexIdCreation = false;
+            }
 
             // Commit: the rollback is now atomically applied
             await this.indexerDb.commitTransaction();
