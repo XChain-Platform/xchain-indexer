@@ -91,6 +91,15 @@ class Dispenser {
         if(!error)
             data = this.util.setNumberFormats(data);
 
+        // Resolve compacted ^<id> address references (GET_ADDRESS, ORACLE_ADDRESS)
+        // back to their canonical address strings before validation/use; the SDK
+        // compacts both by default. Non-resolvable/malformed references are left
+        // as-is and rejected by the isCryptoAddress checks below. See resolveAddressRef.
+        if(!error){
+            data['GET_ADDRESS']    = await this.indexerDb.resolveAddressRef(data['GET_ADDRESS']);
+            data['ORACLE_ADDRESS'] = await this.indexerDb.resolveAddressRef(data['ORACLE_ADDRESS']);
+        }
+
         // Default ownership flag to 0 when omitted; coerce to Number for downstream comparisons
         if(format==0)
             data['GIVE_OWNERSHIP'] = this.util.isNull(data['GIVE_OWNERSHIP']) ? 0 : Number(data['GIVE_OWNERSHIP']);

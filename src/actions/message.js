@@ -78,6 +78,12 @@ class Message {
         if(!error)
             data = this.util.setNumberFormats(data);
 
+        // Resolve a compacted ^<id> DESTINATION back to its canonical address
+        // before validation/use (see resolveAddressRef); non-resolvable or
+        // malformed references are left as-is and rejected by isCryptoAddress.
+        if(!error)
+            data['DESTINATION'] = await this.indexerDb.resolveAddressRef(data['DESTINATION']);
+
         // MESSAGE v2 (VERSION|COIN|DESTINATION|ENCRYPTED_MESSAGE) carries no
         // ENCRYPTION_METHOD on the wire; absence implies ECIES (1) by protocol.
         // Stamp it so v2 rows persist a concrete method rather than null and the

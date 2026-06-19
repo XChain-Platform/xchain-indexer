@@ -86,6 +86,13 @@ class Order {
         if(!error)
             data = this.util.setNumberFormats(data);
 
+        // Resolve a compacted ^<id> GET_ADDRESS back to its canonical address
+        // before the default-to-SOURCE and validation logic (see resolveAddressRef);
+        // non-resolvable or malformed references are left as-is and rejected by
+        // isCryptoAddress.
+        if(!error)
+            data['GET_ADDRESS'] = await this.indexerDb.resolveAddressRef(data['GET_ADDRESS']);
+
         // Detect native coin sides (null/empty TICK = native coin on that chain)
         let isNativeCoinGive = (format==0) ? this.util.isNull(data['GIVE_TICK']) : false;
         let isNativeCoinGet  = (format==0) ? this.util.isNull(data['GET_TICK'])  : false;

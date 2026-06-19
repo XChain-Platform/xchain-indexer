@@ -50,6 +50,11 @@ function createMockDb() {
         createTransaction: sinon.stub().resolves(1),
         getAddressId: sinon.stub().resolves(1),
         createAddress: sinon.stub().resolves(1),
+        // Identity by default: a ^<id> reference resolves to its canonical address in
+        // production, but tests pass full addresses, so returning the input unchanged
+        // keeps existing handler-validation outcomes. Override per-test to exercise
+        // ^<id> resolution.
+        resolveAddressRef: sinon.stub().callsFake(async (v) => v),
         getBlockId: sinon.stub().resolves(1),
         getActionId: sinon.stub().resolves(1),
         createAction: sinon.stub().resolves(1),

@@ -1475,6 +1475,36 @@ class Database {
         return id;
     }
 
+    // Resolve a wire ^<id> address reference to its canonical address string.
+    // Action handlers call this BEFORE validating an address field so the compact
+    // ^<id> form the SDK emits by default (addressResolver.compactAddresses) is
+    // accepted and credited identically to the full address. The reverse of
+    // getAddressId (string -> id), it is deterministic across nodes: index_addresses
+    // ids are assigned by the explicit dense counter on the canonical chain
+    // (getNextAddressId), so id -> address is the same on every node and reorg-stable.
+    //
+    // Only a STRICTLY canonical ^<digits> reference is resolved. Any other caret
+    // string (^1.5, ^0x10, ^-1, ^1e3, ^ 1, ^, ^abc) is returned UNCHANGED so the
+    // caller's existing isCryptoAddress() format check rejects it; this also keeps a
+    // non-integer / out-of-range id off the integer FK columns. A dangling reference
+    // (no such id yet, e.g. a forward reference) is likewise returned unchanged and
+    // rejected. The digit string is handed to SQL verbatim (never via Number()), so a
+    // large id keeps full precision and an out-of-range id simply matches no row.
+    async resolveAddressRef(value){
+        if(this.util.isNull(value))
+            return value;
+        let str = String(value);
+        if(str.substring(0,1) !== '^')
+            return value;
+        let pid = str.substring(1);
+        if(!/^[0-9]+$/.test(pid))
+            return value;
+        let results = await this.doQuery("SELECT address FROM index_addresses WHERE id=? LIMIT 1", [pid]);
+        if(results.length > 0 && !this.util.isNull(results[0].address))
+            return String(results[0].address);
+        return value;
+    }
+
     // Lookup a record in the `blocks` table and return record id
     async getBlockId(block_index){
         let id    = null;

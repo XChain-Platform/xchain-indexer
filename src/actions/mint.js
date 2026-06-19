@@ -66,6 +66,13 @@ class Mint {
         if(!error)
             data = this.util.setNumberFormats(data);
 
+        // Resolve a compacted ^<id> DESTINATION back to its canonical address
+        // before validation/use, so the SDK's default ^<id> wire form validates
+        // and credits identically to the full address. A non-resolvable or
+        // malformed reference is left as-is and rejected by isCryptoAddress below.
+        if(!error)
+            data['DESTINATION'] = await this.indexerDb.resolveAddressRef(data['DESTINATION']);
+
         // Clone the raw data for storage in mints table
         let mint = Object.assign({}, data);
 

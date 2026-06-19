@@ -136,6 +136,13 @@ class Deploy {
         data['COOLDOWN_BLOCKS']    = hasStaking ? params[4] : null;
         data['SLASH_DESTINATION']  = hasStaking ? params[5] : null;
 
+        // Resolve a compacted ^<id> SLASH_DESTINATION back to its canonical address
+        // (the SDK compacts this field by default). The 'BURN' sentinel and null are
+        // left untouched; a non-resolvable/malformed reference is left as-is. This
+        // also keeps a malformed id off the slash-credit FK path. See resolveAddressRef.
+        if(!error && hasStaking && !this.util.isNull(data['SLASH_DESTINATION']) && data['SLASH_DESTINATION'] !== 'BURN')
+            data['SLASH_DESTINATION'] = await this.indexerDb.resolveAddressRef(data['SLASH_DESTINATION']);
+
         // Validate v1/v3 staking config (both optional, but pairing rules apply)
         if(!error && hasStaking){
             let hasCooldown = !this.util.isNull(data['COOLDOWN_BLOCKS']) && data['COOLDOWN_BLOCKS'] !== '';

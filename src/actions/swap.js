@@ -84,6 +84,13 @@ class Swap {
         if(!error)
             data = this.util.setNumberFormats(data);
 
+        // Resolve a compacted ^<id> GET_ADDRESS back to its canonical address
+        // before the default-to-SOURCE and validation logic (see resolveAddressRef);
+        // non-resolvable or malformed references are left as-is and rejected by
+        // isCryptoAddress.
+        if(!error)
+            data['GET_ADDRESS'] = await this.indexerDb.resolveAddressRef(data['GET_ADDRESS']);
+
         // Get information on the GIVE and GET tokens
         let giveTokenInfo = false;
         let getTokenInfo  = false;

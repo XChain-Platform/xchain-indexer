@@ -58,6 +58,7 @@ async function runMint({ network, source, amount, tick }){
     let captured = {};
     const indexerDb = {
         getTokenInfo:                async () => tokenInfo,
+        resolveAddressRef:           async (v) => v,
         getActionCreditDebitAmount:  async () => 0,
         validTickerBeforeTxIndex:    async () => true,
         isActionAllowed:             async () => true,

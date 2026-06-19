@@ -110,6 +110,16 @@ class Issue {
         if(!error)
             data = this.util.setActionParams(data, params, this.formats, format);
 
+        // Resolve compacted ^<id> TRANSFER / TRANSFER_SUPPLY references back to their
+        // canonical addresses before the clone-for-storage and validation below, so the
+        // SDK's default ^<id> wire form validates and is stored/credited identically to
+        // the full address. Non-resolvable/malformed references are left as-is and
+        // rejected by the isCryptoAddress checks. See resolveAddressRef.
+        if(!error){
+            data['TRANSFER']        = await this.indexerDb.resolveAddressRef(data['TRANSFER']);
+            data['TRANSFER_SUPPLY'] = await this.indexerDb.resolveAddressRef(data['TRANSFER_SUPPLY']);
+        }
+
         // TODO: Decode any base64 tickers
         // if(this.util.isBase64(data['TICK']))
         //     $data['TICK'] = this.util.base64Decode(data['TICK']);
