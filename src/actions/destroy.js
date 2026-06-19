@@ -89,7 +89,10 @@ class Destroy {
                 destroys.push([params[1], params[2], memo]);
 
             // Multi-Destroy (Full)
-            if(format==1 && idx>1 && idx%2==0 && idx < lastIdx)
+            // A trailing memo (when present) always sits at the odd last index, so the
+            // idx%2==0 test already excludes it; the extra `idx < lastIdx` guard wrongly
+            // dropped the final tick/amount pair whenever no trailing memo was supplied.
+            if(format==1 && idx>1 && idx%2==0)
                 destroys.push([params[idx-1], params[idx], memo]);
 
             // Multi-Destroy (Full) with Multiple Memos

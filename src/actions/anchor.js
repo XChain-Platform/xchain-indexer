@@ -336,7 +336,11 @@ class Anchor {
     // CRC32 (hex) of the decompressed archive; null when the blob isn't valid gzip.
     _archiveCrc(b64){
         let json;
-        try { json = zlib.gunzipSync(Buffer.from(String(b64), 'base64url')).toString('utf8'); }
+        // Bound the decompressed output: ARCHIVE_B64 is attacker-supplied, freely
+        // broadcastable on-chain data decompressed here BEFORE any signature/quorum
+        // check, so an unbounded gunzip is a gzip-bomb memory-DoS vector. zlib throws
+        // RangeError past the cap and the catch below rejects the archive as invalid.
+        try { json = zlib.gunzipSync(Buffer.from(String(b64), 'base64url'), { maxOutputLength: 16 * 1024 * 1024 }).toString('utf8'); }
         catch(e){ return null; }
         let n = zlib.crc32 ? zlib.crc32(Buffer.from(json, 'utf8')) : this._crc32Fallback(Buffer.from(json, 'utf8'));
         return (n >>> 0).toString(16).padStart(8, '0');

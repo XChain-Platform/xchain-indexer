@@ -128,8 +128,10 @@ class AnchorRecovery {
         }
 
         // CRC binds the blob to the signed structure.
+        // Bound decompressed output (gzip-bomb DoS guard); zlib throws RangeError past
+        // the cap, which the catch rejects as an invalid archive.
         let json;
-        try { json = zlib.gunzipSync(Buffer.from(b64, 'base64url')).toString('utf8'); }
+        try { json = zlib.gunzipSync(Buffer.from(b64, 'base64url'), { maxOutputLength: 16 * 1024 * 1024 }).toString('utf8'); }
         catch(e){ throw new Error('archive is not valid gzip'); }
         if(this._crc32Hex(json) !== String(v1.batch_crc32))
             throw new Error('BATCH_CRC32 mismatch');
@@ -223,8 +225,8 @@ class AnchorRecovery {
     async _rebuild(archive, report){
         for(let s of (archive.capability_snapshots || [])){
             await this.db.doQuery(
-                'INSERT IGNORE INTO capability_snapshots (snapshot_block, capability, signing_pubkey, amount) VALUES (?, ?, ?, ?)',
-                [Number(s.snapshot_block), String(s.capability), String(s.signing_pubkey).toLowerCase(), String(s.amount)]);
+                'INSERT IGNORE INTO capability_snapshots (snapshot_block, capability, signing_pubkey, amount, source) VALUES (?, ?, ?, ?, ?)',
+                [Number(s.snapshot_block), String(s.capability), String(s.signing_pubkey).toLowerCase(), String(s.amount), String(s.source || '')]);
             report.snapshots++;
         }
         for(let m of archive.matches){
