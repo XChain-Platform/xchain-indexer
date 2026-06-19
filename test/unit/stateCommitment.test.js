@@ -155,3 +155,67 @@ describe('state-commitment flag-day activation @regression', function(){
         assert.deepStrictEqual(act.STATE_COMMITMENT_ACTIVATION, canonical);
     });
 });
+
+// Mock db that backs state_tree_nodes in memory and routes computeAndStoreRoots'
+// other queries by SQL shape. chain LTC keeps the BTC-only stakes path out.
+function makeRootsMockDb({ priorRows, balances }){
+    const nodes = new Map();
+    const persisted = {};
+    const db = {
+        getBlockLeafRows: async () => [],
+        doQuery: async (sql, params) => {
+            if(/FROM state_tree_nodes/.test(sql)){
+                const v = nodes.get(params[0]);
+                return v ? [v] : [];
+            }
+            if(/INSERT IGNORE INTO state_tree_nodes/.test(sql)){
+                if(!nodes.has(params[0]))
+                    nodes.set(params[0], { left_hash: params[1], right_hash: params[2] });
+                return [];
+            }
+            if(/SELECT balances_root FROM state_tree_roots/.test(sql)){
+                return priorRows;
+            }
+            if(/UNION ALL/.test(sql) && /credits/.test(sql)){
+                return balances;   // buildFullBalancesRoot net-balance scan
+            }
+            if(/INSERT INTO\s+state_tree_roots/.test(sql)){
+                // [chain, network, blockIndex, balances_root, stakes_root, state_root, block_merkle_root]
+                persisted.balances_root = params[3];
+                persisted.state_root    = params[5];
+                return [];
+            }
+            return [];
+        }
+    };
+    return { db, persisted };
+}
+
+describe('stateCommitment: missing prior root falls back to full recompute (item 4500) @regression', function(){
+    const balances = [
+        { address: 'addr1', tick: 'TICK', net: '100' },
+        { address: 'addr2', tick: 'TICK', net: '50' }
+    ];
+
+    it('full-recomputes balances_root (not EMPTY) when the prior block row is absent', async function(){
+        const { db, persisted } = makeRootsMockDb({ priorRows: [], balances });
+        const out = await SC.computeAndStoreRoots(db, 'LTC', 'mainnet', 500, false);
+
+        // Ground truth: a full build over the same net-balance set.
+        const { db: refDb } = makeRootsMockDb({ priorRows: [], balances });
+        const expected = await SC.buildFullBalancesRoot(refDb, 'LTC', 'mainnet');
+
+        assert.strictEqual(out.balances_root, expected);
+        assert.strictEqual(persisted.balances_root, expected);
+        assert.notStrictEqual(out.balances_root, SC.EMPTY_ROOT_HEX,
+            'missing prior must NOT silently thread from the empty root');
+    });
+
+    it('still threads incrementally from the prior root when the prior block row is present', async function(){
+        // Prior root present + no touched keys -> incremental path returns the
+        // prior root verbatim (EMPTY here), distinct from the non-empty full build.
+        const { db } = makeRootsMockDb({ priorRows: [{ balances_root: SC.EMPTY_ROOT_HEX }], balances });
+        const out = await SC.computeAndStoreRoots(db, 'LTC', 'mainnet', 500, false);
+        assert.strictEqual(out.balances_root, SC.EMPTY_ROOT_HEX);
+    });
+});

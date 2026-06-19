@@ -271,13 +271,27 @@ async function computeAndStoreRoots(db, chain, network, blockIndex, isActivation
     // balances_root: full init on the activation boundary, else incremental over
     // the (address, tick) set the ledger touched this block.
     let balancesRoot;
-    if(isActivationBlock){
+    const prior = isActivationBlock ? [] : await db.doQuery(
+        'SELECT balances_root FROM state_tree_roots WHERE chain=? AND network=? AND block_index=? LIMIT 1',
+        [chain, network, blockIndex - 1]);
+    if(isActivationBlock || !prior.length){
+        // No prior-block root to thread from: either the activation boundary, or a
+        // snapshot-bootstrapped node (or a reorg that rolled the activation row
+        // below this height) whose state_tree_roots history does not include
+        // block-1. Do NOT substitute the empty-tree root: that silently emits a
+        // balances_root forked from a from-genesis node. Instead full-recompute.
+        // buildFullBalancesRoot derives the root from the entire current
+        // net-balance set, independent of any prior root, so at this point in the
+        // block (after the ledger writes, before commit) it yields the identical
+        // root the incremental thread would have produced. Correct and
+        // self-healing rather than a fork or a halt.
+        if(!isActivationBlock)
+            console.warn('stateCommitment: no prior state_tree_roots row for ' + chain + '/' + network +
+                ' block ' + (blockIndex - 1) + '; full-recomputing balances_root for block ' + blockIndex +
+                ' instead of threading from the empty root (snapshot-bootstrap or activation rolled below this height)');
         balancesRoot = await buildFullBalancesRoot(db, chain, network);
     } else {
-        const prior = await db.doQuery(
-            'SELECT balances_root FROM state_tree_roots WHERE chain=? AND network=? AND block_index=? LIMIT 1',
-            [chain, network, blockIndex - 1]);
-        let root = prior.length ? prior[0].balances_root : EMPTY_ROOT_HEX;
+        let root = prior[0].balances_root;
         const touched = db._smtTouched ? Array.from(db._smtTouched) : [];
         for(const entry of touched){
             const [address, tick] = entry.split('\t');
