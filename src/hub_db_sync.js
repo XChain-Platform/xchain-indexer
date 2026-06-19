@@ -813,8 +813,17 @@ class HubDbSync {
     async _refreshCallSyncTimestamp() {
         let ts = null;
         try {
+            // Scope the watermark to calls that touch THIS coin (target or source),
+            // matching the snapshot-presence barrier below. A global MAX(effective_time)
+            // could be bumped past this block's time by an unrelated other-chain call,
+            // letting the barrier pass before every call effective for this coin is
+            // mirrored locally, so two indexers settling the same chain could inject the
+            // same XEXEC at divergent positions and fork (item 4573).
+            let where = "WHERE status = 'finalized'";
+            let args  = [];
+            if (this.coin) { where += " AND (target_chain = ? OR source_chain = ?)"; args = [this.coin, this.coin]; }
             let rows = await this.hubDb.doQuery(
-                "SELECT MAX(effective_time) AS ts FROM cross_chain_calls WHERE status = 'finalized'");
+                "SELECT MAX(effective_time) AS ts FROM cross_chain_calls " + where, args);
             if (rows.length > 0 && rows[0].ts !== null) ts = Number(rows[0].ts);
         } catch (e) {
             return;                                             // table not ready yet

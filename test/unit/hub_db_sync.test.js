@@ -660,3 +660,36 @@ describe('HubDbSync mirror-table cold-start (missing table) @regression @tier2',
             'round 2: table now present -> drains cleanly (no restart needed)');
     });
 });
+
+// Cross-chain call-sync watermark must be scoped to this coin (item 4573): a global
+// MAX(effective_time) could be bumped by an unrelated other-chain call and let the
+// barrier pass before this chain's calls are mirrored, forking XEXEC injection.
+describe('HubDbSync call-sync watermark chain scoping @regression @tier1', function () {
+    it('scopes MAX(effective_time) to (target_chain OR source_chain) = this.coin', async function () {
+        const doQuery = require('sinon').stub();
+        let captured = null;
+        doQuery.callsFake(async (sql, args) => { captured = { sql, args }; return [{ ts: 123 }]; });
+        const sync = new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test', coin: 'BTC' });
+
+        await sync._refreshCallSyncTimestamp();
+
+        assert.ok(captured, 'query ran');
+        assert.ok(/cross_chain_calls/.test(captured.sql));
+        assert.ok(/target_chain\s*=\s*\?\s+OR\s+source_chain\s*=\s*\?/i.test(captured.sql),
+            'must filter to calls touching this coin');
+        assert.deepStrictEqual(captured.args, ['BTC', 'BTC']);
+        assert.strictEqual(sync.callSyncTimestamp, 123);
+    });
+
+    it('falls back to an unscoped watermark when no coin is configured', async function () {
+        const doQuery = require('sinon').stub();
+        let captured = null;
+        doQuery.callsFake(async (sql, args) => { captured = { sql, args }; return [{ ts: 5 }]; });
+        const sync = new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test' });
+
+        await sync._refreshCallSyncTimestamp();
+
+        assert.ok(!/target_chain/.test(captured.sql), 'no coin -> no chain filter');
+        assert.deepStrictEqual(captured.args, []);
+    });
+});
