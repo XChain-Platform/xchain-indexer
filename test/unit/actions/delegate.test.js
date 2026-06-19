@@ -333,6 +333,29 @@ describe('Delegate (DELEGATE) @regression @tier2', function () {
             assert.ok(indexer.indexerDb.createContractDelegation.calledOnce);
         });
 
+        it('stake-existence check requires a fully-active stake, not a mid-unstake slot', async function () {
+            // Consensus predicate guard: a rotate must match only a contract_stakes row with
+            // deactivation_block IS NULL. A row whose UNSTAKE set a future deactivation_block is
+            // mid-cooldown (tokens leaving), and accepting a rotate there binds a signer that
+            // outlives its stake. Lock the SQL so the active-window (deactivation_block > ?) form
+            // cannot be reintroduced. The mock suite can't run the WHERE clause, so assert the text.
+            indexer.indexerDb.getAddressId.resolves(1);
+            indexer.indexerDb.getTickerId.resolves(2);
+            indexer.indexerDb.doQuery.resolves([{ 1: 1 }]);
+
+            const data = v1Data();
+            await handler.parse(['1', VALID_PUBKEY, '5', 'TEST'], data, null);
+
+            const stakeQ = indexer.indexerDb.doQuery.getCalls()
+                .map(c => String(c.args[0]))
+                .find(sql => /FROM contract_stakes/.test(sql) && /target_contract_index/.test(sql));
+            assert.ok(stakeQ, 'contract_stakes existence query was issued');
+            assert.ok(/deactivation_block IS NULL/.test(stakeQ),
+                'rotate must require a fully-active stake (deactivation_block IS NULL)');
+            assert.ok(!/deactivation_block\s*>/.test(stakeQ),
+                'rotate must NOT accept a mid-unstake slot via the active-window (deactivation_block > ?) form');
+        });
+
     });
 
     // ─── v3: Contract-targeted revoke ───────────────────────────────────

@@ -190,7 +190,12 @@ class Delegate {
         if(!error){
             // Reuse getActiveContractStakeByPubkey requires a known pubkey; instead check via owner lookup.
             // We don't know the OLD pubkey from the wire; pubkey rotation just claims a new one.
-            // Validate by sweep: does SOURCE own ANY active contract_stakes row for (target, tick)?
+            // Validate by sweep: does SOURCE own a fully-active contract_stakes row for (target, tick)?
+            // deactivation_block must be NULL, not merely in the future: a row whose UNSTAKE has set
+            // deactivation_block = block + activationDelay is mid-cooldown, its tokens already committed
+            // to a contract_unstakes return. Accepting a rotate there would bind a new signing pubkey
+            // (deactivation_block = NULL) that outlives the backing stake once the cooldown sweeps the
+            // tokens out, leaving a contract-signer authority with no stake behind it.
             let sourceId = await this.indexerDb.getAddressId(data['SOURCE']);
             if(sourceId === null){
                 error = 'invalid: SOURCE (no active contract stake)';
@@ -200,9 +205,9 @@ class Delegate {
                 let rows = await this.indexerDb.doQuery(
                     `SELECT 1 FROM contract_stakes
                      WHERE target_contract_index=? AND source_id=? AND tick_id=? AND status_id=?
-                       AND activation_block <= ? AND (deactivation_block IS NULL OR deactivation_block > ?)
+                       AND activation_block <= ? AND deactivation_block IS NULL
                      LIMIT 1`,
-                    [Number(data['TARGET_CONTRACT_INDEX']), sourceId, tick_id, valid_id, data['BLOCK_INDEX'], data['BLOCK_INDEX']]
+                    [Number(data['TARGET_CONTRACT_INDEX']), sourceId, tick_id, valid_id, data['BLOCK_INDEX']]
                 );
                 if(rows.length === 0)
                     error = 'invalid: SOURCE (no active contract stake)';
