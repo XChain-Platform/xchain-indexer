@@ -90,10 +90,41 @@ describe('Utility @regression @tier1', function () {
             assert.strictEqual(data['IS_SYNTHETIC'], true);
         });
 
-        it('caps each query at XCALL_MAX_CALLS_PER_BLOCK', async function () {
+        it('caps dispatch injection at XCALL_MAX_CALLS_PER_BLOCK (query-level)', async function () {
             await util.processCrossChainCalls(actions, db, 100, 1700000000);
             assert.ok(db.getEffectiveUndispatchedCalls.calledWith(COIN, NETWORK, 1700000000, CAP));
-            assert.ok(db.getEffectiveUnprocessedCallResults.calledWith(COIN, NETWORK, 1700000000, CAP));
+        });
+
+        it('fetches the full effective result set and delivers at most the cap', async function () {
+            // Results are fetched uncapped (so the expiry pass can see requests that are
+            // deliverable this block but deferred past the cap) and the per-block cap is then
+            // applied as a deterministic slice on delivery.
+            const many = Array.from({ length: CAP + 5 }, (_, i) => ({ call_id: String(i).padStart(64, '0') }));
+            db.getEffectiveUnprocessedCallResults.resolves(many);
+            await util.processCrossChainCalls(actions, db, 100, 1700000000);
+            assert.ok(db.getEffectiveUnprocessedCallResults.getCall(0).args[3] > CAP, 'results fetched uncapped');
+            assert.strictEqual(processResult.callCount, CAP, 'delivers exactly the per-block cap');
+        });
+
+        it('does NOT expire a past-deadline request whose result is deliverable this block (cap-deferred)', async function () {
+            // The overflow request has both a quorum-signed result (beyond the cap slice) and a
+            // past deadline. The effective result must win over expiry so the contract receives
+            // the real outcome instead of a skipped:expired on the carried-over result.
+            const OVER = 'd'.repeat(64);
+            const many = Array.from({ length: CAP }, (_, i) => ({ call_id: String(i).padStart(64, '0') }));
+            many.push({ call_id: OVER });                       // CAP+1th: deliverable but past the delivery slice
+            db.getEffectiveUnprocessedCallResults.resolves(many);
+            db.getExpiredCrossChainCallRequests.resolves([{ call_id: OVER }]);
+            await util.processCrossChainCalls(actions, db, 100, 1700000000);
+            const expiryCalls = processAction.getCalls().filter(c => c.args[0] === 'XCALL');
+            assert.strictEqual(expiryCalls.length, 0, 'no expiry injected when a deliverable result exists');
+        });
+
+        it('still expires a past-deadline request that has no effective result', async function () {
+            db.getEffectiveUnprocessedCallResults.resolves([]);   // nothing deliverable
+            db.getExpiredCrossChainCallRequests.resolves([{ call_id: 'e'.repeat(64) }]);
+            await util.processCrossChainCalls(actions, db, 100, 1700000000);
+            assert.ok(processAction.calledWith('XCALL', [2, 'e'.repeat(64)]));
         });
 
         it('runs the three passes in order: inject → deliver → expire', async function () {

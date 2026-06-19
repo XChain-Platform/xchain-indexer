@@ -1521,8 +1521,12 @@ class Utility {
             await actions.processAction('XEXEC', null, data, null);
         }
 
-        // 2. Deliver results for requests this chain originated.
-        let results = await db.getEffectiveUnprocessedCallResults(coin, network, block_time, cap);
+        // 2. Deliver results for requests this chain originated, capped at
+        // XCALL_MAX_CALLS_PER_BLOCK. Fetch the full effective set (the cap is applied here as
+        // a deterministic slice) so step 3 can tell which requests already have a result
+        // available this block even when the cap defers their delivery to a later block.
+        let allResults = await db.getEffectiveUnprocessedCallResults(coin, network, block_time, Number.MAX_SAFE_INTEGER);
+        let results = allResults.slice(0, cap);
         for(let r of results){
             let data = {};
             data['BLOCK_INDEX'] = block_index;
@@ -1531,8 +1535,15 @@ class Utility {
         }
 
         // 3. Expire pending requests past their deadline (mirrors processAttestationExpirations).
+        // A quorum-signed result that is effective this block but deferred past the per-block cap
+        // must still win over deadline expiry; otherwise the expiry pass flips the request to
+        // 'expired' and the carried-over result later records skipped:expired, delivering the wrong
+        // terminal status. Skip expiry for any request whose result is deliverable now (the full
+        // effective set, not just the capped slice delivered this block).
+        let deliverableIds = new Set(allResults.map(r => r.call_id));
         let expired = await db.getExpiredCrossChainCallRequests(block_index);
         for(let info of expired){
+            if(deliverableIds.has(info.call_id)) continue; // effective result wins over expiry at this block
             let data = {};
             data['ACTION']       = 'XCALL';
             data['FORMAT']       = 2;
