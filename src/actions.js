@@ -7,7 +7,7 @@
  *
  * This file is part of XChain Platform. Licensed under the GNU Affero
  * General Public License v3.0 or later; see LICENSE.md. A commercial
- * license (without AGPL source-disclosure terms) is available —
+ * license (without AGPL source-disclosure terms) is available -
  * contact legal@dankest.llc.
  *
  **********************************************************************
@@ -65,7 +65,7 @@ let XChainVM;
 try {
     XChainVM = require('xchain-vm');
 } catch(e) {
-    console.log('WARNING: xchain-vm not available — DEPLOY/EXECUTE will not run contract code', e);
+    console.log('WARNING: xchain-vm not available; DEPLOY/EXECUTE will not run contract code', e);
 }
 
 // Staking actions
@@ -81,10 +81,10 @@ const price              = require('./actions/price.js');
 // External attestation framework (single action; v0=request, v1=response, v2=expire)
 const attest             = require('./actions/attest.js');
 
-// ANCHOR — DOGE-only on-chain state commitments (v0=checkpoint, v1=+archive, v2=continuation)
+// ANCHOR: DOGE-only on-chain state commitments (v0=checkpoint, v1=+archive, v2=continuation)
 const anchor             = require('./actions/anchor.js');
 
-// Cross-chain contract calls — XCALL (source-chain request/expiry) + XEXEC
+// Cross-chain contract calls: XCALL (source-chain request/expiry) + XEXEC
 // (target-chain mirror-driven execution injection)
 const xcall              = require('./actions/xcall.js');
 const xexec              = require('./actions/xexec.js');
@@ -156,7 +156,7 @@ class Actions {
         if(XChainVM){
             this.vm = new XChainVM({
                 // Run every contract in a forked worker process. A contract that
-                // aborts V8 (process-wide SIGABRT — e.g. a bulk allocation that
+                // aborts V8 (process-wide SIGABRT, e.g. a bulk allocation that
                 // bypasses the isolate memory limit) then crashes only the worker,
                 // never this indexer; the executor returns a deterministic
                 // resource-failure result (gasUsed = ceiling) and respawns, so the
@@ -215,7 +215,7 @@ class Actions {
         // ANCHOR action instance (single handler dispatches v0/v1/v2 internally)
         this.actionAnchor           = new anchor(this);
 
-        // NODEPROOF — full-node possession-proof verdict handler
+        // NODEPROOF: full-node possession-proof verdict handler
         this.actionNodeproof        = new nodeproof(this);
 
         // Cross-chain contract call instances (XCALL dispatches v0/v2 internally;
@@ -280,8 +280,9 @@ class Actions {
                 action = this.actionAliases[alias];
         }
 
-        // Support legacy ACTION format with no VERSION (default to VERSION 0)
-        // TODO: Disable this hack before release (LEGACY version is only in BTNS)
+        // Legacy compatibility: VERSION 0 default injection for BTNS-style legacy
+        // ISSUE/MINT/SEND that carry no explicit VERSION field. This is permanent
+        // consensus behaviour, not a pre-release shim; do NOT remove.
         if(['ISSUE','MINT','SEND'].includes(action) && this.util.isLegacyActionFormat(params))
             params.splice(0,0,0);
 
@@ -391,13 +392,13 @@ class Actions {
         // PRICE action (validator snapshots and user oracles)
         if(action=='PRICE')              await this.actionPrice.parse(params, data, error);
 
-        // Attestation framework — handler dispatches on VERSION (v0=request, v1=response, v2=expire)
+        // Attestation framework: handler dispatches on VERSION (v0=request, v1=response, v2=expire)
         if(action=='ATTEST')             await this.actionAttest.parse(params, data, error);
 
-        // ANCHOR — DOGE-only on-chain state commitments (v0=checkpoint, v1=+archive, v2=continuation)
+        // ANCHOR: DOGE-only on-chain state commitments (v0=checkpoint, v1=+archive, v2=continuation)
         if(action=='ANCHOR')             await this.actionAnchor.parse(params, data, error);
 
-        // Cross-chain contract calls — XCALL (VM-emitted request / synthetic expiry),
+        // Cross-chain contract calls: XCALL (VM-emitted request / synthetic expiry),
         // XEXEC (system-injected, mirror-driven target-chain execution)
         if(action=='XCALL')              await this.actionXcall.parse(params, data, error);
         if(action=='XEXEC')              await this.actionXexec.parse(params, data, error);
@@ -430,7 +431,7 @@ class Actions {
             if(format != 0) return unsupported;
             data = this.util.setActionParams(data, params, this.actionIssue.formats, format);
             if(this.util.isNull(data['TICK'])) return unsupported;
-            // An already-existing token is a re-issue/edit — no issuance fee.
+            // An already-existing token is a re-issue/edit; no issuance fee.
             let tokenInfo = await this.indexerDb.getTokenInfo(data['TICK'], blockIndex, data['ACTION_INDEX']);
             if(tokenInfo) return { supported: true, amount: '0' };
             if(!(await this.protocolChanges.isEnabled('ISSUANCE_FEE', blockIndex)))
@@ -451,7 +452,7 @@ class Actions {
         }
 
         if(action === 'ORDER' || action === 'SWAP' || action === 'DISPENSER'){
-            // Edits (format 2) need the prior on-chain record — out of phase-1 scope.
+            // Edits (format 2) need the prior on-chain record, out of phase-1 scope.
             if(format != 0) return unsupported;
             let handler = (action === 'ORDER') ? this.actionOrder
                         : (action === 'SWAP')  ? this.actionSwap
@@ -596,7 +597,7 @@ class Actions {
         let maxPriceAgeSeconds = parseInt(this.config['ORACLE_MAX_PRICE_AGE_SECONDS']) || 1800;
         let blockIndex     = await this.indexerDb.getLatestBlockIndex();
 
-        // Current oracle prices (best-effort — a missing/stale feed doesn't fail the schedule call;
+        // Current oracle prices (best-effort; a missing/stale feed doesn't fail the schedule call;
         // prices.available=false tells the client native fees can't be priced right now).
         let nowEpoch = Math.floor(Date.now() / 1000);
         let prices   = await this.util.getFeeOraclePrices(this.indexerDb, coin, blockIndex, nowEpoch, maxPriceAgeSeconds);

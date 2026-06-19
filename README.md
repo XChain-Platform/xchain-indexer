@@ -6,7 +6,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/version-2.2.1-blue" alt="Version">
   <img src="https://img.shields.io/badge/tests-958%20passing-brightgreen" alt="Tests">
-  <img src="https://img.shields.io/badge/node-%3E%3D18-green" alt="Node">
+  <img src="https://img.shields.io/badge/node-%3E%3D22-green" alt="Node">
   <img src="https://img.shields.io/badge/license-Dankest%20Community-orange" alt="License">
 </p>
 
@@ -18,28 +18,28 @@ State-processing engine for the XChain Platform. Reads decoded blockchain transa
 
 ## Features
 
-- **ACTION types** — ADDRESS, AIRDROP, ATTEST, BATCH, BROADCAST, CALLBACK, COINPAY, COLLECT, DESTROY, DEPLOY, DEPOSIT, DISPENSER, DISPENSE, DIVIDEND, EXECUTE, FILE, ISSUE, LINK, LIST, MESSAGE, MINT, ORDER, PRICE, SEND, SLEEP, STAKE, SWAP, SWEEP, UNSTAKE, DELEGATE, WITHDRAW
-- **Virtual Machine** — deterministic JavaScript smart contracts via [xchain-vm](https://github.com/XChain-platform/xchain-vm) (sandboxed V8 isolates, AST-based gas metering, attestation gateway namespace)
-- **Capability-based staking** — STAKE (VERSION 1 new / VERSION 2 top-up) and UNSTAKE (pubkey-based). A validator's aggregate active stake auto-qualifies it for each of four independent capabilities (`price`, `cross_chain`, `oracle_publish`, `attestation`) per governance-configurable `min_stake[capability]`. New `stakes` columns: `version`, `activation_block`, `deactivation_block`.
-- **Contract-targeted staking** — STAKE v3 / UNSTAKE v1 / DELEGATE v1 let any token be staked against a smart contract deployed via DEPLOY v1 (which carries `COOLDOWN_BLOCKS` + `SLASH_DESTINATION` metadata). Cooldown is per-contract; the contract's own VM logic governs slashing.
-- **External attestation framework** — contracts emit ATTEST v0 via `xchain.attestation.request`; hub federation reaches PBFT quorum; ATTEST v1 is submitted on-chain; indexer fires the request's callback EXECUTE on quorum or system-injects ATTEST v2 on deadline.
-- **PRICE oracles** — PRICE v0 (validator COIN/FIAT snapshots, gated by the `price` and `oracle_publish` capabilities) and PRICE v1 (permissionless user TOKEN/FIAT oracles). Both feed the hub's `oracle_prices` / `price_snapshots` tables that every indexer reads during block processing.
-- **Token-gated content** — FILE action supports AES-256-GCM gated payloads with a compact 33-byte binary key handoff; new `gated_files` table.
-- **COINPay** — native coin DEX pairs with two-phase settlement (ORDER_MATCH → COINPAY)
-- **Unified gas fee schedule** — all protocol fees expressed in gas units, converted via GAS_PRICE to XCHAIN
-- **Multi-chain support** — Bitcoin, Litecoin, and Dogecoin on mainnet, testnet, and regtest
-- **Atomic block processing** — every block wrapped in a DB transaction; failures roll back cleanly
-- **Block reorg handling** — detects reorganizations from the Decoder DB, rolls back and re-indexes
-- **Double-entry ledger** — all token movements recorded as credits, debits, and escrows (including contract derived addresses)
-- **Per-block sanity check** — verifies token supplies match the sum of credits minus debits
-- **Three block hashes** — ledger, actions, and contract hashes per block for state verification
-- **DEX engine** — ORDER matching, SWAP matching, DISPENSER triggering with automatic expiration
-- **Protocol versioning** — actions activate at specific block heights or timestamps per network
-- **Action mapping** — address/ticker/action_index cross-references for fast lookups
-- **Circuit-breaker DB connections** — automatic failure detection and recovery
-- **Watchdog timeout** — configurable per-block processing timeout detects deadlocks
-- **Hub-facing RPCs** — `getownstake`, `getactivevalidators`, `getcapabilityvalidators`, `getpendingattestation_requests`, `getlatestblock`; ingests `pushvalidatorrewards` from hub
-- **Comprehensive test suite** — unit, integration, e2e, fuzz, chaos, mutation, boundary, smoke, performance, regression
+- **ACTION types**: ADDRESS, AIRDROP, ATTEST, BATCH, BROADCAST, CALLBACK, COINPAY, COLLECT, DESTROY, DEPLOY, DEPOSIT, DISPENSER, DISPENSE, DIVIDEND, EXECUTE, FILE, ISSUE, LINK, LIST, MESSAGE, MINT, ORDER, PRICE, SEND, SLEEP, STAKE, SWAP, SWEEP, UNSTAKE, DELEGATE, WITHDRAW
+- **Virtual Machine**: deterministic JavaScript smart contracts via [xchain-vm](https://github.com/XChain-platform/xchain-vm) (sandboxed V8 isolates, AST-based gas metering, attestation gateway namespace)
+- **Capability-based staking**: STAKE (VERSION 1 new / VERSION 2 top-up) and UNSTAKE (pubkey-based). A validator's aggregate active stake auto-qualifies it for each of four independent capabilities (`price`, `cross_chain`, `oracle_publish`, `attestation`) per governance-configurable `min_stake[capability]`. New `stakes` columns: `version`, `activation_block`, `deactivation_block`.
+- **Contract-targeted staking**: STAKE v3 / UNSTAKE v1 / DELEGATE v1 let any token be staked against a smart contract deployed via DEPLOY v1 (which carries `COOLDOWN_BLOCKS` + `SLASH_DESTINATION` metadata). Cooldown is per-contract; the contract's own VM logic governs slashing.
+- **External attestation framework**: contracts emit ATTEST v0 via `xchain.attestation.request`; hub federation reaches PBFT quorum; ATTEST v1 is submitted on-chain; indexer fires the request's callback EXECUTE on quorum or system-injects ATTEST v2 on deadline.
+- **PRICE oracles**: PRICE v0 (validator COIN/FIAT snapshots, gated by the `price` and `oracle_publish` capabilities) and PRICE v1 (permissionless user TOKEN/FIAT oracles). Both feed the hub's `oracle_prices` / `price_snapshots` tables that every indexer reads during block processing.
+- **Token-gated content**: FILE action supports AES-256-GCM gated payloads with a compact 33-byte binary key handoff; new `gated_files` table.
+- **COINPay**: native coin DEX pairs with two-phase settlement (ORDER_MATCH -> COINPAY)
+- **Unified gas fee schedule**: all protocol fees expressed in gas units, converted via GAS_PRICE to XCHAIN
+- **Multi-chain support**: Bitcoin, Litecoin, and Dogecoin on mainnet, testnet, and regtest
+- **Atomic block processing**: every block wrapped in a DB transaction; failures roll back cleanly
+- **Block reorg handling**: detects reorganizations from the Decoder DB, rolls back and re-indexes
+- **Double-entry ledger**: all token movements recorded as credits, debits, and escrows (including contract derived addresses)
+- **Per-block sanity check**: verifies token supplies match the sum of credits minus debits
+- **Three block hashes**: ledger, actions, and contract hashes per block for state verification
+- **DEX engine**: ORDER matching, SWAP matching, DISPENSER triggering with automatic expiration
+- **Protocol versioning**: actions activate at specific block heights or timestamps per network
+- **Action mapping**: address/ticker/action_index cross-references for fast lookups
+- **Circuit-breaker DB connections**: automatic failure detection and recovery
+- **Watchdog timeout**: configurable per-block processing timeout detects deadlocks
+- **Hub-facing RPCs**: `getownstake`, `getactivevalidators`, `getcapabilityvalidators`, `getpendingattestation_requests`, `getlatestblock`; ingests `pushvalidatorrewards` from hub
+- **Comprehensive test suite**: unit, integration, e2e, fuzz, chaos, mutation, boundary, smoke, performance, regression
 
 ## Documentation
 
@@ -51,7 +51,7 @@ Full indexer documentation is available in the [xchain-documentation](https://gi
 | [Architecture](https://github.com/XChain-platform/xchain-documentation/blob/master/indexer/ARCHITECTURE.md) | Data pipeline, internal components, action handlers, block processing pipeline |
 | [Configuration](https://github.com/XChain-platform/xchain-documentation/blob/master/indexer/CONFIGURATION.md) | Environment variables, coin-specific config, indexer constants |
 | [Actions](https://github.com/XChain-platform/xchain-documentation/blob/master/indexer/ACTIONS.md) | All 20 ACTION types, categories, format versions, protocol versioning |
-| [Database](https://github.com/XChain-platform/xchain-documentation/blob/master/indexer/DATABASE.md) | Full schema reference — core, ledger, action, state, index, and mapping tables |
+| [Database](https://github.com/XChain-platform/xchain-documentation/blob/master/indexer/DATABASE.md) | Full schema reference: core, ledger, action, state, index, and mapping tables |
 | [Ledger](https://github.com/XChain-platform/xchain-documentation/blob/master/indexer/LEDGER.md) | Double-entry ledger, balance calculation, sanity checks, gas token fees |
 | [Operations](https://github.com/XChain-platform/xchain-documentation/blob/master/indexer/OPERATIONS.md) | Running, Docker, API endpoints, resilience, troubleshooting |
 
@@ -118,9 +118,9 @@ npm run api
 
 | Type | Tests | Description |
 |---|---|---|
-| Unit — Core | ~130 | `actions.test.js`, `utility.test.js`, `db.test.js`, `config.test.js`, `rollback.test.js`, `mapper.test.js`, `protocol_changes.test.js` |
-| Unit — Actions | ~530 | 27 action handlers: `send.test.js`, `issue.test.js`, `mint.test.js`, `order.test.js`, `dispenser.test.js`, ... |
-| Unit — Security | ~60 | SQL safety, parameter injection, negative amounts, balance integrity, startup validation |
+| Unit - Core | ~130 | `actions.test.js`, `utility.test.js`, `db.test.js`, `config.test.js`, `rollback.test.js`, `mapper.test.js`, `protocol_changes.test.js` |
+| Unit - Actions | ~530 | 27 action handlers: `send.test.js`, `issue.test.js`, `mint.test.js`, `order.test.js`, `dispenser.test.js`, ... |
+| Unit - Security | ~60 | SQL safety, parameter injection, negative amounts, balance integrity, startup validation |
 | Boundary | ~100 | Supply limits, tick length, fees, expiration, sleep/resume, address validation, DEX price matching |
 | Fuzz | ~50 | Property-based testing via fast-check: mathematical properties, format fuzzing |
 | Chaos | ~30 | Database failures, circuit breaker, timeout handling, malformed data |
@@ -128,7 +128,7 @@ npm run api
 | Smoke | ~10 | Config loading, utility functions, handler instantiation, API liveness |
 | Regression | ~18 | Tagged tests across all suites for fast verification |
 | Integration | ~929 | Full scenario tests against MariaDB |
-| E2E | 43 | Full-stack tests exercising decoder → indexer → explorer pipeline |
+| E2E | 43 | Full-stack tests exercising decoder -> indexer -> explorer pipeline |
 | Performance | 5 suites | Baseline throughput, action benchmarks, sustained load, spike load, scaling |
 | **Total** | **~958+** | |
 

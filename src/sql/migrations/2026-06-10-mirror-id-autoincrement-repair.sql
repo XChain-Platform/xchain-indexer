@@ -29,6 +29,14 @@
 -- UPDATE matches nothing once no id=0 row exists. The id is a mirror paging
 -- cursor, not a foreign key — re-keying a row later in cursor order is
 -- tolerated by the INSERT-IGNORE mirror apply (worst case a re-receive).
+--
+-- OPS RUNBOOK: This migration runs automatically on origin indexers at startup.
+-- Replicas bootstrapped from a stripped-state origin (i.e. bootstrapped BEFORE
+-- this migration was applied on the origin) cloned the stripped DDL and have NO
+-- automated repair path — xchain-sync's addMissingColumns only adds absent
+-- columns, it does not repair column attributes such as AUTO_INCREMENT. For any
+-- such replica, apply the four MODIFY statements above manually (or re-bootstrap
+-- the replica from a repaired origin after this migration has run there).
 
 UPDATE price_snapshots
    SET id = (SELECT next_id FROM (SELECT COALESCE(MAX(id), 0) + 1 AS next_id FROM price_snapshots) t)

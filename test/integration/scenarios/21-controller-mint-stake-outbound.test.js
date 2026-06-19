@@ -11,19 +11,19 @@
  * contact legal@dankest.llc.
  *
  **********************************************************************
- * Integration: programmable-policy layer — Phase C enforcement surfaces.
+ * Integration: programmable-policy layer, Phase C enforcement surfaces.
  *
- * Drives real bind + action flows through the full indexer pipeline (decoder seed →
+ * Drives real bind + action flows through the full indexer pipeline (decoder seed ->
  * processBlocks) against a real MariaDB + the real (isolated-vm) VM. Proves the three
- * Phase C enforcement points the unit tests mock — here over real DB rows + a real
+ * Phase C enforcement points the unit tests mock, here over real DB rows + a real
  * guard VM:
- *   1. MINT  — a `mint`-class token controller gates supply creation (deny reverts the
+ *   1. MINT: a `mint`-class token controller gates supply creation (deny reverts the
  *      mint; allow commits and the block passes the supply sanity check).
- *   2. STAKE — a `stake`-class token controller gates v3 contract-targeted staking
+ *   2. STAKE: a `stake`-class token controller gates v3 contract-targeted staking
  *      (deny reverts; allow commits and debits the bond).
- *   3. SOURCE-outbound self-gate — a `transfer` ADDRESS controller on the SENDER gates
+ *   3. SOURCE-outbound self-gate: a `transfer` ADDRESS controller on the SENDER gates
  *      its OWN outbound SEND (symmetric binding; deny reverts the outbound move; allow
- *      commits and the block passes sanity — the guard-fee GAS burn is conserved).
+ *      commits and the block passes sanity, the guard-fee GAS burn is conserved).
  *
  * Run (disposable MariaDB, e.g. a throwaway container):
  *   TEST_DB_HOST=127.0.0.1 TEST_DB_PORT=<port> TEST_DB_USER=root TEST_DB_PASS=<pw> \
@@ -48,9 +48,9 @@ const OWNERB = 'mn2YrLgFdvZ9MUK64a7TBn3ZVDKFo13b86'; // outbound ALLOW self-gate
 const RECIP  = 'mgash6jYSKAR3Q5HPpDgNX2BYr18q9N6GQ'; // plain recipient (no controller)
 const PUBKEY = 'a'.repeat(64);                        // 64-hex staking pubkey (format-valid)
 
-const GATED1 = 'CPC1';  // mint→DENY, stake→DENY
-const GATED2 = 'CPC2';  // mint→ALLOW, stake→ALLOW
-const PLAIN  = 'CPCP';  // no controller — used for the outbound-self-gate sends
+const GATED1 = 'CPC1';  // mint->DENY, stake->DENY
+const GATED2 = 'CPC2';  // mint->ALLOW, stake->ALLOW
+const PLAIN  = 'CPCP';  // no controller, used for the outbound-self-gate sends
 const T0     = 1700000000;
 const b64 = s => Buffer.from(s, 'utf8').toString('base64');
 const sha = s => crypto.createHash('sha256').update(s).digest('hex');
@@ -59,7 +59,7 @@ const DENY   = "module.exports={ guard:function(){ xchain.revert('policy denied'
 const ALLOW  = "module.exports={ guard:function(){ return {}; } };";
 const TARGET = "module.exports={ guard:function(){ return {}; }, noop:function(){} };"; // stakeable target
 
-describe('Controller Phase C — MINT / STAKE / SOURCE-outbound (real DB + real VM) @phaseE', function () {
+describe('Controller Phase C: MINT / STAKE / SOURCE-outbound (real DB + real VM) @phaseE', function () {
     this.timeout(600000);
     let seeder, indexer, denyIdx, allowIdx, targetIdx;
 
@@ -77,7 +77,7 @@ describe('Controller Phase C — MINT / STAKE / SOURCE-outbound (real DB + real 
              WHERE ia.address = ? AND it.tick = ?`, [address, tick]);
         return rows.length ? String(rows[0].amount) : '0';
     }
-    // Count only VALID stake rows — a denied STAKE still writes its action record (with `invalid`
+    // Count only VALID stake rows: a denied STAKE still writes its action record (with `invalid`
     // status), like every handler; the gating invariant is that no *valid* bond is locked.
     async function validStakeRows(tick) {
         return await indexerQuery(
@@ -135,7 +135,7 @@ describe('Controller Phase C — MINT / STAKE / SOURCE-outbound (real DB + real 
         assert.strictEqual(await balanceOf(OWNERB, PLAIN),  '200',  'OWNERB seeded with PLAIN');
     });
 
-    // ─── 1. MINT guard ───────────────────────────────────────────────────────
+    // --- 1. MINT guard ---
     it('a mint-class controller DENY reverts a MINT (no supply created)', async function () {
         await seeder.seedBlock(110, T0 + 1000, [
             { source: OWNER, data: `ISSUE|6|${GATED1}|${denyIdx}|mint|0|0|bind-mint-deny` },
@@ -148,7 +148,7 @@ describe('Controller Phase C — MINT / STAKE / SOURCE-outbound (real DB + real 
         ]);
         await processBlocks(indexer);
         assert.strictEqual(await balanceOf(OWNER, GATED1), before,
-            'MINT denied by the mint-class controller — balance unchanged');
+            'MINT denied by the mint-class controller: balance unchanged');
     });
 
     it('a mint-class controller ALLOW commits a MINT and the block passes the supply sanity check', async function () {
@@ -166,7 +166,7 @@ describe('Controller Phase C — MINT / STAKE / SOURCE-outbound (real DB + real 
             'allowed MINT created 50 supply and the block committed (sanity passed)');
     });
 
-    // ─── 2. STAKE v3 guard ───────────────────────────────────────────────────
+    // --- 2. STAKE v3 guard ---
     it('a stake-class controller DENY reverts a v3 contract stake (no bond locked)', async function () {
         await seeder.seedBlock(120, T0 + 2000, [
             { source: OWNER, data: `ISSUE|6|${GATED1}|${denyIdx}|stake|0|0|bind-stake-deny` },
@@ -179,7 +179,7 @@ describe('Controller Phase C — MINT / STAKE / SOURCE-outbound (real DB + real 
         ]);
         await processBlocks(indexer);
         assert.strictEqual(await balanceOf(OWNER, GATED1), before,
-            'STAKE denied by the stake-class controller — bond not debited');
+            'STAKE denied by the stake-class controller: bond not debited');
         const rows = await validStakeRows(GATED1);
         assert.strictEqual(rows.length, 0, 'no VALID contract_stakes row for the denied stake (bond not locked)');
     });
@@ -199,9 +199,9 @@ describe('Controller Phase C — MINT / STAKE / SOURCE-outbound (real DB + real 
             'allowed STAKE locked 100 of the bond and the block committed (sanity passed)');
     });
 
-    // ─── 3. SOURCE-outbound self-gate ────────────────────────────────────────
+    // --- 3. SOURCE-outbound self-gate ---
     it("a SENDER's own transfer address-controller DENY reverts its OUTBOUND send", async function () {
-        // OWNERA self-binds transfer → deny. Its own outbound SEND of an ungated token must revert.
+        // OWNERA self-binds transfer -> deny. Its own outbound SEND of an ungated token must revert.
         await seeder.seedBlock(130, T0 + 3000, [
             { source: OWNERA, data: `ADDRESS|1|${denyIdx}|transfer|0|0|bind-out-deny` },
         ]);
@@ -213,14 +213,14 @@ describe('Controller Phase C — MINT / STAKE / SOURCE-outbound (real DB + real 
         ]);
         await processBlocks(indexer);
         assert.strictEqual(await balanceOf(RECIP, PLAIN), before,
-            'outbound SEND denied by the source self-gate — recipient uncredited');
+            'outbound SEND denied by the source self-gate: recipient uncredited');
         assert.strictEqual(await balanceOf(OWNERA, PLAIN), '200',
             "sender's balance unchanged (the outbound move never settled)");
     });
 
     it("a SENDER's own transfer address-controller ALLOW commits its OUTBOUND send (sanity passes)", async function () {
-        // OWNERB self-binds transfer → allow. Its outbound SEND settles and bills a guard fee
-        // (GAS burn) — the block must still pass the supply sanity check.
+        // OWNERB self-binds transfer -> allow. Its outbound SEND settles and bills a guard fee
+        // (GAS burn); the block must still pass the supply sanity check.
         await seeder.seedBlock(132, T0 + 3200, [
             { source: OWNERB, data: `ADDRESS|1|${allowIdx}|transfer|0|0|bind-out-allow` },
         ]);

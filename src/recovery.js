@@ -14,7 +14,7 @@
  * contact legal@dankest.llc.
  *
  **********************************************************************
- * Full-parse recovery CLI — rebuild the cross-chain match mirror from the
+ * Full-parse recovery CLI to rebuild the cross-chain match mirror from the
  * on-chain ANCHOR archive, with NO surviving hub database.
  *
  * Reads the DOGE indexer's anchor_actions (populated purely by chain parse),
@@ -31,7 +31,7 @@
  *      cross_chain set at the match's snapshot_block.
  *   4. (--verify-stakes, recommended) every archived snapshot pubkey must
  *      hold ANY active on-chain stake at its snapshot_block in the given BTC
- *      indexer DB — a fabricated validator set cannot survive this, because
+ *      indexer DB. A fabricated validator set cannot survive this, because
  *      staking is on-chain. The chain stays the root of trust.
  *
  * Later batches supersede earlier ones per match_id (latest-status-wins), so
@@ -40,7 +40,7 @@
  *
  *   node src/recovery.js [--dry-run] [--verify-stakes]
  *
- * Reads INDEXER_DB_* from the service environment (.env) — point it at the
+ * Reads INDEXER_DB_* from the service environment (.env). Point it at the
  * DOGE indexer DB. --verify-stakes additionally needs BTC_INDEXER_DB_NAME
  * (same host/credentials) holding the BTC indexer's stakes tables.
  *
@@ -101,14 +101,14 @@ class AnchorRecovery {
                          ((archive.calls || []).length) + ' calls, ' + ((archive.rewards || []).length) + ' rewards)');
             } catch(e){
                 report.failed.push({ batch_seq: batchSeq, reason: e.message });
-                this.log('recovery: batch ' + batchSeq + ' FAILED — ' + e.message);
+                this.log('recovery: batch ' + batchSeq + ' FAILED: ' + e.message);
             }
         }
 
         this.log('recovery: ' + report.verified + '/' + report.batches + ' batches verified, ' +
                  report.matches + ' match rows, ' + report.calls + ' call rows, ' +
                  report.snapshots + ' snapshot rows, ' + report.rewards + ' reward rows' +
-                 (this.dryRun ? ' (dry run — nothing written)' : ''));
+                 (this.dryRun ? ' (dry run, nothing written)' : ''));
         return report;
     }
 
@@ -148,7 +148,7 @@ class AnchorRecovery {
             .map(s => ({ pubkey: String(s.signing_pubkey).toLowerCase(), source: String(s.source != null ? s.source : ''), weight: String(s.amount != null ? s.amount : '0') }));
 
         // Optional but recommended: archived validator sets must be backed by
-        // real on-chain BTC stakes — fabricated sets cannot survive this.
+        // real on-chain BTC stakes. Fabricated sets cannot survive this.
         if(this.verifyStakes && this.btcDb) await this._verifyStakes(snaps);
 
         // 1. Wrapper signatures vs the ARCHIVED oracle_publish set.
@@ -167,7 +167,7 @@ class AnchorRecovery {
         }
 
         // 3. Every XCALL relay row's signatures vs the ARCHIVED cross_chain set.
-        // `calls` is absent from pre-XCALL archives — treated as empty.
+        // `calls` is absent from pre-XCALL archives; treated as empty.
         for(let c of (archive.calls || [])){
             let set  = setFor('cross_chain', c.snapshot_block);
             let sigs = this._parseSigs(c.validator_signatures);
@@ -176,10 +176,10 @@ class AnchorRecovery {
         }
 
         // 4. Shape-check archived anchor-publish rewards (absent pre-rewards
-        // archives → empty). Reward rows carry no per-row signatures; they are
+        // archives, treated as empty). Reward rows carry no per-row signatures; they are
         // bound by the wrapper CRC+quorum, and the archiving followers re-derived
         // each one from deterministic election state before co-signing. ONLY
-        // anchor publish rewards are restorable — oracle_round and attest_fee are
+        // anchor publish rewards are restorable. oracle_round and attest_fee are
         // re-derived from the chain parse itself, so an archive that claims them
         // is malformed (or malicious) and the batch is rejected.
         for(let r of (archive.rewards || [])){
@@ -188,7 +188,7 @@ class AnchorRecovery {
             if(!r.source || typeof r.source !== 'string')
                 throw new Error('reward row is missing its earn-time source');
             if(!/^anchor_[A-Za-z_]+$/.test(String(r.reward_type || '')))
-                throw new Error('reward row has non-anchor reward_type "' + r.reward_type + '" — only anchor publish rewards are archivable');
+                throw new Error('reward row has non-anchor reward_type "' + r.reward_type + '"; only anchor publish rewards are archivable');
             if(!Number.isFinite(Number(r.round_number)) || Number(r.round_number) < 0)
                 throw new Error('reward row has malformed round_number');
             if(!/^[0-9]+(\.[0-9]+)?$/.test(String(r.amount || '')) || !(Number(r.amount) > 0))
@@ -231,12 +231,12 @@ class AnchorRecovery {
             let existing = await this.db.doQuery(
                 'SELECT match_id FROM cross_chain_matches WHERE match_id = ? LIMIT 1', [m.match_id]);
             if(existing && existing.length > 0){
-                // Same immutable terms — only the status can move (finalized → retracted).
+                // Same immutable terms; only the status can move (finalized to retracted).
                 await this.db.doQuery(
                     'UPDATE cross_chain_matches SET status = ? WHERE match_id = ?', [m.status, m.match_id]);
             } else {
-                // Rebuild under the ORIGINAL hub-assigned id as provenance only —
-                // settlement order is (snapshot_block, match_id), so replay does
+                // Rebuild under the ORIGINAL hub-assigned id as provenance only.
+                // Settlement order is (snapshot_block, match_id), so replay does
                 // not depend on this value; keeping it preserves archive
                 // byte-parity. Archives published before the field was added carry
                 // no id; those rows fall back to AUTO_INCREMENT.
@@ -245,8 +245,8 @@ class AnchorRecovery {
                 let idMark = hasId ? '?, ' : '';
                 let idVal  = hasId ? [Number(m.id)] : [];
                 // finalizing_view rides the archive (MATCH_KEYS) and feeds the EQUIV
-                // signing canonical (_matchCanonical) exactly as for calls below —
-                // dropping it lands view>0 matches at view 0 and forks re-verification.
+                // signing canonical (_matchCanonical) exactly as for calls below.
+                // Dropping it lands view>0 matches at view 0 and forks re-verification.
                 await this.db.doQuery(
                     `INSERT INTO cross_chain_matches
                         (${idCol}match_id, snapshot_block, network,
@@ -261,21 +261,21 @@ class AnchorRecovery {
             }
             report.matches++;
         }
-        // Anchor-publish rewards restore into the BTC indexer DB — they must be
+        // Anchor-publish rewards restore into the BTC indexer DB. They must be
         // present BEFORE the BTC reindex replays its first COLLECT, or
         // historically valid claims re-validate as 'no unclaimed rewards' and
-        // the recovered ledger diverges. Runbook ordering: DOGE archive extract
-        // → BTC reward restore (this) → BTC reindex.
+        // the recovered ledger diverges. Runbook ordering: DOGE archive extract,
+        // then BTC reward restore (this), then BTC reindex.
         let rewards = archive.rewards || [];
         if(rewards.length > 0){
             if(!this.btcDb)
-                throw new Error('archive carries ' + rewards.length + ' reward rows but no BTC indexer DB handle was provided (set BTC_INDEXER_DB_NAME) — restoring without them would corrupt COLLECT replay');
+                throw new Error('archive carries ' + rewards.length + ' reward rows but no BTC indexer DB handle was provided (set BTC_INDEXER_DB_NAME); restoring without them would corrupt COLLECT replay');
             for(let r of rewards){
                 // Earn-time source resolution is pinned by the archive: the hub
                 // archived the source that earned the reward, so restore-time
                 // lookups can't drift if the pubkey was later re-staked from a
                 // different address. createAddress/getOrCreatePubkeyId are
-                // get-or-create — the id maps are append-only, so seeding them
+                // get-or-create. The id maps are append-only, so seeding them
                 // before the reindex is safe (the reindex resolves to the same ids).
                 let source_id = await this.btcDb.createAddress(String(r.source));
                 let pubkey_id = await this.btcDb.getOrCreatePubkeyId(String(r.validator_pubkey).toLowerCase());
@@ -294,21 +294,21 @@ class AnchorRecovery {
             let existing = await this.db.doQuery(
                 'SELECT call_id FROM cross_chain_calls WHERE call_id = ? AND phase = ? LIMIT 1', [c.call_id, c.phase]);
             if(existing && existing.length > 0){
-                // Same immutable terms — only the lifecycle status can move
-                // (finalized → retracted).
+                // Same immutable terms; only the lifecycle status can move
+                // (finalized to retracted).
                 await this.db.doQuery(
                     'UPDATE cross_chain_calls SET status = ? WHERE call_id = ? AND phase = ?',
                     [c.status, c.call_id, c.phase]);
             } else {
-                // Rebuild under the ORIGINAL hub-assigned id as provenance only —
-                // injection order is (snapshot_block, call_id), so replay does not
+                // Rebuild under the ORIGINAL hub-assigned id as provenance only.
+                // Injection order is (snapshot_block, call_id), so replay does not
                 // depend on this value; keeping it preserves archive byte-parity.
                 // finalizing_view is signed into the EQUIV canonical (WI-2 bump 2):
                 // the indexer rebuilds the XCALL signing canonical from this column
                 // to re-verify the hub's 2f+1 sigs. Omitting it lets the NOT NULL
                 // DEFAULT 0 land every recovered row at view 0, so any call finalized
                 // at view>0 (a leader failover) fails re-verification on the recovered
-                // node — strands undelivered calls and forks re-derivation. It rides
+                // node. This strands undelivered calls and forks re-derivation. It rides
                 // the archive (CALL_KEYS) and the verifier already trusts it.
                 await this.db.doQuery(
                     `INSERT INTO cross_chain_calls
@@ -331,7 +331,7 @@ class AnchorRecovery {
     // ── Canonicals (byte-identical to their producers) ──────────────────────────
 
     // Hub StateCheckpointEngine canonical + the v1 archive extension (anchor.js).
-    // v1 ROUND_ID appends batch_seq (distinct from the v0 per-block key — R-4 fix);
+    // v1 ROUND_ID appends batch_seq (distinct from the v0 per-block key, the R-4 fix);
     // gated on the BTC snapshot_block + network, VIEW=0. Must byte-match anchor._canonical.
     _wrapperCanonical(v1){
         let raw = ['XCHECKPOINT', v1.chain, v1.network, String(v1.block_index), v1.block_hash,
@@ -469,17 +469,17 @@ if(require.main === module){
             console.error('recovery: --verify-stakes needs BTC_INDEXER_DB_NAME (same host/credentials).');
             process.exit(2);
         } else {
-            console.warn('recovery: BTC_INDEXER_DB_NAME not set — archived validator sets will not be cross-checked, and any batch carrying anchor reward rows will FAIL (the restore needs the BTC indexer DB).');
+            console.warn('recovery: BTC_INDEXER_DB_NAME not set. Archived validator sets will not be cross-checked, and any batch carrying anchor reward rows will FAIL (the restore needs the BTC indexer DB).');
         }
         if(!verifyStakes)
-            console.warn('recovery: running WITHOUT --verify-stakes — archived validator sets will not be cross-checked against on-chain BTC stakes.');
+            console.warn('recovery: running WITHOUT --verify-stakes. Archived validator sets will not be cross-checked against on-chain BTC stakes.');
 
         try {
             const recovery = new AnchorRecovery(db, { btcDb, dryRun, verifyStakes, util: indexerLike.util });
             const report = await recovery.run();
             process.exitCode = (report.failed.length > 0) ? 1 : 0;
         } catch(err){
-            console.error('recovery: FAILED — ' + ((err && err.stack) || err));
+            console.error('recovery: FAILED: ' + ((err && err.stack) || err));
             process.exitCode = 1;
         } finally {
             process.exit();

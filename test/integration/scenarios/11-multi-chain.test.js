@@ -16,15 +16,15 @@
  * The indexer integration suite otherwise runs BTC-only (INDEXER_COIN defaults to BTC and no
  * scenario loops over chains). This sweeps all three protocol coins to assert:
  *
- *   1. CHAIN-AGNOSTIC CORE — the ISSUE/MINT/SEND lifecycle produces byte-identical ledger state
+ *   1. CHAIN-AGNOSTIC CORE: the ISSUE/MINT/SEND lifecycle produces byte-identical ledger state
  *      on BTC, LTC and DOGE (the common path must not silently depend on the chain).
- *   2. CAPABILITY-STAKING is BTC-ONLY — a v1 capability STAKE is rejected as
+ *   2. CAPABILITY-STAKING is BTC-ONLY: a v1 capability STAKE is rejected as
  *      `invalid: ACTION (BTC only)` on LTC/DOGE but not on BTC (src/actions/stake.js:85).
- *   3. FEE-PAYMENT MODE per chain — BTC falls back to xchain-balance when no native fee output
+ *   3. FEE-PAYMENT MODE per chain: BTC falls back to xchain-balance when no native fee output
  *      is present; LTC/DOGE require the native output (src/utility.js detectFeePaymentMode).
  *
  * Looping coins in one process is safe because config.getConfig() re-reads INDEXER_COIN each call
- * (no memoization) and address validation is chain-agnostic — see test/integration/setup/multi-chain.js.
+ * (no memoization) and address validation is chain-agnostic; see test/integration/setup/multi-chain.js.
  *
  * Run with the usual TEST_DB_* env pointing at a disposable MariaDB:
  *   INDEXER_COIN=BTC INDEXER_NETWORK=regtest npx mocha --no-config test/integration/scenarios/11-multi-chain.test.js
@@ -70,11 +70,11 @@ describe('Multi-chain action processing @regression @tier1', function () {
     // -----------------------------------------------------------------------
     it('ISSUE/MINT/SEND lifecycle produces identical ledger state on BTC, LTC and DOGE', async function () {
         // The launch fee destinations are committed in every coin config, and LTC/DOGE
-        // are native-fee-only — a fee-bearing action with no native fee output would be
+        // are native-fee-only: a fee-bearing action with no native fee output would be
         // rejected there. Exercising native mode needs fee outputs + seeded oracle
         // prices (the live e2e suites cover that); HERE the premise is "identical input
-        // → identical ledger", so pin every coin to the same xchain-balance fee path
-        // via the documented env override (placeholder destination → xchain fallback).
+        // -> identical ledger", so pin every coin to the same xchain-balance fee path
+        // via the documented env override (placeholder destination -> xchain fallback).
         const envKeys = COINS.map(c => `XCHAIN_FEE_DESTINATION_${c}_REGTEST`);
         for (const k of envKeys) process.env[k] = 'X'.repeat(34);
         const results = {};
@@ -101,7 +101,7 @@ describe('Multi-chain action processing @regression @tier1', function () {
         }
 
         // Chain-agnostic: every coin must derive the same ledger (including the
-        // XCHAIN gas balance left after fees — fee math must not depend on the chain).
+        // XCHAIN gas balance left after fees; fee math must not depend on the chain).
         assert.deepStrictEqual(results.LTC,  results.BTC, 'LTC ledger differs from BTC for identical input');
         assert.deepStrictEqual(results.DOGE, results.BTC, 'DOGE ledger differs from BTC for identical input');
         // And the lifecycle actually did something (SEND moved 200 to A2).
@@ -140,9 +140,9 @@ describe('Multi-chain action processing @regression @tier1', function () {
     // 3. Fee-payment mode per chain (behavioral test of detectFeePaymentMode).
     //
     // The launch fee destinations are now committed in every coin config (the
-    // vanity 1Fees…/Lfees…/DFees… addresses), so the shipped default exercises
+    // vanity 1Fees.../Lfees.../DFees... addresses), so the shipped default exercises
     // the real per-chain branch. The unset/placeholder short-circuit to
-    // 'xchain' remains in the code for env-override setups — covered here by
+    // 'xchain' remains in the code for env-override setups, covered here by
     // injecting the placeholder.
     // -----------------------------------------------------------------------
     describe('fee-payment mode', function () {
@@ -155,7 +155,7 @@ describe('Multi-chain action processing @regression @tier1', function () {
             return new Utility();
         }
 
-        // utilFor mutates global env — restore BTC so later scenario files in a
+        // utilFor mutates global env; restore BTC so later scenario files in a
         // consolidated run don't inherit whichever coin the last loop ended on.
         after(function () {
             process.env.INDEXER_COIN    = 'BTC';

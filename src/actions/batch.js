@@ -142,10 +142,10 @@ class Batch {
 
             // Snapshot the transaction-level field names. Anything a sub-action
             // adds beyond these is action-specific and must be cleared before the
-            // next sub-action runs, otherwise it bleeds across commands — e.g. a
+            // next sub-action runs, otherwise it bleeds across commands (e.g. a
             // FILE leaves FORMAT=0 + ENCRYPTION_METHOD set, and a following
             // MESSAGE v2 then parses under FILE's v0 format (its ciphertext lands
-            // in ENCRYPTION_METHOD) and is wrongly rejected.
+            // in ENCRYPTION_METHOD) and is wrongly rejected).
             let baseKeys = new Set(Object.keys(data));
 
             for(let command of commands){
