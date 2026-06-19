@@ -600,7 +600,10 @@ class Actions {
     // TRIAL CAVEAT: InnoDB does NOT roll back AUTO_INCREMENT, so a dry-run that inserts a novel
     // index_* row (always at least the synthetic tx_hash) advances that counter even after
     // rollback. Safe on an isolated single-node regtest indexer; do NOT enable on a live
-    // consensus node until the id-vs-string block-hash question is resolved. Spec:
+    // consensus node until the id-vs-string block-hash question is resolved. This constraint
+    // is now enforced, not just advisory: the `feequotedryrun` RPC is unregistered unless
+    // INDEXER_NETWORK=regtest AND INDEXER_ENABLE_DRYRUN is set (api.js ENABLE_DRYRUN), and is
+    // API-key-gated when a key is configured. Spec:
     // claude/reports/specs/2026-06-01_native-coin-fee-phase2-dryrun.md
     async computeFeeQuoteDryRun({ action, params, source, feeOutputs }){
         action = String(action || '').toUpperCase();

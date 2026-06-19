@@ -89,8 +89,22 @@ const INDEXER_API_KEY = process.env.INDEXER_API_KEY || '';
 if(!INDEXER_API_KEY)
     console.warn('WARNING: INDEXER_API_KEY is not set; write and federation-read methods are UNAUTHENTICATED. Set a key for any shared deployment.');
 
+// feequotedryrun runs the REAL action handler (DEPLOY constructor / full EXECUTE
+// including emit subtrees) against committed state inside a forced-rollback txn and
+// mutates AUTO_INCREMENT non-deterministically. Its own comments mark it unsafe on a
+// live consensus node until the id-vs-string block-hash question is resolved, so it is
+// OPT-IN: registered ONLY on a regtest node with INDEXER_ENABLE_DRYRUN explicitly set.
+// Anywhere else the method is removed entirely (calls get method-not-found), so it can
+// never ship silently public on a shared/mainnet node.
+const ENABLE_DRYRUN = INDEXER_NETWORK === 'regtest'
+    && (process.env.INDEXER_ENABLE_DRYRUN === 'true' || process.env.INDEXER_ENABLE_DRYRUN === '1');
+
 // Set of write methods that require the API key when one is configured
 const WRITE_METHODS = new Set(['pushvalidatorrewards']);
+
+// Methods that execute the VM / mutate AUTO_INCREMENT and must fail closed (401)
+// without a valid x-api-key when a key is configured, even though they roll back.
+const GATED_EXEC_METHODS = new Set(['feequotedryrun']);
 
 // Set of federation read methods that require the API key when one is
 // configured. These expose the staked validator set and the pending
@@ -150,7 +164,7 @@ async function startApi(){
     app.use((req, res, next) => {
         let method = req.body && req.body.method;
         let normalized = method ? method.toLowerCase() : '';
-        if(method && INDEXER_API_KEY && (WRITE_METHODS.has(normalized) || FEDERATION_READ_METHODS.has(normalized))){
+        if(method && INDEXER_API_KEY && (WRITE_METHODS.has(normalized) || FEDERATION_READ_METHODS.has(normalized) || GATED_EXEC_METHODS.has(normalized))){
             let provided = req.headers['x-api-key'] || '';
             if(provided !== INDEXER_API_KEY){
                 return res.status(401).json({
@@ -814,6 +828,14 @@ async function startApi(){
         }
 
     };
+
+    // Unregister the opt-in dry-run unless explicitly enabled on a regtest node
+    // (see ENABLE_DRYRUN). Removing the method means a non-regtest / unflagged node
+    // returns method-not-found instead of exposing unauthenticated VM execution.
+    if(!ENABLE_DRYRUN)
+        delete jsonRpcController.feequotedryrun;
+    else
+        console.warn('WARNING: feequotedryrun is ENABLED (regtest + INDEXER_ENABLE_DRYRUN). It runs the real VM in a rolled-back txn; keep this node isolated.');
 
     // Plain REST status endpoint for monitoring tools that poll over a simple
     // GET: uptime checks, container liveness/readiness probes, and load-balancer
