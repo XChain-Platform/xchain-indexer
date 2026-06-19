@@ -8375,7 +8375,7 @@ class Database {
     // ownership: an UNSTAKE on a delegated-only key has no stake rows to deactivate, so crediting
     // the source's aggregate here would inflate balances (the cooldown sweep credits unstakes.AMOUNT
     // regardless of what was deactivated). Keep this query direct-stake-only.
-    async getActiveStakeByPubkey(pubkey, blockIndex){
+    async getActiveStakeByPubkey(pubkey, blockIndex, opts){
         let pubkey_id = await this.getPubkeyId(String(pubkey).toLowerCase());
         if(pubkey_id === null)
             return null;
@@ -8393,9 +8393,19 @@ class Database {
                      WHERE s.signing_pubkey_id=? AND s.status_id=?`;
         let args = [pubkey_id, valid_id];
         if(blockIndex !== undefined && blockIndex !== null){
-            query += ' AND s.activation_block <= ? AND (s.deactivation_block IS NULL OR s.deactivation_block > ?)';
-            args.push(blockIndex);
-            args.push(blockIndex);
+            if(opts && opts.undeactivatedOnly){
+                // UNSTAKE path: only stakes not already being unstaked (deactivation_block
+                // IS NULL). A stake already deactivating from a prior UNSTAKE in the same
+                // activation-delay window stays "active" (deactivation_block is a future
+                // block) and would otherwise be re-unstaked here, double-crediting the
+                // staker at cooldown end (item 4617).
+                query += ' AND s.activation_block <= ? AND s.deactivation_block IS NULL';
+                args.push(blockIndex);
+            } else {
+                query += ' AND s.activation_block <= ? AND (s.deactivation_block IS NULL OR s.deactivation_block > ?)';
+                args.push(blockIndex);
+                args.push(blockIndex);
+            }
         }
         query += ' GROUP BY s.signing_pubkey_id, ip.pubkey LIMIT 1';
         let results = await this.doQuery(query, args);

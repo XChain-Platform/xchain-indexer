@@ -88,9 +88,13 @@ class Unstake {
         // Verify the pubkey has an active stake owned by SOURCE
         let totalAmount = '0';
         if(!error){
-            let aggregate = await this.indexerDb.getActiveStakeByPubkey(data['SIGNING_PUBKEY'], data['BLOCK_INDEX']);
+            // undeactivatedOnly: an UNSTAKE may only target stake that is not already
+            // being unstaked. A second UNSTAKE inside the activation-delay window would
+            // otherwise re-read the same still-"active" rows and write a duplicate
+            // cooldown credit (double-credit, item 4617).
+            let aggregate = await this.indexerDb.getActiveStakeByPubkey(data['SIGNING_PUBKEY'], data['BLOCK_INDEX'], {undeactivatedOnly: true});
             if(!aggregate){
-                error = 'invalid: SIGNING_PUBKEY (no active stake)';
+                error = 'invalid: SIGNING_PUBKEY (no active stake or unstake already in progress)';
             } else {
                 let sourceId = await this.indexerDb.getAddressId(data['SOURCE']);
                 if(sourceId === null || Number(sourceId) !== Number(aggregate.source_id))
