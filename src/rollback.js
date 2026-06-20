@@ -838,6 +838,27 @@ class Rollback {
                 await this.indexerDb.doQuery(query, args);
             }
 
+            // Sweep balances rows orphaned by the index-table delete above. `balances` is a
+            // derived table keyed by (address_id, tick_id); it is NOT in dataTables (not
+            // deleted by action_index) and is normally reconciled by updateAddressBalance.
+            // But when an address (or tick) is seen ONLY in the orphaned range, its
+            // index_addresses/index_tickers row was just deleted, so the refresh below
+            // resolves the string to NULL (suppressIndexIdCreation) and updateAddressBalance
+            // can no longer locate the stale row by its now-deleted id. That leaves a zombie
+            // balance whose id matches no index row, which inflates sum(balances) and trips
+            // sanityCheck on the next block touching the tick (indexer halts). A
+            // from-genesis replay never created that row, so deleting every balance whose
+            // address_id/tick_id no longer resolves makes the reorged node match a fresh
+            // one. (Pre-suppressIndexIdCreation this was masked: createAddress resurrected the
+            // id and updateAddressBalance recomputed the row to 0 and removed it, at the cost
+            // of the ^<id> fork the index delete exists to close. The id PKs are NOT NULL, so
+            // the NOT IN subqueries never short-circuit on a NULL.) Mirrors the icons orphan
+            // sweep above.
+            await this.indexerDb.doQuery(
+                `DELETE FROM balances
+                 WHERE address_id NOT IN (SELECT id FROM index_addresses)
+                    OR tick_id    NOT IN (SELECT id FROM index_tickers)`, []);
+
             // Delete consensus price snapshots anchored to the orphaned blocks.
             // price_snapshots anchors each round to a block via reference_block
             // (its equivalent of block_index) rather than block_index itself, so
