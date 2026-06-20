@@ -110,6 +110,15 @@ const ROLLBACK_EXEMPT = {
     events:
         'Append-only operational audit log; it records the REORG event itself. ' +
         'Rolling it back would erase the evidence of the rollback.',
+    recovery_pending_rewards:
+        'Recovery-local staging scratch (F1a id-determinism fix): archived validator ' +
+        'rewards keyed by raw source-address string, drained into validator_rewards by the ' +
+        'createAddress apply hook during the reindex. NOT chain truth and NOT consensus- ' +
+        'hashed, so a surviving row never diverges the ledger; an already-applied row is a ' +
+        'no-op (validator_rewards itself IS block-scoped and rolls back). rollback() does ' +
+        'still RE-ARM it (UPDATE applied=0 WHERE source_id NOT IN index_addresses) so the ' +
+        'hook re-materializes a reward whose source address was rolled out of the index, but ' +
+        'that is a parity convenience, not an index-keyed delete, hence exempt not blockTables.',
     // NOTE: pubkeys was here ("a row surviving a reorg is harmless") until the wire
     // ^<id> work made index_addresses ids reorg-reproducible. A reclaimed address_id
     // then re-points the surviving pubkeys row at a DIFFERENT address (INSERT IGNORE

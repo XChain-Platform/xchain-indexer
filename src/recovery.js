@@ -272,22 +272,30 @@ class AnchorRecovery {
         if(rewards.length > 0){
             if(!this.btcDb)
                 throw new Error('archive carries ' + rewards.length + ' reward rows but no BTC indexer DB handle was provided (set BTC_INDEXER_DB_NAME); restoring without them would corrupt COLLECT replay');
+            // F1a id-determinism fix: do NOT assign index ids at restore time. The old path
+            // called createAddress/getOrCreatePubkeyId here, OUTSIDE a block tx, which seeded
+            // low AUTO_INCREMENT ids that offset every subsequent in-block deterministic id
+            // (getNextAddressId is MAX(id)+1 over ALL rows). A recovered node then built a
+            // different index_addresses map than a from-genesis node, forking ^id resolution
+            // and breaking validator_rewards parity across the recovery boundary.
+            //
+            // Instead stage each archived reward keyed by the RAW source-address string + the
+            // signing pubkey, assigning no id. The earn-time source is still pinned by the
+            // archive (no restore-time drift if the pubkey was later re-staked elsewhere).
+            // During the BTC reindex, when the source address first receives its deterministic
+            // in-block id, db.createAddress's apply hook materializes the staged rewards into
+            // validator_rewards under that deterministic source_id. The source's STAKE precedes
+            // its COLLECT in chain order, so the id (and therefore the reward) exists before the
+            // COLLECT replays, preserving the "rewards present before the reindex's first COLLECT"
+            // ordering invariant without ever perturbing the counter. recovery_pending_rewards is
+            // recovery-local: not consensus-hashed, not replicated by xchain-sync.
             for(let r of rewards){
-                // Earn-time source resolution is pinned by the archive: the hub
-                // archived the source that earned the reward, so restore-time
-                // lookups can't drift if the pubkey was later re-staked from a
-                // different address. createAddress/getOrCreatePubkeyId are
-                // get-or-create. The id maps are append-only, so seeding them
-                // before the reindex is safe (the reindex resolves to the same ids).
-                let source_id = await this.btcDb.createAddress(String(r.source));
-                let pubkey_id = await this.btcDb.getOrCreatePubkeyId(String(r.validator_pubkey).toLowerCase());
-                if(source_id === null || pubkey_id === null)
-                    throw new Error('reward row id resolution failed for ' + String(r.validator_pubkey).substring(0, 16) + '...');
                 await this.btcDb.doQuery(
-                    `INSERT IGNORE INTO validator_rewards
-                        (source_id, signing_pubkey_id, reward_type, round_reference, amount, block_index)
+                    `INSERT INTO recovery_pending_rewards
+                        (source_address, validator_pubkey, reward_type, round_reference, amount, block_index)
                      VALUES (?, ?, ?, ?, ?, ?)`,
-                    [source_id, pubkey_id, String(r.reward_type), Number(r.round_number), String(r.amount), Number(r.block_index)]);
+                    [String(r.source).substring(0, 120), String(r.validator_pubkey).toLowerCase().substring(0, 64),
+                     String(r.reward_type), Number(r.round_number), String(r.amount), Number(r.block_index)]);
                 report.rewards++;
             }
         }

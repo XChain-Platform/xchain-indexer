@@ -117,6 +117,18 @@ class Database {
         // delete just closed. Default false: forward block processing is unaffected.
         this.suppressIndexIdCreation = false;
 
+        // Recovery reward apply-hook gate (F1a id-determinism fix). recovery.js stages
+        // archived rewards in recovery_pending_rewards keyed by raw source-address STRING
+        // (no index id assigned), and createAddress materializes them into validator_rewards
+        // when the source address first gets its deterministic in-block id. This counter is
+        // a one-time-probed remaining-unapplied count so normal indexing (no recovery in
+        // progress) pays a single COUNT(*) and then short-circuits the hook entirely. The
+        // rollback re-arm resets _recoveryPendingChecked to force a re-probe when staged rows
+        // are re-armed. See recovery.js, _applyPendingRewardsForAddress, and
+        // claude/reports/2026-06-19_id-determinism-F1-implementation-plan.md.
+        this._recoveryPendingChecked   = false;
+        this._recoveryPendingRemaining = 0;
+
         // Serializes DB transactions across the block-processing loop, the reorg rollback
         // path, and the read-only feequote dry-run (Actions.computeFeeQuoteDryRun). The
         // indexer's own paths are single-threaded and never contend, so the lock is always
@@ -1477,6 +1489,12 @@ class Database {
                 let query = "INSERT IGNORE INTO index_addresses (`id`, `address`, `block_index`) values (?, ?, ?)";
                 await this.doQuery(query, [id, address, (this.util.isNull(bi) ? null : bi)]);
                 id = await this.getAddressId(address);
+                // F1a apply hook: this address just received its deterministic in-block id.
+                // If recovery staged any rewards for it (recovery_pending_rewards, keyed by the
+                // raw address string), materialize them now into validator_rewards under this
+                // deterministic source_id. Normal indexing pays one COUNT(*) probe and then
+                // short-circuits forever (no recovery in progress => remaining stays 0).
+                await this._maybeApplyPendingRewards(address, id);
             } else {
                 // Outside block processing (API read paths, recovery seed): keep the legacy
                 // AUTO_INCREMENT path with a NULL block_index. These ids are not assigned
@@ -1491,6 +1509,59 @@ class Database {
         if(id !== null)
             id = Number(id);
         return id;
+    }
+
+    // F1a recovery reward apply hook. Called from createAddress right after an address
+    // first receives its deterministic in-block id. Cheap-gates on a one-time-probed count
+    // of unapplied staged rewards so normal indexing (no recovery in progress) pays a single
+    // COUNT(*) and then short-circuits on every later call. See the constructor flags and
+    // claude/reports/2026-06-19_id-determinism-F1-implementation-plan.md.
+    async _maybeApplyPendingRewards(address, source_id){
+        if(source_id === null || source_id === undefined)
+            return;
+        if(!this._recoveryPendingChecked){
+            // One-time probe. The table is auto-created by verifyTables, so it always exists;
+            // guard anyway so a partially-migrated DB degrades to "no pending" instead of throwing.
+            try {
+                let probe = await this.doQuery("SELECT COUNT(*) AS c FROM recovery_pending_rewards WHERE applied=0");
+                this._recoveryPendingRemaining = (probe.length > 0) ? Number(probe[0].c) : 0;
+            } catch(e){
+                this._recoveryPendingRemaining = 0;
+            }
+            this._recoveryPendingChecked = true;
+        }
+        if(this._recoveryPendingRemaining <= 0)
+            return;
+        let applied = await this._applyPendingRewardsForAddress(address, source_id);
+        this._recoveryPendingRemaining -= applied;
+    }
+
+    // Materialize every unapplied staged reward for this source address into validator_rewards
+    // under the just-assigned deterministic source_id, byte-identical to the in-block
+    // createValidatorReward row shape (same columns, same UNIQUE dedup). Stamps the staging row
+    // with the resolved source_id and marks it applied (so a reorg re-arm can find rows whose
+    // source id was rolled back). Returns the number of rows applied. The archived block_index
+    // is carried verbatim onto validator_rewards (it is the reward's earn-block, not the
+    // address's first-seen block). validator_rewards is NOT consensus-hashed (parity-only), so
+    // the bar here is COLLECT-correctness + from-genesis parity, not block-hash byte-identity.
+    async _applyPendingRewardsForAddress(source_address, source_id){
+        let rows = await this.doQuery(
+            "SELECT id, validator_pubkey, reward_type, round_reference, amount, block_index FROM recovery_pending_rewards WHERE source_address=? AND applied=0",
+            [source_address]);
+        let count = 0;
+        for(let r of rows){
+            let pubkey_id = await this.getOrCreatePubkeyId(String(r.validator_pubkey).toLowerCase());
+            if(pubkey_id === null)
+                continue;   // leave unapplied; surfaces as a parity gap rather than a bad FK
+            await this.doQuery(
+                `INSERT IGNORE INTO validator_rewards
+                    (source_id, signing_pubkey_id, reward_type, round_reference, amount, block_index)
+                 VALUES (?, ?, ?, ?, ?, ?)`,
+                [source_id, pubkey_id, String(r.reward_type), r.round_reference, String(r.amount), Number(r.block_index)]);
+            await this.doQuery("UPDATE recovery_pending_rewards SET applied=1, source_id=? WHERE id=?", [source_id, r.id]);
+            count++;
+        }
+        return count;
     }
 
     // Resolve a wire ^<id> address reference to its canonical address string.

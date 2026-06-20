@@ -273,17 +273,20 @@ function btcDbStub(staked) {
     return { async doQuery(sql, params) { return set.has(String(params[0]).toLowerCase()) ? [{ 1: 1 }] : []; } };
 }
 
-// BTC indexer stub for the reward restore: get-or-create id maps + an INSERT
-// capture for validator_rewards (the empty pre-reindex DB case).
+// BTC indexer stub for the reward restore. F1a: recovery STAGES archived rewards by raw
+// source-address string into recovery_pending_rewards (assigning NO index id), so the stub
+// captures that INSERT. It must NOT call createAddress/getOrCreatePubkeyId at restore time;
+// expose them as poisoned to assert the id-assignment path is gone (the apply hook assigns
+// ids later, during the reindex, not here).
 function rewardBtcDbStub() {
     let rewards = [];
     return {
         rewards,
-        async createAddress() { return 11; },
-        async getOrCreatePubkeyId() { return 22; },
+        async createAddress() { throw new Error('recovery must not assign index ids at restore time (F1a)'); },
+        async getOrCreatePubkeyId() { throw new Error('recovery must not assign pubkey ids at restore time (F1a)'); },
         async doQuery(sql, params) {
-            if (sql.includes('INSERT IGNORE INTO validator_rewards')) {
-                rewards.push({ source_id: params[0], pubkey_id: params[1], reward_type: params[2],
+            if (sql.includes('INSERT INTO recovery_pending_rewards')) {
+                rewards.push({ source_address: params[0], validator_pubkey: params[1], reward_type: params[2],
                                round_reference: params[3], amount: params[4], block_index: params[5] });
             }
             return [];
@@ -392,6 +395,9 @@ describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () 
             assert.strictEqual(btcDb.rewards.length, 2);
             assert.strictEqual(btcDb.rewards[0].reward_type, 'anchor_BTC');
             assert.strictEqual(btcDb.rewards[0].amount, '10.00000000');
+            // F1a: staged by RAW source-address string (no id), to be materialized under the
+            // deterministic source_id by the reindex apply hook.
+            assert.strictEqual(btcDb.rewards[0].source_address, '1StakeAddr');
         });
 
         it('rejects an archive claiming a derived reward type (oracle_round must never ride the archive)', async function () {
