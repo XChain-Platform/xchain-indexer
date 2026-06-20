@@ -170,13 +170,21 @@ class XChainIndexer {
                 }
             } catch(e){
                 // Table not ready / transient error: treat as not covered and keep waiting.
+                // Surface it once per distinct message so a persistent fault (schema change,
+                // permission regression, dead pool) is distinguishable from genuine mirror lag
+                // instead of looking identical to it for the whole timeout window.
+                if(this._callPresenceLastErr !== e.message){
+                    this._callPresenceLastErr = e.message;
+                    console.error('direct call-presence query error (treating as not covered): ' + e.message);
+                }
             }
             if(covered) return;
             // Mirror is behind. Defer the block rather than proceed with a partial set: once the
             // bound is exhausted, throw so the caller retries this block from the top of the loop.
             if(Date.now() >= deadline)
                 this.util.throwError('direct call-presence barrier timed out after ' + timeoutMs +
-                    'ms waiting for block_time ' + blockTime + ' (call mirror at ' + lastTs + ')');
+                    'ms waiting for block_time ' + blockTime + ' (call mirror at ' + lastTs + ')' +
+                    (this._callPresenceLastErr ? ' [last query error: ' + this._callPresenceLastErr + ']' : ''));
             console.log('Waiting on hub call mirror: block_time ' + blockTime +
                 ' not yet covered (mirror at ' + lastTs + '); retrying...');
             await this.util.sleep(Math.min(pollMs, Math.max(1, deadline - Date.now())));

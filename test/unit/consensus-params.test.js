@@ -121,11 +121,16 @@ const NON_POLLED_CONSENSUS_PARAMS = ['ACTIVATION_DELAY_BLOCKS', 'EXPIRATION_FEE_
 // and the sibling exists in the monorepo, but a standalone indexer CI checkout
 // has neither; there we SKIP the cross-repo coupling rather than fail.
 function resolveVmConsensus(){
-    const tries = ['xchain-vm', '../../../xchain-vm/src/consensus-runtime.js'];
-    for(const t of tries){
-        try { return require(t); } catch(e){ /* try next */ }
+    // Prefer the real package (exports the full frozen surface incl. the strip set
+    // + deploy rules). Only fall back to the consensus-runtime-only module (which
+    // omits those) when the package is genuinely absent. A load error from the
+    // package's own frozen-export guard is surfaced as pkgErr, not silently
+    // degraded to the fallback, so a dropped export reddens rather than skips.
+    try { return { vm: require('xchain-vm'), full: true, pkgErr: null }; }
+    catch(e){
+        try { return { vm: require('../../../xchain-vm/src/consensus-runtime.js'), full: false, pkgErr: e }; }
+        catch(e2){ return { vm: null, full: false, pkgErr: e }; }
     }
-    return null;
 }
 
 describe('consensus parameters are frozen (track 8 guard) @regression', function(){
@@ -213,7 +218,12 @@ describe('consensus parameters are frozen (track 8 guard) @regression', function
     });
 
     it('the bundled VM agrees on the consensus version + status vocabulary (cross-repo coupling)', function(){
-        const vm = resolveVmConsensus();
+        const { vm, full, pkgErr } = resolveVmConsensus();
+        // A package load failure caused by the VM's own frozen-export guard
+        // (a dropped/renamed STRIPPED_GLOBAL_NAMES or CONSENSUS_RULES) must redden,
+        // not degrade to the fallback and skip.
+        if(pkgErr && /STRIPPED_GLOBAL_NAMES|CONSENSUS_RULES/.test(String(pkgErr && pkgErr.message)))
+            assert.fail('xchain-vm failed to load its frozen consensus surface: ' + pkgErr.message);
         if(!vm){ this.skip(); return; } // standalone CI without the VM present
         assert.strictEqual(vm.CONSENSUS_VERSION, EXPECTED_VM_CONSENSUS_VERSION,
             'bundled VM CONSENSUS_VERSION != indexer expectation (bump both together)');
@@ -224,8 +234,13 @@ describe('consensus parameters are frozen (track 8 guard) @regression', function
         // consensus surface frozen with the same epoch. The integer-only check above
         // is structurally blind to a strip-list / rule-set change; these digests close
         // that gap so a sandbox/lint edit reddens unless CONSENSUS_VERSION is bumped +
-        // these goldens regenerated in lockstep. Guarded on presence: the consensus-
-        // runtime-only fallback (standalone CI) does not export these.
+        // these goldens regenerated in lockstep. When the real package is loaded the
+        // exports are MANDATORY (assert presence so a rename cannot silently skip);
+        // only the consensus-runtime-only fallback (standalone CI) legitimately omits them.
+        if(full){
+            assert.ok(vm.STRIPPED_GLOBAL_NAMES, 'xchain-vm did not export STRIPPED_GLOBAL_NAMES (rename? bump CONSENSUS_VERSION + regolden)');
+            assert.ok(vm.CONSENSUS_RULES, 'xchain-vm did not export CONSENSUS_RULES (rename? bump CONSENSUS_VERSION + regolden)');
+        }
         if(vm.STRIPPED_GLOBAL_NAMES){
             assert.deepStrictEqual([...vm.STRIPPED_GLOBAL_NAMES].sort(), EXPECTED_VM_STRIPPED_GLOBAL_NAMES,
                 'VM sandbox strip set drifted from the indexer expectation (bump CONSENSUS_VERSION + regolden in both repos)');

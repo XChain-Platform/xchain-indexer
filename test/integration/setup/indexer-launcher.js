@@ -140,6 +140,12 @@ async function processBlocks(indexer) {
         const blockTime = await indexer.decoderDb.getBlockTime(lastIndexerBlock);
 
         await indexer.indexerDb.beginTransaction();
+        // Mirror production (XChainIndexer sets indexerDb.blockIndex before parsing a
+        // block): createAddress/createTicker default block_index to this.blockIndex,
+        // so without this the harness stamps block_index=NULL and the reorg rollback
+        // (DELETE WHERE block_index >= ?) matches nothing, blinding the 05-reorg suite
+        // to the F-1/F-2 index-id bug class.
+        indexer.indexerDb.blockIndex = lastIndexerBlock;
         try {
             for (const tx of blockTransactions) {
                 await indexer.actions.processTransaction(tx);
