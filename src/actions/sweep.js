@@ -50,13 +50,6 @@ class Sweep {
 
     // Handle parsing the SWEEP transaction
     async parse(params, data, error){
-        /*****************************************************************
-         * DEBUGGING - Force params
-         ****************************************************************/
-        // let str = '0|1BoogrfDADPLQpq8LMASmWQUVYDp4t2hF9|1|1|1|1|1|memo';
-        // params = String(str).split('|');
-        // data['FORMAT'] = this.util.getFormatVersion(params[0]);
-
         // Validate that format is known
         let format = data['FORMAT'];
         if(!error && (format===null || this.formats[format] === undefined ))
@@ -162,14 +155,6 @@ class Sweep {
         // getTransactionFee > 0 + detectFeePaymentMode('xchain') rejects every contract-emitted
         // SWEEP as 'insufficient funds (FEE)'.
         fees['AMOUNT'] = this.util.feeForAction(this.util.getTransactionFee(db_hits, fees['TICK']), data);
-
-        // DEBUG
-        // console.log('source=',data['SOURCE']);
-        // console.log('balances=',balances);
-        // console.log('ownerships=',ownerships);
-        // console.log('preferences=',preferences);
-        // console.log('db_hits=',db_hits);
-        // console.log('fees=',fees);
 
         // Validate fee payment (native coin or XCHAIN balance)
         if(!error && this.util.bcgt(fees['AMOUNT'], 0)){
@@ -354,7 +339,6 @@ class Sweep {
 
                     // Update tokens table to indicate new owner
                     await this.indexerDb.updateTokens(tick);
-                    // console.log('creating issue for tick=',tick);
 
                     // Store the SOURCE, DESTINATION and TICK in addresses and tickers lists
                     this.util.addAddressTicker(issue['SOURCE'], tick);

@@ -60,13 +60,6 @@ class Batch {
         // Define list of ACTIONS and count of usage within BATCH
         let actions = {};
 
-        /*****************************************************************
-         * DEBUGGING - Force params
-         ****************************************************************/
-        // data['TX_DATA'] = "BATCH|0|MINT|0|GAS|60;ISSUE|0|JDOGTEST";
-        // params = String(str).split('|');
-        // data['FORMAT'] = this.util.getFormatVersion(params[0]);
-
         // Validate that format is known
         let format = data['FORMAT'];
         if(!error && (format===null || this.formats[format] === undefined ))

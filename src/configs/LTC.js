@@ -19,10 +19,8 @@
  ********************************************************************/
 module.exports = {
 
-    // Handle returning the current coin configuration
     getConfig: function(network){
 
-        // Define config objects
         let config  = {};
 		let address = {};
 
@@ -69,7 +67,6 @@ module.exports = {
             VM_GUARD_GAS_CEILING: 200000  // Per-call gas ceiling for a controller-bound token `guard` run; SOURCE reserves this fee
         };
 
-		// Set network specific addresses
         switch(network){
             case 'mainnet':
                 address['BURN']            = "LXChainBurnAddressXXXXXXXXXXSkrYkJ";

@@ -120,7 +120,6 @@ describe('Action field-format contract', function () {
             assert.strictEqual(send[3], 'VERSION|TICK|AMOUNT|DESTINATION|MEMO|TICK|AMOUNT|DESTINATION|MEMO');
         });
 
-        // Each golden wire string + the params split exposes for the handler.
         const VECTORS = [
             { v: 0, wire: '0|XCP|100|mqmJDcs5nXFHrj9q7a2G5sBVmjcQTDdUZp|hello',
               params: ['0', 'XCP', '100', 'mqmJDcs5nXFHrj9q7a2G5sBVmjcQTDdUZp', 'hello'] },

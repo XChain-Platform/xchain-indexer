@@ -19,26 +19,17 @@ const sinon  = require('sinon');
 const Database             = require('../../src/db.js');
 const { createMockIndexer } = require('../fixtures/mocks');
 
-// ---------------------------------------------------------------------------
-// Helper: create a Database instance with all IO stubbed out
-// ---------------------------------------------------------------------------
 function makeDb() {
     const indexer = createMockIndexer();
     const db = new Database('localhost', 3306, 'testdb', 'user', 'pass', indexer);
-    // Prevent real pool usage
     db.pool                  = { getConnection: sinon.stub().rejects(new Error('no real DB in unit tests')) };
     db.transactionConnection = null;
-    // Stub the methods that hit the DB
     db.createAddress           = sinon.stub().resolves(1);
     db.getAddressBalances      = sinon.stub().resolves({});
     db.getAddressTableBalances = sinon.stub().resolves({});
     db.doQuery                 = sinon.stub().resolves([]);
     return db;
 }
-
-// ---------------------------------------------------------------------------
-// Suite: updateAddressBalance – UPSERT optimization
-// ---------------------------------------------------------------------------
 
 describe('Database.updateAddressBalance @unit @regression', function () {
 
@@ -143,10 +134,6 @@ describe('Database.updateAddressBalance @unit @regression', function () {
         assert.strictEqual(deleteCalls.length, 0, 'no DELETE when new balance is non-zero');
     });
 });
-
-// ---------------------------------------------------------------------------
-// Suite: updateBalances – parallel outer loop
-// ---------------------------------------------------------------------------
 
 describe('Database.updateBalances (parallelized) @unit @regression', function () {
 

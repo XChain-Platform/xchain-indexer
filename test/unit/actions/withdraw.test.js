@@ -20,20 +20,12 @@ const { createMockIndexer, createBaseData, createTokenInfo } = require('../../fi
 
 const Withdraw = require('../../../src/actions/withdraw.js');
 
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
-
 const SOURCE           = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
 const CONTRACT_INDEX   = '7';
 const TICK             = 'TEST';
 const BLOCK            = 100;
 // Contract address as computed by the handler: 'C:BTC:<contract_action_index>'
 const CONTRACT_ADDRESS = 'C:BTC:' + CONTRACT_INDEX;
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 function makeActionsCtx(indexer) {
     return {
@@ -57,10 +49,6 @@ function makeData(overrides = {}) {
 function makeToken(overrides = {}) {
     return createTokenInfo(Object.assign({ TICK, TICK_ID: 1, DECIMALS: 0 }, overrides));
 }
-
-// ---------------------------------------------------------------------------
-// Suite
-// ---------------------------------------------------------------------------
 
 describe('Withdraw handler @regression @tier2', function () {
     let indexer, actionsCtx, handler;
@@ -95,10 +83,6 @@ describe('Withdraw handler @regression @tier2', function () {
         sinon.restore();
     });
 
-    // -----------------------------------------------------------------------
-    // FORMAT validation
-    // -----------------------------------------------------------------------
-
     describe('FORMAT validation', function () {
 
         it('unknown format → invalid', async function () {
@@ -128,10 +112,6 @@ describe('Withdraw handler @regression @tier2', function () {
             assert.ok(data.STATUS.startsWith('invalid'));
         });
     });
-
-    // -----------------------------------------------------------------------
-    // Valid withdraw
-    // -----------------------------------------------------------------------
 
     describe('valid withdraw', function () {
 
@@ -172,10 +152,6 @@ describe('Withdraw handler @regression @tier2', function () {
             assert.ok(indexer.indexerDb.updateTokens.calledOnce);
         });
     });
-
-    // -----------------------------------------------------------------------
-    // CONTRACT_ACTION_INDEX validations
-    // -----------------------------------------------------------------------
 
     describe('CONTRACT_ACTION_INDEX validations', function () {
 
@@ -236,10 +212,6 @@ describe('Withdraw handler @regression @tier2', function () {
         });
     });
 
-    // -----------------------------------------------------------------------
-    // TICK validations
-    // -----------------------------------------------------------------------
-
     describe('TICK validations', function () {
 
         it('TICK not found → invalid', async function () {
@@ -253,10 +225,6 @@ describe('Withdraw handler @regression @tier2', function () {
             assert.ok(data.STATUS.includes('TICK'));
         });
     });
-
-    // -----------------------------------------------------------------------
-    // AMOUNT validations
-    // -----------------------------------------------------------------------
 
     describe('AMOUNT validations', function () {
 
@@ -300,10 +268,6 @@ describe('Withdraw handler @regression @tier2', function () {
         });
     });
 
-    // -----------------------------------------------------------------------
-    // Contract balance validation
-    // -----------------------------------------------------------------------
-
     describe('contract balance validation', function () {
 
         it('insufficient contract balance → invalid', async function () {
@@ -340,10 +304,6 @@ describe('Withdraw handler @regression @tier2', function () {
         });
     });
 
-    // -----------------------------------------------------------------------
-    // SOURCE sleeping
-    // -----------------------------------------------------------------------
-
     describe('SOURCE sleeping', function () {
 
         it('SOURCE sleeping → invalid', async function () {
@@ -357,10 +317,6 @@ describe('Withdraw handler @regression @tier2', function () {
             assert.ok(data.STATUS.includes('sleeping'));
         });
     });
-
-    // -----------------------------------------------------------------------
-    // Ledger changes
-    // -----------------------------------------------------------------------
 
     describe('ledger changes on valid withdraw', function () {
 

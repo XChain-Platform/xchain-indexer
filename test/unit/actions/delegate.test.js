@@ -66,8 +66,6 @@ describe('Delegate (DELEGATE) @regression @tier2', function () {
         sinon.restore();
     });
 
-    // ─── v0: Capability rotate ───────────────────────────────────────────
-
     describe('v0: capability rotate', function () {
 
         it('valid delegation → STATUS valid and createDelegation called', async function () {
@@ -171,8 +169,6 @@ describe('Delegate (DELEGATE) @regression @tier2', function () {
 
     });
 
-    // ─── v2: Capability revoke ────────────────────────────────────────
-
     describe('v2: capability revoke', function () {
 
         it('valid revoke → STATUS valid and createRevokeDelegation called', async function () {
@@ -265,8 +261,6 @@ describe('Delegate (DELEGATE) @regression @tier2', function () {
 
     });
 
-    // ─── v1: Contract-targeted rotate ───────────────────────────────────
-
     describe('v1: contract-targeted rotate', function () {
 
         function v1Data() { return delegateData({ FORMAT: 1 }); }
@@ -357,8 +351,6 @@ describe('Delegate (DELEGATE) @regression @tier2', function () {
         });
 
     });
-
-    // ─── v3: Contract-targeted revoke ───────────────────────────────────
 
     describe('v3: contract-targeted revoke', function () {
 

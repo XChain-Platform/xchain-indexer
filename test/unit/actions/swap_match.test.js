@@ -71,16 +71,12 @@ describe('Swap_Match action handler @regression @tier2', function () {
         });
     });
 
-    // ─── Returns early when swap is missing ───────────────────────────
-
     it('returns early when swapInfo is null', async function () {
         indexer.indexerDb.getSwapInfo.resolves(null);
         const data = createBaseData({ ACTION: 'SWAP_MATCH', ACTION_INDEX: 10, BLOCK_INDEX: 200 });
         await handler.parse(null, data, null);
         assert.ok(indexer.indexerDb.createSwapMatch.notCalled);
     });
-
-    // ─── No match found ───────────────────────────────────────────────
 
     it('does nothing when no matching swaps are found', async function () {
         const swapInfo = makeSwapInfo();
@@ -90,8 +86,6 @@ describe('Swap_Match action handler @regression @tier2', function () {
         await handler.parse(null, data, null);
         assert.ok(indexer.indexerDb.createSwapMatch.notCalled);
     });
-
-    // ─── Match found ──────────────────────────────────────────────────
 
     it('processes match and creates swap_match record', async function () {
         const swapInfo  = makeSwapInfo();
@@ -110,7 +104,6 @@ describe('Swap_Match action handler @regression @tier2', function () {
         indexer.indexerDb.findSwapMatches.resolves([matchInfo]);
         const data = createBaseData({ ACTION: 'SWAP_MATCH', ACTION_INDEX: 10, BLOCK_INDEX: 200 });
         await handler.parse(null, data, null);
-        // Should have created two status records (one for each swap)
         assert.strictEqual(indexer.indexerDb.createSwapStatus.callCount, 2);
     });
 
@@ -125,8 +118,6 @@ describe('Swap_Match action handler @regression @tier2', function () {
         assert.ok(statuses.every(s => s === 'complete'), `Expected all complete, got: ${statuses}`);
     });
 
-    // ─── Only first valid match is used ──────────────────────────────
-
     it('uses first valid match and ignores subsequent matches', async function () {
         const swapInfo   = makeSwapInfo();
         const matchInfo1 = makeMatchInfo({ ACTION_INDEX: 20 });
@@ -135,18 +126,14 @@ describe('Swap_Match action handler @regression @tier2', function () {
         indexer.indexerDb.findSwapMatches.resolves([matchInfo1, matchInfo2]);
         const data = createBaseData({ ACTION: 'SWAP_MATCH', ACTION_INDEX: 10, BLOCK_INDEX: 200 });
         await handler.parse(null, data, null);
-        // Should only create one match record (first valid match)
         assert.strictEqual(indexer.indexerDb.createSwapMatch.callCount, 1);
     });
-
-    // ─── Block list prevents match ────────────────────────────────────
 
     it('skips match when matchInfo GET_ADDRESS is on swap block list', async function () {
         const swapInfo  = makeSwapInfo({ BLOCK_LIST: 999 });
         const matchInfo = makeMatchInfo({ GET_ADDRESS: '1BlockedAddressXXXXXXXXXXXXXXXXXXXX' });
         indexer.indexerDb.getSwapInfo.resolves(swapInfo);
         indexer.indexerDb.findSwapMatches.resolves([matchInfo]);
-        // Return the blocked address in the block list
         indexer.indexerDb.getList.callsFake(async (listId) => {
             if (listId === 999) return ['1BlockedAddressXXXXXXXXXXXXXXXXXXXX'];
             return [];
@@ -155,8 +142,6 @@ describe('Swap_Match action handler @regression @tier2', function () {
         await handler.parse(null, data, null);
         assert.ok(indexer.indexerDb.createSwapMatch.notCalled, 'Should not match when address is blocked');
     });
-
-    // ─── Side-effect checks ───────────────────────────────────────────
 
     it('calls mapper.createMappings when a match is found', async function () {
         const swapInfo  = makeSwapInfo();
@@ -187,7 +172,6 @@ describe('Swap_Match action handler @regression @tier2', function () {
         assert.ok(indexer.mapper.createMappings.notCalled);
     });
 
-    // ─── Ownership-transfer settlement sides (GIVE_OWNERSHIP = 1) ─────────
     // The default tests cover the balance-escrow path. An ownership offer only
     // matches another ownership offer (the GIVE/GET_OWNERSHIP mirror filter), so
     // an ownership-for-ownership swap drives BOTH ownership branches at once
@@ -217,7 +201,6 @@ describe('Swap_Match action handler @regression @tier2', function () {
         assert.ok(indexer.indexerDb.createSwapMatch.notCalled);
     });
 
-    // ─── SWAP_ACTION_INDEX selects the swap to resolve ────────────────────
     it('resolves the swap by SWAP_ACTION_INDEX when present', async function () {
         const swapInfo  = makeSwapInfo();
         const matchInfo = makeMatchInfo();
@@ -229,7 +212,6 @@ describe('Swap_Match action handler @regression @tier2', function () {
         assert.ok(indexer.indexerDb.createSwapMatch.calledOnce);
     });
 
-    // ─── Token ALLOW/BLOCK list filtering (rejects the match) ─────────────
     // Helper: re-stub getTokenInfo so GET / GIVE tokens carry a list id, and
     // getList returns the list contents for that id.
     function withTokenLists({ getList, giveList }) {

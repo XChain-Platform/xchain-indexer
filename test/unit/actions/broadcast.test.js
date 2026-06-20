@@ -38,8 +38,6 @@ describe('Broadcast action handler @regression @tier3', function () {
         indexer.util.resetLists();
     });
 
-    // ─── Format validation ────────────────────────────────────────────
-
     it('accepts format 0 (message + value)', async function () {
         const data = createBaseData({ ACTION: 'BROADCAST', FORMAT: 0 });
         const params = ['0', 'hello world', '42.5'];
@@ -75,8 +73,6 @@ describe('Broadcast action handler @regression @tier3', function () {
         assert.ok(data['STATUS'].includes('VERSION'), `Expected VERSION error, got: ${data['STATUS']}`);
     });
 
-    // ─── MESSAGE length limit ─────────────────────────────────────────
-
     it('rejects MESSAGE exceeding MAX_BROADCAST_MESSAGE_LENGTH', async function () {
         const longMsg = 'm'.repeat(indexer.config['MAX_BROADCAST_MESSAGE_LENGTH'] + 1);
         const data = createBaseData({ ACTION: 'BROADCAST', FORMAT: 0 });
@@ -85,8 +81,6 @@ describe('Broadcast action handler @regression @tier3', function () {
         assert.ok(data['STATUS'].includes('MESSAGE'), `Expected MESSAGE length error, got: ${data['STATUS']}`);
     });
 
-    // ─── VALUE length limit ───────────────────────────────────────────
-
     it('rejects VALUE exceeding MAX_BROADCAST_VALUE_LENGTH', async function () {
         const longVal = '1'.repeat(indexer.config['MAX_BROADCAST_VALUE_LENGTH'] + 1);
         const data = createBaseData({ ACTION: 'BROADCAST', FORMAT: 0 });
@@ -94,8 +88,6 @@ describe('Broadcast action handler @regression @tier3', function () {
         await handler.parse(params, data, null);
         assert.ok(data['STATUS'].includes('VALUE'), `Expected VALUE length error, got: ${data['STATUS']}`);
     });
-
-    // ─── MEMO validation ──────────────────────────────────────────────
 
     it('rejects MEMO containing a pipe character', async function () {
         const data = createBaseData({ ACTION: 'BROADCAST', FORMAT: 1 });
@@ -118,8 +110,6 @@ describe('Broadcast action handler @regression @tier3', function () {
         await handler.parse(params, data, null);
         assert.ok(data['STATUS'].includes('MEMO'), `Expected MEMO error, got: ${data['STATUS']}`);
     });
-
-    // ─── Side-effect checks ───────────────────────────────────────────
 
     it('calls createBroadcast on the indexerDb', async function () {
         const data = createBaseData({ ACTION: 'BROADCAST', FORMAT: 0 });

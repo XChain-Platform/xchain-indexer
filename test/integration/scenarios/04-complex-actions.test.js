@@ -31,30 +31,18 @@ const DecoderSeeder    = require('../setup/decoder-seeder');
 const { initIndexer, processBlocks, destroyIndexer } = require('../setup/indexer-launcher');
 const helpers = require('../setup/assertion-helpers');
 
-// ---------------------------------------------------------------------------
-// Addresses (30 chars)
-// ---------------------------------------------------------------------------
 const ADDR1 = 'msK1rsgNVFPM4cR3X5rngczTKa6EtT4WKD';
 const ADDR2 = 'mjifPngDYQ6HHPNQdGk1kQuFkJWEiQksQp';
 const ADDR3 = 'mwGujTXFXMLN2YXqo4mQK4DcKy31DUcwoi'; // sweep destination / airdrop member
 const ADDR4 = 'my5gN5QBFhAziVKAhrrVyqJDrkjwbjDKP6'; // airdrop member
 const GAS_ADDR = 'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'; // GAS address (regtest)
 
-// ---------------------------------------------------------------------------
-// Token names
-// ---------------------------------------------------------------------------
 const TICK_X = 'XTOKEN';
 const TICK_Y = 'YTOKEN';
 const TICK_GAS = 'XCHAIN'; // Platform gas token
 
-// ---------------------------------------------------------------------------
-// Block times
-// ---------------------------------------------------------------------------
 const T0 = 1700000000;
 
-// ---------------------------------------------------------------------------
-// Helper: fresh indexer + seeder per test group
-// ---------------------------------------------------------------------------
 async function freshIndexer() {
     await resetDecoderDb();
     await resetIndexerDb();
@@ -82,9 +70,6 @@ async function seedGasToken(seeder, addr, amount) {
     ]);
 }
 
-// ---------------------------------------------------------------------------
-// Suite-level setup / teardown
-// ---------------------------------------------------------------------------
 before(async function () {
     this.timeout(30000);
     await createDatabases();
@@ -95,9 +80,6 @@ after(async function () {
     await closeAll();
 });
 
-// ===========================================================================
-// BATCH TESTS
-// ===========================================================================
 describe('04 complex actions – BATCH, SLEEP, SWEEP, DESTROY, LIST, AIRDROP @regression @tier2', function () {
     this.timeout(60000);
 

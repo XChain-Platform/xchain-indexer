@@ -56,21 +56,6 @@ class Airdrop {
 
     // Handle parsing the AIRDROP transaction
     async parse(params, data, error){
-        /*****************************************************************
-         * DEBUGGING - Force params
-         ****************************************************************/
-        // Single Airdrop
-        // let str = '0|AIRDROPTEST1|1|1257|test'; // ADDRESS LIST
-        // let str = '0|AIRDROPTEST2|1|1191|test'; // TICK LIST
-        // Multi-Airdrop (brief)
-        // let str = '1|1257|AIRDROPTEST1|1|AIRDROPTEST2|2|test brief';
-        // Multi-Airdrop (Full)
-        // let str = '2|AIRDROPTEST1|1|1257|AIRDROPTEST2|2|1191|test full';
-        // Multi-Airdrop (Full) w multiple memos
-        // let str = '3|AIRDROPTEST1|1|1257|memo1|AIRDROPTEST2|2|1191|memo2';
-        // params = String(str).split('|');
-        // data['FORMAT'] = this.util.getFormatVersion(params[0]);
-
         // Validate that format is known
         let format = data['FORMAT'];
         if(!error && (format===null || this.formats[format] === undefined ))

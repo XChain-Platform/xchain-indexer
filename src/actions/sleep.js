@@ -48,14 +48,6 @@ class Sleep {
 
     // Handle parsing the ADDRESS transaction
     async parse(params, data, error){
-        /*****************************************************************
-         * DEBUGGING - Force params
-         ****************************************************************/
-        // let str = "0|791495|Pausing actions until block 791495";
-        // let str = "1|791495|JDOG|Pausing actions on JDOG until block 791495";
-        // params = String(str).split('|');
-        // data['FORMAT'] = this.util.getFormatVersion(params[0]);
-
         // Validate that format is known
         let format = data['FORMAT'];
         if(!error && (format===null || this.formats[format] === undefined ))

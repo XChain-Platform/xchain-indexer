@@ -38,8 +38,6 @@ describe('File action handler @regression @tier3', function () {
         indexer.util.resetLists();
     });
 
-    // ─── Valid file creation ──────────────────────────────────────────
-
     it('creates a valid file record', async function () {
         const data = createBaseData({ ACTION: 'FILE', FORMAT: 0 });
         const params = ['0', 'test.txt', 'text/plain', 'Test File', 'a memo'];
@@ -61,8 +59,6 @@ describe('File action handler @regression @tier3', function () {
         assert.ok(data['STATUS'].includes('VERSION'), `Expected VERSION error, got: ${data['STATUS']}`);
     });
 
-    // ─── NAME length limit ────────────────────────────────────────────
-
     it('rejects NAME exceeding MAX_FILE_NAME_LENGTH', async function () {
         const longName = 'n'.repeat(indexer.config['MAX_FILE_NAME_LENGTH'] + 1);
         const data = createBaseData({ ACTION: 'FILE', FORMAT: 0 });
@@ -70,8 +66,6 @@ describe('File action handler @regression @tier3', function () {
         await handler.parse(params, data, null);
         assert.ok(data['STATUS'].includes('NAME'), `Expected NAME length error, got: ${data['STATUS']}`);
     });
-
-    // ─── TYPE length limit ────────────────────────────────────────────
 
     it('rejects TYPE exceeding MAX_FILE_TYPE_LENGTH', async function () {
         const longType = 't'.repeat(indexer.config['MAX_FILE_TYPE_LENGTH'] + 1);
@@ -81,8 +75,6 @@ describe('File action handler @regression @tier3', function () {
         assert.ok(data['STATUS'].includes('TYPE'), `Expected TYPE length error, got: ${data['STATUS']}`);
     });
 
-    // ─── TITLE length limit ───────────────────────────────────────────
-
     it('rejects TITLE exceeding MAX_FILE_TITLE_LENGTH', async function () {
         const longTitle = 'T'.repeat(indexer.config['MAX_FILE_TITLE_LENGTH'] + 1);
         const data = createBaseData({ ACTION: 'FILE', FORMAT: 0 });
@@ -91,8 +83,6 @@ describe('File action handler @regression @tier3', function () {
         assert.ok(data['STATUS'].includes('TITLE'), `Expected TITLE length error, got: ${data['STATUS']}`);
     });
 
-    // ─── SOURCE sleeping check ────────────────────────────────────────
-
     it('rejects when SOURCE is sleeping', async function () {
         indexer.indexerDb.isActionAllowed.resolves(false);
         const data = createBaseData({ ACTION: 'FILE', FORMAT: 0 });
@@ -100,8 +90,6 @@ describe('File action handler @regression @tier3', function () {
         await handler.parse(params, data, null);
         assert.ok(data['STATUS'].includes('SOURCE'), `Expected SOURCE sleeping error, got: ${data['STATUS']}`);
     });
-
-    // ─── Side-effect checks ───────────────────────────────────────────
 
     it('calls createFile on the indexerDb', async function () {
         const data = createBaseData({ ACTION: 'FILE', FORMAT: 0 });
@@ -116,8 +104,6 @@ describe('File action handler @regression @tier3', function () {
         await handler.parse(params, data, null);
         assert.ok(indexer.mapper.createMappings.calledOnce);
     });
-
-    // ─── Gated content validations ────────────────────────────────────────────
 
     describe('gated content', function () {
         const SOURCE     = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';

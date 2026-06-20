@@ -32,29 +32,17 @@ const { initIndexer, processBlocks, destroyIndexer } = require('../setup/indexer
 const { seedGas } = require('../setup/gas-seeder');
 const helpers = require('../setup/assertion-helpers');
 
-// ---------------------------------------------------------------------------
-// Addresses (30 chars, valid P2PKH length)
-// ---------------------------------------------------------------------------
 const ADDR1 = 'msK1rsgNVFPM4cR3X5rngczTKa6EtT4WKD'; // issues ALPHA
 const ADDR2 = 'mjifPngDYQ6HHPNQdGk1kQuFkJWEiQksQp'; // issues BETA
 const ADDR3 = 'mwGujTXFXMLN2YXqo4mQK4DcKy31DUcwoi'; // dispenser payment collector
 
-// ---------------------------------------------------------------------------
-// Token names
-// ---------------------------------------------------------------------------
 const TICK_A = 'ALPHA';   // issued by ADDR1
 const TICK_B = 'BETA';    // issued by ADDR2
 const TICK_D = 'DTOKEN';  // used in dispenser tests
 
-// ---------------------------------------------------------------------------
-// Block times: start far enough in the past so expirations can be set
-// ---------------------------------------------------------------------------
 const T0 = 1700000000;        // base time
 const T_FAR_FUTURE = T0 + 90 * 86400 + 1; // > 90 days ahead → triggers fee, still valid
 
-// ---------------------------------------------------------------------------
-// Helper: fresh indexer per test
-// ---------------------------------------------------------------------------
 async function freshIndexer() {
     await resetDecoderDb();
     await resetIndexerDb();
@@ -65,9 +53,6 @@ async function freshIndexer() {
     return { seeder, indexer };
 }
 
-// ---------------------------------------------------------------------------
-// Suite-level setup / teardown
-// ---------------------------------------------------------------------------
 before(async function () {
     this.timeout(30000);
     await createDatabases();
@@ -78,9 +63,6 @@ after(async function () {
     await closeAll();
 });
 
-// ===========================================================================
-// ORDER TESTS
-// ===========================================================================
 describe('03 ORDER / DISPENSER integration @regression @tier2', function () {
     this.timeout(60000);
 

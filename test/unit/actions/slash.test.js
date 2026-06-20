@@ -157,7 +157,6 @@ describe('SLASH action handler: equivocation verifier @regression', function () 
         assert.ok(indexer.indexerDb.slashCapabilityStake.notCalled);
     });
 
-    // ── XCONFIG (the 6th engine: whole-federation membership; Phase-A amendment) ──
     // Config content = `snapshot_block|config_digest`; equivocation = same (seq, view),
     // same snapshot_block, DIFFERENT digest. Membership resolves against getActiveValidators
     // (the whole federation), labelled with the sentinel capability 'config'.
@@ -242,7 +241,6 @@ describe('SLASH action handler: equivocation verifier @regression', function () 
         assert.ok(indexer.indexerDb.slashCapabilityStake.calledOnce);
     });
 
-    // ── Bounty / treasury split (Phase D mechanism; governance config + BURN default) ──
     describe('_bountyTreasurySplit', function () {
         function withSlashConfig(cfg) {
             indexer.config.STAKING = { CAPABILITIES: { cross_chain: { MIN_STAKE: '5000', SLASH: cfg } } };

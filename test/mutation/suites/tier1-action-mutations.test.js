@@ -42,10 +42,6 @@ function makeBalances(tickId, amount) {
     return { [tickId]: amount };
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Send Handler Mutations
-// ─────────────────────────────────────────────────────────────────────────────
-
 describe('Mutation : Tier 1: Send Handler @tier1', function () {
     let indexer, handler;
 
@@ -469,10 +465,6 @@ describe('Mutation : Tier 1: Send Handler @tier1', function () {
     });
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Destroy Handler Mutations
-// ─────────────────────────────────────────────────────────────────────────────
-
 describe('Mutation : Tier 1: Destroy Handler @tier1', function () {
     let indexer, handler;
 
@@ -595,10 +587,6 @@ describe('Mutation : Tier 1: Destroy Handler @tier1', function () {
         });
     });
 });
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Issue Handler Mutations
-// ─────────────────────────────────────────────────────────────────────────────
 
 describe('Mutation : Tier 1: Issue Handler @tier1', function () {
     let indexer, handler;

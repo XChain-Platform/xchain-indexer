@@ -56,28 +56,25 @@ describe('stateCommitment: persistent SMT == in-memory reference @regression', f
         const ref = new M.SparseMerkleTree();
         const smt = new SC.PersistentSMT(new SC.MemoryNodeStore());
         let root = SC.EMPTY_ROOT_HEX;
-        // seed 30 keys
         for(let i = 0; i < 30; i++){
             const k = keyFor(i), leaf = leafFor(i);
             ref.set(k, M.toBuf(leaf));
             root = await smt.update(root, k, leaf);
         }
         assert.strictEqual(root, ref.rootHex());
-        // update half to new values
         for(let i = 0; i < 30; i += 2){
             const k = keyFor(i), leaf = leafFor(i + 1000);
             ref.set(k, M.toBuf(leaf));
             root = await smt.update(root, k, leaf);
             assert.strictEqual(root, ref.rootHex(), 'root diverged after update ' + i);
         }
-        // delete a third of them (return-to-zero => null leaf on persistent, delete on ref)
+        // return-to-zero: null leaf on persistent, delete on ref
         for(let i = 0; i < 30; i += 3){
             const k = keyFor(i);
             ref.delete(k);
             root = await smt.update(root, k, null);
             assert.strictEqual(root, ref.rootHex(), 'root diverged after delete ' + i);
         }
-        // delete everything: must collapse back to EMPTY_SMT_ROOT
         for(let i = 0; i < 30; i++){
             const k = keyFor(i);
             if(ref.has(k)){ ref.delete(k); root = await smt.update(root, k, null); }

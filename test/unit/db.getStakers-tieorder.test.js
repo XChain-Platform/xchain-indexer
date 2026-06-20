@@ -73,7 +73,6 @@ function stakeRow(pubkey, amount, tick = 'tick') {
 
 afterEach(function () { sinon.restore(); });
 
-// ---------------------------------------------------------------------------
 describe('getContractStakeDataForVM() staker tie-order determinism @regression @tier1', function () {
 
     // (1) Property: equal-amount stakers must order the SAME way regardless of the physical

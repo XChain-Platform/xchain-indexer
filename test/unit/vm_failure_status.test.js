@@ -40,7 +40,6 @@
 
 const assert = require('assert');
 
-// Utility loads coin config in its constructor; set before require (mirrors utility.test.js).
 process.env.INDEXER_COIN = 'BTC';
 process.env.INDEXER_NETWORK = 'regtest';
 const Utility = require('../../src/utility.js');

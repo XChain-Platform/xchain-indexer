@@ -20,15 +20,9 @@
 
 class ProtocolChanges {
 
-    // Handle constructing a class instance
     constructor(indexer){
-        // Parse in indexer configuration
         this.config    = indexer.config;
-
-        // Setup alias to the utility class instance
         this.util      = indexer.util;
-
-        // Setup alias to the indexer database connection
         this.decoderDb = indexer.decoderDb;
         this.indexerDb = indexer.indexerDb;
 
@@ -44,15 +38,10 @@ class ProtocolChanges {
         this.version = process.env.npm_package_version || require('../package.json').version;
         this.network = process.env.INDEXER_NETWORK;
 
-        // Setup alias to the utility class
-        // Protocol Changes object
         this.changes = {};
-
-        // Parse in protocol changes
         this.parseChanges();
     }
 
-    // Parse protocol changes and populate protocol changes data object
     parseChanges(){
 
         // Define `ACTION` commands and activation time/blocks (ALL UPPER case)
@@ -288,36 +277,26 @@ class ProtocolChanges {
     // @param {testnet_block} integer Testnet activation block_index
     addChange(name, version, mainnet_time, testnet_time, regtest_time, mainnet_block, testnet_block, regtest_block){
         let error = false;
-        // Verify name is string
         if(typeof name != 'string')
             error = 'protocol change name must be string!';
         if(!error && this.changes[name])
             error = 'protocol change name must be unique!';
-        // Verify version is string
         if(!error && typeof version != 'string')
             error = 'protocol change version must be string!';
-        // Verify version is in semantic version format
         if(!error && version.split('.').length != 3)
             error = 'protocol change version must be in semantic version format (XX.XX.XX)!';
-        // Verify mainnet_time is integer
         if(!error && arguments[2] && typeof arguments[2] != 'number')
             error = 'protocol change mainnet_time must be integer!';
-        // Verify testnet_time is integer
         if(!error && arguments[3] && typeof arguments[3] != 'number')
             error = 'protocol change testnet_time must be integer!';
-        // Verify regtest_time is integer
         if(!error && arguments[4] && typeof arguments[4] != 'number')
             error = 'protocol change regtest_time must be integer!';
-        // Verify mainnet_block is integer
         if(!error && arguments[5] && typeof arguments[5] != 'number')
             error = 'protocol change mainnet_block must be integer!';
-        // Verify testnet_block is integer
         if(!error && arguments[6] && typeof arguments[6] != 'number')
             error = 'protocol change testnet_block must be integer!';
-        // Verify regtest_block is integer
         if(!error && arguments[7] && typeof arguments[7] != 'number')
             error = 'protocol change regtest_block must be integer!';
-        // Throw error on any protocol change parsing issue
         if(error){
             this.util.throwError(error);
         } else {

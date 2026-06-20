@@ -64,15 +64,6 @@ class Order {
 
     // Handle parsing the ORDER transaction
     async parse(params, data, error){
-        /*****************************************************************
-         * DEBUGGING - Force params
-         ****************************************************************/
-        // let str    = "0|BTC|RAREPEPE|1|BTC|PEPECASH|10000000.00000000|1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev|||Selling my RAREPEPE cuz mom in hospital";
-        // let str    = "1|1234|Closing order, no buyers, much disappoint";
-        // let str    = "2|1234|4321|||Updating order to only sell to club member addresses";
-        // params = String(str).split('|');
-        // data['FORMAT'] = this.util.getFormatVersion(params[0]);
-
         // Validate that format is known
         let format = data['FORMAT'];
         if(!error && (format===null || this.formats[format] === undefined ))

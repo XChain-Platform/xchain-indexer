@@ -30,9 +30,6 @@ const { assertBalance, assertTokenSupply, assertTokenOwner,
         assertSanity, getToken } = require('../setup/assertion-helpers');
 const { seedGas } = require('../setup/gas-seeder');
 
-// ---------------------------------------------------------------------------
-// Test addresses: valid regtest P2PKH (isCryptoAddress validates base58check)
-// ---------------------------------------------------------------------------
 const ADDR1 = 'msK1rsgNVFPM4cR3X5rngczTKa6EtT4WKD'; // 30 chars, primary issuer
 const ADDR2 = 'mjifPngDYQ6HHPNQdGk1kQuFkJWEiQksQp'; // 30 chars, secondary actor
 const ADDR3 = 'mwGujTXFXMLN2YXqo4mQK4DcKy31DUcwoi'; // 30 chars, recipient

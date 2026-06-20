@@ -16,13 +16,8 @@ process.env.INDEXER_NETWORK = 'regtest';
 const assert = require('assert');
 const sinon  = require('sinon');
 
-// ---------------------------------------------------------------------------
-// Suite: createLedgerChangeRecord table name whitelist
-// ---------------------------------------------------------------------------
-
 describe('Security: ledger table name whitelist @regression @tier4', function () {
 
-    // The whitelist validation is a simple array check; test it directly
     const VALID_LEDGER_TABLES = ['credits', 'debits', 'escrows'];
 
     it('SEC-25: table = \'credits\' → allowed', function () {

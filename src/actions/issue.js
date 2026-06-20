@@ -93,14 +93,6 @@ class Issue {
 
     // Handle parsing the ISSUE transaction
     async parse(params, data, error){
-        /*****************************************************************
-         * DEBUGGING - Force params
-         ****************************************************************/
-        // let str    = "0|JDOG|1000||18";
-        // params = String(str).split('|');
-        // data['SOURCE'] = this.config['ADDRESS']['BURN'];
-        // data['FORMAT'] = this.util.getFormatVersion(params[0]);
-
         // Validate that format is known
         let format = data['FORMAT'];
         if(!error && (format===null || this.formats[format] === undefined ))
@@ -119,10 +111,6 @@ class Issue {
             data['TRANSFER']        = await this.indexerDb.resolveAddressRef(data['TRANSFER']);
             data['TRANSFER_SUPPLY'] = await this.indexerDb.resolveAddressRef(data['TRANSFER_SUPPLY']);
         }
-
-        // TODO: Decode any base64 tickers
-        // if(this.util.isBase64(data['TICK']))
-        //     $data['TICK'] = this.util.base64Decode(data['TICK']);
 
         // Clone the raw data for storage in issues table
         let issue = Object.assign({}, data);

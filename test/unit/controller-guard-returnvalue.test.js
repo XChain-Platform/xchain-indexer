@@ -105,8 +105,6 @@ describe('runControllerGuard: guard returnValue parsing (royalty payoutLegs) @re
         assert.ok(/cap|payout/.test(res.reason || ''));
     });
 
-    // ---- Phase E: per-contract maxTakeBps tightens the effective cap ----
-
     it('denies legs over a TIGHTER per-contract maxTakeBps (under the global cap)', async function () {
         // Σbps = 500, well under the global 10000, but the contract's manifest caps at 300.
         const handler = buildHandler(

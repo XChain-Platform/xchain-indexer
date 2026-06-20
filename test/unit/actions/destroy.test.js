@@ -44,8 +44,6 @@ describe('Destroy @regression @tier1', function () {
         sinon.restore();
     });
 
-    // ─── Format 0 (Single Destroy) ────────────────────────────────────
-
     describe('format 0: single destroy', function () {
 
         it('valid destroy: createDestroy called with valid status', async function () {
@@ -154,8 +152,6 @@ describe('Destroy @regression @tier1', function () {
 
     });
 
-    // ─── Format 1 (Multi-Destroy Full) ───────────────────────────────
-
     describe('format 1: multi-destroy full', function () {
 
         it('valid multi-destroy: createDestroy called for each distinct TICK', async function () {
@@ -176,8 +172,6 @@ describe('Destroy @regression @tier1', function () {
         });
 
     });
-
-    // ─── Multi-destroy consolidation ─────────────────────────────────
 
     describe('multi-destroy consolidation', function () {
 
@@ -213,8 +207,6 @@ describe('Destroy @regression @tier1', function () {
         });
 
     });
-
-    // ─── Record creation ─────────────────────────────────────────────
 
     describe('record creation', function () {
 

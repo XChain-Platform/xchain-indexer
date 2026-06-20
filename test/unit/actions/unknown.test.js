@@ -38,8 +38,6 @@ describe('Unknown action handler @regression @tier3', function () {
         indexer.util.resetLists();
     });
 
-    // ─── Status set to 'invvalid' (intentional typo in source) ───────
-
     it('sets STATUS to invvalid when no incoming error', async function () {
         const data = createBaseData({ ACTION: 'UNKNOWN' });
         await handler.parse(null, data, null);
@@ -58,16 +56,12 @@ describe('Unknown action handler @regression @tier3', function () {
         assert.strictEqual(data['STATUS'], 'custom error message');
     });
 
-    // ─── addAddressTicker called ──────────────────────────────────────
-
     it('adds SOURCE to the addresses list', async function () {
         const data = createBaseData({ ACTION: 'UNKNOWN', SOURCE: 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH' });
         await handler.parse(null, data, null);
         const addresses = indexer.util.getAddressesList();
         assert.ok(Object.keys(addresses).includes(data['SOURCE']), 'SOURCE should be in addresses list');
     });
-
-    // ─── createMappings called ────────────────────────────────────────
 
     it('calls mapper.createMappings', async function () {
         const data = createBaseData({ ACTION: 'UNKNOWN' });

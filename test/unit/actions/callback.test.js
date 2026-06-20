@@ -72,8 +72,6 @@ describe('Callback @regression @tier3', function () {
         sinon.restore();
     });
 
-    // ─── Valid path ───────────────────────────────────────────────────
-
     describe('valid callback', function () {
 
         it('owner can callback: createCallback called with valid status', async function () {
@@ -141,8 +139,6 @@ describe('Callback @regression @tier3', function () {
 
     });
 
-    // ─── Invalid: authorization ───────────────────────────────────────
-
     describe('authorization checks', function () {
 
         it('non-owner cannot callback → invalid', async function () {
@@ -186,8 +182,6 @@ describe('Callback @regression @tier3', function () {
         });
 
     });
-
-    // ─── Invalid: block index ─────────────────────────────────────────
 
     describe('CALLBACK_BLOCK validations', function () {
 
@@ -233,8 +227,6 @@ describe('Callback @regression @tier3', function () {
 
     });
 
-    // ─── Invalid: TICK not found ──────────────────────────────────────
-
     describe('TICK validations', function () {
 
         it('TICK not found → invalid', async function () {
@@ -273,8 +265,6 @@ describe('Callback @regression @tier3', function () {
 
     });
 
-    // ─── Invalid: insufficient balance ───────────────────────────────
-
     describe('balance validations', function () {
 
         it('insufficient CALLBACK_TICK balance → invalid', async function () {
@@ -299,8 +289,6 @@ describe('Callback @regression @tier3', function () {
         });
 
     });
-
-    // ─── createCallback always called ────────────────────────────────
 
     describe('record creation', function () {
 
@@ -342,7 +330,6 @@ describe('Callback @regression @tier3', function () {
 
     });
 
-    // ─── Native-coin fee payment branches ─────────────────────────────────
     // The default suite covers XCHAIN-balance fee deduction; these drive the
     // native-coin payment-mode branch (detectFeePaymentMode → 'native'/'rejected').
 
@@ -389,7 +376,6 @@ describe('Callback @regression @tier3', function () {
         });
     });
 
-    // ─── Validation guards (each rejects with its specific reason) ────────
     describe('validation guards', function () {
 
         function setup(tokenOverrides = {}, cbOverrides = {}) {
@@ -479,7 +465,6 @@ describe('Callback @regression @tier3', function () {
         });
     });
 
-    // ─── CALLBACK_TICK ALLOW/BLOCK list filters holders ───────────────────
     describe('holder allow/block list filtering', function () {
 
         function setup(cbOverrides) {
@@ -515,7 +500,6 @@ describe('Callback @regression @tier3', function () {
         });
     });
 
-    // ─── Native fee: validation failure with no error message (fallback) ──
     it('falls back to a generic message when native fee fails without error text', async function () {
         indexer.indexerDb.getTokenInfo.withArgs('TEST').resolves(makeTokenInfo());
         indexer.indexerDb.getTokenInfo.withArgs('CBTEST').resolves(makeCallbackTokenInfo());

@@ -46,8 +46,6 @@ describe('Sleep @regression @tier3', function () {
         sinon.restore();
     });
 
-    // ─── Format 0: Sleep ADDRESS ──────────────────────────────────────
-
     describe('format 0: sleep ADDRESS', function () {
 
         it('valid address sleep: createSleep called with valid status', async function () {
@@ -138,8 +136,6 @@ describe('Sleep @regression @tier3', function () {
 
     });
 
-    // ─── Format 1: Sleep TICK ─────────────────────────────────────────
-
     describe('format 1: sleep TICK', function () {
 
         it('valid tick sleep by owner: createSleep called with valid status', async function () {
@@ -196,8 +192,6 @@ describe('Sleep @regression @tier3', function () {
 
     });
 
-    // ─── SOURCE sleeping ─────────────────────────────────────────────
-
     describe('SOURCE sleeping', function () {
 
         it('SOURCE sleeping → invalid', async function () {
@@ -216,8 +210,6 @@ describe('Sleep @regression @tier3', function () {
         });
 
     });
-
-    // ─── MEMO validations ────────────────────────────────────────────
 
     describe('MEMO validations', function () {
 
@@ -247,8 +239,6 @@ describe('Sleep @regression @tier3', function () {
 
     });
 
-    // ─── Record creation ─────────────────────────────────────────────
-
     describe('record creation', function () {
 
         it('createSleep called even on invalid', async function () {
@@ -256,7 +246,6 @@ describe('Sleep @regression @tier3', function () {
             indexer.indexerDb.isActionAllowed.resolves(true);
 
             const data   = createBaseData({ ACTION: 'SLEEP', FORMAT: 0, SOURCE, BLOCK_INDEX: 100 });
-            // Past block (invalid)
             const params = ['0', '50', null];
 
             await handler.parse(params, data, null);

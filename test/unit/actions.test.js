@@ -30,10 +30,6 @@ const sinon   = require('sinon');
 const { createMockIndexer } = require('../fixtures/mocks');
 const Actions               = require('../../src/actions');
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
 /**
  * Builds a mock protocolChanges object.
  * By default, every action is defined and enabled.
@@ -96,15 +92,10 @@ function buildActions(protocolChangesOverrides = {}) {
     return { actions, indexer, stubs };
 }
 
-// ---------------------------------------------------------------------------
-// describe: processTransaction - action routing
-// ---------------------------------------------------------------------------
 describe('Actions.processTransaction() @regression @tier3', function () {
     afterEach(function () {
         sinon.restore();
     });
-
-    // ── Basic routing ─────────────────────────────────────────────────────
 
     it('routes SEND to actionSend.parse', async function () {
         const { actions, stubs } = buildActions();
@@ -220,8 +211,6 @@ describe('Actions.processTransaction() @regression @tier3', function () {
         assert.ok(stubs.actionSweep.calledOnce);
     });
 
-    // ── Recently-added handlers (staking COLLECT, oracle PRICE, attestation) ─
-
     it('routes COLLECT to actionCollect.parse', async function () {
         const { actions, stubs } = buildActions();
         await actions.processTransaction(makeTx({ data: 'COLLECT|0' }));
@@ -239,8 +228,6 @@ describe('Actions.processTransaction() @regression @tier3', function () {
         await actions.processTransaction(makeTx({ data: 'ATTEST|1|' + 'a'.repeat(64) + '|http_get|payload|ok|meta|0' }));
         assert.ok(stubs.actionAttest.calledOnce, 'ATTEST should route to actionAttest.parse');
     });
-
-    // ── Aliases ───────────────────────────────────────────────────────────
 
     it('routes DEPLOY to actionDeploy.parse', async function () {
         const { actions, stubs } = buildActions();
@@ -278,8 +265,6 @@ describe('Actions.processTransaction() @regression @tier3', function () {
         await actions.processTransaction(makeTx({ data: 'MSG|0|1|key|cipher' }));
         assert.ok(stubs.actionMessage.calledOnce, 'MSG should route to actionMessage.parse');
     });
-
-    // ── Legacy format detection ───────────────────────────────────────────
 
     it('inserts version 0 for legacy ISSUE format where TICK is first param', async function () {
         const { actions, stubs } = buildActions();
@@ -322,8 +307,6 @@ describe('Actions.processTransaction() @regression @tier3', function () {
         assert.strictEqual(params[1], 'TEST');
     });
 
-    // ── Unknown action ────────────────────────────────────────────────────
-
     it('routes UNKNOWN action to actionUnknown.parse when not defined', async function () {
         const { actions, stubs } = buildActions({ defined: false });
         await actions.processTransaction(makeTx({ data: 'FAKEACTION|0|stuff' }));
@@ -344,8 +327,6 @@ describe('Actions.processTransaction() @regression @tier3', function () {
         assert.ok(typeof error === 'string' && error.length > 0, 'error should be a non-empty string');
     });
 
-    // ── Action not yet enabled ────────────────────────────────────────────
-
     it('passes error to handler when action is not yet activated', async function () {
         const { actions, stubs } = buildActions({ defined: true, enabled: false });
         await actions.processTransaction(makeTx({ data: 'SEND|0|TEST|100|addr' }));
@@ -358,8 +339,6 @@ describe('Actions.processTransaction() @regression @tier3', function () {
         await actions.processTransaction(makeTx({ data: 'SEND|0|TEST|100|addr' }));
         assert.ok(stubs.actionSend.calledOnce);
     });
-
-    // ── data object construction ──────────────────────────────────────────
 
     it('populates data object with correct base fields', async function () {
         const { actions, stubs } = buildActions();
@@ -405,8 +384,6 @@ describe('Actions.processTransaction() @regression @tier3', function () {
         }
     });
 
-    // ── DB method calls ───────────────────────────────────────────────────
-
     it('calls createAddress for source and destination before processing', async function () {
         const { actions, indexer } = buildActions();
         const tx = makeTx();
@@ -438,9 +415,6 @@ describe('Actions.processTransaction() @regression @tier3', function () {
     });
 });
 
-// ---------------------------------------------------------------------------
-// describe: processAction : handler dispatch + resetLists
-// ---------------------------------------------------------------------------
 describe('Actions.processAction() @regression @tier3', function () {
     let actions;
     let stubs;

@@ -94,16 +94,12 @@ function createChaosDb(options = {}) {
     const config = getTestConfig();
     const util = new Utility();
 
-    // Create a minimal indexer object to satisfy the Database constructor
     const indexer = { config, util };
 
-    // Instantiate the real Database (this creates a real mariadb pool
     const db = new Database('localhost', 3306, 'test_db', 'root', '', indexer);
 
-    // Replace the real pool with our fake
     db.pool = new FakePool();
 
-    // Override circuit breaker settings if requested
     if (options.circuitThreshold !== undefined)
         db.circuitThreshold = options.circuitThreshold;
     if (options.circuitCooldown !== undefined)

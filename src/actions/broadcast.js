@@ -56,16 +56,6 @@ class Broadcast {
 
     // Handle parsing the ADDRESS transaction
     async parse(params, data, error){
-        /*****************************************************************
-         * DEBUGGING - Force params
-         ****************************************************************/
-        // let str = "0|This is a test";
-        // let str = "1|BTC-USD|84860|0.01|BTC Price on Sat Apr 12 2025 14:35:36 UTC";
-        // let str = "2|https://oracle-betting-site.com/superbowl-2025.json|1|Bet on the 2025 Superbowl!;
-        // let str = "3|1234|2|Superbowl Results on Tue Aug 19 2025 01:55:00 UTC";
-        // params = String(str).split('|');
-        // data['FORMAT'] = this.util.getFormatVersion(params[0]);
-
         // Validate that format is known
         let format = data['FORMAT'];
         if(!error && (format===null || this.formats[format] === undefined ))

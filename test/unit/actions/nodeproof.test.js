@@ -103,7 +103,6 @@ describe('NodeProof (NODEPROOF) @regression @tier3', function () {
         return deriveChallengeId(NETWORK, EPOCH, SEED, TARGET);
     }
 
-    // ── happy path ───────────────────────────────────────────────────────────
     it('valid verdict → STATUS valid and records each PASS pubkey', async function () {
         const data = v0Data();
         await handler.parse(v0Params({
@@ -130,7 +129,6 @@ describe('NodeProof (NODEPROOF) @regression @tier3', function () {
         assert.strictEqual(indexer.indexerDb.createNodeProofVerification.callCount, 2);
     });
 
-    // ── derived-challenge binding ──────────────────────────────────────────────
     it('rejects a CHALLENGE_ID that does not match the derivation', async function () {
         const data = v0Data();
         await handler.parse(v0Params({
@@ -151,7 +149,6 @@ describe('NodeProof (NODEPROOF) @regression @tier3', function () {
             'expected no-ledger-hash rejection, got: ' + data['STATUS']);
     });
 
-    // ── epoch / window validation ──────────────────────────────────────────────
     it('rejects an EPOCH_HEIGHT that is not a challenge epoch (not a multiple of the interval)', async function () {
         const epoch = 290; // not a multiple of 144
         const cid = deriveChallengeId(NETWORK, epoch, SEED, epoch - 100);
@@ -170,7 +167,6 @@ describe('NodeProof (NODEPROOF) @regression @tier3', function () {
             'expected late-verdict rejection, got: ' + data['STATUS']);
     });
 
-    // ── eligibility / quorum ───────────────────────────────────────────────────
     it('rejects when there are no eligible verifiers (feature dormant)', async function () {
         indexer.config.FULLNODE = Object.assign({}, indexer.config.FULLNODE, { GENESIS_VERIFIERS: [] });
         const data = v0Data();
@@ -223,7 +219,6 @@ describe('NodeProof (NODEPROOF) @regression @tier3', function () {
         assert.ok(String(data['STATUS']).includes('insufficient verifier signatures'));
     });
 
-    // ── PASS-pubkey capability gate ────────────────────────────────────────────
     it('does not record a PASS pubkey that lacks the full_node capability', async function () {
         // Quorum still met, but the PASS pubkey fails the capability check → not recorded.
         indexer.indexerDb.hasCapability.callsFake(async (pk, cap) => cap !== 'full_node' || pk !== PUBKEY_P);
@@ -236,7 +231,6 @@ describe('NodeProof (NODEPROOF) @regression @tier3', function () {
             'a non-staking PASS pubkey must not be recorded');
     });
 
-    // ── chain scope ────────────────────────────────────────────────────────────
     it('is BTC-only : rejects on a non-BTC chain', async function () {
         indexer.config.COIN = 'DOGE';
         const data = v0Data();

@@ -17,8 +17,6 @@ const { createMockIndexer, createBaseData, createTokenInfo } = require('../../fi
 
 const Dispense = require('../../../src/actions/dispense.js');
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
 function makeActionsCtx(indexer) {
     return {
         config:          indexer.config,
@@ -53,8 +51,6 @@ function makeDispenserInfo(overrides = {}) {
         ...overrides,
     };
 }
-
-// ─── Test suite ───────────────────────────────────────────────────────────────
 
 describe('Dispense action handler @regression @tier2', function () {
     let indexer;
@@ -95,8 +91,6 @@ describe('Dispense action handler @regression @tier2', function () {
         sinon.restore();
     });
 
-    // ─── No matching dispensers ───────────────────────────────────────────
-
     it('no matching dispensers: deleteActionIndex called, createDispense not called', async function () {
         indexer.indexerDb.findMatchingDispensers.resolves([]);
 
@@ -112,8 +106,6 @@ describe('Dispense action handler @regression @tier2', function () {
         sinon.assert.calledOnce(indexer.indexerDb.deleteActionIndex);
         sinon.assert.notCalled(indexer.indexerDb.createDispense);
     });
-
-    // ─── Valid dispense ───────────────────────────────────────────────────
 
     it('valid dispense: createDispense called with status valid', async function () {
         const data = createBaseData({
@@ -166,8 +158,6 @@ describe('Dispense action handler @regression @tier2', function () {
             `give_amount ${dispenseRecord['GIVE_AMOUNT']} exceeds GIVE_REMAINING 3`);
     });
 
-    // ─── Insufficient COIN_AMOUNT ─────────────────────────────────────────
-
     it('COIN_AMOUNT less than GET_AMOUNT returns invalid dispense', async function () {
         const data = createBaseData({
             ACTION:      'DISPENSE',
@@ -200,8 +190,6 @@ describe('Dispense action handler @regression @tier2', function () {
         assert.ok(dispenseRecord['STATUS'] !== 'valid');
     });
 
-    // ─── Self-trigger prevention ──────────────────────────────────────────
-
     it('SOURCE same as GET_ADDRESS returns invalid dispense', async function () {
         // Buyer IS the dispenser owner → self-trigger not allowed
         const data = createBaseData({
@@ -217,8 +205,6 @@ describe('Dispense action handler @regression @tier2', function () {
         assert.ok(dispenseRecord['STATUS'] !== 'valid',
             `Expected invalid status for self-trigger, got "${dispenseRecord['STATUS']}"`);
     });
-
-    // ─── Auto-close when GIVE_REMAINING exhausted ────────────────────────
 
     it('auto-close triggered when GIVE_REMAINING falls below GIVE_AMOUNT after dispense', async function () {
         // GIVE_REMAINING=1, GIVE_AMOUNT=1: after dispensing 1, remaining=0 < GIVE_AMOUNT=1
@@ -259,8 +245,6 @@ describe('Dispense action handler @regression @tier2', function () {
 
         sinon.assert.notCalled(actionsCtx.processAction);
     });
-
-    // ─── Allow/block list checks ─────────────────────────────────────────
 
     it('dispenser ALLOW_LIST excludes SOURCE: dispense invalid', async function () {
         indexer.indexerDb.getDispenserInfo.resolves(makeDispenserInfo({ ALLOW_LIST: '5' }));
@@ -349,8 +333,6 @@ describe('Dispense action handler @regression @tier2', function () {
         assert.ok(dispenseRecord['STATUS'] !== 'valid');
     });
 
-    // ─── Multiple dispensers ──────────────────────────────────────────────
-
     it('multiple matching dispensers: createDispense called for each', async function () {
         const dispenser2 = makeDispenserInfo({ ACTION_INDEX: 11, GET_ADDRESS: OWNER_ADDR });
         indexer.indexerDb.findMatchingDispensers.resolves([10, 11]);
@@ -373,8 +355,6 @@ describe('Dispense action handler @regression @tier2', function () {
         assert.ok(indexer.indexerDb.createDispense.callCount >= 2,
             `Expected createDispense called >=2, got ${indexer.indexerDb.createDispense.callCount}`);
     });
-
-    // ─── Ledger changes ───────────────────────────────────────────────────
 
     it('valid dispense processes ledger changes and updates balances', async function () {
         const data = createBaseData({
@@ -402,7 +382,6 @@ describe('Dispense action handler @regression @tier2', function () {
         sinon.assert.calledOnce(indexer.mapper.createMappings);
     });
 
-    // ─── Ownership dispense (GIVE_OWNERSHIP=1) ────────────────────────────
     it('ownership dispense transfers token ownership to the buyer', async function () {
         indexer.indexerDb.clearTokenEscrow = sinon.stub().resolves();
         indexer.indexerDb.getDispenserInfo.resolves(makeDispenserInfo({ GIVE_OWNERSHIP: 1 }));
@@ -417,7 +396,6 @@ describe('Dispense action handler @regression @tier2', function () {
         sinon.assert.notCalled(indexer.indexerDb.createEscrow);   // no balance escrow move
     });
 
-    // ─── FIAT-priced dispenser (validator price snapshot) ─────────────────
     it('FIAT dispenser resolves units via reversePriceMatch', async function () {
         indexer.indexerDb.getDispenserInfo.resolves(makeDispenserInfo({
             FIAT: 'USD', FIAT_AMOUNT: '100', ORACLE_ADDRESS: null, GET_AMOUNT: null,
@@ -444,7 +422,6 @@ describe('Dispense action handler @regression @tier2', function () {
         assert.strictEqual(rec['STATUS'], 'invalid: no matching price snapshot');
     });
 
-    // ─── FIAT dispenser with a user oracle (cross-conversion) ─────────────
     it('FIAT dispenser with ORACLE_ADDRESS resolves units via reverseOraclePriceMatch', async function () {
         indexer.indexerDb.getDispenserInfo.resolves(makeDispenserInfo({
             FIAT: 'JPY', FIAT_AMOUNT: '1000', ORACLE_ADDRESS: '1OracleAddrXXXXXXXXXXXXXXXXXXXX', GET_AMOUNT: null,
@@ -471,7 +448,6 @@ describe('Dispense action handler @regression @tier2', function () {
         assert.strictEqual(rec['STATUS'], 'invalid: no matching oracle price');
     });
 
-    // ─── GIVE-token ALLOW/BLOCK list enforcement ──────────────────────────
     it('rejects a buyer absent from the GIVE-token ALLOW_LIST', async function () {
         indexer.indexerDb.getTokenInfo
             .withArgs('JDOG', sinon.match.any, sinon.match.any)
@@ -498,7 +474,6 @@ describe('Dispense action handler @regression @tier2', function () {
         assert.ok(String(rec['STATUS']).includes('GIVE_TOKEN block list'));
     });
 
-    // ─── GET-token (token-priced dispenser) ALLOW/BLOCK list enforcement ───
     // A token-priced dispenser sets GET_TICK; the GET-token's lists then gate
     // the buyer's DESTINATION + the dispenser GET_ADDRESS.
     function tokenPricedDispenser(getTokenOverrides) {

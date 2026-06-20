@@ -72,7 +72,6 @@ describe('Rollback attest_validator_stats recompute @regression @tier3', functio
         };
         rollback = new Rollback(indexer);
 
-        // ── In-memory attest_validator_stats (post block-delete state) ──
         // Each value mirrors a real row. last_updated_block decides "affected".
         statsStore = new Map([
             [`${pkA}|${PROV}`, { validator_pubkey: pkA, provider_id: PROV, fulfilled_count: 5, missed_count: 2, slashed_count: 0, quality_score: 0, last_updated_block: 105 }],
@@ -101,7 +100,6 @@ describe('Rollback attest_validator_stats recompute @regression @tier3', functio
         indexer.indexerDb.getValidatorsByCapability = sinon.stub().resolves([{ pubkey: pkA }]);
         indexer.indexerDb.getStatusId = sinon.stub().resolves(VALID_ID);
 
-        // Route the recompute's raw SQL at the in-memory model.
         indexer.indexerDb.doQuery = sinon.stub().callsFake(async (query, args) => {
             // 1. pairs whose counters may include orphaned increments
             if (/SELECT\s+validator_pubkey,\s*provider_id/i.test(query)) {

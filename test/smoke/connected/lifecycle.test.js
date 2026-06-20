@@ -48,9 +48,6 @@ process.env.npm_package_name    = process.env.npm_package_name    || 'xchain-ind
 const assert       = require('assert');
 const XChainIndexer = require('../../../src/XChainIndexer.js');
 
-// ---------------------------------------------------------------------------
-// Helper: build a fresh indexer from env credentials
-// ---------------------------------------------------------------------------
 function buildIndexer() {
     return new XChainIndexer(
         process.env.DECODER_DB_HOST, process.env.DECODER_DB_PORT, process.env.DECODER_DB_NAME,
@@ -60,9 +57,6 @@ function buildIndexer() {
     );
 }
 
-// ---------------------------------------------------------------------------
-// Helper: close the DB pools that start() opens inside the indexer
-// ---------------------------------------------------------------------------
 async function closeIndexerPools(indexer) {
     try {
         if (indexer.decoderDb && indexer.decoderDb.pool) await indexer.decoderDb.pool.end();
@@ -72,10 +66,8 @@ async function closeIndexerPools(indexer) {
     } catch (_) { /* ignore */ }
 }
 
-// ---------------------------------------------------------------------------
-// Helper: wait up to `maxMs` for predicate() to return true, checking every
+// Wait up to `maxMs` for predicate() to return true, checking every
 // `intervalMs`. Returns true if the predicate fired, false if it timed out.
-// ---------------------------------------------------------------------------
 async function waitFor(predicate, maxMs, intervalMs) {
     const deadline = Date.now() + maxMs;
     while (Date.now() < deadline) {
@@ -85,9 +77,6 @@ async function waitFor(predicate, maxMs, intervalMs) {
     return predicate(); // one final check
 }
 
-// ---------------------------------------------------------------------------
-// Test suite
-// ---------------------------------------------------------------------------
 describe('Smoke: indexer lifecycle @regression @tier3', function () {
 
     // -------------------------------------------------------------------------

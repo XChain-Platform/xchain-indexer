@@ -37,10 +37,6 @@ function makeActionsCtx(indexer) {
 const SOURCE      = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH'; // 34 chars - valid P2PKH
 const DESTINATION = 'mtr6NtB5KJRAxTX5AbuRtV7S4FF2PZJXUs'; // 35 chars - valid P2PKH
 
-// ---------------------------------------------------------------------------
-// Utility-level isCryptoAddress() boundary tests
-// ---------------------------------------------------------------------------
-
 describe('Utility isCryptoAddress() boundary tests @regression @tier3', function () {
     let util;
 
@@ -104,10 +100,6 @@ describe('Utility isCryptoAddress() boundary tests @regression @tier3', function
         assert.strictEqual(util.isCryptoAddress('bcrt1Qe6l04hhwjg98fmggptdm0cemj6lm7hhwzahaul'), false);
     });
 });
-
-// ---------------------------------------------------------------------------
-// SEND DESTINATION validation (end-to-end through the Send handler)
-// ---------------------------------------------------------------------------
 
 describe('Address validation boundary tests via SEND handler @regression @tier3', function () {
     let indexer, actionsCtx, handler;

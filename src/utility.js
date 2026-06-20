@@ -53,13 +53,11 @@ const ADDRESS_PARAMS  = {
 
 class Utility {
 
-    // Handle constructing a class instance
     constructor(){
-        // Setup placeholders to keep track of addresses/tickers/transactions 
+        // Track addresses/tickers/transactions across an action parse
         this.addresses = {}; // this.addresses[address] = [tick, tick, tick];
         this.tickers   = [];
 
-        // Get indexer configuration
         this.config = config.getConfig();
     }
 
@@ -139,8 +137,6 @@ class Utility {
 
     // Log an error to the error.log file
     logError(error, info){
-        // let file  = '/XChainIndexer/error.log';
-        // fs.appendFileSync(file, error);
         console.error('logError: ' + error, info);
     }
 

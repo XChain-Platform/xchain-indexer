@@ -42,8 +42,6 @@ describe('Link action handler @regression @tier3', function () {
         return ['0', coin1, String(index1), coin2, String(index2), memo || ''];
     }
 
-    // ─── Valid link creation ──────────────────────────────────────────
-
     it('creates a valid BTC->BTC link', async function () {
         const data = createBaseData({ ACTION: 'LINK', FORMAT: 0 });
         await handler.parse(makeParams('BTC', 100, 'BTC', 200, 'linked'), data, null);
@@ -63,8 +61,6 @@ describe('Link action handler @regression @tier3', function () {
         assert.strictEqual(data['STATUS'], 'valid');
     });
 
-    // ─── COIN1/COIN2 must be in accepted coins ────────────────────────
-
     it('rejects COIN1 not in accepted coins', async function () {
         const data = createBaseData({ ACTION: 'LINK', FORMAT: 0 });
         await handler.parse(makeParams('XYZ', 100, 'BTC', 200, ''), data, null);
@@ -76,8 +72,6 @@ describe('Link action handler @regression @tier3', function () {
         await handler.parse(makeParams('BTC', 100, 'ETH', 200, ''), data, null);
         assert.ok(data['STATUS'].includes('COIN2'), `Expected COIN2 error, got: ${data['STATUS']}`);
     });
-
-    // ─── ACTION_INDEX validations ─────────────────────────────────────
 
     it('rejects non-numeric COIN1_ACTION_INDEX', async function () {
         const data = createBaseData({ ACTION: 'LINK', FORMAT: 0 });
@@ -100,8 +94,6 @@ describe('Link action handler @regression @tier3', function () {
         assert.ok(data['STATUS'].includes('COIN1_ACTION_INDEX'), `Expected COIN1_ACTION_INDEX status error, got: ${data['STATUS']}`);
     });
 
-    // ─── SOURCE sleeping check ────────────────────────────────────────
-
     it('rejects when SOURCE is sleeping', async function () {
         indexer.indexerDb.isActionAllowed.resolves(false);
         const data = createBaseData({ ACTION: 'LINK', FORMAT: 0 });
@@ -109,15 +101,11 @@ describe('Link action handler @regression @tier3', function () {
         assert.ok(data['STATUS'].includes('SOURCE'), `Expected SOURCE sleeping error, got: ${data['STATUS']}`);
     });
 
-    // ─── MEMO validation ──────────────────────────────────────────────
-
     it('rejects MEMO containing a pipe character', async function () {
         const data = createBaseData({ ACTION: 'LINK', FORMAT: 0 });
         await handler.parse(makeParams('BTC', 100, 'LTC', 200, 'bad|memo'), data, null);
         assert.ok(data['STATUS'].includes('MEMO'), `Expected MEMO error, got: ${data['STATUS']}`);
     });
-
-    // ─── Side-effect checks ───────────────────────────────────────────
 
     it('calls createLink on the indexerDb', async function () {
         const data = createBaseData({ ACTION: 'LINK', FORMAT: 0 });

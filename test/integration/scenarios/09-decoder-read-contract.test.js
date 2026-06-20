@@ -49,11 +49,9 @@ const config   = require('../../../src/config.js');
 const Utility  = require('../../../src/utility.js');
 const Database = require('../../../src/db.js');
 
-// ---------------------------------------------------------------------------
 // THE CONTRACT: the decoder columns the indexer's getDecoderBlockData() reads.
 // Keep this in lock-step with src/db.js:getDecoderBlockData. If you change the
 // SELECT, change this map, and this test re-validates it against the real schema.
-// ---------------------------------------------------------------------------
 const READ_SURFACE = {
     transactions:        ['data', 'raw_data', 'amount', 'fee', 'block_index', 'tx_hash_id', 'tx_index', 'source_id', 'destination_id'],
     blocks:              ['block_index', 'block_time'],

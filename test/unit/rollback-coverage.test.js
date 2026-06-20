@@ -52,19 +52,13 @@ const sinon  = require('sinon');
 const { createMockIndexer } = require('../fixtures/mocks');
 const Rollback              = require('../../src/rollback.js');
 
-// ---------------------------------------------------------------------------
 // The universe: every table the indexer creates, straight from src/sql/.
 // Mirrors db.js verifyTables() exactly (all *.sql, name = filename minus .sql).
-// ---------------------------------------------------------------------------
 const SQL_DIR = path.join(__dirname, '../../src/sql');
 const UNIVERSE = fs.readdirSync(SQL_DIR)
     .filter(f => f.endsWith('.sql'))
     .map(f => f.slice(0, -'.sql'.length))
     .sort();
-
-// ---------------------------------------------------------------------------
-// Coverage buckets that live outside rollback.js's two table arrays.
-// ---------------------------------------------------------------------------
 
 // Tables not deleted by index but fully recomputed from surviving ledger rows
 // inside rollback() (updateBalances / updateTokens / updateMarkets;
@@ -180,8 +174,6 @@ const ROLLBACK_EXEMPT = {
 // asserted as covered, not silently exempted as inert lookups.
 const ROLLED_BACK_INDEX = ['index_addresses', 'index_tickers'];
 const isLookupTable = (t) => t.startsWith('index_') && !ROLLED_BACK_INDEX.includes(t);
-
-// ---------------------------------------------------------------------------
 
 describe('Rollback coverage guard @regression', function () {
     let rollback;

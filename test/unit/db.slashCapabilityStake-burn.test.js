@@ -48,7 +48,6 @@ function makeDb() {
     return db;
 }
 
-// Capture every query; feed canned rows for the two SELECTs.
 function wire(db, { stakes = [], unstakes = [] }) {
     const calls = [];
     sinon.stub(db, 'doQuery').callsFake(async (sql, args) => {
@@ -72,7 +71,6 @@ describe('Database.slashCapabilityStake() equivocation burn @regression @tier1',
         const burned = await db.slashCapabilityStake(42, 306, 999);
         assert.strictEqual(Number(burned), 1000);
 
-        // The stakes row is zeroed in place.
         const upd = calls.find(c => /UPDATE\s+stakes\s+SET\s+amount/i.test(c.sql));
         assert.ok(upd, 'an active stake must be burned from stakes');
         assert.deepStrictEqual(upd.args, ['0', 7]);

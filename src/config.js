@@ -20,7 +20,6 @@
  *
  ********************************************************************/
 
-// Load required libraries
 const fs   = require('fs');
 const path = require('path');
 
@@ -35,10 +34,8 @@ const parseIntMin0 = (val, defaultVal) => {
 
 module.exports = {
 
-    // Handle returning the current indexer configuration
     getConfig: function(){
 
-        // Set coin and network from environmental variables
         let gas     = 'XCHAIN';                     // TICK to be used as gas token
         let coin    = process.env.INDEXER_COIN;     // BTC / LTC / DOGE
         let network = process.env.INDEXER_NETWORK;  // mainnet / testnet / regtest

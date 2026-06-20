@@ -35,7 +35,6 @@ const { buildHealthResponse } = require('./health');
 const { getStakeSourceByPubkey } = require('./stake-source');
 const merkle        = require('./merkle');
 
-// Parse in .env config data
 dotenv.config();
 
 // Validate required environment variables
@@ -50,7 +49,6 @@ for(const key of REQUIRED_ENV){
     }
 }
 
-// Parse in the environmental variables
 const INDEXER_API_PORT = process.env.INDEXER_API_PORT;
 const INDEXER_NETWORK  = process.env.INDEXER_NETWORK;
 

@@ -20,18 +20,10 @@ const { createMockIndexer, createBaseData, createTokenInfo } = require('../../fi
 
 const Stake = require('../../../src/actions/stake.js');
 
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
-
 const SOURCE  = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
 // Valid 64-char Ed25519 hex public key
 const PUBKEY  = 'a'.repeat(64);
 const BLOCK   = 100;
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 function makeActionsCtx(indexer) {
     return {
@@ -52,10 +44,6 @@ function makeData(overrides = {}) {
     return createBaseData(Object.assign({ ACTION: 'STAKE', COIN: 'BTC', BLOCK_INDEX: BLOCK, SOURCE }, overrides));
 }
 
-// ---------------------------------------------------------------------------
-// Suite
-// ---------------------------------------------------------------------------
-
 describe('Stake handler @regression @tier2', function () {
     let indexer, actionsCtx, handler;
 
@@ -73,7 +61,6 @@ describe('Stake handler @regression @tier2', function () {
         indexer.indexerDb.getContract            = sinon.stub().resolves(null);
         indexer.indexerDb.getStatusString        = sinon.stub().resolves('valid');
 
-        // Sufficient XCHAIN balance for staking
         const gasToken = createTokenInfo({ TICK: 'XCHAIN', TICK_ID: 1, DECIMALS: 8 });
         indexer.indexerDb.getTokenInfo.resolves(gasToken);
         indexer.indexerDb.getAddressBalances.resolves({ 1: '10000.00000000' });
@@ -86,10 +73,6 @@ describe('Stake handler @regression @tier2', function () {
     afterEach(function () {
         sinon.restore();
     });
-
-    // -----------------------------------------------------------------------
-    // FORMAT validation
-    // -----------------------------------------------------------------------
 
     describe('FORMAT validation', function () {
 
@@ -121,10 +104,6 @@ describe('Stake handler @regression @tier2', function () {
         });
     });
 
-    // -----------------------------------------------------------------------
-    // Chain restriction
-    // -----------------------------------------------------------------------
-
     describe('chain restriction', function () {
 
         it('DOGE chain → invalid (capability stake is BTC-only)', async function () {
@@ -145,10 +124,6 @@ describe('Stake handler @regression @tier2', function () {
             assert.ok(data.STATUS.includes('BTC only'));
         });
     });
-
-    // -----------------------------------------------------------------------
-    // v1: Create new capability stake
-    // -----------------------------------------------------------------------
 
     describe('v1: create new capability stake', function () {
 
@@ -233,10 +208,6 @@ describe('Stake handler @regression @tier2', function () {
         });
     });
 
-    // -----------------------------------------------------------------------
-    // AMOUNT validations
-    // -----------------------------------------------------------------------
-
     describe('AMOUNT validations', function () {
 
         it('null AMOUNT → invalid', async function () {
@@ -288,10 +259,6 @@ describe('Stake handler @regression @tier2', function () {
         });
     });
 
-    // -----------------------------------------------------------------------
-    // SIGNING_PUBKEY validations
-    // -----------------------------------------------------------------------
-
     describe('SIGNING_PUBKEY validations', function () {
 
         it('null SIGNING_PUBKEY → invalid', async function () {
@@ -332,10 +299,6 @@ describe('Stake handler @regression @tier2', function () {
         });
     });
 
-    // -----------------------------------------------------------------------
-    // SOURCE sleeping
-    // -----------------------------------------------------------------------
-
     describe('SOURCE sleeping', function () {
 
         it('SOURCE sleeping → invalid', async function () {
@@ -350,10 +313,6 @@ describe('Stake handler @regression @tier2', function () {
             assert.ok(data.STATUS.includes('sleeping'));
         });
     });
-
-    // -----------------------------------------------------------------------
-    // v2 : Top-up existing capability stake
-    // -----------------------------------------------------------------------
 
     describe('v2 : top-up existing capability stake', function () {
 
@@ -406,10 +365,6 @@ describe('Stake handler @regression @tier2', function () {
         });
     });
 
-    // -----------------------------------------------------------------------
-    // v3 : Contract-targeted stake
-    // -----------------------------------------------------------------------
-
     describe('v3 : contract-targeted stake', function () {
 
         const CONTRACT_INDEX = '5';
@@ -427,9 +382,7 @@ describe('Stake handler @regression @tier2', function () {
             // Contract exists, is valid, and has cooldown_blocks set
             indexer.indexerDb.getContract.resolves(makeContractInfo());
             indexer.indexerDb.getStatusString.resolves('valid');
-            // Token for the stake
             indexer.indexerDb.getTokenInfo.resolves(makeContractToken());
-            // Sufficient balance
             indexer.indexerDb.getAddressBalances.resolves({ 2: '1000' });
             // No existing stake for this (target, pubkey, tick)
             indexer.indexerDb.getContractStakeOwner.resolves(null);

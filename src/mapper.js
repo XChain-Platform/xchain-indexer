@@ -20,9 +20,7 @@
 
 class Mapper {
 
-    // Handle constructing a class instance
     constructor(indexer){
-        // Setup short aliases
         this.config    = indexer.config;
         this.decoderDb = indexer.decoderDb;
         this.indexerDb = indexer.indexerDb;
@@ -31,7 +29,6 @@ class Mapper {
 
     // Generalized function to handle creating action_index mapping records
     async createMappings(data){
-        // Setup alias to action
         let action       = data['ACTION'],
             action_index = data['ACTION_INDEX'],
             status       = data['STATUS'];

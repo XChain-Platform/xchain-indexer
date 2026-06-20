@@ -83,8 +83,6 @@ describe('Execute (EXECUTE) @regression @tier2', function () {
         sinon.restore();
     });
 
-    // ─── Format validation ────────────────────────────────────────────────
-
     describe('format validation', function () {
 
         it('rejects unknown VERSION', async function () {
@@ -100,8 +98,6 @@ describe('Execute (EXECUTE) @regression @tier2', function () {
         });
 
     });
-
-    // ─── Contract validations ─────────────────────────────────────────────
 
     describe('contract validations', function () {
 
@@ -133,8 +129,6 @@ describe('Execute (EXECUTE) @regression @tier2', function () {
 
     });
 
-    // ─── SOURCE sleeping ──────────────────────────────────────────────────
-
     describe('source sleeping', function () {
 
         it('rejects when SOURCE is sleeping', async function () {
@@ -145,8 +139,6 @@ describe('Execute (EXECUTE) @regression @tier2', function () {
         });
 
     });
-
-    // ─── Valid execution (no VM) ──────────────────────────────────────────
 
     describe('valid execution without VM', function () {
 
@@ -176,8 +168,6 @@ describe('Execute (EXECUTE) @regression @tier2', function () {
         });
 
     });
-
-    // ─── Valid execution (with VM) ────────────────────────────────────────
 
     describe('valid execution with VM', function () {
 
@@ -241,8 +231,6 @@ describe('Execute (EXECUTE) @regression @tier2', function () {
         });
 
     });
-
-    // ─── VM failure paths ─────────────────────────────────────────────────
 
     describe('VM failure paths', function () {
 
@@ -318,8 +306,6 @@ describe('Execute (EXECUTE) @regression @tier2', function () {
 
     });
 
-    // ─── buildActionParams unit checks ────────────────────────────────────
-
     describe('buildActionParams', function () {
 
         it('SEND → positional array VERSION|TICK|AMOUNT|DESTINATION|MEMO', function () {
@@ -356,8 +342,6 @@ describe('Execute (EXECUTE) @regression @tier2', function () {
 
     });
 
-    // ─── getActionHandler ─────────────────────────────────────────────────
-
     describe('getActionHandler', function () {
 
         it('returns null for unknown action', function () {
@@ -377,8 +361,6 @@ describe('Execute (EXECUTE) @regression @tier2', function () {
         });
 
     });
-
-    // ─── processEmission: emission routing ───────────────────────────────
 
     describe('processEmission', function () {
 
@@ -401,7 +383,6 @@ describe('Execute (EXECUTE) @regression @tier2', function () {
             );
         });
 
-        // ── XCALL emission host-side guards (defense-in-depth vs a compromised VM) ──
         // All four throw before buildActionParams, so minimal emission params suffice.
 
         it('throws when XCALL emission is missing the position argument', async function () {
@@ -481,8 +462,6 @@ describe('Execute (EXECUTE) @regression @tier2', function () {
             );
         });
 
-        // ---- Phase E: permissions-manifest emission allowlist (all paths funnel here) ----
-
         it('rejects an emission whose action is not in the contract permissions allowlist', async function () {
             const sendHandler = { parse: sinon.stub().callsFake(async (params, data) => { data['STATUS'] = 'valid'; }) };
             actionsCtx.actionSend = sendHandler;
@@ -528,8 +507,6 @@ describe('Execute (EXECUTE) @regression @tier2', function () {
 
     });
 
-    // ─── IS_EMISSION: skip fee ───────────────────────────────────────────
-
     describe('IS_EMISSION: fee skip', function () {
 
         it('skips gas fee debit when IS_EMISSION is true', async function () {
@@ -560,7 +537,6 @@ describe('Execute (EXECUTE) @regression @tier2', function () {
 
     });
 
-    // ─── _processSlashEmission (internal SLASH handler) ───────────────────
     // Driven directly: SLASH emissions never reach the wire/decoder, so they are
     // handled inline by this method rather than the generic emission router.
     describe('_processSlashEmission', function () {
@@ -643,7 +619,6 @@ describe('Execute (EXECUTE) @regression @tier2', function () {
         });
     });
 
-    // ─── Cross-contract calls (emit.execute) ──────────────────────────────
     describe('cross-contract calls', function () {
 
         const CALLEE = 7;
@@ -791,7 +766,6 @@ describe('Execute (EXECUTE) @regression @tier2', function () {
         });
     });
 
-    // ─── Gas-fee payment modes (fee > 0) ──────────────────────────────────
     // The default suite runs with GAS_PRICE=0 (fee skipped). Raising GAS_PRICE makes
     // fee = VM_EXECUTE_BASE * GAS_PRICE > 0, driving the native/xchain fee branch. The
     // rejected/invalid paths set `error` and short-circuit BEFORE VM execution, so they

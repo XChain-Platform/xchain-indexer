@@ -15,11 +15,6 @@ const assert      = require('assert');
 const sinon       = require('sinon');
 const UtxoTracker = require('../../src/UtxoTracker.js');
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/** Build a fake fetch that resolves with the given JSON body. */
 function makeFetch(body, opts){
     opts = opts || {};
     return sinon.stub().resolves({
@@ -34,19 +29,14 @@ describe('UtxoTracker', function(){
     let origFetch;
 
     beforeEach(function(){
-        // Capture whatever global.fetch is before each test
         origFetch = global.fetch;
     });
 
     afterEach(function(){
-        // Always restore
         global.fetch = origFetch;
         sinon.restore();
     });
 
-    // -----------------------------------------------------------------------
-    // constructor
-    // -----------------------------------------------------------------------
     describe('constructor', function(){
         it('marks enabled=true and builds endpoint when url+port provided', function(){
             let t = new UtxoTracker('localhost', 3005);
@@ -85,9 +75,6 @@ describe('UtxoTracker', function(){
         });
     });
 
-    // -----------------------------------------------------------------------
-    // _call
-    // -----------------------------------------------------------------------
     describe('_call()', function(){
         it('throws when not enabled', async function(){
             let t = new UtxoTracker();
@@ -171,9 +158,6 @@ describe('UtxoTracker', function(){
         });
     });
 
-    // -----------------------------------------------------------------------
-    // getFirstSeen
-    // -----------------------------------------------------------------------
     describe('getFirstSeen()', function(){
         it('returns { height: N } when RPC returns an object with a numeric height', async function(){
             let t = new UtxoTracker('localhost', 3005);

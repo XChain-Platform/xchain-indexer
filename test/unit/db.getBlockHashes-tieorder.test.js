@@ -46,12 +46,10 @@ const { getTestConfig } = require('../fixtures/config');
 const Utility           = require('../../src/utility');
 const Database          = require('../../src/db');
 
-// ---------------------------------------------------------------------------
-// The tie-prone getBlockHashes queries and the FULL set of columns each one
-// SELECTs (== the set that MUST appear in its ORDER BY for a total row order).
-// ---------------------------------------------------------------------------
+// The tie-prone getBlockHashes queries and the FULL set of columns each one SELECTs
+// (the set that MUST appear in its ORDER BY for a total row order).
 // As of BLOCK_HASH_VERSION 2 these queries ORDER BY the RESOLVED lookup strings (address /
-// tick / status), not the raw *_id surrogates : so the order is id-independent across nodes.
+// tick / status), not the raw *_id surrogates: so the order is id-independent across nodes.
 // Bare names are what orderByCols() extracts from the ORDER BY (alias + COLLATE stripped).
 const TIE_PRONE = {
     credits:     ['action_index', 'address', 'tick', 'amount'],
@@ -131,7 +129,6 @@ async function ledgerHash(creditRows, forceCols) {
 
 afterEach(function () { sinon.restore(); });
 
-// ---------------------------------------------------------------------------
 describe('Database.getBlockHashes() consensus tie-order determinism (ffd061a) @regression @tier1', function () {
 
     // (1) Structural guard: every SELECTed column of each tie-prone query must participate

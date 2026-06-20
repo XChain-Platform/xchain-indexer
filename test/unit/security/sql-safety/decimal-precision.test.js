@@ -18,10 +18,6 @@ const sinon  = require('sinon');
 
 const { createMockIndexer } = require('../../../fixtures/mocks');
 
-// ---------------------------------------------------------------------------
-// Suite: getTokenDecimalPrecision clamping
-// ---------------------------------------------------------------------------
-
 describe('Security: decimal precision clamped to [0, 18] @regression @tier4', function () {
     let indexer;
 

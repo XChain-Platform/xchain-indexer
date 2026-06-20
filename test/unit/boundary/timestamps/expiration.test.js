@@ -98,7 +98,6 @@ describe('ORDER and DISPENSER expiration boundary tests @regression @tier2', fun
     });
 
     it('TS-05: Missing EXPIRATION uses default (BLOCK_TIME + 90 days) and is valid', async function () {
-        // Leave EXPIRATION empty
         const params = makeParams('0|BTC|RAREPEPE|1||BTC|PEPECASH|10||' + SOURCE + '||||');
         const data   = createBaseData({ ACTION: 'ORDER', FORMAT: 0, SOURCE, BLOCK_TIME, COIN: 'BTC' });
         await handler.parse(params, data, null);

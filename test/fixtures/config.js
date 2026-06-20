@@ -16,7 +16,6 @@
  */
 
 function getTestConfig() {
-    // Set environment for config loading
     process.env.INDEXER_COIN = 'BTC';
     process.env.INDEXER_NETWORK = 'regtest';
 

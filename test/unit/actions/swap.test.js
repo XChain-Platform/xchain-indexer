@@ -69,8 +69,6 @@ describe('Swap action handler @regression @tier2', function () {
 
     const FUTURE_EXPIRATION = 9999999999;
 
-    // ─── Create swap (format 0) ───────────────────────────────────────
-
     it('creates a valid swap', async function () {
         const data = createBaseData({ ACTION: 'SWAP', FORMAT: 0, BLOCK_TIME: 1700000000 });
         const params = makeCreateParams('GIVE', '10', 'GET', '5', FUTURE_EXPIRATION, '');
@@ -118,12 +116,10 @@ describe('Swap action handler @regression @tier2', function () {
 
     it('rejects EXPIRATION in the past', async function () {
         const data = createBaseData({ ACTION: 'SWAP', FORMAT: 0, BLOCK_TIME: 1700000000 });
-        const params = makeCreateParams('GIVE', '10', 'GET', '5', 1000000, ''); // past timestamp
+        const params = makeCreateParams('GIVE', '10', 'GET', '5', 1000000, '');
         await handler.parse(params, data, null);
         assert.ok(data['STATUS'].includes('EXPIRATION'), `Expected EXPIRATION error, got: ${data['STATUS']}`);
     });
-
-    // ─── Cancel swap (format 1) ───────────────────────────────────────
 
     it('cancels a valid open swap', async function () {
         const swapInfo = {
@@ -173,8 +169,6 @@ describe('Swap action handler @regression @tier2', function () {
         assert.ok(data['STATUS'].includes('SOURCE'), `Expected SOURCE not owner error, got: ${data['STATUS']}`);
     });
 
-    // ─── Edit swap (format 2) ─────────────────────────────────────────
-
     it('edits a valid open swap expiration', async function () {
         const swapInfo = {
             ACTION_INDEX: 10,
@@ -194,8 +188,6 @@ describe('Swap action handler @regression @tier2', function () {
         assert.strictEqual(data['STATUS'], 'valid');
     });
 
-    // ─── SOURCE sleeping check ────────────────────────────────────────
-
     it('rejects when SOURCE is sleeping (format 0)', async function () {
         indexer.indexerDb.isActionAllowed.resolves(false);
         const data = createBaseData({ ACTION: 'SWAP', FORMAT: 0, BLOCK_TIME: 1700000000 });
@@ -203,8 +195,6 @@ describe('Swap action handler @regression @tier2', function () {
         await handler.parse(params, data, null);
         assert.ok(data['STATUS'].includes('SOURCE') || data['STATUS'].includes('TICK'), `Expected sleeping error, got: ${data['STATUS']}`);
     });
-
-    // ─── Non-unified expiration fee path (lines 313-314) ─────────────
 
     it('legacy getExpirationFee path when UNIFIED_FEES disabled', async function () {
         actionsCtx.protocolChanges.isEnabled = sinon.stub().resolves(false);
@@ -217,8 +207,6 @@ describe('Swap action handler @regression @tier2', function () {
         assert.ok(indexer.indexerDb.createSwap.calledOnce, 'createSwap should be called');
     });
 
-    // ─── Ownership-give create path (lines 394-398, 304-308) ──────────
-
     describe('GIVE_OWNERSHIP=1 (ownership swap)', function () {
 
         beforeEach(function () {
@@ -229,7 +217,6 @@ describe('Swap action handler @regression @tier2', function () {
                 if(tick === 'GET')  return createTokenInfo({ TICK: 'GET',  TICK_ID: 2, DECIMALS: 0 });
                 return null;
             });
-            // Enough balance for fee
             indexer.indexerDb.getAddressBalances.resolves({ 1: '0', 2: '1000', 99: '999999999' });
         });
 
@@ -250,12 +237,9 @@ describe('Swap action handler @regression @tier2', function () {
 
             await handler.parse(params, data, null);
 
-            // If reached here with valid status, ownership escrow fee branch was exercised
             assert.strictEqual(data['STATUS'], 'valid');
         });
     });
-
-    // ─── Native coin fee paths (lines 321-331) ────────────────────────
 
     describe('native coin fee payment', function () {
 
@@ -299,8 +283,6 @@ describe('Swap action handler @regression @tier2', function () {
         });
     });
 
-    // ─── GET_OWNERSHIP bid validations (lines 215-219) ───────────────
-
     describe('GET_OWNERSHIP=1 (bid for ownership)', function () {
 
         it('GET_OWNERSHIP=1 with non-empty GET_AMOUNT returns invalid', async function () {
@@ -320,14 +302,11 @@ describe('Swap action handler @regression @tier2', function () {
         // Left uncovered intentionally; documented in claude/reports/coverage/HANDOVER.md.
     });
 
-    // ─── LIST field validation (lines 269-279) ───────────────────────
-
     describe('LIST field validation', function () {
 
         it('unknown ALLOW_LIST returns invalid', async function () {
             indexer.indexerDb.getListType.resolves(false);
 
-            // ALLOW_LIST at index 11 in format 0
             const params = ['0', 'BTC', 'GIVE', '10', '', 'BTC', 'GET', '5', '', '', String(FUTURE_EXPIRATION), '99', '', ''];
             const data = createBaseData({ ACTION: 'SWAP', FORMAT: 0, BLOCK_TIME: 1700000000 });
 
@@ -347,8 +326,6 @@ describe('Swap action handler @regression @tier2', function () {
             assert.ok(data['STATUS'].includes('unsupported'));
         });
     });
-
-    // ─── Ownership-give cancel (lines 413-415) ────────────────────────
 
     describe('cancel with GIVE_OWNERSHIP=1', function () {
 

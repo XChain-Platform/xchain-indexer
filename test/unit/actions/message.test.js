@@ -41,8 +41,6 @@ describe('Message action handler @regression @tier3', function () {
         indexer.util.resetLists();
     });
 
-    // ─── Valid formats ────────────────────────────────────────────────
-
     it('accepts format 0 (sender key exchange)', async function () {
         const data = createBaseData({ ACTION: 'MESSAGE', FORMAT: 0 });
         const params = ['0', 'BTC', VALID_DEST, '1', 'MYPUBLICKEY'];
@@ -81,8 +79,6 @@ describe('Message action handler @regression @tier3', function () {
         assert.ok(data['STATUS'].includes('VERSION'), `Expected VERSION error, got: ${data['STATUS']}`);
     });
 
-    // ─── ENCRYPTION_METHOD validation ────────────────────────────────
-
     it('accepts ENCRYPTION_METHOD=1 (ECDH)', async function () {
         const data = createBaseData({ ACTION: 'MESSAGE', FORMAT: 0 });
         const params = ['0', 'BTC', VALID_DEST, '1', 'key'];
@@ -111,8 +107,6 @@ describe('Message action handler @regression @tier3', function () {
         assert.ok(data['STATUS'].includes('ENCRYPTION_METHOD'), `Expected ENCRYPTION_METHOD format error, got: ${data['STATUS']}`);
     });
 
-    // ─── Key length limit ─────────────────────────────────────────────
-
     it('rejects ENCRYPTION_KEY exceeding MAX_MESSAGE_KEY_LENGTH', async function () {
         const longKey = 'k'.repeat(indexer.config['MAX_MESSAGE_KEY_LENGTH'] + 1);
         const data = createBaseData({ ACTION: 'MESSAGE', FORMAT: 0 });
@@ -121,16 +115,12 @@ describe('Message action handler @regression @tier3', function () {
         assert.ok(data['STATUS'].includes('ENCRYPTION_KEY'), `Expected ENCRYPTION_KEY error, got: ${data['STATUS']}`);
     });
 
-    // ─── DESTINATION validation ───────────────────────────────────────
-
     it('rejects invalid DESTINATION address format', async function () {
         const data = createBaseData({ ACTION: 'MESSAGE', FORMAT: 3 });
         const params = ['3', 'BTC', 'not-an-address', 'hello'];
         await handler.parse(params, data, null);
         assert.ok(data['STATUS'].includes('DESTINATION'), `Expected DESTINATION error, got: ${data['STATUS']}`);
     });
-
-    // ─── SOURCE sleeping check ────────────────────────────────────────
 
     it('rejects when SOURCE is sleeping', async function () {
         indexer.indexerDb.isActionAllowed.resolves(false);
@@ -139,8 +129,6 @@ describe('Message action handler @regression @tier3', function () {
         await handler.parse(params, data, null);
         assert.ok(data['STATUS'].includes('SOURCE'), `Expected SOURCE sleeping error, got: ${data['STATUS']}`);
     });
-
-    // ─── Side-effect checks ───────────────────────────────────────────
 
     it('calls createMessage on the indexerDb', async function () {
         const data = createBaseData({ ACTION: 'MESSAGE', FORMAT: 3 });

@@ -101,15 +101,7 @@ function makeMatchInfo(overrides = {}) {
     }, overrides);
 }
 
-// ---------------------------------------------------------------------------
-// Suite
-// ---------------------------------------------------------------------------
-
 describe('ORDER_MATCH price-boundary tests @regression @tier2', function () {
-
-    // -----------------------------------------------------------------------
-    // ORD-01: Exact price match → match succeeds
-    // -----------------------------------------------------------------------
 
     describe('ORD-01: Exact price match → match succeeds', function () {
         let indexer, actionsCtx, handler;
@@ -147,10 +139,6 @@ describe('ORDER_MATCH price-boundary tests @regression @tier2', function () {
         });
     });
 
-    // -----------------------------------------------------------------------
-    // ORD-02: Match price slightly better → match succeeds
-    // -----------------------------------------------------------------------
-
     describe('ORD-02: Match price slightly better than order → match succeeds', function () {
         let indexer, actionsCtx, handler;
 
@@ -187,10 +175,6 @@ describe('ORDER_MATCH price-boundary tests @regression @tier2', function () {
         });
     });
 
-    // -----------------------------------------------------------------------
-    // ORD-03: Match price slightly worse → match skipped
-    // -----------------------------------------------------------------------
-
     describe('ORD-03: Match price slightly worse than order → match skipped', function () {
         let indexer, actionsCtx, handler;
 
@@ -225,10 +209,6 @@ describe('ORDER_MATCH price-boundary tests @regression @tier2', function () {
                 'expected createOrderMatch NOT to be called when match price exceeds order price');
         });
     });
-
-    // -----------------------------------------------------------------------
-    // ORD-04: GIVE_REMAINING = 1 (smallest unit) → order completes
-    // -----------------------------------------------------------------------
 
     describe('ORD-04: Order with GIVE_REMAINING = 1 fills and completes', function () {
         let indexer, actionsCtx, handler;
@@ -287,10 +267,6 @@ describe('ORDER_MATCH price-boundary tests @regression @tier2', function () {
                 'expected at least one createOrderStatus call with status "complete"');
         });
     });
-
-    // -----------------------------------------------------------------------
-    // ORD-05: Multiple matches, best price matched first
-    // -----------------------------------------------------------------------
 
     describe('ORD-05: Multiple matches returned, better price processed first', function () {
         let indexer, actionsCtx, handler;

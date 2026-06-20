@@ -17,8 +17,6 @@ const { createMockIndexer, createBaseData, createTokenInfo } = require('../../fi
 
 const Order_Match = require('../../../src/actions/order_match.js');
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
 function makeActionsCtx(indexer) {
     return {
         config:          indexer.config,
@@ -106,8 +104,6 @@ describe('Order_Match action handler @regression @tier2', function () {
         sinon.restore();
     });
 
-    // ─── No matching order ────────────────────────────────────────────────
-
     it('returns early when orderInfo is null (order not found)', async function () {
         indexer.indexerDb.getOrderInfo.resolves(null);
 
@@ -128,8 +124,6 @@ describe('Order_Match action handler @regression @tier2', function () {
         sinon.assert.calledOnce(indexer.indexerDb.findOrderMatches);
         sinon.assert.notCalled(indexer.indexerDb.createOrderMatch);
     });
-
-    // ─── Price validation ────────────────────────────────────────────────
 
     it('skips match when matchInfo.GET_PRICE > orderInfo.GIVE_PRICE', async function () {
         // GIVE_PRICE=5, but match wants GET_PRICE=10 : mismatch → skip
@@ -164,8 +158,6 @@ describe('Order_Match action handler @regression @tier2', function () {
         sinon.assert.calledOnce(indexer.indexerDb.createOrderMatch);
     });
 
-    // ─── Full fill ────────────────────────────────────────────────────────
-
     it('full fill marks both orders complete', async function () {
         // GIVE_REMAINING == GIVE_AMOUNT of match → both fully filled
         // give_amount = matchInfo.GIVE_REMAINING * orderInfo.GET_PRICE = 100 * 0.1 = 10 (== order.GIVE_REMAINING)
@@ -190,8 +182,6 @@ describe('Order_Match action handler @regression @tier2', function () {
             `Expected createOrderStatus called at least twice, got ${indexer.indexerDb.createOrderStatus.callCount}`);
     });
 
-    // ─── Partial fill ────────────────────────────────────────────────────
-
     it('partial fill : only the filled side is marked complete', async function () {
         // Match has 50 PEPECASH (half of order's GET_REMAINING 100):
         // give_amount = 50 * 0.1 = 5 (5 RAREPEPE out of 10 remaining in order → order partially filled)
@@ -215,8 +205,6 @@ describe('Order_Match action handler @regression @tier2', function () {
         // At least one createOrderStatus call for the match side becoming complete
         sinon.assert.called(indexer.indexerDb.createOrderStatus);
     });
-
-    // ─── Indivisibility: 0-decimal (NFT) fills are integer-only ───────────
 
     it('NFT (0-decimal) partial fill settles an integer amount, never a fractional artifact', async function () {
         // RAREPEPE is an indivisible NFT (DECIMALS=0); PEPECASH is divisible (DECIMALS=8).
@@ -260,8 +248,6 @@ describe('Order_Match action handler @regression @tier2', function () {
         assert.ok(!giveStr.includes('.'), `NFT fill must carry no fractional part, got: ${giveStr}`);
     });
 
-    // ─── Skips with zero remaining ────────────────────────────────────────
-
     it('skips match when match GIVE_REMAINING is zero', async function () {
         indexer.indexerDb.getOrderInfo.resolves(makeOrderInfo());
         indexer.indexerDb.findOrderMatches.resolves([makeMatchInfo({ GIVE_REMAINING: '0' })]);
@@ -291,8 +277,6 @@ describe('Order_Match action handler @regression @tier2', function () {
 
         sinon.assert.notCalled(indexer.indexerDb.createOrderMatch);
     });
-
-    // ─── Allow/block list cross-check ────────────────────────────────────
 
     it('skips match when orderInfo ALLOW_LIST does not include match GET_ADDRESS', async function () {
         indexer.indexerDb.getOrderInfo.resolves(makeOrderInfo({ ALLOW_LIST: '5' }));
@@ -356,8 +340,6 @@ describe('Order_Match action handler @regression @tier2', function () {
         sinon.assert.calledOnce(indexer.indexerDb.createOrderMatch);
     });
 
-    // ─── Ledger changes ───────────────────────────────────────────────────
-
     it('updates balances after a successful match', async function () {
         indexer.indexerDb.getOrderInfo.resolves(makeOrderInfo());
         indexer.indexerDb.findOrderMatches.resolves([makeMatchInfo()]);
@@ -377,8 +359,6 @@ describe('Order_Match action handler @regression @tier2', function () {
 
         sinon.assert.called(indexer.mapper.createMappings);
     });
-
-    // ─── ORDER_ACTION_INDEX fallback ──────────────────────────────────────
 
     it('uses ORDER_ACTION_INDEX from data when present', async function () {
         indexer.indexerDb.getOrderInfo.resolves(makeOrderInfo({ ACTION_INDEX: 77 }));
@@ -405,8 +385,6 @@ describe('Order_Match action handler @regression @tier2', function () {
         sinon.assert.calledWith(indexer.indexerDb.getOrderInfo, 'BTC', 1);
     });
 
-    // ─── Ownership compatibility filter ───────────────────────────────────
-
     it('filters out matches where GIVE_OWNERSHIP does not mirror GET_OWNERSHIP', async function () {
         // orderInfo has GIVE_OWNERSHIP=0, GET_OWNERSHIP=0
         // matchInfo has GIVE_OWNERSHIP=1, GET_OWNERSHIP=0 → ownership mismatch → filtered out
@@ -429,8 +407,6 @@ describe('Order_Match action handler @regression @tier2', function () {
 
         sinon.assert.calledOnce(indexer.indexerDb.createOrderMatch);
     });
-
-    // ─── Native coin match (pending_coinpay settlement) ───────────────────
 
     it('native coin GIVE_TICK on orderInfo → pending_coinpay status, createCoinpayObligation called', async function () {
         // orderInfo is offering native coin (null GIVE_TICK), matchInfo has PEPECASH
@@ -499,8 +475,6 @@ describe('Order_Match action handler @regression @tier2', function () {
 
         sinon.assert.calledOnce(indexer.indexerDb.createCoinpayObligation);
     });
-
-    // ─── Ownership order matching ─────────────────────────────────────────
 
     it('GIVE_OWNERSHIP=1 on orderInfo calls transferTokenOwnership for the give side', async function () {
         const transferSpy = sinon.stub(indexer.util, 'transferTokenOwnership').resolves();
@@ -577,8 +551,6 @@ describe('Order_Match action handler @regression @tier2', function () {
 
         sinon.assert.called(transferSpy);
     });
-
-    // ─── Debug mode console-log paths ─────────────────────────────────────
 
     describe('debug mode (handler.debug = true)', function () {
 
@@ -728,8 +700,6 @@ describe('Order_Match action handler @regression @tier2', function () {
 
     });
 
-    // ─── Token ALLOW_LIST / BLOCK_LIST (lines 72-77) ─────────────────────────
-
     it('token GET_TICK ALLOW_LIST set → getList called for token allow list (line 72 true branch)', async function () {
         const orderAddr = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
         const matchAddr = 'mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM';
@@ -840,8 +810,6 @@ describe('Order_Match action handler @regression @tier2', function () {
         sinon.assert.notCalled(indexer.indexerDb.createOrderMatch);
     });
 
-    // ─── Give-side bottleneck (lines 143-145) ────────────────────────────────
-
     it('give-side is the bottleneck (give_from_get > max_give) → give_amount clamped, get derived (lines 143-145)', async function () {
         // max_give = 10, max_get = 1000, GET_PRICE=1 → give_from_get = 1000 >> 10 → give-side bottleneck
         // give_amount = max_give = 10; get_amount = 10 * GIVE_PRICE = 10 * 0.5 = 5
@@ -886,8 +854,6 @@ describe('Order_Match action handler @regression @tier2', function () {
 
         sinon.assert.calledOnce(indexer.indexerDb.createOrderMatch);
     });
-
-    // ─── GET_TICK null routing (native coin, lines 258-270) ──────────────────
 
     describe('native coin routing via GET_TICK null (lines 258-270)', function () {
 
@@ -964,8 +930,6 @@ describe('Order_Match action handler @regression @tier2', function () {
 
     });
 
-    // ─── Ownership single-fill enforcement ────────────────────────────────
-
     it('ownership order: skipped when amounts are not exactly equal (single-fill enforcement)', async function () {
         // orderInfo has GIVE_OWNERSHIP=1, GIVE_REMAINING=1, GET_REMAINING=100
         // match offers only 50 PEPECASH (half of expected 100) → rejected
@@ -1000,7 +964,7 @@ describe('Order_Match action handler @regression @tier2', function () {
     });
 });
 
-// ─── Escrow/credit precision parity (#3736) ─────────────────────────────────────
+// Escrow/credit precision parity (#3736)
 //
 // Instant settlement pushes an escrow RELEASE for the same tick/address it
 // CREDITS. The release amount used to be negated with JS unary minus

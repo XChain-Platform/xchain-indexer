@@ -20,13 +20,6 @@ const { createMockIndexer, createBaseData, createTokenInfo } = require('../../fi
 
 const Issue = require('../../../src/actions/issue.js');
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Build an actionsCtx object the Issue handler expects.
- */
 function makeActionsCtx(indexer) {
     return {
         config:          indexer.config,
@@ -93,22 +86,13 @@ function makeFormat0Params(overrides = {}) {
     ];
 }
 
-/**
- * Create a data object for ISSUE with a given format version already resolved.
- */
 function makeData(overrides = {}) {
     return createBaseData(Object.assign({ ACTION: 'ISSUE', FORMAT: 0 }, overrides));
 }
 
-// ---------------------------------------------------------------------------
 // Shared setup: new-token tests need an XCHAIN balance to pay the issuance fee.
 // BLOCK_INDEX < 862633 skips the fee requirement entirely.
-// ---------------------------------------------------------------------------
 const LOW_BLOCK = 100; // below 862633 → no fee required for new token
-
-// ---------------------------------------------------------------------------
-// Suite
-// ---------------------------------------------------------------------------
 
 describe('Issue handler @regression @tier1', function () {
     let indexer, actionsCtx, handler;
@@ -121,7 +105,6 @@ describe('Issue handler @regression @tier1', function () {
         // Default: no existing token, not distributed
         indexer.indexerDb.getTokenInfo.resolves(null);
         indexer.indexerDb.isDistributed.resolves(false);
-        // isActionAllowed returns true (address not sleeping)
         indexer.indexerDb.isActionAllowed.resolves(true);
         // Zero fee scenario - no GAS balance needed when block < 862633
         indexer.indexerDb.getAddressBalances.resolves({});
@@ -132,10 +115,6 @@ describe('Issue handler @regression @tier1', function () {
     afterEach(function () {
         sinon.restore();
     });
-
-    // -----------------------------------------------------------------------
-    // Format 0: new token creation
-    // -----------------------------------------------------------------------
 
     describe('format 0: new token creation', function () {
 
@@ -206,10 +185,6 @@ describe('Issue handler @regression @tier1', function () {
         });
     });
 
-    // -----------------------------------------------------------------------
-    // VERSION / FORMAT validation
-    // -----------------------------------------------------------------------
-
     describe('VERSION / FORMAT validation', function () {
 
         it('unknown format version → invalid', async function () {
@@ -239,10 +214,6 @@ describe('Issue handler @regression @tier1', function () {
             assert.ok(data.STATUS.startsWith('invalid'));
         });
     });
-
-    // -----------------------------------------------------------------------
-    // TICK validations
-    // -----------------------------------------------------------------------
 
     describe('TICK validations', function () {
 
@@ -389,10 +360,6 @@ describe('Issue handler @regression @tier1', function () {
         });
     });
 
-    // -----------------------------------------------------------------------
-    // DECIMALS validation
-    // -----------------------------------------------------------------------
-
     describe('DECIMALS validation', function () {
 
         it('DECIMALS = 0 → valid', async function () {
@@ -438,10 +405,6 @@ describe('Issue handler @regression @tier1', function () {
         });
     });
 
-    // -----------------------------------------------------------------------
-    // MAX_SUPPLY validation
-    // -----------------------------------------------------------------------
-
     describe('MAX_SUPPLY validation', function () {
 
         it('MAX_SUPPLY above MAX_TOKEN_SUPPLY → invalid', async function () {
@@ -484,10 +447,6 @@ describe('Issue handler @regression @tier1', function () {
         });
     });
 
-    // -----------------------------------------------------------------------
-    // Re-issuance / ownership
-    // -----------------------------------------------------------------------
-
     describe('re-issuance / ownership', function () {
 
         it('re-issuance by non-owner → invalid', async function () {
@@ -518,10 +477,6 @@ describe('Issue handler @regression @tier1', function () {
             assert.strictEqual(data.STATUS, 'valid');
         });
     });
-
-    // -----------------------------------------------------------------------
-    // Lock immutability
-    // -----------------------------------------------------------------------
 
     describe('lock immutability', function () {
 
@@ -618,10 +573,6 @@ describe('Issue handler @regression @tier1', function () {
         });
     });
 
-    // -----------------------------------------------------------------------
-    // MINT_SUPPLY validations
-    // -----------------------------------------------------------------------
-
     describe('MINT_SUPPLY validations', function () {
 
         it('MINT_SUPPLY greater than MAX_SUPPLY → invalid', async function () {
@@ -642,10 +593,6 @@ describe('Issue handler @regression @tier1', function () {
             assert.strictEqual(data.STATUS, 'valid');
         });
     });
-
-    // -----------------------------------------------------------------------
-    // MINT_ADDRESS_MAX validations
-    // -----------------------------------------------------------------------
 
     describe('MINT_ADDRESS_MAX validations', function () {
 
@@ -677,10 +624,6 @@ describe('Issue handler @regression @tier1', function () {
         });
     });
 
-    // -----------------------------------------------------------------------
-    // ADDRESS sleeping
-    // -----------------------------------------------------------------------
-
     describe('address sleeping', function () {
 
         it('SOURCE sleeping → invalid', async function () {
@@ -694,10 +637,6 @@ describe('Issue handler @regression @tier1', function () {
             assert.ok(data.STATUS.startsWith('invalid'));
         });
     });
-
-    // -----------------------------------------------------------------------
-    // DESCRIPTION validations
-    // -----------------------------------------------------------------------
 
     describe('DESCRIPTION validations', function () {
 
@@ -720,10 +659,6 @@ describe('Issue handler @regression @tier1', function () {
         });
     });
 
-    // -----------------------------------------------------------------------
-    // TRANSFER_SUPPLY same as SOURCE is discarded
-    // -----------------------------------------------------------------------
-
     describe('TRANSFER_SUPPLY == SOURCE is discarded', function () {
 
         it('TRANSFER_SUPPLY equal to SOURCE is removed silently', async function () {
@@ -738,10 +673,6 @@ describe('Issue handler @regression @tier1', function () {
         });
     });
 
-    // -----------------------------------------------------------------------
-    // TRANSFER address validation
-    // -----------------------------------------------------------------------
-
     describe('TRANSFER address validation', function () {
 
         it('invalid TRANSFER address → invalid', async function () {
@@ -753,10 +684,6 @@ describe('Issue handler @regression @tier1', function () {
             assert.ok(data.STATUS.startsWith('invalid'));
         });
     });
-
-    // -----------------------------------------------------------------------
-    // MINT_START/STOP_BLOCK validations
-    // -----------------------------------------------------------------------
 
     describe('MINT_START/STOP_BLOCK validations', function () {
 
@@ -797,10 +724,6 @@ describe('Issue handler @regression @tier1', function () {
         });
     });
 
-    // -----------------------------------------------------------------------
-    // MEMO validations
-    // -----------------------------------------------------------------------
-
     describe('MEMO validations', function () {
 
         it('MEMO with pipe → invalid', async function () {
@@ -840,10 +763,6 @@ describe('Issue handler @regression @tier1', function () {
         });
     });
 
-    // -----------------------------------------------------------------------
-    // Format 1 : description update
-    // -----------------------------------------------------------------------
-
     describe('format 1 : brief description update', function () {
 
         it('valid format 1 description update → valid', async function () {
@@ -876,10 +795,6 @@ describe('Issue handler @regression @tier1', function () {
         });
     });
 
-    // -----------------------------------------------------------------------
-    // Format 3 : lock params update
-    // -----------------------------------------------------------------------
-
     describe('format 3 : lock params update', function () {
 
         it('valid format 3 lock update sets lock fields', async function () {
@@ -898,10 +813,6 @@ describe('Issue handler @regression @tier1', function () {
             assert.strictEqual(data.STATUS, 'valid');
         });
     });
-
-    // -----------------------------------------------------------------------
-    // ALLOW_LIST / BLOCK_LIST validation
-    // -----------------------------------------------------------------------
 
     describe('ALLOW_LIST / BLOCK_LIST validation', function () {
 
@@ -939,10 +850,6 @@ describe('Issue handler @regression @tier1', function () {
         });
     });
 
-    // -----------------------------------------------------------------------
-    // createIssue is always called (even on invalid)
-    // -----------------------------------------------------------------------
-
     describe('createIssue always called', function () {
 
         it('createIssue is called even when status is invalid', async function () {
@@ -964,10 +871,6 @@ describe('Issue handler @regression @tier1', function () {
             assert.ok(!indexer.indexerDb.createToken.called, 'createToken must not be called on invalid');
         });
     });
-
-    // -----------------------------------------------------------------------
-    // CALLBACK validations
-    // -----------------------------------------------------------------------
 
     describe('CALLBACK validations', function () {
 

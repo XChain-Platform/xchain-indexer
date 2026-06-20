@@ -44,12 +44,9 @@ const BLOCK_HASH_VERSION = 1;
 
 class Database {
 
-    // Handle constructing a class instance
     constructor(host, port, dbName, user, pass, indexer) {
-        // Parse in indexer configuration
         this.config = indexer.config
 
-        // Create instance of the utility class
         this.util   = indexer.util;
 
         // Reference back to the parent indexer (so dependent code can access hubDb, etc.)
@@ -230,7 +227,6 @@ class Database {
                         await this.createTable(file);
                     }
                 } catch(e){
-                    // console.log('e=',e);
                     this.util.throwError('Error while trying to verify ' + table + ' table exists!');
                     return false;
                 }
@@ -706,7 +702,6 @@ class Database {
     // Handle releasing a connection and freeing it up for additional queries
     async releaseConnection(){
         if(this.transactionConnection != null){
-            // console.log("releasing database connection");
             await this.transactionConnection.release();
             this.transactionConnection = null;
         }  
@@ -3280,7 +3275,6 @@ class Database {
             let balance = this.util.bcnum(await this.getTokenSupplyBalance(tick)); // Supply from balances
             let escrow  = this.util.bcnum(await this.getTokenSupplyEscrow(tick));  // Supply from escrows
             let total   = this.util.bcadd(balance, escrow, decimals[tick]);        // Total (balances + escrows)
-            // DEBUG : Dump information on the sanity check failure
             if(String(token)!=String(ledger) || String(token)!=String(total)){
                 console.log("Tick,   tick_id =", tick, tick_id);
                 console.log("token   supply =", token);

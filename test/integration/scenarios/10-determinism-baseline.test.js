@@ -54,10 +54,8 @@ const A2 = 'n4nbVcRRR5sEHyp2VYuLUvCyDmQmBoonoK';
 const A3 = 'mvuKWKvgzrkxh8QgNZ91vMBZUKN5BFYmo3';
 const BASE_TIME = 1700000000;
 
-// ---------------------------------------------------------------------------
 // Fixed, deterministic action corpus. Order and contents are the contract:
 // changing them invalidates the baseline (regenerate deliberately).
-// ---------------------------------------------------------------------------
 const CORPUS = [
     { block: 100, time: BASE_TIME,        txs: [{ source: A1, data: 'ISSUE|0|DETTOK|100000|1000|0|determinism corpus token' }] },
     { block: 101, time: BASE_TIME + 600,  txs: [{ source: A1, data: 'MINT|0|DETTOK|500' }] },

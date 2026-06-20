@@ -50,15 +50,6 @@ class Destroy {
 
     // Handle parsing the DESTROY transaction
     async parse(params, data, error){
-        /*****************************************************************
-         * DEBUGGING - Force params
-         ****************************************************************/
-        // let str = '0|BRRR|1|foo';
-        // let str = '1|BRRR|1|GAS|10|bar';
-        // let str = '2|BRRR|1|foo|GAS|10|bar';
-        // params = String(str).split('|');
-        // data['FORMAT'] = this.util.getFormatVersion(params[0]);
-
         // Validate that format is known
         let format = data['FORMAT'];
         if(!error && (format===null || this.formats[format] === undefined ))

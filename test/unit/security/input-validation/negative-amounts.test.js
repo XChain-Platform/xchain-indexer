@@ -18,15 +18,10 @@ const sinon  = require('sinon');
 
 const { createMockIndexer, createBaseData, createTokenInfo } = require('../../../fixtures/mocks');
 
-// Import action handlers
 const Send  = require('../../../../src/actions/send.js');
 const Mint  = require('../../../../src/actions/mint.js');
 const Issue = require('../../../../src/actions/issue.js');
 const Order = require('../../../../src/actions/order.js');
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 function makeActionsCtx(indexer) {
     return {
@@ -47,7 +42,6 @@ const LOW_BLOCK   = 100;
 const SOURCE      = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
 const DESTINATION = 'mtr6NtB5KJRAxTX5AbuRtV7S4FF2PZJXUs';
 
-// Issue format 0 param builder
 function makeIssueParams(overrides = {}) {
     const defaults = {
         VERSION: '0', TICK: 'NEWTOKEN', MAX_SUPPLY: '1000', MAX_MINT: '100',
@@ -68,10 +62,6 @@ function makeIssueParams(overrides = {}) {
         m.MINT_START_BLOCK, m.MINT_STOP_BLOCK, m.LOCK_MINT, m.LOCK_MINT_SUPPLY,
         m.MEMO];
 }
-
-// ---------------------------------------------------------------------------
-// Suite: isValidAmountFormat direct tests
-// ---------------------------------------------------------------------------
 
 describe('Security: negative amount rejection in isValidAmountFormat() @regression @tier4', function () {
     let util;
@@ -109,10 +99,6 @@ describe('Security: negative amount rejection in isValidAmountFormat() @regressi
         assert.strictEqual(util.isValidAmountFormat(0, '0'), true);
     });
 });
-
-// ---------------------------------------------------------------------------
-// Suite: negative amounts rejected by action handlers
-// ---------------------------------------------------------------------------
 
 describe('Security: negative amounts rejected by action handlers @regression @tier4', function () {
     let indexer, actionsCtx;

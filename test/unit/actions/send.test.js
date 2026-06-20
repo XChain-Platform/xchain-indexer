@@ -20,10 +20,6 @@ const { createMockIndexer, createBaseData, createTokenInfo } = require('../../fi
 
 const Send = require('../../../src/actions/send.js');
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
 function makeActionsCtx(indexer) {
     return {
         config:          indexer.config,
@@ -39,14 +35,10 @@ function makeActionsCtx(indexer) {
     };
 }
 
-/**
- * Build data object for a SEND transaction.
- */
 function makeData(overrides = {}) {
     return createBaseData(Object.assign({ ACTION: 'SEND', FORMAT: 0 }, overrides));
 }
 
-// Valid BTC addresses used across tests
 const SOURCE      = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
 const DESTINATION = 'mtr6NtB5KJRAxTX5AbuRtV7S4FF2PZJXUs';
 const DEST2       = 'n2j7X44Gm6P4E9cs2H13EkBAotYbjPZW17';
@@ -60,14 +52,9 @@ function makeToken(overrides = {}) {
     }, overrides));
 }
 
-// Balance map: { [TICK_ID]: amount }
 function makeBalances(tickId, amount) {
     return { [tickId]: amount };
 }
-
-// ---------------------------------------------------------------------------
-// Suite
-// ---------------------------------------------------------------------------
 
 describe('Send handler @regression @tier1', function () {
     let indexer, actionsCtx, handler;
@@ -77,7 +64,6 @@ describe('Send handler @regression @tier1', function () {
         actionsCtx = makeActionsCtx(indexer);
         handler    = new Send(actionsCtx);
 
-        // Defaults
         const token = makeToken();
         indexer.indexerDb.getTokenInfo.resolves(token);
         indexer.indexerDb.isActionAllowed.resolves(true);
@@ -92,10 +78,6 @@ describe('Send handler @regression @tier1', function () {
     afterEach(function () {
         sinon.restore();
     });
-
-    // -----------------------------------------------------------------------
-    // Format 0: single send
-    // -----------------------------------------------------------------------
 
     describe('format 0: single send', function () {
 
@@ -140,10 +122,6 @@ describe('Send handler @regression @tier1', function () {
         });
     });
 
-    // -----------------------------------------------------------------------
-    // VERSION / FORMAT validation
-    // -----------------------------------------------------------------------
-
     describe('VERSION / FORMAT validation', function () {
 
         it('unknown format version → invalid', async function () {
@@ -174,10 +152,6 @@ describe('Send handler @regression @tier1', function () {
         });
     });
 
-    // -----------------------------------------------------------------------
-    // TICK validations
-    // -----------------------------------------------------------------------
-
     describe('TICK validations', function () {
 
         it('TICK not found → invalid', async function () {
@@ -203,10 +177,6 @@ describe('Send handler @regression @tier1', function () {
             assert.ok(indexer.indexerDb.createSend.calledOnce);
         });
     });
-
-    // -----------------------------------------------------------------------
-    // AMOUNT validations
-    // -----------------------------------------------------------------------
 
     describe('AMOUNT validations', function () {
 
@@ -245,10 +215,6 @@ describe('Send handler @regression @tier1', function () {
         });
     });
 
-    // -----------------------------------------------------------------------
-    // DESTINATION validations
-    // -----------------------------------------------------------------------
-
     describe('DESTINATION validations', function () {
 
         it('invalid DESTINATION address → invalid', async function () {
@@ -269,10 +235,6 @@ describe('Send handler @regression @tier1', function () {
             assert.strictEqual(data.STATUS, 'valid');
         });
     });
-
-    // -----------------------------------------------------------------------
-    // MEMO validations
-    // -----------------------------------------------------------------------
 
     describe('MEMO validations', function () {
 
@@ -334,10 +296,6 @@ describe('Send handler @regression @tier1', function () {
             assert.strictEqual(data.STATUS, 'valid');
         });
     });
-
-    // -----------------------------------------------------------------------
-    // Address / tick sleeping
-    // -----------------------------------------------------------------------
 
     describe('address and tick sleeping', function () {
 
@@ -401,10 +359,6 @@ describe('Send handler @regression @tier1', function () {
         });
     });
 
-    // -----------------------------------------------------------------------
-    // Format 1: multi-send (brief): same TICK, multiple destinations
-    // -----------------------------------------------------------------------
-
     describe('format 1: multi-send brief', function () {
 
         it('valid multi-send brief (two destinations) → two createSend calls', async function () {
@@ -432,10 +386,6 @@ describe('Send handler @regression @tier1', function () {
         });
     });
 
-    // -----------------------------------------------------------------------
-    // Format 2: multi-send full (different TICKs)
-    // -----------------------------------------------------------------------
-
     describe('format 2: multi-send full', function () {
 
         it('valid multi-send full with two different ticks → two createSend calls', async function () {
@@ -459,10 +409,6 @@ describe('Send handler @regression @tier1', function () {
         });
     });
 
-    // -----------------------------------------------------------------------
-    // Format 3: multi-send with individual memos
-    // -----------------------------------------------------------------------
-
     describe('format 3: multi-send with memos', function () {
 
         it('valid format 3 with two sends and separate memos → two createSend calls', async function () {
@@ -476,10 +422,6 @@ describe('Send handler @regression @tier1', function () {
             assert.ok(indexer.indexerDb.createSend.calledTwice);
         });
     });
-
-    // -----------------------------------------------------------------------
-    // Multi-send consolidation
-    // -----------------------------------------------------------------------
 
     describe('multi-send consolidation', function () {
 
@@ -507,10 +449,6 @@ describe('Send handler @regression @tier1', function () {
             assert.strictEqual(util.bcformat(callArg.AMOUNT, 0), '80');
         });
     });
-
-    // -----------------------------------------------------------------------
-    // createSend always called
-    // -----------------------------------------------------------------------
 
     describe('createSend is always called', function () {
 

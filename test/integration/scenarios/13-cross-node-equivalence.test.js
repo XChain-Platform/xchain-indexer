@@ -56,10 +56,8 @@ const T0  = 1700000000;
 const BLK = 600;
 const T_FAR_FUTURE = T0 + 86400 * 30;
 
-// ---------------------------------------------------------------------------
 // Deterministic base corpus: ledger movement, escrows (ORDER match,
 // DISPENSER), token destruction: blocks 100..107 (gas preamble at 99).
-// ---------------------------------------------------------------------------
 function baseCorpus() {
     return [
         { block: 100, time: T0,           txs: [{ source: ADDR1, data: 'ISSUE|0|EQTA|1000000|1000|0|cross-node equivalence A' }] },

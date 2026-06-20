@@ -35,15 +35,12 @@ describe('Airdrop @regression @tier2', function () {
             processAction:   sinon.stub().resolves(),
         };
         handler = new Airdrop(actionsCtx);
-        // Reset utility lists before each test
         indexer.util.resetLists();
     });
 
     afterEach(function () {
         sinon.restore();
     });
-
-    // ─── Format 0 (Single Airdrop) ───────────────────────────────────
 
     describe('format 0: single airdrop', function () {
 
@@ -152,7 +149,6 @@ describe('Airdrop @regression @tier2', function () {
             indexer.indexerDb.isActionAllowed.resolves(true);
 
             const data = createBaseData({ ACTION: 'AIRDROP', FORMAT: 0 });
-            // memo with pipe
             const params = ['0', 'TEST', '10', '1', 'bad|memo'];
 
             await handler.parse(params, data, null);
@@ -193,8 +189,6 @@ describe('Airdrop @regression @tier2', function () {
 
     });
 
-    // ─── Format 1 (Multi-Airdrop Brief) ──────────────────────────────
-
     describe('format 1: multi-airdrop brief', function () {
 
         it('valid multi-airdrop brief processes all ticks', async function () {
@@ -219,8 +213,6 @@ describe('Airdrop @regression @tier2', function () {
 
     });
 
-    // ─── Format 2 (Multi-Airdrop Full) ───────────────────────────────
-
     describe('format 2: multi-airdrop full', function () {
 
         it('valid multi-airdrop full processes multiple TICK/LIST pairs', async function () {
@@ -244,8 +236,6 @@ describe('Airdrop @regression @tier2', function () {
         });
 
     });
-
-    // ─── Balance & Authorization edge cases ──────────────────────────
 
     describe('balance and authorization checks', function () {
 
@@ -333,7 +323,6 @@ describe('Airdrop @regression @tier2', function () {
             indexer.indexerDb.getList.resolves(['mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM']);
             indexer.indexerDb.getAddressBalances.resolves({ 1: '1000' });
             indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
-            // All recipients blocked
             indexer.indexerDb.isActionAllowed.callsFake((address, tick) => {
                 // source action checks pass, but recipient check fails
                 if (address === 'mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM') return Promise.resolve(false);
@@ -350,8 +339,6 @@ describe('Airdrop @regression @tier2', function () {
         });
 
     });
-
-    // ─── Format 3 (Multi-Airdrop Full with Multiple Memos) ───────────
 
     describe('format 3: multi-airdrop full with multiple memos', function () {
 
@@ -376,8 +363,6 @@ describe('Airdrop @regression @tier2', function () {
         });
 
     });
-
-    // ─── Additional validation branches ──────────────────────────────
 
     describe('additional validation branches', function () {
 
@@ -455,7 +440,6 @@ describe('Airdrop @regression @tier2', function () {
         it('unsupported LIST TYPE → STATUS invalid: LIST TYPE (unsupported)', async function () {
             const tokenInfo = createTokenInfo({ TICK: 'TEST', TICK_ID: 1, DECIMALS: 0 });
             indexer.indexerDb.getTokenInfo.resolves(tokenInfo);
-            // Return a list type not in [1, 2]
             indexer.indexerDb.getListType.resolves(99);
             indexer.indexerDb.getList.resolves(['mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM']);
             indexer.indexerDb.getAddressBalances.resolves({ 1: '1000' });
@@ -521,8 +505,6 @@ describe('Airdrop @regression @tier2', function () {
         });
 
     });
-
-    // ─── Fee payment mode branches ────────────────────────────────────
 
     describe('fee payment mode branches', function () {
 

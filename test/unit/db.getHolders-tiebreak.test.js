@@ -76,7 +76,6 @@ async function holderOrder(creditRows) {
 
 afterEach(function () { sinon.restore(); });
 
-// ---------------------------------------------------------------------------
 describe('Database.getHolders() equal-balance tiebreak determinism @regression @tier1', function () {
 
     // (1) Property: three holders with identical balances must iterate in the SAME order no

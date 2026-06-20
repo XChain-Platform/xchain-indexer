@@ -94,13 +94,11 @@ class DecoderSeeder {
      *   - vout: override vout index (default: 0)
      */
     async seedBlock(blockIndex, blockTime, txs = []) {
-        // Insert block
         await this.query(
             'INSERT INTO blocks (block_index, block_time) VALUES (?, ?)',
             [blockIndex, blockTime]
         );
 
-        // Insert each transaction
         for (const tx of txs) {
             this.txCounter++;
             const txHash = tx.txHash || this.generateTxHash(this.txCounter);
@@ -122,7 +120,6 @@ class DecoderSeeder {
                 [txIndex, txHashId, blockIndex, sourceId, destId, amount, tx.data]
             );
 
-            // Insert transaction_output if destination is specified
             if (tx.destination || vout > 0) {
                 const outputDestId = await this.getOrCreateAddress(tx.destination);
                 await this.query(

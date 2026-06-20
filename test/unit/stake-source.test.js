@@ -26,7 +26,6 @@ const { getStakeSourceByPubkey } = require('../../src/stake-source');
 
 const PUB = 'ab'.repeat(32); // 64 hex chars
 
-// Build a fake indexer whose indexerDb stubs return queued values.
 function makeIndexer({ pubkeyId = 7, validId = 1, doQuery } = {}) {
     const db = {
         getPubkeyId: sinon.stub().resolves(pubkeyId),
@@ -39,8 +38,6 @@ function makeIndexer({ pubkeyId = 7, validId = 1, doQuery } = {}) {
 describe('getStakeSourceByPubkey()', function () {
 
     afterEach(function () { sinon.restore(); });
-
-    // --- input validation -------------------------------------------------
 
     it('rejects a missing pubkey', async function () {
         const { indexer } = makeIndexer();
@@ -79,8 +76,6 @@ describe('getStakeSourceByPubkey()', function () {
         const r = await getStakeSourceByPubkey({ indexerDb: null }, { pubkey: PUB, block_index: 100 });
         assert.deepStrictEqual(r, { error: 'indexer database not ready' });
     });
-
-    // --- resolution branches ---------------------------------------------
 
     it('returns {source:null} for an unknown pubkey (no id)', async function () {
         const { indexer, db } = makeIndexer({ pubkeyId: null });

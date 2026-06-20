@@ -31,9 +31,6 @@ const { initIndexer, processBlocks, destroyIndexer } = require('../setup/indexer
 const { seedGas } = require('../setup/gas-seeder');
 const helpers = require('../setup/assertion-helpers');
 
-// ---------------------------------------------------------------------------
-// Addresses (30-char strings)
-// ---------------------------------------------------------------------------
 const ADDR1 = 'msK1rsgNVFPM4cR3X5rngczTKa6EtT4WKD';
 const ADDR2 = 'mjifPngDYQ6HHPNQdGk1kQuFkJWEiQksQp';
 const ADDR3 = 'mwGujTXFXMLN2YXqo4mQK4DcKy31DUcwoi';
@@ -41,10 +38,6 @@ const ADDR3 = 'mwGujTXFXMLN2YXqo4mQK4DcKy31DUcwoi';
 // Base block time and spacing
 const T0  = 1700100000;
 const BLK = 600;
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 
 describe('06 – Error Handling and Integrity @regression @tier3', function () {
     this.timeout(60000);

@@ -35,7 +35,6 @@ describe('Address action handler @regression @tier3', function () {
             processAction: sinon.stub().resolves(),
         };
         handler = new Address(actionsCtx);
-        // Reset util lists between tests
         indexer.util.resetLists();
     });
 
@@ -48,8 +47,6 @@ describe('Address action handler @regression @tier3', function () {
             memo !== undefined ? memo : '',
         ];
     }
-
-    // ─── FEE_PREFERENCE validations ──────────────────────────────────
 
     it('accepts FEE_PREFERENCE=0', async function () {
         const data = createBaseData({ ACTION: 'ADDRESS', FORMAT: 0 });
@@ -82,8 +79,6 @@ describe('Address action handler @regression @tier3', function () {
         assert.ok(data['STATUS'].includes('FEE_PREFERENCE'), `Expected FEE_PREFERENCE error, got: ${data['STATUS']}`);
     });
 
-    // ─── REQUIRE_MEMO validations ─────────────────────────────────────
-
     it('accepts REQUIRE_MEMO=0', async function () {
         const data = createBaseData({ ACTION: 'ADDRESS', FORMAT: 0 });
         await handler.parse(makeParams(0, 0, ''), data, null);
@@ -101,8 +96,6 @@ describe('Address action handler @regression @tier3', function () {
         await handler.parse(makeParams(0, 2, ''), data, null);
         assert.ok(data['STATUS'].includes('REQUIRE_MEMO'), `Expected REQUIRE_MEMO error, got: ${data['STATUS']}`);
     });
-
-    // ─── DISPENSER_PREFERENCE validations ─────────────────────────────
 
     it('accepts DISPENSER_PREFERENCE=1', async function () {
         const data = createBaseData({ ACTION: 'ADDRESS', FORMAT: 0 });
@@ -141,8 +134,6 @@ describe('Address action handler @regression @tier3', function () {
         assert.strictEqual(data['STATUS'], 'valid');
     });
 
-    // ─── MEMO validations ─────────────────────────────────────────────
-
     it('rejects MEMO containing a pipe character', async function () {
         const data = createBaseData({ ACTION: 'ADDRESS', FORMAT: 0 });
         await handler.parse(makeParams(0, 0, 'bad|memo'), data, null);
@@ -162,16 +153,12 @@ describe('Address action handler @regression @tier3', function () {
         assert.ok(data['STATUS'].includes('MEMO'), `Expected MEMO length error, got: ${data['STATUS']}`);
     });
 
-    // ─── SOURCE sleeping check ────────────────────────────────────────
-
     it('rejects when SOURCE is sleeping', async function () {
         indexer.indexerDb.isActionAllowed.resolves(false);
         const data = createBaseData({ ACTION: 'ADDRESS', FORMAT: 0 });
         await handler.parse(makeParams(0, 0, ''), data, null);
         assert.ok(data['STATUS'].includes('SOURCE'), `Expected SOURCE sleeping error, got: ${data['STATUS']}`);
     });
-
-    // ─── Side-effect checks ───────────────────────────────────────────
 
     it('calls createAddressOption on the indexerDb', async function () {
         const data = createBaseData({ ACTION: 'ADDRESS', FORMAT: 0 });

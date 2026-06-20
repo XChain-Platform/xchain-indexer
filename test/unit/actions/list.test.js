@@ -46,8 +46,6 @@ describe('List @regression @tier3', function () {
         sinon.restore();
     });
 
-    // ─── Format 0: Create LIST ────────────────────────────────────────
-
     describe('format 0: create LIST', function () {
 
         it('create address list: createList, createListItem called for each address', async function () {
@@ -104,8 +102,6 @@ describe('List @regression @tier3', function () {
         });
 
     });
-
-    // ─── Format 1: Edit LIST ──────────────────────────────────────────
 
     describe('format 1: edit LIST', function () {
 
@@ -169,8 +165,6 @@ describe('List @regression @tier3', function () {
 
     });
 
-    // ─── Type 1 (TICK) validation ────────────────────────────────────
-
     describe('type 1: TICK item validation', function () {
 
         it('unknown TICK in list → createListItemInvalid called', async function () {
@@ -222,8 +216,6 @@ describe('List @regression @tier3', function () {
 
     });
 
-    // ─── Type 2 (ADDRESS) validation ─────────────────────────────────
-
     describe('type 2: ADDRESS item validation', function () {
 
         it('invalid address format → createListItemInvalid called', async function () {
@@ -254,8 +246,6 @@ describe('List @regression @tier3', function () {
 
     });
 
-    // ─── SOURCE sleeping ─────────────────────────────────────────────
-
     describe('SOURCE sleeping', function () {
 
         it('SOURCE sleeping → invalid', async function () {
@@ -273,8 +263,6 @@ describe('List @regression @tier3', function () {
         });
 
     });
-
-    // ─── Record creation ─────────────────────────────────────────────
 
     describe('record creation', function () {
 

@@ -34,7 +34,6 @@
 
 const assert = require('assert');
 
-// Utility loads coin config in its constructor; set before require (mirrors utility.test.js).
 process.env.INDEXER_COIN = 'BTC';
 process.env.INDEXER_NETWORK = 'regtest';
 const Utility = require('../../src/utility.js');
@@ -43,10 +42,7 @@ describe('Execution fee: formula + token-decimal masking @regression @tier1', fu
     let util;
     beforeEach(function () { util = new Utility(); });
 
-    // Mirror execute.js exactly: fee = bcmul(gasUsed, GAS_PRICE, 8). bcmul returns a
-    // bignumber object; .toString() gives the canonical decimal string execute.js debits.
     function fee(gasUsed) { return util.bcmul(String(gasUsed), util.config['GAS_PRICE'], 8).toString(); }
-    // Mirror the balance projection: the fee as seen after the DECIMAL(60, decimals) cast.
     function paid(gasUsed, tokenDecimals) { return util.bcformat(fee(gasUsed), tokenDecimals); }
 
     it('GAS_PRICE is the expected consensus value (0.00001 XCHAIN/gas)', function () {

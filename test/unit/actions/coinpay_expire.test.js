@@ -90,8 +90,6 @@ describe('Coinpay_Expire (COINPAY_EXPIRE) @regression @tier2', function () {
         sinon.restore();
     });
 
-    // ─── Early-exit guards ────────────────────────────────────────────────
-
     describe('early-exit guards', function () {
 
         it('returns without writing when obligation does not exist', async function () {
@@ -116,8 +114,6 @@ describe('Coinpay_Expire (COINPAY_EXPIRE) @regression @tier2', function () {
         });
 
     });
-
-    // ─── Normal expiry ────────────────────────────────────────────────────
 
     describe('normal expiry', function () {
 
@@ -169,8 +165,6 @@ describe('Coinpay_Expire (COINPAY_EXPIRE) @regression @tier2', function () {
         });
 
     });
-
-    // ─── Seller order state transitions ─────────────────────────────────
 
     describe('seller order state transitions', function () {
 
@@ -225,8 +219,6 @@ describe('Coinpay_Expire (COINPAY_EXPIRE) @regression @tier2', function () {
         });
 
     });
-
-    // ─── Sweep-destination routing ────────────────────────────────────────
 
     describe('sweep-destination routing', function () {
 

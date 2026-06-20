@@ -68,16 +68,6 @@ class Dispenser {
 
     // Handle parsing the DISPENSER transaction
     async parse(params, data, error){
-        /*****************************************************************
-         * DEBUGGING - Force params
-         ****************************************************************/
-        // let str    = "0|BTC|JDOG|1|10|BTC||0.01|1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev||||||Creating JDOG dispensers at 0.01 BTC each";
-        // let str    = "1|1234|Closing JDOG Dispenser";
-        // let str    = "2|1234|100||||Refilling with 100";
-        // let str    = "2|1234|||9876|5432|Updating allow/block lists";
-        // params = String(str).split('|');
-        // data['FORMAT'] = this.util.getFormatVersion(params[0]);
-
         // Validate that format is known
         let format = data['FORMAT'];
         if(!error && (format===null || this.formats[format] === undefined ))

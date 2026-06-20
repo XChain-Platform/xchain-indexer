@@ -19,7 +19,6 @@ const { createMockIndexer, createBaseData, createTokenInfo } = require('../../fi
 const Cross_Settle = require('../../../src/actions/cross_settle.js');
 const swq          = require('../../../src/stake_weighted_quorum.js');
 
-// ── Real Ed25519 keypair helpers ───────────────────────────────────────────
 // cross_settle verifies signatures with the production ed25519.js (no stub), so
 // the test signs the exact canonical string with a real key. Pubkey is the raw
 // 32-byte hex (SPKI minus the 12-byte prefix); sig is the raw 64-byte hex.
@@ -131,13 +130,11 @@ describe('Cross_Settle action handler @regression @tier1', function () {
         return createBaseData({ ACTION: 'CROSS_SETTLE', BLOCK_INDEX: 200, ...overrides });
     }
 
-    // ─── Guard: no MATCH payload ──────────────────────────────────────────
     it('returns early when no MATCH is present', async function () {
         await handler.parse(null, makeData(), null);
         assert.ok(indexer.indexerDb.recordCrossChainSettlement.notCalled);
     });
 
-    // ─── Guard: network scope ─────────────────────────────────────────────
     it('skips a match signed on a different network', async function () {
         const match = makeMatch({ network: 'mainnet' });
         await handler.parse(null, makeData({ MATCH: match }), null);
@@ -145,7 +142,6 @@ describe('Cross_Settle action handler @regression @tier1', function () {
         assert.ok(indexer.indexerDb.recordCrossChainSettlement.notCalled);
     });
 
-    // ─── Guard: capability snapshot not yet mirrored (N === 0) ────────────
     it('defers when no cross_chain validators are snapshotted (N=0)', async function () {
         const match = makeMatch();
         indexer.indexerDb.getValidatorsByCapability.resolves([]);
@@ -153,7 +149,6 @@ describe('Cross_Settle action handler @regression @tier1', function () {
         assert.ok(indexer.indexerDb.recordCrossChainSettlement.notCalled);
     });
 
-    // ─── Guard: insufficient valid signatures ─────────────────────────────
     it('skips when there are zero valid signatures', async function () {
         const { match, validators } = signMatch(makeMatch(), 0);
         indexer.indexerDb.getValidatorsByCapability.resolves(snapFor(match, 4)); // N=4 → quorum 3
@@ -201,7 +196,6 @@ describe('Cross_Settle action handler @regression @tier1', function () {
         assert.ok(indexer.indexerDb.recordCrossChainSettlement.notCalled);
     });
 
-    // ─── Guard: not this chain's match ────────────────────────────────────
     it('returns when neither leg is this chain', async function () {
         const { match } = signMatch(makeMatch({ a_chain: 'LTC', b_chain: 'DOGE' }), 1);
         indexer.indexerDb.getValidatorsByCapability.resolves(snapFor(match, 1));
@@ -210,7 +204,6 @@ describe('Cross_Settle action handler @regression @tier1', function () {
         assert.ok(indexer.indexerDb.recordCrossChainSettlement.notCalled);
     });
 
-    // ─── Guard: local offer missing / not open ────────────────────────────
     it('skips when the local offer is not found', async function () {
         const { match } = signMatch(makeMatch(), 1);
         indexer.indexerDb.getValidatorsByCapability.resolves(snapFor(match, 1));
@@ -235,7 +228,6 @@ describe('Cross_Settle action handler @regression @tier1', function () {
         assert.ok(indexer.indexerDb.createSwapStatus.notCalled);
     });
 
-    // ─── Happy path: fungible escrow release (ownership = 0) ───────────────
     it('settles leg a: releases escrow to counterparty payout (N=1 quorum)', async function () {
         const { match } = signMatch(makeMatch(), 1);
         indexer.indexerDb.getValidatorsByCapability.resolves(snapFor(match, 1));
@@ -273,7 +265,6 @@ describe('Cross_Settle action handler @regression @tier1', function () {
         assert.ok(indexer.indexerDb.recordCrossChainSettlement.calledWith(777, match, 88));
     });
 
-    // ─── Happy path with N>1 quorum (2f+1) ────────────────────────────────
     it('requires 2f+1 signatures when N>1 and settles when met', async function () {
         const { match } = signMatch(makeMatch(), 3); // N=4 → quorum 3, exactly met
         indexer.indexerDb.getValidatorsByCapability.resolves(snapFor(match, 4));
@@ -283,7 +274,6 @@ describe('Cross_Settle action handler @regression @tier1', function () {
         assert.ok(indexer.indexerDb.recordCrossChainSettlement.calledOnce);
     });
 
-    // ─── Majority floor: N=3 needs 2 signatures, never 1 ──────────────────
     it('rejects a single signature at N=3 (majority floor, not bare 2f+1)', async function () {
         const { match } = signMatch(makeMatch(), 1); // 2f+1 alone would accept this
         indexer.indexerDb.getValidatorsByCapability.resolves(snapFor(match, 3));
@@ -300,7 +290,6 @@ describe('Cross_Settle action handler @regression @tier1', function () {
         assert.ok(indexer.indexerDb.recordCrossChainSettlement.calledOnce);
     });
 
-    // ─── Branch: null ticks fall back to '' in canonical and the coin label ──
     it('settles a native-coin leg (a_tick null) using coin as the tick label', async function () {
         const { match } = signMatch(makeMatch({ a_tick: null, b_tick: null }), 1);
         indexer.indexerDb.getValidatorsByCapability.resolves(snapFor(match, 1));
@@ -310,7 +299,6 @@ describe('Cross_Settle action handler @regression @tier1', function () {
         assert.ok(indexer.indexerDb.recordCrossChainSettlement.calledOnce);
     });
 
-    // ─── Branch: signature entries missing pubkey/sig fields ──────────────
     it('tolerates signature entries missing pubkey/sig fields', async function () {
         const match = makeMatch();
         match.validator_signatures = JSON.stringify([{}, { pubkey: null }, { sig: null }]);
@@ -319,7 +307,6 @@ describe('Cross_Settle action handler @regression @tier1', function () {
         assert.ok(indexer.indexerDb.recordCrossChainSettlement.notCalled);
     });
 
-    // ─── Branch: null validator_signatures falls back to '[]' ─────────────
     it('treats null validator_signatures as empty', async function () {
         const match = makeMatch({ validator_signatures: null });
         indexer.indexerDb.getValidatorsByCapability.resolves(snapFor(match, 1));
@@ -327,7 +314,6 @@ describe('Cross_Settle action handler @regression @tier1', function () {
         assert.ok(indexer.indexerDb.recordCrossChainSettlement.notCalled);
     });
 
-    // ─── Branch: match with no network field, indexer also network-scoped ──
     it('skips a match missing its network field', async function () {
         const { match } = signMatch(makeMatch(), 1);
         delete match.network;
@@ -337,7 +323,6 @@ describe('Cross_Settle action handler @regression @tier1', function () {
         assert.ok(indexer.indexerDb.recordCrossChainSettlement.notCalled);
     });
 
-    // ─── Happy path: ownership transfer (ownership = 1) ────────────────────
     it('transfers token ownership instead of escrow when a_ownership=1', async function () {
         const { match } = signMatch(makeMatch({ a_ownership: 1 }), 1);
         indexer.indexerDb.getValidatorsByCapability.resolves(snapFor(match, 1));
@@ -350,7 +335,6 @@ describe('Cross_Settle action handler @regression @tier1', function () {
         assert.ok(indexer.indexerDb.recordCrossChainSettlement.calledOnce);
     });
 
-    // ─── ORDER leg: partial-fill settlement (Phase B) ─────────────────────
     describe('ORDER leg (partial fills)', function () {
         beforeEach(function () {
             indexer.indexerDb.recordCrossChainOrderFill = sinon.stub().resolves();

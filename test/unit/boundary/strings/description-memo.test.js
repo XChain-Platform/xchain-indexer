@@ -16,7 +16,6 @@ process.env.INDEXER_NETWORK = 'regtest';
 const assert = require('assert');
 const sinon  = require('sinon');
 
-// Relative path from test/unit/boundary/strings/ to fixtures and src
 const { createMockIndexer, createBaseData, createTokenInfo } = require('../../../fixtures/mocks');
 const Issue = require('../../../../src/actions/issue.js');
 const Send  = require('../../../../src/actions/send.js');
@@ -65,10 +64,7 @@ const DESTINATION = 'mtr6NtB5KJRAxTX5AbuRtV7S4FF2PZJXUs';
 
 describe('Description & memo boundary tests @regression @tier3', function () {
 
-    // -------------------------------------------------------------------------
-    // DESCRIPTION boundary (Issue handler)
     // MAX_TOKEN_DESCRIPTION = 250; check is `>= 250` so 249 passes, 250 fails
-    // -------------------------------------------------------------------------
     describe('DESCRIPTION field (Issue)', function () {
         let indexer, actionsCtx, handler;
 
@@ -101,10 +97,7 @@ describe('Description & memo boundary tests @regression @tier3', function () {
         });
     });
 
-    // -------------------------------------------------------------------------
-    // MEMO boundary (Send handler)
     // MAX_MEMO_LENGTH = 250; check is `> 250` so 250 passes, 251 fails
-    // -------------------------------------------------------------------------
     describe('MEMO field (Send)', function () {
         let indexer, actionsCtx, handler;
 

@@ -60,9 +60,6 @@ describe('Price (PRICE) @regression @tier3', function () {
         sinon.restore();
     });
 
-    // ───────────────────────────────────────────────────────────────────────
-    // v0 - validator COIN/FIAT snapshot (PBFT 2f+1 quorum over price-capable set)
-    // ───────────────────────────────────────────────────────────────────────
     describe('v0 - validator snapshot', function () {
 
         // PRICE|0|ROUND|TIMESTAMP|BTC_BLOCK_HEIGHT|PAIR_COUNT|PAIR_ID|PAIR_PRICE|...|SIG_COUNT|PUBKEY|SIG|...
@@ -162,7 +159,6 @@ describe('Price (PRICE) @regression @tier3', function () {
             assert.strictEqual(data['VALIDATION_STATUS'], 'invalid');
         });
 
-        // ── oracle_round reward derivation (consensus - replayable by construction) ──
         describe('round rewards derived from the signer set', function () {
 
             it('valid PRICE → equal floor split to every verified signer, upserted', async function () {
@@ -221,10 +217,9 @@ describe('Price (PRICE) @regression @tier3', function () {
             });
         });
 
-        // ── two-tranche full-node reward split (NODEPROOF verified tier) ──
-        // With FULLNODE.REWARD_SHARE > 0 the round budget splits into a base
+            // With FULLNODE.REWARD_SHARE > 0 the round budget splits into a base
         // tranche (every signer) and a full-node tranche (sources whose trailing
-        // pass rate ≥ MIN_PASS_RATE_BPS, deduped per staking source - a carrot, no
+        // pass rate >= MIN_PASS_RATE_BPS, deduped per staking source - a carrot, no
         // slashing). share == 0 keeps the legacy single pot.
         describe('two-tranche full-node split', function () {
             const SA = { pubkey: PUBKEY_A, source: 'addrA', source_id: 1 };
@@ -371,9 +366,9 @@ describe('Price (PRICE) @regression @tier3', function () {
             });
         });
 
-        // ── determinism (reindex-safe): rewards must be a pure function of the
+        // Determinism (reindex-safe): rewards must be a pure function of the
         // on-chain inputs, independent of DB row order or signer wire order, so a
-        // from-genesis replay reproduces byte-identical validator_rewards. ──
+        // from-genesis replay reproduces byte-identical validator_rewards.
         describe('reward derivation is order-independent', function () {
             // SA has two passing keys {A, C} (rep = min = A); SB has {B} (rep = B).
             const PART = {
@@ -439,9 +434,6 @@ describe('Price (PRICE) @regression @tier3', function () {
         });
     });
 
-    // ───────────────────────────────────────────────────────────────────────
-    // v0 - STAKE_WEIGHTED_QUORUM (finalize on summed signer STAKE, source-deduped)
-    // ───────────────────────────────────────────────────────────────────────
     describe('v0 - stake-weighted quorum', function () {
         function v0Params(pairs, sigs) {
             const out = ['0', '7', '1700000000', '799000', String(pairs.length)];
@@ -496,9 +488,6 @@ describe('Price (PRICE) @regression @tier3', function () {
         });
     });
 
-    // ───────────────────────────────────────────────────────────────────────
-    // v1 - user TOKEN/FIAT oracle price
-    // ───────────────────────────────────────────────────────────────────────
     describe('v1 - user oracle price', function () {
 
         // PRICE|1|COIN|TICK|FIAT|VALUE|FEE|MEMO
@@ -542,10 +531,6 @@ describe('Price (PRICE) @regression @tier3', function () {
         assert.strictEqual(data['VALIDATION_STATUS'], 'invalid');
         assert.ok(indexer.indexerDb.createPrice.calledOnce);
     });
-
-    // ───────────────────────────────────────────────────────────────────────
-    // Hub push paths (hubClient present)
-    // ───────────────────────────────────────────────────────────────────────
 
     describe('hub push - v0', function () {
         function v0Params(pairs, sigs) {

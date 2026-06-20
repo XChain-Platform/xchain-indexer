@@ -109,8 +109,6 @@ describe('Dispenser_Close action handler @regression @tier2', function () {
         assert.ok(indexer.mapper.createMappings.calledOnce);
     });
 
-    // ─── Ownership dispenser closure paths (lines 77-89) ──────────────────────
-
     it('ownership dispenser: clearTokenEscrow when escrow matches and destination is SOURCE', async function () {
         const SOURCE = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
         const dispenser = makeDispenser({ GIVE_OWNERSHIP: 1, ACTION_INDEX: 50, SOURCE });

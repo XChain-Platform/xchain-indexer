@@ -76,7 +76,6 @@ describe('Database.slashContractStake() mid-cooldown double-count guard @regress
             'Pass 1 must carry the active-window filter');
         assert.ok(pass1.args.includes(306), 'Pass 1 must bind the current blockIndex');
 
-        // No UPDATE to contract_stakes (the phantom copy is never touched); the cooldown row is.
         assert.ok(!calls.some(c => /UPDATE\s+contract_stakes/i.test(c.sql)),
             'must NOT slash the deactivated contract_stakes phantom');
         assert.ok(calls.some(c => /UPDATE\s+contract_unstakes/i.test(c.sql)),
