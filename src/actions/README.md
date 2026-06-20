@@ -2,7 +2,7 @@
 
 This directory contains the files and logic related to each ACTION as specified in the documentation.
 
-https://github.com/XChain-platform/xchain-documentation
+https://github.com/XChain-Platform/xchain-documentation
 
 ---
 

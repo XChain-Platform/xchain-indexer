@@ -19,7 +19,7 @@ State-processing engine for the XChain Platform. Reads decoded blockchain transa
 ## Features
 
 - **ACTION types**: ADDRESS, AIRDROP, ANCHOR, ATTEST, BATCH, BROADCAST, CALLBACK, COINPAY, COLLECT, CROSS_SETTLE, DELEGATE, DEPLOY, DEPOSIT, DESTROY, DISPENSER, DISPENSE, DIVIDEND, EXECUTE, FILE, ISSUE, LINK, LIST, MESSAGE, MINT, NODEPROOF, ORDER, PRICE, SEND, SLASH, SLEEP, STAKE, SWAP, SWEEP, UNKNOWN, UNSTAKE, WITHDRAW, XCALL, XEXEC (46 handlers)
-- **Virtual Machine**: deterministic JavaScript smart contracts via [xchain-vm](https://github.com/XChain-platform/xchain-vm) (sandboxed V8 isolates, AST-based gas metering, attestation gateway namespace, cross-contract re-entrant calls via `emit.execute` with call-depth cap and gas budgeting)
+- **Virtual Machine**: deterministic JavaScript smart contracts via [xchain-vm](https://github.com/XChain-Platform/xchain-vm) (sandboxed V8 isolates, AST-based gas metering, attestation gateway namespace, cross-contract re-entrant calls via `emit.execute` with call-depth cap and gas budgeting)
 - **Cross-chain VM calls**: contracts invoke `emit.crossExecute` to emit XCALL requests; the hub federation relays quorum-signed results; XEXEC is system-injected on the target chain; callbacks are delivered back to the source contract
 - **Capability-based staking**: STAKE (VERSION 1 new / VERSION 2 top-up) and UNSTAKE (pubkey-based). A validator's aggregate active stake auto-qualifies it for each of four independent capabilities (`price`, `cross_chain`, `oracle_publish`, `attestation`) per governance-configurable `min_stake[capability]`. Stake rows carry `version`, `activation_block`, `deactivation_block`.
 - **Contract-targeted staking**: STAKE v3 / UNSTAKE v1 / DELEGATE v1 let any token be staked against a smart contract deployed via DEPLOY v1 (which carries `COOLDOWN_BLOCKS` + `SLASH_DESTINATION` metadata). Cooldown is per-contract; the contract's own VM logic governs slashing via SLASH.
@@ -44,22 +44,22 @@ State-processing engine for the XChain Platform. Reads decoded blockchain transa
 
 ## Documentation
 
-Full indexer documentation is available in the [xchain-documentation](https://github.com/XChain-platform/xchain-documentation/tree/master/components/indexer) repository:
+Full indexer documentation is available in the [xchain-documentation](https://github.com/XChain-Platform/xchain-documentation/tree/master/components/indexer) repository:
 
 | Document | Description |
 |---|---|
-| [README](https://github.com/XChain-platform/xchain-documentation/blob/master/components/indexer/README.md) | Overview, installation, quick start, scripts, dependencies |
-| [Architecture](https://github.com/XChain-platform/xchain-documentation/blob/master/components/indexer/ARCHITECTURE.md) | Data pipeline, internal components, action handlers, block processing pipeline |
-| [Configuration](https://github.com/XChain-platform/xchain-documentation/blob/master/components/indexer/CONFIGURATION.md) | Environment variables, coin-specific config, indexer constants |
-| [Actions](https://github.com/XChain-platform/xchain-documentation/blob/master/components/indexer/ACTIONS.md) | All 20 ACTION types, categories, format versions, protocol versioning |
-| [Database](https://github.com/XChain-platform/xchain-documentation/blob/master/components/indexer/DATABASE.md) | Full schema reference: core, ledger, action, state, index, and mapping tables |
-| [Ledger](https://github.com/XChain-platform/xchain-documentation/blob/master/components/indexer/LEDGER.md) | Double-entry ledger, balance calculation, sanity checks, gas token fees |
-| [Operations](https://github.com/XChain-platform/xchain-documentation/blob/master/components/indexer/OPERATIONS.md) | Running, Docker, API endpoints, resilience, troubleshooting |
+| [README](https://github.com/XChain-Platform/xchain-documentation/blob/master/components/indexer/README.md) | Overview, installation, quick start, scripts, dependencies |
+| [Architecture](https://github.com/XChain-Platform/xchain-documentation/blob/master/components/indexer/ARCHITECTURE.md) | Data pipeline, internal components, action handlers, block processing pipeline |
+| [Configuration](https://github.com/XChain-Platform/xchain-documentation/blob/master/components/indexer/CONFIGURATION.md) | Environment variables, coin-specific config, indexer constants |
+| [Actions](https://github.com/XChain-Platform/xchain-documentation/blob/master/components/indexer/ACTIONS.md) | All 20 ACTION types, categories, format versions, protocol versioning |
+| [Database](https://github.com/XChain-Platform/xchain-documentation/blob/master/components/indexer/DATABASE.md) | Full schema reference: core, ledger, action, state, index, and mapping tables |
+| [Ledger](https://github.com/XChain-Platform/xchain-documentation/blob/master/components/indexer/LEDGER.md) | Double-entry ledger, balance calculation, sanity checks, gas token fees |
+| [Operations](https://github.com/XChain-Platform/xchain-documentation/blob/master/components/indexer/OPERATIONS.md) | Running, Docker, API endpoints, resilience, troubleshooting |
 
 ## Quick Start
 
 ```bash
-git clone https://github.com/XChain-platform/xchain-indexer.git
+git clone https://github.com/XChain-Platform/xchain-indexer.git
 cd xchain-indexer
 npm install
 ```
