@@ -44,17 +44,17 @@ State-processing engine for the XChain Platform. Reads decoded blockchain transa
 
 ## Documentation
 
-Full indexer documentation is available in the [xchain-documentation](https://github.com/XChain-platform/xchain-documentation/tree/master/indexer) repository:
+Full indexer documentation is available in the [xchain-documentation](https://github.com/XChain-platform/xchain-documentation/tree/master/components/indexer) repository:
 
 | Document | Description |
 |---|---|
-| [README](https://github.com/XChain-platform/xchain-documentation/blob/master/indexer/README.md) | Overview, installation, quick start, scripts, dependencies |
-| [Architecture](https://github.com/XChain-platform/xchain-documentation/blob/master/indexer/ARCHITECTURE.md) | Data pipeline, internal components, action handlers, block processing pipeline |
-| [Configuration](https://github.com/XChain-platform/xchain-documentation/blob/master/indexer/CONFIGURATION.md) | Environment variables, coin-specific config, indexer constants |
-| [Actions](https://github.com/XChain-platform/xchain-documentation/blob/master/indexer/ACTIONS.md) | All 20 ACTION types, categories, format versions, protocol versioning |
-| [Database](https://github.com/XChain-platform/xchain-documentation/blob/master/indexer/DATABASE.md) | Full schema reference: core, ledger, action, state, index, and mapping tables |
-| [Ledger](https://github.com/XChain-platform/xchain-documentation/blob/master/indexer/LEDGER.md) | Double-entry ledger, balance calculation, sanity checks, gas token fees |
-| [Operations](https://github.com/XChain-platform/xchain-documentation/blob/master/indexer/OPERATIONS.md) | Running, Docker, API endpoints, resilience, troubleshooting |
+| [README](https://github.com/XChain-platform/xchain-documentation/blob/master/components/indexer/README.md) | Overview, installation, quick start, scripts, dependencies |
+| [Architecture](https://github.com/XChain-platform/xchain-documentation/blob/master/components/indexer/ARCHITECTURE.md) | Data pipeline, internal components, action handlers, block processing pipeline |
+| [Configuration](https://github.com/XChain-platform/xchain-documentation/blob/master/components/indexer/CONFIGURATION.md) | Environment variables, coin-specific config, indexer constants |
+| [Actions](https://github.com/XChain-platform/xchain-documentation/blob/master/components/indexer/ACTIONS.md) | All 20 ACTION types, categories, format versions, protocol versioning |
+| [Database](https://github.com/XChain-platform/xchain-documentation/blob/master/components/indexer/DATABASE.md) | Full schema reference: core, ledger, action, state, index, and mapping tables |
+| [Ledger](https://github.com/XChain-platform/xchain-documentation/blob/master/components/indexer/LEDGER.md) | Double-entry ledger, balance calculation, sanity checks, gas token fees |
+| [Operations](https://github.com/XChain-platform/xchain-documentation/blob/master/components/indexer/OPERATIONS.md) | Running, Docker, API endpoints, resilience, troubleshooting |
 
 ## Quick Start
 
@@ -144,4 +144,4 @@ with a commercial license available for proprietary use.
 
 You may use, modify, and distribute this material under the terms of the License.
 See [LICENSE](./LICENSE.md) and [NOTICE](./NOTICE.md) for full terms.
-See the [licensing overview](https://docs.xchain.io/legal/licensing).
+See the [licensing overview](https://docs.xchain.io/legal/LICENSING.html).
