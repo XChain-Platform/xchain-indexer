@@ -1339,7 +1339,11 @@ class Database {
         let activationDelay = (staking && staking['ACTIVATION_DELAY_BLOCKS']) ? staking['ACTIVATION_DELAY_BLOCKS'] : this.config['ACTIVATION_DELAY_BLOCKS'];
         let stateData = await buildStateHashData(this, block_index, {
             activationDelay: activationDelay,
-            gasTick:         this.config['GAS']
+            gasTick:         this.config['GAS'],
+            // network gates the additive index-map class (id-determinism P4); inert by
+            // default (see stateHash.js INDEX_MAP_STATE_HASH_ACTIVATION) so this is a no-op
+            // until the per-chain flag-day height is armed at the coordinated mesh deploy.
+            network:         this.config['NETWORK']
         });
         info['state'] = [];
         info['state']['hash'] = this.util.getDataHash(stateData);

@@ -59,6 +59,51 @@
 // additive, non-consensus integrity hash).
 const STATE_HASH_VERSION = 1;
 
+// ── Index-map state-hash flag-day (id-determinism P4) ────────────────────────
+// Promotes the index_addresses / index_tickers id->string MAP from the advisory
+// /status checksum (BlockHasher.computeIndexMapChecksum) to an ENFORCED per-block
+// class of this replication-integrity hash: the follower recomputes state_hash and
+// HALTS on mismatch, so an id-map divergence (a wire ^id resolving to a different
+// entity, or a recovered node that built a different map) is caught at the block
+// that introduced it instead of silently forking.
+//
+// This is the ONE place state_hash deliberately hashes the surrogate id (not just
+// the resolved string): the id IS the value under protection. It is sound only
+// because the compaction + F1a work made every id-assignment path deterministic
+// (in-block dense counter + rollback; recovery stages by string and the apply hook
+// assigns the deterministic id) - so a from-genesis node and a recovered node now
+// produce byte-identical (id, address) pairs over the same chain.
+//
+// Per-block DELTA (block_index = B), mirroring the rest of this preimage's per-block
+// shape: the rows whose deterministic id was first assigned at B. A cumulative
+// checksum would chain every block on all history (the credits-chaining trap the
+// header warns about); the delta catches a divergence at its origin block.
+//
+// Gated on the chain's OWN local block_index (like state_commitment_activation, not
+// the BTC-anchored snapshot_block): each chain arms at its own flag-day height.
+// DEFAULT INERT on every network (placeholder 999999999) so landing this is a strict
+// no-op on the live fleet - the new class is omitted from the preimage below the
+// threshold, leaving state_hash byte-identical to today. Arm fleet-atomically (set
+// the real per-chain heights) at the coordinated mesh deploy, exactly as WI-2 /
+// state_commitment did. No STATE_HASH_VERSION bump: a block is unambiguously pre- or
+// post-activation on a given network, so the two preimage shapes cannot collide.
+const INDEX_MAP_STATE_HASH_ACTIVATION = {
+    mainnet: 999999999,   // PLACEHOLDER: set the real per-chain flag-day height before arming
+    testnet: 999999999,   // PLACEHOLDER
+    regtest: 999999999,   // PLACEHOLDER
+};
+
+// Whether the index-map class is folded into state_hash at `blockIndex` on `network`.
+// Below the threshold / unknown network -> off (safe; the class is omitted and the
+// preimage stays byte-identical to the pre-feature shape).
+function isIndexMapStateHashActive(blockIndex, network){
+    let b = parseInt(blockIndex);
+    if(!Number.isFinite(b)) return false;
+    let threshold = INDEX_MAP_STATE_HASH_ACTIVATION[network];
+    if(threshold === undefined) return false;
+    return b >= threshold;
+}
+
 const DEACTIVATION_TABLES = ['stakes', 'delegations', 'contract_stakes', 'contract_delegations'];
 const SLASH_SPECS = [
     { table: 'stakes',            debits: 'capability_slash_debits', target: 'stakes'            },
@@ -78,6 +123,7 @@ async function buildStateHashData(db, blockIndex, opts){
     let B       = Number(blockIndex);
     let delay   = (opts && opts.activationDelay != null) ? Number(opts.activationDelay) : null;
     let gasTick = (opts && opts.gasTick != null) ? opts.gasTick : null;
+    let network = (opts && opts.network != null) ? opts.network : null;
     let completedStatusId = await db.getStatusId('completed');
 
     // 1. deactivation_block stamps. A stamp written at block B carries value
@@ -183,20 +229,49 @@ async function buildStateHashData(db, blockIndex, opts){
             [B, B]);
     } catch(e){ /* table/columns may not exist on older schemas */ }
 
+    // 7. Index-map delta (id-determinism P4): the (id, string) pairs whose deterministic
+    //    id was first assigned at block B. GATED INERT by default - included ONLY at/after
+    //    the per-chain INDEX_MAP_STATE_HASH_ACTIVATION height, so below it the two keys are
+    //    omitted and the preimage is byte-identical to the pre-feature shape (no fleet halt).
+    //    Deliberately hashes the surrogate id (the value under protection); sound only because
+    //    every id-assignment path is now deterministic (compaction + F1a). Two appended
+    //    doQuery calls keep the existing call order unchanged when inert.
+    let indexMapActive = isIndexMapStateHashActive(B, network);
+    let index_addresses_new = [];
+    let index_tickers_new   = [];
+    if(indexMapActive){
+        try {
+            index_addresses_new = await db.doQuery(
+                "SELECT id, address FROM index_addresses WHERE block_index = ? ORDER BY id ASC", [B]);
+        } catch(e){ /* table/column may not exist on older schemas */ }
+        try {
+            index_tickers_new = await db.doQuery(
+                "SELECT id, tick FROM index_tickers WHERE block_index = ? ORDER BY id ASC", [B]);
+        } catch(e){ /* table/column may not exist on older schemas */ }
+    }
+
     // Fixed key order: the hash preimage. NOT chained on a previous state_hash
     // (the adjacent three hashes already carry chain-continuity; a chain would only
     // make NULL-backfill of historical blocks poison every successor).
-    return {
+    let preimage = {
         deactivations:      deactivations,
         slashes:            slashes,
         request_status:     request_status,
         cooldown:           cooldown,
         credits:            credits,
-        anchor_invalid:     anchor_invalid,
-        block_index:        B,
-        state_hash_version: STATE_HASH_VERSION
+        anchor_invalid:     anchor_invalid
     };
+    // Index-map keys are inserted (in fixed order, before block_index) ONLY when active,
+    // so an inert block serializes byte-identically to the pre-feature preimage.
+    if(indexMapActive){
+        preimage.index_addresses_new = index_addresses_new;
+        preimage.index_tickers_new   = index_tickers_new;
+    }
+    preimage.block_index        = B;
+    preimage.state_hash_version = STATE_HASH_VERSION;
+    return preimage;
 }
 
 module.exports = { buildStateHashData, STATE_HASH_VERSION,
-                   DEACTIVATION_TABLES, SLASH_SPECS, REQUEST_STATUS_TABLES, COOLDOWN_TABLES };
+                   DEACTIVATION_TABLES, SLASH_SPECS, REQUEST_STATUS_TABLES, COOLDOWN_TABLES,
+                   INDEX_MAP_STATE_HASH_ACTIVATION, isIndexMapStateHashActive };
