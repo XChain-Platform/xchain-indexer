@@ -750,7 +750,15 @@ class Actions {
         // and reorgs); the finally guarantees rollback + lock release even on a handler throw.
         await this.indexerDb.beginTransaction();
         try {
-            let resultData = await this.processTransaction(syntheticTx);
+            // Bound the synthetic run with the SAME watchdog the block loop wraps
+            // processTransaction in (XChainIndexer BLOCK_PROCESS_TIMEOUT). The dry-run holds
+            // the shared _txLock for the whole handler, so a stuck VM/isolate would otherwise
+            // wedge block advancement for the full hang; on timeout the catch+finally roll back
+            // and release the lock within a bounded window instead.
+            let resultData = await this.util.withTimeout(
+                this.processTransaction(syntheticTx),
+                this.config['BLOCK_PROCESS_TIMEOUT'],
+                'feequotedryrun ' + (action || ''));
             status = (resultData && resultData['STATUS'] !== undefined) ? resultData['STATUS'] : null;
         } catch(e){
             dryRunError = 'handler threw: ' + ((e && e.message) ? e.message : e);

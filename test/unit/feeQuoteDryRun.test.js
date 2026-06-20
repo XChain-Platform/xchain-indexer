@@ -22,11 +22,13 @@ const Actions = require('../../src/actions.js');
 // touches a real DB or handler chain; the transaction-mutex calls (beginTransaction /
 // rollbackTransaction) are recorded so we can assert the dry-run always opens and rolls back
 // exactly one transaction.
-function makeCtx({ addressId = 7, status = 'valid', processThrows = false, feeQuote } = {}){
+function makeCtx({ addressId = 7, status = 'valid', processThrows = false, processHangs = false, feeQuote } = {}){
     let calls = { begin: 0, rollback: 0, processed: null };
     let util  = new Utility();
     let ctx = {
         util,
+        // The dry-run bounds processTransaction with the block-loop watchdog timeout.
+        config: { BLOCK_PROCESS_TIMEOUT: 300000 },
         _calls: calls,
         indexerDb: {
             getAddressId:        async () => addressId,
@@ -44,6 +46,7 @@ function makeCtx({ addressId = 7, status = 'valid', processThrows = false, feeQu
         processTransaction: async (tx) => {
             calls.processed = tx;
             if(processThrows) throw new Error('boom');
+            if(processHangs) return new Promise(() => {});   // never resolves: the watchdog must fire
             return { STATUS: status };
         }
     };
@@ -78,6 +81,16 @@ describe('computeFeeQuoteDryRun', () => {
         assert.strictEqual(r.error, 'invalid: insufficient funds', 'error carries the handler reason');
         assert.strictEqual(calls.begin, 1);
         assert.strictEqual(calls.rollback, 1, 'invalid action still rolls back');
+    });
+
+    it('bounds a hung handler with the block-loop watchdog and releases the lock (item 4758)', async () => {
+        let { ctx, calls } = makeCtx({ processHangs: true });
+        ctx.config = { BLOCK_PROCESS_TIMEOUT: 50 };   // tiny timeout so the watchdog fires fast
+        let r = await run(ctx, { action: 'ISSUE', params: ['0', 'NEWTOK', '1000'], source: 'src1' });
+        assert.strictEqual(r.valid, false, 'a watchdog-timed-out dry-run is not valid');
+        assert.ok(/timeout|exceeded/i.test(r.error), 'error reports the watchdog timeout: ' + r.error);
+        assert.strictEqual(calls.begin, 1, 'one transaction opened');
+        assert.strictEqual(calls.rollback, 1, 'lock released via rollback once the watchdog fires (no indefinite wedge)');
     });
 
     it('unindexed source: refused before any transaction is opened (AUTO_INCREMENT-skew mitigation)', async () => {
