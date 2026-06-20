@@ -79,10 +79,30 @@ const RECOMPUTED = ['balances', 'tokens', 'markets', 'attest_validator_stats'];
 // contract_emissions is cascade-deleted via its contract_executions parent.
 // price_snapshots anchors rounds via reference_block (not block_index), so it
 // gets its own delete (`reference_block >= ?`) outside the blockTables loop.
-// icons is a token_id-keyed metadata cache with no action_index/block_index and
-// no enforced FK, so after the dataTables loop deletes a token it gets a bespoke
-// orphan sweep (`token_id NOT IN (SELECT id FROM tokens)`).
-const SPECIAL_CASE = ['contract_emissions', 'price_snapshots', 'icons'];
+//
+// Orphan sweeps (icons, balances, markets, pubkeys): derived/cache tables keyed
+// by a rolled-back index id (index_addresses / index_tickers / tokens) but NOT
+// removed by the action_index / block_index delete loops. After the index-table
+// delete, an entity seen ONLY in the orphaned range leaves a dangling-ref row;
+// each gets a bespoke `<fk> NOT IN (SELECT id FROM <index>)` sweep so the reorged
+// node matches a from-genesis one. balances/markets are ALSO recomputed (surviving
+// rows) but the recompute cannot reach an orphaned-only row, so the sweep is the
+// orphan handler; pubkeys is sweep-only. The sweep DELETEs are asserted to exist
+// below so this classification cannot rot away from the source.
+const SPECIAL_CASE = ['contract_emissions', 'price_snapshots',
+    'icons', 'balances', 'markets', 'pubkeys'];
+
+// The orphan-sweep tables and the index they dangle against (asserted present in
+// rollback.js source below). icons keys on tokens; the rest on the two rolled-back
+// index_* tables. Mirrors xchain-indexer/src/rollback.js (and xchain-sync's
+// ClientRollback for markets/pubkeys).
+const ORPHAN_SWEEPS = [
+    { table: 'icons',    index: 'tokens' },
+    { table: 'balances', index: 'index_addresses' },
+    { table: 'balances', index: 'index_tickers' },
+    { table: 'markets',  index: 'index_tickers' },
+    { table: 'pubkeys',  index: 'index_addresses' },
+];
 
 // Tables intentionally never rolled back. Every entry MUST state why, and is
 // asserted below to actually exist (so this list can't rot with stale names).
@@ -90,12 +110,11 @@ const ROLLBACK_EXEMPT = {
     events:
         'Append-only operational audit log; it records the REORG event itself. ' +
         'Rolling it back would erase the evidence of the rollback.',
-    pubkeys:
-        'Idempotent address_id → pubkey registry (createPubkey: INSERT IGNORE, ' +
-        'address_id PRIMARY KEY). Content-addressed: a given address always has ' +
-        'the same pubkey, keyed on the append-only address registry (stable ' +
-        'ids), so a row surviving a reorg is harmless: re-applying the same blocks ' +
-        're-inserts it as a no-op. Never block-height state, so nothing to undo.',
+    // NOTE: pubkeys was here ("a row surviving a reorg is harmless") until the wire
+    // ^<id> work made index_addresses ids reorg-reproducible. A reclaimed address_id
+    // then re-points the surviving pubkeys row at a DIFFERENT address (INSERT IGNORE
+    // keeps the old pubkey), so it is no longer harmless: it is now orphan-swept (see
+    // SPECIAL_CASE / ORPHAN_SWEEPS).
     cross_chain_matches:
         'Hub-mirrored cross-chain DEX state (CROSS_CHAIN_TABLES in hub_db_sync.js), ' +
         'NOT produced by local block/action processing; the indexer only SELECTs it. ' +
@@ -234,6 +253,32 @@ describe('Rollback coverage guard @regression', function () {
             [],
             stale.length
                 ? `ROLLBACK_EXEMPT names tables that no longer exist in src/sql: ${stale.join(', ')}. Remove them.`
+                : undefined
+        );
+    });
+
+    it('every orphan-sweep DELETE classified in SPECIAL_CASE actually exists in rollback.js', function () {
+        // A derived/cache table that dangles after the index-table delete is only
+        // covered if rollback.js actually sweeps it. Without this, the SPECIAL_CASE
+        // classification could silently outlive a removed sweep (the very failure
+        // that re-opened the orphaned-only-address zombie balance), so assert the
+        // `DELETE FROM <table> ... NOT IN (SELECT id FROM <index>)` is present in source.
+        const src = fs.readFileSync(path.join(__dirname, '../../src/rollback.js'), 'utf8');
+        const missing = ORPHAN_SWEEPS.filter(({ table, index }) => {
+            const re = new RegExp(`DELETE\\s+FROM\\s+${table}\\b[\\s\\S]{0,400}?SELECT\\s+id\\s+FROM\\s+${index}\\b`, 'i');
+            return !re.test(src);
+        }).map(({ table, index }) => `${table} (NOT IN ${index})`);
+
+        assert.deepStrictEqual(
+            missing,
+            [],
+            missing.length
+                ? `rollback.js is missing orphan-sweep DELETE(s): ${missing.join(', ')}. ` +
+                  `These tables reference a rolled-back index id but are not action/block deleted, ` +
+                  `so without the sweep an orphaned-only entity leaves a dangling-ref row that ` +
+                  `diverges from a from-genesis node (zombie balance -> sanityCheck halt; ` +
+                  `markets/pubkeys mis-association on id reuse). Restore the sweep or re-justify ` +
+                  `the SPECIAL_CASE entry.`
                 : undefined
         );
     });
