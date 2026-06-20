@@ -4,24 +4,25 @@
 # XChain Platform Indexer
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-2.2.1-blue" alt="Version">
+  <img src="https://img.shields.io/badge/version-2.7.11-blue" alt="Version">
   <img src="https://img.shields.io/badge/tests-958%20passing-brightgreen" alt="Tests">
   <img src="https://img.shields.io/badge/node-%3E%3D22-green" alt="Node">
-  <img src="https://img.shields.io/badge/license-Dankest%20Community-orange" alt="License">
+  <img src="https://img.shields.io/badge/license-AGPL--3.0--or--later-blue" alt="License">
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/coverage-unit%20%7C%20integration%20%7C%20e2e%20%7C%20fuzz%20%7C%20chaos%20%7C%20mutation%20%7C%20boundary%20%7C%20smoke-brightgreen" alt="Coverage">
+  <img src="https://img.shields.io/badge/coverage-unit%20%7C%20integration%20%7C%20e2e%20%7C%20boundary%20%7C%20security%20%7C%20fuzz%20%7C%20chaos%20%7C%20mutation%20%7C%20regression%20%7C%20performance%20%7C%20smoke-brightgreen" alt="Coverage">
 </p>
 
 State-processing engine for the XChain Platform. Reads decoded blockchain transactions from a Decoder database, validates and executes each ACTION according to protocol rules, and maintains authoritative token state (balances, supplies, ownership, DEX orders, dispensers, smart contracts) in a separate MariaDB database.
 
 ## Features
 
-- **ACTION types**: ADDRESS, AIRDROP, ATTEST, BATCH, BROADCAST, CALLBACK, COINPAY, COLLECT, DESTROY, DEPLOY, DEPOSIT, DISPENSER, DISPENSE, DIVIDEND, EXECUTE, FILE, ISSUE, LINK, LIST, MESSAGE, MINT, ORDER, PRICE, SEND, SLEEP, STAKE, SWAP, SWEEP, UNSTAKE, DELEGATE, WITHDRAW
-- **Virtual Machine**: deterministic JavaScript smart contracts via [xchain-vm](https://github.com/XChain-platform/xchain-vm) (sandboxed V8 isolates, AST-based gas metering, attestation gateway namespace)
-- **Capability-based staking**: STAKE (VERSION 1 new / VERSION 2 top-up) and UNSTAKE (pubkey-based). A validator's aggregate active stake auto-qualifies it for each of four independent capabilities (`price`, `cross_chain`, `oracle_publish`, `attestation`) per governance-configurable `min_stake[capability]`. New `stakes` columns: `version`, `activation_block`, `deactivation_block`.
-- **Contract-targeted staking**: STAKE v3 / UNSTAKE v1 / DELEGATE v1 let any token be staked against a smart contract deployed via DEPLOY v1 (which carries `COOLDOWN_BLOCKS` + `SLASH_DESTINATION` metadata). Cooldown is per-contract; the contract's own VM logic governs slashing.
+- **ACTION types**: ADDRESS, AIRDROP, ANCHOR, ATTEST, BATCH, BROADCAST, CALLBACK, COINPAY, COLLECT, CROSS_SETTLE, DELEGATE, DEPLOY, DEPOSIT, DESTROY, DISPENSER, DISPENSE, DIVIDEND, EXECUTE, FILE, ISSUE, LINK, LIST, MESSAGE, MINT, NODEPROOF, ORDER, PRICE, SEND, SLASH, SLEEP, STAKE, SWAP, SWEEP, UNKNOWN, UNSTAKE, WITHDRAW, XCALL, XEXEC (46 handlers)
+- **Virtual Machine**: deterministic JavaScript smart contracts via [xchain-vm](https://github.com/XChain-platform/xchain-vm) (sandboxed V8 isolates, AST-based gas metering, attestation gateway namespace, cross-contract re-entrant calls via `emit.execute` with call-depth cap and gas budgeting)
+- **Cross-chain VM calls**: contracts invoke `emit.crossExecute` to emit XCALL requests; the hub federation relays quorum-signed results; XEXEC is system-injected on the target chain; callbacks are delivered back to the source contract
+- **Capability-based staking**: STAKE (VERSION 1 new / VERSION 2 top-up) and UNSTAKE (pubkey-based). A validator's aggregate active stake auto-qualifies it for each of four independent capabilities (`price`, `cross_chain`, `oracle_publish`, `attestation`) per governance-configurable `min_stake[capability]`. Stake rows carry `version`, `activation_block`, `deactivation_block`.
+- **Contract-targeted staking**: STAKE v3 / UNSTAKE v1 / DELEGATE v1 let any token be staked against a smart contract deployed via DEPLOY v1 (which carries `COOLDOWN_BLOCKS` + `SLASH_DESTINATION` metadata). Cooldown is per-contract; the contract's own VM logic governs slashing via SLASH.
 - **External attestation framework**: contracts emit ATTEST v0 via `xchain.attestation.request`; hub federation reaches PBFT quorum; ATTEST v1 is submitted on-chain; indexer fires the request's callback EXECUTE on quorum or system-injects ATTEST v2 on deadline.
 - **PRICE oracles**: PRICE v0 (validator COIN/FIAT snapshots, gated by the `price` and `oracle_publish` capabilities) and PRICE v1 (permissionless user TOKEN/FIAT oracles). Both feed the hub's `oracle_prices` / `price_snapshots` tables that every indexer reads during block processing.
 - **Token-gated content**: FILE action supports AES-256-GCM gated payloads with a compact 33-byte binary key handoff; new `gated_files` table.
@@ -33,13 +34,13 @@ State-processing engine for the XChain Platform. Reads decoded blockchain transa
 - **Double-entry ledger**: all token movements recorded as credits, debits, and escrows (including contract derived addresses)
 - **Per-block sanity check**: verifies token supplies match the sum of credits minus debits
 - **Three block hashes**: ledger, actions, and contract hashes per block for state verification
-- **DEX engine**: ORDER matching, SWAP matching, DISPENSER triggering with automatic expiration
+- **DEX engine**: ORDER matching, SWAP matching, DISPENSER triggering with automatic expiration; cross-chain DEX settlement via CROSS_SETTLE
 - **Protocol versioning**: actions activate at specific block heights or timestamps per network
 - **Action mapping**: address/ticker/action_index cross-references for fast lookups
 - **Circuit-breaker DB connections**: automatic failure detection and recovery
 - **Watchdog timeout**: configurable per-block processing timeout detects deadlocks
-- **Hub-facing RPCs**: `getownstake`, `getactivevalidators`, `getcapabilityvalidators`, `getpendingattestation_requests`, `getlatestblock`; ingests `pushvalidatorrewards` from hub
-- **Comprehensive test suite**: unit, integration, e2e, fuzz, chaos, mutation, boundary, smoke, performance, regression
+- **Hub-facing RPCs**: `getownstake`, `getactivevalidators`, `getactivestakeweights`, `getcapabilityvalidators`, `getstakeweightsbycapability`, `getfullnodeverifiers`, `getpendingattestation_requests`, `getopencrosschainorders`, `getpendingcrosschaincalls`, `getcrosschaincall`, `getcrosschaincallresult`, `getactionconfirmations`, `getstakesourcebypubkey`, `getlatestblock`, `getblockhashes`; ingests `pushvalidatorrewards` from hub
+- **Comprehensive test suite**: unit, integration, e2e, boundary, security, fuzz, chaos, mutation, regression, performance, smoke
 
 ## Documentation
 
@@ -144,14 +145,3 @@ with a commercial license available for proprietary use.
 You may use, modify, and distribute this material under the terms of the License.
 See [LICENSE](./LICENSE.md) and [NOTICE](./NOTICE.md) for full terms.
 See the [licensing overview](https://docs.xchain.io/legal/licensing).
-
-## License
-
-XChain Platform is **open source**, dual-licensed under:
-
-- the **[GNU Affero General Public License v3.0](./LICENSE.md)** (`AGPL-3.0-or-later`), free for everyone, and
-- a **[commercial license](https://docs.xchain.io/legal/commercial-license)** for companies that need to keep modifications private.
-
-See the **[licensing overview](https://docs.xchain.io/legal/licensing)** for which one applies to you. "XChain" is a trademark of Dankest, LLC. See the **[Trademark Policy](https://docs.xchain.io/legal/trademark)**.
-
-Copyright © 2025-2026 Dankest, LLC.
