@@ -1517,7 +1517,14 @@ class Database {
         let pid = str.substring(1);
         if(!/^[0-9]+$/.test(pid))
             return value;
-        let results = await this.doQuery("SELECT address FROM index_addresses WHERE id=? LIMIT 1", [pid]);
+        // F2 (deterministic-set gate): resolve a wire ^<id> ONLY to an id in the
+        // deterministic set (block_index IS NOT NULL). Ids assigned out-of-band
+        // (recovery pre-seed; see createAddress) are NOT reproducible across nodes, so
+        // resolving a ^id to one would fork. A non-deterministic / nonexistent id leaves
+        // the value unchanged, so the caller's isCryptoAddress check rejects it the same
+        // way on every node. No-op on current data (no out-of-band ids exist outside
+        // dormant recovery). See claude/reports/2026-06-19_id-determinism-gap-scoping.md.
+        let results = await this.doQuery("SELECT address FROM index_addresses WHERE id=? AND block_index IS NOT NULL LIMIT 1", [pid]);
         if(results.length > 0 && !this.util.isNull(results[0].address))
             return String(results[0].address);
         return value;
@@ -1759,7 +1766,7 @@ class Database {
         // Determine if TICK is actually a TICK ID
         if(str.substring(0,1)=='^' && this.util.isNumeric(pid))
             id = pid;
-        // Try to lookup id using tick passed 
+        // Try to lookup id using tick passed
         if(this.util.isNull(id)){
             let query   = "SELECT id FROM index_tickers WHERE LOWER(tick)=? LIMIT 1";
             let args    = [String(tick).toLowerCase()]
