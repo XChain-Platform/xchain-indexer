@@ -97,29 +97,20 @@ const nodeproof          = require('./actions/nodeproof.js');
 
 class Actions {
 
-    // Handle constructing a class instance
     constructor(indexer){
-        // Parse in indexer configuration
         this.config    = indexer.config;
-
-        // Setup alias to the utility class instance
         this.util      = indexer.util;
-
-        // Setup alias to the mapper class instance
         this.mapper    =  indexer.mapper;
-
-        // Setup alias to the indexer database connection
         this.decoderDb = indexer.decoderDb;
         this.indexerDb = indexer.indexerDb;
         this.hubDb     = indexer.hubDb || null;
 
-        // Setup alias to the hub client (for pushing PRICE data to xchain-hub)
+        // hub client pushes PRICE data to xchain-hub
         this.hubClient = indexer.hubClient || null;
 
-        // Setup alias to the indexer protocol changes instance
         this.protocolChanges = indexer.protocolChanges;
 
-        // Setup alias to the xchain-utxo-tracker client (used by DISPENSER fresh-address check)
+        // utxo-tracker client used by DISPENSER fresh-address check
         this.utxoTracker = indexer.utxoTracker || null;
 
         // Create action instances and pass database connections
@@ -332,9 +323,6 @@ class Actions {
 
         // Create a record of this action in the actions table
         data['ACTION_INDEX'] = await this.indexerDb.createActionIndex(data);
-
-        // DEBUG : Force a specific action
-        // action = 'DIVIDEND';
 
         // Process the specific ACTION commands
         await this.processAction(action, params, data, error);

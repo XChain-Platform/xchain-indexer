@@ -35,7 +35,6 @@ const UtxoTracker  = require('./UtxoTracker.js');
 
 class XChainIndexer {
 
-    // Handle constructing a class instance
     constructor(decoderDbHost, decoderDbPort, decoderDbName, decoderDbUser, decoderDbPass, indexerDbHost, indexerDbPort, indexerDbName, indexerDbUser, indexerDbPass, hubDbHost, hubDbPort, hubDbName, hubDbUser, hubDbPass, utxoTrackerUrl, utxoTrackerPort){
         // XChain Indexer Version
         this.version = process.env.npm_package_version;
