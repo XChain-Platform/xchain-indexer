@@ -859,6 +859,31 @@ class Rollback {
                  WHERE address_id NOT IN (SELECT id FROM index_addresses)
                     OR tick_id    NOT IN (SELECT id FROM index_tickers)`, []);
 
+            // Same orphan-sweep for the other two derived tables that reference a rolled-back
+            // index id but are NOT removed by the action_index / block_index delete loops
+            // (an audit of every table referencing index_addresses/index_tickers found exactly
+            // these plus balances and the icons sweep above):
+            //
+            //  - markets (tick1_id, tick2_id): updateMarkets only UPDATEs existing rows, never
+            //    deletes, so a pair whose tick is orphaned-only keeps a row with a dangling
+            //    tick id. Worse on id reclaim: getMarketId(tick1, reclaimed_id) then matches the
+            //    stale row and the new pair silently inherits the old market's price/volume.
+            //  - pubkeys (address_id -> pubkey, INSERT IGNORE): an orphaned-only source address
+            //    leaves a dangling row; because the write is INSERT IGNORE, a later address that
+            //    reclaims the id keeps the OLD pubkey. Not consensus-hashed (block hashes take
+            //    source_pubkey from the decoder DB, not this table), so this is stale-data, not a
+            //    fork, but it still mis-attributes a pubkey after id reuse.
+            //
+            // A from-genesis node never created either row, so deleting any whose id no longer
+            // resolves makes the reorged node match it.
+            await this.indexerDb.doQuery(
+                `DELETE FROM markets
+                 WHERE tick1_id NOT IN (SELECT id FROM index_tickers)
+                    OR tick2_id NOT IN (SELECT id FROM index_tickers)`, []);
+            await this.indexerDb.doQuery(
+                `DELETE FROM pubkeys
+                 WHERE address_id NOT IN (SELECT id FROM index_addresses)`, []);
+
             // Delete consensus price snapshots anchored to the orphaned blocks.
             // price_snapshots anchors each round to a block via reference_block
             // (its equivalent of block_index) rather than block_index itself, so
