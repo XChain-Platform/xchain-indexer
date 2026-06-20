@@ -838,23 +838,31 @@ class Rollback {
                 await this.indexerDb.doQuery(query, args);
             }
 
-            // F1a recovery reward re-arm. If a reorg during a recovery reindex rolled an
-            // applied reward's source address out of index_addresses (the index-row delete
-            // above), its materialized validator_rewards row was also dropped (validator_rewards
-            // is block-scoped, deleted above). Re-arm the staging row so the apply hook
-            // re-materializes the reward when the canonical chain re-creates that address its
-            // deterministic id. MUST run AFTER the index_addresses delete so the NOT IN sees the
-            // post-rollback id set. No-op (and the table may be absent on a non-recovery stack)
-            // outside an in-progress recovery, so it is wrapped/short-circuited cheaply. Force a
-            // re-probe of the in-memory remaining-count so the hook re-fires for the re-armed rows.
+            // F1a recovery reward re-arm. validator_rewards is block-scoped and was deleted
+            // above by earn-block (block_index >= firstBlockIndex). Re-arm the staging rows for
+            // those same earn-blocks so the reward can be re-materialized on the canonical chain.
+            // Key on the reward's earn-block (block_index), NOT on whether the source address
+            // rolled out: a reward row is dropped iff its earn-block is in the orphaned range,
+            // independent of its source address. The common (and previously-missed) case is an
+            // address first seen BEFORE the range that earns a reward INSIDE it: the reward row
+            // is deleted but the address survives, so the old "source_id NOT IN index_addresses"
+            // predicate never fired and the reward was silently lost forever. MUST run AFTER the
+            // validator_rewards/index_addresses deletes above. No-op (and the table may be absent
+            // on a non-recovery stack) outside an in-progress recovery, so it is wrapped cheaply.
             try {
                 let rearm = await this.indexerDb.doQuery(
                     `UPDATE recovery_pending_rewards
                         SET applied=0, source_id=NULL
-                      WHERE applied=1 AND source_id IS NOT NULL
-                        AND source_id NOT IN (SELECT id FROM index_addresses)`);
+                      WHERE applied=1 AND block_index >= ?`, [block_index]);
                 if(rearm && rearm.affectedRows)
                     this.indexerDb._recoveryPendingChecked = false;
+                let survivors = await this.indexerDb.doQuery(
+                    `SELECT DISTINCT rpr.source_address AS source_address, ia.id AS source_id
+                       FROM recovery_pending_rewards rpr
+                       JOIN index_addresses ia ON ia.address = rpr.source_address
+                      WHERE rpr.applied=0`);
+                for(let s of (survivors || []))
+                    await this.indexerDb._applyPendingRewardsForAddress(s.source_address, s.source_id);
             } catch(e){ /* table absent on a non-recovery stack: nothing staged to re-arm */ }
 
             // Sweep balances rows orphaned by the index-table delete above. `balances` is a
