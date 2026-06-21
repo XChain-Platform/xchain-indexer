@@ -88,9 +88,15 @@ const STATE_HASH_VERSION = 1;
 // state_commitment did. No STATE_HASH_VERSION bump: a block is unambiguously pre- or
 // post-activation on a given network, so the two preimage shapes cannot collide.
 const INDEX_MAP_STATE_HASH_ACTIVATION = {
-    mainnet: 999999999,   // PLACEHOLDER: set the real per-chain flag-day height before arming
-    testnet: 999999999,   // PLACEHOLDER
-    regtest: 999999999,   // PLACEHOLDER
+    // ARM HERE: replace 999999999 (the inert sentinel) with the chain's OWN local
+    // block_index at/after which the index-map folds into state_hash. One-way door: once a
+    // chain crosses its height, any process still on the inert value (or a different height)
+    // computes a divergent state_hash and a follower HALTS, so every indexer + sync process
+    // must run this exact map BEFORE the chain reaches the height. Keep this map
+    // byte-identical to the xchain-{indexer,sync}/src/stateHash.js twin.
+    mainnet: 999999999,   // ARM: 0 at the launch reindex (armed from genesis, no flag-day)
+    testnet: 999999999,   // ARM: current tip + N (fleet fully on armed code first), or 0 + clean reseed
+    regtest: 999999999,   // ARM: current tip + N, or 0 + clean reseed
 };
 
 // Whether the index-map class is folded into state_hash at `blockIndex` on `network`.
