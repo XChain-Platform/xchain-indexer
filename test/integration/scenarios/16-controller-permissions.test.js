@@ -73,6 +73,11 @@ describe('Phase E permissions manifest: deploy persistence (real DB + real VM) @
     let seeder, indexer;
 
     before(async function () {
+        // This scenario drives real contract DEPLOY/EXECUTE, which needs the
+        // isolated-vm-backed xchain-vm. The integration tier is provisioned
+        // without a VM (EXECUTE paths are e2e-suite territory), so skip the whole
+        // suite when xchain-vm can't be loaded rather than failing.
+        try { require('xchain-vm'); } catch (e) { return this.skip(); }
         process.env.INDEXER_COIN    = process.env.INDEXER_COIN    || 'BTC';
         process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
         await createDatabases();
