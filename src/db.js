@@ -23,6 +23,7 @@ const mariadb = require('mariadb');
 const fs      = require('fs');
 const path    = require('path');
 const { buildStateHashData } = require('./stateHash');
+const { canonicalizeHashAddress } = require('./protocolAddressRoles');
 
 // Consensus block-hash scheme version. Folded into the preimage of every per-block
 // ledger/actions/contract hash (see getBlockHashes), so changing it changes every hash.
@@ -1181,6 +1182,18 @@ class Database {
                 ORDER BY
                     e.action_index ASC, a1.address COLLATE utf8_bin ASC, t1.tick COLLATE utf8mb4_bin ASC, e.amount ASC`;
         ledger.escrows = await this.doQuery(query, [block_index]);
+        // CONSENSUS: canonicalize protocol special addresses (BURN/GAS/DONATE/REWARD)
+        // to their chain-independent role token in the hash preimage. A per-chain
+        // special address (e.g. an issuance fee credited to DONATE1) otherwise leaks
+        // the chain's address encoding into the consensus hash, forking the hash chain
+        // across BTC/LTC/DOGE for identical actions. Done here so BOTH the flat ledger
+        // hash below AND the block_merkle_root (which reuses these stashed rows) see the
+        // same canonical strings; balances still track the real address (rows are not
+        // mutated in the DB, only this gathered copy used for hashing). See
+        // protocolAddressRoles.js; xchain-sync/src/BlockHasher.js mirrors this byte-for-byte.
+        for (const row of ledger.credits) row.address = canonicalizeHashAddress(row.address);
+        for (const row of ledger.debits)  row.address = canonicalizeHashAddress(row.address);
+        for (const row of ledger.escrows) row.address = canonicalizeHashAddress(row.address);
         // Get data from actions table
         // Hash the RESOLVED action-type string (e.g. 'SEND'), not the raw action_id - that
         // is an index_actions AUTO_INCREMENT id assigned on first reference (createAction)
