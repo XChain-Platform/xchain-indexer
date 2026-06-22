@@ -259,6 +259,17 @@ module.exports = {
         // CHAIN_TIP_PUSH_MAX_LAG.
         config['CHAIN_TIP_PUSH_MAX_LAG'] = parseIntMin0(process.env.CHAIN_TIP_PUSH_MAX_LAG, 100);
 
+        // Genesis ledger bootstrap (Counterparty/Dogeparty name-ownership injection). The
+        // consensus-critical GENESIS_BLOCK + GENESIS_LEDGER_HASH are pinned per-network in
+        // configs/<COIN>.js; these are the indexer-wide defaults plus the bundled-manifest
+        // path. A genesis block carries ~120k synthetic ISSUE/TRANSFER actions, far more than
+        // a normal block, so it gets its own watchdog. See genesis.js and
+        // claude/reports/launch/GENESIS-LEDGER-BOOTSTRAP.md.
+        config['GENESIS_BLOCK']            = 0;     // 0 = disabled; pinned per chain in configs/<COIN>.js
+        config['GENESIS_LEDGER_HASH']      = null;  // sha256 hex of the bundled CSV; null = skip verify
+        config['GENESIS_LEDGER_PATH']      = process.env.GENESIS_LEDGER_PATH || path.join(__dirname, '..', 'data', 'genesis', coin + '-ledger.csv');
+        config['GENESIS_BLOCK_TIMEOUT_MS'] = parseIntMin0(process.env.GENESIS_BLOCK_TIMEOUT_MS, 1800000); // 30 min
+
         // Merge indexer config and COIN config into a single config object
         let fullConfig = Object.assign({}, config, coinConfig);
 

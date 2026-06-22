@@ -303,8 +303,10 @@ class Issue {
         if(!error && !this.util.isNull(data['DECIMALS']) && tokenInfo && this.util.bcgt(tokenInfo['SUPPLY'], 0) && String(data['DECIMALS'])!=String(tokenInfo['DECIMALS']))
             error = 'invalid: DECIMALS (locked)';
 
-        // Verify TRANSFER addresses
-        if(!error && !this.util.isNull(data['TRANSFER']) && !this.util.isCryptoAddress(data['TRANSFER']))
+        // Verify TRANSFER addresses. Genesis bootstrap is exempt: it seeds Counterparty/
+        // Dogeparty owner addresses that are mainnet-format and so fail isCryptoAddress on a
+        // regtest network. The manifest is trusted (hash-pinned), so the format check is skipped.
+        if(!error && !this.util.isNull(data['TRANSFER']) && !data['IS_GENESIS'] && !this.util.isCryptoAddress(data['TRANSFER']))
             error = 'invalid: TRANSFER (bad address)';
 
         // Verify TRANSFER_SUPPLY and SOURCE are different
@@ -481,7 +483,7 @@ class Issue {
         // every node exempts.
         let issuanceFeeActive = await this.actions.protocolChanges.isEnabled('ISSUANCE_FEE', data['BLOCK_INDEX']);
         let emissionExempt    = await this.actions.protocolChanges.isEnabled('ISSUANCE_FEE_EMISSION_EXEMPT', data['BLOCK_INDEX']);
-        if(!error && !tokenInfo && !gasBootstrap && !(data['IS_EMISSION'] && emissionExempt) && issuanceFeeActive){
+        if(!error && !tokenInfo && !gasBootstrap && !data['IS_GENESIS'] && !(data['IS_EMISSION'] && emissionExempt) && issuanceFeeActive){
             let unifiedFees = await this.actions.protocolChanges.isEnabled('UNIFIED_FEES', data['BLOCK_INDEX']);
             if(unifiedFees){
                 // Unified gas schedule

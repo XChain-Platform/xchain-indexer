@@ -71,6 +71,7 @@ async function initIndexer(opts = {}) {
     const Mapper   = require('../../../src/mapper.js');
     const Actions  = require('../../../src/actions.js');
     const Rollback = require('../../../src/rollback.js');
+    const Genesis  = require('../../../src/genesis.js');
 
     indexer.config = config.getConfig();
     indexer.util = new Utility();
@@ -83,6 +84,7 @@ async function initIndexer(opts = {}) {
     indexer.mapper = new Mapper(indexer);
     indexer.actions = new Actions(indexer);
     indexer.rollback = new Rollback(indexer);
+    indexer.genesis = new Genesis(indexer.actions, indexer.indexerDb, indexer.config, indexer.util);
 
     // Create and verify databases and tables
     await indexer.indexerDb.createDatabase();
@@ -147,6 +149,10 @@ async function processBlocks(indexer) {
         // to the F-1/F-2 index-id bug class.
         indexer.indexerDb.blockIndex = lastIndexerBlock;
         try {
+            // Mirror production: genesis ledger bootstrap runs before the block's real
+            // transactions at the configured genesis block (no-op otherwise). See genesis.js.
+            if (indexer.genesis && Number(lastIndexerBlock) === Number(indexer.config['GENESIS_BLOCK']))
+                await indexer.genesis.inject(lastIndexerBlock, blockTime);
             for (const tx of blockTransactions) {
                 await indexer.actions.processTransaction(tx);
             }

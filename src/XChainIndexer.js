@@ -32,6 +32,7 @@ const HubClient    = require('./hub_client.js');
 const HubDbSync    = require('./hub_db_sync.js');
 const HubPushQueue = require('./hub_push_queue.js');
 const UtxoTracker  = require('./UtxoTracker.js');
+const Genesis      = require('./genesis.js');
 
 class XChainIndexer {
 
@@ -260,6 +261,10 @@ class XChainIndexer {
 
         // Create instance of the actions class and pass database connection instances to it
         this.actions = new actions(this);
+
+        // Genesis ledger bootstrap (Counterparty/Dogeparty name-ownership injection at the
+        // configured genesis block; no-op when GENESIS_BLOCK is unset). See genesis.js.
+        this.genesis = new Genesis(this.actions, this.indexerDb, this.config, this.util);
 
         // Create instance of the rollback class and pass database connection instances to it
         this.rollback = new rollback(this);
@@ -568,6 +573,12 @@ class XChainIndexer {
                         if(this.actions.vm)
                             this.actions.vm.beginBlock();
 
+                        // Genesis ledger bootstrap: at the configured genesis block, inject the
+                        // Counterparty/Dogeparty name-ownership ISSUE/TRANSFER actions BEFORE any
+                        // real transaction, so they take the lowest action indexes in the block.
+                        // No-op on every other block. See genesis.js.
+                        await this.genesis.inject(blockToParse, blockTime);
+
                         // Loop through any block transactions and process them
                         for(const tx of blockTransactions)
                             await this.actions.processTransaction(tx);
@@ -620,7 +631,12 @@ class XChainIndexer {
                         return [ledger, actions, contracts];
                     })();
 
-                    let [ledger, actions, contracts] = await this.util.withTimeout(blockProcessing, this.config['BLOCK_PROCESS_TIMEOUT'], 'block ' + blockToParse);
+                    // The genesis block injects ~120k synthetic ISSUE/TRANSFER actions, far more
+                    // than a normal block, so it gets its own (longer) watchdog timeout.
+                    let blockTimeout = (Number(blockToParse) === Number(this.config['GENESIS_BLOCK']) && this.config['GENESIS_BLOCK_TIMEOUT_MS'])
+                        ? this.config['GENESIS_BLOCK_TIMEOUT_MS']
+                        : this.config['BLOCK_PROCESS_TIMEOUT'];
+                    let [ledger, actions, contracts] = await this.util.withTimeout(blockProcessing, blockTimeout, 'block ' + blockToParse);
 
                     // Commit the block data to the database
                     await this.indexerDb.commitTransaction();

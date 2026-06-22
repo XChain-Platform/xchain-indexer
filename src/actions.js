@@ -243,7 +243,11 @@ class Actions {
     // @param tx.data        string     Action `data`
     // @param tx.tx_hash     string     Transaction hash
     // @param tx.block_index integer    Block index of tx
-    async processTransaction(tx){
+    // isGenesis flags a synthetic genesis-bootstrap action (genesis.js): it is not decoded
+    // from a real coin transaction, so it is fee-exempt and its TRANSFER owner may be a
+    // wrong-network address on regtest. The flag is copied onto `data` (data['IS_GENESIS'])
+    // and read by issue.js. Always false for real decoded transactions.
+    async processTransaction(tx, isGenesis = false){
         let error       = false;
         let params      = String(tx.data).split('|');
         let source      = tx.source;
@@ -307,6 +311,7 @@ class Actions {
         data['FEE']              = tx.fee;      // Miners fee in satoshis
         data['SOURCE_PUBKEY']    = tx.source_pubkey; // Public key for the source address
         data['TX_OUTPUTS']       = tx.tx_outputs || []; // Full native-coin output set (fee detection)
+        data['IS_GENESIS']       = isGenesis === true;  // synthetic genesis bootstrap action (genesis.js)
 
         // Treat plain BTC transactions (empty data) as DISPENSE triggers
         // The decoder records these when the destination matches an active dispenser address

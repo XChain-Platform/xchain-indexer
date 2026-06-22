@@ -95,6 +95,18 @@ module.exports = {
         }
         config['ADDRESS'] = address;
 
+        // Genesis ledger bootstrap pin (consensus-critical; see config.js + genesis.js).
+        // Litecoin has no Counterparty/Dogeparty-style source ledger, so mainnet/testnet
+        // stay disabled (GENESIS_BLOCK=0). regtest still binds via env so the mechanism
+        // can be exercised on a regtest LTC stack.
+        if(network === 'regtest'){
+            config['GENESIS_BLOCK']       = parseInt(process.env.XCHAIN_GENESIS_BLOCK || '0', 10) || 0;
+            config['GENESIS_LEDGER_HASH'] = process.env.XCHAIN_GENESIS_LEDGER_HASH || null;
+        } else {
+            config['GENESIS_BLOCK']       = 0;     // disabled: no LTC source-ledger snapshot
+            config['GENESIS_LEDGER_HASH'] = null;
+        }
+
         return config;
     }
 }

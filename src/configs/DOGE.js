@@ -95,6 +95,17 @@ module.exports = {
         }
         config['ADDRESS'] = address;
 
+        // Genesis ledger bootstrap pin (consensus-critical; see config.js + genesis.js).
+        // mainnet/testnet are frozen and pinned at launch; regtest binds via env so the
+        // e2e harness can point genesis at a current regtest block + test manifest.
+        if(network === 'regtest'){
+            config['GENESIS_BLOCK']       = parseInt(process.env.XCHAIN_GENESIS_BLOCK || '0', 10) || 0;
+            config['GENESIS_LEDGER_HASH'] = process.env.XCHAIN_GENESIS_LEDGER_HASH || null;
+        } else {
+            config['GENESIS_BLOCK']       = 0;     // TODO(launch): pin to the DOGE (Dogeparty) start block
+            config['GENESIS_LEDGER_HASH'] = null;  // TODO(launch): pin sha256 of data/genesis/DOGE-ledger.csv
+        }
+
         return config;
     }
 }
