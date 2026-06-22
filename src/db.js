@@ -43,6 +43,15 @@ const { canonicalizeHashAddress } = require('./protocolAddressRoles');
 // env-overridable.
 const BLOCK_HASH_VERSION = 1;
 
+// Canonical form of a wire `^<id>` index reference: a caret followed by decimal digits
+// with no leading zero (ids start at 1, so `^0` is invalid too). This is the ONE accepted
+// byte-form, so a given entity has exactly one wire id form. Tested against the substring
+// AFTER the '^'. Non-canonical caret strings (`^007`, `^1.5`, `^-1`, `^0x10`, `^1e3`,
+// `^ 1`, `^`) are rejected so they cannot alias to a canonical id or coerce onto an
+// integer FK column; the digit string is handed to SQL verbatim (never via Number()) so a
+// large id keeps full precision. See xchain-documentation/protocol/Index_Id_References.md.
+const CANONICAL_CARET_ID = /^[1-9][0-9]*$/;
+
 class Database {
 
     constructor(host, port, dbName, user, pass, indexer) {
@@ -1434,12 +1443,20 @@ class Database {
         let id  = null;
         let str = String(address);
         let pid = str.substring(1); // Possible ADDRESS ID (everything after the ^ prefix)
-        // A wire ^<id> address reference resolves directly to the numeric id
-        // (mirrors getTickerId). Real crypto addresses (base58/bech32) and the
-        // contract-derived C:<CHAIN>:<index> form never begin with '^', so this
-        // caret check cannot collide with a legitimate address string.
-        if(str.substring(0,1)=='^' && this.util.isNumeric(pid))
-            id = Number(pid);
+        // A wire ^<id> address reference resolves directly to the numeric id (mirrors
+        // getTickerId). Real crypto addresses (base58/bech32) and the contract-derived
+        // C:<CHAIN>:<index> form never begin with '^', so this caret check cannot collide
+        // with a legitimate address string. Only the CANONICAL form is accepted (no leading
+        // zero, id >= 1) and only when a backing row actually exists in the deterministic
+        // set (block_index IS NOT NULL), matching resolveAddressRef: a non-canonical or
+        // dangling/out-of-band caret yields null rather than a phantom id. pid is handed to
+        // SQL verbatim (never Number()) so a large id keeps full precision.
+        if(str.substring(0,1)=='^' && CANONICAL_CARET_ID.test(pid)){
+            let results = await this.doQuery("SELECT id FROM index_addresses WHERE id=? AND block_index IS NOT NULL LIMIT 1", [pid]);
+            if(results.length > 0)
+                id = Number(results[0].id);
+            return id;
+        }
         // Otherwise look the id up by the canonical address string.
         if(this.util.isNull(id)){
             let query   = "SELECT id FROM index_addresses WHERE `address`=? LIMIT 1";
@@ -1466,6 +1483,27 @@ class Database {
         return id;
     }
 
+    // Startup invariant probe (#5052): count index rows with a NULL block_index. These are
+    // out-of-band (legacy AUTO_INCREMENT) ids that are invisible to ^<id> resolution but
+    // inflate the dense counter and signal the DB was not cleanly reindexed from genesis.
+    // Warns loudly with the count rather than throwing, so an in-progress migration node is
+    // not bricked; the planned clean reindex drives both counts to zero. No-op on a clean DB.
+    async warnOnOrphanIndexIds(){
+        try {
+            let a = await this.doQuery("SELECT COUNT(*) AS c FROM index_addresses WHERE block_index IS NULL");
+            let t = await this.doQuery("SELECT COUNT(*) AS c FROM index_tickers WHERE block_index IS NULL");
+            let addrOrphans = (a.length > 0) ? Number(a[0].c) : 0;
+            let tickOrphans = (t.length > 0) ? Number(t[0].c) : 0;
+            if(addrOrphans > 0 || tickOrphans > 0)
+                console.warn('Index id invariant: ' + addrOrphans + ' index_addresses and ' + tickOrphans +
+                    ' index_tickers rows have a NULL block_index (out-of-band ids). These inflate the ' +
+                    'deterministic id counter; a clean genesis reindex is required to restore the invariant.');
+        } catch(e){
+            // Tolerate a partially-migrated DB (column may not exist yet): degrade to silent.
+            console.warn('Index id invariant probe failed (non-fatal):', e.message);
+        }
+    }
+
     // Create records in the 'index_addresses' table and return record id
     // @param {address}     string  Address string (or already-resolved value)
     // @param {blockIndex}  integer Block at which the id is first assigned (defaults to
@@ -1476,6 +1514,13 @@ class Database {
             return null;
         // Truncate to 120 characters
         address = String(address).substring(0,120);
+        // Defense-in-depth: a raw wire ^<id> reference must be resolved by resolveAddressRef
+        // BEFORE it reaches createAddress; it is never a value to intern. If one ever arrives
+        // here (a future mis-wired caller), refuse to create a literal "^…" address row.
+        // A canonical, existing ^<id> still resolves via getAddressId below; anything else
+        // returns null so the caller treats it as a no-op rather than minting a bogus row.
+        if(address.substring(0,1) === '^')
+            return await this.getAddressId(address);
         let id = await this.getAddressId(address);
         // Create address if it does not already exist
         if(id === null){
@@ -1510,7 +1555,12 @@ class Database {
                 // Outside block processing (API read paths, recovery seed): keep the legacy
                 // AUTO_INCREMENT path with a NULL block_index. These ids are not assigned
                 // during consensus block processing, so they are not part of the
-                // deterministic/rollback-tracked set.
+                // deterministic/rollback-tracked set. If this fires AFTER deterministic
+                // indexing has begun it would bump MAX(id) and offset the dense counter, so
+                // warn loudly: it must never happen during the indexing lifetime (#5052).
+                if(this.deterministicIndexingStarted)
+                    console.warn('Index id invariant: out-of-band index_addresses insert ("' + address +
+                        '") after deterministic indexing began; this offsets the id counter.');
                 let query = "INSERT IGNORE INTO index_addresses (`address`) values (?)";
                 await this.doQuery(query, [address]);
                 id = await this.getAddressId(address);
@@ -1584,12 +1634,14 @@ class Database {
     // (getNextAddressId), so id -> address is the same on every node and reorg-stable.
     //
     // Only a STRICTLY canonical ^<digits> reference is resolved. Any other caret
-    // string (^1.5, ^0x10, ^-1, ^1e3, ^ 1, ^, ^abc) is returned UNCHANGED so the
+    // string (^007, ^1.5, ^0x10, ^-1, ^1e3, ^ 1, ^, ^abc) is returned UNCHANGED so the
     // caller's existing isCryptoAddress() format check rejects it; this also keeps a
-    // non-integer / out-of-range id off the integer FK columns. A dangling reference
-    // (no such id yet, e.g. a forward reference) is likewise returned unchanged and
-    // rejected. The digit string is handed to SQL verbatim (never via Number()), so a
-    // large id keeps full precision and an out-of-range id simply matches no row.
+    // non-integer / out-of-range id off the integer FK columns. Leading zeros are
+    // rejected (^007 must not alias to ^7) so a single entity has exactly one wire
+    // byte-form. A dangling reference (no such id yet, e.g. a forward reference) is
+    // likewise returned unchanged and rejected. The digit string is handed to SQL
+    // verbatim (never via Number()), so a large id keeps full precision and an
+    // out-of-range id simply matches no row.
     async resolveAddressRef(value){
         if(this.util.isNull(value))
             return value;
@@ -1597,7 +1649,7 @@ class Database {
         if(str.substring(0,1) !== '^')
             return value;
         let pid = str.substring(1);
-        if(!/^[0-9]+$/.test(pid))
+        if(!CANONICAL_CARET_ID.test(pid))
             return value;
         // F2 (deterministic-set gate): resolve a wire ^<id> ONLY to an id in the
         // deterministic set (block_index IS NOT NULL). Ids assigned out-of-band
@@ -1845,9 +1897,19 @@ class Database {
         let id  = null;
         let str = String(tick);
         let pid = str.substring(1); // Possible TICK ID (everything after the ^ prefix)
-        // Determine if TICK is actually a TICK ID
-        if(str.substring(0,1)=='^' && this.util.isNumeric(pid))
-            id = pid;
+        // A wire ^<id> ticker reference resolves directly to the numeric id. Unlike the
+        // address axis there is no resolveTickerRef shim, so this IS the live consumption
+        // path for a wire ^<tickid>; it must be as strict as resolveAddressRef. Only the
+        // CANONICAL form is accepted (no leading zero, id >= 1) and only when a backing row
+        // exists in the deterministic set (block_index IS NOT NULL): a non-canonical or
+        // dangling/out-of-band caret yields null so the handler rejects it as an unknown
+        // ticker. pid is handed to SQL verbatim (never Number()) to keep full precision.
+        if(str.substring(0,1)=='^' && CANONICAL_CARET_ID.test(pid)){
+            let results = await this.doQuery("SELECT id FROM index_tickers WHERE id=? AND block_index IS NOT NULL LIMIT 1", [pid]);
+            if(results.length > 0)
+                id = Number(results[0].id);
+            return id;
+        }
         // Try to lookup id using tick passed
         if(this.util.isNull(id)){
             let query   = "SELECT id FROM index_tickers WHERE LOWER(tick)=? LIMIT 1";
@@ -1879,6 +1941,11 @@ class Database {
         // Ignore empty tick and return NULL
         if(this.util.isNull(tick))
             return null;
+        // Defense-in-depth: a raw wire ^<id> ticker reference is resolved by getTickerId, never
+        // interned as a literal "^…" tick row. A canonical, existing ^<id> still resolves via
+        // getTickerId below; anything else returns null rather than minting a bogus row.
+        if(String(tick).substring(0,1) === '^')
+            return await this.getTickerId(tick);
         let id = await this.getTickerId(tick);
         // Create ticker if it does not already exist
         if(id === null){
@@ -1904,6 +1971,11 @@ class Database {
                 id = await this.getTickerId(tick);
             } else {
                 // Outside block processing: keep the legacy AUTO_INCREMENT path (NULL block_index).
+                // As with createAddress, an out-of-band insert after deterministic indexing began
+                // offsets the dense id counter and must never happen during indexing (#5052).
+                if(this.deterministicIndexingStarted)
+                    console.warn('Index id invariant: out-of-band index_tickers insert ("' + tick +
+                        '") after deterministic indexing began; this offsets the id counter.');
                 let query = "INSERT IGNORE INTO index_tickers (tick) values (?)";
                 await this.doQuery(query, [tick]);
                 id = await this.getTickerId(tick);

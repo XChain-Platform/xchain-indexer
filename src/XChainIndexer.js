@@ -317,6 +317,16 @@ class XChainIndexer {
             // schema_migrations ledger, so this is a no-op once applied.
             await this.indexerDb.runMigrations();
 
+            // Invariant probe (#5052/#4844/#5026 arming precondition): the deterministic
+            // address/ticker id counter (getNextAddressId = MAX(id)+1) and every wire ^<id>
+            // resolution assume every index row carries a non-NULL, rollback-stable block_index.
+            // Out-of-band rows (legacy AUTO_INCREMENT, NULL block_index) are invisible to ^id
+            // resolution (the resolvers gate on block_index IS NOT NULL) but still inflate the
+            // counter and indicate the DB has not been cleanly reindexed. Warn loudly with the
+            // count rather than throw, so a mid-migration node is not bricked; pre-launch the
+            // clean genesis reindex drives this to zero.
+            await this.indexerDb.warnOnOrphanIndexIds();
+
             // Now that the indexer tables exist (including every hub-mirror table the
             // sync client writes into), start the hub DB sync in the background.
             // Deferred from construction above so the bootstrap never inserts into a
@@ -538,6 +548,11 @@ class XChainIndexer {
                 // id is first assigned (used by rollback to delete + deterministically
                 // reassign ids on reorg, keeping wire ^<id> references fork-safe).
                 this.indexerDb.blockIndex = blockToParse;
+                // Mark that deterministic, block-stamped id assignment has begun. The
+                // out-of-band createAddress/createTicker branch (NULL block_index, legacy
+                // AUTO_INCREMENT) warns if it ever runs after this point, since an out-of-band
+                // insert would bump MAX(id) and silently offset the dense counter (#5052).
+                this.indexerDb.deterministicIndexingStarted = true;
                 // Light-client state commitment (SPV spec §4): when active, install a
                 // fresh per-block touched-key set so the ledger choke point
                 // (db.createLedgerChangeRecord) records every (address, tick) mutated

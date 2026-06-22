@@ -13,6 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Index-map `state_hash` promotion: per-block `index_addresses`/`index_tickers` preimage class, activation-gated and consensus-inert until flag-day.
 
+### Security
+- Resolve a wire `^<id>` index reference only when it is canonical (`^[1-9][0-9]*`, no leading zero) and backs an existing block-stamped row, across `getAddressId`, `getTickerId`, and `resolveAddressRef`.
+- Reject malformed, dangling, and non-canonical caret forms (`^007`, `^1.5`, `^-1`, `^0x10`, `^1e3`) instead of resolving them to a phantom, aliased, or coerced id.
+- Skip the deterministic index-id pre-pass for actions rejected before their handler, so a rejected action mints no `index_addresses` id.
+- Stamp index ids from a single authoritative `block_index` and warn on out-of-band or NULL-`block_index` ids that would offset the deterministic counter.
+
 ## [2.7.11] - 2026-06-20
 
 ### Security

@@ -382,14 +382,25 @@ describe('Database getTicker/getTickerId @regression @tier1', function () {
         assert.strictEqual(await db.getTicker(3), 'PEPE');
     });
 
-    it('getTickerId for ^N literal: strips only the ^ prefix and returns the full id', async function () {
-        // A `^<id>` reference resolves directly to TICK_ID <id> without a DB lookup.
-        // Everything after the caret is the id, including the final digit.
+    it('getTickerId for a canonical ^N reference returns the id when a backing row exists', async function () {
+        // A `^<id>` reference is verified against an existing block-stamped row (mirrors
+        // resolveAddressRef); the id is handed to SQL as a digit string and returned as a Number.
+        const db = makeDb();
+        sinon.stub(db, 'doQuery').resolves([{ id: 42 }]);
+        assert.strictEqual(await db.getTickerId('^42'), 42);
+    });
+
+    it('getTickerId for a canonical ^N reference returns null when no backing row exists (dangling)', async function () {
         const db = makeDb();
         sinon.stub(db, 'doQuery').resolves([]);
-        assert.strictEqual(String(await db.getTickerId('^42')),   '42');
-        assert.strictEqual(String(await db.getTickerId('^1234')), '1234');
-        assert.strictEqual(String(await db.getTickerId('^7')),    '7');  // single-digit id
+        assert.strictEqual(await db.getTickerId('^999999'), null);
+    });
+
+    it('getTickerId rejects a non-canonical ^N (leading zero) rather than aliasing it', async function () {
+        // '^007' must not resolve like '^7'; it falls through to the name lookup (stubbed empty) -> null.
+        const db = makeDb();
+        sinon.stub(db, 'doQuery').resolves([]);
+        assert.strictEqual(await db.getTickerId('^007'), null);
     });
 
     it('getTickerId for ^N with a non-numeric body falls through to a name lookup', async function () {

@@ -352,7 +352,7 @@ class Actions {
         // identically on every node and across code refactors. Runs after createActionIndex
         // (which already registered SOURCE first) and covers the BATCH path too, since
         // batch.js dispatches each sub-action back through processAction.
-        await this.assignActionAddressIds(action, params, data);
+        await this.assignActionAddressIds(action, params, data, error);
 
         // Process the action with the correct handler
         if(action=='ADDRESS')            await this.actionAddress.parse(params, data, error);
@@ -470,10 +470,17 @@ class Actions {
     // Pre-pass: assign deterministic, value-sorted index ids to the NEW wire-field
     // addresses an action introduces. See the call site in processAction and the
     // consensus note in src/addressRefFields.js.
-    async assignActionAddressIds(action, params, data){
+    async assignActionAddressIds(action, params, data, error){
         // Only assign during block processing: createAddress only does explicit-counter
         // (deterministic) assignment inside a transaction. Outside one this is a no-op.
         if(this.indexerDb.transactionConnection == null)
+            return;
+        // #4888: skip pre-handler-rejected actions (unknown / not-yet-activated). Such an
+        // action never reaches its handler, so interning its wire-field addresses would mint
+        // index ids for an action that does nothing. (A semantic rejection INSIDE the handler
+        // still interns, by design: the pre-pass exists to pin id-assignment ORDER, and the
+        // cross-version divergence that creates is foreclosed pre-launch by clean reindex.)
+        if(error)
             return;
         let specs = ADDRESS_REF_FIELDS[action];
         if(!specs || specs.length === 0)
@@ -531,9 +538,17 @@ class Actions {
         // Byte (binary) sort by value: the consensus tiebreak (matches the utf8_bin
         // collation intent; independent of field layout and of any DB collation).
         pending.sort((a, b) => Buffer.compare(Buffer.from(a, 'utf8'), Buffer.from(b, 'utf8')));
+        // #4889: stamp from the SINGLE authoritative block source. createAddress defaults
+        // blockIndex to this.indexerDb.blockIndex (= blockToParse), the same source
+        // createActionIndex uses to stamp SOURCE, so every id created in a block lands under
+        // one block_index value and the rollback "WHERE block_index >= ?" delete cannot split
+        // a block's ids. data['BLOCK_INDEX'] equals it today; warn loudly if it ever diverges.
+        if(data['BLOCK_INDEX'] != this.indexerDb.blockIndex)
+            console.warn('Index id invariant: action BLOCK_INDEX (' + data['BLOCK_INDEX'] +
+                ') != indexer blockIndex (' + this.indexerDb.blockIndex + '); stamping from indexer blockIndex.');
         // Assign each the next explicit dense id, in sorted order, stamped at this block.
         for(let addr of pending)
-            await this.indexerDb.createAddress(addr, data['BLOCK_INDEX']);
+            await this.indexerDb.createAddress(addr);
     }
 
     // Read-only estimator for the XCHAIN-denominated protocol fee ("fees.AMOUNT") an action

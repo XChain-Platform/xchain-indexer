@@ -14,9 +14,11 @@
  * they probe the PARSE/RESOLVE layer only. DB-coercion and real-collation
  * behaviour for the float/overflow cases is the test-host/VM leg (Cat 1/6).
  *
- * Findings are tagged FINDING in the test name. They assert CURRENT
- * behaviour (regression guard) and document the risk; the recommended fix
- * is in the findings report, not applied here.
+ * The canonicalization + existence fix (#4900/#4901/#4902) is now APPLIED:
+ * getAddressId / getTickerId accept ONLY a canonical `^[1-9][0-9]*` that
+ * resolves to an existing block-stamped row, mirroring resolveAddressRef.
+ * These tests are the regression guard for that fix (a non-canonical or
+ * dangling caret resolves to null, never a phantom / aliased / coerced id).
  *********************************************************************/
 
 'use strict';
@@ -47,82 +49,79 @@ afterEach(function () { sinon.restore(); });
 
 describe('Adversarial ^<id> resolution: dangling / malformed references @adversarial @tier1', function () {
 
-    // ---- (A) Fail-open: a well-formed caret-id is accepted with NO existence check ----
+    // ---- (A) Existence-checked: a well-formed caret-id is verified against a real row ----
 
-    it('FINDING: getAddressId accepts a dangling ^<id> with no existence check (fail-open)', async function () {
-        // doQuery throws if reached; a return value proves the row was never verified.
-        const db = makeDb();
+    it('getAddressId existence-checks a canonical ^<id>: dangling -> null (no phantom)', async function () {
+        // The caret branch now SELECTs (id WHERE block_index IS NOT NULL); no row -> null.
+        const db = makeDb((sql, args) => { assert.strictEqual(args[0], '999999', 'id passed as digit string'); return []; });
         const id = await db.getAddressId('^999999');
-        assert.strictEqual(id, 999999, 'dangling caret-id returns the bare number, unverified');
-        assert.strictEqual(db.doQuery.called, false, 'no DB existence check was performed');
-        // Consensus note: not a fork by itself (every node resolves the same wire bytes to
-        // the same missing id -> NULL string at hash time). It IS a silent-counterparty bug:
-        // a credit/debit can name a non-existent entity and be hashed as NULL.
+        assert.strictEqual(id, null, 'dangling caret-id is verified and rejected');
+        assert.strictEqual(db.doQuery.called, true, 'a DB existence check WAS performed');
     });
 
-    it('getTickerId likewise accepts a dangling ^<id> with no existence check', async function () {
-        const db = makeDb();
-        const id = await db.getTickerId('^999999');
-        assert.strictEqual(String(id), '999999');
-        assert.strictEqual(db.doQuery.called, false);
+    it('getAddressId resolves a canonical ^<id> that DOES exist', async function () {
+        const db = makeDb(() => [{ id: 16 }]);
+        assert.strictEqual(await db.getAddressId('^16'), 16);
     });
 
-    // ---- (B) Non-canonical encodings that ALIAS to the same id (wire is not canonical) ----
-
-    it('FINDING: multiple wire encodings resolve to the SAME address id (non-canonical wire form)', async function () {
-        const db = makeDb();
-        const id16  = await db.getAddressId('^16');
-        const idHex = await db.getAddressId('^0x10');   // hex 0x10 == 16
-        const id1k  = await db.getAddressId('^1000');
-        const idSci = await db.getAddressId('^1e3');    // 1e3 == 1000
-        const id123 = await db.getAddressId('^123');
-        const idLz  = await db.getAddressId('^00123');  // leading zeros == 123
-        const id1   = await db.getAddressId('^1');
-        const idWs  = await db.getAddressId('^ 1');     // leading whitespace == 1
-        assert.strictEqual(idHex, id16,  '^0x10 aliases ^16');
-        assert.strictEqual(idSci, id1k,  '^1e3 aliases ^1000');
-        assert.strictEqual(idLz,  id123, '^00123 aliases ^123');
-        assert.strictEqual(idWs,  id1,   '^ 1 aliases ^1');
-        // Indexer hashes identically for aliases (same resolved id -> same string), so this is
-        // NOT an indexer fork. It IS a wire-canonicalisation gap: the encoder/SDK/validator
-        // should accept only /^\^[0-9]+$/ so a single id has a single on-wire byte form
-        // (matters for tx canonicalisation / signatures / dedupe).
+    it('getTickerId existence-checks a canonical ^<id>: dangling -> null', async function () {
+        const db = makeDb(() => []);
+        assert.strictEqual(await db.getTickerId('^999999'), null);
+        assert.strictEqual(db.doQuery.called, true);
     });
 
-    // ---- (C) The real fork/crash candidates: non-integer and out-of-range ids ----
-
-    it('FINDING: getAddressId returns a FLOAT id for ^1.5 (DB integer-column coercion is the fork risk)', async function () {
-        const db = makeDb();
-        const id = await db.getAddressId('^1.5');
-        assert.strictEqual(id, 1.5, 'parse layer does not reject a fractional id');
-        assert.ok(!Number.isInteger(id), 'a non-integer FK value will be coerced by MariaDB (version/sql_mode dependent) -> divergence candidate; must be canonicalised before the INSERT');
+    it('getTickerId resolves a canonical ^<id> that DOES exist (returns a Number)', async function () {
+        const db = makeDb(() => [{ id: 42 }]);
+        const id = await db.getTickerId('^42');
+        assert.strictEqual(id, 42);
+        assert.strictEqual(typeof id, 'number');
     });
 
-    it('FINDING: getAddressId returns a NEGATIVE id for ^-1', async function () {
-        const db = makeDb();
-        const id = await db.getAddressId('^-1');
-        assert.strictEqual(id, -1, 'negative id accepted; address_id is UNSIGNED -> coercion/overflow candidate');
+    // ---- (B) Non-canonical encodings NO LONGER alias: each falls through to a literal lookup ----
+
+    it('non-canonical caret encodings no longer alias to a numeric id (hex/sci/leading-zero/whitespace)', async function () {
+        // None match /^[1-9][0-9]*$/, so each falls through to the literal string lookup
+        // (which finds no "^…" address row) -> null. The aliasing gap is closed.
+        const seen = [];
+        const db = makeDb((sql, args) => { seen.push(args && args[0]); return []; });
+        for (const bad of ['^0x10', '^1e3', '^00123', '^ 1', '^007']) {
+            assert.strictEqual(await db.getAddressId(bad), null, `${JSON.stringify(bad)} no longer resolves to an id`);
+        }
+        assert.strictEqual(seen.length, 5, 'each non-canonical caret string hit the literal lookup branch, never the id existence SELECT');
+        assert.ok(seen.every(s => String(s).charAt(0) === '^'), 'the literal lookup used the raw caret string, proving no numeric coercion happened');
     });
 
-    it('FINDING: getAddressId returns an OUT-OF-RANGE id far beyond BIGINT for a huge ^<id>', async function () {
-        const db = makeDb();
+    // ---- (C) Former fork/crash candidates: non-integer and out-of-range ids are now rejected ----
+
+    it('a FLOAT ^1.5 is non-canonical -> null (never coerced onto an integer FK)', async function () {
+        const db = makeDb(() => []);
+        assert.strictEqual(await db.getAddressId('^1.5'), null);
+    });
+
+    it('a NEGATIVE ^-1 is non-canonical -> null', async function () {
+        const db = makeDb(() => []);
+        assert.strictEqual(await db.getAddressId('^-1'), null);
+    });
+
+    it('an OUT-OF-RANGE huge ^<id> is matched as a digit string, not coerced to a float', async function () {
         const big = '^' + '9'.repeat(38); // ~1e38, BIGINT UNSIGNED max ~1.8e19
-        const id  = await db.getAddressId(big);
-        assert.ok(id > 1.8e19, 'value exceeds BIGINT UNSIGNED range; INSERT/compare behaviour is DB-dependent (clamp/error) -> crash/divergence candidate');
+        let captured;
+        const db = makeDb((sql, args) => { captured = args[0]; return []; }); // no row -> null
+        assert.strictEqual(await db.getAddressId(big), null);
+        assert.strictEqual(captured, '9'.repeat(38), 'id handed to SQL verbatim (no Number() overflow)');
+        assert.strictEqual(typeof captured, 'string');
     });
 
-    // ---- (D) Address vs ticker resolver asymmetry (Number() vs raw string) ----
+    // ---- (D) Address and ticker resolvers are now symmetric (canonical + existence + Number) ----
 
-    it('FINDING: getAddressId returns a Number while getTickerId returns the raw string for the same ^<id>', async function () {
-        const db = makeDb();
-        const addr = await db.getAddressId('^1e3');
-        const tick = await db.getTickerId('^1e3');
-        assert.strictEqual(typeof addr, 'number', 'address resolver does Number(pid) -> 1000');
+    it('getAddressId and getTickerId resolve a canonical existing ^<id> symmetrically (both Number)', async function () {
+        const db = makeDb(() => [{ id: 1000 }]);
+        const addr = await db.getAddressId('^1000');
+        const tick = await db.getTickerId('^1000');
         assert.strictEqual(addr, 1000);
-        assert.strictEqual(typeof tick, 'string', 'ticker resolver returns pid verbatim -> "1e3"');
-        assert.strictEqual(tick, '1e3');
-        // The downstream createTicker does Number() at the end, so they converge, but the
-        // divergent intermediate types are a latent footgun if either path is reused.
+        assert.strictEqual(tick, 1000);
+        assert.strictEqual(typeof addr, 'number');
+        assert.strictEqual(typeof tick, 'number');
     });
 
     // ---- (E) Non-numeric caret strings fall through to a literal lookup (must NOT crash) ----
@@ -158,7 +157,7 @@ describe('resolveAddressRef: the handler-side ^<id> -> canonical address guard (
 
     it('leaves a NON-canonical caret string unchanged and never queries (float/hex/sci/neg/space/empty/alpha)', async function () {
         const db = makeDb(() => { throw new Error('must not query for a non-canonical reference'); });
-        for (const bad of ['^1.5', '^0x10', '^1e3', '^-1', '^ 1', '^', '^abc']) {
+        for (const bad of ['^1.5', '^0x10', '^1e3', '^-1', '^ 1', '^', '^abc', '^007', '^0']) {
             assert.strictEqual(await db.resolveAddressRef(bad), bad,
                 `${JSON.stringify(bad)} must be returned unchanged so isCryptoAddress rejects it`);
         }
