@@ -56,6 +56,13 @@ async function buildHealthResponse({ indexer, indexerRunning, indexerError, last
         }
     }
 
+    // Per-type accepted/rejected counts since the process started. Null when the
+    // actions instance is not yet initialised (e.g. very early in boot or in unit
+    // tests that stub the indexer). Never on any consensus-hashed path.
+    let actionCounters = (indexer.actions && typeof indexer.actions.getActionCounters === 'function')
+                            ? indexer.actions.getActionCounters()
+                            : null;
+
     return {
         status:           (indexerRunning && !circuitOpen) ? "healthy" : "unhealthy",
         running:          indexerRunning,
@@ -77,6 +84,7 @@ async function buildHealthResponse({ indexer, indexerRunning, indexerError, last
         lastHubConfigFetchAt: lastHubConfigFetchAt,
         hubConfigAgeSeconds:  hubConfigAgeSeconds,
         hub_push_queue:   hubPushQueue,
+        action_counters:  actionCounters,
         error:            indexerError ? indexerError.message : null
     };
 }

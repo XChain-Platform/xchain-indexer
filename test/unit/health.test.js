@@ -112,4 +112,22 @@ describe('health() response builder', function(){
         assert.strictEqual(res.error, 'boom');
     });
 
+    it('action_counters is null when the actions instance is not yet initialised', async function(){
+        // During early boot the actions object may not exist yet. The health response
+        // must not throw; it should surface null so a monitoring probe can tell the
+        // counters are simply unavailable, not zero.
+        const res = await call(makeIndexer());
+        assert.strictEqual(res.action_counters, null, 'should be null when indexer.actions is absent');
+    });
+
+    it('action_counters reflects a live snapshot from getActionCounters()', async function(){
+        const counters = { ISSUE: { accepted: 3, rejected: 1 }, SEND: { accepted: 7, rejected: 0 } };
+        const indexer  = makeIndexer({
+            actions: { getActionCounters: () => Object.assign({}, counters) }
+        });
+        const res = await call(indexer);
+        assert.deepStrictEqual(res.action_counters, counters,
+            'action_counters must mirror the live snapshot from getActionCounters()');
+    });
+
 });

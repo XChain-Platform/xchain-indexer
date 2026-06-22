@@ -229,6 +229,12 @@ class Actions {
         this.actionAliases['CAST'] = 'BROADCAST';
         this.actionAliases['MSG']  = 'MESSAGE';
 
+        // Lightweight in-process observability counters: accepted and rejected counts per
+        // ACTION type, accumulated since this instance started. Pure in-memory, never
+        // persisted, and never read on the consensus-hashed path, so they cannot affect
+        // ledger output. Exposed via getActionCounters() for the health endpoint.
+        this._actionCounters = {};
+
     }
 
     // Generalized function to handle processing a transaction
@@ -410,6 +416,34 @@ class Actions {
 
         // Full-node possession-proof verdict (verified-validator tier)
         if(action=='NODEPROOF')          await this.actionNodeproof.parse(params, data, error);
+
+        // Increment the in-memory observability counter for this action type. STATUS
+        // is 'valid' for accepted actions and an 'invalid: ...' string (or undefined
+        // when an earlier gate short-circuits) for rejected ones. This read happens
+        // AFTER the handler has written its final status, so the bucket is accurate.
+        // Pure observability: not on any hashed path and not persisted.
+        let bucket = this._actionCounters[action];
+        if(!bucket){
+            bucket = { accepted: 0, rejected: 0 };
+            this._actionCounters[action] = bucket;
+        }
+        if(data['STATUS'] === 'valid')
+            bucket.accepted++;
+        else
+            bucket.rejected++;
+    }
+
+    // Return a snapshot of the per-type accepted/rejected counters accumulated since
+    // this process started. The caller receives a plain object (not a live reference)
+    // so mutations outside this class cannot corrupt the counters. Surfaced by the
+    // health endpoint as a lightweight operational signal; never on any consensus path.
+    getActionCounters(){
+        let out = {};
+        for(let type of Object.keys(this._actionCounters)){
+            let b = this._actionCounters[type];
+            out[type] = { accepted: b.accepted, rejected: b.rejected };
+        }
+        return out;
     }
 
     // Map an ACTION name to the handler whose `formats` strings (and setActionParams
@@ -426,7 +460,9 @@ class Actions {
             case 'DISPENSER': return this.actionDispenser;
             case 'ORDER':     return this.actionOrder;
             case 'SWAP':      return this.actionSwap;
-            case 'ADDRESS':   return this.actionAddress;
+            // ADDRESS is intentionally absent: ADDRESS_REF_FIELDS has no 'ADDRESS' key,
+            // so assignActionAddressIds returns early before ever reaching this switch.
+            // A case here would be unreachable dead code.
             default:          return null;
         }
     }

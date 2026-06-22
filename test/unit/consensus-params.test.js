@@ -26,7 +26,7 @@ process.env.INDEXER_COIN    = process.env.INDEXER_COIN    || 'BTC';
 process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
 const Utility = require('../../src/utility.js');
 
-// ---- frozen golden (consensus epoch '1') ----
+// ---- frozen golden (consensus epoch '2') ----
 const GOLDEN_GAS_PRICE = '0.00001';
 const GOLDEN_GAS_SCHEDULE = {
     ISSUE:              100000,
