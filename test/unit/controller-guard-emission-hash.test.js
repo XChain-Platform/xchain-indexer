@@ -139,4 +139,24 @@ describe('runControllerGuard: guard emissions enter contract_hash @regression @t
         assert.strictEqual(db.rollbackToSavepoint.callCount, 1,
             'the savepoint (covering the parent execution row + emissions) must roll back');
     });
+
+    it('gives each guard invocation a unique savepoint name even when (action, controller, seq) collide (duplicate-savepoint safety)', async function () {
+        // Up to three guards run on one SEND leg sharing the leg's seq, and two can
+        // share a controller index (token-controller == address-controller, or a
+        // self-send). The savepoint name must still be unique per invocation:
+        // MariaDB silently destroys a duplicate-named savepoint, so a collision in a
+        // re-entrant guard path could orphan an outer rollback target. Two calls on
+        // the SAME handler with identical (ACTION_INDEX, controllerIndex, seq) must
+        // therefore derive distinct names (a trailing per-invocation ordinal).
+        const { handler, db } = buildHandler([]);
+        await handler.runControllerGuard(opts());
+        await handler.runControllerGuard(opts());
+        assert.strictEqual(db.createSavepoint.callCount, 2);
+        const n1 = db.createSavepoint.getCall(0).args[0];
+        const n2 = db.createSavepoint.getCall(1).args[0];
+        assert.ok(n1.startsWith('controller_guard_10_5_0_'), `unexpected savepoint name: ${n1}`);
+        assert.ok(n2.startsWith('controller_guard_10_5_0_'), `unexpected savepoint name: ${n2}`);
+        assert.notStrictEqual(n1, n2,
+            'two guards sharing (action, controller, seq) must get distinct savepoint names or a re-entrant collision could destroy an outer savepoint');
+    });
 });

@@ -71,6 +71,16 @@ class Execute {
         this.util      = action.util;
         this.mapper    = action.mapper;
 
+        // Monotonic per-instance ordinal appended to each controller-guard
+        // savepoint name so every guard invocation gets a globally-unique name
+        // within the transaction. (action_index, contractIndex, seq) alone can
+        // repeat: up to three guards run on one SEND leg sharing the leg's seq,
+        // and two can share a contractIndex (token-controller == address-controller,
+        // or a self-send), so they would otherwise build the same name. The name
+        // is a transaction-local artifact (never hashed, replicated, or persisted),
+        // so a per-process counter that diverges across nodes is harmless.
+        this.guardSavepointCounter = 0;
+
         // Define list of known FORMATS
         this.formats = {};
         this.formats[0] = 'VERSION|CONTRACT_ACTION_INDEX|METHOD|PARAMS...';
@@ -638,9 +648,12 @@ class Execute {
         }
 
         // Guard allowed. Commit its state changes + emissions atomically; any
-        // failure rolls them back and DENIES. Savepoint name is unique per
-        // (native action, controller) so nested controlled-token guards don't
-        // collide (MariaDB destroys a duplicate-named savepoint).
+        // failure rolls them back and DENIES. The savepoint name carries the
+        // (native action, controller, seq) for readability but is made unique by
+        // a trailing per-invocation ordinal: MariaDB silently destroys a
+        // duplicate-named savepoint, so two guards that share a contractIndex on
+        // one leg (or any future re-entrant guard path) must never derive the
+        // same name or an inner release would orphan the outer's rollback target.
         let guardCtxData = {
             ACTION_INDEX:          hostData['ACTION_INDEX'],
             // Root discriminator for this guard's emission subtree = the guarded native action's
@@ -662,7 +675,7 @@ class Execute {
             IS_GUARD_EMISSION:     true
         };
 
-        let savepoint = await this.indexerDb.createSavepoint('controller_guard_' + parseInt(hostData['ACTION_INDEX']) + '_' + contractIndex + '_' + (parseInt(opts.seq) || 0));
+        let savepoint = await this.indexerDb.createSavepoint('controller_guard_' + parseInt(hostData['ACTION_INDEX']) + '_' + contractIndex + '_' + (parseInt(opts.seq) || 0) + '_' + (this.guardSavepointCounter++));
         try {
             for(let change of vmResult.stateChanges){
                 await this.indexerDb.createContractState({
