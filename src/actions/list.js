@@ -74,11 +74,6 @@ class List {
         let list    = [];
         let invalid = {};
 
-        // DEBUG : Translate TYPE 3 (BTNS address) to 2 (XChain address)
-        // TODO  : Remove this when done testing using old BTNS data
-        if(data['TYPE']==3)
-            data['TYPE'] = 2;
-
         /*****************************************************************
          * FORMAT Validations
          ****************************************************************/
