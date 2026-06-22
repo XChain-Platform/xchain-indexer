@@ -112,6 +112,31 @@ describe('Rollback @regression @tier3', function () {
         }
     });
 
+    it('deletes index_addresses and index_tickers by block_index, after the data deletes (#4904)', async function () {
+        // index_addresses/index_tickers ids are consensus-relevant (wire ^<id> refs), so the
+        // reorg must delete the ids first seen in orphaned blocks (WHERE block_index >= ?) so a
+        // reapply reproduces them deterministically. The coverage guard only asserts list
+        // membership; this pins the actual delete predicate + ordering so a refactor that drops
+        // the bound, mis-scopes it, or moves it before the data deletes fails red.
+        indexer.indexerDb.doQuery.onFirstCall().resolves([{ action_index: 50 }]); // firstActionIndex
+        indexer.indexerDb.doQuery.resolves([]);
+        await rollback.rollback(100);
+        const calls = indexer.indexerDb.doQuery.getCalls();
+        const sql   = calls.map(c => c.args[0]);
+        const addrIdx = sql.findIndex(q => /DELETE FROM index_addresses WHERE block_index >= \?/.test(q));
+        const tickIdx = sql.findIndex(q => /DELETE FROM index_tickers WHERE block_index >= \?/.test(q));
+        assert.ok(addrIdx >= 0, 'index_addresses must be deleted by block_index on rollback');
+        assert.ok(tickIdx >= 0, 'index_tickers must be deleted by block_index on rollback');
+        assert.deepStrictEqual(calls[addrIdx].args[1], [100], 'index_addresses delete bound to the rollback block_index');
+        assert.deepStrictEqual(calls[tickIdx].args[1], [100], 'index_tickers delete bound to the rollback block_index');
+        // Ordering: the index-id deletes MUST run after the block data deletes (otherwise a
+        // surviving row could still point at a to-be-deleted id). Use the blocks delete as the
+        // data-phase reference.
+        const blocksIdx = sql.findIndex(q => /DELETE FROM blocks WHERE block_index >= \?/.test(q));
+        assert.ok(blocksIdx >= 0, 'sanity: blocks delete present');
+        assert.ok(addrIdx > blocksIdx && tickIdx > blocksIdx, 'index-id deletes must run after the block data deletes');
+    });
+
     it('reverses orphaned cooldown-maturity completions: deletes the refund credit + resets status_id, before the delete and balance recompute', async function () {
         indexer.indexerDb.doQuery.onFirstCall().resolves([{ action_index: 50 }]); // firstActionIndex
         indexer.indexerDb.doQuery.resolves([]);

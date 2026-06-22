@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - `recovery_pending_rewards` staging table: recovery-local scratch for archived validator rewards, not consensus-hashed, rollback-exempt, and excluded from replication.
+- Behavioral regression test pinning the `index_addresses`/`index_tickers` rollback delete predicate (`WHERE block_index >= ?`) and its ordering after the data deletes.
+- Golden-vector test pinning the stakes-root primitives (`stakeMemberLeaf`/`stakeTotalLeaf`/`sumCanonicalAmounts`) and the `blockMerkleLeaves` cross-kind ordering.
 
 ### Changed
 - Index-map `state_hash` promotion: per-block `index_addresses`/`index_tickers` preimage class, activation-gated and consensus-inert until flag-day.
