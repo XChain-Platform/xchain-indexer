@@ -251,10 +251,11 @@ class Actions {
         let block_time  = tx.block_time;
 
         // Create database records and get ids for tx_hash and source address.
-        // Address creation is sequential (NOT Promise.all) so AUTO_INCREMENT assigns
-        // address_ids in a deterministic source-before-destination order on every node.
-        // Concurrent INSERTs land on separate pool connections, where the engine may
-        // assign ids in either order, producing per-node address_id mismatches that
+        // Address creation is sequential (NOT Promise.all) so the explicit dense
+        // counter (getNextAddressId) assigns address_ids in a deterministic
+        // source-before-destination order on every node. The counter is read-then-insert
+        // per call, so concurrent INSERTs on separate pool connections would race and
+        // assign ids in an unpredictable order, producing per-node mismatches that
         // feed the consensus ledger hash and fork it across validators.
         await this.indexerDb.createAddress(source);
         await this.indexerDb.createAddress(destination);

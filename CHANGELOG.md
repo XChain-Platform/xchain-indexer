@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `recovery_pending_rewards` staging table: recovery-local scratch for archived validator rewards, not consensus-hashed, rollback-exempt, and excluded from replication.
+
+### Changed
+- Index-map `state_hash` promotion: per-block `index_addresses`/`index_tickers` preimage class, activation-gated and consensus-inert until flag-day.
+
 ## [2.7.11] - 2026-06-20
 
 ### Security

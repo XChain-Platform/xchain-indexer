@@ -78,8 +78,8 @@ class Database {
             port:     this.port,
             // Connection options
             connectionLimit:      10,
-            connectTimeout:       10000,
-            acquireTimeout:       10000,
+            connectTimeout:       parseInt(process.env.DB_CONNECT_TIMEOUT) || 10000,
+            acquireTimeout:       parseInt(process.env.DB_ACQUIRE_TIMEOUT) || 10000,
             idleTimeout:          60000,
             insertIdAsNumber:     true,
             // Return BIGINT columns as JS Numbers rather than BigInts. Without
@@ -122,8 +122,7 @@ class Database {
         // a one-time-probed remaining-unapplied count so normal indexing (no recovery in
         // progress) pays a single COUNT(*) and then short-circuits the hook entirely. The
         // rollback re-arm resets _recoveryPendingChecked to force a re-probe when staged rows
-        // are re-armed. See recovery.js, _applyPendingRewardsForAddress, and
-        // claude/reports/2026-06-19_id-determinism-F1-implementation-plan.md.
+        // are re-armed. See recovery.js and _applyPendingRewardsForAddress below.
         this._recoveryPendingChecked   = false;
         this._recoveryPendingRemaining = 0;
 
@@ -1526,8 +1525,8 @@ class Database {
     // F1a recovery reward apply hook. Called from createAddress right after an address
     // first receives its deterministic in-block id. Cheap-gates on a one-time-probed count
     // of unapplied staged rewards so normal indexing (no recovery in progress) pays a single
-    // COUNT(*) and then short-circuits on every later call. See the constructor flags and
-    // claude/reports/2026-06-19_id-determinism-F1-implementation-plan.md.
+    // COUNT(*) and then short-circuits on every later call. See the constructor flags above
+    // and recovery.js for the staging side.
     async _maybeApplyPendingRewards(address, source_id){
         if(source_id === null || source_id === undefined)
             return;
