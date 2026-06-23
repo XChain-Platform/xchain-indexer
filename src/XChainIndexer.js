@@ -352,6 +352,11 @@ class XChainIndexer {
         this.hubPushQueue = new HubPushQueue(this);
         this.hubPushQueue.start();
 
+        // Start the read-only state_tree_nodes orphan-count metric (observability only; no
+        // deletion). Surfaces unbounded COW-node growth so we can measure it before building a
+        // safe reclaiming sweep (see stateCommitment.reportOrphanStats for why deletion is deferred).
+        this._startStateTreeMetric();
+
         // Define placeholders for block parsing status
         let firstDecoderBlock     = null;
         let lastIndexerBlock      = null;
@@ -841,6 +846,43 @@ class XChainIndexer {
             }
         }, intervalMs);
         if(this._hubConfigPollTimer.unref) this._hubConfigPollTimer.unref();
+    }
+
+    // Periodically emit a read-only orphan-count metric for the COW state_tree_nodes store so
+    // its unbounded growth is observable (SPV spec §4.3). Runs on an unref'd interval (never holds
+    // the process open), guarded against self-overlap, and reads on a POOLED connection so it never
+    // touches the block-processing transaction. No deletion: see stateCommitment.reportOrphanStats.
+    // Interval STATE_TREE_METRIC_INTERVAL_MS (default 4h; 0 disables).
+    _startStateTreeMetric(){
+        if(this._stateTreeMetricTimer) return;
+        const raw = parseInt(process.env.STATE_TREE_METRIC_INTERVAL_MS, 10);
+        const intervalMs = Number.isFinite(raw) ? raw : (4 * 60 * 60 * 1000);
+        if(intervalMs === 0) return;   // explicitly disabled
+        this._stateTreeMetricRunning = false;
+        this._stateTreeMetricTimer = setInterval(async () => {
+            if(this._stateTreeMetricRunning) return;   // a prior slow scan is still running
+            this._stateTreeMetricRunning = true;
+            try {
+                const stats = await stateCommitment.reportOrphanStats(
+                    (sql, args) => this.indexerDb._poolQuery(sql, args),
+                    this.config['COIN'], this.config['NETWORK']);
+                if(stats.totalNodes === 0) return;   // pre-activation / empty store: nothing to report
+                console.log('[METRIC] ' + JSON.stringify({
+                    metric: 'state_tree_orphan_nodes', component: 'indexer',
+                    chain: this.config['COIN'], network: this.config['NETWORK'],
+                    total_nodes: stats.totalNodes, reachable_nodes: stats.reachableNodes,
+                    orphan_count: stats.orphanCount, reachability_skipped: stats.reachabilitySkipped,
+                    ts: Date.now()
+                }));
+            } catch(err) {
+                console.warn('XChainIndexer: state_tree orphan-metric failed for ' +
+                    this.config['COIN'] + '/' + this.config['NETWORK'] + ':', err.message || err);
+            } finally {
+                this._stateTreeMetricRunning = false;
+            }
+        }, intervalMs);
+        if(this._stateTreeMetricTimer.unref) this._stateTreeMetricTimer.unref();
+        console.log('XChainIndexer: state_tree orphan-metric started (interval ' + intervalMs + 'ms)');
     }
 
 }

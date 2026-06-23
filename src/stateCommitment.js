@@ -138,6 +138,75 @@ class PersistentSMT {
     }
 }
 
+// Every EMPTY[h] constant, hex. A child hash equal to one of these has no row in
+// state_tree_nodes (empty subtrees are never stored), so reachability marking skips it.
+const EMPTY_CONSTANTS = (function(){
+    const s = new Set();
+    for(let h = 0; h <= M.SMT_DEPTH; h++) if(M.EMPTY[h]) s.add(M.toHex(M.EMPTY[h]));
+    return s;
+})();
+
+// ---- Orphan-node observability (read-only; SPV spec §4.3) -------------------
+// Reports total vs reachable internal nodes in the content-addressed COW
+// state_tree_nodes store so unbounded growth (reorg orphans + per-block stake-
+// subtree churn) is measurable. Reachability marks from the UNION of EVERY
+// retained state_tree_roots row's balances_root + stakes_root: the explorer SPV
+// proof server descends historical roots, so a node is live if ANY retained root
+// reaches it.
+//
+// Deliberately does NOT delete. A safe reclaiming sweep must serialize against
+// block-root insertion: a content-addressed node orphaned by a reorg is commonly
+// re-created by the new canonical chain (INSERT IGNORE is a no-op, the row keeps
+// its old id), and deleting it after it is re-referenced would make the next
+// incremental _descend read a missing row as an EMPTY subtree and fork the
+// balances_root. Reclamation is deferred to a dedicated design paired with
+// root-retention pruning (which is what would actually free the bulk that
+// retained historical roots otherwise pin).
+//
+// `query(sql, args)` MUST run on a POOLED (non-transaction) connection so this
+// never shares the block-processing transaction. Returns
+// { totalNodes, reachableNodes, orphanCount, reachabilitySkipped }.
+async function reportOrphanStats(query, chain, network, opts){
+    opts = opts || {};
+    const maxNodes = opts.maxNodes || parseInt(process.env.STATE_TREE_METRIC_MAX_NODES, 10) || 2000000;
+    const cnt = await query('SELECT COUNT(*) AS c FROM state_tree_nodes', []);
+    const totalNodes = cnt.length ? Number(cnt[0].c) : 0;
+    if(totalNodes === 0) return { totalNodes: 0, reachableNodes: 0, orphanCount: 0, reachabilitySkipped: false };
+    // A full in-memory mark over a very large store is skipped to bound memory; the
+    // total node count still trends growth over time.
+    if(totalNodes > maxNodes) return { totalNodes, reachableNodes: null, orphanCount: null, reachabilitySkipped: true };
+
+    const rows = await query('SELECT node_hash, left_hash, right_hash FROM state_tree_nodes', []);
+    const nodes = new Map();
+    for(const r of rows) nodes.set(r.node_hash, { l: r.left_hash, r: r.right_hash });
+
+    const rootRows = await query(
+        'SELECT DISTINCT balances_root AS r FROM state_tree_roots WHERE chain=? AND network=? ' +
+        'UNION SELECT DISTINCT stakes_root AS r FROM state_tree_roots WHERE chain=? AND network=?',
+        [chain, network, chain, network]);
+
+    // Iterative DFS from every retained root; only push hashes that actually have a
+    // row (EMPTY constants and absent children are skipped). visited == reachable set.
+    const visited = new Set();
+    const stack = [];
+    for(const rr of rootRows){
+        const root = rr.r;
+        if(root && !EMPTY_CONSTANTS.has(root) && nodes.has(root)) stack.push(root);
+    }
+    while(stack.length){
+        const h = stack.pop();
+        if(visited.has(h)) continue;
+        visited.add(h);
+        const row = nodes.get(h);
+        if(!row) continue;
+        for(const child of [row.l, row.r]){
+            if(child && !EMPTY_CONSTANTS.has(child) && !visited.has(child) && nodes.has(child)) stack.push(child);
+        }
+    }
+    const reachableNodes = visited.size;
+    return { totalNodes: nodes.size, reachableNodes, orphanCount: nodes.size - reachableNodes, reachabilitySkipped: false };
+}
+
 // Assemble the top-level state_root from the two v1 sub-roots (others EMPTY).
 function assembleStateRoot(balancesRootHex, stakesRootHex){
     return M.toHex(M.stateRoot({ balances_root: balancesRootHex, stakes_root: stakesRootHex }));
@@ -334,5 +403,6 @@ module.exports = {
     gatherStakeEntries,
     computeBlockMerkleRoot,
     buildFullBalancesRoot,
-    computeAndStoreRoots
+    computeAndStoreRoots,
+    reportOrphanStats
 };
