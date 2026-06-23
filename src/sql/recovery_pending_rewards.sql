@@ -29,7 +29,14 @@ CREATE TABLE recovery_pending_rewards (
     amount           VARCHAR(250) NOT NULL,
     block_index      BIGINT UNSIGNED NOT NULL,         -- archived reward block (carried onto validator_rewards verbatim)
     source_id        BIGINT UNSIGNED,                  -- deterministic id assigned at materialize time (NULL until applied)
-    applied          TINYINT NOT NULL DEFAULT 0
+    applied          TINYINT NOT NULL DEFAULT 0,
+    applied_block    BIGINT UNSIGNED                    -- block at which this row was (re)materialized (NULL until applied).
+                                                        -- The forward-window key xchain-sync uses to stream a survivor row whose
+                                                        -- validator_rewards block_index (the EARN block) sits below the replication
+                                                        -- window: a reorg re-drain re-materializes a reward earned at E < B, so it
+                                                        -- never forward-streams by block_index; the collector selects it by
+                                                        -- applied_block (= B). Reset to NULL by the rollback re-arm. Server-local.
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
 CREATE INDEX source_address ON recovery_pending_rewards (source_address, applied);
+CREATE INDEX applied_block  ON recovery_pending_rewards (applied, applied_block);

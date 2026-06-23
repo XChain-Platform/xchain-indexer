@@ -864,7 +864,7 @@ class Rollback {
             try {
                 let rearm = await this.indexerDb.doQuery(
                     `UPDATE recovery_pending_rewards
-                        SET applied=0, source_id=NULL
+                        SET applied=0, source_id=NULL, applied_block=NULL
                       WHERE applied=1 AND block_index >= ?`, [block_index]);
                 if(rearm && rearm.affectedRows)
                     this.indexerDb._recoveryPendingChecked = false;
@@ -873,8 +873,11 @@ class Rollback {
                        FROM recovery_pending_rewards rpr
                        JOIN index_addresses ia ON ia.address = rpr.source_address
                       WHERE rpr.applied=0`);
+                // Re-materialize at the reorg point B (block_index): the survivor's reward
+                // earn-block may be < B, so stamp applied_block = B as the forward-window key
+                // xchain-sync streams it by (its earn-block sits below the post-reorg window).
                 for(let s of (survivors || []))
-                    await this.indexerDb._applyPendingRewardsForAddress(s.source_address, s.source_id);
+                    await this.indexerDb._applyPendingRewardsForAddress(s.source_address, s.source_id, block_index);
             } catch(e){ /* table absent on a non-recovery stack: nothing staged to re-arm */ }
 
             // Sweep balances rows orphaned by the index-table delete above. `balances` is a

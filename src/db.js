@@ -1550,7 +1550,7 @@ class Database {
                 // raw address string), materialize them now into validator_rewards under this
                 // deterministic source_id. Normal indexing pays one COUNT(*) probe and then
                 // short-circuits forever (no recovery in progress => remaining stays 0).
-                await this._maybeApplyPendingRewards(address, id);
+                await this._maybeApplyPendingRewards(address, id, bi);
             } else {
                 // Outside block processing (API read paths, recovery seed): keep the legacy
                 // AUTO_INCREMENT path with a NULL block_index. These ids are not assigned
@@ -1577,7 +1577,7 @@ class Database {
     // of unapplied staged rewards so normal indexing (no recovery in progress) pays a single
     // COUNT(*) and then short-circuits on every later call. See the constructor flags above
     // and recovery.js for the staging side.
-    async _maybeApplyPendingRewards(address, source_id){
+    async _maybeApplyPendingRewards(address, source_id, materializedBlock){
         if(source_id === null || source_id === undefined)
             return;
         if(!this._recoveryPendingChecked){
@@ -1593,7 +1593,12 @@ class Database {
         }
         if(this._recoveryPendingRemaining <= 0)
             return;
-        let applied = await this._applyPendingRewardsForAddress(address, source_id);
+        // Stamp applied_block = the block this address was first seen at (createAddress
+        // passes its block context). It is the forward-window key xchain-sync streams
+        // these by; without it a materialization whose earn-block sits below a follower's
+        // incremental cursor never reaches the follower (the reorg re-drain is the acute
+        // case, but a recovery-then-incremental-catch-up has the same gap).
+        let applied = await this._applyPendingRewardsForAddress(address, source_id, materializedBlock);
         this._recoveryPendingRemaining -= applied;
     }
 
@@ -1605,10 +1610,17 @@ class Database {
     // is carried verbatim onto validator_rewards (it is the reward's earn-block, not the
     // address's first-seen block). validator_rewards is NOT consensus-hashed (parity-only), so
     // the bar here is COLLECT-correctness + from-genesis parity, not block-hash byte-identity.
-    async _applyPendingRewardsForAddress(source_address, source_id){
+    // materializedBlock (optional): the block at which this materialization happens (the
+    // address's first-seen block, or the reorg point B on a rollback re-drain). Recorded
+    // on the staging row as applied_block, the forward-window key xchain-sync streams the
+    // row by when its validator_rewards block_index (earn-block) sits below the replication
+    // window. Left NULL when not supplied (legacy callers); the collector skips NULL rows.
+    async _applyPendingRewardsForAddress(source_address, source_id, materializedBlock){
         let rows = await this.doQuery(
             "SELECT id, validator_pubkey, reward_type, round_reference, amount, block_index FROM recovery_pending_rewards WHERE source_address=? AND applied=0",
             [source_address]);
+        let appliedBlock = (materializedBlock === undefined || materializedBlock === null)
+            ? null : Number(materializedBlock);
         let count = 0;
         for(let r of rows){
             let pubkey_id = await this.getOrCreatePubkeyId(String(r.validator_pubkey).toLowerCase());
@@ -1619,7 +1631,8 @@ class Database {
                     (source_id, signing_pubkey_id, reward_type, round_reference, amount, block_index)
                  VALUES (?, ?, ?, ?, ?, ?)`,
                 [source_id, pubkey_id, String(r.reward_type), r.round_reference, String(r.amount), Number(r.block_index)]);
-            await this.doQuery("UPDATE recovery_pending_rewards SET applied=1, source_id=? WHERE id=?", [source_id, r.id]);
+            await this.doQuery("UPDATE recovery_pending_rewards SET applied=1, source_id=?, applied_block=? WHERE id=?",
+                [source_id, appliedBlock, r.id]);
             count++;
         }
         return count;
