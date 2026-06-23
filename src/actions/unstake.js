@@ -199,7 +199,7 @@ class Unstake {
         let totalAmount = '0';
         if(!error){
             let aggregate = await this.indexerDb.getActiveContractStakeByPubkey(
-                data['TARGET_CONTRACT_INDEX'], data['SIGNING_PUBKEY'], data['TICK'], data['BLOCK_INDEX']
+                data['TARGET_CONTRACT_INDEX'], data['SIGNING_PUBKEY'], data['TICK'], data['BLOCK_INDEX'], {undeactivatedOnly: true}
             );
             if(!aggregate){
                 error = 'invalid: SIGNING_PUBKEY (no active stake on contract for this tick)';

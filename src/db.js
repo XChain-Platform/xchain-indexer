@@ -9597,7 +9597,7 @@ class Database {
 
     // Get aggregate active contract-stake for (target, pubkey, tick).
     // Returns { source_id, signing_pubkey_id, signing_pubkey, tick_id, tick, amount, activation_block } or null.
-    async getActiveContractStakeByPubkey(targetContractIndex, pubkey, tick, blockIndex){
+    async getActiveContractStakeByPubkey(targetContractIndex, pubkey, tick, blockIndex, opts){
         let pubkey_id = await this.getPubkeyId(String(pubkey).toLowerCase());
         if(pubkey_id === null) return null;
         let tick_id = await this.getTickerId(tick);
@@ -9618,9 +9618,19 @@ class Database {
                      WHERE cs.target_contract_index=? AND cs.signing_pubkey_id=? AND cs.tick_id=? AND cs.status_id=?`;
         let args = [Number(targetContractIndex), pubkey_id, tick_id, valid_id];
         if(blockIndex !== undefined && blockIndex !== null){
-            query += ' AND cs.activation_block <= ? AND (cs.deactivation_block IS NULL OR cs.deactivation_block > ?)';
-            args.push(blockIndex);
-            args.push(blockIndex);
+            if(opts && opts.undeactivatedOnly){
+                // UNSTAKE path: only contract-stakes not already being unstaked
+                // (deactivation_block IS NULL). A stake already deactivating from a prior
+                // UNSTAKE in the same activation-delay window keeps a future deactivation_block
+                // and would otherwise be re-unstaked here, double-crediting the cooldown refund.
+                // Mirrors the v0 stakes path (getActiveStakeByPubkey, item 4617).
+                query += ' AND cs.activation_block <= ? AND cs.deactivation_block IS NULL';
+                args.push(blockIndex);
+            } else {
+                query += ' AND cs.activation_block <= ? AND (cs.deactivation_block IS NULL OR cs.deactivation_block > ?)';
+                args.push(blockIndex);
+                args.push(blockIndex);
+            }
         }
         query += ' GROUP BY cs.signing_pubkey_id, cs.tick_id, ip.pubkey, t.tick LIMIT 1';
         let results = await this.doQuery(query, args);
