@@ -11106,7 +11106,10 @@ class Database {
             query += ' AND effective_at <= ?';
             args.push(blockTime);
         }
-        query += ' ORDER BY effective_at DESC, id DESC LIMIT 1';
+        // Tiebreak on action_index (consensus-stable: (source_chain, action_index) is the
+        // unique key) not id (local AUTO_INCREMENT, differs per mirror by arrival order),
+        // so an effective_at tie resolves to the same row on every node.
+        query += ' ORDER BY effective_at DESC, action_index DESC LIMIT 1';
         let rows = await this.doQuery(query, args);
         if(rows.length === 0) return null;
         return {
@@ -11131,7 +11134,7 @@ class Database {
                      FROM oracle_prices
                      WHERE source_address = ? AND coin = ? AND tick = ? AND fiat = ?
                        AND effective_at BETWEEN ? AND ?
-                     ORDER BY effective_at DESC, id DESC`;
+                     ORDER BY effective_at DESC, action_index DESC`;
         let rows = await this.doQuery(query, [sourceAddress, coin, tick, fiat, startTime, endTime]);
         return rows.map(row => ({
             price:        row.value,
@@ -11147,7 +11150,7 @@ class Database {
                      FROM price_snapshots
                      WHERE coin_pair = ? AND status = 'finalized' AND price IS NOT NULL
                        AND block_timestamp BETWEEN ? AND ?
-                     ORDER BY block_timestamp DESC`;
+                     ORDER BY block_timestamp DESC, round_number DESC`;
         let rows = await this.doQuery(query, [coinPair, startTime, endTime]);
         return rows.map(row => ({
             price:       row.price,
