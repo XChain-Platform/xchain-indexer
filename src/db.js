@@ -9635,15 +9635,19 @@ class Database {
         let tick_id = await this.getTickerId(tick);
         if(tick_id === null) return null;
         let valid_id = await this.getStatusId('valid');
+        // Select the raw per-row amount strings instead of a SQL SUM. Contract-staked tokens may
+        // carry up to MAX_TOKEN_DECIMALS (18) decimals, but SUM(CAST(... AS DECIMAL(30,8))) truncates
+        // anything finer than 8 dp before it reaches the refund, and the mariadb driver could further
+        // coerce a wide DECIMAL aggregate to a lossy JS Number. Aggregating the raw VARCHAR amounts
+        // with the bignumber wrapper at the staked tick's own precision keeps XCHAIN(8) output
+        // byte-identical to the old path and makes >8-dp tokens exact (item 5303).
         let query = `SELECT
-                        MIN(cs.source_id)                       AS source_id,
-                        cs.signing_pubkey_id                    AS signing_pubkey_id,
-                        cs.tick_id                              AS tick_id,
-                        SUM(CAST(cs.amount AS DECIMAL(30,8)))   AS amount,
-                        MIN(cs.activation_block)                AS activation_block,
-                        MIN(cs.block_index)                     AS block_index,
-                        ip.pubkey                               AS signing_pubkey,
-                        t.tick                                  AS tick
+                        cs.source_id          AS source_id,
+                        cs.amount             AS amount,
+                        cs.activation_block   AS activation_block,
+                        cs.block_index        AS block_index,
+                        ip.pubkey             AS signing_pubkey,
+                        t.tick                AS tick
                      FROM contract_stakes cs
                          LEFT JOIN index_pubkeys ip ON (ip.id = cs.signing_pubkey_id)
                          LEFT JOIN index_tickers t  ON (t.id  = cs.tick_id)
@@ -9664,19 +9668,35 @@ class Database {
                 args.push(blockIndex);
             }
         }
-        query += ' GROUP BY cs.signing_pubkey_id, cs.tick_id, ip.pubkey, t.tick LIMIT 1';
+        query += ' ORDER BY cs.action_index ASC';
         let results = await this.doQuery(query, args);
         if(results.length === 0) return null;
-        let row = results[0];
+        // Sum the raw amounts at the token's own decimal precision. MIN(source_id/activation_block/
+        // block_index) is replicated in JS so the returned shape matches the prior GROUP BY row.
+        let decimals = await this.getTokenDecimalPrecision(tick_id);
+        let amount = '0';
+        let source_id = null, activation_block = null, block_index = null;
+        for(let row of results){
+            amount = this.util.bcadd(amount, row.amount, decimals);
+            let rSource = (row.source_id === null || row.source_id === undefined) ? null : Number(row.source_id);
+            if(rSource !== null && (source_id === null || rSource < source_id)) source_id = rSource;
+            let rAct = (row.activation_block === null || row.activation_block === undefined) ? null : Number(row.activation_block);
+            if(rAct !== null && (activation_block === null || rAct < activation_block)) activation_block = rAct;
+            let rBlk = (row.block_index === null || row.block_index === undefined) ? null : Number(row.block_index);
+            if(rBlk !== null && (block_index === null || rBlk < block_index)) block_index = rBlk;
+        }
+        // bcadd returns a bignumber; emit the canonical fixed-precision string the callers expect
+        // (matches the prior String(SUM(...)) representation for XCHAIN at 8 dp).
+        amount = this.util.bcformat(amount, decimals);
         return {
-            source_id:         row.source_id,
-            signing_pubkey_id: row.signing_pubkey_id,
-            signing_pubkey:    row.signing_pubkey,
-            tick_id:           row.tick_id,
-            tick:              row.tick,
-            amount:            (row.amount === null || row.amount === undefined) ? '0' : String(row.amount),
-            activation_block:  row.activation_block,
-            block_index:       row.block_index
+            source_id:         source_id,
+            signing_pubkey_id: pubkey_id,
+            signing_pubkey:    results[0].signing_pubkey,
+            tick_id:           tick_id,
+            tick:              results[0].tick,
+            amount:            amount,
+            activation_block:  activation_block,
+            block_index:       block_index
         };
     }
 
@@ -9793,15 +9813,27 @@ class Database {
         let perPubkeyTick = new Map();      // key: pubkey + '|' + tick → string amount
         let perTickStakers = new Map();     // key: tick → Map(pubkey → string amount)
         let util = this.util;
+        // Contract stakes accept any tick up to MAX_TOKEN_DECIMALS (18), so aggregate each at its
+        // own token precision. A flat 8-dp bcadd truncates the amounts the VM observes through
+        // getStake/getTotalStaked/getStakers for >8-dp tokens (and would then drive a wrong slash);
+        // XCHAIN(8) is unaffected. Per-tick decimals are precomputed here because the aggregation
+        // below is synchronous (item 5303).
+        let tickDecimals = new Map();       // tick string → decimals
+        for(let row of stakes){
+            let tk = String(row.tick || '');
+            if(tk && !tickDecimals.has(tk))
+                tickDecimals.set(tk, await this.getTokenDecimalPrecision(row.tick_id));
+        }
         for(let row of stakes){
             let pubkey = String(row.pubkey || '').toLowerCase();
             let tick   = String(row.tick || '');
             if(!pubkey || !tick) continue;
+            let dec = tickDecimals.has(tick) ? tickDecimals.get(tick) : 8;
             let key = pubkey + '|' + tick;
-            perPubkeyTick.set(key, util.bcadd((perPubkeyTick.get(key) || '0'), row.amount, 8));
+            perPubkeyTick.set(key, util.bcadd((perPubkeyTick.get(key) || '0'), row.amount, dec));
             if(!perTickStakers.has(tick)) perTickStakers.set(tick, new Map());
             let m = perTickStakers.get(tick);
-            m.set(pubkey, util.bcadd((m.get(pubkey) || '0'), row.amount, 8));
+            m.set(pubkey, util.bcadd((m.get(pubkey) || '0'), row.amount, dec));
         }
         // Return a SERIALIZABLE snapshot (plain data), not closures: the VM runs
         // in a forked worker and the read-only data must cross the IPC boundary.
@@ -9813,10 +9845,11 @@ class Database {
         let totalByTick   = {};
         let stakersByTick = {};
         for(let [tick, stakers] of perTickStakers.entries()){
+            let dec = tickDecimals.has(tick) ? tickDecimals.get(tick) : 8;
             let total = '0';
             let arr = [];
             for(let [pk, amt] of stakers.entries()){
-                total = util.bcadd(total, amt, 8);
+                total = util.bcadd(total, amt, dec);
                 arr.push({ pubkey: pk, amount: amt });
             }
             // Sort stakers biggest to smallest. Equal amounts fall back to a lexicographic
@@ -9848,6 +9881,10 @@ class Database {
         if(valid_id === null) return '0';
         let remaining = String(amount);
         let totalSlashed = '0';
+        // The staked tick may carry up to MAX_TOKEN_DECIMALS (18); do all slash arithmetic at its own
+        // precision so an >8-dp token isn't truncated mid-deduction (which would leave dust unslashed
+        // or corrupt the residual stake). XCHAIN(8) math is unchanged (item 5303).
+        let dec = await this.getTokenDecimalPrecision(tickId);
         // Pass 1: deduct from ACTIVE contract_stakes rows (LIFO - highest action_index first).
         // The deactivation-window filter is load-bearing: after UNSTAKE v1 a row keeps its `amount`
         // intact (only deactivation_block is set) AND its tokens are mirrored into a contract_unstakes
@@ -9857,7 +9894,7 @@ class Database {
         // tokens are slashed by Pass 2 (contract_unstakes) instead, so each token is slashed once.
         let stakesQ = `SELECT action_index, amount FROM contract_stakes
                        WHERE target_contract_index=? AND signing_pubkey_id=? AND tick_id=? AND status_id=?
-                         AND CAST(amount AS DECIMAL(30,8)) > 0
+                         AND CAST(amount AS DECIMAL(60,18)) > 0
                          AND (deactivation_block IS NULL OR deactivation_block > ?)
                        ORDER BY action_index DESC`;
         let stakeRows = await this.doQuery(stakesQ, [Number(targetContractIndex), pubkeyId, tickId, valid_id, blockIndex]);
@@ -9865,12 +9902,12 @@ class Database {
             if(!this.util.bcgt(remaining, '0')) break;
             let rowAmt = String(row.amount);
             let take = this.util.bcgte(rowAmt, remaining) ? remaining : rowAmt;
-            let newAmt = this.util.bcsub(rowAmt, take, 8);
+            let newAmt = this.util.bcsub(rowAmt, take, dec);
             await this.doQuery('UPDATE contract_stakes SET amount=? WHERE action_index=?', [newAmt, row.action_index]);
             // Record the in-place debit so a reorg can restore rowAmt verbatim (see rollback.js).
             await this.createContractSlashDebit(executionIndex, slashPosition, 'contract_stakes', row.action_index, rowAmt, take, blockIndex);
-            remaining = this.util.bcsub(remaining, take, 8);
-            totalSlashed = this.util.bcadd(totalSlashed, take, 8);
+            remaining = this.util.bcsub(remaining, take, dec);
+            totalSlashed = this.util.bcadd(totalSlashed, take, dec);
         }
         if(!this.util.bcgt(remaining, '0')) return totalSlashed;
         // Pass 2: deduct from contract_unstakes rows (cooldown-locked but still slashable)
@@ -9881,19 +9918,19 @@ class Database {
         let unstakesQ = `SELECT action_index, amount FROM contract_unstakes
                          WHERE target_contract_index=? AND signing_pubkey_id=? AND tick_id=?
                            AND status_id IN (${placeholders})
-                           AND CAST(amount AS DECIMAL(30,8)) > 0
+                           AND CAST(amount AS DECIMAL(60,18)) > 0
                          ORDER BY action_index DESC`;
         let unstakeRows = await this.doQuery(unstakesQ, [Number(targetContractIndex), pubkeyId, tickId, ...unstakeStatusIds]);
         for(let row of unstakeRows){
             if(!this.util.bcgt(remaining, '0')) break;
             let rowAmt = String(row.amount);
             let take = this.util.bcgte(rowAmt, remaining) ? remaining : rowAmt;
-            let newAmt = this.util.bcsub(rowAmt, take, 8);
+            let newAmt = this.util.bcsub(rowAmt, take, dec);
             await this.doQuery('UPDATE contract_unstakes SET amount=? WHERE action_index=?', [newAmt, row.action_index]);
             // Record the in-place debit so a reorg can restore rowAmt verbatim (see rollback.js).
             await this.createContractSlashDebit(executionIndex, slashPosition, 'contract_unstakes', row.action_index, rowAmt, take, blockIndex);
-            remaining = this.util.bcsub(remaining, take, 8);
-            totalSlashed = this.util.bcadd(totalSlashed, take, 8);
+            remaining = this.util.bcsub(remaining, take, dec);
+            totalSlashed = this.util.bcadd(totalSlashed, take, dec);
         }
         return totalSlashed;
     }
@@ -10085,13 +10122,16 @@ class Database {
             capabilityRows.push(row.action_index);
         }
         // Contract unstakes (any tick)
+        // Positivity filter is cast at DECIMAL(60,18) (not 30,8) so a contract refund finer than
+        // 8 dp on an >8-dp token isn't truncated to 0 and stranded as a never-swept 'pending' row.
+        // XCHAIN(8) and every <=8-dp refund evaluate identically under either scale (item 5303).
         let conQ = `SELECT cu.action_index, cu.amount, a.address AS source_address, t.tick AS tick
                     FROM contract_unstakes cu
                         LEFT JOIN index_addresses a ON (a.id = cu.source_id)
                         LEFT JOIN index_tickers   t ON (t.id = cu.tick_id)
                     WHERE cu.cooldown_end_block <= ?
                       AND cu.status_id IN (${placeholders})
-                      AND CAST(cu.amount AS DECIMAL(30,8)) > 0
+                      AND CAST(cu.amount AS DECIMAL(60,18)) > 0
                     ORDER BY cu.action_index ASC`;
         let conRows = await this.doQuery(conQ, [currentBlock, ...statusIds]);
         let contractRows = [];
