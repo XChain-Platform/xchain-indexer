@@ -52,6 +52,22 @@ class Genesis {
             return;
 
         let gas  = this.config['ADDRESS']['GAS'];
+
+        // Fast path: if a precomputed state dump is present, bulk-import it instead of
+        // re-deriving the ledger through the pipeline. The importer verifies the artifact
+        // against GENESIS_DUMP_HASH and re-checks the recomputed block hashes (see
+        // genesisDump.js), so the imported state is provably the canonical genesis state.
+        let dumpFile = this.config['GENESIS_DUMP_PATH'];
+        if(dumpFile && fs.existsSync(dumpFile)){
+            console.log('GENESIS: importing precomputed dump for ' + this.config['COIN'] + ' at block ' + blockToParse + ' from ' + dumpFile);
+            if(this.util.isNull(this.config['GENESIS_DUMP_HASH']))
+                console.warn('GENESIS: GENESIS_DUMP_HASH is not pinned; importing on the dump-recorded block hashes only (no content-hash anchor).');
+            let GenesisDump = require('./genesisDump');
+            let res = await (new GenesisDump(this.indexerDb, this.util, this.config)).read(dumpFile);
+            console.log('GENESIS: imported ' + res.rowsImported + ' rows (block hashes verified)');
+            return;
+        }
+
         let file = this.config['GENESIS_LEDGER_PATH'];
         console.log('GENESIS: bootstrapping ' + this.config['COIN'] + ' name ownership at block ' + blockToParse + ' from ' + file);
 
@@ -61,16 +77,34 @@ class Genesis {
         // Load + pre-flight rows (dedupe, tick sanity, parent-before-child order).
         let rows = this._loadRows(file);
 
+        // Enable the genesis-only intern cache for the duration of injection. The pipeline
+        // re-resolves the same ticks and the constant GAS source many times per action; the
+        // cache collapses those getTickerId/getAddressId SELECTs to one DB hit each. Safe
+        // here only because genesis is one atomic block (ids assigned, never deleted), and
+        // cleared in the finally so the block's later real transactions run uncached.
+        this.indexerDb._internCache = { addr: new Map(), tick: new Map(), tx: new Map() };
+        try {
+
         // Pass 1: GAS issues every tick (owner = GAS), in file (parent-before-child) order.
         // GAS therefore owns each parent when its children are issued, so the parent gate passes.
         for(let r of rows)
             await this._issue(gas, r.tick, null, blockToParse, blockTime, 1);
 
-        // Pass 2: GAS transfers each tick to its real owner. Ticks left to GAS (owner == GAS)
-        // are skipped: pass 1 already left them GAS-owned, which is the intent.
-        for(let r of rows)
-            if(r.owner !== gas)
-                await this._issue(gas, r.tick, r.owner, blockToParse, blockTime, 2);
+        // Pass 2: GAS transfers each tick to its real owner, in REVERSE file order
+        // (children before parents). A subtoken transfer is gated on the SOURCE still
+        // owning the parent (issue.js parent gate); transferring a parent to its owner
+        // first would strand every child (parent no longer GAS-owned -> the child's
+        // transfer is rejected and the subtoken silently stays with GAS). Reverse order
+        // keeps each tick's parent GAS-owned until after the child has been transferred,
+        // because a parent always precedes its descendants in the sorted manifest. Ticks
+        // left to GAS (owner == GAS) are skipped: pass 1 already left them GAS-owned.
+        for(let i = rows.length - 1; i >= 0; i--)
+            if(rows[i].owner !== gas)
+                await this._issue(gas, rows[i].tick, rows[i].owner, blockToParse, blockTime, 2);
+
+        } finally {
+            this.indexerDb._internCache = null;
+        }
 
         console.log('GENESIS: complete - ' + rows.length + ' names injected');
     }
@@ -150,12 +184,19 @@ class Genesis {
         let fields = ['ISSUE', '0', tick];
         if(!this.util.isNull(transfer))
             fields.push('', '', '', '', '', transfer); // skip the 5 fields before TRANSFER
+        // Deterministic, fixed-width synthetic tx hash. Embedding the raw tick overflowed
+        // the 64-char unique prefix on index_transactions.hash, so long ticks sharing a
+        // 64-char prefix collided to a NULL tx_hash_id. A sha256 digest of (coin,pass,tick)
+        // keeps the hash deterministic and collision-free inside the indexed width; the
+        // readable GENESIS-<coin>-P<pass>- prefix preserves explorer legibility (63 chars).
+        let digest = crypto.createHash('sha256')
+            .update(this.config['COIN'] + '|' + pass + '|' + tick).digest('hex').slice(0, 48);
         let tx = {
             data:          fields.join('|'),
             source:        gas,
             destination:   null,
             amount:        null,
-            tx_hash:       'GENESIS-' + this.config['COIN'] + '-P' + pass + '-' + tick,
+            tx_hash:       'GENESIS-' + this.config['COIN'] + '-P' + pass + '-' + digest,
             vout:          0,
             block_index:   blockToParse,
             block_time:    blockTime,

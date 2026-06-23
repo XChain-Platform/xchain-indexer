@@ -123,9 +123,19 @@ class Issue {
         let allowedCharacters = String(this.config['TICK_CHARACTERS']).split('');
         let tickCharacters    = String(data['TICK']).split('');
 
-        // Get source address balances and preferences
-        let balances    = await this.indexerDb.getAddressBalances(data['SOURCE'], null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
-        let preferences = await this.indexerDb.getAddressPreferences(data['SOURCE'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
+        // Get source address balances and preferences. At genesis the SOURCE is always GAS,
+        // which holds no balances and has set no preferences, so these resolve to the exact
+        // empty/default result the queries would return; substituting them skips the
+        // table-scanning reads on the ~240k-action genesis block. `balances` is only consumed
+        // under a non-zero fee (genesis is fee-exempt, so it stays untouched), and the default
+        // preferences object is the literal initializer of getAddressPreferences. Byte-identity
+        // of the genesis ledger is asserted by scenario 22's reindex-determinism check.
+        let balances    = data['IS_GENESIS']
+            ? {}
+            : await this.indexerDb.getAddressBalances(data['SOURCE'], null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
+        let preferences = data['IS_GENESIS']
+            ? { FEE_PREFERENCE: 2, REQUIRE_MEMO: 0, DISPENSER_PREFERENCE: 1 }
+            : await this.indexerDb.getAddressPreferences(data['SOURCE'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
 
         // Create the fees object 
         let fees = await this.util.createFeesObject(this.indexerDb, data, preferences);
@@ -161,8 +171,10 @@ class Issue {
             if(!error && parentInfo && parentInfo['OWNER']!=data['SOURCE'])
                 error = 'invalid: TICK (parent issued by another address)';
 
-            // Reject child issuance while the parent's ownership is escrowed in an open offer
-            if(!error && parentInfo && await this.indexerDb.isOwnershipEscrowed(parent))
+            // Reject child issuance while the parent's ownership is escrowed in an open offer.
+            // Genesis has no escrows (the escrows table is empty during bootstrap), so the
+            // check is a guaranteed false; skip the read.
+            if(!error && parentInfo && !data['IS_GENESIS'] && await this.indexerDb.isOwnershipEscrowed(parent))
                 error = 'invalid: TICK (parent ownership escrowed)';
         }
 
@@ -202,7 +214,12 @@ class Issue {
 
         // Get information on token, then check distribution passing tokenInfo to avoid a second getTokenInfo call
         let tokenInfo     = await this.indexerDb.getTokenInfo(data['TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
-        let isDistributed = await this.indexerDb.isDistributed(data['TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX'], tokenInfo);
+        // Genesis creates name ownership only (no balances/holders), so a genesis token is
+        // never distributed; isDistributed only feeds CALLBACK edits, which carry null fields
+        // at genesis anyway. Skip the holders read.
+        let isDistributed = data['IS_GENESIS']
+            ? false
+            : await this.indexerDb.isDistributed(data['TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX'], tokenInfo);
 
         // Populate empty PARAMS with current setting
         if(tokenInfo){
@@ -244,8 +261,9 @@ class Issue {
          * General Validations
          ****************************************************************/
 
-        // Verify SOURCE is not sleeping
-        if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
+        // Verify SOURCE is not sleeping. GAS is never put to sleep and there are no lists at
+        // genesis, so isActionAllowed is always true during bootstrap; skip the read.
+        if(!error && !data['IS_GENESIS'] && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
             error = 'invalid: SOURCE (sleeping)';
 
         // Verify ISSUE is coming from TICK owner
@@ -257,7 +275,7 @@ class Issue {
         // v5 list params, and v0 re-issuance from the existing owner). The escrow itself
         // was opened by a successful ORDER/SWAP/DISPENSER from the same SOURCE; only
         // closing the offer (via cancel/expire/match/sweep) releases this lock.
-        if(!error && tokenInfo && await this.indexerDb.isOwnershipEscrowed(data['TICK']))
+        if(!error && tokenInfo && !data['IS_GENESIS'] && await this.indexerDb.isOwnershipEscrowed(data['TICK']))
             error = 'invalid: TICK (ownership escrowed)';
 
         // Verify LOCK fields cannot be changed once enabled/locked

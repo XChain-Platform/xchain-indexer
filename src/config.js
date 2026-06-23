@@ -262,13 +262,32 @@ module.exports = {
         // Genesis ledger bootstrap (Counterparty/Dogeparty name-ownership injection). The
         // consensus-critical GENESIS_BLOCK + GENESIS_LEDGER_HASH are pinned per-network in
         // configs/<COIN>.js; these are the indexer-wide defaults plus the bundled-manifest
-        // path. A genesis block carries ~120k synthetic ISSUE/TRANSFER actions, far more than
-        // a normal block, so it gets its own watchdog. See genesis.js and
+        // path. A genesis block carries ~240k synthetic ISSUE/TRANSFER actions (BTC: 121,716
+        // names x2 passes), far more than a normal block, so it gets its own watchdog.
+        // Even after the genesis-path optimizations (intern cache + read-skip in genesis.js /
+        // issue.js), the full BTC CSV derivation measured ~124 min on commodity hardware. That
+        // path is now the FALLBACK/generator only - normal full-parse nodes import the precomputed
+        // state dump (minutes, see genesisDump.js) - but the watchdog must still cover the CSV
+        // fallback on a slower DB, so it is set to 4h. See genesis.js and
         // claude/reports/launch/GENESIS-LEDGER-BOOTSTRAP.md.
         config['GENESIS_BLOCK']            = 0;     // 0 = disabled; pinned per chain in configs/<COIN>.js
         config['GENESIS_LEDGER_HASH']      = null;  // sha256 hex of the bundled CSV; null = skip verify
         config['GENESIS_LEDGER_PATH']      = process.env.GENESIS_LEDGER_PATH || path.join(__dirname, '..', 'data', 'genesis', coin + '-ledger.csv');
-        config['GENESIS_BLOCK_TIMEOUT_MS'] = parseIntMin0(process.env.GENESIS_BLOCK_TIMEOUT_MS, 1800000); // 30 min
+        config['GENESIS_BLOCK_TIMEOUT_MS'] = parseIntMin0(process.env.GENESIS_BLOCK_TIMEOUT_MS, 14400000); // 4 hours
+
+        // Precomputed genesis state dump (genesisDump.js). When this artifact is present at
+        // GENESIS_DUMP_PATH, inject() bulk-imports it (minutes) instead of re-deriving the
+        // ~240k-action genesis ledger through the pipeline (~1h); the importer verifies the
+        // file against GENESIS_DUMP_HASH (sha256 of the UNCOMPRESSED content) and re-checks the
+        // recomputed genesis block hashes, so trust matches the CSV path's GENESIS_LEDGER_HASH.
+        // Absent or unpinned -> the canonical CSV derivation runs (and is the generator + fallback).
+        config['GENESIS_DUMP_PATH']        = process.env.GENESIS_DUMP_PATH || path.join(__dirname, '..', 'data', 'genesis', coin + '-genesis-dump.ndjson.gz');
+        config['GENESIS_DUMP_HASH']        = process.env.XCHAIN_GENESIS_DUMP_HASH || null;
+        // Watchdog for the genesis block when it takes the DUMP IMPORT path (measured ~15s for
+        // BTC); kept tight (10 min default) so a wedged import is caught fast. The CSV-derivation
+        // fallback uses the generous GENESIS_BLOCK_TIMEOUT_MS instead. XChainIndexer picks between
+        // them by whether GENESIS_DUMP_PATH exists at the genesis block.
+        config['GENESIS_DUMP_TIMEOUT_MS']  = parseIntMin0(process.env.GENESIS_DUMP_TIMEOUT_MS, 600000); // 10 min
 
         // Merge indexer config and COIN config into a single config object
         let fullConfig = Object.assign({}, config, coinConfig);

@@ -34,6 +34,14 @@ const BASE_TIME     = 1700000000;
 const GAS   = 'mgash6jYSKAR3Q5HPpDgNX2BYr18q9N6GQ';            // BTC regtest GAS address
 const ALICE = '1AaaAliceownsthissubassetnotrootXqf';          // mainnet-format (wrong-network on regtest)
 const BOB   = '1BbbBobownsthedeepleafnodeXXXXXm4Hsa';
+// A full family (root + nested subs) owned by ONE non-GAS address, plus a root and
+// subasset split across TWO non-GAS owners. These exercise the case real CP/DP data
+// is full of and the original two-pass design got wrong: pass 2 must transfer
+// children before parents (reverse order) or the parent is handed off first and every
+// child's transfer fails the parent-ownership gate, stranding the subtoken with GAS.
+const CARL  = '1CccCarlownstheentirecarlnetfamily';
+const DANA  = '1DddDanaownstherootbutnotthegift00';
+const ERIN  = '1EeeErinownsonlythegiftsubassetXX';
 
 describe('Genesis Ledger Bootstrap @regression', function () {
     this.timeout(60000);
@@ -79,17 +87,29 @@ describe('Genesis Ledger Bootstrap @regression', function () {
         await assertTokenOwner(indexerQuery, 'PEPECASH', GAS);
         await assertTokenOwner(indexerQuery, 'PEPECASH.RARE', GAS);          // intermediate
         await assertTokenOwner(indexerQuery, 'PEPECASH.RARE.GOLD', BOB);     // 3-deep leaf, divergent owner
+
+        // Whole family owned by one non-GAS address: every level must transfer (reverse
+        // pass-2 order), not strand on GAS once the root leaves GAS ownership.
+        await assertTokenOwner(indexerQuery, 'CARLNET', CARL);
+        await assertTokenOwner(indexerQuery, 'CARLNET.SUB', CARL);
+        await assertTokenOwner(indexerQuery, 'CARLNET.SUB.DEEP', CARL);      // 3-deep, parent also non-GAS
+        // Root and subasset held by two DIFFERENT non-GAS owners.
+        await assertTokenOwner(indexerQuery, 'DANACO', DANA);
+        await assertTokenOwner(indexerQuery, 'DANACO.GIFT', ERIN);           // parent non-GAS, child other owner
     });
 
     it('records a valid ISSUE/TRANSFER chain of custody and no balances', async function () {
         await processBlocks(indexer);
 
-        // 5 pass-1 ISSUEs + 2 pass-2 TRANSFERs (only the 2 non-GAS owners) = 7 issue rows, all valid.
+        // 10 pass-1 ISSUEs + 7 pass-2 TRANSFERs (every non-GAS owner; the 3 GAS-owned
+        // ticks FLDC, PEPECASH, PEPECASH.RARE are skipped) = 17 issue rows, all valid.
+        // Crucially every transfer must be valid: a stranded subtoken would show up here
+        // as a missing transfer (count < 17), and the owner assertions above would fail.
         const issues = await indexerQuery(
             `SELECT s.status FROM issues i INNER JOIN index_statuses s ON s.id = i.status_id
              ORDER BY i.action_index ASC`
         );
-        assert.strictEqual(issues.length, 7, 'expected 7 issue rows (5 issue + 2 transfer)');
+        assert.strictEqual(issues.length, 17, 'expected 17 issue rows (10 issue + 7 transfer)');
         assert.ok(issues.every(r => r.status === 'valid'), 'every genesis issue/transfer is valid');
 
         // Name ownership only: genesis mints no supply, so no balances exist.

@@ -124,6 +124,20 @@ class Database {
         // delete just closed. Default false: forward block processing is unaffected.
         this.suppressIndexIdCreation = false;
 
+        // Optional genesis-only intern cache: address-string -> id, LOWER(tick) -> id, and
+        // tx-hash -> id.
+        // The genesis bootstrap (genesis.js) runs ~240k synthetic ISSUE/TRANSFER actions
+        // through the normal pipeline, which re-resolves the same handful of ticks and the
+        // constant GAS source dozens of times per action via getTickerId/getAddressId.
+        // Those resolution SELECTs dominate genesis time (profiled ~50% of all DB work).
+        // When this map is non-null, getTickerId/getAddressId serve non-null hits from
+        // memory and create* populate it. It is SAFE only because genesis is one atomic
+        // block and a rollback floor: ids are assigned, never deleted, during injection,
+        // so a cached id can never go stale. genesis.inject() enables it for the passes and
+        // clears it in a finally; normal block processing leaves it null (path unchanged).
+        // Caret ^<id> references are never cached (they take a distinct resolution path).
+        this._internCache = null;
+
         // Recovery reward apply-hook gate (F1a id-determinism fix). recovery.js stages
         // archived rewards in recovery_pending_rewards keyed by raw source-address STRING
         // (no index id assigned), and createAddress materializes them into validator_rewards
@@ -1407,11 +1421,20 @@ class Database {
 
     // Lookup a record in the `index_transactions` table and return record id
     async getTransactionId(hash){
+        // Genesis intern cache: the same synthetic tx hash is resolved several times per
+        // action (createTxIndex/createActionIndex/mappings); serve non-null hits from memory.
+        if(this._internCache !== null){
+            let hit = this._internCache.tx.get(hash);
+            if(hit !== undefined)
+                return hit;
+        }
         let id    = null;
         let query = "SELECT id FROM index_transactions WHERE `hash`=? LIMIT 1"
         let results = await this.doQuery(query, [hash]);
         if(results.length > 0)
             id = Number(results[0].id);
+        if(id !== null && this._internCache !== null)
+            this._internCache.tx.set(hash, id);
         return id;
     }
 
@@ -1457,6 +1480,12 @@ class Database {
                 id = Number(results[0].id);
             return id;
         }
+        // Genesis intern cache: serve a non-null hit from memory (see _internCache).
+        if(this._internCache !== null){
+            let hit = this._internCache.addr.get(str);
+            if(hit !== undefined)
+                return hit;
+        }
         // Otherwise look the id up by the canonical address string.
         if(this.util.isNull(id)){
             let query   = "SELECT id FROM index_addresses WHERE `address`=? LIMIT 1";
@@ -1464,6 +1493,8 @@ class Database {
             if(results.length > 0)
                 id = Number(results[0].id);
         }
+        if(id !== null && this._internCache !== null)
+            this._internCache.addr.set(str, id);
         return id;
     }
 
@@ -1923,14 +1954,24 @@ class Database {
                 id = Number(results[0].id);
             return id;
         }
+        // Genesis intern cache: serve a non-null hit from memory, keyed by LOWER(tick) to
+        // match the case-insensitive lookup below (see _internCache).
+        let lc = String(tick).toLowerCase();
+        if(this._internCache !== null){
+            let hit = this._internCache.tick.get(lc);
+            if(hit !== undefined)
+                return hit;
+        }
         // Try to lookup id using tick passed
         if(this.util.isNull(id)){
             let query   = "SELECT id FROM index_tickers WHERE LOWER(tick)=? LIMIT 1";
-            let args    = [String(tick).toLowerCase()]
+            let args    = [lc];
             let results = await this.doQuery(query, args);
             if(results.length > 0)
                 id = Number(results[0].id);
         }
+        if(id !== null && this._internCache !== null)
+            this._internCache.tick.set(lc, id);
         return id;
     }
 

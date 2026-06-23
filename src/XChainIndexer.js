@@ -19,6 +19,7 @@
  ********************************************************************/
 
 // Load required libraries
+const fs        = require('fs');
 const config    = require('./config.js');
 const changes   = require('./protocol_changes.js');
 const database  = require('./db.js');
@@ -631,11 +632,20 @@ class XChainIndexer {
                         return [ledger, actions, contracts];
                     })();
 
-                    // The genesis block injects ~120k synthetic ISSUE/TRANSFER actions, far more
-                    // than a normal block, so it gets its own (longer) watchdog timeout.
-                    let blockTimeout = (Number(blockToParse) === Number(this.config['GENESIS_BLOCK']) && this.config['GENESIS_BLOCK_TIMEOUT_MS'])
-                        ? this.config['GENESIS_BLOCK_TIMEOUT_MS']
-                        : this.config['BLOCK_PROCESS_TIMEOUT'];
+                    // The genesis block does far more than a normal block, so it gets its own
+                    // watchdog. The budget follows the PATH it will take (see genesis.inject):
+                    // importing the precomputed dump finishes in seconds, so it uses the tight
+                    // GENESIS_DUMP_TIMEOUT_MS; only the CSV re-derivation fallback (~1-2h) needs
+                    // the generous GENESIS_BLOCK_TIMEOUT_MS. This keeps a tight liveness signal on
+                    // the normal (dump) path without false-tripping a no-dump node.
+                    let isGenesisBlock = Number(blockToParse) === Number(this.config['GENESIS_BLOCK']) && this.config['GENESIS_BLOCK'];
+                    let blockTimeout   = this.config['BLOCK_PROCESS_TIMEOUT'];
+                    if(isGenesisBlock){
+                        let dumpPath = this.config['GENESIS_DUMP_PATH'];
+                        blockTimeout = (dumpPath && fs.existsSync(dumpPath))
+                            ? this.config['GENESIS_DUMP_TIMEOUT_MS']
+                            : this.config['GENESIS_BLOCK_TIMEOUT_MS'];
+                    }
                     let [ledger, actions, contracts] = await this.util.withTimeout(blockProcessing, blockTimeout, 'block ' + blockToParse);
 
                     // Commit the block data to the database
