@@ -1796,12 +1796,17 @@ describe('Database.getContractStakeOwner() @regression @tier1', function () {
 describe('Database.createActionMapping() @regression @tier1', function () {
     it('inserts or updates mapping record', async function () {
         const db = makeDb();
+        // A real (resolvable) address ref: createActionMapping resolves it to a
+        // non-null id, then does SELECT (absent) + INSERT. A null id is skipped
+        // entirely (see db.mapping-null-skip.test.js), so a valid type + resolved
+        // id is required to exercise the insert path.
+        sinon.stub(db, 'createAddress').resolves(7);
         const stub = sinon.stub(db, 'doQuery');
-        // First call: SELECT check
+        // First call: SELECT check (not present)
         stub.onCall(0).resolves([]);
         // Second call: INSERT
         stub.onCall(1).resolves([]);
-        await db.createActionMapping(5, 'SEND', 'test-value');
+        await db.createActionMapping(5, 'address', 'test-value');
         assert.ok(stub.calledTwice);
     });
 });
