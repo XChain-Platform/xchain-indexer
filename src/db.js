@@ -9353,7 +9353,13 @@ class Database {
                      WHERE fv.passed = 1
                        AND fv.block_index >  ?
                        AND fv.block_index <= ?
+                     ORDER BY ip.pubkey ASC, sa.address ASC
                      LIMIT ?`;
+        // ORDER BY is required: this set feeds the equal full-node reward split, so a
+        // LIMIT without a deterministic order would truncate a different subset on each
+        // node (storage/join order differs) and diverge the ledger. Order on
+        // consensus-stable columns (pubkey, then source address) - NOT source_id, which
+        // is a local AUTO_INCREMENT surrogate that differs per node.
         let rows = await this.doQuery(query, [low, blockIndex, limit]);
         let truncated = rows.length >= limit;
         if(truncated)
