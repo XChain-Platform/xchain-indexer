@@ -138,7 +138,11 @@ class Swap_Match {
                 if(Number(swapInfo['GIVE_OWNERSHIP']||0) == 1){
                     await this.util.transferTokenOwnership(this.indexerDb, this.mapper, data, swapInfo['GIVE_TICK'], swapInfo['SOURCE'], matchInfo['GET_ADDRESS']);
                 } else {
-                    escrows.push([matchInfo['GET_TICK'], -matchInfo['GET_AMOUNT'], matchInfo['GET_ADDRESS']]);
+                    // Negate via bcsub, not JS unary minus: -GET_AMOUNT coerces the
+                    // bignumber string to a float and loses digits past ~15 sig figs,
+                    // de-syncing this escrow debit from the full-precision split credits
+                    // below (applyProceedsSplit conserves exactly to GET_AMOUNT).
+                    escrows.push([matchInfo['GET_TICK'], this.util.bcsub(0, matchInfo['GET_AMOUNT'], 64), matchInfo['GET_ADDRESS']]);
                     let mDec = 0;
                     if(!this.util.isNull(matchInfo['PAYOUT_LEGS'])){
                         let mInfo = await this.indexerDb.getTokenInfo(matchInfo['GET_TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
@@ -154,7 +158,9 @@ class Swap_Match {
                 if(Number(matchInfo['GIVE_OWNERSHIP']||0) == 1){
                     await this.util.transferTokenOwnership(this.indexerDb, this.mapper, data, matchInfo['GIVE_TICK'], matchInfo['SOURCE'], swapInfo['GET_ADDRESS']);
                 } else {
-                    escrows.push([swapInfo['GET_TICK'], -swapInfo['GET_AMOUNT'], swapInfo['GET_ADDRESS']]);
+                    // Negate via bcsub, not JS unary minus (see matchInfo side above):
+                    // preserve full precision so the escrow debit mirrors the split credits.
+                    escrows.push([swapInfo['GET_TICK'], this.util.bcsub(0, swapInfo['GET_AMOUNT'], 64), swapInfo['GET_ADDRESS']]);
                     let sDec = 0;
                     if(!this.util.isNull(swapInfo['PAYOUT_LEGS'])){
                         let sInfo = await this.indexerDb.getTokenInfo(swapInfo['GET_TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);

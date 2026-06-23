@@ -271,7 +271,11 @@ class Dispense {
                     await this.util.transferTokenOwnership(this.indexerDb, this.mapper, dispense, dispense['GIVE_TICK'], dispenser['SOURCE'], dispense['DESTINATION']);
                 } else if(this.util.bcgt(dispense['GIVE_AMOUNT'], 0)){
                     // Balance dispense: debit from escrow, credit buyer
-                    escrows.push([dispense['GIVE_TICK'], -dispense['GIVE_AMOUNT'], dispense['DESTINATION']]);
+                    // Negate via bcsub, not JS unary minus: -GIVE_AMOUNT coerces the
+                    // 64-precision bignumber string to a float and silently loses digits
+                    // past ~15 sig figs, de-syncing the escrow debit from the full-precision
+                    // credit below. Mirror the credit exactly at the same precision (64).
+                    escrows.push([dispense['GIVE_TICK'], this.util.bcsub(0, dispense['GIVE_AMOUNT'], 64), dispense['DESTINATION']]);
                     credits.push([dispense['GIVE_TICK'],  dispense['GIVE_AMOUNT'], dispense['DESTINATION']]);
                 }
 
