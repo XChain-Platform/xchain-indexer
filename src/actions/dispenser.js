@@ -182,8 +182,11 @@ class Dispenser {
         if(!error && format==0 && !this.util.isNull(data['GIVE_AMOUNT']) && giveTokenInfo && !this.util.isValidAmountFormat(giveTokenInfo['DECIMALS'], data['GIVE_AMOUNT']))
             error = "invalid: GIVE_AMOUNT (format)";
 
-        // Verify GIVE_ESCROW format
-        if(!error && format==0 && !this.util.isNull(data['GIVE_ESCROW']) && giveTokenInfo && !this.util.isValidAmountFormat(giveTokenInfo['DECIMALS'], data['GIVE_ESCROW']))
+        // Verify GIVE_ESCROW format. Covers format 2 (edit/refill) too: a refill
+        // carries GIVE_ESCROW against the existing dispenser's GIVE_TICK, and an
+        // unvalidated non-numeric / over-precision value would reach bcsub and throw,
+        // halting the indexer at that block.
+        if(!error && (format==0 || format==2) && !this.util.isNull(data['GIVE_ESCROW']) && giveTokenInfo && !this.util.isValidAmountFormat(giveTokenInfo['DECIMALS'], data['GIVE_ESCROW']))
             error = "invalid: GIVE_ESCROW (format)";
 
         // GIVE_OWNERSHIP must be 0 or 1
