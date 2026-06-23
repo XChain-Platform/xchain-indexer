@@ -295,6 +295,21 @@ module.exports = {
         // Merge indexer config and COIN config into a single config object
         let fullConfig = Object.assign({}, config, coinConfig);
 
+        // Native-fee chains (LTC/DOGE) MUST have a FEE_DESTINATION. detectFeePaymentMode
+        // falls back to 'xchain' for any action when FEE_DESTINATION is unset/placeholder;
+        // on BTC that is the intended fallback, but on LTC/DOGE the correct behavior is
+        // native-only (a missing fee output is 'rejected'). A node started without a
+        // FEE_DESTINATION would therefore ACCEPT actions a correctly-configured node
+        // rejects, a consensus-acceptance divergence. Fail closed at startup rather than
+        // ship a divergent indexer (the coin configs carry real defaults, so this only
+        // fires on an explicit misconfiguration).
+        if(coin === 'LTC' || coin === 'DOGE'){
+            let fd = fullConfig['ADDRESS'] ? fullConfig['ADDRESS']['FEE_DESTINATION'] : null;
+            if(!fd || fd === 'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'){
+                throw new Error('FEE_DESTINATION is required on ' + coin + ' (native-fee chain): set XCHAIN_FEE_DESTINATION_' + coin + '_' + String(network).toUpperCase() + ' or use the coin-config default. A missing value would make every action fall back to XCHAIN fee mode and diverge from a correctly-configured node.');
+            }
+        }
+
         return fullConfig;
     },
 
