@@ -70,6 +70,22 @@ const EXPECTED_VM_CONSENSUS_RULES = [
     'banned-async', 'banned-literal', 'banned-math',
     'invalid-type', 'reserved-identifier', 'unsupported-syntax'
 ];
+// The sandbox neuters more than the global strip set: prototype-method strips
+// (regex + locale/ICU), the prototype .constructor neuters, and the SafeMath
+// member whitelist are each consensus-critical and frozen VM-side. Mirror them
+// here so a drift in any of those lists reddens the cross-repo coupling too.
+// Proto methods are compared as a sorted 'Proto.method' key set.
+const EXPECTED_VM_STRIPPED_PROTO_METHODS = [
+    'Array.toLocaleString', 'Number.toLocaleString', 'Object.toLocaleString',
+    'String.localeCompare', 'String.match', 'String.matchAll', 'String.normalize',
+    'String.search', 'String.toLocaleLowerCase', 'String.toLocaleUpperCase'
+];
+const EXPECTED_VM_NEUTERED_PROTO_CONSTRUCTORS = [
+    'Array', 'Boolean', 'Number', 'Object', 'RegExp', 'String'
+];
+const EXPECTED_VM_SAFE_MATH_MEMBERS = [
+    'E', 'PI', 'abs', 'ceil', 'floor', 'max', 'min', 'round', 'sign', 'trunc'
+];
 const FROZEN_STATUS_TOKENS = ['reverted', 'out_of_resource', 'failed'];
 // Safety cap on validator-set queries (db.js). Read on the deterministic block-processing
 // path (responsible-set / quorum gates), so it is a FROZEN node-local consensus constant
@@ -240,6 +256,9 @@ describe('consensus parameters are frozen (track 8 guard) @regression', function
         if(full){
             assert.ok(vm.STRIPPED_GLOBAL_NAMES, 'xchain-vm did not export STRIPPED_GLOBAL_NAMES (rename? bump CONSENSUS_VERSION + regolden)');
             assert.ok(vm.CONSENSUS_RULES, 'xchain-vm did not export CONSENSUS_RULES (rename? bump CONSENSUS_VERSION + regolden)');
+            assert.ok(vm.STRIPPED_PROTO_METHODS, 'xchain-vm did not export STRIPPED_PROTO_METHODS (rename? update goldens in lockstep)');
+            assert.ok(vm.NEUTERED_PROTO_CONSTRUCTORS, 'xchain-vm did not export NEUTERED_PROTO_CONSTRUCTORS (rename? update goldens in lockstep)');
+            assert.ok(vm.SAFE_MATH_MEMBERS, 'xchain-vm did not export SAFE_MATH_MEMBERS (rename? update goldens in lockstep)');
         }
         if(vm.STRIPPED_GLOBAL_NAMES){
             assert.deepStrictEqual([...vm.STRIPPED_GLOBAL_NAMES].sort(), EXPECTED_VM_STRIPPED_GLOBAL_NAMES,
@@ -248,6 +267,19 @@ describe('consensus parameters are frozen (track 8 guard) @regression', function
         if(vm.CONSENSUS_RULES){
             assert.deepStrictEqual([...vm.CONSENSUS_RULES].sort(), EXPECTED_VM_CONSENSUS_RULES,
                 'VM deploy CONSENSUS_RULES drifted from the indexer expectation (bump CONSENSUS_VERSION + regolden in both repos)');
+        }
+        if(vm.STRIPPED_PROTO_METHODS){
+            const keys = vm.STRIPPED_PROTO_METHODS.map(e => e.proto + '.' + e.method).sort();
+            assert.deepStrictEqual(keys, EXPECTED_VM_STRIPPED_PROTO_METHODS,
+                'VM sandbox prototype-method neuters drifted from the indexer expectation (update goldens in both repos in lockstep)');
+        }
+        if(vm.NEUTERED_PROTO_CONSTRUCTORS){
+            assert.deepStrictEqual([...vm.NEUTERED_PROTO_CONSTRUCTORS].sort(), EXPECTED_VM_NEUTERED_PROTO_CONSTRUCTORS,
+                'VM prototype .constructor neuter targets drifted from the indexer expectation (update goldens in both repos in lockstep)');
+        }
+        if(vm.SAFE_MATH_MEMBERS){
+            assert.deepStrictEqual([...vm.SAFE_MATH_MEMBERS].sort(), EXPECTED_VM_SAFE_MATH_MEMBERS,
+                'VM SafeMath member whitelist drifted from the indexer expectation (update goldens in both repos in lockstep)');
         }
     });
 });
