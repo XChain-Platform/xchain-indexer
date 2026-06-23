@@ -95,9 +95,13 @@ describe('Rollback attest_validator_stats recompute @regression @tier3', functio
             { request_id: 'r1'.repeat(32), provider_id: PROV, redundancy: 1, block_index: 20, deadline_block: 50 },
         ];
 
-        // getValidatorsByCapability is the deterministic snapshot the live expiry
-        // path consulted; for block 20 the attestation set is just [pkA].
+        // The deterministic snapshot the live expiry path consulted; for block 20 the
+        // attestation set is just [pkA]. Stub BOTH the unweighted and stake-weighted
+        // capability lookups (the recompute picks one per request block via
+        // isStakeWeightedQuorumActive, mirroring attest.js) so the responsible set is
+        // [pkA] regardless of which branch the activation height selects.
         indexer.indexerDb.getValidatorsByCapability = sinon.stub().resolves([{ pubkey: pkA }]);
+        indexer.indexerDb.getStakeWeightsByCapability = sinon.stub().resolves([{ pubkey: pkA }]);
         indexer.indexerDb.getStatusId = sinon.stub().resolves(VALID_ID);
 
         indexer.indexerDb.doQuery = sinon.stub().callsFake(async (query, args) => {

@@ -19,6 +19,7 @@
  ********************************************************************/
 
 const crypto = require('crypto');
+const swq    = require('./stake_weighted_quorum.js');
 
 class Rollback {
 
@@ -1245,18 +1246,24 @@ class Rollback {
             [block_index - 1, validId]
         );
 
-        // Cache the capability set per request block; getValidatorsByCapability
-        // is the same deterministic snapshot the live expiry path consulted.
+        // Cache the capability set per request block; this must consult the SAME
+        // snapshot and stake-weighted branch the live expiry path used, or missed_count
+        // re-derives wrong after a reorg. At/after STAKE_WEIGHTED_QUORUM activation the
+        // live path dedups multi-key sources to one slot, so the unweighted validator
+        // list would credit an excluded key and drop a real one.
         let validatorsByBlock = new Map();
         for(let req of expiredReqs){
             let reqBlock   = Number(req.block_index);
-            let validators = validatorsByBlock.get(reqBlock);
-            if(validators === undefined){
-                let vs     = await this.indexerDb.getValidatorsByCapability('attestation', reqBlock);
-                validators = (vs || []).map(v => String(v.pubkey).toLowerCase());
-                validatorsByBlock.set(reqBlock, validators);
+            let cached     = validatorsByBlock.get(reqBlock);
+            if(cached === undefined){
+                let weighted = swq.isStakeWeightedQuorumActive(reqBlock, this.config['NETWORK']);
+                let vs       = weighted
+                    ? await this.indexerDb.getStakeWeightsByCapability('attestation', reqBlock)
+                    : await this.indexerDb.getValidatorsByCapability('attestation', reqBlock);
+                cached = { weighted, validators: vs || [] };
+                validatorsByBlock.set(reqBlock, cached);
             }
-            let responsible = this._responsibleSet(String(req.request_id), validators, Number(req.redundancy));
+            let responsible = this._responsibleSet(String(req.request_id), cached.validators, Number(req.redundancy), cached.weighted);
             let provider    = String(req.provider_id);
             let expiryBlock  = Number(req.deadline_block) + 1;
             for(let pubkey of responsible){
@@ -1287,17 +1294,30 @@ class Rollback {
         }
     }
 
-    // Deterministic responsible validator set, mirrors attest.js
-    // _computeResponsibleSet: sort the capability validators by
-    // SHA256(request_id || pubkey), take the top REDUNDANCY.
-    _responsibleSet(requestId, validators, redundancy){
+    // Deterministic responsible validator set. MUST mirror attest.js
+    // _computeResponsibleSet byte-for-byte (sort by SHA256(request_id || pubkey),
+    // when stake-weighted dedup to one slot per source keeping the lowest hash,
+    // then take the top REDUNDANCY) or reorg-recomputed missed_count diverges from
+    // the live expiry path. `validators` are the raw capability rows ({pubkey, source});
+    // `weighted` is swq.isStakeWeightedQuorumActive for the request block.
+    _responsibleSet(requestId, validators, redundancy, weighted){
         if(!validators || validators.length === 0)
             return [];
-        let withHash = validators.map(pk => ({
-            pubkey: pk,
-            hash:   crypto.createHash('sha256').update(String(requestId), 'utf8').update(pk, 'utf8').digest('hex')
-        }));
+        let withHash = validators.map(v => {
+            let pk = String(v.pubkey).toLowerCase();
+            let h  = crypto.createHash('sha256').update(String(requestId), 'utf8').update(pk, 'utf8').digest('hex');
+            return { pubkey: pk, source: (v.source != null ? String(v.source) : null), hash: h };
+        });
         withHash.sort((a, b) => (a.hash < b.hash) ? -1 : (a.hash > b.hash ? 1 : 0));
+        if(weighted){
+            let seen = new Set();
+            withHash = withHash.filter(v => {
+                if(v.source === null) return true;
+                if(seen.has(v.source)) return false;
+                seen.add(v.source);
+                return true;
+            });
+        }
         return withHash.slice(0, Math.max(1, Number(redundancy) || 1)).map(v => v.pubkey);
     }
 }
