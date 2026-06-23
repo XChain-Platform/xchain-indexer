@@ -281,7 +281,10 @@ module.exports = {
         // file against GENESIS_DUMP_HASH (sha256 of the UNCOMPRESSED content) and re-checks the
         // recomputed genesis block hashes, so trust matches the CSV path's GENESIS_LEDGER_HASH.
         // Absent or unpinned -> the canonical CSV derivation runs (and is the generator + fallback).
-        config['GENESIS_DUMP_PATH']        = process.env.GENESIS_DUMP_PATH || path.join(__dirname, '..', 'data', 'genesis', coin + '-genesis-dump.ndjson.gz');
+        // The path is network-specific (<coin>-<network>-genesis-dump...) so a mainnet dump is never
+        // mis-applied on testnet/regtest (the importer would reject the block mismatch); only networks
+        // with a bundled dump take the fast path, the rest fall back to CSV.
+        config['GENESIS_DUMP_PATH']        = process.env.GENESIS_DUMP_PATH || path.join(__dirname, '..', 'data', 'genesis', coin + '-' + network + '-genesis-dump.ndjson.gz');
         config['GENESIS_DUMP_HASH']        = process.env.XCHAIN_GENESIS_DUMP_HASH || null;
         // Watchdog for the genesis block when it takes the DUMP IMPORT path (measured ~15s for
         // BTC); kept tight (10 min default) so a wedged import is caught fast. The CSV-derivation

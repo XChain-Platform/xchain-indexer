@@ -94,8 +94,8 @@ const INDEX_MAP_STATE_HASH_ACTIVATION = {
     // computes a divergent state_hash and a follower HALTS, so every indexer + sync process
     // must run this exact map BEFORE the chain reaches the height. Keep this map
     // byte-identical to the xchain-{indexer,sync}/src/stateHash.js twin.
-    mainnet: 999999999,   // ARM: 0 at the launch reindex (armed from genesis, no flag-day)
-    testnet: 999999999,   // ARM: current tip + N (fleet fully on armed code first), or 0 + clean reseed
+    mainnet: 0,           // ARMED at the genesis launch reindex (folds from genesis, no mid-chain flag-day)
+    testnet: 0,           // ARMED at the genesis launch reindex (clean reseed accompanies it)
     regtest: 999999999,   // ARM: current tip + N, or 0 + clean reseed
 };
 

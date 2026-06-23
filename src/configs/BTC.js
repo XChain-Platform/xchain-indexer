@@ -183,9 +183,19 @@ module.exports = {
         if(network === 'regtest'){
             config['GENESIS_BLOCK']       = parseInt(process.env.XCHAIN_GENESIS_BLOCK || '0', 10) || 0;
             config['GENESIS_LEDGER_HASH'] = process.env.XCHAIN_GENESIS_LEDGER_HASH || null;
-        } else {
-            config['GENESIS_BLOCK']       = 0;     // TODO(launch): pin to the BTC (Counterparty) start block
-            config['GENESIS_LEDGER_HASH'] = null;  // TODO(launch): pin sha256 of data/genesis/BTC-ledger.csv
+            config['GENESIS_DUMP_HASH']   = process.env.XCHAIN_GENESIS_DUMP_HASH || null;
+        } else if(network === 'mainnet'){
+            // Counterparty name-ownership injected at the BTC mainnet start block (decoder
+            // getFirstBlock, re-pinned 2026-06-19). LEDGER_HASH = sha256 of the bundled CSV;
+            // DUMP_HASH = sha256 of the UNCOMPRESSED bundled dump content (fast-import anchor).
+            config['GENESIS_BLOCK']       = 950000;
+            config['GENESIS_LEDGER_HASH'] = 'f347a0499654b128dd0461441ed6341ac27a24b909d6ff6e3995db4e69dc23e5';
+            config['GENESIS_DUMP_HASH']   = 'f80653328e747b838cc63dcff86ac4868eb4ce8f0b81e06b4cec996313312012';
+        } else { // testnet
+            // Testnet activates genesis at its start block but ships NO bundled dump (CSV fallback).
+            config['GENESIS_BLOCK']       = 138000;
+            config['GENESIS_LEDGER_HASH'] = 'f347a0499654b128dd0461441ed6341ac27a24b909d6ff6e3995db4e69dc23e5';
+            config['GENESIS_DUMP_HASH']   = null;
         }
 
         return config;
