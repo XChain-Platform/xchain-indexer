@@ -12,6 +12,13 @@ WORKDIR /XChainIndexer
 RUN npm ci
 
 COPY ./src /XChainIndexer/src
+# Genesis-ledger bootstrap artifacts (Counterparty/Dogeparty name-ownership
+# manifests + precomputed mainnet state dumps). config.js resolves
+# GENESIS_LEDGER_PATH / GENESIS_DUMP_PATH under /XChainIndexer/data/genesis, so
+# the bundled CSVs and dumps must ship inside the image; without this a
+# containerized indexer crash-loops at the genesis block on a missing-file read
+# (the direct-node self-tests passed only because data/ is on disk in the repo).
+COPY ./data/genesis /XChainIndexer/data/genesis
 COPY ./.en[v] /XChainIndexer/.env
 
 CMD ["npm", "run", "api"]
