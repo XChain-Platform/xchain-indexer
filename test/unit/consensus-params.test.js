@@ -104,12 +104,12 @@ const GOLDEN_FEE_PARAMS_PER_CHAIN = {
 };
 // Per-chain staking consensus golden. ACTIVATION_DELAY_BLOCKS and COOLDOWN_BLOCKS drive
 // activation_block / deactivation_block hashed state across stake/delegate/unstake.
-// COOLDOWN_BLOCKS is shared; ACTIVATION_DELAY_BLOCKS is calibrated per-chain for ~60-min
-// reorg protection at each chain's block time.
+// Both are calibrated per-chain for a consistent wall-clock at each chain's block time:
+// ACTIVATION_DELAY_BLOCKS ~= 60-min reorg protection, COOLDOWN_BLOCKS ~= 7-day unstake hold.
 const GOLDEN_STAKING_PER_CHAIN = {
     BTC:  { ACTIVATION_DELAY_BLOCKS: 6,  COOLDOWN_BLOCKS: 1000 },
-    LTC:  { ACTIVATION_DELAY_BLOCKS: 24, COOLDOWN_BLOCKS: 1000 },
-    DOGE: { ACTIVATION_DELAY_BLOCKS: 60, COOLDOWN_BLOCKS: 1000 }
+    LTC:  { ACTIVATION_DELAY_BLOCKS: 24, COOLDOWN_BLOCKS: 4032 },
+    DOGE: { ACTIVATION_DELAY_BLOCKS: 60, COOLDOWN_BLOCKS: 10080 }
 };
 // Consensus params that must NOT be live-polled by the hub config overlay; doing so races
 // the federation into a soft fork. The behavioural test below asserts the overlay ignores

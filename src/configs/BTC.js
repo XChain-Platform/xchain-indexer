@@ -40,7 +40,7 @@ module.exports = {
         config['ORACLE_MAX_PRICE_AGE_SECONDS'] = 1800;       // Reject oracle prices older than this vs the block being processed (≈3× the ~10-min BTC oracle-round interval; applies on all chains); 0 disables
         config['VALIDATOR_QUERY_LIMIT'] = 1000;              // CONSENSUS-CRITICAL safety cap on validator-set queries (db.js). Frozen node-local (NOT an env var) because the cap is read on the deterministic block-processing path (attest responsible-set, quorum gates); a per-node value would fork the federation once the qualifying set exceeds the smaller cap. Generous vs any realistic federation; hitting it is logged.
         config['STAKING'] = {
-            COOLDOWN_BLOCKS:         1000,                     // Blocks before unstaked XCHAIN is returned
+            COOLDOWN_BLOCKS:         1000,                     // ~7 days at ~10 min/block before unstaked XCHAIN is returned
             ACTIVATION_DELAY_BLOCKS: 6,                        // ~60 min reorg protection at ~10 min/block
             // SLASH (WI-2 bump 2, equivocation slashing): the bounty/treasury split a
             // permissionless SLASH proof applies to a burned bond (actions/slash.js
