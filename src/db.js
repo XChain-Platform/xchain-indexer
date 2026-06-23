@@ -6028,6 +6028,14 @@ class Database {
             type_id = 2;
             id      = await this.createAddress(value);
         }
+        // A wire ^<id> reference that does not resolve to an existing block-stamped row
+        // yields a null id (getAddressId/getTickerId, commit 0b023b2). There is no entity
+        // to map, so skip the row rather than INSERT NULL into the NOT-NULL id column,
+        // which aborts the whole block on a reindex. Matches 0b023b2's "treat as a no-op
+        // rather than mint a bogus row" contract; mappings_actions is a lookup index, not
+        // consensus-hashed, so skipping a dangling-ref mapping changes no block hashes.
+        if(this.util.isNull(id))
+            return;
         // Check if record already exists
         let query  = `SELECT
                             action_index
@@ -6057,6 +6065,12 @@ class Database {
             type_id = 1;
             id      = await this.createTicker(value);
         }
+        // Same null-guard as createActionMapping: a dangling ^<id> ticker reference
+        // resolves to null (0b023b2); skip the lookup-index row instead of inserting NULL
+        // into the NOT-NULL id column and aborting the block. mappings_files is not
+        // consensus-hashed, so this changes no block hashes.
+        if(this.util.isNull(id))
+            return;
         // Check if record already exists
         let query  = `SELECT
                             action_index
