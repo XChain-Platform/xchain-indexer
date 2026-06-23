@@ -693,3 +693,52 @@ describe('HubDbSync call-sync watermark chain scoping @regression @tier1', funct
         assert.deepStrictEqual(captured.args, []);
     });
 });
+
+// _applyRetraction mirrors the hub's reorg delete onto the local copy. When the broadcast
+// carries to_action_index (a deferred/closed-range retraction, item 5296) the replica MUST
+// bound its delete identically or it diverges from the hub. The first doQuery call is the delete.
+describe('HubDbSync._applyRetraction closed-range parity @regression @tier3', function () {
+    function makeApply() {
+        const calls = [];
+        const doQuery = sinon.stub().callsFake(async (sql, args) => { calls.push({ sql, args }); return []; });
+        const sync = new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test' });
+        return { sync, calls };
+    }
+
+    it('open-ended delete for price_snapshots when no to_action_index', async function () {
+        const { sync, calls } = makeApply();
+        await sync._applyRetraction({ table: 'price_snapshots', source_chain: 'BTC', from_action_index: 50 });
+        assert.match(calls[0].sql, /source_action_index >= \?/);
+        assert.ok(!/<= \?/.test(calls[0].sql), 'must stay open-ended');
+        assert.deepStrictEqual(calls[0].args, ['BTC', 50]);
+    });
+
+    it('bounded delete for price_snapshots when to_action_index present', async function () {
+        const { sync, calls } = makeApply();
+        await sync._applyRetraction({ table: 'price_snapshots', source_chain: 'BTC', from_action_index: 50, to_action_index: 75 });
+        assert.match(calls[0].sql, /source_action_index >= \? AND source_action_index <= \?/);
+        assert.deepStrictEqual(calls[0].args, ['BTC', 50, 75]);
+    });
+
+    it('bounded delete for oracle_prices keys on action_index', async function () {
+        const { sync, calls } = makeApply();
+        await sync._applyRetraction({ table: 'oracle_prices', source_chain: 'LTC', from_action_index: 1, to_action_index: 9 });
+        assert.match(calls[0].sql, /action_index >= \? AND action_index <= \?/);
+        assert.deepStrictEqual(calls[0].args, ['LTC', 1, 9]);
+    });
+
+    it('bounded delete for cross_chain_calls', async function () {
+        const { sync, calls } = makeApply();
+        await sync._applyRetraction({ table: 'cross_chain_calls', source_chain: 'BTC', from_action_index: 10, to_action_index: 20 });
+        assert.match(calls[0].sql, /source_action_index >= \? AND source_action_index <= \?/);
+        assert.deepStrictEqual(calls[0].args, ['BTC', 10, 20]);
+    });
+
+    it('bounded two-sided delete for cross_chain_matches', async function () {
+        const { sync, calls } = makeApply();
+        await sync._applyRetraction({ table: 'cross_chain_matches', source_chain: 'BTC', from_action_index: 10, to_action_index: 20 });
+        assert.match(calls[0].sql, /a_action_index >= \? AND a_action_index <= \?/);
+        assert.match(calls[0].sql, /b_action_index >= \? AND b_action_index <= \?/);
+        assert.deepStrictEqual(calls[0].args, ['BTC', 10, 20, 'BTC', 10, 20]);
+    });
+});

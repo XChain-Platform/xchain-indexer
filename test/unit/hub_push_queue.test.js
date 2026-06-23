@@ -28,7 +28,9 @@ function makeIndexer(hubClientOpts){
         enabled:        true,
         pushPriceRound: sinon.stub().resolves(),
         pushOraclePrice: sinon.stub().resolves(),
-        retractPriceRange: sinon.stub().resolves()
+        retractPriceRange: sinon.stub().resolves(),
+        retractXcallRange: sinon.stub().resolves(),
+        retractMatchRange: sinon.stub().resolves()
     }, hubClientOpts || {});
 
     let indexerDb = {
@@ -334,15 +336,47 @@ describe('HubPushQueue', function(){
             assert.strictEqual(indexer.indexerDb.markHubPushDelivered.calledWith(2), true);
         });
 
-        it('calls retractPriceRange for price_retraction rows and marks delivered', async function(){
+        it('calls retractPriceRange for price_retraction rows and marks delivered (open-ended when no ceiling)', async function(){
             let indexer = makeIndexer();
             let q = new HubPushQueue(indexer);
             let payload = { coin: 'BTC', action_index: 4200 };
             let row = makeRow({ id: 7, push_type: 'price_retraction', payload: JSON.stringify(payload) });
             await q._attempt(row);
             assert.strictEqual(indexer.hubClient.retractPriceRange.calledOnce, true);
-            assert.deepStrictEqual(indexer.hubClient.retractPriceRange.firstCall.args, ['BTC', 4200]);
+            // Back-compat: a payload without last_action_index passes undefined as the ceiling,
+            // which the hub_client treats as open-ended (item 5296).
+            assert.deepStrictEqual(indexer.hubClient.retractPriceRange.firstCall.args, ['BTC', 4200, undefined]);
             assert.strictEqual(indexer.indexerDb.markHubPushDelivered.calledWith(7), true);
+        });
+
+        it('passes last_action_index as the closed-range ceiling when present in the payload', async function(){
+            let indexer = makeIndexer();
+            let q = new HubPushQueue(indexer);
+            let payload = { coin: 'BTC', action_index: 4200, last_action_index: 4250 };
+            let row = makeRow({ id: 8, push_type: 'price_retraction', payload: JSON.stringify(payload) });
+            await q._attempt(row);
+            assert.deepStrictEqual(indexer.hubClient.retractPriceRange.firstCall.args, ['BTC', 4200, 4250]);
+            assert.strictEqual(indexer.indexerDb.markHubPushDelivered.calledWith(8), true);
+        });
+
+        it('calls retractXcallRange / retractMatchRange with the closed-range ceiling', async function(){
+            let indexer = makeIndexer();
+            let q = new HubPushQueue(indexer);
+            await q._attempt(makeRow({ id: 9,  push_type: 'xcall_retraction', payload: JSON.stringify({ coin: 'BTC', action_index: 10, last_action_index: 20 }) }));
+            await q._attempt(makeRow({ id: 10, push_type: 'match_retraction', payload: JSON.stringify({ coin: 'BTC', action_index: 30, last_action_index: 40 }) }));
+            assert.deepStrictEqual(indexer.hubClient.retractXcallRange.firstCall.args, ['BTC', 10, 20]);
+            assert.deepStrictEqual(indexer.hubClient.retractMatchRange.firstCall.args, ['BTC', 30, 40]);
+        });
+
+        it('drain() is a no-op while paused, and resumes after resume()', async function(){
+            let indexer = makeIndexer();
+            let q = new HubPushQueue(indexer);
+            q.pause();
+            await q.drain();
+            assert.strictEqual(indexer.indexerDb.getPendingHubPushes.called, false, 'paused drain must not fetch');
+            q.resume();
+            await q.drain();
+            assert.strictEqual(indexer.indexerDb.getPendingHubPushes.called, true, 'resumed drain fetches');
         });
 
         it('marks row failed for unknown push_type', async function(){

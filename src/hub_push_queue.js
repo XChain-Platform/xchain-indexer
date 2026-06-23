@@ -52,7 +52,16 @@ class HubPushQueue {
 
         this.timer    = null;
         this.draining = false;
+        // Set by rollback.js around its post-commit retraction block so a deferred drain cannot
+        // re-issue a stale open-ended retraction against the just-rolled-back range (item 5297).
+        // Independent of `draining` (which only prevents overlapping drains).
+        this.paused   = false;
     }
+
+    // Pause/resume gate drain() entry. Synchronous flag flips; an already-running drain finishes
+    // (it is guarded separately by `draining`), but no NEW drain tick starts while paused.
+    pause(){ this.paused = true; }
+    resume(){ this.paused = false; }
 
     // Begin draining on an interval. No-op when no hub is configured; in that
     // case the PRICE handlers never enqueue, so there is nothing to drain.
@@ -88,6 +97,7 @@ class HubPushQueue {
     // hub can't pile up concurrent drains on top of each other.
     async drain(){
         if(this.draining) return;
+        if(this.paused) return;
         this.draining = true;
         try {
             let rows = await this.indexerDb.getPendingHubPushes(this.batchSize);
@@ -138,16 +148,19 @@ class HubPushQueue {
                 await this.hubClient.pushOraclePrice(payload);
             } else if(row.push_type === 'price_retraction'){
                 // Reorg retraction parked by rollback.js when the live RPC failed.
-                // pushpricereorg is idempotent over a replayed range.
-                await this.hubClient.retractPriceRange(payload.coin, payload.action_index);
+                // pushpricereorg is idempotent over a replayed range. A deferred drain bounds the
+                // delete to the CLOSED range [action_index, last_action_index] so a row re-published
+                // at A' inside the original open-ended range is not wiped (item 5296). Old queued
+                // rows (no last_action_index) fall back to open-ended via undefined.
+                await this.hubClient.retractPriceRange(payload.coin, payload.action_index, payload.last_action_index);
             } else if(row.push_type === 'xcall_retraction'){
                 // Reorg XCALL relay retraction parked by rollback.js when the live RPC
-                // failed. retractXcallRange is idempotent over a replayed range.
-                await this.hubClient.retractXcallRange(payload.coin, payload.action_index);
+                // failed. retractXcallRange is idempotent over a replayed range; closed-range bounded.
+                await this.hubClient.retractXcallRange(payload.coin, payload.action_index, payload.last_action_index);
             } else if(row.push_type === 'match_retraction'){
                 // Reorg DEX cross-chain match retraction parked by rollback.js when the
-                // live RPC failed. retractMatchRange is idempotent over a replayed range.
-                await this.hubClient.retractMatchRange(payload.coin, payload.action_index);
+                // live RPC failed. retractMatchRange is idempotent over a replayed range; closed-range bounded.
+                await this.hubClient.retractMatchRange(payload.coin, payload.action_index, payload.last_action_index);
             } else {
                 console.warn('HubPushQueue: row ' + row.id + ' has unknown push_type "' + row.push_type + '", marking failed');
                 await this.indexerDb.recordHubPushAttempt(row.id, 'unknown push_type', 1);

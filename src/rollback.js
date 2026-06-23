@@ -39,6 +39,13 @@ class Rollback {
         // relay rows seeded from rolled-back PRICE / XCALL actions on the cross-chain hub)
         this.hubClient = indexer.hubClient;
 
+        // Setup alias to the durable hub-push queue. Paused around the post-commit retraction
+        // block so an in-flight deferred drain cannot interleave with this rollback and re-issue
+        // a stale open-ended retraction against the just-rolled-back range (item 5297). May be
+        // unset during early boot (rollbacks only occur in the main loop after the queue starts),
+        // so every use is null-guarded.
+        this.hubPushQueue = indexer.hubPushQueue || null;
+
         // Setup alias to the indexer protocol changes instance
         this.protocolChanges = indexer.protocolChanges;
 
@@ -211,6 +218,14 @@ class Rollback {
         // price retraction whenever the lowest rolled-back action is index 0.
         let firstActionIndex = null;
 
+        // Highest rolled-back action_index, used to bound a DEFERRED hub retraction to a CLOSED
+        // range [first, last]. Captured here, before the dataTables DELETE below removes the
+        // orphaned `actions` rows, so the MAX reflects the full rolled-back range. The live
+        // (immediate) retraction stays open-ended; only a queued/replayed retraction needs the
+        // ceiling, so that a re-published row at A' (>= first) landing before the deferred drain
+        // is not wiped by an open-ended DELETE (items 5296/5297).
+        let lastActionIndex = null;
+
         // Placeholder for market pairs
         let markets = [];
 
@@ -228,6 +243,14 @@ class Rollback {
         let rows = await this.indexerDb.doQuery(query, args);
         if(rows.length > 0)
             firstActionIndex = Number(rows[0].action_index);
+
+        // Capture the upper bound of the rolled-back action range (still in the DB at this point).
+        let maxRows = await this.indexerDb.doQuery(
+            'SELECT MAX(a.action_index) AS last_action_index FROM actions a WHERE a.block_index >= ?',
+            [block_index]
+        );
+        if(maxRows.length > 0 && maxRows[0].last_action_index !== null)
+            lastActionIndex = Number(maxRows[0].last_action_index);
 
         // Handle looking up data for any action_indexes in the rollback
         if(firstActionIndex !== null){
@@ -1057,6 +1080,13 @@ class Rollback {
         // stale rows once by invoking the hub's price-reorg reconciliation
         // (pushpricereorg) with from_action_index=0 for the affected COIN before
         // resuming normal indexing.
+        // Quiesce the durable queue across all three retractions so an in-flight deferred drain
+        // (it runs on an unref'd interval) cannot re-issue a stale open-ended retraction against
+        // the just-rolled-back range while this rollback is mid-flight (item 5297). resume() is in
+        // the finally below so the queue always restarts even if a retraction path throws.
+        if(this.hubPushQueue) this.hubPushQueue.pause();
+        try {
+
         if(firstActionIndex !== null && this.hubClient){
             try {
                 await this.hubClient.retractPriceRange(this.config['COIN'], firstActionIndex);
@@ -1073,7 +1103,7 @@ class Rollback {
                 console.warn('Rollback: hub price retraction failed, queueing for retry:', err && err.message);
                 try {
                     await this.indexerDb.enqueueHubPush('price_retraction',
-                        { coin: this.config['COIN'], action_index: firstActionIndex });
+                        { coin: this.config['COIN'], action_index: firstActionIndex, last_action_index: lastActionIndex });
                 } catch(e) {
                     console.error('Rollback: failed to enqueue price retraction for retry:', e && e.message);
                 }
@@ -1103,7 +1133,7 @@ class Rollback {
                 console.warn('Rollback: hub XCALL retraction failed, queueing for retry:', err && err.message);
                 try {
                     await this.indexerDb.enqueueHubPush('xcall_retraction',
-                        { coin: this.config['COIN'], action_index: firstActionIndex });
+                        { coin: this.config['COIN'], action_index: firstActionIndex, last_action_index: lastActionIndex });
                 } catch(e) {
                     console.error('Rollback: failed to enqueue XCALL retraction for retry:', e && e.message);
                 }
@@ -1133,11 +1163,15 @@ class Rollback {
                 console.warn('Rollback: hub DEX match retraction failed, queueing for retry:', err && err.message);
                 try {
                     await this.indexerDb.enqueueHubPush('match_retraction',
-                        { coin: this.config['COIN'], action_index: firstActionIndex });
+                        { coin: this.config['COIN'], action_index: firstActionIndex, last_action_index: lastActionIndex });
                 } catch(e) {
                     console.error('Rollback: failed to enqueue DEX match retraction for retry:', e && e.message);
                 }
             }
+        }
+
+        } finally {
+            if(this.hubPushQueue) this.hubPushQueue.resume();
         }
 
         // Log the rollback time

@@ -281,6 +281,65 @@ describe('Rollback @regression @tier3', function () {
         assert.strictEqual(payload.action_index, 50);
     });
 
+    // ─── Closed-range deferred retraction + quiesce (items 5296/5297) ──
+
+    it('parks the deferred retraction with last_action_index = MAX of the rolled-back range', async function () {
+        const hubClient = { retractPriceRange: sinon.stub().rejects(new Error('hub unreachable')), retractXcallRange: sinon.stub().resolves(), retractMatchRange: sinon.stub().resolves() };
+        const idx = createMockIndexer({ hubClient });
+        idx.protocolChanges = { isDefined: sinon.stub().returns(true), isEnabled: sinon.stub().resolves(true) };
+        idx.indexerDb.enqueueHubPush = sinon.stub().resolves();
+        const rb = new Rollback(idx);
+        idx.util.resetLists();
+        idx.indexerDb.doQuery.onFirstCall().resolves([{ action_index: 50 }]);   // firstActionIndex
+        idx.indexerDb.doQuery.onSecondCall().resolves([{ last_action_index: 75 }]); // MAX(action_index)
+        idx.indexerDb.doQuery.resolves([]);
+        await assert.doesNotReject(() => rb.rollback(100));
+        const payload = idx.indexerDb.enqueueHubPush.firstCall.args[1];
+        assert.strictEqual(payload.action_index, 50);
+        assert.strictEqual(payload.last_action_index, 75, 'deferred retraction must carry the closed-range ceiling');
+    });
+
+    it('keeps the LIVE retraction open-ended (no ceiling) so it never under-deletes the orphaned range', async function () {
+        const hubClient = { retractPriceRange: sinon.stub().resolves(), retractXcallRange: sinon.stub().resolves(), retractMatchRange: sinon.stub().resolves() };
+        const idx = createMockIndexer({ hubClient });
+        idx.protocolChanges = { isDefined: sinon.stub().returns(true), isEnabled: sinon.stub().resolves(true) };
+        const rb = new Rollback(idx);
+        idx.util.resetLists();
+        idx.indexerDb.doQuery.onFirstCall().resolves([{ action_index: 50 }]);
+        idx.indexerDb.doQuery.onSecondCall().resolves([{ last_action_index: 75 }]);
+        idx.indexerDb.doQuery.resolves([]);
+        await rb.rollback(100);
+        // Live call passes only (coin, from); the ceiling is intentionally omitted.
+        assert.strictEqual(hubClient.retractPriceRange.firstCall.args.length, 2);
+        assert.strictEqual(hubClient.retractPriceRange.firstCall.args[1], 50);
+    });
+
+    it('quiesces the hub-push queue around the retraction block (pause before, resume after, even on throw)', async function () {
+        const order = [];
+        const hubPushQueue = {
+            pause:  sinon.stub().callsFake(() => order.push('pause')),
+            resume: sinon.stub().callsFake(() => order.push('resume'))
+        };
+        // A failing live retraction must still resume() via the finally.
+        const hubClient = {
+            retractPriceRange: sinon.stub().callsFake(async () => { order.push('retract'); throw new Error('hub down'); }),
+            retractXcallRange: sinon.stub().resolves(),
+            retractMatchRange: sinon.stub().resolves()
+        };
+        const idx = createMockIndexer({ hubClient });
+        idx.protocolChanges = { isDefined: sinon.stub().returns(true), isEnabled: sinon.stub().resolves(true) };
+        idx.indexerDb.enqueueHubPush = sinon.stub().resolves();
+        idx.hubPushQueue = hubPushQueue;   // captured by the Rollback constructor
+        const rb = new Rollback(idx);
+        idx.util.resetLists();
+        idx.indexerDb.doQuery.onFirstCall().resolves([{ action_index: 50 }]);
+        idx.indexerDb.doQuery.resolves([]);
+        await assert.doesNotReject(() => rb.rollback(100));
+        assert.ok(hubPushQueue.pause.calledOnce && hubPushQueue.resume.calledOnce, 'pause + resume each called once');
+        assert.ok(order.indexOf('pause') < order.indexOf('retract'), 'pause precedes retraction');
+        assert.ok(order.indexOf('retract') < order.indexOf('resume'), 'resume follows retraction');
+    });
+
     // ─── Hub XCALL (cross_chain_calls) retraction signal ──────────────
 
     it('signals the hub to retract cross-chain calls for the rolled-back range', async function () {

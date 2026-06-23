@@ -68,12 +68,14 @@ class HubClient {
     // sourceChain:     the chain this indexer serves (BTC/LTC/DOGE)
     // fromActionIndex: lowest rolled-back action_index; the hub deletes rows for
     //                  this source_chain whose action_index is >= this value.
-    async retractPriceRange(sourceChain, fromActionIndex){
+    // toActionIndex (optional): upper bound for a CLOSED-range retraction. The live retraction
+    // omits it (open-ended is safe before forward processing resumes); a DEFERRED retraction from
+    // the queue passes it so a row re-published at A' inside the original range is not wiped (5296).
+    async retractPriceRange(sourceChain, fromActionIndex, toActionIndex){
         if(!this.enabled) return;
-        return this._call('pushpricereorg', {
-            source_chain:      sourceChain,
-            from_action_index: fromActionIndex
-        });
+        let params = { source_chain: sourceChain, from_action_index: fromActionIndex };
+        if(toActionIndex !== undefined && toActionIndex !== null) params.to_action_index = toActionIndex;
+        return this._call('pushpricereorg', params);
     }
 
     // Notify the hub that a reorg rolled back XCALL request actions on this chain so it
@@ -84,12 +86,12 @@ class HubClient {
     // sourceChain:     the chain this indexer serves (BTC/LTC/DOGE)
     // fromActionIndex: lowest rolled-back action_index; the hub retracts relay rows for
     //                  this source_chain whose source_action_index is >= this value.
-    async retractXcallRange(sourceChain, fromActionIndex){
+    // toActionIndex (optional): closed-range upper bound for a deferred retraction (see 5296).
+    async retractXcallRange(sourceChain, fromActionIndex, toActionIndex){
         if(!this.enabled) return;
-        return this._call('pushxcallreorg', {
-            source_chain:      sourceChain,
-            from_action_index: fromActionIndex
-        });
+        let params = { source_chain: sourceChain, from_action_index: fromActionIndex };
+        if(toActionIndex !== undefined && toActionIndex !== null) params.to_action_index = toActionIndex;
+        return this._call('pushxcallreorg', params);
     }
 
     // Notify the hub that a reorg rolled back DEX ORDER actions on this chain so it can retract
@@ -100,12 +102,12 @@ class HubClient {
     // sourceChain:     the chain this indexer serves (BTC/LTC/DOGE)
     // fromActionIndex: lowest rolled-back action_index; the hub retracts matches for this
     //                  source_chain whose a_action_index/b_action_index is >= this value.
-    async retractMatchRange(sourceChain, fromActionIndex){
+    // toActionIndex (optional): closed-range upper bound for a deferred retraction (see 5296).
+    async retractMatchRange(sourceChain, fromActionIndex, toActionIndex){
         if(!this.enabled) return;
-        return this._call('pushdexreorg', {
-            source_chain:      sourceChain,
-            from_action_index: fromActionIndex
-        });
+        let params = { source_chain: sourceChain, from_action_index: fromActionIndex };
+        if(toActionIndex !== undefined && toActionIndex !== null) params.to_action_index = toActionIndex;
+        return this._call('pushdexreorg', params);
     }
 
     // Make a JSON-RPC 2.0 call to the hub

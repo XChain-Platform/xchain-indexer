@@ -709,17 +709,30 @@ class HubDbSync {
     // Apply a reorg retraction to the local hub DB copy. The hub deletes price
     // rows seeded from rolled-back PRICE actions; we mirror that delete so this
     // indexer stops reading prices that were never finalized on-chain.
-    // event: { table, source_chain, from_action_index }
+    // event: { table, source_chain, from_action_index, to_action_index? }
+    // When the broadcaster supplies to_action_index the hub applied a CLOSED-range delete
+    // (a deferred retraction, item 5296); we MUST mirror the same bound or the replica diverges
+    // from the hub by deleting re-published rows the hub kept. Absent (live retraction) =>
+    // open-ended `>= from`, exactly as before.
     async _applyRetraction(event) {
         let from = Number(event.from_action_index);
         if (!Number.isFinite(from)) return;                    // malformed, skip
+        let to = (event.to_action_index !== undefined && event.to_action_index !== null)
+                 ? Number(event.to_action_index) : null;
+        let bounded = (to !== null && Number.isFinite(to));
         // cross_chain_matches is two-sided: a match is retracted when EITHER order leg on
         // the reorged chain was rolled back. The settlement pass then rolls back any leg it
         // already applied for that match (its cross_chain_settlements row drops with the block).
         if (event.table === 'cross_chain_matches') {
-            await this.hubDb.doQuery(
-                'DELETE FROM cross_chain_matches WHERE (a_chain = ? AND a_action_index >= ?) OR (b_chain = ? AND b_action_index >= ?)',
-                [event.source_chain, from, event.source_chain, from]);
+            if (bounded) {
+                await this.hubDb.doQuery(
+                    'DELETE FROM cross_chain_matches WHERE (a_chain = ? AND a_action_index >= ? AND a_action_index <= ?) OR (b_chain = ? AND b_action_index >= ? AND b_action_index <= ?)',
+                    [event.source_chain, from, to, event.source_chain, from, to]);
+            } else {
+                await this.hubDb.doQuery(
+                    'DELETE FROM cross_chain_matches WHERE (a_chain = ? AND a_action_index >= ?) OR (b_chain = ? AND b_action_index >= ?)',
+                    [event.source_chain, from, event.source_chain, from]);
+            }
             await this._refreshMatchSyncTimestamp();
             return;
         }
@@ -727,16 +740,29 @@ class HubDbSync {
         // that was reorged away). Both phases drop: a dispatch whose request
         // vanished must never produce an execution or a callback here.
         if (event.table === 'cross_chain_calls') {
-            await this.hubDb.doQuery(
-                'DELETE FROM cross_chain_calls WHERE source_chain = ? AND source_action_index >= ?',
-                [event.source_chain, from]);
+            if (bounded) {
+                await this.hubDb.doQuery(
+                    'DELETE FROM cross_chain_calls WHERE source_chain = ? AND source_action_index >= ? AND source_action_index <= ?',
+                    [event.source_chain, from, to]);
+            } else {
+                await this.hubDb.doQuery(
+                    'DELETE FROM cross_chain_calls WHERE source_chain = ? AND source_action_index >= ?',
+                    [event.source_chain, from]);
+            }
             await this._refreshCallSyncTimestamp();
             return;
         }
         let column = RETRACTION_COLUMNS[event.table];
         if (!column) return;                                   // unknown table, skip
-        let query = 'DELETE FROM ' + event.table + ' WHERE source_chain = ? AND ' + column + ' >= ?';
-        await this.hubDb.doQuery(query, [event.source_chain, from]);
+        let query, args;
+        if (bounded) {
+            query = 'DELETE FROM ' + event.table + ' WHERE source_chain = ? AND ' + column + ' >= ? AND ' + column + ' <= ?';
+            args  = [event.source_chain, from, to];
+        } else {
+            query = 'DELETE FROM ' + event.table + ' WHERE source_chain = ? AND ' + column + ' >= ?';
+            args  = [event.source_chain, from];
+        }
+        await this.hubDb.doQuery(query, args);
     }
 
     // ── Cross-chain match sync barrier (mirrors the oracle_prices barrier) ──────
