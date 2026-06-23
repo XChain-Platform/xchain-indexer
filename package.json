@@ -10,7 +10,7 @@
   "dependencies": {
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
-    "express": "^4.22.2",
+    "express": "^5.2.1",
     "express-json-rpc-router": "^1.4.0",
     "helmet": "^8.2.0",
     "mariadb": "3.5.2",
