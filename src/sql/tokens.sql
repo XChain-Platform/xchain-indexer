@@ -43,3 +43,4 @@ CREATE        INDEX lock_callback    ON tokens (lock_callback);
 CREATE        INDEX callback_tick_id ON tokens (callback_tick_id);
 CREATE        INDEX allow_list       ON tokens (allow_list);
 CREATE        INDEX block_list       ON tokens (block_list);
+CREATE        INDEX action_index     ON tokens (action_index);

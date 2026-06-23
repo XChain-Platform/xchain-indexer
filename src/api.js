@@ -509,6 +509,9 @@ async function startApi(){
                 return {
                     block_index: blk,
                     count:       validators.length,
+                    // Additive: true when the result hit VALIDATOR_QUERY_LIMIT, so a
+                    // hub can alarm rather than silently consume a truncated set.
+                    truncated:   raw.truncated === true,
                     validators:  validators
                 };
             } catch (err) {

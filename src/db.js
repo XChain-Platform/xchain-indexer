@@ -131,7 +131,9 @@ class Database {
         // constant GAS source dozens of times per action via getTickerId/getAddressId.
         // Those resolution SELECTs dominate genesis time (profiled ~50% of all DB work).
         // When this map is non-null, getTickerId/getAddressId serve non-null hits from
-        // memory and create* populate it. It is SAFE only because genesis is one atomic
+        // memory; the read paths (getTickerId, getAddressId) populate it lazily on a
+        // non-null DB hit. create* methods do NOT call .set() directly. It is SAFE only
+        // because genesis is one atomic
         // block and a rollback floor: ids are assigned, never deleted, during injection,
         // so a cached id can never go stale. genesis.inject() enables it for the passes and
         // clears it in a finally; normal block processing leaves it null (path unchanged).
@@ -9340,19 +9342,29 @@ class Database {
     async getVerifiedFullNodeSet(blockIndex){
         let window = parseInt((this.config['FULLNODE'] || {})['PROOF_WINDOW_BLOCKS']) || 0;
         let low    = parseInt(blockIndex) - window;
+        // Safety cap matching the sibling validator-set RPCs (getActiveValidators,
+        // getValidatorsByCapability, etc.) so this path can't return an unbounded
+        // set on a large federation. Override via VALIDATOR_QUERY_LIMIT.
+        let limit = this.config['VALIDATOR_QUERY_LIMIT'];
         let query = `SELECT DISTINCT ip.pubkey AS pubkey, sa.address AS source, fv.source_id AS source_id
                      FROM full_node_verifications fv
                      JOIN index_pubkeys   ip ON ip.id = fv.signing_pubkey_id
                      JOIN index_addresses sa ON sa.id = fv.source_id
                      WHERE fv.passed = 1
                        AND fv.block_index >  ?
-                       AND fv.block_index <= ?`;
-        let rows = await this.doQuery(query, [low, blockIndex]);
-        return rows.map(r => ({
+                       AND fv.block_index <= ?
+                     LIMIT ?`;
+        let rows = await this.doQuery(query, [low, blockIndex, limit]);
+        let truncated = rows.length >= limit;
+        if(truncated)
+            console.warn('getVerifiedFullNodeSet hit the result cap of ' + limit + ' rows at block ' + blockIndex + ' - full-node verifier set may be truncated. Raise the frozen VALIDATOR_QUERY_LIMIT consensus constant (coordinated fleet upgrade) if the federation has grown.');
+        let result = rows.map(r => ({
             pubkey:    String(r.pubkey),
             source:    r.source == null ? '' : String(r.source),
             source_id: r.source_id
         }));
+        result.truncated = truncated;
+        return result;
     }
 
     // Participation-rate inputs for the full-node REWARD gate (price.js). Earning the

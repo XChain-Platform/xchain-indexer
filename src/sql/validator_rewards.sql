@@ -12,3 +12,4 @@ CREATE TABLE validator_rewards (
 CREATE UNIQUE INDEX reward_unique     ON validator_rewards (source_id, signing_pubkey_id, reward_type, round_reference);
 CREATE        INDEX source_id         ON validator_rewards (source_id);
 CREATE        INDEX signing_pubkey_id ON validator_rewards (signing_pubkey_id);
+CREATE        INDEX block_index       ON validator_rewards (block_index);

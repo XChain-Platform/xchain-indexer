@@ -61,10 +61,10 @@ async function withArmed(height, fn){
 
 describe('state_hash index-map class (id-determinism P4) @regression', function(){
 
-    it('gate: inert by default on every network, arms at/after the per-chain height', function(){
-        assert.strictEqual(isIndexMapStateHashActive(7, 'regtest'), false, 'default placeholder is inert');
-        assert.strictEqual(isIndexMapStateHashActive(7, 'mainnet'), false);
-        assert.strictEqual(isIndexMapStateHashActive(7, 'testnet'), false);
+    it('gate: regtest inert by default; mainnet/testnet armed at genesis (height 0); at/above threshold activates', function(){
+        assert.strictEqual(isIndexMapStateHashActive(7, 'regtest'), false, 'regtest placeholder is inert');
+        assert.strictEqual(isIndexMapStateHashActive(7, 'mainnet'), true, 'mainnet armed at genesis (0)');
+        assert.strictEqual(isIndexMapStateHashActive(7, 'testnet'), true, 'testnet armed at genesis (0)');
         assert.strictEqual(isIndexMapStateHashActive(7, 'nonexistent'), false, 'unknown network -> off (safe)');
         assert.strictEqual(isIndexMapStateHashActive(7, null), false);
         return withArmed(5, () => {

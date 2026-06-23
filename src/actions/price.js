@@ -16,7 +16,7 @@
  *
  * Two versions:
  *   v0: Validator COIN/FIAT snapshot (PBFT-signed by price-capable validators)
- *       Format: PRICE|0|ROUND|TIMESTAMP|PAIR_COUNT|PAIR_ID|PAIR_PRICE|...|SIG_COUNT|PUBKEY|SIG|...
+ *       Format: PRICE|0|ROUND|TIMESTAMP|BTC_BLOCK_HEIGHT|PAIR_COUNT|PAIR_ID|PAIR_PRICE|...|SIG_COUNT|PUBKEY|SIG|...
  *   v1: User TOKEN/FIAT oracle price (no staking required)
  *       Format: PRICE|1|COIN|TICK|FIAT|VALUE|FEE|MEMO
  *

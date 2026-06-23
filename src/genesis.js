@@ -188,7 +188,7 @@ class Genesis {
         // the 64-char unique prefix on index_transactions.hash, so long ticks sharing a
         // 64-char prefix collided to a NULL tx_hash_id. A sha256 digest of (coin,pass,tick)
         // keeps the hash deterministic and collision-free inside the indexed width; the
-        // readable GENESIS-<coin>-P<pass>- prefix preserves explorer legibility (63 chars).
+        // readable GENESIS-<coin>-P<pass>- prefix preserves explorer legibility (64 chars).
         let digest = crypto.createHash('sha256')
             .update(this.config['COIN'] + '|' + pass + '|' + tick).digest('hex').slice(0, 48);
         let tx = {
