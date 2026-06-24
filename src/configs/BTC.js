@@ -192,9 +192,11 @@ module.exports = {
             config['GENESIS_LEDGER_HASH'] = 'f347a0499654b128dd0461441ed6341ac27a24b909d6ff6e3995db4e69dc23e5';
             config['GENESIS_DUMP_HASH']   = 'f80653328e747b838cc63dcff86ac4868eb4ce8f0b81e06b4cec996313312012';
         } else { // testnet
-            // Testnet activates genesis at its start block but ships NO bundled dump (CSV fallback).
-            config['GENESIS_BLOCK']       = 138000;
-            config['GENESIS_LEDGER_HASH'] = 'f347a0499654b128dd0461441ed6341ac27a24b909d6ff6e3995db4e69dc23e5';
+            // Testnet launches CLEAN (genesis disabled, like LTC). The Counterparty name-ownership
+            // carry-forward is a mainnet-only allocation reserving real snapshot/airdrop ownership;
+            // testnet is for experimentation, so its namespace stays open for anyone to register.
+            config['GENESIS_BLOCK']       = 0;
+            config['GENESIS_LEDGER_HASH'] = null;
             config['GENESIS_DUMP_HASH']   = null;
         }
 
