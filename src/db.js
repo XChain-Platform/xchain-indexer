@@ -1844,6 +1844,28 @@ class Database {
         return idx;
     }
 
+    // Source-chain reorg fence (item 5308). The current monotonic push generation for `coin`,
+    // 0 when no rollback has ever bumped it (matches the DEFAULT 0 hub rows stamp before the
+    // first reorg, all of which are then always deletable). Read fresh on every push + rollback;
+    // the value lives only in the DB so it survives a crash and is never rolled back.
+    async getPushGeneration(coin){
+        let results = await this.doQuery('SELECT generation FROM push_generations WHERE coin = ? LIMIT 1', [coin]);
+        return (results.length > 0) ? Number(results[0].generation) : 0;
+    }
+
+    // Bump `coin`'s push generation by one (creating the row at 1 on first bump) and return the
+    // NEW value. Called once at the start of every rollback, BEFORE forward replay, so rows the
+    // replay re-publishes carry the bumped generation while the orphaned rows keep the prior one.
+    // The retraction carries the PRE-bump generation (newGen - 1), so the fence deletes the
+    // orphans (gen <= pre) and the re-published rows (gen == new) survive. Monotonic: a skipped
+    // value from a crashed-then-retried rollback is harmless since the fence only needs <=.
+    async bumpPushGeneration(coin){
+        await this.doQuery(
+            'INSERT INTO push_generations (coin, generation) VALUES (?, 1) ON DUPLICATE KEY UPDATE generation = generation + 1',
+            [coin]);
+        return await this.getPushGeneration(coin);
+    }
+
     // Lookup action_index records in the `actions` table and return them
     async getActionIndex(data){
         let action_index  = null;

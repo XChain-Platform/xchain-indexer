@@ -118,6 +118,13 @@ const ROLLBACK_EXEMPT = {
     // then re-points the surviving pubkeys row at a DIFFERENT address (INSERT IGNORE
     // keeps the old pubkey), so it is no longer harmless: it is now orphan-swept (see
     // SPECIAL_CASE / ORPHAN_SWEEPS).
+    push_generations:
+        'Source-chain reorg fence counter (item 5308): one monotonic generation per coin, ' +
+        'bumped once at the START of every rollback() so re-published rows outrank the orphaned ' +
+        'ones. Rolling it back is exactly the bug it fixes (a reset value would let a deferred ' +
+        'retraction wipe a re-published row at a recycled action_index again). NOT chain truth ' +
+        'and NOT consensus-hashed; it is hub-replication metadata stamped onto hub rows only. ' +
+        'Intentionally never deleted/recomputed by rollback, hence exempt by design.',
     cross_chain_matches:
         'Hub-mirrored cross-chain DEX state (CROSS_CHAIN_TABLES in hub_db_sync.js), ' +
         'NOT produced by local block/action processing. Tagged by source chain + ' +

@@ -619,6 +619,12 @@ async function startApi(){
                 let swaps  = await indexer.indexerDb.getOpenCrossChainSwaps(max, after_action_index, to_coin);
                 let orders = await indexer.indexerDb.getOpenCrossChainOrders(max, after_action_index, to_coin);
                 let merged = swaps.concat(orders);
+                // Source-chain reorg fence (item 5308): stamp each offer with this chain's current
+                // push generation. The hub copies it onto the matched leg's a_/b_push_generation so a
+                // deferred retraction fences by generation and a re-published order at a recycled
+                // action_index (higher generation) survives. Per-COIN, so one read covers the book.
+                let pushGeneration = await indexer.indexerDb.getPushGeneration(indexer.config['COIN']);
+                for(let o of merged) o.push_generation = pushGeneration;
                 return {
                     latest_block_index: latest,
                     network:            indexer.config['NETWORK'],
@@ -645,6 +651,11 @@ async function startApi(){
             try {
                 let latest = await indexer.indexerDb.getLatestBlockIndex();
                 let rows   = await indexer.indexerDb.getPendingCrossChainCallRequests(max);
+                // Source-chain reorg fence (item 5308): stamp each call with this chain's current
+                // push generation. The hub copies it onto the dispatch row (and the result row
+                // inherits it), so a source-keyed deferred retraction fences by generation. Per-COIN.
+                let pushGeneration = await indexer.indexerDb.getPushGeneration(indexer.config['COIN']);
+                for(let c of rows) c.push_generation = pushGeneration;
                 return {
                     latest_block_index: latest,
                     network:            indexer.config['NETWORK'],

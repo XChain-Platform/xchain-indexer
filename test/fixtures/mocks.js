@@ -62,6 +62,10 @@ function createMockDb() {
         getTxIndex: sinon.stub().resolves(1),
         createTxIndex: sinon.stub().resolves(1),
         getNextActionIndex: sinon.stub().resolves(1),
+        // Source-chain reorg fence (item 5308): default the bump to generation 1 (pre-bump 0), so a
+        // rollback under the mock threads retraction_generation = 0 into the retraction calls.
+        getPushGeneration: sinon.stub().resolves(0),
+        bumpPushGeneration: sinon.stub().resolves(1),
         getActionIndex: sinon.stub().resolves(null),
         createActionIndex: sinon.stub().resolves(1),
         updateActionIndex: sinon.stub().resolves(),

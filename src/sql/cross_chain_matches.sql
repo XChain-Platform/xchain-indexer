@@ -21,10 +21,12 @@ CREATE TABLE cross_chain_matches (
     b_payout_addr        VARCHAR(255) NOT NULL,
     effective_time       BIGINT NOT NULL,                         -- wall-clock instant the indexer applies at (shared clock)
     finalizing_view      INT          NOT NULL DEFAULT 0,         -- PBFT view the round finalized at; signed into the EQUIV canonical (WI-2 bump 2) so the indexer rebuilds the exact view
-    validator_signatures TEXT         NOT NULL,                   -- JSON [{pubkey,sig}] — 2f+1 over the canonical match
+    validator_signatures TEXT         NOT NULL,                   -- JSON [{pubkey,sig}]; 2f+1 over the canonical match
     status               VARCHAR(20)  NOT NULL DEFAULT 'finalized',
     batch_root           VARCHAR(64),
     anchor_txid          VARCHAR(64),
+    a_push_generation    BIGINT       NOT NULL DEFAULT 0,          -- A-leg source-chain reorg fence (item 5308); mirrored from the hub
+    b_push_generation    BIGINT       NOT NULL DEFAULT 0,          -- B-leg source-chain reorg fence (item 5308); mirrored from the hub
     created_at           TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE KEY uq_match_id (match_id),
     KEY idx_effective (effective_time),

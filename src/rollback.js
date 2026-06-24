@@ -208,6 +208,22 @@ class Rollback {
         // Notify user of start of rollback
         console.log('Starting rollback to block ' + block_index + '...');
 
+        // Source-chain reorg fence (item 5308): bump this chain's monotonic push generation NOW,
+        // before any forward replay re-publishes rows, so re-published rows carry the new generation
+        // while the orphaned rows keep the prior one. Both the live and the deferred retractions
+        // below carry the PRE-bump generation (bumped - 1), so the hub fence deletes only the
+        // orphans (push_generation <= pre) and a re-published row at a recycled action_index (the
+        // new generation) survives. push_generations is NEVER a rollback dataTable (monotonic).
+        let retractionGeneration = null;
+        try {
+            let bumpedGeneration = await this.indexerDb.bumpPushGeneration(this.config['COIN']);
+            retractionGeneration = bumpedGeneration - 1;
+        } catch(err) {
+            // A failed bump would silently disable the fence for this reorg. Log loudly; the
+            // retractions fall back to no-fence (the prior, range-only behavior) rather than abort.
+            console.error('Rollback: failed to bump push generation (reorg fence disabled for this rollback):', err && err.message);
+        }
+
         // Reset the address/tickers/transactions lists
         this.util.resetLists();
 
@@ -1089,7 +1105,7 @@ class Rollback {
 
         if(firstActionIndex !== null && this.hubClient){
             try {
-                await this.hubClient.retractPriceRange(this.config['COIN'], firstActionIndex);
+                await this.hubClient.retractPriceRange(this.config['COIN'], firstActionIndex, null, retractionGeneration);
             } catch(err) {
                 // Durability: a dropped retraction permanently diverges the hub's
                 // oracle_prices / price_snapshots (and every mirroring indexer) from
@@ -1103,7 +1119,7 @@ class Rollback {
                 console.warn('Rollback: hub price retraction failed, queueing for retry:', err && err.message);
                 try {
                     await this.indexerDb.enqueueHubPush('price_retraction',
-                        { coin: this.config['COIN'], action_index: firstActionIndex, last_action_index: lastActionIndex });
+                        { coin: this.config['COIN'], action_index: firstActionIndex, last_action_index: lastActionIndex, retraction_generation: retractionGeneration });
                 } catch(e) {
                     console.error('Rollback: failed to enqueue price retraction for retry:', e && e.message);
                 }
@@ -1119,7 +1135,7 @@ class Rollback {
         // price retraction. A hub failure must not leave the local rollback half-applied.
         if(firstActionIndex !== null && this.hubClient){
             try {
-                await this.hubClient.retractXcallRange(this.config['COIN'], firstActionIndex);
+                await this.hubClient.retractXcallRange(this.config['COIN'], firstActionIndex, null, retractionGeneration);
             } catch(err) {
                 // Durability: a dropped XCALL retraction permanently diverges the hub's
                 // cross_chain_calls (and every mirroring indexer) from chain truth, leaving
@@ -1133,7 +1149,7 @@ class Rollback {
                 console.warn('Rollback: hub XCALL retraction failed, queueing for retry:', err && err.message);
                 try {
                     await this.indexerDb.enqueueHubPush('xcall_retraction',
-                        { coin: this.config['COIN'], action_index: firstActionIndex, last_action_index: lastActionIndex });
+                        { coin: this.config['COIN'], action_index: firstActionIndex, last_action_index: lastActionIndex, retraction_generation: retractionGeneration });
                 } catch(e) {
                     console.error('Rollback: failed to enqueue XCALL retraction for retry:', e && e.message);
                 }
@@ -1149,7 +1165,7 @@ class Rollback {
         // hub failure must not leave the local rollback half-applied.
         if(firstActionIndex !== null && this.hubClient){
             try {
-                await this.hubClient.retractMatchRange(this.config['COIN'], firstActionIndex);
+                await this.hubClient.retractMatchRange(this.config['COIN'], firstActionIndex, null, retractionGeneration);
             } catch(err) {
                 // Durability: a dropped match retraction permanently diverges the hub's
                 // cross_chain_matches (and every mirroring indexer) from chain truth, leaving
@@ -1163,7 +1179,7 @@ class Rollback {
                 console.warn('Rollback: hub DEX match retraction failed, queueing for retry:', err && err.message);
                 try {
                     await this.indexerDb.enqueueHubPush('match_retraction',
-                        { coin: this.config['COIN'], action_index: firstActionIndex, last_action_index: lastActionIndex });
+                        { coin: this.config['COIN'], action_index: firstActionIndex, last_action_index: lastActionIndex, retraction_generation: retractionGeneration });
                 } catch(e) {
                     console.error('Rollback: failed to enqueue DEX match retraction for retry:', e && e.message);
                 }

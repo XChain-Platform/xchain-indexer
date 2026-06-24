@@ -10,6 +10,7 @@ CREATE TABLE price_snapshots (
     consensus_round     INT DEFAULT 1,
     consensus_proof     TEXT NOT NULL,
     status              ENUM('finalized','skipped','disputed') NOT NULL,
+    push_generation     BIGINT NOT NULL DEFAULT 0,     -- source-chain reorg fence (item 5308); mirrored from the hub. See xchain-hub/src/sql/price_snapshots.sql.
     created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE KEY idx_round_pair (round_number, coin_pair),
     KEY idx_pair_block (coin_pair, reference_block),

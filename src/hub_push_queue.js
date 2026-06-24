@@ -151,16 +151,17 @@ class HubPushQueue {
                 // pushpricereorg is idempotent over a replayed range. A deferred drain bounds the
                 // delete to the CLOSED range [action_index, last_action_index] so a row re-published
                 // at A' inside the original open-ended range is not wiped (item 5296). Old queued
-                // rows (no last_action_index) fall back to open-ended via undefined.
-                await this.hubClient.retractPriceRange(payload.coin, payload.action_index, payload.last_action_index);
+                // rows (no last_action_index) fall back to open-ended via undefined. retraction_generation
+                // (item 5308) fences the delete to push_generation <= it; absent on old queued rows.
+                await this.hubClient.retractPriceRange(payload.coin, payload.action_index, payload.last_action_index, payload.retraction_generation);
             } else if(row.push_type === 'xcall_retraction'){
                 // Reorg XCALL relay retraction parked by rollback.js when the live RPC
-                // failed. retractXcallRange is idempotent over a replayed range; closed-range bounded.
-                await this.hubClient.retractXcallRange(payload.coin, payload.action_index, payload.last_action_index);
+                // failed. retractXcallRange is idempotent over a replayed range; closed-range bounded + gen-fenced.
+                await this.hubClient.retractXcallRange(payload.coin, payload.action_index, payload.last_action_index, payload.retraction_generation);
             } else if(row.push_type === 'match_retraction'){
                 // Reorg DEX cross-chain match retraction parked by rollback.js when the
-                // live RPC failed. retractMatchRange is idempotent over a replayed range; closed-range bounded.
-                await this.hubClient.retractMatchRange(payload.coin, payload.action_index, payload.last_action_index);
+                // live RPC failed. retractMatchRange is idempotent over a replayed range; closed-range bounded + gen-fenced.
+                await this.hubClient.retractMatchRange(payload.coin, payload.action_index, payload.last_action_index, payload.retraction_generation);
             } else {
                 console.warn('HubPushQueue: row ' + row.id + ' has unknown push_type "' + row.push_type + '", marking failed');
                 await this.indexerDb.recordHubPushAttempt(row.id, 'unknown push_type', 1);

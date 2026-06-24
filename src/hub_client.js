@@ -71,10 +71,14 @@ class HubClient {
     // toActionIndex (optional): upper bound for a CLOSED-range retraction. The live retraction
     // omits it (open-ended is safe before forward processing resumes); a DEFERRED retraction from
     // the queue passes it so a row re-published at A' inside the original range is not wiped (5296).
-    async retractPriceRange(sourceChain, fromActionIndex, toActionIndex){
+    // retractionGeneration (optional, item 5308): the rollback's PRE-bump push generation. Both the
+    // live and deferred retractions carry it so the hub fences the delete to push_generation <= it,
+    // leaving a row re-published at a recycled action_index (higher generation) intact.
+    async retractPriceRange(sourceChain, fromActionIndex, toActionIndex, retractionGeneration){
         if(!this.enabled) return;
         let params = { source_chain: sourceChain, from_action_index: fromActionIndex };
         if(toActionIndex !== undefined && toActionIndex !== null) params.to_action_index = toActionIndex;
+        if(retractionGeneration !== undefined && retractionGeneration !== null) params.retraction_generation = retractionGeneration;
         return this._call('pushpricereorg', params);
     }
 
@@ -87,10 +91,12 @@ class HubClient {
     // fromActionIndex: lowest rolled-back action_index; the hub retracts relay rows for
     //                  this source_chain whose source_action_index is >= this value.
     // toActionIndex (optional): closed-range upper bound for a deferred retraction (see 5296).
-    async retractXcallRange(sourceChain, fromActionIndex, toActionIndex){
+    // retractionGeneration (optional, item 5308): see retractPriceRange.
+    async retractXcallRange(sourceChain, fromActionIndex, toActionIndex, retractionGeneration){
         if(!this.enabled) return;
         let params = { source_chain: sourceChain, from_action_index: fromActionIndex };
         if(toActionIndex !== undefined && toActionIndex !== null) params.to_action_index = toActionIndex;
+        if(retractionGeneration !== undefined && retractionGeneration !== null) params.retraction_generation = retractionGeneration;
         return this._call('pushxcallreorg', params);
     }
 
@@ -103,10 +109,12 @@ class HubClient {
     // fromActionIndex: lowest rolled-back action_index; the hub retracts matches for this
     //                  source_chain whose a_action_index/b_action_index is >= this value.
     // toActionIndex (optional): closed-range upper bound for a deferred retraction (see 5296).
-    async retractMatchRange(sourceChain, fromActionIndex, toActionIndex){
+    // retractionGeneration (optional, item 5308): see retractPriceRange (fenced per-leg by the hub).
+    async retractMatchRange(sourceChain, fromActionIndex, toActionIndex, retractionGeneration){
         if(!this.enabled) return;
         let params = { source_chain: sourceChain, from_action_index: fromActionIndex };
         if(toActionIndex !== undefined && toActionIndex !== null) params.to_action_index = toActionIndex;
+        if(retractionGeneration !== undefined && retractionGeneration !== null) params.retraction_generation = retractionGeneration;
         return this._call('pushdexreorg', params);
     }
 

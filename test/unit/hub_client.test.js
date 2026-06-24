@@ -176,6 +176,28 @@ describe('HubClient', function(){
             let payload = callStub.firstCall.args[1];
             assert.strictEqual(payload.source_chain, 'LTC');
             assert.strictEqual(payload.from_action_index, 999);
+            // No bound or generation passed => neither key present (open-ended, no fence).
+            assert.ok(!('to_action_index' in payload));
+            assert.ok(!('retraction_generation' in payload));
+        });
+
+        it('threads to_action_index + retraction_generation into the payload when given (items 5296/5308)', async function(){
+            let c = new HubClient('http://hub.example.com', '');
+            let callStub = sinon.stub(c, '_call').resolves({});
+            await c.retractPriceRange('BTC', 50, 75, 5);
+            let payload = callStub.firstCall.args[1];
+            assert.strictEqual(payload.from_action_index, 50);
+            assert.strictEqual(payload.to_action_index, 75);
+            assert.strictEqual(payload.retraction_generation, 5);
+        });
+
+        it('threads retraction_generation on an open-ended (live) retraction (to=null)', async function(){
+            let c = new HubClient('http://hub.example.com', '');
+            let callStub = sinon.stub(c, '_call').resolves({});
+            await c.retractPriceRange('BTC', 50, null, 7);
+            let payload = callStub.firstCall.args[1];
+            assert.ok(!('to_action_index' in payload), 'no closed-range bound');
+            assert.strictEqual(payload.retraction_generation, 7);
         });
 
         it('propagates rejection from _call', async function(){

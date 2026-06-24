@@ -297,6 +297,9 @@ describe('Rollback @regression @tier3', function () {
         const payload = idx.indexerDb.enqueueHubPush.firstCall.args[1];
         assert.strictEqual(payload.action_index, 50);
         assert.strictEqual(payload.last_action_index, 75, 'deferred retraction must carry the closed-range ceiling');
+        // The deferred payload also carries the pre-bump generation fence (item 5308); the mock bump
+        // returns 1, so the pre-bump value is 0.
+        assert.strictEqual(payload.retraction_generation, 0, 'deferred retraction must carry the generation fence');
     });
 
     it('keeps the LIVE retraction open-ended (no ceiling) so it never under-deletes the orphaned range', async function () {
@@ -309,9 +312,30 @@ describe('Rollback @regression @tier3', function () {
         idx.indexerDb.doQuery.onSecondCall().resolves([{ last_action_index: 75 }]);
         idx.indexerDb.doQuery.resolves([]);
         await rb.rollback(100);
-        // Live call passes only (coin, from); the ceiling is intentionally omitted.
-        assert.strictEqual(hubClient.retractPriceRange.firstCall.args.length, 2);
+        // Live call passes (coin, from, null, retractionGeneration): the ceiling is intentionally
+        // omitted (open-ended), but the generation fence (item 5308) IS threaded. The mock bump
+        // returns 1, so the pre-bump retraction generation is 0.
         assert.strictEqual(hubClient.retractPriceRange.firstCall.args[1], 50);
+        assert.strictEqual(hubClient.retractPriceRange.firstCall.args[2], null, 'no closed-range ceiling on the live retraction');
+        assert.strictEqual(hubClient.retractPriceRange.firstCall.args[3], 0, 'pre-bump generation threaded as the fence');
+    });
+
+    it('bumps the push generation once at rollback start and threads the PRE-bump value (item 5308)', async function () {
+        const hubClient = { retractPriceRange: sinon.stub().resolves(), retractXcallRange: sinon.stub().resolves(), retractMatchRange: sinon.stub().resolves() };
+        const idx = createMockIndexer({ hubClient });
+        idx.protocolChanges = { isDefined: sinon.stub().returns(true), isEnabled: sinon.stub().resolves(true) };
+        idx.indexerDb.bumpPushGeneration = sinon.stub().resolves(6);   // post-bump generation 6 => pre-bump 5
+        const rb = new Rollback(idx);
+        idx.util.resetLists();
+        idx.indexerDb.doQuery.onFirstCall().resolves([{ action_index: 50 }]);
+        idx.indexerDb.doQuery.resolves([]);
+        await rb.rollback(100);
+        assert.ok(idx.indexerDb.bumpPushGeneration.calledOnce, 'generation bumped exactly once');
+        assert.strictEqual(idx.indexerDb.bumpPushGeneration.firstCall.args[0], rb.config['COIN']);
+        // All three retractions carry the pre-bump generation (5) as the fence.
+        assert.strictEqual(hubClient.retractPriceRange.firstCall.args[3], 5);
+        assert.strictEqual(hubClient.retractXcallRange.firstCall.args[3], 5);
+        assert.strictEqual(hubClient.retractMatchRange.firstCall.args[3], 5);
     });
 
     it('quiesces the hub-push queue around the retraction block (pause before, resume after, even on throw)', async function () {

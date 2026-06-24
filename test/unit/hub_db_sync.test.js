@@ -741,4 +741,37 @@ describe('HubDbSync._applyRetraction closed-range parity @regression @tier3', fu
         assert.match(calls[0].sql, /b_action_index >= \? AND b_action_index <= \?/);
         assert.deepStrictEqual(calls[0].args, ['BTC', 10, 20, 'BTC', 10, 20]);
     });
+
+    // Item 5308: when the broadcast carries retraction_generation, the replica mirrors the SAME
+    // generation fence (push_generation <= it), so a row re-published at a recycled action_index
+    // (higher generation) survives on the replica too. cross_chain_matches fences per leg.
+    it('gen-fenced delete for price_snapshots adds push_generation <= ?', async function () {
+        const { sync, calls } = makeApply();
+        await sync._applyRetraction({ table: 'price_snapshots', source_chain: 'BTC', from_action_index: 50, to_action_index: 75, retraction_generation: 5 });
+        assert.match(calls[0].sql, /source_action_index >= \? AND source_action_index <= \? AND push_generation <= \?/);
+        assert.deepStrictEqual(calls[0].args, ['BTC', 50, 75, 5]);
+    });
+
+    it('gen-fenced open-ended delete for oracle_prices (gen but no to_action_index)', async function () {
+        const { sync, calls } = makeApply();
+        await sync._applyRetraction({ table: 'oracle_prices', source_chain: 'LTC', from_action_index: 1, retraction_generation: 7 });
+        assert.match(calls[0].sql, /action_index >= \? AND push_generation <= \?/);
+        assert.ok(!/action_index <= \?/.test(calls[0].sql), 'no closed-range clause');
+        assert.deepStrictEqual(calls[0].args, ['LTC', 1, 7]);
+    });
+
+    it('gen-fenced delete for cross_chain_calls adds push_generation <= ?', async function () {
+        const { sync, calls } = makeApply();
+        await sync._applyRetraction({ table: 'cross_chain_calls', source_chain: 'BTC', from_action_index: 10, to_action_index: 20, retraction_generation: 3 });
+        assert.match(calls[0].sql, /source_action_index >= \? AND source_action_index <= \? AND push_generation <= \?/);
+        assert.deepStrictEqual(calls[0].args, ['BTC', 10, 20, 3]);
+    });
+
+    it('gen-fenced PER-LEG delete for cross_chain_matches (a_/b_push_generation)', async function () {
+        const { sync, calls } = makeApply();
+        await sync._applyRetraction({ table: 'cross_chain_matches', source_chain: 'BTC', from_action_index: 10, to_action_index: 20, retraction_generation: 4 });
+        assert.match(calls[0].sql, /a_action_index <= \? AND a_push_generation <= \?/);
+        assert.match(calls[0].sql, /b_action_index <= \? AND b_push_generation <= \?/);
+        assert.deepStrictEqual(calls[0].args, ['BTC', 10, 20, 4, 'BTC', 10, 20, 4]);
+    });
 });

@@ -297,6 +297,10 @@ class Price {
         // for the HubPushQueue poller to retry with backoff. The hub dedupes by
         // round_number, so a later replay it already has is a safe no-op.
         if(!error && this.hubClient){
+            // Source-chain reorg fence (item 5308): stamp the current push generation so the hub
+            // row carries it. A later deferred retraction (which carries the rollback's pre-bump
+            // generation) then deletes only stale rows, not this one if it is re-published post-reorg.
+            let pushGeneration = await this.indexerDb.getPushGeneration(data['COIN']);
             let payload = {
                 source_chain:     data['COIN'],
                 round:            round,
@@ -305,7 +309,8 @@ class Price {
                 pairs:            pairs,
                 sigs:             sigs,
                 action_index:     data['ACTION_INDEX'],
-                block_index:      data['BLOCK_INDEX']
+                block_index:      data['BLOCK_INDEX'],
+                push_generation:  pushGeneration
             };
             this.hubClient.pushPriceRound(payload).catch(err => {
                 console.warn('PRICE v0: hub push failed, queued for retry:', err.message);
@@ -370,6 +375,8 @@ class Price {
         // The hub dedupes by (source_address, source_chain, action_index), so a
         // later replay it already has is a safe no-op.
         if(!error && this.hubClient){
+            // Source-chain reorg fence (item 5308): see _parseV0 above.
+            let pushGeneration = await this.indexerDb.getPushGeneration(data['COIN']);
             let payload = {
                 source_chain:   data['COIN'],
                 source_address: data['SOURCE'],
@@ -380,7 +387,8 @@ class Price {
                 fee:            data['V1_FEE'],
                 memo:           data['MEMO'],
                 block_time:     data['BLOCK_TIME'],
-                action_index:   data['ACTION_INDEX']
+                action_index:   data['ACTION_INDEX'],
+                push_generation: pushGeneration
             };
             this.hubClient.pushOraclePrice(payload).catch(err => {
                 console.warn('PRICE v1: hub push failed, queued for retry:', err.message);
