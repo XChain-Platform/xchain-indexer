@@ -97,6 +97,45 @@ function v3Params(overrides = {}) {
     return p;
 }
 
+// ANCHOR v4 params (anchor-reward, rootless): v0 fields + the root sig list, then the
+// PUBLISHER pubkey + the attestation sig list appended at the tail.
+function v4Params(overrides = {}) {
+    let f = Object.assign({
+        chain: 'BTC', network: 'regtest', block_index: '500', block_hash: HASH('0'),
+        ledger: HASH('1'), actions: HASH('2'), contracts: HASH('3'),
+        seq: '0', snapshot: '100',
+        sigs: [[PUBKEY_A, SIG]],
+        publisher: PUBKEY_A, attest: [[PUBKEY_A, SIG]]
+    }, overrides);
+    let p = ['4', f.chain, f.network, f.block_index, f.block_hash, f.ledger, f.actions, f.contracts,
+             f.seq, f.snapshot, String(f.sigs.length)];
+    for (let [pk, sg] of f.sigs) p.push(pk, sg);
+    p.push(f.publisher, String(f.attest.length));
+    for (let [pk, sg] of f.attest) p.push(pk, sg);
+    return p;
+}
+
+// ANCHOR v5 params (anchor-reward, root-bearing): v3 fields + the root sig list, then the
+// PUBLISHER pubkey + the attestation sig list appended at the tail.
+function v5Params(overrides = {}) {
+    let f = Object.assign({
+        chain: 'BTC', network: 'regtest', block_index: '500', block_hash: HASH('0'),
+        ledger: HASH('1'), actions: HASH('2'), contracts: HASH('3'),
+        seq: '0', snapshot: '100',
+        state_root: HASH('d'), state_root_version: '1',
+        block_merkle_root: HASH('e'), block_merkle_version: '1',
+        sigs: [[PUBKEY_A, SIG]],
+        publisher: PUBKEY_A, attest: [[PUBKEY_A, SIG]]
+    }, overrides);
+    let p = ['5', f.chain, f.network, f.block_index, f.block_hash, f.ledger, f.actions, f.contracts,
+             f.seq, f.snapshot, f.state_root, f.state_root_version, f.block_merkle_root, f.block_merkle_version,
+             String(f.sigs.length)];
+    for (let [pk, sg] of f.sigs) p.push(pk, sg);
+    p.push(f.publisher, String(f.attest.length));
+    for (let [pk, sg] of f.attest) p.push(pk, sg);
+    return p;
+}
+
 const ARCHIVE_JSON = JSON.stringify({ v: 1, network: 'regtest', batch_seq: 0, matches: [{ match_id: 'm1' }], capability_snapshots: [] });
 
 describe('Anchor (ANCHOR) @regression @tier3', function () {
@@ -111,6 +150,8 @@ describe('Anchor (ANCHOR) @regression @tier3', function () {
         db.getAnchorV1ByBatchSeq      = sinon.stub().resolves(null);
         db.getAnchorChunks            = sinon.stub().resolves([]);
         db.setAnchorArchiveStatus     = sinon.stub().resolves();
+        db.createValidatorReward      = sinon.stub().resolves(true);
+        db.reconcileAnchorRewardWinner= sinon.stub().resolves(0);
     }
 
     beforeEach(function () {
@@ -225,6 +266,83 @@ describe('Anchor (ANCHOR) @regression @tier3', function () {
         await handler.parse(v0Params(), data, null);
         assert.strictEqual(data['STATUS'], 'unverified');
         assert.ok(indexer.indexerDb.createAnchorAction.calledOnce);   // stored regardless
+    });
+
+    // ── v4/v5: publisher-attestation + on-chain reward derivation ────────────────────
+    it('v4 with a valid publisher attestation is valid and DERIVES the reward (no push)', async function () {
+        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 4, COIN: 'DOGE' });
+        await handler.parse(v4Params(), data, null);
+        assert.strictEqual(data['STATUS'], 'valid');
+        assert.strictEqual(data['PUBLISHER'], PUBKEY_A);
+        assert.ok(indexer.indexerDb.createValidatorReward.calledOnce);
+        // (pubkeyHex, roundReference, rewardType, amount, blockIndex, upsert) - frozen amount, NOT wire.
+        assert.deepStrictEqual(indexer.indexerDb.createValidatorReward.firstCall.args,
+            [PUBKEY_A, 0, 'anchor_BTC', '10.00000000', 100, true]);
+        assert.ok(indexer.indexerDb.reconcileAnchorRewardWinner.calledOnceWith(0, 'anchor_BTC'));
+    });
+
+    it('v5 (root-bearing) is valid, stores the roots, and derives the reward', async function () {
+        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 5, COIN: 'DOGE' });
+        await handler.parse(v5Params(), data, null);
+        assert.strictEqual(data['STATUS'], 'valid');
+        assert.strictEqual(lastWrite()['STATE_ROOT'], HASH('d'));
+        assert.deepStrictEqual(indexer.indexerDb.createValidatorReward.firstCall.args,
+            [PUBKEY_A, 0, 'anchor_BTC', '10.00000000', 100, true]);
+    });
+
+    it('v4 is rejected before the ANCHOR_REWARD flag-day', async function () {
+        let arStub = sinon.stub(require('../../../src/anchor_reward_activation.js'),
+            'isAnchorRewardActive').returns(false);
+        try {
+            let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 4, COIN: 'DOGE' });
+            await handler.parse(v4Params(), data, null);
+            assert.ok(String(data['STATUS']).startsWith('invalid: ANCHOR v4 before ANCHOR_REWARD flag-day'));
+            assert.ok(indexer.indexerDb.createValidatorReward.notCalled);
+        } finally { arStub.restore(); }
+    });
+
+    it('v4 keeps the anchor valid but SKIPS the reward when PUBLISHER is not in the oracle_publish set', async function () {
+        // Snapshot = {A}; attestation quorum from A is valid, but the named PUBLISHER is B.
+        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 4, COIN: 'DOGE' });
+        await handler.parse(v4Params({ publisher: PUBKEY_B }), data, null);
+        assert.strictEqual(data['STATUS'], 'valid');                 // anchor still lands
+        assert.ok(indexer.indexerDb.createValidatorReward.notCalled); // reward denied
+    });
+
+    it('v4 keeps the anchor valid but SKIPS the reward when the attestation quorum is short', async function () {
+        // Snapshot = {A}; the only attestation sig is from B (not in the set) -> 0 valid attesters.
+        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 4, COIN: 'DOGE' });
+        await handler.parse(v4Params({ attest: [[PUBKEY_B, SIG]] }), data, null);
+        assert.strictEqual(data['STATUS'], 'valid');
+        assert.ok(indexer.indexerDb.createValidatorReward.notCalled);
+    });
+
+    it('v4 rejects a malformed PUBLISHER', async function () {
+        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 4, COIN: 'DOGE' });
+        await handler.parse(v4Params({ publisher: 'nothex' }), data, null);
+        assert.ok(String(data['STATUS']).startsWith('invalid: PUBLISHER format'));
+        assert.ok(indexer.indexerDb.createValidatorReward.notCalled);
+    });
+
+    it('reward (XANCPUB) canonical: XANCPUB|anchor_<CHAIN>|seq|snapshot|publisher|amount, EQUIV-wrapped', function () {
+        let d = {
+            FORMAT: 4, CHAIN: 'BTC', NETWORK: 'regtest', CHECKPOINT_SEQ: 0, SNAPSHOT_BLOCK: 100,
+            PUBLISHER: PUBKEY_A
+        };
+        let raw = ['XANCPUB', 'anchor_BTC', '0', '100', PUBKEY_A, '10.00000000'].join('|');
+        let expected = eq.buildEquivCanonical(eq.ENGINE_TAGS.CHECKPOINT, 'XANCPUB|BTC|regtest|0|100', 0, raw);
+        assert.strictEqual(handler._rewardCanonical(d), expected);
+    });
+
+    it('determinism: two independent parses of identical v4 bytes derive the identical reward row', async function () {
+        let h2 = new Anchor(indexer);
+        let d1 = createBaseData({ ACTION: 'ANCHOR', FORMAT: 4, COIN: 'DOGE' });
+        let d2 = createBaseData({ ACTION: 'ANCHOR', FORMAT: 4, COIN: 'DOGE' });
+        await handler.parse(v4Params(), d1, null);
+        let firstArgs = indexer.indexerDb.createValidatorReward.lastCall.args;
+        await h2.parse(v4Params(), d2, null);
+        let secondArgs = indexer.indexerDb.createValidatorReward.lastCall.args;
+        assert.deepStrictEqual(firstArgs, secondArgs);
     });
 
     it('replay guard: a checkpoint_seq below the recorded max is stale; equal is allowed (v0+v1 pairs share a seq)', async function () {

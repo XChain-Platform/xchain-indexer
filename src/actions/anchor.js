@@ -45,6 +45,7 @@ const ed25519 = require('../ed25519.js');
 const swq     = require('../stake_weighted_quorum.js');
 const eq      = require('../equivocation_header.js');
 const ckpt    = require('../checkpoint_commitment_activation.js');
+const ar      = require('../anchor_reward_activation.js');
 
 const ALLOWED_CHAINS = ['BTC', 'LTC', 'DOGE'];
 
@@ -68,6 +69,13 @@ class Anchor {
         // mid-string). The signatures cover the post-flag-day checkpoint canonical, which
         // includes the same roots, so they are signed, not just transported.
         this.formats[3] = 'VERSION|CHAIN|NETWORK|BLOCK_INDEX|BLOCK_HASH|LEDGER_HASH|ACTIONS_HASH|CONTRACT_HASH|CHECKPOINT_SEQ|SNAPSHOT_BLOCK|STATE_ROOT|STATE_ROOT_VERSION|BLOCK_MERKLE_ROOT|BLOCK_MERKLE_VERSION|SIG_COUNT|PUBKEY|SIG|...';
+        // v4 / v5 (anchor-reward re-derivation flag-day): the checkpoint anchor PLUS the
+        // elected PUBLISHER pubkey and a SECOND 2f+1 oracle_publish attestation (XANCPUB) over
+        // the reward tuple, appended AFTER the root signature list (positional, never mid-string).
+        // v4 = rootless (v0-shaped) + publisher; v5 = root-bearing (v3-shaped) + publisher. The
+        // indexer re-derives the reward from these bytes, so the trusted hub push is retired.
+        this.formats[4] = 'VERSION|CHAIN|NETWORK|BLOCK_INDEX|BLOCK_HASH|LEDGER_HASH|ACTIONS_HASH|CONTRACT_HASH|CHECKPOINT_SEQ|SNAPSHOT_BLOCK|SIG_COUNT|PUBKEY|SIG|...|PUBLISHER|ATTEST_SIG_COUNT|APUBKEY|ASIG|...';
+        this.formats[5] = 'VERSION|CHAIN|NETWORK|BLOCK_INDEX|BLOCK_HASH|LEDGER_HASH|ACTIONS_HASH|CONTRACT_HASH|CHECKPOINT_SEQ|SNAPSHOT_BLOCK|STATE_ROOT|STATE_ROOT_VERSION|BLOCK_MERKLE_ROOT|BLOCK_MERKLE_VERSION|SIG_COUNT|PUBKEY|SIG|...|PUBLISHER|ATTEST_SIG_COUNT|APUBKEY|ASIG|...';
     }
 
     // Canonical signing string: MUST byte-match the hub's
@@ -87,18 +95,36 @@ class Anchor {
             base += '|' + String(d['MATCH_BATCH_SEQ']) + '|' + String(d['MATCH_COUNT']) + '|' +
                     d['BATCH_CRC32'] + '|' + String(d['TOTAL_CHUNKS']);
             roundId += '|' + d['MATCH_BATCH_SEQ'];
-        } else if(Number(d['FORMAT']) === 3){
-            // SPV Phase 2 (spec §6.1/§6.3): v3 IS the root-carrying checkpoint, so its
-            // canonical always appends the root suffix. Byte-matches the hub's post-flag-day
-            // canonicalCheckpoint suffix + the SDK/explorer reconstructions. Gating on the
-            // VERSION (not the flag-day) keeps a legacy v0 rootless even after the flag-day:
-            // v0 sigs were produced over the rootless canonical, and post-flag-day the hub
-            // emits v3 (carrying roots), never v0. v3 itself is rejected pre-flag-day in parse.
+        } else if(Number(d['FORMAT']) === 3 || Number(d['FORMAT']) === 5){
+            // SPV Phase 2 (spec §6.1/§6.3): v3 (and the root-bearing v5) IS the root-carrying
+            // checkpoint, so its canonical always appends the root suffix. Byte-matches the hub's
+            // post-flag-day canonicalCheckpoint suffix + the SDK/explorer reconstructions. Gating
+            // on the VERSION (not the flag-day) keeps a legacy v0/v4 rootless even after the
+            // flag-day: those sigs were produced over the rootless canonical. v5 carries roots and
+            // is rejected pre-CHECKPOINT_COMMITMENT in parse.
             base += '|' + [String(d['STATE_ROOT'] || '').toLowerCase(), String(d['STATE_ROOT_VERSION']),
                            String(d['BLOCK_MERKLE_ROOT'] || '').toLowerCase(), String(d['BLOCK_MERKLE_VERSION'])].join('|');
         }
         if(eq.isEquivHeaderActive(d['SNAPSHOT_BLOCK'], d['NETWORK']))
             return eq.buildEquivCanonical(eq.ENGINE_TAGS.CHECKPOINT, roundId, 0, base);
+        return base;
+    }
+
+    // Publisher-attestation canonical (XANCPUB): the string the 2f+1 oracle_publish quorum
+    // signs to ATTEST which validator earns the anchor reward. MUST byte-match the hub's
+    // StateAnchorPublisher._attestationCanonical. The amount is the FROZEN consensus constant
+    // (ar.ANCHOR_REWARD_AMOUNT), NEVER taken from the wire. A distinct 'XANCPUB|...' roundId
+    // prefix gives the attestation its OWN equivocation family, so a validator that signs both
+    // the checkpoint root canonical and this reward attestation in the same round is never
+    // falsely slashable (same R-4 reasoning as the v0/v1 roundId split above).
+    _rewardCanonical(d){
+        let base = ['XANCPUB', 'anchor_' + d['CHAIN'], String(d['CHECKPOINT_SEQ']),
+                    String(d['SNAPSHOT_BLOCK']), String(d['PUBLISHER'] || '').toLowerCase(),
+                    ar.ANCHOR_REWARD_AMOUNT].join('|');
+        if(eq.isEquivHeaderActive(d['SNAPSHOT_BLOCK'], d['NETWORK'])){
+            let roundId = 'XANCPUB|' + d['CHAIN'] + '|' + d['NETWORK'] + '|' + d['CHECKPOINT_SEQ'] + '|' + d['SNAPSHOT_BLOCK'];
+            return eq.buildEquivCanonical(eq.ENGINE_TAGS.CHECKPOINT, roundId, 0, base);
+        }
         return base;
     }
 
@@ -137,8 +163,9 @@ class Anchor {
             data['TOTAL_CHUNKS']    = params[13];
             data['ARCHIVE_B64']     = String(params[14] || '');
             sigBase = 15;
-        } else if(format === 3){
+        } else if(format === 3 || format === 5){
             // SPV Phase 2: the two light-client roots + version bytes, before SIG_COUNT.
+            // v5 is the root-bearing publisher anchor (v3 shape + publisher tail).
             data['STATE_ROOT']           = String(params[10] || '').toLowerCase();
             data['STATE_ROOT_VERSION']   = params[11];
             data['BLOCK_MERKLE_ROOT']    = String(params[12] || '').toLowerCase();
@@ -169,11 +196,18 @@ class Anchor {
             else if(!data['ARCHIVE_B64'] || !/^[0-9a-zA-Z_-]+$/.test(String(data['ARCHIVE_B64'])))
                 error = 'invalid: ARCHIVE_B64 (format)';
         }
-        if(!error && format === 3){
-            // v3 may only appear at/above the CHECKPOINT_COMMITMENT flag-day (else its
-            // signed canonical would have no root suffix, so the sigs could never verify).
+        // v4/v5 (publisher-bearing anchors) may only appear at/above the ANCHOR_REWARD
+        // flag-day; below it the legacy push path stands and these versions do not exist.
+        if(!error && (format === 4 || format === 5)){
+            if(!ar.isAnchorRewardActive(Number(data['SNAPSHOT_BLOCK']), data['NETWORK']))
+                error = 'invalid: ANCHOR v' + format + ' before ANCHOR_REWARD flag-day';
+        }
+        // v3 and the root-bearing v5 may only appear at/above the CHECKPOINT_COMMITMENT
+        // flag-day (else their signed canonical would have no root suffix, so the sigs could
+        // never verify).
+        if(!error && (format === 3 || format === 5)){
             if(!ckpt.isCheckpointCommitmentActive(Number(data['SNAPSHOT_BLOCK']), data['NETWORK']))
-                error = 'invalid: ANCHOR v3 before CHECKPOINT_COMMITMENT flag-day';
+                error = 'invalid: ANCHOR v' + format + ' before CHECKPOINT_COMMITMENT flag-day';
             else if(!/^[0-9a-f]{64}$/.test(String(data['STATE_ROOT'])))
                 error = 'invalid: STATE_ROOT (format)';
             else if(!/^[0-9a-f]{64}$/.test(String(data['BLOCK_MERKLE_ROOT'])))
@@ -185,9 +219,10 @@ class Anchor {
 
         // ── Parse the signature list ──────────────────────────────────────────
         let sigs = [];
+        let sigCount = 0;
         if(!error){
             try {
-                let sigCount = parseInt(params[sigBase]);
+                sigCount = parseInt(params[sigBase]);
                 if(!Number.isFinite(sigCount) || sigCount < 1) throw new Error('SIG_COUNT');
                 for(let i = 0; i < sigCount; i++){
                     let pubkey = params[sigBase + 1 + 2 * i];
@@ -196,6 +231,29 @@ class Anchor {
                     if(!/^[0-9a-fA-F]{64}$/.test(pubkey))     throw new Error('pubkey format at index ' + i);
                     if(!/^[0-9a-fA-F]{128}$/.test(sig))       throw new Error('sig format at index ' + i);
                     sigs.push({ pubkey: pubkey.toLowerCase(), sig: sig.toLowerCase() });
+                }
+            } catch(e){
+                error = 'invalid: ' + e.message;
+            }
+        }
+
+        // ── v4/v5: PUBLISHER pubkey + the publisher-attestation sig list, appended AFTER
+        //    the root sig list (located by sigBase + 1 + 2*sigCount). ────────────────────
+        let publisherSigs = [];
+        if(!error && (format === 4 || format === 5)){
+            try {
+                let pubBase = sigBase + 1 + 2 * sigCount;
+                data['PUBLISHER'] = String(params[pubBase] || '').toLowerCase();
+                if(!/^[0-9a-f]{64}$/.test(data['PUBLISHER'])) throw new Error('PUBLISHER format');
+                let attestCount = parseInt(params[pubBase + 1]);
+                if(!Number.isFinite(attestCount) || attestCount < 1) throw new Error('ATTEST_SIG_COUNT');
+                for(let i = 0; i < attestCount; i++){
+                    let pubkey = params[pubBase + 2 + 2 * i];
+                    let sig    = params[pubBase + 2 + 2 * i + 1];
+                    if(!pubkey || !sig)                       throw new Error('missing attestation sig at index ' + i);
+                    if(!/^[0-9a-fA-F]{64}$/.test(pubkey))     throw new Error('attestation pubkey format at index ' + i);
+                    if(!/^[0-9a-fA-F]{128}$/.test(sig))       throw new Error('attestation sig format at index ' + i);
+                    publisherSigs.push({ pubkey: pubkey.toLowerCase(), sig: sig.toLowerCase() });
                 }
             } catch(e){
                 error = 'invalid: ' + e.message;
@@ -228,22 +286,25 @@ class Anchor {
         // ── Verify 2f+1 oracle_publish signatures over the canonical ─────────
         // SNAPSHOT_BLOCK comes from the wire payload (a BTC height), NOT from
         // the DOGE block this ANCHOR landed in.
+        // Hoisted so the v4/v5 publisher-attestation check below can REUSE the same
+        // oracle_publish set + weighting (no second query, no chance of a divergent set).
+        let weighted = false, validators = null, snapPubkeys = null, oracleN = 0;
         if(!error){
             let snapshotBlock = Number(data['SNAPSHOT_BLOCK']);
             // Stake-weighted (source-deduped) at/above STAKE_WEIGHTED_QUORUM (keyed on
             // the BTC snapshot_block + the checkpoint's network), else legacy 2f+1 count.
-            let weighted = swq.isStakeWeightedQuorumActive(snapshotBlock, data['NETWORK']);
-            let validators = weighted
+            weighted = swq.isStakeWeightedQuorumActive(snapshotBlock, data['NETWORK']);
+            validators = weighted
                 ? await this.indexerDb.getStakeWeightsByCapability('oracle_publish', snapshotBlock)
                 : await this.indexerDb.getValidatorsByCapability('oracle_publish', snapshotBlock);
-            let N = (validators && validators.length) ? validators.length : 0;
-            if(N === 0){
+            oracleN = (validators && validators.length) ? validators.length : 0;
+            if(oracleN === 0){
                 // No oracle_publish snapshot mirrored locally (offline resync / no hub).
                 // Store as 'unverified'; recovery re-verifies from archived snapshots.
                 data['STATUS'] = 'unverified';
             } else {
                 let canonical = this._canonical(data);
-                let snapPubkeys = new Set(validators.map(v => String(v.pubkey).toLowerCase()));
+                snapPubkeys = new Set(validators.map(v => String(v.pubkey).toLowerCase()));
                 let validSigners = [], seen = new Set();
                 for(let s of sigs){
                     let pk = String(s.pubkey || '').toLowerCase();
@@ -255,9 +316,44 @@ class Anchor {
                 }
                 let quorumMet = weighted
                     ? swq.meetsStakeThreshold(validators, validSigners)
-                    : (validSigners.length >= ((N <= 1) ? 1 : Math.max(2 * Math.floor((N - 1) / 3) + 1, Math.ceil((N + 1) / 2))));
+                    : (validSigners.length >= ((oracleN <= 1) ? 1 : Math.max(2 * Math.floor((oracleN - 1) / 3) + 1, Math.ceil((oracleN + 1) / 2))));
                 if(!quorumMet)
-                    error = 'invalid: insufficient ' + (weighted ? 'signer stake' : 'valid signatures (' + validSigners.length + '/' + N + ')');
+                    error = 'invalid: insufficient ' + (weighted ? 'signer stake' : 'valid signatures (' + validSigners.length + '/' + oracleN + ')');
+            }
+        }
+
+        // ── v4/v5: verify the PUBLISHER-attestation quorum (a SECOND 2f+1 over the XANCPUB
+        //    canonical) and DERIVE the anchor reward from chain, retiring the trusted hub push.
+        //    The attestation reuses the SAME oracle_publish set + weighting resolved for the root
+        //    quorum. The reward is credited only when the root quorum passed (error still null,
+        //    snapshot present), the attestation quorum is met, and PUBLISHER is in the snapshot
+        //    set. A degraded or forged attestation NEVER fails the anchor: the checkpoint still
+        //    records as 'valid'; only the reward is skipped, and every indexer reaches the same
+        //    verdict deterministically. amount is the FROZEN consensus constant; reconcile keeps
+        //    the smallest-pubkey winner on a failover double-publish, identical to the retired
+        //    push path + recovery, so the COLLECT rail stays single-winner fleet-wide. ─────────
+        if(!error && (format === 4 || format === 5) && snapPubkeys && oracleN > 0){
+            let rewardCanonical = this._rewardCanonical(data);
+            let attSigners = [], attSeen = new Set();
+            for(let s of publisherSigs){
+                let pk = String(s.pubkey || '').toLowerCase();
+                if(attSeen.has(pk)) continue;
+                attSeen.add(pk);
+                if(!snapPubkeys.has(pk)) continue;
+                if(!ed25519.verify(rewardCanonical, s.sig, s.pubkey)) continue;
+                attSigners.push(pk);
+            }
+            let attQuorumMet = weighted
+                ? swq.meetsStakeThreshold(validators, attSigners)
+                : (attSigners.length >= ((oracleN <= 1) ? 1 : Math.max(2 * Math.floor((oracleN - 1) / 3) + 1, Math.ceil((oracleN + 1) / 2))));
+            if(attQuorumMet && snapPubkeys.has(String(data['PUBLISHER']))){
+                let ok = await this.indexerDb.createValidatorReward(
+                    data['PUBLISHER'], Number(data['CHECKPOINT_SEQ']), 'anchor_' + data['CHAIN'],
+                    ar.ANCHOR_REWARD_AMOUNT, Number(data['SNAPSHOT_BLOCK']), true);
+                if(ok)
+                    await this.indexerDb.reconcileAnchorRewardWinner(Number(data['CHECKPOINT_SEQ']), 'anchor_' + data['CHAIN']);
+            } else {
+                console.warn('\t ANCHOR v' + format + ' : publisher-attestation quorum not met or PUBLISHER not in oracle_publish set; reward skipped (anchor still valid)');
             }
         }
 
