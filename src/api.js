@@ -34,6 +34,7 @@ const jsonRouter    = require('express-json-rpc-router');
 const { buildHealthResponse } = require('./health');
 const { getStakeSourceByPubkey } = require('./stake-source');
 const merkle        = require('./merkle');
+const ar            = require('./anchor_reward_activation.js');
 
 dotenv.config();
 
@@ -805,6 +806,11 @@ async function startApi(){
         // during block processing; accepting a push for them would let a stale
         // hub race the derivation and open a replay-divergence window, so they
         // are rejected outright.
+        // #5311 (staged retirement): per-chain anchor rewards become on-chain DERIVED
+        // at/above the ANCHOR_REWARD flag-day, so this endpoint rejects them there (see
+        // the gate below). It remains the transport for anchor_archive and pre-flag-day
+        // rounds until pre-v4 history is buried, at which point the whole handler + its
+        // WRITE_METHODS entry are deleted (the decisive close of the forge vector).
         // Body: { round, reward_type, block_index, rewards: [{pubkey, amount}, ...] }
         async pushvalidatorrewards({round, reward_type, block_index, rewards}){
             if(round === undefined || round === null)
@@ -817,6 +823,17 @@ async function startApi(){
             if(!/^anchor_[A-Za-z_]+$/.test(type))
                 return { error: 'reward_type ' + type + ' is not pushable (derived during block processing)' };
             let blockIdx = block_index || 0;
+            // #5311 staged retirement: at/above the ANCHOR_REWARD flag-day a per-chain anchor
+            // reward (anchor_<CHAIN>) is DERIVED on-chain from the ANCHOR v4/v5 publisher
+            // attestation, so accepting an unauthenticated push for it is exactly the forge
+            // vector this change retires; reject it (defense in depth; the upgraded hub no
+            // longer pushes it). anchor_archive (not derived from v4/v5) and pre-flag-day
+            // anchor_<CHAIN> rewards still push. block_index is the BTC snapshot_block the
+            // flag-day is keyed on. The handler itself stays until pre-v4 history is buried.
+            if(/^anchor_(BTC|LTC|DOGE)$/.test(type) &&
+               ar.isAnchorRewardActive(Number(blockIdx), indexer.config && indexer.config['NETWORK']))
+                return { error: 'reward_type ' + type + ' at block ' + blockIdx +
+                                ' is derived on-chain from ANCHOR v4/v5; push retired (#5311)' };
             let written = 0;
             let skipped = 0;
             for(let r of rewards){
