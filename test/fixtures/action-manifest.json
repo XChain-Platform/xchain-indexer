@@ -1,0 +1,363 @@
+{
+  "$schema_note": "Authoritative registry of every XChain protocol ACTION and which repos must wire it. Single source of truth for the cross-repo action lockstep. Adding an action = add one entry here, re-vendor the copies, and the per-repo ActionManifestConformance guards force every repo to wire it (or fail CI). Generated from live wiring at HEAD; it codifies what IS, not an aspiration.",
+  "authority": "xchain-documentation/protocol/action-manifest.json is authoritative. xchain-{decoder,indexer,sdk,wallet,explorer}/test/fixtures/action-manifest.json vendor byte-identical copies so each repo CI asserts its slice without a sibling checkout. Keep all copies identical.",
+  "flags": {
+    "wireDecoded": "top-level ACTION-encoded on-chain tx the DECODER must decode (xchain-decoder VALID_ACTION_NAMES)",
+    "indexerHandled": "the INDEXER dispatches a handler for it (xchain-indexer src/actions.js action== switch)",
+    "userEncodable": "the SDK can author it (xchain-sdk Formats keys)",
+    "explorerRender": "the EXPLORER renders it (xchain-explorer getActionData)",
+    "walletForm": "the WALLET surfaces an authoring form (xchain-wallet registry/actions.js)"
+  },
+  "categories": {
+    "wire-user": "user-encodable on-chain action: decoded + indexed + SDK-encodable",
+    "validator": "validator-broadcast on-chain action: decoded + indexed but NOT user-encodable (ANCHOR/ATTEST/NODEPROOF/SLASH)",
+    "mirror-injected": "indexer-injected from the hub mirror, NOT chain-decoded (XCALL/XEXEC/CROSS_SETTLE)",
+    "lifecycle": "system-generated sub-action, never a decoded wire tx (matches/expiries/dispense)",
+    "explorer-legacy-render": "render-only in the explorer (legacy order/dispenser cancel+edit views); no decoder/indexer twin"
+  },
+  "notes": [
+    "The indexer protocol_changes registry ALSO holds non-action feature-gate flags (CONTROLLER_GUARD, CROSS_CHAIN_DEX, ISSUANCE_FEE, ISSUANCE_FEE_EMISSION_EXEMPT, LOCK_MAX_SUPPLY_EXACT, UNIFIED_FEES, VM_ACTIONS, VM_BALANCE_TOKENINFO, VM_BANNED_ASYNC); these are NOT actions and are excluded. The indexer conformance guard compares the dispatch switch, not the registry.",
+    "UNKNOWN is the indexer/explorer catch-all sentinel, not an action; excluded. Each guard drops UNKNOWN before comparing.",
+    "Aliases are expanded to canonical names before any gate (decoder ACTION_ALIASES / indexer actionAliases)."
+  ],
+  "aliases": {
+    "TRANSFER": "SEND",
+    "ADDR": "ADDRESS",
+    "DROP": "AIRDROP",
+    "CAST": "BROADCAST",
+    "MSG": "MESSAGE"
+  },
+  "actions": {
+    "ADDRESS": {
+      "category": "wire-user",
+      "wireDecoded": true,
+      "indexerHandled": true,
+      "userEncodable": true,
+      "explorerRender": true
+    },
+    "AIRDROP": {
+      "category": "wire-user",
+      "wireDecoded": true,
+      "indexerHandled": true,
+      "userEncodable": true,
+      "explorerRender": true,
+      "walletForm": true
+    },
+    "ANCHOR": {
+      "category": "validator",
+      "wireDecoded": true,
+      "indexerHandled": true,
+      "explorerRender": true
+    },
+    "ATTEST": {
+      "category": "validator",
+      "wireDecoded": true,
+      "indexerHandled": true,
+      "explorerRender": true
+    },
+    "BATCH": {
+      "category": "wire-user",
+      "wireDecoded": true,
+      "indexerHandled": true,
+      "userEncodable": true,
+      "explorerRender": true,
+      "walletForm": true
+    },
+    "BROADCAST": {
+      "category": "wire-user",
+      "wireDecoded": true,
+      "indexerHandled": true,
+      "userEncodable": true,
+      "explorerRender": true,
+      "walletForm": true
+    },
+    "CALLBACK": {
+      "category": "wire-user",
+      "wireDecoded": true,
+      "indexerHandled": true,
+      "userEncodable": true,
+      "explorerRender": true,
+      "walletForm": true
+    },
+    "COINPAY": {
+      "category": "wire-user",
+      "wireDecoded": true,
+      "indexerHandled": true,
+      "userEncodable": true,
+      "explorerRender": true,
+      "walletForm": true
+    },
+    "COINPAY_EXPIRE": {
+      "category": "lifecycle",
+      "indexerHandled": true,
+      "explorerRender": true
+    },
+    "COLLECT": {
+      "category": "wire-user",
+      "wireDecoded": true,
+      "indexerHandled": true,
+      "userEncodable": true,
+      "explorerRender": true,
+      "walletForm": true
+    },
+    "CROSS_SETTLE": {
+      "category": "mirror-injected",
+      "indexerHandled": true
+    },
+    "DELEGATE": {
+      "category": "wire-user",
+      "wireDecoded": true,
+      "indexerHandled": true,
+      "userEncodable": true,
+      "explorerRender": true,
+      "walletForm": true
+    },
+    "DEPLOY": {
+      "category": "wire-user",
+      "wireDecoded": true,
+      "indexerHandled": true,
+      "userEncodable": true,
+      "explorerRender": true,
+      "walletForm": true
+    },
+    "DEPOSIT": {
+      "category": "wire-user",
+      "wireDecoded": true,
+      "indexerHandled": true,
+      "userEncodable": true,
+      "explorerRender": true,
+      "walletForm": true
+    },
+    "DESTROY": {
+      "category": "wire-user",
+      "wireDecoded": true,
+      "indexerHandled": true,
+      "userEncodable": true,
+      "explorerRender": true,
+      "walletForm": true
+    },
+    "DISPENSE": {
+      "category": "lifecycle",
+      "indexerHandled": true,
+      "explorerRender": true
+    },
+    "DISPENSER": {
+      "category": "wire-user",
+      "wireDecoded": true,
+      "indexerHandled": true,
+      "userEncodable": true,
+      "explorerRender": true,
+      "walletForm": true
+    },
+    "DISPENSER_CANCEL": {
+      "category": "explorer-legacy-render",
+      "explorerRender": true
+    },
+    "DISPENSER_CLOSE": {
+      "category": "lifecycle",
+      "indexerHandled": true,
+      "explorerRender": true
+    },
+    "DISPENSER_EDIT": {
+      "category": "explorer-legacy-render",
+      "explorerRender": true
+    },
+    "DISPENSER_EXPIRE": {
+      "category": "lifecycle",
+      "indexerHandled": true,
+      "explorerRender": true
+    },
+    "DIVIDEND": {
+      "category": "wire-user",
+      "wireDecoded": true,
+      "indexerHandled": true,
+      "userEncodable": true,
+      "explorerRender": true,
+      "walletForm": true
+    },
+    "EXECUTE": {
+      "category": "wire-user",
+      "wireDecoded": true,
+      "indexerHandled": true,
+      "userEncodable": true,
+      "explorerRender": true,
+      "walletForm": true
+    },
+    "FILE": {
+      "category": "wire-user",
+      "wireDecoded": true,
+      "indexerHandled": true,
+      "userEncodable": true,
+      "explorerRender": true,
+      "walletForm": true
+    },
+    "ISSUE": {
+      "category": "wire-user",
+      "wireDecoded": true,
+      "indexerHandled": true,
+      "userEncodable": true,
+      "explorerRender": true,
+      "walletForm": true
+    },
+    "LINK": {
+      "category": "wire-user",
+      "wireDecoded": true,
+      "indexerHandled": true,
+      "userEncodable": true,
+      "explorerRender": true,
+      "walletForm": true
+    },
+    "LIST": {
+      "category": "wire-user",
+      "wireDecoded": true,
+      "indexerHandled": true,
+      "userEncodable": true,
+      "explorerRender": true,
+      "walletForm": true
+    },
+    "MESSAGE": {
+      "category": "wire-user",
+      "wireDecoded": true,
+      "indexerHandled": true,
+      "userEncodable": true,
+      "explorerRender": true,
+      "walletForm": true
+    },
+    "MINT": {
+      "category": "wire-user",
+      "wireDecoded": true,
+      "indexerHandled": true,
+      "userEncodable": true,
+      "explorerRender": true,
+      "walletForm": true
+    },
+    "NODEPROOF": {
+      "category": "validator",
+      "wireDecoded": true,
+      "indexerHandled": true,
+      "explorerRender": true
+    },
+    "ORDER": {
+      "category": "wire-user",
+      "wireDecoded": true,
+      "indexerHandled": true,
+      "userEncodable": true,
+      "explorerRender": true,
+      "walletForm": true
+    },
+    "ORDER_CANCEL": {
+      "category": "explorer-legacy-render",
+      "explorerRender": true
+    },
+    "ORDER_EDIT": {
+      "category": "explorer-legacy-render",
+      "explorerRender": true
+    },
+    "ORDER_EXPIRE": {
+      "category": "lifecycle",
+      "indexerHandled": true,
+      "explorerRender": true
+    },
+    "ORDER_MATCH": {
+      "category": "lifecycle",
+      "indexerHandled": true,
+      "explorerRender": true
+    },
+    "PRICE": {
+      "category": "wire-user",
+      "wireDecoded": true,
+      "indexerHandled": true,
+      "userEncodable": true,
+      "explorerRender": true,
+      "walletForm": true
+    },
+    "SEND": {
+      "category": "wire-user",
+      "wireDecoded": true,
+      "indexerHandled": true,
+      "userEncodable": true,
+      "explorerRender": true,
+      "walletForm": true
+    },
+    "SLASH": {
+      "category": "validator",
+      "wireDecoded": true,
+      "indexerHandled": true
+    },
+    "SLEEP": {
+      "category": "wire-user",
+      "wireDecoded": true,
+      "indexerHandled": true,
+      "userEncodable": true,
+      "explorerRender": true,
+      "walletForm": true
+    },
+    "STAKE": {
+      "category": "wire-user",
+      "wireDecoded": true,
+      "indexerHandled": true,
+      "userEncodable": true,
+      "explorerRender": true,
+      "walletForm": true
+    },
+    "SWAP": {
+      "category": "wire-user",
+      "wireDecoded": true,
+      "indexerHandled": true,
+      "userEncodable": true,
+      "explorerRender": true,
+      "walletForm": true
+    },
+    "SWAP_CANCEL": {
+      "category": "explorer-legacy-render",
+      "explorerRender": true
+    },
+    "SWAP_EDIT": {
+      "category": "explorer-legacy-render",
+      "explorerRender": true
+    },
+    "SWAP_EXPIRE": {
+      "category": "lifecycle",
+      "indexerHandled": true,
+      "explorerRender": true
+    },
+    "SWAP_MATCH": {
+      "category": "lifecycle",
+      "indexerHandled": true,
+      "explorerRender": true
+    },
+    "SWEEP": {
+      "category": "wire-user",
+      "wireDecoded": true,
+      "indexerHandled": true,
+      "userEncodable": true,
+      "explorerRender": true,
+      "walletForm": true
+    },
+    "UNSTAKE": {
+      "category": "wire-user",
+      "wireDecoded": true,
+      "indexerHandled": true,
+      "userEncodable": true,
+      "explorerRender": true,
+      "walletForm": true
+    },
+    "WITHDRAW": {
+      "category": "wire-user",
+      "wireDecoded": true,
+      "indexerHandled": true,
+      "userEncodable": true,
+      "explorerRender": true,
+      "walletForm": true
+    },
+    "XCALL": {
+      "category": "mirror-injected",
+      "indexerHandled": true,
+      "explorerRender": true
+    },
+    "XEXEC": {
+      "category": "mirror-injected",
+      "indexerHandled": true
+    }
+  }
+}
