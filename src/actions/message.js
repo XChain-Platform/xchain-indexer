@@ -91,8 +91,14 @@ class Message {
         if(!error && !this.util.isNull(data['COIN']) && !this.config['COINS'].includes(String(data['COIN']).toUpperCase()))
             error = "invalid: COIN (value)";
 
-        // Verify DESTINATION address format
-        if(!error && !this.util.isNull(data['DESTINATION']) && !this.util.isCryptoAddress(data['DESTINATION']))
+        // Verify DESTINATION address format against the COIN network, NOT this
+        // indexer's broadcast chain: a MESSAGE may be broadcast on any chain
+        // regardless of the destination's chain (e.g. a BTC-addressed message
+        // sent over DOGE for cheap fees; see protocol/actions/MESSAGE.md). So a
+        // BTC destination must be validated with BTC's address params even on a
+        // DOGE node. Fall back to the node's own coin when COIN is absent.
+        let destCoin = this.util.isNull(data['COIN']) ? null : String(data['COIN']).toUpperCase();
+        if(!error && !this.util.isNull(data['DESTINATION']) && !this.util.isCryptoAddress(data['DESTINATION'], destCoin))
             error = "invalid: DESTINATION (format)";
 
         // Verify ENCRYPTION_METHOD format
