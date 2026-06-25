@@ -102,6 +102,11 @@ const CROSS_CHAIN_TABLES = ['cross_chain_matches', 'cross_chain_calls', 'capabil
 // checkpoint_seq. Not on any settlement-critical path (no block-loop barrier).
 const HUB_STATE_TABLES = ['state_checkpoints'];
 
+// TTL for the per-table local-column cache. Bounds how long a hub-side column
+// rename can keep silently NULLing the mirror before _localColumns re-reads the
+// schema and self-heals (see _localColumns).
+const LOCAL_COLUMN_CACHE_TTL_MS = 5 * 60 * 1000;
+
 class HubDbSync {
 
     constructor(hubDb, options) {
@@ -198,6 +203,11 @@ class HubDbSync {
         // Reset on disconnect; re-set after the reconnect re-bootstrap drains.
         this._bootstrapDrained = false;
         this._readyWatermark   = null;
+        // Set when a live row event is rejected for a schema_version mismatch. While
+        // true the watermark heartbeat must NOT advance, or the price-sync barrier
+        // would open and settle a block against mirror data we refused to apply.
+        // Cleared on a clean re-bootstrap (which only drains when versions match).
+        this._schemaMismatchSeen = false;
 
         // Serialization chain for the WebSocket message handler. Each incoming
         // message appends its async work to this promise so that a watermark
@@ -299,6 +309,10 @@ class HubDbSync {
             }
             if (allDrained && marks.length > 0) {
                 this._bootstrapDrained = true;
+                // A clean full drain proves the hub's schema_version matched (a
+                // mismatch parks the bootstrap), so any earlier live mismatch is
+                // resolved: re-open the watermark gate.
+                this._schemaMismatchSeen = false;
                 this._advanceWatermark(Math.min.apply(null, marks));
             } else if (this.running) {
                 console.warn('HubDbSync: bootstrap partial, retrying in ' + this.pollIntervalMs + 'ms (heartbeat gate stays closed)');
@@ -697,28 +711,36 @@ class HubDbSync {
         await this.hubDb.doQuery(query, args);
     }
 
-    // Local mirror table columns, cached per table for the process lifetime.
-    // Table names come only from the fixed internal mirror lists (the
-    // price_snapshots/oracle_prices pair, CROSS_CHAIN_TABLES, HUB_STATE_TABLES),
-    // never from hub input.
+    // Local mirror table columns, cached per table with a short TTL. Table names
+    // come only from the fixed internal mirror lists (the price_snapshots/
+    // oracle_prices pair, CROSS_CHAIN_TABLES, HUB_STATE_TABLES), never from hub
+    // input. The TTL (vs the former process-lifetime cache) bounds how long a
+    // hub-side column rename/addition can keep silently NULLing the mirror: a
+    // lifetime cache never re-learned the new column, so a row carrying it was
+    // dropped by the _applyRow filter until a manual restart. After the TTL the
+    // next apply re-reads SHOW COLUMNS and self-heals. A SHOW COLUMNS every few
+    // minutes per table is negligible. We do NOT invalidate eagerly on a dropped
+    // column because the hub legitimately serves columns the mirror omits by
+    // design (see _applyRow), which would otherwise trigger a re-fetch storm.
     async _localColumns(table) {
         if (!this._localColumnCache) this._localColumnCache = {};
-        if (!this._localColumnCache[table]) {
+        let entry = this._localColumnCache[table];
+        if (!entry || (Date.now() - entry.fetchedAt) > LOCAL_COLUMN_CACHE_TTL_MS) {
             let rows = await this.hubDb.doQuery('SHOW COLUMNS FROM ' + table);
             // doQuery swallows a missing-table error (1146) for non-transactional
             // reads and returns [] instead of throwing. Caching an empty set here
-            // would poison the mirror for the entire process lifetime: every
-            // _applyRow would filter to zero columns and silently no-op, so a table
-            // that is merely not-created-yet (startup race with the indexer's
-            // verifyTables() on a fresh reset) would never mirror a single row until
-            // a restart (prod rollout attempt 2026-06-17). A real mirror table always
-            // has columns, so an empty result means "not ready": do NOT cache it, and
-            // throw so the caller treats this bootstrap as not-drained and retries.
+            // would poison the mirror: every _applyRow would filter to zero columns
+            // and silently no-op, so a table that is merely not-created-yet (startup
+            // race with the indexer's verifyTables() on a fresh reset) would never
+            // mirror a row until a restart (prod rollout attempt 2026-06-17). A real
+            // mirror table always has columns, so an empty result means "not ready":
+            // do NOT cache it, and throw so the caller treats this bootstrap as
+            // not-drained and retries.
             if (!rows || rows.length === 0)
                 throw new Error('local mirror table ' + table + ' not available yet (no columns)');
-            this._localColumnCache[table] = new Set(rows.map(r => r.Field));
+            entry = this._localColumnCache[table] = { cols: new Set(rows.map(r => r.Field)), fetchedAt: Date.now() };
         }
-        return this._localColumnCache[table];
+        return entry.cols;
     }
 
     // Apply a reorg retraction to the local hub DB copy. The hub deletes price
@@ -1096,7 +1118,10 @@ class HubDbSync {
                             // Stream-position heartbeat: every row event produced up to ts has
                             // been delivered on this socket. Safe to advance only once the
                             // bootstrap has drained (rows from before the subscription).
-                            if (this._bootstrapDrained) this._advanceWatermark(event.ts);
+                            // Do not advance while a live schema mismatch is outstanding:
+                            // rows are being refused below, so certifying the stream as
+                            // caught-up would settle blocks against data we did not apply.
+                            if (this._bootstrapDrained && !this._schemaMismatchSeen) this._advanceWatermark(event.ts);
                         } else if ((event.type === 'row:inserted' || event.type === 'row:deleted')
                                    && event.schema_version != null
                                    && event.schema_version !== HUB_SCHEMA_VERSION) {
@@ -1110,6 +1135,10 @@ class HubDbSync {
                             console.error('HubDbSync: hub schema_version ' + event.schema_version +
                                 ' != local ' + HUB_SCHEMA_VERSION + ' for ' + event.table +
                                 '; refusing to apply row. Restart this indexer after upgrading the hub.');
+                            // Freeze the watermark gate until a clean re-bootstrap, so a
+                            // following heartbeat cannot certify the stream as caught-up
+                            // while we are dropping rows we cannot apply.
+                            this._schemaMismatchSeen = true;
                         } else if (event.type === 'row:inserted' && event.table && event.row) {
                             await this._applyRow(event.table, event.row);
                             if (event.table === 'price_snapshots')     await this._refreshPriceSyncHeight();
