@@ -14,9 +14,10 @@
 // production manifest (data/genesis/<COIN>-ledger.csv: ~121.7k BTC ticks,
 // ~42.7k DOGE), pins genesis to a regtest block, and measures how long the
 // single genesis block takes to inject. Correctness + determinism are already
-// proven by integration scenario 22; this validates only that the ~240k-action
-// genesis block completes inside GENESIS_BLOCK_TIMEOUT_MS (30 min). Coin is
-// chosen by INDEXER_COIN; run once per chain (BTC, then DOGE).
+// proven by integration scenario 22; this validates only that the genesis block
+// (one create per name + one transfer per ancestor, ~124k actions on BTC) completes
+// inside GENESIS_BLOCK_TIMEOUT_MS (30 min). Coin is chosen by INDEXER_COIN; run once
+// per chain (BTC, then DOGE).
 
 process.env.INDEXER_COIN    = process.env.INDEXER_COIN    || 'BTC';
 process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
@@ -35,26 +36,52 @@ const GENESIS_BLOCK = 100;
 const BASE_TIME     = 1700000000;
 const LEDGER_PATH   = path.join(__dirname, '../../../data/genesis', COIN + '-ledger.csv');
 
-// Count manifest data rows (every non-empty, non-header line) the way genesis.js
-// does, so the assertion tracks the bundled file rather than a hardcoded number.
-function manifestRowCount(file) {
-    let n = 0;
+// Parse manifest ticks the way genesis.js _loadRows does (last comma splits tick from
+// owner, RFC4180-unwrap a quoted tick), so the assertions track the bundled file rather
+// than hardcoded numbers. Returns the in-order tick list (production manifests have no
+// duplicate ticks, which the `tickers === rowCount` assertion also relies on).
+function manifestTicks(file) {
+    let ticks = [];
     for (const line of fs.readFileSync(file, 'utf8').split(/\r?\n/)) {
         if (line === '' || line === 'tick,owner_address') continue;
-        n++;
+        const comma = line.lastIndexOf(',');
+        if (comma < 0) continue;
+        let tick = line.slice(0, comma).trim();
+        if (tick.length >= 2 && tick[0] === '"' && tick[tick.length - 1] === '"')
+            tick = tick.slice(1, -1).replace(/""/g, '"');
+        if (tick === '') continue;
+        ticks.push(tick);
     }
-    return n;
+    return ticks;
+}
+
+// Count ancestor ticks (a tick that is the parent-prefix of another present tick),
+// mirroring genesis.js _ancestorSet. On regtest every owner is non-GAS, so the expected
+// genesis issue rows are: one create per tick + one deferred transfer per ancestor.
+function ancestorCount(ticks) {
+    const present = new Set(ticks);
+    const ancestors = new Set();
+    for (const t of ticks) {
+        const parts = t.split('.');
+        for (let i = 1; i < parts.length; i++) {
+            const prefix = parts.slice(0, i).join('.');
+            if (present.has(prefix)) ancestors.add(prefix);
+        }
+    }
+    return ancestors.size;
 }
 
 describe('06 Genesis Bootstrap (full-scale)', function () {
     this.timeout(0); // run under `npm run test:perf` (mocha --timeout 0)
 
-    let seeder, indexer, rowCount, timeoutMs;
+    let seeder, indexer, rowCount, ancestors, timeoutMs;
 
     before(async function () {
         assert.ok(fs.existsSync(LEDGER_PATH),
             'bundled manifest missing: ' + LEDGER_PATH + ' (copy from snapshot/<source>/ledger.csv)');
-        rowCount = manifestRowCount(LEDGER_PATH);
+        const ticks = manifestTicks(LEDGER_PATH);
+        rowCount  = ticks.length;
+        ancestors = ancestorCount(ticks);
 
         // Pin genesis to a current regtest block + the full production manifest.
         // Config (regtest branch) reads these at initIndexer time.
@@ -86,21 +113,24 @@ describe('06 Genesis Bootstrap (full-scale)', function () {
         await processBlocks(indexer);
         const elapsedMs = Number(process.hrtime.bigint() - t0) / 1e6;
 
-        // Expected genesis actions: pass 1 issues every row (ISSUE), pass 2 transfers
-        // every row whose owner != GAS. On regtest the GAS address is a regtest address
-        // that never appears in a mainnet snapshot, so all rows get a pass-2 transfer:
-        // 2 * rowCount issue-table rows, and rowCount distinct tickers.
+        // Expected genesis actions: one create per row, plus one deferred transfer per
+        // ancestor (a tick that is the parent-prefix of another). On regtest the GAS
+        // address never appears in a mainnet snapshot, so every owner is non-GAS: leaves
+        // fold their transfer into the create, ancestors transfer in the cleanup pass.
+        // So issue-table rows = rowCount + ancestors, and rowCount distinct tickers.
+        const expectedIssues = rowCount + ancestors;
         const issues   = await countRows(indexerQuery, 'issues', '1=1', []);
         const tickers  = await countRows(indexerQuery, 'index_tickers', '1=1', []);
         const balances = await countRows(indexerQuery, 'balances', '1=1', []);
 
         const perSec = Math.round((issues / elapsedMs) * 1000);
-        console.log('\nGENESIS PERF [' + COIN + ']: ' + rowCount + ' manifest rows -> '
-            + issues + ' issue/transfer actions in ' + (elapsedMs / 1000).toFixed(1) + 's '
+        console.log('\nGENESIS PERF [' + COIN + ']: ' + rowCount + ' manifest rows ('
+            + ancestors + ' ancestors) -> ' + issues + ' issue actions in '
+            + (elapsedMs / 1000).toFixed(1) + 's '
             + '(' + perSec + ' actions/s); watchdog = ' + (timeoutMs / 60000) + ' min.');
 
         assert.strictEqual(tickers, rowCount, 'every manifest name created a ticker');
-        assert.strictEqual(issues, rowCount * 2, 'pass-1 issue + pass-2 transfer per row');
+        assert.strictEqual(issues, expectedIssues, 'one create per row + one transfer per ancestor');
         assert.strictEqual(balances, 0, 'genesis creates zero balances');
         assert.ok(elapsedMs < timeoutMs,
             'genesis block must complete inside GENESIS_BLOCK_TIMEOUT_MS ('

@@ -16,14 +16,22 @@
  *
  * Injects Counterparty/Dogeparty asset-NAME ownership into the XChain ledger at
  * a configured genesis block. Each name in the bundled manifest (tick,owner CSV)
- * is created by the GAS address and then transferred to its real owner, so every
- * reserved name has a genuine ISSUE + TRANSFER chain of custody.
+ * is issued by the GAS address and ends up owned by its real owner, so every
+ * reserved name has a genuine GAS-issued chain of custody.
  *
- * Two passes are required because XChain gates subtoken creation on owning the
- * parent (issue.js): GAS transiently owns the whole tree during pass 1 (parent
- * before child, the manifest's tick-name sort order), then pass 2 hands each name
- * to its owner. This is the only way to land subassets whose owner differs from
- * the root owner. Name ownership only; no balances (the airdrop is separate).
+ * XChain gates subtoken creation on owning the parent (issue.js), so GAS must own
+ * a parent while its children are created. We split the manifest into ancestors
+ * (names that are the parent-prefix of another name) and leaves (no descendants):
+ *   - Leaf: a single ISSUE that both creates the tick and TRANSFERs it to its owner.
+ *     The parent gate reads the parent's owner BEFORE the in-action transfer, so the
+ *     create+transfer is accepted as long as GAS still owns the parent at that point.
+ *   - Ancestor: created owned by GAS in the create pass (transfer deferred), then
+ *     handed to its owner in a cleanup pass over ancestors only, in REVERSE order
+ *     (child-ancestor before parent-ancestor) so a parent stays GAS-owned until its
+ *     descendants are placed. GAS-owned ancestors need no transfer.
+ * This collapses the historical "issue every name twice" to one action per leaf
+ * (the vast majority) while still landing divergent-owner subassets correctly.
+ * Name ownership only; no balances (the airdrop is separate).
  *
  * Determinism is consensus-critical: the same manifest, applied in the same order
  * with deterministic synthetic tx hashes, produces identical ledger/state hashes
@@ -85,21 +93,31 @@ class Genesis {
         this.indexerDb._internCache = { addr: new Map(), tick: new Map(), tx: new Map() };
         try {
 
-        // Pass 1: GAS issues every tick (owner = GAS), in file (parent-before-child) order.
-        // GAS therefore owns each parent when its children are issued, so the parent gate passes.
-        for(let r of rows)
-            await this._issue(gas, r.tick, null, blockToParse, blockTime, 1);
+        // Ancestor set: every strict prefix-parent that appears among the loaded ticks.
+        // A tick is an ancestor if some OTHER tick has it as a "a", "a.b", ... prefix.
+        // Ancestors must stay GAS-owned while their descendants are placed; leaves do not.
+        let ancestors = this._ancestorSet(rows);
 
-        // Pass 2: GAS transfers each tick to its real owner, in REVERSE file order
-        // (children before parents). A subtoken transfer is gated on the SOURCE still
-        // owning the parent (issue.js parent gate); transferring a parent to its owner
-        // first would strand every child (parent no longer GAS-owned -> the child's
-        // transfer is rejected and the subtoken silently stays with GAS). Reverse order
-        // keeps each tick's parent GAS-owned until after the child has been transferred,
-        // because a parent always precedes its descendants in the sorted manifest. Ticks
-        // left to GAS (owner == GAS) are skipped: pass 1 already left them GAS-owned.
+        // Create pass: GAS issues every tick once, in file (parent-before-child) order so
+        // GAS owns each parent when its children are created (the parent gate passes).
+        // A leaf folds its TRANSFER into this single action (the gate reads the parent's
+        // owner before the transfer is applied, and transferring a leaf never disturbs a
+        // parent). An ancestor is created owned by GAS and its transfer is deferred below.
+        for(let r of rows){
+            let transfer = (!ancestors.has(r.tick) && r.owner !== gas) ? r.owner : null;
+            await this._issue(gas, r.tick, transfer, blockToParse, blockTime, 1);
+        }
+
+        // Cleanup pass: GAS transfers each ANCESTOR to its real owner, in REVERSE file
+        // order (child-ancestor before parent-ancestor). A subtoken transfer is gated on
+        // the SOURCE still owning the parent (issue.js parent gate); transferring a parent
+        // to its owner first would strand a descendant ancestor whose transfer still needs
+        // GAS to own that parent. Reverse order keeps each ancestor's parent GAS-owned
+        // until after it has been transferred, because a parent always precedes its
+        // descendants in the sorted manifest. GAS-owned ancestors are skipped (already
+        // left GAS-owned by the create pass); leaves were already transferred above.
         for(let i = rows.length - 1; i >= 0; i--)
-            if(rows[i].owner !== gas)
+            if(ancestors.has(rows[i].tick) && rows[i].owner !== gas)
                 await this._issue(gas, rows[i].tick, rows[i].owner, blockToParse, blockTime, 2);
 
         } finally {
@@ -175,10 +193,31 @@ class Genesis {
         return rows;
     }
 
+    // Build the set of ancestor ticks: a tick is an ancestor if some other loaded tick
+    // names it as a parent prefix (e.g. "A" and "A.B" make "A" an ancestor). Each tick's
+    // own strict prefixes are added only when they are themselves present in the manifest,
+    // so the set contains real reserved names that gate at least one descendant's creation.
+    // The parent-before-child invariant is already asserted in _loadRows.
+    _ancestorSet(rows){
+        let present   = new Set(rows.map(r => r.tick));
+        let ancestors = new Set();
+        for(let r of rows){
+            let parts = r.tick.split('.');
+            for(let i = 1; i < parts.length; i++){
+                let prefix = parts.slice(0, i).join('.');
+                if(present.has(prefix))
+                    ancestors.add(prefix);
+            }
+        }
+        return ancestors;
+    }
+
     // Synthesize one genesis action and run it through the normal action pipeline with the
     // genesis flag set (fee-exempt + wrong-network TRANSFER allowed; see issue.js / actions.js).
-    // pass 1 = create owned by GAS (no TRANSFER); pass 2 = re-issue from GAS with TRANSFER=owner.
-    // The tx hash is deterministic so a reindex replays to the identical action indexes/hashes.
+    // pass 1 = create from GAS (with TRANSFER=owner for a leaf, no TRANSFER for an ancestor);
+    // pass 2 = the deferred ancestor transfer (re-issue from GAS with TRANSFER=owner). The pass
+    // number feeds the tx hash, so a leaf (pass 1 only) and an ancestor (pass 1 + pass 2) never
+    // collide. The tx hash is deterministic so a reindex replays to identical action indexes/hashes.
     async _issue(gas, tick, transfer, blockToParse, blockTime, pass){
         // ISSUE format 0: VERSION|TICK|MAX_SUPPLY|MAX_MINT|DECIMALS|DESCRIPTION|MINT_SUPPLY|TRANSFER|...
         let fields = ['ISSUE', '0', tick];

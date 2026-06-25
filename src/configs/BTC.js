@@ -190,7 +190,7 @@ module.exports = {
             // DUMP_HASH = sha256 of the UNCOMPRESSED bundled dump content (fast-import anchor).
             config['GENESIS_BLOCK']       = 950000;
             config['GENESIS_LEDGER_HASH'] = 'f347a0499654b128dd0461441ed6341ac27a24b909d6ff6e3995db4e69dc23e5';
-            config['GENESIS_DUMP_HASH']   = 'f80653328e747b838cc63dcff86ac4868eb4ce8f0b81e06b4cec996313312012';
+            config['GENESIS_DUMP_HASH']   = 'f57def6a7beb68fe7957d46c1b135cbd3983f168a491353da1d9fd59adaedbca';
         } else { // testnet
             // Testnet launches CLEAN (genesis disabled, like LTC). The Counterparty name-ownership
             // carry-forward is a mainnet-only allocation reserving real snapshot/airdrop ownership;

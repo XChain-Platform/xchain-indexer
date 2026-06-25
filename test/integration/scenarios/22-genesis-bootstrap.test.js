@@ -12,11 +12,13 @@
  *
  **********************************************************************
  * Integration tests: genesis ledger bootstrap (Counterparty/Dogeparty name
- * ownership injection). Verifies the two-pass GAS-issue-then-transfer at the
- * configured genesis block: every name exists with valid ISSUE + TRANSFER, the
- * deep-nested and divergent-owner cases land on the right owners, no balances are
- * created, the genesis block is a rollback floor, and a reindex reproduces the
- * identical ledger/actions hashes (consensus determinism). See src/genesis.js.
+ * ownership injection). Verifies the GAS-issued injection at the configured genesis
+ * block: a leaf name (no descendants) is created and transferred to its owner in a
+ * single ISSUE, while an ancestor name (parent-prefix of another) is created owned by
+ * GAS and transferred in a reverse-order cleanup pass. Every name lands on the right
+ * owner (incl. deep-nested + divergent-owner cases), no balances are created, the
+ * genesis block is a rollback floor, and a reindex reproduces the identical
+ * ledger/actions hashes (consensus determinism). See src/genesis.js.
  */
 
 'use strict';
@@ -88,8 +90,9 @@ describe('Genesis Ledger Bootstrap @regression', function () {
         await assertTokenOwner(indexerQuery, 'PEPECASH.RARE', GAS);          // intermediate
         await assertTokenOwner(indexerQuery, 'PEPECASH.RARE.GOLD', BOB);     // 3-deep leaf, divergent owner
 
-        // Whole family owned by one non-GAS address: every level must transfer (reverse
-        // pass-2 order), not strand on GAS once the root leaves GAS ownership.
+        // Whole family owned by one non-GAS address: the ancestors (CARLNET, CARLNET.SUB)
+        // transfer in the reverse-order cleanup pass and the leaf (CARLNET.SUB.DEEP) folds
+        // its transfer into its create. None may strand on GAS once an ancestor leaves GAS.
         await assertTokenOwner(indexerQuery, 'CARLNET', CARL);
         await assertTokenOwner(indexerQuery, 'CARLNET.SUB', CARL);
         await assertTokenOwner(indexerQuery, 'CARLNET.SUB.DEEP', CARL);      // 3-deep, parent also non-GAS
@@ -101,15 +104,18 @@ describe('Genesis Ledger Bootstrap @regression', function () {
     it('records a valid ISSUE/TRANSFER chain of custody and no balances', async function () {
         await processBlocks(indexer);
 
-        // 10 pass-1 ISSUEs + 7 pass-2 TRANSFERs (every non-GAS owner; the 3 GAS-owned
-        // ticks FLDC, PEPECASH, PEPECASH.RARE are skipped) = 17 issue rows, all valid.
-        // Crucially every transfer must be valid: a stranded subtoken would show up here
-        // as a missing transfer (count < 17), and the owner assertions above would fail.
+        // One create per name (10) + a deferred transfer for each non-GAS ANCESTOR
+        // (CARLNET, CARLNET.SUB, DANACO = 3) = 13 issue rows, all valid. The 3 GAS-owned
+        // ancestors (FLDC, PEPECASH, PEPECASH.RARE) need no transfer, and the 4 non-GAS
+        // leaves (FLDC.SCARCE, PEPECASH.RARE.GOLD, CARLNET.SUB.DEEP, DANACO.GIFT) fold their
+        // transfer into the create. Crucially every transfer must be valid: a stranded
+        // subtoken would show up as a missing transfer (count < 13) and the owner
+        // assertions above would fail.
         const issues = await indexerQuery(
             `SELECT s.status FROM issues i INNER JOIN index_statuses s ON s.id = i.status_id
              ORDER BY i.action_index ASC`
         );
-        assert.strictEqual(issues.length, 17, 'expected 17 issue rows (10 issue + 7 transfer)');
+        assert.strictEqual(issues.length, 13, 'expected 13 issue rows (10 create + 3 ancestor transfer)');
         assert.ok(issues.every(r => r.status === 'valid'), 'every genesis issue/transfer is valid');
 
         // Name ownership only: genesis mints no supply, so no balances exist.
