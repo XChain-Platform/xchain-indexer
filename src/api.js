@@ -84,8 +84,18 @@ const HUB_DB_PASS = process.env.HUB_DB_PASS || '';
 // deployment (ConfigService injects no such var); the same over-tightening
 // that took down the encoder pre-launch (see xchain-encoder e2bf7c4).
 const INDEXER_API_KEY = process.env.INDEXER_API_KEY || '';
-if(!INDEXER_API_KEY)
-    console.warn('WARNING: INDEXER_API_KEY is not set; write and federation-read methods are UNAUTHENTICATED. Set a key for any shared deployment.');
+
+// Explicit escape hatch for keyless single-host / regtest nodes. When no API
+// key is configured the gated methods (validator-reward writes, federation
+// reads, gated exec) fail closed by default; setting this to 'true' restores
+// the old keyless pass-through. A blind hard-fail would 401 every keyless
+// xchain-node-managed indexer fleet-wide, so the escape hatch keeps that an
+// opt-in operator decision rather than a silent breakage.
+const ALLOW_UNAUTHED = (process.env.INDEXER_ALLOW_UNAUTHENTICATED === 'true');
+if(!INDEXER_API_KEY && ALLOW_UNAUTHED)
+    console.warn('WARNING: INDEXER_API_KEY is not set and INDEXER_ALLOW_UNAUTHENTICATED=true; write and federation-read methods are UNAUTHENTICATED. Never use this in production.');
+else if(!INDEXER_API_KEY)
+    console.warn('WARNING: INDEXER_API_KEY is not set; write and federation-read methods will be REJECTED (fail-closed). Set INDEXER_API_KEY for a shared deployment, or INDEXER_ALLOW_UNAUTHENTICATED=true to allow keyless single-host/regtest access.');
 
 // feequotedryrun runs the REAL action handler (DEPLOY constructor / full EXECUTE
 // including emit subtrees) against committed state inside a forced-rollback txn and
@@ -153,23 +163,33 @@ async function startApi(){
         methods: ['POST']
     }));
 
-    // API key enforcement for write + federation read methods. Enforced only
-    // when a key is configured (matching .env.example): with INDEXER_API_KEY
-    // set, these methods fail closed without a valid x-api-key; unset disables
-    // the gate (single-host / regtest; no key plumbing exists in xchain-node
-    // or the hub callers yet, so failing closed with no key 401'd every
-    // federation read fleet-wide). Production deployments should set a key.
+    // API key enforcement for write + federation read + gated exec methods.
+    // These methods forge spendable validator_rewards rows or enumerate the
+    // staked validator set, so they must never be reachable by an unauthenticated
+    // peer. The gate fails closed by default: with INDEXER_API_KEY set, a valid
+    // x-api-key is required; with no key set and no explicit escape hatch, the
+    // call is rejected. Only INDEXER_ALLOW_UNAUTHENTICATED=true restores keyless
+    // pass-through for a single-host / regtest node.
     app.use((req, res, next) => {
         let method = req.body && req.body.method;
         let normalized = method ? method.toLowerCase() : '';
-        if(method && INDEXER_API_KEY && (WRITE_METHODS.has(normalized) || FEDERATION_READ_METHODS.has(normalized) || GATED_EXEC_METHODS.has(normalized))){
-            let provided = req.headers['x-api-key'] || '';
-            if(provided !== INDEXER_API_KEY){
+        let gated = method && (WRITE_METHODS.has(normalized) || FEDERATION_READ_METHODS.has(normalized) || GATED_EXEC_METHODS.has(normalized));
+        if(gated){
+            if(INDEXER_API_KEY){
+                let provided = req.headers['x-api-key'] || '';
+                if(provided !== INDEXER_API_KEY){
+                    return res.status(401).json({
+                        jsonrpc: '2.0', id: req.body.id || null,
+                        error: { code: -32001, message: 'Unauthorized' }
+                    });
+                }
+            } else if(!ALLOW_UNAUTHED){
                 return res.status(401).json({
                     jsonrpc: '2.0', id: req.body.id || null,
-                    error: { code: -32001, message: 'Unauthorized' }
+                    error: { code: -32001, message: 'Unauthorized: this method requires INDEXER_API_KEY, or set INDEXER_ALLOW_UNAUTHENTICATED=true for keyless single-host/regtest access' }
                 });
             }
+            // else: no key configured and ALLOW_UNAUTHED set, pass through.
         }
         next();
     });

@@ -282,4 +282,24 @@ describe('consensus parameters are frozen (track 8 guard) @regression', function
                 'VM SafeMath member whitelist drifted from the indexer expectation (update goldens in both repos in lockstep)');
         }
     });
+
+    it('the VM async/binary flag-day timestamps match the indexer protocol_changes (cross-repo byte-gate)', function(){
+        const { vm, full } = resolveVmConsensus();
+        if(!vm || !full){ this.skip(); return; } // standalone CI without the real VM present
+        const pc = require('../../src/protocol_changes.js');
+        // ASYNC_SURFACE_GATE_BLOCK_TIME (VM) and VM_BANNED_ASYNC mainnet_time (indexer)
+        // flip the SAME consensus boundary. They live in two repos with independent deploy
+        // cycles, so a one-sided edit (or a stale bundled-VM dep mid-upgrade) ships a fleet
+        // that forks at the flag-day with no other CI failure. Assert byte-identity here.
+        if(vm.ASYNC_SURFACE_GATE_BLOCK_TIME !== undefined){
+            assert.strictEqual(vm.ASYNC_SURFACE_GATE_BLOCK_TIME, pc.VM_BANNED_ASYNC_MAINNET_TIME,
+                'xchain-vm ASYNC_SURFACE_GATE_BLOCK_TIME != indexer VM_BANNED_ASYNC mainnet_time; update both repos in lockstep (one-sided edit forks the fleet)');
+        }
+        // BINARY_ALLOC_GATE_BLOCK_TIME is the same coordinated 2.0.0 flag-day; pin it to the
+        // same canonical timestamp so a VM-side edit without a matching indexer update reddens.
+        if(vm.BINARY_ALLOC_GATE_BLOCK_TIME !== undefined){
+            assert.strictEqual(vm.BINARY_ALLOC_GATE_BLOCK_TIME, pc.VM_BANNED_ASYNC_MAINNET_TIME,
+                'xchain-vm BINARY_ALLOC_GATE_BLOCK_TIME drifted from the coordinated 2.0.0 flag-day timestamp; confirm it matches the indexer activation');
+        }
+    });
 });

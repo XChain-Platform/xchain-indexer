@@ -51,6 +51,7 @@
 const http  = require('http');
 const https = require('https');
 const url   = require('url');
+const { HUB_SCHEMA_VERSION } = require('./hub-schema-version');
 
 let WebSocket = null;
 try {
@@ -365,6 +366,20 @@ class HubDbSync {
             let path = '/hub-db/snapshot/' + table + '?since_id=' + lastId + '&limit=' + PAGE_LIMIT;
             let result = await this._httpGet(path);
             if (!result || !Array.isArray(result.rows)) return null;
+
+            // Schema-version handshake: the hub stamps each snapshot page with its
+            // mirror schema_version. A mismatch means the hub's row shape differs from
+            // what this indexer was built for, so applying these rows could drop a
+            // consensus-relevant column and fork the ledger. Fail closed: return "not
+            // drained" without applying, so _bootstrapAll retries and the barrier stays
+            // shut, deferring blocks rather than settling against mismatched mirror data.
+            // The != null guard keeps older hubs that send no version working unchanged.
+            if (result.schema_version != null && result.schema_version !== HUB_SCHEMA_VERSION) {
+                console.error('HubDbSync: hub snapshot schema_version ' + result.schema_version +
+                    ' != local ' + HUB_SCHEMA_VERSION + ' for ' + table +
+                    '; refusing to bootstrap. Restart this indexer after upgrading the hub.');
+                return null;
+            }
 
             for (let row of result.rows) {
                 try {
@@ -1082,6 +1097,19 @@ class HubDbSync {
                             // been delivered on this socket. Safe to advance only once the
                             // bootstrap has drained (rows from before the subscription).
                             if (this._bootstrapDrained) this._advanceWatermark(event.ts);
+                        } else if ((event.type === 'row:inserted' || event.type === 'row:deleted')
+                                   && event.schema_version != null
+                                   && event.schema_version !== HUB_SCHEMA_VERSION) {
+                            // Schema-version mismatch: the hub is broadcasting a mirror row shape
+                            // this indexer was not built for, so applying it (or its retraction)
+                            // risks dropping a consensus-relevant column and forking the ledger.
+                            // Fail closed: do not apply, do not advance the watermark, so the
+                            // barrier stays shut and the block is deferred rather than settled
+                            // against mismatched mirror data. The != null guard keeps older hubs
+                            // that send no version working unchanged.
+                            console.error('HubDbSync: hub schema_version ' + event.schema_version +
+                                ' != local ' + HUB_SCHEMA_VERSION + ' for ' + event.table +
+                                '; refusing to apply row. Restart this indexer after upgrading the hub.');
                         } else if (event.type === 'row:inserted' && event.table && event.row) {
                             await this._applyRow(event.table, event.row);
                             if (event.table === 'price_snapshots')     await this._refreshPriceSyncHeight();

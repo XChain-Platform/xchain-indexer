@@ -18,6 +18,12 @@
  *
  ********************************************************************/
 
+// VM async/Promise flag-day, single source of truth for the cross-repo coupling
+// guard. This MUST stay byte-identical to xchain-vm's ASYNC_SURFACE_GATE_BLOCK_TIME;
+// a one-sided edit forks the fleet on the first async-using DEPLOY/EXECUTE after the
+// earlier of the two timestamps. consensus-params.test.js asserts the two are equal.
+const VM_BANNED_ASYNC_MAINNET_TIME = 1798761600;
+
 class ProtocolChanges {
 
     constructor(indexer){
@@ -245,7 +251,7 @@ class ProtocolChanges {
         // mainnet; a wrong value is a fork. testnet/regtest activate at genesis (no
         // pre-activation history to preserve; the e2e/regtest stack has run with the
         // rule live, so genesis activation preserves its current behaviour).
-        this.addChange('VM_BANNED_ASYNC', '2.0.0',1798761600,0,0,0,0,0);
+        this.addChange('VM_BANNED_ASYNC', '2.0.0',VM_BANNED_ASYNC_MAINNET_TIME,0,0,0,0,0);
 
         // ISSUE validity: strict LOCK_MAX_SUPPLY guard. Before this activation the guard used
         // a truthy check, so an explicit LOCK_MAX_SUPPLY=0 field (a no-op lock intent with no
@@ -383,3 +389,6 @@ class ProtocolChanges {
 }
 
 module.exports = ProtocolChanges;
+// Canonical async-gate flag-day, exported for the cross-repo byte-identity guard in
+// test/unit/consensus-params.test.js (must equal xchain-vm ASYNC_SURFACE_GATE_BLOCK_TIME).
+module.exports.VM_BANNED_ASYNC_MAINNET_TIME = VM_BANNED_ASYNC_MAINNET_TIME;
