@@ -282,7 +282,8 @@
     "SLASH": {
       "category": "validator",
       "wireDecoded": true,
-      "indexerHandled": true
+      "indexerHandled": true,
+      "explorerRender": true
     },
     "SLEEP": {
       "category": "wire-user",
