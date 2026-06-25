@@ -53,12 +53,17 @@ const ADDRESS_PARAMS  = {
 
 class Utility {
 
-    constructor(){
+    constructor(cfg){
         // Track addresses/tickers/transactions across an action parse
         this.addresses = {}; // this.addresses[address] = [tick, tick, tick];
         this.tickers   = [];
 
-        this.config = config.getConfig();
+        // Reuse the caller's config object when provided so the indexer and its
+        // Utility share ONE snapshot. config.getConfig() returns a fresh object
+        // every call, so a bare new util() would build a second, independent
+        // config; once the hub overlay mutates the indexer's object in place,
+        // the two could diverge. Bare construction (CLI tools) still self-loads.
+        this.config = cfg || config.getConfig();
     }
 
     /*

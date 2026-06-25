@@ -48,7 +48,9 @@ async function main(){
     }
 
     // The Database constructor only needs { config, util } off its parent.
-    const indexerLike = { config: config.getConfig(), util: new Utility() };
+    // Share ONE config object between the two (see Utility constructor).
+    const cfg = config.getConfig();
+    const indexerLike = { config: cfg, util: new Utility(cfg) };
     const db = new Database(host, port, name, user, pass, indexerLike);
 
     try {

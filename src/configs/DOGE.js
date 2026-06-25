@@ -11,113 +11,17 @@
  * contact legal@dankest.llc.
  *
  **********************************************************************
- * 
- * XChain Indexer - COIN Configuration - Dogecoin (DOGE) 
- * 
- * This config file contains COIN specific configuration information
- * 
+ *
+ * XChain Indexer - COIN Configuration - Dogecoin (DOGE)
+ *
+ * Thin adapter over the canonical coin definition in src/coins/DOGE.js. All
+ * Dogecoin values live there; edit that file, not this one.
+ *
  ********************************************************************/
+const { toIndexerConfig } = require('./_adapter');
+
 module.exports = {
-
     getConfig: function(network){
-
-        let config  = {};
-		let address = {};
-
-        // Legacy fee constants (used before UNIFIED_FEES activation)
-        config['ISSUANCE_FEE_TOKEN']    = '0.25000000';
-        config['ISSUANCE_FEE_SUBTOKEN'] = '0.10000000';
-        config['EXPIRATION_FEE_DEFAULT_DAYS'] = 90;
-        config['EXPIRATION_FEE_FREE_DAYS']    = 182;
-        config['EXPIRATION_FEE_PER_DAY']      = '0.00136986';
-
-        // Unified gas fee schedule (active after UNIFIED_FEES protocol change)
-        config['GAS_PRICE'] = '0.00001';
-        config['UNIFIED_EXPIRATION_FEE_FREE_DAYS'] = 90;
-        config['FEE_PAYMENT_MODE'] = 'native';               // DOGE: 'native' only (no XCHAIN balance deduction). Informational only; not read at runtime. See CONFIGURATION.md and detectFeePaymentMode() in utility.js.
-        config['FEE_TOLERANCE_MIN'] = '0.95';
-        config['FEE_TOLERANCE_MAX'] = '1.10';
-        config['ORACLE_MAX_PRICE_AGE_SECONDS'] = 1800;       // Reject oracle prices older than this vs the block being processed (≈3× the ~10-min BTC oracle-round interval; applies on all chains); 0 disables
-        config['VALIDATOR_QUERY_LIMIT'] = 1000;              // CONSENSUS-CRITICAL safety cap on validator-set queries (db.js). Frozen node-local (NOT an env var) because the cap is read on the deterministic block-processing path (attest responsible-set, quorum gates); a per-node value would fork the federation once the qualifying set exceeds the smaller cap. Generous vs any realistic federation; hitting it is logged.
-        config['STAKING'] = {
-            COOLDOWN_BLOCKS:         10080,                    // ~7 days at ~1 min/block before unstaked XCHAIN is returned
-            ACTIVATION_DELAY_BLOCKS: 60,                       // ~60 min reorg protection at ~1 min/block
-            CAPABILITIES: {}                                   // Capability staking is BTC-only at the protocol level
-        };
-        config['GAS_SCHEDULE'] = {
-            ISSUE:              100000,
-            ISSUE_SUBTOKEN:     50000,
-            EXPIRATION_PER_DAY: 550,
-            OWNERSHIP_ESCROW:   50000,   // Premium charged on ORDER/SWAP/DISPENSER create when GIVE_OWNERSHIP=1
-            AIRDROP_PER_RECIPIENT: 100,
-            DIVIDEND_PER_RECIPIENT: 100,
-            VM_EXECUTE_BASE:    1000,
-            VM_DEPLOY_BASE:     100000,
-            VM_DEPLOY_PER_BYTE: 10,
-            VM_STATE_READ:      100,
-            VM_STATE_WRITE:     200,
-            VM_STATE_DELETE:     100,
-            VM_ORACLE_READ:     100,
-            VM_CROSSCHAIN_READ: 100,
-            VM_ATTEST_REQUEST: 5000,    // External attestation framework: emit one ATTEST v0 (off-chain data request)
-            VM_XCALL_REQUEST: 2000,    // Cross-chain call: emit one XCALL v0 request (relay cost)
-            VM_XCALL_CALLBACK: 20000,  // Cross-chain call: fixed ceiling the result/expiry callback runs against
-            VM_EMISSION:        500,
-            VM_COMPUTATION:     1,
-            VM_GUARD_GAS_CEILING: 200000  // Per-call gas ceiling for a controller-bound token `guard` run; SOURCE reserves this fee
-        };
-
-        switch(network){
-            case 'mainnet':
-                address['BURN']            = "DChainBurnAddressXXXXXXXXXXXawc9pt";
-                address['GAS']             = "DGasfpttCnTijuuoAdiJ9sXJjG7vQ5pMkW";
-                address['DONATE1']         = "DDonate1RBcwGnCRNnVtwuCmQyWW1Gn25f"; // Protocol Development
-                address['DONATE2']         = "DDonate2o3Sg4phybp92oFpkmv8S9ZhGSV"; // Community Develoment
-                address['FEE_DESTINATION'] = process.env['XCHAIN_FEE_DESTINATION_DOGE_' + network.toUpperCase()] || "DFeesjvoMoVqd9UDuwDSAxzHMF5xZFgeG9"; // Native coin fee destination
-                address['REWARD']          = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // Validator reward pool (structural only; COLLECT/XCHAIN are BTC-only, unused on DOGE)
-                break;
-            case 'testnet':
-                address['BURN']            = "nchainburnaddressXXXXXXXXXXXYKgF7W";
-                address['GAS']             = "ngasn6zHFzJ72zpk3DBKmXhD2XtszujSDW";
-                address['DONATE1']         = "ndonate1dE87UXUFf4gjyhPg7hfQRJXVXr"; // Protocol Development
-                address['DONATE2']         = "ndonate2wev8vKDgvd1DHhtJtvkRbn2usJ"; // Community Develoment
-                address['FEE_DESTINATION'] = process.env['XCHAIN_FEE_DESTINATION_DOGE_' + network.toUpperCase()] || "nfeesoodkv5UTFXcDeKcUU95QHFiK2Ggo7"; // Native coin fee destination
-                address['REWARD']          = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // Validator reward pool (structural only; COLLECT/XCHAIN are BTC-only, unused on DOGE)
-                break;
-            case 'regtest':
-                address['BURN']            = "mvs8WdppEhzQLxfcYwrr1eoKA2nUFi55ff";
-                address['GAS']             = "mgasDTdKu5DsbW97qSRnE8raAuYpKMfmhg";
-                address['DONATE1']         = "mzdg8wGxgP3Jk45FuZPspumCL3Ruup37ob"; // Protocol Development
-                address['DONATE2']         = "mmXU8RU7q3BUsyT66rtw1H6P7B2ZZd9c5Y"; // Community Develoment
-                address['FEE_DESTINATION'] = process.env['XCHAIN_FEE_DESTINATION_DOGE_' + network.toUpperCase()] || "mfees5pa2HwNBonk5vG23aDWkN9fuDJib4"; // Native coin fee destination
-                address['REWARD']          = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // Validator reward pool (structural only; COLLECT/XCHAIN are BTC-only, unused on DOGE)
-                break;
-        }
-        config['ADDRESS'] = address;
-
-        // Genesis ledger bootstrap pin (consensus-critical; see config.js + genesis.js).
-        // mainnet/testnet are frozen and pinned at launch; regtest binds via env so the
-        // e2e harness can point genesis at a current regtest block + test manifest.
-        if(network === 'regtest'){
-            config['GENESIS_BLOCK']       = parseInt(process.env.XCHAIN_GENESIS_BLOCK || '0', 10) || 0;
-            config['GENESIS_LEDGER_HASH'] = process.env.XCHAIN_GENESIS_LEDGER_HASH || null;
-            config['GENESIS_DUMP_HASH']   = process.env.XCHAIN_GENESIS_DUMP_HASH || null;
-        } else if(network === 'mainnet'){
-            // Dogeparty name-ownership injected at the DOGE mainnet start block (decoder
-            // getFirstBlock, re-pinned 2026-06-19). LEDGER_HASH = sha256 of the bundled CSV;
-            // DUMP_HASH = sha256 of the UNCOMPRESSED bundled dump content (fast-import anchor).
-            config['GENESIS_BLOCK']       = 6240000;
-            config['GENESIS_LEDGER_HASH'] = '87abac0b03cbd24694f7c5e666425bdae6f9a9c51b826826bd4848bd4ade991b';
-            config['GENESIS_DUMP_HASH']   = '81d3d2cb4714bc40ec12c2d1c8573040858ddf66e4ba89a05d44d86d3bffa0f1';
-        } else { // testnet
-            // Testnet launches CLEAN (genesis disabled, like LTC). The Dogeparty name-ownership
-            // carry-forward is a mainnet-only allocation reserving real snapshot/airdrop ownership;
-            // testnet is for experimentation, so its namespace stays open for anyone to register.
-            config['GENESIS_BLOCK']       = 0;
-            config['GENESIS_LEDGER_HASH'] = null;
-            config['GENESIS_DUMP_HASH']   = null;
-        }
-
-        return config;
+        return toIndexerConfig('DOGE', network);
     }
-}
+};

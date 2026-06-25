@@ -199,8 +199,23 @@ class XChainIndexer {
         // Get indexer configuration
         this.config = config.getConfig();
 
-        // Create instance of the utility class
-        this.util = new util();
+        // Create instance of the utility class, sharing the indexer's single
+        // config object (NOT a fresh getConfig()) so a later hub overlay can't
+        // make this.config and this.util.config diverge.
+        this.util = new util(this.config);
+
+        // Guard the shared-config invariant: every block-processing module reads
+        // this.config, and the hub overlay mutates it in place, so util MUST hold
+        // the same object. Construction above guarantees it; this catches a future
+        // refactor that reintroduces the divergence without bricking startup.
+        if(this.util.config !== this.config)
+            console.error('CONFIG WIRING BUG: indexer.config and util.config are not the same object; a hub overlay could desync consensus reads.');
+
+        // Verify the bundled canonical coin files against CONSENSUS_CONFIG_PIN before
+        // processing any block. A null pin (mainnet, pre-arm) skips; a mismatch on an
+        // armed network halts, exactly like genesis.js' ledger-hash check. This catches
+        // a vendored coin file that drifted from the pinned consensus config.
+        require('./coins').verifyConsensusPin(this.config.NETWORK);
 
         // Create hub client (for pushing chain tip and other cross-chain data to xchain-hub)
         this.hubClient = new HubClient();
@@ -368,29 +383,37 @@ class XChainIndexer {
             if(this.stopFlag)
                 break;
 
-            // Get the decoder's latest reorg event ({id, block_index}) and the decoder event id
-            // the indexer last recorded. Reorgs are matched by event IDENTITY (the decoder's
-            // events.id), NOT by block-height magnitude: block heights increase across repeated
-            // reorgs, so comparing heights (e.g. `decoder < indexer`) silently drops every reorg
-            // after the first. Comparing the decoder event id the indexer already processed
-            // against the decoder's current latest reorg id catches each new reorg regardless of
-            // its height. Do not re-introduce a block-height comparison here.
-            let decoderReorg         = await this.decoderDb.getLatestReorg();
+            // Fetch EVERY decoder reorg event the indexer has not yet processed (oldest first),
+            // not just the latest. getLastProcessedReorgId() is the decoder event id of the most
+            // recent reorg the indexer recorded; getReorgsSince() returns all decoder reorgs newer
+            // than it. Reorgs are matched by event IDENTITY (the decoder's events.id), NOT by
+            // block-height magnitude: heights increase across repeated reorgs, so a height compare
+            // silently drops every reorg after the first. Do not re-introduce a height comparison.
             let lastProcessedReorgId = await this.indexerDb.getLastProcessedReorgId();
+            let unprocessedReorgs    = await this.decoderDb.getReorgsSince(lastProcessedReorgId);
 
             // Get last processed block from Indexer and Decoder databases
             lastDecoderBlock       = await this.decoderDb.getBlockIndex('decoder', 'last');
             this.lastDecoderBlock  = lastDecoderBlock;
             lastIndexerBlock       = await this.indexerDb.getBlockIndex('indexer', 'last');
 
-            // Handle block reorgs: process when the decoder's latest reorg event is one the
-            // indexer has not yet recorded (identity check). Always record the reorg, but only
-            // roll back if the indexer has already indexed past the reorg block.
-            if(!this.util.isNull(decoderReorg) && decoderReorg.id !== lastProcessedReorgId){
-                console.log("Detected block reorganization at block #",decoderReorg.block_index);
-                await this.indexerDb.createReorg(decoderReorg.block_index, decoderReorg.id);
-                if(!this.util.isNull(lastIndexerBlock) && lastIndexerBlock >= decoderReorg.block_index){
-                    await this.rollback.rollback(decoderReorg.block_index);
+            // Handle block reorgs. When two or more reorgs land between indexer iterations and a
+            // newer event is SHALLOWER than an older one, processing only the latest leaves
+            // orphaned rows below the older, deeper reorg point (a consensus-divergence and
+            // double-count source). So roll back once to the DEEPEST (minimum) block index across
+            // every unprocessed reorg, and record each event in id order so the processed-id cursor
+            // advances to the newest decoder event. Always record; only roll back if the indexer
+            // has already indexed past the deepest reorg block.
+            if(unprocessedReorgs.length > 0){
+                let minReorgBlock = null;
+                for(let reorg of unprocessedReorgs){
+                    if(minReorgBlock === null || reorg.block_index < minReorgBlock)
+                        minReorgBlock = reorg.block_index;
+                    await this.indexerDb.createReorg(reorg.block_index, reorg.id);
+                }
+                console.log("Detected " + unprocessedReorgs.length + " block reorganization(s); deepest at block #", minReorgBlock);
+                if(!this.util.isNull(lastIndexerBlock) && lastIndexerBlock >= minReorgBlock){
+                    await this.rollback.rollback(minReorgBlock);
                     // Re-read the resume cursor: rollback() deleted every block >=
                     // the reorg point, and lastIndexerBlock was read BEFORE the
                     // rollback. Resuming from the stale pre-rollback tip skips the
@@ -741,7 +764,8 @@ class XChainIndexer {
     async _applyHubConfigOverlay(){
         if(!this.hubClient || !this.hubClient.enabled) return;
         try {
-            let { configs, seq } = this._unwrapHubConfigResponse(await this.hubClient._call('getallconfigs', {}));
+            let { configs, seq, coinConsensusHashes } = this._unwrapHubConfigResponse(await this.hubClient._call('getallconfigs', {}));
+            this._checkHubConsensusHash(coinConsensusHashes);
             this._mergeHubParams(configs);
             this.lastHubConfigSeq = seq;
             this.lastHubConfigFetchAt = Date.now();
@@ -750,21 +774,47 @@ class XChainIndexer {
         }
     }
 
+    // Transport-integrity check: compare the hub's served consensus-config hash for
+    // this coin/network against our OWN bundled hash. A mismatch means the hub would
+    // serve divergent consensus values; we never apply consensus params from the hub
+    // (the pinned-verify-only class below), so this only logs, but it surfaces a hub
+    // that is out of sync with this node's pinned bundle so an operator can upgrade.
+    _checkHubConsensusHash(coinConsensusHashes){
+        if(!coinConsensusHashes) return; // older hub: field absent, nothing to compare
+        let coin = this.config.COIN, network = this.config.NETWORK;
+        let hubHash = coinConsensusHashes[network] && coinConsensusHashes[network][coin];
+        if(!hubHash) return;
+        let localHash = require('./coins').consensusHash(coin, network);
+        if(hubHash !== localHash)
+            console.error('CONSENSUS HASH MISMATCH: hub serves ' + hubHash + ' for ' + coin + '/' + network +
+                ' but this node bundles ' + localHash + '. The hub config diverges from this node; not applying hub consensus values (they are pinned-verify-only). Upgrade the lagging side.');
+    }
+
     // Normalize the getallconfigs response across hub versions. Newer hubs wrap the
     // config map as { configs, seq } so consumers can detect a config change committed
     // between polls; older hubs return the bare nested map. Returns { configs, seq }
     // with seq defaulting to 0 (treated as "no committed change seen" by the poll loop).
     _unwrapHubConfigResponse(response){
         if(response && typeof response === 'object' && response.configs && typeof response.configs === 'object' && ('seq' in response)){
-            return { configs: response.configs, seq: Number(response.seq) || 0 };
+            return { configs: response.configs, seq: Number(response.seq) || 0, coinConsensusHashes: response.coin_consensus_hashes || null };
         }
-        return { configs: response || {}, seq: 0 };
+        return { configs: response || {}, seq: 0, coinConsensusHashes: null };
     }
 
     // Shallow-merge the hub's operational params for this coin/network over the live
     // config object. Mutating this.config in place is what lets a re-applied overlay
     // take effect without a process restart.
     _mergeHubParams(allConfigs){
+        // THREE-WAY CONFIG CLASSIFIER (see the platform consolidation plan):
+        //   1. pinned-verify-only - consensus-critical coin params (gas schedule, staking,
+        //      fee math, addresses, genesis, byte-prefixes). NEVER applied from the hub;
+        //      the hub serves them only for the transport-integrity hash check
+        //      (_checkHubConsensusHash). They live solely in the bundled canonical coin
+        //      files (src/coins) and are pin-verified at boot (verifyConsensusPin).
+        //   2. live-apply - display/connection params, safe to merge live. Listed below.
+        //   3. governance-activated - operationally-mutable consensus params, selected by a
+        //      protocol-agreed activation height (NOT a live poll); none wired yet.
+        //
         // CONSENSUS RULE: any param whose value feeds block-hashed state must NOT appear in
         // these lists. The overlay applies a committed hub change the moment a node observes
         // it, which happens at different wall-clock times (hence different block heights)

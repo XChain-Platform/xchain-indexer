@@ -464,7 +464,9 @@ if(require.main === module){
         const dryRun       = process.argv.includes('--dry-run');
         const verifyStakes = process.argv.includes('--verify-stakes');
 
-        const indexerLike = { config: config.getConfig(), util: new Utility() };
+        // Share ONE config object between indexer-like and its Utility.
+        const cfg = config.getConfig();
+        const indexerLike = { config: cfg, util: new Utility(cfg) };
         const db = new Database(host, port, name, user, pass, indexerLike);
 
         // The BTC indexer DB handle serves two roles: the --verify-stakes
