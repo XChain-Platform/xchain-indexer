@@ -707,6 +707,31 @@ class HubDbSync {
             return;
         }
 
+        // oracle_prices needs the same in-place upgrade path, but keyed on its
+        // push_generation rather than a status column (it has no skipped->finalized
+        // lifecycle). It carries UNIQUE (source_chain, action_index). After a
+        // source-chain reorg a PRICE is re-mined at a RECYCLED action_index
+        // (getNextActionIndex assigns MAX+1 over survivors, not an immutable counter)
+        // and re-published with a BUMPED push_generation. If the replica still holds
+        // the stale lower-generation row at that key, a plain INSERT IGNORE no-ops and
+        // leaves push_generation at the old value; the deferred generation-fenced
+        // retraction (push_generation <= pre-bump) then deletes the freshly re-published
+        // row, and the hub never re-sends the deduped row, so the oracle price is
+        // permanently absent on this replica until a full bootstrap. Upgrade in place
+        // when the incoming generation is >= the local one, lifting push_generation so
+        // the fenced delete is a no-op against it (the same ordering-independent
+        // convergence price_snapshots and cross_chain_calls get via their status upgrade).
+        // >= (not >) keeps re-delivery of the same generation idempotent.
+        if (table === 'oracle_prices' && cols.includes('push_generation')) {
+            let updatable = cols.filter(c => c !== 'id' && c !== 'source_chain' && c !== 'action_index' && c !== 'push_generation');
+            let sets = updatable.map(c => '`' + c + '` = IF(VALUES(`push_generation`) >= `push_generation`, VALUES(`' + c + '`), `' + c + '`)');
+            sets.push('push_generation = IF(VALUES(`push_generation`) >= `push_generation`, VALUES(`push_generation`), `push_generation`)');
+            let query = 'INSERT INTO oracle_prices (' + cols.map(c => '`' + c + '`').join(', ') + ') VALUES (' + placeholders + ')'
+                      + ' ON DUPLICATE KEY UPDATE ' + sets.join(', ');
+            await this.hubDb.doQuery(query, args);
+            return;
+        }
+
         let query = 'INSERT IGNORE INTO ' + table + ' (' + cols.join(', ') + ') VALUES (' + placeholders + ')';
         await this.hubDb.doQuery(query, args);
     }

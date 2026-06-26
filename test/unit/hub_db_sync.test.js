@@ -551,6 +551,74 @@ describe('HubDbSync _applyRow price_snapshots skipped→finalized upgrade @regre
     });
 });
 
+describe('HubDbSync _applyRow oracle_prices generation upgrade @regression @tier2', function () {
+
+    // A source-chain reorg re-mines a PRICE at a RECYCLED action_index (getNextActionIndex
+    // assigns MAX+1 over survivors) and re-publishes it with a BUMPED push_generation. A
+    // plain INSERT IGNORE on the mirror would no-op against the stale lower-generation row,
+    // leaving push_generation old, so the generation-fenced retraction (push_generation <=
+    // pre-bump) then deletes the freshly re-published row and the price goes permanently
+    // missing on this replica. _applyRow must upgrade in place keyed on push_generation,
+    // mirroring the price_snapshots / cross_chain_calls upgrade paths.
+
+    const OP_COLS = ['id', 'source_chain', 'action_index', 'coin', 'tick', 'fiat',
+                     'value', 'push_generation', 'created_at'];
+
+    function makeApplySync(localCols) {
+        const doQuery = sinon.stub();
+        doQuery.withArgs(sinon.match(/^SHOW COLUMNS/)).resolves(localCols.map(f => ({ Field: f })));
+        doQuery.resolves([]);
+        const sync = new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test' });
+        return { sync, doQuery };
+    }
+
+    function oracleRow(gen) {
+        return { id: 7, source_chain: 'LTC', action_index: 42, coin: 'LTC', tick: 'XCP',
+                 fiat: 'USD', value: '1.23', push_generation: gen, created_at: '2026-06-25 00:00:00' };
+    }
+
+    it('uses an ON DUPLICATE KEY UPDATE upsert (not INSERT IGNORE) for oracle_prices', async function () {
+        const { sync, doQuery } = makeApplySync(OP_COLS);
+        await sync._applyRow('oracle_prices', oracleRow(1));
+        const insert = doQuery.getCalls().find(c => /oracle_prices/.test(c.args[0]) && /INSERT/.test(c.args[0]));
+        assert.ok(insert, 'an INSERT must run');
+        assert.ok(/ON DUPLICATE KEY UPDATE/.test(insert.args[0]), 'must be an upsert');
+        assert.ok(!/^INSERT IGNORE/.test(insert.args[0]), 'must NOT be a plain INSERT IGNORE');
+    });
+
+    it('guards every column on VALUES(push_generation) >= push_generation and never reassigns the unique-key columns', async function () {
+        const { sync, doQuery } = makeApplySync(OP_COLS);
+        await sync._applyRow('oracle_prices', oracleRow(1));
+        const sql = doQuery.getCalls().find(c => /ON DUPLICATE KEY UPDATE/.test(c.args[0])).args[0];
+        // a payload column upgrades only when the incoming generation wins
+        assert.ok(/`value` = IF\(VALUES\(`push_generation`\) >= `push_generation`, VALUES\(`value`\), `value`\)/.test(sql));
+        // push_generation itself is lifted on the same condition
+        assert.ok(/push_generation = IF\(VALUES\(`push_generation`\) >= `push_generation`, VALUES\(`push_generation`\), `push_generation`\)/.test(sql));
+        // the unique key (source_chain, action_index) + PK id are never reassigned
+        const updateClause = sql.split('ON DUPLICATE KEY UPDATE')[1];
+        assert.ok(!/`source_chain` =/.test(updateClause));
+        assert.ok(!/`action_index` =/.test(updateClause));
+        assert.ok(!/`id` =/.test(updateClause));
+    });
+
+    it('still filters hub-only columns the local mirror does not carry', async function () {
+        const { sync, doQuery } = makeApplySync(['source_chain', 'action_index', 'value', 'push_generation']);
+        let row = oracleRow(2);
+        row.hub_only_audit = 'xyz';
+        await sync._applyRow('oracle_prices', row);
+        const sql = doQuery.getCalls().find(c => /INSERT/.test(c.args[0])).args[0];
+        assert.ok(!sql.includes('hub_only_audit'), 'unknown column dropped');
+        assert.ok(/ON DUPLICATE KEY UPDATE/.test(sql));
+    });
+
+    it('falls back to INSERT IGNORE if the row carries no push_generation column', async function () {
+        const { sync, doQuery } = makeApplySync(['source_chain', 'action_index', 'value']);
+        await sync._applyRow('oracle_prices', { source_chain: 'LTC', action_index: 42, value: '1.23' });
+        const insert = doQuery.getCalls().find(c => /INSERT/.test(c.args[0]));
+        assert.ok(/^INSERT IGNORE/.test(insert.args[0]), 'no push_generation → plain idempotent insert');
+    });
+});
+
 describe('HubDbSync _applyRow datetime coercion @regression @tier2', function () {
 
     // Regression (fleet incident 2026-06-16): the hub serves rows as JSON, so a
