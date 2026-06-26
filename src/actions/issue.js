@@ -212,6 +212,14 @@ class Issue {
         if(!error && String(data['TICK']).toUpperCase()==this.config['GAS'] && data['SOURCE']!=this.config['ADDRESS']['GAS'] && this.config['NETWORK']!='regtest')
             error = 'invalid: GAS Address';
 
+        // Verify the GAS token (XCHAIN) is only ever issued on BTC. It is the platform gas
+        // token but exists as a real, balance-bearing token only on the BTC ledger; on
+        // DOGE/LTC fees settle in native coin (XCHAIN is only a unit of account for sizing),
+        // so XCHAIN is never created there. Regtest is exempt so the e2e harness can self-seed
+        // play-money gas on any chain.
+        if(!error && String(data['TICK']).toUpperCase()==this.config['GAS'] && this.config['COIN']!='BTC' && this.config['NETWORK']!='regtest')
+            error = 'invalid: TICK (BTC-only)';
+
         // Get information on token, then check distribution passing tokenInfo to avoid a second getTokenInfo call
         let tokenInfo     = await this.indexerDb.getTokenInfo(data['TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
         // Genesis creates name ownership only (no balances/holders), so a genesis token is

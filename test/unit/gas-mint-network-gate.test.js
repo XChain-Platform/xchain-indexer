@@ -13,12 +13,15 @@
  * contact legal@dankest.llc.
  *
  **********************************************************************
- * GAS-tick MINT network gate. Pins the airtight backstop that makes an
- * open-mint gas token impossible on mainnet (only the GAS address may mint
- * the GAS tick there) regardless of how the genesis ISSUE was authored, while
- * leaving the GAS tick open-mintable on testnet/regtest so developers can
- * self-mint a little play-money gas. Per-mint amount is bounded by the token's
- * own MAX_MINT (set at genesis ISSUE); there is no separate cap mechanism.
+ * GAS-tick OPEN MINT policy. XCHAIN is the platform gas token and its supply
+ * is distributed by an open mint: any address may MINT it on every network
+ * (the former mainnet GAS-address-only backstop was removed). Minting is bounded
+ * entirely by the token's own genesis parameters:
+ *   - MINT_START_BLOCK gates the launch window (pinned to a far-future sentinel at
+ *     genesis, lowered by the operator via a GAS-signed ISSUE when the mint opens),
+ *   - MAX_SUPPLY caps the total, MAX_MINT bounds the per-transaction amount.
+ * ISSUE of XCHAIN remains GAS-only + BTC-only (issue.js); only the subsequent
+ * minting is public.
  *
  * Drives Mint.parse() with the real utility and a stubbed DB layer, so it runs
  * on any Node version.
@@ -34,18 +37,20 @@ const Utility = require('../../src/utility.js');
 const GAS_ADDR = 'mgassdEpzH2AuKGK9W5FZh8drWYKrpXk6D'; // matches configs/BTC.js testnet GAS address shape
 const DEV_ADDR = 'mDevAddrXXXXXXXXXXXXXXXXXXXXXXXXXXX';
 
-async function runMint({ network, source, amount, tick }){
+async function runMint({ network, source, amount, tick, mintStartBlock = 0, blockIndex = 100,
+                         maxMint = 100000, supply = 0 }){
 
     const util = new Utility();
 
     util.processTransactionLedgerChanges = async () => {};
 
-    // An unlocked, open-mint token with a high MAX_MINT (mirrors the regtest XCHAIN
-    // genesis). LOCK_MINT=0 and a different BLOCK_INDEX so the same-block re-check
-    // branch is skipped.
+    // An unlocked, open-mint token mirroring the XCHAIN genesis: 8 decimals, a
+    // 100,000,000 MAX_SUPPLY, a per-tx MAX_MINT cap, and a configurable MINT_START_BLOCK.
+    // A different BLOCK_INDEX (1) so the same-block re-check branch is skipped. maxMint = 0
+    // disables the per-tx cap so the MAX_SUPPLY ceiling can be exercised in isolation.
     const tokenInfo = {
-        BLOCK_INDEX: 1, SUPPLY: 0, DECIMALS: 0, MAX_SUPPLY: 100000000,
-        MAX_MINT: 100000, MINT_ADDRESS_MAX: 0, MINT_START_BLOCK: 0,
+        BLOCK_INDEX: 1, SUPPLY: supply, DECIMALS: 8, MAX_SUPPLY: 100000000,
+        MAX_MINT: maxMint, MINT_ADDRESS_MAX: 0, MINT_START_BLOCK: mintStartBlock,
         MINT_STOP_BLOCK: 0, LOCK_MINT: 0
     };
 
@@ -83,7 +88,7 @@ async function runMint({ network, source, amount, tick }){
     const data = {
         FORMAT: util.getFormatVersion(params[0]),
         SOURCE: source,
-        BLOCK_INDEX: 100,
+        BLOCK_INDEX: blockIndex,
         ACTION_INDEX: 100
     };
 
@@ -91,42 +96,60 @@ async function runMint({ network, source, amount, tick }){
     return captured.status;
 }
 
-describe('GAS-tick MINT network gate @regression @security', function () {
+describe('GAS-tick open mint @regression @security', function () {
 
-    describe('mainnet : only the GAS address may mint the GAS tick', function () {
-        it('rejects a non-GAS address minting the GAS tick', async function () {
+    describe('open mint : any address may mint the GAS tick on every network', function () {
+        it('allows a non-GAS address to mint the GAS tick on mainnet (open mint)', async function () {
             assert.strictEqual(
-                await runMint({ network: 'mainnet', source: DEV_ADDR, amount: '5', tick: 'XCHAIN' }),
-                'invalid: GAS Address (mint)');
+                await runMint({ network: 'mainnet', source: DEV_ADDR, amount: '5', tick: 'XCHAIN' }), 'valid');
         });
-        it('rejects even a tiny mint from a non-GAS address (no open-mint on mainnet)', async function () {
+        it('allows the GAS address to mint the GAS tick on mainnet', async function () {
             assert.strictEqual(
-                await runMint({ network: 'mainnet', source: DEV_ADDR, amount: '1', tick: 'XCHAIN' }),
-                'invalid: GAS Address (mint)');
+                await runMint({ network: 'mainnet', source: GAS_ADDR, amount: '5', tick: 'XCHAIN' }), 'valid');
         });
-        it('allows the GAS address to mint the GAS tick', async function () {
-            assert.strictEqual(await runMint({ network: 'mainnet', source: GAS_ADDR, amount: '5', tick: 'XCHAIN' }), 'valid');
+        it('allows a non-GAS address to mint the GAS tick on testnet', async function () {
+            assert.strictEqual(
+                await runMint({ network: 'testnet', source: DEV_ADDR, amount: '5', tick: 'XCHAIN' }), 'valid');
         });
-        it('does not gate subtokens (XCHAIN.foo is not the GAS tick)', async function () {
-            assert.strictEqual(await runMint({ network: 'mainnet', source: DEV_ADDR, amount: '5', tick: 'XCHAIN.FOO' }), 'valid');
+        it('allows a non-GAS address to mint the GAS tick on regtest', async function () {
+            assert.strictEqual(
+                await runMint({ network: 'regtest', source: DEV_ADDR, amount: '90000', tick: 'XCHAIN' }), 'valid');
         });
     });
 
-    describe('testnet : GAS tick is open-mintable (dev gas), bounded only by MAX_MINT', function () {
-        it('any address may mint the GAS tick', async function () {
-            assert.strictEqual(await runMint({ network: 'testnet', source: DEV_ADDR, amount: '5',  tick: 'XCHAIN' }), 'valid');
-        });
-        it('rejects amounts above the token MAX_MINT (the only per-mint bound)', async function () {
-            // tokenInfo.MAX_MINT = 100000 → 100001 is rejected by the standard MAX_MINT check.
+    describe('MINT_START_BLOCK gates the launch window', function () {
+        it('rejects a mint before MINT_START_BLOCK (mint disabled until the operator opens it)', async function () {
             assert.strictEqual(
-                await runMint({ network: 'testnet', source: DEV_ADDR, amount: '100001', tick: 'XCHAIN' }),
+                await runMint({ network: 'mainnet', source: DEV_ADDR, amount: '5', tick: 'XCHAIN',
+                    mintStartBlock: 999999999, blockIndex: 950001 }),
+                'invalid: MINT_START_BLOCK');
+        });
+        it('allows a mint at/after MINT_START_BLOCK (launch window open)', async function () {
+            assert.strictEqual(
+                await runMint({ network: 'mainnet', source: DEV_ADDR, amount: '5', tick: 'XCHAIN',
+                    mintStartBlock: 1000000, blockIndex: 1000000 }),
+                'valid');
+        });
+    });
+
+    describe('supply bounds still enforced', function () {
+        it('rejects a per-tx amount above MAX_MINT', async function () {
+            assert.strictEqual(
+                await runMint({ network: 'mainnet', source: DEV_ADDR, amount: '100001', tick: 'XCHAIN' }),
                 'invalid: AMOUNT > MAX_MINT');
         });
+        it('rejects a mint that would exceed MAX_SUPPLY', async function () {
+            // Disable the per-tx cap (maxMint = 0) so the MAX_SUPPLY = 100,000,000 ceiling is
+            // what rejects: a 100,000,001 mint from a zero starting supply.
+            assert.strictEqual(
+                await runMint({ network: 'mainnet', source: DEV_ADDR, amount: '100000001', tick: 'XCHAIN', maxMint: 0 }),
+                'invalid: mint exceeds MAX_SUPPLY');
+        });
     });
 
-    describe('regtest : GAS tick is open-mintable (preserves e2e gas seeding)', function () {
-        it('any address may mint the GAS tick', async function () {
-            assert.strictEqual(await runMint({ network: 'regtest', source: DEV_ADDR, amount: '90000', tick: 'XCHAIN' }), 'valid');
+    describe('subtokens are unaffected', function () {
+        it('mints XCHAIN.FOO normally (a subtoken is not the GAS tick)', async function () {
+            assert.strictEqual(await runMint({ network: 'mainnet', source: DEV_ADDR, amount: '5', tick: 'XCHAIN.FOO' }), 'valid');
         });
     });
 });

@@ -98,6 +98,13 @@ class Genesis {
         // Ancestors must stay GAS-owned while their descendants are placed; leaves do not.
         let ancestors = this._ancestorSet(rows);
 
+        // Gas token: inject XCHAIN as the first genesis action (BTC mainnet only). Unlike the
+        // CP/DP name reservations, it carries real token parameters and is the canonical
+        // creation of the platform gas token. ISSUE of XCHAIN is GAS-only (issue.js) and
+        // BTC-only, so this is the single place it is ever created on a live chain.
+        if(this.config['COIN'] === 'BTC' && this.config['NETWORK'] === 'mainnet')
+            await this._injectGasToken(gas, blockToParse, blockTime);
+
         // Create pass: GAS issues every tick once, in file (parent-before-child) order so
         // GAS owns each parent when its children are created (the parent gate passes).
         // A leaf folds its TRANSFER into this single action (the gate reads the parent's
@@ -244,6 +251,60 @@ class Genesis {
             source_pubkey: null,
             tx_outputs:    []
         };
+        await this.actions.processTransaction(tx, true); // isGenesis = true
+    }
+
+    // Inject the XCHAIN gas token as the first genesis action. Unlike the bare name
+    // reservations, the gas token carries real parameters: 8 decimals and a 100,000,000
+    // MAX_SUPPLY, owned by GAS, with zero pre-mint (supply 0). MINT_START_BLOCK is pinned to a
+    // far-future sentinel so the token exists but is un-mintable until the operator lowers it
+    // via a later GAS-signed ISSUE (the launch open-mint). Decimals stay editable until the
+    // first mint (issue.js locks them only once SUPPLY > 0), so the launch ISSUE can still
+    // tune caps/window while supply is 0. The synthetic tx hash uses a distinct GAS marker so
+    // it never collides with the per-name create/transfer passes.
+    async _injectGasToken(gas, blockToParse, blockTime){
+        let tick = this.config['GAS']; // 'XCHAIN'
+        // ISSUE format 0: VERSION|TICK|MAX_SUPPLY|MAX_MINT|DECIMALS|DESCRIPTION|MINT_SUPPLY|
+        //   TRANSFER|...|MINT_ADDRESS_MAX|MINT_START_BLOCK|... Trailing fields are omitted
+        //   (parser tolerates a short field list); owner is GAS so there is no TRANSFER.
+        let fields = ['ISSUE', '0', tick,
+            '100000000',        // MAX_SUPPLY
+            '',                 // MAX_MINT (0 = no per-tx cap; set at launch if wanted)
+            '8',                // DECIMALS
+            'XChain gas token', // DESCRIPTION
+            '',                 // MINT_SUPPLY (no pre-mint)
+            '',                 // TRANSFER (owner is GAS)
+            '',                 // TRANSFER_SUPPLY
+            '',                 // LOCK_MAX_SUPPLY
+            '',                 // LOCK_MAX_MINT
+            '',                 // LOCK_DESCRIPTION
+            '',                 // LOCK_SLEEP
+            '',                 // LOCK_CALLBACK
+            '',                 // CALLBACK_BLOCK
+            '',                 // CALLBACK_TICK
+            '',                 // CALLBACK_AMOUNT
+            '',                 // ALLOW_LIST
+            '',                 // BLOCK_LIST
+            '',                 // MINT_ADDRESS_MAX
+            '999999999'         // MINT_START_BLOCK (sentinel: mint disabled until lowered)
+        ];
+        let digest = crypto.createHash('sha256')
+            .update(this.config['COIN'] + '|GAS|' + tick).digest('hex').slice(0, 48);
+        let tx = {
+            data:          fields.join('|'),
+            source:        gas,
+            destination:   null,
+            amount:        null,
+            tx_hash:       'GENESIS-' + this.config['COIN'] + '-GAS-' + digest,
+            vout:          0,
+            block_index:   blockToParse,
+            block_time:    blockTime,
+            raw_data:      null,
+            fee:           null,
+            source_pubkey: null,
+            tx_outputs:    []
+        };
+        console.log('GENESIS: injecting gas token ' + tick + ' (decimals 8, max_supply 100000000, mint disabled) owned by GAS');
         await this.actions.processTransaction(tx, true); // isGenesis = true
     }
 }

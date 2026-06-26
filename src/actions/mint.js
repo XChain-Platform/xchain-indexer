@@ -151,18 +151,15 @@ class Mint {
         if(!error && !this.util.isNull(data['AMOUNT']) && this.util.bcgt(data['MAX_MINT'], 0) && this.util.bcgt(data['AMOUNT'], data['MAX_MINT']))
             error = 'invalid: AMOUNT > MAX_MINT';
 
-        // GAS-tick mint policy: on mainnet, ONLY the GAS address may mint the GAS tick.
-        // This is an airtight, consensus-critical backstop that makes an open-mint gas
-        // token impossible on mainnet regardless of how the genesis ISSUE was authored
-        // (defense-in-depth over LOCK_MINT). On testnet/regtest the GAS tick is left
-        // open-mintable so developers can self-mint a little play-money gas (MINT pays
-        // no XCHAIN fee, only the native tx fee); the per-mint amount is bounded by the
-        // token's own MAX_MINT (set at genesis ISSUE). No separate cap needed.
-        // Subtokens (e.g. XCHAIN.foo) are NOT the GAS tick and are unaffected.
-        if(!error && String(data['TICK']).toUpperCase()==this.config['GAS']
-           && this.config['NETWORK']!='regtest' && this.config['NETWORK']!='testnet'
-           && data['SOURCE']!=this.config['ADDRESS']['GAS'])
-            error = 'invalid: GAS Address (mint)';
+        // GAS-tick mint policy: XCHAIN uses an OPEN MINT (any address may mint), the launch
+        // distribution mechanism. The prior mainnet GAS-address-only backstop was removed so
+        // the public can mint their share. Minting is now governed entirely by the token's own
+        // genesis parameters: MINT_START_BLOCK gates the launch window (pinned to a far-future
+        // sentinel at genesis, lowered by the operator via a GAS-signed ISSUE when the mint
+        // opens), MAX_SUPPLY caps the total (100,000,000), and MAX_MINT / MINT_ADDRESS_MAX
+        // bound per-tx / per-address if set. ISSUE of XCHAIN stays GAS-only + BTC-only
+        // (issue.js), so the token can only ever be created (and its caps/window authored) by
+        // the operator; only the subsequent minting is public.
 
         // Verify minting AMOUNT will not exceed MAX_SUPPLY
         if(!error && this.util.bcgt(this.util.bcadd(data['SUPPLY'],data['AMOUNT'],data['DECIMALS']), this.util.bcadd(data['MAX_SUPPLY'],0,data['DECIMALS'])))

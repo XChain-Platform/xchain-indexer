@@ -79,10 +79,13 @@ module.exports = {
             // Genesis ledger bootstrap pin (Counterparty name carry-forward).
             // mainnet is frozen at launch; LEDGER_HASH = sha256 of the bundled CSV,
             // DUMP_HASH = sha256 of the uncompressed bundled state dump.
+            // DUMP_HASH re-pinned 2026-06-26: XCHAIN gas token injected as genesis token #1
+            // (decimals 8, max_supply 100M, mint disabled, GAS-owned); ledgerHash unchanged
+            // (XCHAIN is injected in genesis.js code, not the CSV manifest).
             genesis: {
                 block:      950000,
                 ledgerHash: 'f347a0499654b128dd0461441ed6341ac27a24b909d6ff6e3995db4e69dc23e5',
-                dumpHash:   '64bfb00c25a44e4239396374fb6a6588c64ed12f6dab313afde138e1f7918203',
+                dumpHash:   'e416c382dd6951ce5c4da7e053f6dbb407ca3d966a513209eb59886dbe95e738',
             },
         },
 
