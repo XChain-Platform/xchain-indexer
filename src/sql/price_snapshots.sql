@@ -15,5 +15,7 @@ CREATE TABLE price_snapshots (
     UNIQUE KEY idx_round_pair (round_number, coin_pair),
     KEY idx_pair_block (coin_pair, reference_block),
     KEY idx_pair_timestamp (coin_pair, block_timestamp),
-    KEY idx_status (status)
+    KEY idx_status (status),
+    -- Oracle snapshot preload: WHERE status + reference_block range, ORDER BY round_number DESC.
+    KEY idx_status_block_round (status, reference_block, round_number)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;

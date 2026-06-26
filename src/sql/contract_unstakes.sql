@@ -18,3 +18,5 @@ CREATE        INDEX target_contract_index ON contract_unstakes (target_contract_
 CREATE        INDEX tick_id               ON contract_unstakes (tick_id);
 CREATE        INDEX cooldown_end_block    ON contract_unstakes (cooldown_end_block);
 CREATE        INDEX status_id             ON contract_unstakes (status_id);
+-- Composite for the per-block cooldown sweep (status_id filter + cooldown_end_block range).
+CREATE        INDEX status_cooldown       ON contract_unstakes (status_id, cooldown_end_block);

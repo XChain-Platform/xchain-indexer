@@ -14,3 +14,5 @@ CREATE        INDEX source_id          ON unstakes (source_id);
 CREATE        INDEX signing_pubkey_id  ON unstakes (signing_pubkey_id);
 CREATE        INDEX status_id          ON unstakes (status_id);
 CREATE        INDEX cooldown_end_block ON unstakes (cooldown_end_block);
+-- Composite for the per-block cooldown sweep (status_id filter + cooldown_end_block range).
+CREATE        INDEX status_cooldown    ON unstakes (status_id, cooldown_end_block);
