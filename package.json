@@ -21,6 +21,8 @@
   "scripts": {
     "api": "node --no-node-snapshot ./src/api.js",
     "migrate": "node ./src/migrate.js",
+    "vendor:vm": "bash bin/vendor-vm.sh",
+    "check:vm": "bash bin/vendor-vm.sh check",
     "check:consensus-time": "if grep -rn 'getCurrentTime(' src/actions/ 2>/dev/null; then echo 'ERROR: getCurrentTime() (wall-clock Date.now) must never be called inside src/actions/. Block processing must use the deterministic block timestamp (data[\"BLOCK_TIME\"]); a wall-clock value here diverges consensus state across validator instances'; exit 1; else echo 'OK: no wall-clock time usage in src/actions/'; fi",
     "test": "mocha --timeout 30000 --recursive 'test/unit/**/*.test.js' 'test/unit/*.test.js'",
     "coverage": "c8 --reporter=text --reporter=html --include 'src/**/*.js' mocha --timeout 30000 --recursive 'test/unit/**/*.test.js' 'test/unit/*.test.js' --exit",
