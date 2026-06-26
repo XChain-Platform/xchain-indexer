@@ -485,12 +485,26 @@ class Utility {
         let [int, sats] = String(amount).split('.');
         if(!divisible && this.isNumeric(int) && int==amount)
             return true;
-        if(divisible && this.isNumeric(int) && (this.isNull(sats) || this.isNumeric(sats)))
+        //<FRACTIONAL-PRECISION-CAP> (item 5346): an amount must not carry more fractional
+        // digits than the tick's decimals. The ledger normalizes to the tick precision at
+        // write time (createLedgerChangeRecord -> bcadd(amount,0,decimals)), so accepting
+        // finer precision here would store an unrounded action amount that diverges from the
+        // rounded ledger row (a supply-reconciliation desync). Contract-EMITTED amounts are
+        // pre-truncated to the tick decimals in execute.js processEmission before they reach
+        // this validator, so this rejects only over-precise user/wire input. Mirrored in
+        // xchain-sdk/src/utility.js (parity test in test/unit/utility.test.js).
+        if(divisible && this.isNumeric(int) && (this.isNull(sats) || this.isNumeric(sats))){
+            if(!this.isNull(sats) && String(sats).length > parseInt(decimals))
+                return false;
             return true;
+        }
+        //</FRACTIONAL-PRECISION-CAP>
         return false;
     }
 
-    // Handle validating fiat amount format
+    // Validate a fiat amount format. Now equivalent to isValidAmountFormat (the precision
+    // cap lives there since item 5346); kept as a named alias so existing callers and the
+    // attest.js FEE_AMOUNT comment remain valid.
     isValidFiatFormat(decimals, amount){
         let valid = this.isValidAmountFormat(decimals, amount);
         if(valid){

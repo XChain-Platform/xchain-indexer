@@ -544,6 +544,20 @@ describe('Utility @regression @tier1', function () {
         it('should reject non-numeric', function () {
             assert.strictEqual(util.isValidAmountFormat(8, 'abc'), false);
         });
+        // Fractional-precision cap (item 5346): an amount must not carry more decimal
+        // places than the tick's decimals.
+        it('should reject more fractional digits than decimals', function () {
+            assert.strictEqual(util.isValidAmountFormat(8, '1.000000001'), false);
+        });
+        it('should accept exactly decimals fractional digits (boundary)', function () {
+            assert.strictEqual(util.isValidAmountFormat(8, '1.00000001'), true);
+        });
+        it('should reject any fraction when decimals=0 via the cap path', function () {
+            assert.strictEqual(util.isValidAmountFormat(2, '1.123'), false);
+        });
+        it('should accept fewer fractional digits than decimals', function () {
+            assert.strictEqual(util.isValidAmountFormat(8, '1.5'), true);
+        });
     });
 
     describe('isValidFiatFormat()', function () {
@@ -555,6 +569,28 @@ describe('Utility @regression @tier1', function () {
         });
         it('should accept integer amount', function () {
             assert.strictEqual(util.isValidFiatFormat(2, '10'), true);
+        });
+    });
+
+    // The SDK ships its own isValidAmountFormat for client-side pre-submission checks. It is
+    // NOT auto-synced with the indexer's (and the indexer has extra object/negative guards),
+    // but the FRACTIONAL-PRECISION-CAP fragment must agree so the SDK never builds an amount
+    // the consensus-authoritative indexer would reject (item 5346). No sync script exists, so
+    // this fragment-parity test is the drift guard.
+    describe('isValidAmountFormat() SDK<->indexer fractional-cap parity', function () {
+        const SdkUtility = require('../../../xchain-sdk/src/utility.js');
+        const sdkUtil = new SdkUtility();
+        const cases = [
+            [0, '100', true], [0, '1.5', false],
+            [8, '1.00000001', true], [8, '1.000000001', false],
+            [8, '1.5', true], [2, '1.123', false], [2, '1.12', true],
+            [8, '100', true],
+        ];
+        cases.forEach(function ([decimals, amount, expected]) {
+            it(`decimals=${decimals} amount=${amount} -> ${expected} (both)`, function () {
+                assert.strictEqual(util.isValidAmountFormat(decimals, amount), expected, 'indexer');
+                assert.strictEqual(sdkUtil.isValidAmountFormat(decimals, amount), expected, 'sdk');
+            });
         });
     });
 

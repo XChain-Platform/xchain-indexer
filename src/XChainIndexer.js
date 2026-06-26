@@ -431,7 +431,6 @@ class XChainIndexer {
                 for(let reorg of unprocessedReorgs){
                     if(minReorgBlock === null || reorg.block_index < minReorgBlock)
                         minReorgBlock = reorg.block_index;
-                    await this.indexerDb.createReorg(reorg.block_index, reorg.id);
                 }
                 console.log("Detected " + unprocessedReorgs.length + " block reorganization(s); deepest at block #", minReorgBlock);
                 if(!this.util.isNull(lastIndexerBlock) && lastIndexerBlock >= minReorgBlock){
@@ -447,6 +446,17 @@ class XChainIndexer {
                     // undefined, which JSON.stringify drops).
                     lastIndexerBlock = await this.indexerDb.getBlockIndex('indexer', 'last');
                 }
+                // Record the processed-reorg markers ONLY after any rollback has committed.
+                // The marker rows advance the processed-id cursor (getLastProcessedReorgId), so
+                // writing them before rollback() meant a crash or thrown error inside the rollback
+                // window left the cursor advanced and the rollback was never retried, stranding
+                // orphaned old-chain rows below minReorgBlock (silent consensus divergence). Writing
+                // strictly after the commit keeps the cursor un-advanced on failure, so the same
+                // reorg is re-detected and retried on the next pass; the retry is idempotent because
+                // the rollback is skipped once lastIndexerBlock has dropped below minReorgBlock.
+                // Oldest-first so a partial-write crash only advances the cursor as far as is durable.
+                for(let reorg of unprocessedReorgs)
+                    await this.indexerDb.createReorg(reorg.block_index, reorg.id);
             }
 
             // If indexer has no parsed blocks, set last indexer block to first decoder block-1

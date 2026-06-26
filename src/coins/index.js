@@ -132,11 +132,25 @@ function resolveFullnode(fullnode, network){
     return out;
 }
 
-// Apply the FEE_DESTINATION env override (allowed on every network; the bundled
-// default is a real address, so the env var is for pre-launch redirection only).
+// Apply the FEE_DESTINATION env override. Honored on non-mainnet networks only
+// (pre-launch redirection on regtest/testnet). On mainnet the env var is ignored and
+// the bundled default - the consensus-pinned address - is always used: FEE_DESTINATION
+// gates native-fee acceptance (detectFeePaymentMode / validateNativeCoinFee), but the
+// consensus pin hashes only the static bundle, so an env-resolved override escapes the
+// freeze and would let two operators accept/reject the same native-fee action
+// differently, forking the block-hashed ledger. A set-but-ignored mainnet override is
+// warned rather than silently dropped so a misconfiguration is visible.
 function resolveFeeDestination(tick, network, defaultAddr){
     const key = 'XCHAIN_FEE_DESTINATION_' + tick + '_' + String(network).toUpperCase();
-    return process.env[key] || defaultAddr;
+    const override = process.env[key];
+    if(!override) return defaultAddr;
+    if(network === 'mainnet'){
+        if(override !== defaultAddr)
+            console.log('WARNING: ' + key + ' is set but IGNORED on mainnet; using the bundled ' +
+                'consensus-pinned FEE_DESTINATION. To redirect fees, change the pinned coin bundle.');
+        return defaultAddr;
+    }
+    return override;
 }
 
 // Resolve a coin for a network: merge coin-level params with the selected network

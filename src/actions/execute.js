@@ -59,6 +59,29 @@ const GUARD_METHOD = 'guard';
 // (canonical: xchain-documentation/protocol/constants.js).
 const { XCALL_MIN_GAS, XCALL_MAX_GAS, XCALL_MAX_HOPS } = require('./xcall.js');
 
+// Amount-bearing fields of every emittable action, mapping each amount param to the param
+// that names the tick it is denominated in (item 5346). processEmission normalizes each to
+// that tick's decimals before dispatch, so a contract that computes an over-precise amount
+// (e.g. an AMM's 64-digit bignum payout) emits a tick-precise amount that passes
+// isValidAmountFormat and matches what the ledger stores. ISSUE declares the new tick's
+// decimals inline (`declared`) because the tick is not in the issues table yet. Emittable
+// actions with no tick-denominated amount are absent (CALLBACK/XCALL/EXECUTE/BROADCAST/
+// COINPAY/FILE/LINK/LIST/MESSAGE/SWEEP); COINPAY's amount is a native-coin value, not a tick.
+// SLASH is handled inline, not here. KEEP IN SYNC with buildActionParams: the emission-map
+// coverage test (test/unit/execute-emission-truncation.test.js) fails if a new amount-bearing
+// emittable action is missing here.
+const EMISSION_AMOUNT_FIELDS = {
+    SEND:      [{ amount: 'quantity',   tick: 'tick' }],
+    MINT:      [{ amount: 'quantity',   tick: 'tick' }],
+    DESTROY:   [{ amount: 'quantity',   tick: 'tick' }],
+    AIRDROP:   [{ amount: 'quantity',   tick: 'tick' }],
+    DIVIDEND:  [{ amount: 'quantity',   tick: 'dividendTick' }],
+    ORDER:     [{ amount: 'giveAmount', tick: 'giveTick' }, { amount: 'getAmount', tick: 'getTick' }],
+    DISPENSER: [{ amount: 'giveAmount', tick: 'giveTick' }, { amount: 'giveEscrow', tick: 'giveTick' }, { amount: 'getAmount', tick: 'getTick' }],
+    ATTEST:    [{ amount: 'feeAmount',  tick: 'feeTick' }],
+    ISSUE:     [{ amount: 'maxSupply',  declared: true }, { amount: 'maxMint', declared: true }, { amount: 'mintSupply', declared: true }, { amount: 'callbackAmount', tick: 'callbackTick' }],
+};
+
 class Execute {
 
     // Handle constructing a class instance
@@ -866,6 +889,14 @@ class Execute {
         // Force source to the contract's derived address
         let contractAddress = 'C:' + this.config['CHAIN'] + ':' + executionData['CONTRACT_ACTION_INDEX'];
 
+        // Normalize emitted amounts to their tick's decimals BEFORE building params and
+        // dispatching (item 5346). Contracts compute with 64-digit bignum precision, so an
+        // emitted amount can carry more fractional digits than the tick; left unnormalized it
+        // would be rejected by isValidAmountFormat (reverting e.g. every AMM swap) or stored
+        // unrounded while the ledger rounds it (supply desync). This applies the SAME
+        // normalization the ledger uses, so the two agree.
+        await this._truncateEmissionAmounts(action, params);
+
         // Build positional params array for the handler
         let actionParams = this.buildActionParams(action, params);
 
@@ -1066,6 +1097,38 @@ class Execute {
         }
     }
 
+    // Normalize every amount-bearing field of an emitted action to its tick's decimals
+    // (item 5346), using the SAME normalization the ledger applies at write time
+    // (createLedgerChangeRecord -> util.bcadd(amount, 0, decimals)). This makes a contract's
+    // over-precise computed amount tick-precise before it reaches the action handler, so it
+    // passes isValidAmountFormat and the stored action amount matches the ledger row. Mutates
+    // and returns `params`. Fields that are null/empty are left as-is; a tick unknown locally
+    // (e.g. an ORDER/SWAP get-leg on a foreign chain) is left untouched because that leg is
+    // validated on the far chain. ISSUE uses its inline declared decimals (the tick is not in
+    // the issues table yet). Driven by EMISSION_AMOUNT_FIELDS; keep that map in sync with
+    // buildActionParams (enforced by the emission-map coverage test).
+    async _truncateEmissionAmounts(action, params){
+        let fields = EMISSION_AMOUNT_FIELDS[action];
+        if(!fields || !params) return params;
+        for(let f of fields){
+            let value = params[f.amount];
+            if(this.util.isNull(value) || String(value) === '') continue;
+            let decimals;
+            if(f.declared){
+                decimals = parseInt(params.decimals);
+                if(!Number.isFinite(decimals)) continue;
+            } else {
+                let tick = params[f.tick];
+                if(this.util.isNull(tick) || String(tick) === '') continue;
+                let tickId = await this.indexerDb.getTickerId(tick);
+                if(tickId === null) continue;
+                decimals = await this.indexerDb.getTokenDecimalPrecision(tickId);
+            }
+            params[f.amount] = String(this.util.bcadd(value, 0, decimals));
+        }
+        return params;
+    }
+
     // Process a SLASH emission from inside the VM. The emission carries:
     //   { action: 'SLASH', params: { contractIndex, pubkey, token, amount } }
     // Authorization is implicit: the gateway's contractStakeData accessor is scoped
@@ -1151,5 +1214,9 @@ class Execute {
         });
     }
 }
+
+// Exposed for the emission-map coverage test (keeps EMISSION_AMOUNT_FIELDS in sync with
+// buildActionParams without copying the map into the test).
+Execute.EMISSION_AMOUNT_FIELDS = EMISSION_AMOUNT_FIELDS;
 
 module.exports = Execute;
