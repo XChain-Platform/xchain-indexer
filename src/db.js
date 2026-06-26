@@ -1020,6 +1020,41 @@ class Database {
         return { id: Number(row.id), block_index: block_index };
     }
 
+    // Get EVERY decoder reorg event newer than the one the indexer last processed, oldest
+    // first, each as {id, block_index} where block_index is that event's deepest (lowest)
+    // orphaned block. getLatestReorg() returns only the single newest event, so when two
+    // reorgs land between indexer iterations and the newer one is shallower, the older,
+    // deeper reorg is silently dropped and orphaned rows survive below the rollback point.
+    // Processing the full set (and rolling back to the minimum block across it) closes that
+    // gap. afterId is the decoder event id from getLastProcessedReorgId (null = none yet).
+    async getReorgsSince(afterId){
+        let query, args;
+        if(afterId === null || afterId === undefined){
+            query = `SELECT id, data FROM events WHERE code='REORG' ORDER BY id ASC`;
+            args  = [];
+        } else {
+            query = `SELECT id, data FROM events WHERE code='REORG' AND id > ? ORDER BY id ASC`;
+            args  = [Number(afterId)];
+        }
+        let results = await this.doQuery(query, args);
+        let reorgs = [];
+        for(let row of results){
+            let block_index = null;
+            let data = JSON.parse(row.data);
+            if(typeof data === 'object' && data !== null){
+                for(let block of data){
+                    // Decoder REORG events store an array of {block_index, block_hash};
+                    // unwrap the numeric block index and keep the lowest (deepest) one.
+                    let idx = (typeof block === 'object' && block !== null) ? block.block_index : block;
+                    if(idx < block_index || block_index === null)
+                        block_index = idx;
+                }
+            }
+            reorgs.push({ id: Number(row.id), block_index: block_index });
+        }
+        return reorgs;
+    }
+
     // Get the decoder event id of the most-recent reorg the indexer has already recorded,
     // or null if none. This is the value compared against getLatestReorg().id to decide
     // whether a new reorg needs processing - an IDENTITY check, not a block-height compare.

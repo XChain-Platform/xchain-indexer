@@ -623,6 +623,7 @@ describe('Database reorg identity detection @regression @tier1', function () {
             util,
             doQuery: sinon.stub().resolves([]),
             getLatestReorg:         Database.prototype.getLatestReorg,
+            getReorgsSince:         Database.prototype.getReorgsSince,
             getLastProcessedReorgId: Database.prototype.getLastProcessedReorgId,
             createReorg:            Database.prototype.createReorg,
         };
@@ -682,6 +683,43 @@ describe('Database reorg identity detection @regression @tier1', function () {
         // The buggy magnitude check (200 < 100) was false → miss. Identity catches it.
         assert.strictEqual(decoderReorg.block_index < lastProcessedReorgId, false, 'magnitude compare would have missed it');
         assert.strictEqual(decoderReorg.id !== lastProcessedReorgId, true, 'identity check detects the new reorg');
+    });
+
+    it('getReorgsSince returns every reorg after the given id, oldest first, each with its lowest block', async function () {
+        db.doQuery.resolves([
+            { id: 6, data: JSON.stringify([{ block_index: 200, block_hash: 'h200' }]) },
+            { id: 7, data: JSON.stringify([{ block_index: 150, block_hash: 'h150' }, { block_index: 152, block_hash: 'h152' }]) },
+        ]);
+        const result = await db.getReorgsSince.call(db, 5);
+        assert.deepStrictEqual(result, [
+            { id: 6, block_index: 200 },
+            { id: 7, block_index: 150 },
+        ]);
+        // The query must filter by id > afterId, not return only the latest.
+        assert.match(db.doQuery.firstCall.args[0], /id > \?/);
+        assert.deepStrictEqual(db.doQuery.firstCall.args[1], [5]);
+    });
+
+    it('getReorgsSince(null) returns all reorg events (no afterId filter)', async function () {
+        db.doQuery.resolves([{ id: 1, data: JSON.stringify([{ block_index: 10, block_hash: 'h10' }]) }]);
+        const result = await db.getReorgsSince.call(db, null);
+        assert.deepStrictEqual(result, [{ id: 1, block_index: 10 }]);
+        assert.doesNotMatch(db.doQuery.firstCall.args[0], /id > \?/);
+    });
+
+    it('exposes the DEEPEST block across two unprocessed reorgs when the newer one is shallower', async function () {
+        // The bug: getLatestReorg returns only event 7 (block 200); rolling back to 200
+        // leaves orphaned rows from event 6's deeper reorg at block 100. getReorgsSince
+        // surfaces both so the caller can roll back to the minimum (deepest) block.
+        db.doQuery.resolves([
+            { id: 6, data: JSON.stringify([{ block_index: 100, block_hash: 'h100' }]) },
+            { id: 7, data: JSON.stringify([{ block_index: 200, block_hash: 'h200' }]) },
+        ]);
+        const reorgs = await db.getReorgsSince.call(db, 5);
+        const minBlock = reorgs.reduce((m, r) => (m === null || r.block_index < m ? r.block_index : m), null);
+        assert.strictEqual(minBlock, 100, 'deepest block across all unprocessed reorgs');
+        const maxId = reorgs.reduce((m, r) => Math.max(m, r.id), 0);
+        assert.strictEqual(maxId, 7, 'cursor advances to the newest decoder event id');
     });
 });
 
