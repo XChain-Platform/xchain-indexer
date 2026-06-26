@@ -257,11 +257,33 @@ class XChainIndexer {
         } else {
             // No hub DB credentials supplied. Hub-owned tables (price_snapshots, oracle_prices,
             // stakes, delegations, validator_rewards) will be read from the indexer's own DB.
-            // Correct for single-host deployments; on a distributed node it means HUB_DB_HOST /
-            // HUB_DB_NAME are unset and price/oracle reads will use local (possibly stale) data.
-            console.warn('WARNING: HUB_DB_HOST / HUB_DB_NAME not set. Hub-owned price/oracle tables ' +
-                'will be read from the local indexer DB. Expected for single-host setups; on a distributed ' +
-                'node this indicates a hub DB misconfiguration and fee/price data may be stale or absent.');
+            // Correct for single-host deployments (the local DB holds the synced hub copy), but
+            // indistinguishable from a distributed/validator node where HUB_DB_HOST / HUB_DB_NAME
+            // were simply forgotten. In that misconfig the node values native-coin fees against
+            // stale/empty local price data, which on mainnet is a consensus-divergence hazard.
+            //
+            // Fail closed on mainnet: require an explicit acknowledgment that a local price source
+            // is intended (single-host) before booting. This mirrors the INDEXER_ALLOW_UNAUTHENTICATED
+            // escape hatch in api.js. testnet/regtest keep the non-fatal warning, since single-host
+            // is the norm there and there is no canonical fleet to diverge from.
+            let allowLocal = process.env.INDEXER_ALLOW_LOCAL_PRICE_SOURCE === 'true';
+            if(this.config['NETWORK'] === 'mainnet' && !allowLocal){
+                this.util.throwError('HUB_DB_HOST / HUB_DB_NAME are not set on a mainnet node. Native-coin ' +
+                    'fee validation and price reads would fall back to the local indexer DB, which on a ' +
+                    'distributed node means stale/empty price data and consensus divergence. Set ' +
+                    'HUB_DB_HOST / HUB_DB_NAME for a distributed deployment, or set ' +
+                    'INDEXER_ALLOW_LOCAL_PRICE_SOURCE=true to confirm an intentional single-host node ' +
+                    '(local DB holds the synced hub copy).');
+            }
+            if(allowLocal){
+                console.log('Hub DB not set; local price source acknowledged via INDEXER_ALLOW_LOCAL_PRICE_SOURCE. ' +
+                    'Hub-owned price/oracle tables will be read from the local indexer DB (single-host mode).');
+            } else {
+                console.warn('WARNING: HUB_DB_HOST / HUB_DB_NAME not set. Hub-owned price/oracle tables ' +
+                    'will be read from the local indexer DB. Expected for single-host setups; on a distributed ' +
+                    'node this indicates a hub DB misconfiguration and fee/price data may be stale or absent. ' +
+                    'Set INDEXER_ALLOW_LOCAL_PRICE_SOURCE=true to acknowledge an intentional single-host node.');
+            }
         }
 
         // Create instance of the protocol changes class

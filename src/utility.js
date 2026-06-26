@@ -897,13 +897,18 @@ class Utility {
             // local DB holds the synced hub copy). In a distributed deployment it almost always
             // means HUB_DB_HOST / HUB_DB_NAME are unset or misconfigured, in which case fee
             // validation and FIAT settlement run against stale or empty local price data with
-            // no error. Warn once so the misconfiguration is visible in logs.
+            // no error. On mainnet this path only runs when the operator explicitly set
+            // INDEXER_ALLOW_LOCAL_PRICE_SOURCE=true (startup otherwise fails closed; see
+            // XChainIndexer.start); on testnet/regtest it is the normal single-host case. Warn
+            // once so a misconfiguration is still visible in logs.
             priceDb = db;
             if(!this._hubDbFallbackWarned){
                 this._hubDbFallbackWarned = true;
                 console.warn('WARNING: getFeeOraclePrices: no hub DB configured (HUB_DB_HOST/HUB_DB_NAME unset); ' +
                     'falling back to the local indexer DB for price_snapshots/oracle_prices. ' +
-                    'Expected for single-host deployments; on a distributed node this means price data may be stale or absent.');
+                    'Expected for single-host deployments; on a distributed node this means price data may be ' +
+                    'stale or absent. Set HUB_DB_HOST/HUB_DB_NAME, or INDEXER_ALLOW_LOCAL_PRICE_SOURCE=true to ' +
+                    'acknowledge an intentional single-host node.');
             }
         }
         let opts = { blockTime: refTime, maxAgeSeconds: maxAgeSeconds };
