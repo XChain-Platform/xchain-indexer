@@ -4389,7 +4389,169 @@ class Database {
         }
         args    = [coin, encryption_method, encryption_key, encrypted_message, plaintext_message, destination_id, status_id, action_index];
         results = await this.doQuery(query, args);
-    }        
+    }
+
+    // Create/Update a poll record (VOTE v0). Keyed by the create action_index,
+    // which is the poll's id. OPTIONS are stored as a JSON array, index-addressed
+    // by ballots. Defaults (max_selections=1, tally_mode=approval,
+    // weight_mode=balance) are applied by the handler before this is called.
+    async createPoll(data){
+        let action_index     = data['ACTION_INDEX'];
+        let block_index      = data['BLOCK_INDEX'];
+        let tick_id          = await this.createTicker(data['TICK']);
+        let status_id        = await this.createStatus(data['STATUS']);
+        let end_block        = data['END_BLOCK'];
+        let optionsArr       = String(data['OPTIONS']).split(',').map(o => o.trim());
+        let options          = JSON.stringify(optionsArr);
+        let max_selections   = data['MAX_SELECTIONS'];
+        let tally_mode       = data['TALLY_MODE'];
+        let weight_mode      = data['WEIGHT_MODE'];
+        let quorum           = data['QUORUM'];
+        let min_voters       = data['MIN_VOTERS'];
+        let min_vote_balance = data['MIN_VOTE_BALANCE'];
+        let decide_threshold = data['DECIDE_THRESHOLD'];
+        let question         = data['QUESTION'];
+        // INSERT/UPDATE keyed by action_index (poll definition is immutable, but
+        // reprocessing the same action must be idempotent)
+        let query   = `SELECT action_index FROM polls WHERE action_index=?`;
+        let results = await this.doQuery(query, [action_index]);
+        let exists  = (results.length > 0);
+        if(exists){
+            query = `UPDATE polls SET
+                        block_index=?, tick_id=?, end_block=?, options=?, max_selections=?,
+                        tally_mode=?, weight_mode=?, quorum=?, min_voters=?, min_vote_balance=?,
+                        decide_threshold=?, question=?, status_id=?
+                     WHERE action_index=?`;
+        } else {
+            query = `INSERT INTO polls
+                        (block_index, tick_id, end_block, options, max_selections,
+                         tally_mode, weight_mode, quorum, min_voters, min_vote_balance,
+                         decide_threshold, question, status_id, action_index)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+        }
+        let args = [block_index, tick_id, end_block, options, max_selections,
+                    tally_mode, weight_mode, quorum, min_voters, min_vote_balance,
+                    decide_threshold, question, status_id, action_index];
+        await this.doQuery(query, args);
+    }
+
+    // Fetch a poll definition row by its id (the VOTE v0 action_index). Returns
+    // null if no such poll exists.
+    async getPoll(pollIndex){
+        let results = await this.doQuery(`SELECT * FROM polls WHERE action_index=? LIMIT 1`, [pollIndex]);
+        if(!results || results.length === 0) return null;
+        return results[0];
+    }
+
+    // Write a voter's ballot (VOTE v1) as an atomic set. Wholesale last-write-wins:
+    // delete the voter's prior rows for this poll, then insert one row per selected
+    // option. Only called for a VALID ballot (an invalid one is a no-op on the
+    // voter's standing ballot). `selections` is [{choice, share}, ...].
+    async createBallot(data, selections){
+        let action_index     = data['ACTION_INDEX'];
+        let block_index      = data['BLOCK_INDEX'];
+        let poll_index       = data['POLL_REF'];
+        let voter_address_id = await this.createAddress(data['SOURCE']);
+        let status_id        = await this.createStatus(data['STATUS']);
+        let memo             = data['MEMO'];
+        await this.doQuery(`DELETE FROM votes WHERE poll_index=? AND voter_address_id=?`, [poll_index, voter_address_id]);
+        for(let sel of selections){
+            let query = `INSERT INTO votes
+                            (action_index, block_index, poll_index, voter_address_id, choice, share, memo, status_id)
+                         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`;
+            let args  = [action_index, block_index, poll_index, voter_address_id, sel.choice, sel.share, memo, status_id];
+            await this.doQuery(query, args);
+        }
+    }
+
+    // Compute a poll's tally deterministically (Phase 1 lazy tally; the same logic
+    // the system-injected VOTE v2 will freeze on-chain in Phase 2). Weight is the
+    // voter's balance at the measure block (default = the poll's close block);
+    // callers may pass the current tip for a provisional standing on an open poll.
+    // Enforces the close-time backing rule (a voter must still hold the token at
+    // the measure block) and the dust floor on participation counting.
+    async getPollTally(pollIndex, measureBlock=null){
+        let poll = await this.getPoll(pollIndex);
+        if(this.util.isNull(poll)) return null;
+        let end_block   = Number(poll.end_block);
+        if(this.util.isNull(measureBlock)) measureBlock = end_block;
+        measureBlock    = Math.min(Number(measureBlock), end_block);
+        let tick        = await this.getTicker(poll.tick_id);
+        let options     = JSON.parse(poll.options || '[]');
+        let optionCount = options.length;
+        let tally_mode  = poll.tally_mode  || 'approval';
+        let weight_mode = poll.weight_mode || 'balance';
+        let minVoteBal  = this.util.isNull(poll.min_vote_balance) ? '0' : String(poll.min_vote_balance);
+        // Close-block holders (deterministic, address-tiebroken); supply = sum
+        let holders = await this.getHolders(tick, measureBlock, null);
+        let supply  = '0';
+        for(let addr in holders) supply = this.util.bcadd(supply, holders[addr], 18);
+        // Current ballots for the poll, grouped by voter
+        let rows = await this.doQuery(
+            `SELECT a.address AS address, v.choice AS choice, v.share AS share
+               FROM votes v INNER JOIN index_addresses a ON (a.id=v.voter_address_id)
+              WHERE v.poll_index=?`, [pollIndex]);
+        let byVoter = {};
+        for(let r of rows){
+            if(this.util.isNull(byVoter[r.address])) byVoter[r.address] = [];
+            byVoter[r.address].push({ choice: Number(r.choice), share: this.util.isNull(r.share) ? '1' : String(r.share) });
+        }
+        let totals = [];
+        for(let i=0;i<optionCount;i++) totals.push('0');
+        let totalCountedWeight = '0';
+        let qualifyingVoters   = 0;
+        for(let addr in byVoter){
+            let closeBal = holders[addr];
+            // Hold-to-count: the ballot counts only if the voter still holds the token
+            if(this.util.isNull(closeBal) || !this.util.bcgt(closeBal, 0)) continue;
+            let weight = (weight_mode==='flat') ? '1' : closeBal;
+            // Participation gate counts a voter only above the dust floor
+            if(this.util.bcgte(closeBal, minVoteBal)) qualifyingVoters++;
+            let picks = byVoter[addr];
+            if(tally_mode==='split'){
+                let sumShares = '0';
+                for(let p of picks) sumShares = this.util.bcadd(sumShares, p.share, 18);
+                if(!this.util.bcgt(sumShares, 0)) continue;
+                for(let p of picks){
+                    if(p.choice < 0 || p.choice >= optionCount) continue;
+                    let portion = this.util.bcmul(weight, this.util.bcdiv(p.share, sumShares, 18), 18);
+                    totals[p.choice] = this.util.bcadd(totals[p.choice], portion, 18);
+                }
+            } else {
+                for(let p of picks){
+                    if(p.choice < 0 || p.choice >= optionCount) continue;
+                    totals[p.choice] = this.util.bcadd(totals[p.choice], weight, 18);
+                }
+            }
+            // Counted once per voter for the weight-quorum turnout fraction
+            totalCountedWeight = this.util.bcadd(totalCountedWeight, weight, 18);
+        }
+        // Winner: highest weight, lowest option index on a tie
+        let winning_option = null, best = '0';
+        for(let i=0;i<optionCount;i++)
+            if(this.util.bcgt(totals[i], best)){ best = totals[i]; winning_option = i; }
+        // Validity gates (both fractions of supply / counts; either may be unset)
+        let quorum_met = true, min_voters_met = true;
+        if(!this.util.isNull(poll.quorum) && this.util.bcgt(poll.quorum, 0)){
+            let turnout = this.util.bcgt(supply, 0) ? this.util.bcdiv(totalCountedWeight, supply, 18) : '0';
+            quorum_met  = this.util.bcgte(turnout, poll.quorum);
+        }
+        if(!this.util.isNull(poll.min_voters) && Number(poll.min_voters) > 0)
+            min_voters_met = (qualifyingVoters >= Number(poll.min_voters));
+        let passed = quorum_met && min_voters_met;
+        let latest = await this.getLatestBlockIndex();
+        let closed = (latest >= end_block);
+        let status = !passed ? 'failed_quorum' : (closed ? 'finalized' : 'open');
+        let optionResults = [];
+        for(let i=0;i<optionCount;i++)
+            optionResults.push({ index: i, label: options[i], weight: String(totals[i]) });
+        return {
+            poll_index: Number(pollIndex), tick, measure_block: measureBlock, end_block,
+            tally_mode, weight_mode, options: optionResults,
+            supply: String(supply), total_counted_weight: String(totalCountedWeight),
+            total_voters: qualifyingVoters, quorum_met, min_voters_met, winning_option, status
+        };
+    }
 
     // Create/Update record in `sleeps` table
     async createSleep(data){

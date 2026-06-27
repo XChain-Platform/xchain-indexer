@@ -1,0 +1,48 @@
+-- VOTE poll definitions. One row per VOTE v0 (create poll) action_index. The
+-- poll's identity IS its creating action_index (no caller-supplied id), matching
+-- how every other protocol object is keyed by its source action.
+--
+-- A poll is governed and decided by holders of one token (tick_id), which is both
+-- the electorate and the weight basis. Ballots live in `votes`, one row per
+-- (poll, voter, option). The finalization columns (winning_option ... onward) are
+-- written by the system-injected VOTE v2 in Phase 2; Phase 1 leaves them null and
+-- computes the tally lazily at read time (see db.getPollTally).
+--
+-- Spec: xchain-documentation/protocol/actions/VOTE.md
+DROP TABLE IF EXISTS polls;
+CREATE TABLE polls (
+    action_index            BIGINT UNSIGNED NOT NULL,   -- FK to actions (the VOTE v0 that created the poll); also the poll id
+    block_index             BIGINT UNSIGNED NOT NULL,   -- creation block (rollback key)
+    tick_id                 BIGINT UNSIGNED,            -- FK to index_tickers: electorate + weight token
+    end_block               BIGINT UNSIGNED,            -- latest close block (voting accepted while cast_block <= end_block)
+    options                 MEDIUMTEXT,                 -- JSON array of option labels, index-addressed by ballots
+    max_selections          SMALLINT UNSIGNED,          -- max distinct options one ballot may list (1 = single-choice)
+    tally_mode              ENUM('approval','split'),   -- approval = full weight per option; split = weight divided by per-option shares
+    weight_mode             ENUM('balance','stake','flat'), -- balance = close holdings; flat = one-address-one-vote (stake is Phase 2)
+    quorum                  VARCHAR(60),                -- optional weight gate: min (counted weight / close supply) fraction, e.g. '0.2'
+    min_voters              BIGINT UNSIGNED,            -- optional participation gate: min distinct qualifying voters
+    min_vote_balance        VARCHAR(60),                -- dust floor: a voter counts toward min_voters only if close balance >= this
+    decide_threshold        VARCHAR(60),                -- optional early-decide arm: fraction of supply an option must reach (Phase 2)
+    question                MEDIUMTEXT,                 -- inline question text or a FILE reference
+    -- lifecycle
+    poll_status             ENUM('open','finalized','failed_quorum') NOT NULL DEFAULT 'open', -- poll state (distinct from status_id)
+    -- finalization (written by VOTE v2 in Phase 2; null until then)
+    winning_option          SMALLINT UNSIGNED,          -- option index with highest weight (lowest index on tie); null if no winner
+    total_weight            VARCHAR(60),                -- total counted weight at close
+    total_voters            BIGINT UNSIGNED,            -- distinct qualifying voters at close
+    quorum_met              TINYINT UNSIGNED,           -- 1 if weight quorum satisfied
+    min_voters_met          TINYINT UNSIGNED,           -- 1 if participation gate satisfied
+    fail_reason             ENUM('quorum','min_voters','both'), -- why a poll terminated failed_quorum (null when passed)
+    decided_early           TINYINT UNSIGNED,           -- 1 if closed by decide_threshold before end_block
+    effective_close_block   BIGINT UNSIGNED,            -- block weights were measured at (end_block, or early-decide crossing block)
+    finalized_action_index  BIGINT UNSIGNED,            -- action_index of the VOTE v2 that finalized this poll
+    resolved_block          BIGINT UNSIGNED,            -- block finalization went terminal; reorg-rollback reset key
+    -- action validation
+    status_id               BIGINT UNSIGNED             -- FK to index_statuses (validation status of the create action)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
+
+CREATE UNIQUE INDEX action_index ON polls (action_index);
+CREATE        INDEX tick_id      ON polls (tick_id);
+CREATE        INDEX end_block    ON polls (end_block);
+CREATE        INDEX poll_status  ON polls (poll_status, end_block);
+CREATE        INDEX block_index  ON polls (block_index);

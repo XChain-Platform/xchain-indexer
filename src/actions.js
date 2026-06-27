@@ -62,6 +62,7 @@ const deploy             = require('./actions/deploy.js');
 const execute            = require('./actions/execute.js');
 const deposit            = require('./actions/deposit.js');
 const withdraw           = require('./actions/withdraw.js');
+const vote               = require('./actions/vote.js');
 
 // VM runtime
 let XChainVM;
@@ -192,6 +193,7 @@ class Actions {
         this.actionExecute          = new execute(this);
         this.actionDeposit          = new deposit(this);
         this.actionWithdraw         = new withdraw(this);
+        this.actionVote             = new vote(this);
 
         // Staking action instances
         this.actionStake            = new stake(this);
@@ -397,6 +399,7 @@ class Actions {
         if(action=='EXECUTE')            await this.actionExecute.parse(params, data, error);
         if(action=='DEPOSIT')            await this.actionDeposit.parse(params, data, error);
         if(action=='WITHDRAW')           await this.actionWithdraw.parse(params, data, error);
+        if(action=='VOTE')               await this.actionVote.parse(params, data, error);
 
         // Staking actions (DELEGATE handles both rotate v0/v1 and revoke v2/v3 internally)
         if(action=='STAKE')              await this.actionStake.parse(params, data, error);

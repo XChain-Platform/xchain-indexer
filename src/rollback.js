@@ -157,7 +157,15 @@ class Rollback {
             // row is keyed by its own action_index and never mutated (cooldown expiry is computed at
             // read time), so the generic action_index delete reverts orphaned binds/unbinds exactly.
             'token_controllers',
-            'address_controllers'
+            'address_controllers',
+            // VOTE governance: poll definitions (one row per VOTE v0) and ballots
+            // (one row per (poll, voter, option) on a VOTE v1). Both keyed by their
+            // writing action_index, so the generic delete reverts reorged polls and
+            // ballots. createBallot's delete-then-insert keeps the set consistent on
+            // replay; a reorg that removes a replacing ballot drops its rows and the
+            // prior ballot re-inserts when its block reprocesses.
+            'polls',
+            'votes'
         ];
 
         // Lookup tables that ARE rolled back (block-scoped, keyed by their block_index).

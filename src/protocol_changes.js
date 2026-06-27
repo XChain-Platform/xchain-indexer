@@ -114,6 +114,13 @@ class ProtocolChanges {
         // Publishable on any chain (DOGE recommended for low fees)
         this.addChange('PRICE',              '2.0.0',0,0,0,0,0,0);
 
+        // VOTE action: token-weighted governance polls. Single action with
+        // v0=create poll, v1=cast ballot (v2=system finalize is Phase 2).
+        // Genesis-active here for regtest/testnet prototyping; mainnet gets a
+        // coordinated flag-day timestamp before BTC activation.
+        // (See xchain-documentation/protocol/actions/VOTE.md)
+        this.addChange('VOTE',               '2.0.0',0,0,0,0,0,0);
+
         // External attestation framework: single ATTEST action with v0=request, v1=response, v2=expire
         // (See xchain-documentation/protocol/actions/ATTEST.md)
         this.addChange('ATTEST',             '2.0.0',0,0,0,0,0,0);
