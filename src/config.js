@@ -154,6 +154,11 @@ module.exports = {
         config['MAX_MESSAGE_LENGTH']     = 1048576; // 1 MB = 1,048,576 Characters
         config['MAX_MESSAGE_KEY_LENGTH'] = 1048576; // 1 MB = 1,048,576 Characters
 
+        // Minimum XCHAIN deposit a VOTE v0 poll creator must escrow (anti-spam,
+        // refunded on quorum / forfeited to DONATE1 on failed_quorum). '0' = no
+        // deposit required (the deposit is optional until a deployment raises this).
+        config['POLL_DEPOSIT_MIN'] = '0';
+
         // Define list of NUMBER fields
         config['NUMBER_FIELDS'] = [
             'ALLOW_LIST', 

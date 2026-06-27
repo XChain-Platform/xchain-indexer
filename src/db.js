@@ -4411,6 +4411,12 @@ class Database {
         let min_vote_balance = data['MIN_VOTE_BALANCE'];
         let decide_threshold = data['DECIDE_THRESHOLD'];
         let question         = data['QUESTION'];
+        // Creation deposit (anti-spam): _parseCreate normalizes DEPOSIT to a numeric
+        // string ('0' when none). Store the amount and the creator address id (the
+        // refund target) so VOTE v2 can release the escrow without re-deriving SOURCE.
+        let deposit_amount   = this.util.isNull(data['DEPOSIT']) ? '0' : String(data['DEPOSIT']);
+        let has_deposit      = this.util.bcgt(deposit_amount, 0);
+        let deposit_addr_id  = has_deposit ? await this.createAddress(data['SOURCE']) : null;
         // INSERT/UPDATE keyed by action_index (poll definition is immutable, but
         // reprocessing the same action must be idempotent)
         let query   = `SELECT action_index FROM polls WHERE action_index=?`;
@@ -4420,18 +4426,18 @@ class Database {
             query = `UPDATE polls SET
                         block_index=?, tick_id=?, end_block=?, options=?, max_selections=?,
                         tally_mode=?, weight_mode=?, quorum=?, min_voters=?, min_vote_balance=?,
-                        decide_threshold=?, question=?, status_id=?
+                        decide_threshold=?, question=?, deposit_amount=?, deposit_address_id=?, status_id=?
                      WHERE action_index=?`;
         } else {
             query = `INSERT INTO polls
                         (block_index, tick_id, end_block, options, max_selections,
                          tally_mode, weight_mode, quorum, min_voters, min_vote_balance,
-                         decide_threshold, question, status_id, action_index)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+                         decide_threshold, question, deposit_amount, deposit_address_id, status_id, action_index)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
         }
         let args = [block_index, tick_id, end_block, options, max_selections,
                     tally_mode, weight_mode, quorum, min_voters, min_vote_balance,
-                    decide_threshold, question, status_id, action_index];
+                    decide_threshold, question, deposit_amount, deposit_addr_id, status_id, action_index];
         await this.doQuery(query, args);
     }
 
@@ -4441,6 +4447,22 @@ class Database {
         let results = await this.doQuery(`SELECT * FROM polls WHERE action_index=? LIMIT 1`, [pollIndex]);
         if(!results || results.length === 0) return null;
         return results[0];
+    }
+
+    // Resolve a deterministic index_addresses id back to its address string. Used by
+    // VOTE v2 to find the deposit refund target (deposit_address_id was assigned via
+    // createAddress at creation, so it is in the deterministic set). Null if missing.
+    async getAddressById(id){
+        if(this.util.isNull(id)) return null;
+        let results = await this.doQuery(`SELECT address FROM index_addresses WHERE id=? LIMIT 1`, [id]);
+        return (results.length > 0 && !this.util.isNull(results[0].address)) ? String(results[0].address) : null;
+    }
+
+    // Mark a poll's creation deposit as released ('refunded' or 'forfeited'). Called
+    // by VOTE v2 after the escrow ledger change so a reprocessed finalize is a no-op
+    // (the escrow itself is idempotent via action_index, this records the outcome).
+    async setPollDepositResolved(pollIndex, resolved){
+        await this.doQuery(`UPDATE polls SET deposit_resolved=? WHERE action_index=?`, [resolved, pollIndex]);
     }
 
     // Record a VOTE v3 delegation set/clear as an append-only event row. A null

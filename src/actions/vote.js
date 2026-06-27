@@ -46,7 +46,7 @@ class Vote {
         // Define list of known FORMATS. v0 create + v1 ballot are user actions;
         // v2 finalize is system-injected only (the per-block sweep synthesizes it).
         this.formats = {};
-        this.formats[0] = 'VERSION|TICK|END_BLOCK|OPTIONS|MAX_SELECTIONS|TALLY_MODE|WEIGHT_MODE|QUORUM|MIN_VOTERS|MIN_VOTE_BALANCE|DECIDE_THRESHOLD|QUESTION';
+        this.formats[0] = 'VERSION|TICK|END_BLOCK|OPTIONS|MAX_SELECTIONS|TALLY_MODE|WEIGHT_MODE|QUORUM|MIN_VOTERS|MIN_VOTE_BALANCE|DECIDE_THRESHOLD|QUESTION|DEPOSIT';
         this.formats[1] = 'VERSION|POLL_REF|BALLOT|MEMO';
         this.formats[2] = 'VERSION|POLL_REF';
         this.formats[3] = 'VERSION|TICK|DELEGATE_TO|MEMO';
@@ -180,6 +180,31 @@ class Vote {
         if(!error && !this.util.isNull(data['QUESTION']) && String(data['QUESTION']).length > this.config['MAX_MESSAGE_LENGTH'])
             error = 'invalid: QUESTION (length)';
 
+        // DEPOSIT (optional anti-spam escrow, Section 15): GAS the creator locks at
+        // creation, refunded on 'finalized' or forfeited to the DONATE1 treasury on
+        // 'failed_quorum' (released by VOTE v2). Normalize to a numeric string ('0'
+        // = none) and enforce the POLL_DEPOSIT_MIN floor. The actual escrow happens
+        // after the poll row is written, only when valid.
+        let gas        = this.config['GAS'];
+        let depositMin = this.config['POLL_DEPOSIT_MIN'] || '0';
+        let deposit    = this.util.isNull(data['DEPOSIT']) ? '0' : String(data['DEPOSIT']).trim();
+        if(!error){
+            if(!this.util.isNumeric(deposit) || this.util.bclt(deposit, 0))
+                error = 'invalid: DEPOSIT (non-negative amount)';
+            else if(this.util.bclt(deposit, depositMin))
+                error = 'invalid: DEPOSIT (below POLL_DEPOSIT_MIN ' + depositMin + ')';
+        }
+        // Funding check: SOURCE must hold the DEPOSIT in GAS, read at
+        // (block, action) so accept/reject is identical across validators.
+        if(!error && this.util.bcgt(deposit, 0)){
+            let gasInfo  = await this.indexerDb.getTokenInfo(gas, block_index, action_index);
+            let balances = await this.indexerDb.getAddressBalances(data['SOURCE'], null, block_index, action_index);
+            if(!gasInfo || !this.util.hasBalance(balances, gasInfo['TICK_ID'], deposit))
+                error = 'invalid: insufficient funds (DEPOSIT)';
+        }
+        // Carry the normalized deposit so createPoll stores a clean '0' when absent.
+        data['DEPOSIT'] = deposit;
+
         // Determine final status
         let status = (error) ? error : 'valid';
         data['STATUS'] = status;
@@ -190,6 +215,20 @@ class Vote {
         // (the action itself is still recorded in `actions` with its status)
         if(!error)
             await this.indexerDb.createPoll(data);
+
+        // Escrow the deposit from SOURCE (debit + escrow at this v0 action_index;
+        // released by VOTE v2 finalize). Same generic ledger path as ATTEST's fee
+        // escrow, so rollback deletes by action_index with no special case.
+        if(!error && this.util.bcgt(deposit, 0)){
+            this.util.addAddressTicker(data['SOURCE'], gas);
+            let debits  = [[gas, deposit, data['SOURCE']]];
+            let escrows = [[gas, deposit, data['SOURCE']]];
+            await this.util.processTransactionLedgerChanges(this.indexerDb, data, [], debits, escrows);
+            let tickers   = this.util.getTickersList(),
+                addresses = Object.keys(this.util.getAddressesList());
+            await this.indexerDb.updateBalances(addresses);
+            await this.indexerDb.updateTokens(tickers);
+        }
 
         // Store the SOURCE/TICK in addresses+tickers list, create action mappings
         this.util.addAddressTicker(data['SOURCE'], data['TICK']);
@@ -326,6 +365,11 @@ class Vote {
         // Compute + freeze the result (reuses getPollTally for the math).
         let result = await this.indexerDb.finalizePoll(data);
 
+        // Release any creation deposit per the terminal outcome: refund the creator
+        // on a real result, forfeit to the DONATE1 treasury on failed_quorum.
+        if(result)
+            await this._settleDeposit(poll, data, result.poll_status);
+
         let summary = result
             ? (result.poll_status + (result.fail_reason ? '/' + result.fail_reason : '') +
                ' winner=' + (this.util.isNull(result.winning_option) ? 'none' : result.winning_option) +
@@ -335,6 +379,50 @@ class Vote {
                     data['EFFECTIVE_CLOSE_BLOCK'] + ' : ' + summary);
 
         await this.mapper.createMappings(data);
+    }
+
+    /*****************************************************************
+     * Release a poll's creation deposit at finalization.
+     *
+     * Refunds the escrowed GAS to the creator on a real outcome ('finalized'), or
+     * forfeits it to the DONATE1 treasury when the poll dies for lack of
+     * participation ('failed_quorum'). A negative escrow row releases the hold (the
+     * order_expire / attest_settle idiom); the matching credit routes the funds.
+     * No-op when the poll carried no deposit. deposit_resolved records the outcome
+     * so a reprocessed finalize cannot double-release.
+     ****************************************************************/
+    async _settleDeposit(poll, data, terminalStatus){
+        let deposit = String((poll && poll.deposit_amount) || '0');
+        if(!this.util.bcgt(deposit, '0')) return;
+        if(!this.util.isNull(poll.deposit_resolved)) return; // already released
+
+        let creator = await this.indexerDb.getAddressById(poll.deposit_address_id);
+        if(this.util.isNull(creator)){
+            console.warn('\t VOTE deposit : missing creator for poll ' + poll.action_index + ', escrow left held');
+            return;
+        }
+
+        let gas      = this.config['GAS'];
+        let refunded = (terminalStatus !== 'failed_quorum');
+        let target   = refunded ? creator : this.config['ADDRESS']['DONATE1'];
+
+        // Negative escrow releases the hold against the creator; the credit pays the
+        // refund target (creator on refund, treasury on forfeit).
+        let escrows = [[gas, this.util.bcmul(deposit, '-1', 8), creator]];
+        let credits = [[gas, deposit, target]];
+        this.util.addAddressTicker(creator, gas);
+        this.util.addAddressTicker(target, gas);
+
+        await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, [], escrows);
+        let tickers   = this.util.getTickersList(),
+            addresses = Object.keys(this.util.getAddressesList());
+        await this.indexerDb.updateBalances(addresses);
+        await this.indexerDb.updateTokens(tickers);
+        await this.indexerDb.setPollDepositResolved(poll.action_index, refunded ? 'refunded' : 'forfeited');
+
+        console.log("\t VOTE deposit : " + deposit + ' ' + gas + ' ' +
+                    (refunded ? 'refunded to creator' : 'forfeited to DONATE1') +
+                    ' [poll ' + poll.action_index + ']');
     }
 
     /*****************************************************************

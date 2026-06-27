@@ -37,6 +37,11 @@ CREATE TABLE polls (
     effective_close_block   BIGINT UNSIGNED,            -- block weights were measured at (end_block, or early-decide crossing block)
     finalized_action_index  BIGINT UNSIGNED,            -- action_index of the VOTE v2 that finalized this poll
     resolved_block          BIGINT UNSIGNED,            -- block finalization went terminal; reorg-rollback reset key
+    -- creation deposit (anti-spam): XCHAIN escrowed at v0, refunded to the creator
+    -- on 'finalized' or forfeited to the DONATE1 treasury on 'failed_quorum' by v2
+    deposit_amount          VARCHAR(60),                -- XCHAIN amount escrowed at creation (null/0 = none)
+    deposit_address_id      BIGINT UNSIGNED,            -- FK to index_addresses: the creator who paid the deposit (refund target)
+    deposit_resolved        ENUM('refunded','forfeited'), -- set by v2 finalization once the deposit is released
     -- action validation
     status_id               BIGINT UNSIGNED             -- FK to index_statuses (validation status of the create action)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
