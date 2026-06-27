@@ -904,13 +904,19 @@ class Execute {
         // Build positional params array for the handler
         let actionParams = this.buildActionParams(action, params);
 
+        // Most emittable actions are version-0 only, but VOTE is sub-typed by version
+        // (0 = create poll, 1 = cast ballot) and its handler dispatches on FORMAT. Carry
+        // the emitted version into FORMAT so a contract-cast ballot isn't mis-parsed as a
+        // poll creation (which then fails the create-only "must hold TICK" gate).
+        let emissionFormat = (action === 'VOTE') ? (Number(params.version) || 0) : 0;
+
         // Create a real action_index for this emission
         let emissionActionIndex = await this.indexerDb.createActionIndex({
             ACTION:      action,
             BLOCK_INDEX: executionData['BLOCK_INDEX'],
             TX_INDEX:    executionData['TX_INDEX'],
             TX_VOUT:     executionData['TX_VOUT'],
-            FORMAT:      0,
+            FORMAT:      emissionFormat,
             // The emission's TRUE source is the contract, not the EXECUTE caller. Persisting it
             // here is what lets refunds/ownership/auth resolve back to the contract later.
             SOURCE:      contractAddress
@@ -926,7 +932,7 @@ class Execute {
             TX_INDEX:           executionData['TX_INDEX'],
             TX_HASH:            executionData['TX_HASH'],
             TX_VOUT:            executionData['TX_VOUT'],
-            FORMAT:             0,
+            FORMAT:             emissionFormat,
             IS_EMISSION:        true,
             // Propagated from a guard run's emission context (false for normal EXECUTE emissions,
             // which ARE still subject to their token's controller). Lets maybeRunControllerGuard
@@ -995,6 +1001,7 @@ class Execute {
             'BROADCAST':  this.actions.actionBroadcast,
             'MESSAGE':    this.actions.actionMessage,
             'ATTEST':     this.actions.actionAttest,
+            'VOTE':       this.actions.actionVote,
             // Cross-contract call: the callee EXECUTE routes through this same
             // handler class (re-entrant; parse() keeps no instance state).
             'EXECUTE':    this.actions.actionExecute,
@@ -1008,6 +1015,18 @@ class Execute {
     // MUST match the format strings in each handler's this.formats[0].
     buildActionParams(action, params){
         switch(action){
+            case 'VOTE':
+                // Contracts may emit v0 (create poll) and v1 (cast ballot) only; the
+                // emit API (gateway-emit.js) is the choke point that forbids v2/v3.
+                if(Number(params.version) === 1)
+                    // FORMAT: VERSION|POLL_REF|BALLOT|MEMO
+                    return [1, params.pollRef, params.ballot, params.memo || ''];
+                // FORMAT: VERSION|TICK|END_BLOCK|OPTIONS|MAX_SELECTIONS|TALLY_MODE|WEIGHT_MODE|QUORUM|MIN_VOTERS|MIN_VOTE_BALANCE|DECIDE_THRESHOLD|QUESTION|DEPOSIT|CALLBACK_CONTRACT|CALLBACK_METHOD|CALLBACK_PARAMS|CALLBACK_ON|GAS_ESCROW
+                return [0, params.tick, params.endBlock, params.options, params.maxSelections || '',
+                        params.tallyMode || '', params.weightMode || '', params.quorum || '', params.minVoters || '',
+                        params.minVoteBalance || '', params.decideThreshold || '', params.question || '', params.deposit || '',
+                        params.callbackContract || '', params.callbackMethod || '', params.callbackParams || '',
+                        params.callbackOn || '', params.gasEscrow || ''];
             case 'SEND':
                 // FORMAT: VERSION|TICK|AMOUNT|DESTINATION|MEMO
                 return [0, params.tick, params.quantity, params.destination, params.memo || ''];

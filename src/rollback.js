@@ -545,15 +545,17 @@ class Rollback {
                 // re-synthesizes the v2 and a reorged node diverges from a fresh
                 // sync. Keyed on resolved_block (stamped at finalize) so it re-opens
                 // and re-evaluates early-decide on replay. Mirrors the ATTEST reset.
-                // deposit_resolved is reset too: the v2 escrow release (a credits/
-                // escrows ledger change at the v2 action_index) is deleted generically
-                // with the orphaned range, so the re-synthesized v2 must re-release.
+                // deposit_resolved + callback_execute_action_index reset too: the v2
+                // escrow release and the injected binding-callback EXECUTE (both at the
+                // v2 action_index) are deleted generically with the orphaned range, so
+                // the re-synthesized v2 must re-release the escrow and re-fire the
+                // callback on replay.
                 query = `UPDATE polls
                             SET poll_status = 'open', winning_option = NULL, total_weight = NULL,
                                 total_voters = NULL, quorum_met = NULL, min_voters_met = NULL,
                                 fail_reason = NULL, decided_early = NULL, effective_close_block = NULL,
                                 finalized_action_index = NULL, resolved_block = NULL,
-                                deposit_resolved = NULL
+                                deposit_resolved = NULL, callback_execute_action_index = NULL
                             WHERE poll_status IN ('finalized', 'failed_quorum')
                               AND resolved_block >= ?`;
                 args  = [block_index];

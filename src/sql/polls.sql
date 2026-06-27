@@ -42,6 +42,15 @@ CREATE TABLE polls (
     deposit_amount          VARCHAR(60),                -- XCHAIN amount escrowed at creation (null/0 = none)
     deposit_address_id      BIGINT UNSIGNED,            -- FK to index_addresses: the creator who paid the deposit (refund target)
     deposit_resolved        ENUM('refunded','forfeited'), -- set by v2 finalization once the deposit is released
+    -- binding poll / callback-on-finalize (optional; null = a signaling poll):
+    -- v2 finalization fires CALLBACK_METHOD on CALLBACK_CONTRACT with the result,
+    -- turning a decided poll into an on-chain effect (mirrors ATTEST's callback)
+    callback_contract_index BIGINT UNSIGNED,            -- FK to contracts: the contract v2 invokes on finalization
+    callback_method         VARCHAR(64),                -- method name on that contract
+    callback_params         MEDIUMTEXT,                 -- JSON array of developer params echoed to the callback
+    callback_on             ENUM('pass','always'),      -- pass = only on a finalized win; always = every finalization
+    gas_escrow              VARCHAR(60),                -- XCHAIN escrowed at v0 to back the callback EXECUTE (refunded at finalize)
+    callback_execute_action_index BIGINT UNSIGNED,      -- action_index of the EXECUTE v2 injected (set when fired)
     -- action validation
     status_id               BIGINT UNSIGNED             -- FK to index_statuses (validation status of the create action)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;

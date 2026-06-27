@@ -46,7 +46,7 @@ class Vote {
         // Define list of known FORMATS. v0 create + v1 ballot are user actions;
         // v2 finalize is system-injected only (the per-block sweep synthesizes it).
         this.formats = {};
-        this.formats[0] = 'VERSION|TICK|END_BLOCK|OPTIONS|MAX_SELECTIONS|TALLY_MODE|WEIGHT_MODE|QUORUM|MIN_VOTERS|MIN_VOTE_BALANCE|DECIDE_THRESHOLD|QUESTION|DEPOSIT';
+        this.formats[0] = 'VERSION|TICK|END_BLOCK|OPTIONS|MAX_SELECTIONS|TALLY_MODE|WEIGHT_MODE|QUORUM|MIN_VOTERS|MIN_VOTE_BALANCE|DECIDE_THRESHOLD|QUESTION|DEPOSIT|CALLBACK_CONTRACT|CALLBACK_METHOD|CALLBACK_PARAMS|CALLBACK_ON|GAS_ESCROW';
         this.formats[1] = 'VERSION|POLL_REF|BALLOT|MEMO';
         this.formats[2] = 'VERSION|POLL_REF';
         this.formats[3] = 'VERSION|TICK|DELEGATE_TO|MEMO';
@@ -205,6 +205,58 @@ class Vote {
         // Carry the normalized deposit so createPoll stores a clean '0' when absent.
         data['DEPOSIT'] = deposit;
 
+        // Binding poll / callback-on-finalize (optional, Section 14): a poll may name
+        // a contract method that v2 finalization invokes with the result. Blank
+        // CALLBACK_CONTRACT = a signaling poll. When set, the method + firing rule are
+        // validated here; GAS_ESCROW (optional XCHAIN) is escrowed below alongside the
+        // deposit. Mirrors ATTEST's callback_method / gas_escrow.
+        let binding   = !error && !this.util.isNull(data['CALLBACK_CONTRACT']) && String(data['CALLBACK_CONTRACT']).trim() !== '';
+        let gasEscrow = '0';
+        if(!error && binding){
+            if(!this.util.isNumeric(data['CALLBACK_CONTRACT'])){
+                error = 'invalid: CALLBACK_CONTRACT (format)';
+            } else {
+                let contract = await this.indexerDb.getContract(parseInt(data['CALLBACK_CONTRACT']));
+                if(this.util.isNull(contract))
+                    error = 'invalid: CALLBACK_CONTRACT (unknown contract)';
+            }
+            // CALLBACK_METHOD required and bounded (matches ATTEST's 64-char cap).
+            if(!error && (this.util.isNull(data['CALLBACK_METHOD']) || String(data['CALLBACK_METHOD']).trim() === ''))
+                error = 'invalid: CALLBACK_METHOD (required for a binding poll)';
+            if(!error && String(data['CALLBACK_METHOD']).length > 64)
+                error = 'invalid: CALLBACK_METHOD (length)';
+            // CALLBACK_ON: default 'pass' (fire only on a finalized win); 'always'
+            // fires on every finalization including failed_quorum.
+            if(this.util.isNull(data['CALLBACK_ON'])) data['CALLBACK_ON'] = 'pass';
+            if(!error && !['pass','always'].includes(data['CALLBACK_ON']))
+                error = 'invalid: CALLBACK_ON (pass|always)';
+            // CALLBACK_PARAMS (optional): must be a JSON array if present.
+            if(!error && !this.util.isNull(data['CALLBACK_PARAMS']) && String(data['CALLBACK_PARAMS']).trim() !== ''){
+                let ok = false;
+                try { ok = Array.isArray(JSON.parse(data['CALLBACK_PARAMS'])); } catch(e){ ok = false; }
+                if(!ok) error = 'invalid: CALLBACK_PARAMS (must be a JSON array)';
+            }
+            // GAS_ESCROW (optional): XCHAIN the creator locks to back the callback
+            // EXECUTE. Refunded to the creator at finalization (precise gas-cost
+            // metering from the escrow is deferred, mirroring ATTEST gas_escrow).
+            gasEscrow = this.util.isNull(data['GAS_ESCROW']) ? '0' : String(data['GAS_ESCROW']).trim();
+            if(!error && (!this.util.isNumeric(gasEscrow) || this.util.bclt(gasEscrow, 0)))
+                error = 'invalid: GAS_ESCROW (non-negative amount)';
+            // Funding check covers DEPOSIT + GAS_ESCROW together (both in GAS).
+            if(!error && this.util.bcgt(gasEscrow, 0)){
+                let need     = this.util.bcadd(deposit, gasEscrow, 8);
+                let gasInfo  = await this.indexerDb.getTokenInfo(gas, block_index, action_index);
+                let balances = await this.indexerDb.getAddressBalances(data['SOURCE'], null, block_index, action_index);
+                if(!gasInfo || !this.util.hasBalance(balances, gasInfo['TICK_ID'], need))
+                    error = 'invalid: insufficient funds (GAS_ESCROW)';
+            }
+        }
+        // A non-binding poll must not carry callback fields with content.
+        if(!error && !binding && !this.util.isNull(data['GAS_ESCROW']) && this.util.bcgt(String(data['GAS_ESCROW']).trim() || '0', 0))
+            error = 'invalid: GAS_ESCROW (set without CALLBACK_CONTRACT)';
+        data['GAS_ESCROW']       = binding ? gasEscrow : '0';
+        data['IS_BINDING']       = binding;
+
         // Determine final status
         let status = (error) ? error : 'valid';
         data['STATUS'] = status;
@@ -216,13 +268,15 @@ class Vote {
         if(!error)
             await this.indexerDb.createPoll(data);
 
-        // Escrow the deposit from SOURCE (debit + escrow at this v0 action_index;
-        // released by VOTE v2 finalize). Same generic ledger path as ATTEST's fee
-        // escrow, so rollback deletes by action_index with no special case.
-        if(!error && this.util.bcgt(deposit, 0)){
+        // Escrow the creator's locked GAS (deposit + any binding-poll gas_escrow)
+        // at this v0 action_index; released by VOTE v2 finalize. One combined escrow
+        // row (both are GAS from SOURCE); v2 routes the credits per kind. Same generic
+        // ledger path as ATTEST's fee escrow, so rollback deletes by action_index.
+        let lockTotal = this.util.bcadd(deposit, data['GAS_ESCROW'], 8);
+        if(!error && this.util.bcgt(lockTotal, 0)){
             this.util.addAddressTicker(data['SOURCE'], gas);
-            let debits  = [[gas, deposit, data['SOURCE']]];
-            let escrows = [[gas, deposit, data['SOURCE']]];
+            let debits  = [[gas, lockTotal, data['SOURCE']]];
+            let escrows = [[gas, lockTotal, data['SOURCE']]];
             await this.util.processTransactionLedgerChanges(this.indexerDb, data, [], debits, escrows);
             let tickers   = this.util.getTickersList(),
                 addresses = Object.keys(this.util.getAddressesList());
@@ -370,6 +424,18 @@ class Vote {
         if(result)
             await this._settleDeposit(poll, data, result.poll_status);
 
+        // Binding poll (Section 14): fire the contract callback when its CALLBACK_ON
+        // gate is met - 'always' on any finalization, 'pass' only on a finalized win.
+        // A failed callback does NOT un-finalize the poll (see _injectCallbackExecute).
+        if(result && !this.util.isNull(poll.callback_contract_index)){
+            let fires = (poll.callback_on === 'always') ||
+                        (result.poll_status === 'finalized' && !this.util.isNull(result.winning_option));
+            if(fires){
+                let cbIndex = await this._injectCallbackExecute(poll, data, result);
+                if(cbIndex) await this.indexerDb.setPollCallbackIndex(poll.action_index, cbIndex);
+            }
+        }
+
         let summary = result
             ? (result.poll_status + (result.fail_reason ? '/' + result.fail_reason : '') +
                ' winner=' + (this.util.isNull(result.winning_option) ? 'none' : result.winning_option) +
@@ -392,26 +458,34 @@ class Vote {
      * so a reprocessed finalize cannot double-release.
      ****************************************************************/
     async _settleDeposit(poll, data, terminalStatus){
-        let deposit = String((poll && poll.deposit_amount) || '0');
-        if(!this.util.bcgt(deposit, '0')) return;
+        let deposit   = String((poll && poll.deposit_amount) || '0');
+        let gasEscrow = String((poll && poll.gas_escrow) || '0');
+        let held      = this.util.bcadd(deposit, gasEscrow, 8); // combined v0 escrow
+        if(!this.util.bcgt(held, '0')) return;
         if(!this.util.isNull(poll.deposit_resolved)) return; // already released
 
         let creator = await this.indexerDb.getAddressById(poll.deposit_address_id);
         if(this.util.isNull(creator)){
-            console.warn('\t VOTE deposit : missing creator for poll ' + poll.action_index + ', escrow left held');
+            console.warn('\t VOTE escrow : missing creator for poll ' + poll.action_index + ', escrow left held');
             return;
         }
 
-        let gas      = this.config['GAS'];
-        let refunded = (terminalStatus !== 'failed_quorum');
-        let target   = refunded ? creator : this.config['ADDRESS']['DONATE1'];
-
-        // Negative escrow releases the hold against the creator; the credit pays the
-        // refund target (creator on refund, treasury on forfeit).
-        let escrows = [[gas, this.util.bcmul(deposit, '-1', 8), creator]];
-        let credits = [[gas, deposit, target]];
+        let gas       = this.config['GAS'];
+        let refunded  = (terminalStatus !== 'failed_quorum');
+        // Release the whole v0 hold (one negative escrow row) and route the credits:
+        // the deposit refunds the creator on a finalized win or forfeits to DONATE1 on
+        // failed_quorum; the gas_escrow ALWAYS refunds the creator (the callback's
+        // backing, not at risk). Precise gas-cost metering is deferred (ATTEST parity).
+        let escrows = [[gas, this.util.bcmul(held, '-1', 8), creator]];
+        let credits = [];
         this.util.addAddressTicker(creator, gas);
-        this.util.addAddressTicker(target, gas);
+        if(this.util.bcgt(deposit, '0')){
+            let depTarget = refunded ? creator : this.config['ADDRESS']['DONATE1'];
+            this.util.addAddressTicker(depTarget, gas);
+            credits.push([gas, deposit, depTarget]);
+        }
+        if(this.util.bcgt(gasEscrow, '0'))
+            credits.push([gas, gasEscrow, creator]);
 
         await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, [], escrows);
         let tickers   = this.util.getTickersList(),
@@ -420,9 +494,82 @@ class Vote {
         await this.indexerDb.updateTokens(tickers);
         await this.indexerDb.setPollDepositResolved(poll.action_index, refunded ? 'refunded' : 'forfeited');
 
-        console.log("\t VOTE deposit : " + deposit + ' ' + gas + ' ' +
-                    (refunded ? 'refunded to creator' : 'forfeited to DONATE1') +
-                    ' [poll ' + poll.action_index + ']');
+        console.log("\t VOTE escrow : poll " + poll.action_index + ' released ' + held + ' ' + gas +
+                    ' (deposit ' + deposit + (refunded ? ' refund' : ' forfeit') + ', gas_escrow ' + gasEscrow + ' refund)');
+    }
+
+    /*****************************************************************
+     * Binding poll: inject the system EXECUTE that runs the poll's callback.
+     *
+     * Mirrors ATTEST's synthetic-v2 callback injection. The poll's own result is
+     * NOT yet visible to xchain.getPollResult inside the callback (the visibility
+     * gate is resolved_block < block, and this fires AT the finalization block), so
+     * the result is delivered as positional EXECUTE params the contract reads via
+     * xchain.getInputParam(i). The callback runs as the target contract itself
+     * (SOURCE = contract address). A callback that reverts, runs out of gas, or
+     * throws does NOT un-finalize the poll: the savepoint isolates its effects and
+     * the recorded poll result stands.
+     ****************************************************************/
+    async _injectCallbackExecute(poll, data, result){
+        if(!this.actions.actionExecute) return null;
+
+        let callbackParams = [];
+        if(poll.callback_params){
+            try { let parsed = JSON.parse(poll.callback_params); if(Array.isArray(parsed)) callbackParams = parsed; }
+            catch(e){ callbackParams = []; }
+        }
+
+        // Callback signature: [pollIndex, status, winning_option, total_weight,
+        // total_voters, quorum_met, min_voters_met, ...originalCallbackParams].
+        let callbackArgs = [
+            String(poll.action_index),
+            String(result.poll_status),
+            this.util.isNull(result.winning_option) ? '' : String(result.winning_option),
+            String(this.util.isNull(result.total_counted_weight) ? '0' : result.total_counted_weight),
+            String(this.util.isNull(result.total_voters) ? '0' : result.total_voters),
+            result.quorum_met ? '1' : '0',
+            result.min_voters_met ? '1' : '0',
+            ...callbackParams.map(String)
+        ];
+
+        // Positional EXECUTE format: VERSION|CONTRACT_ACTION_INDEX|METHOD|PARAMS...
+        let actionParams = [0, poll.callback_contract_index, poll.callback_method, ...callbackArgs];
+
+        let chain = this.config['CHAIN'];
+        let emissionActionIndex = await this.indexerDb.createActionIndex({
+            ACTION:      'EXECUTE',
+            BLOCK_INDEX: data['BLOCK_INDEX'],
+            FORMAT:      0,
+            SOURCE:      'C:' + chain + ':' + poll.callback_contract_index
+        }, true);
+
+        let emissionData = {
+            ACTION_INDEX: emissionActionIndex,
+            SOURCE:       'C:' + chain + ':' + poll.callback_contract_index,
+            FEE_PAYER:    'C:' + chain + ':' + poll.callback_contract_index,
+            BLOCK_INDEX:  data['BLOCK_INDEX'],
+            BLOCK_TIME:   data['BLOCK_TIME'],
+            FORMAT:       0,
+            IS_EMISSION:  true,
+            EMITTER:      data['ACTION_INDEX']
+        };
+
+        let savepoint = await this.indexerDb.createSavepoint('vote_callback_' + parseInt(poll.action_index));
+        try {
+            await this.actions.actionExecute.parse(actionParams, emissionData, null);
+            if(emissionData['STATUS'] && emissionData['STATUS'] !== 'valid')
+                console.warn('\t VOTE callback : execute non-valid (' + emissionData['STATUS'] + '), poll result stands');
+            await this.indexerDb.releaseSavepoint(savepoint);
+            console.log("\t VOTE callback : poll " + poll.action_index + ' -> contract ' +
+                        poll.callback_contract_index + '.' + poll.callback_method + ' (execute ' + emissionActionIndex + ')');
+            return emissionActionIndex;
+        } catch(e){
+            // A throwing callback must not brick the finalized result: roll back only
+            // the callback's effects and keep the poll terminal.
+            await this.indexerDb.rollbackToSavepoint(savepoint);
+            console.warn('\t VOTE callback : execute threw (' + e.message + '), poll result stands');
+            return null;
+        }
     }
 
     /*****************************************************************

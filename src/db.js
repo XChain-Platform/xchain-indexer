@@ -4415,8 +4415,18 @@ class Database {
         // string ('0' when none). Store the amount and the creator address id (the
         // refund target) so VOTE v2 can release the escrow without re-deriving SOURCE.
         let deposit_amount   = this.util.isNull(data['DEPOSIT']) ? '0' : String(data['DEPOSIT']);
-        let has_deposit      = this.util.bcgt(deposit_amount, 0);
-        let deposit_addr_id  = has_deposit ? await this.createAddress(data['SOURCE']) : null;
+        // Binding-poll callback fields (null on a signaling poll). callback_params is
+        // stored as the raw JSON array string; gas_escrow defaults to '0'.
+        let binding          = !this.util.isNull(data['CALLBACK_CONTRACT']) && String(data['CALLBACK_CONTRACT']).trim() !== '';
+        let cb_contract      = binding ? parseInt(data['CALLBACK_CONTRACT']) : null;
+        let cb_method        = binding ? data['CALLBACK_METHOD'] : null;
+        let cb_params        = binding ? (this.util.isNull(data['CALLBACK_PARAMS']) ? null : String(data['CALLBACK_PARAMS'])) : null;
+        let cb_on            = binding ? (data['CALLBACK_ON'] || 'pass') : null;
+        let gas_escrow       = binding ? (this.util.isNull(data['GAS_ESCROW']) ? '0' : String(data['GAS_ESCROW'])) : null;
+        // deposit_address_id is the escrow PAYER (= creator), stored whenever any GAS
+        // is locked (deposit OR gas_escrow) so v2 can resolve the refund target.
+        let has_escrow       = this.util.bcgt(deposit_amount, 0) || (binding && this.util.bcgt(gas_escrow, 0));
+        let deposit_addr_id  = has_escrow ? await this.createAddress(data['SOURCE']) : null;
         // INSERT/UPDATE keyed by action_index (poll definition is immutable, but
         // reprocessing the same action must be idempotent)
         let query   = `SELECT action_index FROM polls WHERE action_index=?`;
@@ -4426,18 +4436,23 @@ class Database {
             query = `UPDATE polls SET
                         block_index=?, tick_id=?, end_block=?, options=?, max_selections=?,
                         tally_mode=?, weight_mode=?, quorum=?, min_voters=?, min_vote_balance=?,
-                        decide_threshold=?, question=?, deposit_amount=?, deposit_address_id=?, status_id=?
+                        decide_threshold=?, question=?, deposit_amount=?, deposit_address_id=?,
+                        callback_contract_index=?, callback_method=?, callback_params=?,
+                        callback_on=?, gas_escrow=?, status_id=?
                      WHERE action_index=?`;
         } else {
             query = `INSERT INTO polls
                         (block_index, tick_id, end_block, options, max_selections,
                          tally_mode, weight_mode, quorum, min_voters, min_vote_balance,
-                         decide_threshold, question, deposit_amount, deposit_address_id, status_id, action_index)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+                         decide_threshold, question, deposit_amount, deposit_address_id,
+                         callback_contract_index, callback_method, callback_params,
+                         callback_on, gas_escrow, status_id, action_index)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
         }
         let args = [block_index, tick_id, end_block, options, max_selections,
                     tally_mode, weight_mode, quorum, min_voters, min_vote_balance,
-                    decide_threshold, question, deposit_amount, deposit_addr_id, status_id, action_index];
+                    decide_threshold, question, deposit_amount, deposit_addr_id,
+                    cb_contract, cb_method, cb_params, cb_on, gas_escrow, status_id, action_index];
         await this.doQuery(query, args);
     }
 
@@ -4463,6 +4478,12 @@ class Database {
     // (the escrow itself is idempotent via action_index, this records the outcome).
     async setPollDepositResolved(pollIndex, resolved){
         await this.doQuery(`UPDATE polls SET deposit_resolved=? WHERE action_index=?`, [resolved, pollIndex]);
+    }
+
+    // Record the action_index of the EXECUTE that VOTE v2 injected for a binding
+    // poll's callback. Cleared on rollback re-open so a re-synthesized v2 re-fires.
+    async setPollCallbackIndex(pollIndex, executeActionIndex){
+        await this.doQuery(`UPDATE polls SET callback_execute_action_index=? WHERE action_index=?`, [executeActionIndex, pollIndex]);
     }
 
     // Record a VOTE v3 delegation set/clear as an append-only event row. A null
