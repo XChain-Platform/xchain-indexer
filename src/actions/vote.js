@@ -43,10 +43,12 @@ class Vote {
         this.util      = action.util;
         this.mapper    = action.mapper;
 
-        // Define list of known FORMATS (Phase 1 implements v0 create + v1 ballot)
+        // Define list of known FORMATS. v0 create + v1 ballot are user actions;
+        // v2 finalize is system-injected only (the per-block sweep synthesizes it).
         this.formats = {};
         this.formats[0] = 'VERSION|TICK|END_BLOCK|OPTIONS|MAX_SELECTIONS|TALLY_MODE|WEIGHT_MODE|QUORUM|MIN_VOTERS|MIN_VOTE_BALANCE|DECIDE_THRESHOLD|QUESTION';
         this.formats[1] = 'VERSION|POLL_REF|BALLOT|MEMO';
+        this.formats[2] = 'VERSION|POLL_REF';
     }
 
     // Handle parsing the VOTE transaction
@@ -65,6 +67,8 @@ class Vote {
             await this._parseCreate(data, error);
         else if(format===1)
             await this._parseBallot(data, error);
+        else if(format===2)
+            await this._parseFinalize(data, error);
     }
 
     /*****************************************************************
@@ -266,6 +270,56 @@ class Vote {
             await this.indexerDb.createBallot(data, selections);
 
         this.util.addAddressTicker(data['SOURCE']);
+        await this.mapper.createMappings(data);
+    }
+
+    /*****************************************************************
+     * VOTE v2 - finalize poll (system-injected only)
+     *
+     * Freezes a poll's tally on-chain at its effective close. Triggered by the
+     * per-block sweep (util.processVoteFinalizations), never by a user tx: a poll
+     * result is a pure deterministic function of already-agreed on-chain state
+     * (the votes ledger + getHolders at the close block), so every node computes
+     * the same result locally with no consensus round.
+     ****************************************************************/
+    async _parseFinalize(data, error){
+        // System-synthesized only. The decoder accepts VOTE in VALID_ACTION_NAMES,
+        // but a user-broadcast VOTE|2 cannot legitimately finalize a poll; reject it
+        // (mirrors attest.js:454).
+        if(!data['IS_SYNTHETIC']){
+            console.warn('\t VOTE v2 : rejected (user-broadcast not allowed for synthetic finalize)');
+            data['STATUS'] = 'invalid: VOTE v2 must be system-synthesized';
+            return;
+        }
+
+        // The poll must still be open. Race-protected: a poll finalized by an
+        // earlier trigger this block (e.g. early-decide) is skipped.
+        let pollIndex = data['POLL_REF'];
+        let poll = await this.indexerDb.getPoll(pollIndex);
+        if(this.util.isNull(poll) || poll.poll_status !== 'open')
+            return;
+
+        // Synthesized actions arrive without an ACTION_INDEX; allocate one now so
+        // poll_results rows and the mappings have a real source (mirrors attest.js).
+        data['ACTION_INDEX'] = await this.indexerDb.createActionIndex({
+            ACTION:      'VOTE',
+            BLOCK_INDEX: data['BLOCK_INDEX'],
+            FORMAT:      2
+        }, true);
+
+        data['STATUS'] = 'valid';
+
+        // Compute + freeze the result (reuses getPollTally for the math).
+        let result = await this.indexerDb.finalizePoll(data);
+
+        let summary = result
+            ? (result.poll_status + (result.fail_reason ? '/' + result.fail_reason : '') +
+               ' winner=' + (this.util.isNull(result.winning_option) ? 'none' : result.winning_option) +
+               (result.decided_early ? ' (early)' : ''))
+            : 'no-op';
+        console.log("\t VOTE v2 finalize : poll " + pollIndex + ' @ ' +
+                    data['EFFECTIVE_CLOSE_BLOCK'] + ' : ' + summary);
+
         await this.mapper.createMappings(data);
     }
 }

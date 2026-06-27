@@ -664,6 +664,9 @@ class XChainIndexer {
                         // Check for any attestation requests past their DEADLINE_BLOCK
                         await this.util.processAttestationExpirations(this.actions, this.indexerDb, blockToParse, blockTime);
 
+                        // Finalize VOTE polls whose window closed (or that early-decide this block)
+                        await this.util.processVoteFinalizations(this.actions, this.indexerDb, blockToParse, blockTime);
+
                         // Release tokens for unstakes (capability + contract) past their cooldown
                         await this.util.processCooldownCompletions(this.indexerDb, blockToParse);
 

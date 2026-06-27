@@ -233,6 +233,7 @@ class Execute {
             // Load read-only data for gateway (price data lives in local hub DB when configured)
             let oracleData = await ((this.actions && this.actions.hubDb) || this.indexerDb).getOracleDataForVM(data['BLOCK_INDEX'], data['BLOCK_TIME'], parseInt(this.config['ORACLE_MAX_PRICE_AGE_SECONDS']) || 1800);
             let crossChainData = await this.indexerDb.getCrossChainDataForVM(data['BLOCK_INDEX']);
+            let pollData       = await this.indexerDb.getPollResultsForVM(data['BLOCK_INDEX']);
 
             // Pre-load contract-stake snapshot scoped to THIS contract. Backs the
             // xchain.contract.{getStake,getTotalStaked,getStakers,slash} APIs synchronously.
@@ -309,6 +310,7 @@ class Execute {
                 tokenInfo:         vmLedger.tokenInfo,
                 oracleData:        oracleData,
                 crossChainData:    crossChainData,
+                pollData:          pollData,
                 attestationData:   null, // TODO: getResponse() reader not currently wired into the VM context
                 contractStakeData: contractStakeData,
                 providerDeadlines: PROVIDER_DEADLINE_WINDOWS
@@ -561,6 +563,7 @@ class Execute {
         let contractState = await this.indexerDb.getContractState(contractIndex);
         let oracleData = await ((this.actions && this.actions.hubDb) || this.indexerDb).getOracleDataForVM(hostData['BLOCK_INDEX'], hostData['BLOCK_TIME'], parseInt(this.config['ORACLE_MAX_PRICE_AGE_SECONDS']) || 1800);
         let crossChainData = await this.indexerDb.getCrossChainDataForVM(hostData['BLOCK_INDEX']);
+        let pollData       = await this.indexerDb.getPollResultsForVM(hostData['BLOCK_INDEX']);
         let contractStakeData = await this.indexerDb.getContractStakeDataForVM(contractIndex, hostData['BLOCK_INDEX']);
         // Gated on the VM_BALANCE_TOKENINFO flag-day (see primary EXECUTE path).
         let guardLedger = { balances: null, tokenInfo: null };
@@ -614,6 +617,7 @@ class Execute {
                 tokenInfo:         guardLedger.tokenInfo,
                 oracleData:        oracleData,
                 crossChainData:    crossChainData,
+                pollData:          pollData,
                 attestationData:   null,
                 contractStakeData: contractStakeData,
                 providerDeadlines: PROVIDER_DEADLINE_WINDOWS

@@ -4497,7 +4497,8 @@ class Database {
             byVoter[r.address].push({ choice: Number(r.choice), share: this.util.isNull(r.share) ? '1' : String(r.share) });
         }
         let totals = [];
-        for(let i=0;i<optionCount;i++) totals.push('0');
+        let optionVoters = [];
+        for(let i=0;i<optionCount;i++){ totals.push('0'); optionVoters.push(0); }
         let totalCountedWeight = '0';
         let qualifyingVoters   = 0;
         for(let addr in byVoter){
@@ -4516,11 +4517,13 @@ class Database {
                     if(p.choice < 0 || p.choice >= optionCount) continue;
                     let portion = this.util.bcmul(weight, this.util.bcdiv(p.share, sumShares, 18), 18);
                     totals[p.choice] = this.util.bcadd(totals[p.choice], portion, 18);
+                    optionVoters[p.choice]++;
                 }
             } else {
                 for(let p of picks){
                     if(p.choice < 0 || p.choice >= optionCount) continue;
                     totals[p.choice] = this.util.bcadd(totals[p.choice], weight, 18);
+                    optionVoters[p.choice]++;
                 }
             }
             // Counted once per voter for the weight-quorum turnout fraction
@@ -4544,13 +4547,162 @@ class Database {
         let status = !passed ? 'failed_quorum' : (closed ? 'finalized' : 'open');
         let optionResults = [];
         for(let i=0;i<optionCount;i++)
-            optionResults.push({ index: i, label: options[i], weight: String(totals[i]) });
+            optionResults.push({ index: i, label: options[i], weight: String(totals[i]), voters: optionVoters[i] });
         return {
             poll_index: Number(pollIndex), tick, measure_block: measureBlock, end_block,
             tally_mode, weight_mode, options: optionResults,
             supply: String(supply), total_counted_weight: String(totalCountedWeight),
             total_voters: qualifyingVoters, quorum_met, min_voters_met, winning_option, status
         };
+    }
+
+    // Select open polls whose voting window has closed by block_index (time
+    // trigger for finalization). Mirrors getExpiredAttestationRequests: the
+    // per-block sweep injects a synthetic VOTE v2 for each. end_block is the
+    // effective close for these (balances measured there even if the v2 lands
+    // a block late).
+    async getDuePolls(block_index){
+        return await this.doQuery(
+            `SELECT action_index, end_block FROM polls
+              WHERE poll_status='open' AND end_block <= ?`, [block_index]);
+    }
+
+    // Select open polls that are armed for early-decide (a decide_threshold is
+    // set) and not yet time-due (end_block still in the future; a poll at its
+    // end_block finalizes via the time path). The sweep evaluates each one's
+    // provisional tally at the current block to decide whether to close early.
+    async getArmedPolls(block_index){
+        return await this.doQuery(
+            `SELECT action_index FROM polls
+              WHERE poll_status='open'
+                AND decide_threshold IS NOT NULL AND decide_threshold <> ''
+                AND end_block > ?`, [block_index]);
+    }
+
+    // Freeze a poll's result on-chain (system-injected VOTE v2). Computes the
+    // deterministic tally at the effective close block (reusing getPollTally, the
+    // single source of truth for the math), writes one poll_results row per option,
+    // and flips the polls row terminal. Returns the computed tally for logging.
+    //
+    // `data` carries the v2 action's ACTION_INDEX + BLOCK_INDEX and the sweep's
+    // EFFECTIVE_CLOSE_BLOCK / DECIDED_EARLY. A poll that fails either validity gate
+    // terminates 'failed_quorum' with no winner (results still recorded).
+    async finalizePoll(data){
+        let pollIndex     = Number(data['POLL_REF']);
+        let actionIndex   = data['ACTION_INDEX'];
+        let block_index   = data['BLOCK_INDEX'];
+        let closeBlock    = Number(data['EFFECTIVE_CLOSE_BLOCK']);
+        let decidedEarly  = data['DECIDED_EARLY'] ? 1 : 0;
+        let status_id     = await this.createStatus(data['STATUS']);
+
+        let tally = await this.getPollTally(pollIndex, closeBlock);
+        if(this.util.isNull(tally)) return null;
+
+        let passed   = tally.quorum_met && tally.min_voters_met;
+        let terminal = passed ? 'finalized' : 'failed_quorum';
+        let fail_reason = null;
+        if(!passed){
+            if(!tally.quorum_met && !tally.min_voters_met) fail_reason = 'both';
+            else if(!tally.quorum_met)                     fail_reason = 'quorum';
+            else                                           fail_reason = 'min_voters';
+        }
+        // No winner is recorded for a poll that failed its gates.
+        let winning_option = passed ? tally.winning_option : null;
+
+        // One poll_results row per option (per-option weight + distinct voter count)
+        for(let opt of tally.options){
+            await this.doQuery(
+                `INSERT INTO poll_results
+                    (action_index, block_index, poll_index, option_index, total_weight, voter_count, resolved_block, status_id)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+                [actionIndex, block_index, pollIndex, opt.index, String(opt.weight), opt.voters, block_index, status_id]);
+        }
+
+        // Flip the polls summary terminal. resolved_block anchors the reorg reset.
+        await this.doQuery(
+            `UPDATE polls SET
+                poll_status=?, winning_option=?, total_weight=?, total_voters=?,
+                quorum_met=?, min_voters_met=?, fail_reason=?, decided_early=?,
+                effective_close_block=?, finalized_action_index=?, resolved_block=?
+             WHERE action_index=?`,
+            [terminal, winning_option, String(tally.total_counted_weight), tally.total_voters,
+             tally.quorum_met ? 1 : 0, tally.min_voters_met ? 1 : 0, fail_reason, decidedEarly,
+             closeBlock, actionIndex, block_index, pollIndex]);
+
+        return Object.assign({}, tally, { poll_status: terminal, fail_reason, decided_early: decidedEarly, winning_option });
+    }
+
+    // Read a poll's frozen result (the VM host function xchain.getPollResult and
+    // the explorer read this). Returns the polls summary plus per-option rows. For
+    // an open (not-yet-finalized) poll, poll_status is 'open' and the finalization
+    // fields are null, so a contract can tell "not decided yet" from a real result.
+    async getPollResult(pollIndex){
+        let poll = await this.getPoll(pollIndex);
+        if(this.util.isNull(poll)) return null;
+        let options = JSON.parse(poll.options || '[]');
+        let rows = await this.doQuery(
+            `SELECT option_index, total_weight, voter_count FROM poll_results
+              WHERE poll_index=? ORDER BY option_index ASC`, [pollIndex]);
+        let optionResults = [];
+        for(let i=0;i<options.length;i++){
+            let r = rows.find(x => Number(x.option_index) === i);
+            optionResults.push({
+                index: i, label: options[i],
+                weight: r ? String(r.total_weight) : '0',
+                voters: r ? Number(r.voter_count) : 0
+            });
+        }
+        return {
+            poll_index: Number(pollIndex),
+            poll_status: poll.poll_status,
+            winning_option: this.util.isNull(poll.winning_option) ? null : Number(poll.winning_option),
+            total_weight: this.util.isNull(poll.total_weight) ? null : String(poll.total_weight),
+            total_voters: this.util.isNull(poll.total_voters) ? null : Number(poll.total_voters),
+            quorum_met: this.util.isNull(poll.quorum_met) ? null : !!Number(poll.quorum_met),
+            min_voters_met: this.util.isNull(poll.min_voters_met) ? null : !!Number(poll.min_voters_met),
+            fail_reason: poll.fail_reason || null,
+            decided_early: this.util.isNull(poll.decided_early) ? null : !!Number(poll.decided_early),
+            effective_close_block: this.util.isNull(poll.effective_close_block) ? null : Number(poll.effective_close_block),
+            options: optionResults
+        };
+    }
+
+    // Serializable snapshot of finalized poll results for the VM (backs
+    // xchain.getPollResult). The VM worker rebuilds the getPollResult accessor
+    // from this plain map (keys are poll indices).
+    //
+    // CONSENSUS RULE (mirrors getCrossChainDataForVM): only polls finalized in
+    // blocks STRICTLY BEFORE the current one are exposed (resolved_block <
+    // block_index). A poll is finalized by the per-block sweep AFTER that block's
+    // actions run, so this bound also guarantees a poll never reads as decided
+    // within its own finalization block, identically on every node and on replay.
+    async getPollResultsForVM(block_index){
+        let polls = {};
+        let rows = await this.doQuery(
+            `SELECT action_index, poll_status, winning_option, total_weight, total_voters, decided_early
+               FROM polls
+              WHERE poll_status IN ('finalized','failed_quorum')
+                AND resolved_block IS NOT NULL AND resolved_block < ?`,
+            [Number(block_index) || 0]);
+        for(let r of rows){
+            let resultRows = await this.doQuery(
+                `SELECT option_index, total_weight, voter_count FROM poll_results
+                  WHERE poll_index=? ORDER BY option_index ASC`, [r.action_index]);
+            let options = resultRows.map(o => ({
+                index: Number(o.option_index),
+                weight: String(o.total_weight),
+                voters: Number(o.voter_count)
+            }));
+            polls[String(r.action_index)] = {
+                status:         r.poll_status,
+                winning_option: this.util.isNull(r.winning_option) ? null : Number(r.winning_option),
+                total_weight:   this.util.isNull(r.total_weight) ? null : String(r.total_weight),
+                total_voters:   this.util.isNull(r.total_voters) ? null : Number(r.total_voters),
+                decided_early:  this.util.isNull(r.decided_early) ? null : !!Number(r.decided_early),
+                options:        options
+            };
+        }
+        return { polls: polls };
     }
 
     // Create/Update record in `sleeps` table

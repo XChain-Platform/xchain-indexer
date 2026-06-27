@@ -1399,6 +1399,67 @@ class Utility {
         }
     }
 
+    // Per-block VOTE poll finalization sweep (mirrors processAttestationExpirations).
+    // Injects a synthetic VOTE v2 for each poll that reaches its effective close by
+    // either trigger. A poll result is a pure deterministic function of on-chain
+    // state (votes ledger + getHolders at the close block), so this is a local
+    // computation, never a consensus round.
+    async processVoteFinalizations(actions, db, block_index, block_time){
+        // 1. Time trigger: polls whose voting window has closed. The effective
+        //    close is end_block; balances are measured there even if the v2 lands a
+        //    block late, so the close state is exact.
+        let due = await db.getDuePolls(block_index);
+        for(let poll of due){
+            let data = {};
+            data['ACTION']                = 'VOTE';
+            data['FORMAT']                = 2;
+            data['BLOCK_INDEX']           = block_index;
+            data['BLOCK_TIME']            = block_time;
+            data['POLL_REF']              = poll.action_index;
+            data['EFFECTIVE_CLOSE_BLOCK'] = Number(poll.end_block);
+            data['DECIDED_EARLY']         = 0;
+            data['IS_SYNTHETIC']          = true;
+            // Mirror the synthetic-action positional layout: VERSION|POLL_REF
+            await actions.processAction('VOTE', [2, poll.action_index], data, null);
+        }
+
+        // 2. Early-decide trigger: armed open polls (a decide_threshold is set, not
+        //    yet time-due) whose provisional tally at THIS block crosses the
+        //    threshold AND passes any validity gates. Early-decide is the close
+        //    block arriving early: weights are measured at this block, exactly as a
+        //    time-close measures them at end_block. The first canonical block to
+        //    cross wins; evaluated after the block is fully processed, so it is
+        //    deterministic across nodes.
+        let armed = await db.getArmedPolls(block_index);
+        for(let poll of armed){
+            let pollIndex = poll.action_index;
+            let tally = await db.getPollTally(pollIndex, block_index);
+            if(!tally) continue;
+            // Leading option weight as a fraction of total TICK supply at this block.
+            let leader = '0';
+            for(let opt of tally.options)
+                if(this.bcgt(opt.weight, leader)) leader = opt.weight;
+            let frac = this.bcgt(tally.supply, 0) ? this.bcdiv(leader, tally.supply, 18) : '0';
+            let pollDef   = await db.getPoll(pollIndex);
+            let threshold = pollDef.decide_threshold;
+            // Crosses the supply threshold AND clears participation/quorum now (else
+            // a whale could force-close a poll that fails its gates). A poll that
+            // crosses weight but not a gate stays open and keeps evaluating.
+            if(this.bcgte(frac, threshold) && tally.quorum_met && tally.min_voters_met){
+                let data = {};
+                data['ACTION']                = 'VOTE';
+                data['FORMAT']                = 2;
+                data['BLOCK_INDEX']           = block_index;
+                data['BLOCK_TIME']            = block_time;
+                data['POLL_REF']              = pollIndex;
+                data['EFFECTIVE_CLOSE_BLOCK'] = block_index;
+                data['DECIDED_EARLY']         = 1;
+                data['IS_SYNTHETIC']          = true;
+                await actions.processAction('VOTE', [2, pollIndex], data, null);
+            }
+        }
+    }
+
     // Finalize unstakes (capability + contract) whose cooldown has elapsed.
     // For each completed row: writes a credit using the unstake's own action_index
     // (for audit-trail continuity), updates the source address's balance, and marks

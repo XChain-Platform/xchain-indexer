@@ -165,7 +165,12 @@ class Rollback {
             // replay; a reorg that removes a replacing ballot drops its rows and the
             // prior ballot re-inserts when its block reprocesses.
             'polls',
-            'votes'
+            'votes',
+            // VOTE v2 finalization: per-option frozen results, keyed by the v2
+            // action_index, so the generic delete drops a reorged finalization's
+            // rows. The polls SUMMARY is mutated in place on an earlier-block row,
+            // so it is additionally reset below (see the polls re-open block).
+            'poll_results'
         ];
 
         // Lookup tables that ARE rolled back (block-scoped, keyed by their block_index).
@@ -521,6 +526,26 @@ class Rollback {
                                 result_payload = NULL, resolved_block = NULL,
                                 callback_action_index = NULL
                             WHERE version = 0 AND request_status IN ('completed', 'expired')
+                              AND resolved_block >= ?`;
+                args  = [block_index];
+                await this.indexerDb.doQuery(query, args);
+
+                // Re-open VOTE polls whose TERMINAL finalization happened in the
+                // orphaned range. The VOTE v2 sweep flips a poll (created in an
+                // EARLIER block, so it survives the bulk delete below) from 'open'
+                // to 'finalized'/'failed_quorum' via a direct UPDATE on the polls
+                // row, and writes poll_results keyed on the v2 action_index (those
+                // ARE deleted generically). Without this reset the surviving polls
+                // row stays terminal, so the per-block sweep (open-only) never
+                // re-synthesizes the v2 and a reorged node diverges from a fresh
+                // sync. Keyed on resolved_block (stamped at finalize) so it re-opens
+                // and re-evaluates early-decide on replay. Mirrors the ATTEST reset.
+                query = `UPDATE polls
+                            SET poll_status = 'open', winning_option = NULL, total_weight = NULL,
+                                total_voters = NULL, quorum_met = NULL, min_voters_met = NULL,
+                                fail_reason = NULL, decided_early = NULL, effective_close_block = NULL,
+                                finalized_action_index = NULL, resolved_block = NULL
+                            WHERE poll_status IN ('finalized', 'failed_quorum')
                               AND resolved_block >= ?`;
                 args  = [block_index];
                 await this.indexerDb.doQuery(query, args);
