@@ -170,7 +170,12 @@ class Rollback {
             // action_index, so the generic delete drops a reorged finalization's
             // rows. The polls SUMMARY is mutated in place on an earlier-block row,
             // so it is additionally reset below (see the polls re-open block).
-            'poll_results'
+            'poll_results',
+            // VOTE v3 delegation event log: append-only (latest active row per
+            // delegator wins at read time), keyed by its own action_index, so the
+            // generic delete reverts a reorged set/clear and the prior delegation
+            // becomes latest-active again automatically.
+            'vote_delegations'
         ];
 
         // Lookup tables that ARE rolled back (block-scoped, keyed by their block_index).

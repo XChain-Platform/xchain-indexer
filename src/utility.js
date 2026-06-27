@@ -404,6 +404,23 @@ class Utility {
         return this.bcnum(mathjs.format(rounded, {notation: 'fixed', precision: d}));
     }
 
+    // Square root of a non-negative big number, TRUNCATED (not rounded) to d
+    // decimals. sqrt is irrational, so a fixed-precision truncation is
+    // consensus-critical: every node must derive identical weights. Computed in
+    // decimal.js space (mathjs bignumber is decimal.js-backed) then floored at
+    // 10^d, the same discipline as bcmulfloor. Backs the quadratic VOTE weight
+    // mode (weight = sqrt(close_balance)); negative input clamps to 0 (balances
+    // are non-negative, this is just a guard).
+    bcsqrt(num, decimals){
+        let n = (!this.isNull(num)) ? num : 0;
+        let d = (!this.isNull(decimals)) ? parseInt(decimals) : 0;
+        let base = this.bcnum(n);
+        if(base.lt(0)) return mathjs.bignumber(0);
+        let scale = mathjs.bignumber(10).pow(d);
+        let trunc = base.sqrt().times(scale).floor().div(scale);
+        return this.bcnum(mathjs.format(trunc, {notation: 'fixed', precision: d}));
+    }
+
     // Handle dividing 2 big numbers
     bcdiv(numA, numB, decimals){
         let a = (!this.isNull(numA)) ? numA : 0;

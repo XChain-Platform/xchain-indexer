@@ -49,6 +49,7 @@ class Vote {
         this.formats[0] = 'VERSION|TICK|END_BLOCK|OPTIONS|MAX_SELECTIONS|TALLY_MODE|WEIGHT_MODE|QUORUM|MIN_VOTERS|MIN_VOTE_BALANCE|DECIDE_THRESHOLD|QUESTION';
         this.formats[1] = 'VERSION|POLL_REF|BALLOT|MEMO';
         this.formats[2] = 'VERSION|POLL_REF';
+        this.formats[3] = 'VERSION|TICK|DELEGATE_TO|MEMO';
     }
 
     // Handle parsing the VOTE transaction
@@ -69,6 +70,8 @@ class Vote {
             await this._parseBallot(data, error);
         else if(format===2)
             await this._parseFinalize(data, error);
+        else if(format===3)
+            await this._parseDelegate(data, error);
     }
 
     /*****************************************************************
@@ -131,9 +134,20 @@ class Vote {
         if(!error && !['approval','split'].includes(data['TALLY_MODE']))
             error = 'invalid: TALLY_MODE (value)';
 
-        // WEIGHT_MODE: Phase 1 supports balance + flat (stake/quadratic/time_weighted are later phases)
-        if(!error && !['balance','flat'].includes(data['WEIGHT_MODE']))
-            error = 'invalid: WEIGHT_MODE (unsupported in phase 1)';
+        // WEIGHT_MODE: balance (close holdings), flat (one-address-one-vote),
+        // quadratic (sqrt of close balance, anti-whale), time_weighted (windowed
+        // average holdings). 'stake' remains reserved for a later phase.
+        if(!error && !['balance','flat','quadratic','time_weighted'].includes(data['WEIGHT_MODE']))
+            error = 'invalid: WEIGHT_MODE (value)';
+
+        // quadratic REQUIRES a dust floor: sqrt(a)+sqrt(b) > sqrt(a+b), so without
+        // a per-voter floor a holder could split across addresses to inflate total
+        // quadratic weight. MIN_VOTE_BALANCE raises that sybil cost (Section 12.1).
+        // Sybil-resistant, not sybil-proof (documented).
+        if(!error && data['WEIGHT_MODE'] === 'quadratic'){
+            if(this.util.isNull(data['MIN_VOTE_BALANCE']) || !this.util.bcgt(data['MIN_VOTE_BALANCE'], 0))
+                error = 'invalid: quadratic WEIGHT_MODE requires MIN_VOTE_BALANCE > 0';
+        }
 
         // QUORUM (optional): fraction of supply, 0 < q <= 1
         if(!error && !this.util.isNull(data['QUORUM'])){
@@ -320,6 +334,55 @@ class Vote {
         console.log("\t VOTE v2 finalize : poll " + pollIndex + ' @ ' +
                     data['EFFECTIVE_CLOSE_BLOCK'] + ' : ' + summary);
 
+        await this.mapper.createMappings(data);
+    }
+
+    /*****************************************************************
+     * VOTE v3 - set/clear vote delegation (liquid democracy)
+     *
+     * A standing, per-token delegation of voting weight to another address. Set
+     * once, it applies to every poll governed by TICK until changed or cleared
+     * (last-write-wins). A blank DELEGATE_TO clears it. Delegation is resolved at
+     * each poll's close (db.getPollTally): one hop, a direct vote overrides it,
+     * and the delegator must still hold TICK at close for their weight to flow.
+     ****************************************************************/
+    async _parseDelegate(data, error){
+        let block_index  = parseInt(data['BLOCK_INDEX']);
+        let action_index = data['ACTION_INDEX'];
+
+        // TICK must be a real, issued token (the governance electorate)
+        if(!error){
+            if(this.util.isNull(data['TICK']))
+                error = 'invalid: TICK (missing)';
+            else {
+                let tokenInfo = await this.indexerDb.getTokenInfo(data['TICK'], block_index, action_index);
+                if(this.util.isNull(tokenInfo))
+                    error = 'invalid: TICK (unknown)';
+            }
+        }
+
+        // DELEGATE_TO is optional: blank = clear (revoke). When set, it cannot be
+        // the delegator itself (a self-delegation is meaningless and would let a
+        // voter appear to "delegate" while still voting normally).
+        let clearing = this.util.isNull(data['DELEGATE_TO']) || String(data['DELEGATE_TO']).trim() === '';
+        if(!error && !clearing && String(data['DELEGATE_TO']).trim() === String(data['SOURCE']).trim())
+            error = 'invalid: DELEGATE_TO (cannot delegate to self)';
+
+        // MEMO (optional): bounded length
+        if(!error && !this.util.isNull(data['MEMO']) && String(data['MEMO']).length > this.config['MAX_MESSAGE_LENGTH'])
+            error = 'invalid: MEMO (length)';
+
+        let status = (error) ? error : 'valid';
+        data['STATUS'] = status;
+
+        console.log("\t VOTE delegate : " + data['TICK'] + ' -> ' +
+                    (clearing ? '(clear)' : data['DELEGATE_TO']) + ' : ' + status);
+
+        // Only a valid action writes a delegation event row.
+        if(!error)
+            await this.indexerDb.createVoteDelegation(data);
+
+        this.util.addAddressTicker(data['SOURCE'], data['TICK']);
         await this.mapper.createMappings(data);
     }
 }

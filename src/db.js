@@ -4443,6 +4443,50 @@ class Database {
         return results[0];
     }
 
+    // Record a VOTE v3 delegation set/clear as an append-only event row. A null
+    // delegate (blank DELEGATE_TO) is a clear; the latest row per (tick, delegator)
+    // wins at read time (getActiveDelegations), so there is nothing to mutate and
+    // rollback is the generic action_index delete. Named createVoteDelegation to
+    // avoid colliding with createDelegation (the validator signing-key DELEGATE).
+    async createVoteDelegation(data){
+        let action_index = data['ACTION_INDEX'];
+        let block_index  = data['BLOCK_INDEX'];
+        let tick_id      = await this.createTicker(data['TICK']);
+        let delegator_id = await this.createAddress(data['SOURCE']);
+        let cleared      = this.util.isNull(data['DELEGATE_TO']) || String(data['DELEGATE_TO']).trim() === '';
+        let delegate_id  = cleared ? null : await this.createAddress(String(data['DELEGATE_TO']).trim());
+        let status_id    = await this.createStatus(data['STATUS']);
+        await this.doQuery(
+            `INSERT INTO vote_delegations
+                (action_index, block_index, tick_id, delegator_address_id, delegate_address_id, status_id)
+             VALUES (?, ?, ?, ?, ?, ?)`,
+            [action_index, block_index, tick_id, delegator_id, delegate_id, status_id]);
+    }
+
+    // Active delegations for a token at/before a block: {delegatorAddress:
+    // delegateAddress}. Latest row per delegator wins (highest action_index, the
+    // monotonic per-block tiebreak); a delegator whose latest row is a CLEAR is
+    // omitted. Used by getPollTally to flow weight one hop.
+    async getActiveDelegations(tick_id, block_index){
+        let rows = await this.doQuery(
+            `SELECT da.address AS delegator, dg.address AS delegate
+               FROM vote_delegations vd
+               INNER JOIN (
+                    SELECT delegator_address_id, MAX(action_index) AS max_ai
+                      FROM vote_delegations
+                     WHERE tick_id = ? AND block_index <= ?
+                     GROUP BY delegator_address_id
+               ) latest ON latest.delegator_address_id = vd.delegator_address_id
+                       AND latest.max_ai = vd.action_index
+               INNER JOIN index_addresses da ON da.id = vd.delegator_address_id
+               LEFT  JOIN index_addresses dg ON dg.id = vd.delegate_address_id
+              WHERE vd.delegate_address_id IS NOT NULL`,
+            [tick_id, Number(block_index)]);
+        let out = {};
+        for(let r of rows) out[r.delegator] = r.delegate;
+        return out;
+    }
+
     // Write a voter's ballot (VOTE v1) as an atomic set. Wholesale last-write-wins:
     // delete the voter's prior rows for this poll, then insert one row per selected
     // option. Only called for a VALID ballot (an invalid one is a no-op on the
@@ -4470,6 +4514,65 @@ class Database {
     // callers may pass the current tip for a provisional standing on an open poll.
     // Enforces the close-time backing rule (a voter must still hold the token at
     // the measure block) and the dust floor on participation counting.
+    // Time-weighted average balance of every holder over [startBlock, endBlock],
+    // for the time_weighted VOTE weight mode (Section 12.2). Resists
+    // flash-acquisition voting: weight reflects sustained holding, not a close
+    // snapshot. Derived from the credits/debits ledger (each event joined to its
+    // action's block), NOT an O(blocks) scan: balance at startBlock + the signed
+    // window events reconstruct the trajectory; each segment contributes
+    // balance*blocks_held, summed and divided by the window length. All mathjs
+    // fixed-precision; same-block events have zero-length segments so intra-block
+    // ordering never affects the result (deterministic). Returns {address: avg}.
+    async getTimeWeightedBalances(tick, startBlock, endBlock){
+        startBlock = Number(startBlock);
+        endBlock   = Number(endBlock);
+        let windowLen = endBlock - startBlock;
+        let startBal  = await this.getHolders(tick, startBlock, null);
+        let tick_id   = await this.createTicker(tick);
+        // Signed balance-change events in (startBlock, endBlock], oldest first.
+        let rows = await this.doQuery(
+            `SELECT ia.address AS address, ac.block_index AS block_index, c.amount AS amount, 1 AS sign
+               FROM credits c
+               INNER JOIN actions ac        ON ac.action_index = c.action_index
+               INNER JOIN index_addresses ia ON ia.id = c.address_id
+              WHERE c.tick_id = ? AND ac.block_index > ? AND ac.block_index <= ?
+             UNION ALL
+             SELECT ia.address AS address, ac.block_index AS block_index, d.amount AS amount, -1 AS sign
+               FROM debits d
+               INNER JOIN actions ac        ON ac.action_index = d.action_index
+               INNER JOIN index_addresses ia ON ia.id = d.address_id
+              WHERE d.tick_id = ? AND ac.block_index > ? AND ac.block_index <= ?
+              ORDER BY block_index ASC`,
+            [tick_id, startBlock, endBlock, tick_id, startBlock, endBlock]);
+        let evByAddr = {};
+        for(let r of rows){
+            if(this.util.isNull(evByAddr[r.address])) evByAddr[r.address] = [];
+            let delta = (Number(r.sign) < 0) ? this.util.bcmul(String(r.amount), '-1', 18) : String(r.amount);
+            evByAddr[r.address].push({ block: Number(r.block_index), delta: delta });
+        }
+        let result = {};
+        let addrs  = new Set([...Object.keys(startBal), ...Object.keys(evByAddr)]);
+        for(let addr of addrs){
+            let bal = this.util.isNull(startBal[addr]) ? '0' : String(startBal[addr]);
+            // Degenerate window (close == creation): no integral, average is the
+            // start balance (avoids divide-by-zero; a poll closing at its own
+            // creation block can only happen via an immediate early-decide).
+            if(windowLen <= 0){ result[addr] = bal; continue; }
+            let prevBlock = startBlock;
+            let integral  = '0';
+            for(let ev of (evByAddr[addr] || [])){
+                let segLen = ev.block - prevBlock;
+                if(segLen > 0) integral = this.util.bcadd(integral, this.util.bcmul(bal, String(segLen), 18), 18);
+                bal = this.util.bcadd(bal, ev.delta, 18);
+                prevBlock = ev.block;
+            }
+            let tailLen = endBlock - prevBlock;
+            if(tailLen > 0) integral = this.util.bcadd(integral, this.util.bcmul(bal, String(tailLen), 18), 18);
+            result[addr] = this.util.bcdiv(integral, String(windowLen), 18);
+        }
+        return result;
+    }
+
     async getPollTally(pollIndex, measureBlock=null){
         let poll = await this.getPoll(pollIndex);
         if(this.util.isNull(poll)) return null;
@@ -4484,6 +4587,12 @@ class Database {
         let minVoteBal  = this.util.isNull(poll.min_vote_balance) ? '0' : String(poll.min_vote_balance);
         // Close-block holders (deterministic, address-tiebroken); supply = sum
         let holders = await this.getHolders(tick, measureBlock, null);
+        // time_weighted maps each voter's close eligibility to their average
+        // balance over [creation_block, close]; preloaded once (windowed ledger
+        // aggregation, Section 12.2). Other modes derive weight from closeBal.
+        let twBalances = (weight_mode === 'time_weighted')
+            ? await this.getTimeWeightedBalances(tick, Number(poll.block_index), measureBlock)
+            : null;
         let supply  = '0';
         for(let addr in holders) supply = this.util.bcadd(supply, holders[addr], 18);
         // Current ballots for the poll, grouped by voter
@@ -4496,6 +4605,38 @@ class Database {
             if(this.util.isNull(byVoter[r.address])) byVoter[r.address] = [];
             byVoter[r.address].push({ choice: Number(r.choice), share: this.util.isNull(r.share) ? '1' : String(r.share) });
         }
+        // Map a close-eligible voter's close balance to a weight number under the
+        // active mode. balance = close holdings; flat = one-address-one-vote;
+        // quadratic = sqrt(close) to flatten whales; time_weighted = average
+        // holdings over the window. Eligibility (hold-to-count + dust floor) is
+        // always the close snapshot, never the transform.
+        const weightFor = (addr, closeBal) => {
+            if(weight_mode === 'flat')          return '1';
+            if(weight_mode === 'quadratic')     return this.util.bcsqrt(closeBal, 18);
+            if(weight_mode === 'time_weighted') return (twBalances && !this.util.isNull(twBalances[addr])) ? twBalances[addr] : '0';
+            return closeBal;
+        };
+
+        // One-hop delegation (Section 13): a holder who did NOT vote directly and
+        // still holds at close lends their weight to their delegate's ballot, if
+        // the delegate cast one. Standing per-token delegation resolved at the
+        // close block. inbound[delegate] = summed delegated weight; folded into the
+        // delegate's own weight in the loop below.
+        let inbound = {};
+        if(!this.util.isNull(poll.tick_id)){
+            let delegations = await this.getActiveDelegations(poll.tick_id, measureBlock);
+            for(let delegator in delegations){
+                let delegate = delegations[delegator];
+                if(this.util.isNull(delegate)) continue;                  // cleared delegation
+                if(!this.util.isNull(byVoter[delegator])) continue;       // voted directly -> overrides
+                if(this.util.isNull(byVoter[delegate])) continue;         // idle delegate -> weight unused
+                let dBal = holders[delegator];
+                if(this.util.isNull(dBal) || !this.util.bcgt(dBal, 0)) continue; // hold-to-count on delegator
+                let dWeight = weightFor(delegator, dBal);
+                inbound[delegate] = this.util.bcadd(this.util.isNull(inbound[delegate]) ? '0' : inbound[delegate], dWeight, 18);
+            }
+        }
+
         let totals = [];
         let optionVoters = [];
         for(let i=0;i<optionCount;i++){ totals.push('0'); optionVoters.push(0); }
@@ -4504,9 +4645,13 @@ class Database {
         for(let addr in byVoter){
             let closeBal = holders[addr];
             // Hold-to-count: the ballot counts only if the voter still holds the token
+            // at close (applies to every weight mode; the dust floor below also reads
+            // closeBal, so eligibility is always the close snapshot, never the transform).
             if(this.util.isNull(closeBal) || !this.util.bcgt(closeBal, 0)) continue;
-            let weight = (weight_mode==='flat') ? '1' : closeBal;
-            // Participation gate counts a voter only above the dust floor
+            // The voter's own weight plus any weight delegated to them (one-hop).
+            let weight = this.util.bcadd(weightFor(addr, closeBal), this.util.isNull(inbound[addr]) ? '0' : inbound[addr], 18);
+            // Participation gate counts a direct voter only above the dust floor
+            // (delegators add weight but not headcount; see spec).
             if(this.util.bcgte(closeBal, minVoteBal)) qualifyingVoters++;
             let picks = byVoter[addr];
             if(tally_mode==='split'){

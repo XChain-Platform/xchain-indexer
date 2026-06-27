@@ -18,7 +18,7 @@ CREATE TABLE polls (
     options                 MEDIUMTEXT,                 -- JSON array of option labels, index-addressed by ballots
     max_selections          SMALLINT UNSIGNED,          -- max distinct options one ballot may list (1 = single-choice)
     tally_mode              ENUM('approval','split'),   -- approval = full weight per option; split = weight divided by per-option shares
-    weight_mode             ENUM('balance','stake','flat'), -- balance = close holdings; flat = one-address-one-vote (stake is Phase 2)
+    weight_mode             ENUM('balance','stake','flat','quadratic','time_weighted'), -- balance = close holdings; flat = one-address-one-vote; quadratic = sqrt(close); time_weighted = windowed avg; stake reserved
     quorum                  VARCHAR(60),                -- optional weight gate: min (counted weight / close supply) fraction, e.g. '0.2'
     min_voters              BIGINT UNSIGNED,            -- optional participation gate: min distinct qualifying voters
     min_vote_balance        VARCHAR(60),                -- dust floor: a voter counts toward min_voters only if close balance >= this
