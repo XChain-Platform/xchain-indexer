@@ -343,6 +343,14 @@
       "explorerRender": true,
       "walletForm": true
     },
+    "VOTE": {
+      "category": "wire-user",
+      "wireDecoded": true,
+      "indexerHandled": true,
+      "userEncodable": true,
+      "explorerRender": false,
+      "walletForm": false
+    },
     "WITHDRAW": {
       "category": "wire-user",
       "wireDecoded": true,
