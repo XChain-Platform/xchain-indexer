@@ -348,8 +348,8 @@
       "wireDecoded": true,
       "indexerHandled": true,
       "userEncodable": true,
-      "explorerRender": false,
-      "walletForm": false
+      "explorerRender": true,
+      "walletForm": true
     },
     "WITHDRAW": {
       "category": "wire-user",
