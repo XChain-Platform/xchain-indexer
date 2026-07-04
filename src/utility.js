@@ -145,9 +145,17 @@ class Utility {
         console.error('logError: ' + error, info);
     }
 
-    // JSON.stringify with BigInt support
+    // JSON.stringify with BigInt support. BigInts serialize as decimal strings.
+    // JSON.stringify consults BigInt.prototype.toJSON BEFORE the replacer, so a
+    // process that also loads a module patching that prototype (xchain-sdk does,
+    // emitting raw unquoted digits) would silently change our output, and this
+    // feeds getDataHash. Reading the pre-toJSON value via this[key] pins the
+    // string form regardless of any global patch.
     jsonStringify(obj){
-        return JSON.stringify(obj, (key, value) => typeof value === 'bigint' ? value.toString() : value);
+        return JSON.stringify(obj, function(key, value){
+            const raw = this[key];
+            return typeof raw === 'bigint' ? raw.toString() : value;
+        });
     }
 
     // Get a SHA256 hash of a given data object
@@ -342,6 +350,16 @@ class Utility {
         if(str === 'NaN' || str === 'Infinity' || str === '-Infinity' || !this.isNumeric(num))
             return mathjs.bignumber(0);
         return mathjs.bignumber(str);
+    }
+
+    // Render a big number as a plain decimal string in normal (never exponential)
+    // notation. String()/toString() on a decimal.js-backed bignumber switches to
+    // exponential below 1e-7 (e.g. "3e-8"), which the SMT leaf encoder rejects
+    // (merkle canonicalAmount) and which drifts the stored byte-form from the
+    // sync twin. toFixed() without dp is byte-identical to toString() for every
+    // normal-range value, so previously stored amounts are unaffected.
+    bcstr(num){
+        return this.bcnum(num).toFixed();
     }
 
     // Handle returning a number to a given decimal point precision

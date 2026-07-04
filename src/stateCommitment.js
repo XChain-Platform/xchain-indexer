@@ -244,7 +244,11 @@ async function getNetBalance(db, address, tick){
         [address, tick, address, tick]);
     const cr = rows.length ? String(rows[0].cr) : '0';
     const dr = rows.length ? String(rows[0].dr) : '0';
-    return db.util.bcsub(cr, dr, 18);
+    // Render via bcstr: bcsub returns a decimal.js bignumber whose String() form
+    // goes exponential below 1e-7 ("1e-8"), which canonicalAmount rejects and
+    // wedges the block loop. bcstr is minimal fixed notation, byte-identical to
+    // the sync follower's SQL minimal-decimal rendering of the same net.
+    return db.util.bcstr(db.util.bcsub(cr, dr, 18));
 }
 
 // Locked-escrow leaf is DEFERRED out of v1 (SPV spec §4.2 D2, revised). The

@@ -1,8 +1,16 @@
--- VOTE ballots. One row per (poll, voter, option) on a voter's CURRENT ballot.
--- A VOTE v1 carries the voter's whole ballot (one or more options); the handler
--- writes it as an atomic set, deleting the voter's prior rows for the poll and
--- inserting the new set (wholesale last-write-wins). All rows of one ballot share
--- the v1 action_index.
+-- VOTE ballots. One row per (poll, voter, ballot action, option). APPEND-ONLY:
+-- a VOTE v1 carries the voter's whole ballot (one or more options) and the
+-- handler INSERTs it as a new set keyed by the v1 action_index, never touching
+-- the voter's earlier sets. The voter's CURRENT ballot is their rows at
+-- MAX(action_index) for the poll (filtered at tally time, db.getPollTally).
+--
+-- Append-only is a reorg-safety requirement, not a convenience: the original
+-- delete-then-insert design destroyed the prior ballot when a voter re-voted,
+-- so a reorg that orphaned the replacing ballot could not restore it (the prior
+-- ballot's block is below the rollback point and never reprocesses), forking a
+-- reorged node's tally from a from-genesis replay. With append-only sets, the
+-- generic action_index rollback deletes the orphaned replacement and the prior
+-- set automatically becomes the latest again (same model as vote_delegations).
 --
 -- Effective weight is NOT stored: it derives from the voter's balance at the
 -- effective close block (the hold-to-count gate) split by `share`, computed at
@@ -23,9 +31,10 @@ CREATE TABLE votes (
     status_id         BIGINT UNSIGNED             -- FK to index_statuses (validation status of the ballot action)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
--- One active row per (poll, voter, option). A voter's active approval set is all
--- their rows for the poll, capped at the poll's max_selections by the handler.
-CREATE UNIQUE INDEX poll_voter_choice ON votes (poll_index, voter_address_id, choice);
+-- One row per (poll, voter, ballot action, option): each re-vote is a new
+-- action_index set. The composite also serves the current-ballot filter
+-- (MAX(action_index) per (poll_index, voter_address_id)) in db.getPollTally.
+CREATE UNIQUE INDEX poll_voter_action_choice ON votes (poll_index, voter_address_id, action_index, choice);
 CREATE        INDEX poll_index        ON votes (poll_index);
 CREATE        INDEX voter_address_id  ON votes (voter_address_id);
 CREATE        INDEX action_index      ON votes (action_index);

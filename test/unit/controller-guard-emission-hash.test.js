@@ -52,6 +52,7 @@ describe('runControllerGuard: guard emissions enter contract_hash @regression @t
         db.getContractState          = sinon.stub().resolves({});
         db.getOracleDataForVM        = sinon.stub().resolves({});
         db.getCrossChainDataForVM    = sinon.stub().resolves({});
+        db.getPollResultsForVM       = sinon.stub().resolves({ polls: {} });
         db.getContractStakeDataForVM = sinon.stub().resolves({});
         db.buildVmBalancesAndTokenInfo = sinon.stub().resolves({ balances: {}, tokenInfo: {} });
         db.createSavepoint           = sinon.stub().resolves('sp');

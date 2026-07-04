@@ -49,6 +49,7 @@ describe('EXECUTE host-fault propagation: halt, not fabricate @regression @tier1
         db.getContractState        = sinon.stub().resolves({});
         db.getOracleDataForVM      = sinon.stub().resolves({});
         db.getCrossChainDataForVM  = sinon.stub().resolves({});
+        db.getPollResultsForVM     = sinon.stub().resolves({ polls: {} });
         db.getContractStakeDataForVM = sinon.stub().resolves({});
         // If the handler ever reached commit (it must NOT on a host fault), surface it:
         db.createContractExecution = sinon.stub().rejects(new Error('reached commit: host fault was swallowed!'));

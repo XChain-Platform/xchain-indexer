@@ -80,6 +80,10 @@ const EMISSION_AMOUNT_FIELDS = {
     DISPENSER: [{ amount: 'giveAmount', tick: 'giveTick' }, { amount: 'giveEscrow', tick: 'giveTick' }, { amount: 'getAmount', tick: 'getTick' }],
     ATTEST:    [{ amount: 'feeAmount',  tick: 'feeTick' }],
     ISSUE:     [{ amount: 'maxSupply',  declared: true }, { amount: 'maxMint', declared: true }, { amount: 'mintSupply', declared: true }, { amount: 'callbackAmount', tick: 'callbackTick' }],
+    // VOTE v0's DEPOSIT and GAS_ESCROW are denominated in the fixed GAS tick
+    // (config GAS), not a tick named by a param; `gas: true` resolves it.
+    // VOTE v1 (ballot) has neither param, so both fields skip as empty.
+    VOTE:      [{ amount: 'deposit',    gas: true }, { amount: 'gasEscrow', gas: true }],
 };
 
 class Execute {
@@ -1141,13 +1145,17 @@ class Execute {
                 decimals = parseInt(params.decimals);
                 if(!Number.isFinite(decimals)) continue;
             } else {
-                let tick = params[f.tick];
+                // `gas: true` fields are denominated in the chain's fixed GAS tick
+                // rather than a tick named by another param (VOTE deposit/gasEscrow).
+                let tick = f.gas ? this.config['GAS'] : params[f.tick];
                 if(this.util.isNull(tick) || String(tick) === '') continue;
                 let tickId = await this.indexerDb.getTickerId(tick);
                 if(tickId === null) continue;
                 decimals = await this.indexerDb.getTokenDecimalPrecision(tickId);
             }
-            params[f.amount] = String(this.util.bcadd(value, 0, decimals));
+            // bcstr, not String(): a truncated dust amount below 1e-7 would render
+            // exponentially ("3e-8") and fail the handler's format validation.
+            params[f.amount] = this.util.bcstr(this.util.bcadd(value, 0, decimals));
         }
         return params;
     }

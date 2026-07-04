@@ -44,6 +44,7 @@ describe('runControllerGuard: guard returnValue parsing (royalty payoutLegs) @re
         db.getContractState          = sinon.stub().resolves({});
         db.getOracleDataForVM        = sinon.stub().resolves({});
         db.getCrossChainDataForVM    = sinon.stub().resolves({});
+        db.getPollResultsForVM       = sinon.stub().resolves({ polls: {} });
         db.getContractStakeDataForVM = sinon.stub().resolves({});
         // Present in the current working tree (getBalance support); harmless if absent.
         db.buildVmBalancesAndTokenInfo = sinon.stub().resolves({ balances: {}, tokenInfo: {} });

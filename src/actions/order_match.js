@@ -249,8 +249,12 @@ class Order_Match {
 
                 // Update the data object
                 data['ACTION_INDEX'] = action['ACTION_INDEX'];
-                data['MATCH_GIVE_AMOUNT'] = give_amount;
-                data['MATCH_GET_AMOUNT']  = get_amount;
+                // Stringify in normal notation here so every downstream consumer
+                // (order_matches insert, remaining-amount math, logs) sees the
+                // canonical decimal form; a raw bignumber String()s to exponential
+                // below 1e-7 ("3e-8") and wedges the state-commitment encoder.
+                data['MATCH_GIVE_AMOUNT'] = this.util.bcstr(give_amount);
+                data['MATCH_GET_AMOUNT']  = this.util.bcstr(get_amount);
 
                 if(isNativeCoinMatch){
                     // Two-phase settlement: create COINPay obligation

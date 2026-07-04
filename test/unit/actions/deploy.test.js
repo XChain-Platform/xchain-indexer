@@ -38,6 +38,7 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
         db.rollbackToSavepoint     = sinon.stub().resolves();
         db.getOracleDataForVM      = sinon.stub().resolves({});
         db.getCrossChainDataForVM  = sinon.stub().resolves({});
+        db.getPollResultsForVM     = sinon.stub().resolves({ polls: {} });
         db.getStatusString         = sinon.stub().resolves('valid');
     }
 

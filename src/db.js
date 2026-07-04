@@ -2811,8 +2811,10 @@ class Database {
         // row by updateAddressBalance) - triggering the supply SanityError.
         let decimals = await this.getTokenDecimalPrecision(tick_id);
         amount = this.util.bcadd(amount, 0, decimals);
-        // Convert any BigNumber amount to a plain string before inserting into the database
-        amount = String(amount);
+        // Convert any BigNumber amount to a plain decimal string before inserting.
+        // Must be normal notation: String() renders sub-1e-7 amounts exponentially
+        // ("3e-8"), which the SMT leaf encoder rejects at parse time (block wedge).
+        amount = this.util.bcstr(amount);
         // Check if record already exists for this token
         let query = `SELECT
                         action_index
@@ -2922,8 +2924,11 @@ class Database {
                 query = "DELETE FROM balances WHERE address_id=? AND tick_id=?";
                 args.push(address_id, tick_id);
             } else {
-                // Convert BigNumber to plain string so mariadb driver serializes it correctly
-                balance = String(balance);
+                // Convert BigNumber to a plain decimal string so the mariadb driver
+                // serializes it correctly. Normal notation is required: String()
+                // renders sub-1e-7 balances exponentially ("3e-8"), which the SMT
+                // leaf encoder rejects (block wedge) and drifts the byte-form vs sync.
+                balance = this.util.bcstr(balance);
                 query = "INSERT INTO balances (tick_id, address_id, amount) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE amount = VALUES(amount)";
                 args.push(tick_id, address_id, balance);
             }
@@ -4541,7 +4546,11 @@ class Database {
         let voter_address_id = await this.createAddress(data['SOURCE']);
         let status_id        = await this.createStatus(data['STATUS']);
         let memo             = data['MEMO'];
-        await this.doQuery(`DELETE FROM votes WHERE poll_index=? AND voter_address_id=?`, [poll_index, voter_address_id]);
+        // APPEND-ONLY: never delete the voter's prior ballot rows. A re-vote inserts
+        // a new action_index set and the tally reads the voter's MAX(action_index)
+        // set (getPollTally). Deleting priors here is unrecoverable on a reorg that
+        // orphans the replacement (the prior ballot's block never reprocesses),
+        // forking a reorged node's tally from a from-genesis replay.
         for(let sel of selections){
             let query = `INSERT INTO votes
                             (action_index, block_index, poll_index, voter_address_id, choice, share, memo, status_id)
@@ -4638,11 +4647,17 @@ class Database {
             : null;
         let supply  = '0';
         for(let addr in holders) supply = this.util.bcadd(supply, holders[addr], 18);
-        // Current ballots for the poll, grouped by voter
+        // Current ballots for the poll, grouped by voter. votes is append-only
+        // (every re-vote is a new action_index set), so the voter's CURRENT ballot
+        // is their rows at MAX(action_index); earlier sets stay in the table purely
+        // for reorg safety (rolling back the latest set re-exposes the prior one).
         let rows = await this.doQuery(
             `SELECT a.address AS address, v.choice AS choice, v.share AS share
                FROM votes v INNER JOIN index_addresses a ON (a.id=v.voter_address_id)
-              WHERE v.poll_index=?`, [pollIndex]);
+              WHERE v.poll_index=?
+                AND v.action_index = (SELECT MAX(v2.action_index) FROM votes v2
+                                       WHERE v2.poll_index=v.poll_index
+                                         AND v2.voter_address_id=v.voter_address_id)`, [pollIndex]);
         let byVoter = {};
         for(let r of rows){
             if(this.util.isNull(byVoter[r.address])) byVoter[r.address] = [];
@@ -4734,12 +4749,14 @@ class Database {
         let closed = (latest >= end_block);
         let status = !passed ? 'failed_quorum' : (closed ? 'finalized' : 'open');
         let optionResults = [];
+        // bcstr, not String(): a dust weight below 1e-7 (18-decimal governance
+        // token) would render exponentially and persist that way in poll_results.
         for(let i=0;i<optionCount;i++)
-            optionResults.push({ index: i, label: options[i], weight: String(totals[i]), voters: optionVoters[i] });
+            optionResults.push({ index: i, label: options[i], weight: this.util.bcstr(totals[i]), voters: optionVoters[i] });
         return {
             poll_index: Number(pollIndex), tick, measure_block: measureBlock, end_block,
             tally_mode, weight_mode, options: optionResults,
-            supply: String(supply), total_counted_weight: String(totalCountedWeight),
+            supply: this.util.bcstr(supply), total_counted_weight: this.util.bcstr(totalCountedWeight),
             total_voters: qualifyingVoters, quorum_met, min_voters_met, winning_option, status
         };
     }
@@ -10507,7 +10524,7 @@ class Database {
                          prev_amount, amount, block_index)
                      VALUES (?, ?, ?, ?, ?, ?, ?)`;
         await this.doQuery(query, [executionIndex, slashPosition, targetTable, stakeActionIndex,
-                                   String(prevAmount), String(amount), blockIndex]);
+                                   String(prevAmount), this.util.bcstr(amount), blockIndex]);
     }
 
     // Burn an equivocating validator's ENTIRE capability bond (active `stakes` + cooldown-
@@ -10574,7 +10591,7 @@ class Database {
                         (slash_action_index, target_table, stake_action_index, prev_amount, amount, block_index)
                      VALUES (?, ?, ?, ?, ?, ?)`;
         await this.doQuery(query, [slashActionIndex, targetTable, stakeActionIndex,
-                                   String(prevAmount), String(amount), blockIndex]);
+                                   String(prevAmount), this.util.bcstr(amount), blockIndex]);
     }
 
     // Record a capability-stake slash event (audit). Caller (the SLASH handler) has already
@@ -10598,7 +10615,7 @@ class Database {
                          bounty_amount, treasury_amount, submitter_id, destination_id, block_index)
                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
         await this.doQuery(query, [slash_action_index, signing_pubkey_id, capability, equiv_key,
-                                   String(amount), String(bounty_amount), String(treasury_amount),
+                                   this.util.bcstr(amount), this.util.bcstr(bounty_amount), this.util.bcstr(treasury_amount),
                                    submitter_id, destination_id, block_index]);
     }
 

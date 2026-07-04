@@ -159,11 +159,13 @@ class Rollback {
             'token_controllers',
             'address_controllers',
             // VOTE governance: poll definitions (one row per VOTE v0) and ballots
-            // (one row per (poll, voter, option) on a VOTE v1). Both keyed by their
-            // writing action_index, so the generic delete reverts reorged polls and
-            // ballots. createBallot's delete-then-insert keeps the set consistent on
-            // replay; a reorg that removes a replacing ballot drops its rows and the
-            // prior ballot re-inserts when its block reprocesses.
+            // (VOTE v1 sets). Both keyed by their writing action_index, so the
+            // generic delete reverts reorged polls and ballots. votes is APPEND-ONLY
+            // (a re-vote inserts a new action_index set; getPollTally reads each
+            // voter's MAX(action_index) set), so deleting an orphaned replacement
+            // here automatically re-exposes the voter's prior surviving ballot;
+            // no restore logic is needed and none would be possible (the prior
+            // ballot's block is below the rollback point and never reprocesses).
             'polls',
             'votes',
             // VOTE v2 finalization: per-option frozen results, keyed by the v2

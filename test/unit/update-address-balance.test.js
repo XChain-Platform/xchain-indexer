@@ -67,7 +67,26 @@ describe('Database.updateAddressBalance @unit @regression', function () {
         // Object keys in JS are always strings, so tick_id arrives as '7'
         assert.strictEqual(String(args[0]), '7', 'first arg should be tick_id');
         assert.strictEqual(args[1], 42,           'second arg should be address_id');
-        assert.strictEqual(args[2], '50.000000000000000000', 'third arg should be amount string');
+        // bcstr renders the canonical minimal decimal form (what production rows
+        // actually store: a BigNumber balance stringifies without trailing zeros,
+        // and never exponentially). The stub's padded input normalizes to '50'.
+        assert.strictEqual(args[2], '50', 'third arg should be the canonical amount string');
+    });
+
+    it('stores sub-1e-7 balances in normal notation, never exponential (3e-8 block-wedge regression)', async function () {
+        // A dust order match settles 0.00000003: decimal.js String()/toString()
+        // renders it "3e-8", which merkle.canonicalAmount rejects, wedging every
+        // indexer at that block. bcstr must persist the plain decimal form.
+        const db = makeDb();
+        db.createAddress.resolves(42);
+        db.getAddressBalances.resolves({ 7: '3e-8' });
+
+        await db.updateAddressBalance('addr1', false);
+
+        const upsertCall = db.doQuery.args.find(a => /ON DUPLICATE KEY UPDATE/i.test(a[0]));
+        assert.ok(upsertCall, 'UPSERT call must exist');
+        assert.strictEqual(upsertCall[1][2], '0.00000003',
+            'amount must be stored in normal decimal notation, not exponential');
     });
 
     it('issues DELETE (not UPSERT) for a zero balance', async function () {

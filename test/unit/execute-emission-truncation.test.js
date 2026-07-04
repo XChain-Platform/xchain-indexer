@@ -114,6 +114,20 @@ describe('Emission amount truncation (item 5346) @regression @tier1', function()
             assert.strictEqual(params.mintSupply, String(util.bcadd('10.999', 0, 2)));
         });
 
+        it('VOTE deposit and gasEscrow normalize to the fixed GAS tick decimals (gas:true path)', async function(){
+            // VOTE v0 escrows are denominated in the chain's GAS tick (config GAS),
+            // not a tick named by a param; the map resolves it via `gas: true`.
+            const indexerDb = {
+                getTickerId: async (tick) => (tick === 'XCHAIN' ? 1 : null),
+                getTokenDecimalPrecision: async () => 8,
+            };
+            const ex = new Execute({ config:{ GAS:'XCHAIN' }, decoderDb:{}, indexerDb, util, mapper:{} });
+            const params = { tick:'TKN', deposit:'1.234567891234', gasEscrow:'0.999999999' };
+            await ex._truncateEmissionAmounts('VOTE', params);
+            assert.strictEqual(params.deposit,   String(util.bcadd('1.234567891234', 0, 8)));
+            assert.strictEqual(params.gasEscrow, String(util.bcadd('0.999999999', 0, 8)));
+        });
+
         it('leaves a get-leg untouched when its tick is unknown locally (cross-chain)', async function(){
             // giveTick A is known; getTick FOREIGN is not (getTickerId -> null).
             const ex = makeExecute({ A:true, __d:8 });
