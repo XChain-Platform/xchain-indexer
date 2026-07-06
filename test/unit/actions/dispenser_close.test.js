@@ -174,4 +174,23 @@ describe('Dispenser_Close action handler @regression @tier2', function () {
         const addresses = indexer.util.getAddressesList();
         assert.ok(Object.keys(addresses).includes(CANCELLER), 'Canceller address should be tracked as destination');
     });
+
+    it('negates the escrow return at full precision (no unary-minus float truncation)', async function () {
+        // Same hazard as DISPENSER_EXPIRE: -GIVE_REMAINING on an 18-decimal
+        // bignumber string truncates to a float and desyncs the escrow return from
+        // the full-precision credit; bcsub negates without losing digits.
+        const REMAINING = '5.123456789012345678';
+        const dispenser = makeDispenser({ GIVE_REMAINING: REMAINING });
+        indexer.indexerDb.getDispenserInfo.resolves(dispenser);
+        indexer.indexerDb.getSweepDestination.resolves(null);
+        indexer.indexerDb.getDispenserCanceller.resolves(null);
+        const capture = sinon.stub(indexer.util, 'processTransactionLedgerChanges').resolves();
+        const data = createBaseData({ ACTION: 'DISPENSER_CLOSE', DISPENSER_ACTION_INDEX: 50, BLOCK_INDEX: 200, DISPENSER_STATUS: 'closed' });
+        await handler.parse(null, data, null);
+        assert.ok(capture.calledOnce, 'processTransactionLedgerChanges should be called');
+        const escrows = capture.getCall(0).args[4];
+        assert.strictEqual(escrows.length, 1, 'one escrow return is pushed');
+        assert.strictEqual(String(escrows[0][1]), '-' + REMAINING, 'escrow return keeps all 18 decimals');
+        assert.notStrictEqual(String(escrows[0][1]), String(-Number(REMAINING)), 'not the truncated JS-float negation');
+    });
 });

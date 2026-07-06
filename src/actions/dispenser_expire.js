@@ -68,8 +68,12 @@ class Dispenser_Expire {
                 // unchanged (ownership stays with the seller).
                 await this.indexerDb.clearTokenEscrow(dispenser['GIVE_TICK']);
             } else {
-                // Balance dispenser: debit GIVE_TICK from escrows and credit it to the SOURCE address
-                escrows.push([dispenser['GIVE_TICK'], -dispenser['GIVE_REMAINING'], dispenser['SOURCE']]);
+                // Balance dispenser: debit GIVE_TICK from escrows and credit it to the SOURCE address.
+                // Negate via bcsub, not JS unary minus: -GIVE_REMAINING coerces the 64-precision
+                // bignumber string to a float and silently loses digits past ~15 sig figs, de-syncing
+                // the escrow debit from the full-precision credit below (mirrors dispense.js). Negate
+                // at the same precision (64).
+                escrows.push([dispenser['GIVE_TICK'], this.util.bcsub(0, dispenser['GIVE_REMAINING'], 64), dispenser['SOURCE']]);
                 credits.push([dispenser['GIVE_TICK'],  dispenser['GIVE_REMAINING'], dispenser['SOURCE']]);
             }
 

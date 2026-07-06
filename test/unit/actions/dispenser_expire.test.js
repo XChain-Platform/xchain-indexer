@@ -100,4 +100,21 @@ describe('Dispenser_Expire action handler @regression @tier2', function () {
         await handler.parse(null, data, null);
         assert.ok(indexer.mapper.createMappings.calledOnce);
     });
+
+    it('negates the escrow debit at full precision (no unary-minus float truncation)', async function () {
+        // GIVE_REMAINING is an 18-decimal bignumber string; JS unary minus would
+        // coerce it to a float and silently drop digits past ~15 sig figs, desyncing
+        // the escrow debit from the full-precision credit. bcsub keeps every digit.
+        const REMAINING = '5.123456789012345678';
+        const dispenser = makeDispenser({ GIVE_REMAINING: REMAINING });
+        indexer.indexerDb.getDispenserInfo.resolves(dispenser);
+        const capture = sinon.stub(indexer.util, 'processTransactionLedgerChanges').resolves();
+        const data = createBaseData({ ACTION: 'DISPENSER_EXPIRE', ACTION_INDEX: 50, BLOCK_INDEX: 200 });
+        await handler.parse(null, data, null);
+        assert.ok(capture.calledOnce, 'processTransactionLedgerChanges should be called');
+        const escrows = capture.getCall(0).args[4];
+        assert.strictEqual(escrows.length, 1, 'one escrow debit is pushed');
+        assert.strictEqual(String(escrows[0][1]), '-' + REMAINING, 'escrow debit keeps all 18 decimals');
+        assert.notStrictEqual(String(escrows[0][1]), String(-Number(REMAINING)), 'not the truncated JS-float negation');
+    });
 });
