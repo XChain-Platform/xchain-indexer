@@ -164,6 +164,17 @@ describe('Withdraw handler @regression @tier2', function () {
             assert.ok(data.STATUS.includes('CONTRACT_ACTION_INDEX'));
         });
 
+        it('non-numeric CONTRACT_ACTION_INDEX → invalid (format), not a crash', async function () {
+            // Regression twin of deposit.test.js: junk here previously reached the
+            // BIGINT row write and wedged block processing under strict SQL mode.
+            const params = ['0', 'null', TICK, '100'];
+            const data   = makeData({ FORMAT: 0 });
+
+            await handler.parse(params, data, null);
+
+            assert.ok(data.STATUS.includes('CONTRACT_ACTION_INDEX (format)'));
+        });
+
         it('contract not found → invalid', async function () {
             indexer.indexerDb.getContract.resolves(null);
 

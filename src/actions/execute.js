@@ -139,6 +139,12 @@ class Execute {
         if(!error && this.util.isNull(data['CONTRACT_ACTION_INDEX']))
             error = 'invalid: CONTRACT_ACTION_INDEX (required)';
 
+        // Verify CONTRACT_ACTION_INDEX is a canonical integer index (see deposit.js).
+        // Host-derived reentrant calls (emitted EXECUTE / XEXEC) pass integer indexes,
+        // which String() renders canonically, so this only rejects malformed wire input.
+        if(!error && !/^\d+$/.test(String(data['CONTRACT_ACTION_INDEX'])))
+            error = 'invalid: CONTRACT_ACTION_INDEX (format)';
+
         // Verify METHOD is provided
         if(!error && this.util.isNull(data['METHOD']))
             error = 'invalid: METHOD (required)';

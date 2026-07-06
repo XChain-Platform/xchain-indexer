@@ -170,6 +170,18 @@ module.exports = {
             'CALLBACK_BLOCK', 
             'COIN1_ACTION_INDEX',
             'COIN2_ACTION_INDEX',
+            // CONTRACT_ACTION_INDEX / TARGET_CONTRACT_INDEX: DEPOSIT/WITHDRAW/EXECUTE and
+            // the contract-staking family write their row even when the action is invalid,
+            // so a non-numeric wire value ('null', text) must normalize to NULL for storage.
+            // Without this the BIGINT insert throws under STRICT_TRANS_TABLES and the
+            // block-processing retry loop hard-wedges the indexer (found 2026-07-05 when a
+            // broadcast DEPOSIT|0|null|... wedged the LTC-regtest venue).
+            'CONTRACT_ACTION_INDEX',
+            // CONTRACT_INDEX is the storage-side key createContractExecution /
+            // createContractState read; the EXECUTE handler copies the (possibly junk)
+            // wire CONTRACT_ACTION_INDEX into it for the row write, so it needs the
+            // same numeric-or-NULL normalization.
+            'CONTRACT_INDEX',
             'CONTROLLER',
             'COOLDOWN_BLOCKS',
             'DECIMALS',
@@ -194,6 +206,7 @@ module.exports = {
             'OWNERSHIPS',
             'RESUME_BLOCK',
             'SWAP_ACTION_INDEX',
+            'TARGET_CONTRACT_INDEX',
             'TRANSFER_SUPPLY',
             'TYPE',
             'UNBIND',

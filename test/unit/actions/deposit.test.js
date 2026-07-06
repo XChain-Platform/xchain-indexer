@@ -83,6 +83,23 @@ describe('Deposit (DEPOSIT) @regression @tier2', function () {
             assert.ok(String(data['STATUS']).includes('CONTRACT_ACTION_INDEX'));
         });
 
+        it('rejects a non-numeric CONTRACT_ACTION_INDEX as (format), not a crash', async function () {
+            // Regression: a broadcast DEPOSIT|0|null|... previously reached createDeposit
+            // with the raw string, and the BIGINT insert threw under STRICT_TRANS_TABLES,
+            // hard-wedging block processing (2026-07-05 LTC-regtest sweep).
+            const data = depositData({ FORMAT: 0 });
+            await handler.parse(['0', 'null', 'TEST', '10'], data, null);
+            assert.ok(String(data['STATUS']).includes('CONTRACT_ACTION_INDEX (format)'));
+        });
+
+        it('rejects a coercible non-canonical CONTRACT_ACTION_INDEX (2.0) as (format)', async function () {
+            // '2.0' passes a SQL existence lookup by numeric coercion but would derive a
+            // phantom custody address string ('C:BTC:2.0'), so it must fail the format gate.
+            const data = depositData({ FORMAT: 0 });
+            await handler.parse(['0', '2.0', 'TEST', '10'], data, null);
+            assert.ok(String(data['STATUS']).includes('CONTRACT_ACTION_INDEX (format)'));
+        });
+
         it('rejects when contract does not exist', async function () {
             indexer.indexerDb.getContract.resolves(null);
             const data = depositData({ FORMAT: 0 });

@@ -71,6 +71,12 @@ class Withdraw {
         if(!error && this.util.isNull(data['CONTRACT_ACTION_INDEX']))
             error = 'invalid: CONTRACT_ACTION_INDEX (required)';
 
+        // Verify CONTRACT_ACTION_INDEX is a canonical integer index (see deposit.js: a
+        // coercible non-canonical form would resolve a real contract but derive a phantom
+        // custody address string, and non-numeric junk must not reach the row write).
+        if(!error && !/^\d+$/.test(String(data['CONTRACT_ACTION_INDEX'])))
+            error = 'invalid: CONTRACT_ACTION_INDEX (format)';
+
         // Verify contract exists
         let contractInfo = null;
         if(!error){

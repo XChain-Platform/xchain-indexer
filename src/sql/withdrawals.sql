@@ -1,7 +1,7 @@
 DROP TABLE IF EXISTS withdrawals;
 CREATE TABLE withdrawals (
     action_index        BIGINT UNSIGNED NOT NULL,
-    contract_index      BIGINT UNSIGNED NOT NULL,
+    contract_index      BIGINT UNSIGNED,                -- NULL when the action is invalid with a non-numeric wire value (storage normalization)
     source_id           BIGINT UNSIGNED NOT NULL,
     tick_id             BIGINT UNSIGNED NOT NULL,
     amount              VARCHAR(250) NOT NULL,

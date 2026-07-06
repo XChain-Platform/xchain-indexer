@@ -1,7 +1,7 @@
 DROP TABLE IF EXISTS contract_executions;
 CREATE TABLE contract_executions (
     action_index        BIGINT UNSIGNED NOT NULL,
-    contract_index      BIGINT UNSIGNED NOT NULL,
+    contract_index      BIGINT UNSIGNED,                -- NULL when the action is invalid with a non-numeric wire value (storage normalization)
     caller_id           BIGINT UNSIGNED NOT NULL,
     method_name         VARCHAR(250),
     input_params        TEXT,

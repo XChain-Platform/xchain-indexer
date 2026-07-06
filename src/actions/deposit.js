@@ -70,6 +70,14 @@ class Deposit {
         if(!error && this.util.isNull(data['CONTRACT_ACTION_INDEX']))
             error = 'invalid: CONTRACT_ACTION_INDEX (required)';
 
+        // Verify CONTRACT_ACTION_INDEX is a canonical integer index. This must reject at
+        // parse, not just null at storage: the SQL existence lookup coerces a numeric-ish
+        // string ('2.0') onto a real contract id while the derived custody address keeps
+        // the raw form ('C:LTC:2.0'), crediting a phantom address. Same gate the
+        // contract-staking family (STAKE/UNSTAKE/DELEGATE v3) uses.
+        if(!error && !/^\d+$/.test(String(data['CONTRACT_ACTION_INDEX'])))
+            error = 'invalid: CONTRACT_ACTION_INDEX (format)';
+
         // Verify contract exists and is active
         let contractInfo = null;
         if(!error){
