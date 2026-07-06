@@ -1,4 +1,4 @@
--- xchain:migration mode=auto
+-- xchain:migration mode=manual
 -- Migration: drop the orphaned `contract_balances` table from deployed databases.
 --
 -- The `contract_balances` materialized cache was removed in commit 7d25e6c: contract

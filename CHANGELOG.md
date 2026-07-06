@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- The orphaned `contract_balances` drop migration is tagged `mode=manual` so its destructive `DROP TABLE` no longer auto-runs at indexer startup across the fleet; it now applies only via an explicit operator migrate run.
 - CI integration scenarios 11/14 boot LTC/DOGE test indexers with real fee destinations and pin the xchain fee path post-init (`withCoin` `xchainFeeMode`), replacing the placeholder env override the startup guard now fails closed on.
 - Cross-node content-mode equivalence no longer compares `push_generations`: the monotonic reorg fence differs between a survivor and a fresh re-parse by design.
 - The SDK fee-fragment parity drift guard moved from the unit tier to integration scenario 15 with a read-only sdk checkout in CI, so the unit tier no longer requires a sibling xchain-sdk checkout.
