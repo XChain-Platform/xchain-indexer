@@ -668,7 +668,7 @@ class XChainIndexer {
                         await this.util.processVoteFinalizations(this.actions, this.indexerDb, blockToParse, blockTime);
 
                         // Release tokens for unstakes (capability + contract) past their cooldown
-                        await this.util.processCooldownCompletions(this.indexerDb, blockToParse);
+                        await this.util.processCooldownCompletions(this.actions, this.indexerDb, blockToParse);
 
                         // Clear VM compilation cache for this block
                         if(this.actions.vm)

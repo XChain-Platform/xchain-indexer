@@ -1496,20 +1496,41 @@ class Utility {
     }
 
     // Finalize unstakes (capability + contract) whose cooldown has elapsed.
-    // For each completed row: writes a credit using the unstake's own action_index
-    // (for audit-trail continuity), updates the source address's balance, and marks
-    // the unstake row as 'completed' so the same release doesn't fire twice.
+    // For each completed row: writes a return credit, updates the source address's
+    // balance, and marks the unstake row as 'completed' so the same release doesn't
+    // fire twice. The credit's action_index is resolved by completionAttribution
+    // below: a fresh synthetic UNSTAKE (format 2) action minted at this cooldown
+    // block once UNSTAKE_COOLDOWN_COMPLETION_ACTION is active (so it hashes into the
+    // block where it is applied), or the unstake's own action_index before activation
+    // (legacy behaviour, preserved so pre-activation history still validates).
     //
     // Skips rows where amount=0 (fully slashed). Operates inside the block transaction
     // so the credit + balance update + status flip are all atomic with the block.
-    async processCooldownCompletions(db, block_index){
+    async processCooldownCompletions(actions, db, block_index){
         let sweep = await db.sweepCompletedCooldowns(block_index);
         if(!sweep || sweep.credits.length === 0) return;
         let addressesToRebalance = new Set();
         let ticksToRebalance     = new Set();
-        // Apply credits: each tuple is [tick, amount, sourceAddress]
-        // The credit's action_index reuses the unstake's action_index for the audit trail.
-        // We need to associate each credit with the right row, so re-derive from sweep state.
+        // Consensus attribution of the return credit (F-21, activation-gated). The credit is
+        // applied at THIS block (the cooldown-expiry block), but the block-hash query buckets
+        // every ledger row by its action's block_index. Before UNSTAKE_COOLDOWN_COMPLETION_ACTION
+        // the credit reused the UNSTAKE's own action_index, whose block_index is the earlier
+        // UNSTAKE block, so it hashed into the wrong block (its committed ledger_hash predates the
+        // credit; a recompute-from-final-state diverges). After activation each return credit is
+        // attributed to a fresh synthetic UNSTAKE (format 2) action minted at THIS block, so it
+        // hashes where the effect lands and the ledger_hash agrees with balances_root and any
+        // recompute. `completionAttribution` resolves, per unstake, the action_index the credit
+        // is written under: the new synthetic action when active, the unstake's own when not.
+        const completionActive = await actions.protocolChanges.isEnabled('UNSTAKE_COOLDOWN_COMPLETION_ACTION', block_index);
+        const completionAttribution = async (unstakeActionIndex) => {
+            if(!completionActive) return unstakeActionIndex;
+            // Mint a synthetic UNSTAKE v2 completion at the cooldown-expiry block. force=true so a
+            // distinct action_index is allocated per matured unstake (no natural tx to key on); its
+            // block_index buckets the credit + the action row into this block for both the ledger
+            // and actions hashes. Rolls back with the block via the generic action-range delete.
+            return await db.createActionIndex({ ACTION: 'UNSTAKE', BLOCK_INDEX: block_index, FORMAT: 2 }, true);
+        };
+        // Apply credits: each tuple is [tick, amount, sourceAddress].
         // capabilityRows and contractRows preserve action_index order; re-query for tick/amount/address.
         if(sweep.capabilityRows.length > 0 || sweep.contractRows.length > 0){
             // Re-fetch with action_index so each credit gets its own action_index trail
@@ -1520,13 +1541,15 @@ class Utility {
                     `SELECT u.action_index, u.amount, a.address AS source_address
                      FROM unstakes u
                          LEFT JOIN index_addresses a ON (a.id = u.source_id)
-                     WHERE u.action_index IN (${placeholdersCap})`,
+                     WHERE u.action_index IN (${placeholdersCap})
+                     ORDER BY u.action_index ASC`,
                     sweep.capabilityRows
                 );
                 let gas = db.config['GAS'];
                 for(let row of rows){
                     if(!this.bcgt(row.amount, '0')) continue;
-                    await db.createCredit(row.action_index, gas, String(row.amount), row.source_address);
+                    let creditIndex = await completionAttribution(row.action_index);
+                    await db.createCredit(creditIndex, gas, String(row.amount), row.source_address);
                     addressesToRebalance.add(row.source_address);
                     ticksToRebalance.add(gas);
                 }
@@ -1537,12 +1560,14 @@ class Utility {
                      FROM contract_unstakes cu
                          LEFT JOIN index_addresses a ON (a.id = cu.source_id)
                          LEFT JOIN index_tickers   t ON (t.id = cu.tick_id)
-                     WHERE cu.action_index IN (${placeholdersCon})`,
+                     WHERE cu.action_index IN (${placeholdersCon})
+                     ORDER BY cu.action_index ASC`,
                     sweep.contractRows
                 );
                 for(let row of rows){
                     if(!this.bcgt(row.amount, '0')) continue;
-                    await db.createCredit(row.action_index, row.tick, String(row.amount), row.source_address);
+                    let creditIndex = await completionAttribution(row.action_index);
+                    await db.createCredit(creditIndex, row.tick, String(row.amount), row.source_address);
                     addressesToRebalance.add(row.source_address);
                     ticksToRebalance.add(row.tick);
                 }

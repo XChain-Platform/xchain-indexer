@@ -116,11 +116,13 @@ describe('Unstake cooldown completion: GAS supply conservation (real DB + real V
         // already ran in processBlocks; now completions, then the per-block sanity check).
         await indexer.indexerDb.beginTransaction();
         try {
-            await indexer.util.processCooldownCompletions(indexer.indexerDb, Number(ce));
-            // The release credit is recorded against the unstake's action_index (block 107).
-            // sanityCheck on that block re-derives GAS supply: pre-fix the supply column was stale
-            // (ledger > supply) and this throws SanityError; post-fix updateTokens reconciles it.
-            await indexer.indexerDb.sanityCheck(UNSTAKE_BLOCK);
+            await indexer.util.processCooldownCompletions(indexer.actions, indexer.indexerDb, Number(ce));
+            // With UNSTAKE_COOLDOWN_COMPLETION_ACTION active (regtest genesis), the release
+            // credit is recorded against a fresh synthetic UNSTAKE (format 2) action minted at
+            // the cooldown-end block, so it hashes into that block. sanityCheck on the cooldown
+            // block re-derives GAS supply: pre-fix the supply column was stale (ledger > supply)
+            // and this throws SanityError; post-fix updateTokens reconciles it.
+            await indexer.indexerDb.sanityCheck(Number(ce));
             await indexer.indexerDb.commitTransaction();
         } catch (e) {
             await indexer.indexerDb.rollbackTransaction();
@@ -130,6 +132,23 @@ describe('Unstake cooldown completion: GAS supply conservation (real DB + real V
         // The bond returned to A1's liquid balance...
         assert.strictEqual(Number(await balanceOf(A1, GAS)) - liquidBefore, Number(STAKE_AMT),
             'released bond credited back to the staker');
+
+        // F-21: the return credit must hash into the COOLDOWN block, not the UNSTAKE's origin
+        // block. Assert the credit's action lives at the cooldown-end block (via a synthetic
+        // UNSTAKE completion action) rather than at UNSTAKE_BLOCK. This is the property that
+        // makes ledger_hash agree with balances_root and with a recompute-from-final-state.
+        const creditActionBlocks = await indexerQuery(
+            `SELECT DISTINCT act.block_index AS b
+             FROM credits c
+                 JOIN actions act ON act.action_index = c.action_index
+                 JOIN index_addresses a ON a.id = c.address_id
+                 JOIN index_tickers   t ON t.id = c.tick_id
+             WHERE a.address = ? AND t.tick = ?`, [A1, GAS]);
+        const blocks = creditActionBlocks.map(r => Number(r.b));
+        assert.ok(blocks.includes(Number(ce)),
+            `return credit must be attributed to the cooldown block ${Number(ce)} (got blocks ${blocks.join(',')})`);
+        assert.ok(!blocks.includes(UNSTAKE_BLOCK),
+            `return credit must NOT be attributed to the UNSTAKE origin block ${UNSTAKE_BLOCK} (got ${blocks.join(',')})`);
         // ...and the GAS supply column matches the ledger (the invariant the fix restores).
         const ledger = String(await indexer.indexerDb.getTokenSupply(GAS));
         const token  = String(await indexer.indexerDb.getTokenSupplyToken(GAS));

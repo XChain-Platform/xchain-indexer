@@ -269,6 +269,27 @@ class ProtocolChanges {
         // the strict check effective from block 0 on testnet/regtest and mainnet alike.
         this.addChange('LOCK_MAX_SUPPLY_EXACT', '2.0.0',0,0,0,0,0,0);
 
+        // UNSTAKE cooldown-completion action attribution. When a capability/contract
+        // UNSTAKE cooldown elapses, processCooldownCompletions credits the returned
+        // tokens back to the source. Before this activation the credit reused the
+        // UNSTAKE's OWN action_index (whose block_index is the earlier UNSTAKE block),
+        // so the block-hash query buckets the credit into the UNSTAKE's origin block,
+        // whose ledger_hash was committed BEFORE the credit existed, while a
+        // recompute-from-final-state (a snapshot-bootstrapped xchain-sync replica, an
+        // SPV verifier) buckets it there too and diverges from the committed hash. The
+        // balances_root already attributes the effect to the cooldown block, so the
+        // ledger_hash was the sole mis-attributed commitment. After activation the
+        // return credit is attributed to a fresh synthetic UNSTAKE (format 2) action
+        // minted at the cooldown-expiry block, so it hashes into the block where the
+        // effect is applied and the ledger_hash chain agrees with balances_root and
+        // with any recompute. Consensus-breaking (changes actions_hash + ledger_hash
+        // for cooldown-completion blocks), so it is gated on the same coordinated
+        // flag-day as the other contract-era consensus fixes (2027-01-01 00:00:00 UTC,
+        // PLACEHOLDER, MUST be confirmed with the fleet upgrade; a wrong value forks).
+        // testnet/regtest activate at genesis (all zeros); the e2e/regtest stack must
+        // be rebuilt fresh so no pre-activation cooldown-completion blocks remain.
+        this.addChange('UNSTAKE_COOLDOWN_COMPLETION_ACTION', '2.0.0',1798761600,0,0,0,0,0);
+
         // NOTE: STAKE_WEIGHTED_QUORUM (WI-1) is deliberately NOT registered here.
         // Standard activations gate on the LOCAL processing block via isEnabled();
         // stake-weighted quorum must gate on the BTC-anchored `snapshot_block`
