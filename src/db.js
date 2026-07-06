@@ -2271,9 +2271,16 @@ class Database {
         let decimals = await this.getTokenDecimalPrecision(tick_id);
         // Add tick_id to SQL query arguments
         args.push(tick_id);
-        // If a block_index was given, only lookup tokens created before or in given block_index
+        // Scope by the ACTION's own block_index (a.block_index), NOT by joining transactions
+        // on tx_index. Protocol-generated / synthetic actions (ORDER_MATCH, *_EXPIRE, VOTE v2,
+        // the UNSTAKE v2 cooldown completion, etc.) carry tx_index = NULL with no transactions
+        // row, so the old `INNER JOIN transactions` silently dropped their ledger effects from
+        // this supply sum. That stayed invisible only while every synthetic effect was net-zero
+        // on supply (matched credit+debit / escrow release); the UNSTAKE v2 completion is the
+        // first synthetic NET-MINT credit, so it exposed the gap as a balances>ledger SanityError.
+        // Mirrors the identical fix in getBlockHashes. actions.block_index is set for every row.
         if(!this.util.isNull(block_index) && this.util.isNumeric(block_index)){
-            sql += " AND t.block_index <= ?";
+            sql += " AND a.block_index <= ?";
             args.push(parseInt(block_index));
         }
         // If a action_index was given, only lookup tokens created before given action_index
@@ -2281,38 +2288,35 @@ class Database {
             sql += " AND m.action_index < ?";
             args.push(parseInt(action_index));
         }
-        // Get Credits 
-        query = `SELECT 
-                    SUM(CAST(m.amount AS DECIMAL(60,` + decimals + `))) as credits 
-                FROM 
+        // Get Credits
+        query = `SELECT
+                    SUM(CAST(m.amount AS DECIMAL(60,` + decimals + `))) as credits
+                FROM
                     credits m
-                    INNER JOIN actions      a ON (a.action_index=m.action_index)
-                    INNER JOIN transactions t ON (t.tx_index=a.tx_index)
-                WHERE 
+                    INNER JOIN actions a ON (a.action_index=m.action_index)
+                WHERE
                     m.tick_id=?` + sql;
         results = await this.doQuery(query, args);
         if(results.length > 0 && !this.util.isNull(results[0].credits))
             credits = results[0].credits;
-        // Get Debits 
-        query = `SELECT 
-                    SUM(CAST(m.amount AS DECIMAL(60,` + decimals + `))) as debits 
-                FROM 
+        // Get Debits
+        query = `SELECT
+                    SUM(CAST(m.amount AS DECIMAL(60,` + decimals + `))) as debits
+                FROM
                     debits m
-                    INNER JOIN actions      a ON (a.action_index=m.action_index)
-                    INNER JOIN transactions t ON (t.tx_index=a.tx_index)
-                WHERE 
+                    INNER JOIN actions a ON (a.action_index=m.action_index)
+                WHERE
                     m.tick_id=?` + sql;
         results = await this.doQuery(query, args);
         if(results.length > 0 && !this.util.isNull(results[0].debits))
             debits = results[0].debits;
-        // Get Escrows 
-        query = `SELECT 
-                    SUM(CAST(m.amount AS DECIMAL(60,` + decimals + `))) as escrows 
-                FROM 
+        // Get Escrows
+        query = `SELECT
+                    SUM(CAST(m.amount AS DECIMAL(60,` + decimals + `))) as escrows
+                FROM
                     escrows m
-                    INNER JOIN actions      a ON (a.action_index=m.action_index)
-                    INNER JOIN transactions t ON (t.tx_index=a.tx_index)
-                WHERE 
+                    INNER JOIN actions a ON (a.action_index=m.action_index)
+                WHERE
                     m.tick_id=?` + sql;
         results = await this.doQuery(query, args);
         if(results.length > 0 && !this.util.isNull(results[0].escrows))
@@ -3428,34 +3432,36 @@ class Database {
                         DISTINCT(x.tick_id),
                         t2.tick,
                         t1.decimals
-                    FROM 
+                    FROM
                         (
-                            SELECT 
-                                c.tick_id 
-                            FROM 
+                            -- Scope the touched-tick set by the ACTION's own block_index, NOT by
+                            -- joining transactions on tx_index: a block whose only ledger effect is
+                            -- a synthetic action (e.g. an UNSTAKE v2 cooldown completion, tx_index
+                            -- NULL) would otherwise contribute no tick and skip the sanity check for
+                            -- it, hiding the imbalance until a later real-tx block for that tick.
+                            SELECT
+                                c.tick_id
+                            FROM
                                 credits c
-                                INNER JOIN actions      a ON (c.action_index=a.action_index)
-                                INNER JOIN transactions t ON (t.tx_index=a.tx_index)
-                            WHERE 
-                                t.block_index=? 
+                                INNER JOIN actions a ON (c.action_index=a.action_index)
+                            WHERE
+                                a.block_index=?
                             UNION
-                            SELECT 
-                                d.tick_id 
-                            FROM 
+                            SELECT
+                                d.tick_id
+                            FROM
                                 debits d
-                                INNER JOIN actions      a ON (d.action_index=a.action_index)
-                                INNER JOIN transactions t ON (t.tx_index=a.tx_index)
-                            WHERE 
-                                t.block_index=? 
+                                INNER JOIN actions a ON (d.action_index=a.action_index)
+                            WHERE
+                                a.block_index=?
                             UNION
-                            SELECT 
-                                e.tick_id 
-                            FROM 
+                            SELECT
+                                e.tick_id
+                            FROM
                                 escrows e
-                                INNER JOIN actions      a ON (e.action_index=a.action_index)
-                                INNER JOIN transactions t ON (t.tx_index=a.tx_index)
-                            WHERE 
-                                t.block_index=? 
+                                INNER JOIN actions a ON (e.action_index=a.action_index)
+                            WHERE
+                                a.block_index=?
                         ) as x
                         INNER JOIN tokens        t1 ON (t1.tick_id=x.tick_id)
                         INNER JOIN index_tickers t2 ON (t2.id=x.tick_id)

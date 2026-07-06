@@ -149,9 +149,22 @@ describe('Unstake cooldown completion: GAS supply conservation (real DB + real V
             `return credit must be attributed to the cooldown block ${Number(ce)} (got blocks ${blocks.join(',')})`);
         assert.ok(!blocks.includes(UNSTAKE_BLOCK),
             `return credit must NOT be attributed to the UNSTAKE origin block ${UNSTAKE_BLOCK} (got ${blocks.join(',')})`);
-        // ...and the GAS supply column matches the ledger (the invariant the fix restores).
-        const ledger = String(await indexer.indexerDb.getTokenSupply(GAS));
-        const token  = String(await indexer.indexerDb.getTokenSupplyToken(GAS));
-        assert.strictEqual(ledger, token, 'GAS ledger supply == tokens.supply after the release');
+        // ...and the FULL three-way supply invariant holds: tokens.supply == ledger
+        // (credits-debits+escrows) == balances. The synthetic UNSTAKE completion is a
+        // NET-MINT credit on a tx_index=NULL action, so getTokenSupply must count
+        // synthetic-action credits (it previously INNER JOINed transactions and dropped
+        // them, leaving balances 500 higher than the ledger and wedging sanityCheck at
+        // the next real-tx block). Comparing balance to ledger here is the check that a
+        // ledger-vs-token-only assertion missed (both were computed the same buggy way).
+        const ledger  = String(await indexer.indexerDb.getTokenSupply(GAS));
+        const token   = String(await indexer.indexerDb.getTokenSupplyToken(GAS));
+        const balance = String(await indexer.indexerDb.getTokenSupplyBalance(GAS));
+        assert.strictEqual(ledger, token,   'GAS ledger supply == tokens.supply after the release');
+        assert.strictEqual(balance, ledger, 'GAS balances supply == ledger supply (synthetic-credit counted)');
+
+        // And sanityCheck on the cooldown block itself must now find + validate GAS: the
+        // touched-tick scan is scoped by the action's block_index, so a synthetic-only
+        // completion block is no longer skipped. This throws SanityError on regression.
+        await indexer.indexerDb.sanityCheck(Number(ce));
     });
 });
