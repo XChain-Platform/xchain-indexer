@@ -572,28 +572,11 @@ describe('Utility @regression @tier1', function () {
         });
     });
 
-    // The SDK ships its own isValidAmountFormat for client-side pre-submission checks. It is
-    // NOT auto-synced with the indexer's (and the indexer has extra object/negative guards),
-    // but the FRACTIONAL-PRECISION-CAP fragment must agree so the SDK never builds an amount
-    // the consensus-authoritative indexer would reject (item 5346). No sync script exists, so
-    // this fragment-parity test is the drift guard.
-    describe('isValidAmountFormat() SDK<->indexer fractional-cap parity', function () {
-        const SdkUtility = require('../../../xchain-sdk/src/utility.js');
-        const sdkUtil = new SdkUtility();
-        const cases = [
-            [0, '100', true], [0, '1.5', false],
-            [8, '1.00000001', true], [8, '1.000000001', false],
-            [8, '1.5', true], [2, '1.123', false], [2, '1.12', true],
-            [8, '100', true],
-        ];
-        cases.forEach(function ([decimals, amount, expected]) {
-            it(`decimals=${decimals} amount=${amount} -> ${expected} (both)`, function () {
-                assert.strictEqual(util.isValidAmountFormat(decimals, amount), expected, 'indexer');
-                assert.strictEqual(sdkUtil.isValidAmountFormat(decimals, amount), expected, 'sdk');
-            });
-        });
-    });
-
+    // The SDK<->indexer isValidAmountFormat fragment-parity drift guard (item
+    // 5346) lives in test/integration/scenarios/15-sdk-parity.test.js: it needs
+    // a real xchain-sdk checkout, which the unit tier's shared reusable CI
+    // workflow does not have (the integration workflow checks the sdk out to
+    // .xchain-sdk and sets XCHAIN_SDK_PATH).
     describe('isValidLockValue()', function () {
         it('should accept 0', function () {
             assert.strictEqual(util.isValidLockValue(0), true);

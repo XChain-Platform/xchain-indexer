@@ -73,31 +73,27 @@ describe('Multi-chain action processing @regression @tier1', function () {
         // are native-fee-only: a fee-bearing action with no native fee output would be
         // rejected there. Exercising native mode needs fee outputs + seeded oracle
         // prices (the live e2e suites cover that); HERE the premise is "identical input
-        // -> identical ledger", so pin every coin to the same xchain-balance fee path
-        // via the documented env override (placeholder destination -> xchain fallback).
-        const envKeys = COINS.map(c => `XCHAIN_FEE_DESTINATION_${c}_REGTEST`);
-        for (const k of envKeys) process.env[k] = 'X'.repeat(34);
+        // -> identical ledger", so pin every coin to the same xchain-balance fee path.
+        // xchainFeeMode blanks FEE_DESTINATION on the live config AFTER a clean init;
+        // the former env-placeholder route now fails closed at startup on LTC/DOGE
+        // (src/config.js FEE_DESTINATION guard).
         const results = {};
-        try {
-            for (const coin of COINS) {
-                results[coin] = await withCoin(coin, 'regtest', async ({ seeder, indexer }) => {
-                    // Fee era: A1's ISSUE/MINT/SEND and A2's balance row all cost gas
-                    await seedGas(seeder, { addresses: [A1, A2] });
-                    await seeder.seedBlock(100, T,        [{ source: A1, data: 'ISSUE|0|MCTOK|100000|1000|0|multi-chain token' }]);
-                    await seeder.seedBlock(101, T + 600,  [{ source: A1, data: 'MINT|0|MCTOK|500' }]);
-                    await seeder.seedBlock(102, T + 1200, [{ source: A1, destination: A2, data: 'SEND|0|MCTOK|200|' + A2 }]);
-                    await processBlocks(indexer);
-                    const tok = await getToken(indexerQuery, 'MCTOK');
-                    return {
-                        supply: tok ? tok.supply : null,
-                        balA1: await balanceOf(A1, 'MCTOK'),
-                        balA2: await balanceOf(A2, 'MCTOK'),
-                        gasA1: await balanceOf(A1, 'XCHAIN'),
-                    };
-                });
-            }
-        } finally {
-            for (const k of envKeys) delete process.env[k];
+        for (const coin of COINS) {
+            results[coin] = await withCoin(coin, 'regtest', async ({ seeder, indexer }) => {
+                // Fee era: A1's ISSUE/MINT/SEND and A2's balance row all cost gas
+                await seedGas(seeder, { addresses: [A1, A2] });
+                await seeder.seedBlock(100, T,        [{ source: A1, data: 'ISSUE|0|MCTOK|100000|1000|0|multi-chain token' }]);
+                await seeder.seedBlock(101, T + 600,  [{ source: A1, data: 'MINT|0|MCTOK|500' }]);
+                await seeder.seedBlock(102, T + 1200, [{ source: A1, destination: A2, data: 'SEND|0|MCTOK|200|' + A2 }]);
+                await processBlocks(indexer);
+                const tok = await getToken(indexerQuery, 'MCTOK');
+                return {
+                    supply: tok ? tok.supply : null,
+                    balA1: await balanceOf(A1, 'MCTOK'),
+                    balA2: await balanceOf(A2, 'MCTOK'),
+                    gasA1: await balanceOf(A1, 'XCHAIN'),
+                };
+            }, { xchainFeeMode: true });
         }
 
         // Chain-agnostic: every coin must derive the same ledger (including the

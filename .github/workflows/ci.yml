@@ -1,4 +1,4 @@
-# FINAL — the slim per-repo replacement for .github/workflows/ci.yml
+# FINAL: the slim per-repo replacement for .github/workflows/ci.yml
 # Drop this into each npm repo. It does nothing but delegate to the shared definition.
 # Pinned @master: push the reusable workflow once and every caller picks it up on its
 # next run. (Switch to a moving @v1 tag later if you want change-control.)
@@ -22,7 +22,7 @@ jobs:
   # workflow because it needs a DB service container and the canonical decoder
   # schema (test/integration/setup/db-connection.js loads xchain-decoder's
   # src/sql/*.sql so the harness can never drift from the real decoder schema).
-  # No xchain-vm is provisioned here (the dir is gitignored) — the indexer
+  # No xchain-vm is provisioned here (the dir is gitignored); the indexer
   # degrades gracefully and the whole tier is written to pass without a VM
   # (EXECUTE paths are e2e-suite territory).
   integration:
@@ -44,7 +44,7 @@ jobs:
       - uses: actions/checkout@v4
 
       # xchain-decoder is still PRIVATE pre-launch, so the default GITHUB_TOKEN
-      # cannot read it — this uses a read-only deploy key scoped to that one
+      # cannot read it, so this uses a read-only deploy key scoped to that one
       # repo (secret XCHAIN_DECODER_DEPLOY_KEY). When the repos flip public at
       # launch, the ssh-key line can simply be dropped.
       - name: Check out the canonical decoder schema
@@ -53,6 +53,16 @@ jobs:
           repository: XChain-Platform/xchain-decoder
           ssh-key: ${{ secrets.XCHAIN_DECODER_DEPLOY_KEY }}
           path: .xchain-decoder
+
+      # Scenario 15 (SDK<->indexer fee-fragment parity drift guard) needs the
+      # real sdk source. Same private-repo deploy-key pattern as the decoder
+      # above (secret XCHAIN_SDK_DEPLOY_KEY, read-only, scoped to xchain-sdk).
+      - name: Check out the sdk for the parity scenario
+        uses: actions/checkout@v4
+        with:
+          repository: XChain-Platform/xchain-sdk
+          ssh-key: ${{ secrets.XCHAIN_SDK_DEPLOY_KEY }}
+          path: .xchain-sdk
 
       - name: Use Node.js 22
         uses: actions/setup-node@v4
@@ -70,4 +80,5 @@ jobs:
           TEST_DB_USER: root
           TEST_DB_PASS: xchain-fixture-throwaway
           XCHAIN_DECODER_SQL_PATH: ${{ github.workspace }}/.xchain-decoder/src/sql
+          XCHAIN_SDK_PATH: ${{ github.workspace }}/.xchain-sdk
         run: npm run test:integration:ci

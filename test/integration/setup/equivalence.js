@@ -70,6 +70,16 @@ const CONTENT_MODE_TABLE_EXCLUSIONS = {
 };
 const CONTENT_MODE_GLOBAL_EXCLUSIONS = ['id', 'tx_hash_id'];
 
+// Tables skipped ENTIRELY in 'content' mode: node-local operational state whose
+// rows record processing HISTORY, not chain content. push_generations is the
+// monotonic source-chain reorg fence (item 5308): bumped once per rollback and
+// deliberately never rolled back (src/rollback.js), so a reorg survivor carries
+// a generation a fresh re-parse of the same chain cannot have, BY DESIGN. The
+// artifacts it fences (hub push rows) live in the hub DB, outside this oracle.
+// 'strict' mode still compares it byte-wise: identical processing histories
+// must produce identical generations.
+const CONTENT_MODE_TABLE_SKIP = new Set(['push_generations']);
+
 function excludedColumns(table, mode) {
     let cols = GLOBAL_COLUMN_EXCLUSIONS
         .concat(TABLE_COLUMN_EXCLUSIONS[table] || []);
@@ -165,6 +175,7 @@ async function assertIndexerDbsEquivalent(queryA, queryB, opts = {}) {
 
     const diffs = [];
     for (const table of tablesA) {
+        if (mode === 'content' && CONTENT_MODE_TABLE_SKIP.has(table)) continue;
         const excluded = excludedColumns(table, mode);
         const canonA = await tableCanon(queryA, table, excluded);
         const canonB = await tableCanon(queryB, table, excluded);

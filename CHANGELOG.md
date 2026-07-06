@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- CI integration scenarios 11/14 boot LTC/DOGE test indexers with real fee destinations and pin the xchain fee path post-init (`withCoin` `xchainFeeMode`), replacing the placeholder env override the startup guard now fails closed on.
+- Cross-node content-mode equivalence no longer compares `push_generations`: the monotonic reorg fence differs between a survivor and a fresh re-parse by design.
+- The SDK fee-fragment parity drift guard moved from the unit tier to integration scenario 15 with a read-only sdk checkout in CI, so the unit tier no longer requires a sibling xchain-sdk checkout.
+- The integration launcher shares one config snapshot between the indexer and its Utility, matching production wiring.
 - VOTE ballots are stored append-only (unique key gains `action_index`; tally reads each voter's latest set), so a reorg orphaning a re-vote restores the voter's prior ballot instead of losing it forever.
 - Amount strings are rendered in normal notation everywhere (`Utility.bcstr`): sub-1e-7 amounts previously stringified exponentially ("3e-8"), which the SMT leaf encoder rejects, hard-wedging the indexer at that block.
 - VM-emitted VOTE deposits/gas escrows are classified in the emission amount-truncation map (fixed GAS denomination).

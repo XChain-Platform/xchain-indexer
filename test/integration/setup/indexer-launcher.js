@@ -74,7 +74,10 @@ async function initIndexer(opts = {}) {
     const Genesis  = require('../../../src/genesis.js');
 
     indexer.config = config.getConfig();
-    indexer.util = new Utility();
+    // Share the ONE config snapshot exactly like XChainIndexer.start() does: a bare
+    // new Utility() self-loads a second snapshot, and tests that mutate the live
+    // config (multi-chain.js forceXchainFeeMode) would silently miss the util copy.
+    indexer.util = new Utility(indexer.config);
 
     const p = getConnectionParams(opts.indexerName);
     indexer.decoderDb = new Database(p.decoderHost, p.decoderPort, p.decoderName, p.decoderUser, p.decoderPass, indexer);

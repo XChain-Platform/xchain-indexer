@@ -33,10 +33,11 @@
  *     coin would make the order cross-chain on two of the three runs).
  *   - chain-GATED actions (BTC-only capability staking) are excluded;
  *     scenario 11 covers the gates themselves.
- *   - every coin is pinned to the xchain-balance fee path via the
- *     documented placeholder-destination override (same premise as
- *     scenario 11: LTC/DOGE are native-fee-only with a real destination,
- *     which would reject fee-bearing actions absent fee outputs).
+ *   - every coin is pinned to the xchain-balance fee path via withCoin's
+ *     xchainFeeMode (post-init config blanking; same premise as scenario
+ *     11: LTC/DOGE are native-fee-only with a real destination, which
+ *     would reject fee-bearing actions absent fee outputs, and the env-
+ *     placeholder route now fails closed at startup on those chains).
  *
  * Exactly THREE per-chain artifacts remain, all normalized (not ignored)
  * before comparison; anything else that differs is a chain-dependence bug:
@@ -109,7 +110,6 @@ const CORPUS_BLOCKS = 9; // gas preamble + 100..107
 describe('14 – Multi-chain full-state parity @regression @tier1', function () {
     this.timeout(180000);
 
-    const envKeys = COINS.map(c => `XCHAIN_FEE_DESTINATION_${c}_REGTEST`);
     const states = {};
     const chains = {};
 
@@ -139,10 +139,9 @@ describe('14 – Multi-chain full-state parity @regression @tier1', function () 
     before(async function () {
         await createDatabases();
         await createDecoderSchema();
-        // Pin every coin to the xchain-balance fee path (see header).
-        for (const k of envKeys) process.env[k] = 'X'.repeat(34);
 
         for (const coin of COINS) {
+            // xchainFeeMode pins every coin to the xchain-balance fee path (see header).
             await withCoin(coin, 'regtest', async ({ seeder, indexer }) => {
                 await seedGas(seeder, { addresses: [ADDR1, ADDR2, ADDR3] });
                 for (const b of corpus(coin)) await seeder.seedBlock(b.block, b.time, b.txs);
@@ -154,12 +153,11 @@ describe('14 – Multi-chain full-state parity @regression @tier1', function () 
                     await captureDbState(indexerQuery), coin,
                     (indexer.config && indexer.config.ADDRESS) || {});
                 chains[coin] = await readHashChain(indexerQuery);
-            });
+            }, { xchainFeeMode: true });
         }
     });
 
     after(async function () {
-        for (const k of envKeys) delete process.env[k];
         await closeAll();
     });
 
