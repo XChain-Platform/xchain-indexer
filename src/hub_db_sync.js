@@ -1292,4 +1292,74 @@ class HubDbSync {
     }
 }
 
+// Remove SQL `--` line comments while respecting quoted strings, so a ';'
+// appearing inside comment prose is never mistaken for a statement terminator.
+// Faithful copy of the indexer db.js stripSqlLineComments logic; lives here so
+// ensureTables() stays self-contained in the vendored client.
+function stripSqlLineComments(sql) {
+    let out = '';
+    let quote = null;
+    for (let i = 0; i < sql.length; i++) {
+        const ch = sql[i];
+        if (quote) {
+            out += ch;
+            if (ch === quote) {
+                if (sql[i + 1] === quote) { out += sql[++i]; }
+                else { quote = null; }
+            }
+            continue;
+        }
+        if (ch === "'" || ch === '"' || ch === '`') { quote = ch; out += ch; continue; }
+        if (ch === '-' && sql[i + 1] === '-') {
+            while (i < sql.length && sql[i] !== '\n') { i++; }
+            if (i < sql.length) { out += '\n'; }
+            continue;
+        }
+        out += ch;
+    }
+    return out;
+}
+
+// Create the mirror tables from the vendored SQL twin files in sqlDir, for
+// consumers that (unlike the indexer, whose verifyTables() owns its schema)
+// have no table-creation machinery of their own, e.g. the explorer's embedded
+// mirror. Must complete before HubDbSync.start(): starting against a missing
+// table poisons the per-table column cache (see _localColumns / the 2026-06-17
+// cold-start regression). dbConn is the same doQuery-bearing object the
+// HubDbSync constructor takes. Retries each file with exponential backoff so a
+// transient DB blip at boot doesn't leave half-built schema.
+async function ensureTables(dbConn, sqlDir) {
+    const fs   = require('fs');
+    const path = require('path');
+    const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+    const files = fs.readdirSync(sqlDir).filter((f) => f.endsWith('.sql')).sort();
+    if (files.length === 0)
+        throw new Error('ensureTables: no .sql files found in ' + sqlDir);
+    const MAX_ATTEMPTS = 5;
+    for (const file of files) {
+        const data    = fs.readFileSync(path.join(sqlDir, file), 'utf8');
+        const queries = stripSqlLineComments(data).split(';').map((q) => q.trim()).filter((q) => q !== '');
+        let lastErr = null;
+        let done = false;
+        for (let attempt = 1; attempt <= MAX_ATTEMPTS && !done; attempt++) {
+            try {
+                for (const query of queries)
+                    await dbConn.doQuery(query);
+                done = true;
+            } catch (err) {
+                lastErr = err;
+                if (attempt >= MAX_ATTEMPTS) break;
+                const backoffMs = Math.min(30000, 500 * Math.pow(2, attempt - 1));
+                console.log('ensureTables: error creating ' + file + ' (attempt ' + attempt + '/' + MAX_ATTEMPTS + '): '
+                    + (err && err.message) + '. Retrying in ' + backoffMs + 'ms...');
+                await sleep(backoffMs);
+            }
+        }
+        if (!done)
+            throw new Error('ensureTables: failed to create ' + file + ' after ' + MAX_ATTEMPTS
+                + ' attempts: ' + (lastErr ? lastErr.message : 'unknown'));
+    }
+}
+
 module.exports = HubDbSync;
+module.exports.ensureTables = ensureTables;

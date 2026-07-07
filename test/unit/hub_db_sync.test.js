@@ -843,3 +843,97 @@ describe('HubDbSync._applyRetraction closed-range parity @regression @tier3', fu
         assert.deepStrictEqual(calls[0].args, ['BTC', 10, 20, 4, 'BTC', 10, 20, 4]);
     });
 });
+
+// ---------------------------------------------------------------------------
+// ensureTables(): mirror-schema creation for consumers without their own
+// table machinery (the explorer's embedded mirror). The indexer never calls
+// this (verifyTables() owns its schema); these tests pin the contract the
+// explorer relies on: comment-safe statement splitting, per-file retry with
+// backoff, and a hard error on an empty SQL dir.
+// ---------------------------------------------------------------------------
+describe('HubDbSync.ensureTables @regression @tier3', function () {
+
+    const fs   = require('fs');
+    const os   = require('os');
+    const path = require('path');
+    const { ensureTables } = HubDbSync;
+
+    function makeSqlDir(files) {
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hub-mirror-sql-'));
+        for (const [name, content] of Object.entries(files))
+            fs.writeFileSync(path.join(dir, name), content);
+        return dir;
+    }
+
+    it('is exported alongside the class', function () {
+        assert.strictEqual(typeof ensureTables, 'function');
+    });
+
+    it('executes every statement of every .sql file, in filename order', async function () {
+        const dir = makeSqlDir({
+            'b_second.sql': 'CREATE TABLE IF NOT EXISTS b (id INT);',
+            'a_first.sql':  'CREATE TABLE IF NOT EXISTS a (id INT);\nCREATE INDEX idx_a ON a (id);'
+        });
+        const calls = [];
+        await ensureTables({ doQuery: async (sql) => { calls.push(sql); return []; } }, dir);
+        assert.strictEqual(calls.length, 3);
+        assert.match(calls[0], /CREATE TABLE IF NOT EXISTS a/);
+        assert.match(calls[1], /CREATE INDEX idx_a/);
+        assert.match(calls[2], /CREATE TABLE IF NOT EXISTS b/);
+    });
+
+    it('a semicolon inside a -- comment is not a statement terminator', async function () {
+        // Statement bodies must not contain quoted semicolons (the split on ';'
+        // is naive there, same as indexer db.js createTable); the guarantee
+        // under test is comment prose only, which is what bit attests.sql.
+        const dir = makeSqlDir({
+            't.sql': '-- header prose; with a semicolon\nCREATE TABLE IF NOT EXISTS t (id INT);'
+        });
+        const calls = [];
+        await ensureTables({ doQuery: async (sql) => { calls.push(sql); return []; } }, dir);
+        assert.strictEqual(calls.length, 1, 'comment semicolons must not split statements');
+        assert.match(calls[0], /CREATE TABLE IF NOT EXISTS t/);
+    });
+
+    it('retries a failing file with backoff and succeeds', async function () {
+        const clock = sinon.useFakeTimers();
+        try {
+            const dir = makeSqlDir({ 't.sql': 'CREATE TABLE IF NOT EXISTS t (id INT);' });
+            let attempts = 0;
+            const doQuery = async () => {
+                attempts++;
+                if (attempts === 1) throw new Error('transient');
+                return [];
+            };
+            const p = ensureTables({ doQuery }, dir);
+            await clock.tickAsync(600);
+            await p;
+            assert.strictEqual(attempts, 2);
+        } finally {
+            clock.restore();
+        }
+    });
+
+    it('throws after exhausting attempts on a persistently failing file', async function () {
+        const clock = sinon.useFakeTimers();
+        try {
+            const dir = makeSqlDir({ 't.sql': 'CREATE TABLE IF NOT EXISTS t (id INT);' });
+            const p = assert.rejects(
+                ensureTables({ doQuery: async () => { throw new Error('down'); } }, dir),
+                /failed to create t\.sql after 5 attempts: down/
+            );
+            await clock.tickAsync(60000);
+            await p;
+        } finally {
+            clock.restore();
+        }
+    });
+
+    it('throws on a directory with no .sql files', async function () {
+        const dir = makeSqlDir({});
+        await assert.rejects(
+            ensureTables({ doQuery: async () => [] }, dir),
+            /no \.sql files found/
+        );
+    });
+});
