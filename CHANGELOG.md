@@ -8,13 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Armed `CROSS_CHAIN_ROYALTY_ACTIVATION` mainnet at BTC anchor 961000 (~2026-08-04, fleet deploy required first) and confirmed the create-side `CROSS_CHAIN_ROYALTY` date at 2027-04-01.
+- Armed the contract-era (Cohort A) flag-day at 2026-10-01 00:00 UTC (was the 2027-01-01 placeholder) across all six block_TIME gates, re-anchored the CROSS_CHAIN_ROYALTY create-side date to 2027-01-01 (one quarter after), and armed the four remaining BTC-anchored gates (checkpoint commitment, EQUIV header, stake-weighted quorum, anchor reward) at BTC 961000.
+- `STATE_COMMITMENT_ACTIVATION` armed mid-chain with per-chain '<COIN>:<network>' keys (same heights as the state-hash gates); the twin module and its call sites now take the coin, mirroring stateHash.js.
+- Armed `CROSS_CHAIN_ROYALTY_ACTIVATION` mainnet at BTC anchor 961000 (~2026-08-04, fleet deploy required first); the create-side `CROSS_CHAIN_ROYALTY` date was re-anchored to 2027-01-01 the same day (entry above).
 - `stateHash.js` gains the flag-day-gated `token_supply` class covering in-place supply refreshes (F-1 closure); both state-hash gate maps are now per-chain and ARMED (fleet deploy required before the earliest activation height, DOGE mainnet 6,291,000).
 - `src/tableLifecycle.js` table-lifecycle registry: declares replication, rollback, and hash coverage per table, generates the rollback table lists, and gates coverage in tests (twin vendored to xchain-sync).
 - `stateHash.js` gains a flag-day-gated `poll_finalize` class covering VOTE poll finalization flips (inert on all networks until `POLL_FINALIZE_STATE_HASH_ACTIVATION` is armed).
 - `hub_db_sync.js` exports `ensureTables()` for non-indexer mirror consumers and is now the canonical copy vendored into xchain-explorer via `bin/sync-hub-mirror-client.sh`; indexer runtime behavior is unchanged.
 
 ### Fixed
+- `tick_id` is now nullable on the five invalid-tolerant detail tables (`deposits`, `withdrawals`, `contract_stakes`, `contract_unstakes`, `contract_delegations`) via an auto migration, closing a fleet-halt wedge where an invalid DEPOSIT/WITHDRAW/STAKE/UNSTAKE/DELEGATE carrying an unresolvable TICK (empty, or a `^<id>` reference to a non-existent ticker) wrote its row with a NULL `tick_id` and threw `ER_BAD_NULL_ERROR`, hard-looping block processing (F-18 sibling; found by the flag-day transition drill).
 - `hub_db_sync.js _applyRow` upgrades mirrored `cross_chain_matches.anchor_txid` in place (first-stamp-wins), so the hub's ANCHOR back-fill re-broadcast lands instead of being dropped by INSERT IGNORE.
 - `hub_db_sync.js ensureTables()` gates each SQL file on table existence (probed inside the retry loop), so a mirror consumer restarting against an already-built schema no longer fails with ER_TABLE_EXISTS_ERROR.
 - Pin `decimal.js` to `10.4.3` in the indexer's own `overrides` (mirroring the bundled VM): the deployed consensus process pulls the precision-64 BigNumber backend transitively via `mathjs` (caret `^10.4.3`), and npm honors `overrides` only from the top-level package, so a fresh install or `npm update` could otherwise float the backend within 10.x and silently change contract math roots. A new freeze-guard assertion pins the installed `decimal.js` (10.4.3) and `mathjs` (15.2.0) versions where consensus actually runs.

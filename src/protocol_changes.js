@@ -22,7 +22,7 @@
 // guard. This MUST stay byte-identical to xchain-vm's ASYNC_SURFACE_GATE_BLOCK_TIME;
 // a one-sided edit forks the fleet on the first async-using DEPLOY/EXECUTE after the
 // earlier of the two timestamps. consensus-params.test.js asserts the two are equal.
-const VM_BANNED_ASYNC_MAINNET_TIME = 1798761600;
+const VM_BANNED_ASYNC_MAINNET_TIME = 1790812800;
 
 class ProtocolChanges {
 
@@ -94,10 +94,10 @@ class ProtocolChanges {
         // height can name one coordinated cutover across all three chains, but a single
         // timestamp can. testnet/regtest activate at genesis (base64-native; no pre-base64
         // history to preserve, and the e2e/regtest stack deploys base64 from block 0).
-        // The mainnet timestamp below is a PLACEHOLDER coordinated flag-day (2027-01-01
-        // 00:00:00 UTC) that MUST be confirmed and aligned with the SDK base64 rollout
-        // before any base64 DEPLOY is broadcast to mainnet; a wrong value is a second fork.
-        this.addChange('DEPLOY_BASE64_CODE', '2.0.0',1798761600,0,0,0,0,0);
+        // The mainnet timestamp below is the coordinated contract-era flag-day
+        // (2026-10-01 00:00:00 UTC, CONFIRMED 2026-07-07), aligned with the SDK base64
+        // rollout; a wrong value is a second fork.
+        this.addChange('DEPLOY_BASE64_CODE', '2.0.0',1790812800,0,0,0,0,0);
 
         // Staking actions: capability variants (STAKE v1/v2, UNSTAKE v0, DELEGATE v0/v2, COLLECT) are BTC-only;
         // contract variants (STAKE v3, UNSTAKE v1, DELEGATE v1/v3) work on any chain
@@ -172,13 +172,13 @@ class ProtocolChanges {
         // ISSUEs ride DEPLOY/EXECUTE, which run on BTC, LTC and DOGE whose heights
         // diverge by millions of blocks, so no single shared block height names one
         // cutover across all three chains, but a single timestamp does. The mainnet
-        // timestamp is the same PLACEHOLDER coordinated flag-day as the base64
-        // rollout (2027-01-01 00:00:00 UTC) and MUST be confirmed/aligned with the
-        // other contract-deploy consensus fixes shipping in this window before any
-        // affected DEPLOY is broadcast to mainnet; a wrong value is a second fork.
+        // timestamp is the same coordinated contract-era flag-day as the base64
+        // rollout (2026-10-01 00:00:00 UTC, CONFIRMED 2026-07-07), aligned with the
+        // other contract-deploy consensus fixes shipping in this window; a wrong
+        // value is a second fork.
         // testnet/regtest activate at genesis (no pre-exemption history to preserve;
         // the e2e/regtest stack exercises VM emissions from block 0).
-        this.addChange('ISSUANCE_FEE_EMISSION_EXEMPT', '2.0.0',1798761600,0,0,0,0,0);
+        this.addChange('ISSUANCE_FEE_EMISSION_EXEMPT', '2.0.0',1790812800,0,0,0,0,0);
 
         // VM getBalance()/getTokenInfo() reader. Below this activation the gateway
         // receives balances:null / tokenInfo:null in every execution path (the
@@ -195,13 +195,12 @@ class ProtocolChanges {
         // ISSUANCE_FEE_EMISSION_EXEMPT. DEPLOY/EXECUTE run on BTC, LTC and DOGE
         // whose heights diverge by millions of blocks, so no single shared block
         // height names one cutover across all three chains, but a single timestamp
-        // does. The mainnet timestamp is the same PLACEHOLDER coordinated flag-day
-        // as the other contract-deploy consensus fixes in this window (2027-01-01
-        // 00:00:00 UTC) and MUST be confirmed/aligned before any balance-reading
-        // contract is broadcast to mainnet; a wrong value is a fork. testnet/regtest
+        // does. The mainnet timestamp is the same coordinated contract-era flag-day
+        // as the other contract-deploy consensus fixes in this window (2026-10-01
+        // 00:00:00 UTC, CONFIRMED 2026-07-07); a wrong value is a fork. testnet/regtest
         // activate at genesis (no pre-reader history to preserve; the e2e/regtest
         // stack exercises VM balance reads from block 0).
-        this.addChange('VM_BALANCE_TOKENINFO', '2.0.0',1798761600,0,0,0,0,0);
+        this.addChange('VM_BALANCE_TOKENINFO', '2.0.0',1790812800,0,0,0,0,0);
 
         // Programmable-policy controller guard. Below this activation the bound
         // controller's `guard` method is NEVER run: every SEND/ORDER/SWAP/DISPENSER/
@@ -223,13 +222,13 @@ class ProtocolChanges {
         // VM_BALANCE_TOKENINFO. Guarded actions run on BTC, LTC and DOGE whose heights
         // diverge by millions of blocks, so no single shared block height names one
         // cutover across all three chains, but a single timestamp does. The mainnet
-        // timestamp is the same PLACEHOLDER coordinated flag-day as the other
-        // contract-era consensus fixes in this window (2027-01-01 00:00:00 UTC) and MUST
-        // be confirmed/aligned with the operator fleet upgrade before any CONTROLLER-bound
-        // token is issued on mainnet; a wrong value is a fork. testnet/regtest activate
+        // timestamp is the same coordinated contract-era flag-day as the other
+        // contract-era consensus fixes in this window (2026-10-01 00:00:00 UTC,
+        // CONFIRMED 2026-07-07), aligned with the operator fleet upgrade before any
+        // CONTROLLER-bound token is issued on mainnet; a wrong value is a fork. testnet/regtest activate
         // at genesis (no pre-guard history to preserve; the e2e/regtest stack exercises
         // controller guards from block 0).
-        this.addChange('CONTROLLER_GUARD', '2.0.0',1798761600,0,0,0,0,0);
+        this.addChange('CONTROLLER_GUARD', '2.0.0',1790812800,0,0,0,0,0);
 
         // Cross-chain royalty enforcement, layered on CONTROLLER_GUARD. Once the guard
         // produces royalty payout_legs (post-CONTROLLER_GUARD), a CROSS-CHAIN listing of
@@ -244,20 +243,22 @@ class ProtocolChanges {
         // entry gates the CREATE-side acceptance rule (local block, like any acceptance
         // rule); the match-canonical format flip is keyed on the BTC-anchored
         // snapshot_block via the twin-module pattern (see the STAKE_WEIGHTED_QUORUM note
-        // below), NOT this entry. The mainnet timestamp is CONFIRMED (2026-07-07) at one
-        // quarter AFTER the CONTROLLER_GUARD flag-day (2027-04-01 00:00:00 UTC): the deny
-        // window between the two dates is the safe interim while the fleet upgrades to
-        // legs-in-canonical. The canonical partner is ARMED at BTC anchor 961000
+        // below), NOT this entry. The mainnet timestamp is CONFIRMED (2026-07-07,
+        // re-anchored the same day when the contract-era cohort moved to 2026-10-01) at
+        // one quarter AFTER the CONTROLLER_GUARD flag-day (2027-01-01 00:00:00 UTC): the
+        // deny window between the two dates is the safe interim while the fleet upgrades
+        // to legs-in-canonical. The canonical partner is ARMED at BTC anchor 961000
         // (~2026-08-04), months before this date, satisfying the canonical-first
-        // ordering; if the CONTROLLER_GUARD cohort moves, re-anchor this one quarter
-        // after it (never before the canonical partner); a wrong value is a fork. testnet/regtest activate at genesis so the
+        // ordering; if the CONTROLLER_GUARD cohort moves again, re-anchor this one
+        // quarter after it (never before the canonical partner); a wrong value is a
+        // fork. testnet/regtest activate at genesis so the
         // propagate+apply path is exercisable from block 0; regtest accepts an env
         // override (a future activation time) so the OFF/deny path stays drillable on a
         // single-node regtest stack. The override is regtest-only ON PURPOSE: two
         // regtest nodes with different overrides fork each other, which is fine for a
         // one-node drill and unacceptable anywhere else.
         let ccRoyaltyRegtestTime = parseInt(process.env.CROSS_CHAIN_ROYALTY_REGTEST_TIME) || 0;
-        this.addChange('CROSS_CHAIN_ROYALTY', '2.0.0',1806537600,0,ccRoyaltyRegtestTime,0,0,0);
+        this.addChange('CROSS_CHAIN_ROYALTY', '2.0.0',1798761600,0,ccRoyaltyRegtestTime,0,0,0);
 
         // Async/Promise contract surface (VM CONSENSUS_VERSION '2'). Below this
         // activation the on-chain deploy validator (validateSyntax) ACCEPTS a
@@ -279,10 +280,10 @@ class ProtocolChanges {
         // block_TIME (not block_index), mirroring DEPLOY_BASE64_CODE: DEPLOY/EXECUTE
         // run on BTC, LTC and DOGE whose heights diverge by millions of blocks, so no
         // single shared block height names one cutover across all three chains, but a
-        // single timestamp does. The mainnet timestamp is the same PLACEHOLDER
-        // coordinated flag-day as the other contract-era consensus fixes in this
-        // window (2027-01-01 00:00:00 UTC) and MUST be confirmed/aligned with the
-        // fleet upgrade before any async/Promise-relevant DEPLOY is broadcast to
+        // single timestamp does. The mainnet timestamp is the same coordinated
+        // contract-era flag-day as the other consensus fixes in this window
+        // (2026-10-01 00:00:00 UTC, CONFIRMED 2026-07-07), aligned with the fleet
+        // upgrade before any async/Promise-relevant DEPLOY is broadcast to
         // mainnet; a wrong value is a fork. testnet/regtest activate at genesis (no
         // pre-activation history to preserve; the e2e/regtest stack has run with the
         // rule live, so genesis activation preserves its current behaviour).
@@ -312,11 +313,11 @@ class ProtocolChanges {
         // effect is applied and the ledger_hash chain agrees with balances_root and
         // with any recompute. Consensus-breaking (changes actions_hash + ledger_hash
         // for cooldown-completion blocks), so it is gated on the same coordinated
-        // flag-day as the other contract-era consensus fixes (2027-01-01 00:00:00 UTC,
-        // PLACEHOLDER, MUST be confirmed with the fleet upgrade; a wrong value forks).
+        // flag-day as the other contract-era consensus fixes (2026-10-01 00:00:00 UTC,
+        // CONFIRMED 2026-07-07, aligned with the fleet upgrade; a wrong value forks).
         // testnet/regtest activate at genesis (all zeros); the e2e/regtest stack must
         // be rebuilt fresh so no pre-activation cooldown-completion blocks remain.
-        this.addChange('UNSTAKE_COOLDOWN_COMPLETION_ACTION', '2.0.0',1798761600,0,0,0,0,0);
+        this.addChange('UNSTAKE_COOLDOWN_COMPLETION_ACTION', '2.0.0',1790812800,0,0,0,0,0);
 
         // NOTE: STAKE_WEIGHTED_QUORUM (WI-1) is deliberately NOT registered here.
         // Standard activations gate on the LOCAL processing block via isEnabled();

@@ -128,17 +128,25 @@ describe('stateCommitment: persistent SMT == in-memory reference @regression', f
 describe('state-commitment flag-day activation @regression', function(){
     const act = require('../../src/state_commitment_activation.js');
 
-    it('gates on the local block_index per network', function(){
+    it('gates on the local block_index per chain', function(){
         assert.strictEqual(act.isStateCommitmentActive(0, 'regtest'), true);
-        assert.strictEqual(act.isStateCommitmentActive(0, 'testnet'), true);
-        assert.strictEqual(act.isStateCommitmentActive(5, 'mainnet'), false);   // placeholder height
-        assert.strictEqual(act.isStateCommitmentActive(0, 'bogusnet'), false);  // unknown -> off
+        assert.strictEqual(act.isStateCommitmentActive(0, 'testnet', 'BTC'), false);   // below the armed testnet height
+        assert.strictEqual(act.isStateCommitmentActive(145000, 'testnet', 'BTC'), true);
+        assert.strictEqual(act.isStateCommitmentActive(958499, 'mainnet', 'BTC'), false);  // one below the armed height
+        assert.strictEqual(act.isStateCommitmentActive(958500, 'mainnet', 'BTC'), true);
+        assert.strictEqual(act.isStateCommitmentActive(6291000, 'mainnet', 'DOGE'), true);
+        assert.strictEqual(act.isStateCommitmentActive(6291000, 'mainnet', 'LTC'), true);  // LTC armed lower
+        assert.strictEqual(act.isStateCommitmentActive(5, 'mainnet'), false);       // coin-less mainnet -> inert
+        assert.strictEqual(act.isStateCommitmentActive(0, 'bogusnet'), false);      // unknown -> off
     });
 
     it('flags only the single activation boundary block', function(){
         // regtest activates at 0: block 0 is the boundary (0 active, -1 inactive)
         assert.strictEqual(act.isStateCommitmentActivationBlock(0, 'regtest'), true);
         assert.strictEqual(act.isStateCommitmentActivationBlock(1, 'regtest'), false);
+        // mid-chain arming: the armed height itself is the boundary
+        assert.strictEqual(act.isStateCommitmentActivationBlock(958500, 'mainnet', 'BTC'), true);
+        assert.strictEqual(act.isStateCommitmentActivationBlock(958501, 'mainnet', 'BTC'), false);
     });
 
     // Cross-service parity: the indexer's LOCAL activation map must equal the

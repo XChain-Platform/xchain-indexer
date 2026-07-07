@@ -187,7 +187,7 @@ describe('ProtocolChanges @regression @tier3', function () {
     // ledger. deploy.test.js stubs isEnabled(), so ONLY this block guards the REAL
     // registration. Keep these assertions in lockstep with protocol_changes.js.
     describe('DEPLOY_BASE64_CODE activation gate (consensus)', function () {
-        const MAINNET_FLAG_DAY = 1798761600; // 2027-01-01 00:00:00 UTC PLACEHOLDER (see protocol_changes.js)
+        const MAINNET_FLAG_DAY = 1790812800; // 2026-10-01 00:00:00 UTC, CONFIRMED 2026-07-07 (see protocol_changes.js)
 
         // The constructor reads INDEXER_NETWORK + npm_package_version fresh, so a new
         // instance per network/version is all that's needed (no module-cache reset).
@@ -266,7 +266,7 @@ describe('ProtocolChanges @regression @tier3', function () {
     // guards the registration the call sites depend on. Keep in lockstep with
     // protocol_changes.js.
     describe('VM_BALANCE_TOKENINFO activation gate (consensus)', function () {
-        const MAINNET_FLAG_DAY = 1798761600; // 2027-01-01 00:00:00 UTC PLACEHOLDER (see protocol_changes.js)
+        const MAINNET_FLAG_DAY = 1790812800; // 2026-10-01 00:00:00 UTC, CONFIRMED 2026-07-07 (see protocol_changes.js)
 
         function pcFor(network, version = '2.0.0') {
             process.env.npm_package_version = version; // shipping consensus version
@@ -343,7 +343,7 @@ describe('ProtocolChanges @regression @tier3', function () {
     // REAL isEnabled() at the single shared chokepoint, so this block guards the registration
     // that gate depends on. Keep in lockstep with protocol_changes.js.
     describe('CONTROLLER_GUARD activation gate (consensus)', function () {
-        const MAINNET_FLAG_DAY = 1798761600; // 2027-01-01 00:00:00 UTC PLACEHOLDER (see protocol_changes.js)
+        const MAINNET_FLAG_DAY = 1790812800; // 2026-10-01 00:00:00 UTC, CONFIRMED 2026-07-07 (see protocol_changes.js)
 
         function pcFor(network, version = '2.0.0') {
             process.env.npm_package_version = version; // shipping consensus version

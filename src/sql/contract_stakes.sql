@@ -5,7 +5,7 @@ CREATE TABLE contract_stakes (
     version                TINYINT UNSIGNED NOT NULL DEFAULT 3,  -- STAKE format version (3 today, reserved for future variants)
     signing_pubkey_id      BIGINT UNSIGNED NOT NULL,        -- FK to index_pubkeys (Ed25519 hot key)
     target_contract_index  BIGINT UNSIGNED,                 -- FK to contracts.action_index (the contract being staked to); NULL on invalid junk-index actions
-    tick_id                BIGINT UNSIGNED NOT NULL,        -- FK to index_tickers (which token is staked)
+    tick_id                BIGINT UNSIGNED,                 -- FK to index_tickers (which token is staked); NULL on invalid actions with an unresolvable TICK
     amount                 VARCHAR(250) NOT NULL,           -- Token amount added by this action (active stake = SUM across (target, source, pubkey, tick))
     status_id              BIGINT UNSIGNED,                 -- valid/invalid/etc
     block_index            BIGINT UNSIGNED NOT NULL,

@@ -4,7 +4,7 @@ CREATE TABLE contract_delegations (
     source_id              BIGINT UNSIGNED NOT NULL,        -- staking address
     signing_pubkey_id      BIGINT UNSIGNED NOT NULL,        -- FK to index_pubkeys (the NEW pubkey)
     target_contract_index  BIGINT UNSIGNED NOT NULL,        -- FK to contracts.action_index
-    tick_id                BIGINT UNSIGNED NOT NULL,        -- FK to index_tickers (which contract-stake context)
+    tick_id                BIGINT UNSIGNED,                 -- FK to index_tickers (which contract-stake context); NULL on invalid actions with an unresolvable TICK
     status_id              BIGINT UNSIGNED,                 -- active/revoked
     block_index            BIGINT UNSIGNED NOT NULL,
     activation_block       BIGINT UNSIGNED NOT NULL DEFAULT 0,  -- block when delegation becomes active

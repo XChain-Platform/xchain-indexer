@@ -424,6 +424,73 @@ describe('Database getTicker/getTickerId @regression @tier1', function () {
     });
 });
 
+// tick_id NULL tolerance on the invalid-detail-row writers (fleet-halt regression)
+// The DEPOSIT/WITHDRAW and contract-staking (STAKE/UNSTAKE/DELEGATE) handlers write
+// their detail row even when the action is invalid, and resolve tick_id through
+// createTicker(), which returns null for an unresolvable TICK (empty, or a ^<id>
+// reference to a ticker that does not exist). With NOT NULL on the column, that
+// INSERT threw ER_BAD_NULL_ERROR and the block-processing retry loop hard-wedged
+// every indexer (a single crafted tx could halt the fleet; F-18 sibling, found by
+// the 2026-07-07 flag-day transition drill). Columns are now nullable
+// (2026-07-07-tick-id-columns-nullable migration); these guard that each writer
+// emits its INSERT with tick_id=null instead of throwing.
+describe('Database detail-row writers tolerate a null tick_id @regression @tier1', function () {
+    // The INSERT is the writer's LAST doQuery call (each does a SELECT-exists probe
+    // first), so read the final call's bind args and locate the null tick_id.
+    async function insertArgsForNullTick(method, data) {
+        const db = makeDb();
+        sinon.stub(db, 'createStatus').resolves(9);
+        sinon.stub(db, 'getAddressId').resolves(3);
+        sinon.stub(db, 'getOrCreatePubkeyId').resolves(4);
+        // Unresolvable TICK (e.g. a ^<id> ref with no backing row) -> null.
+        sinon.stub(db, 'createTicker').resolves(null);
+        const stub = sinon.stub(db, 'doQuery').resolves([]);   // SELECT-exists -> not found; INSERT -> ok
+        await db[method](data);                                // must NOT throw
+        return stub.lastCall.args[1];
+    }
+
+    it('createDeposit inserts a null tick_id for an unresolvable TICK', async function () {
+        const args = await insertArgsForNullTick('createDeposit', {
+            CONTRACT_ACTION_INDEX: 166, SOURCE: 'addr', TICK: '^22', AMOUNT: '500',
+            STATUS: 'invalid: TICK (unknown)', BLOCK_INDEX: 396, ACTION_INDEX: 163,
+        });
+        assert.ok(args.includes(null), 'expected a null bind (tick_id) among the deposits INSERT args');
+    });
+
+    it('createWithdrawal inserts a null tick_id for an unresolvable TICK', async function () {
+        const args = await insertArgsForNullTick('createWithdrawal', {
+            CONTRACT_ACTION_INDEX: 166, SOURCE: 'addr', TICK: '^22', AMOUNT: '500',
+            STATUS: 'invalid: TICK (unknown)', BLOCK_INDEX: 396, ACTION_INDEX: 164,
+        });
+        assert.ok(args.includes(null), 'expected a null bind (tick_id) among the withdrawals INSERT args');
+    });
+
+    it('createContractStake inserts a null tick_id for an unresolvable TICK', async function () {
+        const args = await insertArgsForNullTick('createContractStake', {
+            SOURCE: 'addr', SIGNING_PUBKEY: 'aa', TARGET_CONTRACT_INDEX: 5, TICK: '^22',
+            AMOUNT: '500', STATUS: 'invalid: TICK (unknown)', BLOCK_INDEX: 396, ACTION_INDEX: 165,
+        });
+        assert.ok(args.includes(null), 'expected a null bind (tick_id) among the contract_stakes INSERT args');
+    });
+
+    it('createContractUnstake inserts a null tick_id for an unresolvable TICK', async function () {
+        const args = await insertArgsForNullTick('createContractUnstake', {
+            SOURCE: 'addr', SIGNING_PUBKEY: 'aa', TARGET_CONTRACT_INDEX: 5, TICK: '^22',
+            COOLDOWN_END_BLOCK: 500, AMOUNT: '500', STATUS: 'invalid: TICK (unknown)',
+            BLOCK_INDEX: 396, ACTION_INDEX: 166,
+        });
+        assert.ok(args.includes(null), 'expected a null bind (tick_id) among the contract_unstakes INSERT args');
+    });
+
+    it('createContractDelegation inserts a null tick_id for an unresolvable TICK', async function () {
+        const args = await insertArgsForNullTick('createContractDelegation', {
+            SOURCE: 'addr', SIGNING_PUBKEY: 'aa', TARGET_CONTRACT_INDEX: 5, TICK: '^22',
+            STATUS: 'invalid: TICK (unknown)', BLOCK_INDEX: 396, ACTION_INDEX: 167,
+        });
+        assert.ok(args.includes(null), 'expected a null bind (tick_id) among the contract_delegations INSERT args');
+    });
+});
+
 // TICK_ID (^N) <-> ticker-name equivalence
 // The protocol lets any action reference a token by its full name (PEPE) or by
 // its immutable numeric id with a caret prefix (^7). Both MUST resolve to the

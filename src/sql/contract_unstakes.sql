@@ -4,7 +4,7 @@ CREATE TABLE contract_unstakes (
     source_id              BIGINT UNSIGNED NOT NULL,
     signing_pubkey_id      BIGINT UNSIGNED NOT NULL,        -- FK to index_pubkeys (which contract-stake is being unstaked)
     target_contract_index  BIGINT UNSIGNED,                 -- FK to contracts.action_index; NULL on invalid junk-index actions
-    tick_id                BIGINT UNSIGNED NOT NULL,        -- FK to index_tickers (which token)
+    tick_id                BIGINT UNSIGNED,                 -- FK to index_tickers (which token); NULL on invalid actions with an unresolvable TICK
     cooldown_end_block     BIGINT UNSIGNED NOT NULL,        -- block when funds release (block_index + contracts.cooldown_blocks)
     amount                 VARCHAR(250) NOT NULL,           -- Total amount being unstaked (sum of active contract_stakes rows for this (target, pubkey, tick))
     status_id              BIGINT UNSIGNED,                 -- pending/completed/cancelled

@@ -623,7 +623,7 @@ class XChainIndexer {
                 // fresh per-block touched-key set so the ledger choke point
                 // (db.createLedgerChangeRecord) records every (address, tick) mutated
                 // this block; cleared/null when inactive so the hook is inert.
-                let stateCommitActive = stateCommitAct.isStateCommitmentActive(blockToParse, this.config['NETWORK']);
+                let stateCommitActive = stateCommitAct.isStateCommitmentActive(blockToParse, this.config['NETWORK'], this.config['COIN']);
                 this.indexerDb._smtTouched = stateCommitActive ? new Set() : null;
                 try {
 
@@ -688,7 +688,7 @@ class XChainIndexer {
                         // block, after sanityCheck and before commit. Gated by the flag-day;
                         // a throw here rolls the whole block back like any other failure.
                         if(stateCommitActive){
-                            let isActivation = stateCommitAct.isStateCommitmentActivationBlock(blockToParse, this.config['NETWORK']);
+                            let isActivation = stateCommitAct.isStateCommitmentActivationBlock(blockToParse, this.config['NETWORK'], this.config['COIN']);
                             await stateCommitment.computeAndStoreRoots(this.indexerDb, this.config['COIN'], this.config['NETWORK'], blockToParse, isActivation);
                         }
 

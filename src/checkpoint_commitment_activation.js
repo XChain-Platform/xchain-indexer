@@ -39,7 +39,7 @@
 // carried by the checkpoint/ANCHOR canonical (NOT the local processing height), so
 // every chain + the hub flip the signed shape on the same anchor.
 const CHECKPOINT_COMMITMENT_ACTIVATION = {
-    mainnet: 999999999,   // PLACEHOLDER: set the real BTC flag-day height before mainnet enable
+    mainnet: 961000,      // ARMED 2026-07-07: BTC anchor ~2026-08-04; deploy hub + ALL indexers (+ sdk/explorer/sync copies) before this height
     testnet: 0,
     regtest: 0,
 };
