@@ -244,12 +244,13 @@ class ProtocolChanges {
         // entry gates the CREATE-side acceptance rule (local block, like any acceptance
         // rule); the match-canonical format flip is keyed on the BTC-anchored
         // snapshot_block via the twin-module pattern (see the STAKE_WEIGHTED_QUORUM note
-        // below), NOT this entry. The mainnet timestamp is a PLACEHOLDER one quarter
-        // AFTER the CONTROLLER_GUARD flag-day (2027-04-01 00:00:00 UTC): the deny window
-        // between the two dates is the safe interim while the fleet upgrades to
-        // legs-in-canonical, and the real date MUST be coordinated with that fleet
-        // upgrade before any cross-chain listing of a controlled token exists on
-        // mainnet; a wrong value is a fork. testnet/regtest activate at genesis so the
+        // below), NOT this entry. The mainnet timestamp is CONFIRMED (2026-07-07) at one
+        // quarter AFTER the CONTROLLER_GUARD flag-day (2027-04-01 00:00:00 UTC): the deny
+        // window between the two dates is the safe interim while the fleet upgrades to
+        // legs-in-canonical. The canonical partner is ARMED at BTC anchor 961000
+        // (~2026-08-04), months before this date, satisfying the canonical-first
+        // ordering; if the CONTROLLER_GUARD cohort moves, re-anchor this one quarter
+        // after it (never before the canonical partner); a wrong value is a fork. testnet/regtest activate at genesis so the
         // propagate+apply path is exercisable from block 0; regtest accepts an env
         // override (a future activation time) so the OFF/deny path stays drillable on a
         // single-node regtest stack. The override is regtest-only ON PURPOSE: two

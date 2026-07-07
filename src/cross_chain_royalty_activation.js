@@ -32,7 +32,9 @@
  * gated rules use this twin-module pattern, NOT protocol_changes.addChange
  * (see the note in protocol_changes.js).
  *
- * Byte-identical twin lives in the sibling repo:
+ * LOCAL COPY of the canonical map in xchain-documentation/protocol/constants.js,
+ * kept byte-equal by the cross-service regression suite (a divergence forks the
+ * signed match bytes and breaks federation parity). Byte-identical twin lives in:
  * xchain-indexer/src/cross_chain_royalty_activation.js
  * xchain-hub/src/cross_chain_royalty_activation.js
  *
@@ -42,7 +44,7 @@
 // carried by the XMATCH canonical (NOT the local processing height), so every
 // chain + the hub flip the match format on the same anchor.
 const CROSS_CHAIN_ROYALTY_ACTIVATION = {
-    mainnet: 999999999,   // PLACEHOLDER: set the real BTC flag-day height before mainnet enable
+    mainnet: 961000,      // ARMED 2026-07-07: BTC anchor ~2026-08-04; deploy hub + ALL indexers before this height
     testnet: 0,
     regtest: 0,
 };
