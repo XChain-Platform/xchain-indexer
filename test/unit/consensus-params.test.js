@@ -87,6 +87,16 @@ const EXPECTED_VM_SAFE_MATH_MEMBERS = [
     'E', 'PI', 'abs', 'ceil', 'floor', 'max', 'min', 'round', 'sign', 'trunc'
 ];
 const FROZEN_STATUS_TOKENS = ['reverted', 'out_of_resource', 'failed'];
+// Frozen math-library versions. decimal.js is the BigNumber backend that performs the
+// consensus-critical precision-64 arithmetic behind every contract math root; mathjs is the
+// fee/amount math engine. Both are pinned EXACTLY in this package's `overrides` block so a
+// lockfile re-resolve or `npm update` cannot float them (mathjs declares decimal.js as a caret,
+// ^10.4.3, which would otherwise drift the backend within 10.x and silently change math roots →
+// divergent Merkle root → chain fork). This asserts the pin where consensus actually runs (the
+// deployed indexer process); the analogous MATH_PINNED guard lives VM-side only and npm honors
+// `overrides` only from the top-level package, so the vendored VM's own pin is inert here.
+const GOLDEN_DECIMAL_JS_VERSION = '10.4.3';
+const GOLDEN_MATHJS_VERSION     = '15.2.0';
 // Safety cap on validator-set queries (db.js). Read on the deterministic block-processing
 // path (responsible-set / quorum gates), so it is a FROZEN node-local consensus constant
 // (identical across chains, never an env var). A per-node value forks the federation once the
@@ -210,6 +220,17 @@ describe('consensus parameters are frozen (track 8 guard) @regression', function
         assert.strictEqual(stub.config.STAKING.ACTIVATION_DELAY_BLOCKS, 6, 'STAKING.ACTIVATION_DELAY_BLOCKS was live-polled');
         assert.strictEqual(stub.config.STAKING.COOLDOWN_BLOCKS, 1000, 'STAKING.COOLDOWN_BLOCKS was live-polled');
         assert.strictEqual(stub.config.ACTIVATION_DELAY_BLOCKS, undefined, 'top-level ACTIVATION_DELAY_BLOCKS was live-polled');
+    });
+
+    it('the consensus-critical math libraries are pinned to the frozen versions (decimal.js + mathjs)', function(){
+        // Read the ACTUALLY-INSTALLED versions (not the package.json range) so the assertion
+        // fails if a lockfile re-resolve floats decimal.js within the caret mathjs declares.
+        const installedDecimal = require('decimal.js/package.json').version;
+        const installedMathjs  = require('mathjs/package.json').version;
+        assert.strictEqual(installedDecimal, GOLDEN_DECIMAL_JS_VERSION,
+            'installed decimal.js drifted from the frozen pin (overrides["decimal.js"] must equal ' + GOLDEN_DECIMAL_JS_VERSION + '); a caret float here changes precision-64 contract math roots and forks the chain');
+        assert.strictEqual(installedMathjs, GOLDEN_MATHJS_VERSION,
+            'installed mathjs drifted from the frozen pin (overrides["mathjs"] must equal ' + GOLDEN_MATHJS_VERSION + ')');
     });
 
     it('vmFailureStatus maps every VM error into the frozen closed token set', function(){

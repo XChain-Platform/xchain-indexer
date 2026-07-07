@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- Pin `decimal.js` to `10.4.3` in the indexer's own `overrides` (mirroring the bundled VM): the deployed consensus process pulls the precision-64 BigNumber backend transitively via `mathjs` (caret `^10.4.3`), and npm honors `overrides` only from the top-level package, so a fresh install or `npm update` could otherwise float the backend within 10.x and silently change contract math roots. A new freeze-guard assertion pins the installed `decimal.js` (10.4.3) and `mathjs` (15.2.0) versions where consensus actually runs.
 - `DISPENSER_EXPIRE` and `DISPENSER_CLOSE` return escrow via `bcsub(0, GIVE_REMAINING, 64)` instead of JS unary minus, which coerced an 18-decimal remaining balance to a float and desynced the escrow debit from the full-precision credit (mirrors the `dispense.js` pattern).
 - The orphaned `contract_balances` drop migration is tagged `mode=manual` so its destructive `DROP TABLE` no longer auto-runs at indexer startup across the fleet; it now applies only via an explicit operator migrate run.
 - CI integration scenarios 11/14 boot LTC/DOGE test indexers with real fee destinations and pin the xchain fee path post-init (`withCoin` `xchainFeeMode`), replacing the placeholder env override the startup guard now fails closed on.
