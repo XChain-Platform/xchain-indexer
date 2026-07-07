@@ -75,8 +75,17 @@ class Sweep {
         let ownerships  = await this.indexerDb.getAddressOwnerships(data['SOURCE']);
         let escrowed    = await this.indexerDb.getAddressEscrows(data['SOURCE'], null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
 
-        // Create the fees object 
+        // Create the fees object
         let fees = await this.util.createFeesObject(this.indexerDb, data, preferences);
+
+        // Controller-bound token gas context. Any swept balance of a token whose `transfer` class is
+        // bound to a controller runs that contract's `guard` before the sweep settles; SOURCE pays
+        // the (bounded) cumulative guard gas in GAS. Loaded once; the per-tick guard loop below
+        // reserves against the live `balances` view and any deny fails the whole SWEEP. Pre-flag-day
+        // the guard is a strict no-op.
+        let gasTick  = this.config['GAS'];
+        let gasInfo  = await this.indexerDb.getTokenInfo(gasTick, data['BLOCK_INDEX'], data['ACTION_INDEX']);
+        let guardFee = 0;
 
         /*****************************************************************
          * FORMAT Validations
@@ -181,6 +190,44 @@ class Sweep {
         if(!error && (!fees['PAYMENT_MODE'] || fees['PAYMENT_MODE'] === 2))
             balances = this.util.debitBalances(balances, fees['TICK_ID'], fees['AMOUNT']);
 
+        // Controller-bound tokens: gate the OUTBOUND move of each swept balance. For every swept tick
+        // whose `transfer` class is bound to a controller, run that contract's `guard` once on the
+        // aggregate move (from=SOURCE, to=DESTINATION, amount=balance). ANY deny fails the WHOLE SWEEP
+        // (fail-closed, per the chosen bounded-aggregate model). SOURCE pays the cumulative guard gas
+        // in GAS, reserved out of `balances` as we go so the swept GAS amount below already excludes it
+        // (SOURCE is never over-debited). Ticks are iterated in ascending tick_id order so guard
+        // executions are deterministic across nodes. Ownership transfers (the ISSUE loop below) are a
+        // separate capability and are NOT gated by this class. Only runs when BALANCES are swept, and
+        // is a strict no-op before the CONTROLLER_GUARD flag-day.
+        if(!error && data['BALANCES']==1){
+            let sweepTickIds = Object.keys(balances).map(Number).sort((a,b) => a-b);
+            for(let tick_id of sweepTickIds){
+                if(error) break;
+                let amount = balances[tick_id];
+                if(this.util.isNull(amount) || !this.util.bcgt(String(amount), '0')) continue;
+                let tick = await this.indexerDb.getTicker(tick_id);
+                if(this.util.isNull(tick)) continue;
+                let result = await this.util.maybeRunControllerGuard(this.actions, this.indexerDb, {
+                    actionType:  'SWEEP',
+                    tick:        tick,
+                    from:        data['SOURCE'],
+                    to:          data['DESTINATION'],
+                    amount:      String(amount),
+                    data:        data,
+                    gasInfo:     gasInfo,
+                    gasBalances: balances,
+                    seq:         Number(tick_id) || 0
+                });
+                if(result.error){
+                    error = 'invalid: ' + result.error;
+                } else if(this.util.bcgt(result.guardFee, 0)){
+                    guardFee = this.util.bcadd(guardFee, result.guardFee, 8);
+                    if(gasInfo)
+                        balances = this.util.debitBalances(balances, gasInfo['TICK_ID'], result.guardFee);
+                }
+            }
+        }
+
         // Determine final status
         let status = (error) ? error : 'valid';
         data['STATUS'] = sweep['STATUS'] = status;
@@ -214,6 +261,15 @@ class Sweep {
 
             // Handle any transaction FEE according the users's ADDRESS preferences
             [credits, debits] = await this.util.processTransactionFees(this.indexerDb, credits, debits, fees);
+
+            // Bill the cumulative controller-guard gas to SOURCE (a GAS burn with no offsetting
+            // credit). `balances` was already reduced above so the swept GAS credited to DESTINATION
+            // excludes it; the end-of-action updateTokens recomputes GAS supply from the ledger so the
+            // per-block sanityCheck (ledger == supply == balances) holds.
+            if(this.util.bcgt(guardFee, 0)){
+                debits.push([gasTick, guardFee, data['SOURCE']]);
+                this.util.addAddressTicker(data['SOURCE'], gasTick);
+            }
 
             // Cancel open ORDERs. If the order has pending COINPay obligations, use the
             // two-phase 'cancelling' path (matches order.js v1 cancel behavior): escrow

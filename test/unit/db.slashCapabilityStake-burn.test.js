@@ -48,11 +48,26 @@ function makeDb() {
     return db;
 }
 
-function wire(db, { stakes = [], unstakes = [] }) {
+// Emulate the Pass-1 `stakes` SELECT against fixture rows, honoring whichever deactivation predicate
+// the query text carries, so the test exercises the real block-height arithmetic rather than assuming
+// the filter works. slashBlock is the block the slash lands at (3rd arg to slashCapabilityStake).
+function selectStakes(sql, rows, slashBlock) {
+    const windowed = /deactivation_block\s*>\s*\?/i.test(sql);         // the buggy `> ?` predicate
+    const hasNull  = /deactivation_block\s+IS\s+NULL/i.test(sql);
+    const nullOnly = hasNull && !windowed;                             // the correct `IS NULL`-only predicate
+    return rows.filter((r) => {
+        if (r.deactivation_block === null || r.deactivation_block === undefined) return true;
+        if (nullOnly)  return false;                                        // correct filter drops any deactivated row
+        if (windowed)  return Number(r.deactivation_block) > Number(slashBlock); // buggy filter keeps it in-window
+        return true;
+    }).map((r) => ({ action_index: r.action_index, amount: r.amount }));
+}
+
+function wire(db, { stakes = [], unstakes = [], slashBlock = 306 }) {
     const calls = [];
     sinon.stub(db, 'doQuery').callsFake(async (sql, args) => {
         calls.push({ sql, args });
-        if (/SELECT[\s\S]*FROM\s+stakes/i.test(sql))   return stakes;
+        if (/SELECT[\s\S]*FROM\s+stakes/i.test(sql))   return selectStakes(sql, stakes, slashBlock);
         if (/SELECT[\s\S]*FROM\s+unstakes/i.test(sql)) return unstakes;
         return [];   // UPDATEs + the capability_slash_debits INSERTs
     });
@@ -75,11 +90,12 @@ describe('Database.slashCapabilityStake() equivocation burn @regression @tier1',
         assert.ok(upd, 'an active stake must be burned from stakes');
         assert.deepStrictEqual(upd.args, ['0', 7]);
 
-        // Pass 1 carries the active-window guard and binds the slash block.
+        // Pass 1 only ever burns never-unstaked rows (deactivation_block IS NULL); a deactivated
+        // row's tokens live in the cooldown unstakes row and are burned by Pass 2.
         const sel = calls.find(c => /SELECT[\s\S]*FROM\s+stakes/i.test(c.sql));
-        assert.ok(/deactivation_block IS NULL OR deactivation_block > \?/.test(sel.sql),
-            'Pass 1 must carry the deactivation-window guard');
-        assert.ok(sel.args.includes(306) && sel.args.includes(42), 'binds blockIndex + pubkeyId');
+        assert.ok(/deactivation_block\s+IS\s+NULL/i.test(sel.sql) && !/deactivation_block\s*>\s*\?/i.test(sel.sql),
+            'Pass 1 must filter deactivation_block IS NULL (not the inverted future-block predicate)');
+        assert.ok(sel.args.includes(306) && sel.args.includes(42), 'binds blockIndex (activation gate) + pubkeyId');
 
         // The debit records the verbatim pre-slash amount for reorg restore.
         const d = debitInserts(calls);
@@ -91,9 +107,15 @@ describe('Database.slashCapabilityStake() equivocation burn @regression @tier1',
 
     it('mid-cooldown: a deactivated stakes row is excluded; the bond burns from unstakes only', async function () {
         const db = makeDb();
-        // Pass 1 SELECT returns [] (the active-window filter excludes the deactivated phantom);
-        // the tokens live in the cooldown unstakes row.
-        const calls = wire(db, { stakes: [], unstakes: [{ action_index: 5, amount: '1000' }] });
+        // The validator unstaked; its stakes row keeps amount=1000 but carries a FUTURE
+        // deactivation_block (312 > slash block 306), and the tokens are mirrored into the cooldown
+        // unstakes row. The correct IS NULL filter must exclude the stakes phantom so the bond burns
+        // once (Pass 2). The inverted `> ?` predicate would include it in-window and double-burn.
+        const calls = wire(db, {
+            stakes:   [{ action_index: 7, amount: '1000', deactivation_block: 312 }],
+            unstakes: [{ action_index: 5, amount: '1000' }],
+            slashBlock: 306,
+        });
 
         const burned = await db.slashCapabilityStake(42, 306, 999);
         assert.strictEqual(Number(burned), 1000);

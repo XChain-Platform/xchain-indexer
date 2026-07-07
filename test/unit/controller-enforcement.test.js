@@ -59,6 +59,10 @@ describe('Programmable policy layer : Phase B enforcement @regression', function
         it('SEND → transfer', function () {
             assert.strictEqual(util.controllerActionClass('SEND'), 'transfer');
         });
+        it('AIRDROP/DIVIDEND/SWEEP → transfer (bulk outbound moves are gated too)', function () {
+            for (const a of ['AIRDROP', 'DIVIDEND', 'SWEEP'])
+                assert.strictEqual(util.controllerActionClass(a), 'transfer');
+        });
         it('ORDER/SWAP/DISPENSER create → trade', function () {
             for (const a of ['ORDER_CREATE', 'SWAP_CREATE', 'DISPENSER_CREATE'])
                 assert.strictEqual(util.controllerActionClass(a), 'trade');

@@ -95,6 +95,15 @@ describe('Utility @regression @tier1', function () {
             assert.ok(db.getEffectiveUndispatchedCalls.calledWith(COIN, NETWORK, 1700000000, CAP));
         });
 
+        it('caps the expiry pass at XCALL_MAX_CALLS_PER_BLOCK (query-level) so a deadline-aligned burst cannot wedge the chain', async function () {
+            // deadline_block is caller-chosen; without a bound, an aligned burst would synthesize an
+            // XCALL v2 + VM callback isolate per request in one block transaction and blow the block
+            // timeout deterministically on every indexer. The expiry query must receive the cap.
+            await util.processCrossChainCalls(actions, db, 100, 1700000000);
+            assert.ok(db.getExpiredCrossChainCallRequests.calledWith(100, CAP),
+                'expiry pass must bind the per-block cap (block_index, cap)');
+        });
+
         it('fetches the full effective result set and delivers at most the cap', async function () {
             // Results are fetched uncapped (so the expiry pass can see requests that are
             // deliverable this block but deferred past the cap) and the per-block cap is then

@@ -6435,14 +6435,24 @@ class Database {
     }
 
     // Pending requests whose deadline has passed (drives the v2 expiry synthesis).
-    async getExpiredCrossChainCallRequests(block_index){
+    // Pending requests whose deadline has passed, capped at `cap` per block (carry-forward: the
+    // remainder is picked up in later blocks). The cap is load-bearing for liveness: deadline_block
+    // is caller-chosen in [10,4000], so an attacker can align many requests' deadlines onto one
+    // block; without a bound the expiry pass would synthesize an XCALL v2 + run a VM callback isolate
+    // for every one of them inside a single block transaction, blowing BLOCK_PROCESS_TIMEOUT and
+    // wedging every indexer on the chain at the identical block. Ordering is deterministic and
+    // node-invariant (deadline_block, then per-chain action_index), so the capped subset and the
+    // carry-forward converge byte-identically across operators (matches the dispatch/result caps).
+    async getExpiredCrossChainCallRequests(block_index, cap){
+        let limit = (Number.isInteger(cap) && cap > 0) ? cap : Number.MAX_SAFE_INTEGER;
         return await this.doQuery(
             `SELECT x.call_id FROM xcalls x
              JOIN index_statuses s ON s.id = x.status_id
              WHERE x.version = 0 AND s.status = 'valid'
                AND x.request_status = 'pending' AND x.deadline_block < ?
-             ORDER BY x.action_index ASC`,
-            [block_index]);
+             ORDER BY x.deadline_block ASC, x.action_index ASC
+             LIMIT ?`,
+            [block_index, limit]);
     }
 
     // Pending requests for the federation relay (getpendingcrosschaincalls RPC).
@@ -10467,19 +10477,25 @@ class Database {
         // precision so an >8-dp token isn't truncated mid-deduction (which would leave dust unslashed
         // or corrupt the residual stake). XCHAIN(8) math is unchanged (item 5303).
         let dec = await this.getTokenDecimalPrecision(tickId);
-        // Pass 1: deduct from ACTIVE contract_stakes rows (LIFO - highest action_index first).
-        // The deactivation-window filter is load-bearing: after UNSTAKE v1 a row keeps its `amount`
-        // intact (only deactivation_block is set) AND its tokens are mirrored into a contract_unstakes
-        // cooldown row. Without this filter Pass 1 would slash that phantom contract_stakes copy while
-        // the cooldown sweep still refunds the full contract_unstakes row - crediting the destination
-        // AND refunding the staker against a single debit (supply inflation). Unstaked-but-cooling
-        // tokens are slashed by Pass 2 (contract_unstakes) instead, so each token is slashed once.
+        // Pass 1: deduct from ACTIVE (never-unstaked) contract_stakes rows (LIFO - highest
+        // action_index first). The deactivation filter is load-bearing: UNSTAKE v1 leaves the
+        // contract_stakes row's `amount` intact (it only sets a FUTURE deactivation_block =
+        // block + ACTIVATION_DELAY_BLOCKS) AND mirrors the tokens into a contract_unstakes
+        // cooldown row that the block-end sweep refunds in full. So the tokens exist in exactly
+        // one slashable place per lifecycle stage: contract_stakes while deactivation_block IS
+        // NULL, contract_unstakes once UNSTAKE has run. Pass 1 must therefore skip EVERY row that
+        // carries a deactivation_block (Pass 2 slashes those from contract_unstakes). Filtering on
+        // `deactivation_block > blockIndex` was wrong: because the block is in the future, that
+        // predicate is TRUE throughout the [unstake, unstake+delay) window, so a slash landing in
+        // the window slashed the phantom contract_stakes copy (crediting the destination) while the
+        // sweep still refunded the contract_unstakes row - +X to the destination AND +X back to the
+        // staker against one debit (silent supply inflation + total slash evasion).
         let stakesQ = `SELECT action_index, amount FROM contract_stakes
                        WHERE target_contract_index=? AND signing_pubkey_id=? AND tick_id=? AND status_id=?
                          AND CAST(amount AS DECIMAL(60,18)) > 0
-                         AND (deactivation_block IS NULL OR deactivation_block > ?)
+                         AND deactivation_block IS NULL
                        ORDER BY action_index DESC`;
-        let stakeRows = await this.doQuery(stakesQ, [Number(targetContractIndex), pubkeyId, tickId, valid_id, blockIndex]);
+        let stakeRows = await this.doQuery(stakesQ, [Number(targetContractIndex), pubkeyId, tickId, valid_id]);
         for(let row of stakeRows){
             if(!this.util.bcgt(remaining, '0')) break;
             let rowAmt = String(row.amount);
@@ -10550,14 +10566,21 @@ class Database {
         let valid_id = await this.getStatusId('valid');
         if(valid_id === null) return '0';
         let totalSlashed = '0';
-        // Pass 1: ACTIVE stakes rows (LIFO - highest action_index first) within the window.
+        // Pass 1: ACTIVE (never-unstaked) stakes rows (LIFO - highest action_index first). Same
+        // correctness point as slashContractStake: after UNSTAKE the `stakes` row keeps its amount
+        // but carries a FUTURE deactivation_block and its tokens are mirrored into a cooldown
+        // `unstakes` row (Pass 2). Pass 1 must skip any row with a deactivation_block set, else a
+        // slash in the [unstake, unstake+delay) window burns BOTH the stakes row here AND the
+        // unstakes row in Pass 2 (which has no `remaining` gate), doubling `totalSlashed` and
+        // inflating the bounty/treasury base computed from it. `deactivation_block > blockIndex`
+        // was the inverted predicate (future block => TRUE in-window).
         let stakesQ = `SELECT action_index, amount FROM stakes
                        WHERE signing_pubkey_id=? AND status_id=?
                          AND activation_block <= ?
                          AND CAST(amount AS DECIMAL(30,8)) > 0
-                         AND (deactivation_block IS NULL OR deactivation_block > ?)
+                         AND deactivation_block IS NULL
                        ORDER BY action_index DESC`;
-        let stakeRows = await this.doQuery(stakesQ, [pubkeyId, valid_id, blockIndex, blockIndex]);
+        let stakeRows = await this.doQuery(stakesQ, [pubkeyId, valid_id, blockIndex]);
         for(let row of stakeRows){
             let rowAmt = String(row.amount);
             if(!this.util.bcgt(rowAmt, '0')) continue;

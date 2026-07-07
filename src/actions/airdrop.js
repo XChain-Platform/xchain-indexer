@@ -106,6 +106,15 @@ class Airdrop {
         let balances    = await this.indexerDb.getAddressBalances(data['SOURCE'], null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
         let preferences = await this.indexerDb.getAddressPreferences(data['SOURCE'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
 
+        // Controller-bound token gas context. If the airdropped TICK's `transfer` class is bound to a
+        // controller, the aggregate outbound move runs that contract's `guard` before settling and
+        // SOURCE pays the (bounded) guard gas in GAS. Loaded once; the guard reserves its ceiling
+        // against the live `balances` view so a denied/cheap guard can never drive GAS negative, and
+        // the metered fee is reserved out of `balances` before the per-tx fee check (below) so the two
+        // GAS charges are cumulative. Pre-CONTROLLER_GUARD flag-day the guard is a strict no-op.
+        let gasTick = this.config['GAS'];
+        let gasInfo = await this.indexerDb.getTokenInfo(gasTick, data['BLOCK_INDEX'], data['ACTION_INDEX']);
+
         // Create the fees object 
         let fees = await this.util.createFeesObject(this.indexerDb, data, preferences);
 
@@ -127,6 +136,9 @@ class Airdrop {
 
             // Copy base transaction data object
             let airdrop = data;
+
+            // Guard gas fee billed to SOURCE for this leg (0 = uncontrolled token)
+            let guardFee = 0;
 
             // Array of addresses that will receive this AIRDROP
             let recipients = [];
@@ -272,6 +284,34 @@ class Airdrop {
             if(!error)
                 balances = this.util.debitBalances(balances, tokenInfo['TICK_ID'], airdrop['DEBIT']);
 
+            // Controller-bound token: the airdropped TICK's bound contract gates the AGGREGATE
+            // outbound move once (from=SOURCE, amount=total DEBIT, no single recipient). The guard
+            // may DENY (revert the whole airdrop leg) or bill metered gas. Reserve the guard ceiling
+            // against the live GAS balance and, on allow, reduce `balances` by the metered fee BEFORE
+            // the per-tx fee check so a holder short on GAS can't pass the fee check yet be over-debited
+            // by the guard fee (which would drive GAS negative and trip sanityCheck). Runs after all
+            // other validation, so an allow leads directly to a valid airdrop. Flag-gated no-op pre-day.
+            if(!error && tokenInfo){
+                let result = await this.util.maybeRunControllerGuard(this.actions, this.indexerDb, {
+                    actionType:  'AIRDROP',
+                    tick:        airdrop['TICK'],
+                    from:        data['SOURCE'],
+                    to:          '',
+                    amount:      airdrop['DEBIT'],
+                    data:        airdrop,
+                    gasInfo:     gasInfo,
+                    gasBalances: balances,
+                    seq:         parseInt(idx) || 0
+                });
+                if(result.error){
+                    error = 'invalid: ' + result.error;
+                } else if(this.util.bcgt(result.guardFee, 0)){
+                    guardFee = result.guardFee;
+                    if(gasInfo)
+                        balances = this.util.debitBalances(balances, gasInfo['TICK_ID'], guardFee);
+                }
+            }
+
             // Validate fee payment (native coin or XCHAIN balance)
             if(!error && this.util.bcgt(fees['AMOUNT'], 0)){
                 let paymentMode = this.util.detectFeePaymentMode(data, this.decoderDb, data['TX_OUTPUTS']);
@@ -319,6 +359,14 @@ class Airdrop {
 
                 // Add ticker, amount, and address to debits array
                 debits.push([airdrop['TICK'], airdrop['DEBIT'], data['SOURCE']]);
+
+                // Bill the controller-guard gas to SOURCE (a GAS burn with no offsetting credit). The
+                // end-of-action updateTokens recomputes GAS supply from the ledger so the per-block
+                // sanityCheck (ledger == supply == balances) holds. `balances` was already reduced above.
+                if(this.util.bcgt(guardFee, 0)){
+                    debits.push([gasTick, guardFee, data['SOURCE']]);
+                    this.util.addAddressTicker(data['SOURCE'], gasTick);
+                }
 
                 // Handle any transaction FEE according the users's ADDRESS preferences
                 [credits, debits] = await this.util.processTransactionFees(this.indexerDb, credits, debits, fees);

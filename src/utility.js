@@ -1226,7 +1226,17 @@ class Utility {
     // silently fall into a controlled class. An unmapped action returns null (never gated).
     controllerActionClass(actionType){
         switch(actionType){
-            case 'SEND':             return 'transfer';
+            // Every native OUTBOUND transfer of a controlled token routes through the `transfer`
+            // class so a bound controller's rule (allowlist/freeze/compliance) is unavoidable. SEND
+            // is the direct 1:1 transfer; AIRDROP/DIVIDEND/SWEEP are bulk moves gated on the
+            // AGGREGATE outbound move per controlled tick (one guard run: from=SOURCE, amount=total),
+            // never per recipient (bounded VM work; a controller needing per-recipient control denies
+            // the aggregate). SWEEP ownership transfers are NOT gated by any class yet (separate
+            // capability; tracked as a follow-up).
+            case 'SEND':
+            case 'AIRDROP':
+            case 'DIVIDEND':
+            case 'SWEEP':            return 'transfer';
             case 'ORDER_CREATE':
             case 'SWAP_CREATE':
             case 'DISPENSER_CREATE': return 'trade';
@@ -1682,7 +1692,12 @@ class Utility {
         // terminal status. Skip expiry for any request whose result is deliverable now (the full
         // effective set, not just the capped slice delivered this block).
         let deliverableIds = new Set(allResults.map(r => r.call_id));
-        let expired = await db.getExpiredCrossChainCallRequests(block_index);
+        // Cap the expiry pass at XCALL_MAX_CALLS_PER_BLOCK, same as dispatch/result: each expiry
+        // synthesizes an XCALL v2 and runs a VM callback isolate, so an uncapped burst of
+        // deadline-aligned requests would exceed BLOCK_PROCESS_TIMEOUT and deterministically wedge
+        // every indexer on the chain. Remainder carries forward (getExpiredCrossChainCallRequests
+        // orders by deadline_block, action_index, so the cutoff is node-invariant).
+        let expired = await db.getExpiredCrossChainCallRequests(block_index, cap);
         for(let info of expired){
             if(deliverableIds.has(info.call_id)) continue; // effective result wins over expiry at this block
             let data = {};

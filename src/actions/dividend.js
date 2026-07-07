@@ -72,6 +72,15 @@ class Dividend {
         let tokenInfo         = await this.indexerDb.getTokenInfo(data['TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
         let dividendTokenInfo = await this.indexerDb.getTokenInfo(data['DIVIDEND_TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
 
+        // Controller-bound token gas context. If DIVIDEND_TICK's `transfer` class is bound to a
+        // controller, the aggregate outbound distribution runs that contract's `guard` before
+        // settling and SOURCE pays the (bounded) guard gas in GAS. Guard fee is reserved out of
+        // `balances` before the per-tx fee check so the two GAS charges are cumulative. Pre-flag-day
+        // the guard is a strict no-op.
+        let gasTick = this.config['GAS'];
+        let gasInfo = await this.indexerDb.getTokenInfo(gasTick, data['BLOCK_INDEX'], data['ACTION_INDEX']);
+        let guardFee = 0;
+
         // Create the fees object 
         let fees = await this.util.createFeesObject(this.indexerDb, data, preferences);
 
@@ -186,6 +195,32 @@ class Dividend {
         if(!error)
             balances = this.util.debitBalances(balances, dividendTokenInfo['TICK_ID'], dividend['DEBIT']);
 
+        // Controller-bound token: DIVIDEND_TICK's bound contract gates the AGGREGATE outbound
+        // distribution once (from=SOURCE, amount=total DEBIT, no single recipient). Deny reverts the
+        // whole dividend; an allow bills metered gas. Reserve the guard fee out of `balances` BEFORE
+        // the per-tx fee check so a holder short on GAS can't pass the fee check and then be
+        // over-debited by the guard fee (negative GAS -> sanityCheck halt). Flag-gated no-op pre-day.
+        if(!error && dividendTokenInfo){
+            let result = await this.util.maybeRunControllerGuard(this.actions, this.indexerDb, {
+                actionType:  'DIVIDEND',
+                tick:        data['DIVIDEND_TICK'],
+                from:        data['SOURCE'],
+                to:          '',
+                amount:      dividend['DEBIT'],
+                data:        data,
+                gasInfo:     gasInfo,
+                gasBalances: balances,
+                seq:         0
+            });
+            if(result.error){
+                error = 'invalid: ' + result.error;
+            } else if(this.util.bcgt(result.guardFee, 0)){
+                guardFee = result.guardFee;
+                if(gasInfo)
+                    balances = this.util.debitBalances(balances, gasInfo['TICK_ID'], guardFee);
+            }
+        }
+
         // Validate fee payment (native coin or XCHAIN balance)
         if(!error && this.util.bcgt(fees['AMOUNT'], 0)){
             let paymentMode = this.util.detectFeePaymentMode(data, this.decoderDb, data['TX_OUTPUTS']);
@@ -233,6 +268,13 @@ class Dividend {
 
             // Add DIVIDEND_TICK and DEBIT to debits array
             debits.push([dividend['DIVIDEND_TICK'], dividend['DEBIT'], dividend['SOURCE']]);
+
+            // Bill the controller-guard gas to SOURCE (a GAS burn with no offsetting credit); the
+            // end-of-action updateTokens recomputes GAS supply from the ledger so sanityCheck holds.
+            if(this.util.bcgt(guardFee, 0)){
+                debits.push([gasTick, guardFee, dividend['SOURCE']]);
+                this.util.addAddressTicker(dividend['SOURCE'], gasTick);
+            }
 
             // Handle any transaction FEE according the users's ADDRESS preferences
             [credits, debits] = await this.util.processTransactionFees(this.indexerDb, credits, debits, fees);
