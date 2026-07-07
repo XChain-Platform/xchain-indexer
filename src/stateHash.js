@@ -30,7 +30,9 @@
  *   - cooldown-maturity status flips (unstakes/contract_unstakes)
  *   - backdated cooldown refund credits (capability GAS + contract own-tick)
  *   - invalid_archive stamp on anchor_actions v1 parent rows (CRC-failed chunked batches)
- *   - VOTE poll finalization flips on surviving polls rows (flag-day gated, inert by default)
+ *   - VOTE poll finalization flips on surviving polls rows (flag-day gated per chain)
+ *   - tokens.supply refreshes on surviving token rows (flag-day gated per chain; the
+ *     hash twin of the updated_rows tokens-supply replication class)
  *
  * CONSENSUS-STYLE DETERMINISM (mirrors db.js getBlockHashes):
  *   - surrogate AUTO_INCREMENT ids (address_id/tick_id/status_id) are NEVER hashed;
@@ -118,28 +120,75 @@ function isIndexMapStateHashActive(blockIndex, network){
 // class where a follower silently dropping the flip upsert diverged with no halt
 // (the attests/xcalls v0 flips have had this coverage from the start).
 //
-// Same gating model as INDEX_MAP_STATE_HASH_ACTIVATION above: keyed on the
-// chain's OWN local block_index, DEFAULT INERT on every network (999999999
-// placeholder), so landing this is a strict no-op on the live fleet: the class
-// is omitted from the preimage below the threshold, leaving state_hash
-// byte-identical to today. Arm fleet-atomically (every indexer + sync process
-// on this map first) at the coordinated flag-day; the arming decision rides the
-// flag-day unification plan (claude/reports/2026-07-07_flag-day-inventory-...).
-// No STATE_HASH_VERSION bump: a block is unambiguously pre- or post-activation
-// on a given network. Keep byte-identical to the xchain-sync twin.
+// Same gating model as INDEX_MAP_STATE_HASH_ACTIVATION above (keyed on the
+// chain's OWN local block_index), but ARMED MID-CHAIN, which forces per-chain
+// keys: unlike the genesis-armed index-map class, one shared 'mainnet' height
+// cannot fit BTC (~957k) and DOGE (~6.28M) simultaneously. Lookup is
+// '<COIN>:<network>' first, then the bare network key (regtest keeps one key;
+// unknown -> inert). ARMED 2026-07-07 at tip + margin per chain: the whole
+// fleet (every indexer + sync process) MUST run this map before the EARLIEST
+// chain crosses its height (see the deploy-by note per line), or followers
+// still on the old map false-halt at the boundary. A missed deadline is
+// recoverable by bumping the not-yet-crossed heights before deploy. No
+// STATE_HASH_VERSION bump: a block is unambiguously pre- or post-activation.
+// Keep byte-identical to the xchain-sync twin.
 const POLL_FINALIZE_STATE_HASH_ACTIVATION = {
-    mainnet: 999999999,   // ARM: coordinated flag-day (see the unification plan)
-    testnet: 999999999,   // ARM: with mainnet or ahead of it after a clean reseed
-    regtest: 999999999,   // ARM: current tip + N, or 0 + clean reseed
+    'BTC:mainnet':  958500,     // armed 2026-07-07 at tip 957062; ~10 days of margin
+    'LTC:mainnet':  3143000,    // armed 2026-07-07 at tip 3138154; ~8 days
+    'DOGE:mainnet': 6291000,    // armed 2026-07-07 at tip 6280094; ~7.5 days
+    'BTC:testnet':  145000,     // armed 2026-07-07 at tip 143299
+    'LTC:testnet':  4805000,    // armed 2026-07-07 at tip 4797675
+    'DOGE:testnet': 67000000,   // armed 2026-07-07 at tip 66498605 (fast chain, wide margin)
+    regtest: 0,                 // armed from genesis: fresh regtest stacks exercise the class end to end
 };
 
+// Resolve a per-chain activation threshold: '<COIN>:<network>' key first, then
+// the bare network key. A production caller on mainnet/testnet MUST pass coin
+// (both real call sites do: indexer db.js getBlockHashes and sync
+// BlockHasher.computeStateHash); a coin-less lookup on those networks finds no
+// key and stays inert, which is safe only while the OTHER side of the
+// conformance pair is equally coin-less (unit fixtures/vectors).
+function _activationThreshold(map, network, coin){
+    if(coin != null && map[coin + ':' + network] !== undefined) return map[coin + ':' + network];
+    return map[network];
+}
+
 // Whether the poll-finalize class is folded into state_hash at `blockIndex` on
-// `network`. Below the threshold / unknown network -> off (safe; the class is
-// omitted and the preimage stays byte-identical to the pre-feature shape).
-function isPollFinalizeStateHashActive(blockIndex, network){
+// `network` for `coin`. Below the threshold / unknown network -> off (safe; the
+// class is omitted and the preimage stays byte-identical to the pre-feature shape).
+function isPollFinalizeStateHashActive(blockIndex, network, coin){
     let b = parseInt(blockIndex);
     if(!Number.isFinite(b)) return false;
-    let threshold = POLL_FINALIZE_STATE_HASH_ACTIVATION[network];
+    let threshold = _activationThreshold(POLL_FINALIZE_STATE_HASH_ACTIVATION, network, coin);
+    if(threshold === undefined) return false;
+    return b >= threshold;
+}
+
+// ── tokens.supply state-hash flag-day (F-1 closure) ──────────────────────────
+// The hash twin of the updated_rows tokens-supply replication class: supply is
+// mutated IN PLACE on a surviving token row (its action_index stays at the
+// DEPLOY action), so no consensus block hash and no other state_hash class
+// covers it; a follower silently dropping the supply upsert served a stale
+// supply with no halt. Supply changes exactly when a credit/debit/escrow row is
+// written for the tick, so the per-block class hashes (tick, supply) for every
+// tick touched by a ledger row at block B. Same per-chain arming map and
+// deploy-by constraint as POLL_FINALIZE above; the two classes flip together.
+const TOKEN_SUPPLY_STATE_HASH_ACTIVATION = {
+    'BTC:mainnet':  958500,     // armed 2026-07-07, same heights as POLL_FINALIZE
+    'LTC:mainnet':  3143000,
+    'DOGE:mainnet': 6291000,
+    'BTC:testnet':  145000,
+    'LTC:testnet':  4805000,
+    'DOGE:testnet': 67000000,
+    regtest: 0,
+};
+
+// Whether the token-supply class is folded into state_hash at `blockIndex` on
+// `network` for `coin`. Same fail-inert semantics as the poll-finalize gate.
+function isTokenSupplyStateHashActive(blockIndex, network, coin){
+    let b = parseInt(blockIndex);
+    if(!Number.isFinite(b)) return false;
+    let threshold = _activationThreshold(TOKEN_SUPPLY_STATE_HASH_ACTIVATION, network, coin);
     if(threshold === undefined) return false;
     return b >= threshold;
 }
@@ -164,6 +213,7 @@ async function buildStateHashData(db, blockIndex, opts){
     let delay   = (opts && opts.activationDelay != null) ? Number(opts.activationDelay) : null;
     let gasTick = (opts && opts.gasTick != null) ? opts.gasTick : null;
     let network = (opts && opts.network != null) ? opts.network : null;
+    let coin    = (opts && opts.coin != null) ? opts.coin : null;
     let completedStatusId = await db.getStatusId('completed');
 
     // 1. deactivation_block stamps. A stamp written at block B carries value
@@ -300,7 +350,7 @@ async function buildStateHashData(db, blockIndex, opts){
     //    so below it the key is omitted and the preimage is byte-identical to the
     //    pre-feature shape (no fleet halt). The query is appended after every
     //    existing call so the doQuery call order is unchanged when inert.
-    let pollFinalizeActive = isPollFinalizeStateHashActive(B, network);
+    let pollFinalizeActive = isPollFinalizeStateHashActive(B, network, coin);
     let poll_finalize = [];
     if(pollFinalizeActive){
         try {
@@ -310,6 +360,35 @@ async function buildStateHashData(db, blockIndex, opts){
                 "finalized_action_index, resolved_block, deposit_resolved, callback_execute_action_index " +
                 "FROM polls WHERE resolved_block BETWEEN ? AND ? ORDER BY action_index ASC",
                 [B, B]);
+        } catch(e){ /* table/columns may not exist on older schemas */ }
+    }
+
+    // 9. tokens.supply refreshes: (tick, supply) for every tick a ledger row
+    //    touched at block B (supply is functionally derived from credits/debits/
+    //    escrows, so this selection is exactly the set of possibly-moved supplies;
+    //    the same join shape the updated_rows forward class uses, scoped to one
+    //    block). Resolved tick strings with a pinned BINARY sort; supply is the
+    //    minimal-decimal string updateTokens writes, byte-identical on source and
+    //    follower (the follower's row is the source's row, replicated verbatim).
+    //    Per-branch joins (driving from actions) rather than a UNION ALL derived
+    //    table, mirroring the forward class's optimiser note. GATED INERT below
+    //    the per-chain activation height; query appended after every existing
+    //    call so the doQuery call order is unchanged when inert.
+    let tokenSupplyActive = isTokenSupplyStateHashActive(B, network, coin);
+    let token_supply = [];
+    if(tokenSupplyActive){
+        try {
+            token_supply = await db.doQuery(
+                "SELECT tk.tick AS tick, t.supply AS supply FROM tokens t " +
+                "JOIN index_tickers tk ON (tk.id = t.tick_id) " +
+                "WHERE t.tick_id IN ( " +
+                    "SELECT c.tick_id FROM credits c JOIN actions a ON (a.action_index = c.action_index) WHERE a.block_index BETWEEN ? AND ? AND c.tick_id IS NOT NULL " +
+                    "UNION " +
+                    "SELECT d.tick_id FROM debits d JOIN actions a ON (a.action_index = d.action_index) WHERE a.block_index BETWEEN ? AND ? AND d.tick_id IS NOT NULL " +
+                    "UNION " +
+                    "SELECT e.tick_id FROM escrows e JOIN actions a ON (a.action_index = e.action_index) WHERE a.block_index BETWEEN ? AND ? AND e.tick_id IS NOT NULL " +
+                ") ORDER BY tick COLLATE utf8mb4_bin ASC",
+                [B, B, B, B, B, B]);
         } catch(e){ /* table/columns may not exist on older schemas */ }
     }
 
@@ -330,10 +409,14 @@ async function buildStateHashData(db, blockIndex, opts){
         preimage.index_addresses_new = index_addresses_new;
         preimage.index_tickers_new   = index_tickers_new;
     }
-    // Poll-finalize key likewise inserted ONLY when active (after the index-map
-    // keys, before block_index), preserving the inert byte-identity guarantee.
+    // Poll-finalize and token-supply keys likewise inserted ONLY when active
+    // (in fixed order after the index-map keys, before block_index), preserving
+    // the inert byte-identity guarantee per class.
     if(pollFinalizeActive){
         preimage.poll_finalize = poll_finalize;
+    }
+    if(tokenSupplyActive){
+        preimage.token_supply = token_supply;
     }
     preimage.block_index        = B;
     preimage.state_hash_version = STATE_HASH_VERSION;
@@ -343,4 +426,5 @@ async function buildStateHashData(db, blockIndex, opts){
 module.exports = { buildStateHashData, STATE_HASH_VERSION,
                    DEACTIVATION_TABLES, SLASH_SPECS, REQUEST_STATUS_TABLES, COOLDOWN_TABLES,
                    INDEX_MAP_STATE_HASH_ACTIVATION, isIndexMapStateHashActive,
-                   POLL_FINALIZE_STATE_HASH_ACTIVATION, isPollFinalizeStateHashActive };
+                   POLL_FINALIZE_STATE_HASH_ACTIVATION, isPollFinalizeStateHashActive,
+                   TOKEN_SUPPLY_STATE_HASH_ACTIVATION, isTokenSupplyStateHashActive };

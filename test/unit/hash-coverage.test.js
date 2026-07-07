@@ -97,6 +97,7 @@ describe('Hash coverage guard @regression', function () {
             'credits',        // backdated cooldown refund credits class
             'anchor_actions', // invalid_archive stamp class
             'polls',          // finalization-flip class (flag-day gated; structural binding below)
+            'tokens',         // supply-refresh class (F-1 closure; flag-day gated; structural binding below)
         ]);
         assert.deepStrictEqual(
             lifecycle.hashClassTables('state_hash').sort(),
@@ -139,35 +140,48 @@ describe('Hash coverage guard @regression', function () {
             'quorum-covered table set changed; verify the new/removed table\'s signature-verification story before updating this pin');
     });
 
-    it('KNOWN GAPS stay declared until deliberately closed (tokens supply)', function () {
-        // Accepted in-place-mutation gaps are documented on their registry
-        // entries rather than silently absent. If one gains hash coverage
-        // (or the gap note is dropped), this pin forces the registry prose and
-        // the coverage reality to move together. (The polls finalization gap
-        // was closed 2026-07-07 via the flag-day-gated poll_finalize class;
-        // see the structural binding below.)
-        const tokens = lifecycle.entry('tokens');
-        assert.ok(/KNOWN GAP/.test(tokens.hashed.note) && tokens.hashed.classes.length === 0,
-            'tokens: either the supply-forward gap was closed (update the registry note and this test) ' +
-            'or the gap declaration was dropped without closing it');
-    });
-
-    it('poll_finalize class: gated selection exists, keyed by resolved_block, and ships INERT until armed', function () {
+    it('poll_finalize class: gated selection exists, keyed by resolved_block, armed per chain', function () {
         // Structural binding for the polls state_hash declaration: the gathering
         // SQL must select by resolved_block (the same key the updated_rows
         // forward channel and the rollback re-open use) behind the activation
-        // gate. The map must exist with entries for all three networks; arming
-        // is a deliberate flag-day decision (unification plan), not a default.
+        // gate, with per-chain armed heights on every real chain:network pair.
         const src = read('src/stateHash.js');
         assert.ok(/FROM polls WHERE resolved_block BETWEEN \? AND \? ORDER BY action_index ASC/.test(src),
             'stateHash.js no longer gathers the poll-finalize flip by resolved_block; the polls state_hash declaration is stale');
         const map = stateHash.POLL_FINALIZE_STATE_HASH_ACTIVATION;
-        for (const net of ['mainnet', 'testnet', 'regtest'])
-            assert.ok(Number.isFinite(map[net]), `POLL_FINALIZE_STATE_HASH_ACTIVATION.${net} missing`);
+        for (const key of ['BTC:mainnet', 'LTC:mainnet', 'DOGE:mainnet', 'BTC:testnet', 'LTC:testnet', 'DOGE:testnet', 'regtest'])
+            assert.ok(Number.isFinite(map[key]), `POLL_FINALIZE_STATE_HASH_ACTIVATION['${key}'] missing`);
         // Surrogate-id guard: the selected columns must never include the
         // lookup ids on the polls row (they diverge across nodes).
         const sel = src.match(/SELECT[\s\S]{0,400}?FROM polls WHERE resolved_block/)[0];
         for (const banned of ['tick_id', 'deposit_address_id', 'status_id'])
             assert.ok(sel.indexOf(banned) === -1, `poll_finalize preimage must not hash surrogate id column ${banned}`);
+    });
+
+    it('token_supply class: gated selection exists, keyed by ledger-touched ticks, armed per chain (F-1 closure)', function () {
+        // Structural binding for the tokens state_hash declaration: the gathering
+        // SQL must derive the tick set from ledger rows at the block (the same
+        // selection shape the updated_rows tokens-supply forward class uses) and
+        // hash resolved (tick, supply) pairs, never surrogate ids.
+        const src = read('src/stateHash.js');
+        assert.ok(/SELECT tk\.tick AS tick, t\.supply AS supply FROM tokens t/.test(src),
+            'stateHash.js no longer gathers (tick, supply); the tokens state_hash declaration is stale');
+        for (const ledger of ['credits c', 'debits d', 'escrows e'])
+            assert.ok(new RegExp(`SELECT \\w+\\.tick_id FROM ${ledger} JOIN actions a ON`).test(src),
+                `token_supply selection lost its ${ledger.split(' ')[0]} ledger-touch branch`);
+        const map = stateHash.TOKEN_SUPPLY_STATE_HASH_ACTIVATION;
+        for (const key of ['BTC:mainnet', 'LTC:mainnet', 'DOGE:mainnet', 'BTC:testnet', 'LTC:testnet', 'DOGE:testnet', 'regtest'])
+            assert.ok(Number.isFinite(map[key]), `TOKEN_SUPPLY_STATE_HASH_ACTIVATION['${key}'] missing`);
+    });
+
+    it('both state-hash conformance callers thread the (network, coin) gate pair', function () {
+        // The per-chain armed maps are looked up by '<COIN>:<network>'. A caller
+        // that omits coin silently computes WITHOUT the armed classes while its
+        // conformance twin computes WITH them: a guaranteed divergence halt at
+        // the activation height. Pin both production call sites.
+        const dbSrc = read('src/db.js');
+        const call = dbSrc.match(/buildStateHashData\(this, block_index, \{[\s\S]{0,700}?\}\)/);
+        assert.ok(call && /coin:\s*this\.config\['COIN'\]/.test(call[0]),
+            "db.js getBlockHashes must pass coin: this.config['COIN'] to buildStateHashData");
     });
 });

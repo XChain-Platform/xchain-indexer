@@ -59,8 +59,13 @@ const TIE_PRONE = {
     withdrawals: ['action_index', 'contract_index', 'address', 'tick', 'amount', 'status']
 };
 
-// Which tie-prone table (if any) a query reads from.
+// Which tie-prone table (if any) a query reads from. The state_hash
+// token_supply class (2026-07-07) derives its tick set from credits/debits/
+// escrows SUBQUERIES but projects only (tick, supply), and tick is UNIQUE, so
+// its ORDER BY tick is already a total order: not a tie-prone ledger
+// projection. Classify it by its outer FROM tokens and skip it.
 function tableOf(sql) {
+    if (/FROM\s+tokens\b/i.test(sql)) return null;
     const m = sql.match(/FROM\s+(credits|debits|escrows|deposits|withdrawals)\b/i);
     return m ? m[1].toLowerCase() : null;
 }

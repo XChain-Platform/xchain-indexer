@@ -1407,10 +1407,13 @@ class Database {
         let stateData = await buildStateHashData(this, block_index, {
             activationDelay: activationDelay,
             gasTick:         this.config['GAS'],
-            // network gates the additive index-map class (id-determinism P4); inert by
-            // default (see stateHash.js INDEX_MAP_STATE_HASH_ACTIVATION) so this is a no-op
-            // until the per-chain flag-day height is armed at the coordinated mesh deploy.
-            network:         this.config['NETWORK']
+            // network gates the additive index-map class (id-determinism P4); coin extends
+            // the lookup to the per-chain '<COIN>:<network>' keys the mid-chain-armed
+            // classes (poll_finalize / token_supply) use. The sync follower's recompute
+            // (BlockHasher.computeStateHash) MUST pass the same pair or the conformance
+            // hash diverges at the activation heights.
+            network:         this.config['NETWORK'],
+            coin:            this.config['COIN']
         });
         info['state'] = [];
         info['state']['hash'] = this.util.getDataHash(stateData);
