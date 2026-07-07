@@ -32,6 +32,7 @@ const BASE58_ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvw
 const BECH32_CHARSET  = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l';
 const BECH32_CONST    = 1;          // BIP-173 checksum constant (segwit v0)
 const BECH32M_CONST   = 0x2bc830a3; // BIP-350 checksum constant (segwit v1+)
+const BECH32_GEN      = [0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3];
 const ADDRESS_PARAMS  = {
     BTC: {
         mainnet: { p2pkh: 0x00, p2sh: 0x05, hrp: 'bc'   },
@@ -642,22 +643,7 @@ class Utility {
             data.push(value);
         }
         // Verify the BCH checksum (BIP-173 polymod over expanded hrp + data)
-        let chk = 1;
-        let values = [];
-        for(let i=0; i<hrp.length; i++)
-            values.push(hrp.charCodeAt(i)>>5);
-        values.push(0);
-        for(let i=0; i<hrp.length; i++)
-            values.push(hrp.charCodeAt(i)&31);
-        values = values.concat(data);
-        const GEN = [0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3];
-        for(let value of values){
-            let top = chk>>25;
-            chk = ((chk&0x1ffffff)<<5)^value;
-            for(let i=0; i<5; i++)
-                if((top>>i)&1)
-                    chk ^= GEN[i];
-        }
+        let chk = this.bech32Polymod(hrp, data);
         // Witness version is the first data value; remaining values (minus the
         // 6 checksum chars) are the witness program in 5-bit groups
         let version = data[0];
@@ -684,6 +670,136 @@ class Utility {
         if(version==0 && program.length!=20 && program.length!=32)
             return false;
         return { hrp: hrp, version: version, program: program };
+    }
+
+    // BIP-173 BCH polymod over the expanded HRP plus the given 5-bit data values.
+    // Shared by bech32Decode (verify: result must equal the checksum constant) and
+    // bech32Encode (create: result over data + six zeros, XOR the constant, yields
+    // the 6 checksum values).
+    bech32Polymod(hrp, data){
+        let values = [];
+        for(let i=0; i<hrp.length; i++)
+            values.push(hrp.charCodeAt(i)>>5);
+        values.push(0);
+        for(let i=0; i<hrp.length; i++)
+            values.push(hrp.charCodeAt(i)&31);
+        values = values.concat(data);
+        let chk = 1;
+        for(let value of values){
+            let top = chk>>25;
+            chk = ((chk&0x1ffffff)<<5)^value;
+            for(let i=0; i<5; i++)
+                if((top>>i)&1)
+                    chk ^= BECH32_GEN[i];
+        }
+        return chk;
+    }
+
+    // Encode payload bytes as a base58check string (inverse of base58CheckDecode):
+    // append a 4-byte double-SHA256 checksum, base58-encode the big integer, and
+    // express leading zero bytes as leading '1' characters. Returns false on empty
+    // or non-Buffer input.
+    base58CheckEncode(payload){
+        if(!Buffer.isBuffer(payload) || payload.length==0)
+            return false;
+        let hash = crypto.createHash('sha256').update(crypto.createHash('sha256').update(payload).digest()).digest();
+        let data = Buffer.concat([payload, hash.subarray(0,4)]);
+        let num  = BigInt('0x' + data.toString('hex'));
+        let str  = '';
+        while(num>0n){
+            str = BASE58_ALPHABET[Number(num % 58n)] + str;
+            num = num / 58n;
+        }
+        for(let byte of data){
+            if(byte!=0)
+                break;
+            str = '1' + str;
+        }
+        return str;
+    }
+
+    // Encode a segwit address as bech32 (v0) / bech32m (v1+) per BIP-173/BIP-350
+    // (inverse of bech32Decode). `program` is the witness program bytes (Buffer or
+    // array). Returns false on any input that could not round-trip through
+    // bech32Decode (bad version, out-of-range program length).
+    bech32Encode(hrp, version, program){
+        if(this.isNull(hrp) || String(hrp).length<1 || !Number.isInteger(version) || version<0 || version>16)
+            return false;
+        let bytes = Array.from(program || []);
+        if(bytes.length<2 || bytes.length>40)
+            return false;
+        if(version==0 && bytes.length!=20 && bytes.length!=32)
+            return false;
+        // Regroup the witness program from 8-bit to 5-bit values (pad the tail with zero bits)
+        let bits = 0, acc = 0, data = [version];
+        for(let byte of bytes){
+            acc  = (acc<<8)|byte;
+            bits += 8;
+            while(bits>=5){
+                bits -= 5;
+                data.push((acc>>bits)&31);
+            }
+        }
+        if(bits>0)
+            data.push((acc<<(5-bits))&31);
+        // Checksum: polymod over hrp + data + six zero placeholders, XOR the version's constant
+        let chk = this.bech32Polymod(hrp, data.concat([0,0,0,0,0,0])) ^ (version==0 ? BECH32_CONST : BECH32M_CONST);
+        for(let i=0; i<6; i++)
+            data.push((chk>>(5*(5-i)))&31);
+        let str = hrp + '1';
+        for(let value of data)
+            str += BECH32_CHARSET[value];
+        return str;
+    }
+
+    // Re-encode an address from one coin's encoding to another's for the SAME key
+    // owner: P2PKH/P2SH share the hash160 across BTC/LTC/DOGE (only the version
+    // byte differs), segwit shares the witness program (only the HRP differs).
+    // Used by cross-chain royalty legs: leg `to` addresses are expressed in the
+    // controlled token's chain encoding and re-encoded to the proceeds chain at
+    // settlement. Fail-closed (returns null) on anything not deterministically
+    // portable: contract ledger addresses (chain-tagged), the 'BURN' sentinel,
+    // malformed or foreign-version base58 payloads, and segwit when the target
+    // coin has no bech32 HRP (e.g. DOGE). Pure and deterministic.
+    crossChainReencodeAddress(address, fromCoin, toCoin, network){
+        if(this.isNull(address))
+            return null;
+        let str = String(address);
+        if(this.isContractAddress(str) || str=='BURN')
+            return null;
+        let net        = (network) ? network : this.config['NETWORK'];
+        let fromParams = (ADDRESS_PARAMS[fromCoin]) ? ADDRESS_PARAMS[fromCoin][net] : false;
+        let toParams   = (ADDRESS_PARAMS[toCoin])   ? ADDRESS_PARAMS[toCoin][net]   : false;
+        if(!fromParams || !toParams)
+            return null;
+        // Segwit address: keep version + witness program, swap the HRP
+        if(fromParams.hrp && str.toLowerCase().startsWith(fromParams.hrp + '1')){
+            let decoded = this.bech32Decode(str);
+            if(!decoded || decoded.hrp!=fromParams.hrp || !toParams.hrp)
+                return null;
+            let encoded = this.bech32Encode(toParams.hrp, decoded.version, decoded.program);
+            return (encoded) ? encoded : null;
+        }
+        // Base58check address: classify by the source coin's version byte, keep the hash160
+        let payload = this.base58CheckDecode(str);
+        if(!payload || payload.length!=21)
+            return null;
+        let versionByte = null;
+        if(payload[0]==fromParams.p2pkh)
+            versionByte = toParams.p2pkh;
+        else if(payload[0]==fromParams.p2sh)
+            versionByte = toParams.p2sh;
+        if(versionByte===null)
+            return null;
+        let encoded = this.base58CheckEncode(Buffer.concat([Buffer.from([versionByte]), payload.subarray(1)]));
+        return (encoded) ? encoded : null;
+    }
+
+    // Create-side validation companion: true when the address will re-encode to
+    // toCoin at settlement (so a listing can be denied up front instead of ever
+    // hitting an unpayable royalty leg on a trade that already delivered).
+    canReencodeAddress(address, fromCoin, toCoin, network){
+        return this.crossChainReencodeAddress(address, fromCoin, toCoin, network) !== null;
     }
 
     // Handle validating that an address is a real crypto address on the given

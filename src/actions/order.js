@@ -392,11 +392,29 @@ class Order {
                 error = 'invalid: ' + result.error;
             } else {
                 guardFee = result.guardFee;
+                // Cross-chain royalty gate: the legs are computed on THIS chain but the proceeds
+                // settle on GET_COIN, where only a CROSS_CHAIN_ROYALTY-aware fleet can apply them
+                // (the legs ride the validator-signed match canonical). Below the flag-day, DENY
+                // the listing (fail-closed: accepting it would silently evade the royalty). At or
+                // above it, require every leg address to re-encode to GET_COIN so the settlement-
+                // time re-encode can never hit an unpayable leg on a trade that already delivered.
+                if(result.payoutLegs && isCrossChain){
+                    if(!(await this.actions.protocolChanges.isEnabled('CROSS_CHAIN_ROYALTY', data['BLOCK_INDEX']))){
+                        error = 'invalid: royalty not enforceable cross-chain';
+                    } else {
+                        for(let leg of result.payoutLegs){
+                            if(!this.util.canReencodeAddress(leg.to, this.config['COIN'], data['GET_COIN'], this.config['NETWORK'])){
+                                error = 'invalid: royalty leg not payable on proceeds chain';
+                                break;
+                            }
+                        }
+                    }
+                }
                 // Persist the guard's royalty/fee split (bps legs) on the order row; the protocol
                 // applies it to the seller's proceeds at each match (Utility.applyProceedsSplit).
                 // NB: `order` was snapshotted (Object.assign) before the guard ran, and createOrder
                 // persists `order`, so set the legs on BOTH or they never reach the DB.
-                if(result.payoutLegs)
+                if(!error && result.payoutLegs)
                     data['PAYOUT_LEGS'] = order['PAYOUT_LEGS'] = JSON.stringify(result.payoutLegs);
             }
         }

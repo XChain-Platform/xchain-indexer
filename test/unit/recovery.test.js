@@ -60,7 +60,10 @@ function memDb(v1s, v2s) {
                 return [];
             }
             if (sql.startsWith('INSERT INTO cross_chain_matches')) {
-                matches.push({ match_id: params[0], status: params[21], finalizing_view: params[params.length - 1] });
+                // Positional per recovery's INSERT (no id column in these fixtures): the
+                // royalty columns sit at 11 (a_payout_legs) / 20 (b_payout_legs), status at 23.
+                matches.push({ match_id: params[0], a_payout_legs: params[11], b_payout_legs: params[20],
+                               status: params[23], finalizing_view: params[params.length - 1] });
                 return [];
             }
             if (sql.startsWith('SELECT call_id FROM cross_chain_calls'))

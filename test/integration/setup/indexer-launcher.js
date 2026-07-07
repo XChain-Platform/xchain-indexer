@@ -161,6 +161,10 @@ async function processBlocks(indexer) {
             }
 
             await indexer.util.processExpirations(indexer.actions, indexer.indexerDb, lastIndexerBlock, blockTime);
+            // Mirror production (XChainIndexer.start): settle this chain's leg of any
+            // effective validator-signed cross-chain match. No-op for scenarios without
+            // cross_chain_matches rows; scenario 26 injects signed matches directly.
+            await indexer.util.processCrossChainSettlements(indexer.actions, indexer.indexerDb, lastIndexerBlock, blockTime);
             await indexer.util.processCancellations(indexer.actions, indexer.indexerDb, lastIndexerBlock, blockTime);
             await indexer.indexerDb.createBlock(lastIndexerBlock, blockTime);
             await indexer.util.processMarketUpdates(indexer.indexerDb, lastIndexerBlock, blockTime);

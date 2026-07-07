@@ -51,6 +51,7 @@ const crypto  = require('crypto');
 const ed25519 = require('./ed25519.js');
 const swq     = require('./stake_weighted_quorum.js');
 const eq      = require('./equivocation_header.js');
+const ccr     = require('./cross_chain_royalty_activation.js');
 
 class AnchorRecovery {
 
@@ -249,16 +250,20 @@ class AnchorRecovery {
                 // finalizing_view rides the archive (MATCH_KEYS) and feeds the EQUIV
                 // signing canonical (_matchCanonical) exactly as for calls below.
                 // Dropping it lands view>0 matches at view 0 and forks re-verification.
+                // a_payout_legs/b_payout_legs ride the archive (MATCH_KEYS, omit-when-null)
+                // at/above the CROSS_CHAIN_ROYALTY flag-day; they feed the signing canonical
+                // (_matchCanonical), so dropping them would fork re-verification exactly like
+                // dropping finalizing_view. Pre-royalty archives carry no key → null.
                 await this.db.doQuery(
                     `INSERT INTO cross_chain_matches
                         (${idCol}match_id, snapshot_block, network,
-                         a_chain, a_action_index, a_kind, a_tick, a_amount, a_filled_before, a_ownership, a_payout_addr,
-                         b_chain, b_action_index, b_kind, b_tick, b_amount, b_filled_before, b_ownership, b_payout_addr,
+                         a_chain, a_action_index, a_kind, a_tick, a_amount, a_filled_before, a_ownership, a_payout_addr, a_payout_legs,
+                         b_chain, b_action_index, b_kind, b_tick, b_amount, b_filled_before, b_ownership, b_payout_addr, b_payout_legs,
                          effective_time, validator_signatures, status, finalizing_view)
-                     VALUES (${idMark}?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                     VALUES (${idMark}?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                     [...idVal, m.match_id, Number(m.snapshot_block), m.network,
-                     m.a_chain, Number(m.a_action_index), m.a_kind, m.a_tick, m.a_amount, m.a_filled_before, Number(m.a_ownership), m.a_payout_addr,
-                     m.b_chain, Number(m.b_action_index), m.b_kind, m.b_tick, m.b_amount, m.b_filled_before, Number(m.b_ownership), m.b_payout_addr,
+                     m.a_chain, Number(m.a_action_index), m.a_kind, m.a_tick, m.a_amount, m.a_filled_before, Number(m.a_ownership), m.a_payout_addr, (m.a_payout_legs != null ? String(m.a_payout_legs) : null),
+                     m.b_chain, Number(m.b_action_index), m.b_kind, m.b_tick, m.b_amount, m.b_filled_before, Number(m.b_ownership), m.b_payout_addr, (m.b_payout_legs != null ? String(m.b_payout_legs) : null),
                      Number(m.effective_time), m.validator_signatures, m.status, Number(m.finalizing_view) || 0]);
             }
             report.matches++;
@@ -365,6 +370,10 @@ class AnchorRecovery {
             m.a_kind || 'swap', String(m.a_filled_before != null ? m.a_filled_before : '0'),
             m.b_kind || 'swap', String(m.b_filled_before != null ? m.b_filled_before : '0')
         ].join('|');
+        // Cross-chain royalty legs ride the signed match at/above the CROSS_CHAIN_ROYALTY
+        // flag-day; below it the canonical is byte-identical to the legacy format.
+        if(ccr.isCrossChainRoyaltyActive(m.snapshot_block, m.network))
+            raw += '|' + String(m.a_payout_legs || '') + '|' + String(m.b_payout_legs || '');
         // EQUIV (WI-2 bump 2): VIEW = the archived row's finalizing_view (serialized into
         // the archive by StateAnchorPublisher.MATCH_KEYS). TAG=XDEX, ROUND_ID=match_id.
         if(eq.isEquivHeaderActive(m.snapshot_block, m.network))

@@ -35,6 +35,7 @@
 const ed25519 = require('../ed25519.js');
 const swq     = require('../stake_weighted_quorum.js');
 const eq      = require('../equivocation_header.js');
+const ccr     = require('../cross_chain_royalty_activation.js');
 
 class Cross_Settle {
 
@@ -60,6 +61,10 @@ class Cross_Settle {
             m.a_kind || 'swap', String(m.a_filled_before != null ? m.a_filled_before : '0'),
             m.b_kind || 'swap', String(m.b_filled_before != null ? m.b_filled_before : '0')
         ].join('|');
+        // Cross-chain royalty legs ride the signed match at/above the CROSS_CHAIN_ROYALTY
+        // flag-day; below it the canonical is byte-identical to the legacy format.
+        if(ccr.isCrossChainRoyaltyActive(m.snapshot_block, m.network))
+            raw += '|' + String(m.a_payout_legs || '') + '|' + String(m.b_payout_legs || '');
         // EQUIV (WI-2 bump 2): VIEW = the row's persisted finalizing_view (the view the
         // hub round finalized at; == pending.view when the quorum sigs were taken). TAG=XDEX,
         // ROUND_ID=match_id. Gate on the row's snapshot_block + network. Must byte-match the hub.
@@ -189,8 +194,10 @@ class Cross_Settle {
             await this.util.transferTokenOwnership(this.indexerDb, this.mapper, data, giveTick, swapInfo['SOURCE'], payoutAddr);
         } else {
             escrows.push([giveTick, -giveAmount, payoutAddr]);
-            credits.push([giveTick,  giveAmount, payoutAddr]);
-            this.util.addAddressTicker(payoutAddr, giveTick);
+            for(let c of await this._proceedsCredits(data, m, coin, giveTick, giveAmount, payoutAddr, counterpartyCoin)){
+                credits.push(c);
+                this.util.addAddressTicker(c[2], c[0]);
+            }
         }
 
         await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits, escrows);
@@ -203,6 +210,46 @@ class Cross_Settle {
         await this.indexerDb.updateBalances(addresses);
 
         await this.mapper.createMappings(data);
+    }
+
+    // Build the proceeds credit(s) for a non-ownership escrow release. The released escrow
+    // is the proceeds of the OTHER chain's offer (its seller listed a controlled token
+    // there, and its guard produced the stored royalty split), so at/above the
+    // CROSS_CHAIN_ROYALTY flag-day the counterparty's legs are applied here: each leg `to`
+    // is re-encoded from the counterparty chain's address encoding to THIS chain's
+    // (crossChainReencodeAddress; same hash160/witness program, different version byte or
+    // HRP), then applyProceedsSplit replaces the single full credit with seller remainder
+    // + leg credits, conserving giveAmount exactly. Fail-closed like applyProceedsSplit: a
+    // native-coin leg (no tick), a malformed legs set, or any leg that does not re-encode
+    // (impossible for a create-side-validated order, but a hostile mirror row could carry
+    // anything) yields NO split, so the seller keeps full proceeds and a bad row can never
+    // trap the settlement. Below the flag-day the single full credit is returned unchanged.
+    async _proceedsCredits(data, m, coin, giveTick, giveAmount, payoutAddr, counterpartyCoin){
+        let full = [[giveTick, giveAmount, payoutAddr]];
+        if(!ccr.isCrossChainRoyaltyActive(m.snapshot_block, m.network))
+            return full;
+        // The legs belong to the offer whose proceeds THIS release pays out: on a's chain
+        // the escrow releases to b's payout (b's legs), and vice versa.
+        let isA      = (m.a_chain === coin);
+        let legsJson = isA ? m.b_payout_legs : m.a_payout_legs;
+        if(this.util.isNull(legsJson) || this.util.isNull(giveTick))
+            return full;
+        let parsed;
+        try { parsed = JSON.parse(legsJson); } catch(e){ return full; }
+        if(!Array.isArray(parsed) || parsed.length === 0)
+            return full;
+        let reencoded = [];
+        for(let leg of parsed){
+            let to = this.util.crossChainReencodeAddress((leg ? leg.to : null), counterpartyCoin, coin, this.config['NETWORK']);
+            if(to === null)
+                return full;
+            reencoded.push({ to: to, bps: leg.bps });
+        }
+        let dec  = 0;
+        let info = await this.indexerDb.getTokenInfo(giveTick, data['BLOCK_INDEX'], data['ACTION_INDEX']);
+        if(info && !this.util.isNull(info['DECIMALS']))
+            dec = parseInt(info['DECIMALS']);
+        return this.util.applyProceedsSplit(giveTick, giveAmount, payoutAddr, reencoded, dec, parseInt(this.config['CONTROLLER_MAX_TAKE_BPS']));
     }
 
     // Record a no-op settlement for a match whose local offer is already terminal:
@@ -251,8 +298,10 @@ class Cross_Settle {
             await this.util.transferTokenOwnership(this.indexerDb, this.mapper, data, giveTick, orderInfo['SOURCE'], payoutAddr);
         } else {
             escrows.push([giveTick, -giveAmount, payoutAddr]);
-            credits.push([giveTick,  giveAmount, payoutAddr]);
-            this.util.addAddressTicker(payoutAddr, giveTick);
+            for(let c of await this._proceedsCredits(data, m, coin, giveTick, giveAmount, payoutAddr, counterpartyCoin)){
+                credits.push(c);
+                this.util.addAddressTicker(c[2], c[0]);
+            }
         }
         await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits, escrows);
 

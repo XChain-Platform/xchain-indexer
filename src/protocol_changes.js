@@ -231,6 +231,33 @@ class ProtocolChanges {
         // controller guards from block 0).
         this.addChange('CONTROLLER_GUARD', '2.0.0',1798761600,0,0,0,0,0);
 
+        // Cross-chain royalty enforcement, layered on CONTROLLER_GUARD. Once the guard
+        // produces royalty payout_legs (post-CONTROLLER_GUARD), a CROSS-CHAIN listing of
+        // a royalty-bearing token needs its legs applied on the PROCEEDS chain, which
+        // only a fleet that carries legs in the validator-signed match canonical can do.
+        // Below this activation such a listing is DENIED at create ('royalty not
+        // enforceable cross-chain', fail-closed: accepting it would silently evade the
+        // royalty); at/above it the listing is accepted after every leg address proves
+        // re-encodable to GET_COIN (Utility.canReencodeAddress), and the legs travel in
+        // the signed match for settlement-time application. Same-chain royalties and
+        // leg-less cross-chain listings are unaffected either side of the flag. This
+        // entry gates the CREATE-side acceptance rule (local block, like any acceptance
+        // rule); the match-canonical format flip is keyed on the BTC-anchored
+        // snapshot_block via the twin-module pattern (see the STAKE_WEIGHTED_QUORUM note
+        // below), NOT this entry. The mainnet timestamp is a PLACEHOLDER one quarter
+        // AFTER the CONTROLLER_GUARD flag-day (2027-04-01 00:00:00 UTC): the deny window
+        // between the two dates is the safe interim while the fleet upgrades to
+        // legs-in-canonical, and the real date MUST be coordinated with that fleet
+        // upgrade before any cross-chain listing of a controlled token exists on
+        // mainnet; a wrong value is a fork. testnet/regtest activate at genesis so the
+        // propagate+apply path is exercisable from block 0; regtest accepts an env
+        // override (a future activation time) so the OFF/deny path stays drillable on a
+        // single-node regtest stack. The override is regtest-only ON PURPOSE: two
+        // regtest nodes with different overrides fork each other, which is fine for a
+        // one-node drill and unacceptable anywhere else.
+        let ccRoyaltyRegtestTime = parseInt(process.env.CROSS_CHAIN_ROYALTY_REGTEST_TIME) || 0;
+        this.addChange('CROSS_CHAIN_ROYALTY', '2.0.0',1806537600,0,ccRoyaltyRegtestTime,0,0,0);
+
         // Async/Promise contract surface (VM CONSENSUS_VERSION '2'). Below this
         // activation the on-chain deploy validator (validateSyntax) ACCEPTS a
         // contract that uses async/await or references the global Promise, and the

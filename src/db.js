@@ -6213,6 +6213,7 @@ class Database {
                         s1.expiration,
                         s1.allow_list,
                         s1.block_list,
+                        s1.payout_legs,
                         t1.block_index
                     FROM
                         swaps s1
@@ -6249,6 +6250,9 @@ class Database {
             expiration:     Number(row.expiration),
             allow_list:     row.allow_list,
             block_list:     row.block_list,
+            // Controller-guard royalty split (JSON [{to,bps}] or null). The hub copies it
+            // into the match row so settlement can apply it on the proceeds chain.
+            payout_legs:    row.payout_legs || null,
             block_index:    Number(row.block_index)
         }));
     }
@@ -6281,6 +6285,7 @@ class Database {
                         o1.expiration,
                         o1.allow_list,
                         o1.block_list,
+                        o1.payout_legs,
                         t1.block_index
                     FROM
                         orders o1
@@ -6324,6 +6329,9 @@ class Database {
                 expiration:     Number(row.expiration),
                 allow_list:     row.allow_list,
                 block_list:     row.block_list,
+                // Controller-guard royalty split (JSON [{to,bps}] or null). The hub copies it
+                // into the match row so settlement can apply it on the proceeds chain.
+                payout_legs:    row.payout_legs || null,
                 block_index:    Number(row.block_index)
             });
         }

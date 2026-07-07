@@ -20,6 +20,7 @@
 const crypto = require('crypto');
 const zlib   = require('zlib');
 const eq     = require('../../src/equivocation_header.js');
+const ccr    = require('../../src/cross_chain_royalty_activation.js');
 
 // ── Real Ed25519 helpers ────────────────────────────────────────────────────
 function makeKeypair() {
@@ -32,8 +33,8 @@ function signHex(kp, payload) {
 
 // ── Publisher-faithful serialization (MATCH_KEYS order) ─────────────────────
 const MATCH_KEYS = ['match_id', 'snapshot_block', 'network',
-    'a_chain', 'a_action_index', 'a_kind', 'a_tick', 'a_amount', 'a_filled_before', 'a_ownership', 'a_payout_addr',
-    'b_chain', 'b_action_index', 'b_kind', 'b_tick', 'b_amount', 'b_filled_before', 'b_ownership', 'b_payout_addr',
+    'a_chain', 'a_action_index', 'a_kind', 'a_tick', 'a_amount', 'a_filled_before', 'a_ownership', 'a_payout_addr', 'a_payout_legs',
+    'b_chain', 'b_action_index', 'b_kind', 'b_tick', 'b_amount', 'b_filled_before', 'b_ownership', 'b_payout_addr', 'b_payout_legs',
     'effective_time', 'finalizing_view', 'validator_signatures', 'status'];
 function serializeMatch(m) {
     let out = {};
@@ -43,6 +44,7 @@ function serializeMatch(m) {
         else if (k === 'finalizing_view') out[k] = Number(v) || 0;
         else if (k === 'a_ownership' || k === 'b_ownership') out[k] = Number(v) ? 1 : 0;
         else if (k === 'a_tick' || k === 'b_tick') out[k] = (v == null) ? null : String(v);
+        else if (k === 'a_payout_legs' || k === 'b_payout_legs') { if (v != null) out[k] = String(v); }  // omit-when-null (hub parity)
         else out[k] = String(v == null ? '' : v);
     }
     return out;
@@ -54,6 +56,9 @@ function matchCanonical(m) {
         String(m.effective_time), m.network || '',
         m.a_kind || 'swap', String(m.a_filled_before != null ? m.a_filled_before : '0'),
         m.b_kind || 'swap', String(m.b_filled_before != null ? m.b_filled_before : '0')].join('|');
+    // Royalty legs ride the signed match at/above CROSS_CHAIN_ROYALTY (regtest genesis).
+    if (ccr.isCrossChainRoyaltyActive(m.snapshot_block, m.network))
+        raw += '|' + String(m.a_payout_legs || '') + '|' + String(m.b_payout_legs || '');
     // EQUIV active in regtest: TAG=XDEX, ROUND_ID=match_id, VIEW=finalizing_view (default 0).
     if (eq.isEquivHeaderActive(m.snapshot_block, m.network))
         return eq.buildEquivCanonical(eq.ENGINE_TAGS.DEX, m.match_id, (m.finalizing_view != null ? m.finalizing_view : 0), raw);
