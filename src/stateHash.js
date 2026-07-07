@@ -30,6 +30,7 @@
  *   - cooldown-maturity status flips (unstakes/contract_unstakes)
  *   - backdated cooldown refund credits (capability GAS + contract own-tick)
  *   - invalid_archive stamp on anchor_actions v1 parent rows (CRC-failed chunked batches)
+ *   - VOTE poll finalization flips on surviving polls rows (flag-day gated, inert by default)
  *
  * CONSENSUS-STYLE DETERMINISM (mirrors db.js getBlockHashes):
  *   - surrogate AUTO_INCREMENT ids (address_id/tick_id/status_id) are NEVER hashed;
@@ -106,6 +107,39 @@ function isIndexMapStateHashActive(blockIndex, network){
     let b = parseInt(blockIndex);
     if(!Number.isFinite(b)) return false;
     let threshold = INDEX_MAP_STATE_HASH_ACTIVATION[network];
+    if(threshold === undefined) return false;
+    return b >= threshold;
+}
+
+// ── VOTE poll-finalization state-hash flag-day ────────────────────────────────
+// Promotes the polls finalization flip (VOTE v2 mutates a SURVIVING polls row
+// terminal IN PLACE) from an unhashed updated_rows mutation to an ENFORCED
+// per-block class of this replication-integrity hash, closing the one mutation
+// class where a follower silently dropping the flip upsert diverged with no halt
+// (the attests/xcalls v0 flips have had this coverage from the start).
+//
+// Same gating model as INDEX_MAP_STATE_HASH_ACTIVATION above: keyed on the
+// chain's OWN local block_index, DEFAULT INERT on every network (999999999
+// placeholder), so landing this is a strict no-op on the live fleet: the class
+// is omitted from the preimage below the threshold, leaving state_hash
+// byte-identical to today. Arm fleet-atomically (every indexer + sync process
+// on this map first) at the coordinated flag-day; the arming decision rides the
+// flag-day unification plan (claude/reports/2026-07-07_flag-day-inventory-...).
+// No STATE_HASH_VERSION bump: a block is unambiguously pre- or post-activation
+// on a given network. Keep byte-identical to the xchain-sync twin.
+const POLL_FINALIZE_STATE_HASH_ACTIVATION = {
+    mainnet: 999999999,   // ARM: coordinated flag-day (see the unification plan)
+    testnet: 999999999,   // ARM: with mainnet or ahead of it after a clean reseed
+    regtest: 999999999,   // ARM: current tip + N, or 0 + clean reseed
+};
+
+// Whether the poll-finalize class is folded into state_hash at `blockIndex` on
+// `network`. Below the threshold / unknown network -> off (safe; the class is
+// omitted and the preimage stays byte-identical to the pre-feature shape).
+function isPollFinalizeStateHashActive(blockIndex, network){
+    let b = parseInt(blockIndex);
+    if(!Number.isFinite(b)) return false;
+    let threshold = POLL_FINALIZE_STATE_HASH_ACTIVATION[network];
     if(threshold === undefined) return false;
     return b >= threshold;
 }
@@ -256,6 +290,29 @@ async function buildStateHashData(db, blockIndex, opts){
         } catch(e){ /* table/column may not exist on older schemas */ }
     }
 
+    // 8. VOTE poll finalization flips: polls rows whose terminal flip landed at
+    //    block B, keyed by resolved_block (the SAME key the forward updated_rows
+    //    POLL_FINALIZE channel selects by and the reverse rollback re-open resets).
+    //    Hashes the full deterministic tally outcome (winner, weights, gates,
+    //    deposit + callback resolution), never a surrogate id; poll identity is
+    //    action_index (unique), so ORDER BY action_index is a total order. GATED
+    //    INERT by default: included ONLY at/after the per-chain activation height,
+    //    so below it the key is omitted and the preimage is byte-identical to the
+    //    pre-feature shape (no fleet halt). The query is appended after every
+    //    existing call so the doQuery call order is unchanged when inert.
+    let pollFinalizeActive = isPollFinalizeStateHashActive(B, network);
+    let poll_finalize = [];
+    if(pollFinalizeActive){
+        try {
+            poll_finalize = await db.doQuery(
+                "SELECT action_index, poll_status, winning_option, total_weight, total_voters, " +
+                "quorum_met, min_voters_met, fail_reason, decided_early, effective_close_block, " +
+                "finalized_action_index, resolved_block, deposit_resolved, callback_execute_action_index " +
+                "FROM polls WHERE resolved_block BETWEEN ? AND ? ORDER BY action_index ASC",
+                [B, B]);
+        } catch(e){ /* table/columns may not exist on older schemas */ }
+    }
+
     // Fixed key order: the hash preimage. NOT chained on a previous state_hash
     // (the adjacent three hashes already carry chain-continuity; a chain would only
     // make NULL-backfill of historical blocks poison every successor).
@@ -273,6 +330,11 @@ async function buildStateHashData(db, blockIndex, opts){
         preimage.index_addresses_new = index_addresses_new;
         preimage.index_tickers_new   = index_tickers_new;
     }
+    // Poll-finalize key likewise inserted ONLY when active (after the index-map
+    // keys, before block_index), preserving the inert byte-identity guarantee.
+    if(pollFinalizeActive){
+        preimage.poll_finalize = poll_finalize;
+    }
     preimage.block_index        = B;
     preimage.state_hash_version = STATE_HASH_VERSION;
     return preimage;
@@ -280,4 +342,5 @@ async function buildStateHashData(db, blockIndex, opts){
 
 module.exports = { buildStateHashData, STATE_HASH_VERSION,
                    DEACTIVATION_TABLES, SLASH_SPECS, REQUEST_STATUS_TABLES, COOLDOWN_TABLES,
-                   INDEX_MAP_STATE_HASH_ACTIVATION, isIndexMapStateHashActive };
+                   INDEX_MAP_STATE_HASH_ACTIVATION, isIndexMapStateHashActive,
+                   POLL_FINALIZE_STATE_HASH_ACTIVATION, isPollFinalizeStateHashActive };

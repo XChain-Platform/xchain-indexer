@@ -27,16 +27,12 @@
  * mainnet. This test closes the *class*: a new src/sql/<table>.sql that nobody
  * classifies fails here instead of shipping.
  *
- * To satisfy this test, a new table must land in exactly one of these buckets:
- *   - dataTables   - deleted by `action_index >= ?`  (per-action rows)
- *   - blockTables  - deleted by `block_index >= ?`   (per-block rows)
- *   - RECOMPUTED   - not deleted by index; fully rebuilt during rollback()
- *   - SPECIAL_CASE - deleted by bespoke logic in rollback() (cascades, etc.)
- *   - ROLLBACK_EXEMPT - intentionally never rolled back (must carry a reason)
- *   - the `index_` prefix - append-only, id-keyed dedup lookups; orphaned rows
- *     are harmless because they are only ever referenced by id.
- *
- * Pick the bucket by understanding the table, not by silencing the test.
+ * To satisfy this test, a new table needs ONE entry in the table-lifecycle
+ * registry (src/tableLifecycle.js) declaring its replication, rollback, and
+ * hash-coverage classification; the rollback buckets checked here (generic
+ * lists, RECOMPUTED, SPECIAL_CASE, ROLLBACK_EXEMPT, inert lookups) are all
+ * derived from that registry. Classify by understanding the table, not by
+ * silencing the test; see the registry header for the field definitions.
  */
 
 'use strict';
@@ -51,6 +47,7 @@ const sinon  = require('sinon');
 
 const { createMockIndexer } = require('../fixtures/mocks');
 const Rollback              = require('../../src/rollback.js');
+const lifecycle             = require('../../src/tableLifecycle.js');
 
 // The universe: every table the indexer creates, straight from src/sql/.
 // Mirrors db.js verifyTables() exactly (all *.sql, name = filename minus .sql).
@@ -60,126 +57,20 @@ const UNIVERSE = fs.readdirSync(SQL_DIR)
     .map(f => f.slice(0, -'.sql'.length))
     .sort();
 
-// Tables not deleted by index but fully recomputed from surviving ledger rows
-// inside rollback() (updateBalances / updateTokens / updateMarkets;
-// attest_validator_stats via
-// _recomputeAttestationValidatorStats: drops rows last touched in the orphaned
-// range, then rebuilds them from surviving signatures + expired requests).
-// `tokens` is ALSO in dataTables; listing it here is harmless, as coverage is a
-// union, not a partition.
-const RECOMPUTED = ['balances', 'tokens', 'markets', 'attest_validator_stats'];
-
-// Tables deleted by bespoke logic in rollback() rather than the generic loops.
-// contract_emissions is cascade-deleted via its contract_executions parent.
-// price_snapshots anchors rounds via reference_block (not block_index), so it
-// gets its own delete (`reference_block >= ?`) outside the blockTables loop.
-//
-// Orphan sweeps (icons, balances, markets, pubkeys): derived/cache tables keyed
-// by a rolled-back index id (index_addresses / index_tickers / tokens) but NOT
-// removed by the action_index / block_index delete loops. After the index-table
-// delete, an entity seen ONLY in the orphaned range leaves a dangling-ref row;
-// each gets a bespoke `<fk> NOT IN (SELECT id FROM <index>)` sweep so the reorged
-// node matches a from-genesis one. balances/markets are ALSO recomputed (surviving
-// rows) but the recompute cannot reach an orphaned-only row, so the sweep is the
-// orphan handler; pubkeys is sweep-only. The sweep DELETEs are asserted to exist
-// below so this classification cannot rot away from the source.
-const SPECIAL_CASE = ['contract_emissions', 'price_snapshots',
-    'icons', 'balances', 'markets', 'pubkeys'];
-
-// The orphan-sweep tables and the index they dangle against (asserted present in
-// rollback.js source below). icons keys on tokens; the rest on the two rolled-back
-// index_* tables. Mirrors xchain-indexer/src/rollback.js (and xchain-sync's
-// ClientRollback for markets/pubkeys).
-const ORPHAN_SWEEPS = [
-    { table: 'icons',    index: 'tokens' },
-    { table: 'balances', index: 'index_addresses' },
-    { table: 'balances', index: 'index_tickers' },
-    { table: 'markets',  index: 'index_tickers' },
-    { table: 'pubkeys',  index: 'index_addresses' },
-];
-
-// Tables intentionally never rolled back. Every entry MUST state why, and is
-// asserted below to actually exist (so this list can't rot with stale names).
-const ROLLBACK_EXEMPT = {
-    events:
-        'Append-only operational audit log; it records the REORG event itself. ' +
-        'Rolling it back would erase the evidence of the rollback.',
-    recovery_pending_rewards:
-        'Recovery-local staging scratch (F1a id-determinism fix): archived validator ' +
-        'rewards keyed by raw source-address string, drained into validator_rewards by the ' +
-        'createAddress apply hook during the reindex. NOT chain truth and NOT consensus- ' +
-        'hashed, so a surviving row never diverges the ledger; an already-applied row is a ' +
-        'no-op (validator_rewards itself IS block-scoped and rolls back). rollback() does ' +
-        'still RE-ARM it (UPDATE applied=0 WHERE source_id NOT IN index_addresses) so the ' +
-        'hook re-materializes a reward whose source address was rolled out of the index, but ' +
-        'that is a parity convenience, not an index-keyed delete, hence exempt not blockTables.',
-    // NOTE: pubkeys was here ("a row surviving a reorg is harmless") until the wire
-    // ^<id> work made index_addresses ids reorg-reproducible. A reclaimed address_id
-    // then re-points the surviving pubkeys row at a DIFFERENT address (INSERT IGNORE
-    // keeps the old pubkey), so it is no longer harmless: it is now orphan-swept (see
-    // SPECIAL_CASE / ORPHAN_SWEEPS).
-    push_generations:
-        'Source-chain reorg fence counter (item 5308): one monotonic generation per coin, ' +
-        'bumped once at the START of every rollback() so re-published rows outrank the orphaned ' +
-        'ones. Rolling it back is exactly the bug it fixes (a reset value would let a deferred ' +
-        'retraction wipe a re-published row at a recycled action_index again). NOT chain truth ' +
-        'and NOT consensus-hashed; it is hub-replication metadata stamped onto hub rows only. ' +
-        'Intentionally never deleted/recomputed by rollback, hence exempt by design.',
-    cross_chain_matches:
-        'Hub-mirrored cross-chain DEX state (CROSS_CHAIN_TABLES in hub_db_sync.js), ' +
-        'NOT produced by local block/action processing. Tagged by source chain + ' +
-        'a_/b_action_index (two-sided); locally pre-deleted to close the hub-blip ' +
-        'window (CROSS-CHAIN-MIRROR-REORG-DELETE in rollback.js); hub retraction via ' +
-        'retractMatchRange is the idempotent backstop and a harmless no-op after the ' +
-        'local delete.',
-    cross_chain_calls:
-        'Hub-mirrored cross-chain contract call relay rows (CROSS_CHAIN_TABLES in ' +
-        'hub_db_sync.js), NOT produced by local block/action processing; the indexer ' +
-        'only SELECTs it (XEXEC injection / result-callback passes). Tagged by ' +
-        'source_chain + source_action_index; locally pre-deleted to close the hub-blip ' +
-        'window (CROSS-CHAIN-MIRROR-REORG-DELETE in rollback.js); hub retraction via ' +
-        'retractXcallRange is the idempotent backstop and a harmless no-op after the ' +
-        'local delete.',
-    oracle_prices:
-        'Hub-mirrored user-published PRICE v1 oracle rows (hub_db_sync.js), NOT produced ' +
-        'by local block/action processing; the indexer only SELECTs it (fee/oracle price ' +
-        'reads). action_index in this table refers to the row\'s SOURCE chain, which is ' +
-        'usually a DIFFERENT chain from the one this indexer reorgs, so deleting by local ' +
-        'block height would corrupt the mirror. Synced from the hub via an `id` cursor; ' +
-        'source-chain reorgs are handled mirror-side by hub_db_sync (pushpricereorg rail).',
-    capability_snapshots:
-        'Hub-mirrored, immutable block-boundary capability snapshots (CROSS_CHAIN_TABLES ' +
-        'in hub_db_sync.js): one row per pubkey that qualified for a capability at a ' +
-        'BTC-anchored snapshot_block, synced from the hub via an `id` cursor and never ' +
-        'retracted (immutable history). The indexer only SELECTs it to verify match ' +
-        'signatures; block replay does not recreate it, so the chain-reorg path must ' +
-        'not delete it.',
-    state_checkpoints:
-        'Hub-mirrored, quorum-signed state checkpoints (hub_db_sync.js), NOT produced ' +
-        'by local block/action processing; the indexer only SELECTs it for the ' +
-        'explorer/SDK verification APIs. Synced from the hub via an `id` cursor and ' +
-        'never retracted (a reorged height is superseded by a re-broadcast row with a ' +
-        'higher checkpoint_seq). Block replay does not recreate it, so the chain-reorg ' +
-        'path must not delete it. (The on-chain ANCHOR record, anchor_actions, IS ' +
-        'action-indexed and rolls back normally as a dataTable.)',
-    state_tree_nodes:
-        'Content-addressed, copy-on-write SMT node store for the light-client state ' +
-        'commitment (SPV spec §4.3). Nodes are keyed by their own hash, so a node that ' +
-        'survives a reorg is harmless: re-applying the new chain INSERT-IGNOREs the same ' +
-        'hashes (no-op) and the surviving fork-point root in state_tree_roots (which IS ' +
-        'block-indexed and rolls back) anchors the correct tree. Orphaned nodes become ' +
-        'unreferenced garbage that a later mark-and-sweep pruner reclaims; deleting them ' +
-        'by block height is both unnecessary and impossible (a node carries no block_index, ' +
-        'and the same node may be shared by surviving blocks).',
-};
+// Rollback buckets and the orphan-sweep manifest, derived from the
+// table-lifecycle registry (the single classification point). Per-table
+// rationale lives with each registry entry.
+const { RECOMPUTED, SPECIAL_CASE, ROLLBACK_EXEMPT } = lifecycle.rollbackBuckets();
+const ORPHAN_SWEEPS = lifecycle.ORPHAN_SWEEPS;
 
 // Convention: append-only, id-keyed dedup lookups. Orphaned rows are inert
 // because data tables reference them only by id. EXCEPTION: index_addresses and
 // index_tickers can be named by a wire ^<id> reference, so their ids ARE
 // consensus-relevant and they are rolled back (rollback.indexTables); they must be
-// asserted as covered, not silently exempted as inert lookups.
-const ROLLED_BACK_INDEX = ['index_addresses', 'index_tickers'];
-const isLookupTable = (t) => t.startsWith('index_') && !ROLLED_BACK_INDEX.includes(t);
+// asserted as covered, not silently exempted as inert lookups. Derived from the
+// registry ('lookup' rollback mode) and cross-checked structurally below.
+const LOOKUP_TABLES = new Set(lifecycle.tablesWhere(t => t.rollback === 'lookup'));
+const isLookupTable = (t) => LOOKUP_TABLES.has(t);
 
 describe('Rollback coverage guard @regression', function () {
     let rollback;
@@ -262,6 +153,74 @@ describe('Rollback coverage guard @regression', function () {
                 ? `ROLLBACK_EXEMPT names tables that no longer exist in src/sql: ${stale.join(', ')}. Remove them.`
                 : undefined
         );
+    });
+
+    // ── Table-lifecycle registry gates ──────────────────────────────────
+    // The registry (src/tableLifecycle.js) is the single place a new table is
+    // classified for replication, rollback, and hash coverage. These tests make
+    // "forgot to classify" impossible in each direction.
+
+    it('every src/sql table has a table-lifecycle registry entry', function () {
+        const registered = new Set(lifecycle.allTables().filter(t => t.owner === 'indexer').map(t => t.table));
+        const missing = UNIVERSE.filter(t => !registered.has(t));
+        assert.deepStrictEqual(
+            missing,
+            [],
+            missing.length
+                ? `\n\nThese src/sql tables have NO entry in src/tableLifecycle.js:\n` +
+                  missing.map(t => `    - ${t}`).join('\n') +
+                  `\n\nEvery table must declare its replication, rollback, and hash-coverage\n` +
+                  `lifecycle in the registry (see its header for field definitions), then be\n` +
+                  `mirrored into the xchain-sync twin copy.\n`
+                : undefined
+        );
+    });
+
+    it('every indexer-owned registry entry names a real src/sql table (the registry cannot rot)', function () {
+        const universeSet = new Set(UNIVERSE);
+        const stale = lifecycle.allTables()
+            .filter(t => t.owner === 'indexer' && !universeSet.has(t.table))
+            .map(t => t.table);
+        assert.deepStrictEqual(stale, [],
+            stale.length ? `tableLifecycle.js entries with no src/sql definition (typo or dropped table): ${stale.join(', ')}` : undefined);
+    });
+
+    it('every registry entry declares all three lifecycle dimensions with valid values', function () {
+        const REPLICATION = ['stream:action', 'stream:block', 'stream:index', 'stream:special',
+            'snapshot', 'hub-mirror', 'local', 'follower-derived'];
+        const ROLLBACK    = ['action', 'block', 'index', 'recomputed', 'special', 'exempt', 'lookup'];
+        const REPLICA     = ['mirror', 'recomputed', 'special', 'exempt', 'lookup', 'local'];
+        const HASH        = ['ledger', 'actions', 'contracts', 'state_hash', 'state_commitment', 'index_map', 'quorum'];
+        const problems = [];
+        for (const t of lifecycle.allTables()) {
+            if (!REPLICATION.includes(t.replication))
+                problems.push(`${t.table}: invalid replication '${t.replication}'`);
+            if (t.owner === 'indexer' ? !ROLLBACK.includes(t.rollback) : t.rollback !== null)
+                problems.push(`${t.table}: invalid rollback '${t.rollback}' for owner '${t.owner}'`);
+            if (!REPLICA.includes(t.replicaRollback))
+                problems.push(`${t.table}: invalid replicaRollback '${t.replicaRollback}'`);
+            if (!t.hashed || !Array.isArray(t.hashed.classes))
+                problems.push(`${t.table}: hashed.classes missing`);
+            else {
+                for (const c of t.hashed.classes)
+                    if (!HASH.includes(c)) problems.push(`${t.table}: unknown hash class '${c}'`);
+                // A table with no hash class must SAY why (derived / operational /
+                // quorum-covered); that declaration is the whole point of the dimension.
+                if (t.hashed.classes.length === 0 && !(t.hashed.note && t.hashed.note.length > 10))
+                    problems.push(`${t.table}: empty hashed.classes without a substantive note`);
+            }
+            if (t.rollback === 'exempt' && !(t.note && t.note.length > 20))
+                problems.push(`${t.table}: rollback 'exempt' requires a substantive note (why is never rolling back safe?)`);
+        }
+        assert.deepStrictEqual(problems, [], problems.join('\n'));
+    });
+
+    it('registry lookup entries follow the index_ naming convention (inertness relies on it)', function () {
+        const offenders = lifecycle.tablesWhere(t => t.rollback === 'lookup' && !t.table.startsWith('index_'));
+        assert.deepStrictEqual(offenders, [],
+            `Non-index_* tables classified as inert lookups: ${offenders.join(', ')}. ` +
+            `The inert-lookup argument (ids only ever referenced by id, never hashed) is a ` +
+            `property of the dedup lookup tables; anything else needs a real rollback mode.`);
     });
 
     it('every orphan-sweep DELETE classified in SPECIAL_CASE actually exists in rollback.js', function () {

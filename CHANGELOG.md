@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `src/tableLifecycle.js` table-lifecycle registry: declares replication, rollback, and hash coverage per table, generates the rollback table lists, and gates coverage in tests (twin vendored to xchain-sync).
+- `stateHash.js` gains a flag-day-gated `poll_finalize` class covering VOTE poll finalization flips (inert on all networks until `POLL_FINALIZE_STATE_HASH_ACTIVATION` is armed).
 - `hub_db_sync.js` exports `ensureTables()` for non-indexer mirror consumers and is now the canonical copy vendored into xchain-explorer via `bin/sync-hub-mirror-client.sh`; indexer runtime behavior is unchanged.
 
 ### Fixed

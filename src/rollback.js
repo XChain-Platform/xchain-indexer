@@ -18,8 +18,9 @@
  *
  ********************************************************************/
 
-const crypto = require('crypto');
-const swq    = require('./stake_weighted_quorum.js');
+const crypto    = require('crypto');
+const swq       = require('./stake_weighted_quorum.js');
+const lifecycle = require('./tableLifecycle.js');
 
 class Rollback {
 
@@ -49,145 +50,18 @@ class Rollback {
         // Setup alias to the indexer protocol changes instance
         this.protocolChanges = indexer.protocolChanges;
 
-        // List of tables that store data using block_index
-        this.blockTables = [
-            'blocks',
-            'transactions',
-            'validator_rewards',
-            'contract_state',
-            'slash_events',
-            // Per-row slash debit log (one row per in-place contract_stakes/contract_unstakes
-            // amount reduction). Block-scoped (rollback key = block_index, same as slash_events).
-            // The restore below reads it BEFORE this generic delete drops the orphaned rows.
-            'contract_slash_debits',
-            // Capability-stake equivocation slashing (WI-2 bump 2). Audit + per-row debit log,
-            // both block-scoped like their contract twins; the capability_slash_debits restore
-            // below runs BEFORE these generic deletes.
-            'capability_slash_events',
-            'capability_slash_debits',
-            // Light-client per-block state commitments (SPV spec §4/§5). Delete the
-            // roots for orphaned blocks; the surviving fork-point row (block_index-1)
-            // is the root the re-applied chain builds forward on. The content-addressed
-            // state_tree_nodes are NOT deleted here (COW; orphans are pruned later) -
-            // see ROLLBACK_EXEMPT in rollback-coverage.test.js.
-            'state_tree_roots'
-        ];
-
-        // List of tables that store data using action_index
-        this.dataTables = [
-            'actions',
-            'addresses',
-            'airdrops',
-            'batches',
-            'broadcasts',
-            'callbacks',
-            'credits',
-            'debits',
-            'coinpay_expires',
-            'coinpay_obligations',
-            'coinpay_statuses',
-            'coinpays',
-            'destroys',
-            'dispensers',
-            'dispenser_cancels',
-            'dispenser_closes',
-            'dispenser_edits',
-            'dispenser_expires',
-            'dispenser_statuses',
-            'dispenses',
-            'dividends',
-            'escrows',
-            'fees',
-            'files',
-            'gated_files',
-            'issues',
-            'links',
-            'lists',
-            'list_edits',
-            'list_items',
-            'list_items_invalid',
-            'mappings_actions',
-            'mappings_files',
-            'messages',
-            'mints',
-            'orders',
-            'order_cancels',
-            'order_edits',
-            'order_expires',
-            'order_matches',
-            'order_statuses',
-            'sends',
-            'sleeps',
-            'swaps',
-            'swap_cancels',
-            'swap_edits',
-            'swap_expires',
-            'swap_matches',
-            'swap_statuses',
-            'cross_chain_settlements',
-            'cross_chain_call_executions',
-            'cross_chain_call_callbacks',
-            'xcalls',
-            'sweeps',
-            'tokens',
-            'stakes',
-            'unstakes',
-            'delegations',
-            'stake_key_revocations',
-            'reward_claims',
-            // NODEPROOF verdict rows (verified full-node tier). Keyed by the verdict's
-            // action_index (one verdict writes one row per PASS pubkey, all sharing it),
-            // so the generic action_index delete drops a reorged verdict and all its
-            // verification rows together (verified status cannot survive a reorg).
-            'full_node_verifications',
-            'contracts',
-            'contract_permissions',
-            'deploy_chunks',
-            'contract_stakes',
-            'contract_unstakes',
-            'contract_delegations',
-            'contract_executions',
-            'deposits',
-            'withdrawals',
-            'anchor_actions',
-            'attests',
-            'prices',
-            'pending_hub_pushes',
-            // Programmable policy layer: append-only controller bind/unbind event logs. Each event
-            // row is keyed by its own action_index and never mutated (cooldown expiry is computed at
-            // read time), so the generic action_index delete reverts orphaned binds/unbinds exactly.
-            'token_controllers',
-            'address_controllers',
-            // VOTE governance: poll definitions (one row per VOTE v0) and ballots
-            // (VOTE v1 sets). Both keyed by their writing action_index, so the
-            // generic delete reverts reorged polls and ballots. votes is APPEND-ONLY
-            // (a re-vote inserts a new action_index set; getPollTally reads each
-            // voter's MAX(action_index) set), so deleting an orphaned replacement
-            // here automatically re-exposes the voter's prior surviving ballot;
-            // no restore logic is needed and none would be possible (the prior
-            // ballot's block is below the rollback point and never reprocesses).
-            'polls',
-            'votes',
-            // VOTE v2 finalization: per-option frozen results, keyed by the v2
-            // action_index, so the generic delete drops a reorged finalization's
-            // rows. The polls SUMMARY is mutated in place on an earlier-block row,
-            // so it is additionally reset below (see the polls re-open block).
-            'poll_results',
-            // VOTE v3 delegation event log: append-only (latest active row per
-            // delegator wins at read time), keyed by its own action_index, so the
-            // generic delete reverts a reorged set/clear and the prior delegation
-            // becomes latest-active again automatically.
-            'vote_delegations'
-        ];
-
-        // Lookup tables that ARE rolled back (block-scoped, keyed by their block_index).
-        // Unlike the other index_* tables, these can be named by a wire ^<id> reference, so
-        // their ids are consensus-relevant and must rewind on reorg (see the NOTE below and
-        // the dedicated delete loop at the end of rollback()).
-        this.indexTables = [
-            'index_addresses',
-            'index_tickers'
-        ];
+        // Generic rollback table lists, generated from the table-lifecycle
+        // registry (src/tableLifecycle.js): dataTables are deleted by
+        // action_index, blockTables by block_index, indexTables are the two
+        // wire-^<id> consensus lookups deleted by their own block_index. Per-
+        // table rationale (why a table is generic vs recomputed vs bespoke vs
+        // exempt) lives with its registry entry; classify NEW tables there,
+        // not here. The bespoke restores/sweeps in rollback() below stay
+        // hand-written and run in their required order around these loops.
+        let rollbackLists = lifecycle.rollbackTables();
+        this.blockTables  = rollbackLists.blockTables;
+        this.dataTables   = rollbackLists.dataTables;
+        this.indexTables  = rollbackLists.indexTables;
 
         // NOTE: index_addresses and index_tickers ARE rolled back (block-scoped delete at
         // the end of rollback(), keyed by index_*.block_index). Once an address/ticker can

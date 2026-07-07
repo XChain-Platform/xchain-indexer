@@ -1,0 +1,173 @@
+/*********************************************************************
+ *
+ * Copyright © 2025–2026 Dankest, LLC
+ * Based on XChain Platform by Dankest, LLC – https://dankest.llc
+ *
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This file is part of XChain Platform. Licensed under the GNU Affero
+ * General Public License v3.0 or later; see LICENSE.md. A commercial
+ * license (without AGPL source-disclosure terms) is available -
+ * contact legal@dankest.llc.
+ *
+ **********************************************************************
+ * test/unit/hash-coverage.test.js
+ *
+ * Hash-coverage guard: binds the per-table `hashed` declarations in the
+ * table-lifecycle registry (src/tableLifecycle.js) to the code that actually
+ * computes each hash. The registry is where a new table DECLARES which
+ * integrity hash would catch a divergence in it; these tests make that
+ * declaration verifiable in both directions:
+ *
+ *   - a table declaring a class must actually be read by that hash's
+ *     gathering code (a stale declaration fails), and
+ *   - a table the hashing code reads must declare the class (an undeclared
+ *     expansion of a hash preimage fails).
+ *
+ * Together with the rollback-coverage registry gates, a new consensus table
+ * cannot ship with its hash story unstated.
+ */
+
+'use strict';
+
+process.env.INDEXER_COIN    = 'BTC';
+process.env.INDEXER_NETWORK = 'regtest';
+
+const assert = require('assert');
+const fs     = require('fs');
+const path   = require('path');
+
+const lifecycle = require('../../src/tableLifecycle.js');
+const stateHash = require('../../src/stateHash.js');
+
+const read = (rel) => fs.readFileSync(path.join(__dirname, '../..', rel), 'utf8');
+
+describe('Hash coverage guard @regression', function () {
+
+    // The consensus block-hash preimage gathering lives in db.js getBlockHashes.
+    // Slice its body (start of the method to the gathered-rows stash it ends on)
+    // so the FROM-table assertions below cannot accidentally match unrelated SQL
+    // elsewhere in db.js.
+    function blockHashBody(){
+        const src   = read('src/db.js');
+        const start = src.indexOf('async getBlockHashes(');
+        const end   = src.indexOf('this._lastGatheredBlockRows', start);
+        assert.ok(start !== -1 && end > start, 'db.js getBlockHashes body not found; update this guard\'s slicing');
+        return src.slice(start, end);
+    }
+
+    it('every table declaring a ledger/actions/contracts class is gathered by getBlockHashes (and the sets are pinned)', function () {
+        // Value-pin the three consensus preimage table sets. Growing one is a
+        // consensus change (every hash changes): it must be deliberate, and it
+        // must update the registry declaration AND this pin together.
+        assert.deepStrictEqual(lifecycle.hashClassTables('ledger').sort(),
+            ['credits', 'debits', 'escrows'],
+            'ledger-hash table set changed; this is a consensus preimage change');
+        assert.deepStrictEqual(lifecycle.hashClassTables('actions').sort(),
+            ['actions'],
+            'actions-hash table set changed; this is a consensus preimage change');
+        assert.deepStrictEqual(lifecycle.hashClassTables('contracts').sort(),
+            ['contract_emissions', 'contract_executions', 'contract_state', 'contracts', 'deposits', 'withdrawals'],
+            'contract-hash table set changed; this is a consensus preimage change');
+
+        // Structural binding: each declared table is actually read inside
+        // getBlockHashes (FROM <table>, allowing an alias).
+        const body = blockHashBody();
+        for (const cls of ['ledger', 'actions', 'contracts']) {
+            for (const t of lifecycle.hashClassTables(cls)) {
+                const re = new RegExp(`FROM\\s+${t}\\b`, 'i');
+                assert.ok(re.test(body),
+                    `${t} declares hash class '${cls}' but db.js getBlockHashes never reads it; ` +
+                    `fix the registry declaration or the preimage gathering`);
+            }
+        }
+    });
+
+    it('state_hash class declarations exactly match the stateHash.js mutation-class tables (both directions)', function () {
+        // The state_hash preimage covers in-place mutation classes plus the
+        // backdated refund credits and the anchor invalid_archive stamp. Its
+        // table set is derivable from the module's own exported constants, so
+        // the registry declarations and the implementation are compared
+        // set-for-set: a table added to either side alone fails.
+        const fromCode = new Set([
+            ...stateHash.DEACTIVATION_TABLES,
+            ...stateHash.SLASH_SPECS.map(s => s.table),
+            ...stateHash.REQUEST_STATUS_TABLES,
+            ...stateHash.COOLDOWN_TABLES,
+            'credits',        // backdated cooldown refund credits class
+            'anchor_actions', // invalid_archive stamp class
+            'polls',          // finalization-flip class (flag-day gated; structural binding below)
+        ]);
+        assert.deepStrictEqual(
+            lifecycle.hashClassTables('state_hash').sort(),
+            [...fromCode].sort(),
+            'state_hash declarations in tableLifecycle.js and the classes gathered by stateHash.js have drifted; ' +
+            'a new in-place mutation class must land in BOTH (and in the updated_rows forward channel + both rollbacks)'
+        );
+    });
+
+    it('index_map class declarations match the id-map delta tables stateHash.js gathers', function () {
+        assert.deepStrictEqual(lifecycle.hashClassTables('index_map').sort(),
+            ['index_addresses', 'index_tickers'],
+            'index_map hash class must cover exactly the two wire-^id consensus lookups');
+        // Structural binding: the armed class queries both tables by block_index.
+        const src = read('src/stateHash.js');
+        for (const t of ['index_addresses', 'index_tickers']) {
+            assert.ok(new RegExp(`FROM ${t} WHERE block_index = \\?`).test(src),
+                `stateHash.js no longer gathers the ${t} id-map delta; the index_map class declaration is stale`);
+        }
+    });
+
+    it('state_commitment class declarations are pinned to the SMT inputs and stores', function () {
+        // balances + BTC stakes are the SMT leaf inputs (stateCommitment.js);
+        // state_tree_roots/state_tree_nodes are the commitment store itself.
+        // Changing this set is an SPV-spec change: update the registry, this
+        // pin, and the stateCommitment twins together.
+        assert.deepStrictEqual(lifecycle.hashClassTables('state_commitment').sort(),
+            ['balances', 'stakes', 'state_tree_nodes', 'state_tree_roots'],
+            'state_commitment table set changed; this is an SPV/light-client spec change');
+        const src = read('src/stateCommitment.js');
+        for (const t of ['balances', 'state_tree_roots', 'state_tree_nodes']) {
+            assert.ok(src.indexOf(t) !== -1,
+                `stateCommitment.js no longer references ${t}; the state_commitment declaration is stale`);
+        }
+    });
+
+    it('quorum class declarations are pinned to the hub-mirrored federation-signed tables', function () {
+        assert.deepStrictEqual(lifecycle.hashClassTables('quorum').sort(),
+            ['capability_snapshots', 'cross_chain_calls', 'cross_chain_matches', 'price_snapshots', 'state_checkpoints'],
+            'quorum-covered table set changed; verify the new/removed table\'s signature-verification story before updating this pin');
+    });
+
+    it('KNOWN GAPS stay declared until deliberately closed (tokens supply)', function () {
+        // Accepted in-place-mutation gaps are documented on their registry
+        // entries rather than silently absent. If one gains hash coverage
+        // (or the gap note is dropped), this pin forces the registry prose and
+        // the coverage reality to move together. (The polls finalization gap
+        // was closed 2026-07-07 via the flag-day-gated poll_finalize class;
+        // see the structural binding below.)
+        const tokens = lifecycle.entry('tokens');
+        assert.ok(/KNOWN GAP/.test(tokens.hashed.note) && tokens.hashed.classes.length === 0,
+            'tokens: either the supply-forward gap was closed (update the registry note and this test) ' +
+            'or the gap declaration was dropped without closing it');
+    });
+
+    it('poll_finalize class: gated selection exists, keyed by resolved_block, and ships INERT until armed', function () {
+        // Structural binding for the polls state_hash declaration: the gathering
+        // SQL must select by resolved_block (the same key the updated_rows
+        // forward channel and the rollback re-open use) behind the activation
+        // gate. The map must exist with entries for all three networks; arming
+        // is a deliberate flag-day decision (unification plan), not a default.
+        const src = read('src/stateHash.js');
+        assert.ok(/FROM polls WHERE resolved_block BETWEEN \? AND \? ORDER BY action_index ASC/.test(src),
+            'stateHash.js no longer gathers the poll-finalize flip by resolved_block; the polls state_hash declaration is stale');
+        const map = stateHash.POLL_FINALIZE_STATE_HASH_ACTIVATION;
+        for (const net of ['mainnet', 'testnet', 'regtest'])
+            assert.ok(Number.isFinite(map[net]), `POLL_FINALIZE_STATE_HASH_ACTIVATION.${net} missing`);
+        // Surrogate-id guard: the selected columns must never include the
+        // lookup ids on the polls row (they diverge across nodes).
+        const sel = src.match(/SELECT[\s\S]{0,400}?FROM polls WHERE resolved_block/)[0];
+        for (const banned of ['tick_id', 'deposit_address_id', 'status_id'])
+            assert.ok(sel.indexOf(banned) === -1, `poll_finalize preimage must not hash surrogate id column ${banned}`);
+    });
+});
