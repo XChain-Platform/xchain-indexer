@@ -871,15 +871,37 @@ describe('HubDbSync.ensureTables @regression @tier3', function () {
 
     it('executes every statement of every .sql file, in filename order', async function () {
         const dir = makeSqlDir({
-            'b_second.sql': 'CREATE TABLE IF NOT EXISTS b (id INT);',
-            'a_first.sql':  'CREATE TABLE IF NOT EXISTS a (id INT);\nCREATE INDEX idx_a ON a (id);'
+            'b_second.sql': 'CREATE TABLE b (id INT);',
+            'a_first.sql':  'CREATE TABLE a (id INT);\nCREATE INDEX idx_a ON a (id);'
         });
         const calls = [];
         await ensureTables({ doQuery: async (sql) => { calls.push(sql); return []; } }, dir);
-        assert.strictEqual(calls.length, 3);
-        assert.match(calls[0], /CREATE TABLE IF NOT EXISTS a/);
-        assert.match(calls[1], /CREATE INDEX idx_a/);
-        assert.match(calls[2], /CREATE TABLE IF NOT EXISTS b/);
+        const creates = calls.filter((s) => !/^SHOW TABLES/.test(s));
+        assert.strictEqual(creates.length, 3);
+        assert.match(creates[0], /CREATE TABLE a/);
+        assert.match(creates[1], /CREATE INDEX idx_a/);
+        assert.match(creates[2], /CREATE TABLE b/);
+    });
+
+    it('skips a file whose table already exists (restart against a built schema)', async function () {
+        // The SQL twins use bare CREATE TABLE, so a re-run must gate on
+        // existence exactly like the indexer verifyTables() does; without the
+        // gate a mirror consumer crash-loops with ER_TABLE_EXISTS_ERROR on
+        // every restart (caught live in the keyed-feed drill 2026-07-06).
+        const dir = makeSqlDir({
+            'a.sql': 'CREATE TABLE a (id INT);',
+            'b.sql': 'CREATE TABLE b (id INT);'
+        });
+        const calls = [];
+        const doQuery = async (sql, args) => {
+            calls.push(sql);
+            if (/^SHOW TABLES/.test(sql)) return args[0] === 'a' ? [{ t: 'a' }] : [];
+            return [];
+        };
+        await ensureTables({ doQuery }, dir);
+        const creates = calls.filter((s) => !/^SHOW TABLES/.test(s));
+        assert.strictEqual(creates.length, 1, 'only the missing table is created');
+        assert.match(creates[0], /CREATE TABLE b/);
     });
 
     it('a semicolon inside a -- comment is not a statement terminator', async function () {
@@ -887,28 +909,31 @@ describe('HubDbSync.ensureTables @regression @tier3', function () {
         // is naive there, same as indexer db.js createTable); the guarantee
         // under test is comment prose only, which is what bit attests.sql.
         const dir = makeSqlDir({
-            't.sql': '-- header prose; with a semicolon\nCREATE TABLE IF NOT EXISTS t (id INT);'
+            't.sql': '-- header prose; with a semicolon\nCREATE TABLE t (id INT);'
         });
         const calls = [];
         await ensureTables({ doQuery: async (sql) => { calls.push(sql); return []; } }, dir);
-        assert.strictEqual(calls.length, 1, 'comment semicolons must not split statements');
-        assert.match(calls[0], /CREATE TABLE IF NOT EXISTS t/);
+        const creates = calls.filter((s) => !/^SHOW TABLES/.test(s));
+        assert.strictEqual(creates.length, 1, 'comment semicolons must not split statements');
+        assert.match(creates[0], /CREATE TABLE t/);
     });
 
     it('retries a failing file with backoff and succeeds', async function () {
         const clock = sinon.useFakeTimers();
         try {
-            const dir = makeSqlDir({ 't.sql': 'CREATE TABLE IF NOT EXISTS t (id INT);' });
-            let attempts = 0;
-            const doQuery = async () => {
-                attempts++;
-                if (attempts === 1) throw new Error('transient');
+            const dir = makeSqlDir({ 't.sql': 'CREATE TABLE t (id INT);' });
+            let calls = 0;
+            let created = false;
+            const doQuery = async (sql) => {
+                calls++;
+                if (calls === 1) throw new Error('transient');
+                if (/^CREATE TABLE/.test(sql)) created = true;
                 return [];
             };
             const p = ensureTables({ doQuery }, dir);
             await clock.tickAsync(600);
             await p;
-            assert.strictEqual(attempts, 2);
+            assert.strictEqual(created, true, 'table created on the retry attempt');
         } finally {
             clock.restore();
         }
@@ -917,7 +942,7 @@ describe('HubDbSync.ensureTables @regression @tier3', function () {
     it('throws after exhausting attempts on a persistently failing file', async function () {
         const clock = sinon.useFakeTimers();
         try {
-            const dir = makeSqlDir({ 't.sql': 'CREATE TABLE IF NOT EXISTS t (id INT);' });
+            const dir = makeSqlDir({ 't.sql': 'CREATE TABLE t (id INT);' });
             const p = assert.rejects(
                 ensureTables({ doQuery: async () => { throw new Error('down'); } }, dir),
                 /failed to create t\.sql after 5 attempts: down/

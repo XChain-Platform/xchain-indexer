@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `hub_db_sync.js` exports `ensureTables()` for non-indexer mirror consumers and is now the canonical copy vendored into xchain-explorer via `bin/sync-hub-mirror-client.sh`; indexer runtime behavior is unchanged.
 
 ### Fixed
+- `hub_db_sync.js ensureTables()` gates each SQL file on table existence (probed inside the retry loop), so a mirror consumer restarting against an already-built schema no longer fails with ER_TABLE_EXISTS_ERROR.
 - Pin `decimal.js` to `10.4.3` in the indexer's own `overrides` (mirroring the bundled VM): the deployed consensus process pulls the precision-64 BigNumber backend transitively via `mathjs` (caret `^10.4.3`), and npm honors `overrides` only from the top-level package, so a fresh install or `npm update` could otherwise float the backend within 10.x and silently change contract math roots. A new freeze-guard assertion pins the installed `decimal.js` (10.4.3) and `mathjs` (15.2.0) versions where consensus actually runs.
 - `DISPENSER_EXPIRE` and `DISPENSER_CLOSE` return escrow via `bcsub(0, GIVE_REMAINING, 64)` instead of JS unary minus, which coerced an 18-decimal remaining balance to a float and desynced the escrow debit from the full-precision credit (mirrors the `dispense.js` pattern).
 - The orphaned `contract_balances` drop migration is tagged `mode=manual` so its destructive `DROP TABLE` no longer auto-runs at indexer startup across the fleet; it now applies only via an explicit operator migrate run.

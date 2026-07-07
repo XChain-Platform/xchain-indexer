@@ -1337,12 +1337,22 @@ async function ensureTables(dbConn, sqlDir) {
         throw new Error('ensureTables: no .sql files found in ' + sqlDir);
     const MAX_ATTEMPTS = 5;
     for (const file of files) {
+        const table   = file.slice(0, -'.sql'.length);
         const data    = fs.readFileSync(path.join(sqlDir, file), 'utf8');
         const queries = stripSqlLineComments(data).split(';').map((q) => q.trim()).filter((q) => q !== '');
         let lastErr = null;
         let done = false;
         for (let attempt = 1; attempt <= MAX_ATTEMPTS && !done; attempt++) {
             try {
+                // The SQL twins use bare CREATE TABLE (byte-identical to the
+                // indexer originals, whose verifyTables() gates on existence
+                // before running them), so gate here the same way: an existing
+                // table means this file already ran and re-running would fail
+                // with ER_TABLE_EXISTS_ERROR on every restart. Probed inside
+                // the retry loop so a transient blip on the probe itself also
+                // retries (caught live in the keyed-feed drill 2026-07-06).
+                const existing = await dbConn.doQuery('SHOW TABLES LIKE ?', [table]);
+                if (existing && existing.length > 0) { done = true; break; }
                 for (const query of queries)
                     await dbConn.doQuery(query);
                 done = true;
