@@ -732,6 +732,22 @@ class HubDbSync {
             return;
         }
 
+        // cross_chain_matches needs a NARROW in-place upgrade path, not plain INSERT
+        // IGNORE. The signed match content is immutable once quorum-signed, but
+        // anchor_txid is stamped LATER (StateAnchorPublisher._backfillBatch, first-
+        // stamp-wins COALESCE) when the ANCHOR v1 archive publishes, and the hub
+        // re-broadcasts the stamped row. A plain INSERT IGNORE would no-op against
+        // the already-mirrored row and leave anchor_txid NULL on streamed mirrors
+        // forever, while a fresh REST bootstrap serves the stamp (divergent mirrors).
+        // Only anchor_txid upgrades, NULL->value with the hub's own COALESCE
+        // semantics, so a late or duplicate event can never mutate signed columns.
+        if (table === 'cross_chain_matches' && cols.includes('anchor_txid')) {
+            let query = 'INSERT INTO cross_chain_matches (' + cols.map(c => '`' + c + '`').join(', ') + ') VALUES (' + placeholders + ')'
+                      + ' ON DUPLICATE KEY UPDATE anchor_txid = COALESCE(anchor_txid, VALUES(anchor_txid))';
+            await this.hubDb.doQuery(query, args);
+            return;
+        }
+
         let query = 'INSERT IGNORE INTO ' + table + ' (' + cols.join(', ') + ') VALUES (' + placeholders + ')';
         await this.hubDb.doQuery(query, args);
     }

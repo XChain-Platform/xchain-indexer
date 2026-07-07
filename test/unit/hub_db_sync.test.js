@@ -619,6 +619,89 @@ describe('HubDbSync _applyRow oracle_prices generation upgrade @regression @tier
     });
 });
 
+describe('HubDbSync _applyRow cross_chain_matches anchor-stamp upgrade @regression @tier2', function () {
+
+    // The ANCHOR v1 archive stamps cross_chain_matches.anchor_txid AFTER the row was
+    // quorum-signed and streamed (StateAnchorPublisher._backfillBatch), and the hub
+    // re-broadcasts the stamped row on the mirror feed. A plain INSERT IGNORE would
+    // no-op against the already-mirrored row and leave anchor_txid NULL on streamed
+    // mirrors while a fresh REST bootstrap serves the stamp (divergent mirrors).
+    // _applyRow must upgrade anchor_txid in place, first-stamp-wins (the hub's own
+    // COALESCE back-fill semantics), and never reassign the quorum-signed columns.
+
+    const CM_COLS = ['id', 'match_id', 'snapshot_block', 'network', 'a_chain', 'a_amount',
+                     'b_chain', 'b_amount', 'status', 'validator_signatures',
+                     'batch_root', 'anchor_txid', 'created_at'];
+
+    function makeApplySync(localCols) {
+        const doQuery = sinon.stub();
+        doQuery.withArgs(sinon.match(/^SHOW COLUMNS/)).resolves(localCols.map(f => ({ Field: f })));
+        doQuery.resolves([]);
+        const sync = new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test' });
+        return { sync, doQuery };
+    }
+
+    function matchRow(txid) {
+        return { id: 12, match_id: 'a'.repeat(64), snapshot_block: 900, network: 'regtest',
+                 a_chain: 'BTC', a_amount: '1', b_chain: 'DOGE', b_amount: '2',
+                 status: 'finalized', validator_signatures: '[]',
+                 batch_root: null, anchor_txid: txid, created_at: '2026-07-06 00:00:00' };
+    }
+
+    it('uses an ON DUPLICATE KEY UPDATE upsert (not INSERT IGNORE) for cross_chain_matches', async function () {
+        const { sync, doQuery } = makeApplySync(CM_COLS);
+        await sync._applyRow('cross_chain_matches', matchRow('d0ge'.repeat(16)));
+        const insert = doQuery.getCalls().find(c => /cross_chain_matches/.test(c.args[0]) && /INSERT/.test(c.args[0]));
+        assert.ok(insert, 'an INSERT must run');
+        assert.ok(/ON DUPLICATE KEY UPDATE/.test(insert.args[0]), 'must be an upsert');
+        assert.ok(!/^INSERT IGNORE/.test(insert.args[0]), 'must NOT be a plain INSERT IGNORE');
+    });
+
+    it('upgrades ONLY anchor_txid, first-stamp-wins, never reassigning signed or key columns', async function () {
+        const { sync, doQuery } = makeApplySync(CM_COLS);
+        await sync._applyRow('cross_chain_matches', matchRow('d0ge'.repeat(16)));
+        const sql = doQuery.getCalls().find(c => /ON DUPLICATE KEY UPDATE/.test(c.args[0])).args[0];
+        const updateClause = sql.split('ON DUPLICATE KEY UPDATE')[1];
+        // first-stamp-wins: an existing local stamp is never overwritten
+        assert.ok(/anchor_txid = COALESCE\(anchor_txid, VALUES\(anchor_txid\)\)/.test(updateClause));
+        // no signed/content column and no key column appears in the UPDATE clause
+        for (const col of ['a_amount', 'b_amount', 'status', 'validator_signatures',
+                           'match_id', 'id', 'snapshot_block']) {
+            assert.ok(!new RegExp('`?' + col + '`? =').test(updateClause.replace(/anchor_txid = COALESCE\(anchor_txid, VALUES\(anchor_txid\)\)/, '')),
+                      col + ' must not be reassigned');
+        }
+    });
+
+    it('re-delivery of an unstamped row is a no-op against a stamped local row', async function () {
+        const { sync, doQuery } = makeApplySync(CM_COLS);
+        await sync._applyRow('cross_chain_matches', matchRow(null));
+        const sql = doQuery.getCalls().find(c => /ON DUPLICATE KEY UPDATE/.test(c.args[0])).args[0];
+        // COALESCE(anchor_txid, VALUES(anchor_txid)): local non-NULL wins, and a NULL
+        // incoming value cannot regress it; the branch itself is what guarantees this,
+        // the SQL shape is asserted here.
+        assert.ok(/COALESCE\(anchor_txid, VALUES\(anchor_txid\)\)/.test(sql));
+    });
+
+    it('still filters hub-only columns the local mirror does not carry', async function () {
+        const { sync, doQuery } = makeApplySync(['match_id', 'status', 'anchor_txid']);
+        let row = matchRow('ff00'.repeat(16));
+        row.batch_seq = 7;             // hub-side-only archive bookkeeping
+        row.archived_status = 'finalized';
+        await sync._applyRow('cross_chain_matches', row);
+        const sql = doQuery.getCalls().find(c => /INSERT/.test(c.args[0])).args[0];
+        assert.ok(!sql.includes('batch_seq'), 'hub-only column dropped');
+        assert.ok(!sql.includes('archived_status'), 'hub-only column dropped');
+        assert.ok(/ON DUPLICATE KEY UPDATE/.test(sql));
+    });
+
+    it('falls back to INSERT IGNORE if the row carries no anchor_txid column', async function () {
+        const { sync, doQuery } = makeApplySync(['match_id', 'status']);
+        await sync._applyRow('cross_chain_matches', { match_id: 'b'.repeat(64), status: 'finalized' });
+        const insert = doQuery.getCalls().find(c => /INSERT/.test(c.args[0]));
+        assert.ok(/^INSERT IGNORE/.test(insert.args[0]), 'no anchor_txid → plain idempotent insert');
+    });
+});
+
 describe('HubDbSync _applyRow datetime coercion @regression @tier2', function () {
 
     // Regression (fleet incident 2026-06-16): the hub serves rows as JSON, so a
