@@ -4778,7 +4778,8 @@ class Database {
     async getDuePolls(block_index){
         return await this.doQuery(
             `SELECT action_index, end_block FROM polls
-              WHERE poll_status='open' AND end_block <= ?`, [block_index]);
+              WHERE poll_status='open' AND end_block <= ?
+              ORDER BY action_index ASC`, [block_index]);
     }
 
     // Select open polls that are armed for early-decide (a decide_threshold is
@@ -4790,7 +4791,8 @@ class Database {
             `SELECT action_index FROM polls
               WHERE poll_status='open'
                 AND decide_threshold IS NOT NULL AND decide_threshold <> ''
-                AND end_block > ?`, [block_index]);
+                AND end_block > ?
+              ORDER BY action_index ASC`, [block_index]);
     }
 
     // Freeze a poll's result on-chain (system-injected VOTE v2). Computes the
