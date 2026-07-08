@@ -78,12 +78,17 @@ describe('Tier 1 - normalizeDataValues @tier1', function () {
         }));
     }
 
+    // normalizeDataValues operates on a shallow COPY and RETURNS it (it stopped mutating
+    // in place to fix an AIRDROP multi-tick corruption bug); every real caller reassigns
+    // from the return value. These properties therefore assert on `data = normalize(data)`,
+    // not the untouched input - reading the original hid the range/coercion effects and let
+    // an out-of-range DECIMALS pass (normalize nulls it, but only on the returned copy).
     describe('never throws', function () {
         it('returns without throwing for fuzzed data objects', function () {
             fc.assert(fc.property(
                 fuzzedData(),
                 (data) => {
-                    normalize(data);
+                    data = normalize(data);
                 }
             ), { numRuns: NUM_RUNS });
         });
@@ -99,7 +104,7 @@ describe('Tier 1 - normalizeDataValues @tier1', function () {
                     fc.anything(),
                 ),
                 (data) => {
-                    normalize(data);
+                    data = normalize(data);
                 }
             ), { numRuns: NUM_RUNS });
         });
@@ -110,7 +115,7 @@ describe('Tier 1 - normalizeDataValues @tier1', function () {
             fc.assert(fc.property(
                 fuzzedData(),
                 (data) => {
-                    normalize(data);
+                    data = normalize(data);
                     for (const field of config['NUMBER_FIELDS']) {
                         if (data[field] !== undefined) {
                             assert.ok(
@@ -129,7 +134,7 @@ describe('Tier 1 - normalizeDataValues @tier1', function () {
             fc.assert(fc.property(
                 fuzzedData(),
                 (data) => {
-                    normalize(data);
+                    data = normalize(data);
                     for (const field of config['LOCK_FIELDS']) {
                         if (data[field] !== undefined) {
                             assert.ok(
@@ -148,7 +153,7 @@ describe('Tier 1 - normalizeDataValues @tier1', function () {
             fc.assert(fc.property(
                 fuzzedData(),
                 (data) => {
-                    normalize(data);
+                    data = normalize(data);
                     if (data['DECIMALS'] !== null && data['DECIMALS'] !== undefined) {
                         assert.ok(
                             data['DECIMALS'] >= config.MIN_TOKEN_DECIMALS &&
@@ -166,7 +171,7 @@ describe('Tier 1 - normalizeDataValues @tier1', function () {
             fc.assert(fc.property(
                 fuzzedData(),
                 (data) => {
-                    normalize(data);
+                    data = normalize(data);
                     if (data['MEMO'] !== null && data['MEMO'] !== undefined) {
                         assert.ok(String(data['MEMO']).length <= 250,
                             `MEMO length ${String(data['MEMO']).length} > 250`);
@@ -179,7 +184,7 @@ describe('Tier 1 - normalizeDataValues @tier1', function () {
             fc.assert(fc.property(
                 fuzzedData().filter(d => d.ACTION === 'BROADCAST'),
                 (data) => {
-                    normalize(data);
+                    data = normalize(data);
                     if (data['MESSAGE'] !== null && data['MESSAGE'] !== undefined) {
                         assert.ok(String(data['MESSAGE']).length <= 250,
                             `BROADCAST MESSAGE length ${String(data['MESSAGE']).length} > 250`);
@@ -192,7 +197,7 @@ describe('Tier 1 - normalizeDataValues @tier1', function () {
             fc.assert(fc.property(
                 fuzzedData().filter(d => d.ACTION === 'BROADCAST'),
                 (data) => {
-                    normalize(data);
+                    data = normalize(data);
                     if (data['VALUE'] !== null && data['VALUE'] !== undefined) {
                         assert.ok(String(data['VALUE']).length <= 25,
                             `BROADCAST VALUE length ${String(data['VALUE']).length} > 25`);
@@ -205,7 +210,7 @@ describe('Tier 1 - normalizeDataValues @tier1', function () {
             fc.assert(fc.property(
                 fuzzedData().filter(d => d.ACTION === 'ISSUE'),
                 (data) => {
-                    normalize(data);
+                    data = normalize(data);
                     if (data['DESCRIPTION'] !== null && data['DESCRIPTION'] !== undefined) {
                         assert.ok(String(data['DESCRIPTION']).length <= 250,
                             `ISSUE DESCRIPTION length ${String(data['DESCRIPTION']).length} > 250`);
@@ -218,7 +223,7 @@ describe('Tier 1 - normalizeDataValues @tier1', function () {
             fc.assert(fc.property(
                 fuzzedData().filter(d => d.ACTION === 'FILE'),
                 (data) => {
-                    normalize(data);
+                    data = normalize(data);
                     if (data['NAME'] !== null && data['NAME'] !== undefined) {
                         assert.ok(String(data['NAME']).length <= 250,
                             `FILE NAME length ${String(data['NAME']).length} > 250`);
@@ -231,7 +236,7 @@ describe('Tier 1 - normalizeDataValues @tier1', function () {
             fc.assert(fc.property(
                 fuzzedData().filter(d => d.ACTION === 'SLEEP'),
                 (data) => {
-                    normalize(data);
+                    data = normalize(data);
                     if (data['RESUME_BLOCK'] !== null && data['RESUME_BLOCK'] !== undefined) {
                         assert.ok(String(data['RESUME_BLOCK']).length <= 25,
                             `SLEEP RESUME_BLOCK length ${String(data['RESUME_BLOCK']).length} > 25`);
