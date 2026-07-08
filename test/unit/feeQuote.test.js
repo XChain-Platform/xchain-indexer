@@ -195,6 +195,20 @@ describe('native coin fee quote @regression @tier1', function () {
             }
         });
 
+        it('fee-exempt settlement/lifecycle actions: zero-fee feeExempt result, engine never invoked', async function () {
+            let util = makeUtil('DOGE', FEE_DEST);
+            for(let action of ['COINPAY', 'DISPENSE', 'ORDER_MATCH', 'COINPAY_EXPIRE', 'CROSS_SETTLE', 'coinpay']){
+                let { ctx, calls } = makeCtx(util, makeDb({ prices: BTC_PRICES }));
+                let q = await ctx.computeFeeQuote.call(ctx, { action, params: ['0', '5'], source: 'src' });
+                assert.strictEqual(q.supported, true, action + ' is answerable');
+                assert.strictEqual(q.valid, true, action + ' needs no fee output');
+                assert.strictEqual(q.feeExempt, true, action + ' must be flagged fee-exempt');
+                assert.strictEqual(q.xchainFee, '0.00000000');
+                assert.strictEqual(q.requiredFeeSats, 0);
+                assert.strictEqual(calls.dryRuns, 0, action + ' must not reach the engine');
+            }
+        });
+
         it('no FEE_DESTINATION configured => supported:false, engine never invoked', async function () {
             let util = makeUtil('BTC', PLACEHOLDER);
             let { ctx, calls } = makeCtx(util, makeDb({ prices: BTC_PRICES }));

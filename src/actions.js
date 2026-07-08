@@ -33,6 +33,21 @@ const { ADDRESS_REF_FIELDS } = require('./addressRefFields.js');
 // `feequotedryrun` RPC (regtest + INDEXER_ENABLE_DRYRUN + API key) has no such restriction.
 const FEE_QUOTE_DENYLIST = new Set(['DEPLOY', 'EXECUTE', 'XEXEC', 'BATCH']);
 
+// Settlement and lifecycle legs that stage NO protocol fee: the fee was already charged when
+// the originating ORDER/SWAP/DISPENSER was created, so there is nothing for feequote to price.
+// They also can't be dry-run through the synthetic-tx harness: COINPAY/DISPENSE only settle
+// against a native-coin output paying a specific payee/dispenser (coinpay.js/dispense.js
+// early-exit "skip" when it's absent), and the *_MATCH/*_EXPIRE/*_CLOSE/CROSS_SETTLE actions
+// are system-synthesized during block processing, never wallet-broadcast. Quoting any of them
+// used to fall through to a misleading `dry-run produced no status`; instead answer honestly
+// with a zero-fee, feeExempt result. This is a read-only preflight classification, never a
+// consensus path: it changes what the quote reports, not what a handler charges on-chain.
+const FEE_QUOTE_EXEMPT = new Set([
+    'COINPAY', 'DISPENSE',
+    'COINPAY_EXPIRE', 'ORDER_MATCH', 'ORDER_EXPIRE', 'SWAP_MATCH', 'SWAP_EXPIRE',
+    'DISPENSER_CLOSE', 'DISPENSER_EXPIRE', 'CROSS_SETTLE'
+]);
+
 // Load indexer actions
 const address          = require('./actions/address.js');
 const airdrop          = require('./actions/airdrop.js');
@@ -768,6 +783,18 @@ class Actions {
 
         if(FEE_QUOTE_DENYLIST.has(action))
             return Object.assign(base, { supported: false, valid: false, error: 'native fee pre-flight not supported for ' + action + ' (pay the fee in XCHAIN)' });
+
+        // Fee-exempt settlement/lifecycle actions: no protocol fee to price, and their required
+        // native outputs can't be reproduced by the dry-run harness. Answer zero, skip the engine.
+        if(FEE_QUOTE_EXEMPT.has(action))
+            return Object.assign(base, {
+                valid:             true,
+                feeExempt:         true,
+                xchainFee:         '0.00000000',
+                requiredFeeNative: '0.00000000',
+                requiredFeeSats:   0,
+                note:              action + ' carries no protocol fee (settlement/lifecycle action); no native fee output required'
+            });
 
         let maxPending = parseInt(process.env.INDEXER_FEEQUOTE_MAX_PENDING, 10) || 8;
         if((this._feeQuotePending || 0) >= maxPending)
