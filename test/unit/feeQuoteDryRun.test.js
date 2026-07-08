@@ -35,7 +35,12 @@ function makeCtx({ addressId = 7, status = 'valid', processThrows = false, proce
             getLatestBlockIndex: async () => 100,
             getBlockTime:        async () => 1000,
             beginTransaction:    async () => { calls.begin++; },
-            rollbackTransaction: async () => { calls.rollback++; }
+            rollbackTransaction: async () => { calls.rollback++; },
+            // Watchdog-fence surface (M-16): the dry-run reads the epoch after
+            // beginTransaction and runs processTransaction under it. The stub
+            // mirrors the real Database contract (fixed epoch, pass-through run).
+            currentTxEpoch:      () => 0,
+            runInTxEpoch:        (epoch, fn) => fn()
         },
         // Stubbed: returns a fixed native-fee quote (the real one is unit-tested in feeQuote.test.js).
         computeFeeQuote: async () => (feeQuote !== undefined ? feeQuote : {

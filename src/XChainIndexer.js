@@ -641,8 +641,17 @@ class XChainIndexer {
                 this.indexerDb._smtTouched = stateCommitActive ? new Set() : null;
                 try {
 
+                    // Fence the block's writes to THIS transaction's epoch (M-16). Read the
+                    // epoch that beginTransaction just assigned, then run all block processing
+                    // under it (runInTxEpoch) so every DB write it issues carries this epoch.
+                    // If the watchdog below fires, the outer catch rolls back and bumps the
+                    // epoch; the abandoned promise (which may still resume and try to write on
+                    // the shared connection now owned by a later block) then carries a stale
+                    // epoch and is rejected inside the db layer before touching the driver.
+                    let txEpoch = this.indexerDb.currentTxEpoch();
+
                     // Process the block with a watchdog timeout to detect deadlocks or infinite loops
-                    let blockProcessing = (async () => {
+                    let blockProcessing = this.indexerDb.runInTxEpoch(txEpoch, async () => {
 
                         // Initialize VM compilation cache for this block
                         if(this.actions.vm)
@@ -707,7 +716,19 @@ class XChainIndexer {
                         }
 
                         return [ledger, actions, contracts];
-                    })();
+                    });
+
+                    // Watchdog-timeout safety (M-16). If the watchdog rejects below, we stop
+                    // awaiting blockProcessing but the promise stays pending and may settle
+                    // later (typically the epoch fence rejecting a zombie write, or the block
+                    // finally finishing). Attach a swallow handler so that late settlement can
+                    // never surface as an unhandledRejection that crashes the process. The
+                    // epoch fence, not this handler, is what prevents the zombie's writes from
+                    // landing; this only keeps the abandoned promise's rejection quiet.
+                    blockProcessing.catch((e) => {
+                        console.warn('Abandoned block-processing promise for block ' + blockToParse +
+                            ' settled after watchdog: ' + (e && e.message ? e.message : e));
+                    });
 
                     // The genesis block does far more than a normal block, so it gets its own
                     // watchdog. The budget follows the PATH it will take (see genesis.inject):

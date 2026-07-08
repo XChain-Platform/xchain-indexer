@@ -797,14 +797,29 @@ class Actions {
         // beginTransaction acquires the db transaction mutex (serializes against block processing
         // and reorgs); the finally guarantees rollback + lock release even on a handler throw.
         await this.indexerDb.beginTransaction();
+        // Fence the dry-run's writes to THIS transaction's epoch (M-16), same as the block
+        // loop: on watchdog timeout the finally below rolls back and bumps the epoch, but the
+        // abandoned processTransaction can still resume and try to write on the shared
+        // connection, which by then may belong to a REAL block's transaction. The stale epoch
+        // rejects those zombie writes inside the db layer before they reach the driver.
+        let dryRunEpoch = this.indexerDb.currentTxEpoch();
         try {
             // Bound the synthetic run with the SAME watchdog the block loop wraps
             // processTransaction in (XChainIndexer BLOCK_PROCESS_TIMEOUT). The dry-run holds
             // the shared _txLock for the whole handler, so a stuck VM/isolate would otherwise
             // wedge block advancement for the full hang; on timeout the catch+finally roll back
             // and release the lock within a bounded window instead.
+            let dryRunProcessing = this.indexerDb.runInTxEpoch(dryRunEpoch,
+                () => this.processTransaction(syntheticTx));
+            // Keep the abandoned promise's late settlement (typically the epoch fence firing)
+            // from surfacing as an unhandledRejection; the fence, not this handler, is what
+            // stops the zombie's writes.
+            dryRunProcessing.catch((e) => {
+                console.warn('Abandoned fee-quote dry-run settled after watchdog: ' +
+                    ((e && e.message) ? e.message : e));
+            });
             let resultData = await this.util.withTimeout(
-                this.processTransaction(syntheticTx),
+                dryRunProcessing,
                 this.config['BLOCK_PROCESS_TIMEOUT'],
                 'feequotedryrun ' + (action || ''));
             status = (resultData && resultData['STATUS'] !== undefined) ? resultData['STATUS'] : null;

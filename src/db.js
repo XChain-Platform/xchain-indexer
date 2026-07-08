@@ -22,8 +22,22 @@
 const mariadb = require('mariadb');
 const fs      = require('fs');
 const path    = require('path');
+const { AsyncLocalStorage } = require('async_hooks');
 const { buildStateHashData } = require('./stateHash');
 const { canonicalizeHashAddress } = require('./protocolAddressRoles');
+
+// Watchdog-fence context (M-16). The block loop runs each block's processing inside
+// txEpochStore.run(epoch, ...) so every DB call it makes carries the transaction epoch
+// it was issued under. If the block watchdog fires, the outer catch rolls back and the
+// abandoned (zombie) block-processing promise can still resume and try to write on the
+// SHARED transactionConnection, which by then belongs to a LATER block's transaction.
+// The epoch a write carries is compared against the db's current epoch (_txEpoch); the
+// epoch is bumped on every transaction teardown, so a zombie write carries a stale epoch
+// and is rejected before it reaches the driver. AsyncLocalStorage propagates the epoch
+// across every await inside the block promise (including the zombie continuation) without
+// threading it through every call site, and is absent for non-block-loop callers (RPC
+// reads, health checks), which are therefore never fenced.
+const txEpochStore = new AsyncLocalStorage();
 
 // Consensus block-hash scheme version. Folded into the preimage of every per-block
 // ledger/actions/contract hash (see getBlockHashes), so changing it changes every hash.
@@ -160,6 +174,12 @@ class Database {
         // commit/rollback release. Held only during active processing (barrier stalls happen
         // before beginTransaction), so it never blocks on a stalled indexer.
         this._txLock = { locked: false, queue: [] };
+
+        // Watchdog-fence epoch (M-16). Monotonic counter identifying the current DB
+        // transaction context. beginTransaction assigns a fresh epoch; every teardown
+        // (commit or rollback) bumps it, so a write issued under a torn-down transaction
+        // carries a stale epoch and is rejected by _assertTxNotFenced. See txEpochStore.
+        this._txEpoch = 0;
 
         // Circuit breaker state for database connections
         this.circuitState     = 'closed';  // closed | open | half-open
@@ -749,6 +769,36 @@ class Database {
         else this._txLock.locked = false;
     }
 
+    // The DB transaction epoch active right now (M-16). The block loop reads this
+    // immediately after beginTransaction and runs the block promise under it (runInTxEpoch)
+    // so every write it issues is fenced to this epoch.
+    currentTxEpoch(){
+        return this._txEpoch;
+    }
+
+    // Run fn with `epoch` installed as the watchdog-fence context for every DB call fn makes
+    // (transitively, across awaits). Returns fn's return value (the block-processing promise).
+    // Used only by the block loop; behavior on the non-timeout path is unchanged because the
+    // installed epoch always equals the current _txEpoch until the transaction is torn down.
+    runInTxEpoch(epoch, fn){
+        return txEpochStore.run(epoch, fn);
+    }
+
+    // Watchdog fence (M-16). Reject a write whose issuing epoch no longer matches the current
+    // transaction epoch. Only block-loop code runs inside a txEpochStore context, so a stored
+    // epoch that differs from _txEpoch means this call is an abandoned (timed-out) block's
+    // zombie continuation trying to write after its transaction was rolled back and a later
+    // block's transaction took over the shared connection. No stored epoch = a non-block-loop
+    // caller (federation RPC read, health check), which is never fenced. This can only ADD a
+    // throw on the already-broken timeout path; it never suppresses a legitimate write, so the
+    // non-timeout path is byte-identical.
+    _assertTxNotFenced(){
+        const epoch = txEpochStore.getStore();
+        if(epoch !== undefined && epoch !== this._txEpoch)
+            this.util.throwError('transaction fenced (M-16): write from epoch ' + epoch +
+                ' after teardown (current epoch ' + this._txEpoch + '); zombie write rejected');
+    }
+
     // Handle beginning a SQL transaction
     async beginTransaction(){
         await this._acquireTxLock();
@@ -757,6 +807,9 @@ class Database {
         try {
             this.transactionConnection = await this.getConnection();
             await this.transactionConnection.beginTransaction();
+            // Fresh epoch for this transaction (M-16). The block loop reads it via
+            // currentTxEpoch() and fences the block promise to it.
+            this._txEpoch++;
         } catch(e){
             if(this.transactionConnection != null){
                 try { await this.transactionConnection.release(); } catch(_){}
@@ -776,6 +829,10 @@ class Database {
             } finally {
                 await this.transactionConnection.release();
                 this.transactionConnection = null;
+                // Fence any zombie of the block that just rolled back (M-16): bumping the
+                // epoch here closes even the window before the next block's beginTransaction,
+                // so a post-rollback zombie write cannot land as a stray auto-committed row.
+                this._txEpoch++;
                 this._releaseTxLock();
             }
         }
@@ -788,6 +845,8 @@ class Database {
                 await this.transactionConnection.commit();
                 await this.transactionConnection.release();
                 this.transactionConnection = null;
+                // Fence any zombie of the block that just committed (M-16).
+                this._txEpoch++;
                 this._releaseTxLock();
                 return true;
             } catch (e){
@@ -797,6 +856,7 @@ class Database {
                 } finally {
                     await this.transactionConnection.release();
                     this.transactionConnection = null;
+                    this._txEpoch++;
                     this._releaseTxLock();
                 }
                 this.util.throwError('commitTransaction error=' + e);
@@ -807,6 +867,7 @@ class Database {
 
     // Handle running a query and returning the results
     async doQuery(query, args){
+        this._assertTxNotFenced();
         let results = [];
         if(!this.util.isNull(query)){
             // Normalize args: convert any boxed primitives (e.g. mathjs BigNumber) to plain values.
@@ -844,6 +905,7 @@ class Database {
     // ledger (M-17: the hub-DB price read). Callers inside block processing
     // let the throw roll back and retry the block.
     async doQueryStrict(query, args){
+        this._assertTxNotFenced();
         let results = [];
         if(!this.util.isNull(query)){
             if(Array.isArray(args)){
@@ -11519,6 +11581,7 @@ class Database {
 
     // Create a savepoint within the current transaction
     async createSavepoint(name){
+        this._assertTxNotFenced();
         if(!this.transactionConnection)
             throw new Error('createSavepoint requires an active transaction');
         await this.transactionConnection.query('SAVEPOINT ' + name);
@@ -11527,6 +11590,7 @@ class Database {
 
     // Release a savepoint
     async releaseSavepoint(name){
+        this._assertTxNotFenced();
         if(!this.transactionConnection)
             throw new Error('releaseSavepoint requires an active transaction');
         await this.transactionConnection.query('RELEASE SAVEPOINT ' + name);
@@ -11534,6 +11598,7 @@ class Database {
 
     // Rollback to a savepoint
     async rollbackToSavepoint(name){
+        this._assertTxNotFenced();
         if(!this.transactionConnection)
             throw new Error('rollbackToSavepoint requires an active transaction');
         await this.transactionConnection.query('ROLLBACK TO SAVEPOINT ' + name);
