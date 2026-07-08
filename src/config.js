@@ -32,11 +32,20 @@ const parseIntMin0 = (val, defaultVal) => {
     return Number.isFinite(parsed) && parsed >= 0 ? parsed : defaultVal;
 };
 
+// TICK of the protocol gas token (config['GAS']). This value is consensus: it
+// names the token debited for capability STAKE, VOTE deposits/escrows, and
+// contract gas billing. Exported so the cross-service drift guard can assert it
+// equals the canonical copy (xchain-documentation/protocol/constants.js GAS_TICK)
+// and the SDK co-signer's mirror.
+const GAS_TICK = 'XCHAIN';
+
 module.exports = {
+
+    GAS_TICK,
 
     getConfig: function(){
 
-        let gas     = 'XCHAIN';                     // TICK to be used as gas token
+        let gas     = GAS_TICK;                     // TICK to be used as gas token
         let coin    = process.env.INDEXER_COIN;     // BTC / LTC / DOGE
         let network = process.env.INDEXER_NETWORK;  // mainnet / testnet / regtest
 
