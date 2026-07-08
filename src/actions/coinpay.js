@@ -173,7 +173,8 @@ class Coinpay {
                 // ownership record itself.
                 await this.util.transferTokenOwnership(this.indexerDb, this.mapper, data, sellerOrder['GIVE_TICK'], sellerOrder['SOURCE'], buyerGetAddress);
             } else {
-                escrows.push([sellerOrder['GIVE_TICK'], -tokenAmount, sellerOrder['SOURCE']]);
+                // BigNumber-space negation, not JS unary minus (float truncation, #3736).
+                escrows.push([sellerOrder['GIVE_TICK'], this.util.bcsub(0, tokenAmount, 64), sellerOrder['SOURCE']]);
                 credits.push([sellerOrder['GIVE_TICK'],  tokenAmount, buyerGetAddress]);
             }
         }
@@ -218,7 +219,8 @@ class Coinpay {
                                 this.util.addAddressTicker(refundTo, sellerOrder['GIVE_TICK']);
                             }
                         }
-                        escrows.push([sellerOrder['GIVE_TICK'], -updatedSellerOrder['GIVE_REMAINING'], sellerOrder['SOURCE']]);
+                        // BigNumber-space negation, not JS unary minus (float truncation, #3736).
+                        escrows.push([sellerOrder['GIVE_TICK'], this.util.bcsub(0, updatedSellerOrder['GIVE_REMAINING'], 64), sellerOrder['SOURCE']]);
                         credits.push([sellerOrder['GIVE_TICK'],  updatedSellerOrder['GIVE_REMAINING'], refundTo]);
                     }
                 }

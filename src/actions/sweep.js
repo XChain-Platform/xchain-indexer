@@ -295,8 +295,9 @@ class Sweep {
                         await this.util.transferTokenOwnership(this.indexerDb, this.mapper, data, info['GIVE_TICK'], info['SOURCE'], data['DESTINATION']);
                         ownershipsTransferred.add(info['GIVE_TICK']);
                     } else if(!this.util.isNull(info['GIVE_TICK'])){
-                        // Balance order: standard escrow → DESTINATION
-                        escrows.push([info['GIVE_TICK'], -info['GIVE_REMAINING'], info['SOURCE']]);
+                        // Balance order: standard escrow → DESTINATION.
+                        // BigNumber-space negation, not JS unary minus (float truncation, #3736).
+                        escrows.push([info['GIVE_TICK'], this.util.bcsub(0, info['GIVE_REMAINING'], 64), info['SOURCE']]);
                         credits.push([info['GIVE_TICK'],  info['GIVE_REMAINING'], data['DESTINATION']]);
                         this.util.addAddressTicker(data['DESTINATION'], info['GIVE_TICK']);
                     }
@@ -315,8 +316,9 @@ class Sweep {
                     await this.util.transferTokenOwnership(this.indexerDb, this.mapper, data, info['GIVE_TICK'], info['SOURCE'], data['DESTINATION']);
                     ownershipsTransferred.add(info['GIVE_TICK']);
                 } else {
-                    // Balance swap: standard escrow → DESTINATION
-                    escrows.push([info['GIVE_TICK'], -info['GIVE_AMOUNT'], info['SOURCE']]);
+                    // Balance swap: standard escrow → DESTINATION.
+                    // BigNumber-space negation, not JS unary minus (float truncation, #3736).
+                    escrows.push([info['GIVE_TICK'], this.util.bcsub(0, info['GIVE_AMOUNT'], 64), info['SOURCE']]);
                     credits.push([info['GIVE_TICK'],  info['GIVE_AMOUNT'], data['DESTINATION']]);
                     this.util.addAddressTicker(data['DESTINATION'], info['GIVE_TICK']);
                 }

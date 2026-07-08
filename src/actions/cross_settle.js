@@ -193,7 +193,8 @@ class Cross_Settle {
         if(giveOwnership === 1){
             await this.util.transferTokenOwnership(this.indexerDb, this.mapper, data, giveTick, swapInfo['SOURCE'], payoutAddr);
         } else {
-            escrows.push([giveTick, -giveAmount, payoutAddr]);
+            // BigNumber-space negation, not JS unary minus (float truncation, #3736).
+            escrows.push([giveTick, this.util.bcsub(0, giveAmount, 64), payoutAddr]);
             for(let c of await this._proceedsCredits(data, m, coin, giveTick, giveAmount, payoutAddr, counterpartyCoin)){
                 credits.push(c);
                 this.util.addAddressTicker(c[2], c[0]);
@@ -297,7 +298,8 @@ class Cross_Settle {
             // Ownership orders are single-fill: transfer ownership, no balance escrow.
             await this.util.transferTokenOwnership(this.indexerDb, this.mapper, data, giveTick, orderInfo['SOURCE'], payoutAddr);
         } else {
-            escrows.push([giveTick, -giveAmount, payoutAddr]);
+            // BigNumber-space negation, not JS unary minus (float truncation, #3736).
+            escrows.push([giveTick, this.util.bcsub(0, giveAmount, 64), payoutAddr]);
             for(let c of await this._proceedsCredits(data, m, coin, giveTick, giveAmount, payoutAddr, counterpartyCoin)){
                 credits.push(c);
                 this.util.addAddressTicker(c[2], c[0]);

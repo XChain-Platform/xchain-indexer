@@ -68,8 +68,9 @@ class Swap_Expire {
             // Release ownership escrow back to the seller (tokens.owner_id is unchanged)
             await this.indexerDb.clearTokenEscrow(swapInfo['GIVE_TICK']);
         } else {
-            // Debit GIVE_TICK from escrows and credit it to the SOURCE address
-            escrows.push([swapInfo['GIVE_TICK'], -swapInfo['GIVE_AMOUNT'], swapInfo['SOURCE']]);
+            // Debit GIVE_TICK from escrows and credit it to the SOURCE address.
+            // BigNumber-space negation, not JS unary minus (float truncation, #3736).
+            escrows.push([swapInfo['GIVE_TICK'], this.util.bcsub(0, swapInfo['GIVE_AMOUNT'], 64), swapInfo['SOURCE']]);
             credits.push([swapInfo['GIVE_TICK'],  swapInfo['GIVE_AMOUNT'], swapInfo['SOURCE']]);
         }
 

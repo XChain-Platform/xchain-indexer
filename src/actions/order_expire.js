@@ -78,8 +78,10 @@ class Order_Expire {
                 // Release ownership escrow back to the seller (tokens.owner_id is unchanged)
                 await this.indexerDb.clearTokenEscrow(orderInfo['GIVE_TICK']);
             } else if(!this.util.isNull(orderInfo['GIVE_TICK'])){
-                // Debit GIVE_TICK from escrows and credit it to the SOURCE address (skip for native coin GIVE)
-                escrows.push([orderInfo['GIVE_TICK'], -orderInfo['GIVE_REMAINING'], orderInfo['SOURCE']]);
+                // Debit GIVE_TICK from escrows and credit it to the SOURCE address (skip for native coin GIVE).
+                // Negate in BigNumber space, not JS unary minus: the float round-trip truncates
+                // past ~15 sig figs, de-syncing the escrow release from the credit below (#3736).
+                escrows.push([orderInfo['GIVE_TICK'], this.util.bcsub(0, orderInfo['GIVE_REMAINING'], 64), orderInfo['SOURCE']]);
                 credits.push([orderInfo['GIVE_TICK'],  orderInfo['GIVE_REMAINING'], orderInfo['SOURCE']]);
             }
 

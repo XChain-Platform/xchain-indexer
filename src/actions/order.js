@@ -503,8 +503,9 @@ class Order {
                         // Release ownership escrow back to the seller (tokens.owner_id is unchanged; only the gate clears)
                         await this.indexerDb.clearTokenEscrow(orderInfo['GIVE_TICK']);
                     } else if(!this.util.isNull(orderInfo['GIVE_TICK'])){
-                        // Debit token from escrows and credit back to seller
-                        escrows.push([orderInfo['GIVE_TICK'], -orderInfo['GIVE_REMAINING'], orderInfo['SOURCE']]);
+                        // Debit token from escrows and credit back to seller.
+                        // BigNumber-space negation, not JS unary minus (float truncation, #3736).
+                        escrows.push([orderInfo['GIVE_TICK'], this.util.bcsub(0, orderInfo['GIVE_REMAINING'], 64), orderInfo['SOURCE']]);
                         credits.push([orderInfo['GIVE_TICK'], orderInfo['GIVE_REMAINING'], orderInfo['SOURCE']]);
                     }
 
