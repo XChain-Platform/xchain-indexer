@@ -125,19 +125,24 @@ class Order_Match {
                 //
                 // Both orders constrain the trade:
                 //   give_amount (orderInfo.GIVE_TICK = matchInfo.GET_TICK) is bounded by
-                //     matchInfo.GET_REMAINING and orderInfo.GIVE_REMAINING.
+                //     matchInfo.GET_REMAINING and the taker's RUNNING give-remaining.
                 //   get_amount  (orderInfo.GET_TICK = matchInfo.GIVE_TICK) is bounded by
-                //     matchInfo.GIVE_REMAINING and orderInfo.GET_REMAINING.
+                //     matchInfo.GIVE_REMAINING and the taker's RUNNING get-remaining.
+                // The taker bound must read order[...] (decremented after each fill),
+                // NOT orderInfo[...] (fetched once at line 46, never refreshed): across
+                // two makers in one pass the stale bound would let a later fill release
+                // more escrow than the taker still has, over-releasing and tripping the
+                // per-block supply sanity check.
                 // Take whichever pair tightens first as the bottleneck, then derive the
                 // other amount from the price. The derived side is multiplied at high
                 // precision (64), matching GET_PRICE/GIVE_PRICE's own precision, so the
                 // intermediate carries no rounding noise; final quantization happens below.
-                let max_give = this.util.bclt(matchInfo['GET_REMAINING'], orderInfo['GIVE_REMAINING'])
+                let max_give = this.util.bclt(matchInfo['GET_REMAINING'], order['GIVE_REMAINING'])
                     ? matchInfo['GET_REMAINING']
-                    : orderInfo['GIVE_REMAINING'];
-                let max_get = this.util.bclt(matchInfo['GIVE_REMAINING'], orderInfo['GET_REMAINING'])
+                    : order['GIVE_REMAINING'];
+                let max_get = this.util.bclt(matchInfo['GIVE_REMAINING'], order['GET_REMAINING'])
                     ? matchInfo['GIVE_REMAINING']
-                    : orderInfo['GET_REMAINING'];
+                    : order['GET_REMAINING'];
                 let give_from_get = this.util.bcmul(max_get, orderInfo['GET_PRICE'], 64);
                 let give_amount, get_amount;
                 if (this.util.bcgt(give_from_get, max_give)) {

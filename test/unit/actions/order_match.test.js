@@ -206,6 +206,40 @@ describe('Order_Match action handler @regression @tier2', function () {
         sinon.assert.called(indexer.indexerDb.createOrderStatus);
     });
 
+    it('two makers in one pass never release more escrow than the taker deposited', async function () {
+        // Regression for the multi-maker over-fill bug: each fill must bound the
+        // taker side by its RUNNING remaining, not the fetch-once orderInfo value.
+        // Taker gives 10 RAREPEPE (escrow). Maker1 consumes 6, leaving 4; Maker2
+        // wants 8. With the stale bound Maker2 released 8 (total 14 > 10 escrow),
+        // over-releasing and tripping the per-block supply sanity check.
+        indexer.indexerDb.getOrderInfo.resolves(makeOrderInfo({
+            GIVE_REMAINING: '10', GET_REMAINING: '100', GIVE_PRICE: '10', GET_PRICE: '0.1',
+        }));
+        indexer.indexerDb.findOrderMatches.resolves([
+            makeMatchInfo({ ACTION_INDEX: 2, GET_ADDRESS: 'mMaker1aaaaaaaaaaaaaaaaaaaaaaaaaaa',
+                            GIVE_REMAINING: '60', GET_REMAINING: '6', GET_PRICE: '10' }),
+            makeMatchInfo({ ACTION_INDEX: 3, GET_ADDRESS: 'mMaker2bbbbbbbbbbbbbbbbbbbbbbbbbbb',
+                            GIVE_REMAINING: '80', GET_REMAINING: '8', GET_PRICE: '10' }),
+        ]);
+
+        // Capture the escrow rows handed to the ledger on each fill. The taker's
+        // give-token (RAREPEPE) release is escrows[i] where tick === 'RAREPEPE'.
+        const escrowsByFill = [];
+        sinon.stub(indexer.util, 'processTransactionLedgerChanges')
+            .callsFake(async (_db, _data, _credits, _debits, escrows) => { escrowsByFill.push(escrows); });
+
+        const data = createBaseData({ ACTION: 'ORDER_MATCH', BLOCK_TIME, ACTION_INDEX: 1 });
+        await orderMatch.parse([], data, false);
+
+        let takerReleased = 0;
+        for (const escrows of escrowsByFill)
+            for (const [tick, amount] of escrows)
+                if (tick === 'RAREPEPE') takerReleased += Math.abs(Number(indexer.util.bcstr(amount)));
+
+        assert.strictEqual(takerReleased, 10,
+            `taker released ${takerReleased} RAREPEPE but only escrowed 10 (over-fill across makers)`);
+    });
+
     it('NFT (0-decimal) partial fill settles an integer amount, never a fractional artifact', async function () {
         // RAREPEPE is an indivisible NFT (DECIMALS=0); PEPECASH is divisible (DECIMALS=8).
         // The counterparty's PEPECASH remaining (3) priced at a non-terminating 1/3 ratio
