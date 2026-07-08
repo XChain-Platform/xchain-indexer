@@ -172,21 +172,32 @@ async function startApi(){
     // call is rejected. Only INDEXER_ALLOW_UNAUTHENTICATED=true restores keyless
     // pass-through for a single-host / regtest node.
     app.use((req, res, next) => {
-        let method = req.body && req.body.method;
-        let normalized = method ? method.toLowerCase() : '';
-        let gated = method && (WRITE_METHODS.has(normalized) || FEDERATION_READ_METHODS.has(normalized) || GATED_EXEC_METHODS.has(normalized));
+        // A JSON-RPC batch arrives as an array of call objects; a single call as
+        // one object. express-json-rpc-router dispatches every element of an
+        // array body, so the gate must inspect ALL of them: require the key if
+        // ANY element invokes a gated method. Reading req.body.method off an
+        // array leaves it undefined, which would smuggle a gated method (e.g.
+        // pushvalidatorrewards, which forges spendable validator_rewards rows)
+        // past the check unauthenticated inside a one-element batch.
+        let calls = Array.isArray(req.body) ? req.body : [req.body];
+        let id = (Array.isArray(req.body) ? null : (req.body && req.body.id)) || null;
+        let gated = calls.some(call => {
+            let method = call && call.method;
+            let normalized = method ? method.toLowerCase() : '';
+            return method && (WRITE_METHODS.has(normalized) || FEDERATION_READ_METHODS.has(normalized) || GATED_EXEC_METHODS.has(normalized));
+        });
         if(gated){
             if(INDEXER_API_KEY){
                 let provided = req.headers['x-api-key'] || '';
                 if(provided !== INDEXER_API_KEY){
                     return res.status(401).json({
-                        jsonrpc: '2.0', id: req.body.id || null,
+                        jsonrpc: '2.0', id,
                         error: { code: -32001, message: 'Unauthorized' }
                     });
                 }
             } else if(!ALLOW_UNAUTHED){
                 return res.status(401).json({
-                    jsonrpc: '2.0', id: req.body.id || null,
+                    jsonrpc: '2.0', id,
                     error: { code: -32001, message: 'Unauthorized: this method requires INDEXER_API_KEY, or set INDEXER_ALLOW_UNAUTHENTICATED=true for keyless single-host/regtest access' }
                 });
             }
