@@ -74,7 +74,15 @@ function totalStake(validators){
             weightBySource.set(src, (v.weight === null || v.weight === undefined) ? '0' : String(v.weight));
     }
     let S = mathjs.bignumber(0);
-    for(let w of weightBySource.values()) S = mathjs.add(S, bcnum(w));
+    for(let w of weightBySource.values()){
+        let bw = bcnum(w);
+        // Mirror meetsStakeThreshold: bcnum accepts a leading '-', and S over a
+        // snapshot holding a negative weight is meaningless. Hard error, like the
+        // blank-source case above.
+        if(bw.lt(0))
+            throw new Error('stake_weighted_quorum.totalStake: negative weight in snapshot');
+        S = mathjs.add(S, bw);
+    }
     return S;
 }
 
@@ -87,6 +95,11 @@ function totalStake(validators){
 // its keys signed (DELEGATE v0 is additive). Degenerate cases fall out with no
 // special-casing: single source -> 3S>2S true; empty/zero-stake set -> 0>0 false.
 // A blank/missing source FAILS CLOSED (returns false); it is NOT a single source.
+// A NEGATIVE weight anywhere in the snapshot, or a non-positive total stake S,
+// also FAILS CLOSED: bcnum accepts a leading '-', and a corrupt/malicious snapshot
+// row driving S <= 0 would otherwise let the strict 3*tally > 2*S test hold for an
+// EMPTY signer set (0 > negative). A snapshot that cannot express a meaningful
+// two-thirds threshold must never finalize.
 function meetsStakeThreshold(validators, signerPubkeys){
     let weightBySource = new Map();   // source -> weight (first wins; all equal per source)
     let pubkeyToSource = new Map();   // pubkey(lower) -> source
@@ -102,9 +115,16 @@ function meetsStakeThreshold(validators, signerPubkeys){
         if(!weightBySource.has(src))
             weightBySource.set(src, (v.weight === null || v.weight === undefined) ? '0' : String(v.weight));
     }
-    // S = sum of weight over distinct sources in the snapshot.
+    // S = sum of weight over distinct sources in the snapshot. Fail CLOSED on any
+    // negative weight, then on S <= 0 (see the contract comment above): with S
+    // driven to or below zero, 3*tally > 2*S would finalize on zero signatures.
     let S = mathjs.bignumber(0);
-    for(let w of weightBySource.values()) S = mathjs.add(S, bcnum(w));
+    for(let w of weightBySource.values()){
+        let bw = bcnum(w);
+        if(bw.lt(0)) return false;
+        S = mathjs.add(S, bw);
+    }
+    if(S.lte(0)) return false;
     // Tally = sum of weight over the DISTINCT sources represented by valid signers.
     let countedSources = new Set();
     let seenPubkeys    = new Set();
