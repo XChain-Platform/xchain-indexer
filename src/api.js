@@ -35,6 +35,18 @@ const { buildHealthResponse } = require('./health');
 const { getStakeSourceByPubkey } = require('./stake-source');
 const merkle        = require('./merkle');
 const ar            = require('./anchor_reward_activation.js');
+const crypto        = require('crypto');
+
+// Constant-time API-key comparison. A plain `!==` short-circuits at the first
+// mismatching byte, leaking the key that guards reward-forging writes through
+// response-time differences; timingSafeEqual needs equal-length buffers, so
+// length is guarded first (a length mismatch is not itself the secret).
+function keyEquals(provided, expected){
+    const a = Buffer.from(String(provided == null ? '' : provided));
+    const b = Buffer.from(String(expected == null ? '' : expected));
+    if(a.length !== b.length) return false;
+    return crypto.timingSafeEqual(a, b);
+}
 
 dotenv.config();
 
@@ -189,7 +201,7 @@ async function startApi(){
         if(gated){
             if(INDEXER_API_KEY){
                 let provided = req.headers['x-api-key'] || '';
-                if(provided !== INDEXER_API_KEY){
+                if(!keyEquals(provided, INDEXER_API_KEY)){
                     return res.status(401).json({
                         jsonrpc: '2.0', id,
                         error: { code: -32001, message: 'Unauthorized' }
