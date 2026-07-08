@@ -216,11 +216,16 @@ class Order_Match {
                     continue;
                 }
 
-                // Update GET_REMAINING and GIVE_REMAINING in the orders
-                order['GIVE_REMAINING'] = this.util.bcsub(order['GIVE_REMAINING'], give_amount);
-                order['GET_REMAINING']  = this.util.bcsub(order['GET_REMAINING'],  get_amount);
-                match['GIVE_REMAINING'] = this.util.bcsub(match['GIVE_REMAINING'], get_amount);
-                match['GET_REMAINING']  = this.util.bcsub(match['GET_REMAINING'],  give_amount);
+                // Update GET_REMAINING and GIVE_REMAINING in the orders.
+                // Subtract at precision 64, matching getOrderAmountsRemaining's
+                // cross-block derivation. bcsub's decimals default is 0, which
+                // rounds a fractional remaining to a whole number: a remaining
+                // that rounds to 0 marks the order complete with escrow still
+                // held, one that rounds up keeps filling past exhaustion.
+                order['GIVE_REMAINING'] = this.util.bcsub(order['GIVE_REMAINING'], give_amount, 64);
+                order['GET_REMAINING']  = this.util.bcsub(order['GET_REMAINING'],  get_amount,  64);
+                match['GIVE_REMAINING'] = this.util.bcsub(match['GIVE_REMAINING'], get_amount,  64);
+                match['GET_REMAINING']  = this.util.bcsub(match['GET_REMAINING'],  give_amount, 64);
 
                 // Display get/give remaining amounts
                 if(this.debug)

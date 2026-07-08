@@ -240,6 +240,55 @@ describe('Order_Match action handler @regression @tier2', function () {
             `taker released ${takerReleased} RAREPEPE but only escrowed 10 (over-fill across makers)`);
     });
 
+    it('fractional running remaining survives a fill exactly (no integer rounding)', async function () {
+        // Regression for the bcsub-without-decimals bug: the running remaining was
+        // subtracted at bcsub's default precision 0, so a fractional remaining
+        // rounded to a whole number. 10 - 9.6 became "0" instead of "0.4": the
+        // taker was marked complete with 0.4 still escrowed, and the second maker
+        // (who wanted exactly that 0.4) was skipped as exhausted.
+        indexer.indexerDb.getTokenInfo
+            .withArgs('RAREPEPE', sinon.match.any, sinon.match.any)
+            .resolves(createTokenInfo({ TICK: 'RAREPEPE', TICK_ID: 10, DECIMALS: 8, ALLOW_LIST: null, BLOCK_LIST: null }));
+        indexer.indexerDb.getTokenInfo
+            .withArgs('PEPECASH', sinon.match.any, sinon.match.any)
+            .resolves(createTokenInfo({ TICK: 'PEPECASH', TICK_ID: 20, DECIMALS: 8, ALLOW_LIST: null, BLOCK_LIST: null }));
+
+        // Taker: 10 RAREPEPE for 10 PEPECASH at price 1, both ways.
+        indexer.indexerDb.getOrderInfo.resolves(makeOrderInfo({
+            GIVE_REMAINING: '10', GET_REMAINING: '10', GIVE_PRICE: '1', GET_PRICE: '1',
+        }));
+        indexer.indexerDb.findOrderMatches.resolves([
+            makeMatchInfo({ ACTION_INDEX: 2, GET_ADDRESS: 'mMaker1aaaaaaaaaaaaaaaaaaaaaaaaaaa',
+                            GIVE_REMAINING: '9.6', GET_REMAINING: '9.6', GET_PRICE: '1' }),
+            makeMatchInfo({ ACTION_INDEX: 3, GET_ADDRESS: 'mMaker2bbbbbbbbbbbbbbbbbbbbbbbbbbb',
+                            GIVE_REMAINING: '0.4', GET_REMAINING: '0.4', GET_PRICE: '1' }),
+        ]);
+
+        const escrowsByFill = [];
+        sinon.stub(indexer.util, 'processTransactionLedgerChanges')
+            .callsFake(async (_db, _data, _credits, _debits, escrows) => { escrowsByFill.push(escrows); });
+
+        const data = createBaseData({ ACTION: 'ORDER_MATCH', BLOCK_TIME, ACTION_INDEX: 1 });
+        await orderMatch.parse([], data, false);
+
+        // Both fills must land: 9.6 then the fractional tail 0.4.
+        sinon.assert.calledTwice(indexer.indexerDb.createOrderMatch);
+        let takerReleased = '0';
+        for (const escrows of escrowsByFill)
+            for (const [tick, amount] of escrows)
+                if (tick === 'RAREPEPE')
+                    takerReleased = indexer.util.bcsub(takerReleased, amount, 8); // amounts are negative releases
+        assert.strictEqual(String(takerReleased), '10',
+            `taker released ${takerReleased} RAREPEPE of the 10 escrowed (fractional tail lost to rounding)`);
+        // The taker completes only after the tail fill drains it to exactly 0.
+        sinon.assert.calledWith(indexer.indexerDb.createOrderStatus, 999, 1, 'complete');
+
+        // Negative control: the pre-fix default-precision subtraction rounds the
+        // fractional remaining away, so this test fails against the old code.
+        assert.strictEqual(String(indexer.util.bcsub('10', '9.6')), '0',
+            'sanity: bcsub without decimals must round 0.4 to 0, else this regression is vacuous');
+    });
+
     it('NFT (0-decimal) partial fill settles an integer amount, never a fractional artifact', async function () {
         // RAREPEPE is an indivisible NFT (DECIMALS=0); PEPECASH is divisible (DECIMALS=8).
         // The counterparty's PEPECASH remaining (3) priced at a non-terminating 1/3 ratio
