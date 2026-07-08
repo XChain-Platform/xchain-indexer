@@ -322,5 +322,24 @@ describe('consensus parameters are frozen (track 8 guard) @regression', function
             assert.strictEqual(vm.BINARY_ALLOC_GATE_BLOCK_TIME, pc.VM_BANNED_ASYNC_MAINNET_TIME,
                 'xchain-vm BINARY_ALLOC_GATE_BLOCK_TIME drifted from the coordinated 2.0.0 flag-day timestamp; confirm it matches the indexer activation');
         }
+        // STATE_KEY_NUL_GATE_BLOCK_TIME (H-5) rejects NUL-byte state keys that would wedge the
+        // indexer's block merkle root. It is a VM-side consensus gate that must activate at the
+        // same coordinated 2.0.0 flag-day; a one-sided edit forks the fleet at the boundary with
+        // no other CI failure. Pin it to the canonical timestamp.
+        if(vm.STATE_KEY_NUL_GATE_BLOCK_TIME !== undefined){
+            assert.strictEqual(vm.STATE_KEY_NUL_GATE_BLOCK_TIME, pc.VM_BANNED_ASYNC_MAINNET_TIME,
+                'xchain-vm STATE_KEY_NUL_GATE_BLOCK_TIME drifted from the coordinated 2.0.0 flag-day timestamp; update both repos in lockstep (one-sided edit forks the fleet at the flag-day)');
+        }
+    });
+
+    it('the indexer NATIVE_FEE_PRICE_TIME_GATE flag-day matches the coordinated 2.0.0 timestamp', function(){
+        // H-3: deterministic (time-gated) price_snapshots selection for native-coin fee
+        // validation on non-reference chains flips at this flag-day. It is an indexer-internal
+        // consensus gate (utility.getFeeOraclePrices + the sync barrier), pinned to the same
+        // canonical 2.0.0 timestamp as the VM async/binary gates: a divergent value forks the
+        // fleet on the first fee-bearing LTC/DOGE action after the boundary. Same-repo, no VM dep.
+        const pc = require('../../src/protocol_changes.js');
+        assert.strictEqual(pc.NATIVE_FEE_PRICE_TIME_GATE_MAINNET_TIME, pc.VM_BANNED_ASYNC_MAINNET_TIME,
+            'NATIVE_FEE_PRICE_TIME_GATE_MAINNET_TIME drifted from the coordinated 2.0.0 flag-day timestamp');
     });
 });
