@@ -2,7 +2,7 @@
 /src/node_modules
 /node_modules
 /.env
-# Staged at build time by xchain-node (LIBRARY_BUNDLES) — not part of the repo
+# Staged at build time by xchain-node (LIBRARY_BUNDLES) - not part of the repo
 /xchain-vm/
 
 # Local DB dumps (multi-hundred-MB SQL blobs are a GitHub push blocker)
@@ -13,7 +13,7 @@
 /XChain_Indexer.sql
 /XChain_Indexer.sql.gz
 
-# Coverage output (c8/nyc) — generated, not source
+# Coverage output (c8/nyc) - generated, not source
 coverage/
 .nyc_output/
 .claude/
