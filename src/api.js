@@ -110,11 +110,15 @@ if(!INDEXER_API_KEY && ALLOW_UNAUTHED)
 else if(!INDEXER_API_KEY)
     console.warn('WARNING: INDEXER_API_KEY is not set; write and federation-read methods will be REJECTED (fail-closed). Set INDEXER_API_KEY for a shared deployment, or INDEXER_ALLOW_UNAUTHENTICATED=true to allow keyless single-host/regtest access.');
 
-// feequotedryrun runs the REAL action handler (DEPLOY constructor / full EXECUTE
-// including emit subtrees) against committed state inside a forced-rollback txn and
-// mutates AUTO_INCREMENT non-deterministically. Its own comments mark it unsafe on a
-// live consensus node until the id-vs-string block-hash question is resolved, so it is
-// OPT-IN: registered ONLY on a regtest node with INDEXER_ENABLE_DRYRUN explicitly set.
+// feequotedryrun runs the REAL action handler with NO action deny-list: DEPLOY
+// constructor / full EXECUTE including emit subtrees, up to the VM CPU cap, while
+// holding the shared transaction mutex, under caller-shaped feeOutputs and the full
+// block watchdog. The consensus question that originally gated it is resolved (block
+// hashes cover canonical strings, and in-transaction index ids are dense-explicit and
+// roll back; see the 06-18 trial + Actions._dryRunAction), so this gate is about
+// UNMETERED COMPUTE on a public port: the default `feequote` dry-runs safely behind a
+// deny-list + admission cap + short timeout, while this raw surface stays OPT-IN:
+// registered ONLY on a regtest node with INDEXER_ENABLE_DRYRUN explicitly set.
 // Anywhere else the method is removed entirely (calls get method-not-found), so it can
 // never ship silently public on a shared/mainnet node.
 const ENABLE_DRYRUN = INDEXER_NETWORK === 'regtest'
@@ -349,13 +353,16 @@ async function startApi(){
             }
         },
 
-        // Read-only native-coin fee pre-flight. Given an action + its wire params (and
-        // optionally a proposed FEE_DESTINATION output value in satoshis), value the action's
-        // XCHAIN protocol fee in the native coin at current oracle prices and judge a proposed
-        // output against the on-chain tolerance, WITHOUT persisting anything. Lets a client size
-        // the fee output and refuse to broadcast a doomed (under-sized / stale-priced) native-fee
-        // tx, which would otherwise forfeit the fee. Public read (surfaced to wallets/SDK via the
-        // explorer proxy); not a write or federation method.
+        // Read-only native-coin fee pre-flight. Phase 2: runs the REAL action handler in a
+        // forced-rollback dry-run (Actions.computeFeeQuote), so `valid`/`error` are the
+        // handler's own verdict for ANY quotable action (class-A fee/price failures AND
+        // class-B action failures: insufficient balance, taken ticker, ...), and the fee is
+        // the handler's staged number valued at current oracle prices, judged (optionally)
+        // against the on-chain tolerance. Nothing persists. VM/compound actions
+        // (DEPLOY/EXECUTE/XEXEC/BATCH) stay unquotable here; quotes are admission-capped and
+        // time-boxed so this public read can't starve the block loop (see computeFeeQuote).
+        // Public read (surfaced to wallets/SDK via the explorer proxy); not a write or
+        // federation method.
         // Body: { action, params, source, feeOutputSats? }
         async feequote({action, params, source, feeOutputSats}){
             if(!action || typeof action !== 'string')
@@ -370,11 +377,11 @@ async function startApi(){
             }
         },
 
-        // OPT-IN phase-2 dry-run: runs the REAL action handler against current state inside a
-        // forced-rollback transaction and returns authoritative { valid, error, status } for ANY
-        // action (feequote's estimator only covers the create-action subset). Native-fee sizing is
-        // merged in from computeFeeQuote. Never persists. See computeFeeQuoteDryRun for the trial
-        // caveat (AUTO_INCREMENT skew); intended for an isolated regtest indexer for now.
+        // OPT-IN raw dry-run: same engine as feequote but with no action deny-list, no
+        // admission cap, the caller's literal feeOutputs (no probe injection), and the full
+        // block watchdog as timeout. That unrestricted surface (VM actions on demand) is why
+        // it stays regtest-gated (see ENABLE_DRYRUN) even though the default feequote now
+        // dry-runs publicly. Never persists.
         // Body: { action, params, source, feeOutputs? }
         async feequotedryrun({action, params, source, feeOutputs}){
             if(!action || typeof action !== 'string')

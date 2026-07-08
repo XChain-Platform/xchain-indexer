@@ -17,112 +17,182 @@ process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
 const Utility = require('../../src/utility.js');
 const Actions = require('../../src/actions.js');
 
-// Build a minimal Actions-like context exposing the real computeFeeQuoteDryRun prototype method
-// plus stubbed dependencies. processTransaction and computeFeeQuote are stubbed so the test never
-// touches a real DB or handler chain; the transaction-mutex calls (beginTransaction /
-// rollbackTransaction) are recorded so we can assert the dry-run always opens and rolls back
-// exactly one transaction.
-function makeCtx({ addressId = 7, status = 'valid', processThrows = false, processHangs = false, feeQuote } = {}){
-    let calls = { begin: 0, rollback: 0, processed: null };
+const FEE_DEST = 'feeDestinationAddr111111111111111';
+
+// Build a minimal Actions-like context exposing the real _dryRunAction /
+// computeFeeQuoteDryRun prototype methods plus stubbed dependencies. processTransaction is
+// stubbed so the test never touches a real DB or handler chain; the transaction-mutex calls
+// (beginTransaction / rollbackTransaction) and the fee-row read are recorded IN ORDER so we
+// can assert the dry-run opens exactly one transaction, reads the staged fee inside it, and
+// always rolls back.
+function makeCtx({ status = 'valid', actionIndex = 55, feeAmount = '1.00000000',
+                   processThrows = false, processHangs = false, prices = {} } = {}){
+    let calls = { order: [], begin: 0, rollback: 0, processed: null };
     let util  = new Utility();
+    util.config['COIN']                         = 'BTC';
+    util.config['ADDRESS']                      = Object.assign({}, util.config['ADDRESS'] || {}, { FEE_DESTINATION: FEE_DEST });
+    util.config['FEE_TOLERANCE_MIN']            = '0.95';
+    util.config['FEE_TOLERANCE_MAX']            = '1.10';
+    util.config['ORACLE_MAX_PRICE_AGE_SECONDS'] = 1800;
     let ctx = {
         util,
-        // The dry-run bounds processTransaction with the block-loop watchdog timeout.
-        config: { BLOCK_PROCESS_TIMEOUT: 300000 },
+        config: util.config,
         _calls: calls,
         indexerDb: {
-            getAddressId:        async () => addressId,
             getLatestBlockIndex: async () => 100,
             getBlockTime:        async () => 1000,
-            beginTransaction:    async () => { calls.begin++; },
-            rollbackTransaction: async () => { calls.rollback++; },
+            beginTransaction:    async () => { calls.begin++; calls.order.push('begin'); },
+            rollbackTransaction: async () => { calls.rollback++; calls.order.push('rollback'); },
             // Watchdog-fence surface (M-16): the dry-run reads the epoch after
             // beginTransaction and runs processTransaction under it. The stub
             // mirrors the real Database contract (fixed epoch, pass-through run).
             currentTxEpoch:      () => 0,
-            runInTxEpoch:        (epoch, fn) => fn()
+            runInTxEpoch:        (epoch, fn) => fn(),
+            // The handler-staged fee row, readable only between begin and rollback.
+            getFeeRecord:        async (ai) => {
+                calls.order.push('getFeeRecord:' + ai);
+                return (feeAmount == null) ? null : { amount: feeAmount, gas_cost: 0, gas_price: '0', xchain_amount: feeAmount, payment_mode: 1 };
+            },
+            getLatestPrice:      async (pair) => {
+                if(prices[pair] == null) return null;
+                return { price: prices[pair], roundNumber: 7, block_timestamp: 1000 };
+            }
         },
-        // Stubbed: returns a fixed native-fee quote (the real one is unit-tested in feeQuote.test.js).
-        computeFeeQuote: async () => (feeQuote !== undefined ? feeQuote : {
-            supported: true, valid: true, action: 'ISSUE', coin: 'BTC',
-            xchainFee: '1.00000000', requiredFeeNative: '0.00002000', requiredFeeSats: 2000
-        }),
         // Stubbed handler run: records the synthetic tx and stamps STATUS like a real handler.
         processTransaction: async (tx) => {
             calls.processed = tx;
+            calls.order.push('process');
             if(processThrows) throw new Error('boom');
             if(processHangs) return new Promise(() => {});   // never resolves: the watchdog must fire
-            return { STATUS: status };
-        }
+            return { STATUS: status, ACTION_INDEX: actionIndex };
+        },
+        _dryRunAction:         Actions.prototype._dryRunAction,
+        _priceFeeQuote:        Actions.prototype._priceFeeQuote,
+        computeFeeQuoteDryRun: Actions.prototype.computeFeeQuoteDryRun
     };
+    ctx.config['BLOCK_PROCESS_TIMEOUT'] = 300000;
     return { ctx, calls };
 }
 
-function run(ctx, args){ return Actions.prototype.computeFeeQuoteDryRun.call(ctx, args); }
+const BTC_PRICES = { 'XCHAIN/USD': '1.00000000', 'BTC/USD': '50000.00000000' };
 
-describe('computeFeeQuoteDryRun', () => {
+describe('_dryRunAction (shared dry-run engine)', () => {
 
-    it('valid action: STATUS=valid -> valid:true, fee fields merged, one balanced transaction', async () => {
+    it('valid action: one balanced transaction, fee row read INSIDE it, handler fee extracted', async () => {
         let { ctx, calls } = makeCtx({ status: 'valid' });
-        let r = await run(ctx, { action: 'ISSUE', params: ['0', 'NEWTOK', '1000'], source: 'src1' });
-        assert.strictEqual(r.dryRun, true, 'dryRun flag set');
-        assert.strictEqual(r.valid, true, 'valid status -> valid:true');
-        assert.strictEqual(r.error, null, 'no error on valid');
+        let r = await ctx._dryRunAction.call(ctx, { action: 'ISSUE', params: ['0', 'NEWTOK', '1000'], source: 'src1', timeoutMs: 300000 });
         assert.strictEqual(r.status, 'valid');
-        assert.strictEqual(r.feeSupported, true, 'fee supported merged from computeFeeQuote');
-        assert.strictEqual(r.requiredFeeNative, '0.00002000', 'native fee merged');
+        assert.strictEqual(r.error, null);
+        assert.strictEqual(r.xchainFee, '1.00000000', 'handler-staged fee extracted');
         assert.strictEqual(calls.begin, 1, 'one transaction opened');
         assert.strictEqual(calls.rollback, 1, 'one rollback (never persists)');
+        assert.deepStrictEqual(calls.order, ['begin', 'process', 'getFeeRecord:55', 'rollback'],
+            'fee row read after the handler, before rollback');
         assert.strictEqual(calls.processed.data, 'ISSUE|0|NEWTOK|1000', 'action string reassembled');
         assert.ok(String(calls.processed.tx_hash).startsWith('DRYRUN-'), 'tx_hash marked DRYRUN');
         assert.strictEqual(calls.processed.block_index, 100, 'synthetic tx anchored at tip');
     });
 
-    it('class-B invalid: handler stamps an invalid STATUS the estimator could never produce', async () => {
-        let { ctx, calls } = makeCtx({ status: 'invalid: insufficient funds' });
-        let r = await run(ctx, { action: 'SEND', params: ['0', 'TOK', '999', 'dest'], source: 'src1' });
-        assert.strictEqual(r.valid, false, 'invalid status -> valid:false');
+    it('injects an oversized probe fee output when none supplied and a destination is given', async () => {
+        let { ctx, calls } = makeCtx({});
+        await ctx._dryRunAction.call(ctx, { action: 'SEND', params: ['0', 'T', '1', 'd'], source: 's', probeFeeDestination: FEE_DEST, timeoutMs: 300000 });
+        assert.strictEqual(calls.processed.tx_outputs.length, 1);
+        assert.strictEqual(calls.processed.tx_outputs[0].address, FEE_DEST);
+        assert.ok(Number(calls.processed.tx_outputs[0].value) >= 21000000, 'probe exceeds any band');
+    });
+
+    it('caller-supplied feeOutputs pass through untouched (no probe injection)', async () => {
+        let { ctx, calls } = makeCtx({});
+        let outs = [{ address: 'someAddr', value: '0.00001900' }];
+        await ctx._dryRunAction.call(ctx, { action: 'SEND', params: ['0', 'T', '1', 'd'], source: 's', feeOutputs: outs, probeFeeDestination: FEE_DEST, timeoutMs: 300000 });
+        assert.deepStrictEqual(calls.processed.tx_outputs, outs);
+    });
+
+    it('no probe destination and no outputs: synthetic tx carries an empty output set', async () => {
+        let { ctx, calls } = makeCtx({});
+        await ctx._dryRunAction.call(ctx, { action: 'SEND', params: ['0', 'T', '1', 'd'], source: 's', timeoutMs: 300000 });
+        assert.deepStrictEqual(calls.processed.tx_outputs, []);
+    });
+
+    it('class-B invalid: handler reason in status, fee null when no row was staged', async () => {
+        let { ctx, calls } = makeCtx({ status: 'invalid: insufficient funds', feeAmount: null });
+        let r = await ctx._dryRunAction.call(ctx, { action: 'SEND', params: ['0', 'TOK', '999', 'dest'], source: 'src1', timeoutMs: 300000 });
         assert.strictEqual(r.status, 'invalid: insufficient funds');
-        assert.strictEqual(r.error, 'invalid: insufficient funds', 'error carries the handler reason');
-        assert.strictEqual(calls.begin, 1);
+        assert.strictEqual(r.xchainFee, null, 'fee unknowable for a rejected action');
         assert.strictEqual(calls.rollback, 1, 'invalid action still rolls back');
     });
 
-    it('bounds a hung handler with the block-loop watchdog and releases the lock (item 4758)', async () => {
-        let { ctx, calls } = makeCtx({ processHangs: true });
-        ctx.config = { BLOCK_PROCESS_TIMEOUT: 50 };   // tiny timeout so the watchdog fires fast
-        let r = await run(ctx, { action: 'ISSUE', params: ['0', 'NEWTOK', '1000'], source: 'src1' });
-        assert.strictEqual(r.valid, false, 'a watchdog-timed-out dry-run is not valid');
-        assert.ok(/timeout|exceeded/i.test(r.error), 'error reports the watchdog timeout: ' + r.error);
-        assert.strictEqual(calls.begin, 1, 'one transaction opened');
-        assert.strictEqual(calls.rollback, 1, 'lock released via rollback once the watchdog fires (no indefinite wedge)');
+    it('valid zero-fee action (no fee row): xchainFee is "0"', async () => {
+        let { ctx } = makeCtx({ status: 'valid', feeAmount: null });
+        let r = await ctx._dryRunAction.call(ctx, { action: 'MINT', params: ['0', 'TOK'], source: 'src1', timeoutMs: 300000 });
+        assert.strictEqual(r.xchainFee, '0');
     });
 
-    it('unindexed source: refused before any transaction is opened (AUTO_INCREMENT-skew mitigation)', async () => {
-        let { ctx, calls } = makeCtx({ addressId: null });
-        let r = await run(ctx, { action: 'ISSUE', params: ['0', 'NEWTOK', '1000'], source: 'unknownsrc' });
-        assert.strictEqual(r.dryRun, false, 'not run when source is unindexed');
-        assert.strictEqual(r.valid, false);
-        assert.ok(/not indexed/.test(r.error), 'error explains unindexed source');
-        assert.strictEqual(calls.begin, 0, 'no transaction opened for an unindexed source');
-        assert.strictEqual(calls.rollback, 0);
+    it('fresh (never-indexed) source is dry-run normally: dense in-txn ids roll back cleanly', async () => {
+        // No getAddressId gate exists any more; the engine must not require one.
+        let { ctx, calls } = makeCtx({ status: 'invalid: insufficient funds', feeAmount: null });
+        let r = await ctx._dryRunAction.call(ctx, { action: 'SEND', params: ['0', 'T', '1', 'd'], source: 'neverSeenAddr', timeoutMs: 300000 });
+        assert.strictEqual(calls.begin, 1, 'transaction opened for a fresh source');
+        assert.strictEqual(r.status, 'invalid: insufficient funds', 'handler judged it');
+    });
+
+    it('bounds a hung handler with the caller timeout and releases the lock', async () => {
+        let { ctx, calls } = makeCtx({ processHangs: true });
+        let r = await ctx._dryRunAction.call(ctx, { action: 'ISSUE', params: ['0', 'NEWTOK'], source: 'src1', timeoutMs: 50, label: 'feequote ISSUE' });
+        assert.ok(/timeout|exceeded/i.test(r.error), 'error reports the watchdog timeout: ' + r.error);
+        assert.strictEqual(r.status, null);
+        assert.strictEqual(calls.begin, 1);
+        assert.strictEqual(calls.rollback, 1, 'lock released via rollback once the watchdog fires (no indefinite wedge)');
     });
 
     it('handler throws: rollback still runs in finally (no lock leak)', async () => {
         let { ctx, calls } = makeCtx({ processThrows: true });
-        let r = await run(ctx, { action: 'EXECUTE', params: ['0', 'c'], source: 'src1' });
-        assert.strictEqual(r.valid, false, 'throw -> not valid');
+        let r = await ctx._dryRunAction.call(ctx, { action: 'EXECUTE', params: ['0', 'c'], source: 'src1', timeoutMs: 300000 });
         assert.ok(/handler threw/.test(r.error), 'error reports the throw');
         assert.strictEqual(calls.begin, 1, 'transaction was opened');
         assert.strictEqual(calls.rollback, 1, 'rollback runs in finally even on throw');
     });
+});
 
-    it('missing source: treated like an unindexed source, no transaction opened', async () => {
-        let { ctx, calls } = makeCtx({});
-        let r = await run(ctx, { action: 'ISSUE', params: ['0', 'NEWTOK', '1000'], source: null });
-        assert.strictEqual(r.dryRun, false);
-        assert.strictEqual(r.valid, false);
-        assert.strictEqual(calls.begin, 0, 'no transaction without a source');
+describe('computeFeeQuoteDryRun (raw regtest surface)', () => {
+
+    it('valid run with prices: handler verdict + best-effort native sizing merged', async () => {
+        let { ctx, calls } = makeCtx({ status: 'valid', prices: BTC_PRICES });
+        let r = await ctx.computeFeeQuoteDryRun.call(ctx, { action: 'ISSUE', params: ['0', 'NEWTOK', '1000'], source: 'src1' });
+        assert.strictEqual(r.dryRun, true);
+        assert.strictEqual(r.valid, true);
+        assert.strictEqual(r.status, 'valid');
+        assert.strictEqual(r.error, null);
+        assert.strictEqual(r.xchainFee, '1.00000000');
+        assert.strictEqual(r.feeSupported, true);
+        assert.strictEqual(r.requiredFeeNative, '0.00002000');
+        assert.strictEqual(r.requiredFeeSats, 2000);
+        assert.deepStrictEqual(calls.processed.tx_outputs, [], 'raw surface never injects a probe output');
     });
 
+    it('valid run without prices: verdict stands, sizing degrades to feeSupported:false + feeError', async () => {
+        let { ctx } = makeCtx({ status: 'valid', prices: {} });
+        let r = await ctx.computeFeeQuoteDryRun.call(ctx, { action: 'ISSUE', params: ['0', 'NEWTOK'], source: 'src1' });
+        assert.strictEqual(r.valid, true, 'pricing failure must not overwrite the handler verdict');
+        assert.strictEqual(r.feeSupported, false);
+        assert.ok(/missing or stale/.test(r.feeError), r.feeError);
+        assert.strictEqual(r.requiredFeeNative, null);
+    });
+
+    it('class-B invalid: verdict + verbatim reason', async () => {
+        let { ctx } = makeCtx({ status: 'invalid: TICK (unknown)', feeAmount: null, prices: BTC_PRICES });
+        let r = await ctx.computeFeeQuoteDryRun.call(ctx, { action: 'SEND', params: ['0', 'NOPE', '1', 'd'], source: 'src1' });
+        assert.strictEqual(r.valid, false);
+        assert.strictEqual(r.error, 'invalid: TICK (unknown)');
+        assert.strictEqual(r.feeSupported, false);
+    });
+
+    it('uses the full block watchdog as its timeout bound', async () => {
+        let { ctx, calls } = makeCtx({ processHangs: true, prices: BTC_PRICES });
+        ctx.config['BLOCK_PROCESS_TIMEOUT'] = 50;   // tiny so the watchdog fires fast
+        let r = await ctx.computeFeeQuoteDryRun.call(ctx, { action: 'ISSUE', params: ['0', 'X'], source: 'src1' });
+        assert.strictEqual(r.valid, false);
+        assert.ok(/timeout|exceeded/i.test(r.error), r.error);
+        assert.strictEqual(calls.rollback, 1);
+    });
 });

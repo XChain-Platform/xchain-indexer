@@ -24,6 +24,15 @@
 // Canonical ADDRESS-reference field map (consensus surface; byte-identical copy in xchain-sdk)
 const { ADDRESS_REF_FIELDS } = require('./addressRefFields.js');
 
+// Actions the PUBLIC feequote pre-flight refuses to dry-run. DEPLOY/EXECUTE run
+// caller-supplied code in the VM (up to the VM CPU cap) while the dry-run holds the shared
+// transaction mutex, XEXEC re-runs a target contract, and BATCH can smuggle any of them as
+// a sub-action; quoting these on a shared node would hand unauthenticated callers a
+// block-loop-stalling compute primitive. They keep the Phase-1 `supported:false` answer
+// (pay the fee in XCHAIN; the wallet txSimulator covers client-side validity). The raw
+// `feequotedryrun` RPC (regtest + INDEXER_ENABLE_DRYRUN + API key) has no such restriction.
+const FEE_QUOTE_DENYLIST = new Set(['DEPLOY', 'EXECUTE', 'XEXEC', 'BATCH']);
+
 // Load indexer actions
 const address          = require('./actions/address.js');
 const airdrop          = require('./actions/airdrop.js');
@@ -559,132 +568,111 @@ class Actions {
             await this.indexerDb.createAddress(addr);
     }
 
-    // Read-only estimator for the XCHAIN-denominated protocol fee ("fees.AMOUNT") an action
-    // would be charged, computed against current chain state WITHOUT persisting anything.
-    // Powers the native-coin fee pre-flight (see computeFeeQuote) so a client can size the
-    // FEE_DESTINATION output before broadcasting. Reuses the same util fee helpers + per-handler
-    // format strings the live handlers use, to keep drift minimal.
+    // Run the REAL action handler for a proposed action against current committed state inside
+    // a forced-rollback transaction, and extract the handler's verdict plus the
+    // XCHAIN-denominated fee it staged (the `fees` row, read back before rollback discards it).
+    // The single dry-run engine behind BOTH the public feequote pre-flight (computeFeeQuote)
+    // and the raw regtest-only feequotedryrun RPC. Never persists; and because in-transaction
+    // index_* ids are assigned dense-explicitly (db.createAddress/createTicker MAX(id)+1) they
+    // roll back with the row, so a dry-run leaves no id skew. That retires the 06-18
+    // unindexed-source refusal: quoting from a fresh (never-seen) address is a supported case.
     //
-    // Phase 1 scope (where the fee is computable from params + current tip + config alone):
-    //   - ISSUE create (format 0): issuance fee, gated by ISSUANCE_FEE/UNIFIED_FEES.
-    //   - ORDER / SWAP / DISPENSER create (format 0): expiration + ownership-escrow premium.
-    // Everything else (edits, DIVIDEND/AIRDROP whose fee depends on enumerated recipients/holders,
-    // DEPLOY/EXECUTE, ...) returns { supported:false } so the client falls back to XCHAIN-balance
-    // mode rather than guessing. A future full-handler dry-run will supersede this and remove the
-    // duplication. Returns { supported, amount }.
-    async estimateActionFee(data, params){
-        let action     = data['ACTION'];
-        let format     = data['FORMAT'];
-        let blockIndex = data['BLOCK_INDEX'];
-        let unsupported = { supported: false, amount: '0' };
-
-        if(action === 'ISSUE'){
-            // Only a fresh create charges the issuance fee.
-            if(format != 0) return unsupported;
-            data = this.util.setActionParams(data, params, this.actionIssue.formats, format);
-            if(this.util.isNull(data['TICK'])) return unsupported;
-            // An already-existing token is a re-issue/edit; no issuance fee.
-            let tokenInfo = await this.indexerDb.getTokenInfo(data['TICK'], blockIndex, data['ACTION_INDEX']);
-            if(tokenInfo) return { supported: true, amount: '0' };
-            if(!(await this.protocolChanges.isEnabled('ISSUANCE_FEE', blockIndex)))
-                return { supported: true, amount: '0' };
-            // Subtoken (TICK has a parent segment whose token exists) charges the subtoken rate.
-            let parentInfo = false;
-            let parts = String(data['TICK']).split('.');
-            if(parts.length > 1){
-                let parent = parts.slice(0, -1).join('.');
-                parentInfo = await this.indexerDb.getTokenInfo(parent, blockIndex, data['ACTION_INDEX']);
-            }
-            if(await this.protocolChanges.isEnabled('UNIFIED_FEES', blockIndex)){
-                let schedule = this.config['GAS_SCHEDULE'];
-                let gasCost  = parentInfo ? schedule.ISSUE_SUBTOKEN : schedule.ISSUE;
-                return { supported: true, amount: this.util.bcmul(gasCost, this.config['GAS_PRICE'], 8) };
-            }
-            return { supported: true, amount: parentInfo ? this.config['ISSUANCE_FEE_SUBTOKEN'] : this.config['ISSUANCE_FEE_TOKEN'] };
-        }
-
-        if(action === 'ORDER' || action === 'SWAP' || action === 'DISPENSER'){
-            // Edits (format 2) need the prior on-chain record, out of phase-1 scope.
-            if(format != 0) return unsupported;
-            let handler = (action === 'ORDER') ? this.actionOrder
-                        : (action === 'SWAP')  ? this.actionSwap
-                        :                        this.actionDispenser;
-            data = this.util.setActionParams(data, params, handler.formats, format);
-            let isOwnershipGive = (data['GIVE_OWNERSHIP'] == 1);
-            if(await this.protocolChanges.isEnabled('UNIFIED_FEES', blockIndex)){
-                let fee = 0;
-                if(!this.util.isNull(data['EXPIRATION'])){
-                    let exp = this.util.getUnifiedExpirationFee(data, null);
-                    fee = this.util.bcadd(fee, exp.fee, 8);
-                }
-                if(isOwnershipGive){
-                    let own = this.util.getOwnershipEscrowFee();
-                    fee = this.util.bcadd(fee, own.fee, 8);
-                }
-                return { supported: true, amount: fee };
-            }
-            if(!this.util.isNull(data['EXPIRATION']))
-                return { supported: true, amount: this.util.getExpirationFee(data, null) };
-            return { supported: true, amount: '0' };
-        }
-
-        return unsupported;
-    }
-
-    // Read-only native-coin fee pre-flight. Given an action + its wire params, compute the
-    // XCHAIN protocol fee against current state, value it in the native coin via current oracle
-    // prices, and (optionally) judge a proposed fee-output amount against the same tolerance the
-    // on-chain validator enforces. Never persists. The SDK/wallet use the result to size the
-    // FEE_DESTINATION output and to refuse broadcasting a doomed (under-sized / stale-priced) tx.
-    // `feeOutputSats` (optional) is the proposed output value in satoshis.
-    async computeFeeQuote({ action, params, source, feeOutputSats }){
-        let coin           = this.config['COIN'];
-        let feeDestination = this.config['ADDRESS'] ? this.config['ADDRESS']['FEE_DESTINATION'] : null;
-        let toleranceMin   = this.util.bcnum(this.config['FEE_TOLERANCE_MIN'] || '0.95');
-        let toleranceMax   = this.util.bcnum(this.config['FEE_TOLERANCE_MAX'] || '1.10');
-
-        action = String(action || '').toUpperCase();
-        if(!Array.isArray(params)) params = String(params == null ? '' : params).split('|');
-        params = params.map(v => String(v).trim());
-
+    // `feeOutputs` is the synthetic tx's native-coin output set. When the caller supplies none
+    // and `probeFeeDestination` is set, a deliberately OVERSIZED fee output is injected so
+    // LTC/DOGE's mandatory-native detection sees payment-mode 1 and the handler validates and
+    // records the fee without an XCHAIN debit. The on-chain acceptance rule is lower-bound-only
+    // (util.validateNativeCoinFee), so oversizing can never be the reason a quote rejects;
+    // sizing the real output is the caller's job (computeFeeQuote prices the extracted fee).
+    //
+    // Returns { blockIndex, blockTime, status, error, xchainFee } where xchainFee is the
+    // handler-recorded fee ('0' for a valid zero-fee action, null when the run never got far
+    // enough to stage one).
+    async _dryRunAction({ action, params, source, feeOutputs, probeFeeDestination, timeoutMs, label }){
         let blockIndex = await this.indexerDb.getLatestBlockIndex();
         let blockTime  = await this.indexerDb.getBlockTime(blockIndex);
 
-        let data = {};
-        data['ACTION']       = action;
-        data['FORMAT']       = this.util.getFormatVersion(params[0]);
-        data['BLOCK_INDEX']  = blockIndex;
-        data['BLOCK_TIME']   = blockTime;       // current tip; expiration-fee day count is anchored here
-        data['SOURCE']       = source || null;
-        data['COIN']         = coin;
-        data['ACTION_INDEX'] = null;
+        let txOutputs = Array.isArray(feeOutputs) ? feeOutputs : [];
+        if(txOutputs.length === 0 && probeFeeDestination)
+            // Decimal coin units (decoder-shaped outputs); 21M coin exceeds any fee band.
+            txOutputs = [{ address: probeFeeDestination, value: '21000000.00000000' }];
 
-        let base = {
-            supported:      true,
-            action:         action,
-            coin:           coin,
-            blockIndex:     blockIndex,
-            blockTime:      blockTime,
-            feeDestination: feeDestination,
-            toleranceMin:   this.util.bcformat(toleranceMin, 8),
-            toleranceMax:   this.util.bcformat(toleranceMax, 8)
+        // Synthetic transaction mirroring what the decoder feeds processTransaction. The tx_hash
+        // is unique + clearly marked; it and any handler writes vanish on rollback.
+        let syntheticTx = {
+            data:          [action].concat(params).join('|'),
+            source:        source,
+            destination:   null,
+            amount:        null,
+            tx_hash:       'DRYRUN-' + blockIndex + '-' + (this._dryRunSeq = (this._dryRunSeq || 0) + 1),
+            vout:          0,
+            block_index:   blockIndex,
+            block_time:    blockTime,
+            fee:           null,
+            source_pubkey: null,
+            tx_outputs:    txOutputs,
+            raw_data:      null
         };
 
-        // Native-coin fees are off unless a real FEE_DESTINATION is configured.
-        if(!feeDestination || feeDestination === 'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX')
-            return Object.assign(base, { supported: false, valid: false, error: 'native coin fee not enabled (no FEE_DESTINATION configured)' });
-
-        // 1) XCHAIN-denominated economic fee for this action against current state.
-        let estimate;
+        let status = null, feeRecord = null, dryRunError = null;
+        // beginTransaction acquires the db transaction mutex (serializes against block processing
+        // and reorgs); the finally guarantees rollback + lock release even on a handler throw.
+        await this.indexerDb.beginTransaction();
+        // Fence the dry-run's writes to THIS transaction's epoch (M-16), same as the block
+        // loop: on watchdog timeout the finally below rolls back and bumps the epoch, but the
+        // abandoned processTransaction can still resume and try to write on the shared
+        // connection, which by then may belong to a REAL block's transaction. The stale epoch
+        // rejects those zombie writes inside the db layer before they reach the driver.
+        let dryRunEpoch = this.indexerDb.currentTxEpoch();
         try {
-            estimate = await this.estimateActionFee(data, params);
+            // Bound the synthetic run. The dry-run holds the shared _txLock for the whole
+            // handler, so a stuck handler would otherwise wedge block advancement for the full
+            // hang; on timeout the catch+finally roll back and release the lock within the
+            // caller's bounded window instead.
+            let dryRunProcessing = this.indexerDb.runInTxEpoch(dryRunEpoch,
+                () => this.processTransaction(syntheticTx));
+            // Keep the abandoned promise's late settlement (typically the epoch fence firing)
+            // from surfacing as an unhandledRejection; the fence, not this handler, is what
+            // stops the zombie's writes.
+            dryRunProcessing.catch((e) => {
+                console.warn('Abandoned fee-quote dry-run settled after watchdog: ' +
+                    ((e && e.message) ? e.message : e));
+            });
+            let resultData = await this.util.withTimeout(
+                dryRunProcessing,
+                timeoutMs,
+                label || ('feequote dry-run ' + (action || '')));
+            status = (resultData && resultData['STATUS'] !== undefined) ? resultData['STATUS'] : null;
+            // Extract the handler-computed fee while the transaction is still open (the row
+            // vanishes on rollback). `amount` is XCHAIN-denominated in every payment mode.
+            let actionIndex = (resultData && resultData['ACTION_INDEX'] !== undefined) ? resultData['ACTION_INDEX'] : null;
+            if(actionIndex !== null)
+                feeRecord = await this.indexerDb.getFeeRecord(actionIndex);
         } catch(e){
-            return Object.assign(base, { supported: false, valid: false, error: 'fee estimate failed: ' + ((e && e.message) ? e.message : e) });
+            dryRunError = 'handler threw: ' + ((e && e.message) ? e.message : e);
+        } finally {
+            await this.indexerDb.rollbackTransaction();
         }
-        if(!estimate.supported)
-            return Object.assign(base, { supported: false, valid: false, error: 'native fee pre-flight not supported for ' + action + ' (pay the fee in XCHAIN)' });
 
-        let xchainFee = this.util.bcnum(estimate.amount);
+        return {
+            blockIndex: blockIndex,
+            blockTime:  blockTime,
+            status:     status,
+            error:      dryRunError,
+            xchainFee:  feeRecord ? String(feeRecord.amount)
+                       : ((status === 'valid') ? '0' : null)
+        };
+    }
+
+    // Price an XCHAIN-denominated fee in the native coin via current oracle prices, and
+    // (optionally) judge a proposed fee-output amount against the same lower-bound rule the
+    // on-chain validator enforces (util.validateNativeCoinFee rejects only below min). Pure
+    // pricing, shared by computeFeeQuote and computeFeeQuoteDryRun; extends and returns `base`.
+    async _priceFeeQuote(base, xchainFeeRaw, feeOutputSats){
+        let coin         = this.config['COIN'];
+        let toleranceMin = this.util.bcnum(this.config['FEE_TOLERANCE_MIN'] || '0.95');
+        let toleranceMax = this.util.bcnum(this.config['FEE_TOLERANCE_MAX'] || '1.10');
+
+        let xchainFee  = this.util.bcnum(xchainFeeRaw == null ? '0' : xchainFeeRaw);
         base.xchainFee = this.util.bcformat(xchainFee, 8);
 
         // No protocol fee => nothing to pay in native coin.
@@ -696,9 +684,11 @@ class Actions {
             });
         }
 
-        // 2) Value it in native coin via current oracle prices (shared with validateNativeCoinFee).
-        //    Staleness is judged against wall-clock now so the freshness verdict reflects real-world
-        //    price age (a pre-flight isn't tied to a specific future block).
+        // Value it in native coin via current oracle prices (shared with validateNativeCoinFee).
+        // Staleness is judged against wall-clock now so the freshness verdict reflects real-world
+        // price age (a pre-flight isn't tied to a specific future block).
+        let blockIndex         = (base.blockIndex !== undefined && base.blockIndex !== null)
+                               ? base.blockIndex : await this.indexerDb.getLatestBlockIndex();
         let nowEpoch           = Math.floor(Date.now() / 1000);
         let maxPriceAgeSeconds = parseInt(this.config['ORACLE_MAX_PRICE_AGE_SECONDS']) || 1800;
         let prices = await this.util.getFeeOraclePrices(this.indexerDb, coin, blockIndex, nowEpoch, maxPriceAgeSeconds);
@@ -712,8 +702,8 @@ class Actions {
         let requiredFeeNative = this.util.bcformat(band.expectedNative, 8);
         let requiredFeeSats   = Number(this.util.bcformat(this.util.bcmul(band.expectedNative, 100000000, 0), 0));
 
-        // 3) If the caller supplied a proposed output, judge it against the SAME lower-bound rule
-        //    the on-chain validator enforces (validateNativeCoinFee rejects only below min).
+        // If the caller supplied a proposed output, judge it against the SAME lower-bound rule
+        // the on-chain validator enforces (validateNativeCoinFee rejects only below min).
         let valid = true, error = null;
         if(feeOutputSats !== undefined && feeOutputSats !== null && String(feeOutputSats) !== ''){
             let paidCoin = this.util.bcdiv(this.util.bcnum(feeOutputSats), 100000000, 8);
@@ -738,107 +728,147 @@ class Actions {
         });
     }
 
-    // Read-only "phase-2" fee/validity dry-run. Runs the REAL action handler against current
-    // committed state inside a forced-rollback transaction (serialized against the block loop +
-    // reorg path via the db transaction mutex), so it reports AUTHORITATIVE validity for ANY
-    // action, not just the estimateActionFee create-action subset. Native-fee sizing is taken
-    // from computeFeeQuote (which covers the supported create actions); extracting the
-    // handler-computed fee for every action is a follow-up. Never persists (always rolls back).
+    // Read-only native-coin fee pre-flight (the public `feequote` JSON-RPC). Phase 2: runs the
+    // REAL action handler in a forced-rollback dry-run (_dryRunAction), so validity is
+    // authoritative for any quotable action: class-A failures (fee sizing, oracle price) AND
+    // class-B failures the Phase-1 estimator could never see (insufficient balance, taken
+    // ticker, expired order, ...), surfaced verbatim in `error`/`status`. The fee is the
+    // handler's own staged number, so there is no estimator to drift (estimateActionFee is
+    // retired) and no supported-subset restriction; only the VM/compound actions in
+    // FEE_QUOTE_DENYLIST stay unquotable on this public path. Never persists.
     //
-    // TRIAL CAVEAT: InnoDB does NOT roll back AUTO_INCREMENT, so a dry-run that inserts a novel
-    // index_* row (always at least the synthetic tx_hash) advances that counter even after
-    // rollback. Safe on an isolated single-node regtest indexer; do NOT enable on a live
-    // consensus node until the id-vs-string block-hash question is resolved. This constraint
-    // is now enforced, not just advisory: the `feequotedryrun` RPC is unregistered unless
+    // Guardrails for a public endpoint: quotes serialize against the block loop on the db
+    // transaction mutex, so each is time-boxed (INDEXER_FEEQUOTE_TIMEOUT_MS, default 10s,
+    // instead of the 300s block watchdog) and admission-capped
+    // (INDEXER_FEEQUOTE_MAX_PENDING, default 8; beyond it callers get a retryable busy error
+    // rather than a queue that could starve block processing).
+    // `feeOutputSats` (optional) is the proposed output value in satoshis.
+    async computeFeeQuote({ action, params, source, feeOutputSats }){
+        let coin           = this.config['COIN'];
+        let feeDestination = this.config['ADDRESS'] ? this.config['ADDRESS']['FEE_DESTINATION'] : null;
+        let toleranceMin   = this.util.bcnum(this.config['FEE_TOLERANCE_MIN'] || '0.95');
+        let toleranceMax   = this.util.bcnum(this.config['FEE_TOLERANCE_MAX'] || '1.10');
+
+        action = String(action || '').toUpperCase();
+        if(!Array.isArray(params)) params = String(params == null ? '' : params).split('|');
+        params = params.map(v => String(v).trim());
+
+        let base = {
+            supported:      true,
+            action:         action,
+            coin:           coin,
+            feeDestination: feeDestination,
+            toleranceMin:   this.util.bcformat(toleranceMin, 8),
+            toleranceMax:   this.util.bcformat(toleranceMax, 8)
+        };
+
+        // Native-coin fees are off unless a real FEE_DESTINATION is configured.
+        if(!feeDestination || feeDestination === 'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX')
+            return Object.assign(base, { supported: false, valid: false, error: 'native coin fee not enabled (no FEE_DESTINATION configured)' });
+
+        if(FEE_QUOTE_DENYLIST.has(action))
+            return Object.assign(base, { supported: false, valid: false, error: 'native fee pre-flight not supported for ' + action + ' (pay the fee in XCHAIN)' });
+
+        let maxPending = parseInt(process.env.INDEXER_FEEQUOTE_MAX_PENDING, 10) || 8;
+        if((this._feeQuotePending || 0) >= maxPending)
+            return Object.assign(base, { valid: false, busy: true, retryable: true,
+                error: 'fee quote busy (' + maxPending + ' quotes already pending); retry shortly' });
+
+        let timeoutMs = parseInt(process.env.INDEXER_FEEQUOTE_TIMEOUT_MS, 10) || 10000;
+        this._feeQuotePending = (this._feeQuotePending || 0) + 1;
+        let run;
+        try {
+            run = await this._dryRunAction({
+                action, params, source,
+                probeFeeDestination: feeDestination,
+                timeoutMs: timeoutMs,
+                label: 'feequote ' + action
+            });
+        } finally {
+            this._feeQuotePending--;
+        }
+
+        base.blockIndex = run.blockIndex;
+        base.blockTime  = run.blockTime;
+        base.status     = run.status;
+        base.validated  = true;
+
+        // The handler's verdict is authoritative; its reason (class-A or class-B) verbatim.
+        if(run.status !== 'valid')
+            return Object.assign(base, {
+                valid:     false,
+                error:     run.error || run.status || 'dry-run produced no status',
+                xchainFee: (run.xchainFee == null) ? null : this.util.bcformat(this.util.bcnum(run.xchainFee), 8)
+            });
+
+        return await this._priceFeeQuote(base, run.xchainFee, feeOutputSats);
+    }
+
+    // Raw fee/validity dry-run (the regtest-only `feequotedryrun` JSON-RPC). Same engine as the
+    // public feequote (_dryRunAction) but with NO deny-list, NO admission cap, the caller's
+    // literal `feeOutputs` (no probe injection: absent outputs exercise the BTC xchain-balance
+    // fallback / LTC-DOGE mandatory-native rejection exactly as a real broadcast would), and
+    // the full block watchdog as its timeout. That unrestricted surface (VM actions on demand,
+    // attacker-shaped outputs) is why it stays OPT-IN: the RPC is unregistered unless
     // INDEXER_NETWORK=regtest AND INDEXER_ENABLE_DRYRUN is set (api.js ENABLE_DRYRUN), and is
-    // API-key-gated when a key is configured. Spec:
+    // API-key-gated when a key is configured. The 06-18 trial's AUTO_INCREMENT concern is
+    // resolved (block hashes cover canonical strings; in-transaction index ids are dense-
+    // explicit and roll back), so the gate is about compute, not consensus. Spec:
     // claude/reports/specs/2026-06-01_native-coin-fee-phase2-dryrun.md
     async computeFeeQuoteDryRun({ action, params, source, feeOutputs }){
         action = String(action || '').toUpperCase();
         if(!Array.isArray(params)) params = String(params == null ? '' : params).split('|');
         params = params.map(v => String(v).trim());
 
-        // Native-fee sizing (oracle-priced) for the supported create actions; non-fatal when the
-        // action is outside the estimator's set (the dry-run still reports handler validity).
-        let feeQuote;
-        try {
-            feeQuote = await this.computeFeeQuote({ action, params, source });
-        } catch(e){
-            feeQuote = { supported: false, valid: false, error: 'fee quote failed: ' + ((e && e.message) ? e.message : e) };
-        }
+        let coin           = this.config['COIN'];
+        let feeDestination = this.config['ADDRESS'] ? this.config['ADDRESS']['FEE_DESTINATION'] : null;
+        let nativeEnabled  = !!(feeDestination && feeDestination !== 'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX');
 
-        // Pre-check: refuse an un-indexed source so the dry-run never burns an index_addresses
-        // AUTO_INCREMENT slot for an address the real chain never created (id-skew mitigation).
-        let sourceId = this.util.isNull(source) ? null : await this.indexerDb.getAddressId(source);
-        if(this.util.isNull(source) || this.util.isNull(sourceId))
-            return Object.assign({}, feeQuote, { dryRun: false, valid: false, status: null, error: 'source address not indexed (dry-run requires a known source)' });
+        let run = await this._dryRunAction({
+            action, params, source, feeOutputs,
+            probeFeeDestination: null,
+            timeoutMs: this.config['BLOCK_PROCESS_TIMEOUT'],
+            label: 'feequotedryrun ' + (action || '')
+        });
 
-        let blockIndex = await this.indexerDb.getLatestBlockIndex();
-        let blockTime  = await this.indexerDb.getBlockTime(blockIndex);
-
-        // Synthetic transaction mirroring what the decoder feeds processTransaction. The tx_hash
-        // is unique + clearly marked; it and any handler writes vanish on rollback.
-        let syntheticTx = {
-            data:          [action].concat(params).join('|'),
-            source:        source,
-            destination:   null,
-            amount:        null,
-            tx_hash:       'DRYRUN-' + blockIndex + '-' + (this._dryRunSeq = (this._dryRunSeq || 0) + 1),
-            vout:          0,
-            block_index:   blockIndex,
-            block_time:    blockTime,
-            fee:           null,
-            source_pubkey: null,
-            tx_outputs:    Array.isArray(feeOutputs) ? feeOutputs : [],
-            raw_data:      null
+        let valid  = (run.status === 'valid');
+        let result = {
+            supported:      true,
+            dryRun:         true,
+            action:         action,
+            coin:           coin,
+            feeDestination: feeDestination,
+            blockIndex:     run.blockIndex,
+            blockTime:      run.blockTime,
+            valid:          valid,
+            status:         run.status,
+            error:          valid ? null : (run.error || run.status || 'dry-run produced no status'),
+            xchainFee:      (run.xchainFee == null) ? null : this.util.bcformat(this.util.bcnum(run.xchainFee), 8),
+            requiredFeeNative: null,
+            feeSupported:   false
         };
 
-        let status = null, dryRunError = null;
-        // beginTransaction acquires the db transaction mutex (serializes against block processing
-        // and reorgs); the finally guarantees rollback + lock release even on a handler throw.
-        await this.indexerDb.beginTransaction();
-        // Fence the dry-run's writes to THIS transaction's epoch (M-16), same as the block
-        // loop: on watchdog timeout the finally below rolls back and bumps the epoch, but the
-        // abandoned processTransaction can still resume and try to write on the shared
-        // connection, which by then may belong to a REAL block's transaction. The stale epoch
-        // rejects those zombie writes inside the db layer before they reach the driver.
-        let dryRunEpoch = this.indexerDb.currentTxEpoch();
-        try {
-            // Bound the synthetic run with the SAME watchdog the block loop wraps
-            // processTransaction in (XChainIndexer BLOCK_PROCESS_TIMEOUT). The dry-run holds
-            // the shared _txLock for the whole handler, so a stuck VM/isolate would otherwise
-            // wedge block advancement for the full hang; on timeout the catch+finally roll back
-            // and release the lock within a bounded window instead.
-            let dryRunProcessing = this.indexerDb.runInTxEpoch(dryRunEpoch,
-                () => this.processTransaction(syntheticTx));
-            // Keep the abandoned promise's late settlement (typically the epoch fence firing)
-            // from surfacing as an unhandledRejection; the fence, not this handler, is what
-            // stops the zombie's writes.
-            dryRunProcessing.catch((e) => {
-                console.warn('Abandoned fee-quote dry-run settled after watchdog: ' +
-                    ((e && e.message) ? e.message : e));
-            });
-            let resultData = await this.util.withTimeout(
-                dryRunProcessing,
-                this.config['BLOCK_PROCESS_TIMEOUT'],
-                'feequotedryrun ' + (action || ''));
-            status = (resultData && resultData['STATUS'] !== undefined) ? resultData['STATUS'] : null;
-        } catch(e){
-            dryRunError = 'handler threw: ' + ((e && e.message) ? e.message : e);
-        } finally {
-            await this.indexerDb.rollbackTransaction();
+        // Native-fee sizing for the extracted fee, merged without letting a pricing failure
+        // (missing/stale oracle) overwrite the handler's validity verdict: on this raw surface
+        // the handler verdict is the headline and sizing is best-effort.
+        if(valid && nativeEnabled){
+            let priced = await this._priceFeeQuote({ blockIndex: run.blockIndex }, run.xchainFee, undefined);
+            if(priced.valid !== false){
+                result.feeSupported      = true;
+                result.oracleRound       = priced.oracleRound;
+                result.xchainUsdPrice    = priced.xchainUsdPrice;
+                result.coinUsdPrice      = priced.coinUsdPrice;
+                result.expectedNative    = priced.expectedNative;
+                result.minAcceptable     = priced.minAcceptable;
+                result.maxAcceptable     = priced.maxAcceptable;
+                result.requiredFeeNative = priced.requiredFeeNative;
+                result.requiredFeeSats   = priced.requiredFeeSats;
+            } else {
+                result.feeError = priced.error;
+            }
         }
 
-        let valid = (status === 'valid');
-        return Object.assign({}, feeQuote, {
-            dryRun:            true,
-            blockIndex:        blockIndex,
-            valid:             valid,
-            status:            status,
-            error:             valid ? null : (dryRunError || status || 'dry-run produced no status'),
-            requiredFeeNative: (feeQuote && feeQuote.supported) ? feeQuote.requiredFeeNative : null,
-            feeSupported:      !!(feeQuote && feeQuote.supported)
-        });
+        return result;
     }
 
     // Read-only fee schedule + current oracle prices for native-coin fee payment. Lets a client
