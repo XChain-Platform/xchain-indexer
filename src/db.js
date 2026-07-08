@@ -780,22 +780,31 @@ class Database {
     // (transitively, across awaits). Returns fn's return value (the block-processing promise).
     // Used only by the block loop; behavior on the non-timeout path is unchanged because the
     // installed epoch always equals the current _txEpoch until the transaction is torn down.
+    // The context records WHICH Database instance owns the guarded transaction: the indexer
+    // process holds several instances of this class (indexer DB, decoder DB, hub-DB mirror),
+    // and the fence must only guard the owner's shared transactionConnection. A read through
+    // a sibling instance inside the same async context (e.g. a hub-mirror price read during
+    // fee validation) draws from that instance's own pool and can never land in the guarded
+    // transaction, so it must not be fenced (its epoch counter never advances, so comparing
+    // across instances fences every such read; caught live on regtest 2026-07-08).
     runInTxEpoch(epoch, fn){
-        return txEpochStore.run(epoch, fn);
+        return txEpochStore.run({ owner: this, epoch: epoch }, fn);
     }
 
     // Watchdog fence (M-16). Reject a write whose issuing epoch no longer matches the current
-    // transaction epoch. Only block-loop code runs inside a txEpochStore context, so a stored
-    // epoch that differs from _txEpoch means this call is an abandoned (timed-out) block's
-    // zombie continuation trying to write after its transaction was rolled back and a later
-    // block's transaction took over the shared connection. No stored epoch = a non-block-loop
-    // caller (federation RPC read, health check), which is never fenced. This can only ADD a
-    // throw on the already-broken timeout path; it never suppresses a legitimate write, so the
-    // non-timeout path is byte-identical.
+    // transaction epoch ON THE INSTANCE THAT OWNS THE GUARDED TRANSACTION. Only block-loop
+    // code runs inside a txEpochStore context, so an owner-match with a stale epoch means this
+    // call is an abandoned (timed-out) block's zombie continuation trying to write after its
+    // transaction was rolled back and a later block's transaction took over the shared
+    // connection. No stored context = a non-block-loop caller (federation RPC read, health
+    // check); an owner mismatch = a sibling Database instance's pool read inside the block's
+    // async context; neither is fenced. This can only ADD a throw on the already-broken
+    // timeout path; it never suppresses a legitimate write, so the non-timeout path is
+    // byte-identical.
     _assertTxNotFenced(){
-        const epoch = txEpochStore.getStore();
-        if(epoch !== undefined && epoch !== this._txEpoch)
-            this.util.throwError('transaction fenced (M-16): write from epoch ' + epoch +
+        const ctx = txEpochStore.getStore();
+        if(ctx !== undefined && ctx.owner === this && ctx.epoch !== this._txEpoch)
+            this.util.throwError('transaction fenced (M-16): write from epoch ' + ctx.epoch +
                 ' after teardown (current epoch ' + this._txEpoch + '); zombie write rejected');
     }
 
@@ -3887,6 +3896,20 @@ class Database {
         }
         args    = [tick_id, list_action_index, amount, memo_id, status_id, action_index];
         results = await this.doQuery(query, args);
+    }
+
+    // Read the fee row a handler staged for an action (createFeeRecord above). The feequote
+    // dry-run calls this INSIDE its still-open forced-rollback transaction to extract the
+    // handler-computed XCHAIN-denominated fee before the rollback discards the row; `amount`
+    // is XCHAIN-denominated in every payment mode (mode 1 records the native output separately
+    // in native_coin_amount). Returns null when the handler recorded no fee (zero-fee action,
+    // or it rejected before fee processing).
+    async getFeeRecord(actionIndex){
+        if(this.util.isNull(actionIndex))
+            return null;
+        let query   = `SELECT amount, gas_cost, gas_price, xchain_amount, payment_mode FROM fees WHERE action_index=?`;
+        let results = await this.doQuery(query, [actionIndex]);
+        return (results && results.length > 0) ? results[0] : null;
     }
 
     // Create/Update record in `fees` table

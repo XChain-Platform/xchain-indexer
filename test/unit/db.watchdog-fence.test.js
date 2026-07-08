@@ -167,6 +167,45 @@ describe('Database watchdog-fence epoch (M-16) @regression @tier1', function () 
         await db.commitTransaction();
     });
 
+    it('never fences a SIBLING Database instance read inside the block epoch context', async function () {
+        // The indexer process holds several Database instances (indexer DB, decoder DB,
+        // hub-DB mirror). Fee validation reads oracle prices through the hub-mirror
+        // instance INSIDE the block/dry-run epoch context; that instance's own epoch
+        // counter never advances, so an owner-blind fence rejects every such read
+        // (regtest live failure 2026-07-08: every feequote dry-run fenced its price
+        // read). The fence must apply only to the instance that owns the guarded
+        // transaction.
+        const connA = makeConn();
+        const dbA   = makeDb(connA);   // owns the block transaction
+        const connB = makeConn();
+        const dbB   = makeDb(connB);   // sibling (hub-mirror style, no transactions ever)
+
+        await dbA.beginTransaction();
+        const epoch = dbA.currentTxEpoch();
+        await dbA.runInTxEpoch(epoch, async () => {
+            // Sibling read inside the guarded context: must pass, both live and after
+            // the owner's teardown (the zombie hazard is the owner's shared connection,
+            // never a sibling's pool).
+            await assert.doesNotReject(() => dbB.doQuery('SELECT price FROM price_snapshots', []));
+        });
+        await dbA.rollbackTransaction();
+
+        // Even a ZOMBIE continuation's sibling read is not the fence's business: only
+        // the owner's write is rejected.
+        await dbA.beginTransaction();
+        await dbA.runInTxEpoch(epoch, async () => {  // stale epoch on purpose
+            await assert.doesNotReject(() => dbB.doQuery('SELECT 1', []));
+            await assert.rejects(() => dbA.doQuery('INSERT INTO zombie VALUES (1)', []),
+                /transaction fenced \(M-16\)/);
+        });
+        await dbA.commitTransaction();
+
+        assert.ok(
+            connB.query.getCalls().some((c) => /price_snapshots/.test(c.args[0])),
+            'sibling read reached its own driver'
+        );
+    });
+
     it('fences a zombie savepoint call after rollback', async function () {
         const conn = makeConn();
         const db   = makeDb(conn);
