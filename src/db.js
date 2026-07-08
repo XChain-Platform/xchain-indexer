@@ -9286,6 +9286,27 @@ class Database {
         }
     }
 
+    // API-path view of this DB instance: same methods, but every doQuery()
+    // draws an independent pooled connection (_poolQuery) instead of routing
+    // through getConnection(), which returns the open block's
+    // transactionConnection while a block is processing. Federation RPC
+    // handlers that WRITE (pushvalidatorrewards) must use this view: a push
+    // landing mid-block would otherwise join the block's ACID transaction and
+    // be rolled back on a reorg/throw AFTER the API already acked it (the hub
+    // never retries), and its statements would share the block's physical
+    // connection with commitTransaction()'s release. The view also sees only
+    // COMMITTED state, so stake-source resolution never reads rows the block
+    // may still roll back. Do NOT use it for anything that opens its own
+    // transaction (e.g. the dry-run path): the override bypasses
+    // transactionConnection entirely.
+    apiView(){
+        if(!this._apiView){
+            this._apiView = Object.create(this);
+            this._apiView.doQuery = (query, args) => this._poolQuery(query, args);
+        }
+        return this._apiView;
+    }
+
     // Park a failed hub push for later retry. `payload` is the exact argument
     // object the HubClient method expects; it is serialized to JSON. The source
     // action_index is lifted out into its own column so a reorg can purge queued

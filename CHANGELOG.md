@@ -17,6 +17,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `hub_db_sync.js` exports `ensureTables()` for non-indexer mirror consumers and is now the canonical copy vendored into xchain-explorer via `bin/sync-hub-mirror-client.sh`; indexer runtime behavior is unchanged.
 
 ### Fixed
+- `order_match.js` subtracts the running remaining at precision 64 (was bcsub's default 0, which rounded a fractional remaining to an integer, prematurely completing orders with escrow stranded or filling past exhaustion).
+- All 12 remaining escrow-release sites (order/swap/coinpay expire+cancel, sweep, cross_settle) negate via `bcsub(0, amount, 64)` instead of JS unary minus, which float-truncated high-decimal amounts and desynced the release from the paired credit; a source-scan regression guards the whole family.
+- `pushvalidatorrewards` writes through the new `db.apiView()` pooled-connection view, so a hub push landing mid-block no longer joins the block's open transaction and can't be rolled back after the API acked it.
 - `tick_id` is now nullable on the five invalid-tolerant detail tables (`deposits`, `withdrawals`, `contract_stakes`, `contract_unstakes`, `contract_delegations`) via an auto migration, closing a fleet-halt wedge where an invalid DEPOSIT/WITHDRAW/STAKE/UNSTAKE/DELEGATE carrying an unresolvable TICK (empty, or a `^<id>` reference to a non-existent ticker) wrote its row with a NULL `tick_id` and threw `ER_BAD_NULL_ERROR`, hard-looping block processing (F-18 sibling; found by the flag-day transition drill).
 - `hub_db_sync.js _applyRow` upgrades mirrored `cross_chain_matches.anchor_txid` in place (first-stamp-wins), so the hub's ANCHOR back-fill re-broadcast lands instead of being dropped by INSERT IGNORE.
 - `hub_db_sync.js ensureTables()` gates each SQL file on table existence (probed inside the retry loop), so a mirror consumer restarting against an already-built schema no longer fails with ER_TABLE_EXISTS_ERROR.

@@ -1436,6 +1436,63 @@ describe('Database._poolQuery() @regression @tier1', function () {
     });
 });
 
+// apiView: federation-API writes must never join an open block transaction.
+// A pushvalidatorrewards landing mid-block used to route through doQuery ->
+// getConnection() -> the block's transactionConnection, so a reorg/throw
+// rolled back rewards the API had already acked (the hub never retries).
+describe('Database.apiView() @regression @tier1', function () {
+    it('routes doQuery to a pooled connection even while a block transaction is open', async function () {
+        const db     = makeDb();
+        const txConn = { query: sinon.stub().resolves([]), release: sinon.stub().resolves() };
+        const poolConn = { query: sinon.stub().resolves([{ id: 7 }]), release: sinon.stub().resolves() };
+        db.transactionConnection = txConn;           // simulate mid-block state
+        db.pool.getConnection.resolves(poolConn);
+
+        const rows = await db.apiView().doQuery('SELECT 1', []);
+        assert.deepStrictEqual(rows, [{ id: 7 }]);
+        assert.ok(poolConn.query.calledOnce, 'query must run on the pooled connection');
+        assert.ok(poolConn.release.calledOnce, 'pooled connection must be released');
+        assert.ok(txConn.query.notCalled, 'the open block transaction must never see API queries');
+    });
+
+    it('createValidatorReward via apiView never touches the transaction connection', async function () {
+        const db     = makeDb();
+        const txConn = { query: sinon.stub().resolves([]), release: sinon.stub().resolves() };
+        db.transactionConnection = txConn;
+        // Pooled connection answers the whole helper chain: pubkey id, status id,
+        // stake-source resolution, then accepts the INSERT.
+        const poolConn = {
+            query: sinon.stub().callsFake(async (sql) => {
+                if (/FROM index_pubkeys/i.test(sql))   return [{ id: 11 }];
+                if (/FROM index_statuses/i.test(sql))  return [{ id: 1 }];
+                if (/FROM stakes/i.test(sql))          return [{ source_id: 5 }];
+                return [];
+            }),
+            release: sinon.stub().resolves()
+        };
+        db.pool.getConnection.resolves(poolConn);
+
+        const ok = await db.apiView().createValidatorReward('aa'.repeat(32), 3, 'anchor_BTC', '1', 100);
+        assert.strictEqual(ok, true);
+        const insert = poolConn.query.getCalls().find(c => /INSERT.*validator_rewards/is.test(c.args[0]));
+        assert.ok(insert, 'reward INSERT must run on the pooled connection');
+        assert.ok(txConn.query.notCalled, 'no statement may join the open block transaction');
+    });
+
+    it('base doQuery still uses the open transaction connection (control)', async function () {
+        const db     = makeDb();
+        const txConn = { query: sinon.stub().resolves([{ id: 1 }]), release: sinon.stub().resolves() };
+        db.transactionConnection = txConn;
+        await db.doQuery('SELECT 1', []);
+        assert.ok(txConn.query.calledOnce, 'block-loop queries must keep joining the transaction');
+    });
+
+    it('returns the same cached view on repeated calls', function () {
+        const db = makeDb();
+        assert.strictEqual(db.apiView(), db.apiView());
+    });
+});
+
 // enqueueHubPush / markHubPushDelivered / recordHubPushAttempt
 describe('Database hub push queue methods @regression @tier1', function () {
     it('enqueueHubPush inserts a row with serialized payload', async function () {

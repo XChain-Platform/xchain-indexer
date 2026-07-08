@@ -847,10 +847,16 @@ async function startApi(){
                                 ' is derived on-chain from ANCHOR v4/v5; push retired (#5311)' };
             let written = 0;
             let skipped = 0;
+            // apiView(): these writes land on an independent pooled connection. A
+            // push arriving while a block is mid-processing must never join the
+            // block's open transaction: the block's reorg/error rollback would
+            // silently revert rewards this handler already acked with
+            // {status:'success'}, and the hub never retries a successful push.
+            let apiDb = indexer.indexerDb.apiView();
             for(let r of rewards){
                 if(!r || !r.pubkey || !r.amount){ skipped++; continue; }
                 try {
-                    let ok = await indexer.indexerDb.createValidatorReward(r.pubkey, round, type, r.amount, blockIdx);
+                    let ok = await apiDb.createValidatorReward(r.pubkey, round, type, r.amount, blockIdx);
                     if(ok) written++;
                     else skipped++;
                 } catch (err) {
@@ -865,7 +871,7 @@ async function startApi(){
             // or diverge the recovery ledger hash (#3963).
             if(written > 0 && /^anchor_[A-Za-z_]+$/.test(type)){
                 try {
-                    let removed = await indexer.indexerDb.reconcileAnchorRewardWinner(round, type);
+                    let removed = await apiDb.reconcileAnchorRewardWinner(round, type);
                     if(removed > 0)
                         console.log('pushvalidatorrewards: retracted ' + removed + ' superseded anchor reward(s) for ' + type + ' #' + round + ' (kept deterministic winner)');
                 } catch (err) {
