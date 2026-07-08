@@ -55,6 +55,10 @@ function makeDb() {
 function dbWithDoQuery(rows) {
     const db = makeDb();
     sinon.stub(db, 'doQuery').resolves(rows);
+    // Consensus-input reads (e.g. getLatestPrice) route through doQueryStrict,
+    // which throws instead of swallowing errors (M-17). Stub it identically so
+    // helpers that assert on returned rows exercise either path.
+    sinon.stub(db, 'doQueryStrict').resolves(rows);
     return db;
 }
 
@@ -226,6 +230,40 @@ describe('Database.doQuery() @regression @tier1', function () {
         };
         db.transactionConnection = conn;
         await assert.rejects(() => db.doQuery('SELECT 1'), /tx query error/);
+    });
+});
+
+// doQueryStrict: the consensus-input variant that ALWAYS throws on query error
+// (M-17). doQuery collapses a non-transactional error into [] - indistinguishable
+// from an empty result - which can fork the ledger on a transient DB fault; a
+// strict read lets block processing roll back and retry.
+describe('Database.doQueryStrict() @regression @tier1', function () {
+    it('returns rows on success and releases when not in a transaction', async function () {
+        const db   = makeDb();
+        const conn = {
+            query:   sinon.stub().resolves([{ id: 1 }]),
+            release: sinon.stub().resolves()
+        };
+        db.pool.getConnection.resolves(conn);
+        const results = await db.doQueryStrict('SELECT 1', []);
+        assert.deepStrictEqual(results, [{ id: 1 }]);
+        assert.ok(conn.release.calledOnce);
+    });
+
+    it('returns [] when query is null/undefined', async function () {
+        const db = makeDb();
+        assert.deepStrictEqual(await db.doQueryStrict(null), []);
+    });
+
+    it('THROWS on a query error outside a transaction (unlike doQuery, which swallows)', async function () {
+        const db   = makeDb();
+        const conn = {
+            query:   sinon.stub().rejects(new Error('strict query error')),
+            release: sinon.stub().resolves()
+        };
+        db.pool.getConnection.resolves(conn);
+        await assert.rejects(() => db.doQueryStrict('SELECT 1'), /strict query error/);
+        assert.ok(conn.release.calledOnce, 'connection must still be released on throw');
     });
 });
 

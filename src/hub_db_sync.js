@@ -127,6 +127,15 @@ class HubDbSync {
         this.priceSyncHeight = 0;
         this._priceWaiters   = [];                         // pending waitForPriceSyncHeight() resolvers
 
+        // Highest block_timestamp among finalized rounds in the local price_snapshots copy.
+        // Used by the time-keyed price barrier (waitForPriceSyncTime) that gates NON-reference
+        // chains (LTC/DOGE) at/after the NATIVE_FEE_PRICE_TIME_GATE flag-day: their heights are
+        // not comparable to the rounds' BTC reference_block anchor, so catch-up is judged by the
+        // rounds' consensus timestamps against the block's time instead (H-3). Refreshed together
+        // with priceSyncHeight after every successful price_snapshots sync.
+        this.priceSyncMaxTimestamp = 0;
+        this._priceTimeWaiters     = [];                   // pending waitForPriceSyncTime() resolvers
+
         // Highest effective_at present in the local oracle_prices copy. Used by the
         // block-processing sync barrier (waitForOracleSyncTimestamp) so an indexer does not
         // settle FIAT dispensers for a block until its local oracle mirror has caught up to
@@ -224,6 +233,7 @@ class HubDbSync {
         if (!Number.isFinite(ts) || ts <= this.streamWatermark) return;
         this.streamWatermark = ts;
         this._releasePriceWaiters();
+        this._releasePriceTimeWaiters();
         this._releaseOracleWaiters();
         this._releaseMatchWaiters();
         this._releaseCallWaiters();
@@ -478,18 +488,21 @@ class HubDbSync {
     // copy and release any barrier waiters that are now satisfied. Called after every
     // successful sync of the table (bootstrap, poll, live insert, reorg retraction).
     async _refreshPriceSyncHeight() {
-        let height = 0;
+        let height = 0, maxTs = 0;
         try {
             let rows = await this.hubDb.doQuery(
-                "SELECT MAX(reference_block) AS h FROM price_snapshots WHERE status = 'finalized'"
+                "SELECT MAX(reference_block) AS h, MAX(block_timestamp) AS ts FROM price_snapshots WHERE status = 'finalized'"
             );
-            if (rows.length > 0 && rows[0].h !== null) height = Number(rows[0].h);
+            if (rows.length > 0 && rows[0].h  != null) height = Number(rows[0].h);
+            if (rows.length > 0 && rows[0].ts != null) maxTs  = Number(rows[0].ts);
         } catch (e) {
             return;                                         // table not ready yet; leave height untouched
         }
-        this.priceSyncHeight  = height;
-        this.priceBootstrapped = true;                      // mirror read successfully at least once
+        this.priceSyncHeight       = height;
+        this.priceSyncMaxTimestamp = maxTs;
+        this.priceBootstrapped     = true;                  // mirror read successfully at least once
         this._releasePriceWaiters();
+        this._releasePriceTimeWaiters();
     }
 
     // Whether the price mirror is caught up enough to safely process a block at
@@ -566,6 +579,70 @@ class HubDbSync {
                                  ', stream watermark at ' + this.streamWatermark + ')'));
             }, ms);
             this._priceWaiters.push(waiter);
+        });
+    }
+
+    // Whether the price mirror is caught up enough to safely process a block at
+    // blockTime on a NON-reference chain (H-3 / NATIVE_FEE_PRICE_TIME_GATE).
+    // Two satisfied cases, mirroring _priceSyncSatisfied:
+    //   1. The mirror already holds a finalized round whose consensus timestamp
+    //      is at/past this block's time, so every round eligible at this block
+    //      (block_timestamp <= blockTime) is already local.
+    //   2. The hub's stream watermark has passed this block's time plus the
+    //      grace margin: the hub has sent everything it produced through that
+    //      instant, so the eligible set is FINAL. This is also what lets a
+    //      chain proceed deterministically when no rounds exist yet, while a
+    //      genuinely-behind mirror (hub unreachable → watermark frozen) defers.
+    _priceTimeSyncSatisfied(blockTime) {
+        if (!Number.isFinite(blockTime)) return true;       // nothing to gate on
+        if (this.priceBootstrapped && this.priceSyncMaxTimestamp >= blockTime) return true;
+        if (this.priceBootstrapped &&
+            this.streamWatermark >= blockTime + this.priceWatermarkGraceS) return true;
+        return false;
+    }
+
+    // Resolve any pending time-keyed waiters whose target is now covered.
+    _releasePriceTimeWaiters() {
+        if (this._priceTimeWaiters.length === 0) return;
+        let stillWaiting = [];
+        for (let w of this._priceTimeWaiters) {
+            if (this._priceTimeSyncSatisfied(w.ts)) {
+                clearTimeout(w.timer);
+                w.resolve(this.priceSyncMaxTimestamp);
+            } else {
+                stillWaiting.push(w);
+            }
+        }
+        this._priceTimeWaiters = stillWaiting;
+    }
+
+    // Block-processing sync barrier for native-coin fee validation on NON-reference
+    // chains (H-3). Resolves once the local price_snapshots copy holds every finalized
+    // round with block_timestamp <= this block's time, so getLatestPrice's time-gated
+    // selection reads the same round on every indexer of this chain. Rejects after
+    // timeoutMs so the caller can DEFER the block and retry; never validate fees
+    // against a stale local mirror. The reference chain (BTC) keeps the height-keyed
+    // waitForPriceSyncHeight barrier above.
+    waitForPriceSyncTime(blockTime, timeoutMs) {
+        blockTime = Number(blockTime);
+        if (!this.enabled || !Number.isFinite(blockTime)) return Promise.resolve(this.priceSyncMaxTimestamp);
+        if (this._priceTimeSyncSatisfied(blockTime))       return Promise.resolve(this.priceSyncMaxTimestamp);
+
+        let ms = parseInt(timeoutMs);
+        if (!Number.isFinite(ms) || ms <= 0) ms = 60000;
+        return new Promise((resolve, reject) => {
+            let waiter = { ts: blockTime, resolve: resolve, timer: null };
+            waiter.timer = setTimeout(async () => {
+                // Same self-heal as waitForPriceSyncHeight: re-read the mirror
+                // before giving up, in case a refresh was missed on a stream edge.
+                try { await this._refreshPriceSyncHeight(); } catch (e) { /* fall through to reject */ }
+                if (this._priceTimeSyncSatisfied(blockTime)) return;   // resolved by the refresh
+                this._priceTimeWaiters = this._priceTimeWaiters.filter(w => w !== waiter);
+                reject(new Error('price time-sync barrier timed out after ' + ms + 'ms waiting for block time ' +
+                                 blockTime + ' (mirror max round timestamp ' + this.priceSyncMaxTimestamp +
+                                 ', stream watermark at ' + this.streamWatermark + ')'));
+            }, ms);
+            this._priceTimeWaiters.push(waiter);
         });
     }
 

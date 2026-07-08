@@ -20,6 +20,7 @@
 
 // Load required libraries
 const config = require('./config.js');
+const protocolChanges = require('./protocol_changes.js');
 const crypto = require('crypto');
 const mathjs = require('mathjs');
 const fs     = require('fs');
@@ -1076,7 +1077,18 @@ class Utility {
                     'acknowledge an intentional single-host node.');
             }
         }
-        let opts = { blockTime: refTime, maxAgeSeconds: maxAgeSeconds };
+        // H-3 (NATIVE_FEE_PRICE_TIME_GATE): price rounds are anchored to BTC
+        // heights, so getLatestPrice's reference_block gate only pins a round
+        // deterministically on the reference chain itself. On every other chain
+        // the gate is vacuous against the local height, so at/after the
+        // flag-day selection switches to the round's consensus timestamp vs
+        // this block's time (deterministic across nodes and on replay). The
+        // block loop enforces the matching time-keyed price barrier
+        // (XChainIndexer/hub_db_sync), gated by the SAME shared predicate.
+        let network      = this.config['NETWORK'] || process.env.INDEXER_NETWORK;
+        let selectByTime = (coin !== 'BTC') &&
+            protocolChanges.isNativeFeePriceTimeGateActive(network, refTime);
+        let opts = { blockTime: refTime, maxAgeSeconds: maxAgeSeconds, selectByTime: selectByTime };
 
         let coinPriceData = await priceDb.getLatestPrice(coin + '/USD', blockIndex, opts);
         if(!coinPriceData || !coinPriceData.price)

@@ -502,8 +502,12 @@ class XChainIndexer {
                 //
                 // Price rounds are anchored to BTC block heights, so this height comparison is
                 // only meaningful for a BTC indexer; other chains' block heights are not
-                // comparable to the anchor and would never satisfy the barrier (their price
-                // freshness is addressed separately). No barrier when hub-db sync is disabled
+                // comparable to the anchor. At/after the NATIVE_FEE_PRICE_TIME_GATE flag-day
+                // (H-3), non-BTC chains gate on the time-keyed barrier instead: fee validation
+                // there selects rounds by consensus timestamp (db.getLatestPrice selectByTime),
+                // so the mirror must hold every round with block_timestamp <= this block's
+                // time. Both sides use the same shared predicate so query and barrier can
+                // never gate differently. No barrier when hub-db sync is disabled
                 // (single-host: the local hub DB is the hub itself, always current).
                 if(this.hubDbSync && this.config['COIN'] === 'BTC'){
                     try {
@@ -513,6 +517,16 @@ class XChainIndexer {
                         // retries this same block after the sleep interval rather than processing
                         // it against a stale price copy. No transaction is open yet.
                         console.warn('Deferring block ' + blockToParse + ' (price sync): ', err);
+                        this.stallReason = 'price_sync_barrier';
+                        break;
+                    }
+                } else if(this.hubDbSync &&
+                          changes.isNativeFeePriceTimeGateActive(this.config['NETWORK'], blockTime)){
+                    try {
+                        await this.hubDbSync.waitForPriceSyncTime(blockTime, this.priceSyncTimeoutMs);
+                    } catch(err){
+                        // Same defer semantics as the height barrier above.
+                        console.warn('Deferring block ' + blockToParse + ' (price time-sync): ', err);
                         this.stallReason = 'price_sync_barrier';
                         break;
                     }

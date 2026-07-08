@@ -837,6 +837,36 @@ class Database {
         return results;
     }
 
+    // Like doQuery, but a query error ALWAYS throws, transactional or not.
+    // For consensus-input reads: doQuery collapses a non-transactional query
+    // error into [], indistinguishable from a genuinely empty result, so a
+    // transient DB fault becomes "no data" on this node only and can fork the
+    // ledger (M-17: the hub-DB price read). Callers inside block processing
+    // let the throw roll back and retry the block.
+    async doQueryStrict(query, args){
+        let results = [];
+        if(!this.util.isNull(query)){
+            if(Array.isArray(args)){
+                for(let i = 0; i < args.length; i++){
+                    if(args[i] !== null && args[i] !== undefined && typeof args[i] === 'object' && !Buffer.isBuffer(args[i]))
+                        args[i] = args[i].toString();
+                }
+            }
+            let tx = this.transactionConnection != null;
+            let db = await this.getConnection();
+            try {
+                results = await db.query(query, args);
+            } catch (error){
+                this.util.logError('Error running database query :', error);
+                throw error;
+            } finally {
+                if(!tx)
+                    await db.release();
+            }
+        }
+        return results;
+    }
+
     /* 
      * General database functions
      */
@@ -11744,7 +11774,21 @@ class Database {
     // not false-trigger during historical backfill.
     async getLatestPrice(coinPair, blockHeight, opts){
         let query, args;
-        if(blockHeight !== undefined && blockHeight !== null){
+        if(opts && opts.selectByTime && Number.isFinite(Number(opts.blockTime))){
+            // H-3 (NATIVE_FEE_PRICE_TIME_GATE): on non-reference chains the
+            // reference_block gate below is vacuous (LTC/DOGE heights sit far
+            // above any BTC anchor), so selection must pin on the round's own
+            // consensus timestamp vs this block's time - the same two
+            // quantities the staleness guard compares. Deterministic across
+            // nodes (given the time-keyed price barrier) and on replay
+            // (historical block times exclude rounds finalized later).
+            query = `SELECT price, round_number, block_timestamp
+                     FROM price_snapshots
+                     WHERE coin_pair = ? AND status = 'finalized' AND price IS NOT NULL
+                       AND block_timestamp <= ?
+                     ORDER BY round_number DESC LIMIT 1`;
+            args = [coinPair, Number(opts.blockTime)];
+        } else if(blockHeight !== undefined && blockHeight !== null){
             query = `SELECT price, round_number, block_timestamp
                      FROM price_snapshots
                      WHERE coin_pair = ? AND status = 'finalized' AND price IS NOT NULL
@@ -11758,7 +11802,12 @@ class Database {
                      ORDER BY round_number DESC LIMIT 1`;
             args = [coinPair];
         }
-        let rows = await this.doQuery(query, args);
+        // Strict read (M-17): this is a consensus input. doQuery would swallow a
+        // non-transactional query error into [] - indistinguishable from "no
+        // price", so one node with a transient hub-DB fault fails the fee closed
+        // while healthy peers accept, forking the ledger. Throwing instead lets
+        // block processing roll back and retry the block.
+        let rows = await this.doQueryStrict(query, args);
         if(rows.length === 0) return null;
 
         // Staleness guard (opt-in via opts) - see method comment.

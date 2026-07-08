@@ -24,6 +24,24 @@
 // earlier of the two timestamps. consensus-params.test.js asserts the two are equal.
 const VM_BANNED_ASYNC_MAINNET_TIME = 1790812800;
 
+// H-3 flag-day: deterministic (time-gated) price_snapshots selection for
+// native-coin fee validation on non-reference chains (see the
+// NATIVE_FEE_PRICE_TIME_GATE registration below). Same coordinated 2.0.0
+// contract-era timestamp as the other flag-days; a divergent value forks the
+// fleet on the first fee-bearing LTC/DOGE action after the earlier timestamp.
+const NATIVE_FEE_PRICE_TIME_GATE_MAINNET_TIME = 1790812800;
+
+// Single shared predicate for the NATIVE_FEE_PRICE_TIME_GATE flag-day, used by
+// utility.getFeeOraclePrices (query selection) and XChainIndexer (sync
+// barrier) so the two can never gate differently. Semantics match the
+// registry entry: testnet/regtest active from genesis, mainnet at the
+// flag-day; an unknown/empty network is treated like mainnet (conservative:
+// requires the flag-day).
+function isNativeFeePriceTimeGateActive(network, blockTime){
+    if(network === 'testnet' || network === 'regtest') return true;
+    return Number.isFinite(Number(blockTime)) && Number(blockTime) >= NATIVE_FEE_PRICE_TIME_GATE_MAINNET_TIME;
+}
+
 class ProtocolChanges {
 
     constructor(indexer){
@@ -319,6 +337,24 @@ class ProtocolChanges {
         // be rebuilt fresh so no pre-activation cooldown-completion blocks remain.
         this.addChange('UNSTAKE_COOLDOWN_COMPLETION_ACTION', '2.0.0',1790812800,0,0,0,0,0);
 
+        // H-3: deterministic price_snapshots selection for native-coin fee
+        // validation on NON-reference chains. Price rounds are anchored to BTC
+        // heights, so getLatestPrice's `reference_block <= blockIndex` gate is
+        // vacuously true against LTC/DOGE heights (numerically far above any BTC
+        // anchor): the query returned whatever globally-latest round the local
+        // mirror held, so mirror lag forked the fleet AND a from-genesis replay
+        // read today's newest round instead of the round used live. At/after
+        // this flag-day, non-BTC chains select by the round's consensus
+        // timestamp instead (`block_timestamp <= block time`, the same pair of
+        // quantities the staleness guard already compares) and the block loop
+        // gates on the time-keyed price barrier. Keyed on block TIME (not
+        // height) for the same reason as DEPLOY_BASE64_CODE: no single height
+        // names one cutover across chains. Evaluation happens in
+        // utility.getFeeOraclePrices / XChainIndexer via the shared
+        // isNativeFeePriceTimeGateActive() below (one predicate, no drift);
+        // registered here so the flag-day inventory carries it.
+        this.addChange('NATIVE_FEE_PRICE_TIME_GATE', '2.0.0', NATIVE_FEE_PRICE_TIME_GATE_MAINNET_TIME,0,0,0,0,0);
+
         // NOTE: STAKE_WEIGHTED_QUORUM (WI-1) is deliberately NOT registered here.
         // Standard activations gate on the LOCAL processing block via isEnabled();
         // stake-weighted quorum must gate on the BTC-anchored `snapshot_block`
@@ -449,3 +485,6 @@ module.exports = ProtocolChanges;
 // Canonical async-gate flag-day, exported for the cross-repo byte-identity guard in
 // test/unit/consensus-params.test.js (must equal xchain-vm ASYNC_SURFACE_GATE_BLOCK_TIME).
 module.exports.VM_BANNED_ASYNC_MAINNET_TIME = VM_BANNED_ASYNC_MAINNET_TIME;
+// H-3 price-selection flag-day + its shared gate predicate (see registration).
+module.exports.NATIVE_FEE_PRICE_TIME_GATE_MAINNET_TIME = NATIVE_FEE_PRICE_TIME_GATE_MAINNET_TIME;
+module.exports.isNativeFeePriceTimeGateActive = isNativeFeePriceTimeGateActive;

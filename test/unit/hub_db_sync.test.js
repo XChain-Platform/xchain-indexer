@@ -1045,3 +1045,74 @@ describe('HubDbSync.ensureTables @regression @tier3', function () {
         );
     });
 });
+
+// H-3 / NATIVE_FEE_PRICE_TIME_GATE: time-keyed price barrier for non-reference
+// chains (LTC/DOGE). Their heights are not comparable to the rounds' BTC
+// reference_block anchor, so catch-up is judged by the rounds' consensus
+// timestamps (mirror MAX(block_timestamp)) or the hub stream watermark.
+describe('HubDbSync time-keyed price barrier (H-3) @regression @tier3', function () {
+
+    function makeTimeSync(maxReferenceBlock, maxTimestamp) {
+        const doQuery = sinon.stub();
+        doQuery.callsFake(async () => [{ h: maxReferenceBlock, ts: maxTimestamp }]);
+        const hubDb = { doQuery };
+        const sync = new HubDbSync(hubDb, { hubUrl: 'http://hub.test' });
+        return { sync, hubDb, doQuery };
+    }
+
+    it('_refreshPriceSyncHeight adopts MAX(block_timestamp) alongside the height', async function () {
+        const { sync } = makeTimeSync(123, 5000);
+        await sync._refreshPriceSyncHeight();
+        assert.strictEqual(sync.priceSyncHeight, 123);
+        assert.strictEqual(sync.priceSyncMaxTimestamp, 5000);
+    });
+
+    it('resolves immediately when the mirror already holds a round at/past the block time', async function () {
+        const { sync } = makeTimeSync(123, 5000);
+        await sync._refreshPriceSyncHeight();
+        const got = await sync.waitForPriceSyncTime(4000, 1000);
+        assert.strictEqual(got, 5000);
+    });
+
+    it('resolves once a later sync raises the mirror max timestamp', async function () {
+        const { sync, doQuery } = makeTimeSync(0, 0);
+        await sync._refreshPriceSyncHeight();
+        const pending = sync.waitForPriceSyncTime(4000, 2000);
+        doQuery.callsFake(async () => [{ h: 10, ts: 4500 }]);
+        await sync._refreshPriceSyncHeight();
+        const got = await pending;
+        assert.strictEqual(got, 4500);
+    });
+
+    it('resolves via the stream watermark when the hub has covered blockTime + grace', async function () {
+        const { sync } = makeTimeSync(0, 0);
+        await sync._refreshPriceSyncHeight();
+        const pending = sync.waitForPriceSyncTime(4000, 2000);
+        sync._advanceWatermark(4000 + sync.priceWatermarkGraceS);
+        const got = await pending;
+        assert.strictEqual(got, 0, 'watermark satisfaction does not require any local round');
+    });
+
+    it('rejects on timeout while the mirror and watermark stay behind', async function () {
+        const { sync } = makeTimeSync(0, 0);
+        await sync._refreshPriceSyncHeight();
+        await assert.rejects(
+            sync.waitForPriceSyncTime(4000, 50),
+            /price time-sync barrier timed out/
+        );
+    });
+
+    it('self-heals on timeout when the DB caught up but the in-memory timestamp was stale', async function () {
+        const { sync, doQuery } = makeTimeSync(0, 0);
+        await sync._refreshPriceSyncHeight();
+        doQuery.callsFake(async () => [{ h: 10, ts: 9000 }]);   // DB is current; memory is stale
+        const got = await sync.waitForPriceSyncTime(4000, 50);
+        assert.strictEqual(got, 9000, 'timeout path must re-read the mirror before rejecting');
+    });
+
+    it('is a no-op when sync is disabled (single-host)', async function () {
+        const sync = new HubDbSync(null, {});
+        const got = await sync.waitForPriceSyncTime(999999, 10);
+        assert.strictEqual(got, 0);
+    });
+});
