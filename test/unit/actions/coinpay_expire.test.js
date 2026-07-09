@@ -56,9 +56,23 @@ describe('Coinpay_Expire (COINPAY_EXPIRE) @regression @tier2', function () {
         };
     }
 
+    // The native match escrows the SELLER's token leg. Seller is the original (get) order
+    // (get_action_index=10), so its token side is give_amount ('50' TEST); the coin leg
+    // (get_amount, '0.001') equals the obligation's COIN_AMOUNT and must NOT be released.
+    function makeMatchAmounts(overrides = {}) {
+        return {
+            give_action_index: 11,
+            get_action_index:  10,
+            give_amount:       '50',      // token leg (what the seller escrowed)
+            get_amount:        '0.001',   // native-coin leg (== obligation COIN_AMOUNT)
+            ...overrides,
+        };
+    }
+
     function addExpireStubs(db) {
         db.getCoinpayObligationInfo = sinon.stub().resolves(makeObligation());
         db.getOrderMatchOrders      = sinon.stub().resolves({ give_action_index: 11, get_action_index: 10 });
+        db.getOrderMatchAmounts     = sinon.stub().resolves(makeMatchAmounts());
         db.getOrderInfo             = sinon.stub();
         db.getOrderInfo.withArgs(sinon.match.any, 11).resolves(makeCoinOrder());
         db.getOrderInfo.withArgs(sinon.match.any, 10).resolves(makeSellerOrder());
@@ -76,11 +90,12 @@ describe('Coinpay_Expire (COINPAY_EXPIRE) @regression @tier2', function () {
         addExpireStubs(indexer.indexerDb);
 
         actionsCtx = {
-            config:    indexer.config,
-            util:      indexer.util,
-            mapper:    indexer.mapper,
-            decoderDb: indexer.decoderDb,
-            indexerDb: indexer.indexerDb,
+            config:         indexer.config,
+            util:           indexer.util,
+            mapper:         indexer.mapper,
+            decoderDb:      indexer.decoderDb,
+            indexerDb:      indexer.indexerDb,
+            protocolChanges: indexer.protocolChanges,   // isEnabled -> true (regtest genesis) by default
         };
         handler = new Coinpay_Expire(actionsCtx);
         indexer.util.resetLists();
@@ -162,6 +177,50 @@ describe('Coinpay_Expire (COINPAY_EXPIRE) @regression @tier2', function () {
             await handler.parse(null, data, null);
             const addresses = indexer.util.getAddressesList();
             assert.ok(Object.keys(addresses).includes(SELLER), 'seller should be tracked for balance update');
+        });
+
+    });
+
+    describe('escrow-release amount (CP-EXPIRE-1)', function () {
+
+        it('releases the SELLER token leg (give/get amount), NOT the obligation COIN_AMOUNT', async function () {
+            // Seller escrowed 50 TEST; obligation COIN_AMOUNT is 0.001 (the buyer coin leg).
+            const data = createBaseData({ ACTION: 'COINPAY_EXPIRE', ACTION_INDEX: 42 });
+            await handler.parse(null, data, null);
+
+            const escrowCall = indexer.indexerDb.createEscrow.getCalls().find(c => c.args[1] === 'TEST');
+            const creditCall = indexer.indexerDb.createCredit.getCalls().find(c => c.args[1] === 'TEST');
+            assert.ok(escrowCall, 'an escrow adjustment for the seller token must be written');
+            assert.ok(creditCall, 'a credit for the seller token must be written');
+            // createEscrow(action_index, tick, amount, address); credit mirrors it positive.
+            assert.strictEqual(Number(creditCall.args[2]), 50, 'credit must equal the escrowed token leg, not COIN_AMOUNT');
+            assert.strictEqual(Number(escrowCall.args[2]), -50, 'escrow debit must mirror the token leg');
+            // Guard against the original bug: never release the native-coin amount as a token.
+            assert.notStrictEqual(Number(creditCall.args[2]), 0.001, 'must not release COIN_AMOUNT as a token quantity');
+        });
+
+        it('routes the token leg (not COIN_AMOUNT) to the sweep destination in cancelling state', async function () {
+            const cancellingOrder = makeSellerOrder({ ORDER_STATUS: 'cancelling', GIVE_REMAINING: '0' });
+            indexer.indexerDb.getOrderInfo.withArgs(sinon.match.any, 10).resolves(cancellingOrder);
+            indexer.indexerDb.getOrderSweepDestination.resolves(SWEEP);
+
+            const data = createBaseData({ ACTION: 'COINPAY_EXPIRE', ACTION_INDEX: 42 });
+            await handler.parse(null, data, null);
+
+            const creditCall = indexer.indexerDb.createCredit.getCalls().find(c => c.args[1] === 'TEST' && c.args[3] === SWEEP);
+            assert.ok(creditCall, 'token leg must be credited to the sweep destination');
+            assert.strictEqual(Number(creditCall.args[2]), 50, 'sweep credit must be the token leg, not COIN_AMOUNT');
+        });
+
+        it('LEGACY (flag OFF): preserves the pre-flag-day COIN_AMOUNT release for replay parity', async function () {
+            actionsCtx.protocolChanges.isEnabled = sinon.stub().resolves(false);
+
+            const data = createBaseData({ ACTION: 'COINPAY_EXPIRE', ACTION_INDEX: 42 });
+            await handler.parse(null, data, null);
+
+            const creditCall = indexer.indexerDb.createCredit.getCalls().find(c => c.args[1] === 'TEST');
+            assert.ok(creditCall, 'legacy path still writes a credit');
+            assert.strictEqual(Number(creditCall.args[2]), 0.001, 'below the flag-day the legacy COIN_AMOUNT release is preserved');
         });
 
     });

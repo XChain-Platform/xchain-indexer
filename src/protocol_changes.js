@@ -343,6 +343,30 @@ class ProtocolChanges {
         // (2026-10-01 00:00:00 UTC); testnet/regtest activate at genesis.
         this.addChange('SLEEP_RESPECTS_LOCK_SLEEP', '2.0.0',1790812800,0,0,0,0,0);
 
+        // COINPAY_EXPIRE escrow-release amount correctness. A native-coin ORDER_MATCH
+        // escrows the SELLER's token leg (order_matches give/get amount) and records a
+        // coinpay_obligation whose COIN_AMOUNT is the BUYER's native-coin leg (a different
+        // asset and quantity). The fulfill path (coinpay.js) correctly releases the token
+        // leg (getOrderMatchAmounts) from escrow to the buyer. Before this activation the
+        // EXPIRE path released obligation.COIN_AMOUNT of the seller's TOKEN back to the
+        // seller instead: it credited a token quantity equal to the native-coin amount,
+        // over- or under-releasing the seller's escrow by (COIN_AMOUNT - tokenAmount). An
+        // over-release is a net-zero (+credit / -escrow) phantom mint out of the global
+        // escrow pool that evades the per-block supply sanity check (same class as OM-1);
+        // an under-release strands tokens in escrow. After activation the EXPIRE path
+        // releases the same token leg the fulfill path does. Gated because it CHANGES a
+        // consensus-visible ledger movement (the credited/escrow amounts, hashed into
+        // balances_root + ledger_hash): an ungated flip forks a heterogeneous fleet on the
+        // first native-coin coinpay expiry and diverges a from-genesis replay from the
+        // committed ledger. Keyed on block_TIME (not block_index), mirroring the other
+        // multi-chain gates: native-coin DEX pairs settle on BTC, LTC and DOGE whose
+        // heights diverge by millions of blocks, so no single shared height names one
+        // cutover across all three chains, but a single timestamp does. Same coordinated
+        // contract-era flag-day as the other tightening fixes in this window (2026-10-01
+        // 00:00:00 UTC); testnet/regtest activate at genesis (all zeros) so the correct
+        // release is in force from block 0 there and in the unit/e2e suites.
+        this.addChange('COINPAY_EXPIRE_TOKEN_AMOUNT', '2.0.0',1790812800,0,0,0,0,0);
+
         // UNSTAKE cooldown-completion action attribution. When a capability/contract
         // UNSTAKE cooldown elapses, processCooldownCompletions credits the returned
         // tokens back to the source. Before this activation the credit reused the

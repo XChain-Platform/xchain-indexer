@@ -73,6 +73,25 @@ class Coinpay_Expire {
             sellerOrder = giveOrderInfo;
         }
 
+        // Determine the SELLER's escrowed token leg for this match. The obligation's
+        // COIN_AMOUNT is the BUYER's native-coin leg (a different asset), so releasing
+        // it as a token quantity over/under-releases the seller's escrow. Derive the
+        // token leg from order_matches exactly as the fulfill path (coinpay.js) does:
+        // if the seller is the original (get) order the token side is give_amount, else
+        // it is get_amount. Gated by COINPAY_EXPIRE_TOKEN_AMOUNT so the corrected release
+        // switches over at a coordinated flag-day; below it the legacy COIN_AMOUNT is
+        // preserved byte-for-byte for from-genesis replay and heterogeneous-fleet safety.
+        let useTokenAmount = await this.actions.protocolChanges.isEnabled('COINPAY_EXPIRE_TOKEN_AMOUNT', data['BLOCK_INDEX']);
+        let releaseAmount  = obligationInfo['COIN_AMOUNT'];
+        if(useTokenAmount){
+            let matchQuery = await this.indexerDb.getOrderMatchAmounts(obligationInfo['ACTION_INDEX']);
+            if(matchQuery){
+                releaseAmount = (sellerOrder['ACTION_INDEX'] == matchQuery.get_action_index)
+                    ? matchQuery.give_amount
+                    : matchQuery.get_amount;
+            }
+        }
+
         // Add addresses to the addresses list
         this.util.addAddressTicker(sellerOrder['SOURCE'], sellerOrder['GIVE_TICK']);
 
@@ -118,8 +137,8 @@ class Coinpay_Expire {
             let refundTo = sweepDest || sellerOrder['SOURCE'];
             if(sweepDest) this.util.addAddressTicker(sweepDest, sellerOrder['GIVE_TICK']);
             // BigNumber-space negation, not JS unary minus (float truncation, #3736).
-            escrows.push([sellerOrder['GIVE_TICK'], this.util.bcsub(0, obligationInfo['COIN_AMOUNT'], 64), sellerOrder['SOURCE']]);
-            credits.push([sellerOrder['GIVE_TICK'],  obligationInfo['COIN_AMOUNT'], refundTo]);
+            escrows.push([sellerOrder['GIVE_TICK'], this.util.bcsub(0, releaseAmount, 64), sellerOrder['SOURCE']]);
+            credits.push([sellerOrder['GIVE_TICK'],  releaseAmount, refundTo]);
         }
 
         // Create record in the coinpay_expires table
