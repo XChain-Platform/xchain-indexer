@@ -50,10 +50,13 @@ describe('Utility @regression @tier1', function () {
         const CAP = require('../../src/actions/xcall.js').XCALL_MAX_CALLS_PER_BLOCK;
         let actions, db, processAction, processResult;
 
+        let resultSuppressesExpiry;
         beforeEach(function () {
             processAction = sinon.stub().resolves();
             processResult = sinon.stub().resolves();
-            actions = { processAction, actionXcall: { processResult } };
+            // Default: a present result row is verified-deliverable (honest-majority path).
+            resultSuppressesExpiry = sinon.stub().resolves(true);
+            actions = { processAction, actionXcall: { processResult, resultSuppressesExpiry } };
             db = {
                 config: { COIN, NETWORK },
                 getEffectiveUndispatchedCalls:      sinon.stub().resolves([]),
@@ -124,9 +127,28 @@ describe('Utility @regression @tier1', function () {
             many.push({ call_id: OVER });                       // CAP+1th: deliverable but past the delivery slice
             db.getEffectiveUnprocessedCallResults.resolves(many);
             db.getExpiredCrossChainCallRequests.resolves([{ call_id: OVER }]);
+            resultSuppressesExpiry.resolves(true);              // the result verifies (quorum-signed)
             await util.processCrossChainCalls(actions, db, 100, 1700000000);
             const expiryCalls = processAction.getCalls().filter(c => c.args[0] === 'XCALL');
             assert.strictEqual(expiryCalls.length, 0, 'no expiry injected when a deliverable result exists');
+            // The suppression decision is made against the actual result row, not mere presence.
+            assert.ok(resultSuppressesExpiry.calledWithMatch({ call_id: OVER }));
+        });
+
+        it('DOES expire when the only result row is finalized-but-unverifiable (Byzantine mirror cannot deadlock the callback)', async function () {
+            // XRES-1: a hub mirror can hold a phase=result/status=finalized row with invalid
+            // signatures. processResult rejects it every block and never records a callback, so it
+            // is never pruned from the effective set. If mere presence suppressed expiry the request
+            // would deadlock forever (and nodes mirroring different hubs would diverge on the v2
+            // action). Expiry MUST still fire: suppression keys on verified deliverability, not row
+            // presence.
+            const BAD = 'f'.repeat(64);
+            db.getEffectiveUnprocessedCallResults.resolves([{ call_id: BAD }]);
+            db.getExpiredCrossChainCallRequests.resolves([{ call_id: BAD }]);
+            resultSuppressesExpiry.resolves(false);            // sigs do not verify against the snapshot
+            await util.processCrossChainCalls(actions, db, 100, 1700000000);
+            assert.ok(processAction.calledWith('XCALL', [2, BAD]),
+                'expiry must fire when the present result row does not verify');
         });
 
         it('still expires a past-deadline request that has no effective result', async function () {

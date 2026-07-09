@@ -288,6 +288,68 @@ class Xcall {
         return raw;
     }
 
+    // Verify the cross_chain quorum over a mirrored result row's canonical.
+    // Stake-weighted (source-deduped 3·Σ>2·S) at/above STAKE_WEIGHTED_QUORUM
+    // (BTC snapshot_block + network), else legacy 2f+1 signer count. Returns
+    //   { synced:false }                        - capability snapshot not mirrored yet (defer)
+    //   { synced:true, quorumMet, N, validSigners } - snapshot present; quorum verdict
+    // Shared by processResult (delivery) and resultSuppressesExpiry (the deadline
+    // gate) so the two can never drift on what counts as a deliverable result.
+    async _verifyResultQuorum(r){
+        let snapshotBlock = Number(r.snapshot_block);
+        let weighted = swq.isStakeWeightedQuorumActive(snapshotBlock, r.network);
+        let validators = weighted
+            ? await this.indexerDb.getStakeWeightsByCapability('cross_chain', snapshotBlock)
+            : await this.indexerDb.getValidatorsByCapability('cross_chain', snapshotBlock);
+        let N = (validators && validators.length) ? validators.length : 0;
+        if(N === 0) return { synced: false, quorumMet: false, N: 0, validSigners: [], weighted };
+
+        let sigs;
+        try { sigs = JSON.parse(r.validator_signatures || '[]'); }
+        catch(_) { sigs = []; }
+
+        let canonical = this._resultCanonical(r);
+        let snapPubkeys = new Set(validators.map(v => String(v.pubkey).toLowerCase()));
+        let validSigners = [], seen = new Set();
+        for(let s of sigs){
+            let pk  = String(s.pubkey || '').toLowerCase();
+            let sig = String(s.sig || '').toLowerCase();
+            if(seen.has(pk)) continue;
+            seen.add(pk);
+            if(!/^[0-9a-f]{64}$/.test(pk) || !/^[0-9a-f]{128}$/.test(sig)) continue;
+            if(!snapPubkeys.has(pk)) continue;
+            if(!ed25519.verify(canonical, sig, pk)) continue;
+            validSigners.push(pk);
+        }
+        let quorumMet = weighted
+            ? swq.meetsStakeThreshold(validators, validSigners)
+            : (validSigners.length >= ((N <= 1) ? 1 : Math.max(2 * Math.floor((N - 1) / 3) + 1, Math.ceil((N + 1) / 2))));
+        return { synced: true, quorumMet, N, validSigners, weighted };
+    }
+
+    // Does a mirrored, effective result row for `call_id` legitimately defer or
+    // satisfy the request (and therefore MUST suppress deadline expiry)? True when
+    // either the capability snapshot is not mirrored yet (defer, as processResult
+    // does) OR the 2f+1 quorum verifies. A finalized-but-unverifiable result row
+    // (Byzantine/buggy hub mirror) returns FALSE, so deadline expiry still fires:
+    // otherwise processResult rejects that row every block (never pruning it, since
+    // no callback is recorded) while the expiry gate saw only its presence and
+    // suppressed expiry forever - deadlocking the requester's callback and diverging
+    // indexers that mirror different hubs on whether the v2 expiry action exists.
+    // Mirrors processResult's exact delivery gates (network, local request, routing,
+    // quorum) so the two paths agree byte-for-byte on deliverability.
+    async resultSuppressesExpiry(r){
+        if(String(r.network || '') !== String(this.config['NETWORK'] || '')) return false;
+        let request = await this.indexerDb.getCrossChainCallRequestById(String(r.call_id || '').toLowerCase());
+        if(!request) return false;
+        if(String(request.target_chain) !== String(r.target_chain)) return false;
+        let q = await this._verifyResultQuorum(r);
+        // Snapshot not synced yet → the result will deliver once mirrored; keep the
+        // request alive (defer expiry), matching processResult's deferral. Otherwise
+        // suppress only on a verified quorum.
+        return q.synced ? q.quorumMet : true;
+    }
+
     // Process one mirrored, effective result row for a request THIS chain originated
     // (driven by utility.processCrossChainCalls in (snapshot_block, call_id) order).
     // Verifies the 2f+1 signatures, applies the exactly-once interlock against the
@@ -312,42 +374,15 @@ class Xcall {
         }
 
         // ── Verify the cross_chain quorum over the result canonical ──────────────
-        // Stake-weighted (source-deduped 3·Σ>2·S) at/above STAKE_WEIGHTED_QUORUM
-        // (BTC snapshot_block + network), else legacy 2f+1 signer count.
-        let snapshotBlock = Number(r.snapshot_block);
-        let weighted = swq.isStakeWeightedQuorumActive(snapshotBlock, r.network);
-        let validators = weighted
-            ? await this.indexerDb.getStakeWeightsByCapability('cross_chain', snapshotBlock)
-            : await this.indexerDb.getValidatorsByCapability('cross_chain', snapshotBlock);
-        let N = (validators && validators.length) ? validators.length : 0;
-        if(N === 0){
+        let q = await this._verifyResultQuorum(r);
+        if(!q.synced){
             // Snapshot not mirrored yet; defer (the barriers front-stop this; see xexec.js).
             console.log("\t XCALL result : id=" + callId.substring(0,16) + '... : capability snapshot not synced, deferring');
             return;
         }
-
-        let sigs;
-        try { sigs = JSON.parse(r.validator_signatures || '[]'); }
-        catch(_) { sigs = []; }
-
-        let canonical = this._resultCanonical(r);
-        let snapPubkeys = new Set(validators.map(v => String(v.pubkey).toLowerCase()));
-        let validSigners = [], seen = new Set();
-        for(let s of sigs){
-            let pk  = String(s.pubkey || '').toLowerCase();
-            let sig = String(s.sig || '').toLowerCase();
-            if(seen.has(pk)) continue;
-            seen.add(pk);
-            if(!/^[0-9a-f]{64}$/.test(pk) || !/^[0-9a-f]{128}$/.test(sig)) continue;
-            if(!snapPubkeys.has(pk)) continue;
-            if(!ed25519.verify(canonical, sig, pk)) continue;
-            validSigners.push(pk);
-        }
-        let quorumMet = weighted
-            ? swq.meetsStakeThreshold(validators, validSigners)
-            : (validSigners.length >= ((N <= 1) ? 1 : Math.max(2 * Math.floor((N - 1) / 3) + 1, Math.ceil((N + 1) / 2))));
-        if(!quorumMet){
-            console.warn("\t XCALL result : id=" + callId.substring(0,16) + '... : insufficient ' + (weighted ? 'signer stake' : 'valid signatures (' + validSigners.length + '/' + N + ')') + ', skipping');
+        let N = q.N, validSigners = q.validSigners;
+        if(!q.quorumMet){
+            console.warn("\t XCALL result : id=" + callId.substring(0,16) + '... : insufficient ' + (q.weighted ? 'signer stake' : 'valid signatures (' + validSigners.length + '/' + N + ')') + ', skipping');
             return;
         }
 

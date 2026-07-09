@@ -1819,15 +1819,26 @@ class Utility {
         // 'expired' and the carried-over result later records skipped:expired, delivering the wrong
         // terminal status. Skip expiry for any request whose result is deliverable now (the full
         // effective set, not just the capped slice delivered this block).
-        let deliverableIds = new Set(allResults.map(r => r.call_id));
+        //
+        // Presence of a finalized result row is NOT sufficient: the hub mirror is untrusted (every
+        // other pass re-verifies its 2f+1 quorum). A Byzantine/buggy mirror can plant a finalized
+        // result row with invalid signatures - processResult rejects it every block (never pruning
+        // it, since no callback is recorded), so if mere presence suppressed expiry the request
+        // would deadlock forever and indexers mirroring different hubs would diverge on whether the
+        // v2 expiry action exists. So suppress expiry only when the result actually verifies (or the
+        // capability snapshot is not mirrored yet, i.e. it will still deliver) - resultSuppressesExpiry.
+        let resultsByCallId = new Map(allResults.map(r => [r.call_id, r]));
         // Cap the expiry pass at XCALL_MAX_CALLS_PER_BLOCK, same as dispatch/result: each expiry
         // synthesizes an XCALL v2 and runs a VM callback isolate, so an uncapped burst of
         // deadline-aligned requests would exceed BLOCK_PROCESS_TIMEOUT and deterministically wedge
         // every indexer on the chain. Remainder carries forward (getExpiredCrossChainCallRequests
-        // orders by deadline_block, action_index, so the cutoff is node-invariant).
+        // orders by deadline_block, action_index, so the cutoff is node-invariant). The extra
+        // verification below is bounded by this same cap (<=25 quorum checks/block).
         let expired = await db.getExpiredCrossChainCallRequests(block_index, cap);
         for(let info of expired){
-            if(deliverableIds.has(info.call_id)) continue; // effective result wins over expiry at this block
+            let pendingResult = resultsByCallId.get(info.call_id);
+            // effective + VERIFIED result wins over expiry at this block
+            if(pendingResult && await actions.actionXcall.resultSuppressesExpiry(pendingResult)) continue;
             let data = {};
             data['ACTION']       = 'XCALL';
             data['FORMAT']       = 2;
