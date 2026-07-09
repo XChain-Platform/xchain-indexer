@@ -683,12 +683,21 @@ async function startApi(){
                 // offers (Phase B, price-time partial fills). Each is tagged with `kind`.
                 let swaps  = await indexer.indexerDb.getOpenCrossChainSwaps(max, after_action_index, to_coin);
                 let orders = await indexer.indexerDb.getOpenCrossChainOrders(max, after_action_index, to_coin);
+                // Additive truncation marker (XCC-2): each query caps at `max` of its kind and
+                // returns the OLDEST by action_index, so a full page silently drops newer offers.
+                // `concat` returns a plain array (custom props are lost), so OR the two flags here
+                // before merging and surface it so the hub can alarm/paginate rather than match
+                // against a partial cross-chain book. null before the field existed = not truncated.
+                let truncated = (swaps.truncated === true) || (orders.truncated === true);
+                if(truncated)
+                    console.warn('getopencrosschainorders hit the per-kind cap of ' + max + ' at block ' + latest + ' - the open cross-chain book is truncated (newer offers dropped); the hub should raise its limit or page.');
                 let merged = swaps.concat(orders);
                 for(let o of merged) o.push_generation = pushGeneration;
                 return {
                     latest_block_index: latest,
                     network:            indexer.config['NETWORK'],
                     count:              merged.length,
+                    truncated:          truncated,
                     orders:             merged
                 };
             } catch (err) {

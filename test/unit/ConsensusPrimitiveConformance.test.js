@@ -41,7 +41,15 @@ const CANON_PRESENT = fs.existsSync(CANON_DIR);
 
 // Every copy now shares ONE signature: meetsStakeThreshold(validators, signers),
 // and every copy exports totalStake(). No per-repo adapter remains.
-function meets(c){ return swq.meetsStakeThreshold(c.validators, c.signers); }
+// A vector may carry `truncated: true` to exercise the fail-closed-on-truncation
+// guard; JSON can't attach the `truncated` property to an array literal, so apply it
+// onto a copy of the validators array here (the real set-building query sets it the
+// same way on its returned array).
+function vecValidators(c){
+    if(c && c.truncated){ let v = (c.validators || []).slice(); v.truncated = true; return v; }
+    return c.validators;
+}
+function meets(c){ return swq.meetsStakeThreshold(vecValidators(c), c.signers); }
 
 describe('consensus-primitive conformance: canonical vectors @regression', function(){
     before(function(){ if(!quorumVec || !equivVec) this.skip(); });
@@ -55,8 +63,8 @@ describe('consensus-primitive conformance: canonical vectors @regression', funct
     describe('stake_weighted_quorum.totalStake', function(){
         (quorumVec ? quorumVec.totalStake : []).forEach(function(c){
             it(c.name, function(){
-                if(c.throws) assert.throws(() => swq.totalStake(c.validators));
-                else assert.strictEqual(String(swq.totalStake(c.validators)), c.expected);
+                if(c.throws) assert.throws(() => swq.totalStake(vecValidators(c)));
+                else assert.strictEqual(String(swq.totalStake(vecValidators(c))), c.expected);
             });
         });
     });

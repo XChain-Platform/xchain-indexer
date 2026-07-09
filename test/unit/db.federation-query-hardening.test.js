@@ -142,3 +142,36 @@ describe('getCapabilitySnapshotValidators() NULL-amount guard @regression @tier1
         assert.strictEqual(wts[0].weight, '0', 'sibling already guards weight');
     });
 });
+
+describe('getOpenCrossChain{Swaps,Orders}() truncation marker @regression @tier1', function () {
+    // A full page (rows === limit) means newer open cross-chain offers were dropped;
+    // the marker lets the hub alarm rather than match against a partial book (XCC-2).
+    function swapRow(idx) {
+        return { action_index: idx, give_coin: 'BTC', give_tick: 'AAA', give_amount: '1', give_ownership: 0,
+                 get_coin: 'LTC', get_tick: null, get_amount: '1', get_ownership: 0, get_address: 'x',
+                 source: 's', expiration: 0, allow_list: null, block_list: null, payout_legs: null, block_index: 1 };
+    }
+
+    it('flags truncated=true on a full swap page', async function () {
+        const db = makeDb();
+        sinon.stub(db, 'doQuery').resolves([swapRow(1), swapRow(2)]);
+        const out = await db.getOpenCrossChainSwaps(2, null, null);
+        assert.strictEqual(out.truncated, true);
+    });
+
+    it('flags truncated=false on a short swap page', async function () {
+        const db = makeDb();
+        sinon.stub(db, 'doQuery').resolves([swapRow(1)]);
+        const out = await db.getOpenCrossChainSwaps(2, null, null);
+        assert.strictEqual(out.truncated, false);
+    });
+
+    it('flags truncated on a full order page (getOrderAmountsRemaining stubbed)', async function () {
+        const db = makeDb();
+        sinon.stub(db, 'doQuery').resolves([swapRow(1), swapRow(2)]);
+        sinon.stub(db, 'getOrderAmountsRemaining').resolves(['1', '1']);
+        const out = await db.getOpenCrossChainOrders(2, null, null);
+        assert.strictEqual(out.truncated, true);
+        assert.strictEqual(out.length, 2);
+    });
+});

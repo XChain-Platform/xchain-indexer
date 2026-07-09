@@ -63,6 +63,12 @@ function bcnum(v){
 
 // Total active snapshot stake S = sum of weight over DISTINCT sources.
 function totalStake(validators){
+    // A TRUNCATED snapshot (set-building query overflowed its cap and marked the
+    // returned array `truncated`) has silently-dropped sources, so its sum is
+    // meaningless; hard error, mirroring the blank-source / negative-weight guards
+    // below and meetsStakeThreshold's fail-closed truncation check.
+    if(validators && validators.truncated === true)
+        throw new Error('stake_weighted_quorum.totalStake: truncated snapshot cannot be summed');
     let weightBySource = new Map();
     for(let v of (validators || [])){
         // Hard error on a blank/missing source. See meetsStakeThreshold: a blank source
@@ -101,6 +107,16 @@ function totalStake(validators){
 // EMPTY signer set (0 > negative). A snapshot that cannot express a meaningful
 // two-thirds threshold must never finalize.
 function meetsStakeThreshold(validators, signerPubkeys){
+    // Fail CLOSED on a TRUNCATED snapshot. The set-building query
+    // (getStakeWeightsByCapability) caps its result and marks `truncated` on the
+    // returned array when the qualifying set overflowed the cap. A truncated snapshot
+    // has silently-dropped sources, so S is under-counted and the strict 2/3 bar could
+    // finalize a round a full snapshot would reject - a stake-eviction forge (one source
+    // spamming keys to evict honest sources), or organic silent drift once the federation
+    // outgrows the cap. A snapshot that cannot be fully materialised must never finalize;
+    // the operators raise the cap (coordinated) instead. Plain-array callers (no property)
+    // are unaffected. CONSENSUS-CRITICAL: keep byte-identical across all vendored copies.
+    if(validators && validators.truncated === true) return false;
     let weightBySource = new Map();   // source -> weight (first wins; all equal per source)
     let pubkeyToSource = new Map();   // pubkey(lower) -> source
     for(let v of (validators || [])){

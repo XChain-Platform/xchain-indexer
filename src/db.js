@@ -6398,7 +6398,7 @@ class Database {
                     LIMIT ?`;
         args.push(Number(limit));
         let results = await this.doQuery(query, args);
-        return results.map(row => ({
+        let mapped = results.map(row => ({
             kind:           'swap',
             action_index:   Number(row.action_index),
             give_coin:      row.give_coin,
@@ -6421,6 +6421,12 @@ class Database {
             payout_legs:    row.payout_legs || null,
             block_index:    Number(row.block_index)
         }));
+        // Surface truncation the same way the validator-set RPCs do: a full page means
+        // the OLDEST `limit` open cross-chain swaps of this chain were returned and any
+        // newer ones are absent, so the hub can alarm/paginate instead of silently
+        // matching against a partial book (XCC-2). The RPC layer ORs swaps+orders.
+        mapped.truncated = results.length >= Number(limit);
+        return mapped;
     }
 
     // Open cross-chain ORDER offers (get on a different COIN network), for the hub's unified
@@ -6501,6 +6507,9 @@ class Database {
                 block_index:    Number(row.block_index)
             });
         }
+        // Truncation marker (XCC-2), mirroring getOpenCrossChainSwaps + the validator RPCs:
+        // a full page means newer open cross-chain orders were dropped from the book.
+        orders.truncated = results.length >= Number(limit);
         return orders;
     }
 
