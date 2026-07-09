@@ -9440,6 +9440,21 @@ class Database {
         await this._poolQuery(query, [pushType, actionIndex, JSON.stringify(payload)]);
     }
 
+    // Like enqueueHubPush, but routes through the OPEN transaction connection (doQuery, not
+    // _poolQuery) so the row commits atomically with the caller's transaction, and returns the new
+    // row id. Used by rollback.js to write-ahead its hub retractions inside the rollback transaction
+    // (HUB-RETRACT-2): the durable row survives a crash between commit and live delivery, and the id
+    // lets the caller markHubPushDelivered() on a successful immediate delivery. MUST be called with a
+    // transaction open (getConnection() then returns transactionConnection); otherwise it would land
+    // on a pooled connection and not be atomic with the rollback.
+    async enqueueHubPushTx(pushType, payload){
+        let actionIndex = (payload && payload.action_index != null) ? payload.action_index : 0;
+        let query = `INSERT INTO pending_hub_pushes (push_type, action_index, payload, status, attempts, created_at)
+                     VALUES (?, ?, ?, 'pending', 0, NOW())`;
+        let res = await this.doQuery(query, [pushType, actionIndex, JSON.stringify(payload)]);
+        return (res && res.insertId != null) ? Number(res.insertId) : null;
+    }
+
     // Fetch the oldest pending rows for the poller to consider (it applies the
     // per-row backoff gate in JS). `failed` rows are excluded - they are
     // terminal.

@@ -264,42 +264,46 @@ describe('Rollback @regression @tier3', function () {
         assert.ok(idx.indexerDb.commitTransaction.calledOnce, 'local rollback should still commit');
     });
 
-    it('parks a durable price_retraction on the queue when the hub retraction RPC fails', async function () {
+    it('leaves the durable write-ahead price_retraction row when the live RPC fails (HUB-RETRACT-2)', async function () {
         const hubClient = { retractPriceRange: sinon.stub().rejects(new Error('hub unreachable')), retractXcallRange: sinon.stub().resolves(), retractMatchRange: sinon.stub().resolves() };
         const idx = createMockIndexer({ hubClient });
         idx.protocolChanges = { isDefined: sinon.stub().returns(true), isEnabled: sinon.stub().resolves(true) };
-        idx.indexerDb.enqueueHubPush = sinon.stub().resolves();
+        // Distinct ids per staged row so we can tell which was delivered.
+        let n = 0; idx.indexerDb.enqueueHubPushTx = sinon.stub().callsFake(async () => ++n);
+        idx.indexerDb.markHubPushDelivered = sinon.stub().resolves();
         const rb = new Rollback(idx);
         idx.util.resetLists();
         idx.indexerDb.doQuery.onFirstCall().resolves([{ action_index: 50 }]);
         idx.indexerDb.doQuery.resolves([]);
         await assert.doesNotReject(() => rb.rollback(100));
-        assert.ok(idx.indexerDb.enqueueHubPush.calledOnce, 'failed retraction should park on the durable queue');
-        const [pushType, payload] = idx.indexerDb.enqueueHubPush.firstCall.args;
-        assert.strictEqual(pushType, 'price_retraction');
-        assert.strictEqual(payload.coin, rb.config['COIN']);
-        assert.strictEqual(payload.action_index, 50);
+        // The retraction was write-ahead-staged (durable) as a closed-range price_retraction row.
+        const priceStage = idx.indexerDb.enqueueHubPushTx.getCalls().find(c => c.args[0] === 'price_retraction');
+        assert.ok(priceStage, 'a durable price_retraction row must be write-ahead-staged');
+        assert.strictEqual(priceStage.args[1].coin, rb.config['COIN']);
+        assert.strictEqual(priceStage.args[1].action_index, 50);
+        // Its row (id 1) must NOT be marked delivered, since the live RPC failed - it stays for the queue.
+        assert.ok(!idx.indexerDb.markHubPushDelivered.getCalls().some(c => c.args[0] === 1),
+            'a failed live delivery must leave the durable row for HubPushQueue');
     });
 
     // ─── Closed-range deferred retraction + quiesce (items 5296/5297) ──
 
-    it('parks the deferred retraction with last_action_index = MAX of the rolled-back range', async function () {
+    it('write-aheads the durable retraction with last_action_index = MAX of the rolled-back range (closed range)', async function () {
         const hubClient = { retractPriceRange: sinon.stub().rejects(new Error('hub unreachable')), retractXcallRange: sinon.stub().resolves(), retractMatchRange: sinon.stub().resolves() };
         const idx = createMockIndexer({ hubClient });
         idx.protocolChanges = { isDefined: sinon.stub().returns(true), isEnabled: sinon.stub().resolves(true) };
-        idx.indexerDb.enqueueHubPush = sinon.stub().resolves();
         const rb = new Rollback(idx);
         idx.util.resetLists();
         idx.indexerDb.doQuery.onFirstCall().resolves([{ action_index: 50 }]);   // firstActionIndex
         idx.indexerDb.doQuery.onSecondCall().resolves([{ last_action_index: 75 }]); // MAX(action_index)
         idx.indexerDb.doQuery.resolves([]);
         await assert.doesNotReject(() => rb.rollback(100));
-        const payload = idx.indexerDb.enqueueHubPush.firstCall.args[1];
+        const payload = idx.indexerDb.enqueueHubPushTx.getCalls().find(c => c.args[0] === 'price_retraction').args[1];
         assert.strictEqual(payload.action_index, 50);
-        assert.strictEqual(payload.last_action_index, 75, 'deferred retraction must carry the closed-range ceiling');
-        // The deferred payload also carries the pre-bump generation fence (item 5308); the mock bump
+        assert.strictEqual(payload.last_action_index, 75, 'durable write-ahead retraction must carry the closed-range ceiling');
+        // The durable payload also carries the pre-bump generation fence (item 5308); the mock bump
         // returns 1, so the pre-bump value is 0.
-        assert.strictEqual(payload.retraction_generation, 0, 'deferred retraction must carry the generation fence');
+        assert.strictEqual(payload.retraction_generation, 0, 'durable write-ahead retraction must carry the generation fence');
     });
 
     it('keeps the LIVE retraction open-ended (no ceiling) so it never under-deletes the orphaned range', async function () {
@@ -695,25 +699,68 @@ describe('Rollback @regression @tier3', function () {
         assert.ok(idx.indexerDb.beginTransaction.notCalled, 'no transaction (hence no delete) may begin after a failed range read');
     });
 
-    // ─── HUB-RETRACT-6: a failed push-generation bump aborts the rollback (fail closed) ─────
+    // ─── HUB-RETRACT-6 / HUB-RETRACT-1: a failed push-generation bump rolls the transaction back ─────
     // With the bump failed there is no fence value that can separate a re-published row (at a
     // recycled action_index) from an orphan, so degrading to an un-fenced retraction would wipe
-    // canonical rows. The bump runs before beginTransaction, so throwing aborts with zero DB writes;
-    // the driver retries the reorg idempotently.
-    it('aborts the rollback (no transaction, no retraction) when bumpPushGeneration fails', async function () {
+    // canonical rows. The bump now runs INSIDE the rollback transaction (before commit), so a failure
+    // throws into the transaction catch: every delete is rolled back, commit never happens, and no
+    // retraction is delivered. The driver retries the reorg idempotently.
+    it('rolls back the transaction and issues no retraction when bumpPushGeneration fails', async function () {
         const hubClient = { retractPriceRange: sinon.stub().resolves(), retractXcallRange: sinon.stub().resolves(), retractMatchRange: sinon.stub().resolves() };
         const idx = createMockIndexer({ hubClient });
         idx.protocolChanges = { isDefined: sinon.stub().returns(true), isEnabled: sinon.stub().resolves(true) };
         const rb = new Rollback(idx);
         idx.util.resetLists();
+        idx.indexerDb.doQuery.onFirstCall().resolves([{ action_index: 50 }]);
+        idx.indexerDb.doQuery.resolves([]);
         idx.indexerDb.bumpPushGeneration = sinon.stub().rejects(new Error('push_generations missing'));
-        idx.indexerDb.beginTransaction = sinon.stub().resolves();
-        idx.indexerDb.enqueueHubPush = sinon.stub().resolves();
         let threw = false;
         try { await rb.rollback(100); } catch(e){ threw = true; }
         assert.ok(threw, 'a failed bump must abort the rollback');
-        assert.ok(idx.indexerDb.beginTransaction.notCalled, 'no transaction may begin after a failed bump');
-        assert.ok(hubClient.retractPriceRange.notCalled, 'no un-fenced retraction may be issued after a failed bump');
-        assert.ok(idx.indexerDb.enqueueHubPush.notCalled, 'no deferred retraction may be enqueued after a failed bump');
+        assert.ok(idx.indexerDb.rollbackTransaction.calledOnce, 'the transaction must be rolled back on bump failure');
+        assert.ok(idx.indexerDb.commitTransaction.notCalled, 'the transaction must NOT commit after a failed bump');
+        assert.ok(hubClient.retractPriceRange.notCalled, 'no retraction may be delivered after a failed bump');
+        assert.ok(idx.indexerDb.markHubPushDelivered.notCalled, 'no write-ahead row may be marked delivered after a failed bump');
+    });
+
+    // ─── HUB-RETRACT-1: the fence bump is issued inside the transaction, before commit ─────
+    it('bumps the push generation inside the transaction (after beginTransaction, before commit)', async function () {
+        const idx = createMockIndexer();
+        idx.protocolChanges = { isDefined: sinon.stub().returns(true), isEnabled: sinon.stub().resolves(true) };
+        const rb = new Rollback(idx);
+        idx.util.resetLists();
+        idx.indexerDb.doQuery.onFirstCall().resolves([{ action_index: 50 }]);
+        idx.indexerDb.doQuery.resolves([]);
+        await rb.rollback(100);
+        const bumpOrder   = idx.indexerDb.bumpPushGeneration.getCall(0);
+        const beginOrder  = idx.indexerDb.beginTransaction.getCall(0);
+        const commitOrder = idx.indexerDb.commitTransaction.getCall(0);
+        assert.ok(bumpOrder && beginOrder && commitOrder, 'begin, bump, and commit all ran');
+        assert.ok(beginOrder.calledBefore(bumpOrder), 'bump must run AFTER beginTransaction (inside the tx)');
+        assert.ok(bumpOrder.calledBefore(commitOrder), 'bump must run BEFORE commitTransaction');
+    });
+
+    // ─── HUB-RETRACT-2: retractions are write-ahead-staged in-tx, then delivered + dropped on success ─────
+    it('write-aheads all three retractions inside the tx and marks each delivered on live success', async function () {
+        const hubClient = { retractPriceRange: sinon.stub().resolves(), retractXcallRange: sinon.stub().resolves(), retractMatchRange: sinon.stub().resolves() };
+        const idx = createMockIndexer({ hubClient });
+        idx.protocolChanges = { isDefined: sinon.stub().returns(true), isEnabled: sinon.stub().resolves(true) };
+        let n = 0; idx.indexerDb.enqueueHubPushTx = sinon.stub().callsFake(async () => ++n);
+        idx.indexerDb.markHubPushDelivered = sinon.stub().resolves();
+        const rb = new Rollback(idx);
+        idx.util.resetLists();
+        idx.indexerDb.doQuery.onFirstCall().resolves([{ action_index: 50 }]);
+        idx.indexerDb.doQuery.resolves([]);
+        await rb.rollback(100);
+        // All three retraction types were write-ahead-staged...
+        const stagedTypes = idx.indexerDb.enqueueHubPushTx.getCalls().map(c => c.args[0]);
+        for (const t of ['price_retraction', 'xcall_retraction', 'match_retraction'])
+            assert.ok(stagedTypes.includes(t), `expected a write-ahead ${t} row`);
+        // ...before the commit (durable regardless of any post-commit crash)...
+        assert.ok(idx.indexerDb.enqueueHubPushTx.getCall(0).calledBefore(idx.indexerDb.commitTransaction.getCall(0)),
+            'write-ahead rows must be staged inside the transaction (before commit)');
+        // ...and each was delivered live then dropped (ids 1,2,3).
+        const delivered = idx.indexerDb.markHubPushDelivered.getCalls().map(c => c.args[0]).sort();
+        assert.deepStrictEqual(delivered, [1, 2, 3], 'every successfully delivered write-ahead row must be dropped');
     });
 });

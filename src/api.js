@@ -665,16 +665,24 @@ async function startApi(){
             if(max > 500) max = 500;
             try {
                 let latest = await indexer.indexerDb.getLatestBlockIndex();
+                // Source-chain reorg fence (item 5308): stamp each offer with this chain's current
+                // push generation. The hub copies it onto the matched leg's a_/b_push_generation so a
+                // deferred retraction fences by generation and a re-published order at a recycled
+                // action_index (higher generation) survives. Per-COIN, so one read covers the book.
+                //
+                // Read the generation BEFORE the rows (HUB-RETRACT-1): a concurrent rollback bumps the
+                // generation atomically with deleting the orphaned rows (rollback.js, in-transaction).
+                // Reading the generation first guarantees safety wherever that commit lands - gen G
+                // then rows are pre-commit orphans (stamped G, which the fence <= G covers) or already
+                // gone; gen G+1 means the commit happened, so the orphaned rows are already gone. The
+                // reverse order (rows then generation) could read orphaned rows pre-commit and stamp
+                // them with the post-commit G+1, letting them escape the fence permanently.
+                let pushGeneration = await indexer.indexerDb.getPushGeneration(indexer.config['COIN']);
                 // Unified cross-chain book: SWAP offers (Phase A, exact single-fill) + ORDER
                 // offers (Phase B, price-time partial fills). Each is tagged with `kind`.
                 let swaps  = await indexer.indexerDb.getOpenCrossChainSwaps(max, after_action_index, to_coin);
                 let orders = await indexer.indexerDb.getOpenCrossChainOrders(max, after_action_index, to_coin);
                 let merged = swaps.concat(orders);
-                // Source-chain reorg fence (item 5308): stamp each offer with this chain's current
-                // push generation. The hub copies it onto the matched leg's a_/b_push_generation so a
-                // deferred retraction fences by generation and a re-published order at a recycled
-                // action_index (higher generation) survives. Per-COIN, so one read covers the book.
-                let pushGeneration = await indexer.indexerDb.getPushGeneration(indexer.config['COIN']);
                 for(let o of merged) o.push_generation = pushGeneration;
                 return {
                     latest_block_index: latest,
@@ -701,11 +709,15 @@ async function startApi(){
             if(max > 500) max = 500;
             try {
                 let latest = await indexer.indexerDb.getLatestBlockIndex();
-                let rows   = await indexer.indexerDb.getPendingCrossChainCallRequests(max);
                 // Source-chain reorg fence (item 5308): stamp each call with this chain's current
                 // push generation. The hub copies it onto the dispatch row (and the result row
                 // inherits it), so a source-keyed deferred retraction fences by generation. Per-COIN.
+                // Read the generation BEFORE the rows (HUB-RETRACT-1): the rollback bumps the
+                // generation atomically with deleting the orphaned rows, so gen-first is safe wherever
+                // that commit lands, while rows-then-gen could stamp a pre-commit orphan with the
+                // post-commit generation and let it escape the fence. See getopencrosschainorders.
                 let pushGeneration = await indexer.indexerDb.getPushGeneration(indexer.config['COIN']);
+                let rows   = await indexer.indexerDb.getPendingCrossChainCallRequests(max);
                 for(let c of rows) c.push_generation = pushGeneration;
                 return {
                     latest_block_index: latest,

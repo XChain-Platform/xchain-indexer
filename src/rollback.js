@@ -102,30 +102,27 @@ class Rollback {
         // Notify user of start of rollback
         console.log('Starting rollback to block ' + block_index + '...');
 
-        // Source-chain reorg fence (item 5308): bump this chain's monotonic push generation NOW,
-        // before any forward replay re-publishes rows, so re-published rows carry the new generation
-        // while the orphaned rows keep the prior one. Both the live and the deferred retractions
-        // below carry the PRE-bump generation (bumped - 1), so the hub fence deletes only the
-        // orphans (push_generation <= pre) and a re-published row at a recycled action_index (the
-        // new generation) survives. push_generations is NEVER a rollback dataTable (monotonic).
+        // Source-chain reorg fence (item 5308): this chain's monotonic push generation is bumped so
+        // that rows re-published by forward replay carry the NEW generation while the orphaned rows
+        // keep the prior one, and the retractions below carry the PRE-bump generation (bumped - 1) so
+        // the hub fence deletes only the orphans (push_generation <= pre) while a re-published row at a
+        // recycled action_index (new generation) survives. push_generations is NEVER a rollback
+        // dataTable (monotonic).
+        //
+        // The bump is issued INSIDE the rollback transaction (just before commit, below), NOT here,
+        // for two reasons (HUB-RETRACT-1): (a) fail-closed - a bump failure throws into the
+        // transaction's catch, rolling back every delete, so the reorg is retried idempotently rather
+        // than shipping an un-fenced rollback; (b) atomicity vs concurrent hub PULLs - the hub stamps
+        // getpendingcrosschaincalls / getopencrosschainorders results with the CURRENT generation at
+        // serve time, so if the generation flipped to bumped while the orphaned rows were still
+        // committed and visible, a pull would stamp an orphan with the NEW generation and it would
+        // escape the fence forever. Bumping in-transaction means another connection sees either
+        // (pre-commit) old generation + orphaned rows, stamped with the old generation the fence
+        // covers, or (post-commit) new generation + rows already gone - never orphans + new generation.
         let retractionGeneration = null;
-        try {
-            let bumpedGeneration = await this.indexerDb.bumpPushGeneration(this.config['COIN']);
-            retractionGeneration = bumpedGeneration - 1;
-        } catch(err) {
-            // Fail CLOSED, not open. The old behavior degraded to an un-fenced retraction, but with
-            // the bump failed the re-published rows also carry the un-bumped generation, so NO fence
-            // value chosen later can separate a legitimately re-published row (at a recycled
-            // action_index inside the retracted range) from an orphan: a deferred range-only
-            // retraction would wipe canonical price/XCALL/match rows the PRICE push path never
-            // re-pushes, a permanent data loss. The bump runs BEFORE beginTransaction, so throwing
-            // here aborts the rollback with zero DB mutation; the driver leaves the processed-reorg
-            // cursor un-advanced and retries the reorg idempotently once the bump succeeds (a
-            // persistent failure means push_generations is missing - a broken deploy that must halt,
-            // not silently ship an unsafe rollback).
-            console.error('Rollback: failed to bump push generation; aborting rollback to preserve the reorg fence:', err && err.message);
-            throw err;
-        }
+        // Retraction rows written ahead inside the transaction (HUB-RETRACT-2); the post-commit block
+        // attempts immediate live delivery and drops each on success, else leaves it for HubPushQueue.
+        let stagedRetractions = [];
 
         // Reset the address/tickers/transactions lists
         this.util.resetLists();
@@ -954,6 +951,33 @@ class Rollback {
                 this.indexerDb.suppressIndexIdCreation = false;
             }
 
+            // Bump the push-generation fence (HUB-RETRACT-1) and write-ahead the hub retractions
+            // (HUB-RETRACT-2), both INSIDE this transaction so they commit atomically with the
+            // deletes above. Placed last (after sanityCheck) so any earlier failure rolls the bump
+            // back and the reorg is retried cleanly. bumpPushGeneration routes through the open
+            // transaction connection (doQuery), so a failure throws into the catch below.
+            let bumpedGeneration = await this.indexerDb.bumpPushGeneration(this.config['COIN']);
+            retractionGeneration = bumpedGeneration - 1;
+
+            // Write-ahead the three retraction intents as durable pending_hub_pushes rows, committed
+            // atomically with the rollback. Previously the retractions were only enqueued in the
+            // post-commit failure path, so a crash (or DB-pool blip) between commit and the live RPC
+            // dropped them permanently - the retried reorg skips rollback() (lastIndexerBlock already
+            // below minReorgBlock), so they were never re-issued, leaving orphaned 'finalized' hub
+            // rows serving fleet-wide. The rows are inserted AFTER the dataTables purge, so this
+            // rollback's own orphan delete cannot remove them; action_index = firstActionIndex lets a
+            // deeper later reorg's purge supersede them (that reorg atomically stages its own). The
+            // durable rows are CLOSED-range (bounded by lastActionIndex): a queued drain runs after
+            // replay may have re-published rows above lastActionIndex, which must be preserved.
+            if(firstActionIndex !== null && this.hubClient){
+                for(let pushType of ['price_retraction', 'xcall_retraction', 'match_retraction']){
+                    let id = await this.indexerDb.enqueueHubPushTx(pushType, {
+                        coin: this.config['COIN'], action_index: firstActionIndex,
+                        last_action_index: lastActionIndex, retraction_generation: retractionGeneration });
+                    stagedRetractions.push({ pushType, id });
+                }
+            }
+
             // Commit: the rollback is now atomically applied
             await this.indexerDb.commitTransaction();
 
@@ -963,115 +987,46 @@ class Rollback {
             throw e;
         }
 
-        // Signal the cross-chain hub to retract any price rows seeded from the
-        // PRICE actions we just rolled back. The hub stores each pushed round /
-        // oracle price tagged with the source chain + the source action_index, so
-        // it can prune exactly the rows whose action_index falls in the orphaned
-        // range. Without this, the hub (and every indexer mirroring its price
-        // tables) keeps serving prices that were never finalized on-chain.
-        // Best-effort, like every other hub push. A failure here must not leave
-        // the local rollback half-applied, so we only log on error.
+        // Deliver the write-ahead hub retractions committed above (HUB-RETRACT-2). Each was already
+        // durably staged in pending_hub_pushes inside the rollback transaction, so even a crash right
+        // here loses nothing: HubPushQueue drains the surviving rows on restart. Here we just try an
+        // IMMEDIATE live delivery to prune the hub's orphaned oracle_prices / cross_chain_calls /
+        // cross_chain_matches rows without waiting for the queue's backoff, and drop the durable row
+        // on success. Any failure simply leaves the row for the queue (retractions are idempotent and
+        // generation-fenced, so re-delivery is safe).
         //
-        // One-time recovery note: prior to the null-sentinel fix above, a reorg
-        // whose lowest rolled-back action had action_index 0 skipped this
-        // retraction entirely (Number(0) is falsy), leaving orphaned rows in the
-        // hub's oracle_prices / price_snapshots tables and every indexer mirror.
-        // If any chain experienced such a reorg before this fix shipped, flush the
-        // stale rows once by invoking the hub's price-reorg reconciliation
-        // (pushpricereorg) with from_action_index=0 for the affected COIN before
-        // resuming normal indexing.
-        // Quiesce the durable queue across all three retractions so an in-flight deferred drain
-        // (it runs on an unref'd interval) cannot re-issue a stale open-ended retraction against
-        // the just-rolled-back range while this rollback is mid-flight (item 5297). resume() is in
-        // the finally below so the queue always restarts even if a retraction path throws.
-        if(this.hubPushQueue) this.hubPushQueue.pause();
-        try {
-
-        if(firstActionIndex !== null && this.hubClient){
+        // The immediate delivery is OPEN-ENDED (last_action_index = null): it runs before any forward
+        // replay re-publishes rows, so an open-ended delete hits only orphans. The durable fallback
+        // row is CLOSED-range (bounded by lastActionIndex) because a queued drain runs later, after
+        // replay may have re-published rows above lastActionIndex that must be preserved.
+        //
+        // Quiesce the durable queue across delivery so an in-flight drain cannot race these rows (item
+        // 5297); resume() is in the finally so the queue always restarts even if a delivery throws.
+        if(stagedRetractions.length > 0){
+            if(this.hubPushQueue) this.hubPushQueue.pause();
             try {
-                await this.hubClient.retractPriceRange(this.config['COIN'], firstActionIndex, null, retractionGeneration);
-            } catch(err) {
-                // Durability: a dropped retraction permanently diverges the hub's
-                // oracle_prices / price_snapshots (and every mirroring indexer) from
-                // chain truth, with nothing left locally to reconcile it (the orphaned
-                // forward-push rows were just purged by this rollback). Park it on the
-                // same durable queue the forward PRICE pushes use so HubPushQueue
-                // retries it with backoff; pushpricereorg is idempotent over a replayed
-                // range. Enqueued after the rollback commit, so it is NOT caught by this
-                // rollback's own orphan purge; a deeper later reorg supersedes it with a
-                // lower-index retraction.
-                console.warn('Rollback: hub price retraction failed, queueing for retry:', err && err.message);
-                try {
-                    await this.indexerDb.enqueueHubPush('price_retraction',
-                        { coin: this.config['COIN'], action_index: firstActionIndex, last_action_index: lastActionIndex, retraction_generation: retractionGeneration });
-                } catch(e) {
-                    console.error('Rollback: failed to enqueue price retraction for retry:', e && e.message);
+                let coin       = this.config['COIN'];
+                let liveByType = {
+                    price_retraction: (last) => this.hubClient.retractPriceRange(coin, firstActionIndex, last, retractionGeneration),
+                    xcall_retraction: (last) => this.hubClient.retractXcallRange(coin, firstActionIndex, last, retractionGeneration),
+                    match_retraction: (last) => this.hubClient.retractMatchRange(coin, firstActionIndex, last, retractionGeneration),
+                };
+                for(let r of stagedRetractions){
+                    try {
+                        await liveByType[r.pushType](null);
+                        await this.indexerDb.markHubPushDelivered(r.id);
+                    } catch(err) {
+                        // Live delivery failed; the durable (closed-range) write-ahead row stays for
+                        // HubPushQueue to retry with backoff. A dropped retraction would otherwise
+                        // leave orphaned 'finalized' hub rows serving fleet-wide (stale prices, XCALL
+                        // relay rows eligible for re-injection, matches eligible for settlement).
+                        console.warn('Rollback: live ' + r.pushType + ' failed; durable row ' + r.id +
+                            ' will be retried by HubPushQueue:', err && err.message);
+                    }
                 }
+            } finally {
+                if(this.hubPushQueue) this.hubPushQueue.resume();
             }
-        }
-
-        // Signal the hub to retract any cross_chain_calls relay rows seeded from XCALL
-        // request actions just rolled back on this chain. The hub marks the matching relay
-        // rows 'retracted' and broadcasts deletions to indexers mirroring their local
-        // cross_chain_calls copy, so a source-chain reorg never leaves an orphaned
-        // 'finalized' relay row eligible for re-injection on the target chain. Best-effort
-        // and out-of-transaction (the rollback already committed above), exactly like the
-        // price retraction. A hub failure must not leave the local rollback half-applied.
-        if(firstActionIndex !== null && this.hubClient){
-            try {
-                await this.hubClient.retractXcallRange(this.config['COIN'], firstActionIndex, null, retractionGeneration);
-            } catch(err) {
-                // Durability: a dropped XCALL retraction permanently diverges the hub's
-                // cross_chain_calls (and every mirroring indexer) from chain truth, leaving
-                // an orphaned 'finalized' relay row eligible for re-injection on the target
-                // chain, with nothing left locally to reconcile it. Park it on the same
-                // durable queue the forward pushes use so HubPushQueue retries it with
-                // backoff; retractXcallRange is idempotent over a replayed range. Enqueued
-                // after the rollback commit, so it is NOT caught by this rollback's own
-                // orphan purge; a deeper later reorg supersedes it with a lower-index
-                // retraction.
-                console.warn('Rollback: hub XCALL retraction failed, queueing for retry:', err && err.message);
-                try {
-                    await this.indexerDb.enqueueHubPush('xcall_retraction',
-                        { coin: this.config['COIN'], action_index: firstActionIndex, last_action_index: lastActionIndex, retraction_generation: retractionGeneration });
-                } catch(e) {
-                    console.error('Rollback: failed to enqueue XCALL retraction for retry:', e && e.message);
-                }
-            }
-        }
-
-        // Signal the hub to retract any cross_chain_matches rows whose retracted leg references DEX
-        // ORDER actions just rolled back on this chain. The hub marks the matching matches
-        // 'retracted', restores both legs' remaining capacity, and broadcasts deletions to indexers
-        // mirroring their local cross_chain_matches copy, so a source-chain reorg never leaves an
-        // orphaned 'finalized' match eligible for settlement against an order that no longer exists.
-        // Best-effort and out-of-transaction, exactly like the price + XCALL retractions above. A
-        // hub failure must not leave the local rollback half-applied.
-        if(firstActionIndex !== null && this.hubClient){
-            try {
-                await this.hubClient.retractMatchRange(this.config['COIN'], firstActionIndex, null, retractionGeneration);
-            } catch(err) {
-                // Durability: a dropped match retraction permanently diverges the hub's
-                // cross_chain_matches (and every mirroring indexer) from chain truth, leaving
-                // an orphaned 'finalized' match eligible for settlement against an order that
-                // no longer exists, with nothing left locally to reconcile it. Park it on the
-                // same durable queue the forward pushes use so HubPushQueue retries it with
-                // backoff; retractMatchRange is idempotent over a replayed range. Enqueued
-                // after the rollback commit, so it is NOT caught by this rollback's own
-                // orphan purge; a deeper later reorg supersedes it with a lower-index
-                // retraction.
-                console.warn('Rollback: hub DEX match retraction failed, queueing for retry:', err && err.message);
-                try {
-                    await this.indexerDb.enqueueHubPush('match_retraction',
-                        { coin: this.config['COIN'], action_index: firstActionIndex, last_action_index: lastActionIndex, retraction_generation: retractionGeneration });
-                } catch(e) {
-                    console.error('Rollback: failed to enqueue DEX match retraction for retry:', e && e.message);
-                }
-            }
-        }
-
-        } finally {
-            if(this.hubPushQueue) this.hubPushQueue.resume();
         }
 
         // Log the rollback time

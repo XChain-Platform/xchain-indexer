@@ -66,6 +66,12 @@ function createMockDb() {
         // rollback under the mock threads retraction_generation = 0 into the retraction calls.
         getPushGeneration: sinon.stub().resolves(0),
         bumpPushGeneration: sinon.stub().resolves(1),
+        // Hub-push durability: enqueueHubPushTx write-aheads a retraction row inside the rollback
+        // transaction and returns its id (distinct per call); markHubPushDelivered drops it on a
+        // successful immediate delivery. enqueueHubPush is the pooled (non-tx) forward-push variant.
+        enqueueHubPush: sinon.stub().resolves(),
+        enqueueHubPushTx: (() => { let n = 0; return sinon.stub().callsFake(async () => ++n); })(),
+        markHubPushDelivered: sinon.stub().resolves(),
         getActionIndex: sinon.stub().resolves(null),
         createActionIndex: sinon.stub().resolves(1),
         updateActionIndex: sinon.stub().resolves(),
