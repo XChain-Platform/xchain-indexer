@@ -441,6 +441,20 @@ class ProtocolChanges {
         // registered here so the flag-day inventory carries it.
         this.addChange('NATIVE_FEE_PRICE_TIME_GATE', '2.0.0', NATIVE_FEE_PRICE_TIME_GATE_MAINNET_TIME,0,0,0,0,0);
 
+        // DEPLOY_INIT_STRICT (F-14 follow-on): a contract that exports `initialize`
+        // (a constructor) deployed with NO CONSTRUCTOR_PARAMS today runs no
+        // constructor yet still commits 'valid' - it silently deploys uninitialized.
+        // At/after this flag-day the DEPLOY of a constructor-declaring contract with
+        // no CONSTRUCTOR_PARAMS field is REJECTED, and the constructor trigger moves
+        // from truthy to field-present so an explicit empty CONSTRUCTOR_PARAMS runs a
+        // zero-arg initialize (deploy.js). Below the flag-day: byte-identical to today
+        // (truthy trigger, no reject), so a from-genesis replay reproduces the historic
+        // accept-below/reject-above verdict. Keyed on block TIME with the 2026-10-01
+        // contract-era cohort (CONTROLLER_GUARD / VM_BANNED_ASYNC); testnet/regtest
+        // genesis-on. Indexer-only verdict (uses the VM readManifest `hasInitialize`
+        // flag), so not a byte-locked twin; the VM readManifest change ships alongside.
+        this.addChange('DEPLOY_INIT_STRICT', '2.0.0',1790812800,0,0,0,0,0);
+
         // NOTE: STAKE_WEIGHTED_QUORUM (WI-1) is deliberately NOT registered here.
         // Standard activations gate on the LOCAL processing block via isEnabled();
         // stake-weighted quorum must gate on the BTC-anchored `snapshot_block`

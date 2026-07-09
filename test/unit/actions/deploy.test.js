@@ -255,6 +255,86 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
 
     });
 
+    describe('constructor execution under DEPLOY_INIT_STRICT (Option C)', function () {
+
+        // Real readManifest always reports permissions/maxTakeBps types; mirror that
+        // full shape so the deploy path's permissions check does not misfire.
+        function manifest(hasInitialize) {
+            return { permissions: null, permissionsType: 'undefined', maxTakeBps: null, maxTakeBpsType: 'undefined', hasInitialize };
+        }
+        function vmWithManifest(hasInitialize, executeResult) {
+            return makeVm(Object.assign(
+                { readManifest: sinon.stub().resolves({ success: true, manifest: manifest(hasInitialize), error: null }) },
+                executeResult ? { execute: sinon.stub().resolves(executeResult) } : {}
+            ));
+        }
+
+        it('at/after the flag-day, runs the constructor even with NO CONSTRUCTOR_PARAMS (zero args)', async function () {
+            const vm = vmWithManifest(true);
+            actionsCtx.vm = vm;
+            handler = new Deploy(actionsCtx);
+
+            const data = deployData({ FORMAT: 0 });
+            await handler.parse(['0', VALID_CODE_B64, '100000'], data, null);   // no CONSTRUCTOR_PARAMS field
+            assert.ok(vm.execute.calledOnce, 'constructor should run when the contract exports initialize');
+            assert.strictEqual(vm.execute.firstCall.args[0].method, 'initialize');
+            assert.deepStrictEqual(vm.execute.firstCall.args[0].params, [], 'empty CONSTRUCTOR_PARAMS => zero args, not [""]');
+            assert.strictEqual(data['STATUS'], 'valid');
+        });
+
+        it('at/after the flag-day, an arg-expecting constructor given no params fails loudly (deploy rejected)', async function () {
+            const vm = vmWithManifest(true, {
+                success: false, error: 'revert: missing constructor arg', gasUsed: 500,
+                stateChanges: [], stateDeletes: [], emittedActions: [],
+            });
+            actionsCtx.vm = vm;
+            handler = new Deploy(actionsCtx);
+
+            const data = deployData({ FORMAT: 0 });
+            await handler.parse(['0', VALID_CODE_B64, '100000'], data, null);
+            assert.ok(vm.execute.calledOnce);
+            assert.notStrictEqual(data['STATUS'], 'valid');    // no longer a silent uninitialised 'valid'
+            assert.ok(indexer.indexerDb.deleteContract.calledOnce);
+        });
+
+        it('BELOW the flag-day, the same params-less deploy is byte-identical: constructor NOT run, commits valid', async function () {
+            const isEnabled = sinon.stub().resolves(true);
+            isEnabled.withArgs('DEPLOY_INIT_STRICT', sinon.match.any).resolves(false);
+            actionsCtx.protocolChanges.isEnabled = isEnabled;
+            const vm = vmWithManifest(true);
+            actionsCtx.vm = vm;
+            handler = new Deploy(actionsCtx);
+
+            const data = deployData({ FORMAT: 0 });
+            await handler.parse(['0', VALID_CODE_B64, '100000'], data, null);
+            assert.ok(vm.execute.notCalled, 'below the flag-day a params-less deploy runs no constructor (legacy)');
+            assert.strictEqual(data['STATUS'], 'valid');
+        });
+
+        it('at/after the flag-day, a contract with NO initialize export runs no constructor and commits valid', async function () {
+            const vm = vmWithManifest(false);
+            actionsCtx.vm = vm;
+            handler = new Deploy(actionsCtx);
+
+            const data = deployData({ FORMAT: 0 });
+            await handler.parse(['0', VALID_CODE_B64, '100000'], data, null);
+            assert.ok(vm.execute.notCalled, 'no constructor to run');
+            assert.strictEqual(data['STATUS'], 'valid');
+        });
+
+        it('with CONSTRUCTOR_PARAMS present, still runs the constructor with those args (unchanged path)', async function () {
+            const vm = vmWithManifest(true);
+            actionsCtx.vm = vm;
+            handler = new Deploy(actionsCtx);
+
+            const data = deployData({ FORMAT: 0 });
+            await handler.parse(['0', VALID_CODE_B64, '100000', 'a', 'b'], data, null);
+            assert.ok(vm.execute.calledOnce);
+            assert.deepStrictEqual(vm.execute.firstCall.args[0].params, ['a', 'b']);
+            assert.strictEqual(data['STATUS'], 'valid');
+        });
+    });
+
     describe('FORMAT 1: staking config', function () {
 
         it('valid v1 with COOLDOWN_BLOCKS sets STATUS valid', async function () {

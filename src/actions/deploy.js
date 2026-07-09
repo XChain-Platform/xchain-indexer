@@ -327,10 +327,12 @@ class Deploy {
          ****************************************************************/
         let declaredPermissions = null;   // string[] | null
         let declaredMaxTakeBps  = null;   // number   | null
+        let hasInitialize       = false;  // contract exports a callable constructor (DEPLOY_INIT_STRICT)
         if(!error && this.actions.vm){
             let manifestRead = await this.actions.vm.readManifest(code);
             if(manifestRead && manifestRead.success && manifestRead.manifest){
                 let m = manifestRead.manifest;
+                hasInitialize = (m.hasInitialize === true);
                 if(m.permissionsType !== 'undefined'){
                     if(m.permissionsType !== 'array' || !Array.isArray(m.permissions)){
                         error = 'invalid: CONTRACT_MANIFEST (permissions must be an array)';
@@ -419,7 +421,20 @@ class Deploy {
         let constructorError = null;
         let constructorResult = null;
 
-        if(!error && data['CONSTRUCTOR_PARAMS'] && this.actions.vm){
+        // When does the constructor run? Below DEPLOY_INIT_STRICT: only when
+        // CONSTRUCTOR_PARAMS is non-empty (legacy truthy), so a contract exporting
+        // `initialize` deployed with no params silently never initialised (the F-14
+        // footgun) yet still committed 'valid'. At/after the flag-day (Option C): run
+        // `initialize` whenever the contract exports it, regardless of params. This
+        // makes the constructor impossible to silently skip - a zero-arg initialize
+        // runs with no args, and an arg-expecting one deployed with none throws inside
+        // execute() and REJECTS the deploy (constructorResult.success handling below)
+        // instead of committing an uninitialised contract. Gate on the LOCAL block time
+        // (mainnet 2026-10-01 cohort); below it the trigger is byte-identical to today.
+        let initStrict = await this.actions.protocolChanges.isEnabled('DEPLOY_INIT_STRICT', data['BLOCK_INDEX']);
+        let runConstructor = initStrict ? (hasInitialize || !!data['CONSTRUCTOR_PARAMS']) : !!data['CONSTRUCTOR_PARAMS'];
+
+        if(!error && runConstructor && this.actions.vm){
             // Derive deterministic block hash
             let blockHash = crypto.createHash('sha256')
                 .update(String(data['BLOCK_INDEX']) + ':' + String(data['BLOCK_TIME']))
@@ -441,7 +456,10 @@ class Deploy {
                 code:             code,
                 state:            {},
                 method:           'initialize',
-                params:           data['CONSTRUCTOR_PARAMS'].split('|'),
+                // Empty CONSTRUCTOR_PARAMS => zero args ([]), not ['']. ''.split('|')
+                // would pass a single empty-string arg; under DEPLOY_INIT_STRICT a
+                // params-less constructor must receive no args.
+                params:           data['CONSTRUCTOR_PARAMS'] ? data['CONSTRUCTOR_PARAMS'].split('|') : [],
                 caller:           data['SOURCE'],
                 contractAddress:  contractAddress,
                 contractIndex:    data['ACTION_INDEX'],
