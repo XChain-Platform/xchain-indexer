@@ -464,6 +464,9 @@ describe('Database.getBlockIndex() input validation @regression @tier1', functio
             config,
             util,
             doQuery: sinon.stub().resolves([]),
+            // createReorg writes its marker via doQueryStrict (throw-on-fault) so a swallowed
+            // INSERT failure can't leave the processed-reorg cursor un-advanced.
+            doQueryStrict: sinon.stub().resolves([]),
             getBlockIndex: Database.prototype.getBlockIndex,
         };
     });
@@ -558,6 +561,9 @@ describe('Database.getBlockIndex() decoder reorg parsing @regression @tier1', fu
             config,
             util,
             doQuery: sinon.stub().resolves([]),
+            // createReorg writes its marker via doQueryStrict (throw-on-fault) so a swallowed
+            // INSERT failure can't leave the processed-reorg cursor un-advanced.
+            doQueryStrict: sinon.stub().resolves([]),
             getBlockIndex: Database.prototype.getBlockIndex,
         };
     });
@@ -622,6 +628,9 @@ describe('Database reorg identity detection @regression @tier1', function () {
             config,
             util,
             doQuery: sinon.stub().resolves([]),
+            // createReorg writes its marker via doQueryStrict (throw-on-fault) so a swallowed
+            // INSERT failure can't leave the processed-reorg cursor un-advanced.
+            doQueryStrict: sinon.stub().resolves([]),
             getLatestReorg:         Database.prototype.getLatestReorg,
             getReorgsSince:         Database.prototype.getReorgsSince,
             getLastProcessedReorgId: Database.prototype.getLastProcessedReorgId,
@@ -650,7 +659,8 @@ describe('Database reorg identity detection @regression @tier1', function () {
 
     it('createReorg persists both block_index and decoder_event_id as JSON', async function () {
         await db.createReorg.call(db, 200, 7);
-        const args = db.doQuery.firstCall.args[1];
+        // createReorg writes via doQueryStrict (throw-on-fault marker write).
+        const args = db.doQueryStrict.firstCall.args[1];
         assert.deepStrictEqual(JSON.parse(args[0]), { block_index: 200, decoder_event_id: 7 });
     });
 

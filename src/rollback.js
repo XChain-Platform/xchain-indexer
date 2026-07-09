@@ -113,9 +113,18 @@ class Rollback {
             let bumpedGeneration = await this.indexerDb.bumpPushGeneration(this.config['COIN']);
             retractionGeneration = bumpedGeneration - 1;
         } catch(err) {
-            // A failed bump would silently disable the fence for this reorg. Log loudly; the
-            // retractions fall back to no-fence (the prior, range-only behavior) rather than abort.
-            console.error('Rollback: failed to bump push generation (reorg fence disabled for this rollback):', err && err.message);
+            // Fail CLOSED, not open. The old behavior degraded to an un-fenced retraction, but with
+            // the bump failed the re-published rows also carry the un-bumped generation, so NO fence
+            // value chosen later can separate a legitimately re-published row (at a recycled
+            // action_index inside the retracted range) from an orphan: a deferred range-only
+            // retraction would wipe canonical price/XCALL/match rows the PRICE push path never
+            // re-pushes, a permanent data loss. The bump runs BEFORE beginTransaction, so throwing
+            // here aborts the rollback with zero DB mutation; the driver leaves the processed-reorg
+            // cursor un-advanced and retries the reorg idempotently once the bump succeeds (a
+            // persistent failure means push_generations is missing - a broken deploy that must halt,
+            // not silently ship an unsafe rollback).
+            console.error('Rollback: failed to bump push generation; aborting rollback to preserve the reorg fence:', err && err.message);
+            throw err;
         }
 
         // Reset the address/tickers/transactions lists
@@ -150,12 +159,19 @@ class Rollback {
                         a.action_index ASC
                     LIMIT 1`;
         let args = [block_index];
-        let rows = await this.indexerDb.doQuery(query, args);
+        // doQueryStrict (not doQuery): these reads run OUTSIDE the rollback transaction, where
+        // doQuery collapses a transient DB fault (lock timeout, killed connection) into [] -
+        // indistinguishable from "no actions in range" - leaving firstActionIndex null. The
+        // unconditional blockTables/indexTables deletes below would then COMMIT a partial rollback
+        // (blocks/transactions gone, orphaned action/ledger rows surviving) that forks the hash
+        // chain permanently and is never retried (the processed-reorg cursor advances). A throw
+        // instead aborts before any delete; the driver re-detects and retries the reorg cleanly.
+        let rows = await this.indexerDb.doQueryStrict(query, args);
         if(rows.length > 0)
             firstActionIndex = Number(rows[0].action_index);
 
         // Capture the upper bound of the rolled-back action range (still in the DB at this point).
-        let maxRows = await this.indexerDb.doQuery(
+        let maxRows = await this.indexerDb.doQueryStrict(
             'SELECT MAX(a.action_index) AS last_action_index FROM actions a WHERE a.block_index >= ?',
             [block_index]
         );
@@ -327,9 +343,13 @@ class Rollback {
                                 m.action_index >= ?`;
                 }
 
-                // Run the query and populate the addresses, tickers, and markets arrays
+                // Run the query and populate the addresses, tickers, and markets arrays.
+                // doQueryStrict (not doQuery): still pre-transaction; a swallowed fault here would
+                // silently empty the address/ticker/market recompute sets, so updateBalances/
+                // updateTokens/updateMarkets below skip rows they must fix - a stale-balance/supply
+                // divergence. Fail loud so the reorg is retried cleanly instead.
                 if(query){
-                    let rows = await this.indexerDb.doQuery(query, args);
+                    let rows = await this.indexerDb.doQueryStrict(query, args);
                     for(let row of rows){
                         // Populate addresses and tickers arrays
                         if(!this.util.isNull(row.address))
@@ -364,6 +384,17 @@ class Rollback {
         // Begin a transaction; all deletes and recalculations are atomic
         await this.indexerDb.beginTransaction();
         try {
+
+            // Reverse any cooldown maturities orphaned by this reorg. Runs UNCONDITIONALLY (outside
+            // the firstActionIndex guard) and BEFORE the generic deletes: the legacy (pre-flag-day)
+            // maturity path writes the refund credit + 'completed' flip against a SURVIVING unstake
+            // row and mints NO actions row in the maturity block, so a reorg over an action-empty
+            // range leaves firstActionIndex null and would otherwise skip the reversal entirely,
+            // stranding the refund and forking the ledger vs a from-genesis replay. Keyed entirely
+            // on block_index / cooldown_end_block, so it is a no-op when nothing matured. Seeds the
+            // affected source addresses/ticks into the util lists captured above so the unconditional
+            // updateBalances/updateTokens below recompute them.
+            await this._reverseCooldownMaturities(block_index);
 
             // Delete contract_emissions first (references contract_executions)
             if(firstActionIndex !== null){
@@ -596,79 +627,12 @@ class Rollback {
                     await this.indexerDb.doQuery(query, args);
                 }
 
-                // Reverse cooldown-maturity completions whose maturity block was orphaned.
-                // When a capability/contract UNSTAKE cooldown elapses, processCooldownCompletions
-                // finalizes it by (1) writing a refund credit with the UNSTAKE's OWN action_index
-                // (utility.js, "for audit-trail continuity") and (2) flipping the unstake row's
-                // status_id to 'completed' IN PLACE (db.markCooldownsCompleted). The unstake row
-                // lives in an EARLIER (surviving) block, so BOTH effects carry an action_index
-                // BELOW firstActionIndex and survive the generic dataTables delete below. The
-                // credit has no block_index column (keyed only by action_index/address/tick), so it
-                // cannot be range-deleted at all. The maturity itself fires at block =
-                // cooldown_end_block, which is in the orphaned range whenever cooldown_end_block >=
-                // block_index, so a from-genesis replay to block_index-1 would NOT have matured: it
-                // holds neither the refund credit nor the 'completed' status. Without this reset the
-                // reorged node keeps an extra refund (updateBalances re-counts it) and a 'completed'
-                // row the re-maturity sweep (status_id IN (pending,valid), db.sweepCompletedCooldowns)
-                // then skips forever, a permanent credits/balances/unstakes divergence and a hard
-                // balance fork if a SLASH reduces the stake before the new chain re-matures.
-                // createUnstake only ever writes 'valid' (unstake.js), so the from-genesis-equivalent
-                // reset target is 'valid'. Scope to SURVIVING unstake rows (block_index < block_index);
-                // orphaned-range unstakes and their credits are removed wholesale by the dataTables
-                // delete. Runs BEFORE that delete (rows still present) and BEFORE updateBalances.
-                let completedStatusId = await this.indexerDb.getStatusId('completed');
-                let validStatusId     = await this.indexerDb.getStatusId('valid');
-                if(completedStatusId !== null && validStatusId !== null){
-                    let gasTick = this.config['GAS'];
-                    // Feed the affected source address + tick of every reversed maturity into the
-                    // balance/supply recompute set. These unstake rows live in surviving blocks
-                    // (action_index < firstActionIndex), so the read-phase scan above never saw them
-                    // and neither `addresses` nor `tickers` holds them. The refund credit is a net
-                    // mint (its STAKE-time debit was burned), so deleting it must drop both the
-                    // source's cached balance AND the tick's tokens.supply; without seeding the
-                    // recompute here, updateBalances/updateTokens below skip these rows and the cached
-                    // projection keeps the now-deleted refund, re-opening the very divergence this
-                    // block exists to close (and tripping the per-block supply sanityCheck). Collect
-                    // BEFORE the status reset below, which clears the status_id = 'completed' filter.
-                    let capAffected = await this.indexerDb.doQuery(
-                        `SELECT a.address
-                            FROM unstakes u
-                                JOIN index_addresses a ON a.id = u.source_id
-                            WHERE u.status_id = ? AND u.cooldown_end_block >= ? AND u.block_index < ?`,
-                        [completedStatusId, block_index, block_index]);
-                    for(let row of capAffected)
-                        this.util.addAddressTicker(row.address, gasTick);
-                    let conAffected = await this.indexerDb.doQuery(
-                        `SELECT a.address, t.tick
-                            FROM contract_unstakes cu
-                                JOIN index_addresses a ON a.id = cu.source_id
-                                JOIN index_tickers   t ON t.id = cu.tick_id
-                            WHERE cu.status_id = ? AND cu.cooldown_end_block >= ? AND cu.block_index < ?`,
-                        [completedStatusId, block_index, block_index]);
-                    for(let row of conAffected)
-                        this.util.addAddressTicker(row.address, row.tick);
-                    // Capability maturity refund is paid in GAS, keyed by the unstake's action_index.
-                    query = `DELETE c FROM credits c
-                                JOIN unstakes u ON u.action_index = c.action_index AND u.source_id = c.address_id
-                                JOIN index_tickers g ON g.id = c.tick_id AND g.tick = ?
-                                WHERE u.status_id = ? AND u.cooldown_end_block >= ? AND u.block_index < ?`;
-                    await this.indexerDb.doQuery(query, [gasTick, completedStatusId, block_index, block_index]);
-                    // Contract maturity refund is paid in the unstake's own tick.
-                    query = `DELETE c FROM credits c
-                                JOIN contract_unstakes cu ON cu.action_index = c.action_index
-                                                         AND cu.source_id   = c.address_id
-                                                         AND cu.tick_id     = c.tick_id
-                                WHERE cu.status_id = ? AND cu.cooldown_end_block >= ? AND cu.block_index < ?`;
-                    await this.indexerDb.doQuery(query, [completedStatusId, block_index, block_index]);
-                    // Reset the in-place 'completed' flip back to 'valid' so the sweep re-matures the
-                    // cooldown once the new chain re-reaches cooldown_end_block.
-                    query = `UPDATE unstakes SET status_id = ?
-                                WHERE status_id = ? AND cooldown_end_block >= ? AND block_index < ?`;
-                    await this.indexerDb.doQuery(query, [validStatusId, completedStatusId, block_index, block_index]);
-                    query = `UPDATE contract_unstakes SET status_id = ?
-                                WHERE status_id = ? AND cooldown_end_block >= ? AND block_index < ?`;
-                    await this.indexerDb.doQuery(query, [validStatusId, completedStatusId, block_index, block_index]);
-                }
+                // Cooldown-maturity reversal was here; it is now in _reverseCooldownMaturities,
+                // called UNCONDITIONALLY at the top of the transaction (before this guard). It had
+                // to leave this firstActionIndex-gated block because the legacy cooldown maturity
+                // (pre UNSTAKE_COOLDOWN_COMPLETION_ACTION) mints NO actions row, so an orphaned
+                // range containing only such a maturity leaves firstActionIndex null and would skip
+                // the reversal entirely, forking the ledger vs a from-genesis replay.
 
                 // Reset an anchor archive batch's parent v1 status that an orphaned final
                 // chunk flipped to 'invalid_archive' IN PLACE on a surviving row. A chunked
@@ -1112,6 +1076,81 @@ class Rollback {
 
         // Log the rollback time
         this.util.logTimer(rollbackTimer, 'Rollback Done');
+    }
+
+    // Reverse cooldown-maturity completions whose maturity block was orphaned by the reorg.
+    // When a capability/contract UNSTAKE cooldown elapses, processCooldownCompletions finalizes
+    // it by (1) writing a refund credit and (2) flipping the unstake row's status_id to
+    // 'completed' IN PLACE (db.markCooldownsCompleted). In the LEGACY attribution era (before
+    // UNSTAKE_COOLDOWN_COMPLETION_ACTION activates) the credit is keyed on the UNSTAKE's OWN
+    // action_index and NO actions row is minted in the maturity block, so both effects live on a
+    // SURVIVING row (block_index < reorg point) and neither the generic action-range nor block
+    // deletes can undo them; worse, an orphaned range with no other actions leaves firstActionIndex
+    // null, so this MUST run unconditionally (outside the firstActionIndex guard) or the reversal is
+    // skipped entirely. The maturity fires at cooldown_end_block, in the orphaned range whenever
+    // cooldown_end_block >= block_index, so a from-genesis replay to block_index-1 has neither the
+    // refund credit nor the 'completed' status. Without this reset the reorged node keeps an extra
+    // refund (updateBalances re-counts it) and a 'completed' row the re-maturity sweep (status_id IN
+    // (pending,valid), db.sweepCompletedCooldowns) then skips forever: a permanent credits/balances/
+    // unstakes divergence and a hard balance fork if a SLASH reduces the stake before the new chain
+    // re-matures. createUnstake only ever writes 'valid' (unstake.js), so the from-genesis-equivalent
+    // reset target is 'valid'. Scope to SURVIVING unstake rows (block_index < block_index); orphaned-
+    // range unstakes and their credits are removed wholesale by the dataTables delete. Runs inside the
+    // rollback transaction, BEFORE the blockTables delete and BEFORE updateBalances/updateTokens (the
+    // seeded addresses/ticks feed the unconditional recompute via the live util lists). No-op when no
+    // maturity landed in the range (every predicate is keyed on block_index / cooldown_end_block).
+    async _reverseCooldownMaturities(block_index){
+        let completedStatusId = await this.indexerDb.getStatusId('completed');
+        let validStatusId     = await this.indexerDb.getStatusId('valid');
+        if(completedStatusId === null || validStatusId === null)
+            return;
+        let query, gasTick = this.config['GAS'];
+        // Feed the affected source address + tick of every reversed maturity into the
+        // balance/supply recompute set. These unstake rows live in surviving blocks, so the
+        // read-phase scan never saw them and neither `addresses` nor `tickers` holds them. The
+        // refund credit is a net mint (its STAKE-time debit was burned), so deleting it must drop
+        // both the source's cached balance AND the tick's tokens.supply; without seeding the
+        // recompute here, updateBalances/updateTokens skip these rows and the cached projection
+        // keeps the now-deleted refund (and trips the per-block supply sanityCheck). Collect BEFORE
+        // the status reset below, which clears the status_id = 'completed' filter.
+        let capAffected = await this.indexerDb.doQuery(
+            `SELECT a.address
+                FROM unstakes u
+                    JOIN index_addresses a ON a.id = u.source_id
+                WHERE u.status_id = ? AND u.cooldown_end_block >= ? AND u.block_index < ?`,
+            [completedStatusId, block_index, block_index]);
+        for(let row of capAffected)
+            this.util.addAddressTicker(row.address, gasTick);
+        let conAffected = await this.indexerDb.doQuery(
+            `SELECT a.address, t.tick
+                FROM contract_unstakes cu
+                    JOIN index_addresses a ON a.id = cu.source_id
+                    JOIN index_tickers   t ON t.id = cu.tick_id
+                WHERE cu.status_id = ? AND cu.cooldown_end_block >= ? AND cu.block_index < ?`,
+            [completedStatusId, block_index, block_index]);
+        for(let row of conAffected)
+            this.util.addAddressTicker(row.address, row.tick);
+        // Capability maturity refund is paid in GAS, keyed by the unstake's action_index.
+        query = `DELETE c FROM credits c
+                    JOIN unstakes u ON u.action_index = c.action_index AND u.source_id = c.address_id
+                    JOIN index_tickers g ON g.id = c.tick_id AND g.tick = ?
+                    WHERE u.status_id = ? AND u.cooldown_end_block >= ? AND u.block_index < ?`;
+        await this.indexerDb.doQuery(query, [gasTick, completedStatusId, block_index, block_index]);
+        // Contract maturity refund is paid in the unstake's own tick.
+        query = `DELETE c FROM credits c
+                    JOIN contract_unstakes cu ON cu.action_index = c.action_index
+                                             AND cu.source_id   = c.address_id
+                                             AND cu.tick_id     = c.tick_id
+                    WHERE cu.status_id = ? AND cu.cooldown_end_block >= ? AND cu.block_index < ?`;
+        await this.indexerDb.doQuery(query, [completedStatusId, block_index, block_index]);
+        // Reset the in-place 'completed' flip back to 'valid' so the sweep re-matures the
+        // cooldown once the new chain re-reaches cooldown_end_block.
+        query = `UPDATE unstakes SET status_id = ?
+                    WHERE status_id = ? AND cooldown_end_block >= ? AND block_index < ?`;
+        await this.indexerDb.doQuery(query, [validStatusId, completedStatusId, block_index, block_index]);
+        query = `UPDATE contract_unstakes SET status_id = ?
+                    WHERE status_id = ? AND cooldown_end_block >= ? AND block_index < ?`;
+        await this.indexerDb.doQuery(query, [validStatusId, completedStatusId, block_index, block_index]);
     }
 
     // Re-derive attest_validator_stats rows touched at or after block_index.

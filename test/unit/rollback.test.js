@@ -639,4 +639,81 @@ describe('Rollback @regression @tier3', function () {
         assert.ok(!indexer.indexerDb.doQuery.args.some(a => a[0] && AFFECTED_SQL_RE.test(a[0])),
             'no affected-ticker query expected when the rolled-back range is empty');
     });
+
+    // ─── Cooldown-maturity reversal runs on an ACTION-EMPTY range (fork fix) ─────
+    // A legacy (pre UNSTAKE_COOLDOWN_COMPLETION_ACTION) cooldown maturity writes its refund credit
+    // + 'completed' flip against a SURVIVING unstake row and mints NO actions row in the maturity
+    // block. If the orphaned range holds no other actions, firstActionIndex is null; the reversal
+    // must STILL run (it is now hoisted out of the firstActionIndex guard) or the reorged node keeps
+    // a phantom refund and diverges from a from-genesis replay.
+
+    it('reverses cooldown maturities even when the orphaned range has NO actions (firstActionIndex null)', async function () {
+        // No actions row at/after the reorg block: the firstActionIndex range read returns [].
+        indexer.indexerDb.doQuery.resolves([]);
+        await rollback.rollback(100);
+        const calls = indexer.indexerDb.doQuery.getCalls();
+        const capCreditDel = calls.find(c => /DELETE c FROM credits c/.test(c.args[0]) && /JOIN unstakes u/.test(c.args[0]) && c.args[0].includes('cooldown_end_block'));
+        const conCreditDel = calls.find(c => /DELETE c FROM credits c/.test(c.args[0]) && /JOIN contract_unstakes cu/.test(c.args[0]));
+        const capStatusReset = calls.find(c => /UPDATE unstakes SET status_id/.test(c.args[0]) && c.args[0].includes('cooldown_end_block'));
+        const conStatusReset = calls.find(c => /UPDATE contract_unstakes SET status_id/.test(c.args[0]) && c.args[0].includes('cooldown_end_block') && !c.args[0].includes('contract_slash_debits'));
+        assert.ok(capCreditDel, 'capability maturity-credit delete must still run with a null firstActionIndex');
+        assert.ok(conCreditDel, 'contract maturity-credit delete must still run with a null firstActionIndex');
+        assert.ok(capStatusReset, 'unstakes status reset must still run with a null firstActionIndex');
+        assert.ok(conStatusReset, 'contract_unstakes status reset must still run with a null firstActionIndex');
+    });
+
+    it('feeds action-empty-range cooldown sources into the recompute (null firstActionIndex)', async function () {
+        indexer.indexerDb.doQuery.callsFake(async (query) => {
+            // No actions in the range -> firstActionIndex null.
+            if (/FROM\s+actions\s+a/i.test(query) && /a\.action_index/i.test(query)) return [];
+            if (query.includes('FROM unstakes u') && query.includes('cooldown_end_block') && /SELECT/i.test(query)) return [{ address: 'capSrc' }];
+            if (query.includes('FROM contract_unstakes cu') && query.includes('cooldown_end_block') && /SELECT/i.test(query)) return [{ address: 'conSrc', tick: 'CTICK' }];
+            return [];
+        });
+        await rollback.rollback(100);
+        const balanceArg = indexer.indexerDb.updateBalances.firstCall.args[0];
+        assert.ok(balanceArg.includes('capSrc') && balanceArg.includes('conSrc'),
+            'updateBalances must receive the reversed-maturity sources even on an action-empty range');
+        const tokenArg = indexer.indexerDb.updateTokens.firstCall.args[0];
+        assert.ok(tokenArg.includes('XCHAIN') && tokenArg.includes('CTICK'),
+            'updateTokens must receive GAS + the contract tick even on an action-empty range');
+    });
+
+    // ─── REORG-2: consensus range reads use the throw-on-fault variant ──────────
+    it('reads firstActionIndex / lastActionIndex via doQueryStrict (fault must abort, not empty)', async function () {
+        // The mock aliases doQueryStrict to the doQuery stub, so assert the range reads went
+        // through the strict entry point by making it throw and confirming rollback propagates.
+        const idx = createMockIndexer();
+        idx.protocolChanges = { isDefined: sinon.stub().returns(true), isEnabled: sinon.stub().resolves(true) };
+        const rb = new Rollback(idx);
+        idx.util.resetLists();
+        idx.indexerDb.doQueryStrict = sinon.stub().rejects(new Error('lock wait timeout'));
+        idx.indexerDb.beginTransaction = sinon.stub().resolves();
+        let threw = false;
+        try { await rb.rollback(100); } catch(e){ threw = true; }
+        assert.ok(threw, 'a fault on the strict range read must abort the rollback');
+        assert.ok(idx.indexerDb.beginTransaction.notCalled, 'no transaction (hence no delete) may begin after a failed range read');
+    });
+
+    // ─── HUB-RETRACT-6: a failed push-generation bump aborts the rollback (fail closed) ─────
+    // With the bump failed there is no fence value that can separate a re-published row (at a
+    // recycled action_index) from an orphan, so degrading to an un-fenced retraction would wipe
+    // canonical rows. The bump runs before beginTransaction, so throwing aborts with zero DB writes;
+    // the driver retries the reorg idempotently.
+    it('aborts the rollback (no transaction, no retraction) when bumpPushGeneration fails', async function () {
+        const hubClient = { retractPriceRange: sinon.stub().resolves(), retractXcallRange: sinon.stub().resolves(), retractMatchRange: sinon.stub().resolves() };
+        const idx = createMockIndexer({ hubClient });
+        idx.protocolChanges = { isDefined: sinon.stub().returns(true), isEnabled: sinon.stub().resolves(true) };
+        const rb = new Rollback(idx);
+        idx.util.resetLists();
+        idx.indexerDb.bumpPushGeneration = sinon.stub().rejects(new Error('push_generations missing'));
+        idx.indexerDb.beginTransaction = sinon.stub().resolves();
+        idx.indexerDb.enqueueHubPush = sinon.stub().resolves();
+        let threw = false;
+        try { await rb.rollback(100); } catch(e){ threw = true; }
+        assert.ok(threw, 'a failed bump must abort the rollback');
+        assert.ok(idx.indexerDb.beginTransaction.notCalled, 'no transaction may begin after a failed bump');
+        assert.ok(hubClient.retractPriceRange.notCalled, 'no un-fenced retraction may be issued after a failed bump');
+        assert.ok(idx.indexerDb.enqueueHubPush.notCalled, 'no deferred retraction may be enqueued after a failed bump');
+    });
 });

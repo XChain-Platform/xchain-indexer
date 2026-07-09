@@ -473,8 +473,13 @@ class XChainIndexer {
                     console.log('Resuming block parsing at block ' + startBlock + '...');
             }
 
-            // Loop through blocks until indexer has parsed lastDecoderBlock
-            while( !this.util.isNull(lastIndexerBlock) && !this.util.isNull(lastDecoderBlock) && this.util.bclt(lastIndexerBlock, lastDecoderBlock) ){
+            // Loop through blocks until indexer has parsed lastDecoderBlock. The stopFlag check
+            // lets stop() take effect at the next block boundary: on a moving decoder tip this
+            // inner loop can otherwise run indefinitely (lastDecoderBlock is refreshed per block),
+            // so a shutdown request would be deferred until full catch-up. The check sits before
+            // beginTransaction, preserving the invariant that an open block transaction is never
+            // interrupted mid-flight.
+            while( !this.stopFlag && !this.util.isNull(lastIndexerBlock) && !this.util.isNull(lastDecoderBlock) && this.util.bclt(lastIndexerBlock, lastDecoderBlock) ){
 
                 // Set flag to indicate not fully synced
                 this.synced = false;

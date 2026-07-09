@@ -460,5 +460,38 @@ describe('HubPushQueue', function(){
             // attempt 0+1=1
             assert.ok(warnMsg.includes('attempt 1/10'), 'expected "attempt 1/10" in: ' + warnMsg);
         });
+
+        // ─── Retractions are exempt from the attempt cap (HUB-RETRACT-5) ─────
+        // A reorg retraction is the ONLY remaining record that the hub must prune an orphaned
+        // range; retiring it to 'failed' after maxAttempts (a hub outage overlapping a reorg)
+        // permanently strands stale prices / 'finalized' XCALL+DEX rows on the hub. Retractions
+        // are idempotent + generation-fenced, so they must retry indefinitely, never retire.
+        for(const rt of ['price_retraction', 'xcall_retraction', 'match_retraction']){
+            it('does NOT retire a ' + rt + ' after maxAttempts failures (retries forever)', async function(){
+                let indexer = makeIndexer();
+                indexer.hubClient.retractPriceRange = sinon.stub().rejects(new Error('hub down'));
+                indexer.hubClient.retractXcallRange = sinon.stub().rejects(new Error('hub down'));
+                indexer.hubClient.retractMatchRange = sinon.stub().rejects(new Error('hub down'));
+                let q = new HubPushQueue(indexer, { maxAttempts: 3 });
+                // A row that has already burned through maxAttempts: a forward push would be retired.
+                let row = makeRow({ id: 9, push_type: rt, attempts: 3,
+                    payload: JSON.stringify({ coin: 'BTC', action_index: 50, last_action_index: 60, retraction_generation: 4 }) });
+                await q._attempt(row);
+                assert.ok(indexer.indexerDb.recordHubPushAttempt.calledOnce, 'recordHubPushAttempt should be called');
+                let cap = indexer.indexerDb.recordHubPushAttempt.firstCall.args[2];
+                assert.strictEqual(cap, Number.MAX_SAFE_INTEGER,
+                    'a retraction must be recorded with an unbounded cap so it never flips to failed');
+            });
+        }
+
+        it('DOES retire a best-effort forward push at the attempt cap (unchanged)', async function(){
+            let indexer = makeIndexer();
+            indexer.hubClient.pushPriceRound = sinon.stub().rejects(new Error('fail'));
+            let q = new HubPushQueue(indexer, { maxAttempts: 3 });
+            let row = makeRow({ id: 11, push_type: 'price_round', attempts: 2 });
+            await q._attempt(row);
+            let cap = indexer.indexerDb.recordHubPushAttempt.firstCall.args[2];
+            assert.strictEqual(cap, 3, 'a forward push keeps the finite maxAttempts cap');
+        });
     });
 });

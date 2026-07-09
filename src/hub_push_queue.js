@@ -172,9 +172,19 @@ class HubPushQueue {
             console.log('HubPushQueue: delivered ' + row.push_type + ' row ' + row.id + ' (attempt ' + attemptNo + ')');
         } catch (err){
             let msg = String((err && err.message) || err).slice(0, 480);
-            await this.indexerDb.recordHubPushAttempt(row.id, msg, this.maxAttempts);
+            // Reorg retractions must NOT share the best-effort forward-push attempt cap. A forward
+            // price/oracle push is disposable, so retiring it to 'failed' after maxAttempts is fine.
+            // A '*_retraction' row is the ONLY remaining record that the hub must prune an orphaned
+            // range: retiring it (a hub outage overlapping a reorg exhausts the ~10-attempt backoff
+            // in under an hour) permanently strands stale prices and 'finalized' XCALL/DEX rows on
+            // the hub and every mirror, eligible for re-injection/settlement, with the evidence
+            // parked invisibly in a terminal row. Retractions are idempotent and generation-fenced,
+            // so retrying forever at the max backoff is safe; keep them 'pending' indefinitely.
+            let isRetraction = typeof row.push_type === 'string' && row.push_type.endsWith('_retraction');
+            let cap = isRetraction ? Number.MAX_SAFE_INTEGER : this.maxAttempts;
+            await this.indexerDb.recordHubPushAttempt(row.id, msg, cap);
             console.warn('HubPushQueue: push failed for row ' + row.id +
-                ' (attempt ' + attemptNo + '/' + this.maxAttempts + '): ' + msg);
+                ' (attempt ' + attemptNo + (isRetraction ? '' : '/' + this.maxAttempts) + '): ' + msg);
         }
     }
 }

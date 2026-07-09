@@ -26,7 +26,7 @@ const { getTestConfig } = require('./config');
  *   mockDb.getTokenInfo.resolves({ TICK: 'TEST', ... });
  */
 function createMockDb() {
-    return {
+    const db = {
         // Connection / transaction
         getConnection: sinon.stub().resolves({}),
         releaseConnection: sinon.stub().resolves(),
@@ -262,6 +262,12 @@ function createMockDb() {
         // Sanity
         sanityCheck: sinon.stub().resolves(),
     };
+    // doQueryStrict shares the doQuery stub so tests that program read results/ordering via
+    // db.doQuery (onFirstCall for firstActionIndex, etc.) transparently drive rollback.js's
+    // strict pre-transaction reads too, preserving the single-counter call ordering the real
+    // code had before those reads were hardened to throw-on-fault.
+    db.doQueryStrict = db.doQuery;
+    return db;
 }
 
 /**

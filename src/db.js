@@ -1181,7 +1181,14 @@ class Database {
         let payload = JSON.stringify({ block_index: Number(block_index), decoder_event_id: Number(decoder_event_id) });
         let query = `INSERT INTO events (time, code, data) values (now(), 'REORG', ?)`;
         let args  = [payload];
-        let results = await this.doQuery(query, args);
+        // doQueryStrict (not doQuery): this marker advances the processed-reorg cursor and runs
+        // outside any transaction, where doQuery would swallow an INSERT failure into []. A
+        // swallowed failure leaves the cursor un-advanced while the loop replays past minReorgBlock,
+        // so the next iteration re-detects the same reorg and performs a full spurious re-rollback of
+        // already-canonical blocks (plus a redundant push-generation bump + hub retractions). Throwing
+        // instead crashes to a clean restart where the committed rollback makes the reorg a no-op and
+        // the marker is retried, matching the crash-safety ordering the call site documents.
+        let results = await this.doQueryStrict(query, args);
     }
 
     // Handle getting block transaction data for a given block from xchain-decoder database
