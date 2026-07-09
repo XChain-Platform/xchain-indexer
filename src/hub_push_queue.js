@@ -52,15 +52,27 @@ class HubPushQueue {
 
         this.timer    = null;
         this.draining = false;
+        // Promise that resolves when the currently in-flight drain() finishes; null when idle. Lets
+        // pause() await an in-flight drain instead of returning while it is still mid-batch.
+        this._drainDone = null;
         // Set by rollback.js around its post-commit retraction block so a deferred drain cannot
         // re-issue a stale open-ended retraction against the just-rolled-back range (item 5297).
         // Independent of `draining` (which only prevents overlapping drains).
         this.paused   = false;
     }
 
-    // Pause/resume gate drain() entry. Synchronous flag flips; an already-running drain finishes
-    // (it is guarded separately by `draining`), but no NEW drain tick starts while paused.
-    pause(){ this.paused = true; }
+    // Pause the queue and WAIT for any in-flight drain to finish (HUB-RETRACT-3). Setting `paused`
+    // stops any NEW drain tick, but a drain already mid-batch holds a pre-fetched set of rows in
+    // memory and could deliver a stale forward push AFTER the caller's retraction runs, re-creating
+    // an orphaned hub row the fence can no longer delete. Awaiting `_drainDone` closes that race: by
+    // the time pause() resolves, no drain is running and none can start. Returns a promise so callers
+    // do `await queue.pause()`. Safe to call when idle (resolves immediately).
+    async pause(){
+        this.paused = true;
+        // A drain that already passed its paused-check and set draining=true has a live _drainDone;
+        // await it. A drain starting after this line sees paused=true and returns before draining.
+        if(this._drainDone) await this._drainDone;
+    }
     resume(){ this.paused = false; }
 
     // Begin draining on an interval. No-op when no hub is configured; in that
@@ -99,6 +111,9 @@ class HubPushQueue {
         if(this.draining) return;
         if(this.paused) return;
         this.draining = true;
+        // Publish a completion promise so pause() can await this in-flight drain (HUB-RETRACT-3).
+        let resolveDone;
+        this._drainDone = new Promise(resolve => { resolveDone = resolve; });
         try {
             let rows = await this.indexerDb.getPendingHubPushes(this.batchSize);
             if(!rows || rows.length === 0) return;
@@ -109,6 +124,8 @@ class HubPushQueue {
             }
         } finally {
             this.draining = false;
+            this._drainDone = null;
+            resolveDone();
         }
     }
 

@@ -674,6 +674,34 @@ describe('Database reorg identity detection @regression @tier1', function () {
         assert.strictEqual(await db.getLastProcessedReorgId.call(db), null);
     });
 
+    it('getLastProcessedReorgId scans back past a legacy newest row to the newest new-format id (REORG-4)', async function () {
+        // Newest marker is legacy (no decoder_event_id); an older marker carries id 7.
+        db.doQuery.resolves([
+            { data: JSON.stringify({ block_index: 200 }) },
+            { data: JSON.stringify({ block_index: 150, decoder_event_id: 7 }) },
+            { data: '90' },
+        ]);
+        assert.strictEqual(await db.getLastProcessedReorgId.call(db), 7,
+            'must scan back to the newest new-format marker instead of reporting null (which replays all history)');
+    });
+
+    it('getLastProcessedReorgId still returns null when ALL markers are legacy', async function () {
+        db.doQuery.resolves([{ data: '200' }, { data: '150' }]);
+        assert.strictEqual(await db.getLastProcessedReorgId.call(db), null);
+    });
+
+    it('apiView() routes doQuery AND doQueryStrict through _poolQuery, never getConnection (REORG-1)', async function () {
+        const poolCalls = [];
+        const stub = Object.assign(Object.create(Database.prototype), {
+            _poolQuery: (q) => { poolCalls.push(q); return Promise.resolve([]); },
+            getConnection: () => { throw new Error('apiView must never call getConnection (would adopt a foreign transaction)'); },
+        });
+        const view = stub.apiView();
+        await view.doQuery('SELECT 1');
+        await view.doQueryStrict('SELECT 2');
+        assert.strictEqual(poolCalls.length, 2, 'both doQuery and doQueryStrict must run pool-direct');
+    });
+
     it('detects a SECOND, higher-block reorg that a magnitude compare would miss', async function () {
         // Indexer already recorded the first reorg (block 100, decoder event id 5).
         const indexerDb = {

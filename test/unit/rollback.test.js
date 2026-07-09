@@ -763,4 +763,65 @@ describe('Rollback @regression @tier3', function () {
         const delivered = idx.indexerDb.markHubPushDelivered.getCalls().map(c => c.args[0]).sort();
         assert.deepStrictEqual(delivered, [1, 2, 3], 'every successfully delivered write-ahead row must be dropped');
     });
+
+    // ─── IDX-1: anchor invalid_archive reset interns 'unverified' before the UPDATE ─────
+    it('interns unverified via createStatus before the anchor invalid_archive reset UPDATE', async function () {
+        indexer.indexerDb.doQuery.onFirstCall().resolves([{ action_index: 50 }]); // firstActionIndex
+        indexer.indexerDb.doQuery.resolves([]);
+        indexer.indexerDb.createStatus = sinon.stub().resolves(1);
+        await rollback.rollback(100);
+        assert.ok(indexer.indexerDb.createStatus.calledWith('unverified'),
+            "the reset must intern 'unverified' so the JOIN is non-empty on a node that never wrote it forward");
+        const anchorUpdate = indexer.indexerDb.doQuery.getCalls().find(c =>
+            /UPDATE anchor_actions p/.test(c.args[0]) && /status = 'invalid_archive'/.test(c.args[0]));
+        assert.ok(anchorUpdate, 'expected the anchor invalid_archive reset UPDATE');
+        // Drift-guard-preserving: the JOIN text is retained (interning happens BEFORE, not instead).
+        assert.ok(/JOIN index_statuses us ON us\.status = 'unverified'/.test(anchorUpdate.args[0]),
+            'the reset must keep its JOIN text so the cross-repo drift guard still matches');
+        const internCall = indexer.indexerDb.createStatus.getCalls().find(c => c.args[0] === 'unverified');
+        assert.ok(internCall.calledBefore(anchorUpdate), "createStatus('unverified') must run before the UPDATE");
+    });
+
+    // ─── PRICE-SNAP-1: price_snapshots delete is reference_chain-qualified and BTC-only ─────
+    it('qualifies the price_snapshots reorg delete by reference_chain and runs it only on BTC', async function () {
+        // Mock config coin is BTC.
+        indexer.indexerDb.doQuery.onFirstCall().resolves([{ action_index: 50 }]);
+        indexer.indexerDb.doQuery.resolves([]);
+        await rollback.rollback(100);
+        const psDelete = indexer.indexerDb.doQuery.getCalls().find(c => /DELETE FROM price_snapshots/.test(c.args[0]));
+        assert.ok(psDelete, 'BTC indexer should issue the price_snapshots delete');
+        assert.ok(/reference_chain = 'BTC'/.test(psDelete.args[0]),
+            'the delete must be qualified by reference_chain so it cannot prune an off-BTC-published round');
+    });
+
+    it('does NOT delete price_snapshots on a non-BTC (DOGE) indexer', async function () {
+        const idx = createMockIndexer();
+        idx.config['COIN'] = 'DOGE';
+        idx.protocolChanges = { isDefined: sinon.stub().returns(true), isEnabled: sinon.stub().resolves(true) };
+        const rb = new Rollback(idx);
+        idx.util.resetLists();
+        idx.indexerDb.doQuery.onFirstCall().resolves([{ action_index: 50 }]);
+        idx.indexerDb.doQuery.resolves([]);
+        await rb.rollback(100);
+        assert.ok(!idx.indexerDb.doQuery.getCalls().some(c => /DELETE FROM price_snapshots/.test(c.args[0])),
+            'a DOGE indexer must not run the BTC-anchored price_snapshots delete');
+    });
+
+    // ─── IDX-2: markets zombie (pair first-traded only in the orphaned range, ticks survive) ─────
+    it('deletes a zombie markets row whose only orders were orphaned but whose ticks survive', async function () {
+        // Read phase: an ORDER pair (give_tick_id 7 / get_tick_id 9) is collected; both ticks survive.
+        indexer.indexerDb.doQuery.callsFake(async (query) => {
+            if (/FROM\s+actions\s+a/i.test(query) && /a\.action_index/i.test(query)) return [{ action_index: 50 }];
+            // read-phase orders/order_matches collection returns the pair
+            if (/FROM\s+orders\s+m|FROM\s+order_matches\s+m/i.test(query) && /m\.give_tick_id/i.test(query))
+                return [{ tick1_id: 7, tick2_id: 9 }];
+            // survival probes (SELECT 1 FROM orders / order_matches) return empty => zombie
+            return [];
+        });
+        await rollback.rollback(100);
+        const zombieDelete = indexer.indexerDb.doQuery.getCalls().find(c =>
+            /DELETE FROM markets WHERE \(tick1_id=\? AND tick2_id=\?\)/.test(c.args[0]));
+        assert.ok(zombieDelete, 'expected a per-pair zombie markets delete');
+        assert.deepStrictEqual(zombieDelete.args[1], [7, 9, 9, 7], 'both orientations of the collected pair must be deleted');
+    });
 });

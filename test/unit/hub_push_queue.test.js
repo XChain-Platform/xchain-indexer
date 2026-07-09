@@ -494,4 +494,35 @@ describe('HubPushQueue', function(){
             assert.strictEqual(cap, 3, 'a forward push keeps the finite maxAttempts cap');
         });
     });
+
+    // ─── HUB-RETRACT-3: pause() waits for an in-flight drain ─────
+    describe('pause() awaits in-flight drain', function(){
+        it('does not resolve until a drain that is mid-attempt finishes', async function(){
+            let indexer = makeIndexer();
+            let releaseAttempt;
+            // The in-flight _attempt hangs on this promise until we release it.
+            indexer.hubClient.pushPriceRound = sinon.stub().callsFake(() => new Promise(r => { releaseAttempt = r; }));
+            indexer.indexerDb.getPendingHubPushes = sinon.stub().resolves([
+                makeRow({ id: 1, push_type: 'price_round', attempts: 0, last_attempted_at: null })
+            ]);
+            let q = new HubPushQueue(indexer);
+            let drainP = q.drain();                              // enters drain, stalls in _attempt
+            await new Promise(r => setImmediate(r));             // let it reach the stalled attempt
+            let paused = false;
+            let pauseP = q.pause().then(() => { paused = true; });
+            await new Promise(r => setImmediate(r));
+            assert.strictEqual(paused, false, 'pause() must not resolve while a drain is in flight');
+            releaseAttempt();                                    // let the attempt + drain complete
+            await pauseP;
+            assert.strictEqual(paused, true, 'pause() resolves once the in-flight drain finishes');
+            assert.strictEqual(q.draining, false, 'draining flag cleared after the drain completes');
+            await drainP;
+        });
+
+        it('resolves immediately when no drain is in flight', async function(){
+            let q = new HubPushQueue(makeIndexer());
+            await q.pause();   // must not hang
+            assert.strictEqual(q.paused, true);
+        });
+    });
 });

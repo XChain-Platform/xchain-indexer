@@ -369,6 +369,9 @@ class XChainIndexer {
             // count rather than throw, so a mid-migration node is not bricked; pre-launch the
             // clean genesis reindex drives this to zero.
             await this.indexerDb.warnOnOrphanIndexIds();
+            // Warn if the reorg cursor is all-legacy (would replay the full decoder reorg history on
+            // the next reorg detection - REORG-4). Surfaced, not auto-fixed; operator does a reindex.
+            await this.indexerDb.warnOnLegacyReorgCursor();
 
             // Now that the indexer tables exist (including every hub-mirror table the
             // sync client writes into), start the hub DB sync in the background.
@@ -399,6 +402,19 @@ class XChainIndexer {
         let lastIndexerBlock      = null;
         let lastDecoderBlock      = null;
 
+        // Pool-direct view for the reorg-driver's indexerDb reads + the createReorg marker WRITE
+        // (REORG-1). These run outside any transaction the driver holds, and getConnection() adopts
+        // whatever transactionConnection is open - so during a concurrent public feequote dry-run (an
+        // indexerDb transaction held up to 10s that always rolls back) an un-viewed read would see the
+        // dry-run's dirty uncommitted state and the createReorg INSERT would be silently discarded when
+        // that dry-run rolls back, stranding the reorg. The view draws an independent pooled connection
+        // that never adopts a transaction and sees only committed state. apiView may be absent on a
+        // minimal test double, so fall back to the raw db.
+        let indexerReorgView = (typeof this.indexerDb.apiView === 'function') ? this.indexerDb.apiView() : this.indexerDb;
+
+        // How often the inner catch-up loop re-checks for a mid-catch-up decoder reorg (REORG-6).
+        let REORG_RECHECK_BLOCKS = Number(this.config['REORG_RECHECK_BLOCKS']) || 50;
+
         while (true){
 
             // Bail out if stop is requested
@@ -411,13 +427,13 @@ class XChainIndexer {
             // than it. Reorgs are matched by event IDENTITY (the decoder's events.id), NOT by
             // block-height magnitude: heights increase across repeated reorgs, so a height compare
             // silently drops every reorg after the first. Do not re-introduce a height comparison.
-            let lastProcessedReorgId = await this.indexerDb.getLastProcessedReorgId();
+            let lastProcessedReorgId = await indexerReorgView.getLastProcessedReorgId();
             let unprocessedReorgs    = await this.decoderDb.getReorgsSince(lastProcessedReorgId);
 
             // Get last processed block from Indexer and Decoder databases
             lastDecoderBlock       = await this.decoderDb.getBlockIndex('decoder', 'last');
             this.lastDecoderBlock  = lastDecoderBlock;
-            lastIndexerBlock       = await this.indexerDb.getBlockIndex('indexer', 'last');
+            lastIndexerBlock       = await indexerReorgView.getBlockIndex('indexer', 'last');
 
             // Handle block reorgs. When two or more reorgs land between indexer iterations and a
             // newer event is SHALLOWER than an older one, processing only the latest leaves
@@ -444,7 +460,7 @@ class XChainIndexer {
                     // silently restarts the ledger/actions/contract hash chains
                     // (getBlockHashes hashes the next block with previous_hash
                     // undefined, which JSON.stringify drops).
-                    lastIndexerBlock = await this.indexerDb.getBlockIndex('indexer', 'last');
+                    lastIndexerBlock = await indexerReorgView.getBlockIndex('indexer', 'last');
                 }
                 // Record the processed-reorg markers ONLY after any rollback has committed.
                 // The marker rows advance the processed-id cursor (getLastProcessedReorgId), so
@@ -456,7 +472,7 @@ class XChainIndexer {
                 // the rollback is skipped once lastIndexerBlock has dropped below minReorgBlock.
                 // Oldest-first so a partial-write crash only advances the cursor as far as is durable.
                 for(let reorg of unprocessedReorgs)
-                    await this.indexerDb.createReorg(reorg.block_index, reorg.id);
+                    await indexerReorgView.createReorg(reorg.block_index, reorg.id);
             }
 
             // If indexer has no parsed blocks, set last indexer block to first decoder block-1
@@ -483,6 +499,23 @@ class XChainIndexer {
 
                 // Set flag to indicate not fully synced
                 this.synced = false;
+
+                // Bounded reorg-detection latency during long catch-up (REORG-6). Reorg events are
+                // otherwise fetched only at the top of the OUTER loop, and the per-block decoder-tip
+                // refresh keeps this inner loop running as long as the tip moves - so a decoder reorg
+                // that lands mid-catch-up is not detected until the node is fully caught up, and until
+                // then the loop commits hash-chained blocks built on old-chain state (served via
+                // getblockhashes / pushed to the hub). Cheaply re-check every REORG_RECHECK_BLOCKS
+                // blocks and break to the outer loop, which performs the deepest-rollback + replay.
+                // Bounds the mixed-chain window to REORG_RECHECK_BLOCKS instead of the whole backlog;
+                // convergence is unchanged (the eventual rollback unwinds every block >= the reorg).
+                if((Number(lastIndexerBlock) % REORG_RECHECK_BLOCKS) === 0){
+                    let midReorgs = await this.decoderDb.getReorgsSince(lastProcessedReorgId);
+                    if(midReorgs.length > 0){
+                        console.log('Detected a decoder reorg mid-catch-up; breaking to handle it before block ' + (Number(lastIndexerBlock) + 1));
+                        break;
+                    }
+                }
 
                 // Start tracking time to parse block
                 var debugTimer = this.util.startTimer();

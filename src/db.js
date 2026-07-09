@@ -1160,18 +1160,60 @@ class Database {
     // or null if none. This is the value compared against getLatestReorg().id to decide
     // whether a new reorg needs processing - an IDENTITY check, not a block-height compare.
     async getLastProcessedReorgId(){
-        let query = `SELECT data FROM events WHERE code='REORG' ORDER BY id DESC LIMIT 1`;
+        // Scan REORG markers newest-first and return the newest one that carries a decoder_event_id
+        // (REORG-4). The previous code inspected ONLY the single newest row and returned null if it
+        // was a legacy plain-block-number payload - so on a partially-migrated DB whose newest marker
+        // is legacy but older markers are new-format, it wrongly reported "no reorg ever processed",
+        // and getReorgsSince(null) then re-replayed the decoder's entire reorg history (a massive
+        // spurious rollback). Scanning back finds the real cursor whenever any new-format marker
+        // exists. LIMIT bounds the scan; new-format markers are the steady state, so in practice this
+        // returns on the first row.
+        let query = `SELECT data FROM events WHERE code='REORG' ORDER BY id DESC LIMIT 200`;
         let results = await this.doQuery(query);
         if(results.length === 0)
             return null;
-        try {
-            let parsed = JSON.parse(results[0]["data"]);
-            if(parsed !== null && typeof parsed === 'object' && parsed.decoder_event_id !== undefined)
-                return Number(parsed.decoder_event_id);
-        } catch(e){
-            // Legacy plain-block-number rows carry no decoder event id.
+        for(let row of results){
+            try {
+                let parsed = JSON.parse(row["data"]);
+                if(parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed) && parsed.decoder_event_id !== undefined)
+                    return Number(parsed.decoder_event_id);
+            } catch(e){
+                // Legacy plain-block-number rows carry no decoder event id; keep scanning.
+            }
         }
+        // Only legacy markers found. Returning null makes getReorgsSince replay the full decoder reorg
+        // history; on a synced node upgraded from a pre-decoder_event_id release that has not reorged
+        // since, that is a large spurious rollback. We deliberately do NOT auto-seed a baseline here
+        // (that could silently skip a reorg that landed between the last legacy-scheme processing and
+        // the upgrade); warnOnLegacyReorgCursor() surfaces the condition at startup so an operator can
+        // do the one-time clean reindex the platform already treats as the norm.
         return null;
+    }
+
+    // Startup probe: warn loudly if the indexer has REORG markers but NONE carry a decoder_event_id
+    // (all legacy format). On a synced node that means the first reorg detection after upgrade would
+    // replay the decoder's entire reorg history (REORG-4). Surfaced, not auto-fixed, because there is
+    // no safe way to derive the correct new-format cursor from legacy rows. No-op on a clean DB.
+    async warnOnLegacyReorgCursor(){
+        try {
+            let rows = await this.doQuery(`SELECT data FROM events WHERE code='REORG' ORDER BY id DESC LIMIT 200`);
+            if(rows.length === 0) return;
+            let hasNewFormat = false;
+            for(let row of rows){
+                try {
+                    let parsed = JSON.parse(row["data"]);
+                    if(parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed) && parsed.decoder_event_id !== undefined){
+                        hasNewFormat = true; break;
+                    }
+                } catch(e){ /* legacy row */ }
+            }
+            if(!hasNewFormat)
+                console.warn('Reorg cursor invariant: all REORG event markers are legacy (no decoder_event_id). ' +
+                    'The next reorg detection would replay the full decoder reorg history. A clean genesis reindex ' +
+                    'is recommended to restore the new-format cursor.');
+        } catch(e){
+            console.warn('Reorg cursor invariant probe failed (non-fatal):', e.message);
+        }
     }
 
     // Handle creating a record of a block reorg. Persists the decoder event id alongside the
@@ -9425,6 +9467,12 @@ class Database {
         if(!this._apiView){
             this._apiView = Object.create(this);
             this._apiView.doQuery = (query, args) => this._poolQuery(query, args);
+            // doQueryStrict must also bypass transactionConnection. _poolQuery already throws on a
+            // query error (no swallow), so it satisfies the strict contract. Without this override,
+            // a method that internally calls doQueryStrict (e.g. createReorg) would still adopt an
+            // open foreign transaction when invoked on the view - defeating the reorg-path isolation
+            // that routes createReorg / the rollback read-phase through this view (REORG-1).
+            this._apiView.doQueryStrict = (query, args) => this._poolQuery(query, args);
         }
         return this._apiView;
     }

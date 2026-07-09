@@ -33,6 +33,16 @@ class Rollback {
         this.decoderDb = indexer.decoderDb;
         this.indexerDb = indexer.indexerDb;
 
+        // Pool-direct view for the pre-transaction read phase (REORG-1). getConnection() adopts any
+        // open transactionConnection, so before this rollback opens its own transaction the read-phase
+        // queries would otherwise run on whatever foreign transaction happens to be open (e.g. a public
+        // feequote dry-run, which always rolls back), silently discarding/dirtying them. The view's
+        // doQuery/doQueryStrict draw an independent pooled connection that never adopts a transaction.
+        // The rollback's own transaction still uses this.indexerDb (transactionConnection). apiView may
+        // be absent on a minimal mock (or indexerDb itself absent in a static drift-guard analyzer), so
+        // fall back to the raw db.
+        this.indexerView = (this.indexerDb && typeof this.indexerDb.apiView === 'function') ? this.indexerDb.apiView() : this.indexerDb;
+
         // Setup alias to the utility class
         this.util      = indexer.util;
 
@@ -163,12 +173,12 @@ class Rollback {
         // (blocks/transactions gone, orphaned action/ledger rows surviving) that forks the hash
         // chain permanently and is never retried (the processed-reorg cursor advances). A throw
         // instead aborts before any delete; the driver re-detects and retries the reorg cleanly.
-        let rows = await this.indexerDb.doQueryStrict(query, args);
+        let rows = await this.indexerView.doQueryStrict(query, args);
         if(rows.length > 0)
             firstActionIndex = Number(rows[0].action_index);
 
         // Capture the upper bound of the rolled-back action range (still in the DB at this point).
-        let maxRows = await this.indexerDb.doQueryStrict(
+        let maxRows = await this.indexerView.doQueryStrict(
             'SELECT MAX(a.action_index) AS last_action_index FROM actions a WHERE a.block_index >= ?',
             [block_index]
         );
@@ -346,7 +356,7 @@ class Rollback {
                 // updateTokens/updateMarkets below skip rows they must fix - a stale-balance/supply
                 // divergence. Fail loud so the reorg is retried cleanly instead.
                 if(query){
-                    let rows = await this.indexerDb.doQueryStrict(query, args);
+                    let rows = await this.indexerView.doQueryStrict(query, args);
                     for(let row of rows){
                         // Populate addresses and tickers arrays
                         if(!this.util.isNull(row.address))
@@ -660,6 +670,18 @@ class Rollback {
                 // legitimate completion, which must NOT trigger a reset. Runs BEFORE the delete so
                 // both the parent and the orphaned chunk rows are still present.
                 if(firstActionIndex !== null){
+                    // Intern 'unverified' FIRST (IDX-1). The UPDATE below resolves its target id via
+                    // `JOIN index_statuses us ON us.status = 'unverified'`, but a normally hub-connected
+                    // node never writes 'unverified' forward (anchor.js only stores it when no
+                    // oracle_publish snapshot is mirrored), so that row is usually absent and the JOIN
+                    // matches nothing, silently no-oping the reset and leaving the parent wedged at
+                    // 'invalid_archive'. createStatus interns it (INSERT IGNORE) so the JOIN is
+                    // guaranteed non-empty; index_statuses ids are never hashed, so an in-rollback
+                    // intern is byte-neutral. The UPDATE's SQL text is deliberately left unchanged so
+                    // the cross-repo drift guard (xchain-sync rollback-coverage) still matches; the
+                    // replica converges via snapshot catch-up (it cannot intern locally without
+                    // diverging the replicated id, and anchor status_id is in no block-hash projection).
+                    await this.indexerDb.createStatus('unverified');
                     query = `UPDATE anchor_actions p
                                 JOIN index_statuses ps ON ps.id = p.status_id AND ps.status = 'invalid_archive'
                                 JOIN anchor_actions c
@@ -847,6 +869,35 @@ class Rollback {
                 `DELETE FROM pubkeys
                  WHERE address_id NOT IN (SELECT id FROM index_addresses)`, []);
 
+            // IDX-2: the dangling-tick sweep above misses a market whose pair was FIRST traded only in
+            // the orphaned range but whose ticks survive (both were issued in earlier surviving
+            // blocks). createMarket inserts the markets row on the first order for a pair; if that
+            // order (and every other order/match for the pair) is in the orphaned range, the generic
+            // dataTables delete removes the orders but updateMarkets only refreshes stats, never
+            // deletes, so a zeroed-stats row lingers that a from-genesis replay never created. Scoped
+            // to the pairs this rollback collected (`markets`), each is dropped only if NO surviving
+            // orders/order_matches row references it in either orientation. markets is unhashed and
+            // snapshot-replicated (no consensus reader), so this is a fresh-replay parity fix.
+            for(let pair of markets){
+                let survives = await this.indexerDb.doQuery(
+                    `SELECT 1 FROM orders o
+                        WHERE (o.give_tick_id=? AND o.get_tick_id=?) OR (o.give_tick_id=? AND o.get_tick_id=?)
+                        LIMIT 1`,
+                    [pair.tick1_id, pair.tick2_id, pair.tick2_id, pair.tick1_id]);
+                if(survives.length === 0){
+                    survives = await this.indexerDb.doQuery(
+                        `SELECT 1 FROM order_matches om
+                            WHERE (om.give_tick_id=? AND om.get_tick_id=?) OR (om.give_tick_id=? AND om.get_tick_id=?)
+                            LIMIT 1`,
+                        [pair.tick1_id, pair.tick2_id, pair.tick2_id, pair.tick1_id]);
+                }
+                if(survives.length === 0){
+                    await this.indexerDb.doQuery(
+                        `DELETE FROM markets WHERE (tick1_id=? AND tick2_id=?) OR (tick1_id=? AND tick2_id=?)`,
+                        [pair.tick1_id, pair.tick2_id, pair.tick2_id, pair.tick1_id]);
+                }
+            }
+
             // Delete consensus price snapshots anchored to the orphaned blocks.
             // price_snapshots anchors each round to a block via reference_block
             // (its equivalent of block_index) rather than block_index itself, so
@@ -864,9 +915,20 @@ class Rollback {
             // price_snapshots delete exists because a from-genesis replay never
             // regenerates orphaned rounds, so hub re-mirror alone cannot close
             // the divergence window on this table.
-            query = `DELETE FROM price_snapshots WHERE reference_block >= ?`;
-            args  = [block_index];
-            await this.indexerDb.doQuery(query, args);
+            // PRICE-SNAP-1: reference_block is ALWAYS a BTC anchor height (the PRICE v0 wire field),
+            // regardless of the publishing chain, and reference_chain records that publisher. The old
+            // unqualified `reference_block >= block_index` therefore (a) is a numeric no-op on a
+            // DOGE/LTC indexer (local heights dwarf BTC anchors) and (b) would, once the price
+            // capability is resolvable off-BTC, let a BTC reorg delete a DOGE/LTC-published round
+            // anchored to a BTC height that the hub (source_chain-scoped) still keeps - a mirror-hole
+            // fork on a table that feeds getOracleDataForVM. Scope the delete to BTC-published rounds
+            // on the BTC indexer only; off-BTC rounds converge via the hub's source_chain retraction,
+            // exactly as the note above describes. Behavior-preserving today (all v0 rounds are BTC).
+            if(this.config['COIN'] === 'BTC'){
+                query = `DELETE FROM price_snapshots WHERE reference_chain = 'BTC' AND reference_block >= ?`;
+                args  = [block_index];
+                await this.indexerDb.doQuery(query, args);
+            }
 
             // oracle_prices is the per-action local mirror of PRICE v1 rows
             // (populated by hub_db_sync). Like price_snapshots, its rows are
@@ -1003,7 +1065,9 @@ class Rollback {
         // Quiesce the durable queue across delivery so an in-flight drain cannot race these rows (item
         // 5297); resume() is in the finally so the queue always restarts even if a delivery throws.
         if(stagedRetractions.length > 0){
-            if(this.hubPushQueue) this.hubPushQueue.pause();
+            // await: pause() now waits for any in-flight drain to finish (HUB-RETRACT-3), so a
+            // pre-fetched stale forward push cannot land on the hub after our retraction below.
+            if(this.hubPushQueue) await this.hubPushQueue.pause();
             try {
                 let coin       = this.config['COIN'];
                 let liveByType = {
