@@ -316,6 +316,33 @@ class ProtocolChanges {
         // the strict check effective from block 0 on testnet/regtest and mainnet alike.
         this.addChange('LOCK_MAX_SUPPLY_EXACT', '2.0.0',0,0,0,0,0,0);
 
+        // ISSUE validity: cumulative MINT_SUPPLY cap. Before this activation the only guard on
+        // an ISSUE's MINT_SUPPLY was a single-shot `MINT_SUPPLY > MAX_SUPPLY` check, which
+        // ignores supply that already exists: an owner could re-ISSUE the same tick with
+        // MINT_SUPPLY repeatedly (LOCK_MINT_SUPPLY unset) and mint fresh supply past MAX_SUPPLY
+        // (and past a locked NFT edition size), because MINT_SUPPLY is credited on every valid
+        // ISSUE, not just the first. After activation the cap is enforced against
+        // SUPPLY + MINT_SUPPLY, matching mint.js's cumulative MAX_SUPPLY invariant (bcadd(SUPPLY,
+        // AMOUNT) > MAX_SUPPLY). Gated because it TIGHTENS validity (a previously-valid over-cap
+        // re-ISSUE becomes invalid): an ungated flip would fork a heterogeneous fleet on the
+        // first such re-ISSUE and diverge a from-genesis replay from the committed ledger_hash.
+        // Same coordinated contract-era flag-day timestamp as the other tightening consensus
+        // fixes in this window (2026-10-01 00:00:00 UTC); testnet/regtest activate at genesis
+        // (all zeros) so the check is in force from block 0 there and in the unit/e2e suites.
+        this.addChange('ISSUE_MINT_SUPPLY_CUMULATIVE_CAP', '2.0.0',1790812800,0,0,0,0,0);
+
+        // SLEEP validity: honor the token's LOCK_SLEEP flag. Before this activation the SLEEP
+        // handler never inspected tokenInfo['LOCK_SLEEP'], so a token issued with LOCK_SLEEP=1
+        // (a documented, immutable "cannot be paused" guarantee holders rely on) could still be
+        // frozen indefinitely by its owner (SLEEP|1|-1|TICK) - the only LOCK_* flag with zero
+        // enforcement anywhere in src/. After activation a TICK sleep of a LOCK_SLEEP=1 token is
+        // rejected ('invalid: LOCK_SLEEP'), mirroring the LOCK_MINT (mint.js) / LOCK_CALLBACK
+        // (callback.js) enforcement pattern. Gated because it TIGHTENS validity (a previously-
+        // valid SLEEP becomes invalid), so the fleet and any from-genesis replay must flip at one
+        // coordinated block. Same contract-era flag-day timestamp as the other tightening fixes
+        // (2026-10-01 00:00:00 UTC); testnet/regtest activate at genesis.
+        this.addChange('SLEEP_RESPECTS_LOCK_SLEEP', '2.0.0',1790812800,0,0,0,0,0);
+
         // UNSTAKE cooldown-completion action attribution. When a capability/contract
         // UNSTAKE cooldown elapses, processCooldownCompletions credits the returned
         // tokens back to the source. Before this activation the credit reused the

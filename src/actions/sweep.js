@@ -91,6 +91,17 @@ class Sweep {
          * FORMAT Validations
          ****************************************************************/
 
+        // DESTINATION is mandatory. A null/empty DESTINATION skips the format check below and
+        // sweeps every SOURCE balance into a NULL-address credit: createLedgerChangeRecord writes
+        // the credit with address_id=NULL, but updateBalances skips NULL addresses, so SOURCE's
+        // balances row is decremented with no matching credit row - the balances sum falls short
+        // of the unchanged token supply and the per-block sanityCheck throws SanityError, halting
+        // the indexer fleet-wide from one crafted tx (and OWNERSHIPS=1 would also deed ownership to
+        // a NULL owner). Reject it up front. Ungated: current behaviour is a chain HALT (no block
+        // commits), so there is no committed valid ledger for this to fork against.
+        if(!error && this.util.isNull(data['DESTINATION']))
+            error = "invalid: DESTINATION (null)";
+
         // Verify DESTINATION address format
         if(!error && !this.util.isNull(data['DESTINATION']) && !this.util.isCryptoAddress(data['DESTINATION']))
             error = "invalid: DESTINATION (format)";

@@ -72,10 +72,14 @@ class Deposit {
 
         // Verify CONTRACT_ACTION_INDEX is a canonical integer index. This must reject at
         // parse, not just null at storage: the SQL existence lookup coerces a numeric-ish
-        // string ('2.0') onto a real contract id while the derived custody address keeps
-        // the raw form ('C:LTC:2.0'), crediting a phantom address. Same gate the
-        // contract-staking family (STAKE/UNSTAKE/DELEGATE v3) uses.
-        if(!error && !/^\d+$/.test(String(data['CONTRACT_ACTION_INDEX'])))
+        // string onto a real contract id while the derived custody address keeps the raw
+        // form, crediting a phantom address the contract can never spend from. `/^\d+$/`
+        // rejected '2.0' but NOT leading-zero forms ('02','007'), which coerce to the real
+        // contract id in SQL yet derive 'C:CHAIN:02' - a distinct address_id from the
+        // contract's canonical 'C:CHAIN:2' custody, silently stranding the deposit. Require
+        // a canonical no-leading-zero integer. Same gate the contract-staking family
+        // (STAKE/UNSTAKE/DELEGATE v3) uses - apply the same tightening there.
+        if(!error && !/^[1-9]\d*$/.test(String(data['CONTRACT_ACTION_INDEX'])))
             error = 'invalid: CONTRACT_ACTION_INDEX (format)';
 
         // Verify contract exists and is active

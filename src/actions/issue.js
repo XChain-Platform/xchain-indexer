@@ -351,6 +351,23 @@ class Issue {
         if(!error && !this.util.isNull(data['MINT_SUPPLY']) && this.util.bcgt(data['MINT_SUPPLY'], data['MAX_SUPPLY']))
             error = 'invalid: MINT_SUPPLY > MAX_SUPPLY';
 
+        // Cumulative MINT_SUPPLY cap: MINT_SUPPLY mints fresh supply on EVERY valid ISSUE (line
+        // ~640 credits it unconditionally), so on a re-ISSUE it stacks on top of the supply that
+        // already exists. The single-shot MINT_SUPPLY>MAX_SUPPLY guard above ignores that, letting
+        // an owner re-ISSUE MINT_SUPPLY repeatedly (LOCK_MINT_SUPPLY unset) and inflate past
+        // MAX_SUPPLY - and past a locked NFT edition size, since LOCK_MAX_SUPPLY only freezes the
+        // cap, not minting. Enforce the cap against SUPPLY + MINT_SUPPLY, mirroring mint.js's
+        // cumulative invariant. getTokenSupply reflects earlier same-block mints/issues; this
+        // action's own MINT_SUPPLY is credited later, so it is not yet counted. Gated (tightens
+        // validity): flips fleet-wide at one coordinated block; pre-launch chains activate at genesis.
+        if(!error && !this.util.isNull(data['MINT_SUPPLY']) && this.util.bcgt(data['MINT_SUPPLY'], 0)
+           && await this.actions.protocolChanges.isEnabled('ISSUE_MINT_SUPPLY_CUMULATIVE_CAP', data['BLOCK_INDEX'])){
+            let currentSupply = await this.indexerDb.getTokenSupply(data['TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
+            let projected     = this.util.bcadd(currentSupply, data['MINT_SUPPLY'], data['DECIMALS']);
+            if(this.util.bcgt(projected, this.util.bcadd(data['MAX_SUPPLY'], 0, data['DECIMALS'])))
+                error = 'invalid: MINT_SUPPLY exceeds MAX_SUPPLY';
+        }
+
         // Verify MINT_ADDRESS_MAX is less than MAX_SUPPLY
         if(!error && !this.util.isNull(data['MINT_ADDRESS_MAX']) && this.util.bcgt(data['MINT_ADDRESS_MAX'], 0) && this.util.bcgt(data['MINT_ADDRESS_MAX'], data['MAX_SUPPLY']))
             error = 'invalid: MINT_ADDRESS_MAX > MAX_SUPPLY';

@@ -88,6 +88,45 @@ describe('Sweep @regression @tier3', function () {
             assert.ok(indexer.indexerDb.createSweep.calledOnce);
         });
 
+        // SWEEP-1: a null/empty DESTINATION must be rejected. Left unchecked it credits every
+        // swept balance to a NULL address_id that updateBalances skips, breaking the per-block
+        // supply invariant and halting the fleet (SanityError). Reject it, and never emit a
+        // NULL-address credit.
+        it('null DESTINATION → invalid, no NULL-address credit emitted', async function () {
+            indexer.indexerDb.getAddressBalances.resolves({ 1: '5', 2: '10' }); // GAS + another tick
+            indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
+            indexer.indexerDb.getAddressOwnerships.resolves(['MYTOKEN']);
+            indexer.indexerDb.getAddressEscrows.resolves([]);
+            indexer.indexerDb.isActionAllowed.resolves(true);
+            indexer.indexerDb.getTicker.resolves('GAS');
+
+            const data   = createBaseData({ ACTION: 'SWEEP', FORMAT: 0, SOURCE });
+            const params = ['0']; // DESTINATION omitted → null
+
+            await handler.parse(params, data, null);
+
+            assert.strictEqual(data['STATUS'], 'invalid: DESTINATION (null)');
+            // No balance transfer and no ownership deed-over should have run.
+            assert.ok(!indexer.indexerDb.createCredit.called, 'must not write any credit for a null-destination sweep');
+            assert.ok(!indexer.indexerDb.createIssue.called, 'must not transfer ownership to a null owner');
+        });
+
+        it('empty-string DESTINATION → invalid (same guard)', async function () {
+            indexer.indexerDb.getAddressBalances.resolves({ 1: '5' });
+            indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
+            indexer.indexerDb.getAddressOwnerships.resolves([]);
+            indexer.indexerDb.getAddressEscrows.resolves([]);
+            indexer.indexerDb.isActionAllowed.resolves(true);
+            indexer.indexerDb.getTicker.resolves('GAS');
+
+            const data   = createBaseData({ ACTION: 'SWEEP', FORMAT: 0, SOURCE });
+            const params = ['0', ''];
+
+            await handler.parse(params, data, null);
+
+            assert.strictEqual(data['STATUS'], 'invalid: DESTINATION (null)');
+        });
+
     });
 
     // ─── OWNERSHIPS=1 ────────────────────────────────────────────────

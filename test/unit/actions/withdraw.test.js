@@ -113,6 +113,33 @@ describe('Withdraw handler @regression @tier2', function () {
         });
     });
 
+    // WITHDRAW-1: WITHDRAW was the sole token-moving handler that never checked whether the TICK
+    // is asleep, and shared the /^\d+$/ gate that admits leading-zero (phantom-address) indexes.
+    describe('WITHDRAW-1: sleeping-tick + canonical-index enforcement @regression @security', function () {
+
+        it('sleeping TICK → invalid (mirror of DEPOSIT)', async function () {
+            // SOURCE awake, but the TICK is asleep: isActionAllowed(null, TICK) → false.
+            indexer.indexerDb.isActionAllowed = sinon.stub().callsFake(async (addr, tick) => !(addr === null && tick === TICK));
+
+            const params = ['0', CONTRACT_INDEX, TICK, '100'];
+            const data   = makeData({ FORMAT: 0 });
+
+            await handler.parse(params, data, null);
+
+            assert.strictEqual(data.STATUS, 'invalid: TICK (sleeping)');
+            assert.ok(!indexer.indexerDb.createCredit.called, 'no ledger movement of a sleeping tick');
+        });
+
+        it('rejects a leading-zero CONTRACT_ACTION_INDEX (07) as (format)', async function () {
+            const params = ['0', '07', TICK, '100'];
+            const data   = makeData({ FORMAT: 0 });
+
+            await handler.parse(params, data, null);
+
+            assert.ok(String(data.STATUS).includes('CONTRACT_ACTION_INDEX (format)'));
+        });
+    });
+
     describe('valid withdraw', function () {
 
         it('valid withdraw → STATUS valid, createWithdrawal called', async function () {

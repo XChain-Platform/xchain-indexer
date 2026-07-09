@@ -99,6 +99,16 @@ class Sleep {
         if(!error && data['TYPE']=='TICK' && data['SOURCE']!=tokenInfo['OWNER'])
             error = 'invalid: TICK (not authorized)';
 
+        // Honor the token's LOCK_SLEEP flag. A token issued with LOCK_SLEEP=1 carries an immutable
+        // "cannot be paused" guarantee (issue.js), so a TICK sleep of it must be rejected - the same
+        // enforcement every other LOCK_* flag gets in its handler (LOCK_MINT in mint.js, LOCK_CALLBACK
+        // in callback.js). Without it the owner can permanently freeze a token they promised never to
+        // pause (SLEEP|1|-1|TICK -> isTickSleeping forever), stranding every holder's balance. Gated
+        // (tightens validity): flips fleet-wide at one coordinated block; pre-launch chains at genesis.
+        if(!error && data['TYPE']=='TICK' && tokenInfo && tokenInfo['LOCK_SLEEP']==1
+           && await this.actions.protocolChanges.isEnabled('SLEEP_RESPECTS_LOCK_SLEEP', data['BLOCK_INDEX']))
+            error = 'invalid: LOCK_SLEEP';
+
         // Reject if TICK ownership is currently escrowed by an open ORDER/SWAP/DISPENSER
         if(!error && data['TYPE']=='TICK' && await this.indexerDb.isOwnershipEscrowed(data['TICK']))
             error = 'invalid: TICK (ownership escrowed)';

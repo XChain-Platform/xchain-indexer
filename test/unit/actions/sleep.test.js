@@ -165,6 +165,49 @@ describe('Sleep @regression @tier3', function () {
             assert.ok(data['STATUS'].includes('invalid'));
         });
 
+        // SLEEP-1: a LOCK_SLEEP=1 token carries an immutable "cannot be paused" guarantee.
+        it('LOCK_SLEEP=1 token cannot be slept even by its owner → invalid (flag on)', async function () {
+            const tokenInfo = createTokenInfo({ TICK: 'TEST', TICK_ID: 1, OWNER, LOCK_SLEEP: 1 });
+            indexer.indexerDb.getTokenInfo.resolves(tokenInfo);
+            indexer.indexerDb.isActionAllowed.resolves(true);
+
+            // Indefinite-sleep sentinel (-1), the most damaging form.
+            const data   = createBaseData({ ACTION: 'SLEEP', FORMAT: 1, SOURCE: OWNER, BLOCK_INDEX: 100 });
+            const params = ['1', '-1', 'TEST', null];
+
+            await handler.parse(params, data, null);
+
+            assert.strictEqual(data['STATUS'], 'invalid: LOCK_SLEEP');
+        });
+
+        it('LOCK_SLEEP=0 token can still be slept by its owner → valid', async function () {
+            const tokenInfo = createTokenInfo({ TICK: 'TEST', TICK_ID: 1, OWNER, LOCK_SLEEP: 0 });
+            indexer.indexerDb.getTokenInfo.resolves(tokenInfo);
+            indexer.indexerDb.isActionAllowed.resolves(true);
+
+            const data   = createBaseData({ ACTION: 'SLEEP', FORMAT: 1, SOURCE: OWNER, BLOCK_INDEX: 100 });
+            const params = ['1', '200', 'TEST', null];
+
+            await handler.parse(params, data, null);
+
+            assert.strictEqual(data['STATUS'], 'valid');
+        });
+
+        it('pre-flag-day (flag off) LOCK_SLEEP is not yet enforced → valid', async function () {
+            const tokenInfo = createTokenInfo({ TICK: 'TEST', TICK_ID: 1, OWNER, LOCK_SLEEP: 1 });
+            indexer.indexerDb.getTokenInfo.resolves(tokenInfo);
+            indexer.indexerDb.isActionAllowed.resolves(true);
+            actionsCtx.protocolChanges.isEnabled = sinon.stub().callsFake(async (name) =>
+                name === 'SLEEP_RESPECTS_LOCK_SLEEP' ? false : true);
+
+            const data   = createBaseData({ ACTION: 'SLEEP', FORMAT: 1, SOURCE: OWNER, BLOCK_INDEX: 100 });
+            const params = ['1', '200', 'TEST', null];
+
+            await handler.parse(params, data, null);
+
+            assert.strictEqual(data['STATUS'], 'valid');
+        });
+
         it('TICK not found → invalid', async function () {
             indexer.indexerDb.getTokenInfo.resolves(null);
             indexer.indexerDb.isActionAllowed.resolves(true);

@@ -100,6 +100,21 @@ describe('Deposit (DEPOSIT) @regression @tier2', function () {
             assert.ok(String(data['STATUS']).includes('CONTRACT_ACTION_INDEX (format)'));
         });
 
+        // DEPOSIT-1: leading-zero forms coerce to the real contract id in SQL but derive a
+        // distinct custody address ('C:BTC:07' != 'C:BTC:7'), silently stranding the deposit.
+        it('rejects a leading-zero CONTRACT_ACTION_INDEX (07) as (format)', async function () {
+            const data = depositData({ FORMAT: 0 });
+            await handler.parse(['0', '07', 'TEST', '10'], data, null);
+            assert.ok(String(data['STATUS']).includes('CONTRACT_ACTION_INDEX (format)'));
+            assert.ok(!indexer.indexerDb.createCredit.called, 'no phantom-address credit for a rejected deposit');
+        });
+
+        it('rejects a single leading-zero CONTRACT_ACTION_INDEX (0) as (format)', async function () {
+            const data = depositData({ FORMAT: 0 });
+            await handler.parse(['0', '0', 'TEST', '10'], data, null);
+            assert.ok(String(data['STATUS']).includes('CONTRACT_ACTION_INDEX (format)'));
+        });
+
         it('rejects when contract does not exist', async function () {
             indexer.indexerDb.getContract.resolves(null);
             const data = depositData({ FORMAT: 0 });

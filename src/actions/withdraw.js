@@ -72,9 +72,10 @@ class Withdraw {
             error = 'invalid: CONTRACT_ACTION_INDEX (required)';
 
         // Verify CONTRACT_ACTION_INDEX is a canonical integer index (see deposit.js: a
-        // coercible non-canonical form would resolve a real contract but derive a phantom
-        // custody address string, and non-numeric junk must not reach the row write).
-        if(!error && !/^\d+$/.test(String(data['CONTRACT_ACTION_INDEX'])))
+        // coercible non-canonical form - '2.0' or a leading-zero '02'/'007' - would resolve
+        // a real contract but derive a phantom custody address string, and non-numeric junk
+        // must not reach the row write). Require a no-leading-zero integer, matching deposit.js.
+        if(!error && !/^[1-9]\d*$/.test(String(data['CONTRACT_ACTION_INDEX'])))
             error = 'invalid: CONTRACT_ACTION_INDEX (format)';
 
         // Verify contract exists
@@ -122,6 +123,13 @@ class Withdraw {
         // Verify SOURCE is not sleeping
         if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
             error = 'invalid: SOURCE (sleeping)';
+
+        // Verify TICK is not sleeping. Every other token-moving handler (its mirror DEPOSIT,
+        // plus SEND/MINT/AIRDROP/CALLBACK/DESTROY/ORDER/SWAP/DISPENSER) blocks movement of a
+        // sleeping tick; WITHDRAW was the sole omission, so a frozen token could be pulled out
+        // of contract custody while DEPOSIT of the same tick is rejected.
+        if(!error && await this.indexerDb.isActionAllowed(null, data['TICK'], data['BLOCK_INDEX']) == false)
+            error = 'invalid: TICK (sleeping)';
 
         // Determine final status
         let status = (error) ? error : 'valid';

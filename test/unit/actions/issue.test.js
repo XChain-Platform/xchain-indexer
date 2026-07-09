@@ -902,4 +902,60 @@ describe('Issue handler @regression @tier1', function () {
             assert.ok(data.STATUS.startsWith('invalid'));
         });
     });
+
+    // ISSUE-1: cumulative MINT_SUPPLY cap. A re-ISSUE's MINT_SUPPLY mints fresh supply on top
+    // of what already exists; the single-shot MINT_SUPPLY>MAX_SUPPLY guard ignored that, letting
+    // an owner inflate past MAX_SUPPLY by repeating ISSUE with MINT_SUPPLY. The check is gated on
+    // ISSUE_MINT_SUPPLY_CUMULATIVE_CAP.
+    describe('ISSUE-1: cumulative MINT_SUPPLY cap @regression @security', function () {
+
+        const source = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
+
+        it('re-ISSUE MINT_SUPPLY that would exceed MAX_SUPPLY is rejected (flag on)', async function () {
+            // Existing token at cap: SUPPLY=1000, MAX_SUPPLY=1000, owned by SOURCE, mintable.
+            const tokenInfo = createTokenInfo({ TICK: 'MYTOKEN', OWNER: source, MAX_SUPPLY: '1000', SUPPLY: '1000', DECIMALS: 0, LOCK_MINT_SUPPLY: 0 });
+            indexer.indexerDb.getTokenInfo.resolves(tokenInfo);
+            indexer.indexerDb.getTokenSupply.resolves('1000'); // current on-ledger supply, at cap
+
+            // MAX_SUPPLY omitted → repopulated to 1000 from tokenInfo; MINT_SUPPLY=1000 stacks past cap.
+            const params = makeFormat0Params({ TICK: 'MYTOKEN', MAX_SUPPLY: '', MINT_SUPPLY: '1000' });
+            const data   = makeData({ FORMAT: 0, BLOCK_INDEX: LOW_BLOCK, SOURCE: source });
+
+            await handler.parse(params, data, null);
+
+            assert.strictEqual(data.STATUS, 'invalid: MINT_SUPPLY exceeds MAX_SUPPLY');
+            assert.ok(!indexer.indexerDb.createToken.called, 'createToken must not run for a rejected over-mint');
+        });
+
+        it('re-ISSUE MINT_SUPPLY within remaining headroom stays valid (flag on)', async function () {
+            // SUPPLY=600 of a 1000 cap: minting 400 more reaches exactly the cap and is allowed.
+            const tokenInfo = createTokenInfo({ TICK: 'MYTOKEN', OWNER: source, MAX_SUPPLY: '1000', SUPPLY: '600', DECIMALS: 0, LOCK_MINT_SUPPLY: 0 });
+            indexer.indexerDb.getTokenInfo.resolves(tokenInfo);
+            indexer.indexerDb.getTokenSupply.resolves('600');
+
+            const params = makeFormat0Params({ TICK: 'MYTOKEN', MAX_SUPPLY: '', MINT_SUPPLY: '400' });
+            const data   = makeData({ FORMAT: 0, BLOCK_INDEX: LOW_BLOCK, SOURCE: source });
+
+            await handler.parse(params, data, null);
+
+            assert.strictEqual(data.STATUS, 'valid');
+        });
+
+        it('pre-flag-day (flag off) the legacy single-shot behaviour is preserved', async function () {
+            const tokenInfo = createTokenInfo({ TICK: 'MYTOKEN', OWNER: source, MAX_SUPPLY: '1000', SUPPLY: '1000', DECIMALS: 0, LOCK_MINT_SUPPLY: 0 });
+            indexer.indexerDb.getTokenInfo.resolves(tokenInfo);
+            indexer.indexerDb.getTokenSupply.resolves('1000');
+            // Flag OFF: cumulative check is skipped, so the over-cap re-ISSUE stays valid as before.
+            actionsCtx.protocolChanges.isEnabled = sinon.stub().callsFake(async (name, block) =>
+                name === 'ISSUANCE_FEE' ? Number(block) >= 862633 :
+                name === 'ISSUE_MINT_SUPPLY_CUMULATIVE_CAP' ? false : true);
+
+            const params = makeFormat0Params({ TICK: 'MYTOKEN', MAX_SUPPLY: '', MINT_SUPPLY: '1000' });
+            const data   = makeData({ FORMAT: 0, BLOCK_INDEX: LOW_BLOCK, SOURCE: source });
+
+            await handler.parse(params, data, null);
+
+            assert.strictEqual(data.STATUS, 'valid');
+        });
+    });
 });
