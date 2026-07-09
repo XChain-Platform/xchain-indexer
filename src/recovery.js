@@ -53,6 +53,7 @@ const ed25519 = require('./ed25519.js');
 const swq     = require('./stake_weighted_quorum.js');
 const eq      = require('./equivocation_header.js');
 const ccr     = require('./cross_chain_royalty_activation.js');
+const ar      = require('./anchor_reward_activation.js');
 
 class AnchorRecovery {
 
@@ -91,7 +92,7 @@ class AnchorRecovery {
             let batchSeq = Number(v1.match_batch_seq);
             try {
                 let archive = await this._verifyBatch(v1);
-                if(!this.dryRun) await this._rebuild(archive, report);
+                if(!this.dryRun) await this._rebuild(archive, report, v1.network);
                 else {
                     report.matches   += archive.matches.length;
                     report.calls     += (archive.calls || []).length;
@@ -299,7 +300,7 @@ class AnchorRecovery {
 
     // ── Rebuild (latest-status-wins: batches process in batch_seq order) ───────
 
-    async _rebuild(archive, report){
+    async _rebuild(archive, report, network){
         for(let s of (archive.capability_snapshots || [])){
             await this.db.doQuery(
                 'INSERT IGNORE INTO capability_snapshots (snapshot_block, capability, signing_pubkey, amount, source) VALUES (?, ?, ?, ?, ?)',
@@ -371,12 +372,29 @@ class AnchorRecovery {
             // ordering invariant without ever perturbing the counter. recovery_pending_rewards is
             // recovery-local: not consensus-hashed, not replicated by xchain-sync.
             for(let r of rewards){
+                // Pin the per-chain anchor-publish reward amount to the FROZEN consensus
+                // constant at/above the anchor-reward flag-day, EXACTLY as the live indexer
+                // credits it (anchor.js: createValidatorReward with ar.ANCHOR_REWARD_AMOUNT,
+                // "NEVER taken from the wire"). Otherwise a colluding oracle_publish quorum
+                // (or, without --verify-stakes, a fabricated on-chain archive) could archive an
+                // inflated anchor_<chain> amount that recovery would stage COLLECT-spendable
+                // while a live node credits only the frozen amount -> recovered/live divergence
+                // + over-credit on the COLLECT rail. anchor_archive is never v4/v5-derived, so
+                // its operator-tunable amount is kept as archived (matches the live push path),
+                // and below the flag-day the legacy amount stands (v4/v5 rejected on-chain).
+                let derivedChainReward = /^anchor_(BTC|LTC|DOGE)$/.test(String(r.reward_type)) &&
+                                         ar.isAnchorRewardActive(Number(r.block_index), network);
+                let amount = derivedChainReward ? ar.ANCHOR_REWARD_AMOUNT : String(r.amount);
+                if(derivedChainReward && String(r.amount) !== ar.ANCHOR_REWARD_AMOUNT)
+                    this.log('recovery: WARNING archived ' + r.reward_type + ' #' + r.round_number +
+                             ' amount ' + r.amount + ' != frozen ' + ar.ANCHOR_REWARD_AMOUNT +
+                             '; pinning to the frozen constant (forged or misconfigured archive?)');
                 await this.btcDb.doQuery(
                     `INSERT INTO recovery_pending_rewards
                         (source_address, validator_pubkey, reward_type, round_reference, amount, block_index)
                      VALUES (?, ?, ?, ?, ?, ?)`,
                     [String(r.source).substring(0, 120), String(r.validator_pubkey).toLowerCase().substring(0, 64),
-                     String(r.reward_type), Number(r.round_number), String(r.amount), Number(r.block_index)]);
+                     String(r.reward_type), Number(r.round_number), amount, Number(r.block_index)]);
                 report.rewards++;
             }
         }

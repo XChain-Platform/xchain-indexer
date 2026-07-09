@@ -295,6 +295,25 @@ describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () 
             assert.strictEqual(btcDb.rewards[0].source_address, '1StakeAddr');
         });
 
+        it('pins an inflated anchor_<chain> reward to the frozen constant (recovered==live, REC-REWARD-AMT-1)', async function () {
+            // A colluding oracle_publish quorum (or, without --verify-stakes, a fabricated
+            // archive) claims an inflated anchor_BTC amount. The batch still verifies (the
+            // wrapper sigs are valid over the CRC-bound JSON), but recovery must STAGE the
+            // FROZEN ANCHOR_REWARD_AMOUNT the live indexer credits (anchor.js), never the wire
+            // amount, or the recovered COLLECT rail over-credits vs a live node.
+            let { v1 } = buildBatch(0, [rawMatch('m1')], oracleKeys, crossKeys,
+                                    { rewards: [ reward({ amount: '999.00000000' }),
+                                                 reward({ reward_type: 'anchor_archive', round_number: 3, amount: '999.00000000' }) ] });
+            let btcDb = rewardBtcDbStub();
+            let report = await new AnchorRecovery(memDb([v1], []), Object.assign({ btcDb }, quiet)).run();
+            assert.strictEqual(report.verified, 1);
+            let byType = Object.fromEntries(btcDb.rewards.map(r => [r.reward_type, r]));
+            // anchor_BTC is v4/v5-derived at/above the flag: pinned to the frozen constant.
+            assert.strictEqual(byType['anchor_BTC'].amount, '10.00000000');
+            // anchor_archive is never v4/v5-derived: the operator-tunable amount is kept as archived.
+            assert.strictEqual(byType['anchor_archive'].amount, '999.00000000');
+        });
+
         it('rejects an archive claiming a derived reward type (oracle_round must never ride the archive)', async function () {
             let { v1 } = buildBatch(0, [rawMatch('m1')], oracleKeys, crossKeys,
                                     { rewards: [reward({ reward_type: 'oracle_round' })] });
