@@ -33,6 +33,7 @@ const XChainIndexer = require('./XChainIndexer');
 const jsonRouter    = require('express-json-rpc-router');
 const { buildHealthResponse } = require('./health');
 const { getStakeSourceByPubkey } = require('./stake-source');
+const { canonicalizeRewardType } = require('./reward-push-gate');
 const merkle        = require('./merkle');
 const ar            = require('./anchor_reward_activation.js');
 const crypto        = require('crypto');
@@ -861,7 +862,13 @@ async function startApi(){
                 return { error: 'rewards must be an array' };
             if(!indexer.indexerDb)
                 return { error: 'indexer database not ready' };
-            let type = reward_type || 'oracle_round';
+            // Canonicalize the reward_type case BEFORE any gate/store/reconcile.
+            // The validator_rewards column is utf8_general_ci and the derived
+            // winner is written as 'anchor_' + CHAIN.toUpperCase(), so a mixed-case
+            // push (e.g. 'anchor_btc') would otherwise slip the case-sensitive
+            // flag-day gate below AND collation-collide with the derived winner in
+            // reconcileAnchorRewardWinner, deleting the legit row (forge/fork).
+            let type = canonicalizeRewardType(reward_type || 'oracle_round');
             if(!/^anchor_[A-Za-z_]+$/.test(type))
                 return { error: 'reward_type ' + type + ' is not pushable (derived during block processing)' };
             let blockIdx = block_index || 0;

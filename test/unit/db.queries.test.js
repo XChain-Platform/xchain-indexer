@@ -1605,7 +1605,9 @@ describe('Database capability snapshot methods @regression @tier1', function () 
         ]);
         const result = await db.getCapabilitySnapshotValidators('cross_chain', 100);
         assert.deepStrictEqual(result[0], { pubkey: 'aa', amount: '5000' });
-        assert.deepStrictEqual(result[1], { pubkey: 'bb', amount: 'null' });
+        // A NULL amount is coerced to '0' to match the sibling getCapabilitySnapshotWeights
+        // and the BTC local path (previously surfaced as the literal string 'null').
+        assert.deepStrictEqual(result[1], { pubkey: 'bb', amount: '0' });
     });
 
     it('isPubkeyInCapabilitySnapshot returns true when row found', async function () {

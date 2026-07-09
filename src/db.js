@@ -10294,7 +10294,11 @@ class Database {
                      FROM capability_snapshots
                      WHERE capability = ? AND snapshot_block = ?`;
         let rows = await this._mirrorDb().doQuery(query, [capability, snapshotBlock]);
-        return rows.map(r => ({ pubkey: String(r.pubkey), amount: String(r.amount) }));
+        // Guard a NULL amount to '0' so all three snapshot read methods render it
+        // identically: the sibling getCapabilitySnapshotWeights (r.weight == null ?
+        // '0') and the BTC local path both coerce NULL to '0'; without this an
+        // unguarded NULL would surface as the literal string 'null'.
+        return rows.map(r => ({ pubkey: String(r.pubkey), amount: r.amount == null ? '0' : String(r.amount) }));
     }
 
     // Whether a pubkey is in the mirrored capability snapshot at a block (qualified).
@@ -11347,7 +11351,14 @@ class Database {
             where += ' AND (block_index > ? OR (block_index = ? AND action_index > ?))';
             args.push(afterBlock, afterBlock, afterAction);
         }
-        let max = Number(limit) > 0 ? Number(limit) : 100;
+        // Floor + hard-cap here at the interpolation site so the row count is
+        // always a bounded integer regardless of caller: a fractional limit
+        // (e.g. 100.5) would produce `LIMIT 100.5`, a MariaDB syntax error that
+        // throws and fails the whole attestation-work poll, and an unclamped large
+        // integer would be an unbounded scan. The RPC layer also range-clamps, but
+        // this method owns the SQL so it enforces the invariant for every caller.
+        let max = Number(limit);
+        max = (Number.isFinite(max) && max > 0) ? Math.min(Math.floor(max), 500) : 100;
         let query = `SELECT action_index, request_id, contract_index, fee_payer_id, provider_id,
                             payload, callback_method, callback_params_json,
                             redundancy, deadline_block, gas_escrow, fee_tick_id, fee_amount,
@@ -11355,7 +11366,8 @@ class Database {
                      FROM attests
                      WHERE ` + where + `
                      ORDER BY block_index ASC, action_index ASC
-                     LIMIT ` + max;
+                     LIMIT ?`;
+        args.push(max);
         let rows = await this.doQuery(query, args);
         // Convert BigInt columns to Number so the express JSON serializer
         // doesn't throw `TypeError: Do not know how to serialize a BigInt`.
