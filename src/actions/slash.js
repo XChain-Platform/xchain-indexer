@@ -244,7 +244,10 @@ class Slash {
 
         if(status === 'valid'){
             // Burn the whole bond (active stakes + cooldown unstakes); returns total XCHAIN burned.
-            let burned = await this.indexerDb.slashCapabilityStake(pubkeyId, data['BLOCK_INDEX'], data['ACTION_INDEX']);
+            // SLASH-1: at/after SLASH_BURNS_PENDING_STAKE (EQUIV-height-gated) burn pending-activation
+            // stakes too, so an equivocator's just-submitted top-up can't survive the burn.
+            let burnPending = await this.actions.protocolChanges.isEnabled('SLASH_BURNS_PENDING_STAKE', data['BLOCK_INDEX']);
+            let burned = await this.indexerDb.slashCapabilityStake(pubkeyId, data['BLOCK_INDEX'], data['ACTION_INDEX'], burnPending);
 
             // Bounty / treasury split. Governance config (Phase D); absent → pure burn.
             let split = this._bountyTreasurySplit(capability, burned);

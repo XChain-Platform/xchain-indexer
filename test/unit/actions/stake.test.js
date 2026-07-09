@@ -398,6 +398,43 @@ describe('Stake handler @regression @tier2', function () {
             assert.ok(indexer.indexerDb.createContractStake.calledOnce);
         });
 
+        it('STAKE-1: rejects a leading-zero TARGET_CONTRACT_INDEX at/after the flag-day', async function () {
+            const params = ['3', '100', PUBKEY, '005', CONTRACT_TICK];   // non-canonical index, flag on by default
+            const data   = makeData({ FORMAT: 3 });
+            await handler.parse(params, data, null);
+            assert.ok(String(data.STATUS).includes('TARGET_CONTRACT_INDEX (format)'));
+        });
+
+        it('STAKE-1: accepts a leading-zero index below the flag-day (legacy /^[0-9]+$/)', async function () {
+            actionsCtx.protocolChanges.isEnabled = sinon.stub().resolves(false);
+            const params = ['3', '100', PUBKEY, '005', CONTRACT_TICK];
+            const data   = makeData({ FORMAT: 3 });
+            await handler.parse(params, data, null);
+            assert.strictEqual(data.STATUS, 'valid');   // '005' -> contract 5, valid pre-flag-day
+        });
+
+        it('STAKE-2: rejects when staking GAS and AMOUNT+guardFee exceeds the GAS balance', async function () {
+            const GAS = actionsCtx.config['GAS'];
+            indexer.indexerDb.getTokenInfo.resolves(createTokenInfo({ TICK: GAS, TICK_ID: 1, DECIMALS: 8 }));
+            indexer.indexerDb.getAddressBalances.resolves({ 1: '100' });        // exactly AMOUNT, no room for the fee
+            indexer.util.maybeRunControllerGuard = sinon.stub().resolves({ guardFee: '5' });
+            const params = ['3', '100', PUBKEY, CONTRACT_INDEX, GAS];
+            const data   = makeData({ FORMAT: 3 });
+            await handler.parse(params, data, null);
+            assert.ok(String(data.STATUS).includes('STAKE + guard fee'));
+        });
+
+        it('STAKE-2: allows the combined debit when the GAS balance covers AMOUNT+guardFee', async function () {
+            const GAS = actionsCtx.config['GAS'];
+            indexer.indexerDb.getTokenInfo.resolves(createTokenInfo({ TICK: GAS, TICK_ID: 1, DECIMALS: 8 }));
+            indexer.indexerDb.getAddressBalances.resolves({ 1: '105' });        // covers 100 + 5
+            indexer.util.maybeRunControllerGuard = sinon.stub().resolves({ guardFee: '5' });
+            const params = ['3', '100', PUBKEY, CONTRACT_INDEX, GAS];
+            const data   = makeData({ FORMAT: 3 });
+            await handler.parse(params, data, null);
+            assert.strictEqual(data.STATUS, 'valid');
+        });
+
         it('v3 → mapper.createMappings called', async function () {
             const params = ['3', '100', PUBKEY, CONTRACT_INDEX, CONTRACT_TICK];
             const data   = makeData({ FORMAT: 3 });

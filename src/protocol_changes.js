@@ -388,6 +388,41 @@ class ProtocolChanges {
         // be rebuilt fresh so no pre-activation cooldown-completion blocks remain.
         this.addChange('UNSTAKE_COOLDOWN_COMPLETION_ACTION', '2.0.0',1790812800,0,0,0,0,0);
 
+        // Staking-family stress-sweep fixes (2026-07-09). All three are consensus-visible
+        // validity/derivation changes, gated on the same coordinated contract-era flag-day
+        // as the other 2026-10-01 fixes (a wrong value forks); testnet/regtest at genesis.
+
+        // DEL-1: DELEGATE v2 delegation-revoke previously INSERTed a fresh status=valid,
+        // activation_block=0 delegations row (createRevokeDelegation -> createDelegation) in
+        // addition to deactivating the parent, so a repeat revoke before maturity EXTENDED the
+        // revoked key's signer lifetime and the stray rows corrupt historical as-of effective-set
+        // reads. At/after this flag-day the revoke mirrors the v3 path: NO insert, deactivate the
+        // parent only. Changes the delegations table that feeds _stakeWeightsSql/stakes_root, so
+        // it is a hashed-derivation change (flag-day, not a query tweak).
+        this.addChange('DELEGATE_REVOKE_NO_REINSERT', '2.0.0',1790812800,0,0,0,0,0);
+
+        // STAKE-1: the contract-targeted TARGET_CONTRACT_INDEX was validated with /^[0-9]+$/, which
+        // accepts non-canonical leading-zero forms ('007'). Benign at runtime (Number-coerced
+        // consistently, no fund-stranding, unlike the DEPOSIT custody-address bug), but it is a
+        // non-canonical validity surface inconsistent with deposit/withdraw's /^[1-9]\d*$/. At/after
+        // this flag-day STAKE v3 / UNSTAKE v1 / DELEGATE v1,v3 reject leading zeros. UNLIKE the
+        // deposit/withdraw tightening (ungated - a leading-zero deposit was ALREADY a stranded-funds
+        // bug, so rejecting forked nothing valid), a leading-zero contract stake currently produces a
+        // VALID, correct row, so tightening it is a live validity change and MUST be gated.
+        this.addChange('CONTRACT_INDEX_CANONICAL', '2.0.0',1790812800,0,0,0,0,0);
+
+        // SLASH-1: slashCapabilityStake Pass 1 filtered `activation_block <= block`, so a
+        // pending-activation capability top-up (debited at STAKE time) escaped the equivocation bond
+        // burn and could later be UNSTAKEd/refunded (the sibling slashContractStake has no such
+        // filter). At/after this flag-day the whole locked bond burns, activated or not. Gated on the
+        // BTC-anchored EQUIV activation HEIGHT (equivocation_header.js EQUIV_HEADER_ACTIVATION.mainnet
+        // = 961000), NOT the 2026-10-01 timestamp: real slashing is inert below the EQUIV flag-day,
+        // and 961000 (~2026-08-04) precedes 2026-10-01, so a timestamp gate would leave a window where
+        // slashing ran with the old (incomplete) burn. Height-gated so the fix goes live exactly when
+        // slashing does. slashCapabilityStake is indexer-only (the follower mirrors the zeroed rows),
+        // so this is not a byte-locked twin.
+        this.addChange('SLASH_BURNS_PENDING_STAKE', '2.0.0',0,0,0,961000,0,0);
+
         // H-3: deterministic price_snapshots selection for native-coin fee
         // validation on NON-reference chains. Price rounds are anchored to BTC
         // heights, so getLatestPrice's `reference_block <= blockIndex` gate is

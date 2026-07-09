@@ -67,6 +67,10 @@ describe('SLASH action handler: equivocation verifier @regression', function () 
         ctx = {
             config: indexer.config, util: indexer.util, mapper: indexer.mapper,
             decoderDb: indexer.decoderDb, indexerDb: db,
+            protocolChanges: {
+                isDefined: sinon.stub().returns(true),
+                isEnabled: sinon.stub().resolves(true),
+            },
         };
         handler = new Slash(ctx);
         indexer.util.resetLists();
@@ -98,7 +102,8 @@ describe('SLASH action handler: equivocation verifier @regression', function () 
 
         assert.strictEqual(d['STATUS'], 'valid');
         assert.ok(indexer.indexerDb.slashCapabilityStake.calledOnce, 'slashCapabilityStake must be called once');
-        assert.deepStrictEqual(indexer.indexerDb.slashCapabilityStake.firstCall.args, [7, 200, 999]);
+        // 4th arg is burnPending (SLASH-1): true here since the mock flag defaults on.
+        assert.deepStrictEqual(indexer.indexerDb.slashCapabilityStake.firstCall.args, [7, 200, 999, true]);
         assert.ok(indexer.indexerDb.createCapabilitySlashEvent.calledOnce, 'an audit event must be written');
     });
 

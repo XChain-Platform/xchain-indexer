@@ -10901,7 +10901,7 @@ class Database {
     // set) AND its tokens are mirrored into a cooldown `unstakes` row, so Pass 1 must skip that
     // phantom copy (Pass 2 burns the cooldown row) - each token burned exactly once. The
     // (pubkey,capability) dedup that makes a first slash idempotent lives in the SLASH handler.
-    async slashCapabilityStake(pubkeyId, blockIndex, slashActionIndex){
+    async slashCapabilityStake(pubkeyId, blockIndex, slashActionIndex, burnPending){
         let valid_id = await this.getStatusId('valid');
         if(valid_id === null) return '0';
         let totalSlashed = '0';
@@ -10913,13 +10913,23 @@ class Database {
         // unstakes row in Pass 2 (which has no `remaining` gate), doubling `totalSlashed` and
         // inflating the bounty/treasury base computed from it. `deactivation_block > blockIndex`
         // was the inverted predicate (future block => TRUE in-window).
+        // SLASH-1 (gated by SLASH_BURNS_PENDING_STAKE, caller passes burnPending): a byzantine key's
+        // ENTIRE locked bond must burn, activated or NOT. A pending-activation top-up
+        // (activation_block > blockIndex) was already debited from the staker at STAKE time, so the
+        // legacy `activation_block <= ?` filter let it survive the burn and be UNSTAKEd/refunded
+        // later (the sibling slashContractStake never had this filter). At/after the flag-day the
+        // predicate is dropped; below it the legacy activation-gated burn is preserved for
+        // replay/fleet consistency. The `deactivation_block IS NULL` guard is INDEPENDENT and stays
+        // in both regimes (it is the Pass-1/Pass-2 double-burn defense, not an activation gate).
+        let activationClause = burnPending ? '' : 'AND activation_block <= ?';
         let stakesQ = `SELECT action_index, amount FROM stakes
                        WHERE signing_pubkey_id=? AND status_id=?
-                         AND activation_block <= ?
+                         ${activationClause}
                          AND CAST(amount AS DECIMAL(30,8)) > 0
                          AND deactivation_block IS NULL
                        ORDER BY action_index DESC`;
-        let stakeRows = await this.doQuery(stakesQ, [pubkeyId, valid_id, blockIndex]);
+        let stakeArgs = burnPending ? [pubkeyId, valid_id] : [pubkeyId, valid_id, blockIndex];
+        let stakeRows = await this.doQuery(stakesQ, stakeArgs);
         for(let row of stakeRows){
             let rowAmt = String(row.amount);
             if(!this.util.bcgt(rowAmt, '0')) continue;

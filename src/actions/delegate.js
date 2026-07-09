@@ -181,7 +181,9 @@ class Delegate {
             error = 'invalid: SIGNING_PUBKEY (format)';
         if(!error && this.util.isNull(data['TARGET_CONTRACT_INDEX']))
             error = 'invalid: TARGET_CONTRACT_INDEX (required)';
-        if(!error && (!/^[0-9]+$/.test(String(data['TARGET_CONTRACT_INDEX'])) || Number(data['TARGET_CONTRACT_INDEX']) <= 0))
+        // STAKE-1 (gated by CONTRACT_INDEX_CANONICAL): reject non-canonical leading zeros at/after the flag-day.
+        let idxRe = (await this.actions.protocolChanges.isEnabled('CONTRACT_INDEX_CANONICAL', data['BLOCK_INDEX'])) ? /^[1-9]\d*$/ : /^[0-9]+$/;
+        if(!error && (!idxRe.test(String(data['TARGET_CONTRACT_INDEX'])) || Number(data['TARGET_CONTRACT_INDEX']) <= 0))
             error = 'invalid: TARGET_CONTRACT_INDEX (format)';
         if(!error && this.util.isNull(data['TICK']))
             error = 'invalid: TICK (required)';
@@ -331,10 +333,21 @@ class Delegate {
             data['DEACTIVATION_BLOCK'] = parseInt(data['BLOCK_INDEX']) + activationDelay;
             await this.indexerDb.createStakeKeyRevocation(data);
         } else {
-            // Create record in delegations table (with revoked status)
-            await this.indexerDb.createRevokeDelegation(data);
+            // DEL-1 (gated by DELEGATE_REVOKE_NO_REINSERT): mirror the v3 contract-revoke path -
+            // deactivate the PARENT delegation only, do NOT insert a fresh row. The legacy path
+            // (createRevokeDelegation -> createDelegation) INSERTed a status=valid, activation_block=0
+            // delegations row, so a second revoke before the first matured extended the revoked key's
+            // signer lifetime, and the stray activation_block=0 rows misrepresent historical as-of
+            // effective-set reads. At/after the flag-day only the deactivation UPDATE runs (a repeat
+            // revoke then no-ops, since the parent already carries a deactivation_block). Below the
+            // flag-day the legacy insert+cap is preserved for replay/fleet consistency.
+            let noReinsert = await this.actions.protocolChanges.isEnabled('DELEGATE_REVOKE_NO_REINSERT', data['BLOCK_INDEX']);
+            if(!noReinsert)
+                await this.indexerDb.createRevokeDelegation(data);
 
-            // Mark the parent delegation's deactivation_block (BLOCK_INDEX + activation delay)
+            // Mark the parent delegation's deactivation_block (BLOCK_INDEX + activation delay). In the
+            // fixed path this is the only delegations write; in the legacy path it also caps the row
+            // just inserted above.
             if(status === 'valid')
                 await this.indexerDb.setDelegationDeactivation(data['SOURCE'], data['SIGNING_PUBKEY'], parseInt(data['BLOCK_INDEX']) + activationDelay);
         }
@@ -373,7 +386,9 @@ class Delegate {
             error = 'invalid: SIGNING_PUBKEY (format)';
         if(!error && this.util.isNull(data['TARGET_CONTRACT_INDEX']))
             error = 'invalid: TARGET_CONTRACT_INDEX (required)';
-        if(!error && (!/^[0-9]+$/.test(String(data['TARGET_CONTRACT_INDEX'])) || Number(data['TARGET_CONTRACT_INDEX']) <= 0))
+        // STAKE-1 (gated by CONTRACT_INDEX_CANONICAL): reject non-canonical leading zeros at/after the flag-day.
+        let idxRe = (await this.actions.protocolChanges.isEnabled('CONTRACT_INDEX_CANONICAL', data['BLOCK_INDEX'])) ? /^[1-9]\d*$/ : /^[0-9]+$/;
+        if(!error && (!idxRe.test(String(data['TARGET_CONTRACT_INDEX'])) || Number(data['TARGET_CONTRACT_INDEX']) <= 0))
             error = 'invalid: TARGET_CONTRACT_INDEX (format)';
         if(!error && this.util.isNull(data['TICK']))
             error = 'invalid: TICK (required)';

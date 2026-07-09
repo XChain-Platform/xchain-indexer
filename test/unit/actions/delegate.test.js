@@ -57,6 +57,10 @@ describe('Delegate (DELEGATE) @regression @tier2', function () {
             mapper:    indexer.mapper,
             decoderDb: indexer.decoderDb,
             indexerDb: indexer.indexerDb,
+            protocolChanges: {
+                isDefined: sinon.stub().returns(true),
+                isEnabled: sinon.stub().resolves(true),
+            },
         };
         handler = new Delegate(actionsCtx);
         indexer.util.resetLists();
@@ -171,11 +175,23 @@ describe('Delegate (DELEGATE) @regression @tier2', function () {
 
     describe('v2: capability revoke', function () {
 
-        it('valid revoke → STATUS valid and createRevokeDelegation called', async function () {
+        it('valid revoke → STATUS valid, deactivates the parent with no spurious insert (DEL-1, flag on)', async function () {
+            const data = delegateData({ FORMAT: 2 });
+            await handler.parse(['2', VALID_PUBKEY], data, null);
+            assert.strictEqual(data['STATUS'], 'valid');
+            // DEL-1 (DELEGATE_REVOKE_NO_REINSERT active by default in the mock): the revoke mirrors
+            // the v3 path - deactivate the parent only, do NOT insert a fresh delegations row.
+            assert.ok(indexer.indexerDb.setDelegationDeactivation.calledOnce);
+            assert.ok(indexer.indexerDb.createRevokeDelegation.notCalled);
+        });
+
+        it('legacy path (flag off) still inserts a revoke row then caps it', async function () {
+            actionsCtx.protocolChanges.isEnabled = sinon.stub().resolves(false);
             const data = delegateData({ FORMAT: 2 });
             await handler.parse(['2', VALID_PUBKEY], data, null);
             assert.strictEqual(data['STATUS'], 'valid');
             assert.ok(indexer.indexerDb.createRevokeDelegation.calledOnce);
+            assert.ok(indexer.indexerDb.setDelegationDeactivation.calledOnce);
         });
 
         it('rejects on non-BTC chain', async function () {
@@ -241,7 +257,7 @@ describe('Delegate (DELEGATE) @regression @tier2', function () {
             const data = delegateData({ FORMAT: 2 });
             await handler.parse(['2', VALID_PUBKEY], data, null);
             assert.strictEqual(data['STATUS'], 'valid');
-            assert.ok(indexer.indexerDb.createRevokeDelegation.calledOnce);
+            assert.ok(indexer.indexerDb.setDelegationDeactivation.calledOnce);   // delegation branch (not stake-key)
             assert.ok(indexer.indexerDb.getActiveStakeBySourceAndPubkey.notCalled);
             assert.ok(indexer.indexerDb.createStakeKeyRevocation.notCalled);
         });

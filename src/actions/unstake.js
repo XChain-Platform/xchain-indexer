@@ -179,7 +179,9 @@ class Unstake {
             error = 'invalid: SIGNING_PUBKEY (format)';
         if(!error && this.util.isNull(data['TARGET_CONTRACT_INDEX']))
             error = 'invalid: TARGET_CONTRACT_INDEX (required)';
-        if(!error && (!/^[0-9]+$/.test(String(data['TARGET_CONTRACT_INDEX'])) || Number(data['TARGET_CONTRACT_INDEX']) <= 0))
+        // STAKE-1 (gated by CONTRACT_INDEX_CANONICAL): reject non-canonical leading zeros at/after the flag-day.
+        let idxRe = (await this.actions.protocolChanges.isEnabled('CONTRACT_INDEX_CANONICAL', data['BLOCK_INDEX'])) ? /^[1-9]\d*$/ : /^[0-9]+$/;
+        if(!error && (!idxRe.test(String(data['TARGET_CONTRACT_INDEX'])) || Number(data['TARGET_CONTRACT_INDEX']) <= 0))
             error = 'invalid: TARGET_CONTRACT_INDEX (format)';
         if(!error && this.util.isNull(data['TICK']))
             error = 'invalid: TICK (required)';

@@ -232,8 +232,11 @@ class Stake {
         if(!error && !/^[0-9a-fA-F]{64}$/.test(String(data['SIGNING_PUBKEY'])))
             error = 'invalid: SIGNING_PUBKEY (format)';
 
-        // TARGET_CONTRACT_INDEX must be a positive integer
-        if(!error && (!/^[0-9]+$/.test(String(data['TARGET_CONTRACT_INDEX'])) || Number(data['TARGET_CONTRACT_INDEX']) <= 0))
+        // TARGET_CONTRACT_INDEX must be a positive integer. STAKE-1 (gated by CONTRACT_INDEX_CANONICAL):
+        // at/after the flag-day reject non-canonical leading zeros (/^[1-9]\d*$/, matching
+        // deposit/withdraw); below it the legacy /^[0-9]+$/ is preserved for replay/fleet consistency.
+        let idxRe = (await this.actions.protocolChanges.isEnabled('CONTRACT_INDEX_CANONICAL', data['BLOCK_INDEX'])) ? /^[1-9]\d*$/ : /^[0-9]+$/;
+        if(!error && (!idxRe.test(String(data['TARGET_CONTRACT_INDEX'])) || Number(data['TARGET_CONTRACT_INDEX']) <= 0))
             error = 'invalid: TARGET_CONTRACT_INDEX (format)';
 
         // Look up the target contract: must exist, be valid, and have opted into staking (cooldown_blocks NOT NULL)
@@ -328,6 +331,16 @@ class Stake {
                 error = 'invalid: ' + result.error;
             else
                 guardFee = result.guardFee;
+        }
+
+        // STAKE-2: when the staked TICK is the GAS token, the stake AMOUNT and the controller
+        // guard-fee BOTH debit GAS, but each was balance-checked independently against the same
+        // snapshot, so their sum could exceed the balance and drive GAS negative. Re-verify the
+        // COMBINED debit against the single GAS balance. Naturally inert below the CONTROLLER_GUARD
+        // flag-day (guardFee is 0 there, so this reduces to the AMOUNT check already done above).
+        if(!error && tickTokenInfo && this.util.bcgt(guardFee, 0) && String(data['TICK']) === String(this.config['GAS'])){
+            if(!this.util.hasBalance(balances, tickTokenInfo['TICK_ID'], this.util.bcadd(data['AMOUNT'], guardFee, 8)))
+                error = 'invalid: insufficient funds (STAKE + guard fee)';
         }
 
         let status = (error) ? error : 'valid';
