@@ -25,6 +25,7 @@ const path    = require('path');
 const { AsyncLocalStorage } = require('async_hooks');
 const { buildStateHashData } = require('./stateHash');
 const { canonicalizeHashAddress } = require('./protocolAddressRoles');
+const swqCap = require('./swq_source_cap_activation');
 
 // Watchdog-fence context (M-16). The block loop runs each block's processing inside
 // txEpochStore.run(epoch, ...) so every DB call it makes carries the transaction epoch
@@ -9830,19 +9831,9 @@ class Database {
     async getActiveStakeWeights(blockIndex){
         let valid_id = await this.getStatusId('valid');
         if(valid_id === null) return [];
-        // Safety cap - see getActiveValidators.
-        let limit = this.config['VALIDATOR_QUERY_LIMIT'];
-        let sw = this._stakeWeightsSql(valid_id, blockIndex, '0');   // no MIN_STAKE floor
-        let query = `${sw.sql} ORDER BY source, pubkey LIMIT ?`;
-        let rows = await this.doQuery(query, [...sw.args, limit]);
-        let truncated = rows.length >= limit;
-        if(truncated)
-            console.warn('getActiveStakeWeights hit the result cap of ' + limit + ' rows at block ' + blockIndex + ' - set may be truncated. Raise the frozen VALIDATOR_QUERY_LIMIT consensus constant (coordinated fleet upgrade) if the federation has grown.');
-        let result = rows.map(r => ({
-            pubkey: String(r.pubkey),
-            source: String(r.source),
-            weight: (r.weight === null || r.weight === undefined) ? '0' : String(r.weight)
-        }));
+        // Safety cap - see getActiveValidators. No MIN_STAKE floor (minStake '0').
+        let { rows, truncated } = await this._stakeWeightsWithCap(valid_id, blockIndex, '0', 'getActiveStakeWeights');
+        let result = rows;
         // Surface truncation to callers (the RPC layer alarms on it) the same way
         // the capability variants do - the console.warn alone is invisible to a hub.
         result.truncated = truncated;
@@ -10007,18 +9998,8 @@ class Database {
             : localFloor;
         let valid_id = await this.getStatusId('valid');
         if(valid_id === null) return [];
-        let limit = this.config['VALIDATOR_QUERY_LIMIT'];
-        let sw = this._stakeWeightsSql(valid_id, blockIndex, minStake);
-        let query = `${sw.sql} ORDER BY source, pubkey LIMIT ?`;
-        let rows = await this.doQuery(query, [...sw.args, limit]);
-        let truncated = rows.length >= limit;
-        if(truncated)
-            console.warn('getStakeWeightsByCapability(' + capability + ') hit the result cap of ' + limit + ' rows at block ' + blockIndex + ' - set may be truncated. Raise the frozen VALIDATOR_QUERY_LIMIT consensus constant (coordinated fleet upgrade) if the federation has grown.');
-        let result = rows.map(r => ({
-            pubkey: String(r.pubkey),
-            source: String(r.source),
-            weight: (r.weight === null || r.weight === undefined) ? '0' : String(r.weight)
-        }));
+        let { rows, truncated } = await this._stakeWeightsWithCap(valid_id, blockIndex, minStake, 'getStakeWeightsByCapability(' + capability + ')');
+        let result = rows;
         result.truncated = truncated;
         return result;
     }
@@ -10088,6 +10069,72 @@ class Database {
                     valid_id, blockIndex, blockIndex, valid_id, blockIndex, blockIndex,
                     valid_id, blockIndex, blockIndex, blockIndex];
         return { sql, args };
+    }
+
+    // SWQ source-cap wrapper (SWQ-TRUNC-1 liveness half). Wraps an inner source-keyed
+    // stake-weight builder ({sql,args} from _stakeWeightsSql or the sync AsOf variant)
+    // and replaces the raw key-row LIMIT with a windowed cap on the consensus UNIT:
+    // DISTINCT staking SOURCES (DENSE_RANK over source) plus a per-source key bound
+    // (ROW_NUMBER per source). One source can no longer fill the window and evict
+    // honest sources. Over-fetches one extra source (_sr <= maxSources + 1) so the
+    // caller can flag a genuinely >maxSources federation as truncated (the primitive
+    // then fails closed); the per-source key cap only bounds the row/leaf count and
+    // never sets truncated (dropping a source's excess keys does not change its
+    // weight). Row order is consensus-irrelevant (the stakes_root SMT keys on
+    // pubkey+capability); only the returned SET is. CONSENSUS-CRITICAL: feeds the
+    // hashed stakes_root at/after SWQ_SOURCE_CAP_ACTIVATION and MUST stay byte-identical
+    // to the xchain-sync twin (cross-repo drift guard in rollback-coverage.test.js).
+    _cappedStakeWeightsSql(inner, maxSources, maxKeys){
+        let sql = `SELECT r.pubkey AS pubkey, r.source AS source, r.weight AS weight, r._sr AS _sr
+                   FROM (
+                       SELECT b.pubkey AS pubkey, b.source AS source, b.weight AS weight,
+                              DENSE_RANK() OVER (ORDER BY b.source)                        AS _sr,
+                              ROW_NUMBER() OVER (PARTITION BY b.source ORDER BY b.pubkey)  AS _kr
+                       FROM (${inner.sql}) b
+                   ) r
+                   WHERE r._sr <= ? AND r._kr <= ?
+                   ORDER BY r.source, r.pubkey`;
+        let args = [...inner.args, maxSources + 1, maxKeys];
+        return { sql, args };
+    }
+
+    // Run the source-keyed stake-weight query under the cap regime in force for this
+    // chain at `blockIndex`, returning { rows:[{pubkey,source,weight}], truncated }.
+    //   at/after SWQ_SOURCE_CAP_ACTIVATION -> windowed source-cap (_cappedStakeWeightsSql):
+    //       truncated ONLY when a genuinely >maxSources federation is seen; a
+    //       key-spamming source is bounded (maxKeys) without truncating.
+    //   below it -> legacy uncapped key-row LIMIT: truncated at >= VALIDATOR_QUERY_LIMIT.
+    // The gate (network/coin/blockIndex) + caps + _cappedStakeWeightsSql are byte-mirrored
+    // in xchain-sync so the stakes_root set is identical on both sides of the height.
+    async _stakeWeightsWithCap(valid_id, blockIndex, minStake, label){
+        let sw = this._stakeWeightsSql(valid_id, blockIndex, minStake);
+        if(swqCap.isSwqSourceCapActive(blockIndex, this.config['NETWORK'], this.config['COIN'])){
+            let maxSources = swqCap.STAKE_WEIGHT_MAX_SOURCES;
+            let maxKeys    = swqCap.STAKE_WEIGHT_MAX_KEYS_PER_SOURCE;
+            let capped = this._cappedStakeWeightsSql(sw, maxSources, maxKeys);
+            let raw = await this.doQuery(capped.sql, capped.args);
+            let truncated = raw.some(r => Number(r._sr) > maxSources);
+            if(truncated)
+                console.warn(label + ' saw more than ' + maxSources + ' distinct staking sources at block ' + blockIndex + ' - snapshot truncated; stake-weighted quorum fails closed. Raise STAKE_WEIGHT_MAX_SOURCES (coordinated flag-day upgrade) if the federation has grown.');
+            let rows = (truncated ? raw.filter(r => Number(r._sr) <= maxSources) : raw).map(r => ({
+                pubkey: String(r.pubkey),
+                source: String(r.source),
+                weight: (r.weight === null || r.weight === undefined) ? '0' : String(r.weight)
+            }));
+            return { rows, truncated };
+        }
+        let limit = this.config['VALIDATOR_QUERY_LIMIT'];
+        let query = `${sw.sql} ORDER BY source, pubkey LIMIT ?`;
+        let raw = await this.doQuery(query, [...sw.args, limit]);
+        let truncated = raw.length >= limit;
+        if(truncated)
+            console.warn(label + ' hit the result cap of ' + limit + ' rows at block ' + blockIndex + ' - set may be truncated. Raise the frozen VALIDATOR_QUERY_LIMIT consensus constant (coordinated fleet upgrade) if the federation has grown.');
+        let rows = raw.map(r => ({
+            pubkey: String(r.pubkey),
+            source: String(r.source),
+            weight: (r.weight === null || r.weight === undefined) ? '0' : String(r.weight)
+        }));
+        return { rows, truncated };
     }
 
     // Read the hub-mirrored SOURCE-KEYED weights for a capability at a snapshot block
