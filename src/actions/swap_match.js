@@ -80,6 +80,22 @@ class Swap_Match {
             for(let match of matches){
                 let valid = true;
 
+                // Reciprocity gate (defense-in-depth for the findSwapMatches reverse-leg
+                // constraint). Scoped to the token-for-token path (all four ticks non-null); a
+                // null-tick (native/other) side is left to its own routing. Settlement below
+                // hardcodes reciprocity (credits swapInfo.GET_TICK / matchInfo.GET_TICK), so BOTH
+                // legs must be an exact tick+coin mirror: what this swap GIVES must equal what the
+                // match GETS, and what it GETS must equal what the match GIVES. A non-mirrored pair
+                // would credit the taker a token the maker never escrowed (a mint out of the
+                // global escrow pool).
+                let bothTokenLegs = !this.util.isNull(swapInfo['GIVE_TICK']) && !this.util.isNull(swapInfo['GET_TICK']) &&
+                                    !this.util.isNull(match['GIVE_TICK']) && !this.util.isNull(match['GET_TICK']);
+                if(bothTokenLegs &&
+                   (String(swapInfo['GIVE_TICK']) !== String(match['GET_TICK'])  || String(swapInfo['GIVE_COIN']) !== String(match['GET_COIN']) ||
+                    String(swapInfo['GET_TICK'])  !== String(match['GIVE_TICK']) || String(swapInfo['GET_COIN'])  !== String(match['GIVE_COIN']))){
+                    valid = false;
+                }
+
                 // List of addresses allowed or blocked from matching with this matching SWAP
                 let matchInfoAllowList = (!this.util.isNull(match['ALLOW_LIST'])) ? await this.indexerDb.getList(match['ALLOW_LIST']) : [];
                 let matchInfoBlockList = (!this.util.isNull(match['BLOCK_LIST'])) ? await this.indexerDb.getList(match['BLOCK_LIST']) : [];

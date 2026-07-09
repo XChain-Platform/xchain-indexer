@@ -37,8 +37,10 @@ describe('Swap_Match action handler @regression @tier2', function () {
         return {
             ACTION_INDEX: 20,
             SOURCE: 'mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM',
-            GIVE_TICK: 'GET',  GIVE_AMOUNT: '5',
-            GET_TICK: 'GIVE',  GET_AMOUNT: '10',
+            // Reciprocal mirror of makeSwapInfo: gives what the swap wants (GET), gets what the
+            // swap gives (GIVE); coins mirror too (production getSwapInfo always returns coins).
+            GIVE_COIN: 'BTC', GIVE_TICK: 'GET',  GIVE_AMOUNT: '5',
+            GET_COIN: 'BTC',  GET_TICK: 'GIVE',  GET_AMOUNT: '10',
             GET_ADDRESS: 'mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM',
             ALLOW_LIST: null, BLOCK_LIST: null,
             ...overrides,
@@ -141,6 +143,33 @@ describe('Swap_Match action handler @regression @tier2', function () {
         const data = createBaseData({ ACTION: 'SWAP_MATCH', ACTION_INDEX: 10, BLOCK_INDEX: 200 });
         await handler.parse(null, data, null);
         assert.ok(indexer.indexerDb.createSwapMatch.notCalled, 'Should not match when address is blocked');
+    });
+
+    // SWAP-MATCH-1: reciprocity gate. swapInfo wants GET; a candidate whose GIVE side is a DIFFERENT
+    // token (reverse-leg mismatch the incomplete findSwapMatches predicate would return) must be
+    // skipped, not settled - else the taker is credited a token the maker never escrowed (an
+    // unbounded mint out of the global escrow pool).
+    it('skips a non-reciprocal swap whose GIVE token != the swap GET token (SWAP-MATCH-1)', async function () {
+        const swapInfo  = makeSwapInfo(); // GIVE=GIVE, GET=GET
+        // Candidate GETs GIVE (forward leg holds) but GIVES a different token VALUABLE (reverse leg
+        // violated: swap.GET GET != match.GIVE VALUABLE).
+        const matchInfo = makeMatchInfo({ GIVE_TICK: 'VALUABLE' });
+        indexer.indexerDb.getSwapInfo.resolves(swapInfo);
+        indexer.indexerDb.findSwapMatches.resolves([matchInfo]);
+        const data = createBaseData({ ACTION: 'SWAP_MATCH', ACTION_INDEX: 10, BLOCK_INDEX: 200 });
+        await handler.parse(null, data, null);
+        assert.ok(indexer.indexerDb.createSwapMatch.notCalled, 'Must not settle a non-reciprocal swap');
+        assert.ok(indexer.indexerDb.createCredit.notCalled, 'Must not credit a token the maker never escrowed');
+    });
+
+    it('skips a non-reciprocal swap whose GIVE coin != the swap GET coin (SWAP-MATCH-1 cross-chain)', async function () {
+        const swapInfo  = makeSwapInfo();
+        const matchInfo = makeMatchInfo({ GIVE_COIN: 'LTC' }); // gives on a different coin than swap GETs
+        indexer.indexerDb.getSwapInfo.resolves(swapInfo);
+        indexer.indexerDb.findSwapMatches.resolves([matchInfo]);
+        const data = createBaseData({ ACTION: 'SWAP_MATCH', ACTION_INDEX: 10, BLOCK_INDEX: 200 });
+        await handler.parse(null, data, null);
+        assert.ok(indexer.indexerDb.createSwapMatch.notCalled);
     });
 
     it('calls mapper.createMappings when a match is found', async function () {

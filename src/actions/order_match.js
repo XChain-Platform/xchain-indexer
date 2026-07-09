@@ -90,6 +90,25 @@ class Order_Match {
                 // Reset the address/tickers/transactions list on each match
                 this.util.resetLists();
 
+                // Reciprocity gate (defense-in-depth for the findOrderMatches reverse-leg
+                // constraint). Scoped to the INSTANT token-for-token path (all four ticks
+                // non-null); the native-coin / COINPay path (any null tick) settles two-phase
+                // with its own routing and is intentionally asymmetric, so it is left untouched.
+                // On the instant path settlement hardcodes reciprocity (releases/credits
+                // orderInfo.GET_TICK, matchInfo.GET_TICK), so BOTH legs must be an exact
+                // tick+coin mirror: what this order GIVES must equal what the match GETS, and
+                // what it GETS must equal what the match GIVES. A non-mirrored pair would credit
+                // the taker a token the maker never escrowed (a mint out of the global escrow pool).
+                let bothTokenLegs = !this.util.isNull(orderInfo['GIVE_TICK']) && !this.util.isNull(orderInfo['GET_TICK']) &&
+                                    !this.util.isNull(matchInfo['GIVE_TICK']) && !this.util.isNull(matchInfo['GET_TICK']);
+                if(bothTokenLegs &&
+                   (String(orderInfo['GIVE_TICK']) !== String(matchInfo['GET_TICK'])  || String(orderInfo['GIVE_COIN']) !== String(matchInfo['GET_COIN']) ||
+                    String(orderInfo['GET_TICK'])  !== String(matchInfo['GIVE_TICK']) || String(orderInfo['GET_COIN'])  !== String(matchInfo['GIVE_COIN']))){
+                    if(this.debug)
+                        console.log('Skipping non-reciprocal match (tick/coin mismatch)', orderInfo['GIVE_TICK'], orderInfo['GET_TICK'], matchInfo['GIVE_TICK'], matchInfo['GET_TICK']);
+                    continue;
+                }
+
                 // Set get/give remaining amounts for this order match
                 match['GIVE_REMAINING'] = matchInfo['GIVE_REMAINING'];
                 match['GET_REMAINING']  = matchInfo['GET_REMAINING'];

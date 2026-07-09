@@ -5503,6 +5503,18 @@ class Database {
                         ) AND
                         s1.give_coin_id=s2.get_coin_id AND
                         s1.give_tick_id=s2.get_tick_id AND
+                        -- Reverse leg: what s1 GETS must be exactly what s2 GIVES. The give leg and
+                        -- the two amount equalities below bind everything EXCEPT the reverse tick/coin,
+                        -- so a taker could receive a DIFFERENT (freely chosen, valuable) token than the
+                        -- maker escrowed as long as the amounts matched; swap_match settlement then
+                        -- credits swapInfo.GET_TICK, minting that token from the global escrow pool
+                        -- (the +credit / -phantom-escrow net to zero, so the supply sanityCheck never
+                        -- trips) while the maker's real GIVE token is stranded. NULL-safe (native-coin
+                        -- sides carry a NULL tick), matching the give-leg / findOrderMatches handling.
+                        s1.get_coin_id=s2.give_coin_id AND
+                        -- Enforced only when both reverse ticks are real tokens (the token-for-token
+                        -- path, where the mint bug lives); a NULL-tick leg is left to its own routing.
+                        (s1.get_tick_id=s2.give_tick_id OR s1.get_tick_id IS NULL OR s2.give_tick_id IS NULL) AND
                         -- Ownership legs store NULL amounts; in SQL, NULL = NULL is NULL (not
                         -- true), so a bare equality silently drops every ownership swap
                         -- (ownership-for-ownership = both NULL, ownership-for-balance = one
@@ -5746,6 +5758,20 @@ class Database {
                         ) AND
                         o1.give_coin_id=o2.get_coin_id AND
                         (o1.give_tick_id=o2.get_tick_id OR (o1.give_tick_id IS NULL AND o2.get_tick_id IS NULL)) AND
+                        -- Reverse leg: what o1 GETS must be exactly what o2 GIVES. Without this the
+                        -- predicate binds only the forward side (o1.give == o2.get), so a taker
+                        -- offering o1.give could match a maker giving a DIFFERENT token than o1.get,
+                        -- and order_match settlement (which hardcodes reciprocity via orderInfo.GET_TICK)
+                        -- would credit the taker a token the maker never escrowed - minting it from the
+                        -- global escrow pool while the maker's real token is stranded, and the
+                        -- +credit / -phantom-escrow net to zero so the supply sanityCheck never trips.
+                        -- NULL-safe like the give leg (native-coin sides carry a NULL tick).
+                        o1.get_coin_id=o2.give_coin_id AND
+                        -- Enforced only when both reverse ticks are real tokens (the instant
+                        -- token-for-token path, where the mint bug lives). If either side is a
+                        -- native-coin leg (NULL tick) the match routes through the two-phase
+                        -- COINPay settlement, which is intentionally asymmetric, so leave it alone.
+                        (o1.get_tick_id=o2.give_tick_id OR o1.get_tick_id IS NULL OR o2.give_tick_id IS NULL) AND
                         o1.action_index=? AND
                         a1.source_id!=? AND
                         s2.status='open'

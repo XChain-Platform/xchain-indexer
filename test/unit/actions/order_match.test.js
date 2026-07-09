@@ -158,6 +158,38 @@ describe('Order_Match action handler @regression @tier2', function () {
         sinon.assert.calledOnce(indexer.indexerDb.createOrderMatch);
     });
 
+    // OM-1: reciprocity gate. The order wants PEPECASH; a candidate whose GIVE side is a DIFFERENT
+    // token (reverse-leg mismatch that the incomplete findOrderMatches predicate would return) must
+    // be skipped, not settled - otherwise the taker is credited a token the maker never escrowed
+    // (an unbounded mint out of the global escrow pool).
+    it('skips a non-reciprocal match whose GIVE token != the order GET token (OM-1)', async function () {
+        indexer.indexerDb.getTokenInfo
+            .withArgs('SCAMTOKEN', sinon.match.any, sinon.match.any)
+            .resolves(createTokenInfo({ TICK: 'SCAMTOKEN', TICK_ID: 30, ALLOW_LIST: null, BLOCK_LIST: null }));
+
+        // orderInfo: GIVE RAREPEPE, GET PEPECASH. Candidate: GET RAREPEPE (forward leg holds) but
+        // GIVE SCAMTOKEN (reverse leg violated: order.GET PEPECASH != match.GIVE SCAMTOKEN).
+        indexer.indexerDb.getOrderInfo.resolves(makeOrderInfo({ GIVE_PRICE: '10', GET_PRICE: '0.1' }));
+        indexer.indexerDb.findOrderMatches.resolves([makeMatchInfo({ GIVE_TICK: 'SCAMTOKEN', GET_PRICE: '10' })]);
+
+        const data = createBaseData({ ACTION: 'ORDER_MATCH', BLOCK_TIME, ACTION_INDEX: 1 });
+        await orderMatch.parse([], data, false);
+
+        sinon.assert.notCalled(indexer.indexerDb.createOrderMatch);
+        sinon.assert.notCalled(indexer.indexerDb.createCredit);
+    });
+
+    it('skips a non-reciprocal match whose GIVE coin != the order GET coin (OM-1 cross-chain)', async function () {
+        // Forward + reverse ticks mirror, but the match GIVES on a different coin than the order GETS.
+        indexer.indexerDb.getOrderInfo.resolves(makeOrderInfo({ GIVE_PRICE: '10', GET_PRICE: '0.1' }));
+        indexer.indexerDb.findOrderMatches.resolves([makeMatchInfo({ GIVE_COIN: 'LTC', GET_PRICE: '10' })]);
+
+        const data = createBaseData({ ACTION: 'ORDER_MATCH', BLOCK_TIME, ACTION_INDEX: 1 });
+        await orderMatch.parse([], data, false);
+
+        sinon.assert.notCalled(indexer.indexerDb.createOrderMatch);
+    });
+
     it('full fill marks both orders complete', async function () {
         // GIVE_REMAINING == GIVE_AMOUNT of match → both fully filled
         // give_amount = matchInfo.GIVE_REMAINING * orderInfo.GET_PRICE = 100 * 0.1 = 10 (== order.GIVE_REMAINING)

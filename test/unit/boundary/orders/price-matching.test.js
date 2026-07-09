@@ -64,6 +64,7 @@ function makeOrderInfo(overrides = {}) {
         GET_AMOUNT:    '1000',
         GET_REMAINING: '1000',
         GET_PRICE:     '10',    // inverse: 1000 PEPECASH / 100 RAREPEPE = 10 RAREPEPE per PEPECASH
+        GET_COIN:      'BTC',
         GET_ADDRESS:   SOURCE,
         ALLOW_LIST:    null,
         BLOCK_LIST:    null,
@@ -93,6 +94,7 @@ function makeMatchInfo(overrides = {}) {
         GET_AMOUNT:    '100',
         GET_REMAINING: '100',
         GET_PRICE:     '0.1',  // inverse: asking 0.1 PEPECASH per RAREPEPE (= orderInfo.GIVE_PRICE)
+        GET_COIN:      'BTC',
         GET_ADDRESS:   OTHER,
         ALLOW_LIST:    null,
         BLOCK_LIST:    null,
