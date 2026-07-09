@@ -112,6 +112,30 @@ describe('Rollback @regression @tier3', function () {
         }
     });
 
+    it('blockTables contains anchor_reward_reconcile_log so orphaned reconcile-log rows are pruned', function () {
+        assert.ok(rollback.blockTables.includes('anchor_reward_reconcile_log'));
+    });
+
+    it('restores reconcile-deleted anchor validator_rewards from anchor_reward_reconcile_log before the deletes (RB-ANCHOR)', async function () {
+        indexer.indexerDb.doQuery.onFirstCall().resolves([{ action_index: 50 }]); // firstActionIndex
+        indexer.indexerDb.doQuery.resolves([]);
+        await rollback.rollback(100);
+        const calls = indexer.indexerDb.doQuery.getCalls();
+        const restore = calls.find(c =>
+            /INSERT IGNORE INTO validator_rewards/.test(c.args[0]) &&
+            c.args[0].includes('anchor_reward_reconcile_log'));
+        assert.ok(restore, 'expected an anchor_reward_reconcile_log restore into validator_rewards');
+        // Scoped to reconciles being orphaned (block_index >= reorg) that deleted losers whose
+        // ORIGINAL earn-block SURVIVES the reorg (reward_block_index < reorg). Both params = reorg.
+        assert.ok(/d\.block_index\s*>=\s*\?/.test(restore.args[0]), 'must scope on the reconcile block');
+        assert.ok(/d\.reward_block_index\s*<\s*\?/.test(restore.args[0]), 'must only restore losers whose earn-block survives the reorg');
+        assert.deepStrictEqual(restore.args[1], [100, 100]);
+        // Must precede the generic validator_rewards block delete (log rows must still exist).
+        const restoreIdx = calls.indexOf(restore);
+        const deleteIdx = calls.findIndex(c => /DELETE FROM validator_rewards WHERE block_index/.test(c.args[0]));
+        assert.ok(restoreIdx >= 0 && deleteIdx >= 0 && restoreIdx < deleteIdx, 'reconcile restore must run before the validator_rewards delete');
+    });
+
     it('deletes index_addresses and index_tickers by block_index, after the data deletes (#4904)', async function () {
         // index_addresses/index_tickers ids are consensus-relevant (wire ^<id> refs), so the
         // reorg must delete the ids first seen in orphaned blocks (WHERE block_index >= ?) so a

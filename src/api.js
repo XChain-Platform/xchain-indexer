@@ -902,7 +902,7 @@ async function startApi(){
             // or diverge the recovery ledger hash (#3963).
             if(written > 0 && /^anchor_[A-Za-z_]+$/.test(type)){
                 try {
-                    let removed = await apiDb.reconcileAnchorRewardWinner(round, type);
+                    let removed = await apiDb.reconcileAnchorRewardWinner(round, type, blockIdx, null);
                     if(removed > 0)
                         console.log('pushvalidatorrewards: retracted ' + removed + ' superseded anchor reward(s) for ' + type + ' #' + round + ' (kept deterministic winner)');
                 } catch (err) {

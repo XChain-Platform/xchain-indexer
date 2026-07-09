@@ -236,6 +236,20 @@ class Attest {
                     ' : fee=' + (feePresent ? data['FEE_AMOUNT'] + ' ' + data['FEE_TICK'] : 'none') +
                     ' : ' + data['STATUS']);
 
+        // ATT-RECOMP-1: pin the responsible set AS-OF this request's block so the reorg
+        // missed_count recompute (rollback._recomputeAttestationValidatorStats) reads the
+        // historical set verbatim rather than re-deriving it against the CURRENT mutable
+        // stakes.amount (a later SURVIVING slash reduces it, so a bare re-derive charges
+        // missed_count to the wrong set). Only a 'pending' request can ever expire and reach
+        // the recompute; a 'rejected' row is invisible to the expiry sweep, so skip the stake
+        // query for it. Uses the SAME _computeResponsibleSet the v1 verify + v2 expiry paths
+        // use, evaluated at the request's own block_index (the set the recompute keys on).
+        if(data['REQUEST_STATUS'] === 'pending'){
+            let responsibleSet = await this._computeResponsibleSet(
+                String(data['REQUEST_ID'] || '').toLowerCase(), data['REDUNDANCY'], data['BLOCK_INDEX']);
+            data['RESPONSIBLE_SET_JSON'] = JSON.stringify(responsibleSet);
+        }
+
         await this.indexerDb.createAttestationRequest(data);
 
         // Escrow the fee from FEE_PAYER (debit + escrow at this v0 action_index;

@@ -84,6 +84,44 @@ describe('reconcileAnchorRewardWinner() @regression @tier1', function () {
         assert.strictEqual(removed, 2, 'returns affectedRows');
     });
 
+    it('pre-images the loser rows into anchor_reward_reconcile_log BEFORE the DELETE when a reconcile block is given (RB-ANCHOR)', async function () {
+        const db    = makeDb();
+        const query = sinon.stub(db, 'doQuery').resolves({ affectedRows: 2 });
+
+        const removed = await db.reconcileAnchorRewardWinner(306, 'anchor_BTC', 900, 42);
+
+        assert.strictEqual(query.callCount, 2, 'expected the pre-image log INSERT then the collapse DELETE');
+        const [logSql, logArgs] = query.firstCall.args;
+        // The log capture uses the SAME loser predicate as the DELETE (pubkey > min_pubkey),
+        // records each row's verbatim pre-image + its ORIGINAL earn-block (reward_block_index),
+        // and scopes the log row to the reconcile (ANCHOR) block.
+        assert.match(logSql, /INSERT\s+INTO\s+anchor_reward_reconcile_log/i);
+        assert.match(logSql, /SELECT\s+\?,\s*vr\.reward_type/i);
+        assert.match(logSql, /vr\.block_index,\s*\?/i, 'must capture the loser row original earn-block as reward_block_index');
+        assert.match(logSql, /pk\.pubkey\s*>\s*m\.min_pubkey/i);
+        // anchor_action_index, reconcile block, then the two (rewardType, round) subquery+WHERE pairs.
+        assert.deepStrictEqual(logArgs, [42, 900, 'anchor_BTC', 306, 'anchor_BTC', 306]);
+        // The DELETE still runs second, unchanged.
+        assert.match(query.secondCall.args[0], /DELETE\s+vr\s+FROM\s+validator_rewards\s+vr/i);
+        assert.strictEqual(removed, 2);
+    });
+
+    it('does NOT log a pre-image when no reconcile block is given (legacy 2-arg callers unchanged)', async function () {
+        const db    = makeDb();
+        const query = sinon.stub(db, 'doQuery').resolves({ affectedRows: 1 });
+        await db.reconcileAnchorRewardWinner(306, 'anchor_BTC');
+        assert.strictEqual(query.callCount, 1, 'only the DELETE, no pre-image log');
+        assert.match(query.firstCall.args[0], /DELETE\s+vr\s+FROM\s+validator_rewards/i);
+    });
+
+    it('passes a null anchor_action_index through to the log when omitted (legacy RPC push path)', async function () {
+        const db    = makeDb();
+        const query = sinon.stub(db, 'doQuery').resolves({ affectedRows: 3 });
+        await db.reconcileAnchorRewardWinner(306, 'anchor_archive', 900, null);
+        assert.strictEqual(query.callCount, 2);
+        assert.strictEqual(query.firstCall.args[1][0], null, 'anchor_action_index logged as NULL');
+    });
+
     it('returns 0 when the DELETE affects nothing', async function () {
         const db = makeDb();
         sinon.stub(db, 'doQuery').resolves({ affectedRows: 0 });

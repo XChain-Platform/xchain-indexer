@@ -9265,8 +9265,42 @@ class Database {
     // (those are derived deterministically per block and never pushed).
     // The min-pubkey is materialised in a derived table so the DELETE doesn't
     // self-reference its target table (MariaDB forbids that inline).
-    async reconcileAnchorRewardWinner(roundReference, rewardType){
+    //
+    // RB-ANCHOR: before the DELETE, pre-image each loser row into
+    // anchor_reward_reconcile_log so a reorg that orphans THIS reconcile (the
+    // ANCHOR action's block) can restore the deleted losers. The losers sit in
+    // EARLIER surviving blocks (block_index = the checkpoint's SNAPSHOT_BLOCK),
+    // so the generic block delete never touches them and a from-genesis replay
+    // to reorg_block-1 (where the orphaned ANCHOR never re-ran the reconcile)
+    // still has them; without the log the reorged node keeps a spuriously-
+    // collapsed reward set, lowering a later COLLECT's SUM(validator_rewards)
+    // vs a fresh replay (a ledger-hashed divergence). Logging is scoped to the
+    // reconcile block, so callers that cannot name a block (legacy test paths)
+    // pass null and skip the log (the DELETE behaviour is unchanged).
+    async reconcileAnchorRewardWinner(roundReference, rewardType, reconcileBlockIndex, anchorActionIndex){
         if(!/^anchor_[A-Za-z_]+$/.test(String(rewardType))) return 0;
+        if(reconcileBlockIndex !== null && reconcileBlockIndex !== undefined){
+            // Same loser predicate as the DELETE (pubkey > min_pubkey), capturing each
+            // row's verbatim pre-image + its ORIGINAL earn-block (reward_block_index).
+            let logQuery = `INSERT INTO anchor_reward_reconcile_log
+                                (anchor_action_index, reward_type, round_reference,
+                                 source_id, signing_pubkey_id, amount, reward_block_index, block_index)
+                            SELECT ?, vr.reward_type, vr.round_reference,
+                                   vr.source_id, vr.signing_pubkey_id, vr.amount, vr.block_index, ?
+                              FROM validator_rewards vr
+                              JOIN index_pubkeys pk ON pk.id = vr.signing_pubkey_id
+                              JOIN (
+                                  SELECT MIN(pk2.pubkey) AS min_pubkey
+                                  FROM validator_rewards vr2
+                                  JOIN index_pubkeys pk2 ON pk2.id = vr2.signing_pubkey_id
+                                  WHERE vr2.reward_type = ? AND vr2.round_reference = ?
+                              ) m
+                              WHERE vr.reward_type = ? AND vr.round_reference = ?
+                                AND pk.pubkey > m.min_pubkey`;
+            await this.doQuery(logQuery, [
+                (anchorActionIndex === undefined ? null : anchorActionIndex), reconcileBlockIndex,
+                rewardType, roundReference, rewardType, roundReference]);
+        }
         let query = `DELETE vr FROM validator_rewards vr
                      JOIN index_pubkeys pk ON pk.id = vr.signing_pubkey_id
                      JOIN (
@@ -11141,6 +11175,11 @@ class Database {
         // Optional request fee (E1): tick resolved to an id (NULL = feeless)
         let fee_tick_id      = !this.util.isNull(data['FEE_TICK']) ? await this.createTicker(data['FEE_TICK']) : null;
         let fee_amount       = !this.util.isNull(data['FEE_AMOUNT']) ? String(data['FEE_AMOUNT']) : null;
+        // ATT-RECOMP-1: the ordered responsible-set pubkeys pinned as-of block_index at request
+        // time (JSON array string), so the reorg missed_count recompute reads the historical set
+        // verbatim instead of re-deriving it against the CURRENT mutable stakes.amount. NULL for
+        // rejected/feeless-legacy rows (the recompute falls back to the live re-derive).
+        let responsible_set  = !this.util.isNull(data['RESPONSIBLE_SET_JSON']) ? String(data['RESPONSIBLE_SET_JSON']) : null;
 
         let query  = "SELECT action_index FROM attests WHERE action_index=? LIMIT 1";
         let exists = false;
@@ -11150,12 +11189,12 @@ class Database {
             query = `UPDATE attests SET
                         version=0, request_id=?, contract_index=?, fee_payer_id=?, provider_id=?, payload=?,
                         callback_method=?, callback_params_json=?, redundancy=?, deadline_block=?,
-                        gas_escrow=?, fee_tick_id=?, fee_amount=?, request_status=?, status_id=?, block_index=?
+                        gas_escrow=?, fee_tick_id=?, fee_amount=?, responsible_set_json=?, request_status=?, status_id=?, block_index=?
                     WHERE action_index=?`;
             await this.doQuery(query, [
                 request_id, contract_index, fee_payer_id, provider_id, payload,
                 callback_method, callback_params, redundancy, deadline_block,
-                gas_escrow, fee_tick_id, fee_amount, request_status, status_id, block_index, action_index
+                gas_escrow, fee_tick_id, fee_amount, responsible_set, request_status, status_id, block_index, action_index
             ]);
         } else {
             // v0 single-request integrity. The (request_id, version) index was relaxed to
@@ -11173,12 +11212,12 @@ class Database {
             query = `INSERT INTO attests
                         (action_index, version, request_id, contract_index, fee_payer_id, provider_id, payload,
                          callback_method, callback_params_json, redundancy, deadline_block,
-                         gas_escrow, fee_tick_id, fee_amount, request_status, status_id, block_index)
-                    VALUES (?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+                         gas_escrow, fee_tick_id, fee_amount, responsible_set_json, request_status, status_id, block_index)
+                    VALUES (?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
             await this.doQuery(query, [
                 action_index, request_id, contract_index, fee_payer_id, provider_id, payload,
                 callback_method, callback_params, redundancy, deadline_block,
-                gas_escrow, fee_tick_id, fee_amount, request_status, status_id, block_index
+                gas_escrow, fee_tick_id, fee_amount, responsible_set, request_status, status_id, block_index
             ]);
         }
     }

@@ -141,6 +141,37 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             assert.ok(indexer.indexerDb.createAttestationRequest.calledOnce);
         });
 
+        it('ATT-RECOMP-1: pins the responsible set AS-OF the request block for a valid request', async function () {
+            const data = v0Data();
+            const reqId = deriveReqId(data['TX_HASH'], data['ROOT_ACTION_INDEX'], data['EMITTER_PATH'], data['EMITTER'], data['EMITTER_POSITION']);
+            await handler.parse(v0Params({ requestId: reqId }), data, null);
+            assert.strictEqual(data['STATUS'], 'valid');
+            // The set is computed at the request's OWN block (not a later block), so it captures
+            // the historical stake amounts before any future slash.
+            assert.ok(indexer.indexerDb.getValidatorsByCapability.calledWith('attestation', data['BLOCK_INDEX']),
+                'responsible set must be computed at the request block');
+            assert.ok(data['RESPONSIBLE_SET_JSON'], 'responsible_set_json must be set on the persisted data');
+            const parsed = JSON.parse(data['RESPONSIBLE_SET_JSON']);
+            assert.ok(Array.isArray(parsed) && parsed.includes(PUBKEY_A),
+                'persisted set must contain the responsible validator');
+            // The persisted value reaches createAttestationRequest for storage.
+            assert.strictEqual(
+                indexer.indexerDb.createAttestationRequest.firstCall.args[0]['RESPONSIBLE_SET_JSON'],
+                data['RESPONSIBLE_SET_JSON']);
+        });
+
+        it('ATT-RECOMP-1: does NOT compute a responsible set for a rejected request (no stake query)', async function () {
+            const data = v0Data();
+            // Unknown provider → structurally rejected → invisible to the expiry sweep, so it
+            // never reaches the missed_count recompute; skip the stake query entirely.
+            await handler.parse(v0Params({ providerId: 'not_a_provider' }), data, null);
+            assert.notStrictEqual(data['STATUS'], 'valid');
+            assert.strictEqual(data['REQUEST_STATUS'], 'rejected');
+            assert.strictEqual(indexer.indexerDb.getValidatorsByCapability.called, false,
+                'a rejected request must not compute a responsible set');
+            assert.strictEqual(data['RESPONSIBLE_SET_JSON'], undefined);
+        });
+
         it('request_id is independent of ACTION_INDEX (reorg / injection-order stability)', async function () {
             // The defect this guards (#4213): emitted-action action_index is assigned by a
             // global max+1 counter and gets NEW values on reorg replay, so binding it forked

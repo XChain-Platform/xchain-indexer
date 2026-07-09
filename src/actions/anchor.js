@@ -351,7 +351,9 @@ class Anchor {
                     data['PUBLISHER'], Number(data['CHECKPOINT_SEQ']), 'anchor_' + data['CHAIN'],
                     ar.ANCHOR_REWARD_AMOUNT, Number(data['SNAPSHOT_BLOCK']), true);
                 if(ok)
-                    await this.indexerDb.reconcileAnchorRewardWinner(Number(data['CHECKPOINT_SEQ']), 'anchor_' + data['CHAIN']);
+                    await this.indexerDb.reconcileAnchorRewardWinner(
+                        Number(data['CHECKPOINT_SEQ']), 'anchor_' + data['CHAIN'],
+                        Number(data['BLOCK_INDEX']), Number(data['ACTION_INDEX']));
             } else {
                 console.warn('\t ANCHOR v' + format + ' : publisher-attestation quorum not met or PUBLISHER not in oracle_publish set; reward skipped (anchor still valid)');
             }

@@ -34,6 +34,7 @@ CREATE TABLE attests (
     fee_amount                    VARCHAR(60),                     -- request fee escrowed from fee_payer (NULL/0 = feeless)
     request_status                ENUM('pending','fulfilled','expired','errored','rejected'), -- lifecycle of the request (v0 rows only; 'rejected' = failed structural validation, never serviceable)
     resolved_block                BIGINT UNSIGNED,                 -- block at which request_status went terminal; the reorg-rollback reset key (v0 rows only)
+    responsible_set_json          MEDIUMTEXT,                      -- v0: ordered responsible-set pubkeys (JSON array) pinned AS-OF block_index at request time (ATT-RECOMP-1); the reorg missed_count recompute reads this verbatim instead of re-deriving via getStakeWeightsByCapability (which sums the CURRENT mutable stakes.amount, corrupted by a surviving slash). NULL on legacy/rejected rows -> recompute falls back to the live re-derive.
     -- response (version 1) fields
     response_hash                 CHAR(64),                        -- SHA256 of the canonical response body
     response_payload              MEDIUMTEXT,                      -- inlined response body

@@ -55,7 +55,7 @@ describe('Rollback attest_validator_stats recompute @regression @tier3', functio
     const pkB = 'bb'.repeat(33);   // untouched: last touch pre-N, must be left exactly as-is
     const pkC = 'cc'.repeat(33);   // affected but fully orphaned: must disappear entirely
 
-    let indexer, rollback, statsStore;
+    let indexer, rollback, statsStore, expiredReqs;
 
     // Helper: serialise the fake stats table into a comparable plain object.
     const dump = () => {
@@ -91,7 +91,10 @@ describe('Rollback attest_validator_stats recompute @regression @tier3', functio
         // Surviving requests that WOULD have expired in a replay to N-1: deadline
         // before N-1 and no valid response. R1's responsible set (redundancy 1
         // over a single-validator capability set = [pkA]) earns pkA one miss.
-        const expiredReqs = [
+        // No responsible_set_json here: these rows exercise the LEGACY fallback (the
+        // recompute re-derives via the stubbed capability lookups). The ATT-RECOMP-1
+        // test below adds the persisted set to prove the re-derive is bypassed.
+        expiredReqs = [
             { request_id: 'r1'.repeat(32), provider_id: PROV, redundancy: 1, block_index: 20, deadline_block: 50 },
         ];
 
@@ -190,6 +193,37 @@ describe('Rollback attest_validator_stats recompute @regression @tier3', functio
         // No extra rows beyond the fresh aggregation.
         assert.deepStrictEqual(Object.keys(result).sort(), Object.keys(expected).sort(),
             'recomputed table must contain exactly the rows a fresh aggregation yields');
+    });
+
+    it('ATT-RECOMP-1: uses the persisted responsible_set_json and does NOT re-derive against current stakes', async function () {
+        // A surviving slash has (in the wild) already reduced stakes.amount, so re-deriving the
+        // responsible set here would charge missed_count to the wrong set. With the set pinned
+        // as-of the request block at v0, the recompute reads it verbatim and never touches the
+        // (now-corrupted) capability/stake-weight lookups.
+        expiredReqs[0].responsible_set_json = JSON.stringify([pkA]);
+
+        await rollback._recomputeAttestationValidatorStats(N);
+        const result = dump();
+
+        assert.strictEqual(indexer.indexerDb.getStakeWeightsByCapability.notCalled, true,
+            'must not re-derive via getStakeWeightsByCapability when the set is persisted');
+        assert.strictEqual(indexer.indexerDb.getValidatorsByCapability.notCalled, true,
+            'must not re-derive via getValidatorsByCapability when the set is persisted');
+        // Same aggregate as the fallback path: pkA earns 1 miss from the persisted set.
+        assert.strictEqual(result[`${pkA}|${PROV}`].missed_count, 1, 'pkA missed_count from the persisted set');
+        assert.strictEqual(result[`${pkA}|${PROV}`].fulfilled_count, 2, 'pkA fulfilled_count from surviving sigs');
+    });
+
+    it('ATT-RECOMP-1: falls back to the live re-derive when responsible_set_json is malformed', async function () {
+        expiredReqs[0].responsible_set_json = '{not-json';
+
+        await rollback._recomputeAttestationValidatorStats(N);
+        const result = dump();
+
+        // A corrupt/legacy value must not throw and must not drop the miss: it re-derives.
+        assert.ok(indexer.indexerDb.getStakeWeightsByCapability.called || indexer.indexerDb.getValidatorsByCapability.called,
+            'a malformed persisted set must fall back to the live capability re-derive');
+        assert.strictEqual(result[`${pkA}|${PROV}`].missed_count, 1, 'miss still attributed via the fallback');
     });
 
     it('is a no-op when no row was touched in the orphaned range', async function () {

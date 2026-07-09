@@ -634,6 +634,36 @@ class Rollback {
                     await this.indexerDb.doQuery(query, args);
                 }
 
+                // Restore anchor validator_rewards rows an orphaned reconcile DELETEd IN PLACE
+                // from earlier SURVIVING blocks (RB-ANCHOR). reconcileAnchorRewardWinner keeps
+                // only the smallest-pubkey winner per (reward_type, round_reference); on a
+                // failover double-publish it deletes loser rows that were created at the
+                // checkpoint's SNAPSHOT_BLOCK (earlier than the ANCHOR that runs the reconcile),
+                // logging each pre-image in anchor_reward_reconcile_log keyed to the reconcile's
+                // (ANCHOR) block. If that ANCHOR is in the orphaned range, the generic block
+                // delete below drops the log rows and the ANCHOR but cannot re-create the deleted
+                // losers, leaving the reorged node with a collapsed reward set while a from-genesis
+                // replay to reorg_block-1 (reconcile never re-ran) keeps every loser. That lowers
+                // a later COLLECT's SUM(validator_rewards) → a ledger-hashed fork. Re-INSERT only
+                // losers whose ORIGINAL earn-block (reward_block_index) SURVIVES the reorg
+                // (< block_index): a loser earned inside the orphaned range is correctly absent
+                // (replay never mints it, and the generic delete already removed any copy). The
+                // restored row carries its original earn-block, so the generic block delete (which
+                // scopes on block_index >= reorg) leaves it in place. Runs BEFORE that delete so
+                // the log rows still exist. amount is the frozen consensus reward constant per
+                // round, so duplicate log rows carry an identical value and INSERT IGNORE is
+                // value-stable + idempotent (no earliest-debit tiebreak needed, unlike the slash
+                // restores above where prev_amount can differ across repeated slashes of one row).
+                query = `INSERT IGNORE INTO validator_rewards
+                            (source_id, signing_pubkey_id, reward_type, round_reference, amount, block_index)
+                         SELECT d.source_id, d.signing_pubkey_id, d.reward_type, d.round_reference,
+                                d.amount, d.reward_block_index
+                           FROM anchor_reward_reconcile_log d
+                          WHERE d.block_index >= ?
+                            AND d.reward_block_index < ?`;
+                args = [block_index, block_index];
+                await this.indexerDb.doQuery(query, args);
+
                 // Cooldown-maturity reversal was here; it is now in _reverseCooldownMaturities,
                 // called UNCONDITIONALLY at the top of the transaction (before this guard). It had
                 // to leave this firstActionIndex-gated block because the legacy cooldown maturity
@@ -1259,7 +1289,7 @@ class Rollback {
         // recomputation independent of status bookkeeping either way.
         let validId = await this.indexerDb.getStatusId('valid');
         let expiredReqs = await this.indexerDb.doQuery(
-            `SELECT ar.request_id, ar.provider_id, ar.redundancy, ar.block_index, ar.deadline_block
+            `SELECT ar.request_id, ar.provider_id, ar.redundancy, ar.block_index, ar.deadline_block, ar.responsible_set_json
              FROM attests ar
              WHERE ar.version = 0
                AND ar.deadline_block < ?
@@ -1281,17 +1311,34 @@ class Rollback {
         // list would credit an excluded key and drop a real one.
         let validatorsByBlock = new Map();
         for(let req of expiredReqs){
-            let reqBlock   = Number(req.block_index);
-            let cached     = validatorsByBlock.get(reqBlock);
-            if(cached === undefined){
-                let weighted = swq.isStakeWeightedQuorumActive(reqBlock, this.config['NETWORK']);
-                let vs       = weighted
-                    ? await this.indexerDb.getStakeWeightsByCapability('attestation', reqBlock)
-                    : await this.indexerDb.getValidatorsByCapability('attestation', reqBlock);
-                cached = { weighted, validators: vs || [] };
-                validatorsByBlock.set(reqBlock, cached);
+            // ATT-RECOMP-1: prefer the responsible set pinned as-of the request block at v0
+            // creation (attests.responsible_set_json). It captures the historical stake amounts
+            // BEFORE any later surviving slash, so the recompute reproduces the true responsible
+            // set instead of re-deriving it against the CURRENT mutable stakes.amount (which a
+            // surviving slash has already reduced → a divergent set → wrong missed_count). Legacy
+            // rows created before the column existed carry NULL and fall back to the live
+            // re-derive below (the pre-fix behaviour, with the known as-of-amount caveat).
+            let responsible = null;
+            if(req.responsible_set_json){
+                try {
+                    let parsed = JSON.parse(req.responsible_set_json);
+                    if(Array.isArray(parsed))
+                        responsible = parsed.map(p => String(p).toLowerCase());
+                } catch(_) { responsible = null; }
             }
-            let responsible = this._responsibleSet(String(req.request_id), cached.validators, Number(req.redundancy), cached.weighted);
+            if(responsible === null){
+                let reqBlock = Number(req.block_index);
+                let cached   = validatorsByBlock.get(reqBlock);
+                if(cached === undefined){
+                    let weighted = swq.isStakeWeightedQuorumActive(reqBlock, this.config['NETWORK']);
+                    let vs       = weighted
+                        ? await this.indexerDb.getStakeWeightsByCapability('attestation', reqBlock)
+                        : await this.indexerDb.getValidatorsByCapability('attestation', reqBlock);
+                    cached = { weighted, validators: vs || [] };
+                    validatorsByBlock.set(reqBlock, cached);
+                }
+                responsible = this._responsibleSet(String(req.request_id), cached.validators, Number(req.redundancy), cached.weighted);
+            }
             let provider    = String(req.provider_id);
             let expiryBlock  = Number(req.deadline_block) + 1;
             for(let pubkey of responsible){
