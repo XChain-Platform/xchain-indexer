@@ -48,6 +48,7 @@
 
 const zlib    = require('zlib');
 const crypto  = require('crypto');
+const mathjs  = require('mathjs');
 const ed25519 = require('./ed25519.js');
 const swq     = require('./stake_weighted_quorum.js');
 const eq      = require('./equivocation_header.js');
@@ -154,6 +155,16 @@ class AnchorRecovery {
         // real on-chain BTC stakes. Fabricated sets cannot survive this.
         if(this.verifyStakes && this.btcDb) await this._verifyStakes(snaps);
 
+        // Completeness (REC-SUBSET-1): existence alone (above) accepts a real-but-
+        // PROPER-SUBSET snapshot - a single small-but-real staker could omit the honest
+        // high-stake sources so the under-counted S lets its minority clear the 2/3 bar,
+        // forging a match/call the wrapper quorum then authenticates. Re-resolve the FULL
+        // qualifying set from the BTC stakes and require no qualifying source was dropped.
+        // Needs the resolver (a BTC-scoped Database), so it is gated on that being present
+        // in addition to --verify-stakes; the raw-doQuery test stub skips it harmlessly.
+        if(this.verifyStakes && this.btcDb && typeof this.btcDb.getStakeWeightsByCapability === 'function')
+            await this._verifyCompleteness(snaps, v1.network);
+
         // 1. Wrapper signatures vs the ARCHIVED oracle_publish set.
         let wrapperSet = setFor('oracle_publish', v1.snapshot_block);
         let wrapperCanonical = this._wrapperCanonical(v1);
@@ -218,6 +229,71 @@ class AnchorRecovery {
             if(!rows || rows.length === 0)
                 throw new Error('archived snapshot pubkey ' + String(s.signing_pubkey).substring(0, 16) +
                                 '... has no on-chain stake at block ' + s.snapshot_block + ' (fabricated set?)');
+        }
+    }
+
+    // REC-SUBSET-1: every SOURCE that qualifies for a capability at the snapshot_block
+    // must appear in the archived snapshot for that (capability, block); a dropped
+    // qualifying source under-counts S and lets an evicted minority clear quorum.
+    //
+    // The completeness threshold is derived FROM THE ARCHIVE ITSELF: a = the minimum
+    // per-source weight the archive admits for the group. Every archived source has
+    // weight >= a, so a >= the hub's true MIN_STAKE at that block; therefore every source
+    // the resolver reports at threshold `a` is one an honest hub would also have included.
+    // Requiring resolved-sources ⊆ archived-sources thus NEVER false-rejects an honest
+    // full snapshot (which is the disaster-recovery safety property that matters) while
+    // catching any honest source dropped to shrink S. A truncated resolution cannot be
+    // trusted to be complete, so it fails closed (mirrors meetsStakeThreshold + XHUB-TRUNC-2).
+    async _verifyCompleteness(snaps, network){
+        // Group archived snapshot rows by (capability, snapshot_block).
+        let groups = new Map();
+        for(let s of snaps){
+            let key = String(s.capability) + '@' + Number(s.snapshot_block);
+            if(!groups.has(key)) groups.set(key, { capability: String(s.capability), block: Number(s.snapshot_block), rows: [] });
+            groups.get(key).rows.push(s);
+        }
+        for(let g of groups.values()){
+            // Only the quorum-bearing capabilities are re-resolvable from BTC stakes; skip
+            // any other archived group (none today, but future-proof against a new snapshot kind).
+            if(g.capability !== 'cross_chain' && g.capability !== 'oracle_publish' && g.capability !== 'price' && g.capability !== 'attestation')
+                continue;
+            // Archive-derived threshold: smallest admitted per-source weight (exact bignumber).
+            let a = null;
+            for(let r of g.rows){
+                let w = mathjs.bignumber((r.amount === null || r.amount === undefined) ? '0' : String(r.amount));
+                if(a === null || w.lt(a)) a = w;
+            }
+            let minStake = (a === null) ? '0' : a.toFixed();
+            let weighted = swq.isStakeWeightedQuorumActive(g.block, network);
+            let resolved = weighted
+                ? await this.btcDb.getStakeWeightsByCapability(g.capability, g.block, minStake)
+                : await this.btcDb.getValidatorsByCapability(g.capability, g.block, minStake);
+            resolved = resolved || [];
+            // A resolution that overflowed its cap cannot be trusted complete -> fail closed.
+            if(resolved.truncated === true)
+                throw new Error('archived ' + g.capability + ' snapshot at block ' + g.block +
+                                ' cannot be completeness-checked: the on-chain resolution is truncated (raise VALIDATOR_QUERY_LIMIT / STAKE_WEIGHT_MAX_SOURCES)');
+            if(weighted){
+                // Source-level completeness: no qualifying staking source may be absent.
+                let archivedSources = new Set(g.rows.map(r => String(r.source != null ? r.source : '')));
+                for(let v of resolved){
+                    let src = String(v.source != null ? v.source : '');
+                    if(!archivedSources.has(src))
+                        throw new Error('archived ' + g.capability + ' snapshot at block ' + g.block +
+                                        ' is incomplete: qualifying source ' + src.substring(0, 24) +
+                                        '... (weight >= ' + minStake + ') was dropped (subset-forge?)');
+                }
+            } else {
+                // Legacy count quorum: completeness is by signing pubkey.
+                let archivedPubkeys = new Set(g.rows.map(r => String(r.signing_pubkey).toLowerCase()));
+                for(let v of resolved){
+                    let pk = String(v.pubkey).toLowerCase();
+                    if(!archivedPubkeys.has(pk))
+                        throw new Error('archived ' + g.capability + ' snapshot at block ' + g.block +
+                                        ' is incomplete: qualifying validator ' + pk.substring(0, 16) +
+                                        '... was dropped (subset-forge?)');
+                }
+            }
         }
     }
 
@@ -485,7 +561,15 @@ if(require.main === module){
         let btcDb = null;
         const btcName = process.env.BTC_INDEXER_DB_NAME;
         if(btcName){
-            btcDb = new Database(host, port, btcName, user, pass, indexerLike);
+            // BTC-scoped config so getStakeWeightsByCapability/getValidatorsByCapability
+            // resolve capability stakes from the BTC stakes tables (the REC-SUBSET-1
+            // completeness cross-check), instead of the non-BTC short-circuit that reads
+            // the mirrored capability_snapshots recovery itself is rebuilding. The raw
+            // reward-restore + _verifyStakes queries are column-based, so the coin scope
+            // does not affect them.
+            const btcCfg  = config.getConfig('BTC', cfg['NETWORK']);
+            const btcLike = { config: btcCfg, util: new Utility(btcCfg) };
+            btcDb = new Database(host, port, btcName, user, pass, btcLike);
         } else if(verifyStakes){
             console.error('recovery: --verify-stakes needs BTC_INDEXER_DB_NAME (same host/credentials).');
             process.exit(2);

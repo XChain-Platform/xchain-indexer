@@ -43,11 +43,17 @@ module.exports = {
 
     GAS_TICK,
 
-    getConfig: function(){
+    getConfig: function(coinOverride, networkOverride){
 
+        // coinOverride / networkOverride let a caller resolve a config for a coin OTHER
+        // than this process's own INDEXER_COIN without mutating the environment. The
+        // recovery CLI uses this to build a BTC-scoped config for the cross-check DB so
+        // getStakeWeightsByCapability resolves capability stakes from the BTC stakes
+        // tables (not the mirrored capability_snapshots short-circuit). Default (no
+        // args) reads the environment exactly as before.
         let gas     = GAS_TICK;                     // TICK to be used as gas token
-        let coin    = process.env.INDEXER_COIN;     // BTC / LTC / DOGE
-        let network = process.env.INDEXER_NETWORK;  // mainnet / testnet / regtest
+        let coin    = coinOverride    || process.env.INDEXER_COIN;     // BTC / LTC / DOGE
+        let network = networkOverride || process.env.INDEXER_NETWORK;  // mainnet / testnet / regtest
 
         // Define indexer and COIN config objects
         let config     = {};

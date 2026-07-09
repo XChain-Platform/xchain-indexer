@@ -81,10 +81,35 @@ function memDb(v1s, v2s) {
     };
 }
 
-// BTC indexer stub: every pubkey in `staked` holds an active stake.
-function btcDbStub(staked) {
+// BTC indexer stub: every pubkey in `staked` holds an active stake (the raw
+// _verifyStakes existence query). opts.capSets = { <capability>: [{pubkey, source, weight}] }
+// backs the REC-SUBSET-1 completeness resolver (getStakeWeightsByCapability /
+// getValidatorsByCapability); opts.truncated = [<capability>...] flags a capped
+// resolution. With no capSets the resolver returns [] (completeness is vacuous),
+// so the pre-existing --verify-stakes tests are unaffected.
+function btcDbStub(staked, opts) {
+    opts = opts || {};
     let set = new Set(staked.map(p => p.toLowerCase()));
-    return { async doQuery(sql, params) { return set.has(String(params[0]).toLowerCase()) ? [{ 1: 1 }] : []; } };
+    let capSets = opts.capSets || {};
+    let truncated = new Set(opts.truncated || []);
+    function resolve(capability, minStake) {
+        let out = (capSets[capability] || [])
+            .filter(r => Number(r.weight != null ? r.weight : r.amount) >= Number(minStake))
+            .map(r => ({ pubkey: r.pubkey, source: r.source, weight: String(r.weight != null ? r.weight : r.amount) }));
+        out.truncated = truncated.has(capability);
+        return out;
+    }
+    return {
+        async doQuery(sql, params) { return set.has(String(params[0]).toLowerCase()) ? [{ 1: 1 }] : []; },
+        async getStakeWeightsByCapability(cap, block, minStake) { return resolve(cap, minStake); },
+        async getValidatorsByCapability(cap, block, minStake) { return resolve(cap, minStake); }
+    };
+}
+
+// Full qualifying set the BTC resolver would report for a set of signing keys,
+// matching the fixture's per-key source formula ('src_' + pubkey[:16], weight 5).
+function capSetFromKeys(keys) {
+    return keys.map(k => ({ pubkey: k.pubkey, source: 'src_' + k.pubkey.slice(0, 16), weight: '5' }));
 }
 
 // BTC indexer stub for the reward restore. F1a: recovery STAGES archived rewards by raw
@@ -185,6 +210,64 @@ describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () 
         // recovery runbook would fail every batch before the reindex runs.
         let report = await new AnchorRecovery(memDb([v1], []), Object.assign({ btcDb: rewardBtcDbStub() }, quiet)).run();
         assert.strictEqual(report.verified, 1);
+    });
+
+    describe('completeness cross-check (REC-SUBSET-1)', function () {
+
+        it('an honest full archived snapshot passes the source completeness check', async function () {
+            let { v1 } = buildBatch(0, [rawMatch('m1')], oracleKeys, crossKeys);
+            let allStaked = oracleKeys.concat(crossKeys).map(k => k.pubkey);
+            let capSets = { cross_chain: capSetFromKeys(crossKeys), oracle_publish: capSetFromKeys(oracleKeys) };
+            let report = await new AnchorRecovery(memDb([v1], []),
+                Object.assign({ btcDb: btcDbStub(allStaked, { capSets }), verifyStakes: true }, quiet)).run();
+            assert.strictEqual(report.verified, 1);
+            assert.strictEqual(report.failed.length, 0);
+        });
+
+        it('rejects a subset snapshot that dropped a qualifying source (the forge)', async function () {
+            // The archive carries the honest 4-source cross_chain set, but on-chain a FIFTH
+            // qualifying source exists that the archive omitted (an evicted honest source).
+            // Existence (_verifyStakes) passes - every ARCHIVED key is staked - but the
+            // completeness resolver reports the dropped source, so the batch must fail.
+            let { v1 } = buildBatch(0, [rawMatch('m1')], oracleKeys, crossKeys);
+            let allStaked = oracleKeys.concat(crossKeys).map(k => k.pubkey);
+            let ghost = makeKeypair();
+            let capSets = {
+                cross_chain: capSetFromKeys(crossKeys).concat([{ pubkey: ghost.pubkey, source: 'src_ghost', weight: '5' }]),
+                oracle_publish: capSetFromKeys(oracleKeys)
+            };
+            let report = await new AnchorRecovery(memDb([v1], []),
+                Object.assign({ btcDb: btcDbStub(allStaked, { capSets }), verifyStakes: true }, quiet)).run();
+            assert.strictEqual(report.verified, 0);
+            assert.ok(report.failed[0].reason.includes('incomplete'));
+            assert.ok(report.failed[0].reason.includes('cross_chain'));
+        });
+
+        it('fails closed when the on-chain resolution is truncated', async function () {
+            let { v1 } = buildBatch(0, [rawMatch('m1')], oracleKeys, crossKeys);
+            let allStaked = oracleKeys.concat(crossKeys).map(k => k.pubkey);
+            let capSets = { cross_chain: capSetFromKeys(crossKeys), oracle_publish: capSetFromKeys(oracleKeys) };
+            let report = await new AnchorRecovery(memDb([v1], []),
+                Object.assign({ btcDb: btcDbStub(allStaked, { capSets, truncated: ['cross_chain'] }), verifyStakes: true }, quiet)).run();
+            assert.strictEqual(report.verified, 0);
+            assert.ok(report.failed[0].reason.includes('truncated'));
+        });
+
+        it('a subset dropping a lower-weight source below the archive floor is NOT flagged (no false-reject)', async function () {
+            // The completeness threshold is the archive's own minimum admitted weight. A source
+            // with LESS weight than that floor is below the bar the archive itself set, so its
+            // absence is not a forge signal - the honest full-archive property must not misfire.
+            let { v1 } = buildBatch(0, [rawMatch('m1')], oracleKeys, crossKeys);
+            let allStaked = oracleKeys.concat(crossKeys).map(k => k.pubkey);
+            let dust = makeKeypair();
+            let capSets = {
+                cross_chain: capSetFromKeys(crossKeys).concat([{ pubkey: dust.pubkey, source: 'src_dust', weight: '1' }]),
+                oracle_publish: capSetFromKeys(oracleKeys)
+            };
+            let report = await new AnchorRecovery(memDb([v1], []),
+                Object.assign({ btcDb: btcDbStub(allStaked, { capSets }), verifyStakes: true }, quiet)).run();
+            assert.strictEqual(report.verified, 1);
+        });
     });
 
     describe('archived rewards', function () {
