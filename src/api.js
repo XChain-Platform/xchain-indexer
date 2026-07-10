@@ -1073,6 +1073,14 @@ async function startApi(){
         });
     });
 
+    // Express 5 / body-parser 2.x leaves req.body undefined when a request carries
+    // no JSON body (a GET, or a POST without application/json), whereas body-parser
+    // 1.x set it to {}. express-json-rpc-router requires req.body to be an object or
+    // it throws ("req.body is required"). Restore the {} default so unmatched requests
+    // that fall through to this root-mounted router get a normal JSON-RPC error
+    // response instead of crashing the request.
+    app.use((req, res, next) => { if (req.body === undefined) req.body = {}; next(); });
+
     // Allow JSON-RPC requests
     app.use(jsonRouter({methods: jsonRpcController}));
 
