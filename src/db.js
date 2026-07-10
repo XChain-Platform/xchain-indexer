@@ -26,6 +26,7 @@ const { AsyncLocalStorage } = require('async_hooks');
 const { buildStateHashData } = require('./stateHash');
 const { canonicalizeHashAddress } = require('./protocolAddressRoles');
 const swqCap = require('./swq_source_cap_activation');
+const { CHECKPOINT_VERSIONS: ANCHOR_CHECKPOINT_VERSIONS } = require('./anchor-action-query');
 
 // Watchdog-fence context (M-16). The block loop runs each block's processing inside
 // txEpochStore.run(epoch, ...) so every DB call it makes carries the transaction epoch
@@ -10461,6 +10462,33 @@ class Database {
                        AND s.status IN ('valid', 'unverified')`;
         let rows = await this.doQuery(query, [chain, network]);
         return (rows.length > 0 && rows[0].max_seq != null) ? Number(rows[0].max_seq) : null;
+    }
+
+    // Look up the on-chain ANCHOR checkpoint record for one checkpoint identity
+    // (chain, network, block_index, checkpoint_seq), joined to its status. Only
+    // checkpoint-bearing versions (0/1/3/4/5; version 2 is an archive continuation
+    // chunk with no checkpoint identity of its own). Returns the highest action_index
+    // match (a reorg-replayed re-anchor supersedes an earlier one) or null. Read path
+    // for the getanchoraction RPC: it lets the hub confirm an announced anchor actually
+    // landed on-chain, with the matching payload, at DOGE depth, before trusting an
+    // anchor-gossip stamp/reward (the block_index_doge column carries the DOGE height).
+    async getAnchorActionByCheckpoint(chain, network, block_index, checkpoint_seq){
+        // Version set is the single source of truth in anchor-action-query.js (shared
+        // with the RPC + tests) so the SQL filter can never drift from it.
+        let versions = ANCHOR_CHECKPOINT_VERSIONS;
+        let query = `SELECT a.action_index, a.version, a.chain, a.network, a.block_index,
+                            a.block_hash, a.ledger_hash, a.actions_hash, a.contract_hash,
+                            a.checkpoint_seq, a.snapshot_block, a.state_root, a.state_root_version,
+                            a.block_merkle_root, a.block_merkle_version, a.block_index_doge, s.status
+                     FROM anchor_actions a
+                     JOIN index_statuses s ON s.id = a.status_id
+                     WHERE a.chain = ? AND a.network = ? AND a.block_index = ? AND a.checkpoint_seq = ?
+                       AND a.version IN (${versions.map(() => '?').join(', ')})
+                     ORDER BY a.action_index DESC
+                     LIMIT 1`;
+        let rows = await this.doQuery(query,
+            [chain, network, Number(block_index), Number(checkpoint_seq), ...versions]);
+        return rows.length > 0 ? rows[0] : null;
     }
 
     // Highest VALID archive batch seq recorded - the v1 batch replay guard

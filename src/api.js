@@ -34,6 +34,7 @@ const jsonRouter    = require('express-json-rpc-router');
 const { buildHealthResponse } = require('./health');
 const { getStakeSourceByPubkey } = require('./stake-source');
 const { canonicalizeRewardType } = require('./reward-push-gate');
+const anchorActionQuery = require('./anchor-action-query');
 const merkle        = require('./merkle');
 const ar            = require('./anchor_reward_activation.js');
 const crypto        = require('crypto');
@@ -149,6 +150,7 @@ const FEDERATION_READ_METHODS = new Set([
     'getpendingattestation_requests',
     'getopencrosschainorders',
     'getactionconfirmations',
+    'getanchoraction',
     'getpendingcrosschaincalls',
     'getcrosschaincall',
     'getcrosschaincallresult'
@@ -850,6 +852,31 @@ async function startApi(){
             } catch (err) {
                 console.error('getactionconfirmations error:', err);
                 return { error: 'failed to look up action confirmations' };
+            }
+        },
+
+        // Look up the on-chain ANCHOR checkpoint record (from anchor_actions, the
+        // permanent full-parse record) for a checkpoint identity, with its DOGE
+        // confirmation depth. Serves the hub's anchor-gossip verification: before a
+        // hub trusts an XANC_V0_DONE / XANC_FINALIZED (which stamps anchor_txid and
+        // mirrors a reward), it confirms via THIS method that a matching anchor
+        // actually landed on-chain (payload hashes match, status is not 'invalid',
+        // confirmations >= XCHAIN_CONFIRMATIONS_DOGE), independently of the announced
+        // txid, defeating a phantom txid and a Byzantine ELECTED publisher alike.
+        // `chain`/`network` are the CHECKPOINTED chain (e.g. BTC/regtest); this
+        // indexer serves the anchor chain (DOGE), so confirmations are DOGE-relative.
+        async getanchoraction({chain, network, block_index, checkpoint_seq}){
+            if(!indexer.indexerDb)
+                return { error: 'indexer database not ready' };
+            let v = anchorActionQuery.validateAnchorActionParams({ chain, network, block_index, checkpoint_seq });
+            if(!v.ok) return { error: v.error };
+            try {
+                let latest = await indexer.indexerDb.getLatestBlockIndex();
+                let row    = await indexer.indexerDb.getAnchorActionByCheckpoint(chain, network, v.block_index, v.checkpoint_seq);
+                return anchorActionQuery.buildAnchorActionResponse(indexer.config, latest, row);
+            } catch (err) {
+                console.error('getanchoraction error:', err);
+                return { error: 'failed to look up anchor action' };
             }
         },
 
