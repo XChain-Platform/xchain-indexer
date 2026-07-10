@@ -35,6 +35,7 @@ const { buildHealthResponse } = require('./health');
 const { getStakeSourceByPubkey } = require('./stake-source');
 const { canonicalizeRewardType } = require('./reward-push-gate');
 const anchorActionQuery = require('./anchor-action-query');
+const reorgHistoryQuery = require('./reorg-history-query');
 const merkle        = require('./merkle');
 const ar            = require('./anchor_reward_activation.js');
 const crypto        = require('crypto');
@@ -151,6 +152,7 @@ const FEDERATION_READ_METHODS = new Set([
     'getopencrosschainorders',
     'getactionconfirmations',
     'getanchoraction',
+    'getreorghistory',
     'getpendingcrosschaincalls',
     'getcrosschaincall',
     'getcrosschaincallresult'
@@ -865,18 +867,62 @@ async function startApi(){
         // txid, defeating a phantom txid and a Byzantine ELECTED publisher alike.
         // `chain`/`network` are the CHECKPOINTED chain (e.g. BTC/regtest); this
         // indexer serves the anchor chain (DOGE), so confirmations are DOGE-relative.
-        async getanchoraction({chain, network, block_index, checkpoint_seq}){
+        // Optional `txid` / `version` narrow the lookup to a SPECIFIC anchor
+        // transaction rather than "the newest anchor for this checkpoint". Without
+        // them the answer is only "this checkpoint is anchored at depth", which a
+        // Byzantine ELECTED publisher can satisfy while announcing a never-mined or
+        // real-but-different txid (XANC-ELECTED-FORGE-1). `checkpoint_anchored` is
+        // returned alongside `exists` so a filtering caller can distinguish a benign
+        // not-yet-anchored checkpoint from a positively-detected txid forge.
+        //
+        // The candidate rows are read with doQuery + the SQL owned by
+        // anchor-action-query.js rather than a db.js accessor, keeping this read
+        // surface isolated (db.js is under concurrent edit). db.js's single-row
+        // getAnchorActionByCheckpoint is superseded by this path and should be
+        // folded back here once db.js is free.
+        async getanchoraction({chain, network, block_index, checkpoint_seq, txid, version}){
             if(!indexer.indexerDb)
                 return { error: 'indexer database not ready' };
-            let v = anchorActionQuery.validateAnchorActionParams({ chain, network, block_index, checkpoint_seq });
+            let v = anchorActionQuery.validateAnchorActionParams({ chain, network, block_index, checkpoint_seq, txid, version });
             if(!v.ok) return { error: v.error };
             try {
                 let latest = await indexer.indexerDb.getLatestBlockIndex();
-                let row    = await indexer.indexerDb.getAnchorActionByCheckpoint(chain, network, v.block_index, v.checkpoint_seq);
-                return anchorActionQuery.buildAnchorActionResponse(indexer.config, latest, row);
+                let rows   = await indexer.indexerDb.doQuery(anchorActionQuery.ANCHOR_ACTIONS_SQL,
+                    [chain, network, v.block_index, v.checkpoint_seq, ...anchorActionQuery.CHECKPOINT_VERSIONS]);
+                let row    = anchorActionQuery.selectAnchorRow(rows, { txid: v.txid, version: v.version });
+                return anchorActionQuery.buildAnchorActionResponse(indexer.config, latest, row,
+                    { checkpoint_anchored: Array.isArray(rows) && rows.length > 0 });
             } catch (err) {
                 console.error('getanchoraction error:', err);
                 return { error: 'failed to look up anchor action' };
+            }
+        },
+
+        // Reorg history WITH the orphaned block hashes, from the decoder's `events`
+        // table (code='REORG', data = [{block_index, block_hash}]).
+        //
+        // Serves xchain-hub's ReorgHandler (REORG-OLDHASH-UNVERIFIED-1): the handler
+        // can confirm the announced NEW hash is what its own node serves at the reorg
+        // height, but nothing today proves the announced OLD hash was ever canonical
+        // there, so one Byzantine validator can drive a fake-reorg rollback with a
+        // fabricated oldHash. db.js's getReorgsSince() keeps only the deepest
+        // block_index and drops the hashes, so this is a separate read.
+        //
+        // Pass block_index + block_hash to ask the precise question: "did you orphan
+        // THIS hash at THIS height?" -> `matched` is the answer. Both must occur on the
+        // SAME orphaned block. Reads the DECODER db (events is a decoder table).
+        async getreorghistory({since_id, block_index, block_hash, limit}){
+            if(!indexer.decoderDb)
+                return { error: 'decoder database not ready' };
+            let v = reorgHistoryQuery.validateReorgHistoryParams({ since_id, block_index, block_hash, limit });
+            if(!v.ok) return { error: v.error };
+            try {
+                let rows = await indexer.decoderDb.doQuery(reorgHistoryQuery.REORG_EVENTS_SQL, [v.since_id, v.limit]);
+                return reorgHistoryQuery.buildReorgHistoryResponse(rows,
+                    { block_index: v.block_index, block_hash: v.block_hash });
+            } catch (err) {
+                console.error('getreorghistory error:', err);
+                return { error: 'failed to look up reorg history' };
             }
         },
 
