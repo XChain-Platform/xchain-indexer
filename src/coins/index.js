@@ -132,21 +132,24 @@ function resolveFullnode(fullnode, network){
     return out;
 }
 
-// Apply the FEE_DESTINATION env override. Honored on non-mainnet networks only
-// (pre-launch redirection on regtest/testnet). On mainnet the env var is ignored and
-// the bundled default - the consensus-pinned address - is always used: FEE_DESTINATION
-// gates native-fee acceptance (detectFeePaymentMode / validateNativeCoinFee), but the
+// Apply the FEE_DESTINATION env override. Honored on regtest ONLY (single-operator,
+// ephemeral; the same gating as the genesis $envOverrides and FULLNODE regtest
+// resolution above). On mainnet AND testnet the env var is ignored and the bundled
+// default - the consensus-pinned address - is always used: FEE_DESTINATION gates
+// native-fee acceptance (detectFeePaymentMode / validateNativeCoinFee), but the
 // consensus pin hashes only the static bundle, so an env-resolved override escapes the
 // freeze and would let two operators accept/reject the same native-fee action
-// differently, forking the block-hashed ledger. A set-but-ignored mainnet override is
+// differently, forking the block-hashed ledger. Testnet is a multi-operator federation
+// with an armed pin (consensus_pin.js), so the identical fork risk applies there; the
+// pin must never give false assurance for this field. A set-but-ignored override is
 // warned rather than silently dropped so a misconfiguration is visible.
 function resolveFeeDestination(tick, network, defaultAddr){
     const key = 'XCHAIN_FEE_DESTINATION_' + tick + '_' + String(network).toUpperCase();
     const override = process.env[key];
     if(!override) return defaultAddr;
-    if(network === 'mainnet'){
+    if(network !== 'regtest'){
         if(override !== defaultAddr)
-            console.log('WARNING: ' + key + ' is set but IGNORED on mainnet; using the bundled ' +
+            console.log('WARNING: ' + key + ' is set but IGNORED on ' + network + '; using the bundled ' +
                 'consensus-pinned FEE_DESTINATION. To redirect fees, change the pinned coin bundle.');
         return defaultAddr;
     }
@@ -225,10 +228,16 @@ function consensusSubset(tick, network){
     const netBlock = coin.networks[network];
     if(!netBlock) throw new Error('Coin ' + tick + ' has no ' + network + ' network');
 
-    // Addresses minus the display-only EXPLORER role.
+    // Addresses minus the display-only roles the coin file declares beside the
+    // data (DISPLAY_ONLY_ADDRESS_ROLES; today exactly EXPLORER). Deriving the
+    // exclusion from the data means a new display-only role must be classified
+    // where it is added instead of silently arming into the hash, and renaming
+    // a display role moves the classification with it. The EXPLORER fallback
+    // preserves behavior for a coin file that omits the declaration.
+    const displayRoles = new Set(coin.DISPLAY_ONLY_ADDRESS_ROLES || ['EXPLORER']);
     const addresses = {};
     for(const k of Object.keys(netBlock.addresses))
-        if(k !== 'EXPLORER') addresses[k] = netBlock.addresses[k];
+        if(!displayRoles.has(k)) addresses[k] = netBlock.addresses[k];
 
     const subset = {
         net:        netBlock.net,

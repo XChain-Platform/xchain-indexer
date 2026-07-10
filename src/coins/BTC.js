@@ -45,6 +45,13 @@ module.exports = {
     // may override per coin via XCHAIN_CONFIRMATIONS_BTC; this is the factory value.
     confirmations: 6,
 
+    // Address roles excluded from the consensus subset/hash (display-only; not read
+    // by the indexer). Every role NOT listed here is consensus-relevant and folds
+    // into the pinned hash. Declared beside the data so a new display-only role is
+    // classified where it is added, and a rename moves the classification with it
+    // (consensusSubset in index.js derives the exclusion from this list).
+    DISPLAY_ONLY_ADDRESS_ROLES: ['EXPLORER'],
+
     // ── PER-NETWORK PARAMS ──────────────────────────────────────────────────
     networks: {
 
