@@ -186,6 +186,31 @@ describe('ProtocolChanges @regression @tier3', function () {
     // decodes → code_hash → contract_hash → the federation checkpoint, forking the
     // ledger. deploy.test.js stubs isEnabled(), so ONLY this block guards the REAL
     // registration. Keep these assertions in lockstep with protocol_changes.js.
+    // isEnabled must FAIL CLOSED on an unrecognized network. The mainnet/testnet/regtest
+    // gate branches have no else, so an unknown network (unset/typo'd INDEXER_NETWORK) would
+    // apply no time/block gate and leave every flag-day change enabled from genesis - a
+    // mis-networked node would activate gated consensus rules early and fork the fleet.
+    describe('isEnabled network fail-closed (consensus backstop)', function () {
+        it('throws on an unrecognized network instead of enabling every gated change', async function () {
+            process.env.npm_package_version = '2.0.0';
+            process.env.INDEXER_NETWORK = 'mainnett'; // typo
+            const bad = new ProtocolChanges(indexer);
+            indexer.decoderDb.getBlockTime.resolves(1);
+            await assert.rejects(() => bad.isEnabled('CONTROLLER_GUARD', 100), /unrecognized network/);
+        });
+
+        it('still evaluates normally for each valid network', async function () {
+            for (const net of ['mainnet', 'testnet', 'regtest']) {
+                process.env.npm_package_version = '2.0.0';
+                process.env.INDEXER_NETWORK = net;
+                const pc2 = new ProtocolChanges(indexer);
+                indexer.decoderDb.getBlockTime.resolves(1);
+                // SEND is genesis-active (1.0.0, all-zero gates), enabled on every valid network.
+                assert.strictEqual(await pc2.isEnabled('SEND', 0), true, net + ' should evaluate');
+            }
+        });
+    });
+
     describe('DEPLOY_BASE64_CODE activation gate (consensus)', function () {
         const MAINNET_FLAG_DAY = 1790812800; // 2026-10-01 00:00:00 UTC, CONFIRMED 2026-07-07 (see protocol_changes.js)
 

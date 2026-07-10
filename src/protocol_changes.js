@@ -533,6 +533,19 @@ class ProtocolChanges {
             if(change){
                 let current              = {};
                 let network              = this.network;
+                // Fail CLOSED on an unrecognized network. The mainnet/testnet/regtest branches
+                // below have no else, so an unknown network (unset/typo'd INDEXER_NETWORK, or a
+                // future network the gate logic doesn't handle) would match none of them, apply
+                // NO time/block gate, and leave enabled=true - every flag-day change would read
+                // as active from genesis and this node would activate gated consensus rules early
+                // and fork the fleet. An un-evaluatable network is not "no gate": treat it like
+                // the catch below and propagate, so block processing halts loudly instead of
+                // silently diverging. (Boot already rejects an invalid network via
+                // coins.getCoinConfig; this is the consensus-path backstop, and it also fails
+                // closed rather than open the way the sibling isNativeFeePriceTimeGateActive does.)
+                if(network !== 'mainnet' && network !== 'testnet' && network !== 'regtest')
+                    throw new Error('ProtocolChanges.isEnabled: unrecognized network "' + network +
+                        '" (expected mainnet/testnet/regtest); refusing to evaluate activation to avoid a silent fork');
                 let semantic_version     = this.version.split('.');
                 current.version_major    = parseInt(semantic_version[0]);
                 current.version_minor    = parseInt(semantic_version[1]);

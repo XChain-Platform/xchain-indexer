@@ -128,7 +128,25 @@ class GenesisDump {
     // Throws (halting the node) on any mismatch. Returns { rowsImported, expectedHashes }.
     async read(file){
         let pinned = this.config['GENESIS_DUMP_HASH'];
-        let hash   = crypto.createHash('sha256');
+
+        // Verify-then-import. When a content hash is pinned, prove the artifact
+        // matches it BEFORE a single row touches the DB. This makes "trust
+        // reduces to the pinned GENESIS_DUMP_HASH" literal: a tampered dump is
+        // rejected up front and never reaches the insert path (so it can neither
+        // do DB work nor exercise the identifier handling below). Previously the
+        // content hash was checked only AFTER streaming every row into the block
+        // transaction, leaving safety resting entirely on that transaction
+        // rolling back. Unpinned dev/regtest dumps (no pin) skip this gate and
+        // rely on the post-import block-hash recompute as their only check.
+        if(!this.util.isNull(pinned)){
+            let fileHash = await this._hashFile(file);
+            if(fileHash !== String(pinned).toLowerCase()){
+                console.error('GENESIS FATAL: dump content hash mismatch for ' + file +
+                    ' (expected ' + pinned + ', got ' + fileHash + '). Halting.');
+                throw new Error('Genesis dump hash mismatch');
+            }
+        }
+
         let meta   = null;
         let curTable = null, curCols = null, batch = [], rowsImported = 0;
 
@@ -144,13 +162,30 @@ class GenesisDump {
         fs.createReadStream(file).pipe(gunzip);
         let rl = readline.createInterface({ input: gunzip, crlfDelay: Infinity });
         for await (let line of rl){
-            hash.update(line + '\n'); // match the writer (it hashed line + '\n')
             if(line === '')
                 continue;
             let obj = JSON.parse(line);
             if(obj.meta){ meta = obj.meta; continue; }
-            if(obj.t){ await flush(); curTable = obj.t; curCols = obj.cols; continue; }
+            if(obj.t){
+                await flush();
+                // Table + column names are interpolated into SQL (identifiers
+                // can't be parameterized), so validate their shape before use.
+                // Every real indexer identifier is a bare [A-Za-z0-9_] name; a
+                // backtick/space/paren/semicolon is an injection attempt.
+                this._assertIdentifier(obj.t);
+                if(!Array.isArray(obj.cols) || obj.cols.length === 0)
+                    throw new Error('Genesis dump table header missing columns: ' + obj.t);
+                for(let c of obj.cols)
+                    this._assertIdentifier(c);
+                curTable = obj.t; curCols = obj.cols;
+                continue;
+            }
             if(obj.r){
+                // A row before any table header is a malformed dump. Refuse it
+                // rather than buffering rows that flush() would silently drop
+                // (an attacker could otherwise grow `batch` without bound -> OOM).
+                if(curTable === null)
+                    throw new Error('Genesis dump row before any table header: ' + file);
                 batch.push(obj.r);
                 if(batch.length >= IMPORT_BATCH)
                     await flush();
@@ -158,13 +193,6 @@ class GenesisDump {
         }
         await flush();
 
-        // Verify the artifact integrity against the pinned content hash.
-        let contentHash = hash.digest('hex');
-        if(!this.util.isNull(pinned) && contentHash !== String(pinned).toLowerCase()){
-            console.error('GENESIS FATAL: dump content hash mismatch for ' + file +
-                ' (expected ' + pinned + ', got ' + contentHash + '). Halting.');
-            throw new Error('Genesis dump hash mismatch');
-        }
         if(meta === null)
             throw new Error('Genesis dump missing meta header: ' + file);
         // The dump pins the rows to the block it was generated at; importing them at a
@@ -188,6 +216,28 @@ class GenesisDump {
 
     // --- helpers ----------------------------------------------------------------
 
+    // sha256 of the artifact's UNCOMPRESSED content, streamed (constant memory).
+    // The writer hashes the exact line strings it feeds to gzip, so the sum of
+    // those bytes equals the raw gunzip output hashed here; this reproduces the
+    // `write()` contentHash / pinned GENESIS_DUMP_HASH without parsing the dump.
+    // (A verify pass and a later import pass read the file twice; a live disk
+    // swap between them is out of scope, matching the local one-shot threat model.)
+    async _hashFile(file){
+        let hash   = crypto.createHash('sha256');
+        let stream = fs.createReadStream(file).pipe(zlib.createGunzip());
+        for await (let chunk of stream)
+            hash.update(chunk);
+        return hash.digest('hex');
+    }
+
+    // Reject any table/column identifier from the (untrusted) dump that is not a
+    // bare [A-Za-z0-9_] name. Identifiers are interpolated into SQL and cannot be
+    // parameterized, so shape validation is the guard against identifier injection.
+    _assertIdentifier(name){
+        if(typeof name !== 'string' || !/^[A-Za-z0-9_]+$/.test(name))
+            throw new Error('Genesis dump has an invalid SQL identifier: ' + JSON.stringify(name));
+    }
+
     // Recompute the four genesis block hashes as plain strings (the shape stored in
     // the dump). Works pre-createBlock since getBlockHashes derives from the block's
     // own rows, not the blocks row.
@@ -196,8 +246,13 @@ class GenesisDump {
         return { ledger: h.ledger.hash, actions: h.actions.hash, state: h.state.hash, contracts: h.contracts.hash };
     }
 
-    // Multi-row parameterized INSERT for one table.
+    // Multi-row parameterized INSERT for one table. Values are parameterized;
+    // the table + column identifiers cannot be, so re-assert their shape here
+    // (read() already validates, but keep the guard with the SQL-building site).
     async _insertBatch(table, cols, rows){
+        this._assertIdentifier(table);
+        for(let c of cols)
+            this._assertIdentifier(c);
         let colList = cols.map(c => '`' + c + '`').join(',');
         let one     = '(' + cols.map(() => '?').join(',') + ')';
         let sql     = 'INSERT INTO `' + table + '` (' + colList + ') VALUES ' + rows.map(() => one).join(',');
