@@ -315,7 +315,10 @@ describe('consensus parameters are frozen (track 8 guard) @regression', function
         // byte-identity here. Gates: ASYNC_SURFACE (banned-async enforcement),
         // BINARY_ALLOC (binary allocation), STATE_KEY_NUL (H-5, rejects NUL-byte state
         // keys that would wedge the block merkle root), METERING_EVAL_ORDER (L-3,
-        // JS-spec-correct compound string-append evaluation order).
+        // JS-spec-correct compound string-append evaluation order), STATE_KEY_TYPE
+        // (state-key type coercion boundary), CALL_SPREAD_METER (cross-call spread
+        // metering). Every gate the VM exports at this coordinated flag-day must be listed
+        // here; add each future gate in lockstep so a dropped one reddens, not skips.
         //
         // Presence is MANDATORY: this test only runs against the real bundled package
         // (skipped above when !full), so a missing gate export means a STALE VENDORED
@@ -326,7 +329,9 @@ describe('consensus parameters are frozen (track 8 guard) @regression', function
             'ASYNC_SURFACE_GATE_BLOCK_TIME',
             'BINARY_ALLOC_GATE_BLOCK_TIME',
             'STATE_KEY_NUL_GATE_BLOCK_TIME',
-            'METERING_EVAL_ORDER_GATE_BLOCK_TIME'
+            'METERING_EVAL_ORDER_GATE_BLOCK_TIME',
+            'STATE_KEY_TYPE_GATE_BLOCK_TIME',
+            'CALL_SPREAD_METER_GATE_BLOCK_TIME'
         ];
         for(const gate of GATE_EXPORTS){
             assert.notStrictEqual(vm[gate], undefined,

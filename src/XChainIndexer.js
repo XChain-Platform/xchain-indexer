@@ -879,7 +879,11 @@ class XChainIndexer {
     async _applyHubConfigOverlay(){
         if(!this.hubClient || !this.hubClient.enabled) return;
         try {
-            let { configs, seq, watermark, coinConsensusHashes } = this._unwrapHubConfigResponse(await this.hubClient._call('getallconfigs', {}));
+            let { ok, configs, seq, watermark, coinConsensusHashes } = this._unwrapHubConfigResponse(await this.hubClient._call('getallconfigs', {}));
+            if(!ok){
+                console.warn('XChainIndexer: hub config overlay skipped, hub returned no usable config (using local defaults)');
+                return;
+            }
             this._checkHubConsensusHash(coinConsensusHashes);
             this._mergeHubParams(configs);
             this.lastHubConfigSeq = seq;
@@ -916,9 +920,18 @@ class XChainIndexer {
     // be honored or a non-consensus hub's committed changes are never re-applied live.
     _unwrapHubConfigResponse(response){
         if(response && typeof response === 'object' && response.configs && typeof response.configs === 'object' && ('seq' in response)){
-            return { configs: response.configs, seq: Number(response.seq) || 0, watermark: Number(response.watermark) || 0, coinConsensusHashes: response.coin_consensus_hashes || null };
+            return { ok: true, configs: response.configs, seq: Number(response.seq) || 0, watermark: Number(response.watermark) || 0, coinConsensusHashes: response.coin_consensus_hashes || null };
         }
-        return { configs: response || {}, seq: 0, watermark: 0, coinConsensusHashes: null };
+        // Failed fetch: the hub returned nothing, a non-object, or an HTTP-200 { error: ... }
+        // envelope. getallconfigs signals a config-DB read failure as a JSON-RPC *result*
+        // (not a JSON-RPC error), so _call resolves rather than throwing. Report ok:false so
+        // callers do NOT refresh lastHubConfigFetchAt on it, keeping the staleness health
+        // signal honest instead of masking a frozen-config hub.
+        if(!response || typeof response !== 'object' || response.error){
+            return { ok: false, configs: {}, seq: 0, watermark: 0, coinConsensusHashes: null };
+        }
+        // Older hub: bare nested config map without the { configs, seq, watermark } wrapper.
+        return { ok: true, configs: response, seq: 0, watermark: 0, coinConsensusHashes: null };
     }
 
     // Shallow-merge the hub's operational params for this coin/network over the live
@@ -1001,10 +1014,22 @@ class XChainIndexer {
         const intervalMs = parseInt(process.env.HUB_CONFIG_POLL_INTERVAL_MS, 10) || 60000;
         this._hubConfigPollTimer = setInterval(async () => {
             try {
-                let { configs, seq, watermark } = this._unwrapHubConfigResponse(await this.hubClient._call('getallconfigs', {}));
-                // A response (no throw) means the hub answered. Record the fetch time even when
-                // seq is unchanged, since the freshness of the live-polled params is what the
-                // health/status age signal reports, not whether they happened to change.
+                let { ok, configs, seq, watermark, coinConsensusHashes } = this._unwrapHubConfigResponse(await this.hubClient._call('getallconfigs', {}));
+                // A usable envelope (not a { error: ... } failure result) means the hub
+                // actually answered with config. A failed fetch must NOT refresh the freshness
+                // signal, or a persistently config-DB-failing hub reports healthy while the
+                // live-polled params are frozen.
+                if(!ok){
+                    console.warn('XChainIndexer: hub config poll returned no usable config; not refreshing freshness signal');
+                    return;
+                }
+                // Re-check hub/node consensus-config drift on every poll (not only at startup),
+                // so a mid-run hub upgrade/downgrade to a divergent bundle is surfaced live.
+                // The check is log-only / pinned-verify-only and cannot affect consensus.
+                this._checkHubConsensusHash(coinConsensusHashes);
+                // Record the fetch time even when seq is unchanged, since the freshness of the
+                // live-polled params is what the health/status age signal reports, not whether
+                // they happened to change.
                 this.lastHubConfigFetchAt = Date.now();
                 // Re-apply on EITHER signal advancing: seq (PBFT-committed) OR watermark
                 // (any config write, incl. a standalone/config-oracle hub with no consensus).
