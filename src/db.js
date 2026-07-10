@@ -433,7 +433,9 @@ class Database {
     //
     // Deliberately NOT flagged (legitimate existing auto patterns): DROP INDEX/KEY,
     // DROP FOREIGN KEY/CONSTRAINT/CHECK/DEFAULT/PRIMARY KEY (structural, no row
-    // data lost), ADD ..., CREATE ..., and MODIFY that widens/nullables a column.
+    // data lost), ADD ..., plain CREATE TABLE / CREATE TABLE IF NOT EXISTS (additive;
+    // but CREATE OR REPLACE TABLE IS flagged - it is an atomic DROP+CREATE), and
+    // MODIFY that widens/nullables a column.
     _destructiveAutoStatement(statements){
         // Drops that remove metadata only; anything else after DROP inside an
         // ALTER (COLUMN, PARTITION, or a bare column identifier) loses data.
@@ -444,9 +446,20 @@ class Database {
             const stmt = String(raw).replace(/\/\*[\s\S]*?\*\//g, ' ').trim();
             if(!stmt) continue;
             if(/^DROP\s+(TABLE|DATABASE|SCHEMA)\b/i.test(stmt))  return raw;
+            // CREATE OR REPLACE TABLE is an atomic DROP TABLE IF EXISTS + CREATE: it destroys
+            // every existing row. Plain CREATE TABLE / CREATE TABLE IF NOT EXISTS are additive
+            // and stay unflagged (see the CREATE note below); only the OR REPLACE form loses
+            // data. DROP TABLE is already flagged, so an author must not be able to slip the
+            // data-losing idempotent-create variant past the auto guard.
+            if(/^CREATE\s+OR\s+REPLACE\s+(TEMPORARY\s+)?TABLE\b/i.test(stmt)) return raw;
             if(/^TRUNCATE\b/i.test(stmt))                        return raw;
             if(/^RENAME\s+TABLE\b/i.test(stmt))                  return raw;
-            if(/^DELETE\s+FROM\b/i.test(stmt))                   return raw;
+            // Any DELETE removes row data - there is no non-destructive form - so match the
+            // bare keyword, not `DELETE FROM`. The narrower form let valid-but-non-canonical
+            // syntax slip the auto guard: `DELETE LOW_PRIORITY FROM`, `DELETE IGNORE FROM`,
+            // and multi-table `DELETE t1 FROM t1 JOIN t2 ...` all delete rows yet omit an
+            // immediate FROM. No false positive: a statement starting with DELETE is always DML.
+            if(/^DELETE\b/i.test(stmt))                          return raw;
             if(/^ALTER\s+TABLE\b/i.test(stmt)){
                 // Every DROP inside the ALTER must target a safe (metadata-only) object.
                 let m;

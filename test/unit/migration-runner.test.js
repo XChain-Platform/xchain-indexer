@@ -97,12 +97,27 @@ describe('Database._destructiveAutoStatement() @regression @tier1', function () 
         assert.ok(destructiveOf(['TRUNCATE TABLE validator_rewards']));
     });
 
+    it('flags CREATE OR REPLACE TABLE (atomic DROP+CREATE wipes rows) but not plain/IF NOT EXISTS', function () {
+        assert.ok(destructiveOf(['CREATE OR REPLACE TABLE balances (id BIGINT) ENGINE=InnoDB']));
+        assert.ok(destructiveOf(['CREATE OR REPLACE TEMPORARY TABLE t (id INT)']));
+        // Additive create forms stay safe (must not false-positive and block fleet boot).
+        assert.strictEqual(destructiveOf(['CREATE TABLE IF NOT EXISTS balances (id BIGINT) ENGINE=InnoDB']), null);
+        assert.strictEqual(destructiveOf(['CREATE TABLE new_thing (id BIGINT) ENGINE=InnoDB']), null);
+    });
+
     it('flags RENAME TABLE', function () {
         assert.ok(destructiveOf(['RENAME TABLE old_name TO new_name']));
     });
 
     it('flags DELETE FROM (destructive DML has no place in an auto migration)', function () {
         assert.ok(destructiveOf(['DELETE FROM balances WHERE amount = 0']));
+    });
+
+    it('flags non-canonical DELETE forms that omit an immediate FROM', function () {
+        // Every DELETE removes rows; the guard must not depend on `DELETE FROM` word order.
+        assert.ok(destructiveOf(['DELETE LOW_PRIORITY FROM balances WHERE amount = 0']));
+        assert.ok(destructiveOf(['DELETE IGNORE FROM balances WHERE amount = 0']));
+        assert.ok(destructiveOf(['DELETE t1 FROM balances t1 JOIN blocks t2 ON t1.block_index=t2.block_index']));
     });
 
     it('flags ALTER TABLE ... DROP COLUMN', function () {
