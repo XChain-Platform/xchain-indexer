@@ -504,6 +504,53 @@ describe('Rollback @regression @tier3', function () {
         assert.ok(indexer.indexerDb.rollbackTransaction.calledOnce);
     });
 
+    // ─── Recovery-reward re-arm: errno-gated catch ─────────────────────
+    // The re-arm block runs INSIDE the atomic reorg transaction. Only the
+    // schema-gap errors (1146 missing table / 1054 missing column: non-recovery
+    // stack, nothing staged) may be swallowed; a transient DB fault must abort
+    // the reorg so a partial re-arm can never commit.
+
+    function rearmFailsWith(err) {
+        indexer.indexerDb.doQuery.callsFake(async (query) => {
+            if (query && query.includes('UPDATE recovery_pending_rewards')) throw err;
+            return [];
+        });
+    }
+
+    it('re-arm: a transient DB fault (errno 1205) aborts and rolls back the reorg transaction', async function () {
+        const lockTimeout = new Error('Lock wait timeout exceeded');
+        lockTimeout.errno = 1205;
+        rearmFailsWith(lockTimeout);
+        await assert.rejects(() => rollback.rollback(100), /Lock wait timeout/);
+        assert.ok(indexer.indexerDb.rollbackTransaction.calledOnce, 'transaction must be rolled back');
+        assert.ok(indexer.indexerDb.commitTransaction.notCalled, 'a partial re-arm must never commit');
+    });
+
+    it('re-arm: an errno-less error also aborts (only the schema gap is tolerated)', async function () {
+        rearmFailsWith(new Error('connection killed'));
+        await assert.rejects(() => rollback.rollback(100), /connection killed/);
+        assert.ok(indexer.indexerDb.rollbackTransaction.calledOnce);
+        assert.ok(indexer.indexerDb.commitTransaction.notCalled);
+    });
+
+    it('re-arm: missing recovery_pending_rewards table (errno 1146) is tolerated and the reorg commits', async function () {
+        const noTable = new Error("Table 'x.recovery_pending_rewards' doesn't exist");
+        noTable.errno = 1146;
+        rearmFailsWith(noTable);
+        await rollback.rollback(100);
+        assert.ok(indexer.indexerDb.commitTransaction.calledOnce, 'schema-gap swallow must still commit');
+        assert.ok(indexer.indexerDb.rollbackTransaction.notCalled);
+    });
+
+    it('re-arm: missing column (errno 1054) is tolerated and the reorg commits', async function () {
+        const noColumn = new Error("Unknown column 'applied' in 'field list'");
+        noColumn.errno = 1054;
+        rearmFailsWith(noColumn);
+        await rollback.rollback(100);
+        assert.ok(indexer.indexerDb.commitTransaction.calledOnce);
+        assert.ok(indexer.indexerDb.rollbackTransaction.notCalled);
+    });
+
     // ─── DELETE queries issued ────────────────────────────────────────
 
     it('issues DELETE queries for blockTables using block_index', async function () {

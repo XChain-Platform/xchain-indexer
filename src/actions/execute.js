@@ -237,8 +237,10 @@ class Execute {
         let nestedGasUnused = 0;
 
         if(!error && this.actions.vm && contractInfo){
-            // Load contract state from DB
-            let contractState = await this.indexerDb.getContractState(data['CONTRACT_ACTION_INDEX']);
+            // Load contract state from DB. BLOCK_INDEX drives the state_key collation
+            // flag-day (binary-collation reload at/after activation, so case-colliding
+            // keys survive; see state_key_collation_activation.js).
+            let contractState = await this.indexerDb.getContractState(data['CONTRACT_ACTION_INDEX'], data['BLOCK_INDEX']);
 
             // Load read-only data for gateway (price data lives in local hub DB when configured)
             let oracleData = await ((this.actions && this.actions.hubDb) || this.indexerDb).getOracleDataForVM(data['BLOCK_INDEX'], data['BLOCK_TIME'], parseInt(this.config['ORACLE_MAX_PRICE_AGE_SECONDS']) || 1800);
@@ -569,8 +571,9 @@ class Execute {
         // hard-coded fallback that could fork a misconfigured node).
         let guardCeiling = this.util.resolveGuardGasCeiling(this.config);
 
-        // Load contract state + read-only data (mirrors parse()).
-        let contractState = await this.indexerDb.getContractState(contractIndex);
+        // Load contract state + read-only data (mirrors parse(), including the
+        // state_key collation flag-day keyed on the host block).
+        let contractState = await this.indexerDb.getContractState(contractIndex, hostData['BLOCK_INDEX']);
         let oracleData = await ((this.actions && this.actions.hubDb) || this.indexerDb).getOracleDataForVM(hostData['BLOCK_INDEX'], hostData['BLOCK_TIME'], parseInt(this.config['ORACLE_MAX_PRICE_AGE_SECONDS']) || 1800);
         let crossChainData = await this.indexerDb.getCrossChainDataForVM(hostData['BLOCK_INDEX']);
         let pollData       = await this.indexerDb.getPollResultsForVM(hostData['BLOCK_INDEX']);

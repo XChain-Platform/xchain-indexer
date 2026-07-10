@@ -17,7 +17,7 @@
 # Usage:
 #   bin/vendor-vm.sh           # refresh ./xchain-vm from the sibling, then verify
 #   bin/vendor-vm.sh fix       # same as above (explicit)
-#   bin/vendor-vm.sh check     # verify versions match; non-zero exit on drift (no writes)
+#   bin/vendor-vm.sh check     # verify version + src/ content match; non-zero exit on drift (no writes)
 #
 # Requires Node 22 for the isolated-vm native build (see the Dockerfile note).
 
@@ -33,6 +33,16 @@ MODE="${1:-fix}"
 vm_version() {
     grep -oE "CONSENSUS_VERSION = '[^']+'" "$1/src/consensus-runtime.js" 2>/dev/null \
         | grep -oE "'[^']+'" | tr -d "'" || true
+}
+
+# Per-file sha1 manifest of the consensus surface (src/** + package.json, which
+# carries the frozen math-library pins), sorted for stable comparison. The version
+# string alone CANNOT detect drift: the 2026-07 incident shipped vendored copies
+# missing two consensus gates (STATE_KEY_NUL, METERING_EVAL_ORDER) while still
+# declaring the same CONSENSUS_VERSION.
+if command -v sha1sum >/dev/null 2>&1; then SHA1=sha1sum; else SHA1="shasum -a 1"; fi
+tree_manifest() {
+    ( cd "$1" && { find src -type f; echo package.json; } | LC_ALL=C sort | xargs $SHA1 )
 }
 
 if [ ! -d "$SRC/src" ]; then
@@ -57,7 +67,17 @@ if [ "$MODE" = "check" ]; then
         echo "vendor-vm: run 'npm run vendor:vm' to refresh the in-place copy." >&2
         exit 1
     fi
-    echo "vendor-vm: in sync."
+    # A matching version is necessary but NOT sufficient: compare src/ content hashes
+    # so a same-version stale copy fails closed.
+    SRC_MAN="$(tree_manifest "$SRC")"
+    DEST_MAN="$(tree_manifest "$DEST")"
+    if [ "$SRC_MAN" != "$DEST_MAN" ]; then
+        echo "vendor-vm: DRIFT - vendored src/ content differs from canonical (CONSENSUS_VERSION matches, bytes do not):" >&2
+        diff <(printf '%s\n' "$SRC_MAN") <(printf '%s\n' "$DEST_MAN") >&2 || true
+        echo "vendor-vm: run 'npm run vendor:vm' to refresh the in-place copy." >&2
+        exit 1
+    fi
+    echo "vendor-vm: in sync (version + src/ content hash)."
     exit 0
 fi
 
@@ -83,4 +103,8 @@ if [ "$NEW_VER" != "$SRC_VER" ]; then
     echo "vendor-vm: ERROR - after refresh vendored version ($NEW_VER) still != canonical ($SRC_VER)" >&2
     exit 1
 fi
-echo "vendor-vm: done. vendored xchain-vm now at CONSENSUS_VERSION=$NEW_VER"
+if [ "$(tree_manifest "$DEST")" != "$(tree_manifest "$SRC")" ]; then
+    echo "vendor-vm: ERROR - after refresh vendored src/ content still differs from canonical" >&2
+    exit 1
+fi
+echo "vendor-vm: done. vendored xchain-vm now at CONSENSUS_VERSION=$NEW_VER (src/ content verified)"

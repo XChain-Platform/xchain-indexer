@@ -851,7 +851,17 @@ class Rollback {
                 // xchain-sync streams it by (its earn-block sits below the post-reorg window).
                 for(let s of (survivors || []))
                     await this.indexerDb._applyPendingRewardsForAddress(s.source_address, s.source_id, block_index);
-            } catch(e){ /* table absent on a non-recovery stack: nothing staged to re-arm */ }
+            } catch(e){
+                // Swallow ONLY the schema-gap case: recovery_pending_rewards absent on a
+                // non-recovery stack (errno 1146 missing table / 1054 missing column), where
+                // nothing was staged to re-arm. Every other fault (lock-wait timeout, deadlock,
+                // killed connection) must propagate to the outer catch so the whole reorg
+                // transaction rolls back and is retried, instead of commitTransaction()
+                // persisting a half-re-armed recovery_pending_rewards/validator_rewards set
+                // (which forks SUM(validator_rewards) at the next COLLECT). Mirrors the
+                // narrow errno gates in xchain-sync's ClientApplier.
+                if(!(e && (e.errno === 1146 || e.errno === 1054))) throw e;
+            }
 
             // Sweep balances rows orphaned by the index-table delete above. `balances` is a
             // derived table keyed by (address_id, tick_id); it is NOT in dataTables (not

@@ -376,6 +376,82 @@ describe('XChainIndexer hub config overlay', function () {
         }
     });
 
+    it('poll re-applies on a watermark-only advance (standalone hub, seq stuck at 0)', async function () {
+        // A standalone/config-oracle hub (no PBFT consensus) never bumps seq, but ANY
+        // config write advances watermark (MAX(updated_at)). The poll must honor watermark
+        // or such a hub's committed config changes are never re-applied live.
+        indexer = makeIndexer();
+        let clock = sinon.useFakeTimers();
+        let mergeSpy = sinon.spy(indexer, '_mergeHubParams');
+        try {
+            let hubStub = { enabled: true, _call: sinon.stub() };
+            // Startup: seq 0, watermark 1000.
+            hubStub._call.onCall(0).resolves({
+                configs: { BTC: { regtest: { 'xchain-indexer': {} } } }, seq: 0, watermark: 1000
+            });
+            indexer.hubClient = hubStub;
+            await indexer._applyHubConfigOverlay();
+            assert.strictEqual(indexer.lastHubConfigWatermark, 1000);
+            assert.strictEqual(indexer.lastHubConfigSeq, 0);
+            mergeSpy.resetHistory();
+
+            process.env.HUB_CONFIG_POLL_INTERVAL_MS = '60000';
+            indexer._startHubConfigPolling();
+
+            // Tick 1: seq still 0, watermark unchanged (1000) -> no re-apply.
+            hubStub._call.onCall(1).resolves({
+                configs: { BTC: { regtest: { 'xchain-indexer': {} } } }, seq: 0, watermark: 1000
+            });
+            await clock.tickAsync(60000);
+            assert.strictEqual(mergeSpy.called, false, 'unchanged watermark must not re-apply');
+
+            // Tick 2: seq still 0, watermark advances to 2000 -> re-apply fires.
+            hubStub._call.onCall(2).resolves({
+                configs: { BTC: { regtest: { 'xchain-indexer': {} } } }, seq: 0, watermark: 2000
+            });
+            await clock.tickAsync(60000);
+            assert.strictEqual(mergeSpy.called, true, 'advanced watermark must re-apply even with seq stuck at 0');
+            assert.strictEqual(indexer.lastHubConfigWatermark, 2000, 'watermark bookkeeping must advance');
+        } finally {
+            if(indexer._hubConfigPollTimer) clearInterval(indexer._hubConfigPollTimer);
+            mergeSpy.restore();
+            clock.restore();
+            delete process.env.HUB_CONFIG_POLL_INTERVAL_MS;
+        }
+    });
+
+    it('older hub without watermark still advances on seq alone (back-compat)', async function () {
+        indexer = makeIndexer();
+        let clock = sinon.useFakeTimers();
+        let mergeSpy = sinon.spy(indexer, '_mergeHubParams');
+        try {
+            let hubStub = { enabled: true, _call: sinon.stub() };
+            hubStub._call.onCall(0).resolves({
+                configs: { BTC: { regtest: { 'xchain-indexer': {} } } }, seq: 5   // no watermark field
+            });
+            indexer.hubClient = hubStub;
+            await indexer._applyHubConfigOverlay();
+            assert.strictEqual(indexer.lastHubConfigSeq, 5);
+            assert.strictEqual(indexer.lastHubConfigWatermark, 0, 'missing watermark defaults to 0');
+            mergeSpy.resetHistory();
+
+            process.env.HUB_CONFIG_POLL_INTERVAL_MS = '60000';
+            indexer._startHubConfigPolling();
+
+            hubStub._call.onCall(1).resolves({
+                configs: { BTC: { regtest: { 'xchain-indexer': {} } } }, seq: 6   // still no watermark
+            });
+            await clock.tickAsync(60000);
+            assert.strictEqual(mergeSpy.called, true, 'seq advance alone must still re-apply');
+            assert.strictEqual(indexer.lastHubConfigSeq, 6);
+        } finally {
+            if(indexer._hubConfigPollTimer) clearInterval(indexer._hubConfigPollTimer);
+            mergeSpy.restore();
+            clock.restore();
+            delete process.env.HUB_CONFIG_POLL_INTERVAL_MS;
+        }
+    });
+
     describe('parseIntMin0 (BLOCK_CHECK_INTERVAL / BLOCK_PROCESS_TIMEOUT)', function () {
 
         function loadWith(env) {

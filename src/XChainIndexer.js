@@ -96,6 +96,13 @@ class XChainIndexer {
         // STAKING) silently frozen while the indexer keeps reporting healthy.
         this.lastHubConfigFetchAt = null;
 
+        // Last hub-config change signals seen. seq = PBFT-committed change counter (0 on a
+        // standalone/config-oracle hub with no consensus); watermark = MAX(updated_at) over
+        // the hub's configs, which advances on ANY config write. A re-apply fires when
+        // EITHER advances, so a non-consensus hub's edits are not silently ignored.
+        this.lastHubConfigSeq = 0;
+        this.lastHubConfigWatermark = 0;
+
         // Price-sync barrier timeout (ms). Before processing a block, the indexer waits for
         // its local price mirror to catch up to that block height so native-coin fee
         // validation is deterministic across operators. On timeout the block is deferred and
@@ -872,10 +879,11 @@ class XChainIndexer {
     async _applyHubConfigOverlay(){
         if(!this.hubClient || !this.hubClient.enabled) return;
         try {
-            let { configs, seq, coinConsensusHashes } = this._unwrapHubConfigResponse(await this.hubClient._call('getallconfigs', {}));
+            let { configs, seq, watermark, coinConsensusHashes } = this._unwrapHubConfigResponse(await this.hubClient._call('getallconfigs', {}));
             this._checkHubConsensusHash(coinConsensusHashes);
             this._mergeHubParams(configs);
             this.lastHubConfigSeq = seq;
+            this.lastHubConfigWatermark = watermark;
             this.lastHubConfigFetchAt = Date.now();
         } catch(err) {
             console.warn('XChainIndexer: hub config overlay failed, using local defaults:', err);
@@ -899,14 +907,18 @@ class XChainIndexer {
     }
 
     // Normalize the getallconfigs response across hub versions. Newer hubs wrap the
-    // config map as { configs, seq } so consumers can detect a config change committed
-    // between polls; older hubs return the bare nested map. Returns { configs, seq }
-    // with seq defaulting to 0 (treated as "no committed change seen" by the poll loop).
+    // config map as { configs, seq, watermark } so consumers can detect a config change
+    // committed between polls; older hubs return the bare nested map. Returns
+    // { configs, seq, watermark } each defaulting to 0 (treated as "no committed change
+    // seen" by the poll loop). seq only advances on PBFT-committed changes, so a
+    // standalone/config-oracle hub (no consensus) never bumps it; watermark
+    // (MAX(updated_at) over configs) advances on ANY config write, so both signals must
+    // be honored or a non-consensus hub's committed changes are never re-applied live.
     _unwrapHubConfigResponse(response){
         if(response && typeof response === 'object' && response.configs && typeof response.configs === 'object' && ('seq' in response)){
-            return { configs: response.configs, seq: Number(response.seq) || 0, coinConsensusHashes: response.coin_consensus_hashes || null };
+            return { configs: response.configs, seq: Number(response.seq) || 0, watermark: Number(response.watermark) || 0, coinConsensusHashes: response.coin_consensus_hashes || null };
         }
-        return { configs: response || {}, seq: 0, coinConsensusHashes: null };
+        return { configs: response || {}, seq: 0, watermark: 0, coinConsensusHashes: null };
     }
 
     // Shallow-merge the hub's operational params for this coin/network over the live
@@ -989,15 +1001,20 @@ class XChainIndexer {
         const intervalMs = parseInt(process.env.HUB_CONFIG_POLL_INTERVAL_MS, 10) || 60000;
         this._hubConfigPollTimer = setInterval(async () => {
             try {
-                let { configs, seq } = this._unwrapHubConfigResponse(await this.hubClient._call('getallconfigs', {}));
+                let { configs, seq, watermark } = this._unwrapHubConfigResponse(await this.hubClient._call('getallconfigs', {}));
                 // A response (no throw) means the hub answered. Record the fetch time even when
                 // seq is unchanged, since the freshness of the live-polled params is what the
                 // health/status age signal reports, not whether they happened to change.
                 this.lastHubConfigFetchAt = Date.now();
-                if(seq > (this.lastHubConfigSeq || 0)){
+                // Re-apply on EITHER signal advancing: seq (PBFT-committed) OR watermark
+                // (any config write, incl. a standalone/config-oracle hub with no consensus).
+                // Older hubs omit watermark -> it defaults to 0 and never advances, so this
+                // stays back-compatible with a seq-only hub.
+                if(seq > (this.lastHubConfigSeq || 0) || watermark > (this.lastHubConfigWatermark || 0)){
                     this._mergeHubParams(configs);
-                    this.lastHubConfigSeq = seq;
-                    console.log('XChainIndexer: applied hub config update (committed seq ' + seq + ')');
+                    this.lastHubConfigSeq = Math.max(seq, this.lastHubConfigSeq || 0);
+                    this.lastHubConfigWatermark = Math.max(watermark, this.lastHubConfigWatermark || 0);
+                    console.log('XChainIndexer: applied hub config update (committed seq ' + seq + ', watermark ' + watermark + ')');
                 }
             } catch(err) {
                 console.warn('XChainIndexer: hub config poll failed, keeping current config:', err.message || err);

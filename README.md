@@ -67,13 +67,13 @@ npm install
 Create a `.env` file:
 
 ```env
-DECODER_DB_HOST=localhost
+DECODER_DB_HOST=127.0.0.1
 DECODER_DB_PORT=3306
 DECODER_DB_NAME=XChain_BTC_Mainnet_Decoder
 DECODER_DB_USER=xchain_reader
 DECODER_DB_PASS=your_password
 
-INDEXER_DB_HOST=localhost
+INDEXER_DB_HOST=127.0.0.1
 INDEXER_DB_PORT=3306
 INDEXER_DB_NAME=XChain_BTC_Mainnet_Indexer
 INDEXER_DB_USER=xchain_writer

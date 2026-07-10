@@ -127,6 +127,20 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
             assert.ok(String(data['STATUS']).includes('CODE_ENCODING'));
         });
 
+        it('VM-isolate maxCodeSize is single-sourced from the shared MAX_CODE_SIZE (no drift-prone literal)', function () {
+            // The DEPLOY byte-length check and the actions.js VM-isolate limit must be the
+            // same value or an oversized contract passes one gate and fails the other. Guard
+            // that actions.js references the shared constant instead of a bare 65536 literal
+            // that could silently drift from Deploy.MAX_CODE_SIZE.
+            const fs  = require('fs');
+            const src = fs.readFileSync(require('path').join(__dirname, '../../../src/actions.js'), 'utf8');
+            assert.ok(/maxCodeSize:\s*deploy\.MAX_CODE_SIZE/.test(src),
+                'actions.js VM-isolate config must set maxCodeSize from deploy.MAX_CODE_SIZE');
+            assert.ok(!/maxCodeSize:\s*\d/.test(src),
+                'actions.js must not hard-code a numeric maxCodeSize literal');
+            assert.strictEqual(Deploy.MAX_CODE_SIZE, 65536, 'canonical MAX_CODE_SIZE value pin');
+        });
+
         it('rejects missing GAS_LIMIT', async function () {
             const data = deployData({ FORMAT: 0 });
             await handler.parse(['0', VALID_CODE_B64, '', ''], data, null);

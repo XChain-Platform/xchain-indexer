@@ -339,7 +339,7 @@ module.exports = {
         if(coin === 'LTC' || coin === 'DOGE'){
             let fd = fullConfig['ADDRESS'] ? fullConfig['ADDRESS']['FEE_DESTINATION'] : null;
             if(!fd || fd === 'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'){
-                throw new Error('FEE_DESTINATION is required on ' + coin + ' (native-fee chain): set XCHAIN_FEE_DESTINATION_' + coin + '_' + String(network).toUpperCase() + ' or use the coin-config default. A missing value would make every action fall back to XCHAIN fee mode and diverge from a correctly-configured node.');
+                throw new Error('FEE_DESTINATION is required on ' + coin + ' (native-fee chain). It is the consensus-pinned coin-bundle default (src/coins/' + coin + '.js); the XCHAIN_FEE_DESTINATION_' + coin + '_' + String(network).toUpperCase() + ' env var is honored on regtest ONLY and is ignored on mainnet/testnet. Restore the coin-bundle default (or, on regtest, set that env var). A missing value would make every action fall back to XCHAIN fee mode and diverge from a correctly-configured node.');
             }
         }
 

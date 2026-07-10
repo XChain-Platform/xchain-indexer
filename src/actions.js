@@ -190,8 +190,10 @@ class Actions {
                     maxEmissions:      50,
                     maxStateKeys:      10000,
                     maxStateValueSize: 65536,
-                    // Canonical MAX_CODE_SIZE: xchain-documentation/protocol/constants.js
-                    maxCodeSize:       65536
+                    // Canonical MAX_CODE_SIZE: single-sourced from deploy.js (which
+                    // pins xchain-documentation/protocol/constants.js) so the isolate
+                    // limit can never drift from the DEPLOY-time byte-length check.
+                    maxCodeSize:       deploy.MAX_CODE_SIZE
                 }
             });
         } else {

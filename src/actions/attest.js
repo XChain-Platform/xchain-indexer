@@ -643,6 +643,8 @@ class Attest {
                 let parsed = JSON.parse(request.callback_params_json);
                 if(Array.isArray(parsed)) callbackParams = parsed;
             } catch(e){
+                console.warn('_injectCallbackExecute: malformed callback_params_json for request ' +
+                             String(request.request_id).substring(0,16) + '..., using empty params:', e.message);
                 callbackParams = [];
             }
         }
