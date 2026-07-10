@@ -412,9 +412,18 @@ class HubDbSync {
                 } catch (err) {
                     applyErrors++;
                     console.warn('HubDbSync: failed to apply row in ' + table + ':', err);
+                    // Stop the page at the FIRST unappliable row. Advancing the cursor past it
+                    // (here, or by applying a later row in this page and raising the local
+                    // MAX(id)) would make the next retry's since_id = SELECT MAX(id) skip it
+                    // forever, and once the retry drains cleanly the heartbeat gate opens over a
+                    // PERMANENT mirror hole (BOOTSTRAP-HOLE-1). Leaving it (and everything after
+                    // it) unapplied keeps local MAX(id) below the hole, so the retry re-fetches
+                    // from it and fails closed until it applies. A persistent bad row wedges this
+                    // table's barrier (defer) rather than silently forking - the module's
+                    // fail-closed contract, same as the schema-mismatch path.
+                    break;
                 }
-                // Advance the cursor unconditionally. A row that failed to apply is
-                // counted in applyErrors (gate stays closed; retry re-fetches it).
+                // Advance the cursor only for a row that actually applied.
                 let rowId = Number(row.id);
                 if (Number.isFinite(rowId) && rowId > lastId) lastId = rowId;
             }
@@ -422,6 +431,7 @@ class HubDbSync {
             // The LAST page's watermark is the hub's most recent "complete through ts"
             // statement covering everything fetched so far.
             if (Number.isFinite(Number(result.watermark))) watermark = Number(result.watermark);
+            if (applyErrors > 0) break;                      // hole hit: stop paging, retry from it
             if (result.rows.length < PAGE_LIMIT) break;      // short page = drained
         }
         console.log('HubDbSync: bootstrapped ' + applied + ' rows into ' + table);
@@ -430,8 +440,10 @@ class HubDbSync {
         // local copy is still behind that ceiling, the REST snapshot window may have
         // missed rows that arrived right before the snapshot was served. Issue a targeted
         // catch-up for that narrow gap. Rows already local are ignored (INSERT IGNORE).
+        // Skip the catch-up when the page loop already hit a hole (applyErrors>0): the table is
+        // not drained regardless, and fetching past the hole would only widen it.
         let hubReadyMaxId = this._readyMaxIds && this._readyMaxIds[table];
-        if (hubReadyMaxId) {
+        if (hubReadyMaxId && applyErrors === 0) {
             let localRows = [];
             try {
                 localRows = await this.hubDb.doQuery('SELECT MAX(id) AS max_id FROM ' + table);
@@ -444,8 +456,23 @@ class HubDbSync {
                     let catchUpPath = '/hub-db/snapshot/' + table + '?since_id=' + localMax + '&limit=10000';
                     let catchUp = await this._httpGet(catchUpPath);
                     if (catchUp && Array.isArray(catchUp.rows)) {
-                        for (let row of catchUp.rows) {
-                            try { await this._applyRow(table, row); } catch (e) { /* ignore */ }
+                        // Same schema fail-closed as the page loop: a mismatched catch-up page
+                        // could drop a consensus-relevant column, so refuse it and mark the
+                        // table not-drained (CATCHUP-SCHEMA-BYPASS-1).
+                        if (catchUp.schema_version != null && catchUp.schema_version !== HUB_SCHEMA_VERSION) {
+                            console.error('HubDbSync: catch-up schema_version ' + catchUp.schema_version +
+                                ' != local ' + HUB_SCHEMA_VERSION + ' for ' + table + '; skipping catch-up');
+                            applyErrors++;
+                        } else {
+                            for (let row of catchUp.rows) {
+                                // Count a swallowed catch-up apply error: leaving it silent left a
+                                // hole while the gate still opened (CATCHUP-SCHEMA-BYPASS-1).
+                                try { await this._applyRow(table, row); }
+                                catch (e) {
+                                    applyErrors++;
+                                    console.warn('HubDbSync: catch-up apply failed for ' + table + ':', e);
+                                }
+                            }
                         }
                     }
                 } catch (err) {
@@ -454,16 +481,29 @@ class HubDbSync {
             }
         }
 
-        if (table === 'price_snapshots')     await this._refreshPriceSyncHeight();
-        if (table === 'oracle_prices')       await this._refreshOracleSyncTimestamp();
-        if (table === 'cross_chain_matches') await this._refreshMatchSyncTimestamp();
-        if (table === 'cross_chain_calls')   await this._refreshCallSyncTimestamp();
-        // A new match/call (new required snapshot_block) or an arriving snapshot can change
-        // snapshot-presence: re-evaluate the snapshot barrier on any cross-chain table.
-        if (CROSS_CHAIN_TABLES.indexOf(table) !== -1) await this._releaseSnapshotWaiters();
-
         // Fully drained only if the final page wasn't full and everything applied.
         let fullyDrained = lastPageCount < PAGE_LIMIT && applyErrors === 0;
+
+        // Only arm this table's barrier state once it FULLY drained. The per-table refresh
+        // sets <x>Bootstrapped = true and caches its scalar; on a PARTIAL drain (rows fetched
+        // but thrown on apply, so the local table is empty or holed) that would arm the
+        // barrier's empty-mirror NULL fast path and the `ts >= blockTime` content path -
+        // NEITHER of which is gated on the global stream watermark - and the oracle/match/call
+        // barriers would open against an incomplete mirror and fork (BOOTSTRAP-FLAG-PARTIAL-DRAIN;
+        // unlike the price-height barrier, which has no empty fast path and safely DEFERS). A
+        // partial drain returns null below, so _bootstrapAll retries with the gate shut. The
+        // reconnect self-heal (_refreshAllSyncHeights) still refreshes from a complete local
+        // mirror on its own path; this only withholds arming on an incomplete bootstrap.
+        if (fullyDrained) {
+            if (table === 'price_snapshots')     await this._refreshPriceSyncHeight();
+            if (table === 'oracle_prices')       await this._refreshOracleSyncTimestamp();
+            if (table === 'cross_chain_matches') await this._refreshMatchSyncTimestamp();
+            if (table === 'cross_chain_calls')   await this._refreshCallSyncTimestamp();
+            // A new match/call (new required snapshot_block) or an arriving snapshot can change
+            // snapshot-presence: re-evaluate the snapshot barrier on any cross-chain table.
+            if (CROSS_CHAIN_TABLES.indexOf(table) !== -1) await this._releaseSnapshotWaiters();
+        }
+
         if (!fullyDrained) return null;
         return watermark !== null ? watermark : 0;
     }
@@ -935,8 +975,19 @@ class HubDbSync {
     async _refreshMatchSyncTimestamp() {
         let ts = null;
         try {
+            // Scope the watermark to matches that touch THIS coin (either leg), matching
+            // the settlement query (db.js: WHERE ... AND (a_chain = ? OR b_chain = ?)) and
+            // the snapshot-presence barrier. A global MAX(effective_time) could be bumped
+            // past this block's time by an unrelated other-chain match (both legs on other
+            // chains, still mirrored here because the hub broadcasts every match), letting
+            // waitForMatchSync pass before every match effective for this coin is mirrored
+            // locally, so two indexers settling the same chain could settle the same match at
+            // divergent blocks and fork. Symmetric to the cross_chain_calls fix (item 4573).
+            let where = "WHERE status = 'finalized'";
+            let args  = [];
+            if (this.coin) { where += " AND (a_chain = ? OR b_chain = ?)"; args = [this.coin, this.coin]; }
             let rows = await this.hubDb.doQuery(
-                "SELECT MAX(effective_time) AS ts FROM cross_chain_matches WHERE status = 'finalized'");
+                "SELECT MAX(effective_time) AS ts FROM cross_chain_matches " + where, args);
             if (rows.length > 0 && rows[0].ts !== null) ts = Number(rows[0].ts);
         } catch (e) {
             return;                                             // table not ready yet

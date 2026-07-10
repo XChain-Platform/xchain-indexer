@@ -812,6 +812,76 @@ describe('HubDbSync mirror-table cold-start (missing table) @regression @tier2',
     });
 });
 
+describe('HubDbSync bootstrap fail-closed on partial drain / holes @regression @tier1', function () {
+
+    // BOOTSTRAP-HOLE-1: on an apply failure mid-page the cursor must not advance past the
+    // failed row (directly or via a later row in the page), or the next retry's since_id =
+    // SELECT MAX(id) skips it forever and, once the retry drains clean, the heartbeat gate
+    // opens over a permanent mirror hole. BOOTSTRAP-FLAG-PARTIAL-DRAIN: a partial drain must
+    // not arm the *Bootstrapped flag, or the barrier's empty/content fast path opens against
+    // an incomplete mirror and forks.
+    it('stops the page at the first apply failure and does not arm the barrier', async function () {
+        const doQuery = sinon.stub();
+        doQuery.withArgs(sinon.match(/SHOW COLUMNS/)).resolves([{ Field: 'id' }, { Field: 'status' }]);
+        doQuery.withArgs(sinon.match(/MAX\(id\)/)).resolves([{ max_id: 0 }]);
+        doQuery.resolves([]);
+        const sync = new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test' });
+        sinon.stub(sync, '_httpGet').resolves({ rows: [{ id: 1 }, { id: 2 }, { id: 3 }], watermark: 99 });
+        const applied = [];
+        sinon.stub(sync, '_applyRow').callsFake(async (t, row) => {
+            if (row.id === 2) throw new Error('unappliable row');
+            applied.push(row.id);
+        });
+        const refresh = sinon.stub(sync, '_refreshPriceSyncHeight').resolves();
+
+        const result = await sync._bootstrapTable('price_snapshots');
+
+        assert.strictEqual(result, null, 'a hole must report not-drained');
+        assert.deepStrictEqual(applied, [1],
+            'stops at the first failure; row 3 (after the hole) is never applied, so local MAX(id) stays below the hole');
+        assert.ok(refresh.notCalled,
+            'a partial drain must NOT arm the barrier (BOOTSTRAP-FLAG-PARTIAL-DRAIN)');
+    });
+
+    it('a clean full drain still arms the barrier (no regression)', async function () {
+        const doQuery = sinon.stub();
+        doQuery.withArgs(sinon.match(/SHOW COLUMNS/)).resolves([{ Field: 'id' }]);
+        doQuery.withArgs(sinon.match(/MAX\(id\)/)).resolves([{ max_id: 0 }]);
+        doQuery.resolves([]);
+        const sync = new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test' });
+        sinon.stub(sync, '_httpGet').resolves({ rows: [{ id: 1 }], watermark: 77 });
+        sinon.stub(sync, '_applyRow').resolves();
+        const refresh = sinon.stub(sync, '_refreshPriceSyncHeight').resolves();
+
+        const result = await sync._bootstrapTable('price_snapshots');
+
+        assert.strictEqual(result, 77, 'clean drain returns the watermark');
+        assert.ok(refresh.calledOnce, 'a full drain arms the barrier');
+    });
+
+    // CATCHUP-SCHEMA-BYPASS-1: the hub_ready_max_id catch-up fetch must honor the same
+    // schema_version fail-closed as the main page loop; a mismatched catch-up page marks
+    // the table not-drained rather than applying rows of an unknown shape.
+    it('a schema-mismatched catch-up page fails closed (not drained)', async function () {
+        const doQuery = sinon.stub();
+        doQuery.withArgs(sinon.match(/SHOW COLUMNS/)).resolves([{ Field: 'id' }]);
+        doQuery.withArgs(sinon.match(/MAX\(id\)/)).resolves([{ max_id: 5 }]);
+        doQuery.resolves([{ max_id: 5 }]);
+        const sync = new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test' });
+        sync._readyMaxIds = { oracle_prices: 100 };            // hub advertises rows past our local max
+        const httpGet = sinon.stub(sync, '_httpGet');
+        httpGet.onFirstCall().resolves({ rows: [], watermark: 10 });          // main page: clean short drain
+        httpGet.onSecondCall().resolves({ rows: [{ id: 6 }], schema_version: 999999 });  // catch-up: mismatch
+        sinon.stub(sync, '_applyRow').resolves();
+        const refresh = sinon.stub(sync, '_refreshOracleSyncTimestamp').resolves();
+
+        const result = await sync._bootstrapTable('oracle_prices');
+
+        assert.strictEqual(result, null, 'a schema-mismatched catch-up must mark the table not-drained');
+        assert.ok(refresh.notCalled, 'and must not arm the barrier');
+    });
+});
+
 // Cross-chain call-sync watermark must be scoped to this coin (item 4573): a global
 // MAX(effective_time) could be bumped by an unrelated other-chain call and let the
 // barrier pass before this chain's calls are mirrored, forking XEXEC injection.
@@ -843,6 +913,77 @@ describe('HubDbSync call-sync watermark chain scoping @regression @tier1', funct
         assert.ok(!/target_chain/.test(captured.sql), 'no coin -> no chain filter');
         assert.deepStrictEqual(captured.args, []);
     });
+});
+
+// Cross-chain MATCH-sync watermark must be scoped to this coin, same fork class as the
+// call-sync watermark (item 4573): a global MAX(effective_time) could be bumped by an
+// unrelated other-chain match (both legs on other chains, still mirrored here) and let
+// waitForMatchSync pass before this chain's matches are mirrored, forking cross_settle.
+describe('HubDbSync match-sync watermark chain scoping @regression @tier1', function () {
+    it('scopes MAX(effective_time) to (a_chain OR b_chain) = this.coin', async function () {
+        const doQuery = require('sinon').stub();
+        let captured = null;
+        doQuery.callsFake(async (sql, args) => { captured = { sql, args }; return [{ ts: 456 }]; });
+        const sync = new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test', coin: 'BTC' });
+
+        await sync._refreshMatchSyncTimestamp();
+
+        assert.ok(captured, 'query ran');
+        assert.ok(/cross_chain_matches/.test(captured.sql));
+        assert.ok(/a_chain\s*=\s*\?\s+OR\s+b_chain\s*=\s*\?/i.test(captured.sql),
+            'must filter to matches touching this coin');
+        assert.deepStrictEqual(captured.args, ['BTC', 'BTC']);
+        assert.strictEqual(sync.matchSyncTimestamp, 456);
+    });
+
+    it('falls back to an unscoped watermark when no coin is configured', async function () {
+        const doQuery = require('sinon').stub();
+        let captured = null;
+        doQuery.callsFake(async (sql, args) => { captured = { sql, args }; return [{ ts: 9 }]; });
+        const sync = new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test' });
+
+        await sync._refreshMatchSyncTimestamp();
+
+        assert.ok(!/a_chain/.test(captured.sql), 'no coin -> no chain filter');
+        assert.deepStrictEqual(captured.args, []);
+    });
+});
+
+// Schema-parity guard (class-retiring): every mirror table the reorg-retraction path
+// DELETEs from MUST declare, in its own src/sql twin, the columns that DELETE references.
+// price_snapshots shipped without source_chain/source_action_index while _applyRetraction
+// built `DELETE ... WHERE source_chain = ? AND source_action_index >= ?`, so every reorg
+// price:deleted threw ER_BAD_FIELD_ERROR and was swallowed -> the rolled-back round was
+// never pruned on distributed replicas, diverging their native-fee price set from single-
+// host indexers. This test reads the actual SQL and fails if any retraction key column is
+// absent, covering both the generic RETRACTION_COLUMNS tables and the special cross-chain paths.
+describe('HubDbSync retraction schema parity @regression @tier1', function () {
+    const fs   = require('fs');
+    const path = require('path');
+    const sqlDir = path.join(__dirname, '..', '..', 'src', 'sql');
+    const cols = (table) => {
+        const sql = fs.readFileSync(path.join(sqlDir, table + '.sql'), 'utf8');
+        // Column name is the first token of each definition line (strip leading whitespace).
+        return new Set(sql.split('\n').map(l => (l.trim().match(/^([a-z_][a-z0-9_]*)\b/i) || [])[1]).filter(Boolean));
+    };
+    // Required retraction key columns per mirrored table (source_chain + the action-index
+    // column the DELETE matches on + the push_generation fence).
+    const REQUIRED = {
+        price_snapshots:     ['source_chain', 'source_action_index', 'push_generation'],
+        oracle_prices:       ['source_chain', 'action_index', 'push_generation'],
+        cross_chain_calls:   ['source_chain', 'source_action_index', 'push_generation'],
+        cross_chain_matches: ['a_chain', 'a_action_index', 'a_push_generation',
+                              'b_chain', 'b_action_index', 'b_push_generation'],
+    };
+    for (const [table, need] of Object.entries(REQUIRED)) {
+        it(table + ' mirror schema carries its retraction key columns', function () {
+            const have = cols(table);
+            for (const c of need) {
+                assert.ok(have.has(c),
+                    table + '.sql is missing retraction column `' + c + '` used by _applyRetraction');
+            }
+        });
+    }
 });
 
 // _applyRetraction mirrors the hub's reorg delete onto the local copy. When the broadcast
