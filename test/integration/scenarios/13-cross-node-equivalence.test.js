@@ -230,20 +230,18 @@ describe('13 – Cross-node equivalence @regression @tier1', function () {
     // hash, and the two nodes FORK. A resynced validator could then never
     // rejoin, and ANCHOR's recover-from-chain-parse promise breaks.
     //
-    // SKIPPED: CONFIRMED CONSENSUS FORK (2026-06-12, P2a finding #1):
-    // the ledger hash diverges at the first post-reorg block whose ledger
-    // rows reference a dedup id assigned AFTER the orphan residue (here:
-    // MINT|POST at block 109; survivor=5d4ba04f… resync=5ab75916….).
-    // Root cause: getBlockHashes (src/db.js:1019) folds raw index_* ids into
-    // the consensus hashes while rollback.js never deletes index_* rows, so
-    // id assignment is reorg-history-dependent. Any orphaned tx whose
-    // source/destination address (or tick/action type/status) was first seen
-    // in the orphan shifts every later first-seen id on the survivor.
-    // Un-skip after the consensus-side decision (hash resolved strings
-    // instead of raw ids, or purge index residue on rollback). See
-    // claude/reports/2026-06-12_p2a-cross-node-equivalence.md.
+    // This is the seam that most directly detects silent consensus forking:
+    // it asserts cross-node ledger-hash equivalence after a reorg whose
+    // orphaned branch minted novel entities. It was skipped 2026-06-12 as a
+    // CONFIRMED CONSENSUS FORK (P2a finding #1: getBlockHashes folded raw
+    // index_* ids into the hash while rollback never deleted index_* rows;
+    // see claude/reports/2026-06-12_p2a-cross-node-equivalence.md). Both
+    // consensus-side fixes have since landed - getBlockHashes hashes the
+    // RESOLVED address/ticker strings, and rollback.js block-scope-deletes
+    // index_addresses/index_tickers - so the guard is live again (re-enabled
+    // 2026-07-09 after a green run against the fixed code).
     // -----------------------------------------------------------------------
-    it.skip('4. survivor equals resync even when ORPHANED blocks introduced novel entities', async function () {
+    it('4. survivor equals resync even when ORPHANED blocks introduced novel entities', async function () {
         const seeder = new DecoderSeeder(decoderQuery);
         await seedBaseCorpus(seeder);
 

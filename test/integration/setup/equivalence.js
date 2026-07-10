@@ -31,12 +31,14 @@
  *                    rows, so the survivor retains residue created by
  *                    orphaned blocks; the fresh side must be a SUBSET.
  *                 3. Columns pointing INTO index_transactions (blocks'
- *                    *_hash_id, tx_hash_id); the survivor's id-space
- *                    contains orphan residue (orphaned tx hashes + orphaned
- *                    block-hash strings), shifting pointer values. The
- *                    referenced STRINGS are verified instead: the hash chain
- *                    is compared resolved (readHashChain), and tx hashes
- *                    come verbatim from the shared decoder corpus.
+ *                    *_hash_id incl. state_hash_id, tx_hash_id); the
+ *                    survivor's id-space contains orphan residue (orphaned tx
+ *                    hashes + orphaned block-hash strings), shifting pointer
+ *                    values. The referenced STRINGS are verified instead: the
+ *                    hash chain (ledger/actions/contracts + the replication-
+ *                    integrity state hash) is compared resolved
+ *                    (readHashChain), and tx hashes come verbatim from the
+ *                    shared decoder corpus.
  *
  * In BOTH modes the consensus commitment is the resolved hash chain.
  * assertHashChainsEqual. Because getBlockHashes folds raw address_id /
@@ -66,7 +68,11 @@ const INDEX_TABLES = new Set([
 // (see header). Everything else, including raw address_id/tick_id/status_id,
 // values, is still compared byte-wise.
 const CONTENT_MODE_TABLE_EXCLUSIONS = {
-    blocks: ['ledger_hash_id', 'actions_hash_id', 'contract_hash_id'],
+    // state_hash_id joined the three consensus-hash pointers when the per-block
+    // replication-integrity state hash shipped (blocks.state_hash_id, interned in
+    // index_transactions exactly like its siblings); its resolved STRING is
+    // compared via readHashChain/assertHashChainsEqual instead.
+    blocks: ['ledger_hash_id', 'actions_hash_id', 'contract_hash_id', 'state_hash_id'],
 };
 const CONTENT_MODE_GLOBAL_EXCLUSIONS = ['id', 'tx_hash_id'];
 
@@ -115,22 +121,26 @@ async function listTables(queryFn) {
     return rows.map(r => String(Object.values(r)[0])).sort();
 }
 
-/** Read a node's chained consensus-hash triple for every block, RESOLVED to
- *  the hash strings (id-independent), ordered by height. */
+/** Read a node's chained consensus-hash triple (plus the replication-integrity
+ *  state hash) for every block, RESOLVED to the hash strings (id-independent),
+ *  ordered by height. */
 async function readHashChain(queryFn) {
     const rows = await queryFn(
         `SELECT b.block_index,
                 t1.hash AS ledger,
                 t2.hash AS actions,
-                t3.hash AS contracts
+                t3.hash AS contracts,
+                t4.hash AS state
          FROM blocks b
          LEFT JOIN index_transactions t1 ON t1.id = b.ledger_hash_id
          LEFT JOIN index_transactions t2 ON t2.id = b.actions_hash_id
          LEFT JOIN index_transactions t3 ON t3.id = b.contract_hash_id
+         LEFT JOIN index_transactions t4 ON t4.id = b.state_hash_id
          ORDER BY b.block_index ASC`);
     return rows.map(r => ({
         block_index: Number(r.block_index),
         ledger: r.ledger, actions: r.actions, contracts: r.contracts,
+        state: r.state,
     }));
 }
 
@@ -149,6 +159,13 @@ function assertHashChainsEqual(chainA, chainB, labelA = 'node A', labelB = 'node
                 `${labelA}=${a[field]} ${labelB}=${b[field]} (first divergent block; ` +
                 `all earlier blocks agree)`);
         }
+        // Replication-integrity state hash: not part of the hub-signed consensus
+        // triple, but a follower recomputes it and HALTS on mismatch, so survivor
+        // and resync must agree on the resolved string all the same.
+        assert.strictEqual(a.state, b.state,
+            `REPLICATION-INTEGRITY DIVERGENCE: state hash diverges at block ` +
+            `${a.block_index}: ${labelA}=${a.state} ${labelB}=${b.state} ` +
+            `(first divergent block; all earlier blocks agree)`);
     }
     assert.strictEqual(chainA.length, chainB.length,
         `hash-chain length differs: ${labelA}=${chainA.length} ${labelB}=${chainB.length}`);

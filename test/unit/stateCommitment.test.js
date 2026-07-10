@@ -154,13 +154,20 @@ describe('state-commitment flag-day activation @regression', function(){
     // indexer and the xchain-sync follower flip the additive root on different
     // blocks -> guaranteed state_root divergence HALT). Monorepo-relative: the
     // canonical doc is present in the monorepo/aggregator checkout but NOT in
-    // standalone single-repo CI, where this skips. The authoritative cross-repo
-    // byte-identity is enforced by the dedicated consensus-primitive conformance
-    // gate, so the skip is not a false green.
+    // standalone single-repo CI. The skip is GATED like the xchain-sync twin
+    // (see its stateCommitment.test.js): the e2e job that checks out
+    // xchain-documentation sets XCHAIN_REQUIRE_SIBLINGS=1, where a missing
+    // canonical doc HARD-FAILS instead of skipping, so this parity assertion can
+    // never green-by-skip where the sibling is required. Standalone CI (flag
+    // unset, no sibling) still skips.
     it('indexer activation map == canonical constants.js', function(){
         let canonical;
         try { canonical = require('../../../xchain-documentation/protocol/constants.js').STATE_COMMITMENT_ACTIVATION; }
-        catch (e) { return this.skip(); }
+        catch (e) {
+            if (process.env.XCHAIN_REQUIRE_SIBLINGS === '1')
+                throw new Error('consensus parity guard cannot run: xchain-documentation sibling missing (' + e.message + ')');
+            return this.skip();
+        }
         assert.deepStrictEqual(act.STATE_COMMITMENT_ACTIVATION, canonical);
     });
 });

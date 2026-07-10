@@ -308,27 +308,31 @@ describe('consensus parameters are frozen (track 8 guard) @regression', function
         const { vm, full } = resolveVmConsensus();
         if(!vm || !full){ this.skip(); return; } // standalone CI without the real VM present
         const pc = require('../../src/protocol_changes.js');
-        // ASYNC_SURFACE_GATE_BLOCK_TIME (VM) and VM_BANNED_ASYNC mainnet_time (indexer)
-        // flip the SAME consensus boundary. They live in two repos with independent deploy
-        // cycles, so a one-sided edit (or a stale bundled-VM dep mid-upgrade) ships a fleet
-        // that forks at the flag-day with no other CI failure. Assert byte-identity here.
-        if(vm.ASYNC_SURFACE_GATE_BLOCK_TIME !== undefined){
-            assert.strictEqual(vm.ASYNC_SURFACE_GATE_BLOCK_TIME, pc.VM_BANNED_ASYNC_MAINNET_TIME,
-                'xchain-vm ASYNC_SURFACE_GATE_BLOCK_TIME != indexer VM_BANNED_ASYNC mainnet_time; update both repos in lockstep (one-sided edit forks the fleet)');
-        }
-        // BINARY_ALLOC_GATE_BLOCK_TIME is the same coordinated 2.0.0 flag-day; pin it to the
-        // same canonical timestamp so a VM-side edit without a matching indexer update reddens.
-        if(vm.BINARY_ALLOC_GATE_BLOCK_TIME !== undefined){
-            assert.strictEqual(vm.BINARY_ALLOC_GATE_BLOCK_TIME, pc.VM_BANNED_ASYNC_MAINNET_TIME,
-                'xchain-vm BINARY_ALLOC_GATE_BLOCK_TIME drifted from the coordinated 2.0.0 flag-day timestamp; confirm it matches the indexer activation');
-        }
-        // STATE_KEY_NUL_GATE_BLOCK_TIME (H-5) rejects NUL-byte state keys that would wedge the
-        // indexer's block merkle root. It is a VM-side consensus gate that must activate at the
-        // same coordinated 2.0.0 flag-day; a one-sided edit forks the fleet at the boundary with
-        // no other CI failure. Pin it to the canonical timestamp.
-        if(vm.STATE_KEY_NUL_GATE_BLOCK_TIME !== undefined){
-            assert.strictEqual(vm.STATE_KEY_NUL_GATE_BLOCK_TIME, pc.VM_BANNED_ASYNC_MAINNET_TIME,
-                'xchain-vm STATE_KEY_NUL_GATE_BLOCK_TIME drifted from the coordinated 2.0.0 flag-day timestamp; update both repos in lockstep (one-sided edit forks the fleet at the flag-day)');
+        // These VM gates and the indexer's VM_BANNED_ASYNC mainnet_time flip the SAME
+        // coordinated 2.0.0 consensus boundary. They live in two repos with independent
+        // deploy cycles, so a one-sided edit (or a stale bundled-VM dep mid-upgrade)
+        // ships a fleet that forks at the flag-day with no other CI failure. Assert
+        // byte-identity here. Gates: ASYNC_SURFACE (banned-async enforcement),
+        // BINARY_ALLOC (binary allocation), STATE_KEY_NUL (H-5, rejects NUL-byte state
+        // keys that would wedge the block merkle root), METERING_EVAL_ORDER (L-3,
+        // JS-spec-correct compound string-append evaluation order).
+        //
+        // Presence is MANDATORY: this test only runs against the real bundled package
+        // (skipped above when !full), so a missing gate export means a STALE VENDORED
+        // COPY and must FAIL, not skip. The 2026-07 drift (vendored copies missing the
+        // STATE_KEY_NUL + METERING_EVAL_ORDER gates at the same declared version)
+        // passed vacuously through the if-undefined guards this replaces.
+        const GATE_EXPORTS = [
+            'ASYNC_SURFACE_GATE_BLOCK_TIME',
+            'BINARY_ALLOC_GATE_BLOCK_TIME',
+            'STATE_KEY_NUL_GATE_BLOCK_TIME',
+            'METERING_EVAL_ORDER_GATE_BLOCK_TIME'
+        ];
+        for(const gate of GATE_EXPORTS){
+            assert.notStrictEqual(vm[gate], undefined,
+                'xchain-vm did not export ' + gate + ' (stale vendored copy? run npm run vendor:vm; renamed? update GATE_EXPORTS in lockstep)');
+            assert.strictEqual(vm[gate], pc.VM_BANNED_ASYNC_MAINNET_TIME,
+                'xchain-vm ' + gate + ' != indexer VM_BANNED_ASYNC mainnet_time; update both repos in lockstep (one-sided edit forks the fleet at the flag-day)');
         }
     });
 

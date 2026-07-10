@@ -26,7 +26,17 @@ const { AsyncLocalStorage } = require('async_hooks');
 const { buildStateHashData } = require('./stateHash');
 const { canonicalizeHashAddress } = require('./protocolAddressRoles');
 const swqCap = require('./swq_source_cap_activation');
+const dispenseCancellingMatch = require('./dispense_cancelling_match_activation');
+const stateKeyCollation = require('./state_key_collation_activation');
 const { CHECKPOINT_VERSIONS: ANCHOR_CHECKPOINT_VERSIONS } = require('./anchor-action-query');
+
+// Tables whose highest-`id`-survivor dedupe rule is validated and safe to auto-apply at
+// startup (see dedupeForUniqueIndex: an upsert that degraded to plain INSERT appended a
+// fresh row per change, so the highest id is the live value). reconcileTableIndexes will
+// only DELETE rows to force a UNIQUE index for a table on this allow-list; any other table
+// with blocking duplicates is left intact with a loud warning for a manual migration, so a
+// mis-declared UNIQUE index can never silently destroy rows on an unvalidated table.
+const AUTO_DEDUP_TABLES = new Set(['balances']);
 
 // Watchdog-fence context (M-16). The block loop runs each block's processing inside
 // txEpochStore.run(epoch, ...) so every DB call it makes carries the transaction epoch
@@ -337,8 +347,17 @@ class Database {
                     if(appliedByName.has(file)){
                         if(appliedByName.get(file) !== checksum){
                             // Migrations are immutable once applied. A changed checksum means
-                            // someone edited an applied file - surface it loudly; never silently re-run.
-                            console.warn('runMigrations: ' + file + ' was already applied but its content CHANGED (checksum mismatch). Migrations are immutable once applied - review manually.');
+                            // someone edited an applied file, so the DB is now on a schema that
+                            // diverges from what the committed file describes.
+                            const msg = 'runMigrations: ' + file + ' was already applied but its content CHANGED (checksum mismatch: recorded ' +
+                                appliedByName.get(file) + ', current ' + checksum + '). Migrations are immutable once applied.';
+                            // Operator path (`node src/migrate.js`, includeManual) and opt-in strict
+                            // mode fail closed so a diverged schema is caught in CI / by an operator
+                            // instead of silently continuing. Default auto-startup stays non-fatal
+                            // (console.error, not warn) to avoid a surprise fleet-wide boot failure.
+                            if(includeManual || process.env.MIGRATION_STRICT_CHECKSUM === '1')
+                                throw new Error(msg + ' Review manually (set MIGRATION_STRICT_CHECKSUM=0 / omit to downgrade to a non-fatal log).');
+                            console.error(msg + ' Continuing on the diverged schema - review manually.');
                         }
                         continue;
                     }
@@ -353,6 +372,19 @@ class Database {
                     // Strip `--` line comments before splitting on ';' (a ';' in a comment
                     // header must not terminate a statement - same rule as createTable()).
                     const statements = this.stripSqlLineComments(raw).split(';').map(s => s.trim()).filter(Boolean);
+                    // Destructive-DDL guard: the mode tag is a human declaration; this scan is
+                    // the machine check behind it. A file tagged `auto` that contains DDL able
+                    // to lose or rename data must NEVER run unattended at startup (nor slip
+                    // through migrate.js under the wrong tag) - block startup with an
+                    // actionable error instead of executing it against every validator's DB.
+                    if(mode === 'auto'){
+                        const offender = this._destructiveAutoStatement(statements);
+                        if(offender){
+                            throw new Error('runMigrations: ' + file + ' is tagged mode=auto but contains destructive DDL: "' +
+                                offender.slice(0, 160) + (offender.length > 160 ? '...' : '') + '". ' +
+                                'Re-tag the file `-- xchain:migration mode=manual` and apply it deliberately via `node src/migrate.js`.');
+                        }
+                    }
                     console.log('runMigrations: applying ' + file + ' (mode=' + mode + ', ' + statements.length + ' statement(s))...');
                     try {
                         for(const stmt of statements){ await conn.query(stmt); }
@@ -385,6 +417,58 @@ class Database {
     _migrationMode(raw){
         const m = String(raw).match(/^\s*--\s*xchain:migration\b[^\n]*\bmode\s*=\s*(auto|manual)\b/im);
         return m ? m[1].toLowerCase() : 'manual';
+    }
+
+    // Destructive-DDL scan for the auto-apply path. Given a migration file's
+    // statement list (already `--`-comment-stripped and ';'-split), returns the
+    // first statement that can lose, truncate, or rename data - or null when the
+    // file is safe to auto-run. Pure string logic (no DB), unit-tested directly.
+    //
+    // Flagged as destructive: DROP TABLE/DATABASE/SCHEMA, TRUNCATE, RENAME TABLE,
+    // DELETE FROM, ALTER TABLE ... DROP <column|partition|bare identifier>,
+    // ALTER TABLE ... RENAME (except RENAME INDEX/KEY), ALTER TABLE ... CHANGE
+    // (rename+retype), and MODIFY ... NOT NULL (the statically detectable
+    // narrowing; a width reduction cannot be seen without the live schema and
+    // stays covered by the manual-tag convention).
+    //
+    // Deliberately NOT flagged (legitimate existing auto patterns): DROP INDEX/KEY,
+    // DROP FOREIGN KEY/CONSTRAINT/CHECK/DEFAULT/PRIMARY KEY (structural, no row
+    // data lost), ADD ..., CREATE ..., and MODIFY that widens/nullables a column.
+    _destructiveAutoStatement(statements){
+        // Drops that remove metadata only; anything else after DROP inside an
+        // ALTER (COLUMN, PARTITION, or a bare column identifier) loses data.
+        const SAFE_ALTER_DROP = new Set(['INDEX', 'KEY', 'FOREIGN', 'CONSTRAINT', 'CHECK', 'DEFAULT', 'PRIMARY']);
+        for(const raw of (statements || [])){
+            // Belt-and-braces: strip /* */ block comments (line comments are already
+            // gone) so a keyword inside comment prose never triggers or hides a hit.
+            const stmt = String(raw).replace(/\/\*[\s\S]*?\*\//g, ' ').trim();
+            if(!stmt) continue;
+            if(/^DROP\s+(TABLE|DATABASE|SCHEMA)\b/i.test(stmt))  return raw;
+            if(/^TRUNCATE\b/i.test(stmt))                        return raw;
+            if(/^RENAME\s+TABLE\b/i.test(stmt))                  return raw;
+            if(/^DELETE\s+FROM\b/i.test(stmt))                   return raw;
+            if(/^ALTER\s+TABLE\b/i.test(stmt)){
+                // Every DROP inside the ALTER must target a safe (metadata-only) object.
+                let m;
+                const dropRe = /\bDROP\s+([A-Za-z_]+|`[^`]+`)/gi;
+                while((m = dropRe.exec(stmt)) !== null){
+                    const target = m[1].replace(/`/g, '').toUpperCase();
+                    if(!SAFE_ALTER_DROP.has(target)) return raw;
+                }
+                // RENAME TO / RENAME COLUMN / bare RENAME lose the old name; only
+                // RENAME INDEX/KEY is a metadata-only rename.
+                if(/\bRENAME\b(?!\s+(INDEX|KEY)\b)/i.test(stmt)) return raw;
+                // CHANGE [COLUMN] renames and retypes in one clause - manual only.
+                if(/\bCHANGE\b/i.test(stmt))                     return raw;
+                // MODIFY that adds NOT NULL narrows the column domain - except an
+                // AUTO_INCREMENT attribute repair: an AUTO_INCREMENT column is
+                // definitionally NOT NULL, so no domain is narrowed (see the
+                // committed 2026-06-10-mirror-id-autoincrement-repair.sql pattern).
+                if(/\bMODIFY\b[\s\S]*\bNOT\s+NULL\b/i.test(stmt) &&
+                   !/\bAUTO_INCREMENT\b/i.test(stmt))            return raw;
+            }
+        }
+        return null;
     }
 
     // Create the migration ledger if absent. Created directly (not via src/sql/) - it
@@ -579,6 +663,10 @@ class Database {
                 } catch(e){
                     const dup = e && (Number(e.errno) === 1062 || /duplicate entry/i.test(e.message || ''));
                     if(!dup){ console.log('  could not add UNIQUE index ' + idx.name + ' on ' + table + ': ' + (e && e.message)); continue; }
+                    if(!AUTO_DEDUP_TABLES.has(table)){
+                        console.warn('  ' + table + '.' + idx.name + ': duplicate rows block the UNIQUE index, but ' + table + ' is NOT on the auto-dedup allow-list - skipping (no rows deleted). Apply a manual migration to resolve the duplicates.');
+                        continue;
+                    }
                     console.log('  ' + table + '.' + idx.name + ': duplicate rows block the UNIQUE index - deduping (keep newest id per ' + key + ') then retrying.');
                     if(!(await this.dedupeForUniqueIndex(db, table, idx.columns))) continue;
                     try {
@@ -1445,16 +1533,28 @@ class Database {
                  WHERE a.block_index=?
                  ORDER BY c.action_index ASC`;
         contracts_data.contracts = await this.doQuery(query, [block_index]);
-        // Contract state (latest value per key written in this block)
+        // Contract state (latest value per key written in this block).
+        // state_key collation is flag-day gated (state_key_collation_activation.js):
+        // contract_state is utf8_general_ci (case/accent-folding), so the legacy
+        // GROUP BY/ORDER BY treat distinct keys like "Key"/"key" as EQUAL - the
+        // folding GROUP BY collapses them to one MAX(id) row, silently dropping the
+        // other key's value from the contract_hash preimage. At/after the activation
+        // height state_key is pinned COLLATE utf8_bin (the same hazard the
+        // address/tick sorts above already pin against); below it the folding form
+        // is kept so historical block hashes replay byte-identically.
+        // xchain-sync/src/BlockHasher.js mirrors this gate byte-for-byte.
+        let stateKeyBin = stateKeyCollation.isStateKeyBinCollationActive(
+            block_index, this.config['NETWORK'], this.config['COIN']);
+        let stateKeyCollate = stateKeyBin ? ' COLLATE utf8_bin' : '';
         query = `SELECT cs.contract_index, cs.state_key, cs.state_value
                  FROM contract_state cs
                  INNER JOIN (
                      SELECT MAX(id) as max_id
                      FROM contract_state
                      WHERE block_index=?
-                     GROUP BY contract_index, state_key
+                     GROUP BY contract_index, state_key` + stateKeyCollate + `
                  ) latest ON cs.id = latest.max_id
-                 ORDER BY cs.contract_index ASC, cs.state_key ASC`;
+                 ORDER BY cs.contract_index ASC, cs.state_key` + stateKeyCollate + ` ASC`;
         contracts_data.state = await this.doQuery(query, [block_index]);
         // Executions. Resolve caller_id -> address and status_id -> status string. contract_index
         // is the deploy's action_index (deterministic, not a surrogate id). action_index is unique.
@@ -8836,6 +8936,18 @@ class Database {
             where = ' AND d1.get_tick_id=?';
             args.push(tick_id);
         }
+        // Latest-status correlation column (flag-day gated, see
+        // dispense_cancelling_match_activation.js). The MAX(action_index) subquery must
+        // correlate on the DISPENSER's action index (d1.action_index), the idiom every
+        // sibling query uses (getDispenserInfo / findDispenserSends / getSweepDestination /
+        // findCancelledDispensers). The legacy predicate correlated on s1.action_index -
+        // the STATUS row's own action index, a different id domain - which only resolves
+        // while the dispenser's sole status row is the initial 'open' one; after a cancel
+        // writes a 'cancelling' row the dispenser matches nothing and the buyer's coin-paid
+        // DISPENSE trigger is silently dropped. Correcting it changes how already-valid
+        // blocks evaluate, so the legacy column is kept below the activation time.
+        let latestStatusCorrelate = dispenseCancellingMatch.isDispenseCancellingMatchActive(
+            data['BLOCK_TIME'], this.config['NETWORK']) ? 'd1.action_index' : 's1.action_index';
         let query  = `SELECT
                             d1.action_index,
                             d1.get_amount,
@@ -8852,7 +8964,7 @@ class Database {
                                 FROM
                                     dispenser_statuses s4
                                 WHERE
-                                    s4.dispenser_action_index=s1.action_index
+                                    s4.dispenser_action_index=` + latestStatusCorrelate + `
                             ) AND
                             s2.status='valid' AND
                             s3.status IN ('open', 'cancelling') AND
@@ -11872,17 +11984,28 @@ class Database {
      * VM Integration - Contract State
      ****************************************************************/
 
-    // Get the current state of a contract as a { key: value } object
-    async getContractState(contractIndex){
+    // Get the current state of a contract as a { key: value } object.
+    // `blockIndex` is the block being processed and drives the state_key
+    // collation flag-day (state_key_collation_activation.js): contract_state is
+    // utf8_general_ci, so the legacy GROUP BY folds distinct keys like
+    // "Key"/"key" into ONE group and the reload drops one of them - the key
+    // vanishes on the next EXECUTE despite the null-prototype round-trip
+    // contract below. At/after the activation height state_key is grouped
+    // COLLATE utf8_bin so every distinct key survives reload; below it (or when
+    // no blockIndex is supplied) the legacy folding form is kept so historical
+    // re-execution stays byte-identical.
+    async getContractState(contractIndex, blockIndex){
         // Get the latest row per key using MAX(id)
         // The idx_latest index (contract_index, state_key, id DESC) makes this efficient
+        let stateKeyBin = (blockIndex !== undefined) && stateKeyCollation.isStateKeyBinCollationActive(
+            blockIndex, this.config['NETWORK'], this.config['COIN']);
         let query = `SELECT cs.state_key, cs.state_value
                      FROM contract_state cs
                      INNER JOIN (
                          SELECT MAX(id) as max_id
                          FROM contract_state
                          WHERE contract_index = ?
-                         GROUP BY state_key
+                         GROUP BY state_key` + (stateKeyBin ? ' COLLATE utf8_bin' : '') + `
                      ) latest ON cs.id = latest.max_id
                      WHERE cs.state_value IS NOT NULL`;
         let results = await this.doQuery(query, [contractIndex]);

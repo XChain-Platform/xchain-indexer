@@ -48,8 +48,8 @@ const ANCHOR_REWARD_ACTIVATION = {
 };
 
 // The frozen validator anchor-publish reward. This is a CONSENSUS CONSTANT: the hub
-// signs it into the XANCPUB attestation and the indexer re-derives it here, never
-// from the wire. Changing it is itself a flag-day. Kept equal to the hub's historical
+// signs it into the XANCPUB attestation and the indexer re-derives it, never from
+// the wire. Changing it is itself a flag-day. Kept equal to the hub's historical
 // default (ANCHOR_REWARD_PER_PUBLISH = '10.00000000').
 const ANCHOR_REWARD_AMOUNT = '10.00000000';
 
