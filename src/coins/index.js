@@ -109,6 +109,16 @@ function resolveGenesis(genesisBlock, network){
 function resolveFullnode(fullnode, network){
     if(!fullnode) return undefined;
     const out = stripDescriptors(fullnode);
+    // Genesis verifier pubkeys are case-insensitive on the wire; normalize on EVERY
+    // network. Previously this ran only AFTER the non-regtest early return below, so
+    // mainnet/testnet served the bundled GENESIS_VERIFIERS verbatim, contradicting
+    // this comment (#1283). Today every coin bundle ships GENESIS_VERIFIERS: [], so
+    // this is a behavioral no-op and hash-neutral (the consensus pin hashes the raw
+    // bundle, not this resolved output); moving it restores the documented contract
+    // before any mixed-case verifier key can be pinned in a form the runtime (which
+    // compares against lowercased on-wire keys) would silently fail to match.
+    if(Array.isArray(out.GENESIS_VERIFIERS))
+        out.GENESIS_VERIFIERS = out.GENESIS_VERIFIERS.map(s => String(s).toLowerCase());
     if(network !== 'regtest') return out;
 
     if(fullnode.$regtestSidecar){
@@ -126,9 +136,6 @@ function resolveFullnode(fullnode, network){
             if(v !== undefined) out[key] = v;
         }
     }
-    // Genesis verifier pubkeys are case-insensitive on the wire; normalize.
-    if(Array.isArray(out.GENESIS_VERIFIERS))
-        out.GENESIS_VERIFIERS = out.GENESIS_VERIFIERS.map(s => String(s).toLowerCase());
     return out;
 }
 
@@ -305,4 +312,5 @@ module.exports = {
     consensusHashes,
     verifyConsensusPin,
     canonicalJson,
+    resolveFullnode,   // #1283: exported for network-normalization conformance testing
 };

@@ -66,14 +66,21 @@ function memDb(v1s, v2s) {
             if (sql.startsWith('SELECT match_id FROM cross_chain_matches'))
                 return matches.filter(r => r.match_id === params[0]).map(r => ({ match_id: r.match_id }));
             if (sql.startsWith('UPDATE cross_chain_matches SET status')) {
-                for (let r of matches) if (r.match_id === params[1]) r.status = params[0];
+                // params = [status, anchorTxid, match_id]; anchor_txid upgrades
+                // NULL->value only (COALESCE semantics in recovery._rebuild).
+                for (let r of matches) if (r.match_id === params[2]) {
+                    r.status = params[0];
+                    if (r.anchor_txid == null) r.anchor_txid = params[1];
+                }
                 return [];
             }
             if (sql.startsWith('INSERT INTO cross_chain_matches')) {
                 // Positional per recovery's INSERT (no id column in these fixtures): the
-                // royalty columns sit at 11 (a_payout_legs) / 20 (b_payout_legs), status at 23.
+                // royalty columns sit at 11 (a_payout_legs) / 20 (b_payout_legs), status at 23;
+                // anchor_txid is the last param, finalizing_view second-to-last.
                 matches.push({ match_id: params[0], a_payout_legs: params[11], b_payout_legs: params[20],
-                               status: params[23], finalizing_view: params[params.length - 1] });
+                               status: params[23], finalizing_view: params[params.length - 2],
+                               anchor_txid: params[params.length - 1] });
                 return [];
             }
             if (sql.startsWith('SELECT call_id FROM cross_chain_calls'))

@@ -343,10 +343,14 @@ class Anchor {
             let attSigners = [], attSeen = new Set();
             for(let s of publisherSigs){
                 let pk = String(s.pubkey || '').toLowerCase();
-                if(attSeen.has(pk)) continue;
-                attSeen.add(pk);
+                if(!pk || attSeen.has(pk)) continue;
                 if(!snapPubkeys.has(pk)) continue;
                 if(!ed25519.verify(rewardCanonical, s.sig, s.pubkey)) continue;
+                // Mark seen only AFTER the signature verifies, matching the root-sig
+                // loop above (and the hub/SDK verifiers): marking on first encounter
+                // lets a garbage-then-valid pair for one qualified validator suppress
+                // the real attestation (order-dependent quorum under-count).
+                attSeen.add(pk);
                 attSigners.push(pk);
             }
             let attQuorumMet = weighted

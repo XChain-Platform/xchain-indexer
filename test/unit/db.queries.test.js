@@ -1621,8 +1621,35 @@ describe('Database.getPendingHubPushes() @regression @tier1', function () {
         const conn = { query: sinon.stub().resolves([]), release: sinon.stub().resolves() };
         db.pool.getConnection.resolves(conn);
         await db.getPendingHubPushes(10);
+        const sql  = conn.query.firstCall.args[0];
         const args = conn.query.firstCall.args[1];
-        assert.strictEqual(args[0], 10);
+        assert.strictEqual(args[args.length - 1], 10, 'limit is the last bound parameter');
+        assert.match(sql, /LIMIT \?/);
+    });
+
+    // Head-of-line blocking fix (review finding 01178748): the due-time predicate
+    // must be pushed into SQL, mirroring HubPushQueue._isDue's backoff formula
+    // (delay = LEAST(base * 2^(attempts-1), max)), so pending-but-not-due rows no
+    // longer occupy the LIMIT batch slots.
+    it('bakes the exponential-backoff due-time predicate into the WHERE clause', async function () {
+        const db   = makeDb();
+        const conn = { query: sinon.stub().resolves([]), release: sinon.stub().resolves() };
+        db.pool.getConnection.resolves(conn);
+        await db.getPendingHubPushes(50, { baseBackoffMs: 30000, maxBackoffMs: 600000 });
+        const sql  = conn.query.firstCall.args[0];
+        const args = conn.query.firstCall.args[1];
+        assert.match(sql, /last_attempted_at IS NULL/);
+        assert.match(sql, /LEAST\(\? \* POW\(2, GREATEST\(attempts - 1, 0\)\), \?\)/);
+        assert.deepStrictEqual(args, [30, 600, 50], 'base/max backoff converted to whole seconds, then the limit');
+    });
+
+    it('defaults the backoff window when no backoffOpts are passed', async function () {
+        const db   = makeDb();
+        const conn = { query: sinon.stub().resolves([]), release: sinon.stub().resolves() };
+        db.pool.getConnection.resolves(conn);
+        await db.getPendingHubPushes(50);
+        const args = conn.query.firstCall.args[1];
+        assert.deepStrictEqual(args, [30, 600, 50], 'falls back to the same 30s/600s defaults HubPushQueue uses');
     });
 });
 

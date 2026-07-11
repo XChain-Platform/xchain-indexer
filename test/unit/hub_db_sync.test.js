@@ -1257,3 +1257,116 @@ describe('HubDbSync time-keyed price barrier (H-3) @regression @tier3', function
         assert.strictEqual(got, 0);
     });
 });
+
+// Heartbeat-timeout watchdog (review finding 0af6d951): reconnect used to trigger
+// ONLY on the socket's 'close'/'error' events, so a half-open TCP connection (no
+// frames, no close/error) froze the mirror indefinitely. The watchdog measures
+// time-since-last-watermark and terminates a stalled socket so the existing
+// close-handler reconnect path self-heals.
+describe('HubDbSync heartbeat-timeout watchdog @regression @tier2', function () {
+
+    function makeWatchdogSync() {
+        const doQuery = sinon.stub().resolves([{ h: 0 }]);
+        const sync = new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test', watermarkIntervalMs: 10000 });
+        return sync;
+    }
+
+    function stubWs() {
+        return { terminate: sinon.stub() };
+    }
+
+    it('terminates the socket once no watermark frame arrives for 3x the interval', function () {
+        const clock = sinon.useFakeTimers();
+        try {
+            const sync = makeWatchdogSync();
+            const ws = stubWs();
+            sync._startWatchdog(ws);
+
+            clock.tick(29999);
+            assert.strictEqual(ws.terminate.called, false, 'must not terminate before the 3x threshold');
+
+            clock.tick(2);
+            assert.strictEqual(ws.terminate.called, true, 'must terminate once idle >= 3x the watermark interval');
+        } finally {
+            clock.restore();
+        }
+    });
+
+    it('never fires while watermark frames keep arriving on schedule', function () {
+        const clock = sinon.useFakeTimers();
+        try {
+            const sync = makeWatchdogSync();
+            const ws = stubWs();
+            sync._startWatchdog(ws);
+
+            // Simulate a heartbeat landing every 10s, well inside the 30s timeout,
+            // for several times longer than the timeout would otherwise allow.
+            for (let i = 0; i < 10; i++) {
+                clock.tick(10000);
+                sync._lastHeartbeatAt = Date.now();
+            }
+            assert.strictEqual(ws.terminate.called, false, 'watchdog must not fire while heartbeats stay current');
+        } finally {
+            clock.restore();
+        }
+    });
+
+    it('a real watermark message stamps _lastHeartbeatAt and keeps the watchdog quiet', async function () {
+        const clock = sinon.useFakeTimers();
+        try {
+            const sync = makeWatchdogSync();
+            sync._bootstrapDrained = true;
+            const ws = stubWs();
+            sync._startWatchdog(ws);
+
+            // Advance close to (but under) the threshold, then simulate what the
+            // 'watermark' message handler does: stamp liveness and advance the
+            // stream watermark. The watchdog must see the reset and stay quiet
+            // through another full interval.
+            clock.tick(25000);
+            sync._lastHeartbeatAt = Date.now();
+            sync._advanceWatermark(1);
+            clock.tick(25000);
+            assert.strictEqual(ws.terminate.called, false, 'a fresh heartbeat must reset the idle clock');
+        } finally {
+            clock.restore();
+        }
+    });
+
+    it('no timer remains active after _stopWatchdog (close-path cleanup)', function () {
+        const clock = sinon.useFakeTimers();
+        try {
+            const sync = makeWatchdogSync();
+            const ws = stubWs();
+            sync._startWatchdog(ws);
+            assert.ok(sync._watchdogTimer, 'watchdog timer set while socket is open');
+
+            sync._stopWatchdog();
+            assert.strictEqual(sync._watchdogTimer, null, 'timer reference cleared');
+
+            clock.tick(60000);
+            assert.strictEqual(ws.terminate.called, false, 'a stopped watchdog must never terminate a closed socket');
+        } finally {
+            clock.restore();
+        }
+    });
+
+    it('starting a fresh watchdog on reconnect clears any prior timer instead of leaking it', function () {
+        const clock = sinon.useFakeTimers();
+        try {
+            const sync = makeWatchdogSync();
+            const ws1 = stubWs();
+            sync._startWatchdog(ws1);
+            const firstTimer = sync._watchdogTimer;
+
+            const ws2 = stubWs();
+            sync._startWatchdog(ws2);
+            assert.notStrictEqual(sync._watchdogTimer, firstTimer, 'a new timer replaces the old one');
+
+            clock.tick(30000);
+            assert.strictEqual(ws1.terminate.called, false, 'the abandoned first socket must not be terminated by a leaked timer');
+        } finally {
+            clock.restore();
+        }
+    });
+});

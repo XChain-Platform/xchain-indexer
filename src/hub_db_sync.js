@@ -81,7 +81,11 @@ const RETRACTION_COLUMNS = {
 function coerceMirrorValue(v) {
     if (typeof v !== 'string') return v;
     if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(v)) return v;
-    let d = new Date(v);
+    // An offset-less ISO string is parsed as LOCAL time by ECMA-262, which would
+    // shift the mirrored value by the node's timezone (per-node mirror drift).
+    // The hub stores UTC, so treat a Z-less/offset-less match as UTC explicitly.
+    let iso = /(?:Z|[+-]\d{2}:?\d{2})$/.test(v) ? v : v + 'Z';
+    let d = new Date(iso);
     if (isNaN(d.getTime())) return v;
     return d.toISOString().slice(0, 19).replace('T', ' ');
 }
@@ -224,6 +228,20 @@ class HubDbSync {
         // apply is still awaiting its DB write. The chain is reset on reconnect
         // (the old connection's in-flight work is abandoned on close anyway).
         this._msgChain = Promise.resolve();
+
+        // Heartbeat-timeout watchdog: the hub broadcasts a {type:'watermark'} frame
+        // every WS_HEARTBEAT_INTERVAL_MS (10s server-side; see HubDbBroadcaster). A
+        // half-open TCP connection (NAT timeout, LB idle drop, hub host power loss)
+        // fires neither 'close' nor 'error' on this socket, so without an explicit
+        // liveness check the mirror can freeze silently for hours. _lastHeartbeatAt
+        // is stamped in _advanceWatermark's caller (the 'watermark' message handler)
+        // and on every fresh connection; _watchdogTimer polls it while the socket is
+        // open and terminates a stalled socket so the existing close-handler
+        // reconnect path self-heals. See review finding 0af6d951.
+        this._lastHeartbeatAt = null;
+        this._watchdogTimer = null;
+        this.watermarkIntervalMs = parseInt(options.watermarkIntervalMs || process.env.HUB_SYNC_WATERMARK_INTERVAL_MS || '10000');
+        this.watermarkTimeoutMs = this.watermarkIntervalMs * 3;
     }
 
     // Advance the stream watermark (monotonic) and re-evaluate every pending
@@ -237,6 +255,32 @@ class HubDbSync {
         this._releaseOracleWaiters();
         this._releaseMatchWaiters();
         this._releaseCallWaiters();
+    }
+
+    // Start the heartbeat-timeout watchdog for the given live socket. Called once
+    // the socket is open; cleared in the 'close'/'error' cleanup so it can never
+    // fire against a dead socket object or leak a timer across reconnects.
+    _startWatchdog(ws) {
+        this._lastHeartbeatAt = Date.now();
+        this._stopWatchdog();
+        this._watchdogTimer = setInterval(() => {
+            if (this._lastHeartbeatAt == null) return;
+            const idleMs = Date.now() - this._lastHeartbeatAt;
+            if (idleMs >= this.watermarkTimeoutMs) {
+                console.warn('HubDbSync: no watermark heartbeat for ' + idleMs +
+                    'ms (timeout ' + this.watermarkTimeoutMs + 'ms); terminating stalled socket');
+                ws.terminate();
+            }
+        }, this.watermarkIntervalMs);
+        if (typeof this._watchdogTimer.unref === 'function') this._watchdogTimer.unref();
+    }
+
+    // Clear the watchdog timer. Safe to call whether or not one is running.
+    _stopWatchdog() {
+        if (this._watchdogTimer) {
+            clearInterval(this._watchdogTimer);
+            this._watchdogTimer = null;
+        }
     }
 
     // Start: open WebSocket and await the hub's ready acknowledgement (confirming
@@ -1249,6 +1293,7 @@ class HubDbSync {
 
             ws.on('open', () => {
                 console.log('HubDbSync: WebSocket connected to ' + wsUrl);
+                this._startWatchdog(ws);
             });
 
             ws.on('message', (data) => {
@@ -1284,6 +1329,10 @@ class HubDbSync {
                 this._msgChain = this._msgChain.then(async () => {
                     try {
                         if (event.type === 'watermark') {
+                            // Liveness: any watermark frame proves the socket is still
+                            // receiving heartbeats, independent of whether the stream
+                            // watermark itself is allowed to advance below.
+                            this._lastHeartbeatAt = Date.now();
                             // Stream-position heartbeat: every row event produced up to ts has
                             // been delivered on this socket. Safe to advance only once the
                             // bootstrap has drained (rows from before the subscription).
@@ -1331,6 +1380,7 @@ class HubDbSync {
 
             ws.on('close', () => {
                 console.log('HubDbSync: WebSocket disconnected, reconnecting in 5s');
+                this._stopWatchdog();
                 this.ws = null;
                 // Rows produced while disconnected won't arrive on the socket;
                 // close the heartbeat gate (and freeze the watermark) until the

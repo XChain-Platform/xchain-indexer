@@ -358,8 +358,13 @@ class Price {
         if(!error && (!data['V1_VALUE'] || !/^[0-9]+(\.[0-9]{1,8})?$/.test(data['V1_VALUE']) || parseFloat(data['V1_VALUE']) <= 0))
             error = 'invalid: VALUE (format)';
 
-        // Validate FEE (decimal between 0 and 1, optional)
-        if(!error && data['V1_FEE'] && (!/^[0-9]+(\.[0-9]+)?$/.test(data['V1_FEE']) || parseFloat(data['V1_FEE']) < 0 || parseFloat(data['V1_FEE']) > 1))
+        // Validate FEE (decimal between 0 and 1, optional). The regex caps precision
+        // at 18 decimals (bcmath width) and the range gate uses exact bcmath
+        // comparators, not parseFloat: an unbounded-precision value like
+        // '1.0000000000000000001' rounds to exactly 1.0 under IEEE-754 and would
+        // slip past a parseFloat `> 1` check while downstream bcmath (bcmul @18)
+        // treats it as > 1, a validator/consensus-math divergence on a money path.
+        if(!error && data['V1_FEE'] && (!/^[0-9]+(\.[0-9]{1,18})?$/.test(data['V1_FEE']) || this.util.bclt(data['V1_FEE'], '0') || this.util.bcgt(data['V1_FEE'], '1')))
             error = 'invalid: FEE (format)';
 
         // Determine validation status

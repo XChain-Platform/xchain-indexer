@@ -523,6 +523,24 @@ describe('Price (PRICE) @regression @tier3', function () {
             await handler.parse(v1Params({ value: '0' }), data, null);
             assert.ok(String(data['STATUS']).includes('VALUE'));
         });
+
+        it('accepts boundary FEE values 0, 1 and a legitimate fraction', async function () {
+            for (const fee of ['0', '1', '0.05', '0.999999999999999999']) {
+                const data = v1Data();
+                await handler.parse(v1Params({ fee }), data, null);
+                assert.strictEqual(data['VALIDATION_STATUS'], 'valid', 'FEE ' + fee + ' should be valid');
+            }
+        });
+
+        it('rejects an unbounded-precision FEE just above 1 (parseFloat rounding bypass)', async function () {
+            // parseFloat('1.0000000000000000001') === 1, so the old parseFloat > 1
+            // gate accepted it; exact bcmath now rejects it.
+            for (const fee of ['1.0000000000000000001', '1.000000000000000000000001']) {
+                const data = v1Data();
+                await handler.parse(v1Params({ fee }), data, null);
+                assert.ok(String(data['STATUS']).includes('FEE'), 'FEE ' + fee + ' should be rejected');
+            }
+        });
     });
 
     it('rejects an unknown VERSION', async function () {

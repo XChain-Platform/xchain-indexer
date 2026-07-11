@@ -9919,18 +9919,31 @@ class Database {
         return staged;
     }
 
-    // Fetch the oldest pending rows for the poller to consider (it applies the
-    // per-row backoff gate in JS). `failed` rows are excluded - they are
-    // terminal.
-    async getPendingHubPushes(limit){
+    // Fetch the oldest DUE pending rows for the poller (`failed` rows are excluded
+    // - they are terminal). The backoff due-time predicate mirrors HubPushQueue's
+    // JS-side _isDue formula (delay = LEAST(base * 2^(attempts-1), max)) directly
+    // in the WHERE clause, so rows still parked in backoff no longer occupy the
+    // LIMIT batch slots. Before this, a row that is pending-but-not-due still
+    // counted against LIMIT, so a hub outage that accumulates more than `limit`
+    // parked rows could starve every newer due row from ever being fetched
+    // (review finding 01178748: head-of-line blocking). `baseBackoffMs` and
+    // `maxBackoffMs` MUST be the same values HubPushQueue uses for _isDue, or the
+    // two due-ness checks drift; the caller passes its own configured values.
+    // The queue keeps _isDue as a cheap belt-and-braces re-check after fetch.
+    async getPendingHubPushes(limit, backoffOpts){
         let max = Number(limit);
         if(!Number.isFinite(max) || max <= 0) max = 50;
+        backoffOpts = backoffOpts || {};
+        let baseSec = Math.max(1, Math.floor((Number(backoffOpts.baseBackoffMs) || 30000) / 1000));
+        let maxSec  = Math.max(1, Math.floor((Number(backoffOpts.maxBackoffMs)  || 600000) / 1000));
         let query = `SELECT id, push_type, payload, attempts, last_attempted_at, status
                      FROM pending_hub_pushes
                      WHERE status='pending'
+                       AND (last_attempted_at IS NULL
+                            OR last_attempted_at <= DATE_SUB(NOW(), INTERVAL LEAST(? * POW(2, GREATEST(attempts - 1, 0)), ?) SECOND))
                      ORDER BY id ASC
                      LIMIT ?`;
-        return await this._poolQuery(query, [max]);
+        return await this._poolQuery(query, [baseSec, maxSec, max]);
     }
 
     // Drop a row once the hub has accepted it (delivered rows aren't retained).

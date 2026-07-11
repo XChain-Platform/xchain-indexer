@@ -318,7 +318,10 @@ module.exports = {
         // mis-applied on testnet/regtest (the importer would reject the block mismatch); only networks
         // with a bundled dump take the fast path, the rest fall back to CSV.
         config['GENESIS_DUMP_PATH']        = process.env.GENESIS_DUMP_PATH || path.join(__dirname, '..', 'data', 'genesis', coin + '-' + network + '-genesis-dump.ndjson.gz');
-        config['GENESIS_DUMP_HASH']        = process.env.XCHAIN_GENESIS_DUMP_HASH || null;
+        // The env override is regtest-only (matching the hub's coins/index.js
+        // $envOverrides gating): on mainnet/testnet the dump hash comes from the
+        // pinned per-coin config, never from a per-node env var.
+        config['GENESIS_DUMP_HASH']        = (network === 'regtest') ? (process.env.XCHAIN_GENESIS_DUMP_HASH || null) : null;
         // Watchdog for the genesis block when it takes the DUMP IMPORT path (measured ~15s for
         // BTC); kept tight (10 min default) so a wedged import is caught fast. The CSV-derivation
         // fallback uses the generous GENESIS_BLOCK_TIMEOUT_MS instead. XChainIndexer picks between

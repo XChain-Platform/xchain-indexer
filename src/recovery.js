@@ -118,7 +118,12 @@ class AnchorRecovery {
             let batchSeq = Number(v1.match_batch_seq);
             try {
                 let archive = await this._verifyBatch(v1);
-                if(!this.dryRun) await this._rebuild(archive, report, v1.network);
+                // The anchor txid is not in the archive blob, but it IS recoverable at
+                // rebuild time: it is the DOGE transaction hash of this v1 ANCHOR action.
+                // Populate it so a recovery-fed mirror matches a mirror-fed one, where the
+                // hub backfills anchor_txid on publish (hub_db_sync COALESCE upgrade path).
+                let anchorTxid = await this._anchorTxid(v1.action_index);
+                if(!this.dryRun) await this._rebuild(archive, report, v1.network, anchorTxid);
                 else {
                     report.matches   += archive.matches.length;
                     report.calls     += (archive.calls || []).length;
@@ -326,7 +331,23 @@ class AnchorRecovery {
 
     // ── Rebuild (latest-status-wins: batches process in batch_seq order) ───────
 
-    async _rebuild(archive, report, network){
+    // Resolve the on-chain transaction hash of an ANCHOR action (actions ->
+    // transactions -> index_transactions). Returns null when unresolvable
+    // (e.g. synthetic fixtures), in which case anchor_txid stays NULL exactly
+    // as a pre-backfill streamed mirror would.
+    async _anchorTxid(actionIndex){
+        try {
+            let rows = await this.db.doQuery(
+                `SELECT it.hash FROM actions a
+                 JOIN transactions t ON t.tx_index = a.tx_index
+                 JOIN index_transactions it ON it.id = t.tx_hash_id
+                 WHERE a.action_index = ? LIMIT 1`,
+                [Number(actionIndex)]);
+            return (rows && rows.length > 0 && rows[0].hash) ? String(rows[0].hash) : null;
+        } catch(e){ return null; }
+    }
+
+    async _rebuild(archive, report, network, anchorTxid = null){
         for(let s of (archive.capability_snapshots || [])){
             await this.db.doQuery(
                 'INSERT IGNORE INTO capability_snapshots (snapshot_block, capability, signing_pubkey, amount, source) VALUES (?, ?, ?, ?, ?)',
@@ -338,8 +359,11 @@ class AnchorRecovery {
                 'SELECT match_id FROM cross_chain_matches WHERE match_id = ? LIMIT 1', [m.match_id]);
             if(existing && existing.length > 0){
                 // Same immutable terms; only the status can move (finalized to retracted).
+                // anchor_txid upgrades NULL->value only, matching the hub mirror's
+                // first-stamp-wins COALESCE semantics (hub_db_sync.js).
                 await this.db.doQuery(
-                    'UPDATE cross_chain_matches SET status = ? WHERE match_id = ?', [m.status, m.match_id]);
+                    'UPDATE cross_chain_matches SET status = ?, anchor_txid = COALESCE(anchor_txid, ?) WHERE match_id = ?',
+                    [m.status, anchorTxid, m.match_id]);
             } else {
                 // Rebuild under the ORIGINAL hub-assigned id as provenance only.
                 // Settlement order is (snapshot_block, match_id), so replay does
@@ -362,12 +386,16 @@ class AnchorRecovery {
                         (${idCol}match_id, snapshot_block, network,
                          a_chain, a_action_index, a_kind, a_tick, a_amount, a_filled_before, a_ownership, a_payout_addr, a_payout_legs,
                          b_chain, b_action_index, b_kind, b_tick, b_amount, b_filled_before, b_ownership, b_payout_addr, b_payout_legs,
-                         effective_time, validator_signatures, status, finalizing_view)
-                     VALUES (${idMark}?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                         effective_time, validator_signatures, status, finalizing_view, anchor_txid)
+                     VALUES (${idMark}?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                     [...idVal, m.match_id, Number(m.snapshot_block), m.network,
                      m.a_chain, Number(m.a_action_index), m.a_kind, m.a_tick, m.a_amount, m.a_filled_before, Number(m.a_ownership), m.a_payout_addr, (m.a_payout_legs != null ? String(m.a_payout_legs) : null),
                      m.b_chain, Number(m.b_action_index), m.b_kind, m.b_tick, m.b_amount, m.b_filled_before, Number(m.b_ownership), m.b_payout_addr, (m.b_payout_legs != null ? String(m.b_payout_legs) : null),
-                     Number(m.effective_time), m.validator_signatures, m.status, Number(m.finalizing_view) || 0]);
+                     Number(m.effective_time), m.validator_signatures, m.status, Number(m.finalizing_view) || 0, anchorTxid]);
+                // Parity carve-out (documented, not recoverable): a/b_push_generation and
+                // cross_chain_calls.push_generation are reorg fences the archive does not
+                // serialize (MATCH_KEYS/CALL_KEYS omit them); recovered rows keep the
+                // schema default 0. Non-consensus: they gate retraction deletes only.
             }
             report.matches++;
         }
@@ -546,8 +574,13 @@ class AnchorRecovery {
         for(let s of sigs){
             let pk = String(s.pubkey).toLowerCase();
             if(seen.has(pk) || !qualified.has(pk)) continue;
+            if(!ed25519.verify(canonical, String(s.sig), pk)) continue;
+            // Mark seen only AFTER the signature verifies, matching anchor.js and the
+            // hub/SDK verifiers: marking on first encounter lets a garbage-then-valid
+            // pair for one qualified validator suppress the real signature and fail
+            // recovery of an on-chain-valid batch (order-dependent quorum under-count).
             seen.add(pk);
-            if(ed25519.verify(canonical, String(s.sig), pk)) validSigners.push(pk);
+            validSigners.push(pk);
         }
         if(weighted)
             return swq.meetsStakeThreshold(validatorSet, validSigners);

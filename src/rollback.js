@@ -731,6 +731,19 @@ class Rollback {
                 for(let table of this.dataTables){
                     query = `DELETE FROM ` + table + ` WHERE action_index >= ?`;
                     args  = [firstActionIndex];
+                    // HUB-RETRACT-2 nested-reorg guard: never purge a prior rollback's durable
+                    // retraction write-ahead rows. They are keyed at that rollback's OWN
+                    // firstActionIndex, so a deeper later reorg's generic purge would delete an
+                    // UNDELIVERED retraction whose closed range [firstOld, lastOld] this reorg's
+                    // replacement rows cannot cover (those actions were already deleted, so the
+                    // new lastActionIndex sits below firstOld) - permanently orphaning
+                    // 'finalized' hub rows if delivery also fails here. Retractions are
+                    // idempotent and generation-fenced, so letting the older rows survive and
+                    // drain later is safe: their fence cannot delete rows re-published after
+                    // this reorg's generation bump.
+                    if(table === 'pending_hub_pushes'){
+                        query = `DELETE FROM pending_hub_pushes WHERE action_index >= ? AND push_type NOT IN ('price_retraction', 'xcall_retraction', 'match_retraction')`;
+                    }
                     await this.indexerDb.doQuery(query, args);
                 }
 
@@ -1243,6 +1256,15 @@ class Rollback {
         for(let r of pairRows)
             affected.add(String(r.validator_pubkey).toLowerCase() + '|' + String(r.provider_id));
 
+        // Scope the two source scans below to the affected pairs' providers. Only
+        // affected (pubkey, provider) pairs are re-inserted, and every source row
+        // contributes counters solely under its own provider_id, so rows for other
+        // providers are pure discarded work. Without this bound each reorg (including
+        // routine depth-1 reorgs) pays a full-history scan + JSON parse of the whole
+        // attests table inside the rollback transaction.
+        let affectedProviders  = [...new Set(pairRows.map(r => String(r.provider_id)))];
+        let providerPlaceholders = affectedProviders.map(() => '?').join(', ');
+
         // Drop the stale rows. Any pair whose entire history was orphaned simply
         // stays gone: a from-genesis replay would never have created its row.
         await this.indexerDb.doQuery(
@@ -1266,8 +1288,9 @@ class Rollback {
         let okResponses = await this.indexerDb.doQuery(
             `SELECT provider_id, validator_signatures, block_index
              FROM attests
-             WHERE version = 1 AND response_status = 'ok' AND validator_signatures IS NOT NULL`,
-            []
+             WHERE version = 1 AND response_status = 'ok' AND validator_signatures IS NOT NULL
+               AND provider_id IN (` + providerPlaceholders + `)`,
+            affectedProviders
         );
         for(let row of okResponses){
             let sigs = [];
@@ -1303,6 +1326,7 @@ class Rollback {
              FROM attests ar
              WHERE ar.version = 0
                AND ar.deadline_block < ?
+               AND ar.provider_id IN (${providerPlaceholders})
                AND ar.request_status <> 'rejected'
                AND NOT EXISTS (
                    SELECT 1 FROM attests r
@@ -1311,7 +1335,7 @@ class Rollback {
                      AND r.status_id = ?
                      AND r.response_status IN ('ok', 'expired')
                )`,
-            [block_index - 1, validId]
+            [block_index - 1, ...affectedProviders, validId]
         );
 
         // Cache the capability set per request block; this must consult the SAME

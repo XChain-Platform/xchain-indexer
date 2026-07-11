@@ -255,13 +255,18 @@ class Dispense {
             // Create a record of this DISPENSE action in the actions table (if it does not already exist)
             dispense['ACTION_INDEX'] = (createActionIndex) ? await this.indexerDb.createActionIndex(data, true) : data['ACTION_INDEX'];
 
-            // Update GIVE_REMAINING amount
-            dispenser['GIVE_REMAINING'] = this.util.bcsub(dispenser['GIVE_REMAINING'], dispense['GIVE_AMOUNT'], 64);
-
             // Determine final status
             let error  = (dispense['STATUS']) ? dispense['STATUS'] : false;
             let status = (error) ? error : 'valid';
             dispense['STATUS'] = status;
+
+            // Update the in-memory GIVE_REMAINING amount, but only for a VALID dispense.
+            // An invalid dispense (e.g. allow/block-list reject) spends no escrow, and the
+            // persisted remaining is recomputed from valid dispenses only; decrementing the
+            // cached counter for rejected dispenses would let a later reader in this loop
+            // see escrow 'spent' by a dispense that never settled.
+            if(status=='valid')
+                dispenser['GIVE_REMAINING'] = this.util.bcsub(dispenser['GIVE_REMAINING'], dispense['GIVE_AMOUNT'], 64);
 
             // Print status message
             console.log("\t DISPENSE : " + dispense['GIVE_AMOUNT'] + ' ' + dispenser['GIVE_TICK'] + ' : ' + dispense['STATUS']);

@@ -129,7 +129,10 @@ describe('Rollback attest_validator_stats recompute @regression @tier3', functio
             // 4. missed_count source: surviving requests that would have expired
             if (/FROM\s+attests/i.test(query) && /NOT\s+EXISTS/i.test(query)) {
                 assert.strictEqual(args[0], N - 1, 'expiry cutoff must be block_index-1');
-                assert.strictEqual(args[1], VALID_ID, 'expiry NOT EXISTS must filter on the valid status id');
+                // args between the cutoff and the trailing status id are the
+                // affected-provider scoping (ar.provider_id IN (...)).
+                assert.strictEqual(args[args.length - 1], VALID_ID, 'expiry NOT EXISTS must filter on the valid status id');
+                assert.ok(args.slice(1, -1).includes(PROV), 'expiry query must be scoped to the affected providers');
                 return expiredReqs;
             }
             // 5. re-insert recomputed rows (INSERT ... ON DUPLICATE KEY UPDATE)

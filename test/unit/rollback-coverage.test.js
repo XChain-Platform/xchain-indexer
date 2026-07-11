@@ -248,4 +248,36 @@ describe('Rollback coverage guard @regression', function () {
                 : undefined
         );
     });
+
+    // Reciprocal cross-repo twin guard. xchain-sync's rollback-coverage.test.js
+    // already locks these files byte-identical against THIS repo, but that guard
+    // only runs in sync CI: an indexer-side edit (e.g. bumping a cap in
+    // swq_source_cap_activation.js) passes all indexer CI and the fork-risk
+    // divergence is only caught when sync CI next runs with a sibling checkout.
+    // Run the same byte-identity assertion here so an unmirrored edit fails CI at
+    // the point of change (the ConsensusPrimitiveConformance pattern). Skips when
+    // the sibling checkout is absent, except where XCHAIN_REQUIRE_SIBLINGS=1
+    // makes green-by-skip impossible (the CI job that checks siblings out).
+    describe('indexer<->sync twin byte-identity (reciprocal guard)', function(){
+        const SYNC_ROOT = process.env.XCHAIN_SYNC_PATH
+            ? path.resolve(process.env.XCHAIN_SYNC_PATH)
+            : path.resolve(__dirname, '..', '..', '..', 'xchain-sync');
+        const REQUIRE_SIBLINGS = process.env.XCHAIN_REQUIRE_SIBLINGS === '1';
+        for(const twin of ['merkle.js', 'state_commitment_activation.js', 'swq_source_cap_activation.js', 'state_key_collation_activation.js', 'tableLifecycle.js']){
+            it(twin + ' is byte-identical across xchain-indexer and xchain-sync (cross-repo twin)', function(){
+                const syncPath = path.join(SYNC_ROOT, 'src', twin);
+                if(!fs.existsSync(syncPath)){
+                    if(REQUIRE_SIBLINGS)
+                        throw new Error('consensus drift guard cannot run: sibling missing at ' + syncPath +
+                            ' (check out xchain-sync or set XCHAIN_SYNC_PATH)');
+                    this.skip();
+                    return;
+                }
+                assert.strictEqual(
+                    fs.readFileSync(path.join(__dirname, '../../src/' + twin), 'utf8'),
+                    fs.readFileSync(syncPath, 'utf8'),
+                    twin + ' drifted between xchain-indexer and xchain-sync; keep the twin byte-identical');
+            });
+        }
+    });
 });

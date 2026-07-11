@@ -115,7 +115,14 @@ class HubPushQueue {
         let resolveDone;
         this._drainDone = new Promise(resolve => { resolveDone = resolve; });
         try {
-            let rows = await this.indexerDb.getPendingHubPushes(this.batchSize);
+            // The due-time predicate is pushed into SQL (db.js getPendingHubPushes) so
+            // parked-in-backoff rows no longer occupy the LIMIT batch slots (review
+            // finding 01178748: head-of-line blocking). Pass the SAME backoff params
+            // used below by _isDue, which stays as a cheap belt-and-braces re-check.
+            let rows = await this.indexerDb.getPendingHubPushes(this.batchSize, {
+                baseBackoffMs: this.baseBackoffMs,
+                maxBackoffMs:  this.maxBackoffMs
+            });
             if(!rows || rows.length === 0) return;
             let now = Date.now();
             for(let row of rows){
