@@ -291,11 +291,13 @@ class Price {
             }
         }
 
-        // Push validated round to hub for cross-chain aggregation. The push is
-        // fire-and-forget so block processing never blocks on hub latency, but a
-        // failure no longer drops the round: it is parked in pending_hub_pushes
-        // for the HubPushQueue poller to retry with backoff. The hub dedupes by
-        // round_number, so a later replay it already has is a safe no-op.
+        // Push validated round to hub for cross-chain aggregation via a durable
+        // transactional outbox (mirrors rollback.js HUB-RETRACT-2). The
+        // pending_hub_pushes row is written through the OPEN block transaction so it
+        // commits atomically with the prices row (and rolls back with it); block
+        // processing never blocks on hub HTTP latency because live delivery is
+        // attempted post-commit. The hub dedupes by round_number, so a later replay
+        // it already has is a safe no-op.
         if(!error && this.hubClient){
             // Source-chain reorg fence (item 5308): stamp the current push generation so the hub
             // row carries it. A later deferred retraction (which carries the rollback's pre-bump
@@ -312,11 +314,14 @@ class Price {
                 block_index:      data['BLOCK_INDEX'],
                 push_generation:  pushGeneration
             };
-            this.hubClient.pushPriceRound(payload).catch(err => {
-                console.warn('PRICE v0: hub push failed, queued for retry:', err.message);
-                this.indexerDb.enqueueHubPush('price_round', payload)
-                    .catch(e => console.error('PRICE v0: failed to enqueue hub push for retry:', e.message));
-            });
+            // Durable outbox: enqueue INSIDE the block transaction (enqueueHubPushTx routes
+            // through the open transaction connection) so a crash between commitTransaction and
+            // the old fire-and-forget .catch handler can no longer silently drop the round, and a
+            // later same-block rollbackTransaction unwinds the row instead of leaving a phantom
+            // push. Stage it for an immediate post-commit live delivery by XChainIndexer; on
+            // success the row is dropped, on failure/crash HubPushQueue drains the survivor.
+            let pushId = await this.indexerDb.enqueueHubPushTx('price_round', payload);
+            this.indexerDb.stageHubPush({ id: pushId, pushType: 'price_round', payload });
         }
 
         // Create action mappings
@@ -369,11 +374,12 @@ class Price {
         await this.indexerDb.createPrice(data);
 
         // Push to hub for cross-chain aggregation (Phase 4 implements full lock
-        // window logic). Fire-and-forget so block processing never blocks on hub
-        // latency, but a failure no longer drops the price: it is parked in
-        // pending_hub_pushes for the HubPushQueue poller to retry with backoff.
-        // The hub dedupes by (source_address, source_chain, action_index), so a
-        // later replay it already has is a safe no-op.
+        // window logic) via the same durable transactional outbox as v0. A v1
+        // oracle_price is a user-submitted action keyed by (source_address,
+        // source_chain, action_index) and is never re-emitted by a later block, so
+        // the old crash-window loss was permanent and non-re-derivable; the outbox
+        // closes it. The hub dedupes by (source_address, source_chain, action_index),
+        // so a later replay it already has is a safe no-op.
         if(!error && this.hubClient){
             // Source-chain reorg fence (item 5308): see _parseV0 above.
             let pushGeneration = await this.indexerDb.getPushGeneration(data['COIN']);
@@ -390,11 +396,13 @@ class Price {
                 action_index:   data['ACTION_INDEX'],
                 push_generation: pushGeneration
             };
-            this.hubClient.pushOraclePrice(payload).catch(err => {
-                console.warn('PRICE v1: hub push failed, queued for retry:', err.message);
-                this.indexerDb.enqueueHubPush('oracle_price', payload)
-                    .catch(e => console.error('PRICE v1: failed to enqueue hub push for retry:', e.message));
-            });
+            // Durable outbox inside the block transaction (see _parseV0). enqueueHubPushTx
+            // commits the pending_hub_pushes row atomically with the prices row; the staged
+            // entry is delivered live post-commit by XChainIndexer and dropped on success, else
+            // HubPushQueue drains the survivor. This is the priority case: unlike a price_round,
+            // a lost oracle_price is never re-derivable.
+            let pushId = await this.indexerDb.enqueueHubPushTx('oracle_price', payload);
+            this.indexerDb.stageHubPush({ id: pushId, pushType: 'oracle_price', payload });
         }
 
         // Create action mappings

@@ -58,6 +58,7 @@ const GUARD_METHOD = 'guard';
 // Cross-chain call (XCALL) host-side guards, mirrored from actions/xcall.js
 // (canonical: xchain-documentation/protocol/constants.js).
 const { XCALL_MIN_GAS, XCALL_MAX_GAS, XCALL_MAX_HOPS } = require('./xcall.js');
+const { rethrowIfInfraFault } = require('./faultGuard.js');
 
 // Amount-bearing fields of every emittable action, mapping each amount param to the param
 // that names the tick it is denominated in (item 5346). processEmission normalizes each to
@@ -394,6 +395,10 @@ class Execute {
                 } catch(emissionError){
                     // Roll back ALL state changes and emissions from this execution
                     await this.indexerDb.rollbackToSavepoint(savepoint);
+                    // An infrastructure fault (VM host fault, transient DB error) is not a
+                    // contract outcome: halt so the block rolls back and retries rather than
+                    // committing a validator-local 'failed' status that would fork the chain.
+                    rethrowIfInfraFault(emissionError);
                     vmError = 'emission failed: ' + emissionError.message;
                     emittedCount = 0;
                     // No refunds on a failed tree: the caller pays its full metered
@@ -808,6 +813,10 @@ class Execute {
             await this.indexerDb.releaseSavepoint(savepoint);
         } catch(emissionError){
             await this.indexerDb.rollbackToSavepoint(savepoint);
+            // An infrastructure fault (VM host fault, transient DB error) is not a
+            // guard decision: halt so the block rolls back and retries rather than
+            // committing a validator-local DENY of a money-bearing action.
+            rethrowIfInfraFault(emissionError);
             return { allow:false, reason:'controller (' + emissionError.message + ')', gasBilled };
         }
 

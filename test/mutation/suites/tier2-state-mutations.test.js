@@ -338,7 +338,7 @@ describe('Mutation : Tier 2: State Management @tier2', function () {
             registry.record({
                 id: 'BCR-400', operator: 'BCR', target: 'Rollback.rollback',
                 mutation: 'block_index >= boundary check', file: 'src/rollback.js',
-                status: usesGte || queriesCaptured.length === 0 ? 'killed' : 'survived',
+                status: usesGte ? 'killed' : 'survived',
                 killedBy: usesGte ? 'SQL uses >= for block_index' : 'rollback executed queries',
                 description: 'Rollback uses >= for block_index (includes the reorg block)',
             });

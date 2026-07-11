@@ -176,6 +176,37 @@ describe('Database transaction lifecycle @regression @tier1', function () {
     });
 });
 
+describe('Database staged hub push buffer @regression @tier1', function () {
+    it('stageHubPush is inert when no per-block buffer is installed', function () {
+        const db = makeDb();
+        // No _stagedHubPushes installed: must not throw and must return nothing to drain.
+        db.stageHubPush({ id: 1, pushType: 'price_round', payload: {} });
+        assert.deepStrictEqual(db.takeStagedHubPushes(), []);
+    });
+
+    it('stageHubPush accumulates and takeStagedHubPushes drains + clears exactly once', function () {
+        const db = makeDb();
+        db._stagedHubPushes = [];
+        db.stageHubPush({ id: 1, pushType: 'price_round', payload: { a: 1 } });
+        db.stageHubPush({ id: 2, pushType: 'oracle_price', payload: { b: 2 } });
+        const first = db.takeStagedHubPushes();
+        assert.strictEqual(first.length, 2);
+        assert.strictEqual(first[0].id, 1);
+        assert.strictEqual(first[1].pushType, 'oracle_price');
+        // Drained once: a second take yields nothing (no duplicate delivery).
+        assert.deepStrictEqual(db.takeStagedHubPushes(), []);
+    });
+
+    it('a fresh per-block buffer discards a prior (rolled-back) block staged rows', function () {
+        const db = makeDb();
+        db._stagedHubPushes = [];
+        db.stageHubPush({ id: 9, pushType: 'price_round', payload: {} });
+        // Simulate the next block start installing a fresh buffer (prior block rolled back).
+        db._stagedHubPushes = [];
+        assert.deepStrictEqual(db.takeStagedHubPushes(), []);
+    });
+});
+
 // doQuery
 describe('Database.doQuery() @regression @tier1', function () {
     it('calls pool.getConnection and conn.query, releases when not in tx', async function () {
@@ -3626,6 +3657,50 @@ describe('Database.getExpiredItems() @regression @tier1', function () {
         const db = dbWithDoQuery([]);
         const result = await db.getExpiredItems(9999999);
         assert.deepStrictEqual(result, []);
+    });
+
+    // Regression for uuid:4fe690ab: the per-open-item edits lookup was an N+1
+    // (one edits query per open item, every block). It is now ONE batched edits
+    // query per type, with identical semantics: ascending-action_index valid
+    // edits, last non-null expiration wins, no-edit items keep base expiration.
+    it('batches the edits lookup (no per-item N+1) and preserves edit semantics', async function () {
+        const db = makeDb();
+        const dq = sinon.stub(db, 'doQuery');
+        // Base UNION: three open orders.
+        dq.onCall(0).resolves([
+            { action_index: 1, expiration: 100, type: 'order' },
+            { action_index: 2, expiration: 100, type: 'order' },
+            { action_index: 3, expiration: 100, type: 'order' },
+        ]);
+        // ONE batched order_edits query: item 1 extended past block_time (two
+        // edits, later one wins), item 2 has a null-expiration edit (ignored),
+        // item 3 has no edits at all.
+        dq.onCall(1).resolves([
+            { item_action_index: 1, expiration: 50 },
+            { item_action_index: 1, expiration: 5000 },
+            { item_action_index: 2, expiration: null },
+        ]);
+        const result = await db.getExpiredItems(200);
+        // Exactly two queries total: base UNION + one batched edits query.
+        assert.strictEqual(dq.callCount, 2);
+        // Item 1 extended to 5000 (not expired); items 2 and 3 stay at 100 (expired).
+        assert.deepStrictEqual(result, [
+            { type: 'order', action_index: 2, expiration: 100 },
+            { type: 'order', action_index: 3, expiration: 100 },
+        ]);
+        // The batched query carries all three item ids plus the 'valid' status arg.
+        const [sql, args] = dq.getCall(1).args;
+        assert.ok(/IN \(\?,\?,\?\)/.test(sql));
+        assert.deepStrictEqual(args, [1, 2, 3, 'valid']);
+    });
+
+    it('issues no edits query at all when no items are open', async function () {
+        const db = makeDb();
+        const dq = sinon.stub(db, 'doQuery');
+        dq.onCall(0).resolves([]);
+        const result = await db.getExpiredItems(200);
+        assert.deepStrictEqual(result, []);
+        assert.strictEqual(dq.callCount, 1);
     });
 });
 

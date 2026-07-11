@@ -62,9 +62,15 @@ class Dispense {
             // Get full dispenser info including GIVE_REMAINING
             let dispenser = await this.indexerDb.getDispenserInfo(this.config['COIN'], action_index, data['BLOCK_TIME']);
 
-            // Only proceed if we have a valid dispenser 
+            // Only proceed if we have a valid dispenser
             if(!error && !dispenser)
                 error = 'invalid: Dispenser unknown'
+
+            // Unknown dispenser: no dispenserInfo entry exists to settle against, so
+            // skip this action_index entirely rather than pushing a dispense record
+            // that references a missing dispenser (no settlement occurs).
+            if(error == 'invalid: Dispenser unknown')
+                continue;
 
             // Store the dispenser info for easy reference
             if(!error)
@@ -231,6 +237,12 @@ class Dispense {
             // Store info on the dispense and dispenser
             let dispense  = dispenses[idx];
             let dispenser = dispenserInfo[dispense['DISPENSER_ACTION_INDEX']];
+
+            // Defensive: dispenserInfo is only populated for known dispensers (see the
+            // 'invalid: Dispenser unknown' skip above). A missing entry here means this
+            // dispense has nothing to settle against, so skip it rather than throwing.
+            if(!dispenser)
+                continue;
 
             // Add Addresses and ticks to the addresses list
             this.util.addAddressTicker(dispense['DESTINATION'], dispenser['GIVE_TICK']);

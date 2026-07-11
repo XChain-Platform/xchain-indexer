@@ -48,6 +48,7 @@ const ed25519 = require('../ed25519.js');
 const swq     = require('../stake_weighted_quorum.js');
 const eq      = require('../equivocation_header.js');
 const { XCALL_MAX_HOPS } = require('./xcall.js');
+const { rethrowIfInfraFault } = require('./faultGuard.js');
 
 // Return payloads are mirrored to every indexer AND ANCHOR-archived on DOGE,
 // so they are hard-capped. Oversize yields status 'payload_too_large' with an
@@ -233,6 +234,13 @@ class Xexec {
             }
         } catch(e){
             await this.indexerDb.rollbackToSavepoint(savepoint);
+            // An infrastructure fault (VM host fault, transient DB error) is not a
+            // cross-chain call result: halt so the block rolls back and retries rather
+            // than relaying a validator-local 'error' verdict (persisted below, outside
+            // the savepoint) that permanently fences the money-bearing call from retry.
+            // Deterministic VM failures never reach here; they are handled at the sibling
+            // branch above via _mapFailureStatus.
+            rethrowIfInfraFault(e);
             resultStatus = 'error';
             console.warn("\t XEXEC : call=" + String(c.call_id).substring(0,16) + '... : execution threw: ' + (e && e.message));
         }

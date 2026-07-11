@@ -44,7 +44,17 @@ function memDb(v1s, v2s) {
         matches, snapshots, calls,
         async doQuery(sql, params) {
             params = params || [];
-            if (sql.startsWith('SELECT * FROM anchor_actions WHERE version = 1')) return v1s;
+            // recovery.run() now joins index_statuses and restricts to status IN
+            // ('valid','unverified'), matching getMaxAnchorBatchSeq. Model that here: a fixture
+            // row's optional `status` property drives the filter (absent = 'valid', so the
+            // pre-existing fixtures are unaffected). A row parsed as invalid is excluded, exactly
+            // as the INNER JOIN + status set drops it against the real schema.
+            if (sql.startsWith('SELECT a.* FROM anchor_actions a')) {
+                return v1s.filter(v => {
+                    let st = (v.status == null) ? 'valid' : String(v.status);
+                    return st === 'valid' || st === 'unverified';
+                });
+            }
             if (sql.startsWith('SELECT chunk_index, archive_b64 FROM anchor_actions WHERE version = 2'))
                 return v2s.filter(c => Number(c.match_batch_seq) === Number(params[0]));
             if (sql.startsWith('INSERT IGNORE INTO capability_snapshots')) {
@@ -165,6 +175,26 @@ describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () 
         assert.strictEqual(report.verified, 2);
         assert.strictEqual(db.matches.length, 1);
         assert.strictEqual(db.matches[0].status, 'retracted');
+    });
+
+    it('skips anchor rows the chain parse recorded as invalid (status filter, not replayed)', async function () {
+        // A v1 the on-chain parse recorded invalid (e.g. insufficient valid signatures, or a stale
+        // CHECKPOINT_SEQ / MATCH_BATCH_SEQ replay) is written to anchor_actions with its archive_b64
+        // intact but a non-'valid' status. recovery.run() must not select it - otherwise a
+        // recovery-fed indexer replays matches/calls a mirror-fed indexer never derived, or a
+        // self-consistent forged archive authenticates itself in. Every sibling reader
+        // (getMaxAnchorBatchSeq) already restricts to status IN ('valid','unverified').
+        let good = buildBatch(0, [rawMatch('m1')], oracleKeys, crossKeys);
+        let bad  = buildBatch(1, [rawMatch('m2')], oracleKeys, crossKeys);
+        bad.v1.status = 'invalid: insufficient valid signatures';
+        let db = memDb([good.v1, bad.v1], []);
+        let report = await new AnchorRecovery(db, quiet).run();
+
+        // Only the valid batch is even considered (the invalid row is filtered out by the query).
+        assert.strictEqual(report.batches, 1);
+        assert.strictEqual(report.verified, 1);
+        assert.strictEqual(db.matches.length, 1);
+        assert.strictEqual(db.matches[0].match_id, 'm1');
     });
 
     it('rejects a corrupted CRC and an incomplete chunk set', async function () {

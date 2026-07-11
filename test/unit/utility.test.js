@@ -24,6 +24,49 @@ describe('Utility @regression @tier1', function () {
         util = new Utility();
     });
 
+    // ─── DEX market refresh: touched-this-block + throttled 24h ageing sweep ──
+    describe('processMarketUpdates()', function () {
+        function fakeDb(touched, stale) {
+            return {
+                getMarkets: sinon.stub().resolves(touched),
+                getStaleMarkets: sinon.stub().resolves(stale),
+                createMarket: sinon.stub().callsFake(async (t1, t2) => Number(String(t1) + String(t2))),
+                getMarketInfo: sinon.stub().callsFake(async (market_id) => ({ market_id })),
+                updateMarketInfo: sinon.stub().resolves(),
+            };
+        }
+
+        it('refreshes only the pairs touched this block (getMarkets called with update=false)', async function () {
+            const db = fakeDb([{ tick1_id: 1, tick2_id: 2 }], []);
+            await util.processMarketUpdates(db, 100, 1700000000);
+            assert.ok(db.getMarkets.calledOnceWithExactly(100, false));
+            assert.strictEqual(db.createMarket.callCount, 1);
+            assert.ok(db.createMarket.calledWithExactly(1, 2));
+            assert.strictEqual(db.updateMarketInfo.callCount, 1);
+        });
+
+        it('runs a bounded throttled ageing sweep over stale markets, using 24h-behind floor', async function () {
+            const db = fakeDb([], [{ id: 11 }, { id: 12 }]);
+            await util.processMarketUpdates(db, 100, 1700000000);
+            // 24h floor passed to getStaleMarkets, bounded by MARKET_STALE_SWEEP_BATCH.
+            assert.ok(db.getStaleMarkets.calledOnce);
+            assert.strictEqual(String(db.getStaleMarkets.firstCall.args[0]), String(1700000000 - 86400));
+            assert.strictEqual(db.getStaleMarkets.firstCall.args[1], Utility.MARKET_STALE_SWEEP_BATCH);
+            // Each stale market is refreshed by market id (not re-created).
+            assert.ok(db.getMarketInfo.calledWith(11));
+            assert.ok(db.getMarketInfo.calledWith(12));
+            assert.strictEqual(db.updateMarketInfo.callCount, 2);
+            assert.ok(db.createMarket.notCalled);
+        });
+
+        it('sets last_updated to the current block_time on every refreshed row', async function () {
+            const db = fakeDb([{ tick1_id: 1, tick2_id: 2 }], [{ id: 99 }]);
+            await util.processMarketUpdates(db, 100, 1700000000);
+            for (const call of db.updateMarketInfo.getCalls())
+                assert.strictEqual(call.args[0].last_updated, 1700000000);
+        });
+    });
+
     // ─── Canonical consensus gas-key resolution (no silent magic-literal fallback) ──
     describe('resolveGuardGasCeiling()', function () {
         it('returns the validated positive integer from GAS_SCHEDULE', function () {

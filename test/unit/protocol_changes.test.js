@@ -430,4 +430,33 @@ describe('ProtocolChanges @regression @tier3', function () {
                 'below the 2.0.0 consensus version the gate is inactive; guard never runs');
         });
     });
+
+    describe('contract-era flag-day cohort single-source-of-truth (consensus)', function () {
+        // These five gates share one coordinated mainnet flag-day and MUST move
+        // together: a wrong value on any one is a ledger fork. Four hard-code the
+        // literal in protocol_changes.js while only VM_BANNED_ASYNC references the
+        // exported constant, so a future edit that updates the constant (or a subset
+        // of the literals) but misses the rest would pass CI and activate coupled
+        // contract-deploy consensus rules at different boundaries. This pins them
+        // equal so any such partial edit fails CI. See review finding uuid:e6069c27.
+        const COHORT = [
+            'DEPLOY_BASE64_CODE',
+            'ISSUANCE_FEE_EMISSION_EXEMPT',
+            'VM_BALANCE_TOKENINFO',
+            'CONTROLLER_GUARD',
+            'VM_BANNED_ASYNC',
+        ];
+
+        it('all five coupled gates share one mainnet_time equal to VM_BANNED_ASYNC_MAINNET_TIME', function () {
+            const anchor = ProtocolChanges.VM_BANNED_ASYNC_MAINNET_TIME;
+            assert.strictEqual(typeof anchor, 'number',
+                'VM_BANNED_ASYNC_MAINNET_TIME must be exported as the cohort anchor');
+            for (const name of COHORT) {
+                const change = pc.changes[name];
+                assert.ok(change, `${name} should be registered`);
+                assert.strictEqual(change.mainnet_time, anchor,
+                    `${name} mainnet_time must equal VM_BANNED_ASYNC_MAINNET_TIME; a partial flag-day edit forks the ledger`);
+            }
+        });
+    });
 });

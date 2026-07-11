@@ -267,6 +267,21 @@ class Send {
             // guard gas ceiling fee (mirrors the cross-contract-call reservation) so
             // a cheap/denied guard never drives GAS negative; the actual metered fee
             // is billed in the valid block below.
+            //
+            // `balances` (all ticks) and `gasBalances` (GAS only) are two independent
+            // in-memory snapshots. When the token being sent IS the gas token they both
+            // track the exact same underlying balance, so reserving/debiting the guard
+            // fee against the separate `gasBalances` snapshot lets AMOUNT and guardFee
+            // each pass their checks against a full, undebited copy of the same balance
+            // and be spent twice. Mirror the airdrop/dividend/sweep pattern: when the
+            // send tick equals the gas tick, reserve and debit the guard fee against a
+            // clone of `balances` that is already pre-debited by this leg's AMOUNT, so a
+            // single balance must cover AMOUNT + guardFee together.
+            let sameTick = !!(gasInfo && tokenInfo && String(gasInfo['TICK_ID']) === String(tokenInfo['TICK_ID']));
+            let baseGasBalances = gasBalances;
+            if(sameTick && !error)
+                baseGasBalances = this.util.debitBalances(Object.assign({}, balances), tokenInfo['TICK_ID'], send['AMOUNT']);
+
             if(!error && tokenInfo){
                 let result = await this.util.maybeRunControllerGuard(this.actions, this.indexerDb, {
                     actionType:  'SEND',
@@ -276,7 +291,7 @@ class Send {
                     amount:      send['AMOUNT'],
                     data:        send,
                     gasInfo:     gasInfo,
-                    gasBalances: gasBalances,
+                    gasBalances: baseGasBalances,
                     seq:         parseInt(idx) || 0
                 });
                 if(result.error)
@@ -293,9 +308,9 @@ class Send {
             // the guard gas, reserved cumulatively after this leg's token guardFee (a shallow clone, so
             // gasBalances only commits in the valid block) so GAS can't be driven negative.
             if(!error && !this.util.isNull(send['SOURCE'])){
-                let reserveBalances = gasBalances;
+                let reserveBalances = baseGasBalances;
                 if(gasInfo && this.util.bcgt(guardFee, 0))
-                    reserveBalances = this.util.debitBalances(Object.assign({}, gasBalances), gasInfo['TICK_ID'], guardFee);
+                    reserveBalances = this.util.debitBalances(Object.assign({}, baseGasBalances), gasInfo['TICK_ID'], guardFee);
                 let outbound = await this.util.maybeRunAddressControllerGuard(this.actions, this.indexerDb, {
                     actionType:  'SEND',
                     actionClass: 'transfer',
@@ -322,9 +337,9 @@ class Send {
             // block), keeping the two-guard reservation cumulative so GAS can't be driven negative.
             // DEX/dispense deliveries are solicited pulls, not direct sends, so they are never gated.
             if(!error && !this.util.isNull(send['DESTINATION'])){
-                let reserveBalances = gasBalances;
+                let reserveBalances = baseGasBalances;
                 if(gasInfo && this.util.bcgt(guardFee, 0))
-                    reserveBalances = this.util.debitBalances(Object.assign({}, gasBalances), gasInfo['TICK_ID'], guardFee);
+                    reserveBalances = this.util.debitBalances(Object.assign({}, baseGasBalances), gasInfo['TICK_ID'], guardFee);
                 let recip = await this.util.maybeRunAddressControllerGuard(this.actions, this.indexerDb, {
                     actionType:  'SEND',
                     actionClass: 'transfer',
@@ -379,8 +394,16 @@ class Send {
                 if(this.util.bcgt(guardFee, 0)){
                     debits.push([gasTick, guardFee, send['SOURCE']]);
                     this.util.addAddressTicker(send['SOURCE'], gasTick);
-                    if(gasInfo)
-                        gasBalances = this.util.debitBalances(gasBalances, gasInfo['TICK_ID'], guardFee);
+                    if(gasInfo){
+                        // When the sent tick IS the gas tick, debit the guard fee out of the same
+                        // `balances` snapshot that AMOUNT was already debited from above (line ~349),
+                        // so AMOUNT + guardFee together are enforced against one balance. Otherwise
+                        // (unchanged) debit the independent `gasBalances` snapshot.
+                        if(sameTick)
+                            balances = this.util.debitBalances(balances, gasInfo['TICK_ID'], guardFee);
+                        else
+                            gasBalances = this.util.debitBalances(gasBalances, gasInfo['TICK_ID'], guardFee);
+                    }
                 }
             }
         }

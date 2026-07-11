@@ -64,15 +64,21 @@ class Dispenser_Expire {
                 escrows = [];
 
             if(Number(dispenser['GIVE_OWNERSHIP']||0) == 1){
-                // Ownership dispenser expire: release the escrow gate. tokens.owner_id is
-                // unchanged (ownership stays with the seller).
-                await this.indexerDb.clearTokenEscrow(dispenser['GIVE_TICK']);
-            } else {
+                // Ownership dispenser expire: release the escrow gate, but only if it is
+                // still held by this dispenser. Mirrors dispenser_close.js, which gates
+                // the same release on getTokenEscrow(...) === ACTION_INDEX so a stale or
+                // already-cleared gate is never touched. tokens.owner_id is unchanged
+                // (ownership stays with the seller) on this expiry path.
+                let currentEscrow = await this.indexerDb.getTokenEscrow(dispenser['GIVE_TICK']);
+                if(Number(currentEscrow) === Number(dispenser['ACTION_INDEX']))
+                    await this.indexerDb.clearTokenEscrow(dispenser['GIVE_TICK']);
+            } else if(this.util.bcgt(dispenser['GIVE_REMAINING'], 0)){
                 // Balance dispenser: debit GIVE_TICK from escrows and credit it to the SOURCE address.
                 // Negate via bcsub, not JS unary minus: -GIVE_REMAINING coerces the 64-precision
                 // bignumber string to a float and silently loses digits past ~15 sig figs, de-syncing
                 // the escrow debit from the full-precision credit below (mirrors dispense.js). Negate
-                // at the same precision (64).
+                // at the same precision (64). Guarded on GIVE_REMAINING > 0, mirroring
+                // dispenser_close.js, so an empty balance dispenser does not push a zero-value pair.
                 escrows.push([dispenser['GIVE_TICK'], this.util.bcsub(0, dispenser['GIVE_REMAINING'], 64), dispenser['SOURCE']]);
                 credits.push([dispenser['GIVE_TICK'],  dispenser['GIVE_REMAINING'], dispenser['SOURCE']]);
             }

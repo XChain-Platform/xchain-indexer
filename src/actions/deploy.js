@@ -36,6 +36,7 @@
 const crypto = require('crypto');
 const DeployChunk = require('./deploy_chunk.js');
 const ProviderRegistry = require('../attestation/providerRegistry.js');
+const { rethrowIfInfraFault } = require('./faultGuard.js');
 
 // Per-provider deadline windows, injected into the VM gateway so a constructor's
 // attestation.request() rejects an over-limit deadlineBlocks at call time rather
@@ -641,6 +642,10 @@ class Deploy {
                 await this.indexerDb.releaseSavepoint(savepoint);
             } catch(e){
                 await this.indexerDb.rollbackToSavepoint(savepoint);
+                // An infrastructure fault (VM host fault, transient DB error) is not a
+                // constructor outcome: halt so the block rolls back and retries rather than
+                // deleting the contract and committing a validator-local 'invalid' deploy.
+                rethrowIfInfraFault(e);
                 // Constructor state/emission processing failed. The whole deployment
                 // fails (no refunds; the deployer pays full gas).
                 nestedGasUnused = 0;

@@ -30,54 +30,61 @@ describe('Mapper @regression @tier3', function () {
         indexer.util.addAddressTicker('1AddrAAAAAAAAAAAAAAAAAAAAAAAAAAAAA');
         const data = createBaseData({ ACTION: 'SEND', ACTION_INDEX: 1, STATUS: 'valid' });
         await mapper.createMappings(data);
-        assert.ok(indexer.indexerDb.createActionMapping.calledWith(1, 'address', '1AddrAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'));
+        assert.ok(indexer.indexerDb.createActionMappings.calledWith(1, 'address', ['1AddrAAAAAAAAAAAAAAAAAAAAAAAAAAAAA']));
     });
 
-    it('creates address mappings for multiple tracked addresses', async function () {
+    it('batches all tracked addresses into a single createActionMappings call', async function () {
         indexer.util.addAddressTicker('1AddrAAAAAAAAAAAAAAAAAAAAAAAAAAAAA');
         indexer.util.addAddressTicker('1AddrBBBBBBBBBBBBBBBBBBBBBBBBBBBB');
         const data = createBaseData({ ACTION: 'SEND', ACTION_INDEX: 1, STATUS: 'valid' });
         await mapper.createMappings(data);
-        const addressCalls = indexer.indexerDb.createActionMapping.args.filter(a => a[1] === 'address');
-        assert.strictEqual(addressCalls.length, 2);
+        const addressCalls = indexer.indexerDb.createActionMappings.args.filter(a => a[1] === 'address');
+        assert.strictEqual(addressCalls.length, 1, 'address mappings should be written in one batched call');
+        assert.deepStrictEqual(addressCalls[0][2], ['1AddrAAAAAAAAAAAAAAAAAAAAAAAAAAAAA', '1AddrBBBBBBBBBBBBBBBBBBBBBBBBBBBB']);
     });
 
     it('creates tick mapping for a tracked ticker', async function () {
         indexer.util.addAddressTicker('1AddrAAAAAAAAAAAAAAAAAAAAAAAAAAAAA', 'TEST');
         const data = createBaseData({ ACTION: 'SEND', ACTION_INDEX: 1, STATUS: 'valid' });
         await mapper.createMappings(data);
-        assert.ok(indexer.indexerDb.createActionMapping.calledWith(1, 'tick', 'TEST'));
+        assert.ok(indexer.indexerDb.createActionMappings.calledWith(1, 'tick', ['TEST']));
     });
 
-    it('creates tick mappings for multiple tickers on the same address', async function () {
+    it('batches all tickers on the same address into a single createActionMappings call', async function () {
         indexer.util.addAddressTicker('1AddrAAAAAAAAAAAAAAAAAAAAAAAAAAAAA', ['TICK1', 'TICK2']);
         const data = createBaseData({ ACTION: 'SEND', ACTION_INDEX: 1, STATUS: 'valid' });
         await mapper.createMappings(data);
-        const tickCalls = indexer.indexerDb.createActionMapping.args.filter(a => a[1] === 'tick');
-        assert.strictEqual(tickCalls.length, 2);
+        const tickCalls = indexer.indexerDb.createActionMappings.args.filter(a => a[1] === 'tick');
+        assert.strictEqual(tickCalls.length, 1, 'tick mappings should be written in one batched call');
+        assert.deepStrictEqual(tickCalls[0][2], ['TICK1', 'TICK2']);
     });
 
-    it('does not create duplicate address mappings', async function () {
+    it('does not include duplicate addresses in the batched call', async function () {
         indexer.util.addAddressTicker('1AddrAAAAAAAAAAAAAAAAAAAAAAAAAAAAA', 'TICK1');
         indexer.util.addAddressTicker('1AddrAAAAAAAAAAAAAAAAAAAAAAAAAAAAA', 'TICK2');
         const data = createBaseData({ ACTION: 'SEND', ACTION_INDEX: 1, STATUS: 'valid' });
         await mapper.createMappings(data);
-        const addressCalls = indexer.indexerDb.createActionMapping.args.filter(a => a[1] === 'address');
+        const addressCalls = indexer.indexerDb.createActionMappings.args.filter(a => a[1] === 'address');
         assert.strictEqual(addressCalls.length, 1);
+        assert.deepStrictEqual(addressCalls[0][2], ['1AddrAAAAAAAAAAAAAAAAAAAAAAAAAAAAA']);
     });
 
-    it('does not create duplicate tick mappings', async function () {
+    it('does not include duplicate ticks in the batched call', async function () {
         indexer.util.addAddressTicker('1AddrAAAAAAAAAAAAAAAAAAAAAAAAAAAAA', 'SAME_TICK');
         indexer.util.addAddressTicker('1AddrBBBBBBBBBBBBBBBBBBBBBBBBBBBB', 'SAME_TICK');
         const data = createBaseData({ ACTION: 'SEND', ACTION_INDEX: 1, STATUS: 'valid' });
         await mapper.createMappings(data);
-        const tickCalls = indexer.indexerDb.createActionMapping.args.filter(a => a[1] === 'tick' && a[2] === 'SAME_TICK');
+        const tickCalls = indexer.indexerDb.createActionMappings.args.filter(a => a[1] === 'tick');
         assert.strictEqual(tickCalls.length, 1);
+        const tickValues = tickCalls[0][2].filter(v => v === 'SAME_TICK');
+        assert.strictEqual(tickValues.length, 1);
     });
 
-    it('does nothing when addresses list is empty', async function () {
+    it('passes an empty list to createActionMappings when addresses list is empty', async function () {
         const data = createBaseData({ ACTION: 'SEND', ACTION_INDEX: 1, STATUS: 'valid' });
         await mapper.createMappings(data);
+        assert.ok(indexer.indexerDb.createActionMappings.calledWith(1, 'address', []));
+        assert.ok(indexer.indexerDb.createActionMappings.calledWith(1, 'tick', []));
         assert.ok(indexer.indexerDb.createActionMapping.notCalled);
     });
 

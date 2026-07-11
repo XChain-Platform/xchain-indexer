@@ -42,24 +42,23 @@ class Mapper {
             tick   : []
         };
 
-        // Loop through address->tickers mappings list
+        // Collect every address/tick to map first, then write each group in one batched
+        // INSERT instead of a serial per-address/per-tick round-trip - recipient-scaling
+        // actions (DIVIDEND/AIRDROP/CALLBACK) can carry thousands of addresses here.
         for(let address in list){
 
-            // Create action_index->address mappings
-            if(!this.util.isNull(address) && !mapped.address.includes(address)){
+            if(!this.util.isNull(address) && !mapped.address.includes(address))
                 mapped.address.push(address);
-                await this.indexerDb.createActionMapping(action_index, 'address', address);
-            }
 
-            // Create action_index->tick mappings
             for(let tick of list[address]){
-                if(!this.util.isNull(tick) && !mapped.tick.includes(tick)){
+                if(!this.util.isNull(tick) && !mapped.tick.includes(tick))
                     mapped.tick.push(tick);
-                    await this.indexerDb.createActionMapping(action_index, 'tick', tick);
-                }
             }
 
         }
+
+        await this.indexerDb.createActionMappings(action_index, 'address', mapped.address);
+        await this.indexerDb.createActionMappings(action_index, 'tick', mapped.tick);
 
         // Handle creating link mappings 
         // TODO : Add support for verifying links across multiple COIN networks in xchain-hub

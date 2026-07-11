@@ -260,6 +260,21 @@ describe('Anchor (ANCHOR) @regression @tier3', function () {
         assert.ok(String(data['STATUS']).startsWith('invalid: insufficient valid signatures (2/4)'));
     });
 
+    it('a garbage-then-valid duplicate for one signer still passes (seen marked AFTER verify; hub/SDK/explorer/sync parity)', async function () {
+        // N=2 validators -> quorum 2, so BOTH A and B must count. The wire sig list is
+        // attacker-influenceable: prepend an INVALID entry for B before its genuine one.
+        // Marking "seen" on first encounter (the pre-fix order) would suppress B's real
+        // signature and reject a legitimately-quorate anchor (order-dependent under-count),
+        // disagreeing with the hub finalizer + SDK/explorer/sync verifiers on the same bytes.
+        indexer.indexerDb.getValidatorsByCapability.resolves(
+            [PUBKEY_A, PUBKEY_B].map(pk => ({ pubkey: pk, amount: '1' })));
+        const BADSIG = '0'.repeat(128);
+        verifyStub.callsFake((canon, sig, pk) => sig === SIG);
+        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 0, COIN: 'DOGE' });
+        await handler.parse(v0Params({ sigs: [[PUBKEY_A, SIG], [PUBKEY_B, BADSIG], [PUBKEY_B, SIG]] }), data, null);
+        assert.strictEqual(data['STATUS'], 'valid');
+    });
+
     it('stores as unverified when no oracle_publish snapshot is mirrored locally', async function () {
         indexer.indexerDb.getValidatorsByCapability.resolves([]);
         let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 0, COIN: 'DOGE' });

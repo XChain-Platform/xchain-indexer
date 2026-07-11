@@ -562,6 +562,23 @@ describe('Rollback @regression @tier3', function () {
             `Expected at least ${rollback.blockTables.length} block_index DELETE queries, got ${blockDeletes.length}`);
     });
 
+    it('issues a block_index DELETE for every table in blockTables (set coverage, not just a count)', async function () {
+        // A raw count check (see the test above) passes even if one table is deleted
+        // N times while another is skipped entirely; this asserts the actual SET of
+        // deleted tables covers every declared blockTables entry.
+        indexer.indexerDb.doQuery.resolves([]);
+        await rollback.rollback(100);
+        const queries = indexer.indexerDb.doQuery.args.map(a => a[0]).filter(q => q && typeof q === 'string');
+        const deletedTables = new Set();
+        for (const q of queries) {
+            const m = q.match(/DELETE FROM\s+`?(\w+)`?\s+WHERE\s+(?:\w+\.)?block_index/i);
+            if (m) deletedTables.add(m[1]);
+        }
+        const missing = rollback.blockTables.filter(t => !deletedTables.has(t));
+        assert.deepStrictEqual(missing, [],
+            `Every blockTables entry must appear in a block_index DELETE; missing: ${missing.join(', ')}`);
+    });
+
     it('issues DELETE queries for dataTables when firstActionIndex exists', async function () {
         // First query returns an action_index so DELETE phase runs
         indexer.indexerDb.doQuery.onFirstCall().resolves([{ action_index: 50 }]);
@@ -570,6 +587,24 @@ describe('Rollback @regression @tier3', function () {
         const queries = indexer.indexerDb.doQuery.args.map(a => a[0]);
         const actionDeletes = queries.filter(q => q && q.includes('DELETE FROM') && q.includes('action_index'));
         assert.ok(actionDeletes.length > 0, 'Expected action_index DELETE queries when firstActionIndex exists');
+    });
+
+    it('issues an action_index DELETE for every table in dataTables (set coverage, not just a nonzero count)', async function () {
+        // A bare "length > 0" check (see the test above) passes even if 79 of 80
+        // dataTables are silently skipped; this asserts the SET of tables actually
+        // deleted covers every declared dataTables entry.
+        indexer.indexerDb.doQuery.onFirstCall().resolves([{ action_index: 50 }]);
+        indexer.indexerDb.doQuery.resolves([]);
+        await rollback.rollback(100);
+        const queries = indexer.indexerDb.doQuery.args.map(a => a[0]).filter(q => q && typeof q === 'string');
+        const deletedTables = new Set();
+        for (const q of queries) {
+            const m = q.match(/DELETE FROM\s+`?(\w+)`?\s+WHERE\s+(?:\w+\.)?action_index/i);
+            if (m) deletedTables.add(m[1]);
+        }
+        const missing = rollback.dataTables.filter(t => !deletedTables.has(t));
+        assert.deepStrictEqual(missing, [],
+            `Every dataTables entry must appear in an action_index DELETE; missing: ${missing.join(', ')}`);
     });
 
     // ─── Post-rollback updates ────────────────────────────────────────

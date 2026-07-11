@@ -605,6 +605,18 @@ describe('Database.getBlockIndex() decoder reorg parsing @regression @tier1', fu
         const result = await db.getBlockIndex.call(db, 'decoder', 'reorg');
         assert.strictEqual(result, null);
     });
+
+    it('does not throw when row.data is malformed JSON (guarded JSON.parse)', async function () {
+        db.doQuery.resolves([{ data: 'not-json{' }]);
+        const result = await db.getBlockIndex.call(db, 'decoder', 'reorg');
+        assert.strictEqual(result, null);
+    });
+
+    it('does not throw when row.data parses to null (typeof null === "object" trap)', async function () {
+        db.doQuery.resolves([{ data: 'null' }]);
+        const result = await db.getBlockIndex.call(db, 'decoder', 'reorg');
+        assert.strictEqual(result, null);
+    });
 });
 
 // ---------------------------------------------------------------------------
@@ -724,7 +736,7 @@ describe('Database reorg identity detection @regression @tier1', function () {
     });
 
     it('getReorgsSince returns every reorg after the given id, oldest first, each with its lowest block', async function () {
-        db.doQuery.resolves([
+        db.doQueryStrict.resolves([
             { id: 6, data: JSON.stringify([{ block_index: 200, block_hash: 'h200' }]) },
             { id: 7, data: JSON.stringify([{ block_index: 150, block_hash: 'h150' }, { block_index: 152, block_hash: 'h152' }]) },
         ]);
@@ -734,22 +746,22 @@ describe('Database reorg identity detection @regression @tier1', function () {
             { id: 7, block_index: 150 },
         ]);
         // The query must filter by id > afterId, not return only the latest.
-        assert.match(db.doQuery.firstCall.args[0], /id > \?/);
-        assert.deepStrictEqual(db.doQuery.firstCall.args[1], [5]);
+        assert.match(db.doQueryStrict.firstCall.args[0], /id > \?/);
+        assert.deepStrictEqual(db.doQueryStrict.firstCall.args[1], [5]);
     });
 
     it('getReorgsSince(null) returns all reorg events (no afterId filter)', async function () {
-        db.doQuery.resolves([{ id: 1, data: JSON.stringify([{ block_index: 10, block_hash: 'h10' }]) }]);
+        db.doQueryStrict.resolves([{ id: 1, data: JSON.stringify([{ block_index: 10, block_hash: 'h10' }]) }]);
         const result = await db.getReorgsSince.call(db, null);
         assert.deepStrictEqual(result, [{ id: 1, block_index: 10 }]);
-        assert.doesNotMatch(db.doQuery.firstCall.args[0], /id > \?/);
+        assert.doesNotMatch(db.doQueryStrict.firstCall.args[0], /id > \?/);
     });
 
     it('exposes the DEEPEST block across two unprocessed reorgs when the newer one is shallower', async function () {
         // The bug: getLatestReorg returns only event 7 (block 200); rolling back to 200
         // leaves orphaned rows from event 6's deeper reorg at block 100. getReorgsSince
         // surfaces both so the caller can roll back to the minimum (deepest) block.
-        db.doQuery.resolves([
+        db.doQueryStrict.resolves([
             { id: 6, data: JSON.stringify([{ block_index: 100, block_hash: 'h100' }]) },
             { id: 7, data: JSON.stringify([{ block_index: 200, block_hash: 'h200' }]) },
         ]);
@@ -758,6 +770,44 @@ describe('Database reorg identity detection @regression @tier1', function () {
         assert.strictEqual(minBlock, 100, 'deepest block across all unprocessed reorgs');
         const maxId = reorgs.reduce((m, r) => Math.max(m, r.id), 0);
         assert.strictEqual(maxId, 7, 'cursor advances to the newest decoder event id');
+    });
+
+    // ── Guarded / malformed payload handling (hardening: skip, never null-index) ──
+
+    it('getReorgsSince skips a row whose data is non-JSON garbage instead of throwing', async function () {
+        db.doQueryStrict.resolves([
+            { id: 6, data: 'not-json{' },
+            { id: 7, data: JSON.stringify([{ block_index: 150, block_hash: 'h150' }]) },
+        ]);
+        const result = await db.getReorgsSince.call(db, 5);
+        // The garbage row must be dropped, not turned into { id: 6, block_index: null }.
+        assert.deepStrictEqual(result, [{ id: 7, block_index: 150 }]);
+        assert.ok(result.every(r => r.block_index !== null), 'no entry may carry a null block_index');
+    });
+
+    it('getReorgsSince skips a row whose payload yields no numeric block_index', async function () {
+        db.doQueryStrict.resolves([
+            { id: 6, data: JSON.stringify([]) },                    // empty array: no block found
+            { id: 7, data: JSON.stringify([{ block_index: 150 }]) },
+        ]);
+        const result = await db.getReorgsSince.call(db, 5);
+        assert.deepStrictEqual(result, [{ id: 7, block_index: 150 }]);
+        assert.ok(result.every(r => r.block_index !== null), 'no entry may carry a null block_index');
+    });
+
+    it('getReorgsSince skips a row whose data parses to null', async function () {
+        db.doQueryStrict.resolves([
+            { id: 6, data: 'null' },
+            { id: 7, data: JSON.stringify([{ block_index: 150 }]) },
+        ]);
+        const result = await db.getReorgsSince.call(db, 5);
+        assert.deepStrictEqual(result, [{ id: 7, block_index: 150 }]);
+    });
+
+    it('getLatestReorg does not throw on malformed row.data and returns a null block_index', async function () {
+        db.doQuery.resolves([{ id: 9, data: 'not-json{' }]);
+        const result = await db.getLatestReorg.call(db);
+        assert.deepStrictEqual(result, { id: 9, block_index: null });
     });
 });
 
@@ -1045,5 +1095,223 @@ describe('Database.getContractState() adversarial keys @regression @tier1', func
         db = makeDb([{ state_key: 'legacy', state_value: 'not-json' }]);
         const state = await db.getContractState.call(db, 1);
         assert.strictEqual(state.legacy, 'not-json');
+    });
+});
+
+// ---------------------------------------------------------------------------
+// describe: getBlockTime (memoization)
+//
+// block_time is constant per block_index but protocol_changes.isEnabled() was
+// re-querying it once per action-handler call (several times per block). This
+// guards the single-entry memo cache: repeated calls for the same block_index
+// must hit the cache instead of re-querying, while a different block_index
+// still triggers a fresh query and returns the correct (not stale) value.
+// ---------------------------------------------------------------------------
+describe('Database.getBlockTime() memoization @regression @tier1', function () {
+    let db;
+
+    beforeEach(function () {
+        db = {
+            // getBlockTime reads via doQueryStrict (throw-on-fault, finding #898) so a
+            // transient decoder-DB fault propagates to the fail-loud protocol-changes catch
+            // instead of collapsing to the `false` sentinel and silently disabling gates.
+            doQueryStrict: sinon.stub().resolves([]),
+            _blockTimeCache: { block_index: null, block_time: null },
+            getBlockTime: Database.prototype.getBlockTime,
+        };
+    });
+
+    it('queries the DB on the first call for a block_index', async function () {
+        db.doQueryStrict.resolves([{ block_time: 1700000000 }]);
+        const result = await db.getBlockTime.call(db, 100);
+        assert.strictEqual(result, 1700000000);
+        assert.strictEqual(db.doQueryStrict.callCount, 1);
+    });
+
+    it('serves repeated calls for the same block_index from cache (no extra query)', async function () {
+        db.doQueryStrict.resolves([{ block_time: 1700000000 }]);
+        await db.getBlockTime.call(db, 100);
+        await db.getBlockTime.call(db, 100);
+        await db.getBlockTime.call(db, 100);
+        assert.strictEqual(db.doQueryStrict.callCount, 1, 'only the first call should hit the DB');
+    });
+
+    it('returns the identical value on cached calls as the original query', async function () {
+        db.doQueryStrict.resolves([{ block_time: 1700000123 }]);
+        const first  = await db.getBlockTime.call(db, 100);
+        const second = await db.getBlockTime.call(db, 100);
+        assert.strictEqual(second, first);
+        assert.strictEqual(second, 1700000123);
+    });
+
+    it('re-queries when block_index changes (last-block-wins, cache does not grow unbounded)', async function () {
+        db.doQueryStrict.onCall(0).resolves([{ block_time: 1111 }]);
+        db.doQueryStrict.onCall(1).resolves([{ block_time: 2222 }]);
+        const first  = await db.getBlockTime.call(db, 100);
+        const second = await db.getBlockTime.call(db, 101);
+        assert.strictEqual(first, 1111);
+        assert.strictEqual(second, 2222);
+        assert.strictEqual(db.doQueryStrict.callCount, 2);
+    });
+
+    it('does not serve a stale value after the block_index advances then returns', async function () {
+        db.doQueryStrict.onCall(0).resolves([{ block_time: 1111 }]);
+        db.doQueryStrict.onCall(1).resolves([{ block_time: 2222 }]);
+        await db.getBlockTime.call(db, 100);
+        await db.getBlockTime.call(db, 101);
+        db.doQueryStrict.resolves([{ block_time: 1111 }]);
+        const third = await db.getBlockTime.call(db, 100);
+        assert.strictEqual(third, 1111);
+        assert.strictEqual(db.doQueryStrict.callCount, 3, 'revisiting block 100 after 101 must re-query, not read a stale entry');
+    });
+
+    it('returns false when the block row is not found (unchanged from unmemoized behavior)', async function () {
+        db.doQueryStrict.resolves([]);
+        const result = await db.getBlockTime.call(db, 999);
+        assert.strictEqual(result, false);
+    });
+
+    it('rethrows an infrastructure fault instead of returning false, and does not cache it', async function () {
+        const fault = new Error('lock wait timeout');
+        fault.errno = 1205;
+        db.doQueryStrict.onCall(0).rejects(fault);
+        db.doQueryStrict.onCall(1).resolves([{ block_time: 1700009999 }]);
+        await assert.rejects(() => db.getBlockTime.call(db, 100), /lock wait timeout/);
+        // Not memoized: the retry re-queries and returns the real value.
+        const retried = await db.getBlockTime.call(db, 100);
+        assert.strictEqual(retried, 1700009999);
+        assert.strictEqual(db.doQueryStrict.callCount, 2);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// describe: getDecoderBlockData (amount unit conflation regression)
+//
+// transactions.amount (BIGINT satoshis) and transaction_outputs.amount (VARCHAR
+// decimal coin) must never be conflated. The SELECT alias is coin_amount (not
+// output_amount) and row.amount is assigned unconditionally from it, so a tx
+// with no stored output can never fall back to a raw satoshi integer.
+// ---------------------------------------------------------------------------
+describe('Database.getDecoderBlockData() amount unit conflation @regression @tier1', function () {
+    let db;
+
+    beforeEach(function () {
+        db = {
+            util: new (require('../../src/utility'))(),
+            doQuery: sinon.stub().resolves([]),
+            // getDecoderBlockData reads via doQueryStrict (throw-on-fault) so a transient
+            // decoder-DB read fault aborts the block instead of committing an empty block.
+            doQueryStrict: sinon.stub().resolves([]),
+            getDecoderBlockData: Database.prototype.getDecoderBlockData,
+        };
+    });
+
+    it('on the no-output path, row.amount is null rather than a satoshi integer', async function () {
+        // No transaction_outputs row joined: coin_amount is NULL, vout/output_destination NULL.
+        db.doQueryStrict.resolves([{
+            data: '{}', raw_data: '', tx_hash: 'txhash1', source: 'addrA', destination: 'addrB',
+            fee: 0, block_index: 100, block_time: 1700000000,
+            vout: null, coin_amount: null, output_destination: null, source_pubkey: null,
+        }]);
+        const rows = await db.getDecoderBlockData.call(db, 100);
+        assert.strictEqual(rows.length, 1);
+        assert.strictEqual(rows[0].amount, null, 'COIN_AMOUNT must never fall back to a satoshi integer');
+        assert.strictEqual(rows[0].coin_amount, undefined, 'the raw alias field must be deleted off the emitted row');
+    });
+
+    it('carries the decimal-coin string through as row.amount when an output is stored', async function () {
+        db.doQueryStrict.resolves([{
+            data: '{}', raw_data: '', tx_hash: 'txhash2', source: 'addrA', destination: 'addrB',
+            fee: 0, block_index: 100, block_time: 1700000000,
+            vout: 0, coin_amount: '0.00005000', output_destination: 'addrC', source_pubkey: null,
+        }]);
+        const rows = await db.getDecoderBlockData.call(db, 100);
+        assert.strictEqual(rows[0].amount, '0.00005000');
+    });
+});
+
+// ---------------------------------------------------------------------------
+// describe: createActionMappings (batched multi-row insert)
+//
+// mapper.js used to call createActionMapping once per address/tick (O(recipients)
+// serial INSERTs for DIVIDEND/AIRDROP/CALLBACK). createActionMappings resolves
+// every value's id then writes all rows for one (action_index, type) with as
+// few round-trips as possible, preserving createActionMapping's existing-row
+// de-duplication and dangling-reference skip semantics.
+// ---------------------------------------------------------------------------
+describe('Database.createActionMappings() batched insert @regression @tier1', function () {
+    let db;
+
+    beforeEach(function () {
+        db = {
+            util: { isNull: v => v === null || v === undefined },
+            createTicker: sinon.stub(),
+            createAddress: sinon.stub(),
+            doQuery: sinon.stub(),
+            createActionMappings: Database.prototype.createActionMappings,
+        };
+    });
+
+    it('does nothing for an empty list (no DB calls)', async function () {
+        await db.createActionMappings.call(db, 1, 'address', []);
+        assert.strictEqual(db.createAddress.callCount, 0);
+        assert.strictEqual(db.doQuery.callCount, 0);
+    });
+
+    it('writes all new addresses in a single batched INSERT', async function () {
+        db.createAddress.callsFake(async (a) => ({ addrA: 10, addrB: 11, addrC: 12 }[a]));
+        db.doQuery.onFirstCall().resolves([]); // exists-check: none exist yet
+        db.doQuery.onSecondCall().resolves([]); // INSERT
+        await db.createActionMappings.call(db, 5, 'address', ['addrA', 'addrB', 'addrC']);
+        assert.strictEqual(db.doQuery.callCount, 2, 'one exists-check + one INSERT, not one per address');
+        const insertQuery = db.doQuery.secondCall.args[0];
+        assert.ok(/INSERT INTO mappings_actions/.test(insertQuery));
+        // 3 rows -> 3 sets of (?, ?, ?)
+        assert.strictEqual((insertQuery.match(/\(\?, \?, \?\)/g) || []).length, 3);
+    });
+
+    it('skips ids that already have a mapping row (matches createActionMapping de-dup)', async function () {
+        db.createAddress.callsFake(async (a) => ({ addrA: 10, addrB: 11 }[a]));
+        db.doQuery.onFirstCall().resolves([{ id: 10 }]); // addrA (id 10) already mapped
+        db.doQuery.onSecondCall().resolves([]);          // INSERT for the remaining row
+        await db.createActionMappings.call(db, 5, 'address', ['addrA', 'addrB']);
+        assert.strictEqual(db.doQuery.callCount, 2);
+        const insertQuery = db.doQuery.secondCall.args[0];
+        assert.strictEqual((insertQuery.match(/\(\?, \?, \?\)/g) || []).length, 1, 'only the un-mapped id should be inserted');
+    });
+
+    it('does not INSERT when every id already has a mapping row', async function () {
+        db.createAddress.callsFake(async (a) => ({ addrA: 10 }[a]));
+        db.doQuery.resolves([{ id: 10 }]);
+        await db.createActionMappings.call(db, 5, 'address', ['addrA']);
+        assert.strictEqual(db.doQuery.callCount, 1, 'only the exists-check, no INSERT');
+    });
+
+    it('skips a dangling ^<id> reference that resolves to a null id', async function () {
+        db.createAddress.callsFake(async (a) => (a === 'addrA' ? 10 : null));
+        db.doQuery.onFirstCall().resolves([]);
+        db.doQuery.onSecondCall().resolves([]);
+        await db.createActionMappings.call(db, 5, 'address', ['addrA', '^999']);
+        const existsArgs = db.doQuery.firstCall.args[1];
+        assert.deepStrictEqual(existsArgs, [5, 2, 10], 'only the resolved id should reach the exists-check');
+    });
+
+    it('does nothing at all when every value resolves to a null id', async function () {
+        db.createAddress.resolves(null);
+        await db.createActionMappings.call(db, 5, 'address', ['^bad1', '^bad2']);
+        assert.strictEqual(db.doQuery.callCount, 0);
+    });
+
+    it('uses type_id=1 for tick and type_id=2 for address', async function () {
+        db.createTicker.resolves(20);
+        db.createAddress.resolves(21);
+        db.doQuery.resolves([]);
+
+        await db.createActionMappings.call(db, 5, 'tick', ['TICKA']);
+        assert.strictEqual(db.doQuery.firstCall.args[1][1], 1);
+
+        db.doQuery.resetHistory();
+        await db.createActionMappings.call(db, 5, 'address', ['addrA']);
+        assert.strictEqual(db.doQuery.firstCall.args[1][1], 2);
     });
 });

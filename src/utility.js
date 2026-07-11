@@ -56,6 +56,10 @@ const ADDRESS_PARAMS  = {
 class Utility {
 
     constructor(cfg){
+        // Max market rows the throttled 24h rolling-stats ageing sweep refreshes per block
+        // (processMarketUpdates step 2). Bounds per-block refresh cost independent of the total
+        // active-market count. markets is unhashed / non-consensus, so this cadence is node-local.
+        // (Defined as a static below; referenced as Utility.MARKET_STALE_SWEEP_BATCH.)
         // Track addresses/tickers/transactions across an action parse
         this.addresses = {}; // this.addresses[address] = [tick, tick, tick];
         this.tickers   = [];
@@ -1963,30 +1967,45 @@ class Utility {
         }
     }
 
-    // Handle creating and updating DEX market information
+    // Handle creating and updating DEX market information.
+    //
+    // Split into two paths so per-block cost tracks blocks that actually touched a market rather
+    // than the total active-market count (previously getMarkets(update=true) refreshed EVERY market
+    // pair with a valid open order older than 24h - effectively all active markets - on every block):
+    //   (1) Touched-this-block refresh: refresh only the pairs traded in THIS block. createMarket
+    //       assigns a NEW markets-row id only for a genuinely new pair, which can only appear from an
+    //       order/match in this touched set (an aged pair already has its row), so the deterministic
+    //       serial id-assignment order the old code guarded is fully preserved.
+    //   (2) Throttled 24h rolling-stats ageing sweep: refresh a bounded batch of the most-stale
+    //       existing market rows so the 24h window still ages out without recomputing all markets
+    //       every block. The `markets` table is unhashed / snapshot-replicated with no consensus
+    //       reader (rollback.js IDX-2), so a node-local sweep cadence never diverges block state.
     async processMarketUpdates(db, block_index, block_time){
-        // Get list of market orders for the given block
-        // Note: this also gets a list of any markets that have not had an update in the past 24 hours
-        let markets = await db.getMarkets(block_index, true);
-        // Process market pairs sequentially so that any new pair's row is
-        // inserted in a deterministic order. createMarket() assigns an
-        // AUTO_INCREMENT id on first insert; fanning the inserts out
-        // concurrently let the id be assigned in DB-completion order, so two
-        // nodes processing the same block could give the same pair different
-        // ids. A serial loop pins the id to pair-iteration order on every node.
+        // (1) Refresh only the pairs touched by an order action in this block (update=false ->
+        // WHERE b1.block_index=?), processed serially to pin new-pair id assignment to iteration order.
+        let markets = await db.getMarkets(block_index, false);
         for(let pair of markets){
-            // Create market
             let market_id = await db.createMarket(pair.tick1_id, pair.tick2_id);
-            // Get the market data
             let data = await db.getMarketInfo(market_id, block_time);
-            // Set the last_updated time to the current block time
             data.last_updated = block_time;
-            // Update market with the updated data
+            await db.updateMarketInfo(data);
+        }
+
+        // (2) Throttled ageing sweep: refresh a bounded batch of markets whose stats last refreshed
+        // more than 24h ago (oldest-first). Pairs already refreshed in step 1 carry last_updated =
+        // block_time, so they are naturally excluded here. Bounded by MARKET_STALE_SWEEP_BATCH.
+        let time_24hr = this.bcsub(String(block_time), '86400');
+        let stale = await db.getStaleMarkets(time_24hr, Utility.MARKET_STALE_SWEEP_BATCH);
+        for(let row of stale){
+            let data = await db.getMarketInfo(row.id, block_time);
+            data.last_updated = block_time;
             await db.updateMarketInfo(data);
         }
     }
 
 
 }
+
+Utility.MARKET_STALE_SWEEP_BATCH = 25;
 
 module.exports = Utility;

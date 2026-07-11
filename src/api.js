@@ -19,16 +19,19 @@
  ********************************************************************/
 
 // Load required libraries
-// Note: express-rate-limit is intentionally omitted; the indexer API is
-// internal-only (hub + xchain-node managed deployments) and is expected to
-// sit behind a network perimeter or INDEXER_API_KEY auth gate rather than
-// being exposed directly. Add rate limiting here if this API is ever
-// publicly accessible (see sibling services: decoder, encoder, explorer, hub).
+// Note: express-rate-limit is mounted per-IP below (INDEXER_RATE_LIMIT_RPM,
+// default 600). The indexer API is intended to be internal-only (hub +
+// xchain-node managed deployments), but the stock xchain-node topology can
+// publish the port on all host interfaces, so a generous limiter keeps an
+// anonymous loop off GET /status and the ungated JSON-RPC reads (each of which
+// costs pooled DB round-trips) without affecting the handful of legitimate
+// hub/explorer callers (see sibling services: decoder, encoder, explorer, hub).
 const dotenv        = require('dotenv');
 const express       = require('express');
 const bodyParser    = require('body-parser');
 const helmet        = require('helmet');
 const cors          = require('cors');
+const rateLimit     = require('express-rate-limit');
 const XChainIndexer = require('./XChainIndexer');
 const jsonRouter    = require('express-json-rpc-router');
 const { buildHealthResponse } = require('./health');
@@ -183,6 +186,17 @@ async function startApi(){
     app.use(cors({
         origin: process.env.CORS_ORIGIN || 'http://localhost',
         methods: ['POST']
+    }));
+
+    // Per-IP rate limit, generous by default (the real callers are a handful of
+    // hub/explorer processes). Bounds an anonymous flood against GET /status and
+    // the ungated JSON-RPC read methods, both of which cost pooled DB round-trips
+    // per hit, so the perimeter assumption is no longer the only guard.
+    app.use(rateLimit({
+        windowMs: 60 * 1000,
+        limit: parseInt(process.env.INDEXER_RATE_LIMIT_RPM) || 600,
+        standardHeaders: true,
+        legacyHeaders: false
     }));
 
     // API key enforcement for write + federation read + gated exec methods.

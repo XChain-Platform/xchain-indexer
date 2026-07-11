@@ -153,6 +153,32 @@ class XChainIndexer {
     // with zero added latency. Only a genuinely-lagging distributed mirror enters the poll loop.
     // A wall-clock proceed (Date.now) is deliberately NOT used: it let a lagging node proceed with
     // fewer cross-chain calls than canonical and diverge the actions hash (the bug this fixes).
+    // Deliver the hub pushes staged (and durably written via enqueueHubPushTx) during the block
+    // transaction that just committed. Each push_type maps to the same HubClient method the
+    // HubPushQueue drain uses; on success the durable pending_hub_pushes row is dropped, on any
+    // failure it is left for HubPushQueue to retry with backoff. Never throws into the block loop.
+    async _deliverStagedHubPushes(){
+        let staged = this.indexerDb.takeStagedHubPushes();
+        if(!staged || staged.length === 0 || !this.hubClient) return;
+        for(let entry of staged){
+            try {
+                if(entry.pushType === 'price_round'){
+                    await this.hubClient.pushPriceRound(entry.payload);
+                } else if(entry.pushType === 'oracle_price'){
+                    await this.hubClient.pushOraclePrice(entry.payload);
+                } else {
+                    // Unknown type: leave the durable row for HubPushQueue rather than guess.
+                    continue;
+                }
+                if(entry.id != null) await this.indexerDb.markHubPushDelivered(entry.id);
+            } catch(err){
+                // Live delivery failed; the durable row stays for HubPushQueue's backoff retry.
+                console.warn('Staged hub push ' + entry.pushType + ' row ' + entry.id +
+                    ' live delivery failed; HubPushQueue will retry:', err && err.message);
+            }
+        }
+    }
+
     async _waitForDirectCallPresence(blockTime){
         blockTime = Number(blockTime);
         if(!this.hubDb || !Number.isFinite(blockTime)) return;
@@ -480,6 +506,17 @@ class XChainIndexer {
                 // Oldest-first so a partial-write crash only advances the cursor as far as is durable.
                 for(let reorg of unprocessedReorgs)
                     await indexerReorgView.createReorg(reorg.block_index, reorg.id);
+
+                // Refresh the local cursor to the durable value just advanced by createReorg.
+                // lastProcessedReorgId was read once at the top of the outer loop and is never
+                // otherwise updated, so the mid-catch-up REORG-6 recheck below would call
+                // getReorgsSince() with the stale pre-processing id, re-select the reorg(s) we
+                // just recorded (their event ids are all > the stale id), and break to the outer
+                // loop once per processed reorg. Re-reading the newest recorded marker id (rather
+                // than assuming getReorgsSince ordering) keeps the recheck comparing against the
+                // true cursor. This never masks an unprocessed reorg: any reorg with id greater
+                // than the refreshed cursor still selects on the next probe.
+                lastProcessedReorgId = await indexerReorgView.getLastProcessedReorgId();
             }
 
             // If indexer has no parsed blocks, set last indexer block to first decoder block-1
@@ -684,6 +721,11 @@ class XChainIndexer {
                 // this block; cleared/null when inactive so the hook is inert.
                 let stateCommitActive = stateCommitAct.isStateCommitmentActive(blockToParse, this.config['NETWORK'], this.config['COIN']);
                 this.indexerDb._smtTouched = stateCommitActive ? new Set() : null;
+                // Install a fresh per-block staged-hub-push buffer. PRICE actions write their hub
+                // push durably inside this transaction (enqueueHubPushTx) and stage the row here for
+                // an immediate post-commit live delivery. Replaced each block, so a rolled-back
+                // block's staged (and rolled-back) rows are simply discarded, never delivered.
+                this.indexerDb._stagedHubPushes = [];
                 try {
 
                     // Fence the block's writes to THIS transaction's epoch (M-16). Read the
@@ -818,6 +860,14 @@ class XChainIndexer {
                     if(!this.util.bcgt(this.util.bcsub(lastDecoderBlock, lastIndexerBlock), this.config['CHAIN_TIP_PUSH_MAX_LAG'])){
                         this.hubClient.pushChainTip(this.config['COIN'], this.config['NETWORK'], lastIndexerBlock, blockTime);
                     }
+
+                    // Deliver the PRICE hub pushes durably staged inside the just-committed block
+                    // transaction (mirrors rollback.js's post-commit retraction delivery). Each row
+                    // already survives a crash here (HubPushQueue drains the survivors on restart);
+                    // this is only an immediate live-delivery fast path that drops the durable row on
+                    // success and leaves it for the queue on any failure. Best-effort and never throws
+                    // into the block loop.
+                    await this._deliverStagedHubPushes();
 
                     // Refresh the decoder tip after each committed block. Without this the
                     // decoder tip is snapshotted once per outer-loop iteration and stays frozen

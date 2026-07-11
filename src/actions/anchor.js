@@ -308,10 +308,16 @@ class Anchor {
                 let validSigners = [], seen = new Set();
                 for(let s of sigs){
                     let pk = String(s.pubkey || '').toLowerCase();
-                    if(seen.has(pk)) continue;
-                    seen.add(pk);
+                    if(!pk || seen.has(pk)) continue;
                     if(!snapPubkeys.has(pk)) continue;
                     if(!ed25519.verify(canonical, s.sig, s.pubkey)) continue;
+                    // Mark seen only AFTER the signature verifies, matching the hub
+                    // finalizer (StateCheckpointEngine) and the SDK/explorer/sync
+                    // verifiers. Marking on first encounter lets a garbage-then-valid
+                    // pair for one qualified validator suppress the real signature
+                    // (order-dependent quorum under-count), failing a legitimately
+                    // quorate anchor closed and disagreeing with the hub on the same bytes.
+                    seen.add(pk);
                     validSigners.push(pk);
                 }
                 let quorumMet = weighted

@@ -134,15 +134,19 @@ async function seedArchive(dogeDb) {
         amount: REWARD_AMOUNT, block_index: EARN_BLOCK,
     };
     const { v1, v2s } = buildBatch(0, [rawMatch('m1')], oracleKeys, crossKeys, { rewards: [reward] });
+    // recovery.run() joins index_statuses and restricts to status IN ('valid','unverified'), so the
+    // seeded v1 MUST carry a real status_id (a NULL status_id is dropped by the INNER JOIN, which is
+    // a fixture defect, not a reason to loosen the query). anchor.js defaults a clean parse to 'valid'.
+    const validStatusId = await dogeDb.createStatus('valid');
     await dogeDb.doQuery(
         `INSERT INTO anchor_actions
             (action_index, version, chain, network, block_index, block_hash, ledger_hash,
              actions_hash, contract_hash, checkpoint_seq, snapshot_block, match_batch_seq,
-             match_count, batch_crc32, total_chunks, archive_b64, validator_signatures, block_index_doge)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             match_count, batch_crc32, total_chunks, archive_b64, validator_signatures, status_id, block_index_doge)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [1, v1.version, v1.chain, v1.network, v1.block_index, v1.block_hash, v1.ledger_hash,
          v1.actions_hash, v1.contract_hash, v1.checkpoint_seq, v1.snapshot_block, v1.match_batch_seq,
-         v1.match_count, v1.batch_crc32, v1.total_chunks, v1.archive_b64, v1.validator_signatures, 500]);
+         v1.match_count, v1.batch_crc32, v1.total_chunks, v1.archive_b64, v1.validator_signatures, validStatusId, 500]);
     let ai = 2;
     for (const c of v2s) {
         await dogeDb.doQuery(

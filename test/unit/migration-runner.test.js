@@ -57,6 +57,17 @@ describe('Database._migrationMode() @regression @tier1', function () {
     it('only honors the tag on a comment line, and a non-auto/manual value falls through to manual', function () {
         assert.strictEqual(modeOf('-- xchain:migration mode=yolo\n'), 'manual');
     });
+
+    it('ignores a mode= tag outside the header window (body prose cannot arm auto)', function () {
+        // A file whose real header omits the tag (defaults manual), with a spoofed
+        // `mode=auto` buried 20+ lines down in prose or a data literal. The scan is
+        // header-window-only, so this must stay manual - a body tag cannot arm the
+        // auto-apply path for a destructive migration.
+        let body = '-- a normal migration comment\n';
+        for(let i = 0; i < 20; i++) body += '-- filler line ' + i + '\n';
+        body += '-- xchain:migration mode=auto\nDROP TABLE contract_stakes;\n';
+        assert.strictEqual(modeOf(body), 'manual');
+    });
 });
 
 describe('committed migrations declare intent @regression @tier1', function () {
@@ -179,6 +190,29 @@ describe('Database._destructiveAutoStatement() @regression @tier1', function () 
 
     it('allows a MODIFY ... NOT NULL AUTO_INCREMENT attribute repair (AUTO_INCREMENT implies NOT NULL)', function () {
         assert.strictEqual(destructiveOf(['ALTER TABLE price_snapshots MODIFY id BIGINT NOT NULL AUTO_INCREMENT']), null);
+    });
+
+    it('flags a NOT NULL-narrowing clause even when a sibling clause is AUTO_INCREMENT', function () {
+        // Per-clause check: one AUTO_INCREMENT clause must not exempt a sibling
+        // NOT NULL narrowing in the same multi-clause ALTER.
+        assert.ok(destructiveOf([
+            'ALTER TABLE t MODIFY id BIGINT NOT NULL AUTO_INCREMENT, MODIFY source VARCHAR(255) NOT NULL'
+        ]));
+    });
+
+    it('flags REPLACE INTO (atomic DELETE+INSERT wipes existing-key rows)', function () {
+        assert.ok(destructiveOf(['REPLACE INTO balances (address, amount) VALUES (?, ?)']));
+    });
+
+    it('flags a bare UPDATE that rewrites row data', function () {
+        assert.ok(destructiveOf(['UPDATE balances SET amount = 0 WHERE amount < 10']));
+    });
+
+    it('allows the committed AUTO_INCREMENT id=0 repair UPDATE, but not other id UPDATEs', function () {
+        assert.strictEqual(destructiveOf([
+            'UPDATE price_snapshots\n   SET id = (SELECT next_id FROM (SELECT COALESCE(MAX(id), 0) + 1 AS next_id FROM price_snapshots) t)\n WHERE id = 0'
+        ]), null);
+        assert.ok(destructiveOf(['UPDATE price_snapshots SET id = 5 WHERE id = 0']));
     });
 
     it('allows RENAME INDEX/KEY (metadata-only rename)', function () {

@@ -244,11 +244,30 @@ class Airdrop {
                 error = 'invalid: insufficient funds';
 
             // Build out array of recipient addresses that are allowed to receive the airdrop
+
+            // Fetch TICK's allow/block lists ONCE before the recipient loop (instead of
+            // isActionAllowed() re-fetching the same token info + lists per recipient), then
+            // check membership in memory. tokenInfo is already loaded above; mirrors
+            // isActionAllowed()'s no-block_index allow/block decision exactly (db.js
+            // isActionAllowed) so the set of approved recipients is unchanged.
             let approved = [];
+            let hasAllowList = tokenInfo && !this.util.isNull(tokenInfo['ALLOW_LIST']) && this.util.isNumeric(tokenInfo['ALLOW_LIST']);
+            let hasBlockList = tokenInfo && !this.util.isNull(tokenInfo['BLOCK_LIST']) && this.util.isNumeric(tokenInfo['BLOCK_LIST']);
+            let recipientAllowList = hasAllowList ? await this.indexerDb.getList(tokenInfo['ALLOW_LIST']) : null;
+            let recipientBlockList = hasBlockList ? await this.indexerDb.getList(tokenInfo['BLOCK_LIST']) : null;
 
             // Verify airdrop is allowed to recipient (allow/block lists)
             for(let address of recipients){
-                if(approved.indexOf(address)==-1 && await this.indexerDb.isActionAllowed(address, airdrop['TICK']))
+                if(approved.indexOf(address)!=-1)
+                    continue;
+                let allowed = true;
+                // False if we have an ALLOW_LIST and address is NOT on it
+                if(allowed && recipientAllowList && !recipientAllowList.includes(address))
+                    allowed = false;
+                // False if we have a BLOCK_LIST and address IS on it
+                if(allowed && recipientBlockList && recipientBlockList.includes(address))
+                    allowed = false;
+                if(allowed)
                     approved.push(address);
             }
 

@@ -31,6 +31,8 @@
  *
  ********************************************************************/
 
+const { rethrowIfInfraFault } = require('./faultGuard.js');
+
 class Vote {
 
     // Handle constructing a class instance
@@ -567,6 +569,11 @@ class Vote {
             // A throwing callback must not brick the finalized result: roll back only
             // the callback's effects and keep the poll terminal.
             await this.indexerDb.rollbackToSavepoint(savepoint);
+            // An infrastructure fault (VM host fault, transient DB error) is not a
+            // callback outcome: halt so the block rolls back and retries rather than
+            // committing this validator's poll with a silently-dropped callback while
+            // healthy peers apply it. A deterministic callback failure still stands.
+            rethrowIfInfraFault(e);
             console.warn('\t VOTE callback : execute threw (' + e.message + '), poll result stands');
             return null;
         }

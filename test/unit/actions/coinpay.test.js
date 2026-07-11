@@ -164,9 +164,10 @@ describe('Coinpay (COINPAY) @regression @tier2', function () {
                 COIN_DESTINATION: PAYEE, COIN_AMOUNT: '0.001'
             });
             await handler.parse(['9', '42'], data, null);
-            // unknown format → error is set but obligation is not pending_coinpay anyway
-            // (skips before createCoinpay)
-            assert.ok(true); // no throw
+            // unknown format sets an error, so the obligation lookup is skipped and the
+            // action index is discarded before any settlement.
+            assert.ok(indexer.indexerDb.createCoinpay.notCalled, 'unknown VERSION must not settle a coinpay');
+            assert.ok(indexer.indexerDb.deleteActionIndex.called, 'unknown VERSION action index is discarded');
         });
 
     });

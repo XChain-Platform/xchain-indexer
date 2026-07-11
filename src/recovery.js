@@ -29,20 +29,33 @@
  *      oracle_publish set at the anchor's snapshot_block.
  *   3. Every match's validator_signatures must reach 2f+1 of the ARCHIVED
  *      cross_chain set at the match's snapshot_block.
- *   4. (--verify-stakes, recommended) every archived snapshot pubkey must
+ *   4. (stake cross-check, ON by default) every archived snapshot pubkey must
  *      hold ANY active on-chain stake at its snapshot_block in the given BTC
  *      indexer DB. A fabricated validator set cannot survive this, because
- *      staking is on-chain. The chain stays the root of trust.
+ *      staking is on-chain. The chain stays the root of trust. Steps 2/3 alone
+ *      authenticate the wrapper/match signatures only against the validator set
+ *      carried INSIDE the same archive blob, so a self-consistent forged archive
+ *      passes them; this on-chain cross-check is what makes the chain, not the
+ *      archive, the root of trust, so it now runs unless explicitly skipped.
  *
  * Later batches supersede earlier ones per match_id (latest-status-wins), so
  * a match archived as `finalized` and later re-archived as `retracted` ends
  * recovered as retracted.
  *
- *   node src/recovery.js [--dry-run] [--verify-stakes]
+ *   node src/recovery.js [--dry-run] [--skip-stake-verification [--i-understand-unverified]]
  *
  * Reads INDEXER_DB_* from the service environment (.env). Point it at the
- * DOGE indexer DB. --verify-stakes additionally needs BTC_INDEXER_DB_NAME
+ * DOGE indexer DB. The default stake cross-check requires BTC_INDEXER_DB_NAME
  * (same host/credentials) holding the BTC indexer's stakes tables.
+ *
+ * Pre-BTC-reindex reward-restore workflow: the reward restore runs BEFORE the
+ * BTC reindex, when the stakes table is empty and the cross-check would wrongly
+ * fail every batch. That is the ONE legitimate writing skip; run it with
+ *   node src/recovery.js --skip-stake-verification --i-understand-unverified
+ * then, AFTER the BTC reindex, run a verifying dry-run pass to confirm:
+ *   node src/recovery.js --dry-run
+ * A bare --skip-stake-verification (no --i-understand-unverified) is forced to a
+ * dry run so an unverified run can never write settlement-bearing rows by accident.
  *
  ********************************************************************/
 
@@ -80,8 +93,21 @@ class AnchorRecovery {
     async run(){
         let report = { batches: 0, verified: 0, failed: [], matches: 0, snapshots: 0, calls: 0, rewards: 0 };
 
+        // Restrict to the SAME statuses every other reader of anchor_actions accepts
+        // (getMaxAnchorBatchSeq / getMaxAnchorCheckpointSeq: version=1 AND status IN
+        // ('valid','unverified')). anchor_actions stores a row for EVERY parsed ANCHOR, valid or
+        // not (anchor.js records the verdict in STATUS rather than dropping the row), so without
+        // this join recovery replayed batches the on-chain parse recorded as invalid - e.g.
+        // 'insufficient valid signatures' or a stale CHECKPOINT_SEQ / MATCH_BATCH_SEQ replay -
+        // into cross_chain_matches / cross_chain_calls that a normally-synced indexer never
+        // derived, diverging a recovery-fed node from a mirror-fed one. The INNER JOIN also drops
+        // any row with a NULL status_id, which every production row resolves (anchor.js defaults
+        // STATUS to 'valid'); do NOT loosen this to a LEFT JOIN accepting NULL, which reopens the hole.
         let v1s = await this.db.doQuery(
-            "SELECT * FROM anchor_actions WHERE version = 1 ORDER BY match_batch_seq ASC");
+            `SELECT a.* FROM anchor_actions a
+             JOIN index_statuses s ON s.id = a.status_id
+             WHERE a.version = 1 AND s.status IN ('valid', 'unverified')
+             ORDER BY a.match_batch_seq ASC`);
         if(!v1s || v1s.length === 0){
             this.log('recovery: no archive anchors found (anchor_actions has no v1 rows)');
             return report;
@@ -564,8 +590,18 @@ if(require.main === module){
             console.error('recovery: INDEXER_DB_HOST / INDEXER_DB_NAME / INDEXER_DB_USER must be set (point at the DOGE indexer DB).');
             process.exit(2);
         }
-        const dryRun       = process.argv.includes('--dry-run');
-        const verifyStakes = process.argv.includes('--verify-stakes');
+        // Stake cross-check is ON BY DEFAULT (fail-closed root of trust). Opt out only with the
+        // explicit --skip-stake-verification flag; --verify-stakes is still accepted as a redundant
+        // no-op for back-compat with existing scripts. Skipping without --i-understand-unverified is
+        // forced to a dry run so an unverified run can never write settlement-bearing rows by accident.
+        const skipStakeVerification = process.argv.includes('--skip-stake-verification');
+        const ackUnverified         = process.argv.includes('--i-understand-unverified');
+        const verifyStakes          = !skipStakeVerification;
+        let   dryRun                = process.argv.includes('--dry-run');
+        if(skipStakeVerification && !dryRun && !ackUnverified){
+            console.warn('recovery: --skip-stake-verification WITHOUT --i-understand-unverified: forcing --dry-run so no rows are written. Re-run with --i-understand-unverified to perform an unverified rebuild (only the documented pre-BTC-reindex reward restore should).');
+            dryRun = true;
+        }
 
         // Share ONE config object between indexer-like and its Utility.
         const cfg = config.getConfig();
@@ -589,13 +625,13 @@ if(require.main === module){
             const btcLike = { config: btcCfg, util: new Utility(btcCfg) };
             btcDb = new Database(host, port, btcName, user, pass, btcLike);
         } else if(verifyStakes){
-            console.error('recovery: --verify-stakes needs BTC_INDEXER_DB_NAME (same host/credentials).');
+            console.error('recovery: the default stake cross-check needs BTC_INDEXER_DB_NAME (same host/credentials). Set it, or pass --skip-stake-verification to run without the on-chain root of trust.');
             process.exit(2);
         } else {
             console.warn('recovery: BTC_INDEXER_DB_NAME not set. Archived validator sets will not be cross-checked, and any batch carrying anchor reward rows will FAIL (the restore needs the BTC indexer DB).');
         }
         if(!verifyStakes)
-            console.warn('recovery: running WITHOUT --verify-stakes. Archived validator sets will not be cross-checked against on-chain BTC stakes.');
+            console.warn('recovery: running WITH --skip-stake-verification. Archived validator sets will NOT be cross-checked against on-chain BTC stakes; a self-consistent forged archive would pass verification.');
 
         try {
             const recovery = new AnchorRecovery(db, { btcDb, dryRun, verifyStakes, util: indexerLike.util });

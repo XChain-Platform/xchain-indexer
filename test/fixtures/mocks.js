@@ -72,6 +72,9 @@ function createMockDb() {
         enqueueHubPush: sinon.stub().resolves(),
         enqueueHubPushTx: (() => { let n = 0; return sinon.stub().callsFake(async () => ++n); })(),
         markHubPushDelivered: sinon.stub().resolves(),
+        // PRICE forward pushes stage their durable row for a post-commit live-delivery attempt.
+        stageHubPush: sinon.stub(),
+        takeStagedHubPushes: sinon.stub().returns([]),
         getActionIndex: sinon.stub().resolves(null),
         createActionIndex: sinon.stub().resolves(1),
         updateActionIndex: sinon.stub().resolves(),
@@ -252,6 +255,7 @@ function createMockDb() {
 
         // Mappings
         createActionMapping: sinon.stub().resolves(),
+        createActionMappings: sinon.stub().resolves(),
         createFileMapping: sinon.stub().resolves(),
 
         // Coin / Fiat / Mime

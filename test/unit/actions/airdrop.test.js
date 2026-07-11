@@ -183,8 +183,9 @@ describe('Airdrop @regression @tier2', function () {
 
             await handler.parse(params, data, null);
 
-            // FORMAT 99 is unknown; airdrops array will be empty so we just check no crash
-            assert.ok(true);
+            // FORMAT 99 is unknown: the airdrops array stays empty, so the create loop
+            // never runs and no airdrop is written.
+            assert.ok(indexer.indexerDb.createAirdrop.notCalled, 'unknown FORMAT must not create an airdrop');
         });
 
     });

@@ -228,7 +228,7 @@ async function buildStateHashData(db, blockIndex, opts){
                 "SELECT action_index, deactivation_block FROM `" + t + "` " +
                 "WHERE deactivation_block BETWEEN ? AND ? ORDER BY action_index ASC",
                 [B + delay, B + delay]);
-        } catch(e){ /* table/column may not exist on older schemas */ }
+        } catch(e){ if(e && typeof e.errno === 'number' && e.errno !== 1146 && e.errno !== 1054) throw e; /* table/column may not exist on older schemas */ }
     }
 
     // 2. SLASH amount cuts: the slashed row reached via its debit-log entry for
@@ -243,7 +243,7 @@ async function buildStateHashData(db, blockIndex, opts){
                 "JOIN `" + s.debits + "` d ON d.stake_action_index = t.action_index " +
                 "WHERE d.target_table = ? AND d.block_index BETWEEN ? AND ? ORDER BY t.action_index ASC",
                 [s.target, B, B]);
-        } catch(e){ /* table may not exist on older schemas */ }
+        } catch(e){ if(e && typeof e.errno === 'number' && e.errno !== 1146 && e.errno !== 1054) throw e; /* table may not exist on older schemas */ }
     }
 
     // 3. v0 request_status flips (the resolved_block stamp), attests + xcalls.
@@ -255,7 +255,7 @@ async function buildStateHashData(db, blockIndex, opts){
                 "SELECT action_index, request_status, resolved_block FROM `" + t + "` " +
                 "WHERE version = 0 AND resolved_block BETWEEN ? AND ? ORDER BY action_index ASC",
                 [B, B]);
-        } catch(e){ /* table/column may not exist on older schemas */ }
+        } catch(e){ if(e && typeof e.errno === 'number' && e.errno !== 1146 && e.errno !== 1054) throw e; /* table/column may not exist on older schemas */ }
     }
 
     // 4. cooldown-maturity status flips, keyed by the maturity block. status_id
@@ -269,7 +269,7 @@ async function buildStateHashData(db, blockIndex, opts){
                 "LEFT JOIN index_statuses s ON (s.id = t.status_id) " +
                 "WHERE t.cooldown_end_block BETWEEN ? AND ? ORDER BY t.action_index ASC",
                 [B, B]);
-        } catch(e){ /* table/column may not exist on older schemas */ }
+        } catch(e){ if(e && typeof e.errno === 'number' && e.errno !== 1146 && e.errno !== 1054) throw e; /* table/column may not exist on older schemas */ }
     }
 
     // 5. backdated cooldown refund credits: capability (GAS) + contract (own tick),
@@ -298,7 +298,7 @@ async function buildStateHashData(db, blockIndex, opts){
                     "WHERE cu.status_id = ? AND cu.cooldown_end_block BETWEEN ? AND ? " +
                 ") x ORDER BY action_index ASC, address COLLATE utf8_bin ASC, tick COLLATE utf8mb4_bin ASC, amount ASC",
                 [gasTick, completedStatusId, B, B, completedStatusId, B, B]);
-        } catch(e){ /* table may not exist on older schemas */ }
+        } catch(e){ if(e && typeof e.errno === 'number' && e.errno !== 1146 && e.errno !== 1054) throw e; /* table may not exist on older schemas */ }
     }
 
     // 6. invalid_archive stamp on anchor_actions v1 parent rows. When the final v2
@@ -317,7 +317,7 @@ async function buildStateHashData(db, blockIndex, opts){
             "WHERE p.version = 1 AND c.block_index BETWEEN ? AND ? " +
             "ORDER BY p.action_index ASC",
             [B, B]);
-    } catch(e){ /* table/columns may not exist on older schemas */ }
+    } catch(e){ if(e && typeof e.errno === 'number' && e.errno !== 1146 && e.errno !== 1054) throw e; /* table/columns may not exist on older schemas */ }
 
     // 7. Index-map delta (id-determinism P4): the (id, string) pairs whose deterministic
     //    id was first assigned at block B. GATED INERT by default - included ONLY at/after
@@ -333,11 +333,11 @@ async function buildStateHashData(db, blockIndex, opts){
         try {
             index_addresses_new = await db.doQuery(
                 "SELECT id, address FROM index_addresses WHERE block_index = ? ORDER BY id ASC", [B]);
-        } catch(e){ /* table/column may not exist on older schemas */ }
+        } catch(e){ if(e && typeof e.errno === 'number' && e.errno !== 1146 && e.errno !== 1054) throw e; /* table/column may not exist on older schemas */ }
         try {
             index_tickers_new = await db.doQuery(
                 "SELECT id, tick FROM index_tickers WHERE block_index = ? ORDER BY id ASC", [B]);
-        } catch(e){ /* table/column may not exist on older schemas */ }
+        } catch(e){ if(e && typeof e.errno === 'number' && e.errno !== 1146 && e.errno !== 1054) throw e; /* table/column may not exist on older schemas */ }
     }
 
     // 8. VOTE poll finalization flips: polls rows whose terminal flip landed at
@@ -360,7 +360,7 @@ async function buildStateHashData(db, blockIndex, opts){
                 "finalized_action_index, resolved_block, deposit_resolved, callback_execute_action_index " +
                 "FROM polls WHERE resolved_block BETWEEN ? AND ? ORDER BY action_index ASC",
                 [B, B]);
-        } catch(e){ /* table/columns may not exist on older schemas */ }
+        } catch(e){ if(e && typeof e.errno === 'number' && e.errno !== 1146 && e.errno !== 1054) throw e; /* table/columns may not exist on older schemas */ }
     }
 
     // 9. tokens.supply refreshes: (tick, supply) for every tick a ledger row
@@ -389,7 +389,7 @@ async function buildStateHashData(db, blockIndex, opts){
                     "SELECT e.tick_id FROM escrows e JOIN actions a ON (a.action_index = e.action_index) WHERE a.block_index BETWEEN ? AND ? AND e.tick_id IS NOT NULL " +
                 ") ORDER BY tick COLLATE utf8mb4_bin ASC",
                 [B, B, B, B, B, B]);
-        } catch(e){ /* table/columns may not exist on older schemas */ }
+        } catch(e){ if(e && typeof e.errno === 'number' && e.errno !== 1146 && e.errno !== 1054) throw e; /* table/columns may not exist on older schemas */ }
     }
 
     // Fixed key order: the hash preimage. NOT chained on a previous state_hash

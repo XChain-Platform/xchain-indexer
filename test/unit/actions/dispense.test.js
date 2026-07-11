@@ -504,4 +504,50 @@ describe('Dispense action handler @regression @tier2', function () {
         const rec = indexer.indexerDb.createDispense.firstCall.args[0];
         assert.ok(String(rec['STATUS']).includes('GET_TOKEN block list'));
     });
+
+    // Regression for the dead 'invalid: Dispenser unknown' branch: getDispenserInfo
+    // returning falsy for a matched action_index must not throw a TypeError out of
+    // the settlement loop (dispenserInfo[...] is never populated for it). See
+    // review finding uuid:78e3de16.
+    it('unknown dispenser (getDispenserInfo returns false): does not throw, no dispense recorded for it', async function () {
+        indexer.indexerDb.findMatchingDispensers.resolves([10]);
+        indexer.indexerDb.getDispenserInfo.resolves(false);
+
+        const data = createBaseData({
+            ACTION:      'DISPENSE',
+            SOURCE:      BUYER_ADDR,
+            COIN_AMOUNT: '0.01',
+            BLOCK_TIME,
+        });
+
+        await assert.doesNotReject(dispense.parse([], data, false));
+
+        // No settlement occurs for an unknown dispenser: nothing pushed/created for it.
+        sinon.assert.notCalled(indexer.indexerDb.createDispense);
+    });
+
+    it('unknown dispenser mixed with a valid one: valid dispenser still settles cleanly', async function () {
+        const dispenser2 = makeDispenserInfo({ ACTION_INDEX: 11, GET_ADDRESS: OWNER_ADDR });
+        indexer.indexerDb.findMatchingDispensers.resolves([10, 11]);
+        indexer.indexerDb.getDispenserInfo
+            .withArgs('BTC', 10, sinon.match.any)
+            .resolves(false);
+        indexer.indexerDb.getDispenserInfo
+            .withArgs('BTC', 11, sinon.match.any)
+            .resolves(dispenser2);
+
+        const data = createBaseData({
+            ACTION:      'DISPENSE',
+            SOURCE:      BUYER_ADDR,
+            COIN_AMOUNT: '0.01',
+            BLOCK_TIME,
+        });
+
+        await assert.doesNotReject(dispense.parse([], data, false));
+
+        // Only the known dispenser (11) produces a record.
+        sinon.assert.calledOnce(indexer.indexerDb.createDispense);
+        const rec = indexer.indexerDb.createDispense.firstCall.args[0];
+        assert.strictEqual(rec['DISPENSER_ACTION_INDEX'], 11);
+    });
 });

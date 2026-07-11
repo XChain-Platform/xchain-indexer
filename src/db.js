@@ -29,6 +29,7 @@ const swqCap = require('./swq_source_cap_activation');
 const dispenseCancellingMatch = require('./dispense_cancelling_match_activation');
 const stateKeyCollation = require('./state_key_collation_activation');
 const { CHECKPOINT_VERSIONS: ANCHOR_CHECKPOINT_VERSIONS } = require('./anchor-action-query');
+const { rethrowIfInfraFault } = require('./actions/faultGuard');
 
 // Tables whose highest-`id`-survivor dedupe rule is validated and safe to auto-apply at
 // startup (see dedupeForUniqueIndex: an upsert that degraded to plain INSERT appended a
@@ -165,6 +166,13 @@ class Database {
         // clears it in a finally; normal block processing leaves it null (path unchanged).
         // Caret ^<id> references are never cached (they take a distinct resolution path).
         this._internCache = null;
+
+        // Single-entry memo for getBlockTime(). block_time is constant for a given
+        // block_index, but protocol_changes.isEnabled() re-queries it once per action-handler
+        // call (several times per block). Last-block-wins keeps this bounded (a plain Map would
+        // grow unbounded across a long-running process) while collapsing the per-action fan-out
+        // to one decoder-DB lookup per block.
+        this._blockTimeCache = { block_index: null, block_time: null };
 
         // Recovery reward apply-hook gate (F1a id-determinism fix). recovery.js stages
         // archived rewards in recovery_pending_rewards keyed by raw source-address STRING
@@ -426,7 +434,12 @@ class Database {
     // Read a migration file's `-- xchain:migration mode=auto|manual` header tag.
     // Defaults to 'manual' when absent (conservative - unknown DDL never auto-runs).
     _migrationMode(raw){
-        const m = String(raw).match(/^\s*--\s*xchain:migration\b[^\n]*\bmode\s*=\s*(auto|manual)\b/im);
+        // The mode tag is a header directive: only the leading header window may
+        // carry it. Scanning the whole file (the old /m behavior) let a `mode=auto`
+        // token buried in body prose or a data literal silently arm auto-apply for a
+        // destructive migration. Restrict the match to the first 10 lines.
+        const header = String(raw).split('\n').slice(0, 10).join('\n');
+        const m = header.match(/^\s*--\s*xchain:migration\b[^\n]*\bmode\s*=\s*(auto|manual)\b/im);
         return m ? m[1].toLowerCase() : 'manual';
     }
 
@@ -436,7 +449,8 @@ class Database {
     // file is safe to auto-run. Pure string logic (no DB), unit-tested directly.
     //
     // Flagged as destructive: DROP TABLE/DATABASE/SCHEMA, TRUNCATE, RENAME TABLE,
-    // DELETE FROM, ALTER TABLE ... DROP <column|partition|bare identifier>,
+    // DELETE (any form), REPLACE INTO (atomic DELETE+INSERT), UPDATE (except the
+    // committed AUTO_INCREMENT id=0 repair), ALTER TABLE ... DROP <column|partition|bare identifier>,
     // ALTER TABLE ... RENAME (except RENAME INDEX/KEY), ALTER TABLE ... CHANGE
     // (rename+retype), and MODIFY ... NOT NULL (the statically detectable
     // narrowing; a width reduction cannot be seen without the live schema and
@@ -471,6 +485,17 @@ class Database {
             // and multi-table `DELETE t1 FROM t1 JOIN t2 ...` all delete rows yet omit an
             // immediate FROM. No false positive: a statement starting with DELETE is always DML.
             if(/^DELETE\b/i.test(stmt))                          return raw;
+            // REPLACE INTO is an atomic DELETE+INSERT on every existing-key row it
+            // touches - the same data-loss profile as DELETE, with no non-destructive
+            // form - so match the bare keyword like DELETE above.
+            if(/^REPLACE\b/i.test(stmt))                         return raw;
+            // A bare UPDATE can rewrite arbitrary row data. The one committed auto
+            // pattern is the AUTO_INCREMENT id repair (`UPDATE <table> SET id = (...)
+            // WHERE id = 0;` in 2026-06-10-mirror-id-autoincrement-repair.sql), which
+            // touches only the sentinel id=0 row; carve exactly that shape out and
+            // flag every other UPDATE.
+            if(/^UPDATE\b/i.test(stmt) &&
+               !/^UPDATE\s+\S+\s+SET\s+id\s*=\s*\([\s\S]+\)\s+WHERE\s+id\s*=\s*0\b/i.test(stmt)) return raw;
             if(/^ALTER\s+TABLE\b/i.test(stmt)){
                 // Every DROP inside the ALTER must target a safe (metadata-only) object.
                 let m;
@@ -488,8 +513,23 @@ class Database {
                 // AUTO_INCREMENT attribute repair: an AUTO_INCREMENT column is
                 // definitionally NOT NULL, so no domain is narrowed (see the
                 // committed 2026-06-10-mirror-id-autoincrement-repair.sql pattern).
-                if(/\bMODIFY\b[\s\S]*\bNOT\s+NULL\b/i.test(stmt) &&
-                   !/\bAUTO_INCREMENT\b/i.test(stmt))            return raw;
+                // Check per top-level clause: a statement-wide AUTO_INCREMENT test
+                // would let one AUTO_INCREMENT clause exempt a sibling NOT NULL clause
+                // in the same multi-clause ALTER (e.g. `MODIFY id ... AUTO_INCREMENT,
+                // MODIFY source VARCHAR(255) NOT NULL`).
+                let mDepth = 0, mStart = 0;
+                const mClauses = [];
+                for(let i=0;i<stmt.length;i++){
+                    const ch = stmt[i];
+                    if(ch === '(') mDepth++;
+                    else if(ch === ')') mDepth--;
+                    else if(ch === ',' && mDepth === 0){ mClauses.push(stmt.slice(mStart, i)); mStart = i + 1; }
+                }
+                mClauses.push(stmt.slice(mStart));
+                for(const clause of mClauses){
+                    if(/\bMODIFY\b[\s\S]*\bNOT\s+NULL\b/i.test(clause) &&
+                       !/\bAUTO_INCREMENT\b/i.test(clause))      return raw;
+                }
             }
         }
         return null;
@@ -1169,15 +1209,19 @@ class Database {
                 let results = await this.doQuery(query);
                 if(results.length > 0){
                     for(let row of results){
-                        let data = JSON.parse(row.data);
-                        if(typeof data === 'object'){
-                            for (let block of data){
-                                // Reorg events are stored as an array of {block_index, block_hash}
-                                // objects, so unwrap the numeric block index before comparing.
-                                let idx = (typeof block === 'object' && block !== null) ? block.block_index : block;
-                                if(idx < block_index || block_index === null)
-                                    block_index = idx;
+                        try {
+                            let data = JSON.parse(row.data);
+                            if(typeof data === 'object' && data !== null){
+                                for (let block of data){
+                                    // Reorg events are stored as an array of {block_index, block_hash}
+                                    // objects, so unwrap the numeric block index before comparing.
+                                    let idx = (typeof block === 'object' && block !== null) ? block.block_index : block;
+                                    if(idx < block_index || block_index === null)
+                                        block_index = idx;
+                                }
                             }
+                        } catch(e){
+                            // Malformed row.data; skip it rather than throwing on for...of.
                         }
 
                     }
@@ -1212,9 +1256,11 @@ class Database {
 
     // Get the decoder's most-recent reorg event as { id, block_index }, or null if none.
     // `id` is the decoder events.id - the IDENTITY used to decide whether a reorg is new.
-    // Block height alone is ambiguous across repeated reorgs (heights increase), so the
-    // caller compares this id rather than the block number. `block_index` is the lowest
-    // block touched by the event (the rollback target).
+    // Block height alone is ambiguous across repeated reorgs (heights increase), so a caller
+    // comparing reorg identity would compare this id rather than the block number. `block_index`
+    // is the lowest block touched by the event (the rollback target). NOTE: the live consumer
+    // does NOT compare against this method's id - it compares getLastProcessedReorgId() instead;
+    // this reader is unused on the production reorg path (see getReorgsSince).
     async getLatestReorg(){
         let query = `SELECT id, data FROM events WHERE code='REORG' ORDER BY id DESC LIMIT 1`;
         let results = await this.doQuery(query);
@@ -1222,15 +1268,19 @@ class Database {
             return null;
         let row = results[0];
         let block_index = null;
-        let data = JSON.parse(row.data);
-        if(typeof data === 'object' && data !== null){
-            for(let block of data){
-                // Reorg events are stored as an array of {block_index, block_hash}
-                // objects, so unwrap the numeric block index before comparing.
-                let idx = (typeof block === 'object' && block !== null) ? block.block_index : block;
-                if(idx < block_index || block_index === null)
-                    block_index = idx;
+        try {
+            let data = JSON.parse(row.data);
+            if(typeof data === 'object' && data !== null){
+                for(let block of data){
+                    // Reorg events are stored as an array of {block_index, block_hash}
+                    // objects, so unwrap the numeric block index before comparing.
+                    let idx = (typeof block === 'object' && block !== null) ? block.block_index : block;
+                    if(idx < block_index || block_index === null)
+                        block_index = idx;
+                }
             }
+        } catch(e){
+            // Malformed row.data; fall through with block_index left null.
         }
         return { id: Number(row.id), block_index: block_index };
     }
@@ -1251,20 +1301,35 @@ class Database {
             query = `SELECT id, data FROM events WHERE code='REORG' AND id > ? ORDER BY id ASC`;
             args  = [Number(afterId)];
         }
-        let results = await this.doQuery(query, args);
+        // doQueryStrict (not doQuery): this runs on decoderDb, which never opens a
+        // transaction, so doQuery would collapse any read fault to [] - indistinguishable
+        // from "no unprocessed reorgs". That silently suppresses the rollback trigger and
+        // lets the catch-up loop commit and publish blocks on un-rolled-back old-chain
+        // state. Throwing instead aborts the pass with no block committed; the loop retries
+        // on the next tick. Mirrors the throwing sibling read on the indexer side.
+        let results = await this.doQueryStrict(query, args);
         let reorgs = [];
         for(let row of results){
             let block_index = null;
-            let data = JSON.parse(row.data);
-            if(typeof data === 'object' && data !== null){
-                for(let block of data){
-                    // Decoder REORG events store an array of {block_index, block_hash};
-                    // unwrap the numeric block index and keep the lowest (deepest) one.
-                    let idx = (typeof block === 'object' && block !== null) ? block.block_index : block;
-                    if(idx < block_index || block_index === null)
-                        block_index = idx;
+            try {
+                let data = JSON.parse(row.data);
+                if(typeof data === 'object' && data !== null){
+                    for(let block of data){
+                        // Decoder REORG events store an array of {block_index, block_hash};
+                        // unwrap the numeric block index and keep the lowest (deepest) one.
+                        let idx = (typeof block === 'object' && block !== null) ? block.block_index : block;
+                        if(idx < block_index || block_index === null)
+                            block_index = idx;
+                    }
                 }
+            } catch(e){
+                // Malformed row.data; treat as yielding no block_index below and skip the row.
             }
+            // A malformed or empty payload must never be treated as a valid rollback target
+            // (a null block_index here would let `lastIndexerBlock >= null` coerce true and
+            // call rollback(null), whose predicates match no rows - a silently missed rollback).
+            if(block_index === null)
+                continue;
             reorgs.push({ id: Number(row.id), block_index: block_index });
         }
         return reorgs;
@@ -1356,12 +1421,11 @@ class Database {
                         t2.hash as tx_hash,
                         a1.address as source,
                         a2.address as destination,
-                        t1.amount,
                         t1.fee,
                         t1.block_index,
                         b1.block_time,
                         t3.vout,
-                        t3.amount as output_amount,
+                        t3.amount as coin_amount,
                         a3.address as output_destination,
                         p1.pubkey as source_pubkey
                     FROM
@@ -1378,7 +1442,14 @@ class Database {
                     ORDER BY
                         t1.tx_index ASC,
                         t3.vout ASC`;
-        let results = await this.doQuery(query, [block_index]);
+        // doQueryStrict (not doQuery): this reads block transactions from decoderDb, which
+        // never opens a transaction, so doQuery would collapse a transient read fault to []
+        // - indistinguishable from a genuinely empty block. The caller would then commit an
+        // empty block and advance lastIndexerBlock, permanently dropping every action in the
+        // block and forking the hash chain. Throwing instead lets the block-level catch roll
+        // back and retry (lastIndexerBlock stays un-advanced). A genuinely empty block still
+        // returns [] via the length check below; only a failed query throws.
+        let results = await this.doQueryStrict(query, [block_index]);
         if(results.length > 0){
             // First pass: collect the stored outputs for each transaction so every emitted row can
             // carry the full output set. The indexer uses this for native-coin fee detection
@@ -1395,7 +1466,7 @@ class Database {
                 outputsByTx[key].push({
                     vout:    this.util.isNull(row.vout) ? 0 : row.vout,
                     address: row.output_destination,
-                    value:   row.output_amount
+                    value:   row.coin_amount
                 });
             }
             for(let key in outputsByTx)
@@ -1404,27 +1475,51 @@ class Database {
             for(let row of results){
                 if(!this.util.isNull(row.output_destination))
                     row.destination = row.output_destination;
-                if(!this.util.isNull(row.output_amount))
-                    row.amount = row.output_amount;
+                row.amount = this.util.isNull(row.coin_amount) ? null : row.coin_amount;
                 if(this.util.isNull(row.vout))
                     row.vout = 0;
                 // Full output set for this transaction (used by native-coin fee validation)
                 row.tx_outputs = outputsByTx[row.tx_hash] || [];
                 delete row.output_destination;
-                delete row.output_amount;
+                delete row.coin_amount;
                 data.push(row);
             }
         }
         return data;
     }
 
-    // Handle getting block time for a given block
+    // Handle getting block time for a given block. Memoized (last-block-wins, see
+    // this._blockTimeCache in the constructor): block_time is constant per block_index, and
+    // protocol_changes.isEnabled() calls this repeatedly per block under the hot per-action path.
     async getBlockTime(block_index){
-        let query   = `SELECT block_time from blocks where block_index=?`; 
-        let results = await this.doQuery(query, [block_index]);
-        if(results.length > 0)
-            return results[0]['block_time'];
-        return false;
+        let key = Number(block_index);
+        if(this._blockTimeCache.block_index === key)
+            return this._blockTimeCache.block_time;
+        let query   = `SELECT block_time from blocks where block_index=?`;
+        let results;
+        try {
+            // doQueryStrict (not doQuery): getBlockTime feeds ProtocolChanges.isEnabled on
+            // the consensus path, and doQuery collapses any decoder-DB fault to [] - which is
+            // indistinguishable from "no such block" and returns the `false` sentinel. `false`
+            // then coerces to 0 in isEnabled's `change.mainnet_time > current.block_time`
+            // compare, silently marking every armed time-gated protocol change INACTIVE on this
+            // node only (a unilateral contract_hash fork), while the fail-loud catch at
+            // protocol_changes.js:583 - written precisely for a transient getBlockTime fault -
+            // never fires because nothing was thrown. Throwing propagates to that catch so the
+            // block rolls back and retries. See finding #898.
+            results = await this.doQueryStrict(query, [block_index]);
+        } catch(e){
+            // Infrastructure faults (lock-wait timeout, connection loss - any errno other than
+            // the benign missing-table/column 1146/1054) must reach the fail-loud gate. A failed
+            // lookup is NEVER memoized, so the retry re-queries against a healthy DB.
+            rethrowIfInfraFault(e);
+            // Benign older-schema gap only: treat as an unresolvable block_time, uncached.
+            return false;
+        }
+        let block_time = (results.length > 0) ? results[0]['block_time'] : false;
+        this._blockTimeCache.block_index = key;
+        this._blockTimeCache.block_time  = block_time;
+        return block_time;
     }
 
     // Get block hashes using credits/debits/actions table data and previous hash
@@ -4965,8 +5060,12 @@ class Database {
         // Map a close-eligible voter's close balance to a weight number under the
         // active mode. balance = close holdings; flat = one-address-one-vote;
         // quadratic = sqrt(close) to flatten whales; time_weighted = average
-        // holdings over the window. Eligibility (hold-to-count + dust floor) is
-        // always the close snapshot, never the transform.
+        // holdings over the window. Weight eligibility is hold-to-count only (a
+        // positive close balance); MIN_VOTE_BALANCE is NOT a floor on weight - it
+        // gates only the qualifyingVoters headcount below. So quadratic weight has
+        // no dust floor: splitting stake across many sub-floor addresses still
+        // yields sqrt-amplified weight (Sybil-resistant, not Sybil-proof), bounded
+        // only by per-address transaction fees.
         const weightFor = (addr, closeBal) => {
             if(weight_mode === 'flat')          return '1';
             if(weight_mode === 'quadratic')     return this.util.bcsqrt(closeBal, 18);
@@ -6989,6 +7088,59 @@ class Database {
         }
     }
 
+    // Batched sibling of createActionMapping(): resolves every value's id and writes all
+    // rows for one (action_index, type) in as few round-trips as possible instead of one
+    // SELECT+INSERT pair per value. Used by mapper.js for recipient-scaling actions
+    // (DIVIDEND/AIRDROP/CALLBACK) where the address/tick list can hold thousands of entries.
+    // Preserves createActionMapping's semantics exactly: same dangling-^<id>-reference skip,
+    // same existing-row de-duplication, no rows written for an empty list.
+    async createActionMappings(action_index, type, values){
+        if(this.util.isNull(values) || values.length === 0)
+            return;
+        let type_id = null;
+        if(type=='tick')
+            type_id = 1;
+        if(type=='address')
+            type_id = 2;
+        if(this.util.isNull(type_id))
+            return;
+
+        // Resolve ids one at a time (createTicker/createAddress are themselves cached lookups),
+        // skipping dangling ^<id> references (null id) and de-duplicating within this batch.
+        let ids = [];
+        for(let value of values){
+            let id = (type=='tick') ? await this.createTicker(value) : await this.createAddress(value);
+            if(this.util.isNull(id))
+                continue;
+            if(!ids.includes(id))
+                ids.push(id);
+        }
+        if(ids.length === 0)
+            return;
+
+        // Skip ids that already carry a mapping row for this action_index/type, matching
+        // createActionMapping's existing-record guard, so the batched INSERT never collides.
+        let existsQuery = `SELECT id FROM mappings_actions WHERE action_index=? AND type_id=? AND id IN (${ids.map(() => '?').join(', ')})`;
+        let existsRows  = await this.doQuery(existsQuery, [action_index, type_id, ...ids]);
+        let existingIds = existsRows.map(row => row.id);
+        let toInsert    = ids.filter(id => !existingIds.includes(id));
+        if(toInsert.length === 0)
+            return;
+
+        // Chunk the multi-row INSERT so a very large recipient list cannot exceed the
+        // driver's bound-parameter limit.
+        let chunkSize = 500;
+        for(let i = 0; i < toInsert.length; i += chunkSize){
+            let chunk        = toInsert.slice(i, i + chunkSize);
+            let placeholders = chunk.map(() => '(?, ?, ?)').join(', ');
+            let args         = [];
+            for(let id of chunk)
+                args.push(action_index, type_id, id);
+            let query = `INSERT INTO mappings_actions (action_index, type_id, id) values ${placeholders}`;
+            await this.doQuery(query, args);
+        }
+    }
+
     // Create records in the 'mappings_files' table
     async createFileMapping(action_index, type, value){
         let type_id = null,
@@ -7856,28 +8008,48 @@ class Database {
         query += ' ORDER BY action_index ASC';
         let results = await this.doQuery(query, args);
         if(results.length > 0){
-            // Get the current expiration for each item
+            // Resolve the effective expiration for every open item in ONE batched
+            // edits query per type (was an N+1: one edits query per open item, every
+            // block). Semantics preserved exactly: iterate `valid` edits in ascending
+            // action_index and let the LAST non-null expiration win; items with no
+            // edits (or only null-expiration edits) keep their base expiration.
+            let byType = {};
             for(let info of results){
-                // Get list of any `valid` edits and set expiration
-                query  = `SELECT 
+                if(!byType[info.type])
+                    byType[info.type] = [];
+                byType[info.type].push(info);
+            }
+            for(let type of Object.keys(byType)){
+                let items        = byType[type];
+                let placeholders = items.map(() => '?').join(',');
+                query  = `SELECT
+                            s1.` + type + `_action_index as item_action_index,
                             s1.expiration
-                        FROM 
-                            ` + info.type + `_edits s1
+                        FROM
+                            ` + type + `_edits s1
                             INNER JOIN index_statuses s2 ON (s2.id=s1.status_id)
-                        WHERE 
-                            s1.` + info.type + `_action_index=? AND
+                        WHERE
+                            s1.` + type + `_action_index IN (` + placeholders + `) AND
                             s2.status=?
                         ORDER BY
                             s1.action_index ASC`;
-                args         = [info.action_index, 'valid'];
+                args         = items.map(i => i.action_index).concat(['valid']);
                 let results2 = await this.doQuery(query, args);
                 if(results2.length > 0){
+                    let latest = {};
                     for(let row of results2){
                         if(!this.util.isNull(row.expiration))
-                            info.expiration = row.expiration;
+                            latest[row.item_action_index] = row.expiration;
+                    }
+                    for(let info of items){
+                        if(latest[info.action_index] !== undefined)
+                            info.expiration = latest[info.action_index];
                     }
                 }
-                // If the item expiration is less than the current block_time, expire the item
+            }
+            // If the item expiration is less than the current block_time, expire the item.
+            // `results` is already ORDER BY action_index ASC, so output order is unchanged.
+            for(let info of results){
                 if(info.expiration < block_time){
                     expired.push({
                         type:         info.type,
@@ -8344,6 +8516,25 @@ class Database {
                         id=?`;
         let args    = [tick1_price, tick1_bid, tick1_ask, tick1_24hr_price, tick1_24hr_high, tick1_24hr_low, tick1_24hr_change, tick1_24hr_volume, tick2_price, tick2_bid, tick2_ask, tick2_24hr_price, tick2_24hr_high, tick2_24hr_low, tick2_24hr_change, tick2_24hr_volume, last_updated, market_id];
         let results = await this.doQuery(query, args);
+    }
+
+    // Bounded batch of the most-stale existing market rows for the throttled 24h rolling-stats
+    // ageing sweep (processMarketUpdates). Returns market ids whose stats were last refreshed
+    // before `time_24hr` (NULL = never), oldest-first, capped at `limit`, so per-block refresh
+    // cost is bounded by the cap rather than the total active-market count. The `markets` table is
+    // unhashed / snapshot-replicated with no consensus reader (see rollback.js IDX-2), so a
+    // node-local sweep cadence cannot diverge block state. ORDER BY (last_updated, id) is stable.
+    async getStaleMarkets(time_24hr, limit){
+        let max = Number(limit);
+        if(!Number.isFinite(max) || max <= 0) max = 25;
+        let rows = await this.doQuery(
+            `SELECT id
+             FROM markets
+             WHERE last_updated IS NULL OR last_updated < ?
+             ORDER BY (last_updated IS NULL) DESC, last_updated ASC, id ASC
+             LIMIT ?`,
+            [time_24hr, max]);
+        return rows || [];
     }
 
     // Handle finding and updating markets
@@ -9708,6 +9899,24 @@ class Database {
                      VALUES (?, ?, ?, 'pending', 0, NOW())`;
         let res = await this.doQuery(query, [pushType, actionIndex, JSON.stringify(payload)]);
         return (res && res.insertId != null) ? Number(res.insertId) : null;
+    }
+
+    // Stage a hub push (already durably written via enqueueHubPushTx inside the open block
+    // transaction) for an immediate live delivery attempt AFTER the block commits. XChainIndexer
+    // installs a fresh _stagedHubPushes array at the start of each block and drains it post-commit
+    // (mirroring rollback.js's post-commit retraction delivery). A rollback simply never drains the
+    // array (it is replaced at the next block start), and the durable rows were rolled back with the
+    // transaction, so nothing phantom survives. Inert (no-op) when no array is installed.
+    stageHubPush(entry){
+        if(Array.isArray(this._stagedHubPushes)) this._stagedHubPushes.push(entry);
+    }
+
+    // Return the staged hub pushes for this block and clear the buffer, so a post-commit drain
+    // consumes each entry exactly once. Returns [] when nothing was staged.
+    takeStagedHubPushes(){
+        let staged = Array.isArray(this._stagedHubPushes) ? this._stagedHubPushes : [];
+        this._stagedHubPushes = Array.isArray(this._stagedHubPushes) ? [] : this._stagedHubPushes;
+        return staged;
     }
 
     // Fetch the oldest pending rows for the poller to consider (it applies the

@@ -117,4 +117,76 @@ describe('Dispenser_Expire action handler @regression @tier2', function () {
         assert.strictEqual(String(escrows[0][1]), '-' + REMAINING, 'escrow debit keeps all 18 decimals');
         assert.notStrictEqual(String(escrows[0][1]), String(-Number(REMAINING)), 'not the truncated JS-float negation');
     });
+
+    // Regression: dispenser_expire.js must mirror dispenser_close.js's escrow-gate
+    // ownership check, only releasing the gate when it belongs to this dispenser's
+    // ACTION_INDEX. See AML finding uuid:0149a13e.
+    it('ownership dispenser: clears the escrow gate when it matches this ACTION_INDEX', async function () {
+        const dispenser = makeDispenser({ GIVE_OWNERSHIP: 1, ACTION_INDEX: 50 });
+        indexer.indexerDb.getDispenserInfo.resolves(dispenser);
+        indexer.indexerDb.getTokenEscrow = sinon.stub().resolves(50);
+        indexer.indexerDb.clearTokenEscrow = sinon.stub().resolves();
+
+        const data = createBaseData({ ACTION: 'DISPENSER_EXPIRE', ACTION_INDEX: 50, BLOCK_INDEX: 200 });
+        await handler.parse(null, data, null);
+
+        sinon.assert.calledOnce(indexer.indexerDb.clearTokenEscrow);
+    });
+
+    it('ownership dispenser: does not clear the escrow gate when it belongs to a different ACTION_INDEX', async function () {
+        const dispenser = makeDispenser({ GIVE_OWNERSHIP: 1, ACTION_INDEX: 50 });
+        indexer.indexerDb.getDispenserInfo.resolves(dispenser);
+        // Gate is held by a different dispenser (e.g. a newer offer on the same tick)
+        indexer.indexerDb.getTokenEscrow = sinon.stub().resolves(99);
+        indexer.indexerDb.clearTokenEscrow = sinon.stub().resolves();
+
+        const data = createBaseData({ ACTION: 'DISPENSER_EXPIRE', ACTION_INDEX: 50, BLOCK_INDEX: 200 });
+        await handler.parse(null, data, null);
+
+        sinon.assert.notCalled(indexer.indexerDb.clearTokenEscrow);
+    });
+
+    it('ownership dispenser: does not clear the escrow gate when already cleared (null)', async function () {
+        const dispenser = makeDispenser({ GIVE_OWNERSHIP: 1, ACTION_INDEX: 50 });
+        indexer.indexerDb.getDispenserInfo.resolves(dispenser);
+        indexer.indexerDb.getTokenEscrow = sinon.stub().resolves(null);
+        indexer.indexerDb.clearTokenEscrow = sinon.stub().resolves();
+
+        const data = createBaseData({ ACTION: 'DISPENSER_EXPIRE', ACTION_INDEX: 50, BLOCK_INDEX: 200 });
+        await handler.parse(null, data, null);
+
+        sinon.assert.notCalled(indexer.indexerDb.clearTokenEscrow);
+    });
+
+    // Regression: mirrors dispenser_close.js's bcgt(GIVE_REMAINING, 0) guard so an
+    // empty balance dispenser does not push a zero-value escrow/credit pair.
+    it('balance dispenser: pushes escrow/credit pair when GIVE_REMAINING > 0', async function () {
+        const dispenser = makeDispenser({ GIVE_REMAINING: '10' });
+        indexer.indexerDb.getDispenserInfo.resolves(dispenser);
+        const capture = sinon.stub(indexer.util, 'processTransactionLedgerChanges').resolves();
+
+        const data = createBaseData({ ACTION: 'DISPENSER_EXPIRE', ACTION_INDEX: 50, BLOCK_INDEX: 200 });
+        await handler.parse(null, data, null);
+
+        // processTransactionLedgerChanges(db, data, credits, debits, escrows)
+        const credits = capture.getCall(0).args[2];
+        const escrows = capture.getCall(0).args[4];
+        assert.strictEqual(escrows.length, 1);
+        assert.strictEqual(credits.length, 1);
+    });
+
+    it('balance dispenser: pushes no escrow/credit pair when GIVE_REMAINING is 0', async function () {
+        const dispenser = makeDispenser({ GIVE_REMAINING: '0' });
+        indexer.indexerDb.getDispenserInfo.resolves(dispenser);
+        const capture = sinon.stub(indexer.util, 'processTransactionLedgerChanges').resolves();
+
+        const data = createBaseData({ ACTION: 'DISPENSER_EXPIRE', ACTION_INDEX: 50, BLOCK_INDEX: 200 });
+        await handler.parse(null, data, null);
+
+        // processTransactionLedgerChanges(db, data, credits, debits, escrows)
+        const credits = capture.getCall(0).args[2];
+        const escrows = capture.getCall(0).args[4];
+        assert.strictEqual(escrows.length, 0, 'no zero-value escrow debit is pushed');
+        assert.strictEqual(credits.length, 0, 'no zero-value credit is pushed');
+    });
 });

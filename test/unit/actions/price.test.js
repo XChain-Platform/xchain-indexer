@@ -547,8 +547,15 @@ describe('Price (PRICE) @regression @tier3', function () {
             sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(false);
         });
 
-        it('valid v0 with hubClient → pushPriceRound called', async function () {
+        // The forward push now goes through a durable transactional outbox: parse writes the
+        // pending_hub_pushes row via enqueueHubPushTx (inside the block transaction) and stages it
+        // for a post-commit live delivery. parse itself never calls pushPriceRound, so a crash
+        // between commit and delivery cannot drop the round, and a same-block rollback unwinds the
+        // outbox row instead of leaving a phantom push.
+        it('valid v0 with hubClient → durable outbox row enqueued + staged (no direct push)', async function () {
             const mockHubClient = { pushPriceRound: sinon.stub().resolves() };
+            indexer.indexerDb.enqueueHubPushTx = sinon.stub().resolves(42);
+            indexer.indexerDb.stageHubPush = sinon.stub();
             indexer.indexerDb.getActiveCapabilityCount.resolves(1);
 
             const localActionsCtx = {
@@ -565,40 +572,24 @@ describe('Price (PRICE) @regression @tier3', function () {
             await localHandler.parse(v0Params(ONE_PAIR, [{ pubkey: PUBKEY_A, sig: SIG_A }]), data, null);
 
             assert.strictEqual(data['VALIDATION_STATUS'], 'valid');
-            assert.ok(mockHubClient.pushPriceRound.calledOnce);
-            // #4232: the push must carry the round's BTC anchor so the hub re-verify
-            // (PriceAggregator) reconstructs the identical signed bytes and gates the
-            // EQUIV header on the same height.
-            assert.strictEqual(mockHubClient.pushPriceRound.firstCall.args[0].btc_block_height, 799000);
+            // Durable row written transactionally, NOT delivered from within parse.
+            assert.ok(indexer.indexerDb.enqueueHubPushTx.calledOnce);
+            assert.strictEqual(indexer.indexerDb.enqueueHubPushTx.firstCall.args[0], 'price_round');
+            assert.ok(!mockHubClient.pushPriceRound.called);
+            // Staged for post-commit delivery, carrying the durable row id and the payload.
+            assert.ok(indexer.indexerDb.stageHubPush.calledOnce);
+            const staged = indexer.indexerDb.stageHubPush.firstCall.args[0];
+            assert.strictEqual(staged.id, 42);
+            assert.strictEqual(staged.pushType, 'price_round');
+            // #4232: the payload must carry the round's BTC anchor for the hub re-verify.
+            assert.strictEqual(staged.payload.btc_block_height, 799000);
+            assert.strictEqual(indexer.indexerDb.enqueueHubPushTx.firstCall.args[1].btc_block_height, 799000);
         });
 
-        it('valid v0 with hubClient - hub push failure queues retry', async function () {
-            // pushPriceRound rejects - should queue via enqueueHubPush (fire-and-forget)
-            indexer.indexerDb.enqueueHubPush = sinon.stub().resolves();
-            const mockHubClient = { pushPriceRound: sinon.stub().rejects(new Error('network timeout')) };
-            indexer.indexerDb.getActiveCapabilityCount.resolves(1);
-
-            const localActionsCtx = {
-                config:    indexer.config,
-                util:      indexer.util,
-                mapper:    indexer.mapper,
-                decoderDb: indexer.decoderDb,
-                indexerDb: indexer.indexerDb,
-                hubClient: mockHubClient,
-            };
-            const localHandler = new Price(localActionsCtx);
-
-            const data = createBaseData({ ACTION: 'PRICE', FORMAT: 0, BLOCK_INDEX: 100 });
-            // Should NOT throw even though hub push rejects (fire-and-forget)
-            await localHandler.parse(v0Params(ONE_PAIR, [{ pubkey: PUBKEY_A, sig: SIG_A }]), data, null);
-
-            assert.strictEqual(data['VALIDATION_STATUS'], 'valid');
-            // enqueueHubPush is called after the rejection is caught by the .catch chain (async)
-            // We just verify the main parse didn't throw
-        });
-
-        it('invalid v0 with hubClient → pushPriceRound NOT called', async function () {
+        it('invalid v0 with hubClient → nothing enqueued or staged', async function () {
             const mockHubClient = { pushPriceRound: sinon.stub().resolves() };
+            indexer.indexerDb.enqueueHubPushTx = sinon.stub().resolves(1);
+            indexer.indexerDb.stageHubPush = sinon.stub();
             // Fail quorum by returning false for all sigs
             ed25519.verify.returns(false);
             indexer.indexerDb.getActiveCapabilityCount.resolves(1);
@@ -618,6 +609,8 @@ describe('Price (PRICE) @regression @tier3', function () {
 
             assert.strictEqual(data['VALIDATION_STATUS'], 'invalid');
             assert.ok(!mockHubClient.pushPriceRound.called);
+            assert.ok(!indexer.indexerDb.enqueueHubPushTx.called);
+            assert.ok(!indexer.indexerDb.stageHubPush.called);
         });
     });
 
@@ -627,8 +620,13 @@ describe('Price (PRICE) @regression @tier3', function () {
             return ['1', p.coin, p.tick, p.fiat, p.value, p.fee, p.memo];
         }
 
-        it('valid v1 with hubClient → pushOraclePrice called', async function () {
+        // A v1 oracle_price is user-submitted and never re-emitted by a later block, so its lost-push
+        // window was permanent. It now uses the same durable transactional outbox as v0: enqueueHubPushTx
+        // inside the block transaction plus a staged post-commit delivery; parse never pushes directly.
+        it('valid v1 with hubClient → durable outbox row enqueued + staged (no direct push)', async function () {
             const mockHubClient = { pushOraclePrice: sinon.stub().resolves() };
+            indexer.indexerDb.enqueueHubPushTx = sinon.stub().resolves(7);
+            indexer.indexerDb.stageHubPush = sinon.stub();
 
             const localActionsCtx = {
                 config:    indexer.config,
@@ -644,11 +642,19 @@ describe('Price (PRICE) @regression @tier3', function () {
             await localHandler.parse(v1Params(), data, null);
 
             assert.strictEqual(data['VALIDATION_STATUS'], 'valid');
-            assert.ok(mockHubClient.pushOraclePrice.calledOnce);
+            assert.ok(indexer.indexerDb.enqueueHubPushTx.calledOnce);
+            assert.strictEqual(indexer.indexerDb.enqueueHubPushTx.firstCall.args[0], 'oracle_price');
+            assert.ok(!mockHubClient.pushOraclePrice.called);
+            assert.ok(indexer.indexerDb.stageHubPush.calledOnce);
+            const staged = indexer.indexerDb.stageHubPush.firstCall.args[0];
+            assert.strictEqual(staged.id, 7);
+            assert.strictEqual(staged.pushType, 'oracle_price');
         });
 
-        it('invalid v1 with hubClient → pushOraclePrice NOT called', async function () {
+        it('invalid v1 with hubClient → nothing enqueued or staged', async function () {
             const mockHubClient = { pushOraclePrice: sinon.stub().resolves() };
+            indexer.indexerDb.enqueueHubPushTx = sinon.stub().resolves(1);
+            indexer.indexerDb.stageHubPush = sinon.stub();
 
             const localActionsCtx = {
                 config:    indexer.config,
@@ -666,27 +672,8 @@ describe('Price (PRICE) @regression @tier3', function () {
 
             assert.strictEqual(data['VALIDATION_STATUS'], 'invalid');
             assert.ok(!mockHubClient.pushOraclePrice.called);
-        });
-
-        it('valid v1 with hubClient - hub push failure queued for retry (no throw)', async function () {
-            indexer.indexerDb.enqueueHubPush = sinon.stub().resolves();
-            const mockHubClient = { pushOraclePrice: sinon.stub().rejects(new Error('hub down')) };
-
-            const localActionsCtx = {
-                config:    indexer.config,
-                util:      indexer.util,
-                mapper:    indexer.mapper,
-                decoderDb: indexer.decoderDb,
-                indexerDb: indexer.indexerDb,
-                hubClient: mockHubClient,
-            };
-            const localHandler = new Price(localActionsCtx);
-
-            const data = createBaseData({ ACTION: 'PRICE', FORMAT: 1 });
-            // Fire-and-forget - must not throw
-            await localHandler.parse(v1Params(), data, null);
-
-            assert.strictEqual(data['VALIDATION_STATUS'], 'valid');
+            assert.ok(!indexer.indexerDb.enqueueHubPushTx.called);
+            assert.ok(!indexer.indexerDb.stageHubPush.called);
         });
     });
 });
