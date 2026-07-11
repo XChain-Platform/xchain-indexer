@@ -59,6 +59,14 @@ describe('Utility @regression @tier1', function () {
             assert.ok(db.createMarket.notCalled);
         });
 
+        it('skips the ageing sweep (without throwing) when block_time is the false sentinel', async function () {
+            // getBlockTime returns false when the block row is unresolvable (older-schema
+            // decoder DB); bcsub("false") used to throw and wedge block processing.
+            const db = fakeDb([{ tick1_id: 1, tick2_id: 2 }], [{ id: 11 }]);
+            await util.processMarketUpdates(db, 100, false);
+            assert.ok(db.getStaleMarkets.notCalled);
+        });
+
         it('sets last_updated to the current block_time on every refreshed row', async function () {
             const db = fakeDb([{ tick1_id: 1, tick2_id: 2 }], [{ id: 99 }]);
             await util.processMarketUpdates(db, 100, 1700000000);

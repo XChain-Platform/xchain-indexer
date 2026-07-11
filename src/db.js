@@ -470,6 +470,18 @@ class Database {
             // gone) so a keyword inside comment prose never triggers or hides a hit.
             const stmt = String(raw).replace(/\/\*[\s\S]*?\*\//g, ' ').trim();
             if(!stmt) continue;
+            // Server-side indirection escapes a statement-prefix classifier: a mode=auto
+            // file can smuggle destructive SQL past every keyword check below via dynamic
+            // SQL (`SET @s = 'DROP TABLE balances'; PREPARE stmt FROM @s; EXECUTE stmt;`)
+            // or a `CALL proc()` whose body the scanner cannot see. None of these are used
+            // by any committed auto migration, so treat them as non-auto-eligible. SET of a
+            // user variable (`SET @s = ...`) exists to stage dynamic SQL for PREPARE, so
+            // flag it too - but NOT system-variable SETs (`SET NAMES ...`, `SET sql_mode
+            // = ...`, `SET @@session...`), which are benign and stay auto-eligible.
+            if(/^PREPARE\b/i.test(stmt))                         return raw;
+            if(/^EXECUTE\b/i.test(stmt))                         return raw;
+            if(/^CALL\b/i.test(stmt))                            return raw;
+            if(/^SET\s+@(?!@)/i.test(stmt))                      return raw;
             if(/^DROP\s+(TABLE|DATABASE|SCHEMA)\b/i.test(stmt))  return raw;
             // CREATE OR REPLACE TABLE is an atomic DROP TABLE IF EXISTS + CREATE: it destroys
             // every existing row. Plain CREATE TABLE / CREATE TABLE IF NOT EXISTS are additive
@@ -1194,102 +1206,28 @@ class Database {
             this.util.logError('Invalid component');
             return null;
         }
-        // Bail out on any invalid request type
-        var validTypes = ['first', 'last', 'reorg'];
+        // Bail out on any invalid request type. Only block-extent reads remain; the
+        // legacy 'reorg' single-newest-row reader was removed (its newest-only, bare-height
+        // shape silently dropped shallower-after-deeper reorgs). The live reorg path uses
+        // getLastProcessedReorgId() + getReorgsSince() exclusively.
+        var validTypes = ['first', 'last'];
         if(!validTypes.includes(type)){
             this.util.logError('Invalid type');
             return null;
         }
-        // Handle reorgs
-        if(type=='reorg'){
-
-            // Handle getting reorg data from the decoder
-            if(component=='decoder'){
-                let query = `SELECT data FROM events WHERE code='REORG' ORDER BY id DESC LIMIT 1`;
-                let results = await this.doQuery(query);
-                if(results.length > 0){
-                    for(let row of results){
-                        try {
-                            let data = JSON.parse(row.data);
-                            if(typeof data === 'object' && data !== null){
-                                for (let block of data){
-                                    // Reorg events are stored as an array of {block_index, block_hash}
-                                    // objects, so unwrap the numeric block index before comparing.
-                                    let idx = (typeof block === 'object' && block !== null) ? block.block_index : block;
-                                    if(idx < block_index || block_index === null)
-                                        block_index = idx;
-                                }
-                            }
-                        } catch(e){
-                            // Malformed row.data; skip it rather than throwing on for...of.
-                        }
-
-                    }
-                }
-
-            }
-
-            // Handle getting reorg data from the indexer. Newer rows store a JSON
-            // {block_index, decoder_event_id} payload; legacy rows store a bare number.
-            if(component=='indexer'){
-                let query = `SELECT data FROM events WHERE code='REORG' ORDER BY id DESC LIMIT 1`;
-                let results = await this.doQuery(query);
-                if(results.length > 0){
-                    let raw = results[0]["data"];
-                    try {
-                        let parsed = JSON.parse(raw);
-                        block_index = (parsed !== null && typeof parsed === 'object') ? Number(parsed.block_index) : Number(parsed);
-                    } catch(e){
-                        block_index = Number(raw);
-                    }
-                }
-            }
-        } else {
-            let func  = (type=='first') ? 'MIN' : 'MAX';
-            let query = 'SELECT ' + func + '(block_index) AS block_index FROM blocks';
-            let results = await this.doQuery(query);
-            if(results.length > 0 && !this.util.isNull(results[0]["block_index"]))
-                block_index = Number(results[0]["block_index"]);
-        }
-        return block_index;
-    }
-
-    // Get the decoder's most-recent reorg event as { id, block_index }, or null if none.
-    // `id` is the decoder events.id - the IDENTITY used to decide whether a reorg is new.
-    // Block height alone is ambiguous across repeated reorgs (heights increase), so a caller
-    // comparing reorg identity would compare this id rather than the block number. `block_index`
-    // is the lowest block touched by the event (the rollback target). NOTE: the live consumer
-    // does NOT compare against this method's id - it compares getLastProcessedReorgId() instead;
-    // this reader is unused on the production reorg path (see getReorgsSince).
-    async getLatestReorg(){
-        let query = `SELECT id, data FROM events WHERE code='REORG' ORDER BY id DESC LIMIT 1`;
+        let func  = (type=='first') ? 'MIN' : 'MAX';
+        let query = 'SELECT ' + func + '(block_index) AS block_index FROM blocks';
         let results = await this.doQuery(query);
-        if(results.length === 0)
-            return null;
-        let row = results[0];
-        let block_index = null;
-        try {
-            let data = JSON.parse(row.data);
-            if(typeof data === 'object' && data !== null){
-                for(let block of data){
-                    // Reorg events are stored as an array of {block_index, block_hash}
-                    // objects, so unwrap the numeric block index before comparing.
-                    let idx = (typeof block === 'object' && block !== null) ? block.block_index : block;
-                    if(idx < block_index || block_index === null)
-                        block_index = idx;
-                }
-            }
-        } catch(e){
-            // Malformed row.data; fall through with block_index left null.
-        }
-        return { id: Number(row.id), block_index: block_index };
+        if(results.length > 0 && !this.util.isNull(results[0]["block_index"]))
+            block_index = Number(results[0]["block_index"]);
+        return block_index;
     }
 
     // Get EVERY decoder reorg event newer than the one the indexer last processed, oldest
     // first, each as {id, block_index} where block_index is that event's deepest (lowest)
-    // orphaned block. getLatestReorg() returns only the single newest event, so when two
-    // reorgs land between indexer iterations and the newer one is shallower, the older,
-    // deeper reorg is silently dropped and orphaned rows survive below the rollback point.
+    // orphaned block. A single-newest-event reader would drop the older, deeper reorg when
+    // two reorgs land between indexer iterations and the newer one is shallower, leaving
+    // orphaned rows below the rollback point.
     // Processing the full set (and rolling back to the minimum block across it) closes that
     // gap. afterId is the decoder event id from getLastProcessedReorgId (null = none yet).
     async getReorgsSince(afterId){
@@ -1336,8 +1274,8 @@ class Database {
     }
 
     // Get the decoder event id of the most-recent reorg the indexer has already recorded,
-    // or null if none. This is the value compared against getLatestReorg().id to decide
-    // whether a new reorg needs processing - an IDENTITY check, not a block-height compare.
+    // or null if none. getReorgsSince() selects every decoder reorg with an id greater than
+    // this value - an IDENTITY check, not a block-height compare.
     async getLastProcessedReorgId(){
         // Scan REORG markers newest-first and return the newest one that carries a decoder_event_id
         // (REORG-4). The previous code inspected ONLY the single newest row and returned null if it

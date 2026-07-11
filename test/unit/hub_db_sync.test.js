@@ -1369,4 +1369,42 @@ describe('HubDbSync heartbeat-timeout watchdog @regression @tier2', function () 
             clock.restore();
         }
     });
+
+    it('adopts the hub-advertised watermark interval and resizes the timeout to 3x', function () {
+        const sync = makeWatchdogSync();
+        assert.strictEqual(sync.watermarkTimeoutMs, 30000, 'seed timeout is 3x the env/option interval');
+        const adopted = sync._adoptHubWatermarkInterval(45000);
+        assert.strictEqual(adopted, true, 'a valid interval is adopted');
+        assert.strictEqual(sync.watermarkIntervalMs, 45000);
+        assert.strictEqual(sync.watermarkTimeoutMs, 135000, 'timeout self-sizes to 3x the hub cadence');
+    });
+
+    it('ignores a missing/invalid advertised interval, keeping the env-seeded timeout (older hub)', function () {
+        const sync = makeWatchdogSync();
+        for (const bad of [undefined, null, 0, -1, 'x', NaN]) {
+            assert.strictEqual(sync._adoptHubWatermarkInterval(bad), false, 'invalid interval is not adopted');
+        }
+        assert.strictEqual(sync.watermarkIntervalMs, 10000, 'interval unchanged');
+        assert.strictEqual(sync.watermarkTimeoutMs, 30000, 'timeout unchanged (env-seeded fallback intact)');
+    });
+
+    it('a socket heartbeating at the hub cadence survives once the interval is adopted (drift no longer kills healthy sockets)', function () {
+        const clock = sinon.useFakeTimers();
+        try {
+            const sync = makeWatchdogSync();
+            // Hub raised its interval to 45s; without adoption the 30s (3x10s) timeout
+            // would terminate a socket that legitimately heartbeats every 45s.
+            sync._adoptHubWatermarkInterval(45000);
+            const ws = stubWs();
+            sync._startWatchdog(ws);
+
+            for (let i = 0; i < 6; i++) {
+                clock.tick(45000);
+                sync._lastHeartbeatAt = Date.now();
+            }
+            assert.strictEqual(ws.terminate.called, false, 'a 45s-cadence socket must not be terminated after adopting the hub interval');
+        } finally {
+            clock.restore();
+        }
+    });
 });

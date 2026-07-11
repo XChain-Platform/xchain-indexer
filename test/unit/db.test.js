@@ -485,6 +485,14 @@ describe('Database.getBlockIndex() input validation @regression @tier1', functio
         assert.strictEqual(result, null);
     });
 
+    it("treats the removed legacy 'reorg' type as invalid (live path uses getReorgsSince)", async function () {
+        // getBlockIndex(...,'reorg') was a dead single-newest-row reader; it now falls
+        // into the invalid-type path and must never query.
+        const result = await db.getBlockIndex.call(db, 'decoder', 'reorg');
+        assert.strictEqual(result, null);
+        assert.strictEqual(db.doQuery.callCount, 0);
+    });
+
     it('does not call doQuery when component is invalid', async function () {
         await db.getBlockIndex.call(db, 'bad', 'first');
         assert.strictEqual(db.doQuery.callCount, 0);
@@ -521,8 +529,8 @@ describe('Database.getBlockIndex() input validation @regression @tier1', functio
         assert.strictEqual(result, null);
     });
 
-    it('accepts all three valid types without returning null early', async function () {
-        for (const type of ['first', 'last', 'reorg']) {
+    it('accepts the valid block-extent types without returning null early', async function () {
+        for (const type of ['first', 'last']) {
             db.doQuery.reset();
             db.doQuery.resolves([]);
             const result = await db.getBlockIndex.call(db, 'decoder', type);
@@ -542,92 +550,14 @@ describe('Database.getBlockIndex() input validation @regression @tier1', functio
 });
 
 // ---------------------------------------------------------------------------
-// describe: getBlockIndex (decoder reorg parsing, mocked doQuery)
-//
-// The decoder stores REORG events as a JSON-serialised array of
-// {block_index, block_hash} objects. getBlockIndex('decoder','reorg') must
-// unwrap the numeric block_index from each element and return the lowest one
-// as a number, not the raw object. A regression here breaks the rollback
-// trigger check, so rollbacks silently never fire.
-// ---------------------------------------------------------------------------
-describe('Database.getBlockIndex() decoder reorg parsing @regression @tier1', function () {
-    let db;
-
-    beforeEach(function () {
-        const config = getTestConfig();
-        const util   = new Utility();
-        sinon.stub(util, 'logError');
-        db = {
-            config,
-            util,
-            doQuery: sinon.stub().resolves([]),
-            // createReorg writes its marker via doQueryStrict (throw-on-fault) so a swallowed
-            // INSERT failure can't leave the processed-reorg cursor un-advanced.
-            doQueryStrict: sinon.stub().resolves([]),
-            getBlockIndex: Database.prototype.getBlockIndex,
-        };
-    });
-
-    afterEach(function () {
-        sinon.restore();
-    });
-
-    it('returns a number (not an object) for the object-array format', async function () {
-        const events = [{ block_index: 120, block_hash: 'abc123' }];
-        db.doQuery.resolves([{ data: JSON.stringify(events) }]);
-        const result = await db.getBlockIndex.call(db, 'decoder', 'reorg');
-        assert.strictEqual(typeof result, 'number');
-        assert.strictEqual(result, 120);
-    });
-
-    it('returns the lowest block_index across multiple orphaned blocks', async function () {
-        const events = [
-            { block_index: 122, block_hash: 'h122' },
-            { block_index: 120, block_hash: 'h120' },
-            { block_index: 121, block_hash: 'h121' },
-        ];
-        db.doQuery.resolves([{ data: JSON.stringify(events) }]);
-        const result = await db.getBlockIndex.call(db, 'decoder', 'reorg');
-        assert.strictEqual(result, 120);
-    });
-
-    it('produces a value that compares numerically (rollback trigger fires)', async function () {
-        const events = [{ block_index: 120, block_hash: 'abc' }];
-        db.doQuery.resolves([{ data: JSON.stringify(events) }]);
-        const lastDecoderReorgBlock = await db.getBlockIndex.call(db, 'decoder', 'reorg');
-        const lastIndexerBlock = 130;
-        // This is the upstream rollback guard; it must evaluate true here.
-        assert.strictEqual(lastIndexerBlock >= lastDecoderReorgBlock, true);
-    });
-
-    it('returns null when there are no reorg events', async function () {
-        db.doQuery.resolves([]);
-        const result = await db.getBlockIndex.call(db, 'decoder', 'reorg');
-        assert.strictEqual(result, null);
-    });
-
-    it('does not throw when row.data is malformed JSON (guarded JSON.parse)', async function () {
-        db.doQuery.resolves([{ data: 'not-json{' }]);
-        const result = await db.getBlockIndex.call(db, 'decoder', 'reorg');
-        assert.strictEqual(result, null);
-    });
-
-    it('does not throw when row.data parses to null (typeof null === "object" trap)', async function () {
-        db.doQuery.resolves([{ data: 'null' }]);
-        const result = await db.getBlockIndex.call(db, 'decoder', 'reorg');
-        assert.strictEqual(result, null);
-    });
-});
-
-// ---------------------------------------------------------------------------
 // describe: reorg detection by event IDENTITY (not block-height magnitude)
 //
 // Regression for the consecutive-reorg miss: comparing reorg block heights
 // (`lastDecoderReorgBlock < lastIndexerReorgBlock`) silently drops every reorg
 // after the first, because block heights increase. Detection must instead match
-// the decoder's reorg events.id (identity). These guard the three pieces the
-// indexer composes: getLatestReorg (decoder id+block), createReorg (persists the
-// decoder id), getLastProcessedReorgId (reads it back).
+// the decoder's reorg events.id (identity). These guard the pieces the indexer
+// composes: getReorgsSince (every decoder reorg newer than the cursor, id+block),
+// createReorg (persists the decoder id), getLastProcessedReorgId (reads it back).
 // ---------------------------------------------------------------------------
 describe('Database reorg identity detection @regression @tier1', function () {
     let db;
@@ -643,7 +573,6 @@ describe('Database reorg identity detection @regression @tier1', function () {
             // createReorg writes its marker via doQueryStrict (throw-on-fault) so a swallowed
             // INSERT failure can't leave the processed-reorg cursor un-advanced.
             doQueryStrict: sinon.stub().resolves([]),
-            getLatestReorg:         Database.prototype.getLatestReorg,
             getReorgsSince:         Database.prototype.getReorgsSince,
             getLastProcessedReorgId: Database.prototype.getLastProcessedReorgId,
             createReorg:            Database.prototype.createReorg,
@@ -652,21 +581,6 @@ describe('Database reorg identity detection @regression @tier1', function () {
 
     afterEach(function () {
         sinon.restore();
-    });
-
-    it('getLatestReorg returns {id, block_index} with the lowest orphaned block', async function () {
-        const events = [
-            { block_index: 202, block_hash: 'h202' },
-            { block_index: 200, block_hash: 'h200' },
-        ];
-        db.doQuery.resolves([{ id: 7, data: JSON.stringify(events) }]);
-        const result = await db.getLatestReorg.call(db);
-        assert.deepStrictEqual(result, { id: 7, block_index: 200 });
-    });
-
-    it('getLatestReorg returns null when there are no reorg events', async function () {
-        db.doQuery.resolves([]);
-        assert.strictEqual(await db.getLatestReorg.call(db), null);
     });
 
     it('createReorg persists both block_index and decoder_event_id as JSON', async function () {
@@ -724,15 +638,17 @@ describe('Database reorg identity detection @regression @tier1', function () {
         // Decoder now reports a newer reorg at the HIGHER block 200 (event id 6).
         const decoderDb = {
             config: db.config, util: db.util,
-            doQuery: sinon.stub().resolves([{ id: 6, data: JSON.stringify([{ block_index: 200, block_hash: 'h200' }]) }]),
-            getLatestReorg: Database.prototype.getLatestReorg,
+            doQueryStrict: sinon.stub().resolves([{ id: 6, data: JSON.stringify([{ block_index: 200, block_hash: 'h200' }]) }]),
+            getReorgsSince: Database.prototype.getReorgsSince,
         };
-        const decoderReorg         = await decoderDb.getLatestReorg.call(decoderDb);
         const lastProcessedReorgId = await indexerDb.getLastProcessedReorgId.call(indexerDb);
+        const unprocessedReorgs    = await decoderDb.getReorgsSince.call(decoderDb, lastProcessedReorgId);
 
-        // The buggy magnitude check (200 < 100) was false → miss. Identity catches it.
-        assert.strictEqual(decoderReorg.block_index < lastProcessedReorgId, false, 'magnitude compare would have missed it');
-        assert.strictEqual(decoderReorg.id !== lastProcessedReorgId, true, 'identity check detects the new reorg');
+        // A magnitude compare (200 < 100 === false) would miss it; selecting by id > cursor
+        // (6 > 5) surfaces the new reorg even though its block is higher.
+        assert.strictEqual(unprocessedReorgs.length, 1, 'identity cursor selects the new higher-block reorg');
+        assert.strictEqual(unprocessedReorgs[0].id, 6);
+        assert.strictEqual(unprocessedReorgs[0].block_index, 200);
     });
 
     it('getReorgsSince returns every reorg after the given id, oldest first, each with its lowest block', async function () {
@@ -758,9 +674,9 @@ describe('Database reorg identity detection @regression @tier1', function () {
     });
 
     it('exposes the DEEPEST block across two unprocessed reorgs when the newer one is shallower', async function () {
-        // The bug: getLatestReorg returns only event 7 (block 200); rolling back to 200
-        // leaves orphaned rows from event 6's deeper reorg at block 100. getReorgsSince
-        // surfaces both so the caller can roll back to the minimum (deepest) block.
+        // The bug a single-newest-event reader caused: it surfaces only event 7 (block 200);
+        // rolling back to 200 leaves orphaned rows from event 6's deeper reorg at block 100.
+        // getReorgsSince surfaces both so the caller can roll back to the minimum (deepest) block.
         db.doQueryStrict.resolves([
             { id: 6, data: JSON.stringify([{ block_index: 100, block_hash: 'h100' }]) },
             { id: 7, data: JSON.stringify([{ block_index: 200, block_hash: 'h200' }]) },
@@ -802,12 +718,6 @@ describe('Database reorg identity detection @regression @tier1', function () {
         ]);
         const result = await db.getReorgsSince.call(db, 5);
         assert.deepStrictEqual(result, [{ id: 7, block_index: 150 }]);
-    });
-
-    it('getLatestReorg does not throw on malformed row.data and returns a null block_index', async function () {
-        db.doQuery.resolves([{ id: 9, data: 'not-json{' }]);
-        const result = await db.getLatestReorg.call(db);
-        assert.deepStrictEqual(result, { id: 9, block_index: null });
     });
 });
 

@@ -398,12 +398,15 @@ describe('XChainIndexer hub config overlay', function () {
             process.env.HUB_CONFIG_POLL_INTERVAL_MS = '60000';
             indexer._startHubConfigPolling();
 
-            // Tick 1: seq still 0, watermark unchanged (1000) -> no re-apply.
+            // Tick 1: seq still 0, watermark equal (1000). An equal NON-ZERO watermark is
+            // treated as a same-second redelivery and re-applies the idempotent merge (see
+            // the dedicated redelivery test below); it is not a no-op on a watermark-bearing hub.
             hubStub._call.onCall(1).resolves({
                 configs: { BTC: { regtest: { 'xchain-indexer': {} } } }, seq: 0, watermark: 1000
             });
             await clock.tickAsync(60000);
-            assert.strictEqual(mergeSpy.called, false, 'unchanged watermark must not re-apply');
+            assert.strictEqual(mergeSpy.called, true, 'equal non-zero watermark re-applies (same-second redelivery)');
+            mergeSpy.resetHistory();
 
             // Tick 2: seq still 0, watermark advances to 2000 -> re-apply fires.
             hubStub._call.onCall(2).resolves({
@@ -444,6 +447,78 @@ describe('XChainIndexer hub config overlay', function () {
             await clock.tickAsync(60000);
             assert.strictEqual(mergeSpy.called, true, 'seq advance alone must still re-apply');
             assert.strictEqual(indexer.lastHubConfigSeq, 6);
+        } finally {
+            if(indexer._hubConfigPollTimer) clearInterval(indexer._hubConfigPollTimer);
+            mergeSpy.restore();
+            clock.restore();
+            delete process.env.HUB_CONFIG_POLL_INTERVAL_MS;
+        }
+    });
+
+    it('poll re-applies on an EQUAL non-zero watermark (same-second redelivery, seq stuck at 0)', async function () {
+        // The hub reads its config watermark BEFORE the rows, so a write stamped in the
+        // same epoch-second as the returned watermark rides the full config tree while the
+        // watermark stays equal. A strict `>` gate would skip it forever on a seq-0
+        // standalone hub; an equal non-zero watermark must be treated as re-apply-eligible
+        // (the merge is idempotent).
+        indexer = makeIndexer();
+        let clock = sinon.useFakeTimers();
+        let mergeSpy = sinon.spy(indexer, '_mergeHubParams');
+        try {
+            let hubStub = { enabled: true, _call: sinon.stub() };
+            // Startup: seq 0, watermark 1000.
+            hubStub._call.onCall(0).resolves({
+                configs: { BTC: { regtest: { 'xchain-indexer': {} } } }, seq: 0, watermark: 1000
+            });
+            indexer.hubClient = hubStub;
+            await indexer._applyHubConfigOverlay();
+            assert.strictEqual(indexer.lastHubConfigWatermark, 1000);
+            mergeSpy.resetHistory();
+
+            process.env.HUB_CONFIG_POLL_INTERVAL_MS = '60000';
+            indexer._startHubConfigPolling();
+
+            // Tick 1: same non-zero watermark 1000 (a same-second redelivered write) -> must re-apply.
+            hubStub._call.onCall(1).resolves({
+                configs: { BTC: { regtest: { 'xchain-indexer': {} } } }, seq: 0, watermark: 1000
+            });
+            await clock.tickAsync(60000);
+            assert.strictEqual(mergeSpy.called, true, 'equal non-zero watermark must re-apply (redelivery)');
+            assert.strictEqual(indexer.lastHubConfigWatermark, 1000, 'watermark bookkeeping stays put');
+        } finally {
+            if(indexer._hubConfigPollTimer) clearInterval(indexer._hubConfigPollTimer);
+            mergeSpy.restore();
+            clock.restore();
+            delete process.env.HUB_CONFIG_POLL_INTERVAL_MS;
+        }
+    });
+
+    it('poll does NOT re-merge every tick on a seq-only hub with no watermark (no regression)', async function () {
+        // Missing watermark defaults to 0. The equal-watermark redelivery path is gated on
+        // watermark > 0, so a seq-only hub whose seq is unchanged must stay a no-op and not
+        // re-merge the tree every poll.
+        indexer = makeIndexer();
+        let clock = sinon.useFakeTimers();
+        let mergeSpy = sinon.spy(indexer, '_mergeHubParams');
+        try {
+            let hubStub = { enabled: true, _call: sinon.stub() };
+            hubStub._call.onCall(0).resolves({
+                configs: { BTC: { regtest: { 'xchain-indexer': {} } } }, seq: 5   // no watermark field
+            });
+            indexer.hubClient = hubStub;
+            await indexer._applyHubConfigOverlay();
+            assert.strictEqual(indexer.lastHubConfigWatermark, 0);
+            mergeSpy.resetHistory();
+
+            process.env.HUB_CONFIG_POLL_INTERVAL_MS = '60000';
+            indexer._startHubConfigPolling();
+
+            // Tick: seq unchanged at 5, still no watermark -> must NOT re-merge.
+            hubStub._call.onCall(1).resolves({
+                configs: { BTC: { regtest: { 'xchain-indexer': {} } } }, seq: 5   // still no watermark
+            });
+            await clock.tickAsync(60000);
+            assert.strictEqual(mergeSpy.called, false, 'seq-only hub with no watermark must not re-merge on an unchanged seq');
         } finally {
             if(indexer._hubConfigPollTimer) clearInterval(indexer._hubConfigPollTimer);
             mergeSpy.restore();

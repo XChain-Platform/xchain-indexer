@@ -230,7 +230,7 @@ class HubDbSync {
         this._msgChain = Promise.resolve();
 
         // Heartbeat-timeout watchdog: the hub broadcasts a {type:'watermark'} frame
-        // every WS_HEARTBEAT_INTERVAL_MS (10s server-side; see HubDbBroadcaster). A
+        // every WS_WATERMARK_INTERVAL_MS (10s server-side default; see HubDbBroadcaster). A
         // half-open TCP connection (NAT timeout, LB idle drop, hub host power loss)
         // fires neither 'close' nor 'error' on this socket, so without an explicit
         // liveness check the mirror can freeze silently for hours. _lastHeartbeatAt
@@ -238,6 +238,13 @@ class HubDbSync {
         // and on every fresh connection; _watchdogTimer polls it while the socket is
         // open and terminates a stalled socket so the existing close-handler
         // reconnect path self-heals. See review finding 0af6d951.
+        //
+        // The watchdog timeout MUST exceed the hub's heartbeat interval. That interval
+        // is now self-describing: the hub stamps its actual cadence into the 'ready'
+        // message (watermark_interval_ms), and the ready handler resizes the watchdog
+        // from it, so an operator raising WS_WATERMARK_INTERVAL_MS on the hub can no
+        // longer make this consumer terminate a healthy socket. The env value below is
+        // only the pre-ready seed and the fallback for older hubs that omit the field.
         this._lastHeartbeatAt = null;
         this._watchdogTimer = null;
         this.watermarkIntervalMs = parseInt(options.watermarkIntervalMs || process.env.HUB_SYNC_WATERMARK_INTERVAL_MS || '10000');
@@ -255,6 +262,20 @@ class HubDbSync {
         this._releaseOracleWaiters();
         this._releaseMatchWaiters();
         this._releaseCallWaiters();
+    }
+
+    // Adopt the hub's advertised heartbeat cadence (from the 'ready' message's
+    // watermark_interval_ms) so the watchdog timeout self-sizes to 3x the hub's
+    // ACTUAL interval instead of a locally-guessed env default. Backward compatible:
+    // an older hub omits the field (value undefined/NaN) and this leaves the
+    // env-seeded interval/timeout untouched. Returns true when a new interval was
+    // adopted so the caller can re-arm the running watchdog at the new cadence.
+    _adoptHubWatermarkInterval(watermarkIntervalMs) {
+        let ms = Number(watermarkIntervalMs);
+        if (!Number.isFinite(ms) || ms <= 0) return false;
+        this.watermarkIntervalMs = ms;
+        this.watermarkTimeoutMs = ms * 3;
+        return true;
     }
 
     // Start the heartbeat-timeout watchdog for the given live socket. Called once
@@ -1313,6 +1334,14 @@ class HubDbSync {
                     if (event.max_ids && typeof event.max_ids === 'object') {
                         this._readyMaxIds = event.max_ids;
                     }
+                    // Self-size the heartbeat watchdog from the hub's ACTUAL cadence when
+                    // advertised (watermark_interval_ms), so the client timeout > hub
+                    // interval invariant holds without a matching env knob on every
+                    // consumer. Re-arm the watchdog (already started on 'open' with the
+                    // env-seeded cadence) only when a valid new interval was adopted, so
+                    // both the poll cadence and the timeout track the hub.
+                    if (this._adoptHubWatermarkInterval(event.watermark_interval_ms))
+                        this._startWatchdog(ws);
                     // NOTE: the ready watermark is NOT advanced here. At this point
                     // the REST bootstrap has not run, so rows the hub produced before
                     // this subscription may not be local yet. Bootstrap responses

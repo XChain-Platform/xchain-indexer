@@ -1994,6 +1994,11 @@ class Utility {
         // (2) Throttled ageing sweep: refresh a bounded batch of markets whose stats last refreshed
         // more than 24h ago (oldest-first). Pairs already refreshed in step 1 carry last_updated =
         // block_time, so they are naturally excluded here. Bounded by MARKET_STALE_SWEEP_BATCH.
+        // getBlockTime returns a `false` sentinel when the block row is unresolvable (older-schema
+        // decoder DB); markets is non-consensus, so skipping the sweep for that block is safe,
+        // while bcsub("false") would throw and wedge block processing.
+        if(!Number.isFinite(Number(block_time)) || block_time === false || block_time === null)
+            return;
         let time_24hr = this.bcsub(String(block_time), '86400');
         let stale = await db.getStaleMarkets(time_24hr, Utility.MARKET_STALE_SWEEP_BATCH);
         for(let row of stale){

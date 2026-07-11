@@ -164,6 +164,39 @@ describe('Database._destructiveAutoStatement() @regression @tier1', function () 
         ]));
     });
 
+    // ── dynamic-SQL / stored-routine indirection must be flagged ─────────
+
+    it('flags PREPARE (dynamic SQL the prefix scanner cannot see)', function () {
+        assert.ok(destructiveOf(["PREPARE stmt FROM @s"]));
+    });
+
+    it('flags EXECUTE of a prepared statement', function () {
+        assert.ok(destructiveOf(['EXECUTE stmt']));
+    });
+
+    it('flags CALL of a stored routine (body is opaque to the scanner)', function () {
+        assert.ok(destructiveOf(['CALL some_proc()']));
+    });
+
+    it('flags SET of a user variable staging dynamic SQL', function () {
+        assert.ok(destructiveOf(["SET @s = 'DROP TABLE balances'"]));
+    });
+
+    it('flags the full SET @/PREPARE/EXECUTE dynamic-SQL bypass end to end', function () {
+        const raw = '-- xchain:migration mode=auto\n' +
+            "SET @s = 'DROP TABLE balances';\n" +
+            'PREPARE stmt FROM @s;\n' +
+            'EXECUTE stmt;\n';
+        assert.strictEqual(modeOf(raw), 'auto');
+        assert.ok(destructiveOf(statementsOf(raw)));
+    });
+
+    it('does NOT flag benign system-variable SETs (SET NAMES / SET sql_mode / SET @@)', function () {
+        assert.strictEqual(destructiveOf(['SET NAMES utf8mb4']), null);
+        assert.strictEqual(destructiveOf(['SET sql_mode = "STRICT_ALL_TABLES"']), null);
+        assert.strictEqual(destructiveOf(['SET @@session.foreign_key_checks = 0']), null);
+    });
+
     // ── allowed: legitimate existing auto patterns must NOT be flagged ───
 
     it('allows DROP INDEX / DROP KEY inside ALTER (idempotent drop+recreate pattern)', function () {

@@ -1085,11 +1085,30 @@ class XChainIndexer {
                 // (any config write, incl. a standalone/config-oracle hub with no consensus).
                 // Older hubs omit watermark -> it defaults to 0 and never advances, so this
                 // stays back-compatible with a seq-only hub.
-                if(seq > (this.lastHubConfigSeq || 0) || watermark > (this.lastHubConfigWatermark || 0)){
+                //
+                // Same-second redelivery: the hub reads its config watermark BEFORE the rows
+                // (xchain-hub api.js/db.js getConfigWatermark), so a write committed after the
+                // watermark read but stamped in the SAME epoch-second is carried in the full
+                // config tree while the watermark it reports stays equal. A strict `>` gate
+                // would skip that row forever on a hub whose PBFT seq never advances (a
+                // standalone/config-oracle hub, seq stuck at 0), acting on stale config with
+                // no staleness signal. So an equal NON-ZERO watermark is treated as re-apply-
+                // eligible: _mergeHubParams is idempotent, so re-merging the (full) tree is
+                // safe. A missing watermark (0) keeps the strict path so a seq-only hub does
+                // NOT re-merge every poll. This relies on the full-tree fetch: do not thread
+                // the hub's since_updated_at delta cursor here, whose strict `>` boundary
+                // would drop the same-second row and reintroduce this hazard.
+                let seqAdvanced       = seq > (this.lastHubConfigSeq || 0);
+                let watermarkAdvanced = watermark > (this.lastHubConfigWatermark || 0);
+                let watermarkRedeliver = watermark > 0 && watermark === (this.lastHubConfigWatermark || 0);
+                if(seqAdvanced || watermarkAdvanced || watermarkRedeliver){
                     this._mergeHubParams(configs);
                     this.lastHubConfigSeq = Math.max(seq, this.lastHubConfigSeq || 0);
                     this.lastHubConfigWatermark = Math.max(watermark, this.lastHubConfigWatermark || 0);
-                    console.log('XChainIndexer: applied hub config update (committed seq ' + seq + ', watermark ' + watermark + ')');
+                    // Only announce an actual advance; an equal-watermark redelivery re-merge
+                    // is a steady-state no-op on a watermark-bearing hub and must not log-spam.
+                    if(seqAdvanced || watermarkAdvanced)
+                        console.log('XChainIndexer: applied hub config update (committed seq ' + seq + ', watermark ' + watermark + ')');
                 }
             } catch(err) {
                 console.warn('XChainIndexer: hub config poll failed, keeping current config:', err.message || err);

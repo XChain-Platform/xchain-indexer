@@ -32,20 +32,27 @@ async function processBlocksInstrumented(indexer, collector) {
     let blocksProcessed = 0;
 
     // --- Reorg handling (identical to processBlocks) ---
-    // Match the decoder's reorg event by IDENTITY (events.id), not block-height
-    // magnitude, so consecutive higher-block reorgs are not missed.
-    const decoderReorg         = await indexer.decoderDb.getLatestReorg();
+    // Process EVERY decoder reorg the indexer has not yet recorded (not just the
+    // newest), matched by event IDENTITY (events.id) not block-height magnitude, so
+    // consecutive higher-block reorgs are not missed. Mirrors XChainIndexer.start().
     const lastProcessedReorgId = await indexer.indexerDb.getLastProcessedReorgId();
+    const unprocessedReorgs    = await indexer.decoderDb.getReorgsSince(lastProcessedReorgId);
 
     let lastDecoderBlock = await indexer.decoderDb.getBlockIndex('decoder', 'last');
     let lastIndexerBlock = await indexer.indexerDb.getBlockIndex('indexer', 'last');
 
-    if (decoderReorg !== null && decoderReorg.id !== lastProcessedReorgId) {
-        await indexer.indexerDb.createReorg(decoderReorg.block_index, decoderReorg.id);
-        if (lastIndexerBlock !== null && lastIndexerBlock >= decoderReorg.block_index) {
-            await indexer.rollback.rollback(decoderReorg.block_index);
+    if (unprocessedReorgs.length > 0) {
+        let minReorgBlock = null;
+        for (const reorg of unprocessedReorgs) {
+            if (minReorgBlock === null || reorg.block_index < minReorgBlock)
+                minReorgBlock = reorg.block_index;
         }
-        lastIndexerBlock = await indexer.indexerDb.getBlockIndex('indexer', 'last');
+        if (lastIndexerBlock !== null && lastIndexerBlock >= minReorgBlock) {
+            await indexer.rollback.rollback(minReorgBlock);
+            lastIndexerBlock = await indexer.indexerDb.getBlockIndex('indexer', 'last');
+        }
+        for (const reorg of unprocessedReorgs)
+            await indexer.indexerDb.createReorg(reorg.block_index, reorg.id);
     }
 
     // Initialize start position if indexer is empty
