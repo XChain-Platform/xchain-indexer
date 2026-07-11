@@ -457,11 +457,44 @@ class AnchorRecovery {
             let existing = await this.db.doQuery(
                 'SELECT call_id FROM cross_chain_calls WHERE call_id = ? AND phase = ? LIMIT 1', [c.call_id, c.phase]);
             if(existing && existing.length > 0){
-                // Same immutable terms; only the lifecycle status can move
-                // (finalized to retracted).
-                await this.db.doQuery(
-                    'UPDATE cross_chain_calls SET status = ? WHERE call_id = ? AND phase = ?',
-                    [c.status, c.call_id, c.phase]);
+                if(c.status === 'finalized'){
+                    // Finalized-wins CONTENT upgrade, mirroring the live mirror path
+                    // hub_db_sync._applyRow's cross_chain_calls ODKU (hub_db_sync.js:861-869).
+                    // Unlike matches, a call's signed content is NOT immutable per key: the
+                    // hub can re-finalize a retracted (call_id, phase) with NEW signed terms
+                    // after a source-chain reorg (CrossChainCallEngine._writeFinalizedRow
+                    // upserts the fresh quorum's content), and the anchor publisher re-archives
+                    // on any status change, so both versions land in successive batches. A
+                    // status-only update here would keep the FIRST batch's effective_time /
+                    // validator_signatures / params under status='finalized', forking the
+                    // injection block (effective_time gates it) and failing 2f+1 re-verification
+                    // vs mirror-fed nodes. So overwrite the full non-key column set. This column
+                    // list is kept in LOCKSTEP with the INSERT branch below (and hub_db_sync's
+                    // updatable set: every non-key column except id/call_id/phase/status);
+                    // schema drift between the two corrupts rebuilt rows. push_generation is a
+                    // reorg fence the archive never serializes (CALL_KEYS omits it), so it is
+                    // left untouched at its recovered default 0, exactly as the INSERT branch.
+                    await this.db.doQuery(
+                        `UPDATE cross_chain_calls SET status = ?, snapshot_block = ?, network = ?,
+                             source_chain = ?, source_action_index = ?, source_contract_index = ?,
+                             target_chain = ?, target_contract_index = ?, method = ?, params_json = ?,
+                             gas_limit = ?, cross_hops = ?, effective_time = ?, result_status = ?,
+                             return_payload_b64 = ?, validator_signatures = ?, finalizing_view = ?
+                         WHERE call_id = ? AND phase = ?`,
+                        [c.status, Number(c.snapshot_block), c.network,
+                         c.source_chain, Number(c.source_action_index), Number(c.source_contract_index),
+                         c.target_chain, Number(c.target_contract_index), c.method, c.params_json,
+                         Number(c.gas_limit), Number(c.cross_hops), Number(c.effective_time), c.result_status,
+                         c.return_payload_b64, c.validator_signatures, Number(c.finalizing_view) || 0,
+                         c.call_id, c.phase]);
+                } else {
+                    // Non-finalized incoming (e.g. a later batch retracts): only the
+                    // lifecycle status moves; content upgrades happen on the finalized
+                    // branch above, matching hub_db_sync's finalized-wins semantics.
+                    await this.db.doQuery(
+                        'UPDATE cross_chain_calls SET status = ? WHERE call_id = ? AND phase = ?',
+                        [c.status, c.call_id, c.phase]);
+                }
             } else {
                 // Rebuild under the ORIGINAL hub-assigned id as provenance only.
                 // Injection order is (snapshot_block, call_id), so replay does not

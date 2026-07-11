@@ -86,11 +86,26 @@ function memDb(v1s, v2s) {
             if (sql.startsWith('SELECT call_id FROM cross_chain_calls'))
                 return calls.filter(r => r.call_id === params[0] && r.phase === params[1]).map(r => ({ call_id: r.call_id }));
             if (sql.startsWith('UPDATE cross_chain_calls SET status')) {
+                if (sql.includes('snapshot_block')) {
+                    // Finalized-wins full-column content upgrade (recovery._rebuild). Param order:
+                    // [0]=status, [12]=effective_time, [15]=validator_signatures, [16]=finalizing_view,
+                    // [17]=call_id, [18]=phase (mirrors the UPDATE column list).
+                    for (let r of calls) if (r.call_id === params[17] && r.phase === params[18]) {
+                        r.status = params[0];
+                        r.effective_time = params[12];
+                        r.validator_signatures = params[15];
+                        r.finalizing_view = params[16];
+                    }
+                    return [];
+                }
+                // Status-only update (non-finalized incoming): params = [status, call_id, phase].
                 for (let r of calls) if (r.call_id === params[1] && r.phase === params[2]) r.status = params[0];
                 return [];
             }
             if (sql.startsWith('INSERT INTO cross_chain_calls')) {
-                calls.push({ id: params[0], call_id: params[1], phase: params[2], status: params[15], finalizing_view: params[params.length - 1] });
+                calls.push({ id: params[0], call_id: params[1], phase: params[2],
+                             effective_time: params[14], status: params[15],
+                             validator_signatures: params[18], finalizing_view: params[params.length - 1] });
                 return [];
             }
             return [];
@@ -419,6 +434,39 @@ describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () 
             assert.strictEqual(report.verified, 2);
             assert.strictEqual(db.calls.length, 1);
             assert.strictEqual(db.calls[0].status, 'retracted');
+        });
+
+        it('re-finalized-wins: a later batch re-finalizes a retracted call with NEW content (full-column upgrade, not status-only)', async function () {
+            // A source-chain reorg retracts a dispatched call; the hub re-mines and
+            // re-finalizes the SAME (call_id, phase) with a LATER effective_time and a
+            // fresh quorum's signatures. Both versions archive in successive batches.
+            // Recovery replays latest-status-wins; the existing-row branch must overwrite
+            // the FULL signed content when the incoming batch is finalized (mirroring
+            // hub_db_sync's ODKU), or the rebuilt row keeps the pre-reorg effective_time /
+            // signatures under status='finalized' and forks the injection block + 2f+1
+            // re-verification vs mirror-fed nodes. effective_time is signed into the call
+            // canonical, so the batch-1 signatures differ from batch-0's automatically.
+            let b0 = buildBatch(0, [rawMatch('m1')], oracleKeys, crossKeys,
+                                { calls: [rawCall('c1', 'dispatch', { status: 'retracted', effective_time: 1700000000 })] });
+            let b1 = buildBatch(1, [rawMatch('m2')], oracleKeys, crossKeys,
+                                { calls: [rawCall('c1', 'dispatch', { status: 'finalized', effective_time: 1700009999 })] });
+            let db = memDb([b0.v1, b1.v1], []);
+            let report = await new AnchorRecovery(db, quiet).run();
+
+            assert.strictEqual(report.verified, 2);
+            assert.strictEqual(db.calls.length, 1);
+            let row = db.calls[0];
+            assert.strictEqual(row.status, 'finalized', 're-finalized status wins');
+            // The re-finalized content must win, not just the status.
+            assert.strictEqual(Number(row.effective_time), 1700009999, 're-finalized effective_time wins');
+            // batch-1 signatures are over the new (later effective_time) canonical, so the
+            // stored signatures must be batch-1's, not batch-0's stale set.
+            let sigs = JSON.parse(row.validator_signatures);
+            let b1Canon = require('../fixtures/anchor-archive.js').callCanonical(
+                rawCall('c1', 'dispatch', { status: 'finalized', effective_time: 1700009999 }));
+            let expectSig = require('../fixtures/anchor-archive.js').signHex(crossKeys[0], b1Canon);
+            let has = sigs.some(s => s.pubkey === crossKeys[0].pubkey && s.sig === expectSig);
+            assert.ok(has, 'validator_signatures are batch-1 (re-finalized) signatures over the new effective_time');
         });
 
         it('a RESULT does not collide with the DISPATCH of the same call_id (no spurious status move)', async function () {
