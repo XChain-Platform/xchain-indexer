@@ -20,7 +20,7 @@
  * per chain height because it changes the hash preimage of already-valid
  * blocks. These tests are mock-based (doQuery stubbed) and lock:
  *   - the GATE: folding SQL below activation / unarmed chains, utf8_bin at/after;
- *   - regtest armed from genesis, mainnet/testnet placeholders NOT armed;
+ *   - regtest armed from genesis, mainnet/testnet armed at the 2026-07-10 heights;
  *   - getContractState only gates when the caller supplies the block context.
  * The byte-identical xchain-sync twin (BlockHasher/getBlockLeafRows) is locked
  * by the sync repo's cross-repo twin guard (rollback-coverage.test.js).
@@ -83,14 +83,14 @@ describe('state_key binary-collation gate (contract_hash preimage + VM reload) @
             assert.match(q, /ORDER BY cs\.contract_index ASC, cs\.state_key COLLATE utf8_bin ASC/);
         });
 
-        it('mainnet (placeholder, NOT armed) keeps the legacy folding collation', async function () {
+        it('mainnet below the armed height keeps the legacy folding collation', async function () {
             const q = await blockHashesStateQuery(dbFor('mainnet'), 900000);
             assert.doesNotMatch(q, /COLLATE utf8_bin/);
             assert.match(q, /GROUP BY contract_index, state_key \)/);
             assert.match(q, /ORDER BY cs\.contract_index ASC, cs\.state_key ASC/);
         });
 
-        it('testnet (placeholder, NOT armed) keeps the legacy folding collation', async function () {
+        it('testnet below the armed height keeps the legacy folding collation', async function () {
             const q = await blockHashesStateQuery(dbFor('testnet'), 140000);
             assert.doesNotMatch(q, /COLLATE utf8_bin/);
         });
@@ -98,14 +98,16 @@ describe('state_key binary-collation gate (contract_hash preimage + VM reload) @
 
     describe('getContractState VM reload', function () {
 
-        it('gates COLLATE utf8_bin when the processing block is at/after activation (regtest)', async function () {
+        it('gates GROUP BY state_key_bin (index-backed utf8_bin shadow) at/after activation (regtest)', async function () {
             const q = await contractStateQuery(dbFor('regtest'), 42, 5);
-            assert.match(q, /GROUP BY state_key COLLATE utf8_bin/);
+            assert.match(q, /GROUP BY state_key_bin/);
+            assert.doesNotMatch(q, /GROUP BY state_key COLLATE/);
         });
 
-        it('keeps the legacy folding form on an unarmed chain (mainnet placeholder)', async function () {
+        it('keeps the legacy folding form below the armed mainnet height', async function () {
             const q = await contractStateQuery(dbFor('mainnet'), 42, 900000);
             assert.doesNotMatch(q, /COLLATE utf8_bin/);
+            assert.doesNotMatch(q, /state_key_bin/);
         });
 
         it('keeps the legacy folding form when no block context is supplied (historical replay safety)', async function () {
@@ -123,13 +125,19 @@ describe('state_key binary-collation gate (contract_hash preimage + VM reload) @
             assert.strictEqual(skc.isStateKeyBinCollationActive('x', 'regtest', 'BTC'), false);
         });
 
-        it('every mainnet/testnet chain is a NOT-ARMED placeholder (operator must arm + mirror the twin)', function () {
-            for (const key of ['BTC:mainnet', 'LTC:mainnet', 'DOGE:mainnet', 'BTC:testnet', 'LTC:testnet', 'DOGE:testnet']) {
-                assert.strictEqual(skc.STATE_KEY_COLLATION_ACTIVATION[key], Number.MAX_SAFE_INTEGER,
-                    key + ' must stay a NOT-ARMED placeholder until the operator pins a coordinated height');
+        it('every mainnet/testnet chain is armed at its coordinated 2026-07-10 height', function () {
+            const ARMED = {
+                'BTC:mainnet': 962500, 'LTC:mainnet': 3160000, 'DOGE:mainnet': 6335000,
+                'BTC:testnet': 146000, 'LTC:testnet': 4890000, 'DOGE:testnet': 67500000,
+            };
+            for (const [key, height] of Object.entries(ARMED)) {
+                assert.strictEqual(skc.STATE_KEY_COLLATION_ACTIVATION[key], height,
+                    key + ' must carry the coordinated armed height (twin-mirrored to xchain-sync)');
                 const [coin, network] = key.split(':');
-                assert.strictEqual(skc.isStateKeyBinCollationActive(1e9, network, coin), false,
-                    key + ' must be inert while unarmed');
+                assert.strictEqual(skc.isStateKeyBinCollationActive(height - 1, network, coin), false,
+                    key + ' must stay legacy below the armed height');
+                assert.strictEqual(skc.isStateKeyBinCollationActive(height, network, coin), true,
+                    key + ' must flip binary at the armed height');
             }
         });
 

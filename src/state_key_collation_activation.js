@@ -60,22 +60,20 @@
 // block_index. At/after the height the binary-collation (utf8_bin) queries
 // run; below it the legacy folding (utf8_general_ci) queries run.
 //
-// *** NOT ARMED *** The mainnet/testnet heights are far-future placeholders
-// (Number.MAX_SAFE_INTEGER = never reached). The OPERATOR must pin coordinated
-// per-chain heights - with fleet deploy-by margin, sequenced against the other
-// armed cohorts (state_commitment 958500/3143000/6291000, swq_source_cap
-// 960000, Cohort-B anchor 961000 on BTC) - and mirror the value into the
-// xchain-sync twin in the same change. An unarmed key is exactly equivalent
-// to absent (inert/off); regtest is armed from genesis so fresh regtest
-// stacks and the e2e conformance scenario exercise the binary path end to end.
-const NOT_ARMED = Number.MAX_SAFE_INTEGER;
+// *** ARMED 2026-07-10 *** Heights are each processing chain's OWN block_index,
+// sequenced after the other armed cohorts (state_commitment 958500/3143000/
+// 6291000, swq_source_cap 960000, Cohort-B anchor 961000 on BTC) with fleet
+// deploy-by margin; testnets flip late July so they prove the binary path
+// before mainnet. The xchain-sync twin mirrors this file byte-for-byte in the
+// same change. Regtest is armed from genesis so fresh regtest stacks and the
+// e2e conformance scenario exercise the binary path end to end.
 const STATE_KEY_COLLATION_ACTIVATION = {
-    'BTC:mainnet':  NOT_ARMED,  // PLACEHOLDER - operator must arm (coordinated height, fleet deploy-by)
-    'LTC:mainnet':  NOT_ARMED,  // PLACEHOLDER - operator must arm
-    'DOGE:mainnet': NOT_ARMED,  // PLACEHOLDER - operator must arm
-    'BTC:testnet':  NOT_ARMED,  // PLACEHOLDER - operator must arm
-    'LTC:testnet':  NOT_ARMED,  // PLACEHOLDER - operator must arm
-    'DOGE:testnet': NOT_ARMED,  // PLACEHOLDER - operator must arm
+    'BTC:mainnet':  962500,     // ARMED 2026-07-10 at tip 957491 (~Aug 13; ~10 days past Cohort-B 961000)
+    'LTC:mainnet':  3160000,    // ARMED 2026-07-10 at tip 3140024 (~Aug 14)
+    'DOGE:mainnet': 6335000,    // ARMED 2026-07-10 at tip 6284614 (~Aug 15)
+    'BTC:testnet':  146000,     // ARMED 2026-07-10 at tip 143700 (~Jul 27; after state_commitment 145000)
+    'LTC:testnet':  4890000,    // ARMED 2026-07-10 at tip 4814284 (~Jul 24)
+    'DOGE:testnet': 67500000,   // ARMED 2026-07-10 at tip 66619530 (fast chain; ~Jul 31, after state_commitment 67000000)
     regtest: 0,                 // armed from genesis: fresh regtest stacks exercise the binary path end to end
 };
 

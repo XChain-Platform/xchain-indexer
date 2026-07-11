@@ -346,6 +346,17 @@ class Database {
 
                     if(appliedByName.has(file)){
                         if(appliedByName.get(file) !== checksum){
+                            // Deliberate one-off rebaselines: an applied file whose only change
+                            // was a reviewed non-executable edit (e.g. a mode retag) may be
+                            // rebaselined here so fleets that recorded the old checksum heal
+                            // in place instead of failing every operator migrate run forever.
+                            // Both hashes are pinned, so any OTHER edit still trips the guard.
+                            const rebase = Database.MIGRATION_CHECKSUM_REBASELINES[file];
+                            if(rebase && appliedByName.get(file) === rebase.from && checksum === rebase.to){
+                                await conn.query('UPDATE schema_migrations SET checksum = ? WHERE name = ?', [checksum, file]);
+                                console.log('runMigrations: rebaselined checksum for ' + file + ' (reviewed retag, executable SQL unchanged).');
+                                continue;
+                            }
                             // Migrations are immutable once applied. A changed checksum means
                             // someone edited an applied file, so the DB is now on a schema that
                             // diverges from what the committed file describes.
@@ -12003,8 +12014,10 @@ class Database {
     // utf8_general_ci, so the legacy GROUP BY folds distinct keys like
     // "Key"/"key" into ONE group and the reload drops one of them - the key
     // vanishes on the next EXECUTE despite the null-prototype round-trip
-    // contract below. At/after the activation height state_key is grouped
-    // COLLATE utf8_bin so every distinct key survives reload; below it (or when
+    // contract below. At/after the activation height the reload groups by
+    // state_key_bin (the utf8_bin generated shadow of state_key, byte-identical
+    // rows to GROUP BY state_key COLLATE utf8_bin but index-backed via
+    // idx_latest_bin) so every distinct key survives reload; below it (or when
     // no blockIndex is supplied) the legacy folding form is kept so historical
     // re-execution stays byte-identical.
     async getContractState(contractIndex, blockIndex){
@@ -12018,7 +12031,7 @@ class Database {
                          SELECT MAX(id) as max_id
                          FROM contract_state
                          WHERE contract_index = ?
-                         GROUP BY state_key` + (stateKeyBin ? ' COLLATE utf8_bin' : '') + `
+                         GROUP BY ` + (stateKeyBin ? 'state_key_bin' : 'state_key') + `
                      ) latest ON cs.id = latest.max_id
                      WHERE cs.state_value IS NOT NULL`;
         let results = await this.doQuery(query, [contractIndex]);
@@ -12447,4 +12460,16 @@ class Database {
         return unclaimed;
     }
 }
+// Applied-migration files whose checksum may be healed in place. Entries are
+// (old sha256 -> new sha256) pairs pinned to a single reviewed edit; anything
+// else still fails the immutability guard in runMigrations().
+Database.MIGRATION_CHECKSUM_REBASELINES = {
+    // ba430f8 retagged the DROP from mode=auto to mode=manual (safety fix);
+    // the executable statement is unchanged.
+    '2026-06-16-drop-orphaned-contract-balances.sql': {
+        from: '287d7bdb0b1a27308bdfd5a433f659aa466e3856f55b361a8b2e89a4ad146f76',
+        to:   '70de5f0ee1146c569b62c75cddb77be8eba72b9963a066b5059f05de15ccdef2',
+    },
+};
+
 module.exports = Database

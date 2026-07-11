@@ -220,3 +220,27 @@ describe('committed mode=auto migrations contain no destructive DDL @regression 
         });
     });
 });
+
+describe('Database.MIGRATION_CHECKSUM_REBASELINES @regression @tier1', function () {
+
+    const crypto  = require('crypto');
+    const MIG_DIR = path.join(__dirname, '..', '..', 'src', 'sql', 'migrations');
+
+    it('every rebaseline pins two distinct 64-hex sha256 values', function () {
+        for (const [file, r] of Object.entries(Database.MIGRATION_CHECKSUM_REBASELINES)) {
+            assert.match(r.from, /^[0-9a-f]{64}$/, file + ': from must be a sha256 hex digest');
+            assert.match(r.to,   /^[0-9a-f]{64}$/, file + ': to must be a sha256 hex digest');
+            assert.notStrictEqual(r.from, r.to, file + ': from and to must differ');
+        }
+    });
+
+    it('every rebaseline `to` hash matches the committed file content (heals TOWARD the repo, never away from it)', function () {
+        for (const [file, r] of Object.entries(Database.MIGRATION_CHECKSUM_REBASELINES)) {
+            const raw = fs.readFileSync(path.join(MIG_DIR, file), 'utf8');
+            const checksum = crypto.createHash('sha256').update(raw).digest('hex');
+            assert.strictEqual(checksum, r.to,
+                file + ': rebaseline target is stale - it must equal the current committed file sha256, ' +
+                'otherwise the heal path would rewrite the ledger to a hash that still mismatches.');
+        }
+    });
+});
