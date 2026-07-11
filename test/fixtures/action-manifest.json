@@ -16,7 +16,7 @@
     "explorer-legacy-render": "render-only in the explorer (legacy order/dispenser cancel+edit views); no decoder/indexer twin"
   },
   "notes": [
-    "The indexer protocol_changes registry ALSO holds non-action feature-gate flags (CONTROLLER_GUARD, CROSS_CHAIN_DEX, ISSUANCE_FEE, ISSUANCE_FEE_EMISSION_EXEMPT, LOCK_MAX_SUPPLY_EXACT, UNIFIED_FEES, VM_ACTIONS, VM_BALANCE_TOKENINFO, VM_BANNED_ASYNC); these are NOT actions and are excluded. The indexer conformance guard compares the dispatch switch, not the registry.",
+    "The indexer protocol_changes registry ALSO holds non-action feature-gate flags: any this.addChange(...) entry whose name is NOT a key in this manifest's 'actions' map is a feature gate, not an action, and is excluded here. As of this pass that set is CONTROLLER_GUARD, CROSS_CHAIN_DEX, ISSUANCE_FEE, ISSUANCE_FEE_EMISSION_EXEMPT, LOCK_MAX_SUPPLY_EXACT, UNIFIED_FEES, VM_ACTIONS, VM_BALANCE_TOKENINFO, VM_BANNED_ASYNC, DEPLOY_BASE64_CODE, CROSS_CHAIN_ROYALTY, ISSUE_MINT_SUPPLY_CUMULATIVE_CAP, SLEEP_RESPECTS_LOCK_SLEEP, COINPAY_EXPIRE_TOKEN_AMOUNT, UNSTAKE_COOLDOWN_COMPLETION_ACTION, DELEGATE_REVOKE_NO_REINSERT, CONTRACT_INDEX_CANONICAL, SLASH_BURNS_PENDING_STAKE, NATIVE_FEE_PRICE_TIME_GATE, DEPLOY_INIT_STRICT, but the enumeration is illustrative, not authoritative: trust the exclusion RULE above it, not this list, since new flag-days are added to the registry without a manifest update. The indexer conformance guard compares the dispatch switch, not the registry.",
     "UNKNOWN is the indexer/explorer catch-all sentinel, not an action; excluded. Each guard drops UNKNOWN before comparing.",
     "Aliases are expanded to canonical names before any gate (decoder ACTION_ALIASES / indexer actionAliases)."
   ],

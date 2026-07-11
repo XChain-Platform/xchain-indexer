@@ -15,7 +15,9 @@
  * XChain Platform Action - ANCHOR (validator-broadcast, DOGE-only)
  *
  * On-chain commitment of federation state: quorum-signed checkpoints (v0),
- * the cross-chain match archive (v1), and archive continuation chunks (v2).
+ * the cross-chain match archive (v1), archive continuation chunks (v2),
+ * SPV light-client roots (v3), and publisher-attestation reward anchors
+ * (v4 rootless / v5 root-bearing).
  * Parsed rows land in anchor_actions: the permanent on-chain record that
  * makes every checkpoint + the complete match archive recoverable from a
  * full chain parse alone (src/recovery.js). Live indexers keep settling
@@ -37,6 +39,9 @@
  *   v0 - VERSION|CHAIN|NETWORK|BLOCK_INDEX|BLOCK_HASH|LEDGER_HASH|ACTIONS_HASH|CONTRACT_HASH|CHECKPOINT_SEQ|SNAPSHOT_BLOCK|SIG_COUNT|PUBKEY|SIG|...
  *   v1 - VERSION|CHAIN|NETWORK|BLOCK_INDEX|BLOCK_HASH|LEDGER_HASH|ACTIONS_HASH|CONTRACT_HASH|CHECKPOINT_SEQ|SNAPSHOT_BLOCK|MATCH_BATCH_SEQ|MATCH_COUNT|BATCH_CRC32|TOTAL_CHUNKS|ARCHIVE_B64|SIG_COUNT|PUBKEY|SIG|...
  *   v2 - VERSION|MATCH_BATCH_SEQ|CHUNK_INDEX|TOTAL_CHUNKS|ARCHIVE_B64_CHUNK
+ *   v3 - v0 checkpoint + STATE_ROOT|STATE_ROOT_VERSION|BLOCK_MERKLE_ROOT|BLOCK_MERKLE_VERSION appended before SIG_COUNT (SPV Phase 2)
+ *   v4 - v0 checkpoint + PUBLISHER|ATTEST_SIG_COUNT|APUBKEY|ASIG|... appended after the root signature list (anchor-reward re-derivation)
+ *   v5 - v3 checkpoint + PUBLISHER|ATTEST_SIG_COUNT|APUBKEY|ASIG|... appended after the root signature list (anchor-reward re-derivation)
  *
  ********************************************************************/
 

@@ -31,7 +31,7 @@
  * LOCAL COPY of the canonical map in xchain-documentation/protocol/constants.js,
  * kept byte-equal by the cross-service regression suite (a divergence forks the
  * signed checkpoint and breaks federation quorum verification). Byte-identical twins
- * live in xchain-{hub,sdk,explorer}/src/checkpoint_commitment_activation.js.
+ * live in xchain-{hub,sdk,explorer,sync}/src/checkpoint_commitment_activation.js.
  *
  ********************************************************************/
 

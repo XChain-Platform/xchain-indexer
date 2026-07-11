@@ -1,5 +1,13 @@
 -- Migration: index_addresses.block_index secondary index
 --
+-- SUPERSEDED: do NOT hand-run this. The equivalent statement now ships as the
+-- runner-tracked, ledger-recorded migration
+-- src/sql/migrations/2026-06-21-index-tables-block-index-secondary-idx.sql
+-- (mode=auto, applied at boot). This legacy copy is inert (runMigrations never
+-- reads this directory) and is retained only for history. Its header note about
+-- schema reconciliation adding columns but not indexes is also stale: verifyTables
+-- has since gained reconcileTableIndexes (src/db.js).
+--
 -- Adds a secondary index on index_addresses(block_index). It supports the advisory
 -- index-map parity checksum (xchain-sync BlockHasher.computeIndexMapChecksum), which
 -- selects the deterministic subset `WHERE block_index IS NOT NULL AND block_index <= ?`

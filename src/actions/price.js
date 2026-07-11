@@ -298,7 +298,7 @@ class Price {
         // processing never blocks on hub HTTP latency because live delivery is
         // attempted post-commit. The hub dedupes by round_number, so a later replay
         // it already has is a safe no-op.
-        if(!error && this.hubClient){
+        if(!error && this.hubClient && this.hubClient.enabled){
             // Source-chain reorg fence (item 5308): stamp the current push generation so the hub
             // row carries it. A later deferred retraction (which carries the rollback's pre-bump
             // generation) then deletes only stale rows, not this one if it is re-published post-reorg.
@@ -385,7 +385,7 @@ class Price {
         // the old crash-window loss was permanent and non-re-derivable; the outbox
         // closes it. The hub dedupes by (source_address, source_chain, action_index),
         // so a later replay it already has is a safe no-op.
-        if(!error && this.hubClient){
+        if(!error && this.hubClient && this.hubClient.enabled){
             // Source-chain reorg fence (item 5308): see _parseV0 above.
             let pushGeneration = await this.indexerDb.getPushGeneration(data['COIN']);
             let payload = {

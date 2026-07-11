@@ -251,7 +251,7 @@ describe('Rollback @regression @tier3', function () {
     // ─── Hub price retraction signal ──────────────────────────────────
 
     it('signals the hub to retract prices for the rolled-back range', async function () {
-        const hubClient = { retractPriceRange: sinon.stub().resolves(), retractXcallRange: sinon.stub().resolves(), retractMatchRange: sinon.stub().resolves() };
+        const hubClient = { enabled: true, retractPriceRange: sinon.stub().resolves(), retractXcallRange: sinon.stub().resolves(), retractMatchRange: sinon.stub().resolves() };
         const idx = createMockIndexer({ hubClient });
         idx.protocolChanges = { isDefined: sinon.stub().returns(true), isEnabled: sinon.stub().resolves(true) };
         const rb = new Rollback(idx);
@@ -266,7 +266,7 @@ describe('Rollback @regression @tier3', function () {
     });
 
     it('does NOT signal the hub when there are no actions in the rolled-back range', async function () {
-        const hubClient = { retractPriceRange: sinon.stub().resolves(), retractXcallRange: sinon.stub().resolves(), retractMatchRange: sinon.stub().resolves() };
+        const hubClient = { enabled: true, retractPriceRange: sinon.stub().resolves(), retractXcallRange: sinon.stub().resolves(), retractMatchRange: sinon.stub().resolves() };
         const idx = createMockIndexer({ hubClient });
         idx.protocolChanges = { isDefined: sinon.stub().returns(true), isEnabled: sinon.stub().resolves(true) };
         const rb = new Rollback(idx);
@@ -277,7 +277,7 @@ describe('Rollback @regression @tier3', function () {
     });
 
     it('does not throw when the hub retraction fails (best-effort)', async function () {
-        const hubClient = { retractPriceRange: sinon.stub().rejects(new Error('hub unreachable')), retractXcallRange: sinon.stub().resolves(), retractMatchRange: sinon.stub().resolves() };
+        const hubClient = { enabled: true, retractPriceRange: sinon.stub().rejects(new Error('hub unreachable')), retractXcallRange: sinon.stub().resolves(), retractMatchRange: sinon.stub().resolves() };
         const idx = createMockIndexer({ hubClient });
         idx.protocolChanges = { isDefined: sinon.stub().returns(true), isEnabled: sinon.stub().resolves(true) };
         const rb = new Rollback(idx);
@@ -289,7 +289,7 @@ describe('Rollback @regression @tier3', function () {
     });
 
     it('leaves the durable write-ahead price_retraction row when the live RPC fails (HUB-RETRACT-2)', async function () {
-        const hubClient = { retractPriceRange: sinon.stub().rejects(new Error('hub unreachable')), retractXcallRange: sinon.stub().resolves(), retractMatchRange: sinon.stub().resolves() };
+        const hubClient = { enabled: true, retractPriceRange: sinon.stub().rejects(new Error('hub unreachable')), retractXcallRange: sinon.stub().resolves(), retractMatchRange: sinon.stub().resolves() };
         const idx = createMockIndexer({ hubClient });
         idx.protocolChanges = { isDefined: sinon.stub().returns(true), isEnabled: sinon.stub().resolves(true) };
         // Distinct ids per staged row so we can tell which was delivered.
@@ -313,7 +313,7 @@ describe('Rollback @regression @tier3', function () {
     // ─── Closed-range deferred retraction + quiesce (items 5296/5297) ──
 
     it('write-aheads the durable retraction with last_action_index = MAX of the rolled-back range (closed range)', async function () {
-        const hubClient = { retractPriceRange: sinon.stub().rejects(new Error('hub unreachable')), retractXcallRange: sinon.stub().resolves(), retractMatchRange: sinon.stub().resolves() };
+        const hubClient = { enabled: true, retractPriceRange: sinon.stub().rejects(new Error('hub unreachable')), retractXcallRange: sinon.stub().resolves(), retractMatchRange: sinon.stub().resolves() };
         const idx = createMockIndexer({ hubClient });
         idx.protocolChanges = { isDefined: sinon.stub().returns(true), isEnabled: sinon.stub().resolves(true) };
         const rb = new Rollback(idx);
@@ -331,7 +331,7 @@ describe('Rollback @regression @tier3', function () {
     });
 
     it('keeps the LIVE retraction open-ended (no ceiling) so it never under-deletes the orphaned range', async function () {
-        const hubClient = { retractPriceRange: sinon.stub().resolves(), retractXcallRange: sinon.stub().resolves(), retractMatchRange: sinon.stub().resolves() };
+        const hubClient = { enabled: true, retractPriceRange: sinon.stub().resolves(), retractXcallRange: sinon.stub().resolves(), retractMatchRange: sinon.stub().resolves() };
         const idx = createMockIndexer({ hubClient });
         idx.protocolChanges = { isDefined: sinon.stub().returns(true), isEnabled: sinon.stub().resolves(true) };
         const rb = new Rollback(idx);
@@ -349,7 +349,7 @@ describe('Rollback @regression @tier3', function () {
     });
 
     it('bumps the push generation once at rollback start and threads the PRE-bump value (item 5308)', async function () {
-        const hubClient = { retractPriceRange: sinon.stub().resolves(), retractXcallRange: sinon.stub().resolves(), retractMatchRange: sinon.stub().resolves() };
+        const hubClient = { enabled: true, retractPriceRange: sinon.stub().resolves(), retractXcallRange: sinon.stub().resolves(), retractMatchRange: sinon.stub().resolves() };
         const idx = createMockIndexer({ hubClient });
         idx.protocolChanges = { isDefined: sinon.stub().returns(true), isEnabled: sinon.stub().resolves(true) };
         idx.indexerDb.bumpPushGeneration = sinon.stub().resolves(6);   // post-bump generation 6 => pre-bump 5
@@ -374,6 +374,7 @@ describe('Rollback @regression @tier3', function () {
         };
         // A failing live retraction must still resume() via the finally.
         const hubClient = {
+            enabled: true,
             retractPriceRange: sinon.stub().callsFake(async () => { order.push('retract'); throw new Error('hub down'); }),
             retractXcallRange: sinon.stub().resolves(),
             retractMatchRange: sinon.stub().resolves()
@@ -395,7 +396,7 @@ describe('Rollback @regression @tier3', function () {
     // ─── Hub XCALL (cross_chain_calls) retraction signal ──────────────
 
     it('signals the hub to retract cross-chain calls for the rolled-back range', async function () {
-        const hubClient = { retractPriceRange: sinon.stub().resolves(), retractXcallRange: sinon.stub().resolves(), retractMatchRange: sinon.stub().resolves() };
+        const hubClient = { enabled: true, retractPriceRange: sinon.stub().resolves(), retractXcallRange: sinon.stub().resolves(), retractMatchRange: sinon.stub().resolves() };
         const idx = createMockIndexer({ hubClient });
         idx.protocolChanges = { isDefined: sinon.stub().returns(true), isEnabled: sinon.stub().resolves(true) };
         const rb = new Rollback(idx);
@@ -409,7 +410,7 @@ describe('Rollback @regression @tier3', function () {
     });
 
     it('does NOT signal the hub for XCALL retraction when the range is empty', async function () {
-        const hubClient = { retractPriceRange: sinon.stub().resolves(), retractXcallRange: sinon.stub().resolves(), retractMatchRange: sinon.stub().resolves() };
+        const hubClient = { enabled: true, retractPriceRange: sinon.stub().resolves(), retractXcallRange: sinon.stub().resolves(), retractMatchRange: sinon.stub().resolves() };
         const idx = createMockIndexer({ hubClient });
         idx.protocolChanges = { isDefined: sinon.stub().returns(true), isEnabled: sinon.stub().resolves(true) };
         const rb = new Rollback(idx);
@@ -420,7 +421,7 @@ describe('Rollback @regression @tier3', function () {
     });
 
     it('does not throw when the hub XCALL retraction fails (best-effort); local rollback still commits', async function () {
-        const hubClient = { retractPriceRange: sinon.stub().resolves(), retractXcallRange: sinon.stub().rejects(new Error('hub unreachable')), retractMatchRange: sinon.stub().resolves() };
+        const hubClient = { enabled: true, retractPriceRange: sinon.stub().resolves(), retractXcallRange: sinon.stub().rejects(new Error('hub unreachable')), retractMatchRange: sinon.stub().resolves() };
         const idx = createMockIndexer({ hubClient });
         idx.protocolChanges = { isDefined: sinon.stub().returns(true), isEnabled: sinon.stub().resolves(true) };
         const rb = new Rollback(idx);
@@ -434,7 +435,7 @@ describe('Rollback @regression @tier3', function () {
     // ─── Hub DEX (cross_chain_matches) retraction signal ──────────────
 
     it('signals the hub to retract cross-chain matches for the rolled-back range', async function () {
-        const hubClient = { retractPriceRange: sinon.stub().resolves(), retractXcallRange: sinon.stub().resolves(), retractMatchRange: sinon.stub().resolves() };
+        const hubClient = { enabled: true, retractPriceRange: sinon.stub().resolves(), retractXcallRange: sinon.stub().resolves(), retractMatchRange: sinon.stub().resolves() };
         const idx = createMockIndexer({ hubClient });
         idx.protocolChanges = { isDefined: sinon.stub().returns(true), isEnabled: sinon.stub().resolves(true) };
         const rb = new Rollback(idx);
@@ -448,7 +449,7 @@ describe('Rollback @regression @tier3', function () {
     });
 
     it('does NOT signal the hub for DEX match retraction when the range is empty', async function () {
-        const hubClient = { retractPriceRange: sinon.stub().resolves(), retractXcallRange: sinon.stub().resolves(), retractMatchRange: sinon.stub().resolves() };
+        const hubClient = { enabled: true, retractPriceRange: sinon.stub().resolves(), retractXcallRange: sinon.stub().resolves(), retractMatchRange: sinon.stub().resolves() };
         const idx = createMockIndexer({ hubClient });
         idx.protocolChanges = { isDefined: sinon.stub().returns(true), isEnabled: sinon.stub().resolves(true) };
         const rb = new Rollback(idx);
@@ -459,7 +460,7 @@ describe('Rollback @regression @tier3', function () {
     });
 
     it('does not throw when the hub DEX match retraction fails (best-effort); local rollback still commits', async function () {
-        const hubClient = { retractPriceRange: sinon.stub().resolves(), retractXcallRange: sinon.stub().resolves(), retractMatchRange: sinon.stub().rejects(new Error('hub unreachable')) };
+        const hubClient = { enabled: true, retractPriceRange: sinon.stub().resolves(), retractXcallRange: sinon.stub().resolves(), retractMatchRange: sinon.stub().rejects(new Error('hub unreachable')) };
         const idx = createMockIndexer({ hubClient });
         idx.protocolChanges = { isDefined: sinon.stub().returns(true), isEnabled: sinon.stub().resolves(true) };
         const rb = new Rollback(idx);
@@ -812,7 +813,7 @@ describe('Rollback @regression @tier3', function () {
     // throws into the transaction catch: every delete is rolled back, commit never happens, and no
     // retraction is delivered. The driver retries the reorg idempotently.
     it('rolls back the transaction and issues no retraction when bumpPushGeneration fails', async function () {
-        const hubClient = { retractPriceRange: sinon.stub().resolves(), retractXcallRange: sinon.stub().resolves(), retractMatchRange: sinon.stub().resolves() };
+        const hubClient = { enabled: true, retractPriceRange: sinon.stub().resolves(), retractXcallRange: sinon.stub().resolves(), retractMatchRange: sinon.stub().resolves() };
         const idx = createMockIndexer({ hubClient });
         idx.protocolChanges = { isDefined: sinon.stub().returns(true), isEnabled: sinon.stub().resolves(true) };
         const rb = new Rollback(idx);
@@ -848,7 +849,7 @@ describe('Rollback @regression @tier3', function () {
 
     // ─── HUB-RETRACT-2: retractions are write-ahead-staged in-tx, then delivered + dropped on success ─────
     it('write-aheads all three retractions inside the tx and marks each delivered on live success', async function () {
-        const hubClient = { retractPriceRange: sinon.stub().resolves(), retractXcallRange: sinon.stub().resolves(), retractMatchRange: sinon.stub().resolves() };
+        const hubClient = { enabled: true, retractPriceRange: sinon.stub().resolves(), retractXcallRange: sinon.stub().resolves(), retractMatchRange: sinon.stub().resolves() };
         const idx = createMockIndexer({ hubClient });
         idx.protocolChanges = { isDefined: sinon.stub().returns(true), isEnabled: sinon.stub().resolves(true) };
         let n = 0; idx.indexerDb.enqueueHubPushTx = sinon.stub().callsFake(async () => ++n);

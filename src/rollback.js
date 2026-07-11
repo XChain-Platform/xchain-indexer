@@ -1080,11 +1080,13 @@ class Rollback {
             // dropped them permanently - the retried reorg skips rollback() (lastIndexerBlock already
             // below minReorgBlock), so they were never re-issued, leaving orphaned 'finalized' hub
             // rows serving fleet-wide. The rows are inserted AFTER the dataTables purge, so this
-            // rollback's own orphan delete cannot remove them; action_index = firstActionIndex lets a
-            // deeper later reorg's purge supersede them (that reorg atomically stages its own). The
+            // rollback's own orphan delete cannot remove them; and a deeper later reorg's purge
+            // deliberately EXCLUDES these retraction push_types (HUB-RETRACT-2 nested-reorg guard,
+            // see the pending_hub_pushes delete above), so they are never superseded by a later
+            // purge and instead drain idempotently under the generation fence. The
             // durable rows are CLOSED-range (bounded by lastActionIndex): a queued drain runs after
             // replay may have re-published rows above lastActionIndex, which must be preserved.
-            if(firstActionIndex !== null && this.hubClient){
+            if(firstActionIndex !== null && this.hubClient && this.hubClient.enabled){
                 for(let pushType of ['price_retraction', 'xcall_retraction', 'match_retraction']){
                     let id = await this.indexerDb.enqueueHubPushTx(pushType, {
                         coin: this.config['COIN'], action_index: firstActionIndex,

@@ -571,7 +571,7 @@ describe('Price (PRICE) @regression @tier3', function () {
         // between commit and delivery cannot drop the round, and a same-block rollback unwinds the
         // outbox row instead of leaving a phantom push.
         it('valid v0 with hubClient → durable outbox row enqueued + staged (no direct push)', async function () {
-            const mockHubClient = { pushPriceRound: sinon.stub().resolves() };
+            const mockHubClient = { enabled: true, pushPriceRound: sinon.stub().resolves() };
             indexer.indexerDb.enqueueHubPushTx = sinon.stub().resolves(42);
             indexer.indexerDb.stageHubPush = sinon.stub();
             indexer.indexerDb.getActiveCapabilityCount.resolves(1);
@@ -605,7 +605,7 @@ describe('Price (PRICE) @regression @tier3', function () {
         });
 
         it('invalid v0 with hubClient → nothing enqueued or staged', async function () {
-            const mockHubClient = { pushPriceRound: sinon.stub().resolves() };
+            const mockHubClient = { enabled: true, pushPriceRound: sinon.stub().resolves() };
             indexer.indexerDb.enqueueHubPushTx = sinon.stub().resolves(1);
             indexer.indexerDb.stageHubPush = sinon.stub();
             // Fail quorum by returning false for all sigs
@@ -642,7 +642,7 @@ describe('Price (PRICE) @regression @tier3', function () {
         // window was permanent. It now uses the same durable transactional outbox as v0: enqueueHubPushTx
         // inside the block transaction plus a staged post-commit delivery; parse never pushes directly.
         it('valid v1 with hubClient → durable outbox row enqueued + staged (no direct push)', async function () {
-            const mockHubClient = { pushOraclePrice: sinon.stub().resolves() };
+            const mockHubClient = { enabled: true, pushOraclePrice: sinon.stub().resolves() };
             indexer.indexerDb.enqueueHubPushTx = sinon.stub().resolves(7);
             indexer.indexerDb.stageHubPush = sinon.stub();
 
@@ -670,7 +670,7 @@ describe('Price (PRICE) @regression @tier3', function () {
         });
 
         it('invalid v1 with hubClient → nothing enqueued or staged', async function () {
-            const mockHubClient = { pushOraclePrice: sinon.stub().resolves() };
+            const mockHubClient = { enabled: true, pushOraclePrice: sinon.stub().resolves() };
             indexer.indexerDb.enqueueHubPushTx = sinon.stub().resolves(1);
             indexer.indexerDb.stageHubPush = sinon.stub();
 

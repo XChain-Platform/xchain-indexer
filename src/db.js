@@ -1348,7 +1348,11 @@ class Database {
         // exists. LIMIT bounds the scan; new-format markers are the steady state, so in practice this
         // returns on the first row.
         let query = `SELECT data FROM events WHERE code='REORG' ORDER BY id DESC LIMIT 200`;
-        let results = await this.doQuery(query);
+        // doQueryStrict (not doQuery): symmetry with getReorgsSince/createReorg. A swallowed
+        // read fault here would return [] -> null, indistinguishable from "no reorg ever
+        // processed", causing getReorgsSince(null) to replay the entire decoder reorg history.
+        // Fail loud so the cursor read cannot silently collapse into a full-history rollback.
+        let results = await this.doQueryStrict(query);
         if(results.length === 0)
             return null;
         for(let row of results){

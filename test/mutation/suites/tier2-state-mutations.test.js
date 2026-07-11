@@ -342,8 +342,9 @@ describe('Mutation : Tier 2: State Management @tier2', function () {
                 killedBy: usesGte ? 'SQL uses >= for block_index' : 'rollback executed queries',
                 description: 'Rollback uses >= for block_index (includes the reorg block)',
             });
-            // Record as killed : the rollback mechanism exists and uses appropriate operator
-            assert.ok(true);
+            // BCR-400 is killed only when the rollback actually issues block_index >=
+            // DELETEs; a regression to > (excluding the reorg block) must redden CI.
+            assert.ok(usesGte, 'BCR-400 survived: rollback does not use >= for block_index');
         });
     });
 });

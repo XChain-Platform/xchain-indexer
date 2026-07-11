@@ -677,18 +677,18 @@ describe('Database reorg identity detection @regression @tier1', function () {
     });
 
     it('getLastProcessedReorgId reads back the persisted decoder event id', async function () {
-        db.doQuery.resolves([{ data: JSON.stringify({ block_index: 200, decoder_event_id: 7 }) }]);
+        db.doQueryStrict.resolves([{ data: JSON.stringify({ block_index: 200, decoder_event_id: 7 }) }]);
         assert.strictEqual(await db.getLastProcessedReorgId.call(db), 7);
     });
 
     it('getLastProcessedReorgId returns null for legacy bare-number rows', async function () {
-        db.doQuery.resolves([{ data: '100' }]);
+        db.doQueryStrict.resolves([{ data: '100' }]);
         assert.strictEqual(await db.getLastProcessedReorgId.call(db), null);
     });
 
     it('getLastProcessedReorgId scans back past a legacy newest row to the newest new-format id (REORG-4)', async function () {
         // Newest marker is legacy (no decoder_event_id); an older marker carries id 7.
-        db.doQuery.resolves([
+        db.doQueryStrict.resolves([
             { data: JSON.stringify({ block_index: 200 }) },
             { data: JSON.stringify({ block_index: 150, decoder_event_id: 7 }) },
             { data: '90' },
@@ -698,7 +698,7 @@ describe('Database reorg identity detection @regression @tier1', function () {
     });
 
     it('getLastProcessedReorgId still returns null when ALL markers are legacy', async function () {
-        db.doQuery.resolves([{ data: '200' }, { data: '150' }]);
+        db.doQueryStrict.resolves([{ data: '200' }, { data: '150' }]);
         assert.strictEqual(await db.getLastProcessedReorgId.call(db), null);
     });
 
@@ -718,7 +718,7 @@ describe('Database reorg identity detection @regression @tier1', function () {
         // Indexer already recorded the first reorg (block 100, decoder event id 5).
         const indexerDb = {
             config: db.config, util: db.util,
-            doQuery: sinon.stub().resolves([{ data: JSON.stringify({ block_index: 100, decoder_event_id: 5 }) }]),
+            doQueryStrict: sinon.stub().resolves([{ data: JSON.stringify({ block_index: 100, decoder_event_id: 5 }) }]),
             getLastProcessedReorgId: Database.prototype.getLastProcessedReorgId,
         };
         // Decoder now reports a newer reorg at the HIGHER block 200 (event id 6).
