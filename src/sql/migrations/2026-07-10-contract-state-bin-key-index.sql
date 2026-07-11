@@ -12,15 +12,19 @@
 -- `GROUP BY state_key COLLATE utf8_bin`, so consensus/reload results are
 -- unchanged; this is throughput-only.
 --
--- mode=manual: index build on a potentially large table must not run at
--- auto-startup. Apply fleet-wide BEFORE the armed heights (BTC 962500 /
--- LTC 3160000 / DOGE 6335000; testnets late July). If a node reaches the
--- height without it, the reload runs the filesort (correct, only slow).
+-- NOTE: the startup drift reconciler (verifyTables -> alterTableForDrift /
+-- reconcileTableIndexes) already auto-adds this column+index from the updated
+-- contract_state.sql on any node running the new code, so both clauses are
+-- IF NOT EXISTS: this file exists to LEDGER the change and to cover DBs that
+-- are not started through the indexer (operator-managed / rebuilt replicas).
+-- Apply fleet-wide BEFORE the armed heights (BTC 962500 / LTC 3160000 /
+-- DOGE 6335000; testnets late July). If a node reaches the height without
+-- it, the reload runs the filesort (correct, only slow).
 --
 -- HOW TO RUN (manual path)
---   mariadb -u <indexer_user> -p <indexer_db> < src/sql/migrations/2026-07-10-contract-state-bin-key-index.sql
+--   node src/migrate.js   (inside the indexer container / service env)
 
 ALTER TABLE contract_state
-  ADD COLUMN state_key_bin VARCHAR(256) CHARACTER SET utf8 COLLATE utf8_bin
+  ADD COLUMN IF NOT EXISTS state_key_bin VARCHAR(256) CHARACTER SET utf8 COLLATE utf8_bin
     GENERATED ALWAYS AS (state_key) VIRTUAL,
-  ADD INDEX idx_latest_bin (contract_index, state_key_bin, id DESC);
+  ADD INDEX IF NOT EXISTS idx_latest_bin (contract_index, state_key_bin, id DESC);
