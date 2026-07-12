@@ -388,9 +388,11 @@ class Database {
                         continue;
                     }
 
-                    // Strip `--` line comments before splitting on ';' (a ';' in a comment
-                    // header must not terminate a statement - same rule as createTable()).
-                    const statements = this.stripSqlLineComments(raw).split(';').map(s => s.trim()).filter(Boolean);
+                    // Quote-aware split into statements: strips `--` line comments and
+                    // breaks on ';' only outside quoted strings, so a ';' in a comment
+                    // header or inside a string literal never terminates a statement, and
+                    // _destructiveAutoStatement classifies real statements not fragments.
+                    const statements = this.splitSqlStatements(raw);
                     // Destructive-DDL guard: the mode tag is a human declaration; this scan is
                     // the machine check behind it. A file tagged `auto` that contains DDL able
                     // to lose or rename data must NEVER run unattended at startup (nor slip
@@ -506,8 +508,7 @@ class Database {
             // WHERE id = 0;` in 2026-06-10-mirror-id-autoincrement-repair.sql), which
             // touches only the sentinel id=0 row; carve exactly that shape out and
             // flag every other UPDATE.
-            if(/^UPDATE\b/i.test(stmt) &&
-               !/^UPDATE\s+\S+\s+SET\s+id\s*=\s*\([\s\S]+\)\s+WHERE\s+id\s*=\s*0\b/i.test(stmt)) return raw;
+            if(/^UPDATE\b/i.test(stmt) && !this._isIdRepairUpdate(stmt)) return raw;
             if(/^ALTER\s+TABLE\b/i.test(stmt)){
                 // Every DROP inside the ALTER must target a safe (metadata-only) object.
                 let m;
@@ -545,6 +546,41 @@ class Database {
             }
         }
         return null;
+    }
+
+    // True only for the one committed auto UPDATE shape: the AUTO_INCREMENT id
+    // repair `UPDATE <table> SET id = (<subquery>) WHERE id = 0`. The old carve-out
+    // regex was unanchored (`0\b`, no `$`) and used a greedy paren-unaware
+    // `\([\s\S]+\)`, so `... WHERE id = 0 OR 1=1` and a smuggled second assignment
+    // `SET id = (...), amount = (...)` both slipped past the guard and rewrote every
+    // row. This matches the shape structurally instead: (1) a single table then
+    // `SET id = (`; (2) a balanced-paren, quote-aware walk finds the value's true
+    // matching `)`, so no extra assignment or clause can ride inside the wildcard;
+    // (3) the remainder must be exactly `WHERE id = 0`, end-anchored, so nothing
+    // trails. The 2026-06-10-mirror-id-autoincrement-repair.sql migration uses a
+    // NESTED subquery with commas, so a "no inner parens / no commas" rule would
+    // wrongly reject it and hard-fail startup; the balanced scan is required.
+    _isIdRepairUpdate(stmt){
+        const head = /^UPDATE\s+(?:`[^`]+`|[A-Za-z0-9_$.]+)\s+SET\s+id\s*=\s*\(/i.exec(stmt);
+        if(!head) return false;
+        let i = head[0].length - 1;              // index of the opening '('
+        let depth = 0;
+        let quote = null;
+        for(; i < stmt.length; i++){
+            const ch = stmt[i];
+            if(quote){
+                if(ch === quote){
+                    if(stmt[i + 1] === quote){ i++; }    // doubled-quote escape
+                    else { quote = null; }
+                }
+                continue;
+            }
+            if(ch === "'" || ch === '"' || ch === '`'){ quote = ch; continue; }
+            if(ch === '('){ depth++; }
+            else if(ch === ')'){ depth--; if(depth === 0){ i++; break; } }
+        }
+        if(depth !== 0) return false;            // unbalanced parens: not the repair shape
+        return /^\s*WHERE\s+id\s*=\s*0\s*;?\s*$/i.test(stmt.slice(i));
     }
 
     // Create the migration ledger if absent. Created directly (not via src/sql/) - it
@@ -819,16 +855,48 @@ class Database {
         return out;
     }
 
+    // Split a SQL string into individual statements on `;`, but only when the `;`
+    // sits outside a quoted string. A naive `.split(';')` tears a statement whose
+    // string literal contains a semicolon (e.g. `SET data = 'a;b'`) into invalid
+    // fragments, so no migration or seed carrying a semicolon in quoted data can
+    // ship, and _destructiveAutoStatement ends up classifying fragments rather than
+    // real statements. `--` line comments are stripped first (same rule as the
+    // callers used); the quote model matches stripSqlLineComments exactly
+    // (single/double-quote and backtick spans, doubled quotes treated as escapes).
+    // Returns trimmed, non-empty statements.
+    splitSqlStatements(sql){
+        const stripped = this.stripSqlLineComments(sql);
+        const statements = [];
+        let current = '';
+        let quote = null;
+        for(let i = 0; i < stripped.length; i++){
+            const ch = stripped[i];
+            if(quote){
+                current += ch;
+                if(ch === quote){
+                    if(stripped[i + 1] === quote){ current += stripped[++i]; }
+                    else { quote = null; }
+                }
+                continue;
+            }
+            if(ch === "'" || ch === '"' || ch === '`'){ quote = ch; current += ch; continue; }
+            if(ch === ';'){ statements.push(current); current = ''; continue; }
+            current += ch;
+        }
+        statements.push(current);
+        return statements.map(s => s.trim()).filter(Boolean);
+    }
+
     async createTable(file){
         const dir     = path.join(__dirname, 'sql');
         const data    = fs.readFileSync(dir + '/' + file, "utf8");
         const table   = file.substring(0, file.indexOf('.sql'));
-        // Strip `--` line comments BEFORE splitting on ';'. A ';' inside a
-        // comment (prose punctuation in a header block) must not be treated as
-        // a statement terminator - that truncates the comment into a bogus
-        // standalone query and fails schema creation (observed: a semicolon in
+        // Quote-aware split into statements. A ';' inside a comment (prose
+        // punctuation in a header block) or inside a string literal must not be
+        // treated as a statement terminator - that truncates the statement into a
+        // bogus standalone query and fails schema creation (observed: a semicolon in
         // attests.sql's header split its comment, crash-looping the indexer).
-        const queries = this.stripSqlLineComments(data).split(';').map(q => q.trim()).filter(q => q !== '');
+        const queries = this.splitSqlStatements(data);
         console.log('Creating ' + table + ' table and indexes...');
 
         const MAX_ATTEMPTS = 5;
@@ -1256,7 +1324,14 @@ class Database {
                         // Decoder REORG events store an array of {block_index, block_hash};
                         // unwrap the numeric block index and keep the lowest (deepest) one.
                         let idx = (typeof block === 'object' && block !== null) ? block.block_index : block;
-                        if(idx < block_index || block_index === null)
+                        // A malformed element (object without a numeric block_index) yields
+                        // `undefined`; skip it so it can neither seed nor poison the target.
+                        // Without this, `undefined` slips past the `block_index === null`
+                        // guard below and later valid elements never recover it.
+                        if(!Number.isFinite(Number(idx)))
+                            continue;
+                        idx = Number(idx);
+                        if(block_index === null || idx < block_index)
                             block_index = idx;
                     }
                 }
@@ -1264,9 +1339,10 @@ class Database {
                 // Malformed row.data; treat as yielding no block_index below and skip the row.
             }
             // A malformed or empty payload must never be treated as a valid rollback target
-            // (a null block_index here would let `lastIndexerBlock >= null` coerce true and
-            // call rollback(null), whose predicates match no rows - a silently missed rollback).
-            if(block_index === null)
+            // (a null/non-finite block_index here would let `lastIndexerBlock >= null` coerce
+            // true and call rollback(null), whose predicates match no rows - a silently missed
+            // rollback).
+            if(!Number.isFinite(block_index))
                 continue;
             reorgs.push({ id: Number(row.id), block_index: block_index });
         }
@@ -1352,6 +1428,33 @@ class Database {
         // instead crashes to a clean restart where the committed rollback makes the reorg a no-op and
         // the marker is retried, matching the crash-safety ordering the call site documents.
         let results = await this.doQueryStrict(query, args);
+    }
+
+    // Read-only reorg observability counters for the /health payload (#1813): the total
+    // number of processed reorgs, plus the block index and timestamp of the most recent
+    // one. Sourced from the durable REORG markers in the events table (see createReorg).
+    // Uses doQuery (not strict) and never throws: health must degrade to null fields, not
+    // fail, when the DB read hiccups or the events table is absent.
+    async getReorgHealthStats(){
+        let stats = { reorgsProcessed: 0, lastReorgBlock: null, lastReorgAt: null };
+        try {
+            let countRows = await this.doQuery("SELECT COUNT(*) AS n FROM events WHERE code='REORG'");
+            if(countRows.length > 0 && countRows[0].n != null)
+                stats.reorgsProcessed = Number(countRows[0].n);
+            let lastRows = await this.doQuery("SELECT time, data FROM events WHERE code='REORG' ORDER BY id DESC LIMIT 1");
+            if(lastRows.length > 0){
+                let ms = new Date(lastRows[0].time).getTime();
+                stats.lastReorgAt = Number.isFinite(ms) ? ms : null;
+                try {
+                    let parsed = JSON.parse(lastRows[0].data);
+                    if(parsed && typeof parsed === 'object' && parsed.block_index != null)
+                        stats.lastReorgBlock = Number(parsed.block_index);
+                } catch(e){ /* legacy/plain payload: leave lastReorgBlock null */ }
+            }
+        } catch(e){
+            // DB unreachable / events table absent; return the null-safe defaults.
+        }
+        return stats;
     }
 
     // Handle getting block transaction data for a given block from xchain-decoder database
@@ -3791,13 +3894,80 @@ class Database {
                 decimals[row.tick] = row.decimals;
             };
         }
+        // Batch the four per-tick aggregates into GROUP BY queries over the block's
+        // touched-tick set, reusing the tick_id/decimals already selected above (#1842).
+        // The former per-tick loop issued getTokenSupply/Token/Balance/Escrow serially,
+        // each re-running createTicker + getTokenDecimalPrecision and (getTokenSupply with
+        // no block scope) three FULL-HISTORY SUM scans, so cost grew ~14 round-trips per
+        // touched tick per block and tracked ledger history. This collapses to a handful
+        // of queries per block regardless of tick count. Semantics are preserved exactly:
+        // the same DECIMAL(60,d) CAST (grouped by d so the scale stays per-tick-correct),
+        // the same action-scoped ledger sums vs unjoined balances/escrow-total sums, the
+        // same three-way compare and SanityError messages.
+        let tickList = Object.keys(tickers);
+        if(tickList.length === 0)
+            return;
+        // tick_id -> tick name, tick_ids grouped by decimal scale, and the flat id list.
+        let idToTick     = {};
+        let idsByDecimals = {};
+        let allIds        = [];
+        for(let tick of tickList){
+            let id = tickers[tick];
+            let d  = decimals[tick];
+            idToTick[id] = tick;
+            (idsByDecimals[d] = idsByDecimals[d] || []).push(id);
+            allIds.push(id);
+        }
+        // Run one GROUP BY SUM per distinct decimal scale over the touched-tick set for a
+        // table. joinActions mirrors getTokenSupply's `INNER JOIN actions` for the ledger
+        // credit/debit/escrow sums; the balances and escrow-TOTAL sums are unjoined, exactly
+        // like getTokenSupplyBalance/getTokenSupplyEscrow. Returns tick_id -> summed string.
+        let sumByTick = async (table, joinActions) => {
+            let out = {};
+            for(let d in idsByDecimals){
+                let ids          = idsByDecimals[d];
+                let dec          = parseInt(d, 10);
+                let placeholders = ids.map(() => '?').join(', ');
+                let from         = joinActions
+                    ? table + ' m INNER JOIN actions a ON (a.action_index=m.action_index)'
+                    : table + ' m';
+                let q = 'SELECT m.tick_id AS tick_id, SUM(CAST(m.amount AS DECIMAL(60,' + dec + '))) AS s'
+                      + ' FROM ' + from + ' WHERE m.tick_id IN (' + placeholders + ') GROUP BY m.tick_id';
+                let rows = await this.doQuery(q, ids);
+                for(let row of rows){
+                    if(!this.util.isNull(row.s)) out[Number(row.tick_id)] = row.s;
+                }
+            }
+            return out;
+        };
+        // Ledger components (action-scoped) and total components (unjoined).
+        let creditsById       = await sumByTick('credits', true);
+        let debitsById        = await sumByTick('debits',  true);
+        let escrowsLedgerById = await sumByTick('escrows', true);
+        let balancesById      = await sumByTick('balances', false);
+        let escrowsTotalById  = await sumByTick('escrows',  false);
+        // tokens.supply per touched tick (raw string, no CAST - matches getTokenSupplyToken).
+        let tokenById = {};
+        {
+            let placeholders = allIds.map(() => '?').join(', ');
+            let rows = await this.doQuery(
+                'SELECT tick_id, supply FROM tokens WHERE tick_id IN (' + placeholders + ')', allIds);
+            for(let row of rows){
+                if(!this.util.isNull(row.supply)) tokenById[Number(row.tick_id)] = row.supply;
+            }
+        }
         // Loop through the tickers and validate token supply match credits/debits/balances info
         for(let tick in tickers){
             let tick_id = tickers[tick];
-            let ledger  = this.util.bcnum(await this.getTokenSupply(tick));        // Supply from ledger (credits - debits + escrows)
-            let token   = this.util.bcnum(await this.getTokenSupplyToken(tick));   // Supply from tokens
-            let balance = this.util.bcnum(await this.getTokenSupplyBalance(tick)); // Supply from balances
-            let escrow  = this.util.bcnum(await this.getTokenSupplyEscrow(tick));  // Supply from escrows
+            let d       = decimals[tick];
+            let credits = (creditsById[tick_id]       != null) ? creditsById[tick_id]       : 0;
+            let debitsV = (debitsById[tick_id]        != null) ? debitsById[tick_id]        : 0;
+            let escLdg  = (escrowsLedgerById[tick_id] != null) ? escrowsLedgerById[tick_id] : 0;
+            // Ledger (credits - debits + escrows), identical to getTokenSupply's final bcadd/bcsub.
+            let ledger  = this.util.bcnum(this.util.bcadd(this.util.bcsub(credits, debitsV, d), escLdg, d));
+            let token   = this.util.bcnum((tokenById[tick_id]        != null) ? tokenById[tick_id]        : 0); // Supply from tokens
+            let balance = this.util.bcnum((balancesById[tick_id]     != null) ? balancesById[tick_id]     : 0); // Supply from balances
+            let escrow  = this.util.bcnum((escrowsTotalById[tick_id] != null) ? escrowsTotalById[tick_id] : 0); // Supply from escrows
             let total   = this.util.bcadd(balance, escrow, decimals[tick]);        // Total (balances + escrows)
             if(String(token)!=String(ledger) || String(token)!=String(total)){
                 console.log("Tick,   tick_id =", tick, tick_id);

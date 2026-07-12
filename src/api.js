@@ -262,8 +262,16 @@ async function startApi(){
                 // Database unreachable; leave lastIndexedBlock null. The circuit
                 // state below tells the operator why.
             }
+            let reorgStats = null;
+            try {
+                if(indexer.indexerDb)
+                    reorgStats = await indexer.indexerDb.getReorgHealthStats();
+            } catch (err) {
+                // DB unreachable; leave reorg counters null (getReorgHealthStats is
+                // already non-throwing, this is belt-and-braces).
+            }
             return buildHealthResponse({
-                indexer, indexerRunning, indexerError, lastIndexedBlock, now: Date.now()
+                indexer, indexerRunning, indexerError, lastIndexedBlock, now: Date.now(), reorgStats
             });
         },
 

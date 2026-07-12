@@ -195,6 +195,17 @@ describe('native coin fee quote @regression @tier1', function () {
             }
         });
 
+        it('deny-list cannot be bypassed with whitespace or alias padding: engine never invoked', async function () {
+            let util = makeUtil('BTC', FEE_DEST);
+            for(let action of [' DEPLOY', 'DEPLOY ', ' deploy ', '\tEXECUTE\n']){
+                let { ctx, calls } = makeCtx(util, makeDb({ prices: BTC_PRICES }));
+                let q = await ctx.computeFeeQuote.call(ctx, { action, params: ['0', 'x'], source: 'src' });
+                assert.strictEqual(q.supported, false, JSON.stringify(action) + ' must be unquotable');
+                assert.ok(/not supported/.test(q.error), q.error);
+                assert.strictEqual(calls.dryRuns, 0, JSON.stringify(action) + ' must not reach the engine');
+            }
+        });
+
         it('fee-exempt settlement/lifecycle actions: zero-fee feeExempt result, engine never invoked', async function () {
             let util = makeUtil('DOGE', FEE_DEST);
             for(let action of ['COINPAY', 'DISPENSE', 'ORDER_MATCH', 'COINPAY_EXPIRE', 'CROSS_SETTLE', 'coinpay']){

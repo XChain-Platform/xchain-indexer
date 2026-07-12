@@ -145,18 +145,29 @@ describe('HubDbSync oracle-sync barrier @regression @tier3', function () {
         assert.strictEqual(sync.oracleBootstrapped, false);
     });
 
-    it('_refreshOracleSyncTimestamp adopts MAX(effective_at) and marks bootstrapped', async function () {
+    it('_refreshOracleSyncTimestamp adopts MAX(effective_at) and marks bootstrapped on the drain path', async function () {
         const { sync } = makeOracleSync(1700000000);
-        await sync._refreshOracleSyncTimestamp();
+        await sync._refreshOracleSyncTimestamp(true);   // armBootstrap=true = the full-drain path
         assert.strictEqual(sync.oracleSyncTimestamp, 1700000000);
         assert.strictEqual(sync.oracleBootstrapped, true);
     });
 
-    it('_refreshOracleSyncTimestamp records an empty mirror as null but still bootstrapped', async function () {
+    it('_refreshOracleSyncTimestamp records an empty mirror as null but still bootstrapped on the drain path', async function () {
         const { sync } = makeOracleSync(null);     // MAX over an empty table → null
-        await sync._refreshOracleSyncTimestamp();
+        await sync._refreshOracleSyncTimestamp(true);
         assert.strictEqual(sync.oracleSyncTimestamp, null);
         assert.strictEqual(sync.oracleBootstrapped, true);
+    });
+
+    it('_refreshOracleSyncTimestamp does NOT arm when the bootstrap has not drained (#1788)', async function () {
+        // Default armBootstrap = this._bootstrapDrained (false here): a reconnect
+        // (_refreshAllSyncHeights before re-bootstrap) or a single live row mid-partial-
+        // bootstrap updates the scalar but must NOT arm the empty-mirror fast path.
+        const { sync } = makeOracleSync(null);
+        assert.strictEqual(sync._bootstrapDrained, false);
+        await sync._refreshOracleSyncTimestamp();       // no arg = the reconnect/live-row default
+        assert.strictEqual(sync.oracleSyncTimestamp, null, 'scalar still refreshed');
+        assert.strictEqual(sync.oracleBootstrapped, false, 'flag withheld until a full drain');
     });
 
     it('_refreshOracleSyncTimestamp leaves state untouched when the table is not ready', async function () {
@@ -191,7 +202,7 @@ describe('HubDbSync oracle-sync barrier @regression @tier3', function () {
 
     it('waitForOracleSyncTimestamp is a no-op once the mirror is known to be empty (no FIAT oracles)', async function () {
         const { sync } = makeOracleSync(null);
-        await sync._refreshOracleSyncTimestamp();      // empty table → bootstrapped, timestamp null
+        await sync._refreshOracleSyncTimestamp(true);  // full-drain path: empty table → bootstrapped, timestamp null
         // Must resolve immediately for any block time, otherwise non-oracle deployments stall.
         const got = await sync.waitForOracleSyncTimestamp(9999999999, 50);
         assert.strictEqual(got, null);

@@ -26,6 +26,10 @@ class Rollback {
 
     // Handle constructing a class instance
     constructor(indexer){
+        // Keep a reference to the indexer so the rollback can surface its in-progress
+        // state (stallReason) on the /health payload for the reorg window (#1812).
+        this.indexer   = indexer;
+
         // Parse in indexer configuration
         this.config    = indexer.config;
 
@@ -108,6 +112,13 @@ class Rollback {
 
         // Start tracking time of rollback
         var rollbackTimer = this.util.startTimer();
+        const rollbackStartedAt = Date.now();
+
+        // Surface the in-progress rollback on /health for the whole reorg window, so a
+        // hung or looping rollback is not misreported as last-known-good (a frozen
+        // lastIndexedBlock with stallReason:null). Cleared after commit, and on the
+        // failure path below (#1812).
+        if(this.indexer) this.indexer.stallReason = 'reorg_rollback';
 
         // Notify user of start of rollback
         console.log('Starting rollback to block ' + block_index + '...');
@@ -1098,9 +1109,16 @@ class Rollback {
             // Commit: the rollback is now atomically applied
             await this.indexerDb.commitTransaction();
 
+            // Destructive rollback is done and committed; clear the in-progress marker so
+            // /health reflects a caught-up node again (#1812).
+            if(this.indexer) this.indexer.stallReason = null;
+
         } catch(e) {
             // Roll back so the DB is left untouched rather than in a partial rollback state
             await this.indexerDb.rollbackTransaction();
+            // Clear the reorg marker on failure too so it can't stick; the caller re-detects
+            // the reorg and retries, re-arming it on the next attempt (#1812).
+            if(this.indexer) this.indexer.stallReason = null;
             throw e;
         }
 
@@ -1147,6 +1165,16 @@ class Rollback {
                 if(this.hubPushQueue) this.hubPushQueue.resume();
             }
         }
+
+        // Structured completion summary so a successful rollback is distinguishable
+        // from a hung/partial one in the log stream (#1812): target block, the rolled-
+        // back action range, the staged hub retractions, and elapsed time.
+        const elapsedMs     = Date.now() - rollbackStartedAt;
+        const retractionIds = stagedRetractions.map(r => r.pushType + '#' + r.id);
+        console.log('Rollback complete: to block ' + block_index +
+            ', action range [' + firstActionIndex + ', ' + lastActionIndex + ']' +
+            ', staged retractions ' + (retractionIds.length ? retractionIds.join(', ') : 'none') +
+            ', elapsed ' + elapsedMs + 'ms');
 
         // Log the rollback time
         this.util.logTimer(rollbackTimer, 'Rollback Done');

@@ -26,7 +26,7 @@
 // fatal error, the freshly-read indexed-block height, and the current epoch
 // ms). Async only for the hub_push_queue stats fetch; all other fields are
 // derived synchronously from already-resolved values.
-async function buildHealthResponse({ indexer, indexerRunning, indexerError, lastIndexedBlock, now }){
+async function buildHealthResponse({ indexer, indexerRunning, indexerError, lastIndexedBlock, now, reorgStats }){
     let decoderDbCircuit = indexer.decoderDb ? indexer.decoderDb.circuitState : null;
     let indexerDbCircuit = indexer.indexerDb ? indexer.indexerDb.circuitState : null;
     let circuitOpen = decoderDbCircuit === 'open' || indexerDbCircuit === 'open';
@@ -85,6 +85,14 @@ async function buildHealthResponse({ indexer, indexerRunning, indexerError, last
         hubConfigAgeSeconds:  hubConfigAgeSeconds,
         hub_push_queue:   hubPushQueue,
         action_counters:  actionCounters,
+        // Reorg/rollback observability (#1813): total processed reorgs and the block
+        // index + epoch-ms timestamp of the most recent one, so the dashboard can meter
+        // the decoder->indexer reorg handshake instead of a frequently-reorging chain
+        // presenting as an ordinary healthy indexer. Null when the API server did not
+        // (or could not) read them.
+        reorgsProcessed:  reorgStats ? reorgStats.reorgsProcessed : null,
+        lastReorgBlock:   reorgStats ? reorgStats.lastReorgBlock  : null,
+        lastReorgAt:      reorgStats ? reorgStats.lastReorgAt     : null,
         error:            indexerError ? indexerError.message : null
     };
 }

@@ -361,6 +361,13 @@ class AnchorRecovery {
                 // Same immutable terms; only the status can move (finalized to retracted).
                 // anchor_txid upgrades NULL->value only, matching the hub mirror's
                 // first-stamp-wins COALESCE semantics (hub_db_sync.js).
+                // Parity carve-out (documented, non-consensus): a retraction here flips the
+                // row to status='retracted' (hub-faithful; the HUB DB UPDATEs the same status),
+                // whereas the live mirror path DELETEs the row outright (hub_db_sync.js). So a
+                // recovery-fed mirror holds a retracted row where a mirror-fed one holds none.
+                // Consensus reads filter status='finalized' and cross_chain_settlements snapshots
+                // both leg refs, so neither read observes the difference; the row-presence gap is
+                // benign and intentional, not a replay divergence.
                 await this.db.doQuery(
                     'UPDATE cross_chain_matches SET status = ?, anchor_txid = COALESCE(anchor_txid, ?) WHERE match_id = ?',
                     [m.status, anchorTxid, m.match_id]);

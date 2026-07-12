@@ -185,7 +185,9 @@ class Slash {
         }
 
         // CAPABILITY must be the one the engine maps to (derived, not trusted). XCONFIG
-        // (and any unknown engine) has no slashable membership here → reject.
+        // maps to the sentinel 'config' capability (Phase-A amendment; membership resolves
+        // against getActiveValidators, see below). Only an unknown/unmapped engine has no
+        // slashable membership here → reject.
         let capability = null;
         if(!error){
             capability = ENGINE_CAPABILITY[engineTag];

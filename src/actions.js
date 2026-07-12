@@ -766,7 +766,15 @@ class Actions {
         let toleranceMin   = this.util.bcnum(this.config['FEE_TOLERANCE_MIN'] || '0.95');
         let toleranceMax   = this.util.bcnum(this.config['FEE_TOLERANCE_MAX'] || '1.10');
 
-        action = String(action || '').toUpperCase();
+        // Normalize exactly as processTransaction will before dispatch: trim then uppercase,
+        // then resolve ACTION aliases. Otherwise a whitespace-padded or aliased name would
+        // classify differently here than at dispatch, letting a caller skip the denylist and
+        // still reach the real VM-compute pre-flight.
+        action = String(action || '').trim().toUpperCase();
+        for(var alias in this.actionAliases){
+            if(action == alias)
+                action = this.actionAliases[alias];
+        }
         if(!Array.isArray(params)) params = String(params == null ? '' : params).split('|');
         params = params.map(v => String(v).trim());
 

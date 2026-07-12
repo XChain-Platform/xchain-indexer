@@ -673,6 +673,19 @@ describe('Database reorg identity detection @regression @tier1', function () {
         assert.doesNotMatch(db.doQueryStrict.firstCall.args[0], /id > \?/);
     });
 
+    it('skips a malformed leading element without poisoning the batch target', async function () {
+        // A leading element that is an object with no numeric block_index unwraps to
+        // `undefined`; it must be skipped (not seed the target as `undefined`, which
+        // would slip past the null guard and drop later valid elements / the whole event).
+        db.doQueryStrict.resolves([
+            { id: 6, data: JSON.stringify([{ block_hash: 'hbad' }, { block_index: 150, block_hash: 'h150' }]) },
+            { id: 7, data: JSON.stringify([{ block_hash: 'honly' }]) },
+        ]);
+        const result = await db.getReorgsSince.call(db, 5);
+        // Event 6 recovers to its one valid element; event 7 is all-malformed and is dropped.
+        assert.deepStrictEqual(result, [{ id: 6, block_index: 150 }]);
+    });
+
     it('exposes the DEEPEST block across two unprocessed reorgs when the newer one is shallower', async function () {
         // The bug a single-newest-event reader caused: it surfaces only event 7 (block 200);
         // rolling back to 200 leaves orphaned rows from event 6's deeper reorg at block 100.

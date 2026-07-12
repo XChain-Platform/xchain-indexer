@@ -763,9 +763,11 @@ describe('Order_Match action handler @regression @tier2', function () {
             const data = createBaseData({ ACTION: 'ORDER_MATCH', BLOCK_TIME, ACTION_INDEX: 1 });
             await orderMatch.parse([], data, false);
 
-            // Either zero-get skip or price mismatch skip : both are valid debug paths
-            // Main goal: hit debug=true code path without crashing
-            assert.ok(true, 'no crash in debug mode with zero GET amount scenario');
+            // This fixture reaches a debug skip (zero-get and/or price-mismatch), and
+            // BOTH skip reasons must leave the order unmatched. Assert the consensus-
+            // relevant outcome (no ORDER_MATCH created) rather than mere no-crash, so a
+            // regression that wrongly creates a match on this path fails (#1860).
+            sinon.assert.notCalled(indexer.indexerDb.createOrderMatch);
         });
 
         it('logs allow/block list skip in debug mode (lines 195-197)', async function () {

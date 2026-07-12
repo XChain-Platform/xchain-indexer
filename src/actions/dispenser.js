@@ -377,9 +377,20 @@ class Dispenser {
             balances = this.util.debitBalances(balances, fees['TICK_ID'], fees['AMOUNT']);
 
         // Controller-bound GIVE token: the bound contract's `guard` must approve
-        // opening a dispenser that sells this token before it opens. Veto-only at
-        // create; the royalty cut is taken per buy at dispense time (dispense.js).
+        // opening a dispenser that sells this token before it opens. This guard is
+        // VETO-ONLY at create: only result.error and result.guardFee are consumed
+        // below; the guard's payoutLegs are intentionally discarded here.
         // SOURCE pays the bounded guard gas (reserved up front).
+        //
+        // KNOWN GAP (#1806): unlike ORDER and SWAP sales of a controller-bound token
+        // (which persist payout_legs at create and apply the royalty split at match
+        // time via applyProceedsSplit), DISPENSER sales apply NO royalty/proceeds
+        // split. dispense.js has no royalty path: it credits the give token to the
+        // buyer directly, and dispense proceeds are native coin paid directly
+        // on-chain. So a controller cannot veto or take a cut per buy at dispense
+        // time. TODO: if dispenser sales must honor the royalty split, that needs
+        // dedicated design for a per-buy split/veto over native-coin proceeds; it is
+        // NOT implemented today. Do not read this comment as an enforced invariant.
         let guardFee = 0;
         if(!error && format==0 && giveTokenInfo){
             let gasInfo = await this.indexerDb.getTokenInfo(this.config['GAS'], data['BLOCK_INDEX'], data['ACTION_INDEX']);

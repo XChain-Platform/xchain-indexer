@@ -130,4 +130,20 @@ describe('health() response builder', function(){
             'action_counters must mirror the live snapshot from getActionCounters()');
     });
 
+    it('surfaces reorg counters from reorgStats (#1813)', async function(){
+        const res = await call(makeIndexer(), {
+            reorgStats: { reorgsProcessed: 3, lastReorgBlock: 6_241_887, lastReorgAt: 1_720_800_000_000 }
+        });
+        assert.strictEqual(res.reorgsProcessed, 3);
+        assert.strictEqual(res.lastReorgBlock, 6_241_887);
+        assert.strictEqual(res.lastReorgAt, 1_720_800_000_000);
+    });
+
+    it('reorg counters are null when reorgStats is omitted (DB unread)', async function(){
+        const res = await call(makeIndexer());
+        assert.strictEqual(res.reorgsProcessed, null);
+        assert.strictEqual(res.lastReorgBlock, null);
+        assert.strictEqual(res.lastReorgAt, null);
+    });
+
 });

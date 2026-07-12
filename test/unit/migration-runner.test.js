@@ -31,10 +31,12 @@ const Database = require('../../src/db');
 // _migrationMode is a pure string function : bind it to a bare object.
 const modeOf = Database.prototype._migrationMode.bind({});
 
-// Destructive-DDL guard helpers: same comment-strip + ';'-split runMigrations uses.
+// Destructive-DDL guard helpers: same comment-strip + quote-aware split runMigrations uses.
+// Bind to the prototype so _destructiveAutoStatement can reach _isIdRepairUpdate and
+// splitSqlStatements can reach stripSqlLineComments (both pure, no instance state).
 const stripComments = Database.prototype.stripSqlLineComments.bind({});
-const destructiveOf = Database.prototype._destructiveAutoStatement.bind({});
-const statementsOf  = (raw) => stripComments(raw).split(';').map(s => s.trim()).filter(Boolean);
+const destructiveOf = Database.prototype._destructiveAutoStatement.bind(Database.prototype);
+const statementsOf  = (raw) => Database.prototype.splitSqlStatements.call(Database.prototype, raw);
 
 describe('Database._migrationMode() @regression @tier1', function () {
 
@@ -87,6 +89,26 @@ describe('committed migrations declare intent @regression @tier1', function () {
                 file + ' has no explicit mode tag. Every migration must declare intent so a ' +
                 'destructive change can never silently auto-run at startup. Add a first line: ' +
                 '`-- xchain:migration mode=auto` (additive + idempotent) or `mode=manual` (gated).');
+        });
+    });
+
+    // The runner applies migrations in `readdirSync(...).sort()` order (src/db.js),
+    // so a `YYYY-MM-DD-` filename prefix is what guarantees authorship-order apply.
+    // Freeze the convention: any NEW file must be dated. The three legacy undated
+    // names predate the convention and are grandfathered by explicit allowlist.
+    const DATED_PREFIX = /^\d{4}-\d{2}-\d{2}-/;
+    const LEGACY_UNDATED = new Set([
+        'add_balances_composite_index.sql',
+        'add_cross_chain_matches_partial_fill_columns.sql',
+        'unique_full_column_index_addresses.sql'
+    ]);
+    files.forEach(function (file) {
+        it(file + ': uses the dated YYYY-MM-DD- filename prefix (ordering convention)', function () {
+            if(LEGACY_UNDATED.has(file)) this.skip();
+            assert.ok(DATED_PREFIX.test(file),
+                file + ' is not dated. Runner apply order is readdirSync().sort(), so every new ' +
+                'migration must start with a `YYYY-MM-DD-` prefix to apply in authorship order. ' +
+                'Rename it (only the three legacy add_/unique_ files are grandfathered).');
         });
     });
 });
@@ -248,6 +270,29 @@ describe('Database._destructiveAutoStatement() @regression @tier1', function () 
         assert.ok(destructiveOf(['UPDATE price_snapshots SET id = 5 WHERE id = 0']));
     });
 
+    it('flags UPDATE bypasses that smuggle past the id-repair carve-out', function () {
+        // The old carve-out regex was unanchored and paren-greedy; these both slipped
+        // through and rewrote every row. They must now be flagged (#1861).
+        // (a) trailing clause after WHERE id = 0
+        assert.ok(destructiveOf(['UPDATE balances SET id = (SELECT 1) WHERE id = 0 OR 1=1']));
+        // (b) a second, data-destroying SET assignment riding inside the id-repair shape
+        assert.ok(destructiveOf(["UPDATE balances SET id = (SELECT id), amount = (SELECT '0') WHERE id = 0"]));
+        // (c) a trailing LIMIT after the id=0 predicate
+        assert.ok(destructiveOf(['UPDATE balances SET id = (SELECT 1) WHERE id = 0 LIMIT 1']));
+    });
+
+    it('still allows the nested-subquery id repair after the carve-out is tightened', function () {
+        // The balanced-paren matcher must not reject the committed repair shape, whose
+        // subquery contains nested parens and commas (a naive "no commas" rule would).
+        assert.strictEqual(destructiveOf([
+            'UPDATE price_snapshots\n   SET id = (SELECT next_id FROM (SELECT COALESCE(MAX(id), 0) + 1 AS next_id FROM price_snapshots) t)\n WHERE id = 0'
+        ]), null);
+        // Backtick-quoted table name, trailing semicolon, and WHERE id = 0 still pass.
+        assert.strictEqual(destructiveOf([
+            'UPDATE `balances` SET id = (SELECT 1) WHERE id = 0;'
+        ]), null);
+    });
+
     it('allows RENAME INDEX/KEY (metadata-only rename)', function () {
         assert.strictEqual(destructiveOf(['ALTER TABLE t RENAME INDEX old_idx TO new_idx']), null);
     });
@@ -267,6 +312,49 @@ describe('Database._destructiveAutoStatement() @regression @tier1', function () 
         assert.strictEqual(modeOf(raw), 'auto');
         const offender = destructiveOf(statementsOf(raw));
         assert.ok(offender && /DROP TABLE contract_stakes/i.test(offender));
+    });
+});
+
+describe('Database.splitSqlStatements() @regression @tier1', function () {
+    const splitOf = (raw) => Database.prototype.splitSqlStatements.call(Database.prototype, raw);
+
+    it('does not split on a ; inside a single-quoted string literal', function () {
+        assert.deepStrictEqual(splitOf("UPDATE t SET data = 'a;b' WHERE id = 1;"),
+            ["UPDATE t SET data = 'a;b' WHERE id = 1"]);
+    });
+
+    it('does not split on a ; inside double-quoted or backtick-quoted spans', function () {
+        assert.deepStrictEqual(splitOf('UPDATE t SET data = "a;b" WHERE id = 1;'),
+            ['UPDATE t SET data = "a;b" WHERE id = 1']);
+        assert.deepStrictEqual(splitOf('UPDATE `we;ird` SET x = 1;'),
+            ['UPDATE `we;ird` SET x = 1']);
+    });
+
+    it('treats doubled quotes as escapes (a ; inside stays inside)', function () {
+        assert.deepStrictEqual(splitOf("INSERT INTO t (m) VALUES ('it''s; fine');"),
+            ["INSERT INTO t (m) VALUES ('it''s; fine')"]);
+    });
+
+    it('does not split on a ; inside a -- line comment', function () {
+        assert.deepStrictEqual(splitOf('SELECT 1; -- trailing; note\nSELECT 2;'),
+            ['SELECT 1', 'SELECT 2']);
+    });
+
+    it('splits ordinary multi-statement SQL into the same statements as before', function () {
+        assert.deepStrictEqual(splitOf('CREATE TABLE a (id INT);\nCREATE TABLE b (id INT);'),
+            ['CREATE TABLE a (id INT)', 'CREATE TABLE b (id INT)']);
+    });
+
+    it('guard classifies real statements, not fragments (both directions)', function () {
+        // A ;DROP TABLE buried in a string literal is ONE non-destructive statement.
+        assert.strictEqual(destructiveOf(splitOf(
+            "INSERT INTO notes (body) VALUES ('watch for ;DROP TABLE x');"
+        )), null);
+        // A genuine trailing DROP TABLE is still caught.
+        const offender = destructiveOf(splitOf(
+            "INSERT INTO notes (body) VALUES ('ok'); DROP TABLE x;"
+        ));
+        assert.ok(offender && /DROP TABLE x/i.test(offender));
     });
 });
 

@@ -52,7 +52,7 @@ describe('ACTION manifest conformance: indexer indexerHandled set @regression', 
     describe('byte-identity to canonical manifest', function () {
         const DOCS = process.env.XCHAIN_DOCS_DIR || path.join(__dirname, '..', '..', '..', 'xchain-documentation');
         const CANON = path.join(DOCS, 'protocol', 'action-manifest.json');
-        before(function () { if (!fs.existsSync(CANON)) this.skip(); });
+        before(function () { if (!fs.existsSync(CANON)) { if (process.env.XCHAIN_REQUIRE_SIBLINGS === '1') throw new Error('XCHAIN_REQUIRE_SIBLINGS=1 but canonical action-manifest.json not found at ' + CANON); this.skip(); } });
         it('vendored test/fixtures/action-manifest.json is byte-identical to canonical', function () {
             assert.strictEqual(fs.readFileSync(VENDORED, 'utf8'), fs.readFileSync(CANON, 'utf8'),
                 'vendored action-manifest.json drifted from canonical; edit ' +

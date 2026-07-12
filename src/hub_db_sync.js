@@ -560,10 +560,15 @@ class HubDbSync {
         // reconnect self-heal (_refreshAllSyncHeights) still refreshes from a complete local
         // mirror on its own path; this only withholds arming on an incomplete bootstrap.
         if (fullyDrained) {
+            // Pass armBootstrap=true: this is the only path allowed to arm the
+            // per-barrier <x>Bootstrapped flags, because only here has the table
+            // fully drained. The refreshers otherwise default arming to
+            // _bootstrapDrained so reconnect / live-row refreshes cannot arm from
+            // a holed mirror (see #1788).
             if (table === 'price_snapshots')     await this._refreshPriceSyncHeight();
-            if (table === 'oracle_prices')       await this._refreshOracleSyncTimestamp();
-            if (table === 'cross_chain_matches') await this._refreshMatchSyncTimestamp();
-            if (table === 'cross_chain_calls')   await this._refreshCallSyncTimestamp();
+            if (table === 'oracle_prices')       await this._refreshOracleSyncTimestamp(true);
+            if (table === 'cross_chain_matches') await this._refreshMatchSyncTimestamp(true);
+            if (table === 'cross_chain_calls')   await this._refreshCallSyncTimestamp(true);
             // A new match/call (new required snapshot_block) or an arriving snapshot can change
             // snapshot-presence: re-evaluate the snapshot barrier on any cross-chain table.
             if (CROSS_CHAIN_TABLES.indexOf(table) !== -1) await this._releaseSnapshotWaiters();
@@ -756,7 +761,7 @@ class HubDbSync {
     // table (bootstrap, poll, live insert, reorg retraction). A NULL max (empty mirror) is a
     // valid result; it means this deployment has no oracle prices, which oracleBootstrapped
     // distinguishes from "not synced yet".
-    async _refreshOracleSyncTimestamp() {
+    async _refreshOracleSyncTimestamp(armBootstrap = this._bootstrapDrained) {
         let ts = null;
         try {
             let rows = await this.hubDb.doQuery('SELECT MAX(effective_at) AS ts FROM oracle_prices');
@@ -765,7 +770,12 @@ class HubDbSync {
             return;                                         // table not ready yet; leave state untouched
         }
         this.oracleSyncTimestamp = ts;                      // number, or null when the mirror holds no oracle prices
-        this.oracleBootstrapped  = true;                    // we have successfully read the mirror at least once
+        // Arm the empty-mirror barrier flag only when a full bootstrap drain is in
+        // effect. A refresh from the reconnect edge (_refreshAllSyncHeights, before
+        // re-bootstrap) or a single live row arriving mid-partial-bootstrap defaults
+        // armBootstrap to _bootstrapDrained (false then), so it cannot arm the NULL
+        // fast path in _oracleSyncSatisfied against a holed mirror and fork (#1788).
+        if (armBootstrap) this.oracleBootstrapped = true;   // read at least once AND fully drained
         this._releaseOracleWaiters();
     }
 
@@ -869,12 +879,14 @@ class HubDbSync {
 
         // cross_chain_calls needs the same in-place upgrade path as price_snapshots,
         // not plain INSERT IGNORE. It carries UNIQUE (call_id, phase). A replica can
-        // already hold an old or 'retracted' row for that key (a source-chain reorg
-        // marked it retracted via the deletion event). When the hub later re-finalizes
-        // the re-mined call (CrossChainCallEngine._writeFinalizedRow upserts the
-        // current quorum's content via ON DUPLICATE KEY UPDATE and rebroadcasts), a
-        // plain INSERT IGNORE here would drop the upgrade and strand the replica on the
-        // stale/retracted row. Because effective_time is in the signed canonical and
+        // already hold an older row for that key (an earlier-stream survivor). Note a
+        // source-chain reorg does NOT leave a status='retracted' row: _applyRetraction
+        // DELETEs the mirrored row outright on the deletion event, so a retracted key is
+        // simply absent locally, never locally queryable with a retracted status. When
+        // the hub later re-finalizes the re-mined call (CrossChainCallEngine._writeFinalizedRow
+        // upserts the current quorum's content via ON DUPLICATE KEY UPDATE and rebroadcasts),
+        // a plain INSERT IGNORE here would drop the upgrade and strand the replica on the
+        // stale row. Because effective_time is in the signed canonical and
         // gates the injection block, a divergent copy would inject at a different block.
         // Upgrade only when the INCOMING row is finalized (keyed on VALUES(status),
         // stable regardless of ODKU assignment order), so an already-finalized local
@@ -1037,7 +1049,7 @@ class HubDbSync {
 
     // Recompute the highest effective_time present in the local cross_chain_matches copy
     // (finalized only) and release satisfied waiters. A NULL max (empty mirror) is valid.
-    async _refreshMatchSyncTimestamp() {
+    async _refreshMatchSyncTimestamp(armBootstrap = this._bootstrapDrained) {
         let ts = null;
         try {
             // Scope the watermark to matches that touch THIS coin (either leg), matching
@@ -1058,7 +1070,10 @@ class HubDbSync {
             return;                                             // table not ready yet
         }
         this.matchSyncTimestamp = ts;
-        this.matchBootstrapped  = true;
+        // Arm only under a full bootstrap drain; reconnect / live-row refreshes
+        // default armBootstrap to _bootstrapDrained so they cannot arm the NULL
+        // fast path from a holed mirror and fork (#1788).
+        if (armBootstrap) this.matchBootstrapped = true;
         this._releaseMatchWaiters();
     }
 
@@ -1115,7 +1130,7 @@ class HubDbSync {
 
     // ── Cross-chain call sync barrier (mirrors the match barrier exactly) ──────
 
-    async _refreshCallSyncTimestamp() {
+    async _refreshCallSyncTimestamp(armBootstrap = this._bootstrapDrained) {
         let ts = null;
         try {
             // Scope the watermark to calls that touch THIS coin (target or source),
@@ -1134,7 +1149,10 @@ class HubDbSync {
             return;                                             // table not ready yet
         }
         this.callSyncTimestamp = ts;
-        this.callBootstrapped  = true;
+        // Arm only under a full bootstrap drain; reconnect / live-row refreshes
+        // default armBootstrap to _bootstrapDrained so they cannot arm the NULL
+        // fast path from a holed mirror and fork (#1788).
+        if (armBootstrap) this.callBootstrapped = true;
         this._releaseCallWaiters();
     }
 
@@ -1543,6 +1561,34 @@ function stripSqlLineComments(sql) {
     return out;
 }
 
+// Quote-aware SQL statement splitter. Strips `--` line comments, then breaks on
+// ';' only outside quoted strings, so a ';' inside a string literal never tears a
+// statement into invalid fragments. Faithful copy of the indexer db.js
+// splitSqlStatements logic; lives here so ensureTables() stays self-contained in
+// the vendored client.
+function splitSqlStatements(sql) {
+    const stripped = stripSqlLineComments(sql);
+    const statements = [];
+    let current = '';
+    let quote = null;
+    for (let i = 0; i < stripped.length; i++) {
+        const ch = stripped[i];
+        if (quote) {
+            current += ch;
+            if (ch === quote) {
+                if (stripped[i + 1] === quote) { current += stripped[++i]; }
+                else { quote = null; }
+            }
+            continue;
+        }
+        if (ch === "'" || ch === '"' || ch === '`') { quote = ch; current += ch; continue; }
+        if (ch === ';') { statements.push(current); current = ''; continue; }
+        current += ch;
+    }
+    statements.push(current);
+    return statements.map((s) => s.trim()).filter(Boolean);
+}
+
 // Create the mirror tables from the vendored SQL twin files in sqlDir, for
 // consumers that (unlike the indexer, whose verifyTables() owns its schema)
 // have no table-creation machinery of their own, e.g. the explorer's embedded
@@ -1562,7 +1608,7 @@ async function ensureTables(dbConn, sqlDir) {
     for (const file of files) {
         const table   = file.slice(0, -'.sql'.length);
         const data    = fs.readFileSync(path.join(sqlDir, file), 'utf8');
-        const queries = stripSqlLineComments(data).split(';').map((q) => q.trim()).filter((q) => q !== '');
+        const queries = splitSqlStatements(data);
         let lastErr = null;
         let done = false;
         for (let attempt = 1; attempt <= MAX_ATTEMPTS && !done; attempt++) {
