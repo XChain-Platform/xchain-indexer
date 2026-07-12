@@ -82,3 +82,44 @@ jobs:
           XCHAIN_DECODER_SQL_PATH: ${{ github.workspace }}/.xchain-decoder/src/sql
           XCHAIN_SDK_PATH: ${{ github.workspace }}/.xchain-sdk
         run: npm run test:integration:ci
+
+  # Cross-repo drift guards (SD-1 / ): this repo vendors the canonical
+  # coin registry from xchain-hub, and per-repo CI cannot see sibling repos, so
+  # a drifted vendored copy previously shipped green (the byte-identity checks
+  # ran only in the monorepo's manual bin/ci-all.sh). This job recreates the
+  # sibling layout (self + canonical side by side) and runs the same checks.
+  # The canonical repo is private pre-launch, so its checkout uses a read-only
+  # deploy key; drop the ssh-key line when the repos flip public at launch.
+  drift-guards:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: xchain-indexer
+
+      - name: Check out the canonical coin registry (xchain-hub)
+        uses: actions/checkout@v4
+        with:
+          repository: XChain-Platform/xchain-hub
+          ssh-key: ${{ secrets.XCHAIN_HUB_DEPLOY_KEY }}
+          path: xchain-hub
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Coin-registry byte-identity vs canonical
+        run: xchain-hub/bin/sync-coins.sh --check --only xchain-indexer
+
+      - name: Coin consensus-pin conformance (own vendored bundle)
+        working-directory: xchain-indexer
+        run: |
+          node -e '
+            const coins = require("./src/coins");
+            for (const net of ["testnet", "regtest"]) {
+              const res = coins.verifyConsensusPin(net);
+              if (res && res.skipped) throw new Error("consensus pin unexpectedly unarmed for " + net);
+            }
+            console.log("consensus pin conformance OK (testnet, regtest)");
+          '

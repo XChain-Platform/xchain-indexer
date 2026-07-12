@@ -46,6 +46,13 @@ tree_manifest() {
 }
 
 if [ ! -d "$SRC/src" ]; then
+    # A drift-guard context (bin/ci-all.sh, the CI drift-guards job) checked out
+    # the canonical sibling on purpose; a missing SRC there means the guard is
+    # about to green-by-skip, so fail closed instead.
+    if [ -n "${XCHAIN_REQUIRE_SIBLINGS:-}" ]; then
+        echo "vendor-vm: canonical source not found at $SRC and XCHAIN_REQUIRE_SIBLINGS is set; refusing to skip." >&2
+        exit 1
+    fi
     echo "vendor-vm: canonical source not found at $SRC" >&2
     echo "vendor-vm: this is expected in a standalone checkout (no monorepo sibling)." >&2
     echo "vendor-vm: in that case the build pipeline (xchain-node) stages xchain-vm; nothing to do here." >&2
