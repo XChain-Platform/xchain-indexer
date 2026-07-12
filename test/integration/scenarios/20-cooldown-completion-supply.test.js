@@ -156,9 +156,14 @@ describe('Unstake cooldown completion: GAS supply conservation (real DB + real V
         // them, leaving balances 500 higher than the ledger and wedging sanityCheck at
         // the next real-tx block). Comparing balance to ledger here is the check that a
         // ledger-vs-token-only assertion missed (both were computed the same buggy way).
-        const ledger  = String(await indexer.indexerDb.getTokenSupply(GAS));
-        const token   = String(await indexer.indexerDb.getTokenSupplyToken(GAS));
-        const balance = String(await indexer.indexerDb.getTokenSupplyBalance(GAS));
+        // bcnum-normalize like the production consumer (sanityCheck): getTokenSupply
+        // returns a bcmath-normalized string ("10000") while the Token/Balance getters
+        // return the raw SQL DECIMAL string ("10000.00000000"); the invariant is about
+        // value, not formatting.
+        const bc      = (v) => String(indexer.indexerDb.util.bcnum(v));
+        const ledger  = bc(await indexer.indexerDb.getTokenSupply(GAS));
+        const token   = bc(await indexer.indexerDb.getTokenSupplyToken(GAS));
+        const balance = bc(await indexer.indexerDb.getTokenSupplyBalance(GAS));
         assert.strictEqual(ledger, token,   'GAS ledger supply == tokens.supply after the release');
         assert.strictEqual(balance, ledger, 'GAS balances supply == ledger supply (synthetic-credit counted)');
 
