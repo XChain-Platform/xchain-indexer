@@ -39,7 +39,7 @@
 --
 -- HOW TO RUN
 -- ----------
---   mariadb -u <indexer_user> -p <indexer_db> < src/sql/migrations/add_cross_chain_matches_partial_fill_columns.sql
+--   mariadb -u <indexer_user> -p <indexer_db> < src/sql/migrations/2026-06-09-cross-chain-matches-partial-fill-columns.sql
 --
 -- Safe to re-run: each ADD COLUMN is guarded with IF NOT EXISTS (MariaDB). No
 -- data dedup or backup-sensitive operation is involved — this only adds columns

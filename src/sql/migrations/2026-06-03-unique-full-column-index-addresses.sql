@@ -32,7 +32,7 @@
 --
 -- HOW TO RUN
 -- ----------
---   mysql -u <user> -p <indexer_db> < src/sql/migrations/unique_full_column_index_addresses.sql
+--   mysql -u <user> -p <indexer_db> < src/sql/migrations/2026-06-03-unique-full-column-index-addresses.sql
 --
 -- Take a backup first. Safe to re-run: the drop is guarded by IF EXISTS and the
 -- create by IF NOT EXISTS. Run while the indexer process is stopped.
