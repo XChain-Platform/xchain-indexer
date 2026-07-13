@@ -111,6 +111,18 @@ class Send {
                 preferences[destination] = await this.indexerDb.getAddressPreferences(destination, data['BLOCK_INDEX'], data['ACTION_INDEX']);
         }
 
+        // Get active gated key hashes for every TICK (reduces duplicated sql queries).
+        // The gate is a property of the TICK, not of the leg, so an N-recipient SEND
+        // needs O(distinct ticks) queries, not one per leg. Same dedupe pattern as
+        // `ticks` and `preferences` above; SEND runs on every ~5s index tick, so the
+        // per-leg form scaled per-block DB work with recipient count.
+        let gatedKeyHashes = {};
+        for(let send of sends){
+            let tick = send[0];
+            if(gatedKeyHashes[tick] === undefined)
+                gatedKeyHashes[tick] = await this.indexerDb.getActiveGatedKeyHashes(tick);
+        }
+
         // Consolidate sends by DESTINATION and TICK
         let keys = {};
         for(let info of sends){
@@ -239,7 +251,7 @@ class Send {
             // correctness at unlock time.
             // See xchain-documentation/protocol/TOKEN_GATED_CONTENT.md.
             if(!error){
-                let gatedHashes = await this.indexerDb.getActiveGatedKeyHashes(send['TICK']);
+                let gatedHashes = gatedKeyHashes[send['TICK']] || [];
                 if(gatedHashes.length > 0){
                     let siblings = data['SIBLING_ACTIONS'] || [];
                     let foundHandoff = false;

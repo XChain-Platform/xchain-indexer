@@ -12,7 +12,7 @@
 
 // Per-repo coin-registry conformance guard. The coin registry (BTC/LTC/DOGE +
 // index.js + consensus_pin.js) is CONSENSUS-CRITICAL and vendored byte-identically
-// from canonical xchain-hub/src/coins into 8 consumer repos. Until now the
+// from canonical xchain-hub/src/coins into 10 consumer repos. Until now the
 // pin==consensusHash conformance test lived only in xchain-hub's suite and the
 // byte-identity drift check only in the aggregate bin/ci-all.sh, so a
 // consumer-only edit (coin file + consensus_pin.js changed together in one repo)

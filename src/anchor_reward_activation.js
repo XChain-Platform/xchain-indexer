@@ -42,7 +42,7 @@
 // carried by the ANCHOR canonical (NOT the local processing height), so every chain
 // + the hub flip the reward-derivation path on the same anchor.
 const ANCHOR_REWARD_ACTIVATION = {
-    mainnet: 961000,      // ARMED 2026-07-07: BTC anchor ~2026-08-04; deploy hub + ALL indexers (+ sdk/explorer/sync copies) before this height
+    mainnet: 961000,      // ARMED 2026-07-07: BTC anchor ~2026-08-04; deploy hub + ALL indexers before this height
     testnet: 0,
     regtest: 0,
 };

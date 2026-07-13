@@ -27,7 +27,7 @@
     "check:consensus-time": "if grep -rn 'getCurrentTime(' src/actions/ 2>/dev/null; then echo 'ERROR: getCurrentTime() (wall-clock Date.now) must never be called inside src/actions/. Block processing must use the deterministic block timestamp (data[\"BLOCK_TIME\"]); a wall-clock value here diverges consensus state across validator instances'; exit 1; else echo 'OK: no wall-clock time usage in src/actions/'; fi",
     "test": "mocha --timeout 30000 --recursive 'test/unit/**/*.test.js' 'test/unit/*.test.js'",
     "coverage": "c8 --reporter=text --reporter=html --include 'src/**/*.js' mocha --timeout 30000 --recursive 'test/unit/**/*.test.js' 'test/unit/*.test.js' --exit",
-    "ci": "mocha --timeout 30000 --recursive --exit 'test/unit/**/*.test.js' 'test/unit/*.test.js'",
+    "ci": "npm run check:vm && mocha --timeout 30000 --recursive --exit 'test/unit/**/*.test.js' 'test/unit/*.test.js'",
     "test:integration": "mocha --timeout 30000 --recursive 'test/integration/scenarios/**/*.test.js'",
     "test:integration:ci": "mocha --no-config --timeout 120000 --exit 'test/integration/scenarios/**/*.test.js'",
     "test:e2e": "mocha --no-config --timeout 60000 --exit 'test/e2e/scenarios/**/*.test.js'",
