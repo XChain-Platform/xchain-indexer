@@ -299,12 +299,37 @@ function verifyConsensusPin(network){
     return { ok: true, skipped: false };
 }
 
+// Per-coin cross-chain confirmation thresholds via the hub's standard
+// three-tier idiom: env XCHAIN_CONFIRMATIONS_<COIN> -> p2pConfig -> per-coin
+// default. On mainnet an override may only RAISE the depth ( / CF-1):
+// the defaults are a consensus-safety floor, and a single validator running a
+// lowered depth would co-sign source actions the rest of the federation still
+// considers reorg-able. testnet/regtest keep the full override for drills.
+function resolveConfirmations(cfg, network){
+    cfg = cfg || {};
+    const out = {};
+    for(const tick of ALLOWED_COINS){
+        const key = 'XCHAIN_CONFIRMATIONS_' + tick;
+        const def = DEFAULT_CONFIRMATIONS[tick];
+        let val = parseInt(process.env[key], 10) || parseInt(cfg[key], 10) || def;
+        if(!Number.isFinite(val) || val <= 0) val = def;
+        if(network === 'mainnet' && val < def){
+            console.warn('[coins] ' + key + '=' + val + ' is below the mainnet floor ' + def +
+                '; clamping to ' + def + ' (confirmation overrides may only raise the depth on mainnet)');
+            val = def;
+        }
+        out[tick] = val;
+    }
+    return out;
+}
+
 module.exports = {
     ALLOWED_COINS,
     NETWORKS,
     COIN_FULL_NAME,
     FULL_NAME_TO_TICK,
     DEFAULT_CONFIRMATIONS,
+    resolveConfirmations,
     getCoinConfig,
     getCoinConfigByFullName,
     consensusSubset,

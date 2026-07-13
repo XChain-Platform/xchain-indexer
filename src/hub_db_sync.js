@@ -178,6 +178,26 @@ class HubDbSync {
         // barrier to matches this chain will actually settle. See waitForSnapshotSync.
         this.coin = options.coin || null;
 
+        // Receive-side retraction guards (XCALL-RETRACT-1, ). row:deleted events
+        // arrive unsigned over the hub stream, and the hub's push*reorg RPCs forward the
+        // caller's claim verbatim, so a compromised HUB_API_KEY could fabricate reorg
+        // retractions and have every mirror durably delete valid quorum-signed rows.
+        // Two local checks bound that:
+        //  - getOwnRollbackGeneration: async hook returning this indexer's OWN current
+        //    push_generations value for its own coin (the source side of the item-5308
+        //    fence). For retractions claiming a reorg of OUR chain we are the authority:
+        //    a legitimate one originated from our own rollback and always carries a
+        //    PRE-bump generation (< our current), so anything else is refused. Absent
+        //    (explorer's vendored mirror, direct-hub-DB mode) the check is skipped.
+        //  - trackedRollbackGeneration: last-observed retraction generation per
+        //    (table, source_chain). Generations are monotonic per source chain, so a
+        //    fenced event below the tracked value is a replay/stale duplicate; equal is
+        //    idempotent redelivery and still applied. In-memory: a restart only widens
+        //    back to the fence itself, never below it.
+        this.getOwnRollbackGeneration = (typeof options.getOwnRollbackGeneration === 'function')
+            ? options.getOwnRollbackGeneration : null;
+        this.trackedRollbackGeneration = {};
+
         // Pending waitForSnapshotSync() resolvers. Unlike the match barrier (a cached
         // scalar max(effective_time)), snapshot-presence is set-dependent: a match can
         // only be settled once the capability_snapshots row set for its snapshot_block is
@@ -1001,6 +1021,49 @@ class HubDbSync {
         let gen = (event.retraction_generation !== undefined && event.retraction_generation !== null)
                   ? Number(event.retraction_generation) : null;
         let fenced = (gen !== null && Number.isFinite(gen) && gen >= 0);
+        // Receive-side guards (XCALL-RETRACT-1, ; see the constructor note).
+        // 1. Quorum-class tables (their insertions carry 2f+1 proof) never accept an
+        //    unfenced open delete: every current source stamps the item-5308 fence, so
+        //    an unfenced event is either a pre-5308 relic or a fabricated wipe. The
+        //    same applies to ANY table's retraction claiming a reorg of OUR OWN chain
+        //    when we can check (our own retractions are always fenced).
+        let quorumClass = (event.table === 'cross_chain_calls' || event.table === 'cross_chain_matches');
+        let ownChain = !!(this.coin && event.source_chain === this.coin && this.getOwnRollbackGeneration);
+        if ((quorumClass || ownChain) && !fenced) {
+            console.error('HubDbSync: refusing UNFENCED retraction of ' + event.table +
+                ' (source_chain ' + event.source_chain + ', from ' + from +
+                '): quorum-class deletions require a retraction_generation fence ');
+            return;
+        }
+        if (fenced) {
+            // 2. Our own chain: only a rollback WE performed can legitimately retract
+            //    rows sourced from this chain, and it always carries a pre-bump
+            //    generation. Refuse anything at/above our current generation. Fail
+            //    closed on a read error: for our own chain this delete is only the
+            //    idempotent backstop behind rollback.js's local pre-delete.
+            if (ownChain) {
+                let own = null;
+                try { own = Number(await this.getOwnRollbackGeneration()); } catch (e) { own = null; }
+                if (own === null || !Number.isFinite(own) || gen >= own) {
+                    console.error('HubDbSync: refusing retraction of ' + event.table + ' for OWN chain ' +
+                        this.coin + ' at generation ' + gen + ' (own rollback generation ' + own +
+                        '): no local rollback produced this fence ');
+                    return;
+                }
+            }
+            // 3. Monotonicity: a fence below the last one observed for this
+            //    (table, source_chain) is a stale replay; skip it. Equal = redelivery,
+            //    idempotent under the fence, still applied.
+            let trackKey = event.table + '|' + event.source_chain;
+            let tracked = this.trackedRollbackGeneration[trackKey];
+            if (tracked !== undefined && gen < tracked) {
+                console.warn('HubDbSync: skipping stale retraction of ' + event.table +
+                    ' (source_chain ' + event.source_chain + ') at generation ' + gen +
+                    ' < last-observed rollback generation ' + tracked);
+                return;
+            }
+            this.trackedRollbackGeneration[trackKey] = gen;
+        }
         // cross_chain_matches is two-sided: a match is retracted when EITHER order leg on
         // the reorged chain was rolled back. The settlement pass then rolls back any leg it
         // already applied for that match (its cross_chain_settlements row drops with the block).

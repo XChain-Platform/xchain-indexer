@@ -276,7 +276,14 @@ class XChainIndexer {
             // local hub DB is the hub's MariaDB itself, so sync is not needed.
             // Enable by setting HUB_DB_SYNC_ENABLED=true (default off).
             if(process.env.HUB_DB_SYNC_ENABLED === 'true'){
-                this.hubDbSync = new HubDbSync(this.hubDb, { coin: this.config['COIN'] });
+                this.hubDbSync = new HubDbSync(this.hubDb, {
+                    coin: this.config['COIN'],
+                    // Receive-side retraction authority for our own chain :
+                    // the mirror refuses hub-broadcast reorg retractions of THIS
+                    // chain's rows unless their generation fence is below our own
+                    // push_generations value, i.e. a rollback we actually performed.
+                    getOwnRollbackGeneration: () => this.indexerDb.getPushGeneration(this.config['COIN'])
+                });
                 // NOTE: do NOT start() here. The hub-mirror tables (price_snapshots,
                 // oracle_prices, cross_chain_*, capability_snapshots, state_checkpoints)
                 // are not created until verifyTables() runs further below. Starting the
