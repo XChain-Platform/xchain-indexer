@@ -348,7 +348,28 @@ class Database {
                 const appliedRows   = await conn.query('SELECT name, checksum FROM schema_migrations');
                 const appliedByName = new Map(appliedRows.map(r => [r.name, r.checksum]));
 
+                // One-time ledger rename heal: three legacy files were renamed from
+                // undated to dated names. The ledger is keyed by filename, so an
+                // already-migrated DB still records them under the old names. Re-key
+                // those rows to the new names (durably, in place) before the comparison
+                // below, so the renamed files register as applied instead of re-running.
+                for(const { from, to } of Database.planLedgerRenames(appliedByName.keys())){
+                    await conn.query('UPDATE schema_migrations SET name = ? WHERE name = ?', [to, from]);
+                    appliedByName.set(to, appliedByName.get(from));
+                    appliedByName.delete(from);
+                    console.log('runMigrations: re-keyed ledger row ' + from + ' -> ' + to + ' (legacy migration renamed to dated form).');
+                }
+
                 for(const file of files){
+                    // Freeze the dated-prefix convention in code: apply order is lexical
+                    // (readdirSync().sort()), so every migration filename must start with a
+                    // YYYY-MM-DD- prefix to apply in authorship order. The three legacy
+                    // undated files were renamed to dated form, so no exemption remains.
+                    if(!/^\d{4}-\d{2}-\d{2}-/.test(file)){
+                        throw new Error('runMigrations: migration "' + file + '" is not dated. Every migration ' +
+                            'filename must start with a YYYY-MM-DD- prefix so it applies in authorship order ' +
+                            '(apply order is lexical). Rename it with the authored date.');
+                    }
                     const raw      = fs.readFileSync(path.join(dir, file), 'utf8');
                     const checksum = crypto.createHash('sha256').update(raw).digest('hex');
 
@@ -647,7 +668,10 @@ class Database {
     // it by ALTER. Two kinds of drift are handled:
     //   1. Missing columns - a column declared in the SQL source but absent
     //      from the live table is added with ADD COLUMN, reusing the source
-    //      definition verbatim so its DEFAULT clause backfills existing rows.
+    //      definition verbatim so its DEFAULT clause backfills existing rows,
+    //      and placed with AFTER/FIRST so the reconciled table keeps the source's
+    //      column ORDER (a bare ADD COLUMN appends, which diverges an aged table
+    //      from a fresh createTable of the same definition).
     //      (A NOT NULL column with no DEFAULT can't be backfilled safely, so
     //      it's skipped with a loud warning rather than aborting startup.)
     //   2. Nullability - only relaxes NOT NULL -> NULL (the safe direction -
@@ -676,7 +700,8 @@ class Database {
             [this.dbName, table]
         );
         const liveByName = new Map(live.map(c => [c.COLUMN_NAME.toLowerCase(), c]));
-        for(const exp of expected){
+        for(let i = 0; i < expected.length; i++){
+            const exp = expected[i];
             const cur = liveByName.get(exp.name.toLowerCase());
             if(!cur){
                 // Column declared in the SQL source but absent from the live
@@ -685,8 +710,22 @@ class Database {
                     console.log('Schema drift on ' + table + '.' + exp.name + ': column missing live, source is NOT NULL with no DEFAULT - cannot backfill existing rows safely. Skipping; add manually.');
                     continue;
                 }
-                console.log('Schema drift on ' + table + '.' + exp.name + ': column missing live. Adding column from SQL source.');
-                await db.query('ALTER TABLE `' + table + '` ADD COLUMN ' + exp.definition);
+                // Place the column where the SQL source puts it, not at the tail. A bare
+                // ADD COLUMN appends, so an aged table reconciled at boot ended up with a
+                // different column ORDER than a fresh createTable of the same definition
+                // (contract_state.state_key_bin: mid-table on fresh installs, tail on aged
+                // ones) - logically equivalent, but not a byte-identical SHOW CREATE TABLE.
+                // Anchor on the nearest PRECEDING source column that exists live (columns
+                // added in this same pass count, hence the liveByName update below); a
+                // source-leading column has no anchor and goes FIRST.
+                let anchor = null;
+                for(let j = i - 1; j >= 0 && !anchor; j--){
+                    if(liveByName.has(expected[j].name.toLowerCase())) anchor = expected[j].name;
+                }
+                const placement = anchor ? ' AFTER `' + anchor + '`' : ' FIRST';
+                console.log('Schema drift on ' + table + '.' + exp.name + ': column missing live. Adding column from SQL source' + (anchor ? ' after ' + anchor : ' first') + '.');
+                await db.query('ALTER TABLE `' + table + '` ADD COLUMN ' + exp.definition + placement);
+                liveByName.set(exp.name.toLowerCase(), { COLUMN_NAME: exp.name, IS_NULLABLE: exp.notNull ? 'NO' : 'YES', COLUMN_TYPE: '', COLUMN_KEY: '', EXTRA: '' });
                 continue;
             }
             const liveIsNullable = cur.IS_NULLABLE === 'YES';
@@ -12804,6 +12843,42 @@ Database.MIGRATION_CHECKSUM_REBASELINES = {
         from: '287d7bdb0b1a27308bdfd5a433f659aa466e3856f55b361a8b2e89a4ad146f76',
         to:   '70de5f0ee1146c569b62c75cddb77be8eba72b9963a066b5059f05de15ccdef2',
     },
+    // Added `AFTER state_key` so the migration lands the generated column in the same
+    // position contract_state.sql declares it (column-order convergence, aged vs fresh).
+    // A DB that already applied the old file has the column at the tail; the clause is
+    // guarded by IF NOT EXISTS, so re-reading the new file is a no-op there and only the
+    // ledger checksum needs to heal.
+    '2026-07-10-contract-state-bin-key-index.sql': {
+        from: '04656bbe931851e254f51c2f4552e8e0ab2c47067cb7eb39dcbb7f4695d38dd1',
+        to:   '15599a2f13a372767468cd72ec05b7dff50d03e095e77cd40ee16bcba52754c6',
+    },
+};
+
+// One-time ledger rename map (old undated filename -> new dated filename). Three
+// legacy migrations predated the dated-prefix convention; renaming them to their
+// authored dates restores lexical=chronological apply order. The ledger is keyed
+// by filename, so an already-migrated DB has rows under the OLD names; runMigrations
+// re-keys those rows to the new names before the applied-vs-pending comparison so
+// the renamed files are recognized as applied instead of re-running. File content
+// (and therefore checksum) is unchanged by the rename. Fresh DBs have no old rows,
+// so they simply apply the files under their new dated names.
+Database.MIGRATION_LEDGER_RENAMES = {
+    'add_balances_composite_index.sql':                 '2026-05-30-balances-composite-index.sql',
+    'unique_full_column_index_addresses.sql':           '2026-06-03-unique-full-column-index-addresses.sql',
+    'add_cross_chain_matches_partial_fill_columns.sql': '2026-06-09-cross-chain-matches-partial-fill-columns.sql',
+};
+
+// Pure planner for the one-time ledger rename heal. Given the names already recorded
+// in schema_migrations, return the {from,to} re-keys to apply: only for legacy names
+// that are present and whose dated target is not already recorded. Idempotent - a DB
+// already re-keyed (or a fresh DB) yields no operations. Unit-tested directly.
+Database.planLedgerRenames = function(appliedNames){
+    const have = new Set(appliedNames);
+    const ops  = [];
+    for(const [oldName, newName] of Object.entries(Database.MIGRATION_LEDGER_RENAMES)){
+        if(have.has(oldName) && !have.has(newName)) ops.push({ from: oldName, to: newName });
+    }
+    return ops;
 };
 
 module.exports = Database

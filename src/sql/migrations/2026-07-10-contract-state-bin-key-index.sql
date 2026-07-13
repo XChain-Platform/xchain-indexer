@@ -24,7 +24,12 @@
 -- HOW TO RUN (manual path)
 --   node src/migrate.js   (inside the indexer container / service env)
 
+-- AFTER state_key: contract_state.sql declares the column between state_key and
+-- state_value, so a bare ADD COLUMN (which appends) would leave an aged table with
+-- a different column ORDER than a fresh createTable of the same definition. The
+-- placement is what keeps the two paths byte-identical; a VIRTUAL generated column
+-- accepts positional placement.
 ALTER TABLE contract_state
   ADD COLUMN IF NOT EXISTS state_key_bin VARCHAR(256) CHARACTER SET utf8 COLLATE utf8_bin
-    GENERATED ALWAYS AS (state_key) VIRTUAL,
+    GENERATED ALWAYS AS (state_key) VIRTUAL AFTER state_key,
   ADD INDEX IF NOT EXISTS idx_latest_bin (contract_index, state_key_bin, id DESC);

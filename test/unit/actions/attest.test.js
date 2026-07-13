@@ -428,6 +428,35 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             assert.strictEqual(data['VALID_SIGS'], 2);
         });
 
+        // The REQUEST_ID format check accepts either case, but the hub signs the
+        // LOWERCASE rid. _parseResponse normalizes once, up front, so the canonical
+        // it verifies against is byte-identical to the hub's signed bytes no matter
+        // what case a producer puts on the wire (the byte-identity used to rest on
+        // AttestationPublisher lowercasing, an invariant outside this handler).
+        it('normalizes a mixed-case REQUEST_ID: canonical, lookup, and stored row', async function () {
+            indexer.indexerDb.getAttestationRequestById.resolves(makeRequestRow({ redundancy: 1 }));
+
+            const lowerData = v1Data();
+            await handler.parse(v1Params([{ pubkey: PUBKEY_A, sig: SIG_A }]), lowerData, null);
+            const canonicalFromLower = ed25519.verify.firstCall.args[0].toString('utf8');
+
+            ed25519.verify.resetHistory();
+            indexer.indexerDb.getAttestationRequestById.resetHistory();
+
+            const upperData = v1Data();
+            await handler.parse(
+                v1Params([{ pubkey: PUBKEY_A, sig: SIG_A }], { requestId: REQ_ID.toUpperCase() }),
+                upperData, null);
+            const canonicalFromUpper = ed25519.verify.firstCall.args[0].toString('utf8');
+
+            assert.strictEqual(canonicalFromUpper, canonicalFromLower,
+                'signed canonical must not depend on the wire request_id case');
+            assert.strictEqual(upperData['STATUS'], 'valid');
+            assert.strictEqual(upperData['REQUEST_ID'], REQ_ID, 'row stores the lowercase id');
+            assert.strictEqual(indexer.indexerDb.getAttestationRequestById.firstCall.args[0], REQ_ID,
+                'request lookup uses the lowercase id');
+        });
+
         it('rejects a malformed SIG_COUNT length prefix', async function () {
             indexer.indexerDb.getAttestationRequestById.resolves(makeRequestRow());
             const data = v1Data();

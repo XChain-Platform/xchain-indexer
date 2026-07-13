@@ -1,0 +1,23 @@
+-- xchain:migration mode=auto
+-- Migration: drop the redundant single-column `address_id` index on balances.
+--
+-- balances.sql declares exactly two indexes ({tick_id, addr_tick}), so a fresh
+-- install never has the single-column `address_id` index. A DB created from the
+-- older schema does, and the only statement that removed it lived in the
+-- mode=manual 2026-05-30-balances-composite-index.sql - pending forever on any
+-- node that is not started through `node src/migrate.js`. reconcileTableIndexes
+-- ADDS declared indexes but never DROPS an undeclared one, so an aged node sat
+-- on {address_id, tick_id, addr_tick} indefinitely: logically fine, but not a
+-- byte-identical schema, which is exactly what the convergence audit flags.
+--
+-- The DROP needs none of the manual gating the UNIQUE add does (it cannot fail
+-- on duplicate data), so it belongs on the auto path. The composite `addr_tick`
+-- covers `address_id` as a leading-column prefix, and verifyTables() (which
+-- reconciles + auto-dedups it into place) runs BEFORE runMigrations() at every
+-- boot, so the covering index is in place by the time this drops the redundant
+-- one. Idempotent: IF EXISTS no-ops on fresh installs and on re-runs.
+--
+-- The single-column `tick_id` index stays: it serves `WHERE tick_id=?` lookups
+-- (supply sums, explorer holders count) that the composite cannot.
+
+ALTER TABLE balances DROP INDEX IF EXISTS address_id;

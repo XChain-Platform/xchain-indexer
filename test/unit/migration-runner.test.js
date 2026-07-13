@@ -94,21 +94,85 @@ describe('committed migrations declare intent @regression @tier1', function () {
 
     // The runner applies migrations in `readdirSync(...).sort()` order (src/db.js),
     // so a `YYYY-MM-DD-` filename prefix is what guarantees authorship-order apply.
-    // Freeze the convention: any NEW file must be dated. The three legacy undated
-    // names predate the convention and are grandfathered by explicit allowlist.
+    // The convention is now enforced with NO exemptions: the three legacy undated
+    // files were renamed to their authored dates (paired with a ledger rename heal),
+    // and runMigrations throws on any undated filename.
     const DATED_PREFIX = /^\d{4}-\d{2}-\d{2}-/;
-    const LEGACY_UNDATED = new Set([
-        'add_balances_composite_index.sql',
-        'add_cross_chain_matches_partial_fill_columns.sql',
-        'unique_full_column_index_addresses.sql'
-    ]);
     files.forEach(function (file) {
         it(file + ': uses the dated YYYY-MM-DD- filename prefix (ordering convention)', function () {
-            if(LEGACY_UNDATED.has(file)) this.skip();
             assert.ok(DATED_PREFIX.test(file),
-                file + ' is not dated. Runner apply order is readdirSync().sort(), so every new ' +
+                file + ' is not dated. Runner apply order is readdirSync().sort(), so every ' +
                 'migration must start with a `YYYY-MM-DD-` prefix to apply in authorship order. ' +
-                'Rename it (only the three legacy add_/unique_ files are grandfathered).');
+                'Rename it with the authored date (no undated files are allowed).');
+        });
+    });
+});
+
+describe('legacy migration rename: ledger remap + ordering @regression @tier1', function () {
+    const MIG_DIR = path.join(__dirname, '..', '..', 'src', 'sql', 'migrations');
+    const RENAMES = Database.MIGRATION_LEDGER_RENAMES;
+
+    it('the three legacy undated names are mapped to dated targets', function () {
+        assert.deepStrictEqual(Object.keys(RENAMES).sort(), [
+            'add_balances_composite_index.sql',
+            'add_cross_chain_matches_partial_fill_columns.sql',
+            'unique_full_column_index_addresses.sql'
+        ]);
+        Object.values(RENAMES).forEach(function (name) {
+            assert.ok(/^\d{4}-\d{2}-\d{2}-/.test(name), name + ' must be dated');
+        });
+    });
+
+    it('every dated target exists on disk and no old undated file remains', function () {
+        Object.entries(RENAMES).forEach(function ([oldName, newName]) {
+            assert.ok(fs.existsSync(path.join(MIG_DIR, newName)), 'expected renamed file ' + newName);
+            assert.ok(!fs.existsSync(path.join(MIG_DIR, oldName)), oldName + ' should have been renamed away');
+        });
+    });
+
+    it('planLedgerRenames re-keys an old-name-applied database', function () {
+        // A DB migrated before the rename recorded the OLD undated names.
+        const applied = ['2026-06-16-drop-orphaned-contract-balances.sql'].concat(Object.keys(RENAMES));
+        const ops = Database.planLedgerRenames(applied);
+        assert.strictEqual(ops.length, 3, 'all three legacy rows should be re-keyed');
+        const byFrom = new Map(ops.map(o => [o.from, o.to]));
+        Object.entries(RENAMES).forEach(function ([oldName, newName]) {
+            assert.strictEqual(byFrom.get(oldName), newName);
+        });
+    });
+
+    it('planLedgerRenames is a no-op on a fresh database (nothing applied yet)', function () {
+        assert.deepStrictEqual(Database.planLedgerRenames([]), []);
+    });
+
+    it('planLedgerRenames is a no-op on a database already re-keyed (idempotent)', function () {
+        // Rows already recorded under the NEW dated names must not be re-keyed again.
+        const applied = Object.values(RENAMES);
+        assert.deepStrictEqual(Database.planLedgerRenames(applied), []);
+    });
+
+    it('does not re-key a legacy row when its dated target is already present', function () {
+        // Mixed state: one row still old, but its target already recorded -> skip that one.
+        const applied = [
+            'add_balances_composite_index.sql',
+            '2026-05-30-balances-composite-index.sql'
+        ];
+        assert.deepStrictEqual(Database.planLedgerRenames(applied), []);
+    });
+
+    it('apply order is now lexical = chronological (renamed files land in date order)', function () {
+        let files = [];
+        try { files = fs.readdirSync(MIG_DIR).filter(f => f.endsWith('.sql')).sort(); } catch (e) { /* none */ }
+        // Every file is dated, and lexical sort of YYYY-MM-DD- prefixes is chronological.
+        const dates = files.map(f => f.slice(0, 10));
+        const ascending = dates.slice().sort();
+        assert.deepStrictEqual(dates, ascending, 'files must sort in ascending date order');
+        // The three renamed files must precede the dated migration that assumes their
+        // schema state (2026-07-07-cross-chain-matches-payout-legs.sql).
+        const payoutIdx = files.indexOf('2026-07-07-cross-chain-matches-payout-legs.sql');
+        Object.values(RENAMES).forEach(function (name) {
+            const idx = files.indexOf(name);
+            assert.ok(idx >= 0 && idx < payoutIdx, name + ' must sort before the payout-legs migration');
         });
     });
 });

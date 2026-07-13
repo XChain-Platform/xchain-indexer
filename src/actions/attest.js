@@ -296,6 +296,17 @@ class Attest {
         if(!error && allowedStatuses.indexOf(String(responseStatus)) === -1)
             error = 'invalid: STATUS (unknown)';
 
+        // Normalize the id ONCE, right after the (case-insensitive) format check, so
+        // every downstream use sees the same bytes: the request lookup, the canonical
+        // signing message, the EQUIV header, the responsible-set hash, and the row we
+        // store. The hub signs the LOWERCASE rid (AttestationConsensus._buildCanonical),
+        // and the only live producer lowercases before broadcast, so the canonical
+        // byte-identity currently rests on an external invariant rather than on this
+        // handler. Normalizing here makes it self-contained: a case-varied but
+        // regex-valid id from a future/added producer can no longer diverge the
+        // canonical from the hub's signed bytes.
+        if(requestId != null) requestId = String(requestId).toLowerCase();
+
         // Parse variable-length sig list
         let sigCount, sigs = [];
         if(!error){
@@ -319,7 +330,7 @@ class Attest {
         // Look up the original request
         let request = null;
         if(!error){
-            request = await this.indexerDb.getAttestationRequestById(String(requestId).toLowerCase());
+            request = await this.indexerDb.getAttestationRequestById(requestId);
             if(!request){
                 error = 'invalid: REQUEST_ID (no matching request)';
             } else if(request.request_status !== 'pending'){
@@ -372,7 +383,7 @@ class Attest {
             // guaranteed non-null inside this !error block; a null lookup sets
             // 'no matching request' above and skips the loop.)
             let responsible = new Set(await this._computeResponsibleSet(
-                String(requestId).toLowerCase(), request.redundancy, snapshotBlock
+                requestId, request.redundancy, snapshotBlock
             ));
             verifiedSigs = verifiedSigs.filter(s => responsible.has(s.pubkey));
             validSigs    = verifiedSigs.length;
@@ -384,7 +395,7 @@ class Attest {
         }
 
         // Stash for DB write
-        data['REQUEST_ID']       = String(requestId).toLowerCase();
+        data['REQUEST_ID']       = requestId;
         data['PROVIDER_ID']      = providerId;
         data['RESPONSE_PAYLOAD'] = responsePayload;
         data['RESPONSE_STATUS']  = responseStatus;
