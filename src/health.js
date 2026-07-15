@@ -26,6 +26,8 @@
 // fatal error, the freshly-read indexed-block height, and the current epoch
 // ms). Async only for the hub_push_queue stats fetch; all other fields are
 // derived synchronously from already-resolved values.
+const { computeArmedMapFingerprint } = require('./armedMapFingerprint');
+
 async function buildHealthResponse({ indexer, indexerRunning, indexerError, lastIndexedBlock, now, reorgStats }){
     let decoderDbCircuit = indexer.decoderDb ? indexer.decoderDb.circuitState : null;
     let indexerDbCircuit = indexer.indexerDb ? indexer.indexerDb.circuitState : null;
@@ -90,6 +92,10 @@ async function buildHealthResponse({ indexer, indexerRunning, indexerError, last
         // the decoder->indexer reorg handshake instead of a frequently-reorging chain
         // presenting as an ordinary healthy indexer. Null when the API server did not
         // (or could not) read them.
+        // Consensus-gate build fingerprint : one string per process so a
+        // fleet sweep can confirm every deployed indexer runs the same armed map
+        // before a flag-day height. Per-file hashes live behind computeArmedMapFingerprint.
+        armed_map_fingerprint: computeArmedMapFingerprint().fingerprint,
         reorgsProcessed:  reorgStats ? reorgStats.reorgsProcessed : null,
         lastReorgBlock:   reorgStats ? reorgStats.lastReorgBlock  : null,
         lastReorgAt:      reorgStats ? reorgStats.lastReorgAt     : null,
