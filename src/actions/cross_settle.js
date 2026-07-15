@@ -286,6 +286,30 @@ class Cross_Settle {
             return;
         }
 
+        // Escrow-authoritative clamp ( / XDEX-COMMIT-TOCTOU): the hub's
+        // committed-fill reservation updates only on match finalization, so two
+        // matches finalized concurrently for the same offer can carry fills whose
+        // sum exceeds the order's escrow. The match row is quorum-signed but the
+        // ESCROW is the authority on what can leave it: release at most what the
+        // order still has (fills recorded by prior settlements included). The
+        // over-stamped portion of a losing match simply never releases; the
+        // counterparty's own leg is clamped independently against its own escrow.
+        // Ownership orders are single-fill (no balance escrow), so no clamp.
+        if(giveOwnership !== 1){
+            let giveRemaining = orderInfo['GIVE_REMAINING'];
+            if(giveRemaining !== undefined && giveRemaining !== null){
+                if(this.util.bclte(giveRemaining, 0)){
+                    console.warn("\t CROSS_SETTLE : match=" + String(m.match_id).substring(0,16) + '... : order ' + coin + ':' + localActionIndex + ' has no give remaining : recording no-op settlement');
+                    await this._recordNoopSettlement(data, m, localActionIndex);
+                    return;
+                }
+                if(this.util.bclt(giveRemaining, giveAmount)){
+                    console.warn("\t CROSS_SETTLE : match=" + String(m.match_id).substring(0,16) + '... : fill ' + giveAmount + ' exceeds give remaining ' + giveRemaining + ' on order ' + coin + ':' + localActionIndex + ' : clamping release to escrow');
+                    giveAmount = giveRemaining;
+                }
+            }
+        }
+
         let action = { ACTION: 'CROSS_SETTLE', BLOCK_INDEX: data['BLOCK_INDEX'] };
         data['ACTION_INDEX'] = await this.indexerDb.createActionIndex(action);
         data['STATUS'] = 'valid';
