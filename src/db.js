@@ -1353,6 +1353,23 @@ class Database {
         // state. Throwing instead aborts the pass with no block committed; the loop retries
         // on the next tick. Mirrors the throwing sibling read on the indexer side.
         let results = await this.doQueryStrict(query, args);
+        // Incarnation guard ( / RE-1): the cursor is a decoder events.id, and the
+        // decoder never deletes events rows, so a cursor ABOVE the decoder's newest REORG
+        // id can only mean the decoder DB was rebuilt or restored out-of-band (AUTO_INCREMENT
+        // reset). With the old behavior that stranded cursor made this query return [] forever,
+        // silently disabling every future rollback while the indexer kept committing blocks.
+        // Fail loud instead: the throw aborts the pass with no block committed (same contract
+        // as a read fault above), so the incoherence pages the operator rather than rotting.
+        if(afterId !== null && afterId !== undefined && results.length === 0){
+            let maxRow = await this.doQueryStrict(`SELECT MAX(id) AS max_id FROM events WHERE code='REORG'`);
+            let maxId  = (maxRow.length > 0) ? maxRow[0]["max_id"] : null;
+            if(maxId === null || Number(maxId) < Number(afterId)){
+                throw new Error('Reorg cursor incoherent (RE-1): indexer cursor decoder_event_id=' + afterId +
+                    ' exceeds the decoder\'s newest REORG event id (' + maxId + '). The decoder DB was likely ' +
+                    'rebuilt or restored out-of-band; rollback detection would be silently disabled. ' +
+                    'Recovery: rebuild decoder+indexer jointly (clean reindex), or restore a matching decoder DB.');
+            }
+        }
         let reorgs = [];
         for(let row of results){
             let block_index = null;

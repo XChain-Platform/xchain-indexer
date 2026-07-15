@@ -74,6 +74,10 @@ function makeDb(seedRows) {
         if (/SELECT data FROM events WHERE code='REORG' ORDER BY id DESC/.test(query)) {
             return rows.slice().sort((a, b) => b.id - a.id).map((r) => ({ data: r.data }));
         }
+        // RE-1 incarnation guard -> newest REORG event id
+        if (/SELECT MAX\(id\) AS max_id FROM events WHERE code='REORG'/.test(query)) {
+            return [{ max_id: rows.length ? rows.reduce((m, r) => Math.max(m, r.id), 0) : null }];
+        }
         // createReorg -> INSERT a marker row
         if (/INSERT INTO events/.test(query)) {
             rows.push({ id: nextId++, data: args[0] });
@@ -152,5 +156,33 @@ describe('reorg catch-up cursor refresh (XChainIndexer.start REORG-6 recheck)', 
         assert.deepStrictEqual(midReorgs.map((r) => r.id), [12],
             'the new reorg (id 12 > cursor 11) is still detected; the refresh does not mask it');
         assert.strictEqual(midReorgs[0].block_index, 6241950);
+    });
+});
+
+//  / RE-1: the cursor is a decoder events.id and the decoder never deletes
+// events rows, so a cursor above the decoder's newest REORG id can only mean an
+// out-of-band decoder rebuild/restore (AUTO_INCREMENT reset). getReorgsSince used
+// to return [] forever in that state, silently disabling all future rollbacks.
+describe('reorg cursor incarnation guard ( / RE-1)', function () {
+
+    it('throws when the cursor exceeds the decoder\'s newest REORG event id (rebuilt decoder DB)', async function () {
+        // Decoder rebuilt: its REORG history restarts at small ids (here: one event, id 3).
+        const rebuiltDecoderDb = makeDb([decoderReorg(3, 100)]);
+        await assert.rejects(() => rebuiltDecoderDb.getReorgsSince(50), /Reorg cursor incoherent \(RE-1\)/);
+    });
+
+    it('throws when the decoder has NO reorg history but the indexer has a cursor', async function () {
+        const emptyDecoderDb = makeDb([]);
+        await assert.rejects(() => emptyDecoderDb.getReorgsSince(50), /Reorg cursor incoherent \(RE-1\)/);
+    });
+
+    it('returns [] normally when the cursor equals the decoder\'s newest REORG id (steady state)', async function () {
+        const decoderDb = makeDb([decoderReorg(10, 6241887), decoderReorg(11, 6241890)]);
+        assert.deepStrictEqual(await decoderDb.getReorgsSince(11), []);
+    });
+
+    it('a null cursor (fresh indexer) never trips the guard', async function () {
+        const emptyDecoderDb = makeDb([]);
+        assert.deepStrictEqual(await emptyDecoderDb.getReorgsSince(null), []);
     });
 });
