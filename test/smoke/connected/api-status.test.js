@@ -59,20 +59,27 @@ function buildApp(indexer) {
     app.use(helmet());
     app.get('/status', async (req, res) => {
         let indexerBlock = null;
+        let indexerDbUnreachable = false;
         try {
             if(indexer.indexerDb)
                 indexerBlock = await indexer.indexerDb.getLatestBlockIndex();
         } catch (err) {
             // Database unreachable; leave indexerBlock null so lag stays null.
+            indexerDbUnreachable = true;
         }
         let decoderBlock = (indexer.lastDecoderBlock != null) ? Number(indexer.lastDecoderBlock) : null;
-        res.json({
+        // Same status-code contract as api.js: 503 on DB-unreachable/stall so
+        // the http_get container healthcheck can observe unhealthy; a mere
+        // not-synced catch-up stays 200.
+        let unhealthy = indexerDbUnreachable || !!indexer.stallReason;
+        res.status(unhealthy ? 503 : 200).json({
             indexerBlock: indexerBlock,
             decoderBlock: decoderBlock,
             lag:          (decoderBlock != null && indexerBlock != null)
                             ? decoderBlock - indexerBlock
                             : null,
-            isSynced:     indexer.isSynced()
+            isSynced:     indexer.isSynced(),
+            stallReason:  indexer.stallReason || null
         });
     });
     return app;
@@ -127,6 +134,57 @@ describe('Smoke: REST /status', function () {
             assert.strictEqual(status, 200, `Expected HTTP 200 but got ${status}`);
             assert.strictEqual(body.decoderBlock, null, `Expected decoderBlock null; got ${JSON.stringify(body)}`);
             assert.strictEqual(body.lag, null, `Expected lag null when decoder tip unknown; got ${JSON.stringify(body)}`);
+        } finally {
+            server.close();
+        }
+    });
+
+    // -------------------------------------------------------------------------
+    // SM-05c/d: healthcheck status-code contract (). The xchain-node
+    // http_get probe (wget, exit 0 on any 2xx) relies on /status returning a
+    // non-200 when the indexer cannot serve: DB unreachable or stalled -> 503;
+    // a healthy initial catch-up (isSynced false) must stay 200.
+    // -------------------------------------------------------------------------
+    it('SM-05c: GET /status returns 503 when the indexer DB is unreachable', async function () {
+        const indexer = {
+            indexerDb: { async getLatestBlockIndex() { throw new Error('conn refused'); } },
+            lastDecoderBlock: 120500,
+            isSynced() { return true; },
+        };
+        const { server, port } = await listen(indexer);
+        try {
+            const { status, body } = await getJson(port, '/status');
+            assert.strictEqual(status, 503, `Expected HTTP 503 on DB-unreachable but got ${status}`);
+            assert.strictEqual(body.indexerBlock, null);
+        } finally {
+            server.close();
+        }
+    });
+
+    it('SM-05d: GET /status returns 503 when stalled, 200 during plain catch-up', async function () {
+        const stalled = {
+            indexerDb: { async getLatestBlockIndex() { return 120000; } },
+            lastDecoderBlock: 120500,
+            isSynced() { return false; },
+            stallReason: 'hub-sync barrier timeout',
+        };
+        let { server, port } = await listen(stalled);
+        try {
+            const { status, body } = await getJson(port, '/status');
+            assert.strictEqual(status, 503, `Expected HTTP 503 when stalled but got ${status}`);
+            assert.strictEqual(body.stallReason, 'hub-sync barrier timeout');
+        } finally {
+            server.close();
+        }
+        // Plain catch-up (not synced, no stall, DB fine) stays 200.
+        ({ server, port } = await listen({
+            indexerDb: { async getLatestBlockIndex() { return 100; } },
+            lastDecoderBlock: 120500,
+            isSynced() { return false; },
+        }));
+        try {
+            const { status } = await getJson(port, '/status');
+            assert.strictEqual(status, 200, `Expected HTTP 200 during catch-up but got ${status}`);
         } finally {
             server.close();
         }

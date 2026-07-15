@@ -45,6 +45,18 @@ const deriveReqId = (txHash, rootActionIndex, emitterPath, contractIndex, positi
         .update(String(txHash) + ':' + String(rootActionIndex) + ':' + String(emitterPath) + ':' + String(contractIndex) + ':' + String(position))
         .digest('hex');
 
+// Cross-repo golden pin for the request_id preimage. This is the checked-in
+// (input tuple -> expected hex) vector from xchain-vm/src/gateway-emit.js
+// (GOLDEN_VECTORS.requestId). It is a LITERAL constant on purpose: asserting the
+// REAL attest handler against it (below) catches a lockstep field-reorder that
+// would otherwise pass because the local deriveReqId copy was reordered too. Keep
+// in sync with xchain-vm/src/gateway-emit.js; a mismatch is a genuine fleet fork.
+const GOLDEN_REQUEST_ID = {
+    input: { txHash: 'abc123', rootActionIndex: 100, emitterPath: '', contractIndex: 7, emitterPosition: 0 },
+    // sha256('abc123:100::7:0')
+    expected: 'b770a548716259f767c3eb6e9e1e5eb0e3878c9ec3d6bbd68a7e1ab8221fffb7'
+};
+
 describe('Attest (ATTEST) @regression @tier3', function () {
     let indexer, actionsCtx, handler, executeStub;
 
@@ -139,6 +151,26 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             await handler.parse(v0Params({ requestId: reqId }), data, null);
             assert.strictEqual(data['STATUS'], 'valid');
             assert.ok(indexer.indexerDb.createAttestationRequest.calledOnce);
+        });
+
+        it('golden vector: the REAL handler derives the checked-in xchain-vm request_id hash', async function () {
+            // Drive the real handler with the cross-repo golden-vector input and the
+            // LITERAL golden hex as the supplied REQUEST_ID. The handler independently
+            // re-derives request_id from these fields and accepts only on a byte match,
+            // so a 'valid' STATUS proves the real derivation still produces the pinned
+            // hex. Unlike the tests above, this assertion does NOT route through the
+            // local deriveReqId lambda, so a lockstep field-reorder of BOTH the real
+            // handler and the lambda can no longer pass silently (closes ).
+            const gv   = GOLDEN_REQUEST_ID.input;
+            const data = v0Data({
+                TX_HASH: gv.txHash, ROOT_ACTION_INDEX: gv.rootActionIndex,
+                EMITTER_PATH: gv.emitterPath, EMITTER: gv.contractIndex,
+                EMITTER_POSITION: gv.emitterPosition,
+            });
+            await handler.parse(v0Params({ requestId: GOLDEN_REQUEST_ID.expected }), data, null);
+            assert.strictEqual(data['STATUS'], 'valid',
+                'real handler must accept the checked-in golden REQUEST_ID; a rejection means the ' +
+                'indexer preimage drifted from xchain-vm/src/gateway-emit.js GOLDEN_VECTORS.requestId');
         });
 
         it('ATT-RECOMP-1: pins the responsible set AS-OF the request block for a valid request', async function () {

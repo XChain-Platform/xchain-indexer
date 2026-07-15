@@ -1,0 +1,22 @@
+-- xchain:migration mode=manual
+-- Migration: drop the legacy `escrows` flag column from sweeps.
+--
+-- The SWEEP three-flag restructure replaced the single `escrows` flag with
+-- `orders`/`swaps`/`dispensers`; sweeps.sql (the fresh-install definition)
+-- has not declared `escrows` since. The only statement that removed it lived
+-- in the legacy, never-executed migrations/ directory
+-- (20260529_sweeps_restructure_flags.sql), which Database.runMigrations()
+-- does not scan, so no aged DB ever had the DROP applied. verifyTables()'s
+-- alterTableForDrift auto-ADDs the three new flags but never DROPS an
+-- undeclared column, so an aged sweeps table permanently carries an
+-- `escrows BIGINT UNSIGNED` column mid-table that a fresh createTable lacks:
+-- not byte-identical schemas, the exact drift the convergence audit flags
+-- (same class as the balances redundant address_id index, which got its
+-- tracked drop on 2026-07-13).
+--
+-- mode=manual because DROP COLUMN is destructive: an operator runs it
+-- deliberately via `node src/migrate.js` after confirming the restructure
+-- backfill completed (no code path has read sweeps.escrows since the
+-- restructure). Idempotent: IF EXISTS no-ops on fresh installs and re-runs.
+
+ALTER TABLE sweeps DROP COLUMN IF EXISTS escrows;

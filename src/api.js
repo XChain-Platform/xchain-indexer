@@ -1055,12 +1055,14 @@ async function startApi(){
     // method) so it never reports a stale in-memory counter.
     app.get('/status', async (req, res) => {
         let indexerBlock = null;
+        let indexerDbUnreachable = false;
         try {
             if(indexer.indexerDb)
                 indexerBlock = await indexer.indexerDb.getLatestBlockIndex();
         } catch (err) {
             // Database unreachable; leave indexerBlock null so lag stays null
             // rather than reporting a misleading figure.
+            indexerDbUnreachable = true;
         }
         let decoderBlock = null;
         try {
@@ -1078,7 +1080,13 @@ async function startApi(){
         let hubConfigAgeSeconds  = (lastHubConfigFetchAt != null)
                                     ? Math.floor((Date.now() - lastHubConfigFetchAt) / 1000)
                                     : null;
-        res.json({
+        // Status-code contract for the xchain-node http_get healthcheck (wget
+        // exits 0 on any 2xx): 503 when the indexer DB is unreachable or the
+        // block counter is stalled (stallReason set), matching the encoder /
+        // utxo-tracker / sync siblings. isSynced=false alone stays 200: a
+        // healthy initial catch-up must not trip restart loops.
+        let unhealthy = indexerDbUnreachable || !!indexer.stallReason;
+        res.status(unhealthy ? 503 : 200).json({
             indexerBlock: indexerBlock,
             decoderBlock: decoderBlock,
             lag:          (decoderBlock != null && indexerBlock != null)
