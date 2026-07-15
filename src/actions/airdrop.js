@@ -299,9 +299,19 @@ class Airdrop {
             if(!error && !this.util.hasBalance(balances, tokenInfo['TICK_ID'], airdrop['DEBIT']))
                 error = 'invalid: insufficient funds (TICK)';
         
-            // Adjust balances to reduce by DEBIT amount
-            if(!error)
-                balances = this.util.debitBalances(balances, tokenInfo['TICK_ID'], airdrop['DEBIT']);
+            // Stage this leg's debits on a CLONED view and commit to the shared
+            // `balances` only once the whole leg validates ( / AIRDROP-1).
+            // Debiting the shared object here meant a later-in-leg failure (guard
+            // DENY, insufficient fee) left the TICK debit applied with no rollback,
+            // so a subsequent leg airdropping the same tick was measured against an
+            // under-counted balance and wrongly rejected. The clone must still
+            // carry the pending TICK debit (send.js's baseGasBalances pattern):
+            // checking the guard's GAS reservation or the fee against the
+            // pre-debit balance would over-spend when the airdropped tick IS the
+            // GAS/fee tick.
+            let legBalances = (!error)
+                ? this.util.debitBalances(Object.assign({}, balances), tokenInfo['TICK_ID'], airdrop['DEBIT'])
+                : balances;
 
             // Controller-bound token: the airdropped TICK's bound contract gates the AGGREGATE
             // outbound move once (from=SOURCE, amount=total DEBIT, no single recipient). The guard
@@ -319,7 +329,7 @@ class Airdrop {
                     amount:      airdrop['DEBIT'],
                     data:        airdrop,
                     gasInfo:     gasInfo,
-                    gasBalances: balances,
+                    gasBalances: legBalances,
                     seq:         parseInt(idx) || 0
                 });
                 if(result.error){
@@ -327,7 +337,7 @@ class Airdrop {
                 } else if(this.util.bcgt(result.guardFee, 0)){
                     guardFee = result.guardFee;
                     if(gasInfo)
-                        balances = this.util.debitBalances(balances, gasInfo['TICK_ID'], guardFee);
+                        legBalances = this.util.debitBalances(legBalances, gasInfo['TICK_ID'], guardFee);
                 }
             }
 
@@ -347,14 +357,19 @@ class Airdrop {
                 } else if(paymentMode === 'rejected'){
                     error = 'invalid: insufficient fee (native coin output required)';
                 } else {
-                    if(!this.util.hasBalance(balances, fees['TICK_ID'], fees['AMOUNT']))
+                    if(!this.util.hasBalance(legBalances, fees['TICK_ID'], fees['AMOUNT']))
                         error = 'invalid: insufficient funds (FEE)';
                 }
             }
 
             // Adjust balances to reduce by FEE AMOUNT (only for XCHAIN deduction mode)
             if(!error && (!fees['PAYMENT_MODE'] || fees['PAYMENT_MODE'] === 2))
-                balances = this.util.debitBalances(balances, fees['TICK_ID'], fees['AMOUNT']);
+                legBalances = this.util.debitBalances(legBalances, fees['TICK_ID'], fees['AMOUNT']);
+
+            // Commit the staged view: only a fully-valid leg mutates the shared
+            // balances the next leg is measured against ( / AIRDROP-1).
+            if(!error)
+                balances = legBalances;
 
             // Determine final status
             let status = (error) ? error : 'valid';

@@ -341,6 +341,41 @@ describe('Airdrop @regression @tier2', function () {
 
     });
 
+    //  / AIRDROP-1: a leg that fails AFTER its TICK debit (e.g. at the fee
+    // check) must not leave that debit applied to the shared balances, or the next
+    // leg airdropping the same tick is measured against an under-counted balance
+    // and wrongly rejected with insufficient TICK instead of its real verdict.
+    describe('multi-leg staged-balance rollback ', function () {
+
+        it('a fee-failed leg does not consume TICK balance from the next leg', async function () {
+            const tokenInfo = createTokenInfo({ TICK: 'TEST', TICK_ID: 1, DECIMALS: 0 });
+            indexer.indexerDb.getTokenInfo.resolves(tokenInfo);
+            indexer.indexerDb.getTickerId.resolves(9);   // fee/GAS tick id
+            indexer.indexerDb.getListType.resolves(2);
+            indexer.indexerDb.getList.resolves(['mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM']);
+            // Enough TEST for ONE full leg (10); not enough GAS for the 50 fee.
+            indexer.indexerDb.getAddressBalances.resolves({ 1: '10', 9: '40' });
+            indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
+            indexer.indexerDb.isActionAllowed.resolves(true);
+            sinon.stub(indexer.util, 'getUnifiedTransactionFee').returns({ gasCost: '1', fee: '50' });
+
+            const statuses = [];
+            indexer.indexerDb.createAirdrop = sinon.stub().callsFake(async a => { statuses.push(a.STATUS); });
+
+            const data = createBaseData({ ACTION: 'AIRDROP', FORMAT: 2 });
+            // FORMAT 2: VERSION|TICK|AMOUNT|LIST|TICK|AMOUNT|LIST|MEMO - same tick both legs.
+            const params = ['2', 'TEST', '10', '1', 'TEST', '10', '2', 'memo'];
+            await handler.parse(params, data, null);
+
+            assert.strictEqual(statuses.length, 2);
+            // Both legs fail at the FEE stage. Before the staged-view fix, leg 1's
+            // TICK debit stuck and leg 2 failed 'invalid: insufficient funds (TICK)'.
+            assert.strictEqual(statuses[0], 'invalid: insufficient funds (FEE)');
+            assert.strictEqual(statuses[1], 'invalid: insufficient funds (FEE)');
+        });
+
+    });
+
     describe('format 3: multi-airdrop full with multiple memos', function () {
 
         it('valid format-3 multi-airdrop processes TICK/LIST/MEMO triples', async function () {
