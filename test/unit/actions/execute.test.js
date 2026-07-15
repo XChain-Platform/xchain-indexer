@@ -394,6 +394,27 @@ describe('Execute (EXECUTE) @regression @tier2', function () {
 
         // All four throw before buildActionParams, so minimal emission params suffice.
 
+        //  / VM-EMIT-1: only VOTE v0 (create) / v1 (ballot) are emittable. v2
+        // (finalize) and v3 (delegate) are gateway-rejected; re-blocked host-side as
+        // defense in depth against an older/compromised bundled VM.
+        it('throws on an emitted VOTE v2 (finalize) - host-side re-block', async function () {
+            const emission = { action: 'VOTE', params: { version: 2, tick: 'TEST' } };
+            const execData = executeData({ FORMAT: 0 });
+            await assert.rejects(
+                () => handler.processEmission(emission, execData, 0),
+                /VOTE version 2 is not emittable/
+            );
+        });
+
+        it('throws on an emitted VOTE v3 (delegate) - host-side re-block', async function () {
+            const emission = { action: 'VOTE', params: { version: 3, tick: 'TEST' } };
+            const execData = executeData({ FORMAT: 0 });
+            await assert.rejects(
+                () => handler.processEmission(emission, execData, 0),
+                /VOTE version 3 is not emittable/
+            );
+        });
+
         it('throws when XCALL emission is missing the position argument', async function () {
             const emission = { action: 'XCALL', params: { gasLimit: 50000 } };
             const execData = executeData({ FORMAT: 0 });

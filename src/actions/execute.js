@@ -930,6 +930,13 @@ class Execute {
         // (0 = create poll, 1 = cast ballot) and its handler dispatches on FORMAT. Carry
         // the emitted version into FORMAT so a contract-cast ballot isn't mis-parsed as a
         // poll creation (which then fails the create-only "must hold TICK" gate).
+        // Only v0/v1 are emittable: v2 (finalize) is system-injected-only and v3
+        // (delegate) has no emission param mapping, so buildActionParams would hand
+        // _parseDelegate a mis-mapped v0 layout. The VM gateway already rejects both
+        // at emit time; re-check host-side as defense in depth against an older
+        // bundled VM, matching the guard-emission checks above ( / VM-EMIT-1).
+        if(action === 'VOTE' && Number(params.version) > 1)
+            throw new Error('emitted VOTE version ' + params.version + ' is not emittable (only v0 create / v1 ballot)');
         let emissionFormat = (action === 'VOTE') ? (Number(params.version) || 0) : 0;
 
         // Create a real action_index for this emission
