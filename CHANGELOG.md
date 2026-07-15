@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `hub_db_sync.js` exports `ensureTables()` for non-indexer mirror consumers and is now the canonical copy vendored into xchain-explorer via `bin/sync-hub-mirror-client.sh`; indexer runtime behavior is unchanged.
 
 ### Fixed
+- `LOCK_MAX_SUPPLY_EXACT` (the strict ISSUE `LOCK_MAX_SUPPLY` guard) now pins its mainnet activation to the coordinated 2026-10-01 00:00 UTC contract-era flag-day instead of `0`; an unpinned mainnet time flipped the verdict on binary version alone, forking a heterogeneous fleet on any ISSUE carrying an explicit `LOCK_MAX_SUPPLY=0` and diverging a from-genesis replay from the committed ledger hash. testnet/regtest stay genesis-active, matching the sibling ISSUE/SLEEP validity gates.
 - `order_match.js` subtracts the running remaining at precision 64 (was bcsub's default 0, which rounded a fractional remaining to an integer, prematurely completing orders with escrow stranded or filling past exhaustion).
 - All 12 remaining escrow-release sites (order/swap/coinpay expire+cancel, sweep, cross_settle) negate via `bcsub(0, amount, 64)` instead of JS unary minus, which float-truncated high-decimal amounts and desynced the release from the paired credit; a source-scan regression guards the whole family.
 - `pushvalidatorrewards` writes through the new `db.apiView()` pooled-connection view, so a hub push landing mid-block no longer joins the block's open transaction and can't be rolled back after the API acked it.

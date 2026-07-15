@@ -312,9 +312,12 @@ class ProtocolChanges {
         // cap declared) incorrectly triggered the 'invalid: LOCK_MAX_SUPPLY (no max supply)'
         // outcome. After activation the guard requires LOCK_MAX_SUPPLY==1, matching the field's
         // intended semantics. Gated so a heterogeneous fleet and any from-genesis replay all
-        // switch at the same block; pre-launch chains activate at genesis (all zeros), making
-        // the strict check effective from block 0 on testnet/regtest and mainnet alike.
-        this.addChange('LOCK_MAX_SUPPLY_EXACT', '2.0.0',0,0,0,0,0,0);
+        // switch at the same block: mainnet pins the same coordinated contract-era flag-day
+        // as the sibling ISSUE/SLEEP validity gates below (2026-10-01 00:00:00 UTC) - a
+        // mainnet_time of 0 would flip the verdict on binary version alone, forking a skewed
+        // fleet on any ISSUE carrying an explicit LOCK_MAX_SUPPLY=0 and diverging a
+        // from-genesis replay. testnet/regtest activate at genesis (all zeros).
+        this.addChange('LOCK_MAX_SUPPLY_EXACT', '2.0.0',1790812800,0,0,0,0,0);
 
         // ISSUE validity: cumulative MINT_SUPPLY cap. Before this activation the only guard on
         // an ISSUE's MINT_SUPPLY was a single-shot `MINT_SUPPLY > MAX_SUPPLY` check, which
