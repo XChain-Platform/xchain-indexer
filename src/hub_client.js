@@ -29,6 +29,11 @@ class HubClient {
     constructor(hubUrl, apiKey){
         this.hubUrl = hubUrl || process.env.HUB_API_URL || '';
         this.apiKey = apiKey || process.env.HUB_API_KEY || '';
+        //  interim credential scoping: when the hub gates its retraction
+        // rails (push*reorg) behind a dedicated HUB_REORG_API_KEY, the reorg
+        // pushes must carry that key; everything else keeps the bulk key.
+        // Unset = legacy single-key behavior.
+        this.reorgApiKey = process.env.HUB_REORG_API_KEY || this.apiKey;
         this.enabled = !!this.hubUrl;
     }
 
@@ -79,7 +84,7 @@ class HubClient {
         let params = { source_chain: sourceChain, from_action_index: fromActionIndex };
         if(toActionIndex !== undefined && toActionIndex !== null) params.to_action_index = toActionIndex;
         if(retractionGeneration !== undefined && retractionGeneration !== null) params.retraction_generation = retractionGeneration;
-        return this._call('pushpricereorg', params);
+        return this._call('pushpricereorg', params, this.reorgApiKey);
     }
 
     // Notify the hub that a reorg rolled back XCALL request actions on this chain so it
@@ -97,7 +102,7 @@ class HubClient {
         let params = { source_chain: sourceChain, from_action_index: fromActionIndex };
         if(toActionIndex !== undefined && toActionIndex !== null) params.to_action_index = toActionIndex;
         if(retractionGeneration !== undefined && retractionGeneration !== null) params.retraction_generation = retractionGeneration;
-        return this._call('pushxcallreorg', params);
+        return this._call('pushxcallreorg', params, this.reorgApiKey);
     }
 
     // Notify the hub that a reorg rolled back DEX ORDER actions on this chain so it can retract
@@ -115,11 +120,11 @@ class HubClient {
         let params = { source_chain: sourceChain, from_action_index: fromActionIndex };
         if(toActionIndex !== undefined && toActionIndex !== null) params.to_action_index = toActionIndex;
         if(retractionGeneration !== undefined && retractionGeneration !== null) params.retraction_generation = retractionGeneration;
-        return this._call('pushdexreorg', params);
+        return this._call('pushdexreorg', params, this.reorgApiKey);
     }
 
     // Make a JSON-RPC 2.0 call to the hub
-    _call(method, params){
+    _call(method, params, apiKeyOverride){
         return new Promise((resolve, reject) => {
             let parsed = url.parse(this.hubUrl);
             let isHttps = parsed.protocol === 'https:';
@@ -136,7 +141,8 @@ class HubClient {
                 'Content-Type':   'application/json',
                 'Content-Length': Buffer.byteLength(body)
             };
-            if(this.apiKey) headers['x-api-key'] = this.apiKey;
+            let key = apiKeyOverride || this.apiKey;
+            if(key) headers['x-api-key'] = key;
 
             let opts = {
                 hostname: parsed.hostname,
