@@ -480,9 +480,25 @@ class Rollback {
                                 total_voters = NULL, quorum_met = NULL, min_voters_met = NULL,
                                 fail_reason = NULL, decided_early = NULL, effective_close_block = NULL,
                                 finalized_action_index = NULL, resolved_block = NULL,
-                                deposit_resolved = NULL, callback_execute_action_index = NULL
+                                deposit_resolved = NULL, callback_execute_action_index = NULL,
+                                callback_due_block = NULL
                             WHERE poll_status IN ('finalized', 'failed_quorum')
                               AND resolved_block >= ?`;
+                args  = [block_index];
+                await this.indexerDb.doQuery(query, args);
+
+                //  timelock: a DEFERRED binding-callback fire whose due block is
+                // orphaned while the finalization itself survives (resolved_block below
+                // the reorg point, callback_due_block at/above it). The injected EXECUTE
+                // is deleted generically with the orphaned range; re-NULL the fired
+                // marker so the sweep re-fires deterministically when the due block
+                // replays. The stamped callback_due_block itself is derived state
+                // (resolved_block + delay) from a surviving v2, so it stays.
+                query = `UPDATE polls
+                            SET callback_execute_action_index = NULL
+                            WHERE poll_status IN ('finalized', 'failed_quorum')
+                              AND callback_due_block >= ?
+                              AND callback_execute_action_index IS NOT NULL`;
                 args  = [block_index];
                 await this.indexerDb.doQuery(query, args);
 

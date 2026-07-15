@@ -72,8 +72,17 @@ class Mint {
         // Get information on token
         let tokenInfo = await this.indexerDb.getTokenInfo(data['TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
 
-        // Get total token minted from this address
-        let minted = await this.indexerDb.getActionCreditDebitAmount('credits', 'MINT', data['TICK'], data['SOURCE'], data['ACTION_INDEX']);
+        // Get total token minted from this address for the MINT_ADDRESS_MAX check.
+        // At/after the MINT_SELF_MINTED_ONLY flag-day only mints AUTHORED by SOURCE
+        // count (mints table by the action's source); below it the legacy measure
+        // (MINT-action credits to SOURCE) applies, which also counts tokens merely
+        // received as another mint's DESTINATION. See protocol_changes.js for why
+        // the corrected measure must be gated (validity loosening).
+        let minted;
+        if(await this.actions.protocolChanges.isEnabled('MINT_SELF_MINTED_ONLY', data['BLOCK_INDEX']))
+            minted = await this.indexerDb.getSelfMintedAmount(data['TICK'], data['SOURCE'], data['ACTION_INDEX']);
+        else
+            minted = await this.indexerDb.getActionCreditDebitAmount('credits', 'MINT', data['TICK'], data['SOURCE'], data['ACTION_INDEX']);
 
         // Verify TICK is valid before MINT
         if(tokenInfo['BLOCK_INDEX']==data['BLOCK_INDEX'] && !(await this.indexerDb.validTickerBeforeTxIndex(data['TICK'], data['ACTION_INDEX'])))

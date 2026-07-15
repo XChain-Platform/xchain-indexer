@@ -51,6 +51,8 @@ CREATE TABLE polls (
     callback_on             ENUM('pass','always'),      -- pass = only on a finalized win; always = every finalization
     gas_escrow              VARCHAR(60),                -- XCHAIN escrowed at v0 to back the callback EXECUTE (refunded at finalize)
     callback_execute_action_index BIGINT UNSIGNED,      -- action_index of the EXECUTE v2 injected (set when fired)
+    callback_delay_blocks   BIGINT UNSIGNED,            -- v0 CALLBACK_DELAY_BLOCKS timelock (honored at/after the VOTE_CALLBACK_TIMELOCK flag-day; null/0 = fire at finalize)
+    callback_due_block      BIGINT UNSIGNED,            -- block the deferred callback fires (resolved_block + delay; stamped by v2, null = immediate)
     -- action validation
     status_id               BIGINT UNSIGNED             -- FK to index_statuses (validation status of the create action)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;

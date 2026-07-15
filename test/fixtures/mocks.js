@@ -237,6 +237,7 @@ function createMockDb() {
         getActionType: sinon.stub().resolves('ISSUE'),
         getActionData: sinon.stub().resolves(null),
         getActionCreditDebitAmount: sinon.stub().resolves(0),
+        getSelfMintedAmount: sinon.stub().resolves(0),
 
         // Preferences
         getAddressPreferences: sinon.stub().resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 }),

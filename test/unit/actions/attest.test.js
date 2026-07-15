@@ -106,6 +106,10 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             decoderDb:     indexer.decoderDb,
             indexerDb:     indexer.indexerDb,
             actionExecute: executeStub,
+            protocolChanges: {
+                isDefined: sinon.stub().returns(true),
+                isEnabled: sinon.stub().resolves(true),
+            },
         };
         handler = new Attest(actionsCtx);
         indexer.util.resetLists();
@@ -487,6 +491,44 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             assert.strictEqual(upperData['REQUEST_ID'], REQ_ID, 'row stores the lowercase id');
             assert.strictEqual(indexer.indexerDb.getAttestationRequestById.firstCall.args[0], REQ_ID,
                 'request lookup uses the lowercase id');
+        });
+
+        // : the id case inside the canonical is consensus behaviour, gated on
+        // ATTEST_CANONICAL_LOWERCASE_ID. Below the flag-day the canonical uses the
+        // RAW wire case (a case-mutated replay keeps failing verification exactly
+        // like on a legacy node); at/after it the lowercased id (self-contained
+        // byte-identity with the hub). The default mock gate is active, so the
+        // normalization test above covers the ON side.
+        it('gate INACTIVE: the canonical uses the RAW wire id case (legacy byte-identity)', async function () {
+            actionsCtx.protocolChanges.isEnabled = sinon.stub().callsFake(
+                async (name) => name !== 'ATTEST_CANONICAL_LOWERCASE_ID');
+            indexer.indexerDb.getAttestationRequestById.resolves(makeRequestRow({ redundancy: 1 }));
+
+            const upperData = v1Data();
+            await handler.parse(
+                v1Params([{ pubkey: PUBKEY_A, sig: SIG_A }], { requestId: REQ_ID.toUpperCase() }),
+                upperData, null);
+            const canonical = ed25519.verify.firstCall.args[0].toString('utf8');
+
+            assert.ok(canonical.includes(REQ_ID.toUpperCase()),
+                'below the flag-day the canonical must carry the raw (uppercase) wire id');
+            assert.ok(!canonical.includes(REQ_ID),
+                'and must not carry the lowercased id');
+            assert.strictEqual(upperData['REQUEST_ID'], REQ_ID,
+                'non-consensus uses (stored row) still lowercase');
+        });
+
+        it('gate INACTIVE: a lowercase wire id produces the same canonical as ever (no behavior change for the live producer)', async function () {
+            actionsCtx.protocolChanges.isEnabled = sinon.stub().callsFake(
+                async (name) => name !== 'ATTEST_CANONICAL_LOWERCASE_ID');
+            indexer.indexerDb.getAttestationRequestById.resolves(makeRequestRow({ redundancy: 1 }));
+
+            const data = v1Data();
+            await handler.parse(v1Params([{ pubkey: PUBKEY_A, sig: SIG_A }]), data, null);
+            const canonical = ed25519.verify.firstCall.args[0].toString('utf8');
+
+            assert.ok(canonical.includes(REQ_ID), 'lowercase wire id verifies against the same bytes');
+            assert.strictEqual(data['STATUS'], 'valid');
         });
 
         it('rejects a malformed SIG_COUNT length prefix', async function () {

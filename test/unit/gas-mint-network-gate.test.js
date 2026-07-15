@@ -59,6 +59,7 @@ async function runMint({ network, source, amount, tick, mintStartBlock = 0, bloc
         getTokenInfo:                async () => tokenInfo,
         resolveAddressRef:           async (v) => v,
         getActionCreditDebitAmount:  async () => 0,
+        getSelfMintedAmount:         async () => 0,
         validTickerBeforeTxIndex:    async () => true,
         isActionAllowed:             async () => true,
         createMint:                  async (m) => { captured.status = m['STATUS']; },
@@ -79,7 +80,8 @@ async function runMint({ network, source, amount, tick, mintStartBlock = 0, bloc
         decoderDb: null,
         indexerDb,
         util,
-        mapper: { createMappings: async () => {} }
+        mapper: { createMappings: async () => {} },
+        protocolChanges: { isEnabled: async () => true }
     };
 
     const mint = new Mint(action);

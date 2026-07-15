@@ -3762,6 +3762,31 @@ class Database {
         return total;
     }
 
+    // Get total amount SELF-MINTED (valid MINT actions authored by `address`) for a ticker
+    // before `action_index`. Unlike getActionCreditDebitAmount('credits','MINT',...), which
+    // also counts MINT credits the address merely received as another mint's DESTINATION,
+    // this measures the mints table by the action's source, so only mints the address
+    // itself authored count toward MINT_ADDRESS_MAX (MINT_SELF_MINTED_ONLY flag-day).
+    async getSelfMintedAmount(tick, address, action_index){
+        let total   = 0;
+        let tick_id = await this.createTicker(tick);
+        let addr_id = await this.createAddress(address);
+        let query = `SELECT
+                m1.amount,
+                t2.decimals
+            FROM
+                mints m1
+                INNER JOIN actions        a1 ON (a1.action_index=m1.action_index)
+                INNER JOIN tokens         t2 ON (t2.tick_id=m1.tick_id)
+                INNER JOIN index_statuses s1 ON (s1.id=m1.status_id)
+            WHERE
+                m1.tick_id=? AND a1.source_id=? AND s1.status='valid' AND m1.action_index < ?`;
+        let results = await this.doQuery(query, [tick_id, addr_id, action_index]);
+        for(let row of results)
+            total = this.util.bcadd(total, row.amount, row.decimals);
+        return total;
+    }
+
     // Lookup a record in the `index_memos` table and return record id
     async getMemoId(memo){
         let id    = null;
@@ -4990,6 +5015,9 @@ class Database {
         let cb_params        = binding ? (this.util.isNull(data['CALLBACK_PARAMS']) ? null : String(data['CALLBACK_PARAMS'])) : null;
         let cb_on            = binding ? (data['CALLBACK_ON'] || 'pass') : null;
         let gas_escrow       = binding ? (this.util.isNull(data['GAS_ESCROW']) ? '0' : String(data['GAS_ESCROW'])) : null;
+        // CALLBACK_DELAY_BLOCKS timelock : _parseCreate nulls the field below
+        // the VOTE_CALLBACK_TIMELOCK flag-day, so a stored value is always gate-legal.
+        let cb_delay         = (binding && !this.util.isNull(data['CALLBACK_DELAY_BLOCKS'])) ? parseInt(data['CALLBACK_DELAY_BLOCKS']) : null;
         // deposit_address_id is the escrow PAYER (= creator), stored whenever any GAS
         // is locked (deposit OR gas_escrow) so v2 can resolve the refund target.
         let has_escrow       = this.util.bcgt(deposit_amount, 0) || (binding && this.util.bcgt(gas_escrow, 0));
@@ -5005,7 +5033,7 @@ class Database {
                         tally_mode=?, weight_mode=?, quorum=?, min_voters=?, min_vote_balance=?,
                         decide_threshold=?, question=?, deposit_amount=?, deposit_address_id=?,
                         callback_contract_index=?, callback_method=?, callback_params=?,
-                        callback_on=?, gas_escrow=?, status_id=?
+                        callback_on=?, gas_escrow=?, callback_delay_blocks=?, status_id=?
                      WHERE action_index=?`;
         } else {
             query = `INSERT INTO polls
@@ -5013,13 +5041,13 @@ class Database {
                          tally_mode, weight_mode, quorum, min_voters, min_vote_balance,
                          decide_threshold, question, deposit_amount, deposit_address_id,
                          callback_contract_index, callback_method, callback_params,
-                         callback_on, gas_escrow, status_id, action_index)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+                         callback_on, gas_escrow, callback_delay_blocks, status_id, action_index)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
         }
         let args = [block_index, tick_id, end_block, options, max_selections,
                     tally_mode, weight_mode, quorum, min_voters, min_vote_balance,
                     decide_threshold, question, deposit_amount, deposit_addr_id,
-                    cb_contract, cb_method, cb_params, cb_on, gas_escrow, status_id, action_index];
+                    cb_contract, cb_method, cb_params, cb_on, gas_escrow, cb_delay, status_id, action_index];
         await this.doQuery(query, args);
     }
 
@@ -5051,6 +5079,27 @@ class Database {
     // poll's callback. Cleared on rollback re-open so a re-synthesized v2 re-fires.
     async setPollCallbackIndex(pollIndex, executeActionIndex){
         await this.doQuery(`UPDATE polls SET callback_execute_action_index=? WHERE action_index=?`, [executeActionIndex, pollIndex]);
+    }
+
+    //  timelock: stamp the block a deferred binding callback fires at
+    // (resolved_block + CALLBACK_DELAY_BLOCKS). Written by VOTE v2 in place of the
+    // immediate injection; cleared by the rollback re-open reset.
+    async setPollCallbackDue(pollIndex, dueBlock){
+        await this.doQuery(`UPDATE polls SET callback_due_block=? WHERE action_index=?`, [dueBlock, pollIndex]);
+    }
+
+    //  timelock: terminal polls whose deferred callback comes due exactly at
+    // block_index and has not fired. Equality (not <=) mirrors the immediate path's
+    // fire-once-at-v2 semantics; the IS NULL guard makes a same-block reprocess
+    // idempotent. Returns the full row (the sweep reconstructs the frozen result
+    // from it).
+    async getDueCallbackPolls(block_index){
+        return await this.doQuery(
+            `SELECT * FROM polls
+              WHERE poll_status IN ('finalized','failed_quorum')
+                AND callback_due_block = ?
+                AND callback_execute_action_index IS NULL
+              ORDER BY action_index ASC`, [block_index]);
     }
 
     // Record a VOTE v3 delegation set/clear as an append-only event row. A null

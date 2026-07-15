@@ -1635,6 +1635,13 @@ class Utility {
                 await actions.processAction('VOTE', [2, pollIndex], data, null);
             }
         }
+
+        // 3. Timelocked binding callbacks : polls finalized in an earlier
+        //    block whose CALLBACK_DELAY_BLOCKS window elapses at THIS block fire
+        //    their deferred callback EXECUTE now. Runs after the finalization
+        //    triggers so a poll finalizing this block can never fire in the same
+        //    pass (a delay >= 1 always defers to a later block anyway).
+        await actions.actionVote.processDueCallbacks(block_index, block_time);
     }
 
     // Finalize unstakes (capability + contract) whose cooldown has elapsed.

@@ -48,7 +48,7 @@ class Vote {
         // Define list of known FORMATS. v0 create + v1 ballot are user actions;
         // v2 finalize is system-injected only (the per-block sweep synthesizes it).
         this.formats = {};
-        this.formats[0] = 'VERSION|TICK|END_BLOCK|OPTIONS|MAX_SELECTIONS|TALLY_MODE|WEIGHT_MODE|QUORUM|MIN_VOTERS|MIN_VOTE_BALANCE|DECIDE_THRESHOLD|QUESTION|DEPOSIT|CALLBACK_CONTRACT|CALLBACK_METHOD|CALLBACK_PARAMS|CALLBACK_ON|GAS_ESCROW';
+        this.formats[0] = 'VERSION|TICK|END_BLOCK|OPTIONS|MAX_SELECTIONS|TALLY_MODE|WEIGHT_MODE|QUORUM|MIN_VOTERS|MIN_VOTE_BALANCE|DECIDE_THRESHOLD|QUESTION|DEPOSIT|CALLBACK_CONTRACT|CALLBACK_METHOD|CALLBACK_PARAMS|CALLBACK_ON|GAS_ESCROW|CALLBACK_DELAY_BLOCKS';
         this.formats[1] = 'VERSION|POLL_REF|BALLOT|MEMO';
         this.formats[2] = 'VERSION|POLL_REF';
         this.formats[3] = 'VERSION|TICK|DELEGATE_TO|MEMO';
@@ -232,6 +232,33 @@ class Vote {
             if(this.util.isNull(data['CALLBACK_ON'])) data['CALLBACK_ON'] = 'pass';
             if(!error && !['pass','always'].includes(data['CALLBACK_ON']))
                 error = 'invalid: CALLBACK_ON (pass|always)';
+            //  (BonkDAO-class guard): at/after the VOTE_BINDING_MINIMUMS
+            // flag-day a binding poll must set its own turnout floor. QUORUM and
+            // MIN_VOTERS >= 1 are required so a callback that can move
+            // contract-held value can never finalize off a handful of ballots
+            // by omission; their magnitudes stay the creator's policy call.
+            // Signaling polls are unaffected. See protocol_changes.js for why
+            // the requirement is gated (validity tightening).
+            if(!error && await this.actions.protocolChanges.isEnabled('VOTE_BINDING_MINIMUMS', data['BLOCK_INDEX'])){
+                if(this.util.isNull(data['QUORUM']))
+                    error = 'invalid: QUORUM (required for a binding poll)';
+                else if(this.util.isNull(data['MIN_VOTERS']) || Number(data['MIN_VOTERS']) < 1)
+                    error = 'invalid: MIN_VOTERS (>= 1 required for a binding poll)';
+            }
+            // : CALLBACK_DELAY_BLOCKS (optional timelock). Honored only
+            // at/after the VOTE_CALLBACK_TIMELOCK flag-day; below it the field
+            // is nulled so acceptance and callback timing match a legacy node,
+            // whose parser drops params beyond its format. See
+            // protocol_changes.js for the fork rationale.
+            if(await this.actions.protocolChanges.isEnabled('VOTE_CALLBACK_TIMELOCK', data['BLOCK_INDEX'])){
+                if(!error && !this.util.isNull(data['CALLBACK_DELAY_BLOCKS'])){
+                    let cbd = Number(data['CALLBACK_DELAY_BLOCKS']);
+                    if(!Number.isInteger(cbd) || cbd < 0)
+                        error = 'invalid: CALLBACK_DELAY_BLOCKS (non-negative integer)';
+                }
+            } else {
+                data['CALLBACK_DELAY_BLOCKS'] = null;
+            }
             // CALLBACK_PARAMS (optional): must be a JSON array if present.
             if(!error && !this.util.isNull(data['CALLBACK_PARAMS']) && String(data['CALLBACK_PARAMS']).trim() !== ''){
                 let ok = false;
@@ -433,8 +460,21 @@ class Vote {
             let fires = (poll.callback_on === 'always') ||
                         (result.poll_status === 'finalized' && !this.util.isNull(result.winning_option));
             if(fires){
-                let cbIndex = await this._injectCallbackExecute(poll, data, result);
-                if(cbIndex) await this.indexerDb.setPollCallbackIndex(poll.action_index, cbIndex);
+                //  timelock: a poll created with CALLBACK_DELAY_BLOCKS > 0
+                // (only storable at/after the VOTE_CALLBACK_TIMELOCK flag-day)
+                // freezes its tally and settles its deposit now, but the callback
+                // EXECUTE is deferred to this block + delay; the per-block sweep
+                // (processDueCallbacks) fires it there. State-driven, so replay is
+                // deterministic without re-evaluating the gate here.
+                let cbDelay = Number(poll.callback_delay_blocks || 0);
+                if(Number.isInteger(cbDelay) && cbDelay > 0){
+                    let dueBlock = parseInt(data['BLOCK_INDEX']) + cbDelay;
+                    await this.indexerDb.setPollCallbackDue(poll.action_index, dueBlock);
+                    console.log("\t VOTE callback : poll " + poll.action_index + ' timelocked, due at block ' + dueBlock);
+                } else {
+                    let cbIndex = await this._injectCallbackExecute(poll, data, result);
+                    if(cbIndex) await this.indexerDb.setPollCallbackIndex(poll.action_index, cbIndex);
+                }
             }
         }
 
@@ -498,6 +538,46 @@ class Vote {
 
         console.log("\t VOTE escrow : poll " + poll.action_index + ' released ' + held + ' ' + gas +
                     ' (deposit ' + deposit + (refunded ? ' refund' : ' forfeit') + ', gas_escrow ' + gasEscrow + ' refund)');
+    }
+
+    /*****************************************************************
+     *  timelock: fire deferred binding callbacks that come due at this
+     * block. Called by the per-block sweep (util.processVoteFinalizations).
+     *
+     * A timelocked poll's v2 stamped callback_due_block = resolved_block +
+     * CALLBACK_DELAY_BLOCKS; here the frozen result is reconstructed from the
+     * terminal polls row and the callback EXECUTE injected exactly as the
+     * immediate path would have at finalize (same EMITTER = the v2's
+     * action_index, same savepoint isolation). Fires exactly once: the due
+     * query matches only callback_due_block = block, mirroring the
+     * immediate path's fire-once-at-v2 semantics (a deterministic callback
+     * failure is final on both paths; only a reorg re-fires via the rollback
+     * reset). Reorg-safe: rolling back the due block deletes the EXECUTE
+     * generically and rollback.js re-NULLs callback_execute_action_index, so
+     * replaying the due block re-fires deterministically.
+     ****************************************************************/
+    async processDueCallbacks(block_index, block_time){
+        let due = await this.indexerDb.getDueCallbackPolls(block_index);
+        for(let poll of due){
+            let result = {
+                poll_status:          poll.poll_status,
+                winning_option:       poll.winning_option,
+                total_counted_weight: poll.total_weight,
+                total_voters:         poll.total_voters,
+                quorum_met:           !!Number(poll.quorum_met || 0),
+                min_voters_met:       !!Number(poll.min_voters_met || 0)
+            };
+            let data = {
+                ACTION:       'VOTE',
+                FORMAT:       2,
+                BLOCK_INDEX:  block_index,
+                BLOCK_TIME:   block_time,
+                ACTION_INDEX: poll.finalized_action_index,
+                IS_SYNTHETIC: true
+            };
+            let cbIndex = await this._injectCallbackExecute(poll, data, result);
+            if(cbIndex) await this.indexerDb.setPollCallbackIndex(poll.action_index, cbIndex);
+        }
     }
 
     /*****************************************************************

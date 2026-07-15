@@ -296,15 +296,19 @@ class Attest {
         if(!error && allowedStatuses.indexOf(String(responseStatus)) === -1)
             error = 'invalid: STATUS (unknown)';
 
-        // Normalize the id ONCE, right after the (case-insensitive) format check, so
-        // every downstream use sees the same bytes: the request lookup, the canonical
-        // signing message, the EQUIV header, the responsible-set hash, and the row we
-        // store. The hub signs the LOWERCASE rid (AttestationConsensus._buildCanonical),
-        // and the only live producer lowercases before broadcast, so the canonical
-        // byte-identity currently rests on an external invariant rather than on this
-        // handler. Normalizing here makes it self-contained: a case-varied but
-        // regex-valid id from a future/added producer can no longer diverge the
-        // canonical from the hub's signed bytes.
+        // Normalize the id for every non-consensus use (request lookup, responsible-set
+        // hash, the stored row): the hub signs the LOWERCASE rid
+        // (AttestationConsensus._buildCanonical) and the only live producer lowercases
+        // before broadcast. The CANONICAL signing bytes themselves are the exception:
+        // whether they use the raw wire case or the lowercased id is CONSENSUS
+        // BEHAVIOUR . Legacy nodes build the canonical from the RAW wire id,
+        // so a case-mutated replay of a pending v1 fails signature verification there;
+        // lowercasing ungated would make the same wire bytes verify on an upgraded
+        // node and fork the fleet. The raw id is therefore kept for the canonical
+        // below the ATTEST_CANONICAL_LOWERCASE_ID flag-day and the lowercased id used
+        // at/after it (making the byte-identity with the hub self-contained instead of
+        // resting on the producer invariant).
+        let requestIdRaw = (requestId == null) ? requestId : String(requestId);
         if(requestId != null) requestId = String(requestId).toLowerCase();
 
         // Parse variable-length sig list
@@ -351,9 +355,14 @@ class Attest {
         // ROUND_ID=request_id, VIEW=0, no view change), gated on the request's block +
         // network; below it, the bare bytes. Byte-matches AttestationConsensus._buildCanonical.
         let responseHash = crypto.createHash('sha256').update(responseBodyBytes).digest('hex');
-        let canonRaw     = String(requestId) + String(providerId) + responseHash + String(responseStatus) + String(meta || '');
+        // : the id case inside the canonical is gated (see the normalization
+        // note above). Raw wire bytes below the flag-day (byte-identical to legacy
+        // verification), lowercased at/after it.
+        let canonId      = (await this.actions.protocolChanges.isEnabled('ATTEST_CANONICAL_LOWERCASE_ID', data['BLOCK_INDEX']))
+                         ? String(requestId) : String(requestIdRaw);
+        let canonRaw     = canonId + String(providerId) + responseHash + String(responseStatus) + String(meta || '');
         if(eq.isEquivHeaderActive(snapshotBlock, this.config['NETWORK']))
-            canonRaw = eq.buildEquivCanonical(eq.ENGINE_TAGS.ATTEST, requestId, 0, canonRaw);
+            canonRaw = eq.buildEquivCanonical(eq.ENGINE_TAGS.ATTEST, canonId, 0, canonRaw);
         let canonical    = Buffer.from(canonRaw, 'utf8');
         let validSigs    = 0;
         let verifiedSigs = [];

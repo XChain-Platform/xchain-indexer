@@ -248,6 +248,98 @@ class ProtocolChanges {
         // controller guards from block 0).
         this.addChange('CONTROLLER_GUARD', '2.0.0',1790812800,0,0,0,0,0);
 
+        // MINT-1 : per-address mint allowance counts SELF-MINTED supply only.
+        // Below this activation the MINT_ADDRESS_MAX check measures MINT-action
+        // credits to SOURCE (the original behaviour), which also counts tokens the
+        // address merely RECEIVED as another mint's DESTINATION, so a griefer can
+        // exhaust any address's allowance by gifting minted supply to it. At/above
+        // it the check measures the mints table by the action's SOURCE (only mints
+        // the address itself authored count). Gated as its own consensus rule
+        // because the fix is a validity LOOSENING: a MINT that historical processing
+        // rejected ('mint exceeds MINT_ADDRESS_MAX' because of received supply)
+        // becomes valid under the new measure, so an ungated flip forks a
+        // heterogeneous fleet on the first such mint and breaks from-genesis replay
+        // byte-identity. Keyed on block_TIME (not block_index), mirroring
+        // DEPLOY_BASE64_CODE: MINT runs on BTC, LTC and DOGE whose heights diverge
+        // by millions of blocks, so no single shared block height names one cutover
+        // across all three chains, but a single timestamp can. The mainnet timestamp
+        // is the  flag-day-set PLACEHOLDER (2027-01-01 00:00:00 UTC); 
+        // owns picking the real coordinated value, and a divergent value is a fork.
+        // testnet/regtest activate at genesis (no history to preserve; the
+        // e2e/regtest stack exercises the corrected measure from block 0).
+        this.addChange('MINT_SELF_MINTED_ONLY', '2.0.0',1798761600,0,0,0,0,0);
+
+        //  (BonkDAO-class guard): a BINDING poll (VOTE v0 that names a
+        // CALLBACK_CONTRACT, so its finalization can move contract-held value)
+        // must set its own turnout floor: QUORUM required, MIN_VOTERS >= 1
+        // required. Without them a treasury-binding poll with the default
+        // 'balance' weighting is exactly the 2026-07 BonkDAO drain: an attacker
+        // buys a sliver of supply, proposes, and passes it alone while nobody
+        // is watching (see claude/reports/learned-knowledge/2026-07-07_bonkdao-
+        // governance-attack-low-turnout-treasury-drain.md). Signaling polls
+        // (blank CALLBACK_CONTRACT) stay permissive. Gated as its own consensus
+        // rule because the requirement is a validity TIGHTENING: a v0 create
+        // that historical processing accepted becomes invalid, so an ungated
+        // flip forks a heterogeneous fleet on the first such poll and breaks
+        // from-genesis replay byte-identity. Keyed on block_TIME (not
+        // block_index), mirroring DEPLOY_BASE64_CODE: VOTE runs on BTC, LTC and
+        // DOGE whose heights diverge by millions of blocks, so no single shared
+        // block height names one cutover across all three chains, but a single
+        // timestamp can. The mainnet timestamp is the  flag-day-set
+        // PLACEHOLDER (2027-01-01 00:00:00 UTC);  owns picking the real
+        // coordinated value, and a divergent value is a fork. testnet/regtest
+        // activate at genesis (no history to preserve; the e2e/regtest stack
+        // exercises the requirement from block 0).
+        this.addChange('VOTE_BINDING_MINIMUMS', '2.0.0',1798761600,0,0,0,0,0);
+
+        //  (BonkDAO lesson 3): optional timelock between poll finalization
+        // and the binding callback's execution. v0 gains a trailing
+        // CALLBACK_DELAY_BLOCKS field: when set (> 0), the v2 finalize freezes
+        // the tally and settles the deposit as always but DEFERS the callback
+        // EXECUTE to resolved_block + delay (stamped as polls.callback_due_block,
+        // fired by the per-block sweep), giving holders and guardians a reaction
+        // window between a hostile pass and the value actually moving. Below the
+        // activation the field is IGNORED (parsed but nulled, exactly how a
+        // legacy node's setActionParams drops params beyond its format), so
+        // acceptance and callback timing stay byte-identical to old nodes.
+        // Gated as its own consensus rule because honoring the field changes
+        // WHICH BLOCK the callback EXECUTE lands in (different actions rows,
+        // contract_hash, checkpoint preimage): an ungated flip forks a
+        // heterogeneous fleet on the first delayed poll. Keyed on block_TIME
+        // (not block_index), mirroring DEPLOY_BASE64_CODE: VOTE runs on BTC,
+        // LTC and DOGE whose heights diverge by millions of blocks, so no
+        // single shared block height names one cutover across all three
+        // chains, but a single timestamp can. The mainnet timestamp is the
+        //  flag-day-set PLACEHOLDER (2027-01-01 00:00:00 UTC); 
+        // owns picking the real coordinated value, and a divergent value is a
+        // fork. testnet/regtest activate at genesis (no history to preserve;
+        // the e2e/regtest stack exercises the timelock from block 0).
+        this.addChange('VOTE_CALLBACK_TIMELOCK', '2.0.0',1798761600,0,0,0,0,0);
+
+        // : ATTEST v1 canonical id-case normalization. Below this activation
+        // the canonical signing bytes (and the EQUIV ROUND_ID) use the RAW wire
+        // REQUEST_ID case, the original behaviour: a case-mutated replay of a
+        // pending v1 fails ed25519 verification because the hub signed the
+        // lowercase id, and every node rejects it identically. At/above it the
+        // canonical uses the LOWERCASED id, making byte-identity with the hub's
+        // AttestationConsensus._buildCanonical self-contained instead of resting
+        // on the external producer-lowercases invariant. Gated as its own
+        // consensus rule because the switch is a validity LOOSENING: wire bytes a
+        // legacy node rejects (uppercase id, lowercase-signed sigs) verify on an
+        // upgraded node, so an ungated flip lets any attacker split a
+        // heterogeneous fleet with a single case-mutated replay (the reason the
+        // 2026-07-13 inline fix was deferred to this flag-day; see review item
+        // #1979). Keyed on block_TIME (not block_index), mirroring
+        // DEPLOY_BASE64_CODE: ATTEST rides EXECUTE emissions on BTC, LTC and
+        // DOGE, whose heights diverge by millions of blocks, so no single shared
+        // block height names one cutover across all three chains, but a single
+        // timestamp can. The mainnet timestamp is the  flag-day-set
+        // PLACEHOLDER (2027-01-01 00:00:00 UTC);  owns picking the real
+        // coordinated value, and a divergent value is a fork. testnet/regtest
+        // activate at genesis (no history to preserve; the e2e/regtest stack
+        // exercises the self-contained canonical from block 0).
+        this.addChange('ATTEST_CANONICAL_LOWERCASE_ID', '2.0.0',1798761600,0,0,0,0,0);
+
         // Cross-chain royalty enforcement, layered on CONTROLLER_GUARD. Once the guard
         // produces royalty payout_legs (post-CONTROLLER_GUARD), a CROSS-CHAIN listing of
         // a royalty-bearing token needs its legs applied on the PROCEEDS chain, which

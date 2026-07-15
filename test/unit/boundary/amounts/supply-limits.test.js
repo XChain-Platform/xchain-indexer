@@ -494,7 +494,7 @@ describe('Supply & amount boundary tests @regression @tier1', function () {
         });
 
         it('minted so far=49, AMOUNT=1 → exactly at cap → valid', async function () {
-            indexer.indexerDb.getActionCreditDebitAmount.resolves('49');
+            indexer.indexerDb.getSelfMintedAmount.resolves('49');
 
             const params = ['0', 'TEST', '1', '', ''];
             const data   = createBaseData({ ACTION: 'MINT', FORMAT: 0, BLOCK_INDEX: LOW_BLOCK, SOURCE });
@@ -505,7 +505,7 @@ describe('Supply & amount boundary tests @regression @tier1', function () {
         });
 
         it('minted so far=50, AMOUNT=1 → one over cap (MINT_ADDRESS_MAX=50) → invalid', async function () {
-            indexer.indexerDb.getActionCreditDebitAmount.resolves('50');
+            indexer.indexerDb.getSelfMintedAmount.resolves('50');
 
             const params = ['0', 'TEST', '1', '', ''];
             const data   = createBaseData({ ACTION: 'MINT', FORMAT: 0, BLOCK_INDEX: LOW_BLOCK, SOURCE });

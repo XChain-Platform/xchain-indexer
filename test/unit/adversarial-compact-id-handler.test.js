@@ -61,6 +61,7 @@ async function runMint({ destination }) {
     const indexerDb = {
         getTokenInfo:                async () => tokenInfo,
         getActionCreditDebitAmount:  async () => 0,
+        getSelfMintedAmount:         async () => 0,
         validTickerBeforeTxIndex:    async () => true,
         isActionAllowed:             async () => true,
         createMint:                  async (m) => { captured.status = m['STATUS']; },
@@ -78,7 +79,8 @@ async function runMint({ destination }) {
     const action = {
         config: { GAS: 'XCHAIN', NETWORK: 'regtest', ADDRESS: { GAS: SRC_ADDR }, MAX_MEMO_LENGTH: 255 },
         decoderDb: null, indexerDb, util,
-        mapper: { createMappings: async () => {} }
+        mapper: { createMappings: async () => {} },
+        protocolChanges: { isEnabled: async () => true }
     };
 
     const mint   = new Mint(action);
