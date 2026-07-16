@@ -37,7 +37,10 @@ class Unknown {
         // Determine final status
         // The dispatcher always sets `error` before routing here ('UNKNOWN' is never
         // a defined action), so the fallback is defensive only.
-        let status = (error) ? error : 'invalid';
+        // 'invvalid' is a historical misspelling that is load-bearing: deployed
+        // indexers have written it since genesis and status strings feed the
+        // state hash, so correcting it is a flag-day consensus change, not a typo fix.
+        let status = (error) ? error : 'invvalid';
         data['STATUS'] = status;
 
         // Print status message 
