@@ -65,6 +65,7 @@ describe('Xexec (XEXEC) @regression @tier3', function () {
         // that signer is valid: reproduces the single-validator legacy outcome.
         db.getStakeWeightsByCapability    = sinon.stub().resolves([{ pubkey: PUBKEY_A, source: 'S1', weight: '100' }]);
         db.recordCrossChainCallExecution  = sinon.stub().resolves();
+        db.recordCrossChainCallRejection  = sinon.stub().resolves();
         db.createSavepoint                = sinon.stub().resolves('sp1');
         db.releaseSavepoint               = sinon.stub().resolves();
         db.rollbackToSavepoint            = sinon.stub().resolves();
@@ -179,11 +180,65 @@ describe('Xexec (XEXEC) @regression @tier3', function () {
         assert.strictEqual(payloadB64, '');
     });
 
+    it('a garbage-then-valid duplicate for one signer still injects (seen marked AFTER verify; hub/SDK parity)', async function () {
+        // Two equal-weight validators: 3*tally > 2*S needs BOTH (3*100 = 300 <= 400).
+        // Prepend an INVALID entry for B before its genuine one: marking "seen" on
+        // first encounter (the pre-fix order) would suppress B's real signature and
+        // refuse a legitimately-quorate injection (order-dependent quorum under-count).
+        const PUBKEY_B = 'b'.repeat(64);
+        const SIG_B    = '2'.repeat(128);
+        const BADSIG   = '0'.repeat(128);
+        indexer.indexerDb.getValidatorsByCapability.resolves([{ pubkey: PUBKEY_A }, { pubkey: PUBKEY_B }]);
+        indexer.indexerDb.getStakeWeightsByCapability.resolves([
+            { pubkey: PUBKEY_A, source: 'S1', weight: '100' },
+            { pubkey: PUBKEY_B, source: 'S2', weight: '100' },
+        ]);
+        sinon.stub(ed25519, 'verify').callsFake((canon, sig, pk) => sig !== BADSIG);
+        const d = makeDispatch({ validator_signatures: JSON.stringify([
+            { pubkey: PUBKEY_A, sig: SIG_A },
+            { pubkey: PUBKEY_B, sig: BADSIG },   // garbage first
+            { pubkey: PUBKEY_B, sig: SIG_B },    // genuine second
+        ]) });
+        await handler.parse(null, Object.assign(ctx(), { CALL: d }), null);
+        assert.ok(executeStub.parse.calledOnce, 'quorate dispatch must inject');
+        assert.ok(indexer.indexerDb.recordCrossChainCallRejection.notCalled);
+    });
+
     it('refuses insufficient signatures (no execution, no record; the call stays pending)', async function () {
         sinon.stub(ed25519, 'verify').returns(false);
         await handler.parse(null, Object.assign(ctx(), { CALL: makeDispatch() }), null);
         assert.ok(executeStub.parse.notCalled);
         assert.ok(indexer.indexerDb.recordCrossChainCallExecution.notCalled);
+    });
+
+    it('a quorum-starved dispatch records a quorum_not_met rejection (XDISP-1 visibility)', async function () {
+        sinon.stub(ed25519, 'verify').returns(false);
+        await handler.parse(null, Object.assign(ctx(), { CALL: makeDispatch() }), null);
+        assert.ok(indexer.indexerDb.recordCrossChainCallRejection.calledOnce,
+            'the refused injection attempt must be recorded, not just console.warned');
+        const [callId, reason, detail, blockIndex] = indexer.indexerDb.recordCrossChainCallRejection.firstCall.args;
+        assert.strictEqual(callId, CALL_ID);
+        assert.strictEqual(reason, 'quorum_not_met');
+        assert.ok(/insufficient signer stake/.test(detail), 'detail carries the stake-weighted specifics: ' + detail);
+        assert.strictEqual(blockIndex, 200);
+    });
+
+    it('a successful execution never records a rejection', async function () {
+        sinon.stub(ed25519, 'verify').returns(true);
+        await handler.parse(null, Object.assign(ctx(), { CALL: makeDispatch() }), null);
+        assert.ok(indexer.indexerDb.recordCrossChainCallExecution.calledOnce);
+        assert.ok(indexer.indexerDb.recordCrossChainCallRejection.notCalled);
+    });
+
+    it('pre-quorum skips (network mismatch, wrong target, missing snapshot) record NO rejection', async function () {
+        sinon.stub(ed25519, 'verify').returns(false);
+        await handler.parse(null, Object.assign(ctx(), { CALL: makeDispatch({ network: 'mainnet' }) }), null);
+        await handler.parse(null, Object.assign(ctx(), { CALL: makeDispatch({ target_chain: 'LTC' }) }), null);
+        indexer.indexerDb.getValidatorsByCapability.resolves([]);
+        indexer.indexerDb.getStakeWeightsByCapability.resolves([]);
+        await handler.parse(null, Object.assign(ctx(), { CALL: makeDispatch() }), null);
+        assert.ok(indexer.indexerDb.recordCrossChainCallRejection.notCalled,
+            'only a real quorum verdict is a rejection; defers/skips stay silent');
     });
 
     it('defers when the capability snapshot is not mirrored yet', async function () {

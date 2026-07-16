@@ -141,17 +141,34 @@ class Xexec {
             let pk  = String(s.pubkey || '').toLowerCase();
             let sig = String(s.sig || '').toLowerCase();
             if(seen.has(pk)) continue;
-            seen.add(pk);
             if(!/^[0-9a-f]{64}$/.test(pk) || !/^[0-9a-f]{128}$/.test(sig)) continue;
             if(!snapPubkeys.has(pk)) continue;
             if(!ed25519.verify(canonical, sig, pk)) continue;
+            // Mark seen only AFTER the signature verifies, matching the hub
+            // finalizer and the SDK/explorer/sync verifiers (and anchor.js):
+            // marking on first encounter lets a garbage-then-valid pair for one
+            // qualified validator suppress the real signature (order-dependent
+            // quorum under-count, failing a quorate injection closed).
+            seen.add(pk);
             validSigners.push(pk);
         }
         let quorumMet = weighted
             ? swq.meetsStakeThreshold(validators, validSigners)
             : (validSigners.length >= ((N <= 1) ? 1 : Math.max(2 * Math.floor((N - 1) / 3) + 1, Math.ceil((N + 1) / 2))));
         if(!quorumMet){
-            console.warn("\t XEXEC : call=" + String(c.call_id).substring(0,16) + '... : insufficient ' + (weighted ? 'signer stake' : 'valid signatures (' + validSigners.length + '/' + N + ')') + ' - skipping');
+            // Quorum starvation (XDISP-1): the mirrored row's signature set does not
+            // meet quorum against the pinned snapshot. NOT terminal: signature sets
+            // are per-hub and hubs gossip more signatures over time, so the call
+            // stays effective + unexecuted and retries every block. Record the
+            // refusal (node-local diagnostics, upsert per attempt) so a starved
+            // dispatch is visible to operators and to getcrosschaincallresult
+            // instead of leaving only this console line.
+            let detail = weighted
+                ? 'insufficient signer stake (' + validSigners.length + ' valid signers of ' + N + ' snapshot keys)'
+                : 'insufficient valid signatures (' + validSigners.length + '/' + N + ')';
+            console.warn("\t XEXEC : call=" + String(c.call_id).substring(0,16) + '... : ' + detail + ' - skipping');
+            await this.indexerDb.recordCrossChainCallRejection(
+                String(c.call_id).toLowerCase(), 'quorum_not_met', detail, data['BLOCK_INDEX']);
             return;
         }
 

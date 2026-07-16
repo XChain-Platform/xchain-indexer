@@ -36,8 +36,8 @@
  *   3. the BURN/GAS/DONATE/REWARD canonicalization loops
  *   4. the hash-assembly tail (block_index / previous_hash / hash_version fold)
  *   5. utility jsonStringify + getDataHash (the shared preimage serializer)
- *   6. stateCommitment.js reportOrphanStats (documented byte-identical twin
- *      with no prior comparison test)
+ *   6. stateCommitment.js reportOrphanStats (documented byte-identical twin;
+ *      compared RAW, header comment included, unlike the normalized checks)
  *
  * A one-sided edit to any of these forks every sync validator's recomputed
  * hash on the next real block (durable divergence halt fleet-wide). The
@@ -212,14 +212,26 @@ describe('consensus block-hash conformance twins (static drift-lock, ) @regressi
         }
     });
 
-    it('stateCommitment reportOrphanStats is identical (documented twin)', function(){
+    it('stateCommitment reportOrphanStats block is BYTE-identical (documented twin, comments included)', function(){
         const pair = loadPair(this, 'src/stateCommitment.js', 'src/stateCommitment.js');
         if(!pair) return;
+        // The twin contract covers the whole block: the "---- Orphan-node
+        // observability" header comment THROUGH the end of reportOrphanStats.
+        // Raw byte comparison, no comment-stripping or whitespace-normalizing:
+        // the header comment itself carries the twin contract.
         const sig = /async function reportOrphanStats\(query, chain, network, opts\)\{/;
+        function extractTwinBlock(src, from){
+            const marker = '// ---- Orphan-node observability';
+            const i = src.indexOf(marker);
+            assert.ok(i !== -1, 'orphan-observability marker not found in ' + from);
+            const tail = src.slice(i);
+            const fn = extractFunction(tail, sig, from);
+            return tail.slice(0, tail.indexOf(fn) + fn.length);
+        }
         assert.strictEqual(
-            normalize(extractFunction(pair.indexer, sig, 'xchain-indexer/src/stateCommitment.js')),
-            normalize(extractFunction(pair.sync, sig, 'xchain-sync/src/stateCommitment.js')),
-            'reportOrphanStats drifted between xchain-indexer and xchain-sync stateCommitment.js; ' +
-            'the header comment declares it a keep-BYTE-IDENTICAL twin');
+            extractTwinBlock(pair.indexer, 'xchain-indexer/src/stateCommitment.js'),
+            extractTwinBlock(pair.sync, 'xchain-sync/src/stateCommitment.js'),
+            'reportOrphanStats block drifted between xchain-indexer and xchain-sync stateCommitment.js; ' +
+            'the header comment declares it a keep-BYTE-IDENTICAL twin (comments included)');
     });
 });

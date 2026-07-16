@@ -34,7 +34,7 @@ const assert  = require('assert');
 const Utility = require('../../src/utility');
 const {
     buildStateHashData, isPollFinalizeStateHashActive, POLL_FINALIZE_STATE_HASH_ACTIVATION,
-    TOKEN_SUPPLY_STATE_HASH_ACTIVATION,
+    TOKEN_SUPPLY_STATE_HASH_ACTIVATION, INDEX_MAP_STATE_HASH_ACTIVATION,
 } = require('../../src/stateHash');
 
 const util = new Utility();
@@ -47,8 +47,8 @@ function dbFor(results, completedId){
 }
 
 // With activationDelay=null (skips the 4 deactivation queries), completedId=null
-// (skips the credits query), the index-map gate inert on regtest, and the
-// token_supply regtest gate disarmed for this suite (see before/after), the
+// (skips the credits query), and the index-map + token_supply regtest gates
+// disarmed for this suite (see before/after), the
 // doQuery call order is: slashes x4, request_status x2, cooldown x2,
 // anchor_invalid x1. The poll_finalize slot is appended when its gate is active.
 function baseResults(){ return [[], [], [], [], [], [], [], [], []]; }
@@ -82,8 +82,16 @@ describe('state_hash poll-finalize class (VOTE flag-day, armed) @regression', fu
     // Isolate this suite from the token_supply class (also armed on regtest):
     // its query slot would shift the canned call-order mock.
     let tokenPrev;
-    before(function(){ tokenPrev = TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest; TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest = 999999999; });
-    after(function(){ TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest = tokenPrev; });
+    // (index-map likewise: armed on regtest since 2026-07-16, )
+    let indexPrev;
+    before(function(){
+        tokenPrev = TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest; TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest = 999999999;
+        indexPrev = INDEX_MAP_STATE_HASH_ACTIVATION.regtest;    INDEX_MAP_STATE_HASH_ACTIVATION.regtest    = 999999999;
+    });
+    after(function(){
+        TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest = tokenPrev;
+        INDEX_MAP_STATE_HASH_ACTIVATION.regtest    = indexPrev;
+    });
 
     it('gate: regtest armed from genesis; mainnet/testnet armed per chain at real heights; coin-less lookup fail-inert', function(){
         assert.strictEqual(isPollFinalizeStateHashActive(0, 'regtest'), true, 'regtest armed at 0 (fresh stacks exercise the class)');

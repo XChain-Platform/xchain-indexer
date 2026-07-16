@@ -35,7 +35,9 @@ class Unknown {
     async parse(params, data, error){
 
         // Determine final status
-        let status = (error) ? error : 'invvalid';
+        // The dispatcher always sets `error` before routing here ('UNKNOWN' is never
+        // a defined action), so the fallback is defensive only.
+        let status = (error) ? error : 'invalid';
         data['STATUS'] = status;
 
         // Print status message 

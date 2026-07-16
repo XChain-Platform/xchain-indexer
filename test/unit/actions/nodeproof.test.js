@@ -200,6 +200,22 @@ describe('NodeProof (NODEPROOF) @regression @tier3', function () {
         assert.ok(indexer.indexerDb.createNodeProofVerification.calledOnce);
     });
 
+    it('a garbage-then-valid duplicate for one verifier still passes (seen marked AFTER verify; hub/SDK parity)', async function () {
+        // V=2 -> quorum 2, so BOTH verifiers must count. Prepend an INVALID entry for
+        // V2 before its genuine one: marking "seen" on first encounter (the pre-fix
+        // order) would suppress V2's real signature and reject a legitimately-quorate
+        // verdict (order-dependent quorum under-count).
+        indexer.config.FULLNODE = Object.assign({}, indexer.config.FULLNODE, { GENESIS_VERIFIERS: [PUBKEY_V, PUBKEY_V2] });
+        const BADSIG = '0'.repeat(128);
+        ed25519.verify.callsFake((canon, sig, pk) => sig !== BADSIG);
+        const data = v0Data();
+        await handler.parse(v0Params({
+            challengeId: validChallengeId(), pass: [PUBKEY_P],
+            sigs: [{ pubkey: PUBKEY_V, sig: SIG_V }, { pubkey: PUBKEY_V2, sig: BADSIG }, { pubkey: PUBKEY_V2, sig: SIG_V2 }],
+        }), data, null);
+        assert.strictEqual(data['STATUS'], 'valid');
+    });
+
     it('ignores signatures from non-eligible signers', async function () {
         // V=1 (PUBKEY_V), but the only sig is from an outsider → 0 valid → below quorum.
         const data = v0Data();

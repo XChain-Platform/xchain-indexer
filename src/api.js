@@ -820,7 +820,21 @@ async function startApi(){
                 let latest = await indexer.indexerDb.getLatestBlockIndex();
                 let row    = await indexer.indexerDb.getCrossChainCallExecutionById(String(call_id));
                 if(!row){
-                    return { exists: false, network: indexer.config['NETWORK'], latest_block_index: latest };
+                    let res = { exists: false, network: indexer.config['NETWORK'], latest_block_index: latest };
+                    // Surface refusal diagnostics (XDISP-1): a quorum-starved dispatch has
+                    // no execution row, but the injection pass records WHY it keeps being
+                    // refused. Node-local advisory only (never quorum-verified relay data).
+                    let rejection = await indexer.indexerDb.getCrossChainCallRejectionById(String(call_id));
+                    if(rejection){
+                        res.rejection = {
+                            reason:      rejection.reason,
+                            detail:      rejection.detail || '',
+                            attempts:    Number(rejection.attempts),
+                            first_block: Number(rejection.first_block),
+                            last_block:  Number(rejection.last_block)
+                        };
+                    }
+                    return res;
                 }
                 return {
                     exists:               true,

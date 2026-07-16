@@ -65,20 +65,27 @@ describe('state_hash index-map class (id-determinism P4) @regression', function(
     // Isolate this suite from the poll_finalize / token_supply classes (armed on
     // regtest since 2026-07-07): their query slots would shift the canned
     // call-order mock and their preimage keys would break the shape assertions.
-    let pollPrev, tokenPrev;
+    // The index-map class itself is also disarmed suite-locally (armed on regtest
+    // since 2026-07-16, ) so the inert-shape tests below still exercise the
+    // below-threshold preimage; withArmed() re-arms per test.
+    let pollPrev, tokenPrev, indexPrev;
     before(function(){
         pollPrev  = POLL_FINALIZE_STATE_HASH_ACTIVATION.regtest;
         tokenPrev = TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest;
+        indexPrev = INDEX_MAP_STATE_HASH_ACTIVATION.regtest;
         POLL_FINALIZE_STATE_HASH_ACTIVATION.regtest = 999999999;
         TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest  = 999999999;
+        INDEX_MAP_STATE_HASH_ACTIVATION.regtest     = 999999999;
     });
     after(function(){
         POLL_FINALIZE_STATE_HASH_ACTIVATION.regtest = pollPrev;
         TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest  = tokenPrev;
+        INDEX_MAP_STATE_HASH_ACTIVATION.regtest     = indexPrev;
     });
 
-    it('gate: regtest inert by default; mainnet/testnet armed at genesis (height 0); at/above threshold activates', function(){
-        assert.strictEqual(isIndexMapStateHashActive(7, 'regtest'), false, 'regtest placeholder is inert');
+    it('gate: every network armed at genesis (height 0, regtest via ); at/above threshold activates', function(){
+        assert.strictEqual(indexPrev, 0, 'regtest armed from genesis ');
+        assert.strictEqual(isIndexMapStateHashActive(7, 'regtest'), false, 'suite-local disarm holds (inert-shape tests depend on it)');
         assert.strictEqual(isIndexMapStateHashActive(7, 'mainnet'), true, 'mainnet armed at genesis (0)');
         assert.strictEqual(isIndexMapStateHashActive(7, 'testnet'), true, 'testnet armed at genesis (0)');
         assert.strictEqual(isIndexMapStateHashActive(7, 'nonexistent'), false, 'unknown network -> off (safe)');

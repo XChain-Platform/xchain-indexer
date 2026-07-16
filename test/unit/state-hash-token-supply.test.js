@@ -31,7 +31,7 @@ const assert  = require('assert');
 const Utility = require('../../src/utility');
 const {
     buildStateHashData, isTokenSupplyStateHashActive, TOKEN_SUPPLY_STATE_HASH_ACTIVATION,
-    POLL_FINALIZE_STATE_HASH_ACTIVATION,
+    POLL_FINALIZE_STATE_HASH_ACTIVATION, INDEX_MAP_STATE_HASH_ACTIVATION,
 } = require('../../src/stateHash');
 
 const util = new Utility();
@@ -44,8 +44,8 @@ function dbFor(results, completedId){
 }
 
 // With activationDelay=null (skips the 4 deactivation queries), completedId=null
-// (skips the credits query), the index-map gate inert on regtest, and the
-// poll_finalize regtest gate disarmed for this suite (see before/after), the
+// (skips the credits query), and the index-map + poll_finalize regtest gates
+// disarmed for this suite (see before/after), the
 // doQuery call order is: slashes x4, request_status x2, cooldown x2,
 // anchor_invalid x1. The token_supply slot is appended when its gate is active.
 function baseResults(){ return [[], [], [], [], [], [], [], [], []]; }
@@ -66,9 +66,16 @@ describe('state_hash token-supply class (F-1 closure, armed) @regression', funct
 
     // Isolate this suite from the poll_finalize class (also armed on regtest):
     // its query slot would shift the canned call-order mock.
-    let pollPrev;
-    before(function(){ pollPrev = POLL_FINALIZE_STATE_HASH_ACTIVATION.regtest; POLL_FINALIZE_STATE_HASH_ACTIVATION.regtest = 999999999; });
-    after(function(){ POLL_FINALIZE_STATE_HASH_ACTIVATION.regtest = pollPrev; });
+    // (index-map likewise: armed on regtest since 2026-07-16, )
+    let pollPrev, indexPrev;
+    before(function(){
+        pollPrev  = POLL_FINALIZE_STATE_HASH_ACTIVATION.regtest; POLL_FINALIZE_STATE_HASH_ACTIVATION.regtest = 999999999;
+        indexPrev = INDEX_MAP_STATE_HASH_ACTIVATION.regtest;     INDEX_MAP_STATE_HASH_ACTIVATION.regtest    = 999999999;
+    });
+    after(function(){
+        POLL_FINALIZE_STATE_HASH_ACTIVATION.regtest = pollPrev;
+        INDEX_MAP_STATE_HASH_ACTIVATION.regtest     = indexPrev;
+    });
 
     it('gate: regtest armed from genesis; mainnet/testnet armed per chain; coin-less lookup fail-inert', function(){
         assert.strictEqual(isTokenSupplyStateHashActive(0, 'regtest'), true, 'regtest armed at 0');

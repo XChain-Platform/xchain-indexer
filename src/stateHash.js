@@ -84,22 +84,23 @@ const STATE_HASH_VERSION = 1;
 //
 // Gated on the chain's OWN local block_index (like state_commitment_activation, not
 // the BTC-anchored snapshot_block): each chain arms at its own flag-day height.
-// DEFAULT INERT on every network (placeholder 999999999) so landing this is a strict
-// no-op on the live fleet - the new class is omitted from the preimage below the
-// threshold, leaving state_hash byte-identical to today. Arm fleet-atomically (set
-// the real per-chain heights) at the coordinated mesh deploy, exactly as WI-2 /
-// state_commitment did. No STATE_HASH_VERSION bump: a block is unambiguously pre- or
-// post-activation on a given network, so the two preimage shapes cannot collide.
+// Landed DEFAULT INERT (placeholder 999999999) so shipping the class was a strict
+// no-op on the live fleet - the class is omitted from the preimage below the
+// threshold, leaving state_hash byte-identical to the pre-feature shape. Armed
+// fleet-atomically (real per-chain heights) exactly as WI-2 / state_commitment
+// did; regtest was the last inert key (armed 2026-07-16, ). No
+// STATE_HASH_VERSION bump: a block is unambiguously pre- or post-activation on a
+// given network, so the two preimage shapes cannot collide.
 const INDEX_MAP_STATE_HASH_ACTIVATION = {
-    // ARM HERE: replace 999999999 (the inert sentinel) with the chain's OWN local
-    // block_index at/after which the index-map folds into state_hash. One-way door: once a
-    // chain crosses its height, any process still on the inert value (or a different height)
-    // computes a divergent state_hash and a follower HALTS, so every indexer + sync process
-    // must run this exact map BEFORE the chain reaches the height. Keep this map
-    // byte-identical to the xchain-{indexer,sync}/src/stateHash.js twin.
+    // Heights are the chain's OWN local block_index at/after which the index-map
+    // folds into state_hash. One-way door: once a chain crosses its height, any
+    // process still on a different height computes a divergent state_hash and a
+    // follower HALTS, so every indexer + sync process must run this exact map
+    // BEFORE the chain reaches the height. Keep this map byte-identical to the
+    // xchain-{indexer,sync}/src/stateHash.js twin.
     mainnet: 0,           // ARMED at the genesis launch reindex (folds from genesis, no mid-chain flag-day)
     testnet: 0,           // ARMED at the genesis launch reindex (clean reseed accompanies it)
-    regtest: 999999999,   // ARM: current tip + N, or 0 + clean reseed
+    regtest: 0,           // ARMED from genesis 2026-07-16 : fresh stacks exercise the class end to end; pre-existing regtest venues need a clean reseed
 };
 
 // Whether the index-map class is folded into state_hash at `blockIndex` on `network`.
@@ -320,8 +321,8 @@ async function buildStateHashData(db, blockIndex, opts){
     } catch(e){ if(e && typeof e.errno === 'number' && e.errno !== 1146 && e.errno !== 1054) throw e; /* table/columns may not exist on older schemas */ }
 
     // 7. Index-map delta (id-determinism P4): the (id, string) pairs whose deterministic
-    //    id was first assigned at block B. GATED INERT by default - included ONLY at/after
-    //    the per-chain INDEX_MAP_STATE_HASH_ACTIVATION height, so below it the two keys are
+    //    id was first assigned at block B. Included ONLY at/after the per-chain
+    //    INDEX_MAP_STATE_HASH_ACTIVATION height, so below it the two keys are
     //    omitted and the preimage is byte-identical to the pre-feature shape (no fleet halt).
     //    Deliberately hashes the surrogate id (the value under protection); sound only because
     //    every id-assignment path is now deterministic (compaction + F1a). Two appended

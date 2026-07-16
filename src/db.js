@@ -7197,6 +7197,43 @@ class Database {
              VALUES (?, ?, ?, ?, ?, ?, ?)`,
             [action_index, String(call_id).toLowerCase(), execute_action_index,
              result_status, return_payload_b64, gas_used, block_index]);
+        // The call made it in: any refusal diagnostics recorded while it was
+        // starved (cross_chain_call_rejections) are now stale evidence.
+        await this.clearCrossChainCallRejection(call_id);
+    }
+
+    // Record a REFUSED injection attempt for a dispatch row (XDISP-1 visibility).
+    // Node-local diagnostics only: upserted per attempt, never consulted by the
+    // injection pass (the call keeps retrying every block), deleted when the call
+    // finally executes. See src/sql/cross_chain_call_rejections.sql.
+    async recordCrossChainCallRejection(call_id, reason, detail, block_index){
+        await this.doQuery(
+            `INSERT INTO cross_chain_call_rejections
+             (call_id, reason, detail, attempts, first_block, last_block)
+             VALUES (?, ?, ?, 1, ?, ?)
+             ON DUPLICATE KEY UPDATE
+                reason     = VALUES(reason),
+                detail     = VALUES(detail),
+                attempts   = attempts + 1,
+                last_block = VALUES(last_block)`,
+            [String(call_id).toLowerCase(), String(reason),
+             detail == null ? null : String(detail).substring(0, 250),
+             block_index, block_index]);
+    }
+
+    // Drop the refusal diagnostics for a call (called once it executes).
+    async clearCrossChainCallRejection(call_id){
+        await this.doQuery(
+            `DELETE FROM cross_chain_call_rejections WHERE call_id = ?`,
+            [String(call_id).toLowerCase()]);
+    }
+
+    // Refusal diagnostics for a single call (getcrosschaincallresult enrichment).
+    async getCrossChainCallRejectionById(call_id){
+        let rows = await this.doQuery(
+            `SELECT * FROM cross_chain_call_rejections WHERE call_id = ? LIMIT 1`,
+            [String(call_id).toLowerCase()]);
+        return rows.length > 0 ? rows[0] : null;
     }
 
     // Execution outcome for a call on THIS (target) chain (getcrosschaincallresult RPC).

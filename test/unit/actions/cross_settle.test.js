@@ -274,6 +274,24 @@ describe('Cross_Settle action handler @regression @tier1', function () {
         assert.ok(indexer.indexerDb.recordCrossChainSettlement.calledOnce);
     });
 
+    it('a garbage-then-valid duplicate for one signer still settles (seen marked AFTER verify; hub/SDK parity)', async function () {
+        // N=2 -> quorum 2, so BOTH signers must count. Prepend an INVALID entry for
+        // the second signer before its genuine one: marking "seen" on first encounter
+        // (the pre-fix order) would suppress the real signature and skip a
+        // legitimately-quorate settlement (order-dependent quorum under-count).
+        const { match, sigs } = signMatch(makeMatch(), 2);
+        match.validator_signatures = JSON.stringify([
+            sigs[0],
+            { pubkey: sigs[1].pubkey, sig: '0'.repeat(128) },  // garbage first
+            sigs[1],                                           // genuine second
+        ]);
+        indexer.indexerDb.getValidatorsByCapability.resolves(snapFor(match, 2));
+        const data = makeData({ MATCH: match });
+        await handler.parse(null, data, null);
+        assert.strictEqual(data['STATUS'], 'valid');
+        assert.ok(indexer.indexerDb.recordCrossChainSettlement.calledOnce);
+    });
+
     it('rejects a single signature at N=3 (majority floor, not bare 2f+1)', async function () {
         const { match } = signMatch(makeMatch(), 1); // 2f+1 alone would accept this
         indexer.indexerDb.getValidatorsByCapability.resolves(snapFor(match, 3));

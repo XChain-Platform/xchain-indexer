@@ -400,6 +400,30 @@ describe('Xcall (XCALL) @regression @tier3', function () {
             assert.strictEqual(stub.firstCall.args[0], expected);
         });
 
+        it('a garbage-then-valid duplicate for one signer still completes (seen marked AFTER verify; hub/SDK parity)', async function () {
+            // Two equal-weight validators: 3*tally > 2*S needs BOTH (3*100 = 300 <= 400).
+            // Prepend an INVALID entry for B before its genuine one: marking "seen" on
+            // first encounter (the pre-fix order) would suppress B's real signature and
+            // skip a legitimately-quorate result (order-dependent quorum under-count).
+            const PUBKEY_B = 'b'.repeat(64);
+            const SIG_B    = '2'.repeat(128);
+            const BADSIG   = '0'.repeat(128);
+            indexer.indexerDb.getStakeWeightsByCapability.resolves([
+                { pubkey: PUBKEY_A, source: 'S1', weight: '100' },
+                { pubkey: PUBKEY_B, source: 'S2', weight: '100' },
+            ]);
+            sinon.stub(ed25519, 'verify').callsFake((canon, sig, pk) => sig !== BADSIG);
+            indexer.indexerDb.getCrossChainCallRequestById.resolves(makeRequestRow());
+            const row = makeResultRow({ validator_signatures: JSON.stringify([
+                { pubkey: PUBKEY_A, sig: SIG_A },
+                { pubkey: PUBKEY_B, sig: BADSIG },   // garbage first
+                { pubkey: PUBKEY_B, sig: SIG_B },    // genuine second
+            ]) });
+            await handler.processResult(row, ctx());
+            assert.ok(indexer.indexerDb.updateCrossChainCallRequestStatus.calledOnceWith(
+                'c'.repeat(64), 'completed', 'ok', '"42"', 200));
+        });
+
         it('refuses insufficient signatures (nothing flips, nothing injects, NO idempotency row)', async function () {
             sinon.stub(ed25519, 'verify').returns(false);
             indexer.indexerDb.getCrossChainCallRequestById.resolves(makeRequestRow());

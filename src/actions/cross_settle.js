@@ -127,10 +127,15 @@ class Cross_Settle {
             let pk  = String(s.pubkey || '').toLowerCase();
             let sig = String(s.sig || '').toLowerCase();
             if(seen.has(pk)) continue;
-            seen.add(pk);
             if(!/^[0-9a-f]{64}$/.test(pk) || !/^[0-9a-f]{128}$/.test(sig)) continue;
             if(!snapPubkeys.has(pk)) continue;
             if(!ed25519.verify(canonical, sig, pk)) continue;
+            // Mark seen only AFTER the signature verifies, matching the hub
+            // finalizer and the SDK/explorer/sync verifiers (and anchor.js):
+            // marking on first encounter lets a garbage-then-valid pair for one
+            // qualified validator suppress the real signature (order-dependent
+            // quorum under-count, fails quorate settlements closed).
+            seen.add(pk);
             validSigners.push(pk);
         }
         let quorumMet = weighted

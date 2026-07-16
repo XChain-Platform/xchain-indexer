@@ -33,6 +33,7 @@ const ed25519 = require('../ed25519.js');
 const swq     = require('../stake_weighted_quorum.js');
 const eq      = require('../equivocation_header.js');
 const ProviderRegistry = require('../attestation/providerRegistry.js');
+const { rethrowIfInfraFault } = require('./faultGuard.js');
 
 class Attest {
 
@@ -471,6 +472,10 @@ class Attest {
                     if(callbackActionIndex)
                         await this.indexerDb.setAttestationResponseCallbackIndex(data['ACTION_INDEX'], callbackActionIndex);
                 } catch(e){
+                    // Infra faults (VM host down, DB driver errno) must halt the block
+                    // rather than commit a locally-dropped callback that forks
+                    // contract_hash against healthy peers (see faultGuard.js).
+                    rethrowIfInfraFault(e);
                     console.warn('Attestation callback injection failed:', e);
                 }
             }
@@ -534,6 +539,10 @@ class Attest {
                 );
             }
         } catch(e){
+            // This catch only absorbs older-schema gaps (missing table/column);
+            // a driver-level fault (deadlock, lock-wait timeout) must halt the
+            // block or this validator alone drops the stat rows (faultGuard.js).
+            rethrowIfInfraFault(e);
             console.warn('Attestation expire: missed_count update failed:', e);
         }
 
@@ -541,6 +550,8 @@ class Attest {
         try {
             await this._injectExpiredCallback(request, data);
         } catch(e){
+            // Same infra-fault gate as the response-path callback above (faultGuard.js).
+            rethrowIfInfraFault(e);
             console.warn('Attestation expiry callback failed:', e);
         }
 

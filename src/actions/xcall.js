@@ -41,6 +41,7 @@ const crypto  = require('crypto');
 const ed25519 = require('../ed25519.js');
 const swq     = require('../stake_weighted_quorum.js');
 const eq      = require('../equivocation_header.js');
+const { rethrowIfInfraFault } = require('./faultGuard.js');
 
 // Mirrored from the canonical constants in
 // xchain-documentation/protocol/constants.js (same convention as the
@@ -264,6 +265,10 @@ class Xcall {
         try {
             await this._injectCallback(request, data, 'expired', '');
         } catch(e){
+            // An infra fault (VM host down, DB driver errno) is not a callback outcome:
+            // halt so the block retries, instead of committing a locally-dropped
+            // callback that forks contract_hash against healthy peers (faultGuard.js).
+            rethrowIfInfraFault(e);
             console.warn('XCALL expiry callback failed:', e);
         }
 
@@ -315,10 +320,15 @@ class Xcall {
             let pk  = String(s.pubkey || '').toLowerCase();
             let sig = String(s.sig || '').toLowerCase();
             if(seen.has(pk)) continue;
-            seen.add(pk);
             if(!/^[0-9a-f]{64}$/.test(pk) || !/^[0-9a-f]{128}$/.test(sig)) continue;
             if(!snapPubkeys.has(pk)) continue;
             if(!ed25519.verify(canonical, sig, pk)) continue;
+            // Mark seen only AFTER the signature verifies, matching the hub
+            // finalizer and the SDK/explorer/sync verifiers (and anchor.js):
+            // marking on first encounter lets a garbage-then-valid pair for one
+            // qualified validator suppress the real signature (order-dependent
+            // quorum under-count, flipping a quorate result verdict closed).
+            seen.add(pk);
             validSigners.push(pk);
         }
         let quorumMet = weighted
@@ -423,6 +433,9 @@ class Xcall {
             if(callbackActionIndex)
                 await this.indexerDb.setCrossChainCallCallbackIndex(callId, callbackActionIndex);
         } catch(e){
+            // Infra faults must halt the block, not record a callback-less result
+            // this validator alone commits (see faultGuard.js).
+            rethrowIfInfraFault(e);
             console.warn('XCALL result callback injection failed:', e);
         }
 

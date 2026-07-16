@@ -147,12 +147,17 @@ const EMPTY_CONSTANTS = (function(){
 })();
 
 // ---- Orphan-node observability (read-only; SPV spec §4.3) -------------------
+// TWIN PAIR: xchain-indexer/src/stateCommitment.js and xchain-sync/src/
+// stateCommitment.js each carry this comment + function; keep the whole block
+// BYTE-IDENTICAL, comments included (drift-guarded in both repos by
+// test/unit/blockhash-conformance-twin.test.js).
+//
 // Reports total vs reachable internal nodes in the content-addressed COW
 // state_tree_nodes store so unbounded growth (reorg orphans + per-block stake-
-// subtree churn) is measurable. Reachability marks from the UNION of EVERY
-// retained state_tree_roots row's balances_root + stakes_root: the explorer SPV
-// proof server descends historical roots, so a node is live if ANY retained root
-// reaches it.
+// subtree buildFull churn) is measurable. Reachability marks from the UNION of
+// EVERY retained state_tree_roots row's balances_root + stakes_root: the
+// explorer SPV proof server descends historical roots, so a node is live if
+// ANY retained root reaches it.
 //
 // Deliberately does NOT delete. A safe reclaiming sweep must serialize against
 // block-root insertion: a content-addressed node orphaned by a reorg is commonly
@@ -164,7 +169,7 @@ const EMPTY_CONSTANTS = (function(){
 // retained historical roots otherwise pin).
 //
 // `query(sql, args)` MUST run on a POOLED (non-transaction) connection so this
-// never shares the block-processing transaction. Returns
+// never shares the caller's block-processing/apply transaction. Returns
 // { totalNodes, reachableNodes, orphanCount, reachabilitySkipped }.
 async function reportOrphanStats(query, chain, network, opts){
     opts = opts || {};
