@@ -362,8 +362,26 @@ describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () 
             let byType = Object.fromEntries(btcDb.rewards.map(r => [r.reward_type, r]));
             // anchor_BTC is v4/v5-derived at/above the flag: pinned to the frozen constant.
             assert.strictEqual(byType['anchor_BTC'].amount, '10.00000000');
-            // anchor_archive is never v4/v5-derived: the operator-tunable amount is kept as archived.
-            assert.strictEqual(byType['anchor_archive'].amount, '999.00000000');
+            // anchor_archive is v6-derived at/above ITS flag-day (, regtest = genesis):
+            // pinned to the frozen ARCHIVE constant for the same recovered==live reason.
+            assert.strictEqual(byType['anchor_archive'].amount, '10.00000000');
+        });
+
+        it('keeps the archived anchor_archive amount below the ARCHIVE_REWARD flag-day (legacy push era)', async function () {
+            // Below the archive flag-day the reward was genuinely operator-tunable and
+            // hub-pushed, so the archived amount IS what live nodes credited; pinning
+            // it would fork the other way.
+            let arMod = require('../../src/anchor_reward_activation.js');
+            let saved = arMod.ARCHIVE_REWARD_ACTIVATION.regtest;
+            arMod.ARCHIVE_REWARD_ACTIVATION.regtest = 999999999;           // pin the flag-day dormant
+            try {
+                let { v1 } = buildBatch(0, [rawMatch('m1')], oracleKeys, crossKeys,
+                                        { rewards: [ reward({ reward_type: 'anchor_archive', round_number: 3, amount: '2.50000000' }) ] });
+                let btcDb = rewardBtcDbStub();
+                let report = await new AnchorRecovery(memDb([v1], []), Object.assign({ btcDb }, quiet)).run();
+                assert.strictEqual(report.verified, 1);
+                assert.strictEqual(btcDb.rewards[0].amount, '2.50000000');
+            } finally { arMod.ARCHIVE_REWARD_ACTIVATION.regtest = saved; }
         });
 
         it('rejects an archive claiming a derived reward type (oracle_round must never ride the archive)', async function () {

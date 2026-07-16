@@ -27,7 +27,7 @@
 // checkpoint_seq + the state hashes). Version 2 is an archive continuation chunk with
 // no checkpoint identity of its own, so it is never a getanchoraction match. Kept here
 // as the single source of truth for both the SQL filter and the tests.
-const CHECKPOINT_VERSIONS = [0, 1, 3, 4, 5];
+const CHECKPOINT_VERSIONS = [0, 1, 3, 4, 5, 6];
 
 // A DOGE txid as the hub announces it (XANC_V0_DONE.txid / XANC_FINALIZED.txid).
 const TXID_RE = /^[0-9a-fA-F]{64}$/;

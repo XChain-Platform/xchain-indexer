@@ -64,8 +64,41 @@ function isAnchorRewardActive(snapshotBlock, network){
     return sb >= threshold;
 }
 
+// Archive-reward re-derivation flag-day . Same shape as ANCHOR_REWARD_ACTIVATION,
+// gating the ARCHIVE leg: at/above this BTC-anchored snapshot_block the elected archive
+// leader emits a publisher-bearing archive anchor (v6 = the v1 archive anchor + the same
+// PUBLISHER|ATTEST_SIG_COUNT|... tail as v4/v5, attested over an 'anchor_archive' XANCPUB
+// canonical) and the indexer DERIVES the anchor_archive reward from those bytes; the
+// key-authenticated pushvalidatorrewards rail is rejected for anchor_archive, closing the
+// insider-with-key forge surface the per-chain flag-day left open. Below the threshold the
+// legacy v1 + push path stands and v6 is rejected.
+const ARCHIVE_REWARD_ACTIVATION = {
+    mainnet: 983000,      // PLACEHOLDER ~2027-01-01 ( flag-day set; arm with the real height before deploy)
+    testnet: 0,
+    regtest: 0,
+};
+
+// The frozen archive-publish reward, signed into the archive XANCPUB attestation and
+// re-derived by the indexer, never from the wire. Kept equal to the hub's historical
+// default (ANCHOR_REWARD_PER_PUBLISH = '10.00000000'). Changing it is itself a flag-day.
+const ARCHIVE_REWARD_AMOUNT = '10.00000000';
+
+// Whether the anchor_archive reward is DERIVED from chain (vs pushed) for an archive
+// anchor whose BTC-anchored snapshot is at `snapshotBlock` on `network`. Below the
+// threshold -> off (legacy push path; v6 rejected). Unknown network -> off (safe).
+function isArchiveRewardActive(snapshotBlock, network){
+    let sb = parseInt(snapshotBlock);
+    if(!Number.isFinite(sb)) return false;
+    let threshold = ARCHIVE_REWARD_ACTIVATION[network];
+    if(threshold === undefined) return false;
+    return sb >= threshold;
+}
+
 module.exports = {
     ANCHOR_REWARD_ACTIVATION,
     ANCHOR_REWARD_AMOUNT,
-    isAnchorRewardActive
+    isAnchorRewardActive,
+    ARCHIVE_REWARD_ACTIVATION,
+    ARCHIVE_REWARD_AMOUNT,
+    isArchiveRewardActive
 };

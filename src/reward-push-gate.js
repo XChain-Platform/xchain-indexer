@@ -34,12 +34,17 @@
 // `WHERE reward_type=?` + MIN(pubkey) collapse, deleting the legitimate derived
 // row and forking that node from the fleet. Canonicalizing at the ingest boundary
 // forecloses both: no lowercase form can slip the gate or create a colliding
-// duplicate. Non-chain reward types (anchor_archive, oracle_round, ...) pass
-// through unchanged.
+// duplicate. anchor_archive is canonicalized to full lowercase for the same
+// reason: its  flag-day gate compares case-sensitively while the derived
+// row is written as 'anchor_archive', so a mixed-case push (e.g. 'Anchor_Archive')
+// would otherwise slip the gate and collation-collide with the derived winner.
+// Other reward types (oracle_round, ...) pass through unchanged.
 function canonicalizeRewardType(type){
     let str = String(type == null ? '' : type);
     let m   = /^anchor_(btc|ltc|doge)$/i.exec(str);
-    return m ? 'anchor_' + m[1].toUpperCase() : str;
+    if(m) return 'anchor_' + m[1].toUpperCase();
+    if(/^anchor_archive$/i.test(str)) return 'anchor_archive';
+    return str;
 }
 
 module.exports = { canonicalizeRewardType };

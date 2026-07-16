@@ -56,8 +56,15 @@ describe('canonicalizeRewardType() forge-gate normalization @regression @tier1',
         assert.strictEqual(canonicalizeRewardType('anchor_DOGE'), 'anchor_DOGE');
     });
 
-    it('passes non-chain reward types through verbatim (no over-normalization)', function () {
+    it('lowercases anchor_archive to its canonical form (the  gate is case-sensitive)', function () {
         assert.strictEqual(canonicalizeRewardType('anchor_archive'), 'anchor_archive');
+        assert.strictEqual(canonicalizeRewardType('Anchor_Archive'), 'anchor_archive');
+        assert.strictEqual(canonicalizeRewardType('ANCHOR_ARCHIVE'), 'anchor_archive');
+        // A decorated variant is not the archive type; left alone.
+        assert.strictEqual(canonicalizeRewardType('anchor_archive_x'), 'anchor_archive_x');
+    });
+
+    it('passes non-chain reward types through verbatim (no over-normalization)', function () {
         assert.strictEqual(canonicalizeRewardType('oracle_round'),   'oracle_round');
         assert.strictEqual(canonicalizeRewardType('attest_fee'),     'attest_fee');
         // An unknown anchor_ subtype is not a live chain, so it is not rewritten.

@@ -955,9 +955,11 @@ async function startApi(){
         // are rejected outright.
         // #5311 (staged retirement): per-chain anchor rewards become on-chain DERIVED
         // at/above the ANCHOR_REWARD flag-day, so this endpoint rejects them there (see
-        // the gate below). It remains the transport for anchor_archive and pre-flag-day
-        // rounds until pre-v4 history is buried, at which point the whole handler + its
-        // WRITE_METHODS entry are deleted (the decisive close of the forge vector).
+        // the gate below).  extends the same retirement to anchor_archive at/above
+        // the ARCHIVE_REWARD flag-day (derived from the ANCHOR v6 publisher attestation).
+        // The handler remains the transport for pre-flag-day rounds until pre-v4/pre-v6
+        // history is buried, at which point the whole handler + its WRITE_METHODS entry
+        // are deleted (the decisive close of the forge vector).
         // Body: { round, reward_type, block_index, rewards: [{pubkey, amount}, ...] }
         async pushvalidatorrewards({round, reward_type, block_index, rewards}){
             if(round === undefined || round === null)
@@ -980,13 +982,23 @@ async function startApi(){
             // reward (anchor_<CHAIN>) is DERIVED on-chain from the ANCHOR v4/v5 publisher
             // attestation, so accepting an unauthenticated push for it is exactly the forge
             // vector this change retires; reject it (defense in depth; the upgraded hub no
-            // longer pushes it). anchor_archive (not derived from v4/v5) and pre-flag-day
-            // anchor_<CHAIN> rewards still push. block_index is the BTC snapshot_block the
-            // flag-day is keyed on. The handler itself stays until pre-v4 history is buried.
+            // longer pushes it). Pre-flag-day anchor_<CHAIN> rewards still push. block_index
+            // is the BTC snapshot_block the flag-day is keyed on. The handler itself stays
+            // until pre-v4/pre-v6 history is buried.
             if(/^anchor_(BTC|LTC|DOGE)$/.test(type) &&
                ar.isAnchorRewardActive(Number(blockIdx), indexer.config && indexer.config['NETWORK']))
                 return { error: 'reward_type ' + type + ' at block ' + blockIdx +
                                 ' is derived on-chain from ANCHOR v4/v5; push retired (#5311)' };
+            // : the same staged retirement for the ARCHIVE leg. At/above the
+            // ARCHIVE_REWARD flag-day anchor_archive is DERIVED on-chain from the ANCHOR v6
+            // publisher attestation, so accepting a key-authenticated push for it is exactly
+            // the insider-with-key forge surface  retires; reject it (the upgraded hub
+            // no longer pushes it). The canonicalizer above pins the type's case so no
+            // collation-variant can slip this case-sensitive comparison.
+            if(type === 'anchor_archive' &&
+               ar.isArchiveRewardActive(Number(blockIdx), indexer.config && indexer.config['NETWORK']))
+                return { error: 'reward_type anchor_archive at block ' + blockIdx +
+                                ' is derived on-chain from ANCHOR v6; push retired ' };
             let written = 0;
             let skipped = 0;
             // apiView(): these writes land on an independent pooled connection. A

@@ -42,6 +42,7 @@
  *   v3 - v0 checkpoint + STATE_ROOT|STATE_ROOT_VERSION|BLOCK_MERKLE_ROOT|BLOCK_MERKLE_VERSION appended before SIG_COUNT (SPV Phase 2)
  *   v4 - v0 checkpoint + PUBLISHER|ATTEST_SIG_COUNT|APUBKEY|ASIG|... appended after the root signature list (anchor-reward re-derivation)
  *   v5 - v3 checkpoint + PUBLISHER|ATTEST_SIG_COUNT|APUBKEY|ASIG|... appended after the root signature list (anchor-reward re-derivation)
+ *   v6 - v1 archive anchor + PUBLISHER|ATTEST_SIG_COUNT|APUBKEY|ASIG|... appended after the root signature list (archive-reward re-derivation, )
  *
  ********************************************************************/
 
@@ -81,6 +82,12 @@ class Anchor {
         // indexer re-derives the reward from these bytes, so the trusted hub push is retired.
         this.formats[4] = 'VERSION|CHAIN|NETWORK|BLOCK_INDEX|BLOCK_HASH|LEDGER_HASH|ACTIONS_HASH|CONTRACT_HASH|CHECKPOINT_SEQ|SNAPSHOT_BLOCK|SIG_COUNT|PUBKEY|SIG|...|PUBLISHER|ATTEST_SIG_COUNT|APUBKEY|ASIG|...';
         this.formats[5] = 'VERSION|CHAIN|NETWORK|BLOCK_INDEX|BLOCK_HASH|LEDGER_HASH|ACTIONS_HASH|CONTRACT_HASH|CHECKPOINT_SEQ|SNAPSHOT_BLOCK|STATE_ROOT|STATE_ROOT_VERSION|BLOCK_MERKLE_ROOT|BLOCK_MERKLE_VERSION|SIG_COUNT|PUBKEY|SIG|...|PUBLISHER|ATTEST_SIG_COUNT|APUBKEY|ASIG|...';
+        // v6 (archive-reward re-derivation flag-day, ): the v1 archive anchor PLUS the
+        // elected archive-leader PUBLISHER pubkey and a 2f+1 oracle_publish attestation over
+        // the 'anchor_archive' XANCPUB canonical, appended AFTER the wrapper signature list.
+        // The indexer re-derives the anchor_archive reward from these bytes, retiring the
+        // last key-authenticated reward push.
+        this.formats[6] = 'VERSION|CHAIN|NETWORK|BLOCK_INDEX|BLOCK_HASH|LEDGER_HASH|ACTIONS_HASH|CONTRACT_HASH|CHECKPOINT_SEQ|SNAPSHOT_BLOCK|MATCH_BATCH_SEQ|MATCH_COUNT|BATCH_CRC32|TOTAL_CHUNKS|ARCHIVE_B64|SIG_COUNT|PUBKEY|SIG|...|PUBLISHER|ATTEST_SIG_COUNT|APUBKEY|ASIG|...';
     }
 
     // Canonical signing string: MUST byte-match the hub's
@@ -94,9 +101,11 @@ class Anchor {
         // per-block (v0) and archive (v1) canonicals (which share checkpoint_seq) get
         // DISTINCT equivocation keys (R-4 false-slash fix). Must byte-match the hub.
         let roundId = d['CHAIN'] + '|' + d['NETWORK'] + '|' + d['BLOCK_INDEX_CHECKPOINTED'] + '|' + d['CHECKPOINT_SEQ'];
-        if(Number(d['FORMAT']) === 1){
-            // Archive (v1): rootless checkpoint base + archive extension. Byte-matches the
-            // hub's _archiveCanonical, which nests the bare _rawCanonicalCheckpoint.
+        if(Number(d['FORMAT']) === 1 || Number(d['FORMAT']) === 6){
+            // Archive (v1, and its publisher-bearing v6): rootless checkpoint base + archive
+            // extension. Byte-matches the hub's _archiveCanonical, which nests the bare
+            // _rawCanonicalCheckpoint; v6's wrapper sigs are produced over the SAME archive
+            // canonical (the publisher tail is attested separately via _rewardCanonical).
             base += '|' + String(d['MATCH_BATCH_SEQ']) + '|' + String(d['MATCH_COUNT']) + '|' +
                     d['BATCH_CRC32'] + '|' + String(d['TOTAL_CHUNKS']);
             roundId += '|' + d['MATCH_BATCH_SEQ'];
@@ -123,6 +132,22 @@ class Anchor {
     // the checkpoint root canonical and this reward attestation in the same round is never
     // falsely slashable (same R-4 reasoning as the v0/v1 roundId split above).
     _rewardCanonical(d){
+        // Archive leg (v6, ): the attested tuple is the anchor_archive reward, keyed on
+        // MATCH_BATCH_SEQ (the archive round number) with the frozen ARCHIVE amount. MUST
+        // byte-match the hub's StateAnchorPublisher._archiveAttestationCanonical. The
+        // 'XANCPUB|archive|...' roundId is disjoint from every per-chain roundId
+        // ('XANCPUB|BTC|...' etc.), so the two attestation families can never equivocation-
+        // collide (same R-4 reasoning as the v0/v1 checkpoint roundId split).
+        if(Number(d['FORMAT']) === 6){
+            let base = ['XANCPUB', 'anchor_archive', String(d['MATCH_BATCH_SEQ']),
+                        String(d['SNAPSHOT_BLOCK']), String(d['PUBLISHER'] || '').toLowerCase(),
+                        ar.ARCHIVE_REWARD_AMOUNT].join('|');
+            if(eq.isEquivHeaderActive(d['SNAPSHOT_BLOCK'], d['NETWORK'])){
+                let roundId = 'XANCPUB|archive|' + d['NETWORK'] + '|' + d['MATCH_BATCH_SEQ'] + '|' + d['SNAPSHOT_BLOCK'];
+                return eq.buildEquivCanonical(eq.ENGINE_TAGS.CHECKPOINT, roundId, 0, base);
+            }
+            return base;
+        }
         let base = ['XANCPUB', 'anchor_' + d['CHAIN'], String(d['CHECKPOINT_SEQ']),
                     String(d['SNAPSHOT_BLOCK']), String(d['PUBLISHER'] || '').toLowerCase(),
                     ar.ANCHOR_REWARD_AMOUNT].join('|');
@@ -161,7 +186,7 @@ class Anchor {
         data['SNAPSHOT_BLOCK']          = params[9];
 
         let sigBase = 10;
-        if(format === 1){
+        if(format === 1 || format === 6){
             data['MATCH_BATCH_SEQ'] = params[10];
             data['MATCH_COUNT']     = params[11];
             data['BATCH_CRC32']     = String(params[12] || '').toLowerCase();
@@ -191,7 +216,7 @@ class Anchor {
             if(!error && !/^[0-9a-f]{64}$/.test(String(data[f])))
                 error = 'invalid: ' + f + ' (format)';
         }
-        if(!error && format === 1){
+        if(!error && (format === 1 || format === 6)){
             if(!/^[0-9]+$/.test(String(data['MATCH_BATCH_SEQ'])) ||
                !/^[0-9]+$/.test(String(data['MATCH_COUNT'])) ||
                !/^[0-9]+$/.test(String(data['TOTAL_CHUNKS'])) || Number(data['TOTAL_CHUNKS']) < 1)
@@ -206,6 +231,12 @@ class Anchor {
         if(!error && (format === 4 || format === 5)){
             if(!ar.isAnchorRewardActive(Number(data['SNAPSHOT_BLOCK']), data['NETWORK']))
                 error = 'invalid: ANCHOR v' + format + ' before ANCHOR_REWARD flag-day';
+        }
+        // v6 (publisher-bearing archive anchor) may only appear at/above the ARCHIVE_REWARD
+        // flag-day; below it the legacy v1 + push path stands and this version does not exist.
+        if(!error && format === 6){
+            if(!ar.isArchiveRewardActive(Number(data['SNAPSHOT_BLOCK']), data['NETWORK']))
+                error = 'invalid: ANCHOR v6 before ARCHIVE_REWARD flag-day';
         }
         // v3 and the root-bearing v5 may only appear at/above the CHECKPOINT_COMMITMENT
         // flag-day (else their signed canonical would have no root suffix, so the sigs could
@@ -245,7 +276,7 @@ class Anchor {
         // ── v4/v5: PUBLISHER pubkey + the publisher-attestation sig list, appended AFTER
         //    the root sig list (located by sigBase + 1 + 2*sigCount). ────────────────────
         let publisherSigs = [];
-        if(!error && (format === 4 || format === 5)){
+        if(!error && (format === 4 || format === 5 || format === 6)){
             try {
                 let pubBase = sigBase + 1 + 2 * sigCount;
                 data['PUBLISHER'] = String(params[pubBase] || '').toLowerCase();
@@ -274,7 +305,7 @@ class Anchor {
             if(maxSeq !== null && Number(data['CHECKPOINT_SEQ']) < maxSeq)
                 error = 'invalid: CHECKPOINT_SEQ (stale; replay of an older checkpoint)';
         }
-        if(!error && format === 1){
+        if(!error && (format === 1 || format === 6)){
             let maxBatch = await this.indexerDb.getMaxAnchorBatchSeq();
             if(maxBatch !== null && Number(data['MATCH_BATCH_SEQ']) < maxBatch)
                 error = 'invalid: MATCH_BATCH_SEQ (stale; replay of an older archive batch)';
@@ -282,7 +313,7 @@ class Anchor {
 
         // ── v1 archive integrity (single-chunk batches verify inline; chunked
         //    batches verify at reassembly when the last v2 arrives) ────────────
-        if(!error && format === 1 && Number(data['TOTAL_CHUNKS']) === 1){
+        if(!error && (format === 1 || format === 6) && Number(data['TOTAL_CHUNKS']) === 1){
             let crc = this._archiveCrc(data['ARCHIVE_B64']);
             if(crc === null)                          error = 'invalid: ARCHIVE_B64 (not gzip)';
             else if(crc !== data['BATCH_CRC32'])      error = 'invalid: BATCH_CRC32 (archive mismatch)';
@@ -343,7 +374,9 @@ class Anchor {
         //    verdict deterministically. amount is the FROZEN consensus constant; reconcile keeps
         //    the smallest-pubkey winner on a failover double-publish, identical to the retired
         //    push path + recovery, so the COLLECT rail stays single-winner fleet-wide. ─────────
-        if(!error && (format === 4 || format === 5) && snapPubkeys && oracleN > 0){
+        //    v6  rides the identical rails for the ARCHIVE leg: reward type
+        //    anchor_archive, round = MATCH_BATCH_SEQ, frozen ARCHIVE_REWARD_AMOUNT.
+        if(!error && (format === 4 || format === 5 || format === 6) && snapPubkeys && oracleN > 0){
             let rewardCanonical = this._rewardCanonical(data);
             let attSigners = [], attSeen = new Set();
             for(let s of publisherSigs){
@@ -362,12 +395,15 @@ class Anchor {
                 ? swq.meetsStakeThreshold(validators, attSigners)
                 : (attSigners.length >= ((oracleN <= 1) ? 1 : Math.max(2 * Math.floor((oracleN - 1) / 3) + 1, Math.ceil((oracleN + 1) / 2))));
             if(attQuorumMet && snapPubkeys.has(String(data['PUBLISHER']))){
+                let rewardType  = (format === 6) ? 'anchor_archive' : 'anchor_' + data['CHAIN'];
+                let rewardRound = (format === 6) ? Number(data['MATCH_BATCH_SEQ']) : Number(data['CHECKPOINT_SEQ']);
+                let rewardAmt   = (format === 6) ? ar.ARCHIVE_REWARD_AMOUNT : ar.ANCHOR_REWARD_AMOUNT;
                 let ok = await this.indexerDb.createValidatorReward(
-                    data['PUBLISHER'], Number(data['CHECKPOINT_SEQ']), 'anchor_' + data['CHAIN'],
-                    ar.ANCHOR_REWARD_AMOUNT, Number(data['SNAPSHOT_BLOCK']), true);
+                    data['PUBLISHER'], rewardRound, rewardType,
+                    rewardAmt, Number(data['SNAPSHOT_BLOCK']), true);
                 if(ok)
                     await this.indexerDb.reconcileAnchorRewardWinner(
-                        Number(data['CHECKPOINT_SEQ']), 'anchor_' + data['CHAIN'],
+                        rewardRound, rewardType,
                         Number(data['BLOCK_INDEX']), Number(data['ACTION_INDEX']));
             } else {
                 console.warn('\t ANCHOR v' + format + ' : publisher-attestation quorum not met or PUBLISHER not in oracle_publish set; reward skipped (anchor still valid)');
@@ -379,7 +415,7 @@ class Anchor {
 
         console.log("\t ANCHOR v" + format + " : " + data['CHAIN'] + '/' + data['NETWORK'] +
                     ' @ ' + data['BLOCK_INDEX_CHECKPOINTED'] + ' seq ' + data['CHECKPOINT_SEQ'] +
-                    (format === 1 ? ' batch ' + data['MATCH_BATCH_SEQ'] + ' (' + data['MATCH_COUNT'] + ' matches, ' + data['TOTAL_CHUNKS'] + ' chunk(s))' : '') +
+                    ((format === 1 || format === 6) ? ' batch ' + data['MATCH_BATCH_SEQ'] + ' (' + data['MATCH_COUNT'] + ' matches, ' + data['TOTAL_CHUNKS'] + ' chunk(s))' : '') +
                     ' : ' + data['STATUS']);
 
         await this.indexerDb.createAnchorAction(data);

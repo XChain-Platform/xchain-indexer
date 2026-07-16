@@ -106,10 +106,10 @@ class AnchorRecovery {
         let v1s = await this.db.doQuery(
             `SELECT a.* FROM anchor_actions a
              JOIN index_statuses s ON s.id = a.status_id
-             WHERE a.version = 1 AND s.status IN ('valid', 'unverified')
+             WHERE a.version IN (1, 6) AND s.status IN ('valid', 'unverified')
              ORDER BY a.match_batch_seq ASC`);
         if(!v1s || v1s.length === 0){
-            this.log('recovery: no archive anchors found (anchor_actions has no v1 rows)');
+            this.log('recovery: no archive anchors found (anchor_actions has no v1/v6 rows)');
             return report;
         }
 
@@ -440,15 +440,20 @@ class AnchorRecovery {
                 // (or, without --verify-stakes, a fabricated on-chain archive) could archive an
                 // inflated anchor_<chain> amount that recovery would stage COLLECT-spendable
                 // while a live node credits only the frozen amount -> recovered/live divergence
-                // + over-credit on the COLLECT rail. anchor_archive is never v4/v5-derived, so
-                // its operator-tunable amount is kept as archived (matches the live push path),
-                // and below the flag-day the legacy amount stands (v4/v5 rejected on-chain).
-                let derivedChainReward = /^anchor_(BTC|LTC|DOGE)$/.test(String(r.reward_type)) &&
-                                         ar.isAnchorRewardActive(Number(r.block_index), network);
-                let amount = derivedChainReward ? ar.ANCHOR_REWARD_AMOUNT : String(r.amount);
-                if(derivedChainReward && String(r.amount) !== ar.ANCHOR_REWARD_AMOUNT)
+                // + over-credit on the COLLECT rail. anchor_archive gets the same pinning at/above
+                // its own ARCHIVE_REWARD flag-day (: derived from the ANCHOR v6 attestation
+                // with the frozen ARCHIVE_REWARD_AMOUNT); below each flag-day the legacy
+                // operator-tunable amount is kept as archived (matches the live push path).
+                let derivedChainReward   = /^anchor_(BTC|LTC|DOGE)$/.test(String(r.reward_type)) &&
+                                           ar.isAnchorRewardActive(Number(r.block_index), network);
+                let derivedArchiveReward = String(r.reward_type) === 'anchor_archive' &&
+                                           ar.isArchiveRewardActive(Number(r.block_index), network);
+                let frozen = derivedChainReward ? ar.ANCHOR_REWARD_AMOUNT
+                           : derivedArchiveReward ? ar.ARCHIVE_REWARD_AMOUNT : null;
+                let amount = (frozen !== null) ? frozen : String(r.amount);
+                if(frozen !== null && String(r.amount) !== frozen)
                     this.log('recovery: WARNING archived ' + r.reward_type + ' #' + r.round_number +
-                             ' amount ' + r.amount + ' != frozen ' + ar.ANCHOR_REWARD_AMOUNT +
+                             ' amount ' + r.amount + ' != frozen ' + frozen +
                              '; pinning to the frozen constant (forged or misconfigured archive?)');
                 await this.btcDb.doQuery(
                     `INSERT INTO recovery_pending_rewards

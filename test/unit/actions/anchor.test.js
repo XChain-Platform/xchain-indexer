@@ -136,6 +136,27 @@ function v5Params(overrides = {}) {
     return p;
 }
 
+// ANCHOR v6 params (archive-reward, ): v1 fields + the wrapper sig list, then the
+// PUBLISHER pubkey + the attestation sig list appended at the tail.
+function v6Params(archiveJson, overrides = {}) {
+    let b64 = (overrides.archive_b64 !== undefined) ? overrides.archive_b64 : gz64(archiveJson);
+    let f = Object.assign({
+        chain: 'BTC', network: 'regtest', block_index: '500', block_hash: HASH('0'),
+        ledger: HASH('1'), actions: HASH('2'), contracts: HASH('3'),
+        seq: '0', snapshot: '100',
+        batch_seq: '0', match_count: '1',
+        crc: crc32Hex(archiveJson), total_chunks: '1',
+        sigs: [[PUBKEY_A, SIG]],
+        publisher: PUBKEY_A, attest: [[PUBKEY_A, SIG]]
+    }, overrides);
+    let p = ['6', f.chain, f.network, f.block_index, f.block_hash, f.ledger, f.actions, f.contracts,
+             f.seq, f.snapshot, f.batch_seq, f.match_count, f.crc, f.total_chunks, b64, String(f.sigs.length)];
+    for (let [pk, sg] of f.sigs) p.push(pk, sg);
+    p.push(f.publisher, String(f.attest.length));
+    for (let [pk, sg] of f.attest) p.push(pk, sg);
+    return p;
+}
+
 const ARCHIVE_JSON = JSON.stringify({ v: 1, network: 'regtest', batch_seq: 0, matches: [{ match_id: 'm1' }], capability_snapshots: [] });
 
 describe('Anchor (ANCHOR) @regression @tier3', function () {
@@ -356,6 +377,93 @@ describe('Anchor (ANCHOR) @regression @tier3', function () {
         await handler.parse(v4Params(), d1, null);
         let firstArgs = indexer.indexerDb.createValidatorReward.lastCall.args;
         await h2.parse(v4Params(), d2, null);
+        let secondArgs = indexer.indexerDb.createValidatorReward.lastCall.args;
+        assert.deepStrictEqual(firstArgs, secondArgs);
+    });
+
+    // ── v6: archive publisher-attestation + anchor_archive reward derivation  ──
+    it('v6 with a valid publisher attestation is valid, stores the archive, and DERIVES the anchor_archive reward', async function () {
+        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 6, COIN: 'DOGE' });
+        await handler.parse(v6Params(ARCHIVE_JSON), data, null);
+        assert.strictEqual(data['STATUS'], 'valid');
+        assert.strictEqual(data['PUBLISHER'], PUBKEY_A);
+        assert.strictEqual(data['MATCH_BATCH_SEQ'], '0');
+        assert.strictEqual(data['ARCHIVE_B64'], gz64(ARCHIVE_JSON));
+        assert.ok(indexer.indexerDb.createValidatorReward.calledOnce);
+        // (pubkeyHex, roundReference=MATCH_BATCH_SEQ, rewardType, amount, blockIndex, upsert)
+        // - frozen ARCHIVE amount, NOT wire.
+        assert.deepStrictEqual(indexer.indexerDb.createValidatorReward.firstCall.args,
+            [PUBKEY_A, 0, 'anchor_archive', '10.00000000', 100, true]);
+        assert.ok(indexer.indexerDb.reconcileAnchorRewardWinner.calledOnceWith(0, 'anchor_archive'));
+    });
+
+    it('v6 wrapper sigs verify over the UNCHANGED v1 archive canonical (batch-extended, EQUIV-wrapped)', async function () {
+        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 6, COIN: 'DOGE' });
+        await handler.parse(v6Params(ARCHIVE_JSON), data, null);
+        let raw = ['XCHECKPOINT', 'BTC', 'regtest', '500', HASH('0'), HASH('1'), HASH('2'), HASH('3'), '0', '100'].join('|') +
+                  '|0|1|' + crc32Hex(ARCHIVE_JSON) + '|1';
+        let expected = eq.buildEquivCanonical(eq.ENGINE_TAGS.CHECKPOINT, 'BTC|regtest|500|0|0', 0, raw);
+        assert.strictEqual(verifyStub.firstCall.args[0], expected);
+    });
+
+    it('v6 is rejected before the ARCHIVE_REWARD flag-day', async function () {
+        let arStub = sinon.stub(require('../../../src/anchor_reward_activation.js'),
+            'isArchiveRewardActive').returns(false);
+        try {
+            let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 6, COIN: 'DOGE' });
+            await handler.parse(v6Params(ARCHIVE_JSON), data, null);
+            assert.ok(String(data['STATUS']).startsWith('invalid: ANCHOR v6 before ARCHIVE_REWARD flag-day'));
+        } finally { arStub.restore(); }
+    });
+
+    it('v6 keeps the anchor valid but SKIPS the reward when PUBLISHER is not in the oracle_publish set', async function () {
+        // Snapshot = {A}; attestation quorum from A is valid, but the named PUBLISHER is B.
+        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 6, COIN: 'DOGE' });
+        await handler.parse(v6Params(ARCHIVE_JSON, { publisher: PUBKEY_B }), data, null);
+        assert.strictEqual(data['STATUS'], 'valid');
+        assert.ok(indexer.indexerDb.createValidatorReward.notCalled);
+    });
+
+    it('v6 keeps the anchor valid but SKIPS the reward when the attestation quorum is short', async function () {
+        // Snapshot = {A}; the only attestation sig is from B (not in the set) -> 0 valid attesters.
+        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 6, COIN: 'DOGE' });
+        await handler.parse(v6Params(ARCHIVE_JSON, { attest: [[PUBKEY_B, SIG]] }), data, null);
+        assert.strictEqual(data['STATUS'], 'valid');
+        assert.ok(indexer.indexerDb.createValidatorReward.notCalled);
+    });
+
+    it('v6 rejects a CRC mismatch exactly like v1 (archive integrity unchanged)', async function () {
+        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 6, COIN: 'DOGE' });
+        await handler.parse(v6Params(ARCHIVE_JSON, { crc: 'deadbeef' }), data, null);
+        assert.ok(String(data['STATUS']).startsWith('invalid: BATCH_CRC32'));
+        assert.ok(indexer.indexerDb.createValidatorReward.notCalled);
+    });
+
+    it('v6 archive reward (XANCPUB) canonical: XANCPUB|anchor_archive|batch|snapshot|publisher|amount with the archive round-id family', function () {
+        let d = {
+            FORMAT: 6, CHAIN: 'BTC', NETWORK: 'regtest', CHECKPOINT_SEQ: 0, SNAPSHOT_BLOCK: 100,
+            MATCH_BATCH_SEQ: 3, PUBLISHER: PUBKEY_A
+        };
+        let raw = ['XANCPUB', 'anchor_archive', '3', '100', PUBKEY_A, '10.00000000'].join('|');
+        let expected = eq.buildEquivCanonical(eq.ENGINE_TAGS.CHECKPOINT, 'XANCPUB|archive|regtest|3|100', 0, raw);
+        assert.strictEqual(handler._rewardCanonical(d), expected);
+    });
+
+    it('v6 replay guard: a match_batch_seq below the recorded max is stale', async function () {
+        indexer.indexerDb.getMaxAnchorBatchSeq.resolves(3);
+        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 6, COIN: 'DOGE' });
+        await handler.parse(v6Params(ARCHIVE_JSON, { batch_seq: '2' }), data, null);
+        assert.ok(String(data['STATUS']).startsWith('invalid: MATCH_BATCH_SEQ (stale'));
+        assert.ok(indexer.indexerDb.createValidatorReward.notCalled);
+    });
+
+    it('determinism: two independent parses of identical v6 bytes derive the identical archive reward row', async function () {
+        let h2 = new Anchor(indexer);
+        let d1 = createBaseData({ ACTION: 'ANCHOR', FORMAT: 6, COIN: 'DOGE' });
+        let d2 = createBaseData({ ACTION: 'ANCHOR', FORMAT: 6, COIN: 'DOGE' });
+        await handler.parse(v6Params(ARCHIVE_JSON), d1, null);
+        let firstArgs = indexer.indexerDb.createValidatorReward.lastCall.args;
+        await h2.parse(v6Params(ARCHIVE_JSON), d2, null);
         let secondArgs = indexer.indexerDb.createValidatorReward.lastCall.args;
         assert.deepStrictEqual(firstArgs, secondArgs);
     });

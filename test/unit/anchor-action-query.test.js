@@ -39,7 +39,7 @@ function anchorRow(overrides) {
 
 describe('anchor-action-query: CHECKPOINT_VERSIONS', function () {
     it('is exactly the checkpoint-bearing versions (v2 continuation excluded)', function () {
-        assert.deepStrictEqual(CHECKPOINT_VERSIONS, [0, 1, 3, 4, 5]);
+        assert.deepStrictEqual(CHECKPOINT_VERSIONS, [0, 1, 3, 4, 5, 6]);
         assert.ok(!CHECKPOINT_VERSIONS.includes(2), 'v2 (archive continuation) is not a checkpoint');
     });
 });

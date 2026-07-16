@@ -11033,7 +11033,7 @@ class Database {
         let query = `SELECT MAX(a.checkpoint_seq) AS max_seq
                      FROM anchor_actions a
                      JOIN index_statuses s ON s.id = a.status_id
-                     WHERE a.chain = ? AND a.network = ? AND a.version IN (0, 1, 3)
+                     WHERE a.chain = ? AND a.network = ? AND a.version IN (0, 1, 3, 4, 5, 6)
                        AND s.status IN ('valid', 'unverified')`;
         let rows = await this.doQuery(query, [chain, network]);
         return (rows.length > 0 && rows[0].max_seq != null) ? Number(rows[0].max_seq) : null;
@@ -11072,16 +11072,16 @@ class Database {
         let query = `SELECT MAX(a.match_batch_seq) AS max_seq
                      FROM anchor_actions a
                      JOIN index_statuses s ON s.id = a.status_id
-                     WHERE a.version = 1 AND s.status IN ('valid', 'unverified')`;
+                     WHERE a.version IN (1, 6) AND s.status IN ('valid', 'unverified')`;
         let rows = await this.doQuery(query, []);
         return (rows.length > 0 && rows[0].max_seq != null) ? Number(rows[0].max_seq) : null;
     }
 
-    // The v1 anchor that started an archive batch (status irrelevant - chunk
-    // geometry checks belong to the caller).
+    // The archive-head anchor (v1, or the publisher-bearing v6) that started an
+    // archive batch (status irrelevant - chunk geometry checks belong to the caller).
     async getAnchorV1ByBatchSeq(batchSeq){
         let rows = await this.doQuery(
-            "SELECT * FROM anchor_actions WHERE version = 1 AND match_batch_seq = ? LIMIT 1", [batchSeq]);
+            "SELECT * FROM anchor_actions WHERE version IN (1, 6) AND match_batch_seq = ? LIMIT 1", [batchSeq]);
         return rows.length > 0 ? rows[0] : null;
     }
 
