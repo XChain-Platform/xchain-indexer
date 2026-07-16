@@ -1,5 +1,24 @@
+--********************************************************************
+--
+-- Copyright © 2025-2026 Dankest, LLC
+-- Based on XChain Platform by Dankest, LLC - https://dankest.llc
+--
+-- SPDX-License-Identifier: AGPL-3.0-or-later
+--
+-- This file is part of XChain Platform. Licensed under the GNU Affero
+-- General Public License v3.0 or later; see LICENSE.md. A commercial
+-- license (without AGPL source-disclosure terms) is available -
+-- contact legal@dankest.llc.
+--
+--********************************************************************
+
 CREATE TABLE capability_snapshots (
-    id             BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,        -- mirror cursor (matches hub id)
+    id             BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,        -- LOCAL surrogate only, NO hub parity:
+                                                             -- hub ids are hub-local (each hub persists
+                                                             -- independently) and AnchorRecovery rebuilds
+                                                             -- id-less, so the mirror strips wire ids and
+                                                             -- bootstraps from since_id=0 (natural-key
+                                                             -- mirror on uq_cap_snap; hub_db_sync #2270)
     snapshot_block BIGINT NOT NULL,                          -- BTC-anchored block boundary
     capability     VARCHAR(20)  NOT NULL,                    -- e.g. 'cross_chain'
     signing_pubkey VARCHAR(64)  NOT NULL,                    -- Ed25519 validator pubkey (64 hex)

@@ -494,13 +494,20 @@ class HubDbSync {
             return null;
         }
 
-        // Determine the highest existing ID in the local copy so we only fetch newer rows
+        // Determine the highest existing ID in the local copy so we only fetch newer rows.
+        // EXCEPT capability_snapshots: its local ids are locally assigned (natural-key
+        // mirror, see _applyRow #2270), so local MAX(id) says nothing about which HUB
+        // rows are present - seeding since_id from it silently skips every hub row with
+        // id <= MAX(local). Always re-page that table from 0; uq_cap_snap + INSERT
+        // IGNORE dedupe, and the in-loop cursor still advances off the hub's wire ids.
         let lastId = 0;
-        try {
-            let rows = await this.hubDb.doQuery('SELECT MAX(id) AS max_id FROM ' + table);
-            if (rows.length > 0 && rows[0].max_id) lastId = Number(rows[0].max_id);
-        } catch (e) {
-            // Table may not exist yet; bootstrap starts at 0
+        if (table !== 'capability_snapshots') {
+            try {
+                let rows = await this.hubDb.doQuery('SELECT MAX(id) AS max_id FROM ' + table);
+                if (rows.length > 0 && rows[0].max_id) lastId = Number(rows[0].max_id);
+            } catch (e) {
+                // Table may not exist yet; bootstrap starts at 0
+            }
         }
 
         // Page until a SHORT page. The previous single-fetch version treated any
@@ -568,8 +575,12 @@ class HubDbSync {
         // catch-up for that narrow gap. Rows already local are ignored (INSERT IGNORE).
         // Skip the catch-up when the page loop already hit a hole (applyErrors>0): the table is
         // not drained regardless, and fetching past the hole would only widen it.
+        // capability_snapshots is exempt: local ids are locally assigned (natural-key
+        // mirror, #2270), so comparing local MAX(id) to the hub's advertised max_id is
+        // meaningless - and its bootstrap always re-pages from 0 anyway, which already
+        // covers the window this catch-up exists for.
         let hubReadyMaxId = this._readyMaxIds && this._readyMaxIds[table];
-        if (hubReadyMaxId && applyErrors === 0) {
+        if (hubReadyMaxId && applyErrors === 0 && table !== 'capability_snapshots') {
             let localRows = [];
             try {
                 localRows = await this.hubDb.doQuery('SELECT MAX(id) AS max_id FROM ' + table);
@@ -912,6 +923,15 @@ class HubDbSync {
     async _applyRow(table, row) {
         let allowed = await this._localColumns(table);
         let cols = Object.keys(row).filter(c => allowed.has(c));
+        // capability_snapshots is a NATURAL-KEY mirror (uq_cap_snap: snapshot_block,
+        // capability, signing_pubkey; no reader keys on id). Hub ids are hub-LOCAL
+        // (every hub persists these rows independently via an id-less INSERT IGNORE)
+        // and AnchorRecovery rebuilds the table id-less too, so a wire id can collide
+        // with a locally-assigned PK and INSERT IGNORE would silently drop the row -
+        // a permanent mirror hole (#2270). Drop the id and let local AUTO_INCREMENT
+        // assign; _bootstrapTable pages this table from since_id=0 for the same reason.
+        // cross_chain_matches/calls keep hub id parity deliberately (settlement-order key).
+        if (table === 'capability_snapshots') cols = cols.filter(c => c !== 'id');
         if (cols.length === 0) return;
         let placeholders = cols.map(() => '?').join(', ');
         let args = cols.map(c => coerceMirrorValue(row[c]));

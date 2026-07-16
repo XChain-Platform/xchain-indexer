@@ -758,11 +758,16 @@ class Database {
         let m;
         while((m = re.exec(sqlData)) !== null){
             if(m[3].toLowerCase() !== table.toLowerCase()) continue;
-            // Split the column list on commas; strip backticks, ASC/DESC, and any (len) prefix.
-            const columns = m[4].split(',')
-                .map(c => c.trim().replace(/`/g, '').split(/\s+/)[0].replace(/\(\d+\)$/, ''))
+            // Split the column list on commas; strip backticks and ASC/DESC. Any (len)
+            // prefix is kept SEPARATELY (prefixes, null = full column) so the
+            // reconciler can detect prefix-width drift instead of treating a
+            // prefixed and a full-column index on the same columns as identical (#2261).
+            const parts = m[4].split(',')
+                .map(c => c.trim().replace(/`/g, '').split(/\s+/)[0])
                 .filter(Boolean);
-            if(columns.length) out.push({ name: m[2], unique: !!m[1], columns });
+            const columns  = parts.map(c => c.replace(/\(\d+\)$/, ''));
+            const prefixes = parts.map(c => { const pm = /\((\d+)\)$/.exec(c); return pm ? Number(pm[1]) : null; });
+            if(columns.length) out.push({ name: m[2], unique: !!m[1], columns, prefixes });
         }
         return out;
     }
@@ -783,15 +788,16 @@ class Database {
 
             // Live indexes -> map keyed by ordered column-set: "c1,c2" => {unique}
             const rows = await db.query(
-                "SELECT INDEX_NAME, NON_UNIQUE, COLUMN_NAME, SEQ_IN_INDEX FROM information_schema.statistics " +
+                "SELECT INDEX_NAME, NON_UNIQUE, COLUMN_NAME, SEQ_IN_INDEX, SUB_PART FROM information_schema.statistics " +
                 "WHERE table_schema = ? AND table_name = ? ORDER BY INDEX_NAME, SEQ_IN_INDEX",
                 [this.dbName, table]);
             const byName = new Map();
             const liveNames = new Set();
             for(const r of rows){
                 liveNames.add(r.INDEX_NAME.toLowerCase());
-                if(!byName.has(r.INDEX_NAME)) byName.set(r.INDEX_NAME, { unique: Number(r.NON_UNIQUE) === 0, cols: [] });
+                if(!byName.has(r.INDEX_NAME)) byName.set(r.INDEX_NAME, { unique: Number(r.NON_UNIQUE) === 0, cols: [], subParts: [] });
                 byName.get(r.INDEX_NAME).cols.push(r.COLUMN_NAME.toLowerCase());
+                byName.get(r.INDEX_NAME).subParts.push(r.SUB_PART == null ? null : Number(r.SUB_PART));
             }
             const liveByCols = new Map();
             for(const info of byName.values()) liveByCols.set(info.cols.join(','), info);
@@ -799,7 +805,26 @@ class Database {
             for(const idx of expected){
                 const key  = idx.columns.map(c => c.toLowerCase()).join(',');
                 const live = liveByCols.get(key);
-                if(live && (!idx.unique || live.unique)) continue;          // already satisfied
+                if(live && (!idx.unique || live.unique)){
+                    // Satisfied by column set, but the column-set match is blind to
+                    // prefix widths: an aged `address(62)` index and the declared
+                    // full-column index read as identical here and no auto path
+                    // converges them (the DROP/CREATE is deliberately mode=manual;
+                    // rebuilding a UNIQUE index the boot upsert path depends on is
+                    // not safe to do unattended). Detect-and-warn so the drift is
+                    // auditable instead of invisible (#2261).
+                    const declared = idx.prefixes || idx.columns.map(() => null);
+                    const drift = idx.columns.map((c, i) => ({ col: c, want: declared[i] ?? null, have: (live.subParts && live.subParts[i]) ?? null }))
+                        .filter(d => d.want !== d.have);
+                    if(drift.length){
+                        const desc = drift.map(d =>
+                            d.col + ' live ' + (d.have === null ? 'full-column' : '(' + d.have + ')') +
+                            ' vs declared ' + (d.want === null ? 'full-column' : '(' + d.want + ')')).join('; ');
+                        console.warn('Schema drift on ' + table + ': index on (' + key + ') differs in prefix width: ' + desc +
+                            '. Not auto-healed (UNIQUE index rebuild is gated manual); run the pending manual migration via node src/migrate.js to converge.');
+                    }
+                    continue;                                               // already satisfied
+                }
                 if(liveNames.has(idx.name.toLowerCase())) continue;          // name taken by a different index - leave alone
                 const colList = idx.columns.map(c => '`' + c + '`').join(', ');
 
@@ -11030,12 +11055,18 @@ class Database {
     // replay guard. Only status 'valid'/'unverified' rows count (an 'invalid: ...'
     // replay attempt must not poison the watermark).
     async getMaxAnchorCheckpointSeq(chain, network){
+        // Version set is the single source of truth in anchor-action-query.js
+        // (shared with getAnchorActionByCheckpoint + the RPC) so the replay
+        // watermark can never drift from the checkpoint-bearing definition
+        // (a hand-copied literal here once omitted v4/v5, freezing the guard).
+        let versions = ANCHOR_CHECKPOINT_VERSIONS;
         let query = `SELECT MAX(a.checkpoint_seq) AS max_seq
                      FROM anchor_actions a
                      JOIN index_statuses s ON s.id = a.status_id
-                     WHERE a.chain = ? AND a.network = ? AND a.version IN (0, 1, 3, 4, 5, 6)
+                     WHERE a.chain = ? AND a.network = ?
+                       AND a.version IN (${versions.map(() => '?').join(', ')})
                        AND s.status IN ('valid', 'unverified')`;
-        let rows = await this.doQuery(query, [chain, network]);
+        let rows = await this.doQuery(query, [chain, network, ...versions]);
         return (rows.length > 0 && rows[0].max_seq != null) ? Number(rows[0].max_seq) : null;
     }
 
@@ -11085,10 +11116,30 @@ class Database {
         return rows.length > 0 ? rows[0] : null;
     }
 
-    // All v2 continuation chunks stored for an archive batch.
+    // The usable v2 continuation chunks stored for an archive batch: rejected
+    // rows (status 'invalid: ...') are excluded and the result is deduped to
+    // ONE row per chunk_index (lowest action_index wins, deterministically).
+    // anchor_actions stores a row for EVERY parsed ANCHOR (the verdict lives
+    // in STATUS) and idx_anchor_batch is NON-unique, so a permissionless junk
+    // v2 tx adds a countable row for an existing (batch, index): unfiltered,
+    // that row inflated the readers' chunk counts - the duplicate guard then
+    // stamped the LEGITIMATE chunk 'invalid: CHUNK_INDEX (duplicate)', the
+    // live invalid_archive CRC check never fired, and AnchorRecovery threw
+    // 'incomplete batch' forever (finding #2269). 'orphan' rows are KEPT: a
+    // chunk that landed before its parent v1 carries legitimate archive
+    // bytes. Mirrors rollback.js's valid-chunk self-join and the recovery.js
+    // v1 status filter; recovery._verifyBatch inlines this same shape (it
+    // only holds a doQuery handle) - keep the two in step.
     async getAnchorChunks(batchSeq){
-        return await this.doQuery(
-            "SELECT * FROM anchor_actions WHERE version = 2 AND match_batch_seq = ? ORDER BY chunk_index ASC", [batchSeq]);
+        let rows = await this.doQuery(
+            `SELECT a.* FROM anchor_actions a
+             JOIN index_statuses s ON s.id = a.status_id
+             WHERE a.version = 2 AND a.match_batch_seq = ? AND s.status NOT LIKE 'invalid:%'
+             ORDER BY a.chunk_index ASC, a.action_index ASC`, [batchSeq]);
+        let byIndex = new Map();
+        for(let r of rows)
+            if(!byIndex.has(Number(r.chunk_index))) byIndex.set(Number(r.chunk_index), r);
+        return Array.from(byIndex.values());
     }
 
     // Flag an anchor row (e.g. 'invalid_archive' when chunk reassembly fails CRC).

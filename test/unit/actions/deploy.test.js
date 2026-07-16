@@ -369,6 +369,25 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
             assert.ok(String(data['STATUS']).includes('COOLDOWN_BLOCKS'));
         });
 
+        // #2254: isNumeric alone accepted fractional strings, storing a fractional
+        // cooldown_blocks against the documented unsigned-int bound. The integer
+        // gate is consensus-gated (COOLDOWN_BLOCKS_INTEGER, contract-era flag-day)
+        // so a from-genesis replay reproduces any historic fractional accept.
+        it('rejects fractional COOLDOWN_BLOCKS once COOLDOWN_BLOCKS_INTEGER is active', async function () {
+            const data = deployData({ FORMAT: 1 });
+            await handler.parse(['1', VALID_CODE_B64, '100000', '', '50.5', ''], data, null);
+            assert.ok(String(data['STATUS']).includes('COOLDOWN_BLOCKS (not an integer)'));
+        });
+
+        it('accepts fractional COOLDOWN_BLOCKS below the COOLDOWN_BLOCKS_INTEGER flag-day (replay fidelity)', async function () {
+            const isEnabled = sinon.stub().resolves(true);
+            isEnabled.withArgs('COOLDOWN_BLOCKS_INTEGER', sinon.match.any).resolves(false);
+            actionsCtx.protocolChanges.isEnabled = isEnabled;
+            const data = deployData({ FORMAT: 1 });
+            await handler.parse(['1', VALID_CODE_B64, '100000', '', '50.5', ''], data, null);
+            assert.strictEqual(data['STATUS'], 'valid');
+        });
+
         it('rejects COOLDOWN_BLOCKS of 0 (out of range)', async function () {
             const data = deployData({ FORMAT: 1 });
             await handler.parse(['1', VALID_CODE_B64, '100000', '', '0', ''], data, null);

@@ -411,6 +411,19 @@ class ProtocolChanges {
         // from-genesis replay. testnet/regtest activate at genesis (all zeros).
         this.addChange('LOCK_MAX_SUPPLY_EXACT', '2.0.0',1790812800,0,0,0,0,0);
 
+        // DEPLOY validity: integer COOLDOWN_BLOCKS. Before this activation the staking
+        // cooldown was gated only by isNumeric + range, so a fractional value ('50.5')
+        // deployed successfully and stored a fractional contracts.cooldown_blocks,
+        // violating the documented unsigned-int bound (protocol/Contract_Staking.md
+        // DEPLOY v1 field type) and flowing a non-integer COOLDOWN_END_BLOCK into
+        // UNSTAKE. After activation the guard requires an integer, matching the
+        // EXPIRATION siblings (order/swap/dispenser). Gated so a from-genesis replay
+        // reproduces any historic fractional-cooldown accept verdict below the
+        // flag-day: mainnet pins the same coordinated contract-era flag-day as the
+        // sibling validity gates (2026-10-01 00:00:00 UTC); testnet/regtest activate
+        // at genesis (all zeros).
+        this.addChange('COOLDOWN_BLOCKS_INTEGER', '2.0.0',1790812800,0,0,0,0,0);
+
         // ISSUE validity: cumulative MINT_SUPPLY cap. Before this activation the only guard on
         // an ISSUE's MINT_SUPPLY was a single-shot `MINT_SUPPLY > MAX_SUPPLY` check, which
         // ignores supply that already exists: an owner could re-ISSUE the same tick with

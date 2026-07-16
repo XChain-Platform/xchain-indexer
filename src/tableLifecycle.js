@@ -269,7 +269,7 @@ const TABLES = [
     // ── Recomputed / bespoke-rollback tables ───────────────────────────
     { table: 'balances', owner: 'indexer', replication: 'snapshot', rollback: 'recomputed', replicaRollback: 'recomputed',
       hashed: { classes: ['state_commitment'], note: 'SMT leaves of the light-client state commitment; also continuously cross-checked by the per-block supply sanityCheck.' },
-      note: 'Derived aggregate of credits/debits. No action_index column, so it cannot stream per block; both sides rebuild it (source updateBalances, replica rebuildBalances) and orphan-sweep rows whose address/tick id was rolled out of the index (zombie rows would otherwise trip sanityCheck).' },
+      note: 'Derived aggregate of credits/debits. No action_index column, so it cannot stream per block; both sides rebuild it (source updateBalances, replica rebuildBalances). Only the SOURCE additionally orphan-sweeps rows whose address/tick id was rolled out of the index (zombie rows would otherwise trip sanityCheck); the replica needs no mirrored sweep because rebuildBalances recomputes wholesale.' },
     { table: 'markets', owner: 'indexer', replication: 'snapshot', rollback: 'recomputed', replicaRollback: 'special',
       hashed: { classes: [], note: 'Derived OHLCV display aggregate keyed by tick pair; no consensus reader.' },
       note: 'Source recomputes affected pairs on rollback; the thin replica cannot recompute OHLCV, so it refreshes values via the snapshot upsert and mirrors only the orphaned-tick sweep (id-reclaim protection).' },
@@ -356,10 +356,18 @@ const TABLES = [
 // resolves, and the index each dangles against. rollback-coverage suites in
 // both repos assert the corresponding DELETE ... NOT IN (SELECT id FROM ...)
 // exists in the rollback source, so this classification cannot outlive a
-// removed sweep. balances is source+replica; the replica additionally relies
-// on its wholesale rebuild.
+// removed sweep.
+//
+// `replica: true` means the sweep is MIRRORED on the replica: the sync-side
+// rollback-coverage guard derives its assertion set from
+// ORPHAN_SWEEPS.filter(s => s.replica) and requires a matching
+// DELETE ... NOT IN (SELECT id FROM ...) in ClientRollback, so flipping the
+// flag without shipping (or removing) the replica sweep fails CI (#2273).
+// balances stays replica:false on both rows: the replica recomputes it
+// wholesale (rebuildBalances), so no mirrored sweep exists there; only the
+// source orphan-sweeps balances.
 const ORPHAN_SWEEPS = [
-    { table: 'icons',    index: 'tokens',          replica: false },
+    { table: 'icons',    index: 'tokens',          replica: true  },
     { table: 'balances', index: 'index_addresses', replica: false },
     { table: 'balances', index: 'index_tickers',   replica: false },
     { table: 'markets',  index: 'index_tickers',   replica: true  },

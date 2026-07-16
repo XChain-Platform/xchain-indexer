@@ -400,6 +400,34 @@ describe('HubDbSync bootstrap pagination + retry @regression @tier2', function (
         assert.strictEqual(await sync._bootstrapTable('oracle_prices'), 99);
     });
 
+    // #2270: capability_snapshots is a natural-key mirror. Local ids are locally
+    // assigned (recovery rebuilds id-less; hub ids are hub-local), so seeding the
+    // cursor from local MAX(id) silently skips hub rows, and applying a wire id
+    // collides with a local PK where INSERT IGNORE drops the row.
+    it('capability_snapshots bootstraps from since_id=0 regardless of local MAX(id) (#2270)', async function () {
+        const sync = makeBootstrapSync();
+        sinon.stub(sync, '_localColumns').resolves(new Set(['id', 'snapshot_block']));
+        sync.hubDb.doQuery = sinon.stub().resolves([{ max_id: 500 }]);   // local rows exist
+        const httpGet = sinon.stub(sync, '_httpGet').resolves({ rows: [{ id: 3 }], watermark: 7 });
+        assert.strictEqual(await sync._bootstrapTable('capability_snapshots'), 7);
+        assert.ok(httpGet.firstCall.args[0].includes('since_id=0'),
+            'must page from 0, not local MAX(id): ' + httpGet.firstCall.args[0]);
+    });
+
+    it('_applyRow strips the wire id for capability_snapshots so a local PK can never collide (#2270)', async function () {
+        const doQuery = sinon.stub().resolves([]);
+        const sync = new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test' });
+        sinon.stub(sync, '_localColumns').resolves(
+            new Set(['id', 'snapshot_block', 'capability', 'signing_pubkey', 'amount', 'source']));
+        await sync._applyRow('capability_snapshots',
+            { id: 42, snapshot_block: 1, capability: 'cross_chain', signing_pubkey: 'aa', amount: '10', source: 's1' });
+        const [query, args] = doQuery.firstCall.args;
+        const colList = query.slice(query.indexOf('(') + 1, query.indexOf(')'));
+        assert.ok(!colList.split(',').map(c => c.trim()).includes('id'),
+            'id must not be inserted: ' + query);
+        assert.ok(!args.includes(42), 'wire id must not ride the args');
+    });
+
     it('returns null (gate closed) when any row fails to apply, even after paging', async function () {
         const sync = makeBootstrapSync();
         sync._applyRow.onFirstCall().rejects(new Error('ER_SOMETHING'));

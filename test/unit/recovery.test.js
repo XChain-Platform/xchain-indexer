@@ -55,8 +55,15 @@ function memDb(v1s, v2s) {
                     return st === 'valid' || st === 'unverified';
                 });
             }
-            if (sql.startsWith('SELECT chunk_index, archive_b64 FROM anchor_actions WHERE version = 2'))
-                return v2s.filter(c => Number(c.match_batch_seq) === Number(params[0]));
+            // The chunk query now joins index_statuses and drops rejected rows
+            // (status LIKE 'invalid:%'), keeping 'valid' and 'orphan' (#2269).
+            // Model the filter here; recovery's own JS does the per-index dedupe.
+            if (sql.startsWith('SELECT c.chunk_index, c.archive_b64, c.action_index FROM anchor_actions c'))
+                return v2s
+                    .filter(c => Number(c.match_batch_seq) === Number(params[0]))
+                    .filter(c => !String(c.status == null ? 'valid' : c.status).startsWith('invalid:'))
+                    .sort((a, b) => (Number(a.chunk_index) - Number(b.chunk_index)) ||
+                                    (Number(a.action_index || 0) - Number(b.action_index || 0)));
             if (sql.startsWith('INSERT IGNORE INTO capability_snapshots')) {
                 let [snapshot_block, capability, signing_pubkey, amount] = params;
                 if (!snapshots.some(r => r.snapshot_block === snapshot_block && r.capability === capability && r.signing_pubkey === signing_pubkey))
@@ -230,6 +237,25 @@ describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () 
         assert.ok(report.failed[0].reason.includes('BATCH_CRC32'));
         assert.ok(report.failed[1].reason.includes('incomplete batch'));
         assert.strictEqual(db.matches.length, 0);
+    });
+
+    it('a rejected junk v2 chunk neither blocks the batch nor enters the reassembly (#2269)', async function () {
+        let multi = buildBatch(2, [rawMatch('m3')], oracleKeys, crossKeys, { chunkSize: 200 });
+        assert.ok(multi.v2s.length >= 1, 'batch should actually chunk');
+        // A permissionless junk tx for an existing (batch, index): parsed, rejected,
+        // but still stored as a countable anchor_actions row. Unfiltered, this row
+        // inflated the count past totalChunks-1 ('incomplete batch' forever); its
+        // junk bytes must also never reach the b64 concat.
+        let junk = { version: 2, match_batch_seq: 2, chunk_index: multi.v2s[0].chunk_index,
+                     archive_b64: 'AAAAjunkAAAA', action_index: 999999,
+                     status: 'invalid: TOTAL_CHUNKS (does not match parent v1)' };
+        let db = memDb([multi.v1], multi.v2s.concat([junk]));
+        let report = await new AnchorRecovery(db, quiet).run();
+
+        assert.strictEqual(report.verified, 1, JSON.stringify(report.failed));
+        assert.strictEqual(report.failed.length, 0);
+        assert.strictEqual(db.matches.length, 1);
+        assert.strictEqual(db.matches[0].match_id, 'm3');
     });
 
     it('rejects a sub-quorum wrapper and sub-quorum match signatures', async function () {

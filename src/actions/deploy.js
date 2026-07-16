@@ -153,8 +153,17 @@ class Deploy {
                 error = 'invalid: SLASH_DESTINATION (requires COOLDOWN_BLOCKS)';
             }
             if(!error && hasCooldown){
+                // Gate: COOLDOWN_BLOCKS_INTEGER adds the isInteger check the doc contract
+                // (unsigned int, Contract_Staking.md) always specified; isNumeric alone
+                // accepted fractional strings ('50.5'), storing a fractional
+                // contracts.cooldown_blocks that flowed a non-integer COOLDOWN_END_BLOCK
+                // into UNSTAKE. Gated on the contract-era flag-day so a from-genesis
+                // replay reproduces any historic fractional accept verdict below it.
+                let cooldownIntegerStrict = await this.actions.protocolChanges.isEnabled('COOLDOWN_BLOCKS_INTEGER', data['BLOCK_INDEX']);
                 if(!this.util.isNumeric(data['COOLDOWN_BLOCKS'])){
                     error = 'invalid: COOLDOWN_BLOCKS (not numeric)';
+                } else if(cooldownIntegerStrict && !this.util.isInteger(data['COOLDOWN_BLOCKS'])){
+                    error = 'invalid: COOLDOWN_BLOCKS (not an integer)';
                 } else {
                     let cb = Number(data['COOLDOWN_BLOCKS']);
                     if(cb < this.MIN_COOLDOWN_BLOCKS || cb > this.MAX_COOLDOWN_BLOCKS){

@@ -376,6 +376,41 @@ describe('XChainIndexer hub config overlay', function () {
         }
     });
 
+    // #2247: a getallconfigs call outrunning the interval must not stack
+    // overlapping in-flight polls (mirrors _startStateTreeMetric's guard),
+    // and the guard must release in finally so one slow poll never wedges
+    // all future polls.
+    it('poll ticks landing while a slow poll is in flight are skipped, and polling resumes after it settles', async function () {
+        indexer = makeIndexer();
+        let clock = sinon.useFakeTimers();
+        try {
+            let inFlight = [];
+            let hubStub = { enabled: true, _call: sinon.stub().callsFake(() =>
+                new Promise((resolve) => inFlight.push(resolve))) };
+            indexer.hubClient = hubStub;
+
+            process.env.HUB_CONFIG_POLL_INTERVAL_MS = '60000';
+            indexer._startHubConfigPolling();
+
+            // Tick 1 starts a poll that never resolves; ticks 2 and 3 must be
+            // skipped by the reentrancy guard, not stack two more calls.
+            await clock.tickAsync(60000);
+            await clock.tickAsync(60000);
+            await clock.tickAsync(60000);
+            assert.strictEqual(hubStub._call.callCount, 1, 'overlapping ticks must not stack polls');
+
+            // The slow poll settles (as a failure); the guard must release and
+            // the next tick polls again.
+            inFlight.shift()({ error: 'slow hub finally answered' });
+            await clock.tickAsync(60000);
+            assert.strictEqual(hubStub._call.callCount, 2, 'polling must resume once the slow poll settles');
+        } finally {
+            if(indexer._hubConfigPollTimer) clearInterval(indexer._hubConfigPollTimer);
+            clock.restore();
+            delete process.env.HUB_CONFIG_POLL_INTERVAL_MS;
+        }
+    });
+
     it('poll re-applies on a watermark-only advance (standalone hub, seq stuck at 0)', async function () {
         // A standalone/config-oracle hub (no PBFT consensus) never bumps seq, but ANY
         // config write advances watermark (MAX(updated_at)). The poll must honor watermark

@@ -49,6 +49,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Skip the deterministic index-id pre-pass for actions rejected before their handler, so a rejected action mints no `index_addresses` id.
 - Stamp index ids from a single authoritative `block_index` and warn on out-of-band or NULL-`block_index` ids that would offset the deterministic counter.
 
+## [2.7.14] - 2026-07-16
+
+### Fixed
+- ANCHOR replay-guard watermark parameterized from shared ANCHOR_CHECKPOINT_VERSIONS instead of a hand-copied literal ().
+- getAnchorChunks excludes invalid chunks and dedupes to the lowest action_index per chunk_index, so junk ANCHOR v2 chunks can no longer block disaster-recovery rebuilds; recovery inlines the same shape ().
+- capability_snapshots hub mirror converted to a natural-key mirror (wire id stripped, bootstrap pages from since_id=0) closing silent permanent mirror holes ().
+- Hub-config poll gains a reentrancy guard released in finally, mirroring _startStateTreeMetric ().
+- DEPLOY COOLDOWN_BLOCKS strict-integer gate, consensus-gated via new COOLDOWN_BLOCKS_INTEGER protocol change in the 2.0.0 contract-era cohort ().
+- reconcileTableIndexes keeps per-column prefixes and warns on prefix-width drift (deliberately no DDL) ().
+- New manual migration repositions state_key_bin so aged and fresh table tails converge ().
+- tableLifecycle ORPHAN_SWEEPS icons sweep marked replica-mirrored with flag semantics documented ().
+
+
 ## [2.7.11] - 2026-06-20
 
 ### Security

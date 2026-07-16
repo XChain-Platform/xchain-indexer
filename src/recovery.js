@@ -153,11 +153,27 @@ class AnchorRecovery {
         let totalChunks = Number(v1.total_chunks) || 1;
         let b64 = String(v1.archive_b64 || '');
         if(totalChunks > 1){
-            let chunks = await this.db.doQuery(
-                "SELECT chunk_index, archive_b64 FROM anchor_actions WHERE version = 2 AND match_batch_seq = ? ORDER BY chunk_index ASC",
+            // Same status filter + per-index dedupe as db.js::getAnchorChunks
+            // (inlined because recovery only holds a doQuery handle - keep the
+            // two in step). Rejected 'invalid: ...' rows are excluded so one
+            // permissionless junk v2 tx cannot inflate the count and block the
+            // batch forever ('incomplete batch', finding #2269); 'orphan' rows
+            // are KEPT (a chunk that landed before its parent v1 carries
+            // legitimate archive bytes). Lowest action_index wins per index,
+            // deterministically. Mirrors the v1 status join above and
+            // rollback.js's valid-chunk self-join; do NOT loosen to unfiltered.
+            let rows = await this.db.doQuery(
+                `SELECT c.chunk_index, c.archive_b64, c.action_index FROM anchor_actions c
+                 JOIN index_statuses s ON s.id = c.status_id
+                 WHERE c.version = 2 AND c.match_batch_seq = ? AND s.status NOT LIKE 'invalid:%'
+                 ORDER BY c.chunk_index ASC, c.action_index ASC`,
                 [Number(v1.match_batch_seq)]);
-            if(!chunks || chunks.length !== totalChunks - 1)
-                throw new Error('incomplete batch: ' + ((chunks || []).length) + '/' + (totalChunks - 1) + ' continuation chunks');
+            let byIndex = new Map();
+            for(let r of (rows || []))
+                if(!byIndex.has(Number(r.chunk_index))) byIndex.set(Number(r.chunk_index), r);
+            let chunks = Array.from(byIndex.values());
+            if(chunks.length !== totalChunks - 1)
+                throw new Error('incomplete batch: ' + chunks.length + '/' + (totalChunks - 1) + ' continuation chunks');
             for(let c of chunks) b64 += c.archive_b64;
         }
 
@@ -348,6 +364,12 @@ class AnchorRecovery {
     }
 
     async _rebuild(archive, report, network, anchorTxid = null){
+        // Parity carve-out (documented): unlike cross_chain_matches/calls below,
+        // capability_snapshots is rebuilt WITHOUT an id, deliberately. The archive
+        // cannot carry one (hub ids are hub-local; every hub persists these rows
+        // independently), so the table is a NATURAL-KEY mirror on uq_cap_snap and
+        // hub_db_sync strips wire ids + bootstraps it from since_id=0 (#2270).
+        // Local AUTO_INCREMENT numbering here is therefore harmless by design.
         for(let s of (archive.capability_snapshots || [])){
             await this.db.doQuery(
                 'INSERT IGNORE INTO capability_snapshots (snapshot_block, capability, signing_pubkey, amount, source) VALUES (?, ?, ?, ?, ?)',

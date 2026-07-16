@@ -1072,7 +1072,13 @@ class XChainIndexer {
         if(!this.hubClient || !this.hubClient.enabled) return;
         if(this._hubConfigPollTimer) return;
         const intervalMs = parseInt(process.env.HUB_CONFIG_POLL_INTERVAL_MS, 10) || 60000;
+        // Guarded against self-overlap like _startStateTreeMetric below (#2247): a
+        // getallconfigs call outrunning the interval (restarting/partitioned hub)
+        // must not stack overlapping in-flight polls.
+        this._hubConfigPollRunning = false;
         this._hubConfigPollTimer = setInterval(async () => {
+            if(this._hubConfigPollRunning) return;   // a prior slow poll is still in flight
+            this._hubConfigPollRunning = true;
             try {
                 let { ok, configs, seq, watermark, coinConsensusHashes } = this._unwrapHubConfigResponse(await this.hubClient._call('getallconfigs', {}));
                 // A usable envelope (not a { error: ... } failure result) means the hub
@@ -1105,9 +1111,11 @@ class XChainIndexer {
                 // no staleness signal. So an equal NON-ZERO watermark is treated as re-apply-
                 // eligible: _mergeHubParams is idempotent, so re-merging the (full) tree is
                 // safe. A missing watermark (0) keeps the strict path so a seq-only hub does
-                // NOT re-merge every poll. This relies on the full-tree fetch: do not thread
-                // the hub's since_updated_at delta cursor here, whose strict `>` boundary
-                // would drop the same-second row and reintroduce this hazard.
+                // NOT re-merge every poll. This relies on the full-tree fetch and stays that
+                // way: the hub's since_updated_at delta boundary is now inclusive `>=` (hub
+                // item #2265), so a new-enough hub no longer drops the same-second row, but
+                // an older hub's strict `>` still would - the full-tree fetch is the
+                // deployment-skew-proof choice, so do not thread the delta cursor here.
                 let seqAdvanced       = seq > (this.lastHubConfigSeq || 0);
                 let watermarkAdvanced = watermark > (this.lastHubConfigWatermark || 0);
                 let watermarkRedeliver = watermark > 0 && watermark === (this.lastHubConfigWatermark || 0);
@@ -1122,6 +1130,8 @@ class XChainIndexer {
                 }
             } catch(err) {
                 console.warn('XChainIndexer: hub config poll failed, keeping current config:', err.message || err);
+            } finally {
+                this._hubConfigPollRunning = false;
             }
         }, intervalMs);
         if(this._hubConfigPollTimer.unref) this._hubConfigPollTimer.unref();

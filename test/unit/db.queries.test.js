@@ -1451,6 +1451,59 @@ describe('Database.parseExpectedIndexes() @regression @tier1', function () {
         const idxs = db.parseExpectedIndexes(sql, 'balances');
         assert.strictEqual(idxs.length, 0);
     });
+
+    // #2261: the (len) prefix used to be stripped and discarded, so a live
+    // aged address(62) UNIQUE index and the declared full-column one read as
+    // identical and prefix drift was invisible to the reconciler.
+    it('captures per-column prefix widths separately from the column names', function () {
+        const sql = 'CREATE UNIQUE INDEX address ON index_addresses (address(62));\n' +
+                    'CREATE INDEX combo ON index_addresses (a(10), b);';
+        const idxs = db.parseExpectedIndexes(sql, 'index_addresses');
+        assert.strictEqual(idxs.length, 2);
+        assert.deepStrictEqual(idxs[0].columns, ['address']);
+        assert.deepStrictEqual(idxs[0].prefixes, [62]);
+        assert.deepStrictEqual(idxs[1].columns, ['a', 'b']);
+        assert.deepStrictEqual(idxs[1].prefixes, [10, null]);
+    });
+
+    // #2261: an aged prefixed UNIQUE index matching the declared full-column
+    // one by column set must be WARNED about (auditable drift), never DDL'd
+    // (the UNIQUE rebuild is deliberately gated manual).
+    it('reconcileTableIndexes warns on prefix-width drift without issuing DDL', async function () {
+        const warn = sinon.stub(console, 'warn');
+        try {
+            const dbc = {
+                query: sinon.stub().resolves([
+                    { INDEX_NAME: 'address', NON_UNIQUE: 0, COLUMN_NAME: 'address', SEQ_IN_INDEX: 1, SUB_PART: 62 },
+                    { INDEX_NAME: 'block_index', NON_UNIQUE: 1, COLUMN_NAME: 'block_index', SEQ_IN_INDEX: 1, SUB_PART: null },
+                ]),
+            };
+            await db.reconcileTableIndexes('index_addresses.sql', dbc);
+            assert.strictEqual(dbc.query.callCount, 1, 'read-only: no ALTER for a satisfied column set');
+            const warned = warn.getCalls().map((c) => c.args.join(' ')).join('\n');
+            assert.match(warned, /prefix width/, 'drift must be surfaced');
+            assert.match(warned, /address live \(62\) vs declared full-column/);
+        } finally {
+            warn.restore();
+        }
+    });
+
+    it('reconcileTableIndexes stays silent when live prefixes match the declaration', async function () {
+        const warn = sinon.stub(console, 'warn');
+        try {
+            const dbc = {
+                query: sinon.stub().resolves([
+                    { INDEX_NAME: 'address', NON_UNIQUE: 0, COLUMN_NAME: 'address', SEQ_IN_INDEX: 1, SUB_PART: null },
+                    { INDEX_NAME: 'block_index', NON_UNIQUE: 1, COLUMN_NAME: 'block_index', SEQ_IN_INDEX: 1, SUB_PART: null },
+                ]),
+            };
+            await db.reconcileTableIndexes('index_addresses.sql', dbc);
+            const warned = warn.getCalls().map((c) => c.args.join(' ')).join('\n');
+            assert.doesNotMatch(warned, /prefix width/);
+        } finally {
+            warn.restore();
+        }
+    });
 });
 
 // _migrationMode
