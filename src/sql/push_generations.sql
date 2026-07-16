@@ -1,3 +1,17 @@
+--********************************************************************
+--
+-- Copyright © 2025-2026 Dankest, LLC
+-- Based on XChain Platform by Dankest, LLC - https://dankest.llc
+--
+-- SPDX-License-Identifier: AGPL-3.0-or-later
+--
+-- This file is part of XChain Platform. Licensed under the GNU Affero
+-- General Public License v3.0 or later; see LICENSE.md. A commercial
+-- license (without AGPL source-disclosure terms) is available -
+-- contact legal@dankest.llc.
+--
+--********************************************************************
+
 -- Monotonic per-chain push generation, the source side of the reorg fence (item 5308).
 -- Bumped once at the start of every rollback; stamped onto every hub push (oracle prices,
 -- PRICE v0 rounds, and the XCALL/MATCH twins via the federation poll RPCs). A deferred
