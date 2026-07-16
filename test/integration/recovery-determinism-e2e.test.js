@@ -34,8 +34,9 @@
  *
  * Pre-F1a this forked: recovery's out-of-band pre-seed offset node B's whole id
  * map, so (1) and (2) diverged. Needs a real MariaDB; set TEST_DB_HOST/PORT/USER/
- * PASS (self-skips without TEST_DB_PASS). Not in the default test/unit spec, so CI
- * is unaffected. See claude/reports/2026-06-19_id-determinism-F1-implementation-plan.md.
+ * PASS (self-skips without TEST_DB_PASS). Runs in CI via the integration tier's
+ * test/integration/** glob , which provides the DB service.
+ * See claude/reports/2026-06-19_id-determinism-F1-implementation-plan.md.
  *
  ********************************************************************/
 'use strict';
@@ -77,7 +78,14 @@ const CHAIN = [
 ];
 const EARN_BLOCK    = 3;            // anchor reward earn-block (carried onto validator_rewards)
 const COLLECT_BLOCK = 4;
-const REWARD_AMOUNT = '5.00000000';
+// anchor_<chain> reward amounts are consensus-frozen at/above the anchor-reward
+// flag-day (regtest = genesis-active): the live push path credits
+// ANCHOR_REWARD_AMOUNT and recovery pins the archived amount to it. Node A must
+// credit the frozen amount like a real live node; the ARCHIVE keeps a deliberately
+// wrong 5.00000000 so this suite also proves recovery pins a forged amount.
+const ar            = require('../../src/anchor_reward_activation');
+const REWARD_AMOUNT = ar.ANCHOR_REWARD_AMOUNT;
+const FORGED_ARCHIVE_AMOUNT = '5.00000000';
 const REWARD_ROUND  = 1;
 const REWARD_TYPE   = 'anchor_BTC';
 
@@ -131,7 +139,7 @@ async function seedArchive(dogeDb) {
     const reward = {
         source: STAKE_SOURCE, validator_pubkey: VALIDATOR.pubkey,
         reward_type: REWARD_TYPE, round_number: REWARD_ROUND,
-        amount: REWARD_AMOUNT, block_index: EARN_BLOCK,
+        amount: FORGED_ARCHIVE_AMOUNT, block_index: EARN_BLOCK,
     };
     const { v1, v2s } = buildBatch(0, [rawMatch('m1')], oracleKeys, crossKeys, { rewards: [reward] });
     // recovery.run() joins index_statuses and restricts to status IN ('valid','unverified'), so the
