@@ -48,10 +48,13 @@
  *
  ********************************************************************/
 
-const http  = require('http');
-const https = require('https');
-const url   = require('url');
+const http   = require('http');
+const https  = require('https');
+const url    = require('url');
+const crypto = require('crypto');
 const { HUB_SCHEMA_VERSION } = require('./hub-schema-version');
+const swq    = require('./stake_weighted_quorum.js');
+const { isRetractionSigningActive } = require('./retraction_signing_activation.js');
 
 let WebSocket = null;
 try {
@@ -68,6 +71,35 @@ const RETRACTION_COLUMNS = {
     price_snapshots: 'source_action_index',
     oracle_prices:   'action_index'
 };
+
+// ──  signed-retraction verification helpers ───────────────────────────
+
+// Rebuild the retraction canonical from the wire event. MUST byte-match the
+// producer in xchain-hub/src/RetractionConsensus.js canonicalRetraction():
+//   XRETRACTV1|<table>|<source_chain>|<from>|<to or ''>|<generation or ''>|<snapshot_block>
+function canonicalRetraction(event) {
+    let to  = (event.to_action_index       !== undefined && event.to_action_index       !== null) ? String(event.to_action_index)       : '';
+    let gen = (event.retraction_generation !== undefined && event.retraction_generation !== null) ? String(event.retraction_generation) : '';
+    return 'XRETRACTV1|' + String(event.table) + '|' + String(event.source_chain) + '|' +
+           String(event.from_action_index) + '|' + to + '|' + gen + '|' + String(event.snapshot_block);
+}
+
+// Ed25519 verify with Node's built-in crypto (raw 32-byte hex pubkey, 64-byte
+// hex signature over the utf8 canonical). Kept dependency-free: this module is
+// vendored byte-identical into xchain-explorer, which must not grow requires.
+const SPKI_ED25519_PREFIX = Buffer.from('302a300506032b6570032100', 'hex');
+function verifyEd25519(payload, sigHex, pubkeyHex) {
+    if (!/^[0-9a-f]{64}$/.test(pubkeyHex) || !/^[0-9a-f]{128}$/.test(sigHex)) return false;
+    try {
+        let key = crypto.createPublicKey({
+            key: Buffer.concat([SPKI_ED25519_PREFIX, Buffer.from(pubkeyHex, 'hex')]),
+            format: 'der', type: 'spki'
+        });
+        return crypto.verify(null, Buffer.from(payload, 'utf8'), key, Buffer.from(sigHex, 'hex'));
+    } catch (e) {
+        return false;
+    }
+}
 
 // Coerce a hub-served value for a parameterized INSERT into the local mirror.
 // The hub serves rows as JSON, so DATETIME columns arrive as ISO-8601 strings
@@ -197,6 +229,15 @@ class HubDbSync {
         this.getOwnRollbackGeneration = (typeof options.getOwnRollbackGeneration === 'function')
             ? options.getOwnRollbackGeneration : null;
         this.trackedRollbackGeneration = {};
+
+        //  signed retractions: the network this mirror serves (mainnet |
+        // testnet | regtest), used to key the RETRACTION_SIGNING flag-day and the
+        // stake-weighted-quorum activation when verifying a quorum-class
+        // retraction's co-signature set. The gate itself is judged from the local
+        // mirrored capability_snapshots high-water mark, NEVER from a wire field.
+        // Absent (explorer's vendored display mirror, older wiring) the gate never
+        // arms and the  fences above stand alone, as before.
+        this.network = options.network || null;
 
         // Pending waitForSnapshotSync() resolvers. Unlike the match barrier (a cached
         // scalar max(effective_time)), snapshot-presence is set-dependent: a match can
@@ -1064,6 +1105,33 @@ class HubDbSync {
             }
             this.trackedRollbackGeneration[trackKey] = gen;
         }
+        // 4. Signed retractions ( full fix): once this mirror's own
+        //    capability_snapshots high-water mark has crossed the
+        //    RETRACTION_SIGNING flag-day era, a quorum-class deletion must carry
+        //    a 2f+1 `cross_chain` co-signature set over the XRETRACTV1 canonical,
+        //    verified against the mirrored snapshot at the event's snapshot_block
+        //    (streamed ahead of the deletion on the same ordered socket). The gate
+        //    is judged from LOCAL state so an attacker cannot slip below it by
+        //    omitting or understating wire fields. Pre-bootstrap (no snapshot rows
+        //    at all) or with no network wired there is no signer set to verify
+        //    against and the fences above stand alone (legacy tier).
+        if (quorumClass && this.network) {
+            let gateBlock = null;
+            try {
+                let rows = await this.hubDb.doQuery(
+                    "SELECT MAX(snapshot_block) AS sb FROM capability_snapshots WHERE capability = 'cross_chain'");
+                if (rows.length > 0 && rows[0].sb !== null) gateBlock = Number(rows[0].sb);
+            } catch (e) { gateBlock = null; }                  // mirror table not ready yet
+            if (gateBlock !== null && isRetractionSigningActive(gateBlock, this.network)) {
+                let ok = await this._verifyRetractionSignatures(event);
+                if (!ok) {
+                    console.error('HubDbSync: refusing UNVERIFIED retraction of ' + event.table +
+                        ' (source_chain ' + event.source_chain + ', from ' + from +
+                        '): quorum-class deletions require a valid 2f+1 co-signature set ');
+                    return;
+                }
+            }
+        }
         // cross_chain_matches is two-sided: a match is retracted when EITHER order leg on
         // the reorged chain was rolled back. The settlement pass then rolls back any leg it
         // already applied for that match (its cross_chain_settlements row drops with the block).
@@ -1106,6 +1174,52 @@ class HubDbSync {
         if (bounded) args.push(to);
         if (fenced) args.push(gen);
         await this.hubDb.doQuery(query, args);
+    }
+
+    // Verify a quorum-class retraction's co-signature set . The event
+    // must carry snapshot_block (itself at/after the flag-day era, so a signed
+    // set can never be minted below the gate) plus retraction_signatures; each
+    // signature is checked over the rebuilt XRETRACTV1 canonical against the
+    // mirrored `cross_chain` capability snapshot at that block, with the same
+    // quorum predicate the settlement pass applies to match insertions
+    // (stake-weighted at/above SWQ activation, else count 2f+1/majority).
+    async _verifyRetractionSignatures(event) {
+        let sb = Number(event.snapshot_block);
+        if (!Number.isFinite(sb) || sb < 0) return false;
+        if (!isRetractionSigningActive(sb, this.network)) return false;
+        let sigs = event.retraction_signatures;
+        if (!Array.isArray(sigs) || sigs.length === 0) return false;
+
+        let rows;
+        try {
+            rows = await this.hubDb.doQuery(
+                "SELECT signing_pubkey, amount, source FROM capability_snapshots WHERE capability = 'cross_chain' AND snapshot_block = ?", [sb]);
+        } catch (e) { return false; }
+        if (!rows || rows.length === 0) return false;          // no snapshot at that block -> nothing to verify against
+
+        let validators = rows.map(r => ({
+            pubkey: String(r.signing_pubkey).toLowerCase(),
+            source: String(r.source != null ? r.source : ''),
+            weight: String(r.amount != null ? r.amount : '0')
+        }));
+        let snapPubkeys = new Set(validators.map(v => v.pubkey));
+
+        let canonical = canonicalRetraction(event);
+        let validSigners = [], seen = new Set();
+        for (let s of sigs) {
+            let pk  = String(s && s.pubkey || '').toLowerCase();
+            let sig = String(s && s.sig || '').toLowerCase();
+            if (!pk || seen.has(pk)) continue;
+            seen.add(pk);
+            if (!snapPubkeys.has(pk)) continue;
+            if (!verifyEd25519(canonical, sig, pk)) continue;
+            validSigners.push(pk);
+        }
+        let weighted = swq.isStakeWeightedQuorumActive(sb, this.network);
+        let n = validators.length;
+        return weighted
+            ? swq.meetsStakeThreshold(validators, validSigners)
+            : (validSigners.length >= ((n <= 1) ? 1 : Math.max(2 * Math.floor((n - 1) / 3) + 1, Math.ceil((n + 1) / 2))));
     }
 
     // ── Cross-chain match sync barrier (mirrors the oracle_prices barrier) ──────

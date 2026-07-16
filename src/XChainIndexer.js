@@ -278,6 +278,9 @@ class XChainIndexer {
             if(process.env.HUB_DB_SYNC_ENABLED === 'true'){
                 this.hubDbSync = new HubDbSync(this.hubDb, {
                     coin: this.config['COIN'],
+                    //  signed retractions: keys the RETRACTION_SIGNING flag-day
+                    // and SWQ activation for quorum-class retraction verification.
+                    network: this.config['NETWORK'],
                     // Receive-side retraction authority for our own chain :
                     // the mirror refuses hub-broadcast reorg retractions of THIS
                     // chain's rows unless their generation fence is below our own
