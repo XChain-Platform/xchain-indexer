@@ -13,7 +13,7 @@
 --********************************************************************
 
 CREATE TABLE state_checkpoints (
-    id                   BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,        -- mirror cursor (matches hub id)
+    id                   BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, -- mirror cursor (matches hub id)
     chain                VARCHAR(10)  NOT NULL,                    -- checkpointed chain: BTC/LTC/DOGE
     network              VARCHAR(20)  NOT NULL,                    -- mainnet/testnet/regtest
     block_index          BIGINT UNSIGNED NOT NULL,                 -- checkpointed height on `chain`

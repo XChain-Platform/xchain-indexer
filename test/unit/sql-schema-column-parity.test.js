@@ -34,8 +34,9 @@
  * Scope, stated plainly: this compares each migration's ADD COLUMN against the
  * definition it must converge to. It does NOT replay migrations against a live aged
  * schema, so it cannot catch a column that drifted through some path other than a
- * committed migration, and it does not check MODIFY-only type changes against the
- * definition (no committed migration does that today; add a case here when one does).
+ * committed migration. MODIFY-only type changes (retypes of an existing column) are
+ * checked by their own case below: the MODIFY's target spec must equal the definition,
+ * so both paths converge on the same column shape.
  ********************************************************************/
 
 const assert = require('assert');
@@ -104,6 +105,29 @@ function collectMigrationColumns() {
     return out;
 }
 
+// Every column a dated migration retypes in place: { file, table, name, spec }.
+// MODIFY cannot restate table-level constraints, so an inline PRIMARY KEY in the
+// definition is normalized away before comparison (the key itself is untouched
+// by a MODIFY; only the column shape must converge).
+function collectMigrationModifies() {
+    const out = [];
+    // Sorted: apply order is lexical (db.js runMigrations), and the last-MODIFY-wins
+    // reduction below depends on iterating files in that same order.
+    for (const file of fs.readdirSync(MIG_DIR).filter(f => f.endsWith('.sql')).sort()) {
+        const raw = stripComments(fs.readFileSync(path.join(MIG_DIR, file), 'utf8'));
+        for (const stmt of raw.split(';')) {
+            const t = stmt.match(/ALTER\s+TABLE\s+`?(\w+)`?/i);
+            if (!t) continue;
+            for (const m of stmt.matchAll(/\bMODIFY\s+(?:COLUMN\s+)?(?:IF\s+EXISTS\s+)?`?(\w+)`?([\s\S]*?)(?=,\s*MODIFY\s|,\s*ADD\s|,\s*DROP\s|$)/gi)) {
+                out.push({ file, table: t[1], name: m[1], spec: normalizeSpec(m[2]) });
+            }
+        }
+    }
+    return out;
+}
+
+const stripInlineKeys = (spec) => spec.replace(/\s+(PRIMARY\s+KEY|UNIQUE(\s+KEY)?)\b/g, '').trim();
+
 describe('SQL schema column parity (definition path vs ledger path) @regression', function () {
 
     it('sanity: the parser finds migration-added columns (guard is not vacuous)', function () {
@@ -146,6 +170,37 @@ describe('SQL schema column parity (definition path vs ledger path) @regression'
         assert.deepStrictEqual(mismatches, [],
             'These columns are declared with a DIFFERENT shape on the two paths, so an aged DB and a fresh ' +
             'install disagree on what the column holds:\n' +
+            mismatches.map(m => `  ${m.table}.${m.name} (${m.file})\n    definition: ${m.definition}\n    migration:  ${m.migration}`).join('\n'));
+    });
+
+    it('sanity: the parser finds migration MODIFY clauses (retype guard is not vacuous)', function () {
+        const mods = collectMigrationModifies();
+        // Pin the two shapes that exist today: a single-clause MODIFY (the 2026-06-10
+        // id repair) and a multi-clause one (the 2026-07-16 signedness align).
+        assert.ok(mods.some(m => m.file.startsWith('2026-06-10') && m.table === 'price_snapshots' && m.name === 'id'),
+            'single-clause MODIFY no longer parsed');
+        assert.ok(mods.some(m => m.file.startsWith('2026-07-16') && m.table === 'cross_chain_calls' && m.name === 'gas_limit'),
+            'multi-clause MODIFY no longer parsed');
+    });
+
+    it('a migration-retyped column converges on its DEFINITION shape (last MODIFY wins)', function () {
+        const defs = collectDefinitionColumns();
+        // Migrations replay in lexical filename order, so only the LAST MODIFY of a
+        // column must match the definition; an earlier one (e.g. the 2026-06-10 signed
+        // id repair, superseded by the 2026-07-16 unsigned align) is legitimately stale.
+        const last = new Map();
+        for (const m of collectMigrationModifies()) last.set(m.table + '.' + m.name.toLowerCase(), m);
+
+        const mismatches = [];
+        for (const m of last.values()) {
+            const d = (defs[m.table] || []).find(x => x.name.toLowerCase() === m.name.toLowerCase());
+            assert.ok(d, m.file + ' MODIFYs ' + m.table + '.' + m.name + ' but no definition declares that column');
+            if (stripInlineKeys(d.spec) !== stripInlineKeys(m.spec))
+                mismatches.push({ table: m.table, name: m.name, file: m.file, definition: d.spec, migration: m.spec });
+        }
+        assert.deepStrictEqual(mismatches, [],
+            'These columns are RETYPED by a migration to a different shape than the definition declares, so an ' +
+            'aged DB and a fresh install disagree on what the column holds:\n' +
             mismatches.map(m => `  ${m.table}.${m.name} (${m.file})\n    definition: ${m.definition}\n    migration:  ${m.migration}`).join('\n'));
     });
 

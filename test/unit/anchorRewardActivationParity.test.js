@@ -47,13 +47,13 @@ describe('anchor_reward_activation twin parity @regression @tier1', function () 
 
     it('indexer exports the frozen ARCHIVE reward amount and the  activation map', function () {
         assert.strictEqual(indexer.ARCHIVE_REWARD_AMOUNT, '10.00000000');
-        assert.strictEqual(indexer.ARCHIVE_REWARD_ACTIVATION.mainnet, 983000);   //  placeholder
+        assert.strictEqual(indexer.ARCHIVE_REWARD_ACTIVATION.mainnet, 969500);   //  armed 2026-07-16: BTC ~2026-10-01 ratified anchor
         assert.strictEqual(indexer.ARCHIVE_REWARD_ACTIVATION.regtest, 0);
     });
 
     it('archive gate predicate is height-gated per network (below off, at/above on, unknown off)', function () {
-        assert.strictEqual(indexer.isArchiveRewardActive(982999, 'mainnet'), false);
-        assert.strictEqual(indexer.isArchiveRewardActive(983000, 'mainnet'), true);
+        assert.strictEqual(indexer.isArchiveRewardActive(969499, 'mainnet'), false);
+        assert.strictEqual(indexer.isArchiveRewardActive(969500, 'mainnet'), true);
         assert.strictEqual(indexer.isArchiveRewardActive(0, 'regtest'), true);
         assert.strictEqual(indexer.isArchiveRewardActive(5, 'bogusnet'), false);
         assert.strictEqual(indexer.isArchiveRewardActive('not-a-number', 'mainnet'), false);
@@ -92,7 +92,7 @@ describe('anchor_reward_activation twin parity @regression @tier1', function () 
                 assert.strictEqual(hub.mod.isAnchorRewardActive(sb, net), indexer.isAnchorRewardActive(sb, net),
                     'predicate parity @ ' + net + ':' + sb);
             }
-            for(const [sb, net] of [[982999,'mainnet'],[983000,'mainnet'],[0,'regtest'],[5,'bogusnet']]){
+            for(const [sb, net] of [[969499,'mainnet'],[969500,'mainnet'],[0,'regtest'],[5,'bogusnet']]){
                 assert.strictEqual(hub.mod.isArchiveRewardActive(sb, net), indexer.isArchiveRewardActive(sb, net),
                     'archive predicate parity @ ' + net + ':' + sb);
             }

@@ -73,7 +73,7 @@ function isAnchorRewardActive(snapshotBlock, network){
 // insider-with-key forge surface the per-chain flag-day left open. Below the threshold the
 // legacy v1 + push path stands and v6 is rejected.
 const ARCHIVE_REWARD_ACTIVATION = {
-    mainnet: 983000,      // PLACEHOLDER ~2027-01-01 ( flag-day set; arm with the real height before deploy)
+    mainnet: 969500,      // ARMED 2026-07-16 : BTC snapshot_block ~2026-10-01 (ratified anchor; derived from tip 957062 on 07-07 at ~144 blocks/day); deploy every consumer before this era
     testnet: 0,
     regtest: 0,
 };

@@ -52,8 +52,31 @@ class Batch {
         this.actionLimits['ISSUE'] = 1;
     }
 
+    // Normalize a sub-action the same way the top-level dispatcher (actions.js)
+    // does: rewrite ACTION aliases, then (when params are given) inject the
+    // implied legacy VERSION 0 for BTNS-style ISSUE/MINT/SEND params so FORMAT
+    // derivation sees a version field. Mutates params in place; returns the
+    // canonical ACTION name. Callers only invoke this at/after the
+    // BATCH_SUBACTION_NORMALIZATION flag-day; before it, sub-actions keep the
+    // historical un-normalized behaviour (aliased names invalidate the BATCH,
+    // legacy-format params misparse) for byte-identical replay.
+    normalizeSubAction(action, params){
+        for(let alias in this.actions.actionAliases){
+            if(action == alias)
+                action = this.actions.actionAliases[alias];
+        }
+        if(params && ['ISSUE','MINT','SEND'].includes(action) && this.util.isLegacyActionFormat(params))
+            params.splice(0,0,0);
+        return action;
+    }
+
     // Handle parsing the BATCH transaction
     async parse(params, data, error){
+        // BATCH_SUBACTION_NORMALIZATION flag-day : when active,
+        // sub-actions get the same alias rewrite + legacy VERSION-0 injection
+        // as top-level actions. Resolved once per BATCH so every scan below
+        // gates identically.
+        let normalize = await this.protocolChanges.isEnabled('BATCH_SUBACTION_NORMALIZATION', data['BLOCK_INDEX']);
         // Clone the raw data for storage in batches table
         let batch = structuredClone(data);
 
@@ -77,6 +100,8 @@ class Batch {
         // Build out array of ACTIONs and count of times used in BATCH
         for(let command of commands){
             let action = String(command).split('|')[0];
+            if(normalize)
+                action = this.normalizeSubAction(action);
             if(this.util.isNull(actions[action]))
                 actions[action] = 0;
             actions[action]++;
@@ -89,6 +114,8 @@ class Batch {
         // Verify all ACTION commands are valid
         for(let command of commands){
             let action = String(command).split('|')[0];
+            if(normalize)
+                action = this.normalizeSubAction(action);
             if(!error && await this.protocolChanges.isEnabled(action, data['BLOCK_INDEX']) == false)
                 error = 'invalid: ACTION (unknown)';
         }
@@ -129,7 +156,10 @@ class Batch {
             for(let command of commands){
                 let parts  = String(command).split('|');
                 let name   = String(parts[0]).toUpperCase();
-                siblings.push({ action: name, params: parts.slice(1), raw: command });
+                let sibParams = parts.slice(1);
+                if(normalize)
+                    name = this.normalizeSubAction(name, sibParams);
+                siblings.push({ action: name, params: sibParams, raw: command });
             }
             data['SIBLING_ACTIONS'] = siblings;
 
@@ -148,6 +178,12 @@ class Batch {
 
                 // Extract ACTION from params
                 let action = String(params.shift()).toUpperCase();
+
+                // Normalize the sub-action like a top-level action would be
+                // (alias rewrite + legacy VERSION-0 injection) so FORMAT
+                // derivation and handler dispatch below see canonical input.
+                if(normalize)
+                    action = this.normalizeSubAction(action, params);
 
                 // Clear action-specific fields left by the previous sub-action.
                 for(let key of Object.keys(data))

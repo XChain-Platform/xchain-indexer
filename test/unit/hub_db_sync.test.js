@@ -1634,12 +1634,12 @@ describe('HubDbSync._applyRetraction signed retractions  @regression @tier1', fu
 
     it('REFUSES a signed set whose snapshot_block is itself below the gate era (no sub-gate minting)', async function () {
         const s = makeSigner();
-        // mainnet threshold 983000: local high-water past it, but the event claims an old era
+        // mainnet threshold 969500: local high-water past it, but the event claims an old era
         const { sync, deletes } = makeSigned({
             snapRows: [{ signing_pubkey: s.pubkey, amount: '100', source: 'srcA' }],
             maxSnapshotBlock: 990000, network: 'mainnet'
         });
-        const canonical = 'XRETRACTV1|cross_chain_calls|DOGE|42|99|7|5000';   // sb 5000 < 983000
+        const canonical = 'XRETRACTV1|cross_chain_calls|DOGE|42|99|7|5000';   // sb 5000 < 969500
         await sync._applyRetraction(signedEvent([{ pubkey: s.pubkey, sig: s.sign(canonical) }]));
         assert.strictEqual(deletes.length, 0);
     });

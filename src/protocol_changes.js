@@ -263,11 +263,12 @@ class ProtocolChanges {
         // DEPLOY_BASE64_CODE: MINT runs on BTC, LTC and DOGE whose heights diverge
         // by millions of blocks, so no single shared block height names one cutover
         // across all three chains, but a single timestamp can. The mainnet timestamp
-        // is the  flag-day-set PLACEHOLDER (2027-01-01 00:00:00 UTC); 
-        // owns picking the real coordinated value, and a divergent value is a fork.
+        // is ARMED 2026-07-16  to the ratified coordinated anchor
+        // 1790812800 (2026-10-01 00:00:00 UTC), joining the confirmed 2.0.0
+        // contract-era cohort; a divergent value is a fork.
         // testnet/regtest activate at genesis (no history to preserve; the
         // e2e/regtest stack exercises the corrected measure from block 0).
-        this.addChange('MINT_SELF_MINTED_ONLY', '2.0.0',1798761600,0,0,0,0,0);
+        this.addChange('MINT_SELF_MINTED_ONLY', '2.0.0',1790812800,0,0,0,0,0);
 
         //  (BonkDAO-class guard): a BINDING poll (VOTE v0 that names a
         // CALLBACK_CONTRACT, so its finalization can move contract-held value)
@@ -285,12 +286,12 @@ class ProtocolChanges {
         // block_index), mirroring DEPLOY_BASE64_CODE: VOTE runs on BTC, LTC and
         // DOGE whose heights diverge by millions of blocks, so no single shared
         // block height names one cutover across all three chains, but a single
-        // timestamp can. The mainnet timestamp is the  flag-day-set
-        // PLACEHOLDER (2027-01-01 00:00:00 UTC);  owns picking the real
-        // coordinated value, and a divergent value is a fork. testnet/regtest
-        // activate at genesis (no history to preserve; the e2e/regtest stack
-        // exercises the requirement from block 0).
-        this.addChange('VOTE_BINDING_MINIMUMS', '2.0.0',1798761600,0,0,0,0,0);
+        // timestamp can. The mainnet timestamp is ARMED 2026-07-16  to
+        // the ratified coordinated anchor 1790812800 (2026-10-01 00:00:00 UTC),
+        // joining the confirmed 2.0.0 contract-era cohort; a divergent value is
+        // a fork. testnet/regtest activate at genesis (no history to preserve;
+        // the e2e/regtest stack exercises the requirement from block 0).
+        this.addChange('VOTE_BINDING_MINIMUMS', '2.0.0',1790812800,0,0,0,0,0);
 
         //  (BonkDAO lesson 3): optional timelock between poll finalization
         // and the binding callback's execution. v0 gains a trailing
@@ -309,12 +310,13 @@ class ProtocolChanges {
         // (not block_index), mirroring DEPLOY_BASE64_CODE: VOTE runs on BTC,
         // LTC and DOGE whose heights diverge by millions of blocks, so no
         // single shared block height names one cutover across all three
-        // chains, but a single timestamp can. The mainnet timestamp is the
-        //  flag-day-set PLACEHOLDER (2027-01-01 00:00:00 UTC); 
-        // owns picking the real coordinated value, and a divergent value is a
-        // fork. testnet/regtest activate at genesis (no history to preserve;
-        // the e2e/regtest stack exercises the timelock from block 0).
-        this.addChange('VOTE_CALLBACK_TIMELOCK', '2.0.0',1798761600,0,0,0,0,0);
+        // chains, but a single timestamp can. The mainnet timestamp is ARMED
+        // 2026-07-16  to the ratified coordinated anchor 1790812800
+        // (2026-10-01 00:00:00 UTC), joining the confirmed 2.0.0 contract-era
+        // cohort; a divergent value is a fork. testnet/regtest activate at
+        // genesis (no history to preserve; the e2e/regtest stack exercises the
+        // timelock from block 0).
+        this.addChange('VOTE_CALLBACK_TIMELOCK', '2.0.0',1790812800,0,0,0,0,0);
 
         // : ATTEST v1 canonical id-case normalization. Below this activation
         // the canonical signing bytes (and the EQUIV ROUND_ID) use the RAW wire
@@ -333,12 +335,13 @@ class ProtocolChanges {
         // DEPLOY_BASE64_CODE: ATTEST rides EXECUTE emissions on BTC, LTC and
         // DOGE, whose heights diverge by millions of blocks, so no single shared
         // block height names one cutover across all three chains, but a single
-        // timestamp can. The mainnet timestamp is the  flag-day-set
-        // PLACEHOLDER (2027-01-01 00:00:00 UTC);  owns picking the real
-        // coordinated value, and a divergent value is a fork. testnet/regtest
-        // activate at genesis (no history to preserve; the e2e/regtest stack
-        // exercises the self-contained canonical from block 0).
-        this.addChange('ATTEST_CANONICAL_LOWERCASE_ID', '2.0.0',1798761600,0,0,0,0,0);
+        // timestamp can. The mainnet timestamp is ARMED 2026-07-16  to
+        // the ratified coordinated anchor 1790812800 (2026-10-01 00:00:00 UTC),
+        // joining the confirmed 2.0.0 contract-era cohort; a divergent value is
+        // a fork. testnet/regtest activate at genesis (no history to preserve;
+        // the e2e/regtest stack exercises the self-contained canonical from
+        // block 0).
+        this.addChange('ATTEST_CANONICAL_LOWERCASE_ID', '2.0.0',1790812800,0,0,0,0,0);
 
         // Cross-chain royalty enforcement, layered on CONTROLLER_GUARD. Once the guard
         // produces royalty payout_legs (post-CONTROLLER_GUARD), a CROSS-CHAIN listing of
@@ -562,6 +565,26 @@ class ProtocolChanges {
         // genesis-on. Indexer-only verdict (uses the VM readManifest `hasInitialize`
         // flag), so not a byte-locked twin; the VM readManifest change ships alongside.
         this.addChange('DEPLOY_INIT_STRICT', '2.0.0',1790812800,0,0,0,0,0);
+
+        // BATCH sub-action normalization : the top-level dispatcher
+        // (actions.js) rewrites ACTION aliases (TRANSFER->SEND, ADDR->ADDRESS,
+        // DROP->AIRDROP, CAST->BROADCAST, MSG->MESSAGE) and injects the implied
+        // legacy VERSION 0 for BTNS-style ISSUE/MINT/SEND params, but batch.js
+        // historically did neither for its sub-actions: an aliased sub-action
+        // name fails the activation lookup (whole BATCH -> 'invalid: ACTION
+        // (unknown)') and a legacy-format sub-action parses its TICK as the
+        // FORMAT version. At/after this flag-day BATCH sub-actions are
+        // normalized exactly like top-level actions (alias rewrite in the
+        // limit/validity scans, the sibling pre-parse and the dispatch loop;
+        // VERSION-0 injection before FORMAT derivation and handler dispatch).
+        // Below it: byte-identical to today, so a from-genesis replay
+        // reproduces every historic reject/misparse verdict (a previously-
+        // invalid BATCH becoming valid changes actions/ledger state hashed
+        // into the checkpoint preimage; an ungated flip forks a skewed fleet
+        // on the first aliased or legacy-format sub-action). Keyed on block
+        // TIME with the ratified 2026-10-01 contract-era cohort (
+        // batch); testnet/regtest activate at genesis (all zeros).
+        this.addChange('BATCH_SUBACTION_NORMALIZATION', '2.0.0',1790812800,0,0,0,0,0);
 
         // NOTE: STAKE_WEIGHTED_QUORUM (WI-1) is deliberately NOT registered here.
         // Standard activations gate on the LOCAL processing block via isEnabled();
