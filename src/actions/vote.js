@@ -88,6 +88,13 @@ class Vote {
         let block_index  = parseInt(data['BLOCK_INDEX']);
         let action_index = data['ACTION_INDEX'];
 
+        // : reject a sleeping SOURCE (v0 moves GAS into escrow while the
+        // address is supposedly frozen). Flag-day gated: see VOTE_RESPECTS_SLEEP
+        // in protocol_changes.js for why this validity tightening is gated.
+        if(!error && await this.actions.protocolChanges.isEnabled('VOTE_RESPECTS_SLEEP', data['BLOCK_INDEX'])
+                  && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
+            error = 'invalid: SOURCE (sleeping)';
+
         // TICK must be a real, issued token (the electorate + weight basis)
         let tokenInfo = null;
         if(!error){
@@ -325,6 +332,13 @@ class Vote {
         let block_index  = parseInt(data['BLOCK_INDEX']);
         let action_index = data['ACTION_INDEX'];
         let selections   = [];
+
+        // : reject a sleeping SOURCE (a frozen address must not cast or
+        // mutate ballots). Flag-day gated: see VOTE_RESPECTS_SLEEP in
+        // protocol_changes.js.
+        if(!error && await this.actions.protocolChanges.isEnabled('VOTE_RESPECTS_SLEEP', data['BLOCK_INDEX'])
+                  && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
+            error = 'invalid: SOURCE (sleeping)';
 
         // POLL_REF must reference an existing poll
         let poll = null;
@@ -672,6 +686,13 @@ class Vote {
         let block_index  = parseInt(data['BLOCK_INDEX']);
         let action_index = data['ACTION_INDEX'];
 
+        // : reject a sleeping SOURCE (a frozen address must not set or
+        // clear delegations). Gated with the v3 DELEGATE_TO format check below:
+        // see VOTE_RESPECTS_SLEEP in protocol_changes.js.
+        let tightened = !error && await this.actions.protocolChanges.isEnabled('VOTE_RESPECTS_SLEEP', data['BLOCK_INDEX']);
+        if(!error && tightened && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
+            error = 'invalid: SOURCE (sleeping)';
+
         // TICK must be a real, issued token (the governance electorate)
         if(!error){
             if(this.util.isNull(data['TICK']))
@@ -689,6 +710,13 @@ class Vote {
         let clearing = this.util.isNull(data['DELEGATE_TO']) || String(data['DELEGATE_TO']).trim() === '';
         if(!error && !clearing && String(data['DELEGATE_TO']).trim() === String(data['SOURCE']).trim())
             error = 'invalid: DELEGATE_TO (cannot delegate to self)';
+
+        // : a set (non-clearing) DELEGATE_TO must be a real address on this
+        // chain, matching MESSAGE/DISPENSER handling. Before the flag-day a
+        // malformed target was accepted and just resolved to no holder at tally
+        // time, so the check shares the VOTE_RESPECTS_SLEEP gate above.
+        if(!error && !clearing && tightened && !this.util.isCryptoAddress(String(data['DELEGATE_TO']).trim()))
+            error = 'invalid: DELEGATE_TO (format)';
 
         // MEMO (optional): bounded length
         if(!error && !this.util.isNull(data['MEMO']) && String(data['MEMO']).length > this.config['MAX_MESSAGE_LENGTH'])

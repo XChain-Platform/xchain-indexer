@@ -318,6 +318,28 @@ class ProtocolChanges {
         // timelock from block 0).
         this.addChange('VOTE_CALLBACK_TIMELOCK', '2.0.0',1790812800,0,0,0,0,0);
 
+        //  (VOTE-SLEEP-1): VOTE respects the self-sleep gate. SLEEP v0
+        // freezes an address ("pauses actions on an ADDRESS") and every sibling
+        // governance/content handler (list/link/broadcast/message/file/address)
+        // rejects a sleeping SOURCE via isActionAllowed, but VOTE never checked
+        // it: a self-slept address could still create and fund polls (v0 moves
+        // GAS into escrow), cast ballots (v1) and set delegations (v3) during
+        // its own freeze window. At/after this activation all three
+        // user-broadcast VOTE versions reject a sleeping SOURCE with
+        // 'invalid: SOURCE (sleeping)'; v2 finalize is system-synthesized and
+        // stays exempt. The same activation also makes v3 validate a set
+        // (non-blank) DELEGATE_TO with isCryptoAddress, matching
+        // MESSAGE/DISPENSER address handling (before, a malformed target was
+        // accepted and simply resolved to no holder at tally time). Gated
+        // because both checks TIGHTEN validity on a genesis-active action (a
+        // previously-valid VOTE becomes invalid), so an ungated flip forks a
+        // heterogeneous fleet and diverges a from-genesis replay; mirrors
+        // SLEEP_RESPECTS_LOCK_SLEEP. Keyed on block_TIME at the ratified
+        // coordinated anchor 1790812800 (2026-10-01 00:00:00 UTC), the
+        // confirmed 2.0.0 contract-era cohort; a divergent value is a fork.
+        // testnet/regtest activate at genesis.
+        this.addChange('VOTE_RESPECTS_SLEEP', '2.0.0',1790812800,0,0,0,0,0);
+
         // : ATTEST v1 canonical id-case normalization. Below this activation
         // the canonical signing bytes (and the EQUIV ROUND_ID) use the RAW wire
         // REQUEST_ID case, the original behaviour: a case-mutated replay of a
