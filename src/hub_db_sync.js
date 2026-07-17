@@ -143,6 +143,11 @@ const HUB_STATE_TABLES = ['state_checkpoints'];
 // schema and self-heals (see _localColumns).
 const LOCAL_COLUMN_CACHE_TTL_MS = 5 * 60 * 1000;
 
+// Cap on live price_snapshots events buffered while the price bootstrap drains
+// (see _bufferPriceEvent). Rounds finalize on PBFT cadence, so even a
+// multi-minute drain sees a handful; the cap only bounds a pathological hub.
+const PENDING_PRICE_EVENT_CAP = 10000;
+
 class HubDbSync {
 
     constructor(hubDb, options) {
@@ -282,6 +287,31 @@ class HubDbSync {
         // would open and settle a block against mirror data we refused to apply.
         // Cleared on a clean re-bootstrap (which only drains when versions match).
         this._schemaMismatchSeen = false;
+
+        // Live price_snapshots events are BUFFERED, not applied, until the
+        // current connection's price_snapshots bootstrap has fully drained
+        // (#2422). The WS subscription opens BEFORE the REST bootstrap and
+        // price_snapshots deliberately drains LAST behind a multi-minute pull,
+        // so a live row (a freshly-finalized round) applied mid-drain lands
+        // ABOVE rows only the still-draining bootstrap will deliver. Every
+        // MAX()-based refresh would then overstate the mirror (priceSyncHeight
+        // jumps to the fresh round while earlier rounds are still absent) and
+        // the height barrier would open over a HOLED mirror: a per-operator
+        // divergent native-fee price read. The same out-of-order row would
+        // also contaminate the re-bootstrap cursor (since_id = local MAX(id)
+        // silently skips the gap under it). Deferring the apply keeps the
+        // local mirror a CONTIGUOUS prefix of the hub's table at all times,
+        // which is what makes the reconnect self-heal
+        // (_refreshAllSyncHeights) and the timeout self-heal safe to read
+        // from it unguarded. _priceDrained is per-connection (reset on close,
+        // like _bootstrapDrained); the buffer replays in arrival order once
+        // the drain completes (see _bootstrapTable), then the live path
+        // resumes. _wsEpoch bumps on every disconnect so a flush racing a
+        // close can never stale-arm _priceDrained for the next connection.
+        this._priceDrained         = false;
+        this._pendingPriceEvents   = [];
+        this._pendingPriceOverflow = false;
+        this._wsEpoch              = 0;
 
         // Serialization chain for the WebSocket message handler. Each incoming
         // message appends its async work to this promise so that a watermark
@@ -637,7 +667,28 @@ class HubDbSync {
             // fully drained. The refreshers otherwise default arming to
             // _bootstrapDrained so reconnect / live-row refreshes cannot arm from
             // a holed mirror (see #1788).
-            if (table === 'price_snapshots')     await this._refreshPriceSyncHeight();
+            if (table === 'price_snapshots') {
+                // Replay the live rounds buffered during this drain (#2422),
+                // serialized through the message chain: every already-received
+                // event is guaranteed buffered ahead of this task and no new
+                // event can interleave mid-flush; the task flips _priceDrained
+                // before the next event task runs, so the live apply path
+                // resumes exactly at the replay boundary with no ordering gap.
+                // A failed or disconnect-raced flush reports the table
+                // not-drained (return null) so _bootstrapAll retries from the
+                // still-contiguous local max, the same fail-closed contract as
+                // the page loop (BOOTSTRAP-HOLE-1).
+                let flushed = false;
+                let epoch = this._wsEpoch;
+                this._msgChain = this._msgChain.then(async () => {
+                    flushed = await this._flushPendingPriceEvents();
+                    if (flushed && epoch === this._wsEpoch) this._priceDrained = true;
+                    else flushed = false;
+                });
+                await this._msgChain;
+                if (!flushed) return null;
+                await this._refreshPriceSyncHeight();
+            }
             if (table === 'oracle_prices')       await this._refreshOracleSyncTimestamp(true);
             if (table === 'cross_chain_matches') await this._refreshMatchSyncTimestamp(true);
             if (table === 'cross_chain_calls')   await this._refreshCallSyncTimestamp(true);
@@ -690,7 +741,11 @@ class HubDbSync {
     // Whether the price mirror is caught up enough to safely process a block at
     // (blockHeight, blockTime). Two satisfied cases:
     //   1. A finalized round anchored at or past this height is local; every round
-    //      eligible at this height is therefore local (rows arrive id-ordered).
+    //      eligible at this height is therefore local (rows arrive id-ordered, and
+    //      live rows are buffered until the bootstrap drain completes, so the
+    //      local mirror is always a CONTIGUOUS prefix of the hub's table; a
+    //      fresh round streamed mid-drain can no longer raise the height over
+    //      still-missing earlier rounds. See _bufferPriceEvent, #2422).
     //   2. The hub's stream watermark has passed this block's time plus a grace
     //      margin covering PBFT finalization lag (the hub has told us everything
     //      it produced through that instant, so the set of rounds at or before this
@@ -1491,6 +1546,110 @@ class HubDbSync {
         });
     }
 
+    // Route one live row event (row:inserted / row:deleted) from the
+    // subscription stream. Split from the socket handler so the buffering
+    // decision is unit-testable; always invoked through _msgChain, so calls
+    // are serialized against each other and against the drain-time flush.
+    // Order matters: the schema fail-closed check runs first (a mismatched
+    // row must freeze the watermark gate even mid-bootstrap and must never be
+    // buffered for a later replay), then price_snapshots events are BUFFERED
+    // while this connection's price bootstrap has not drained (#2422; see the
+    // constructor note: applying them early holes the mirror under the
+    // still-draining REST pull and every MAX()-based refresh would open the
+    // height barrier over the hole), and only then does the normal
+    // apply-and-refresh path run.
+    async _handleRowEvent(event) {
+        if (event.schema_version != null && event.schema_version !== HUB_SCHEMA_VERSION) {
+            // Schema-version mismatch: the hub is broadcasting a mirror row shape
+            // this indexer was not built for, so applying it (or its retraction)
+            // risks dropping a consensus-relevant column and forking the ledger.
+            // Fail closed: do not apply, do not advance the watermark, so the
+            // barrier stays shut and the block is deferred rather than settled
+            // against mismatched mirror data. The != null guard keeps older hubs
+            // that send no version working unchanged.
+            console.error('HubDbSync: hub schema_version ' + event.schema_version +
+                ' != local ' + HUB_SCHEMA_VERSION + ' for ' + event.table +
+                '; refusing to apply row. Restart this indexer after upgrading the hub.');
+            // Freeze the watermark gate until a clean re-bootstrap, so a
+            // following heartbeat cannot certify the stream as caught-up
+            // while we are dropping rows we cannot apply.
+            this._schemaMismatchSeen = true;
+            return;
+        }
+        if (event.table === 'price_snapshots' && !this._priceDrained) {
+            this._bufferPriceEvent(event);
+            return;
+        }
+        if (event.type === 'row:inserted' && event.table && event.row) {
+            await this._applyRow(event.table, event.row);
+            if (event.table === 'price_snapshots')     await this._refreshPriceSyncHeight();
+            if (event.table === 'oracle_prices')       await this._refreshOracleSyncTimestamp();
+            if (event.table === 'cross_chain_matches') await this._refreshMatchSyncTimestamp();
+            if (event.table === 'cross_chain_calls')   await this._refreshCallSyncTimestamp();
+            if (CROSS_CHAIN_TABLES.indexOf(event.table) !== -1) await this._releaseSnapshotWaiters();
+        } else if (event.type === 'row:deleted' && event.table) {
+            await this._applyRetraction(event);
+            if (event.table === 'price_snapshots')     await this._refreshPriceSyncHeight();
+            if (event.table === 'oracle_prices')       await this._refreshOracleSyncTimestamp();
+            if (event.table === 'cross_chain_matches') await this._refreshMatchSyncTimestamp();
+            if (event.table === 'cross_chain_calls')   await this._refreshCallSyncTimestamp();
+            if (event.table === 'cross_chain_matches' || event.table === 'cross_chain_calls') await this._releaseSnapshotWaiters();
+        }
+    }
+
+    // Queue a live price_snapshots event for replay after the price bootstrap
+    // drains (#2422). Inserts AND deletions buffer: replaying a fenced
+    // retraction before the insert it retracts would no-op the delete and then
+    // re-insert the retracted row, so arrival order is consensus-relevant. On
+    // overflow the buffer is abandoned and flagged: the flush then reports the
+    // table not-drained so _bootstrapAll re-pages the dropped rows straight
+    // from the hub (they are in its DB) instead of opening the gate over the
+    // loss; dropped deletions are redelivered by the hub's deferred-retraction
+    // path (item 5296), same as deletions missed while disconnected.
+    _bufferPriceEvent(event) {
+        if (this._pendingPriceOverflow) return;
+        if (this._pendingPriceEvents.length >= PENDING_PRICE_EVENT_CAP) {
+            console.error('HubDbSync: pending price_snapshots event buffer overflow (' +
+                PENDING_PRICE_EVENT_CAP + '); discarding and forcing a re-drain');
+            this._pendingPriceOverflow = true;
+            this._pendingPriceEvents = [];
+            return;
+        }
+        this._pendingPriceEvents.push(event);
+    }
+
+    // Replay the live price_snapshots events buffered during the bootstrap
+    // drain, in arrival order. Returns true when every buffered event applied
+    // (re-receives of rows the final drain pages already fetched are harmless:
+    // the price upsert is idempotent). On a failure it stops AT the failed
+    // event, keeping it and the tail buffered, and returns false so the caller
+    // reports the table not-drained: local MAX(id) stays at the contiguous
+    // drain frontier, the retry re-fetches the failed row over REST, and a
+    // persistently bad row wedges the barrier (defer) rather than silently
+    // forking, the module's fail-closed contract (BOOTSTRAP-HOLE-1).
+    async _flushPendingPriceEvents() {
+        if (this._pendingPriceOverflow) {
+            this._pendingPriceOverflow = false;
+            this._pendingPriceEvents = [];
+            return false;
+        }
+        while (this._pendingPriceEvents.length > 0) {
+            let event = this._pendingPriceEvents[0];
+            try {
+                if (event.type === 'row:inserted' && event.row) {
+                    await this._applyRow('price_snapshots', event.row);
+                } else if (event.type === 'row:deleted') {
+                    await this._applyRetraction(event);
+                }
+            } catch (err) {
+                console.warn('HubDbSync: failed to replay buffered price_snapshots event:', err);
+                return false;
+            }
+            this._pendingPriceEvents.shift();
+        }
+        return true;
+    }
+
     // Open the WebSocket subscription for live row updates. Returns a Promise that
     // resolves once the hub sends a 'ready' acknowledgement confirming the subscription
     // is registered server-side. start() awaits this before running the REST bootstrap,
@@ -1584,37 +1743,11 @@ class HubDbSync {
                             // rows are being refused below, so certifying the stream as
                             // caught-up would settle blocks against data we did not apply.
                             if (this._bootstrapDrained && !this._schemaMismatchSeen) this._advanceWatermark(event.ts);
-                        } else if ((event.type === 'row:inserted' || event.type === 'row:deleted')
-                                   && event.schema_version != null
-                                   && event.schema_version !== HUB_SCHEMA_VERSION) {
-                            // Schema-version mismatch: the hub is broadcasting a mirror row shape
-                            // this indexer was not built for, so applying it (or its retraction)
-                            // risks dropping a consensus-relevant column and forking the ledger.
-                            // Fail closed: do not apply, do not advance the watermark, so the
-                            // barrier stays shut and the block is deferred rather than settled
-                            // against mismatched mirror data. The != null guard keeps older hubs
-                            // that send no version working unchanged.
-                            console.error('HubDbSync: hub schema_version ' + event.schema_version +
-                                ' != local ' + HUB_SCHEMA_VERSION + ' for ' + event.table +
-                                '; refusing to apply row. Restart this indexer after upgrading the hub.');
-                            // Freeze the watermark gate until a clean re-bootstrap, so a
-                            // following heartbeat cannot certify the stream as caught-up
-                            // while we are dropping rows we cannot apply.
-                            this._schemaMismatchSeen = true;
-                        } else if (event.type === 'row:inserted' && event.table && event.row) {
-                            await this._applyRow(event.table, event.row);
-                            if (event.table === 'price_snapshots')     await this._refreshPriceSyncHeight();
-                            if (event.table === 'oracle_prices')       await this._refreshOracleSyncTimestamp();
-                            if (event.table === 'cross_chain_matches') await this._refreshMatchSyncTimestamp();
-                            if (event.table === 'cross_chain_calls')   await this._refreshCallSyncTimestamp();
-                            if (CROSS_CHAIN_TABLES.indexOf(event.table) !== -1) await this._releaseSnapshotWaiters();
-                        } else if (event.type === 'row:deleted' && event.table) {
-                            await this._applyRetraction(event);
-                            if (event.table === 'price_snapshots')     await this._refreshPriceSyncHeight();
-                            if (event.table === 'oracle_prices')       await this._refreshOracleSyncTimestamp();
-                            if (event.table === 'cross_chain_matches') await this._refreshMatchSyncTimestamp();
-                            if (event.table === 'cross_chain_calls')   await this._refreshCallSyncTimestamp();
-                            if (event.table === 'cross_chain_matches' || event.table === 'cross_chain_calls') await this._releaseSnapshotWaiters();
+                        } else if (event.type === 'row:inserted' || event.type === 'row:deleted') {
+                            // Schema fail-closed check, price-event buffering
+                            // (#2422), and the apply-and-refresh path all live
+                            // in _handleRowEvent (extracted for testability).
+                            await this._handleRowEvent(event);
                         }
                     } catch (err) {
                         console.warn('HubDbSync: failed to handle WebSocket message:', err);
@@ -1630,6 +1763,17 @@ class HubDbSync {
                 // close the heartbeat gate (and freeze the watermark) until the
                 // reconnect re-bootstrap has drained the gap.
                 this._bootstrapDrained = false;
+                // Price events buffered for the drain die with the socket: their
+                // inserts re-page via the re-bootstrap and their deletions are
+                // redelivered by the hub's deferred-retraction path (item 5296).
+                // Reset the per-connection price-drain state so live price rows
+                // buffer again until the reconnect re-bootstrap drains (#2422),
+                // and bump the epoch so a flush racing this close cannot
+                // stale-arm _priceDrained for the next connection.
+                this._priceDrained = false;
+                this._pendingPriceEvents = [];
+                this._pendingPriceOverflow = false;
+                this._wsEpoch++;
                 // Reset the serialization chain so the new connection starts clean
                 // rather than waiting on in-flight work from the dead socket.
                 this._msgChain = Promise.resolve();

@@ -921,6 +921,165 @@ describe('HubDbSync bootstrap fail-closed on partial drain / holes @regression @
     });
 });
 
+// ---------------------------------------------------------------------------
+// #2422: the WS subscription opens BEFORE the REST bootstrap and
+// price_snapshots deliberately drains LAST behind a multi-minute pull, so a
+// freshly-finalized round arriving on the socket mid-drain used to apply
+// immediately; _refreshPriceSyncHeight then adopted its MAX(reference_block)
+// while earlier rounds (lower ids, only deliverable via the still-draining
+// bootstrap) were absent locally, and the height barrier's case-1 opened over
+// a HOLED mirror: a per-operator divergent native-fee price read. Live price
+// events must BUFFER until the price bootstrap drains, keeping the local
+// mirror a CONTIGUOUS prefix of the hub's table, while the reconnect
+// self-heal (which reads a COMPLETE mirror before the re-bootstrap, tests
+// above) keeps working unguarded.
+// ---------------------------------------------------------------------------
+describe('HubDbSync live price rows buffer until the price bootstrap drains (#2422) @regression @tier1', function () {
+
+    function makeBufferSync() {
+        const doQuery = sinon.stub().resolves([]);
+        const sync = new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test' });
+        return { sync, doQuery };
+    }
+
+    it('a live price round arriving mid-bootstrap is buffered, not applied, and cannot open the height barrier', async function () {
+        const { sync } = makeBufferSync();
+        const applyRow = sinon.stub(sync, '_applyRow').resolves();
+        const refresh  = sinon.stub(sync, '_refreshPriceSyncHeight').resolves();
+        assert.strictEqual(sync._priceDrained, false, 'price drain pending on a fresh connection');
+        await sync._handleRowEvent({ type: 'row:inserted', table: 'price_snapshots',
+            row: { id: 37032, reference_block: 900000, status: 'finalized' } });
+        assert.ok(applyRow.notCalled, 'must not apply ahead of the still-draining bootstrap');
+        assert.ok(refresh.notCalled, 'must not refresh (a MAX() read would adopt the holed height)');
+        assert.strictEqual(sync._pendingPriceEvents.length, 1, 'event buffered for post-drain replay');
+        assert.strictEqual(sync.priceSyncHeight, 0, 'barrier input unchanged');
+        assert.ok(!sync.priceBootstrapped, 'time-barrier flag not armed from a holed mirror');
+        assert.strictEqual(sync._priceSyncSatisfied(900000, undefined), false, 'barrier stays shut');
+    });
+
+    it('a live price retraction mid-bootstrap buffers too (replay order vs its insert is consensus-relevant)', async function () {
+        const { sync } = makeBufferSync();
+        const retract = sinon.stub(sync, '_applyRetraction').resolves();
+        await sync._handleRowEvent({ type: 'row:deleted', table: 'price_snapshots',
+            source_chain: 'BTC', from_action_index: 50 });
+        assert.ok(retract.notCalled, 'deletion deferred behind any buffered insert it may retract');
+        assert.strictEqual(sync._pendingPriceEvents.length, 1);
+    });
+
+    it('live rows for OTHER tables still apply immediately mid-bootstrap', async function () {
+        const { sync } = makeBufferSync();
+        const applyRow = sinon.stub(sync, '_applyRow').resolves();
+        const refresh  = sinon.stub(sync, '_refreshOracleSyncTimestamp').resolves();
+        await sync._handleRowEvent({ type: 'row:inserted', table: 'oracle_prices', row: { id: 1 } });
+        assert.ok(applyRow.calledOnce, 'non-price mirrors keep the live path');
+        assert.ok(refresh.calledOnce);
+        assert.strictEqual(sync._pendingPriceEvents.length, 0);
+    });
+
+    it('a schema-mismatched live price event is refused outright, never buffered for replay', async function () {
+        const { sync } = makeBufferSync();
+        const applyRow = sinon.stub(sync, '_applyRow').resolves();
+        await sync._handleRowEvent({ type: 'row:inserted', table: 'price_snapshots',
+            schema_version: 999999, row: { id: 1 } });
+        assert.ok(applyRow.notCalled);
+        assert.strictEqual(sync._pendingPriceEvents.length, 0, 'a bad-shape row must not survive to the flush');
+        assert.strictEqual(sync._schemaMismatchSeen, true, 'watermark gate frozen');
+    });
+
+    it('the drain replays buffered events in arrival order, arms the refresh, and resumes the live path', async function () {
+        const doQuery = sinon.stub().resolves([{ max_id: null }]);
+        const sync = new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test' });
+        sinon.stub(sync, '_localColumns').resolves(new Set(['id', 'status']));
+        sinon.stub(sync, '_httpGet').resolves({ rows: [{ id: 1 }, { id: 2 }], watermark: 55 });
+        const seq = [];
+        sinon.stub(sync, '_applyRow').callsFake(async (t, row) => { seq.push('insert:' + row.id); });
+        sinon.stub(sync, '_applyRetraction').callsFake(async (e) => { seq.push('delete:' + e.from_action_index); });
+        const refresh = sinon.stub(sync, '_refreshPriceSyncHeight').resolves();
+
+        // Two live events land mid-drain: a fresh round, then its retraction.
+        await sync._handleRowEvent({ type: 'row:inserted', table: 'price_snapshots', row: { id: 9 } });
+        await sync._handleRowEvent({ type: 'row:deleted', table: 'price_snapshots', source_chain: 'BTC', from_action_index: 9 });
+        assert.deepStrictEqual(seq, [], 'nothing applied before the drain');
+
+        const mark = await sync._bootstrapTable('price_snapshots');
+        assert.strictEqual(mark, 55, 'drain completes');
+        assert.deepStrictEqual(seq, ['insert:1', 'insert:2', 'insert:9', 'delete:9'],
+            'bootstrap pages first, then buffered events replay in arrival order');
+        assert.strictEqual(sync._priceDrained, true);
+        assert.strictEqual(sync._pendingPriceEvents.length, 0);
+        assert.ok(refresh.calledOnce, 'the barrier refresh runs once, after the replay');
+
+        // Live path resumes: the next event applies immediately and refreshes.
+        await sync._handleRowEvent({ type: 'row:inserted', table: 'price_snapshots', row: { id: 10 } });
+        assert.deepStrictEqual(seq.slice(-1), ['insert:10']);
+        assert.ok(refresh.calledTwice, 'post-drain live rows refresh as before');
+    });
+
+    it('a failed replay fails closed: the table reports not-drained and the failed event stays buffered', async function () {
+        const doQuery = sinon.stub().resolves([{ max_id: null }]);
+        const sync = new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test' });
+        sinon.stub(sync, '_localColumns').resolves(new Set(['id']));
+        sinon.stub(sync, '_httpGet').resolves({ rows: [{ id: 1 }], watermark: 55 });
+        const applyRow = sinon.stub(sync, '_applyRow');
+        applyRow.resolves();
+        applyRow.withArgs('price_snapshots', sinon.match({ id: 9 })).rejects(new Error('ER_SOMETHING'));
+        const refresh = sinon.stub(sync, '_refreshPriceSyncHeight').resolves();
+        await sync._handleRowEvent({ type: 'row:inserted', table: 'price_snapshots', row: { id: 9 } });
+        await sync._handleRowEvent({ type: 'row:inserted', table: 'price_snapshots', row: { id: 10 } });
+
+        const mark = await sync._bootstrapTable('price_snapshots');
+        assert.strictEqual(mark, null, 'flush failure must report not-drained so _bootstrapAll retries');
+        assert.strictEqual(sync._priceDrained, false, 'live path must not open over the missed round');
+        assert.strictEqual(sync._pendingPriceEvents.length, 2, 'failed event and tail stay buffered for the retry');
+        assert.ok(refresh.notCalled, 'must not arm the barrier over the hole');
+    });
+
+    it('a disconnect racing the drain cannot stale-arm the live path (epoch guard)', async function () {
+        const doQuery = sinon.stub().resolves([{ max_id: null }]);
+        const sync = new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test' });
+        sinon.stub(sync, '_localColumns').resolves(new Set(['id']));
+        sinon.stub(sync, '_httpGet').resolves({ rows: [], watermark: 55 });
+        const refresh = sinon.stub(sync, '_refreshPriceSyncHeight').resolves();
+        // Simulate the socket closing while the flush is in flight (the close
+        // handler bumps _wsEpoch and resets the per-connection drain state).
+        sinon.stub(sync, '_flushPendingPriceEvents').callsFake(async () => { sync._wsEpoch++; return true; });
+
+        const mark = await sync._bootstrapTable('price_snapshots');
+        assert.strictEqual(mark, null, 'a raced drain must not certify the table');
+        assert.strictEqual(sync._priceDrained, false, 'the NEXT connection must re-buffer until its own re-drain');
+        assert.ok(refresh.notCalled);
+    });
+
+    it('buffer overflow forces a re-drain instead of opening the gate over dropped events', async function () {
+        const { sync } = makeBufferSync();
+        sync._pendingPriceEvents = new Array(10000).fill({ type: 'row:inserted', row: { id: 1 } });
+        sync._bufferPriceEvent({ type: 'row:inserted', row: { id: 99999 } });
+        assert.strictEqual(sync._pendingPriceOverflow, true, 'overflow flagged');
+        assert.strictEqual(sync._pendingPriceEvents.length, 0, 'buffer abandoned (rows re-page from the hub)');
+        assert.strictEqual(await sync._flushPendingPriceEvents(), false,
+            'the flush reports not-drained so _bootstrapAll re-pages the dropped rows');
+        assert.strictEqual(sync._pendingPriceOverflow, false, 'flag consumed; the retry starts clean');
+    });
+
+    it('reconnect self-heal preserved: a COMPLETE mirror still clears a price waiter while the re-drain is pending', async function () {
+        // The distinguishing signal is the mirror's CONTIGUITY, not a flag:
+        // buffering guarantees no out-of-order live row was ever applied, so
+        // at the reconnect edge (_bootstrapDrained false, _priceDrained false)
+        // the local mirror is exactly the pre-disconnect complete prefix and
+        // the proactive refresh may adopt its MAX unguarded (the 5d465fa /
+        // 2026-06-13 self-heal fixes stay intact).
+        const doQuery = sinon.stub().callsFake(async () => [{ h: 150 }]);
+        const sync = new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test' });
+        sync.priceSyncHeight   = 10;               // in-memory frozen behind the mirror
+        sync._bootstrapDrained = false;            // reconnect edge: gate closed...
+        sync._priceDrained     = false;            // ...and the price re-drain still pending
+        const pending = sync.waitForPriceSyncHeight(100, 60000);
+        await sync._refreshAllSyncHeights();       // the reconnect-edge proactive refresh
+        assert.strictEqual(await pending, 150, 'barrier opens from the complete local mirror, not the timeout');
+        assert.strictEqual(sync._priceWaiters.length, 0);
+    });
+});
+
 // Cross-chain call-sync watermark must be scoped to this coin (item 4573): a global
 // MAX(effective_time) could be bumped by an unrelated other-chain call and let the
 // barrier pass before this chain's calls are mirrored, forking XEXEC injection.
