@@ -395,8 +395,22 @@ class Database {
                             // mode fail closed so a diverged schema is caught in CI / by an operator
                             // instead of silently continuing. Default auto-startup stays non-fatal
                             // (console.error, not warn) to avoid a surprise fleet-wide boot failure.
-                            if(includeManual || process.env.MIGRATION_STRICT_CHECKSUM === '1')
-                                throw new Error(msg + ' Review manually (set MIGRATION_STRICT_CHECKSUM=0 / omit to downgrade to a non-fatal log).');
+                            if(includeManual || process.env.MIGRATION_STRICT_CHECKSUM === '1'){
+                                // Tailor the remedy to which branch actually fired. The operator path
+                                // (includeManual, `node src/migrate.js`) ALWAYS fails closed by design, so
+                                // MIGRATION_STRICT_CHECKSUM has no effect there - telling the operator to
+                                // clear it just loops them back to the same error. Only the passive
+                                // startup path opted into strict mode via MIGRATION_STRICT_CHECKSUM=1 can
+                                // actually be downgraded by clearing it. ()
+                                const hint = includeManual
+                                    ? ' This operator run always fails closed (MIGRATION_STRICT_CHECKSUM has no' +
+                                      ' effect here). Either revert ' + file + ' to the content matching the' +
+                                      ' recorded checksum, or - if the edit was reviewed and changed no' +
+                                      ' executable SQL - add a pinned Database.MIGRATION_CHECKSUM_REBASELINES' +
+                                      ' entry mapping the recorded hash to the current one.'
+                                    : ' Review manually (set MIGRATION_STRICT_CHECKSUM=0 / omit to downgrade to a non-fatal log).';
+                                throw new Error(msg + hint);
+                            }
                             console.error(msg + ' Continuing on the diverged schema - review manually.');
                         }
                         continue;
@@ -1646,6 +1660,18 @@ class Database {
         this._blockTimeCache.block_index = key;
         this._blockTimeCache.block_time  = block_time;
         return block_time;
+    }
+
+    // Invalidate the single-entry getBlockTime() memo. A reorg replaces the content of an
+    // already-processed height: the decoder re-inserts the new-chain block with a new
+    // block_time, and the indexer's blocks row for that height is deleted by rollback. The
+    // memo is keyed by height ONLY, so on a depth-1 reorg the replay of the same height would
+    // otherwise return the orphaned chain's stale block_time (a cache hit), feeding the wrong
+    // timestamp into time-gated consensus logic (ProtocolChanges.isEnabled, fee-price gate,
+    // createBlock). Rollback calls this on BOTH DB instances after commit so the replay
+    // re-reads the new chain's block_time. Mirrors the decoder's per-height reorg clear.
+    clearBlockTimeCache(){
+        this._blockTimeCache = { block_index: null, block_time: null };
     }
 
     // Get block hashes using credits/debits/actions table data and previous hash

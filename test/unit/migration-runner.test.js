@@ -84,11 +84,18 @@ describe('committed migrations declare intent @regression @tier1', function () {
     files.forEach(function (file) {
         it(file + ': carries an explicit `-- xchain:migration mode=auto|manual` tag', function () {
             const raw = fs.readFileSync(path.join(MIG_DIR, file), 'utf8');
-            const m = raw.match(/^\s*--\s*xchain:migration\b[^\n]*\bmode\s*=\s*(auto|manual)\b/im);
+            // Scan the SAME first-10-line header window the runner honors (_migrationMode,
+            // src/db.js). A whole-file scan would pass a tag pushed below line 10 (e.g. under a
+            // license banner) that the runner never sees, so the file default-lands as `manual`
+            // while CI stays green - the exact dead-tag gap this test exists to catch ().
+            const header = raw.split('\n').slice(0, 10).join('\n');
+            const m = header.match(/^\s*--\s*xchain:migration\b[^\n]*\bmode\s*=\s*(auto|manual)\b/im);
             assert.ok(m,
-                file + ' has no explicit mode tag. Every migration must declare intent so a ' +
-                'destructive change can never silently auto-run at startup. Add a first line: ' +
-                '`-- xchain:migration mode=auto` (additive + idempotent) or `mode=manual` (gated).');
+                file + ' has no explicit mode tag within the first 10 lines (the runner\'s header ' +
+                'window). Every migration must declare intent so a destructive change can never ' +
+                'silently auto-run at startup, and the tag must sit where _migrationMode reads it. ' +
+                'Add a first line: `-- xchain:migration mode=auto` (additive + idempotent) or ' +
+                '`mode=manual` (gated), above any license banner.');
         });
     });
 

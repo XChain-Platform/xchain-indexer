@@ -1,3 +1,4 @@
+-- xchain:migration mode=manual
 --********************************************************************
 --
 -- Copyright © 2025-2026 Dankest, LLC
@@ -12,7 +13,6 @@
 --
 --********************************************************************
 
--- xchain:migration mode=manual
 -- Migration: reposition contract_state.state_key_bin to AFTER state_key on
 -- aged databases (follow-up to 2026-07-10-contract-state-bin-key-index.sql).
 --

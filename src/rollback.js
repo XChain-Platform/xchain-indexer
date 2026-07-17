@@ -1125,6 +1125,17 @@ class Rollback {
             // Commit: the rollback is now atomically applied
             await this.indexerDb.commitTransaction();
 
+            // Invalidate the height-keyed getBlockTime() memo on BOTH DB instances. This reorg
+            // just changed the content of every height >= block_index: the decoder re-inserted
+            // the new-chain block(s) with new block_time(s), and the indexer's blocks rows were
+            // deleted above. The memo is keyed by height only and is never otherwise cleared, so
+            // without this a depth-1 reorg replay of the same height would hit a stale cache and
+            // drive the block with the orphaned chain's timestamp (a unilateral consensus fork on
+            // any straddling time gate). Clearing after commit guarantees the forward replay
+            // re-reads the new chain's block_time. See .
+            if(this.decoderDb && typeof this.decoderDb.clearBlockTimeCache === 'function') this.decoderDb.clearBlockTimeCache();
+            if(this.indexerDb && typeof this.indexerDb.clearBlockTimeCache === 'function') this.indexerDb.clearBlockTimeCache();
+
             // Destructive rollback is done and committed; clear the in-progress marker so
             // /health reflects a caught-up node again (#1812).
             if(this.indexer) this.indexer.stallReason = null;
