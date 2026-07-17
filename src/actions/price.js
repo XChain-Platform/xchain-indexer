@@ -162,12 +162,19 @@ class Price {
 
             // STAKE_WEIGHTED_QUORUM: at/above the activation snapshot_block, finalize
             // on the summed STAKE of the qualified signers (>2/3 of S, source-deduped)
-            // rather than their COUNT. Gated on this PRICE's BLOCK_INDEX (a BTC height,
-            // price is BTC-anchored) + the indexer's network, so the hub and every
-            // indexer flip on the same anchor. Below activation: byte-for-byte the
-            // legacy count rule. `qualifiedSigners` is the verified, capability-qualified
-            // signer set (the same input both modes tally).
-            let weighted = swq.isStakeWeightedQuorumActive(data['BLOCK_INDEX'], this.config['NETWORK']);
+            // rather than their COUNT. Gated on the round's own BTC anchor
+            // (data['BTC_BLOCK_HEIGHT'], carried in the signed payload; see line 140's
+            // buildPriceV0Payload) + the indexer's network, NOT this PRICE's local
+            // BLOCK_INDEX: PRICE v0 is publishable on any chain (protocol_changes.js,
+            // DOGE recommended for low fees), so keying on the landing chain's local
+            // height would make the LTC/DOGE comparison vacuously true (heights ~2.9M/
+            // ~5.7M >> 961000) and flip stake-weighting on months early there while BTC
+            // still used count quorum - the same signed round resolving under two rules.
+            // The BTC anchor is what the predicate's contract keys on (stake_weighted_
+            // quorum.js), so the hub and every chain's indexer flip on the same anchor.
+            // Below activation: byte-for-byte the legacy count rule. `qualifiedSigners`
+            // is the verified, capability-qualified signer set (both modes tally it).
+            let weighted = swq.isStakeWeightedQuorumActive(data['BTC_BLOCK_HEIGHT'], this.config['NETWORK']);
             if(weighted){
                 let validators = await this.indexerDb.getStakeWeightsByCapability('price', data['BLOCK_INDEX']);
                 if(!swq.meetsStakeThreshold(validators, qualifiedSigners))

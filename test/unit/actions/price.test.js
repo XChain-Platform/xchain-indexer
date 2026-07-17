@@ -145,6 +145,21 @@ describe('Price (PRICE) @regression @tier3', function () {
             assert.strictEqual(data['VALIDATION_STATUS'], 'invalid');
         });
 
+        it('gates stake-weighted quorum on the round BTC anchor (BTC_BLOCK_HEIGHT), not the local BLOCK_INDEX (#2268)', async function () {
+            // The local landing height and the round's signed BTC anchor deliberately differ,
+            // as they do on LTC/DOGE where the local height (~2.9M/~5.7M) dwarfs the BTC anchor.
+            // The activation gate must key on the BTC anchor so every chain and the hub flip on
+            // the same height; keying on BLOCK_INDEX made the comparison vacuously true off-BTC
+            // and armed stake-weighting there months before the BTC anchor (961000). The anchor
+            // is bound in the signed payload (buildPriceV0Payload), so it cannot be forged.
+            indexer.indexerDb.getActiveCapabilityCount.resolves(1);
+            const data = v0Data({ BLOCK_INDEX: 5700000 });   // a DOGE-like local landing height
+            await handler.parse(v0Params(ONE_PAIR, [{ pubkey: PUBKEY_A, sig: SIG_A }], { btcHeight: '799000' }), data, null);
+            assert.ok(swq.isStakeWeightedQuorumActive.calledOnce);
+            assert.strictEqual(swq.isStakeWeightedQuorumActive.getCall(0).args[0], 799000,
+                'gate must receive the round BTC anchor (799000), not the local BLOCK_INDEX (5700000)');
+        });
+
         it('rejects a malformed pair string', async function () {
             const data = v0Data();
             await handler.parse(v0Params([{ pair: 'not-a-pair', price: '1' }], [{ pubkey: PUBKEY_A, sig: SIG_A }]), data, null);
