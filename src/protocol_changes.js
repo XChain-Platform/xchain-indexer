@@ -521,6 +521,27 @@ class ProtocolChanges {
         // be rebuilt fresh so no pre-activation cooldown-completion blocks remain.
         this.addChange('UNSTAKE_COOLDOWN_COMPLETION_ACTION', '2.0.0',1790812800,0,0,0,0,0);
 
+        // FIX_OUTPUT_FANOUT: collapse the reader-side per-output fan-out for data-bearing,
+        // non-COINPAY transactions. getDecoderBlockData (db.js) LEFT JOINs transaction_outputs
+        // and emits ONE row per stored native-coin output, each carrying the same tx `data`;
+        // the block loop runs processTransaction once per row and createActionIndex dedupes on
+        // a per-row tx_vout, so a data-bearing action (e.g. SEND) whose transaction ALSO pays a
+        // dispenser and/or a native fee-destination output executes once PER output row -
+        // duplicate credits/debits for a single on-chain transaction. Per-output processing is
+        // only intended for COINPAY payment settlement and empty-data DISPENSE triggers. At/after
+        // this flag-day, output_fanout.collapseOutputFanout keeps exactly one row (the lowest
+        // vout, deterministic across nodes) for every other transaction; COINPAY and empty-data
+        // rows keep their fan-out. BELOW the flag-day the historical per-row behaviour is
+        // preserved, except that such a multi-row data-bearing transaction is a consensus-critical
+        // fault that aborts the block (visible halt via the watchdog/rollback path) rather than
+        // silently double-executing. Consensus-visible (changes actions_hash + ledger_hash for any
+        // affected block), so gated on the same coordinated contract-era flag-day as the other
+        // 2026-10-01 00:00:00 UTC fixes (a wrong value forks); keyed on block TIME because the
+        // affected native-coin payment/dispenser flows settle on BTC, LTC and DOGE whose heights
+        // diverge, so no single height names one cutover. testnet/regtest activate at genesis
+        // (all zeros) so the collapse is in force from block 0 there and in the unit/e2e suites.
+        this.addChange('FIX_OUTPUT_FANOUT', '2.0.0',1790812800,0,0,0,0,0);
+
         // Staking-family stress-sweep fixes (2026-07-09). All three are consensus-visible
         // validity/derivation changes, gated on the same coordinated contract-era flag-day
         // as the other 2026-10-01 fixes (a wrong value forks); testnet/regtest at genesis.

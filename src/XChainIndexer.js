@@ -34,6 +34,7 @@ const HubDbSync    = require('./hub_db_sync.js');
 const HubPushQueue = require('./hub_push_queue.js');
 const UtxoTracker  = require('./UtxoTracker.js');
 const Genesis      = require('./genesis.js');
+const { collapseOutputFanout } = require('./output_fanout.js');
 
 class XChainIndexer {
 
@@ -582,6 +583,17 @@ class XChainIndexer {
 
                 // Get a list of any transactions in this block from the decoder database
                 let blockTransactions = await this.decoderDb.getDecoderBlockData(blockToParse);
+
+                // Collapse the reader-side per-output fan-out (see src/output_fanout.js).
+                // getDecoderBlockData emits one row per stored native-coin output, each carrying
+                // the same tx data; without this, a data-bearing action whose transaction also
+                // pays a dispenser and/or a fee-destination output would be executed once per
+                // output row (duplicate credits/debits). COINPAY payment settlement and empty-data
+                // DISPENSE triggers keep their per-output fan-out. Consensus-gated on
+                // FIX_OUTPUT_FANOUT; below activation a multi-output data-bearing tx aborts the
+                // block loudly (via the watchdog/rollback path) instead of double-executing.
+                let fanoutFixActive = await this.protocolChanges.isEnabled('FIX_OUTPUT_FANOUT', blockToParse);
+                blockTransactions = collapseOutputFanout(blockTransactions, fanoutFixActive, (m) => this.util.logError(m));
 
                 // Lookup the block time for a given block (read from decoder DB before opening transaction)
                 let blockTime = await this.decoderDb.getBlockTime(blockToParse);
