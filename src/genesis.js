@@ -275,6 +275,14 @@ class Genesis {
             return;
         let tick     = this.config['GAS']; // 'XCHAIN'
         let snapshot = this.config['GENESIS_AIRDROP_SNAPSHOT_BLOCK'] || 'unpinned';
+        // Combined set-hash over the canonical bucket order (name:hash:amount per line):
+        // operators on different nodes compare this one line to prove they armed the
+        // identical airdrop set before any consensus action is derived .
+        let setHash = crypto.createHash('sha256')
+            .update(buckets.map(b => b.name + ':' + (b.hash || 'unpinned') + ':' + b.amount).join('\n'))
+            .digest('hex');
+        console.log('GENESIS: airdrop set-hash ' + setHash + ' (' + buckets.length + ' buckets, canonical order '
+            + buckets.map(b => b.name).join(',') + ')');
         for(let b of buckets){
             this._verifyAirdropFile(b);
             let rows  = this._loadAirdropRows(b.file);
@@ -319,8 +327,18 @@ class Genesis {
             if(names.has(name))
                 throw new Error('GENESIS FATAL: duplicate airdrop bucket name ' + name);
             names.add(name);
-            buckets.push({ name: name, file: paths[i], hash: hashes[i] || null, amount: amount });
+            let hash = hashes[i] || null;
+            // Mainnet CSV fallback fails closed : the expected mainnet path is the
+            // pinned genesis dump; a CSV-derived mainnet genesis is only tolerated when every
+            // bucket carries a sha256 pin, so unpinned content can never enter consensus.
+            if(this.config['NETWORK'] === 'mainnet' && !/^[0-9a-fA-F]{64}$/.test(String(hash || '')))
+                throw new Error('GENESIS FATAL: mainnet airdrop bucket ' + name + ' has no sha256 pin (GENESIS_AIRDROP_HASHES); mainnet CSV genesis requires every bucket pinned (expected path is the genesis dump)');
+            buckets.push({ name: name, file: paths[i], hash: hash, amount: amount });
         }
+        // Canonical order : action_index is a hashed consensus field, so bucket
+        // iteration order must not depend on the operator's env-var CSV order. Bucket names
+        // are unique (checked above), so a byte-order sort on name is total + deterministic.
+        buckets.sort((a, b) => a.name < b.name ? -1 : 1);
         return buckets;
     }
 

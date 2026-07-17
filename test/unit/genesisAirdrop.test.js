@@ -52,7 +52,7 @@ function build(airdrop, cfgOverride){
     let actions = { processTransaction: async (tx, isGenesis) => { calls.push({ tx, isGenesis }); } };
     let config  = Object.assign({
         COIN:                            'BTC',
-        NETWORK:                         'mainnet',
+        NETWORK:                         'regtest',
         GAS:                             'XCHAIN',
         ADDRESS:                         { GAS: GAS_ADDR },
         MAX_TICK_LENGTH:                 250,
@@ -177,6 +177,36 @@ describe('genesis airdrop pass ', function(){
         let file = tmpFile('address,quantity\naddr1,junk\n');
         let { genesis } = build({ paths: [file], hashes: [''], amounts: ['10'] });
         await assert.rejects(() => genesis.inject(100, 1700000000), /no positive holder quantities/);
+    });
+
+    it('credits buckets in canonical name order regardless of configured path order ', async function(){
+        let dir = fs.mkdtempSync(path.join(os.tmpdir(), 'xchain-order-'));
+        let xdp = path.join(dir, 'xdp.csv'); fs.writeFileSync(xdp, 'daddr1,1\n');
+        let xcp = path.join(dir, 'xcp.csv'); fs.writeFileSync(xcp, 'addr1,1\n');
+        // Env lists XDP first; consensus order must still be XCP (name byte-order) first.
+        let { genesis, calls } = build({ paths: [xdp, xcp], hashes: [sha256(xdp), sha256(xcp)], amounts: ['70', '30'] });
+        await genesis.inject(100, 1700000000);
+        let c = credits(calls);
+        assert.deepStrictEqual(
+            c.map(x => x.tx.data),
+            ['ISSUE|2|XCHAIN||30.00000000|addr1',   // XCP bucket, amount stays zipped to its path
+             'ISSUE|2|XCHAIN||70.00000000|daddr1']); // XDP bucket
+    });
+
+    it('fails closed on mainnet when any airdrop bucket lacks a sha256 pin ', async function(){
+        let file = tmpFile('addr1,1\n');
+        for(let hashes of [[], [''], ['not-a-hash']]){
+            let { genesis, calls } = build({ paths: [file], hashes, amounts: ['10'] }, { NETWORK: 'mainnet' });
+            await assert.rejects(() => genesis.inject(100, 1700000000), /mainnet airdrop bucket .* has no sha256 pin/);
+            assert.strictEqual(credits(calls).length, 0);
+        }
+    });
+
+    it('accepts a fully-pinned bucket set on mainnet', async function(){
+        let file = tmpFile('addr1,1\n');
+        let { genesis, calls } = build({ paths: [file], hashes: [sha256(file)], amounts: ['10'] }, { NETWORK: 'mainnet' });
+        await genesis.inject(100, 1700000000);
+        assert.strictEqual(credits(calls).length, 1);
     });
 
     it('rejects two buckets sharing a basename (tx-hash namespace collision)', async function(){
