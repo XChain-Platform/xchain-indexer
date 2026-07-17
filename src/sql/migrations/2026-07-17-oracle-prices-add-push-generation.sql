@@ -1,0 +1,25 @@
+-- xchain:migration mode=auto
+-- Migration: ledger oracle_prices.push_generation (item 5308 reorg fence).
+--
+-- WHY
+-- ---
+-- oracle_prices.sql declares push_generation BIGINT NOT NULL DEFAULT 0 -- the
+-- source-chain reorg fence: a retraction deletes only rows with push_generation
+-- <= the rollback's generation, so a re-published row survives. No dated
+-- migration ledgers it. The startup drift reconciler adds it (NOT NULL + DEFAULT
+-- is add-eligible) on indexer-booted nodes, so schema-from-definitions converges;
+-- a DB converged by replaying the dated migrations alone (operator-managed /
+-- rebuilt replica) keeps the pre-fence shape -- its mirror rows are never
+-- generation-fenced and the item-5308 reorg-retraction semantics silently do not
+-- apply. hub_db_sync already guards for the column's absence
+-- (`cols.includes('push_generation')`, `fenced ? ' AND push_generation <= ?' : ''`),
+-- which is exactly the divergence this ledgers away. Same class as
+-- capability_snapshots.source (2026-06-14).
+--
+-- Additive + idempotent: ADD COLUMN IF NOT EXISTS re-runs as a no-op; the spec
+-- and AFTER anchor (action_index) match oracle_prices.sql exactly.
+--
+-- HOW TO RUN
+--   mariadb -u <indexer_user> -p <indexer_db> < src/sql/migrations/2026-07-17-oracle-prices-add-push-generation.sql
+
+ALTER TABLE oracle_prices ADD COLUMN IF NOT EXISTS push_generation BIGINT NOT NULL DEFAULT 0 AFTER action_index;

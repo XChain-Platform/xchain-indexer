@@ -1,0 +1,26 @@
+-- xchain:migration mode=auto
+-- Migration: ledger attests.responsible_set_json (ATT-RECOMP-1).
+--
+-- WHY
+-- ---
+-- attests.sql declares responsible_set_json MEDIUMTEXT -- the responsible-set
+-- pubkeys pinned AS-OF the request block, read verbatim by the reorg
+-- missed_count recompute instead of re-deriving from the current mutable stakes
+-- (which a surviving slash would corrupt). It was added after the attests table
+-- shipped (rollback.js notes "legacy rows created before the column existed
+-- carry NULL"), but no dated migration ledgers it. The startup drift reconciler
+-- adds it (nullable, AFTER resolved_block) on indexer-booted nodes, so
+-- schema-from-definitions converges; a DB converged by replaying the dated
+-- migrations alone (operator-managed / rebuilt replica) never gains it, and the
+-- expired-request recompute SELECT (rollback.js: `SELECT ... ar.responsible_set_json`)
+-- errors. Same definition-without-ledger class the repo closed for
+-- capability_snapshots.source (2026-06-14), which self-heals too but was still
+-- shipped as the explicit, auditable record.
+--
+-- Additive + idempotent: ADD COLUMN IF NOT EXISTS re-runs as a no-op; the spec
+-- and AFTER anchor (resolved_block) match attests.sql exactly.
+--
+-- HOW TO RUN
+--   mariadb -u <indexer_user> -p <indexer_db> < src/sql/migrations/2026-07-17-attests-add-responsible-set-json.sql
+
+ALTER TABLE attests ADD COLUMN IF NOT EXISTS responsible_set_json MEDIUMTEXT AFTER resolved_block;
