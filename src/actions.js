@@ -340,6 +340,12 @@ class Actions {
         data['SOURCE_PUBKEY']    = tx.source_pubkey; // Public key for the source address
         data['TX_OUTPUTS']       = tx.tx_outputs || []; // Full native-coin output set (fee detection)
         data['IS_GENESIS']       = isGenesis === true;  // synthetic genesis bootstrap action (genesis.js)
+        // Guard-inert marker for the public feequote dry-run: when set, a controller guard
+        // refuses at the _invokeController chokepoint instead of entering the VM (utility.js),
+        // so the unauthenticated feequote endpoint cannot run caller-influenced contract code
+        // while holding the block-loop mutex. Sourced from tx.guard_inert, which only
+        // computeFeeQuote's synthetic tx carries; ALWAYS false for real decoded transactions.
+        data['GUARD_INERT']      = tx.guard_inert === true;
 
         // Treat plain BTC transactions (empty data) as DISPENSE triggers
         // The decoder records these when the destination matches an active dispenser address
@@ -604,7 +610,7 @@ class Actions {
     // Returns { blockIndex, blockTime, status, error, xchainFee } where xchainFee is the
     // handler-recorded fee ('0' for a valid zero-fee action, null when the run never got far
     // enough to stage one).
-    async _dryRunAction({ action, params, source, feeOutputs, probeFeeDestination, timeoutMs, label }){
+    async _dryRunAction({ action, params, source, feeOutputs, probeFeeDestination, timeoutMs, label, guardInert }){
         let blockIndex = await this.indexerDb.getLatestBlockIndex();
         let blockTime  = await this.indexerDb.getBlockTime(blockIndex);
 
@@ -627,7 +633,12 @@ class Actions {
             fee:           null,
             source_pubkey: null,
             tx_outputs:    txOutputs,
-            raw_data:      null
+            raw_data:      null,
+            // Marks a run whose controller guards must NOT enter the VM (the public
+            // feequote path; see computeFeeQuote). Set only here on the synthetic tx and
+            // only when the caller asks, so it is absent from every decoder-fed block tx
+            // and from the API-key-gated feequotedryrun path (which opts to run the VM).
+            guard_inert:   guardInert === true
         };
 
         let status = null, feeRecord = null, dryRunError = null;
@@ -819,7 +830,10 @@ class Actions {
                 action, params, source,
                 probeFeeDestination: feeDestination,
                 timeoutMs: timeoutMs,
-                label: 'feequote ' + action
+                label: 'feequote ' + action,
+                // Public unauthenticated path: a controller guard must never enter the VM
+                // here (see _invokeController). feequotedryrun deliberately omits this.
+                guardInert: true
             });
         } finally {
             this._feeQuotePending--;
@@ -829,6 +843,14 @@ class Actions {
         base.blockTime  = run.blockTime;
         base.status     = run.status;
         base.validated  = true;
+
+        // A controlled token whose guard the feequote path refused (never entered the VM,
+        // see _invokeController): the native-fee verdict genuinely depends on a controller
+        // guard we do not run on this public surface, so report it as not natively quotable
+        // rather than surfacing the sentinel as a spurious class-B invalidity.
+        if(typeof run.status === 'string' && run.status.indexOf('FEE_QUOTE_CONTROLLER_UNSUPPORTED') !== -1)
+            return Object.assign(base, { supported: false, valid: false,
+                error: 'native fee pre-flight not supported for a controller-bound ' + action + ' (pay the fee in XCHAIN)' });
 
         // The handler's verdict is authoritative; its reason (class-A or class-B) verbatim.
         if(run.status !== 'valid')

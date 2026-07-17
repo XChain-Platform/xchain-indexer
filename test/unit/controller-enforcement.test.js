@@ -348,6 +348,74 @@ describe('Programmable policy layer : Phase B enforcement @regression', function
         });
     });
 
+    // ─── feequote GUARD_INERT : the public dry-run must never enter the controller VM ─────
+    // computeFeeQuote runs the REAL handler under a forced rollback while holding the block-loop
+    // tx mutex; without this a controlled SEND/ORDER/... quoted on the unauthenticated `feequote`
+    // endpoint would run caller-influenced contract code (the same class FEE_QUOTE_DENYLIST blocks
+    // for DEPLOY/EXECUTE), reachable today on testnet/regtest where CONTROLLER_GUARD is genesis-
+    // active. The marker rides only computeFeeQuote's synthetic tx (data['GUARD_INERT']), so these
+    // pin: it refuses at the shared chokepoint ONLY when a guard would truly run, it does NOT gag a
+    // real guarded action (block processing / feequotedryrun), and it never turns the below-flag-day
+    // no-op into a spurious DENY.
+    describe('feequote GUARD_INERT : public dry-run must not enter the controller VM', function () {
+        const guardOpts = (data) => ({
+            actionType: 'SEND', tick: 'AAA', from: 'addr1', to: 'addr2', amount: '10',
+            data, gasInfo: null, gasBalances: []
+        });
+
+        it('GUARD_INERT + at/above activation → refuses with the sentinel, guard VM never runs', async function () {
+            const calls = [];
+            const res = await util.maybeRunControllerGuard(
+                // A guard that WOULD allow: proving the VM is not entered regardless of verdict.
+                mkActions({ allow: true, reason: null, gasBilled: 1000 }, calls, true),
+                mkDb({ contract_index: 9, is_unbind: 0 }),
+                guardOpts(Object.assign({}, BASE, { GUARD_INERT: true }))
+            );
+            assert.strictEqual(res.error, 'FEE_QUOTE_CONTROLLER_UNSUPPORTED');
+            assert.strictEqual(res.guardFee, 0);
+            assert.strictEqual(calls.length, 0, 'controller VM must not run for a guard-inert feequote dry-run');
+        });
+
+        it('address-side guard is refused under GUARD_INERT too (both kinds share _invokeController)', async function () {
+            const calls = [];
+            const addrDb = { config: { GAS_SCHEDULE: { VM_GUARD_GAS_CEILING: 200000 }, GAS_PRICE: '0.00001', GAS: 'XCHAIN' },
+                getAddressId: async () => 1, getEffectiveAddressController: async () => ({ contract_index: 9, is_unbind: 0 }),
+                getEffectiveAddressControllerForGuard: async () => ({ contract_index: 9, is_unbind: 0 }) };
+            const res = await util.maybeRunAddressControllerGuard(
+                mkActions({ allow: true, reason: null, gasBilled: 1000 }, calls, true),
+                addrDb,
+                { actionType: 'SEND', actionClass: 'transfer', address: 'addrB', from: 'addrA', to: 'addrB',
+                  tick: 'AAA', amount: '10', data: Object.assign({}, BASE, { GUARD_INERT: true }), gasInfo: null, gasBalances: [] }
+            );
+            assert.strictEqual(res.error, 'FEE_QUOTE_CONTROLLER_UNSUPPORTED');
+            assert.strictEqual(calls.length, 0);
+        });
+
+        it('a normal (non-inert) guarded action still runs the VM (fix does not gag block processing / feequotedryrun)', async function () {
+            const calls = [];
+            const res = await util.maybeRunControllerGuard(
+                mkActions({ allow: true, reason: null, gasBilled: 1000 }, calls, true),
+                mkDb({ contract_index: 9, is_unbind: 0 }),
+                guardOpts(Object.assign({}, BASE)) // GUARD_INERT absent → real path
+            );
+            assert.strictEqual(res.error, null);
+            assert.strictEqual(calls.length, 1, 'a real guarded action must still run its controller VM');
+        });
+
+        it('GUARD_INERT below the CONTROLLER_GUARD flag-day stays a strict no-op (gate wins, no sentinel)', async function () {
+            const calls = [];
+            const res = await util.maybeRunControllerGuard(
+                mkActions({ allow: false, reason: 'must-not-run', gasBilled: 9999 }, calls, false), // gate disabled
+                mkDb({ contract_index: 9, is_unbind: 0 }),
+                guardOpts(Object.assign({}, BASE, { GUARD_INERT: true }))
+            );
+            // Below activation the guard is already a no-op for everyone; GUARD_INERT must not
+            // upgrade that to a DENY, or a below-flag-day quote would misreport a controlled token.
+            assert.deepStrictEqual(res, { error: null, guardFee: 0, payoutLegs: null });
+            assert.strictEqual(calls.length, 0);
+        });
+    });
+
     // ─── 'all' action-class : most-specific-wins fallback (resolution) ───────────
     // getEffective*ControllerForGuard is the enforcement resolver: try the action's specific class,
     // then fall back to a catch-all 'all' binding. Exactly one row out (one guard runs, no stacking).

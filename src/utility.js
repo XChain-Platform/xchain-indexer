@@ -1437,6 +1437,19 @@ class Utility {
         // preimage between heterogeneous node versions. See protocol_changes.js.
         if(!(await actions.protocolChanges.isEnabled('CONTROLLER_GUARD', data['BLOCK_INDEX'])))
             return { error: null, guardFee: 0, payoutLegs: null };
+        // Public feequote dry-runs must never enter the controller VM. computeFeeQuote runs the
+        // REAL handler under a forced rollback while holding the block-loop tx mutex, so executing
+        // a caller-influenced guard here would hand the unauthenticated `feequote` endpoint an
+        // unmetered VM-compute primitive - the exact class FEE_QUOTE_DENYLIST blocks for
+        // DEPLOY/EXECUTE. Refuse at this single shared chokepoint (covering both token- and
+        // address-controller guards, all guarded action classes) ONLY when a guard would truly run:
+        // the caller reaches _invokeController only after an effective controller resolved, so
+        // uncontrolled tokens never hit this line and stay fully quotable, and a new guarded action
+        // inherits the refusal for free. GUARD_INERT is set only on computeFeeQuote's synthetic tx
+        // (never a decoded block tx, never the API-key-gated feequotedryrun), so this branch is dead
+        // on block processing and cannot skip a guard on a real transaction.
+        if(data['GUARD_INERT'])
+            return { error: 'FEE_QUOTE_CONTROLLER_UNSUPPORTED', guardFee: 0, payoutLegs: null };
         // No guard-of-guard: a controller's own emission of the gated subject is not re-guarded;
         // cross-token / different-controller moves still guard, bounded by VM_MAX_CALL_DEPTH.
         if(data['IS_GUARD_EMISSION'] && Number(data['EMITTER']) === Number(controllerIndex))
