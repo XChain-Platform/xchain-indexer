@@ -308,6 +308,21 @@ module.exports = {
         config['GENESIS_LEDGER_PATH']      = process.env.GENESIS_LEDGER_PATH || path.join(__dirname, '..', 'data', 'genesis', coin + '-ledger.csv');
         config['GENESIS_BLOCK_TIMEOUT_MS'] = parseIntMin0(process.env.GENESIS_BLOCK_TIMEOUT_MS, 14400000); // 4 hours
 
+        // XCP/XDP native-token airdrop leg (, GENESIS-LEDGER-BOOTSTRAP.md section 8).
+        // Per-bucket snapshot CSVs (address,quantity as of the snapshot block), sha256 pins,
+        // and XCHAIN bucket amounts, aligned by index: entry N of HASHES/AMOUNTS pins/funds
+        // entry N of PATHS. Empty PATHS = airdrop disabled (the default; the leg is armed by
+        // the launch cut, e.g. PATHS=xcp.csv,xdp.csv AMOUNTS splitting the 30,000,000 CP/DP
+        // allocation from GENESIS-PARAMETERS.md section A). An empty HASHES entry skips the
+        // pin for that file (pre-pin dev/regtest only); AMOUNTS entries are mandatory and
+        // genesis.js fails closed on a missing/invalid one. SNAPSHOT_BLOCK is informational
+        // (announce + log); the CSVs are already cut at that height.
+        let splitCsv = (raw) => String(raw || '').split(',').map(s => s.trim());
+        config['GENESIS_AIRDROP_PATHS']          = splitCsv(process.env.GENESIS_AIRDROP_PATHS).filter(s => s !== '');
+        config['GENESIS_AIRDROP_HASHES']         = process.env.GENESIS_AIRDROP_HASHES  ? splitCsv(process.env.GENESIS_AIRDROP_HASHES)  : [];
+        config['GENESIS_AIRDROP_AMOUNTS']        = process.env.GENESIS_AIRDROP_AMOUNTS ? splitCsv(process.env.GENESIS_AIRDROP_AMOUNTS) : [];
+        config['GENESIS_AIRDROP_SNAPSHOT_BLOCK'] = process.env.GENESIS_AIRDROP_SNAPSHOT_BLOCK || null;
+
         // Precomputed genesis state dump (genesisDump.js). When this artifact is present at
         // GENESIS_DUMP_PATH, inject() bulk-imports it (minutes) instead of re-deriving the
         // ~240k-action genesis ledger through the pipeline (~1h); the importer verifies the

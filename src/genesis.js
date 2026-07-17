@@ -41,6 +41,7 @@
  ********************************************************************/
 
 const fs     = require('fs');
+const path   = require('path');
 const crypto = require('crypto');
 
 class Genesis {
@@ -126,6 +127,11 @@ class Genesis {
         for(let i = rows.length - 1; i >= 0; i--)
             if(ancestors.has(rows[i].tick) && rows[i].owner !== gas)
                 await this._issue(gas, rows[i].tick, rows[i].owner, blockToParse, blockTime, 2);
+
+        // Airdrop pass : credit the XCP/XDP native-token allocation to snapshot
+        // holders. Runs after the name passes so the whole genesis block stays one
+        // deterministic action sequence: gas token, creates, ancestor transfers, credits.
+        await this._injectAirdrops(gas, blockToParse, blockTime);
 
         } finally {
             this.indexerDb._internCache = null;
@@ -243,6 +249,158 @@ class Genesis {
             destination:   null,
             amount:        null,
             tx_hash:       'GENESIS-' + this.config['COIN'] + '-P' + pass + '-' + digest,
+            vout:          0,
+            block_index:   blockToParse,
+            block_time:    blockTime,
+            raw_data:      null,
+            fee:           null,
+            source_pubkey: null,
+            tx_outputs:    []
+        };
+        await this.actions.processTransaction(tx, true); // isGenesis = true
+    }
+
+    // Airdrop pass: credit the CP/DP native-token (XCP/XDP) airdrop allocation to snapshot
+    // holders, pro-rata within each configured bucket. Config-driven and disabled by default
+    // (GENESIS_AIRDROP_PATHS empty): each bucket is a hash-pinned `address,quantity` CSV plus
+    // an XCHAIN amount (GENESIS-PARAMETERS.md: 30,000,000 total across the CP+DP buckets;
+    // the per-bucket split is set at arming). Each credit is a synthetic ISSUE (format 2)
+    // from GAS with MINT_SUPPLY + TRANSFER_SUPPLY, so the mint and the holder credit ride
+    // the normal action pipeline in one action and empty fields inherit the token's params.
+    // Flooring every credit at the 8-decimal grid guarantees the minted sum never exceeds
+    // the bucket amount (the sub-satoshi remainder is simply never minted).
+    async _injectAirdrops(gas, blockToParse, blockTime){
+        let buckets = this._airdropBuckets();
+        if(buckets.length === 0)
+            return;
+        let tick     = this.config['GAS']; // 'XCHAIN'
+        let snapshot = this.config['GENESIS_AIRDROP_SNAPSHOT_BLOCK'] || 'unpinned';
+        for(let b of buckets){
+            this._verifyAirdropFile(b);
+            let rows  = this._loadAirdropRows(b.file);
+            let total = '0';
+            for(let r of rows)
+                total = this.util.bcadd(total, r.quantity, 8);
+            if(!this.util.bcgt(total, 0))
+                throw new Error('GENESIS FATAL: airdrop snapshot ' + b.file + ' has no positive holder quantities');
+            console.log('GENESIS: airdrop bucket ' + b.name + ' - ' + rows.length + ' holders, '
+                + b.amount + ' ' + tick + ' (snapshot block ' + snapshot + ')');
+            let credited = 0;
+            for(let r of rows){
+                let credit = this._prorate(b.amount, r.quantity, total);
+                if(!this.util.bcgt(credit, 0))
+                    continue; // holder's share floors to zero at 8 decimals
+                await this._creditIssue(gas, tick, r.address, credit, b.name, blockToParse, blockTime);
+                credited++;
+            }
+            console.log('GENESIS: airdrop bucket ' + b.name + ' complete - ' + credited + ' credits');
+        }
+    }
+
+    // Zip GENESIS_AIRDROP_PATHS / _HASHES / _AMOUNTS into bucket descriptors, failing closed
+    // on a missing or malformed amount (an unfunded bucket is a launch-cut mistake, not a
+    // skippable row). Bucket name = uppercased file basename (xcp.csv -> XCP); it feeds the
+    // synthetic tx hash, so two buckets must not share a basename.
+    _airdropBuckets(){
+        let paths = this.config['GENESIS_AIRDROP_PATHS'] || [];
+        if(paths.length === 0)
+            return [];
+        let hashes  = this.config['GENESIS_AIRDROP_HASHES']  || [];
+        let amounts = this.config['GENESIS_AIRDROP_AMOUNTS'] || [];
+        if(amounts.length !== paths.length)
+            throw new Error('GENESIS FATAL: GENESIS_AIRDROP_AMOUNTS must carry one amount per GENESIS_AIRDROP_PATHS entry');
+        let buckets = [];
+        let names   = new Set();
+        for(let i = 0; i < paths.length; i++){
+            let name   = path.basename(paths[i]).replace(/\.[^.]*$/, '').toUpperCase();
+            let amount = amounts[i];
+            if(this.util.isNull(amount) || !this.util.isValidAmountFormat(8, amount) || !this.util.bcgt(amount, 0))
+                throw new Error('GENESIS FATAL: invalid airdrop amount "' + amount + '" for bucket ' + name);
+            if(names.has(name))
+                throw new Error('GENESIS FATAL: duplicate airdrop bucket name ' + name);
+            names.add(name);
+            buckets.push({ name: name, file: paths[i], hash: hashes[i] || null, amount: amount });
+        }
+        return buckets;
+    }
+
+    // sha256-pin check for one airdrop snapshot, mirroring _verifyManifest: a null pin skips
+    // (pre-pin dev/regtest), a mismatch halts the node, and a missing file always halts (an
+    // armed bucket without its snapshot must never silently skip the whole allocation).
+    _verifyAirdropFile(bucket){
+        if(!fs.existsSync(bucket.file))
+            throw new Error('GENESIS FATAL: airdrop snapshot missing: ' + bucket.file);
+        if(this.util.isNull(bucket.hash))
+            return;
+        let actual = crypto.createHash('sha256').update(fs.readFileSync(bucket.file)).digest('hex');
+        if(actual !== String(bucket.hash).toLowerCase()){
+            console.error('GENESIS FATAL: airdrop snapshot hash mismatch for ' + bucket.file + ' (expected ' + bucket.hash + ', got ' + actual + '). Halting.');
+            throw new Error('Genesis airdrop snapshot hash mismatch');
+        }
+    }
+
+    // Read one snapshot CSV (address,quantity). Addresses never contain a comma, so the
+    // LAST comma splits the fields (symmetric with _loadRows). Duplicate addresses sum
+    // (first-seen position wins for ordering, keeping the injection order pinned to the
+    // hash-pinned file order); non-numeric or non-positive quantities are skipped + logged.
+    // CP/DP quantities carry at most 8 decimals, matching the bcadd precision here.
+    _loadAirdropRows(file){
+        let lines = fs.readFileSync(file, 'utf8').split(/\r?\n/);
+        let rows  = [];
+        let index = new Map(); // address -> position in rows (dedupe)
+        for(let line of lines){
+            if(line === '' || line === 'address,quantity')
+                continue;
+            let comma = line.lastIndexOf(',');
+            if(comma < 0)
+                continue;
+            let address  = line.slice(0, comma).trim();
+            let quantity = line.slice(comma + 1).trim();
+            if(address === '' || quantity === '')
+                continue;
+            if(!this.util.isNumeric(quantity) || !this.util.bcgt(quantity, 0)){
+                console.warn('GENESIS skip (bad airdrop quantity): ' + address + ',' + quantity);
+                continue;
+            }
+            if(index.has(address)){
+                let r = rows[index.get(address)];
+                r.quantity = this.util.bcadd(r.quantity, quantity, 8);
+            } else {
+                index.set(address, rows.length);
+                rows.push({ address: address, quantity: quantity });
+            }
+        }
+        return rows;
+    }
+
+    // Pro-rata share: floor(amount * quantity / total) at the gas token's 8-decimal grid,
+    // computed entirely in bignumber space (util.bcnum is decimal.js-backed). Flooring is
+    // consensus-critical the same way bcmulfloor is: every node must derive the identical
+    // credit, and rounding down keeps the bucket's minted sum <= its configured amount.
+    _prorate(amount, quantity, total){
+        let share = this.util.bcnum(amount).times(this.util.bcnum(quantity)).div(this.util.bcnum(total));
+        return share.times('100000000').floor().div('100000000').toFixed(8);
+    }
+
+    // Synthesize one airdrop credit: ISSUE format 2 from GAS carrying only MINT_SUPPLY and
+    // TRANSFER_SUPPLY (VERSION|TICK|MAX_MINT|MINT_SUPPLY|TRANSFER_SUPPLY|...), so the token's
+    // existing params are untouched (empty ISSUE fields inherit the current settings) and the
+    // pipeline both mints the credit and lands it on the holder in a single action. The tx
+    // hash digests (coin, bucket, address): addresses are deduped per bucket, so it is unique.
+    async _creditIssue(gas, tick, holder, credit, bucketName, blockToParse, blockTime){
+        let fields = ['ISSUE', '2', tick,
+            '',       // MAX_MINT (inherit)
+            credit,   // MINT_SUPPLY
+            holder    // TRANSFER_SUPPLY
+        ];
+        let digest = crypto.createHash('sha256')
+            .update(this.config['COIN'] + '|AIRDROP|' + bucketName + '|' + holder).digest('hex').slice(0, 48);
+        let tx = {
+            data:          fields.join('|'),
+            source:        gas,
+            destination:   null,
+            amount:        null,
+            tx_hash:       'GENESIS-' + this.config['COIN'] + '-A-' + digest,
             vout:          0,
             block_index:   blockToParse,
             block_time:    blockTime,

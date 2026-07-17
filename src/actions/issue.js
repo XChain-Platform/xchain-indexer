@@ -339,8 +339,10 @@ class Issue {
         if(data['TRANSFER_SUPPLY'] == data['SOURCE'])
             delete data['TRANSFER_SUPPLY'];
 
-        // Verify TRANSFER_SUPPLY addresses
-        if(!error && !this.util.isNull(data['TRANSFER_SUPPLY']) && !this.util.isCryptoAddress(data['TRANSFER_SUPPLY']))
+        // Verify TRANSFER_SUPPLY addresses. Genesis bootstrap is exempt for the same reason
+        // as TRANSFER above: the airdrop pass (genesis.js) credits XCP/XDP snapshot holders
+        // whose addresses are source-chain mainnet format, and the snapshots are hash-pinned.
+        if(!error && !this.util.isNull(data['TRANSFER_SUPPLY']) && !data['IS_GENESIS'] && !this.util.isCryptoAddress(data['TRANSFER_SUPPLY']))
             error = 'invalid: TRANSFER_SUPPLY (bad address)';
 
         // Verify MINT_SUPPLY is allowed and LOCK_MINT_SUPPLY is not set
