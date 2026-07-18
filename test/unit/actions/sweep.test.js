@@ -127,6 +127,42 @@ describe('Sweep @regression @tier3', function () {
             assert.strictEqual(data['STATUS'], 'invalid: DESTINATION (null)');
         });
 
+        // CONSENSUS-DETERMINISM: controller-guard executions must be ordered by the byte value of
+        // the RESOLVED tick STRING, not by tick_id (a local index_tickers AUTO_INCREMENT surrogate
+        // that diverges between nodes post-reorg). A reversed guard order commits a different
+        // contract_hash via contract_executions last-write-wins + emission basePosition.
+        it('runs controller guards in byte order of the tick string, not tick_id order', async function () {
+            // tick_id numeric order (1,2,3) deliberately DIFFERS from tick-string byte order.
+            const tickById = { 1: 'GAS', 2: 'ZZZ', 3: 'AAA' };
+            indexer.indexerDb.getAddressBalances.resolves({ 1: '5', 2: '5', 3: '5' });
+            indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
+            indexer.indexerDb.getAddressOwnerships.resolves([]);
+            indexer.indexerDb.getAddressEscrows.resolves([]);
+            indexer.indexerDb.isActionAllowed.resolves(true);
+            indexer.indexerDb.getTicker.callsFake(async (id) => tickById[Number(id)] || null);
+
+            const calledTicks = [];
+            indexer.util.maybeRunControllerGuard = sinon.stub().callsFake(async (a, b, opts) => {
+                calledTicks.push(opts.tick);
+                return { error: null, guardFee: '0' };
+            });
+
+            const data   = createBaseData({ ACTION: 'SWEEP', FORMAT: 0, SOURCE });
+            const params = ['0', DESTINATION];
+            await handler.parse(params, data, null);
+
+            assert.ok(calledTicks.length >= 2, 'at least two ticks must be guarded so order is observable');
+            const byteSorted = [...calledTicks].sort((x, y) =>
+                Buffer.compare(Buffer.from(x, 'utf8'), Buffer.from(y, 'utf8')));
+            assert.deepStrictEqual(calledTicks, byteSorted,
+                'guards must execute in byte order of the resolved tick string (consensus-stable)');
+            // Teeth: the pre-fix ascending-tick_id order would have produced a DIFFERENT sequence.
+            const idOf     = t => Number(Object.keys(tickById).find(k => tickById[k] === t));
+            const idOrder  = [...calledTicks].sort((x, y) => idOf(x) - idOf(y));
+            assert.notDeepStrictEqual(calledTicks, idOrder,
+                'byte order must differ from the old tick_id order for this fixture (test has teeth)');
+        });
+
     });
 
     // ─── OWNERSHIPS=1 ────────────────────────────────────────────────

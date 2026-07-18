@@ -206,18 +206,30 @@ class Sweep {
         // aggregate move (from=SOURCE, to=DESTINATION, amount=balance). ANY deny fails the WHOLE SWEEP
         // (fail-closed, per the chosen bounded-aggregate model). SOURCE pays the cumulative guard gas
         // in GAS, reserved out of `balances` as we go so the swept GAS amount below already excludes it
-        // (SOURCE is never over-debited). Ticks are iterated in ascending tick_id order so guard
-        // executions are deterministic across nodes. Ownership transfers (the ISSUE loop below) are a
-        // separate capability and are NOT gated by this class. Only runs when BALANCES are swept, and
-        // is a strict no-op before the CONTROLLER_GUARD flag-day.
+        // (SOURCE is never over-debited). Guard executions are iterated in byte (binary) order of the
+        // RESOLVED tick STRING - the consensus-stable key (matching actions.js's pending byte-sort and
+        // the getBlockHashes utf8_bin tiebreak), NOT ascending tick_id. tick_id is a local
+        // index_tickers AUTO_INCREMENT surrogate assigned on first reference and surviving reorgs, so
+        // two nodes whose id assignment diverged post-reorg would run the guards in a different order
+        // and, via contract_executions last-write-wins + emission basePosition, commit a different
+        // contract_hash for the same block (BLOCK_HASH_VERSION rationale, db.js). Ownership transfers
+        // (the ISSUE loop below) are a separate capability and are NOT gated by this class. Only runs
+        // when BALANCES are swept, and is a strict no-op before the CONTROLLER_GUARD flag-day.
         if(!error && data['BALANCES']==1){
-            let sweepTickIds = Object.keys(balances).map(Number).sort((a,b) => a-b);
-            for(let tick_id of sweepTickIds){
+            // Resolve each swept tick_id to its canonical ticker, then order guard runs by that
+            // string. The amount is read fresh INSIDE the loop (not captured here): a prior guard's
+            // gas fee can debit a swept tick's balance mid-loop, so the order must not fix the amount.
+            let sweptTicks = [];
+            for(let sweepTickId of Object.keys(balances)){
+                let sweepTick = await this.indexerDb.getTicker(Number(sweepTickId));
+                if(this.util.isNull(sweepTick)) continue;
+                sweptTicks.push({ tick_id: Number(sweepTickId), tick: sweepTick });
+            }
+            sweptTicks.sort((a, b) => Buffer.compare(Buffer.from(a.tick, 'utf8'), Buffer.from(b.tick, 'utf8')));
+            for(let { tick_id, tick } of sweptTicks){
                 if(error) break;
                 let amount = balances[tick_id];
                 if(this.util.isNull(amount) || !this.util.bcgt(String(amount), '0')) continue;
-                let tick = await this.indexerDb.getTicker(tick_id);
-                if(this.util.isNull(tick)) continue;
                 let result = await this.util.maybeRunControllerGuard(this.actions, this.indexerDb, {
                     actionType:  'SWEEP',
                     tick:        tick,
