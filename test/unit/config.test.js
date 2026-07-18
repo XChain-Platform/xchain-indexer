@@ -103,6 +103,11 @@ describe('Config @regression @tier3', function () {
             assert.ok(config.NUMBER_FIELDS.includes('AMOUNT'));
             assert.ok(config.NUMBER_FIELDS.includes('DECIMALS'));
             assert.ok(config.NUMBER_FIELDS.includes('MAX_SUPPLY'));
+            // : VOTE escrow amounts must stay in lockstep with the SDK
+            // NUMBER_FIELDS so both sides canonicalize the wire value to fixed
+            // decimal (never scientific notation like "1e-8").
+            assert.ok(config.NUMBER_FIELDS.includes('DEPOSIT'));
+            assert.ok(config.NUMBER_FIELDS.includes('GAS_ESCROW'));
         });
 
         it('should define LOCK_FIELDS list', function () {

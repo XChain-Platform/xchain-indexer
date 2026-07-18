@@ -200,6 +200,11 @@ module.exports = {
             'CONTROLLER',
             'COOLDOWN_BLOCKS',
             'DECIMALS',
+            // DEPOSIT / GAS_ESCROW: VOTE v0 poll-creator escrow amounts. Kept in
+            // lockstep with the SDK NUMBER_FIELDS so both sides canonicalize the
+            // wire value to fixed decimal (a raw "1e-8" would otherwise be stored
+            // verbatim in polls.deposit_amount / gas_escrow; ).
+            'DEPOSIT',
             'DISPENSER_ACTION_INDEX',
             'EDIT',
             'ENCRYPTION_METHOD',
@@ -207,7 +212,8 @@ module.exports = {
             'FEE',
             'FEE_AMOUNT',
             'FIAT_AMOUNT',
-            'GET_AMOUNT', 
+            'GAS_ESCROW',
+            'GET_AMOUNT',
             'GIVE_AMOUNT', 
             'GIVE_ESCROW', 
             'LIST_ACTION_INDEX',
