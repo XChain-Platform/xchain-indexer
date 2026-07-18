@@ -732,6 +732,21 @@ describe('Database reorg identity detection @regression @tier1', function () {
         const result = await db.getReorgsSince.call(db, 5);
         assert.deepStrictEqual(result, [{ id: 7, block_index: 150 }]);
     });
+
+    // The skip is deliberate (above), but it must not be SILENT: getLastProcessedReorgId can
+    // later advance the cursor past a dropped id via a newer well-formed marker, permanently
+    // missing that rollback. The drop must page the operator with a LOUD error naming the id.
+    it('getReorgsSince logs a LOUD error when it drops a malformed row, never silently', async function () {
+        const errSpy = sinon.stub(console, 'error');
+        db.doQueryStrict.resolves([
+            { id: 6, data: 'not-json{' },
+            { id: 7, data: JSON.stringify([{ block_index: 150, block_hash: 'h150' }]) },
+        ]);
+        const result = await db.getReorgsSince.call(db, 5);
+        assert.deepStrictEqual(result, [{ id: 7, block_index: 150 }]);
+        assert.ok(errSpy.calledWithMatch(/DROPPING malformed REORG event id=6/),
+            'a dropped malformed REORG row must be logged LOUD, not skipped silently');
+    });
 });
 
 // ---------------------------------------------------------------------------

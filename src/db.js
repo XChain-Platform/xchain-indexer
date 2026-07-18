@@ -1436,9 +1436,20 @@ class Database {
             // A malformed or empty payload must never be treated as a valid rollback target
             // (a null/non-finite block_index here would let `lastIndexerBlock >= null` coerce
             // true and call rollback(null), whose predicates match no rows - a silently missed
-            // rollback).
-            if(!Number.isFinite(block_index))
+            // rollback). We SKIP rather than throw - a benign payload reshape must not halt
+            // indexing, and three regression tests pin skip-not-throw - but the skip must not be
+            // SILENT: getLastProcessedReorgId can later advance the cursor PAST this id via a
+            // newer well-formed marker, permanently losing this rollback with zero operator
+            // signal. Log LOUD (the decoder REORG contract is [{block_index, block_hash}]) so a
+            // payload-shape drift pages the operator instead of rotting.
+            if(!Number.isFinite(block_index)){
+                console.error('getReorgsSince: DROPPING malformed REORG event id=' + row.id +
+                    ' (afterId=' + afterId + '): payload yields no finite block_index, so it has no ' +
+                    'rollback target and the cursor may later pass this id and miss the rollback. ' +
+                    'Expected decoder contract [{block_index, block_hash}]; got data=' +
+                    String(row.data).slice(0, 200));
                 continue;
+            }
             reorgs.push({ id: Number(row.id), block_index: block_index });
         }
         return reorgs;
@@ -2454,11 +2465,20 @@ class Database {
 
     // Create records in the 'actions' table and return record id
     async createActionIndex(data, force=false){
-        // Set values to NULL if it is not already set
+        // Set values to NULL if it is not already set. TX_VOUT is normalized here too so a
+        // hub-mirror-injected action ({ ACTION, BLOCK_INDEX [, FORMAT] }) carries an explicit
+        // null rather than leaking `undefined` into getActionIndex's args and the INSERT below,
+        // where it only reached NULL via sqlstring's undefined->NULL coercion.
         data['BLOCK_INDEX'] = (!this.util.isNull(data['BLOCK_INDEX'])) ? data['BLOCK_INDEX'] : null;
         data['TX_INDEX']    = (!this.util.isNull(data['TX_INDEX'])) ? data['TX_INDEX'] : null;
+        data['TX_VOUT']     = (!this.util.isNull(data['TX_VOUT'])) ? data['TX_VOUT'] : null;
         data['FORMAT']      = (!this.util.isNull(data['FORMAT'])) ? data['FORMAT'] : null;
-        // Check if the action index already exists for this action
+        // Check if the action index already exists. LOAD-BEARING NULL-blindness: for
+        // synthetic/injected rows block_index/tx_index/tx_vout are NULL, and SQL `col = NULL`
+        // matches nothing, so this probe never fires and every injected CROSS_SETTLE / XEXEC /
+        // XCALL mints a FRESH action_index (required - multiple per block must not collapse into
+        // one). Do NOT "harden" the getActionIndex predicate to NULL-safe `<=>`: that would merge
+        // same-block injections into one action_index and corrupt settlement.
         let action_index = await this.getActionIndex(data);
         // Handle creating record
         if(action_index==null || force==true){
@@ -10992,7 +11012,12 @@ class Database {
         result.totalEpochs = (totRows.length && totRows[0].epochs != null) ? Number(totRows[0].epochs) : 0;
         if(result.totalEpochs === 0) return result;
         // Numerator rows - (source, epoch, pubkey) for every passing verdict in the
-        // window. Ordered for deterministic aggregation.
+        // window. ORDER BY consensus-stable columns (address, epoch_height, pubkey) -
+        // a total order identical fleet-wide, NOT fv.source_id, a local index_addresses
+        // AUTO_INCREMENT surrogate that differs per node (the same house rule the sibling
+        // getVerifiedFullNodeSet states). The Map/Set aggregation below is order-insensitive
+        // today, but a future LIMIT or first-source dust allocation would make this row
+        // order consensus-visible, so keep the deterministic total order.
         let rows = await this.doQuery(
             `SELECT fv.source_id AS source_id, sa.address AS source,
                     fv.epoch_height AS epoch_height, ip.pubkey AS pubkey
@@ -11000,7 +11025,7 @@ class Database {
                JOIN index_pubkeys   ip ON ip.id = fv.signing_pubkey_id
                JOIN index_addresses sa ON sa.id = fv.source_id
               WHERE fv.passed = 1 AND fv.block_index > ? AND fv.block_index <= ?
-              ORDER BY fv.source_id`,
+              ORDER BY sa.address, fv.epoch_height, ip.pubkey`,
             [low, blockIndex]);
         let bySource = new Map();
         for(let r of rows){
@@ -11135,8 +11160,10 @@ class Database {
 
     // Look up the on-chain ANCHOR checkpoint record for one checkpoint identity
     // (chain, network, block_index, checkpoint_seq), joined to its status. Only
-    // checkpoint-bearing versions (0/1/3/4/5; version 2 is an archive continuation
-    // chunk with no checkpoint identity of its own). Returns the highest action_index
+    // checkpoint-bearing versions (0/1/3/4/5/6, per the ANCHOR_CHECKPOINT_VERSIONS
+    // constant below; version 2 is an archive continuation chunk with no checkpoint
+    // identity of its own, and v6 is the publisher-bearing archive anchor  that
+    // DOES carry a checkpoint identity). Returns the highest action_index
     // match (a reorg-replayed re-anchor supersedes an earlier one) or null. Read path
     // for the getanchoraction RPC: it lets the hub confirm an announced anchor actually
     // landed on-chain, with the matching payload, at DOGE depth, before trusting an
@@ -11173,9 +11200,21 @@ class Database {
 
     // The archive-head anchor (v1, or the publisher-bearing v6) that started an
     // archive batch (status irrelevant - chunk geometry checks belong to the caller).
+    // match_batch_seq is NOT unique: the replay guard in anchor.js _parseCheckpoint accepts
+    // an EQUAL MATCH_BATCH_SEQ ('never below the recorded max; equal is allowed'), so a
+    // permissionless re-broadcast or failover double-publish stores a SECOND v1/v6 row for
+    // the same batch. The returned parent feeds a consensus-visible geometry/CRC verdict in
+    // anchor.js _parseContinuation (TOTAL_CHUNKS gate + batch_crc32 reassembly, which stamps
+    // setAnchorArchiveStatus(parent.action_index,'invalid_archive')), so the pick MUST be a
+    // deterministic total order or two honest nodes select different parents and persist
+    // divergent anchor_actions status fleet-wide. ORDER BY action_index ASC picks the EARLIEST
+    // (canonical) head - the one that actually STARTED the batch - matching the 'lowest
+    // action_index wins' tie-break the v2-continuation dedup below already uses. Order on
+    // action_index (consensus-visible, unique on this single-network table), never the local
+    // AUTO_INCREMENT id, which differs per node.
     async getAnchorV1ByBatchSeq(batchSeq){
         let rows = await this.doQuery(
-            "SELECT * FROM anchor_actions WHERE version IN (1, 6) AND match_batch_seq = ? LIMIT 1", [batchSeq]);
+            "SELECT * FROM anchor_actions WHERE version IN (1, 6) AND match_batch_seq = ? ORDER BY action_index ASC LIMIT 1", [batchSeq]);
         return rows.length > 0 ? rows[0] : null;
     }
 
