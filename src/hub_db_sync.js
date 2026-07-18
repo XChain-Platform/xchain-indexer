@@ -132,6 +132,18 @@ function coerceMirrorValue(v) {
 // immutable history and never retracted.
 const CROSS_CHAIN_TABLES = ['cross_chain_matches', 'cross_chain_calls', 'capability_snapshots'];
 
+// Tables that must re-page from since_id=0 on EVERY bootstrap. A cursor of
+// since_id = MAX(local id) is INSERT-shaped: it can only deliver rows with a NEW id,
+// so it can never re-fetch an in-place UPGRADE that kept the same hub id. Three
+// mirrored tables are upgraded in place on the hub (price_snapshots skipped->
+// finalized, cross_chain_calls re-finalized, cross_chain_matches anchor_txid
+// stamping); if the upgrade broadcast is missed while this mirror is disconnected,
+// only a full re-page re-delivers the row so the idempotent _applyRow ODKUs converge
+// it (#2491). capability_snapshots is here for a related reason (locally-assigned
+// ids, #2270). The three keep hub-id parity (only capability_snapshots strips id in
+// _applyRow); the re-page cost is O(table) per reconnect, accepted.
+const FULL_REPAGE_TABLES = ['capability_snapshots', 'price_snapshots', 'cross_chain_calls', 'cross_chain_matches'];
+
 // Hub federation state tables. state_checkpoints carries quorum-signed per-chain
 // state-hash commitments (the explorer/SDK verification source). Append-only,
 // never retracted. A reorged height is superseded by a new row with a higher
@@ -525,13 +537,13 @@ class HubDbSync {
         }
 
         // Determine the highest existing ID in the local copy so we only fetch newer rows.
-        // EXCEPT capability_snapshots: its local ids are locally assigned (natural-key
-        // mirror, see _applyRow #2270), so local MAX(id) says nothing about which HUB
-        // rows are present - seeding since_id from it silently skips every hub row with
-        // id <= MAX(local). Always re-page that table from 0; uq_cap_snap + INSERT
-        // IGNORE dedupe, and the in-loop cursor still advances off the hub's wire ids.
+        // EXCEPT the FULL_REPAGE_TABLES (see above): a since_id = MAX(local id) cursor is
+        // INSERT-shaped and can never re-fetch an in-place upgrade (and capability_snapshots
+        // also has locally-assigned ids). Re-page those from 0; the natural-key UNIQUE +
+        // idempotent _applyRow (INSERT IGNORE / ODKU) dedupe, and the in-loop cursor still
+        // advances off the hub's wire ids.
         let lastId = 0;
-        if (table !== 'capability_snapshots') {
+        if (!FULL_REPAGE_TABLES.includes(table)) {
             try {
                 let rows = await this.hubDb.doQuery('SELECT MAX(id) AS max_id FROM ' + table);
                 if (rows.length > 0 && rows[0].max_id) lastId = Number(rows[0].max_id);
@@ -605,12 +617,12 @@ class HubDbSync {
         // catch-up for that narrow gap. Rows already local are ignored (INSERT IGNORE).
         // Skip the catch-up when the page loop already hit a hole (applyErrors>0): the table is
         // not drained regardless, and fetching past the hole would only widen it.
-        // capability_snapshots is exempt: local ids are locally assigned (natural-key
-        // mirror, #2270), so comparing local MAX(id) to the hub's advertised max_id is
-        // meaningless - and its bootstrap always re-pages from 0 anyway, which already
-        // covers the window this catch-up exists for.
+        // The FULL_REPAGE_TABLES are exempt: they always re-page from 0 (which already
+        // covers the window this catch-up exists for), and their since_id=MAX(id) compare
+        // is either meaningless (capability_snapshots' locally-assigned ids) or blind to the
+        // in-place upgrades this catch-up would otherwise try to chase (#2491).
         let hubReadyMaxId = this._readyMaxIds && this._readyMaxIds[table];
-        if (hubReadyMaxId && applyErrors === 0 && table !== 'capability_snapshots') {
+        if (hubReadyMaxId && applyErrors === 0 && !FULL_REPAGE_TABLES.includes(table)) {
             let localRows = [];
             try {
                 localRows = await this.hubDb.doQuery('SELECT MAX(id) AS max_id FROM ' + table);

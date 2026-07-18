@@ -414,6 +414,23 @@ describe('HubDbSync bootstrap pagination + retry @regression @tier2', function (
             'must page from 0, not local MAX(id): ' + httpGet.firstCall.args[0]);
     });
 
+    // #2491: the three in-place-UPGRADED tables must ALSO bootstrap from since_id=0, so a row
+    // upgraded on the hub under its unchanged id (price_snapshots skipped->finalized,
+    // cross_chain_calls re-finalized, cross_chain_matches anchor_txid) while this mirror was
+    // disconnected is re-delivered and converged by its idempotent _applyRow ODKU. A
+    // since_id=MAX(local id) cursor is INSERT-shaped and would strand the pre-upgrade row.
+    ['price_snapshots', 'cross_chain_calls', 'cross_chain_matches'].forEach((table) => {
+        it(`${table} bootstraps from since_id=0 regardless of local MAX(id) to re-fetch in-place upgrades (#2491)`, async function () {
+            const sync = makeBootstrapSync();
+            sinon.stub(sync, '_localColumns').resolves(new Set(['id', 'status']));
+            sync.hubDb.doQuery = sinon.stub().resolves([{ max_id: 500 }]);   // local rows already present
+            const httpGet = sinon.stub(sync, '_httpGet').resolves({ rows: [{ id: 3 }], watermark: 7 });
+            await sync._bootstrapTable(table);
+            assert.ok(httpGet.firstCall.args[0].includes('since_id=0'),
+                `${table} must page from 0, not local MAX(id): ` + httpGet.firstCall.args[0]);
+        });
+    });
+
     it('_applyRow strips the wire id for capability_snapshots so a local PK can never collide (#2270)', async function () {
         const doQuery = sinon.stub().resolves([]);
         const sync = new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test' });
