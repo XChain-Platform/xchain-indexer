@@ -180,7 +180,7 @@ class Dividend {
         } else {
             // Legacy: database hits model
             let db_hits = 3;
-                db_hits += (recipients) ? this.util.bcmul(Object.keys(recipients).length,2,0) : 0;
+                db_hits += (recipients) ? Number(Object.keys(recipients).length) * 2 : 0;
             fees['AMOUNT'] = this.util.getTransactionFee(db_hits, fees['TICK']);
         }
         // Emitted (VM-synthesized) actions pay no separate per-tx fee; see util.feeForAction

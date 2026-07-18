@@ -121,7 +121,7 @@ class Callback {
 
         // Calculate total number of database hits for this CALLBACK
         let db_hits = 4;                                                                       // 1 debits, 1 credits, 1 balances, 1 callback
-            db_hits += (recipients) ? this.util.bcmul(Object.keys(recipients).length,3,0) : 0; // 1 debits, 1 credits, 1 balances
+            db_hits += (recipients) ? Number(Object.keys(recipients).length) * 3 : 0;          // 1 debits, 1 credits, 1 balances
 
         // Determine total transaction FEE based on database hits.
         // Emitted (VM-synthesized) actions pay no separate per-tx fee; see util.feeForAction.

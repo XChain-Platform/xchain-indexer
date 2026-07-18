@@ -166,9 +166,9 @@ class Sweep {
 
         // Calculate total number of database hits for this SWEEP
         let db_hits = 1;                                                                                                                            // 1 sweeps
-            db_hits += (data['BALANCES'])   ? this.util.bcmul(Object.keys(balances).length,4,0)                                              : 0;   // 1 debits, 1 credits, 2 balances
-            db_hits += this.util.bcmul(orderEscrows.length + swapEscrows.length + dispenserEscrows.length, 4, 0);                                   // 1 escrows, 1 credits, 2 balances (per affected offer)
-            db_hits += (data['OWNERSHIPS']) ? this.util.bcmul(Object.keys(ownerships).length,2,0)                                            : 0;   // 1 issue, 1 tokens
+            db_hits += (data['BALANCES'])   ? Number(Object.keys(balances).length) * 4                                                       : 0;   // 1 debits, 1 credits, 2 balances
+            db_hits += Number(orderEscrows.length + swapEscrows.length + dispenserEscrows.length) * 4;                                              // 1 escrows, 1 credits, 2 balances (per affected offer)
+            db_hits += (data['OWNERSHIPS']) ? Number(Object.keys(ownerships).length) * 2                                                     : 0;   // 1 issue, 1 tokens
 
         // Determine total transaction FEE based on database hits. Emitted (VM-synthesized)
         // actions pay no separate per-tx fee. See util.feeForAction. Without this,
