@@ -37,6 +37,24 @@ const deriveCallId = (network, chain, txHash, rootActionIndex, contractIndex, em
         .update([network, chain, txHash, rootActionIndex, contractIndex, emitterPath, position, targetChain].map(String).join(':'))
         .digest('hex');
 
+// Cross-repo golden pin for the call_id preimage. This is the checked-in
+// (input tuple -> expected hex) vector from xchain-vm/src/gateway-emit.js
+// (GOLDEN_VECTORS.callId). It is a LITERAL constant on purpose: asserting the
+// REAL xcall handler against it (below) catches a lockstep field-reorder that
+// would otherwise pass because the local deriveCallId copy was reordered too.
+// Keep in sync with xchain-vm/src/gateway-emit.js; a mismatch is a genuine
+// fleet fork. bin/check-preimage-golden-parity.js (platform root) fails CI if
+// this literal drifts from canonical or the assertion is removed.
+const GOLDEN_CALL_ID = {
+    input: {
+        network: 'regtest', coin: 'BTC', txHash: 'f'.repeat(64),
+        rootActionIndex: 100, contractIndex: 42, emitterPath: '',
+        emitterPosition: 0, targetChain: 'DOGE'
+    },
+    // sha256('regtest:BTC:<64 f chars>:100:42::0:DOGE')
+    expected: 'bca0e6ab4e60a2ec7ea96ab4935c0a4db936be5ce9d8cab0d899b4144a7ae480'
+};
+
 describe('Xcall (XCALL) @regression @tier3', function () {
     let indexer, actionsCtx, handler, executeStub;
 
@@ -150,6 +168,26 @@ describe('Xcall (XCALL) @regression @tier3', function () {
                 data['EMITTER'], data['EMITTER_PATH'], data['EMITTER_POSITION'], 'LTC');
             await handler.parse(v0Params(wrongTarget), data, null);
             assert.match(data['STATUS'], /CALL_ID \(does not match/);
+        });
+
+        it('golden vector: the REAL handler derives the checked-in xchain-vm call_id hash', async function () {
+            // Drive the real handler with the cross-repo golden-vector input and the
+            // LITERAL golden hex as the supplied CALL_ID. The handler independently
+            // re-derives call_id from these fields and accepts only on a byte match,
+            // so a 'valid' STATUS proves the real derivation still produces the pinned
+            // hex. This does NOT route through the local deriveCallId lambda, so a
+            // lockstep field-reorder of BOTH the real handler and the lambda cannot
+            // pass silently (attest.test.js twin; closes  for XCALL).
+            const gv   = GOLDEN_CALL_ID.input;
+            const data = v0Data({
+                TX_HASH: gv.txHash, ROOT_ACTION_INDEX: gv.rootActionIndex,
+                EMITTER: gv.contractIndex, EMITTER_PATH: gv.emitterPath,
+                EMITTER_POSITION: gv.emitterPosition,
+            });
+            await handler.parse(v0Params(GOLDEN_CALL_ID.expected, { targetChain: gv.targetChain }), data, null);
+            assert.strictEqual(data['STATUS'], 'valid',
+                'real handler must accept the checked-in golden CALL_ID; a rejection means the ' +
+                'indexer preimage drifted from xchain-vm/src/gateway-emit.js GOLDEN_VECTORS.callId');
         });
 
         it('hard-fails when EMITTER_POSITION is missing (no silent derivation bypass)', async function () {
