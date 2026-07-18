@@ -485,6 +485,13 @@ class Deploy {
                 // A constructor is a root execution: emitted cross-contract calls
                 // run at depth 1, same as calls emitted by a user EXECUTE.
                 callDepth:        0,
+                // Explicit top-level ceiling (VM-EMIT-2): a constructor is a root
+                // execution, so it runs under the same GAS_CEILING as a top-level
+                // EXECUTE. Passing it explicitly (instead of relying on the VM's
+                // constructor-time default) keeps the ceiling the clamp below
+                // assumes (constructorGas = GAS_CEILING on resource termination)
+                // bound to the ceiling the VM actually enforced.
+                gasCeiling:       GAS_CEILING,
                 blockContext: {
                     height:    data['BLOCK_INDEX'],
                     timestamp: data['BLOCK_TIME'],

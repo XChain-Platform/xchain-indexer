@@ -232,6 +232,18 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
             assert.strictEqual(data['STATUS'], 'valid');
         });
 
+        it('passes an explicit gasCeiling matching the top-level EXECUTE ceiling (VM-EMIT-2)', async function () {
+            const vm = makeVm();
+            actionsCtx.vm = vm;
+            handler = new Deploy(actionsCtx);
+
+            const data = deployData({ FORMAT: 0 });
+            await handler.parse(['0', VALID_CODE_B64, '100000', 'initparam'], data, null);
+            assert.ok(vm.execute.calledOnce);
+            assert.strictEqual(vm.execute.firstCall.args[0].gasCeiling, 1000000,
+                'constructor VM run must carry the explicit 1,000,000 root gas ceiling');
+        });
+
         it('marks deploy invalid when constructor fails', async function () {
             const vm = makeVm({
                 execute: sinon.stub().resolves({
