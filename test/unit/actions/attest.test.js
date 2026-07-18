@@ -1249,6 +1249,17 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             assert.ok(executeStub.parse.calledOnce, 'callback injected with empty payload');
         });
 
+        it('savepoint name is unique per injected callback (suffixed with emission action_index) ', async function () {
+            indexer.indexerDb.createActionIndex.resolves(42);
+            indexer.indexerDb.getAttestationRequestById.resolves(makeRequestRow({ redundancy: 1 }));
+            const data = v1Data();
+            await handler.parse(v1Params([{ pubkey: PUBKEY_A, sig: SIG_A }]), data, null);
+
+            assert.ok(indexer.indexerDb.createSavepoint.calledOnce);
+            assert.strictEqual(indexer.indexerDb.createSavepoint.firstCall.args[0], 'attestation_callback_42',
+                'savepoint name must embed the emission action_index so repeated callbacks in one tx never collide');
+        });
+
     });
 
     describe('_injectExpiredCallback internal branches', function () {
@@ -1305,6 +1316,17 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             );
             assert.ok(indexer.indexerDb.rollbackToSavepoint.calledOnce,
                 'rollbackToSavepoint must be called when expire execute.parse throws');
+        });
+
+        it('expire savepoint name is unique per injected callback (suffixed with emission action_index) ', async function () {
+            indexer.indexerDb.createActionIndex.resolves(77);
+            indexer.indexerDb.getAttestationRequestById.resolves(makeRequestRow({ request_status: 'pending' }));
+            const data = v2Data();
+            await handler.parse(['2', REQ_ID], data, null);
+
+            assert.ok(indexer.indexerDb.createSavepoint.calledOnce);
+            assert.strictEqual(indexer.indexerDb.createSavepoint.firstCall.args[0], 'attestation_expire_callback_77',
+                'expire savepoint name must embed the emission action_index');
         });
 
         it('getValidatorsByCapability throws → missed_count catch block fires, expire still succeeds (lines 367-368)', async function () {

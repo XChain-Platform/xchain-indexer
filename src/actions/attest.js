@@ -722,7 +722,10 @@ class Attest {
             EMITTER:       responseData['ACTION_INDEX']
         };
 
-        let savepoint = await this.indexerDb.createSavepoint('attestation_callback');
+        // Unique per injected callback: a fixed name would be destroyed and re-created
+        // by MariaDB on re-use, corrupting rollback when EXECUTE nests its own savepoints
+        // or multiple attestation callbacks fire in one block transaction.
+        let savepoint = await this.indexerDb.createSavepoint('attestation_callback_' + parseInt(emissionActionIndex));
         try {
             await this.actions.actionExecute.parse(actionParams, emissionData, null);
             if(emissionData['STATUS'] && emissionData['STATUS'] !== 'valid'){
@@ -784,7 +787,8 @@ class Attest {
             EMITTER:      expireData['ACTION_INDEX']
         };
 
-        let savepoint = await this.indexerDb.createSavepoint('attestation_expire_callback');
+        // Unique per injected callback (see _injectCallbackExecute savepoint note).
+        let savepoint = await this.indexerDb.createSavepoint('attestation_expire_callback_' + parseInt(emissionActionIndex));
         try {
             await this.actions.actionExecute.parse(actionParams, emissionData, null);
             if(emissionData['STATUS'] && emissionData['STATUS'] !== 'valid'){
