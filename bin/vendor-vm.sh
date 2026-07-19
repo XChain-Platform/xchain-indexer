@@ -37,6 +37,15 @@
 
 set -euo pipefail
 
+# Fail closed off-Linux: the npm install below compiles isolated-vm for the HOST
+# platform, so a Mac-side run poisons the vendored tree with Mach-O binaries the
+# Linux runtime cannot load (PROM-029 incident). Run this on devhost instead.
+if [ "$(uname -s)" != "Linux" ]; then
+    echo "vendor-vm: refusing to run on $(uname -s): npm install would build a non-Linux isolated-vm into the vendored tree." >&2
+    echo "vendor-vm: run this script on devhost (Linux), e.g.: ssh devhost 'cd $(pwd) && bin/vendor-vm.sh'" >&2
+    exit 1
+fi
+
 INDEXER_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SRC="${XCHAIN_VM_SOURCE:-$INDEXER_ROOT/../xchain-vm}"
 DEST="$INDEXER_ROOT/xchain-vm"
