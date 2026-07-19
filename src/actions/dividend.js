@@ -178,9 +178,17 @@ class Dividend {
             fees['AMOUNT']      = result.fee;
             fees['FEE_VERSION'] = 2;
         } else {
-            // Legacy: database hits model
+            // Legacy: database hits model. LEGACY_FEE_NUMERIC_DBHITS  gates the fix of
+            // the db_hits string-concatenation bug: below the flag-day reproduce the original
+            // `db_hits += bcmul(...)` concatenation byte-for-byte (3 + "4" -> "34") so a
+            // pre-activation replay commits the identical (inflated) fee; at/above it accumulate
+            // numerically. See protocol_changes.js.
+            let numericDbHits = await this.actions.protocolChanges.isEnabled('LEGACY_FEE_NUMERIC_DBHITS', data['BLOCK_INDEX']);
             let db_hits = 3;
+            if(numericDbHits)
                 db_hits += (recipients) ? Number(Object.keys(recipients).length) * 2 : 0;
+            else
+                db_hits += (recipients) ? this.util.bcmul(Object.keys(recipients).length, 2, 0) : 0;
             fees['AMOUNT'] = this.util.getTransactionFee(db_hits, fees['TICK']);
         }
         // Emitted (VM-synthesized) actions pay no separate per-tx fee; see util.feeForAction

@@ -119,9 +119,16 @@ class Callback {
             }
         }
 
-        // Calculate total number of database hits for this CALLBACK
+        // Calculate total number of database hits for this CALLBACK. LEGACY_FEE_NUMERIC_DBHITS
+        //  gates the db_hits string-concatenation fix: below the flag-day reproduce the
+        // original `+= bcmul(...)` concatenation byte-for-byte (4 + "6" -> "46") for
+        // pre-activation replay parity; at/above it accumulate numerically. See protocol_changes.js.
+        let numericDbHits = await this.actions.protocolChanges.isEnabled('LEGACY_FEE_NUMERIC_DBHITS', data['BLOCK_INDEX']);
         let db_hits = 4;                                                                       // 1 debits, 1 credits, 1 balances, 1 callback
+        if(numericDbHits)
             db_hits += (recipients) ? Number(Object.keys(recipients).length) * 3 : 0;          // 1 debits, 1 credits, 1 balances
+        else
+            db_hits += (recipients) ? this.util.bcmul(Object.keys(recipients).length, 3, 0) : 0;
 
         // Determine total transaction FEE based on database hits.
         // Emitted (VM-synthesized) actions pay no separate per-tx fee; see util.feeForAction.

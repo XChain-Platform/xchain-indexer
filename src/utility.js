@@ -462,7 +462,16 @@ class Utility {
     // .floor(), NOT mathjs.floor() (the latter is configured with a default
     // precision that rounds 137.99999999999 up to 138.
     bcfloor(num){
-        return this.bcnum(num).floor().toNumber();
+        // Floor in exact bignumber space, then guard the JS-Number conversion:
+        // .toNumber() above Number.MAX_SAFE_INTEGER (2^53-1) silently rounds to a
+        // nearby double, corrupting a value that then flows into consensus math.
+        // Mirror the encoder's parseSatoshiAmount fail-fast: throw loudly rather
+        // than return a lossy integer (covers dispense.js multiplier and the
+        // rawTokens/rawMultiplier unit math at :1964/:1991).
+        const floored = this.bcnum(num).floor();
+        if(floored.gt(Number.MAX_SAFE_INTEGER))
+            throw new RangeError(`bcfloor result (${floored.toString()}) exceeds the maximum safe integer (${Number.MAX_SAFE_INTEGER}) and cannot be represented without precision loss`);
+        return floored.toNumber();
     }
 
     // Handle comparing two big numbers: returns true if numA > numB
@@ -1057,7 +1066,14 @@ class Utility {
     // validateNativeCoinFee and computeFeeQuote.
     // Returns { coinUsdPrice, xchainUsdPrice, oracleRound } on success, or { error } on
     // a missing/stale/invalid price.
-    async getFeeOraclePrices(db, coin, blockIndex, refTime, maxAgeSeconds){
+    // `gateTime` (optional, 6th arg) anchors ONLY the NATIVE_FEE_PRICE_TIME_GATE flag-day
+    // predicate; it defaults to refTime when null/undefined. The consensus caller
+    // (validateNativeCoinFee) passes BLOCK_TIME as refTime and omits gateTime, so gateTime
+    // resolves to refTime and this path stays byte-identical. The public feequote pre-flight
+    // passes wall-clock as refTime (staleness is deliberately judged against real-world price
+    // age) but the quoted block's time as gateTime, so the flag-day gate is anchored on a
+    // chain-derived time, not the operator's clock, while staleness stays on refTime.
+    async getFeeOraclePrices(db, coin, blockIndex, refTime, maxAgeSeconds, gateTime){
         let priceDb;
         if(db.indexer && db.indexer.hubDb){
             priceDb = db.indexer.hubDb;
@@ -1090,8 +1106,11 @@ class Utility {
         // block loop enforces the matching time-keyed price barrier
         // (XChainIndexer/hub_db_sync), gated by the SAME shared predicate.
         let network      = this.config['NETWORK'] || process.env.INDEXER_NETWORK;
+        // Gate anchored on a chain-derived time (gateTime, default refTime); staleness stays on
+        // refTime via opts.blockTime.
+        let gateAt       = (gateTime === null || gateTime === undefined) ? refTime : gateTime;
         let selectByTime = (coin !== 'BTC') &&
-            protocolChanges.isNativeFeePriceTimeGateActive(network, refTime);
+            protocolChanges.isNativeFeePriceTimeGateActive(network, gateAt);
         let opts = { blockTime: refTime, maxAgeSeconds: maxAgeSeconds, selectByTime: selectByTime };
 
         let coinPriceData = await priceDb.getLatestPrice(coin + '/USD', blockIndex, opts);
@@ -1628,15 +1647,35 @@ class Utility {
         let armed = await db.getArmedPolls(block_index);
         for(let poll of armed){
             let pollIndex = poll.action_index;
+            // Watermark short-circuit (): re-tallying every armed poll from full
+            // ledger/vote/delegation history on every block is the dominant per-block cost here.
+            // For a NON-time_weighted poll the tally is a pure function of its input rows (the
+            // tick's ledger, the poll's votes, the tick's delegations) plus the immutable poll
+            // definition, so if none of those tables gained a row since the last block we tallied
+            // this poll, the tally is byte-identical now. It did not early-decide then (or the poll
+            // would be terminal and absent from getArmedPolls), so it cannot now: skip the tally.
+            // time_weighted is EXCLUDED because its average-holding weight shifts as the measure
+            // window extends each block even with no new ledger row, so its inputs are not captured
+            // by a row-presence watermark; those polls always take the full tally, exactly as before.
+            let watermark = null;
+            if(poll.weight_mode !== 'time_weighted'){
+                watermark = await db.getPollTallyInputWatermark(pollIndex, poll.tick_id);
+                if(db.pollTallyWatermarkMatches(pollIndex, watermark))
+                    continue;
+            }
             let tally = await db.getPollTally(pollIndex, block_index);
-            if(!tally) continue;
+            if(!tally){
+                // No tally (e.g. poll vanished mid-block); record the watermark so a stable poll is
+                // not re-probed to the same dead end every block. Cleared on any input change.
+                if(watermark !== null) db.setPollTallyWatermark(pollIndex, watermark);
+                continue;
+            }
             // Leading option weight as a fraction of total TICK supply at this block.
             let leader = '0';
             for(let opt of tally.options)
                 if(this.bcgt(opt.weight, leader)) leader = opt.weight;
             let frac = this.bcgt(tally.supply, 0) ? this.bcdiv(leader, tally.supply, 18) : '0';
-            let pollDef   = await db.getPoll(pollIndex);
-            let threshold = pollDef.decide_threshold;
+            let threshold = poll.decide_threshold;
             // Crosses the supply threshold AND clears participation/quorum now (else
             // a whale could force-close a poll that fails its gates). A poll that
             // crosses weight but not a gate stays open and keeps evaluating.
@@ -1651,6 +1690,15 @@ class Utility {
                 data['DECIDED_EARLY']         = 1;
                 data['IS_SYNTHETIC']          = true;
                 await actions.processAction('VOTE', [2, pollIndex], data, null);
+                // Finalized: the poll is now terminal and drops out of getArmedPolls, so drop its
+                // watermark too (defensive: keeps a reused action_index from ever matching a stale
+                // fingerprint after a reorg re-opens a poll at the same index).
+                db.clearPollTallyWatermarkEntry(pollIndex);
+            } else if(watermark !== null){
+                // Did NOT early-decide at this fingerprint. Cache it so the next block skips the
+                // full re-tally unless an input row lands. time_weighted polls (watermark null) are
+                // intentionally never cached, so they keep tallying every block as before.
+                db.setPollTallyWatermark(pollIndex, watermark);
             }
         }
 
@@ -1856,7 +1904,12 @@ class Utility {
         // would deadlock forever and indexers mirroring different hubs would diverge on whether the
         // v2 expiry action exists. So suppress expiry only when the result actually verifies (or the
         // capability snapshot is not mirrored yet, i.e. it will still deliver) - resultSuppressesExpiry.
-        let resultsByCallId = new Map(allResults.map(r => [r.call_id, r]));
+        // Key on lowercased call_id: local result rows are canonical-lowercase, but a hub-mirrored
+        // call_id may arrive uppercase, so an unnormalized key would miss the lookup below and let
+        // a request expire even though a deliverable result exists. Lowercase on both insertion
+        // and lookup; the verbatim info.call_id still flows into the synthesized XCALL untouched.
+        // No-op for all-lowercase data.
+        let resultsByCallId = new Map(allResults.map(r => [String(r.call_id).toLowerCase(), r]));
         // Cap the expiry pass at XCALL_MAX_CALLS_PER_BLOCK, same as dispatch/result: each expiry
         // synthesizes an XCALL v2 and runs a VM callback isolate, so an uncapped burst of
         // deadline-aligned requests would exceed BLOCK_PROCESS_TIMEOUT and deterministically wedge
@@ -1865,7 +1918,7 @@ class Utility {
         // verification below is bounded by this same cap (<=25 quorum checks/block).
         let expired = await db.getExpiredCrossChainCallRequests(block_index, cap);
         for(let info of expired){
-            let pendingResult = resultsByCallId.get(info.call_id);
+            let pendingResult = resultsByCallId.get(String(info.call_id).toLowerCase());
             // effective + VERIFIED result wins over expiry at this block
             if(pendingResult && await actions.actionXcall.resultSuppressesExpiry(pendingResult)) continue;
             let data = {};

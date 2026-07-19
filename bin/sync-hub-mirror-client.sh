@@ -62,6 +62,31 @@ for svc in $SERVICES; do
     done
 done
 
+# ---- indexer <-> hub HUB_SCHEMA_VERSION lockstep check ----------------------
+# hub-schema-version.js is not vendored FROM the hub (the indexer's copy above
+# is the canonical file synced OUT to consumers); the hub keeps its own,
+# independent source file at xchain-hub/src/hub-schema-version.js, and both
+# MUST declare the same HUB_SCHEMA_VERSION value or a hub upgrade can silently
+# fork the ledger (see that file's own header comment). A byte-cmp would be
+# too strict here (the two files carry different repo headers by design), so
+# this extracts just the numeric constant from each side and compares values.
+if [ "$CHECK" -eq 1 ]; then
+    HUB_VERSION_FILE="$ROOT/xchain-hub/src/hub-schema-version.js"
+    if [ -f "$HUB_VERSION_FILE" ]; then
+        indexer_ver="$(grep -oE 'HUB_SCHEMA_VERSION = [0-9]+' "$SRC/hub-schema-version.js" | grep -oE '[0-9]+$')"
+        hub_ver="$(grep -oE 'HUB_SCHEMA_VERSION = [0-9]+' "$HUB_VERSION_FILE" | grep -oE '[0-9]+$')"
+        if [ -z "$indexer_ver" ] || [ -z "$hub_ver" ]; then
+            echo "DRIFT: could not extract HUB_SCHEMA_VERSION from indexer and/or hub source; check both files by hand."
+            drift=1
+        elif [ "$indexer_ver" != "$hub_ver" ]; then
+            echo "DRIFT: xchain-indexer HUB_SCHEMA_VERSION ($indexer_ver) != xchain-hub HUB_SCHEMA_VERSION ($hub_ver)"
+            drift=1
+        fi
+    else
+        echo "NOTE: xchain-hub/src/hub-schema-version.js not found at $HUB_VERSION_FILE; skipping indexer<->hub lockstep check (hub repo not checked out alongside indexer)."
+    fi
+fi
+
 if [ "$CHECK" -eq 1 ]; then
     [ "$drift" -eq 0 ] && echo "OK: all vendored hub-mirror client copies are byte-identical to canonical." || exit 1
 else

@@ -999,8 +999,20 @@ async function startApi(){
             let db = indexer.decoderDb.apiView();
             try {
                 let rows = await db.doQuery(reorgHistoryQuery.REORG_EVENTS_SQL, [v.since_id, v.limit]);
+                // #2736: live REORG_HALT probe so the hub can tell "no recent reorgs" apart from
+                // "decoder halted, history frozen". Best-effort: a probe fault falls back to the
+                // indexer's last-known flag rather than failing the whole read.
+                let decoderReorgHalted;
+                try {
+                    // Route through the same apiView db (pool-direct, never the block tx connection).
+                    let probe = await db.isReorgHalted();
+                    decoderReorgHalted = !!(probe && probe.halted);
+                } catch (probeErr) {
+                    decoderReorgHalted = !!indexer.decoderReorgHalted;
+                }
                 return reorgHistoryQuery.buildReorgHistoryResponse(rows,
-                    { block_index: v.block_index, block_hash: v.block_hash });
+                    { block_index: v.block_index, block_hash: v.block_hash },
+                    { decoderReorgHalted });
             } catch (err) {
                 console.error('getreorghistory error:', err);
                 return { error: 'failed to look up reorg history' };
@@ -1148,9 +1160,10 @@ async function startApi(){
         // climbing age here while the indexer otherwise looks synced is the signal that
         // the hub is unreachable and the live-polled governance params are stale.
         let lastHubConfigFetchAt = indexer.lastHubConfigFetchAt || null;
-        let hubConfigAgeSeconds  = (lastHubConfigFetchAt != null)
-                                    ? Math.floor((Date.now() - lastHubConfigFetchAt) / 1000)
-                                    : null;
+        // Age + explicit staleness via the one shared helper (same threshold as buildHealthResponse).
+        let hubConfig            = XChainIndexer.hubConfigStaleness(lastHubConfigFetchAt, Date.now());
+        let hubConfigAgeSeconds  = hubConfig.ageSeconds;
+        let hubConfigStale       = hubConfig.stale;
         // Status-code contract for the xchain-node http_get healthcheck (wget
         // exits 0 on any 2xx): 503 when the indexer DB is unreachable or the
         // block counter is stalled (stallReason set), matching the encoder /
@@ -1170,7 +1183,8 @@ async function startApi(){
             // a healthy catch-up, all of which otherwise present only as a growing lag.
             stallReason:  indexer.stallReason || null,
             lastHubConfigFetchAt: lastHubConfigFetchAt,
-            hubConfigAgeSeconds:  hubConfigAgeSeconds
+            hubConfigAgeSeconds:  hubConfigAgeSeconds,
+            hubConfigStale:       hubConfigStale
         });
     });
 

@@ -458,5 +458,57 @@ describe('Unstake handler @regression @tier2', function () {
 
             assert.strictEqual(data.AMOUNT, '333');
         });
+
+        // Pkg6 / 048fdea9 + ce6a484f (gated UNSTAKE_CONTRACT_COOLDOWN_STRICT): error-path rows
+        // must not carry the phantom BLOCK_INDEX+1000 cooldown from the legacy global fallback.
+        it('error-path (unknown target) COOLDOWN_END_BLOCK is 0, not BLOCK+1000, once strict', async function () {
+            indexer.indexerDb.getContract.resolves(null);
+
+            const params = ['1', PUBKEY, CONTRACT_INDEX, TICK];
+            const data   = makeData({ FORMAT: 1 });
+
+            await handler.parse(params, data, null);
+
+            assert.ok(data.STATUS.includes('unknown'));
+            assert.strictEqual(data.COOLDOWN_END_BLOCK, 0);
+        });
+
+        it('error-path COOLDOWN_END_BLOCK stays BLOCK+1000 below the flag-day (replay fidelity)', async function () {
+            actionsCtx.protocolChanges.isEnabled = sinon.stub().callsFake(async (name) =>
+                name === 'UNSTAKE_CONTRACT_COOLDOWN_STRICT' ? false : true);
+            indexer.indexerDb.getContract.resolves(null);
+
+            const params = ['1', PUBKEY, CONTRACT_INDEX, TICK];
+            const data   = makeData({ FORMAT: 1 });
+
+            await handler.parse(params, data, null);
+
+            assert.ok(data.STATUS.includes('unknown'));
+            assert.strictEqual(data.COOLDOWN_END_BLOCK, BLOCK + 1000);
+        });
+
+        it('rejects a non-integer contract cooldown once strict (latent cross-file trap closed)', async function () {
+            indexer.indexerDb.getContract.resolves(makeContractInfo({ cooldown_blocks: 50.5 }));
+
+            const params = ['1', PUBKEY, CONTRACT_INDEX, TICK];
+            const data   = makeData({ FORMAT: 1 });
+
+            await handler.parse(params, data, null);
+
+            assert.ok(data.STATUS.includes('contract cooldown invalid'));
+            assert.strictEqual(data.COOLDOWN_END_BLOCK, 0);
+        });
+
+        it('valid-path COOLDOWN_END_BLOCK is unchanged by the strict gate', async function () {
+            indexer.indexerDb.getContract.resolves(makeContractInfo({ cooldown_blocks: 200 }));
+
+            const params = ['1', PUBKEY, CONTRACT_INDEX, TICK];
+            const data   = makeData({ FORMAT: 1 });
+
+            await handler.parse(params, data, null);
+
+            assert.strictEqual(data.STATUS, 'valid');
+            assert.strictEqual(data.COOLDOWN_END_BLOCK, BLOCK + 200);
+        });
     });
 });

@@ -56,6 +56,16 @@ Full indexer documentation is available in the [xchain-documentation](https://gi
 | [Ledger](https://github.com/XChain-Platform/xchain-documentation/blob/master/components/indexer/LEDGER.md) | Double-entry ledger, balance calculation, sanity checks, gas token fees |
 | [Operations](https://github.com/XChain-Platform/xchain-documentation/blob/master/components/indexer/OPERATIONS.md) | Running, Docker, API endpoints, resilience, troubleshooting |
 
+### Operational env vars (non-consensus)
+
+Observability / tuning knobs read from the environment. None affects ledger output.
+
+| Variable | Units | Default | Meaning |
+|---|---|---|---|
+| `HUB_CONFIG_POLL_INTERVAL_MS` | ms | `60000` | Hub to indexer config-overlay poll cadence. This is the sole staleness / propagation bound for the live-polled governance overlay: nothing else refreshes it. |
+
+Derived staleness boundary: an overlay that has not refreshed within `HUB_CONFIG_POLL_INTERVAL_MS * 3` is reported as `hubConfigStale: true` on both the `/health` API and the internal health response (three poll intervals tolerate a couple of missed or slow polls before flagging). The boundary lives in code as `HUB_CONFIG_STALENESS_LIMIT_MS` (`src/XChainIndexer.js`); it is not separately configurable.
+
 ## Quick Start
 
 ```bash

@@ -60,15 +60,26 @@ describe('Database._migrationMode() @regression @tier1', function () {
         assert.strictEqual(modeOf('-- xchain:migration mode=yolo\n'), 'manual');
     });
 
-    it('ignores a mode= tag outside the header window (body prose cannot arm auto)', function () {
+    it('ignores a mode= tag below the first SQL statement (body prose cannot arm auto)', function () {
         // A file whose real header omits the tag (defaults manual), with a spoofed
-        // `mode=auto` buried 20+ lines down in prose or a data literal. The scan is
-        // header-window-only, so this must stay manual - a body tag cannot arm the
+        // `mode=auto` buried below a real SQL statement in trailing prose or a data
+        // literal. The scan is prologue-anchored - it stops at the first non-comment,
+        // non-blank line - so a tag past the first statement can never arm the
         // auto-apply path for a destructive migration.
-        let body = '-- a normal migration comment\n';
-        for(let i = 0; i < 20; i++) body += '-- filler line ' + i + '\n';
-        body += '-- xchain:migration mode=auto\nDROP TABLE contract_stakes;\n';
+        const body = 'ALTER TABLE events ADD COLUMN note TEXT;\n' +
+                     '-- xchain:migration mode=auto (trailing prose)\n' +
+                     'DROP TABLE events;\n';
         assert.strictEqual(modeOf(body), 'manual');
+    });
+
+    it('reads mode=auto from a tag under a multi-line license banner', function () {
+        // The house layout puts the license banner first and the mode tag after it,
+        // pushing the tag well past the old 10-line window. The prologue scan reads
+        // the whole leading comment run, so a banner-prefixed mode=auto still arms.
+        let banner = '';
+        for(let i = 0; i < 13; i++) banner += '-- license banner line ' + i + '\n';
+        const raw = banner + '\n-- xchain:migration mode=auto\nALTER TABLE x ADD COLUMN y INT;';
+        assert.strictEqual(modeOf(raw), 'auto');
     });
 });
 
@@ -82,20 +93,24 @@ describe('committed migrations declare intent @regression @tier1', function () {
     });
 
     files.forEach(function (file) {
-        it(file + ': carries an explicit `-- xchain:migration mode=auto|manual` tag', function () {
+        it(file + ': carries an explicit `-- xchain:migration mode=auto|manual` tag the runner sees', function () {
             const raw = fs.readFileSync(path.join(MIG_DIR, file), 'utf8');
-            // Scan the SAME first-10-line header window the runner honors (_migrationMode,
-            // src/db.js). A whole-file scan would pass a tag pushed below line 10 (e.g. under a
-            // license banner) that the runner never sees, so the file default-lands as `manual`
-            // while CI stays green - the exact dead-tag gap this test exists to catch ().
-            const header = raw.split('\n').slice(0, 10).join('\n');
-            const m = header.match(/^\s*--\s*xchain:migration\b[^\n]*\bmode\s*=\s*(auto|manual)\b/im);
-            assert.ok(m,
-                file + ' has no explicit mode tag within the first 10 lines (the runner\'s header ' +
-                'window). Every migration must declare intent so a destructive change can never ' +
-                'silently auto-run at startup, and the tag must sit where _migrationMode reads it. ' +
-                'Add a first line: `-- xchain:migration mode=auto` (additive + idempotent) or ' +
-                '`mode=manual` (gated), above any license banner.');
+            // Match the tag ANYWHERE in the file, then assert the runner's prologue-anchored
+            // _migrationMode actually resolves it to that declared value. This asserts the runner
+            // and the declared intent agree, so a tag the runner cannot see (e.g. below the first
+            // SQL statement) fails CI instead of default-landing as `manual` while looking tagged
+            // (the dead-tag gap this test exists to catch, ).
+            const anywhere = raw.match(/--\s*xchain:migration\b[^\n]*\bmode\s*=\s*(auto|manual)\b/im);
+            assert.ok(anywhere,
+                file + ' has no explicit mode tag. Every migration must declare intent so a ' +
+                'destructive change can never silently auto-run at startup. Add a first line ' +
+                '(or place it anywhere in the leading comment prologue): ' +
+                '`-- xchain:migration mode=auto` (additive + idempotent) or `mode=manual` (gated).');
+            const declared = anywhere[1].toLowerCase();
+            assert.strictEqual(modeOf(raw), declared,
+                file + ' declares mode=' + declared + ' but _migrationMode reads it as ' + modeOf(raw) +
+                ' - the tag sits where the runner cannot see it (it must be in the leading comment ' +
+                'prologue, before the first SQL statement).');
         });
     });
 
@@ -452,11 +467,18 @@ describe('Database.MIGRATION_CHECKSUM_REBASELINES @regression @tier1', function 
     const crypto  = require('crypto');
     const MIG_DIR = path.join(__dirname, '..', '..', 'src', 'sql', 'migrations');
 
-    it('every rebaseline pins two distinct 64-hex sha256 values', function () {
+    it('every rebaseline pins a `to` and one or more distinct 64-hex sha256 `from` values', function () {
+        // `from` may be a single hash or a list of hashes (one reviewed edit can supersede
+        // several historical revisions). Normalize with [].concat and validate every element.
         for (const [file, r] of Object.entries(Database.MIGRATION_CHECKSUM_REBASELINES)) {
-            assert.match(r.from, /^[0-9a-f]{64}$/, file + ': from must be a sha256 hex digest');
-            assert.match(r.to,   /^[0-9a-f]{64}$/, file + ': to must be a sha256 hex digest');
-            assert.notStrictEqual(r.from, r.to, file + ': from and to must differ');
+            const fromList = [].concat(r.from);
+            assert.ok(fromList.length >= 1, file + ': from must have at least one hash');
+            assert.strictEqual(new Set(fromList).size, fromList.length, file + ': from hashes must be unique');
+            assert.match(r.to, /^[0-9a-f]{64}$/, file + ': to must be a sha256 hex digest');
+            for (const from of fromList) {
+                assert.match(from, /^[0-9a-f]{64}$/, file + ': every from must be a sha256 hex digest');
+                assert.notStrictEqual(from, r.to, file + ': from and to must differ');
+            }
         }
     });
 

@@ -95,6 +95,56 @@ describe('native coin fee quote @regression @tier1', function () {
         });
     });
 
+    // #2693: the flag-day gate (NATIVE_FEE_PRICE_TIME_GATE) must anchor on a chain-derived time
+    // (gateTime), not the operator wall-clock, while staleness stays on refTime. The 6th arg
+    // threads gateTime; default gateTime = refTime keeps the consensus caller byte-identical.
+    describe('getFeeOraclePrices() gate-time threading', function () {
+        const GATE = require('../../src/protocol_changes.js').NATIVE_FEE_PRICE_TIME_GATE_MAINNET_TIME;
+        // DB stub that records the opts (selectByTime, blockTime) getLatestPrice was called with.
+        function makeCapturingDb(){
+            let seen = { opts: null };
+            let db = {
+                getLatestBlockIndex: async () => 100,
+                getLatestPrice: async (pair, blockIndex, opts) => {
+                    seen.opts = opts;
+                    let p = { 'XCHAIN/USD': '1.00000000', 'DOGE/USD': '0.10000000' }[pair];
+                    return p == null ? null : { price: p, roundNumber: 7, block_timestamp: 1000 };
+                }
+            };
+            return { db, seen };
+        }
+        function mainnetUtil(){
+            let util = makeUtil('DOGE', FEE_DEST);
+            util.config['NETWORK'] = 'mainnet';
+            return util;
+        }
+
+        it('quote path: block time before the gate + wall-clock after keeps the gate INACTIVE', async function () {
+            let util = mainnetUtil();
+            let { db, seen } = makeCapturingDb();
+            // refTime = wall-clock after the flag-day; gateTime = quoted block before it.
+            let r = await util.getFeeOraclePrices(db, 'DOGE', 100, GATE + 1000, 1800, GATE - 1000);
+            assert.ok(!r.error, r.error);
+            assert.strictEqual(seen.opts.selectByTime, false, 'gate must follow chain time (before), not wall-clock');
+            assert.strictEqual(seen.opts.blockTime, GATE + 1000, 'staleness stays anchored on refTime');
+        });
+
+        it('default gateTime = refTime (consensus caller) is unchanged: refTime after gate => ACTIVE', async function () {
+            let util = mainnetUtil();
+            let { db, seen } = makeCapturingDb();
+            // No 6th arg: gateTime defaults to refTime (validateNativeCoinFee passes BLOCK_TIME).
+            await util.getFeeOraclePrices(db, 'DOGE', 100, GATE + 1000, 1800);
+            assert.strictEqual(seen.opts.selectByTime, true, 'default gateTime=refTime, gate active past flag-day');
+        });
+
+        it('default gateTime = refTime: refTime before gate => INACTIVE', async function () {
+            let util = mainnetUtil();
+            let { db, seen } = makeCapturingDb();
+            await util.getFeeOraclePrices(db, 'DOGE', 100, GATE - 1000, 1800);
+            assert.strictEqual(seen.opts.selectByTime, false);
+        });
+    });
+
     describe('_priceFeeQuote()', function () {
         it('prices 1.0 XCHAIN at the band midpoint (2000 sats) with band bounds', async function () {
             let util = makeUtil('BTC', FEE_DEST);
@@ -208,7 +258,7 @@ describe('native coin fee quote @regression @tier1', function () {
 
         it('fee-exempt settlement/lifecycle actions: zero-fee feeExempt result, engine never invoked', async function () {
             let util = makeUtil('DOGE', FEE_DEST);
-            for(let action of ['COINPAY', 'DISPENSE', 'ORDER_MATCH', 'COINPAY_EXPIRE', 'CROSS_SETTLE', 'coinpay']){
+            for(let action of ['COINPAY', 'DISPENSE', 'ORDER_MATCH', 'COINPAY_EXPIRE', 'CROSS_SETTLE', 'XCALL', 'coinpay']){
                 let { ctx, calls } = makeCtx(util, makeDb({ prices: BTC_PRICES }));
                 let q = await ctx.computeFeeQuote.call(ctx, { action, params: ['0', '5'], source: 'src' });
                 assert.strictEqual(q.supported, true, action + ' is answerable');

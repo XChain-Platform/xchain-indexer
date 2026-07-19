@@ -146,4 +146,23 @@ describe('health() response builder', function(){
         assert.strictEqual(res.lastReorgAt, null);
     });
 
+    it('decoderReorgHalted false by default, no stall attribution (#2736)', async function(){
+        const res = await call(makeIndexer());
+        assert.strictEqual(res.decoderReorgHalted, false);
+        assert.strictEqual(res.stallReason, null);
+    });
+
+    it('decoder halt: decoderReorgHalted true and stallReason attributes the halt (#2736)', async function(){
+        const res = await call(makeIndexer({ decoderReorgHalted: true }));
+        assert.strictEqual(res.decoderReorgHalted, true);
+        assert.ok(/decoder_reorg_halt/.test(res.stallReason),
+            'stallReason must attribute the stall to the decoder halt, got ' + JSON.stringify(res.stallReason));
+    });
+
+    it('decoder halt does not clobber an existing indexer-side stallReason (#2736)', async function(){
+        const res = await call(makeIndexer({ decoderReorgHalted: true, stallReason: 'price-barrier-timeout' }));
+        assert.strictEqual(res.decoderReorgHalted, true);
+        assert.strictEqual(res.stallReason, 'price-barrier-timeout');
+    });
+
 });

@@ -30,9 +30,36 @@ const Anchor   = require('../../../src/actions/anchor.js');
 const ed25519  = require('../../../src/ed25519.js');
 const swq      = require('../../../src/stake_weighted_quorum.js');
 
+const fs     = require('fs');
+const path   = require('path');
+
 const GOLDEN = require('../../fixtures/anchor_canonical_vectors.json');
 const ROW    = GOLDEN.fixture.row;
 const SIGS   = ROW.validator_signatures;
+
+// Byte-identity guard: the vendored fixture MUST match its canonical authority so a
+// silent edit to one copy (which would fork the hub-producer / indexer-parser wire
+// contract) fails loudly. Skips green when the sibling doc is absent, unless
+// XCHAIN_REQUIRE_SIBLINGS=1 (CI) forces a hard failure. The hub-producer half is
+// asserted in xchain-hub against the same canonical file.
+const CANON_VECTORS = path.resolve(__dirname, '../../../../xchain-documentation/protocol/test-vectors/anchor_canonical.json');
+const FIXTURE_PATH  = path.resolve(__dirname, '../../fixtures/anchor_canonical_vectors.json');
+
+describe('Anchor canonical vectors byte-identity to xchain-documentation @regression', function () {
+    it('fixture is byte-identical to xchain-documentation/protocol/test-vectors/anchor_canonical.json', function () {
+        if (!fs.existsSync(CANON_VECTORS)) {
+            if (process.env.XCHAIN_REQUIRE_SIBLINGS === '1')
+                throw new Error('XCHAIN_REQUIRE_SIBLINGS=1 but canonical anchor vectors not found at ' + CANON_VECTORS);
+            this.skip();
+            return;
+        }
+        const local = fs.readFileSync(FIXTURE_PATH, 'utf8');
+        const canon = fs.readFileSync(CANON_VECTORS, 'utf8');
+        assert.strictEqual(local, canon,
+            'this repo\'s anchor_canonical_vectors.json has drifted from the canonical ' +
+            'xchain-documentation/protocol/test-vectors/anchor_canonical.json; reconcile both copies.');
+    });
+});
 
 // The wire string the encoder/decoder hands the action framework has the leading
 // 'ANCHOR' keyword stripped, so params[0] = VERSION (mirrors v0Params() et al.).

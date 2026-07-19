@@ -175,6 +175,17 @@ describe('reorg-history-query: buildReorgHistoryResponse()', function () {
         assert.strictEqual(r.matched, false);
         assert.strictEqual(buildReorgHistoryResponse(undefined, {}).count, 0);
     });
+
+    it('additive decoderReorgHalted field (#2736): defaults false, reflects opts', function () {
+        assert.strictEqual(buildReorgHistoryResponse([], {}).decoderReorgHalted, false);
+        assert.strictEqual(buildReorgHistoryResponse([], {}, {}).decoderReorgHalted, false);
+        assert.strictEqual(buildReorgHistoryResponse([], {}, { decoderReorgHalted: true }).decoderReorgHalted, true);
+        // existing fields unchanged when the halt flag is set
+        let r = buildReorgHistoryResponse([event(5, [200])], { block_index: 200 }, { decoderReorgHalted: true });
+        assert.strictEqual(r.matched, true);
+        assert.strictEqual(r.count, 1);
+        assert.strictEqual(r.decoderReorgHalted, true);
+    });
 });
 
 describe('reorg-history-query: REORG_EVENTS_SQL', function () {

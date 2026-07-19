@@ -177,9 +177,40 @@ async function reportOrphanStats(query, chain, network, opts){
     const cnt = await query('SELECT COUNT(*) AS c FROM state_tree_nodes', []);
     const totalNodes = cnt.length ? Number(cnt[0].c) : 0;
     if(totalNodes === 0) return { totalNodes: 0, reachableNodes: 0, orphanCount: 0, reachabilitySkipped: false };
-    // A full in-memory mark over a very large store is skipped to bound memory; the
-    // total node count still trends growth over time.
-    if(totalNodes > maxNodes) return { totalNodes, reachableNodes: null, orphanCount: null, reachabilitySkipped: true };
+    // Above the in-memory mark ceiling, do not go silent. Load a bounded, deterministic
+    // sample (ORDER BY node_hash LIMIT maxNodes) and mark reachability WITHIN that sample
+    // from the same retained root set, so a rough orphan ratio and growth stay observable
+    // without an unbounded in-memory mark. Reported as an estimate (reachabilityEstimated)
+    // scoped to sampledNodes; this whole function is observability only and never feeds a
+    // consensus hash, so a sampled figure is safe here.
+    if(totalNodes > maxNodes){
+        const sampleRows = await query('SELECT node_hash, left_hash, right_hash FROM state_tree_nodes ORDER BY node_hash LIMIT ?', [maxNodes]);
+        const sampleNodes = new Map();
+        for(const r of sampleRows) sampleNodes.set(r.node_hash, { l: r.left_hash, r: r.right_hash });
+        const sampleRootRows = await query(
+            'SELECT DISTINCT balances_root AS r FROM state_tree_roots WHERE chain=? AND network=? ' +
+            'UNION SELECT DISTINCT stakes_root AS r FROM state_tree_roots WHERE chain=? AND network=?',
+            [chain, network, chain, network]);
+        const sampleVisited = new Set();
+        const sampleStack = [];
+        for(const rr of sampleRootRows){
+            const root = rr.r;
+            if(root && !EMPTY_CONSTANTS.has(root) && sampleNodes.has(root)) sampleStack.push(root);
+        }
+        while(sampleStack.length){
+            const h = sampleStack.pop();
+            if(sampleVisited.has(h)) continue;
+            sampleVisited.add(h);
+            const row = sampleNodes.get(h);
+            if(!row) continue;
+            for(const child of [row.l, row.r]){
+                if(child && !EMPTY_CONSTANTS.has(child) && !sampleVisited.has(child) && sampleNodes.has(child)) sampleStack.push(child);
+            }
+        }
+        const sampledNodes = sampleNodes.size;
+        const sampledReachable = sampleVisited.size;
+        return { totalNodes, reachableNodes: sampledReachable, orphanCount: sampledNodes - sampledReachable, reachabilitySkipped: false, reachabilityEstimated: true, sampledNodes };
+    }
 
     const rows = await query('SELECT node_hash, left_hash, right_hash FROM state_tree_nodes', []);
     const nodes = new Map();

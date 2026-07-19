@@ -19,6 +19,12 @@
 --   version 1: checkpoint + match-archive segment (chunk 0 of the batch)
 --   version 2: archive continuation chunk (no signatures of its own)
 --   version 3: checkpoint + SPV light-client roots (state_root + block_merkle_root)
+--   version 4: v0 checkpoint + publisher-attestation tail (elected PUBLISHER pubkey +
+--              a SECOND 2f+1 oracle_publish attestation, for anchor-reward re-derivation)
+--   version 5: v3 checkpoint + publisher-attestation tail
+--   version 6: v1 archive anchor + publisher-attestation tail (archive-reward, )
+-- The v4/v5/v6 publisher tail is persisted here in the nullable `publisher` and
+-- `publisher_attestations` columns; v0-v3 leave both NULL.
 --
 -- The live verification source for explorers/wallets is the hub-mirrored
 -- state_checkpoints table; this table exists so a full chain parse alone
@@ -31,7 +37,7 @@
 DROP TABLE IF EXISTS anchor_actions;
 CREATE TABLE anchor_actions (
     action_index         BIGINT UNSIGNED NOT NULL,        -- FK to actions (the ANCHOR action that wrote this row)
-    version              TINYINT UNSIGNED NOT NULL,       -- 0=checkpoint, 1=checkpoint+archive, 2=continuation
+    version              TINYINT UNSIGNED NOT NULL,       -- 0=checkpoint, 1=checkpoint+archive, 2=continuation, 3=checkpoint+SPV roots, 4=v0+publisher tail, 5=v3+publisher tail, 6=v1 archive+publisher tail
     chain                VARCHAR(10),                     -- checkpointed chain (v0/v1)
     network              VARCHAR(20),                     -- checkpointed network (v0/v1)
     block_index          BIGINT UNSIGNED,                 -- checkpointed height on `chain` (v0/v1)
@@ -52,6 +58,8 @@ CREATE TABLE anchor_actions (
     chunk_index          INT UNSIGNED,                    -- 1-based continuation index (v2 only; v1 carries chunk 0)
     archive_b64          MEDIUMTEXT,                      -- base64url gzip archive chunk (v1 chunk 0 / v2 continuation)
     validator_signatures MEDIUMTEXT,                      -- JSON [{pubkey,sig}] over the canonical (v0/v1)
+    publisher            VARCHAR(64),                     -- elected PUBLISHER pubkey carried by the v4/v5/v6 tail; NULL for v0-v3
+    publisher_attestations MEDIUMTEXT,                    -- JSON [{pubkey,sig}] second-quorum XANCPUB attestation (v4/v5/v6); NULL for v0-v3
     status_id            BIGINT UNSIGNED,                 -- FK to index_statuses
     block_index_doge     BIGINT UNSIGNED NOT NULL,        -- DOGE block the ANCHOR action landed in (rollback anchor)
     PRIMARY KEY (action_index)

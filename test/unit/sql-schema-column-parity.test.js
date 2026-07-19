@@ -228,4 +228,48 @@ describe('SQL schema column parity (definition path vs ledger path) @regression'
             'byte-identical SHOW CREATE TABLE (this is how contract_state.state_key_bin diverged):\n' +
             misplaced.map(m => `  ${m.table}.${m.name} (${m.file}): want ${m.want}, got ${m.got}`).join('\n'));
     });
+
+    // #2457: the three cases above all run ledger->definition (every migration-added
+    // column is checked against the definition). This closes the INVERSE direction:
+    // a column added to a definition file with NO dated migration is invisible to a
+    // DB converged by replaying migrations alone (operator-managed / rebuilt replica),
+    // which silently ends up short of the column. Baseline = columns that predate the
+    // ledger and legitimately need no migration (test/fixtures/schema-baseline.json).
+    it('no column exists only on the definition path (every definition column is baselined or migration-added) @regression', function () {
+        const baseline = JSON.parse(fs.readFileSync(
+            path.join(__dirname, '..', 'fixtures', 'schema-baseline.json'), 'utf8'));
+        const baselineCols   = baseline.baseline || {};
+        const knownUnledgered = new Set((baseline.known_unledgered || []).map(s => s.toLowerCase()));
+
+        // Columns any dated migration ADDs, as `table.col` (reuses the proven parser).
+        const migrated = new Set(collectMigrationColumns().map(c => (c.table + '.' + c.name).toLowerCase()));
+
+        const orphans = [];
+        for (const [table, cols] of Object.entries(collectDefinitionColumns())) {
+            const based = new Set((baselineCols[table] || []).map(s => s.toLowerCase()));
+            for (const c of cols) {
+                const key  = (table + '.' + c.name).toLowerCase();
+                if (based.has(c.name.toLowerCase())) continue;   // predates the ledger
+                if (migrated.has(key)) continue;                 // a dated migration adds it
+                if (knownUnledgered.has(key)) continue;          // tracked debt, awaiting its migration
+                orphans.push(table + '.' + c.name);
+            }
+        }
+        assert.deepStrictEqual(orphans, [],
+            'These columns are declared in a src/sql/<table>.sql definition but no dated migration under ' +
+            'src/sql/migrations/ adds them, so a replica converged by replaying migrations alone never gains ' +
+            'them. Ship a dated migration (ADD COLUMN IF NOT EXISTS ... with the AFTER anchor matching the ' +
+            'definition). If the column genuinely predates the migration ledger, add it to ' +
+            'test/fixtures/schema-baseline.json deliberately:\n  ' + orphans.join('\n  '));
+    });
+
+    it('sanity: the baseline fixture is not vacuous and references only real tables', function () {
+        const baseline = JSON.parse(fs.readFileSync(
+            path.join(__dirname, '..', 'fixtures', 'schema-baseline.json'), 'utf8'));
+        const defs = collectDefinitionColumns();
+        assert.ok(Object.keys(baseline.baseline || {}).length > 50, 'baseline should cover the bulk of tables');
+        for (const table of Object.keys(baseline.baseline || {})) {
+            assert.ok(defs[table], 'baseline references unknown table ' + table);
+        }
+    });
 });

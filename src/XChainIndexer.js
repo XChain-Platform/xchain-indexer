@@ -37,6 +37,24 @@ const UtxoTracker  = require('./UtxoTracker.js');
 const Genesis      = require('./genesis.js');
 const { collapseOutputFanout } = require('./output_fanout.js');
 
+// Hub->indexer config poll cadence (ms). This is the sole staleness / propagation bound for the
+// live-polled governance overlay: nothing else refreshes it, so an overlay older than a small
+// multiple of this interval means the hub is unreachable. Overridable via
+// HUB_CONFIG_POLL_INTERVAL_MS. Purely operational/observability, NOT a consensus parameter.
+const DEFAULT_HUB_CONFIG_POLL_INTERVAL_MS = 60000;
+// An overlay older than this is reported `stale`. Three poll intervals tolerates a couple of
+// missed/slow polls before flagging, matching the WS_WATERMARK grace convention.
+const HUB_CONFIG_STALENESS_LIMIT_MS = DEFAULT_HUB_CONFIG_POLL_INTERVAL_MS * 3;
+
+// Shared age/staleness computation for the hub-config overlay, used by both health.js and api.js
+// so the age math and the staleness threshold live in exactly one place. `now` and
+// `lastHubConfigFetchAt` are epoch-ms. Returns { ageSeconds:(number|null), stale:boolean }.
+function hubConfigStaleness(lastHubConfigFetchAt, now){
+    if(lastHubConfigFetchAt == null) return { ageSeconds: null, stale: false };
+    let ageMs = now - lastHubConfigFetchAt;
+    return { ageSeconds: Math.floor(ageMs / 1000), stale: ageMs > HUB_CONFIG_STALENESS_LIMIT_MS };
+}
+
 class XChainIndexer {
 
     constructor(decoderDbHost, decoderDbPort, decoderDbName, decoderDbUser, decoderDbPass, indexerDbHost, indexerDbPort, indexerDbName, indexerDbUser, indexerDbPass, hubDbHost, hubDbPort, hubDbName, hubDbUser, hubDbPass, utxoTrackerUrl, utxoTrackerPort){
@@ -88,6 +106,12 @@ class XChainIndexer {
         // an operator can tell WHY lag is growing (a sync-barrier stall, a circuit
         // breaker, and a host fault otherwise all look identical: a rising lag).
         this.stallReason = null;
+        // #2736: set true when the decoder has written a durable REORG_HALT marker (a reorg it
+        // could not safely rewind). Surfaced on /health so a halted decoder is not mistaken for
+        // ordinary idle/lag. Updated by _checkDecoderReorgHalt(); the log-tick counter keeps the
+        // periodic reminder from firing every tight poll.
+        this.decoderReorgHalted   = false;
+        this._reorgHaltLogTick    = 0;
         this.blockchainInfoLastBlock = -1
 
         // Wall-clock (epoch ms) of the most recent SUCCESSFUL hub-config fetch. Set by the
@@ -417,6 +441,9 @@ class XChainIndexer {
             // Warn if the reorg cursor is all-legacy (would replay the full decoder reorg history on
             // the next reorg detection - REORG-4). Surfaced, not auto-fixed; operator does a reindex.
             await this.indexerDb.warnOnLegacyReorgCursor();
+            // #2736: surface a pre-existing decoder REORG_HALT at startup (loud) so a node booting
+            // behind a halted decoder is not silently mistaken for a slow catch-up.
+            await this._checkDecoderReorgHalt();
 
             // Now that the indexer tables exist (including every hub-mirror table the
             // sync client writes into), start the hub DB sync in the background.
@@ -479,7 +506,15 @@ class XChainIndexer {
             // block-height magnitude: heights increase across repeated reorgs, so a height compare
             // silently drops every reorg after the first. Do not re-introduce a height comparison.
             let lastProcessedReorgId = await indexerReorgView.getLastProcessedReorgId();
-            let unprocessedReorgs    = await this.decoderDb.getReorgsSince(lastProcessedReorgId);
+            // #2735: pass the cursor marker's stored witness so getReorgsSince can catch an
+            // out-of-band decoder rebuild that reused this cursor id for a different event
+            // (under-cursor silent skip). Null for legacy markers -> old over-cursor guard only.
+            let cursorWitness        = (lastProcessedReorgId != null)
+                                        ? await indexerReorgView.getLastProcessedReorgWitness() : null;
+            let unprocessedReorgs    = await this.decoderDb.getReorgsSince(lastProcessedReorgId, cursorWitness);
+            // #2736: keep the decoder-halt flag current on every poll (loud on transition, then
+            // periodic). Advisory: it does not gate block processing, only makes the halt visible.
+            await this._checkDecoderReorgHalt();
 
             // Get last processed block from Indexer and Decoder databases
             lastDecoderBlock       = await this.decoderDb.getBlockIndex('decoder', 'last');
@@ -522,8 +557,14 @@ class XChainIndexer {
                 // reorg is re-detected and retried on the next pass; the retry is idempotent because
                 // the rollback is skipped once lastIndexerBlock has dropped below minReorgBlock.
                 // Oldest-first so a partial-write crash only advances the cursor as far as is durable.
-                for(let reorg of unprocessedReorgs)
-                    await indexerReorgView.createReorg(reorg.block_index, reorg.id);
+                for(let reorg of unprocessedReorgs){
+                    // #2735: capture the decoder event's time + payload hash as the marker
+                    // witness, so a later out-of-band decoder rebuild that reuses this id for a
+                    // different event is caught (fail-loud RE-1) instead of silently skipped.
+                    let witness = await this.decoderDb.getReorgEventWitness(reorg.id);
+                    await indexerReorgView.createReorg(reorg.block_index, reorg.id,
+                        witness ? witness.time : null, witness ? witness.hash : null);
+                }
 
                 // Refresh the local cursor to the durable value just advanced by createReorg.
                 // lastProcessedReorgId was read once at the top of the outer loop and is never
@@ -572,7 +613,10 @@ class XChainIndexer {
                 // Bounds the mixed-chain window to REORG_RECHECK_BLOCKS instead of the whole backlog;
                 // convergence is unchanged (the eventual rollback unwinds every block >= the reorg).
                 if((Number(lastIndexerBlock) % REORG_RECHECK_BLOCKS) === 0){
-                    let midReorgs = await this.decoderDb.getReorgsSince(lastProcessedReorgId);
+                    // #2735: witness the cursor here too (same under-cursor protection).
+                    let midCursorWitness = (lastProcessedReorgId != null)
+                                            ? await indexerReorgView.getLastProcessedReorgWitness() : null;
+                    let midReorgs = await this.decoderDb.getReorgsSince(lastProcessedReorgId, midCursorWitness);
                     if(midReorgs.length > 0){
                         console.log('Detected a decoder reorg mid-catch-up; breaking to handle it before block ' + (Number(lastIndexerBlock) + 1));
                         break;
@@ -1087,10 +1131,47 @@ class XChainIndexer {
     // hub that returns the bare map, seq stays 0 and the overlay is never re-applied
     // (matching pre-existing startup-only behavior). The timer is unref'd so it never
     // keeps the process alive. Interval is HUB_CONFIG_POLL_INTERVAL_MS (default 60s).
+    // #2736: probe the decoder for a durable REORG_HALT marker and keep this.decoderReorgHalted
+    // in sync. A halted decoder cannot advance, so the indexer would otherwise just look idle or
+    // lagging. Log LOUD on the transition into halted (naming the required operator action, a full
+    // decoder resync), then only periodically while it stays halted so a tight poll does not spam
+    // the log. Returns the current halted boolean. Never throws to the caller: a decoderDb read
+    // fault is logged and leaves the last known state unchanged (the reorg poll's own strict reads
+    // still fail loud on a real fault).
+    async _checkDecoderReorgHalt(){
+        if(!this.decoderDb) return this.decoderReorgHalted;
+        let halted;
+        try {
+            let probe = await this.decoderDb.isReorgHalted();
+            halted = !!(probe && probe.halted);
+            var payload = probe ? probe.payload : null;
+        } catch(e){
+            console.warn('XChainIndexer: REORG_HALT probe failed (non-fatal), keeping last known state (' +
+                this.decoderReorgHalted + '): ' + (e && e.message));
+            return this.decoderReorgHalted;
+        }
+        if(halted && !this.decoderReorgHalted){
+            console.error('XChainIndexer: DECODER REORG HALT detected - the decoder wrote a durable ' +
+                'REORG_HALT marker (a reorg it could not safely rewind) and will not advance. The ' +
+                'indexer is now blocked behind it and will present as idle/lagging until resolved. ' +
+                'REQUIRED OPERATOR ACTION: full decoder resync (clean reindex of decoder+indexer).' +
+                (payload ? ' Marker detail: ' + payload : ''));
+            this._reorgHaltLogTick = 0;
+        } else if(halted){
+            // Periodic reminder while it stays halted (every ~60 polls), not every tick.
+            if((this._reorgHaltLogTick++ % 60) === 0)
+                console.error('XChainIndexer: decoder still REORG-HALTED; full decoder resync required.');
+        } else if(!halted && this.decoderReorgHalted){
+            console.warn('XChainIndexer: decoder REORG_HALT marker is gone; decoder halt cleared.');
+        }
+        this.decoderReorgHalted = halted;
+        return halted;
+    }
+
     _startHubConfigPolling(){
         if(!this.hubClient || !this.hubClient.enabled) return;
         if(this._hubConfigPollTimer) return;
-        const intervalMs = parseInt(process.env.HUB_CONFIG_POLL_INTERVAL_MS, 10) || 60000;
+        const intervalMs = parseInt(process.env.HUB_CONFIG_POLL_INTERVAL_MS, 10) || DEFAULT_HUB_CONFIG_POLL_INTERVAL_MS;
         // Guarded against self-overlap like _startStateTreeMetric below (#2247): a
         // getallconfigs call outrunning the interval (restarting/partitioned hub)
         // must not stack overlapping in-flight polls.
@@ -1243,3 +1324,6 @@ class XChainIndexer {
 }
 
 module.exports = XChainIndexer;
+module.exports.DEFAULT_HUB_CONFIG_POLL_INTERVAL_MS = DEFAULT_HUB_CONFIG_POLL_INTERVAL_MS;
+module.exports.HUB_CONFIG_STALENESS_LIMIT_MS       = HUB_CONFIG_STALENESS_LIMIT_MS;
+module.exports.hubConfigStaleness                  = hubConfigStaleness;

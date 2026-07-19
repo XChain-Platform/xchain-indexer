@@ -1,0 +1,1166 @@
+{
+  "_comment": "Columns that predate the migration ledger (original CREATE TABLE columns that legitimately have no dated migration). Consumed by sql-schema-column-parity.test.js to guard the definition->ledger direction: any NEW column added to a src/sql/<table>.sql definition must either be added by a dated migration under src/sql/migrations/ OR added here deliberately. Regenerating this file in the same commit that adds the column silently waives the guard - review baseline diffs.",
+  "_known_unledgered_comment": "Columns present in a definition today with no migration that are KNOWN debt awaiting their own migration. The test skips these but keeps them visible. Delete each entry when its migration ships. Empty = no outstanding debt.",
+  "known_unledgered": [],
+  "baseline": {
+    "actions": [
+      "action_index",
+      "block_index",
+      "tx_index",
+      "tx_vout",
+      "action_id",
+      "action_format",
+      "source_id"
+    ],
+    "address_controllers": [
+      "id",
+      "action_index",
+      "address_id",
+      "action_class",
+      "contract_index",
+      "is_unbind",
+      "cooldown_blocks",
+      "cooldown_end_block",
+      "block_index"
+    ],
+    "addresses": [
+      "action_index",
+      "fee_preference",
+      "require_memo",
+      "dispenser_preference",
+      "memo_id",
+      "status_id"
+    ],
+    "airdrops": [
+      "action_index",
+      "tick_id",
+      "list_action_index",
+      "amount",
+      "memo_id",
+      "status_id"
+    ],
+    "anchor_actions": [
+      "action_index",
+      "version",
+      "chain",
+      "network",
+      "block_index",
+      "block_hash",
+      "ledger_hash",
+      "actions_hash",
+      "contract_hash",
+      "checkpoint_seq",
+      "snapshot_block",
+      "state_root",
+      "state_root_version",
+      "block_merkle_root",
+      "block_merkle_version",
+      "match_batch_seq",
+      "match_count",
+      "batch_crc32",
+      "total_chunks",
+      "chunk_index",
+      "archive_b64",
+      "validator_signatures",
+      "status_id",
+      "block_index_doge"
+    ],
+    "anchor_reward_reconcile_log": [
+      "id",
+      "anchor_action_index",
+      "reward_type",
+      "round_reference",
+      "source_id",
+      "signing_pubkey_id",
+      "amount",
+      "reward_block_index",
+      "block_index"
+    ],
+    "attest_validator_stats": [
+      "validator_pubkey",
+      "provider_id",
+      "fulfilled_count",
+      "missed_count",
+      "slashed_count",
+      "quality_score",
+      "last_updated_block"
+    ],
+    "attests": [
+      "action_index",
+      "version",
+      "request_id",
+      "provider_id",
+      "contract_index",
+      "fee_payer_id",
+      "payload",
+      "callback_method",
+      "callback_params_json",
+      "redundancy",
+      "deadline_block",
+      "gas_escrow",
+      "fee_tick_id",
+      "fee_amount",
+      "request_status",
+      "resolved_block",
+      "response_hash",
+      "response_payload",
+      "response_status",
+      "meta",
+      "validator_signatures",
+      "callback_execute_action_index",
+      "status_id",
+      "block_index"
+    ],
+    "balances": [
+      "id",
+      "address_id",
+      "tick_id",
+      "amount"
+    ],
+    "batches": [
+      "action_index",
+      "status_id"
+    ],
+    "blocks": [
+      "id",
+      "block_index",
+      "block_time",
+      "ledger_hash_id",
+      "actions_hash_id",
+      "contract_hash_id",
+      "state_hash_id"
+    ],
+    "broadcasts": [
+      "action_index",
+      "message",
+      "value",
+      "fee",
+      "memo_id",
+      "broadcast_action_index",
+      "status_id"
+    ],
+    "callbacks": [
+      "action_index",
+      "tick_id",
+      "callback_tick_id",
+      "callback_amount",
+      "memo_id",
+      "status_id"
+    ],
+    "capability_slash_debits": [
+      "id",
+      "slash_action_index",
+      "target_table",
+      "stake_action_index",
+      "prev_amount",
+      "amount",
+      "block_index"
+    ],
+    "capability_slash_events": [
+      "id",
+      "slash_action_index",
+      "signing_pubkey_id",
+      "capability",
+      "equiv_key",
+      "amount",
+      "bounty_amount",
+      "treasury_amount",
+      "submitter_id",
+      "destination_id",
+      "block_index"
+    ],
+    "capability_snapshots": [
+      "id",
+      "snapshot_block",
+      "capability",
+      "signing_pubkey",
+      "amount",
+      "created_at"
+    ],
+    "coinpay_expires": [
+      "action_index",
+      "obligation_action_index",
+      "status_id"
+    ],
+    "coinpay_obligations": [
+      "action_index",
+      "payer_address_id",
+      "payee_address_id",
+      "coin_id",
+      "coin_amount",
+      "expiration",
+      "block_index"
+    ],
+    "coinpay_statuses": [
+      "action_index",
+      "coinpay_action_index",
+      "status_id"
+    ],
+    "coinpays": [
+      "action_index",
+      "obligation_action_index",
+      "coin_amount",
+      "txid",
+      "vout",
+      "status_id",
+      "block_index"
+    ],
+    "contract_delegations": [
+      "action_index",
+      "source_id",
+      "signing_pubkey_id",
+      "target_contract_index",
+      "tick_id",
+      "status_id",
+      "block_index",
+      "activation_block",
+      "deactivation_block"
+    ],
+    "contract_emissions": [
+      "id",
+      "execution_index",
+      "emitted_action",
+      "action_index",
+      "position"
+    ],
+    "contract_executions": [
+      "action_index",
+      "contract_index",
+      "caller_id",
+      "method_name",
+      "input_params",
+      "gas_used",
+      "gas_limit",
+      "status_id",
+      "error_message",
+      "emitted_count",
+      "block_index"
+    ],
+    "contract_permissions": [
+      "action_index",
+      "contract_index",
+      "permissions",
+      "max_take_bps",
+      "block_index"
+    ],
+    "contract_slash_debits": [
+      "id",
+      "execution_index",
+      "slash_position",
+      "target_table",
+      "stake_action_index",
+      "prev_amount",
+      "amount",
+      "block_index"
+    ],
+    "contract_stakes": [
+      "action_index",
+      "source_id",
+      "version",
+      "signing_pubkey_id",
+      "target_contract_index",
+      "tick_id",
+      "amount",
+      "status_id",
+      "block_index",
+      "activation_block",
+      "deactivation_block"
+    ],
+    "contract_state": [
+      "id",
+      "contract_index",
+      "state_key",
+      "state_value",
+      "block_index",
+      "action_index"
+    ],
+    "contract_unstakes": [
+      "action_index",
+      "source_id",
+      "signing_pubkey_id",
+      "target_contract_index",
+      "tick_id",
+      "cooldown_end_block",
+      "amount",
+      "status_id",
+      "block_index"
+    ],
+    "contracts": [
+      "action_index",
+      "source_id",
+      "code",
+      "code_hash",
+      "api_version",
+      "status_id",
+      "block_index",
+      "cooldown_blocks",
+      "slash_destination_id"
+    ],
+    "credits": [
+      "action_index",
+      "address_id",
+      "tick_id",
+      "amount"
+    ],
+    "cross_chain_call_callbacks": [
+      "action_index",
+      "call_id",
+      "result_status",
+      "block_index"
+    ],
+    "cross_chain_call_executions": [
+      "action_index",
+      "call_id",
+      "execute_action_index",
+      "result_status",
+      "return_payload_b64",
+      "gas_used",
+      "block_index"
+    ],
+    "cross_chain_call_rejections": [
+      "call_id",
+      "reason",
+      "detail",
+      "attempts",
+      "first_block",
+      "last_block"
+    ],
+    "cross_chain_calls": [
+      "id",
+      "call_id",
+      "phase",
+      "snapshot_block",
+      "network",
+      "source_chain",
+      "source_action_index",
+      "source_contract_index",
+      "target_chain",
+      "target_contract_index",
+      "method",
+      "params_json",
+      "gas_limit",
+      "cross_hops",
+      "effective_time",
+      "status",
+      "result_status",
+      "return_payload_b64",
+      "validator_signatures",
+      "created_at"
+    ],
+    "cross_chain_matches": [
+      "id",
+      "match_id",
+      "snapshot_block",
+      "network",
+      "a_chain",
+      "a_action_index",
+      "a_tick",
+      "a_amount",
+      "a_ownership",
+      "a_payout_addr",
+      "b_chain",
+      "b_action_index",
+      "b_tick",
+      "b_amount",
+      "b_ownership",
+      "b_payout_addr",
+      "effective_time",
+      "validator_signatures",
+      "status",
+      "batch_root",
+      "anchor_txid",
+      "created_at"
+    ],
+    "cross_chain_settlements": [
+      "action_index",
+      "match_id",
+      "local_action_index",
+      "block_index",
+      "a_chain",
+      "a_action_index",
+      "b_chain",
+      "b_action_index"
+    ],
+    "debits": [
+      "action_index",
+      "address_id",
+      "tick_id",
+      "amount"
+    ],
+    "delegations": [
+      "action_index",
+      "source_id",
+      "signing_pubkey_id",
+      "status_id",
+      "block_index",
+      "activation_block",
+      "deactivation_block"
+    ],
+    "deploy_chunks": [
+      "action_index",
+      "source_id",
+      "code_hash",
+      "chunk_index",
+      "total_chunks",
+      "code_part",
+      "block_index",
+      "status_id"
+    ],
+    "deposits": [
+      "action_index",
+      "contract_index",
+      "source_id",
+      "tick_id",
+      "amount",
+      "status_id",
+      "block_index"
+    ],
+    "destroys": [
+      "action_index",
+      "tick_id",
+      "amount",
+      "memo_id",
+      "status_id"
+    ],
+    "dispenser_cancels": [
+      "action_index",
+      "dispenser_action_index",
+      "memo_id",
+      "status_id"
+    ],
+    "dispenser_closes": [
+      "action_index",
+      "dispenser_action_index",
+      "status_id"
+    ],
+    "dispenser_edits": [
+      "action_index",
+      "dispenser_action_index",
+      "give_escrow",
+      "expiration",
+      "allow_list",
+      "block_list",
+      "memo_id",
+      "status_id"
+    ],
+    "dispenser_expires": [
+      "action_index",
+      "dispenser_action_index",
+      "status_id"
+    ],
+    "dispenser_statuses": [
+      "action_index",
+      "dispenser_action_index",
+      "cancelled_by_id",
+      "status_id"
+    ],
+    "dispensers": [
+      "action_index",
+      "give_coin_id",
+      "give_tick_id",
+      "give_amount",
+      "give_escrow",
+      "give_ownership",
+      "get_coin_id",
+      "get_tick_id",
+      "get_amount",
+      "get_address_id",
+      "fiat_id",
+      "fiat_amount",
+      "oracle_address_id",
+      "expiration",
+      "allow_list",
+      "block_list",
+      "memo_id",
+      "status_id"
+    ],
+    "dispenses": [
+      "action_index",
+      "dispenser_action_index",
+      "give_coin_id",
+      "give_tick_id",
+      "give_amount",
+      "get_coin_id",
+      "get_tick_id",
+      "get_amount",
+      "destination_id",
+      "status_id"
+    ],
+    "dividends": [
+      "action_index",
+      "tick_id",
+      "dividend_tick_id",
+      "amount",
+      "memo_id",
+      "status_id"
+    ],
+    "escrows": [
+      "action_index",
+      "address_id",
+      "tick_id",
+      "amount"
+    ],
+    "events": [
+      "id",
+      "time",
+      "code",
+      "data"
+    ],
+    "fees": [
+      "action_index",
+      "tick_id",
+      "amount",
+      "method",
+      "destination_id",
+      "gas_cost",
+      "gas_price",
+      "xchain_amount",
+      "payment_mode",
+      "native_coin_amount",
+      "native_coin",
+      "oracle_round",
+      "fee_preference",
+      "status_id",
+      "fee_version"
+    ],
+    "files": [
+      "action_index",
+      "name",
+      "title",
+      "type_id",
+      "memo_id",
+      "status_id"
+    ],
+    "full_node_verifications": [
+      "id",
+      "action_index",
+      "challenge_id",
+      "epoch_height",
+      "target_height",
+      "signing_pubkey_id",
+      "source_id",
+      "passed",
+      "block_index"
+    ],
+    "gated_files": [
+      "action_index",
+      "gate_ticker",
+      "encryption_method",
+      "key_hash",
+      "status_id",
+      "raw_data"
+    ],
+    "icons": [
+      "id",
+      "token_id",
+      "description_hash",
+      "source_url",
+      "source_hash",
+      "icon_hash",
+      "status",
+      "attempts",
+      "last_error",
+      "next_retry_at",
+      "last_checked_at",
+      "created",
+      "updated"
+    ],
+    "index_actions": [
+      "id",
+      "action"
+    ],
+    "index_addresses": [
+      "id",
+      "address"
+    ],
+    "index_coins": [
+      "id",
+      "coin"
+    ],
+    "index_fiats": [
+      "id",
+      "code",
+      "name"
+    ],
+    "index_memos": [
+      "id",
+      "memo"
+    ],
+    "index_mime_types": [
+      "id",
+      "type"
+    ],
+    "index_pubkeys": [
+      "id",
+      "pubkey"
+    ],
+    "index_statuses": [
+      "id",
+      "status"
+    ],
+    "index_tickers": [
+      "id",
+      "tick"
+    ],
+    "index_transactions": [
+      "id",
+      "hash"
+    ],
+    "issues": [
+      "action_index",
+      "tick_id",
+      "max_supply",
+      "max_mint",
+      "decimals",
+      "description",
+      "mint_supply",
+      "transfer_id",
+      "transfer_supply_id",
+      "lock_max_supply",
+      "lock_mint",
+      "lock_mint_supply",
+      "lock_max_mint",
+      "lock_description",
+      "lock_sleep",
+      "lock_callback",
+      "callback_block",
+      "callback_tick_id",
+      "callback_amount",
+      "allow_list",
+      "block_list",
+      "mint_address_max",
+      "mint_start_block",
+      "mint_stop_block",
+      "memo_id",
+      "status_id"
+    ],
+    "links": [
+      "action_index",
+      "coin1_id",
+      "coin1_action_index",
+      "coin2_id",
+      "coin2_action_index",
+      "memo_id",
+      "status_id"
+    ],
+    "list_edits": [
+      "action_index",
+      "item_id",
+      "status_id"
+    ],
+    "list_items": [
+      "action_index",
+      "item_id"
+    ],
+    "list_items_invalid": [
+      "action_index",
+      "item_id",
+      "status_id"
+    ],
+    "lists": [
+      "action_index",
+      "type",
+      "edit",
+      "list_action_index",
+      "status_id"
+    ],
+    "mappings_actions": [
+      "action_index",
+      "type_id",
+      "id"
+    ],
+    "mappings_files": [
+      "action_index",
+      "type_id",
+      "id"
+    ],
+    "markets": [
+      "id",
+      "tick1_id",
+      "tick1_price",
+      "tick1_bid",
+      "tick1_ask",
+      "tick1_24hr_price",
+      "tick1_24hr_high",
+      "tick1_24hr_low",
+      "tick1_24hr_change",
+      "tick1_24hr_volume",
+      "tick2_id",
+      "tick2_price",
+      "tick2_bid",
+      "tick2_ask",
+      "tick2_24hr_price",
+      "tick2_24hr_high",
+      "tick2_24hr_low",
+      "tick2_24hr_change",
+      "tick2_24hr_volume",
+      "last_updated"
+    ],
+    "messages": [
+      "action_index",
+      "coin",
+      "destination_id",
+      "encryption_method",
+      "encryption_key",
+      "encrypted_message",
+      "plaintext_message",
+      "status_id"
+    ],
+    "mints": [
+      "action_index",
+      "tick_id",
+      "amount",
+      "destination_id",
+      "memo_id",
+      "status_id"
+    ],
+    "oracle_prices": [
+      "id",
+      "source_address",
+      "source_chain",
+      "coin",
+      "tick",
+      "fiat",
+      "value",
+      "fee",
+      "memo",
+      "block_time",
+      "effective_at",
+      "action_index",
+      "created_at"
+    ],
+    "order_cancels": [
+      "action_index",
+      "order_action_index",
+      "memo_id",
+      "status_id"
+    ],
+    "order_edits": [
+      "action_index",
+      "order_action_index",
+      "expiration",
+      "allow_list",
+      "block_list",
+      "memo_id",
+      "status_id"
+    ],
+    "order_expires": [
+      "action_index",
+      "order_action_index",
+      "status_id"
+    ],
+    "order_matches": [
+      "action_index",
+      "give_action_index",
+      "give_coin_id",
+      "give_tick_id",
+      "give_amount",
+      "get_action_index",
+      "get_coin_id",
+      "get_tick_id",
+      "get_amount",
+      "settlement_type",
+      "status_id"
+    ],
+    "order_statuses": [
+      "action_index",
+      "order_action_index",
+      "status_id"
+    ],
+    "orders": [
+      "action_index",
+      "give_coin_id",
+      "give_tick_id",
+      "give_amount",
+      "get_coin_id",
+      "get_tick_id",
+      "get_amount",
+      "get_address_id",
+      "give_ownership",
+      "get_ownership",
+      "expiration",
+      "allow_list",
+      "block_list",
+      "memo_id",
+      "status_id",
+      "payout_legs"
+    ],
+    "pending_hub_pushes": [
+      "id",
+      "push_type",
+      "action_index",
+      "payload",
+      "attempts",
+      "last_attempted_at",
+      "last_error",
+      "status",
+      "created_at"
+    ],
+    "poll_results": [
+      "action_index",
+      "block_index",
+      "poll_index",
+      "option_index",
+      "total_weight",
+      "voter_count",
+      "resolved_block",
+      "status_id"
+    ],
+    "polls": [
+      "action_index",
+      "block_index",
+      "tick_id",
+      "end_block",
+      "options",
+      "max_selections",
+      "tally_mode",
+      "weight_mode",
+      "quorum",
+      "min_voters",
+      "min_vote_balance",
+      "decide_threshold",
+      "question",
+      "poll_status",
+      "winning_option",
+      "total_weight",
+      "total_voters",
+      "quorum_met",
+      "min_voters_met",
+      "fail_reason",
+      "decided_early",
+      "effective_close_block",
+      "finalized_action_index",
+      "resolved_block",
+      "deposit_amount",
+      "deposit_address_id",
+      "deposit_resolved",
+      "status_id"
+    ],
+    "price_snapshots": [
+      "id",
+      "round_number",
+      "coin_pair",
+      "price",
+      "reference_block",
+      "reference_chain",
+      "block_timestamp",
+      "validator_count",
+      "consensus_round",
+      "consensus_proof",
+      "status",
+      "source_chain",
+      "source_action_index",
+      "created_at"
+    ],
+    "prices": [
+      "action_index",
+      "version",
+      "source_id",
+      "round_number",
+      "round_timestamp",
+      "pair_count",
+      "pairs_json",
+      "sig_count",
+      "sigs_json",
+      "coin_id",
+      "tick_id",
+      "fiat_id",
+      "value",
+      "fee",
+      "memo_id",
+      "validation_status",
+      "status_id"
+    ],
+    "pubkeys": [
+      "address_id",
+      "pubkey"
+    ],
+    "push_generations": [
+      "coin",
+      "generation"
+    ],
+    "recovery_pending_rewards": [
+      "id",
+      "source_address",
+      "validator_pubkey",
+      "reward_type",
+      "round_reference",
+      "amount",
+      "block_index",
+      "source_id",
+      "applied",
+      "applied_block"
+    ],
+    "reward_claims": [
+      "action_index",
+      "source_id",
+      "amount",
+      "status_id",
+      "block_index"
+    ],
+    "sends": [
+      "action_index",
+      "tick_id",
+      "destination_id",
+      "amount",
+      "memo_id",
+      "status_id"
+    ],
+    "slash_events": [
+      "id",
+      "execution_index",
+      "target_contract_index",
+      "signing_pubkey_id",
+      "tick_id",
+      "amount",
+      "destination_id",
+      "block_index"
+    ],
+    "sleeps": [
+      "action_index",
+      "type",
+      "tick_id",
+      "resume_block",
+      "memo_id",
+      "status_id"
+    ],
+    "stake_key_revocations": [
+      "action_index",
+      "source_id",
+      "signing_pubkey_id",
+      "status_id",
+      "block_index",
+      "deactivation_block"
+    ],
+    "stakes": [
+      "action_index",
+      "source_id",
+      "version",
+      "signing_pubkey_id",
+      "amount",
+      "status_id",
+      "block_index",
+      "activation_block",
+      "deactivation_block"
+    ],
+    "state_checkpoints": [
+      "id",
+      "chain",
+      "network",
+      "block_index",
+      "block_hash",
+      "ledger_hash",
+      "actions_hash",
+      "contract_hash",
+      "checkpoint_seq",
+      "snapshot_block",
+      "state_root",
+      "state_root_version",
+      "block_merkle_root",
+      "block_merkle_version",
+      "validator_signatures",
+      "created_at"
+    ],
+    "state_tree_nodes": [
+      "id",
+      "node_hash",
+      "left_hash",
+      "right_hash"
+    ],
+    "state_tree_roots": [
+      "id",
+      "chain",
+      "network",
+      "block_index",
+      "balances_root",
+      "stakes_root",
+      "state_root",
+      "block_merkle_root",
+      "computed_at"
+    ],
+    "swap_cancels": [
+      "action_index",
+      "swap_action_index",
+      "memo_id",
+      "status_id"
+    ],
+    "swap_edits": [
+      "action_index",
+      "swap_action_index",
+      "expiration",
+      "allow_list",
+      "block_list",
+      "memo_id",
+      "status_id"
+    ],
+    "swap_expires": [
+      "action_index",
+      "swap_action_index",
+      "status_id"
+    ],
+    "swap_matches": [
+      "action_index",
+      "give_action_index",
+      "give_coin_id",
+      "give_tick_id",
+      "give_amount",
+      "get_action_index",
+      "get_coin_id",
+      "get_tick_id",
+      "get_amount",
+      "status_id"
+    ],
+    "swap_statuses": [
+      "action_index",
+      "swap_action_index",
+      "status_id"
+    ],
+    "swaps": [
+      "action_index",
+      "give_coin_id",
+      "give_tick_id",
+      "give_amount",
+      "get_coin_id",
+      "get_tick_id",
+      "get_amount",
+      "get_address_id",
+      "give_ownership",
+      "get_ownership",
+      "expiration",
+      "allow_list",
+      "block_list",
+      "memo_id",
+      "status_id",
+      "payout_legs"
+    ],
+    "sweeps": [
+      "action_index",
+      "balances",
+      "ownerships",
+      "orders",
+      "swaps",
+      "dispensers",
+      "destination_id",
+      "memo_id",
+      "status_id"
+    ],
+    "token_controllers": [
+      "id",
+      "action_index",
+      "tick_id",
+      "action_class",
+      "contract_index",
+      "bound_by_id",
+      "is_unbind",
+      "cooldown_blocks",
+      "cooldown_end_block",
+      "block_index"
+    ],
+    "tokens": [
+      "id",
+      "tick_id",
+      "action_index",
+      "last_action_index",
+      "supply",
+      "max_supply",
+      "max_mint",
+      "decimals",
+      "description",
+      "lock_max_supply",
+      "lock_mint",
+      "lock_mint_supply",
+      "lock_max_mint",
+      "lock_description",
+      "lock_sleep",
+      "lock_callback",
+      "callback_block",
+      "callback_tick_id",
+      "callback_amount",
+      "allow_list",
+      "block_list",
+      "mint_address_max",
+      "mint_start_block",
+      "mint_stop_block",
+      "owner_id",
+      "escrow_action_index",
+      "coin_price",
+      "coin_floor"
+    ],
+    "transactions": [
+      "tx_index",
+      "block_index",
+      "tx_hash_id",
+      "source_id",
+      "fee",
+      "data"
+    ],
+    "unstakes": [
+      "action_index",
+      "source_id",
+      "signing_pubkey_id",
+      "cooldown_end_block",
+      "amount",
+      "status_id",
+      "block_index"
+    ],
+    "validator_rewards": [
+      "id",
+      "source_id",
+      "signing_pubkey_id",
+      "reward_type",
+      "round_reference",
+      "amount",
+      "block_index"
+    ],
+    "vote_delegations": [
+      "action_index",
+      "block_index",
+      "tick_id",
+      "delegator_address_id",
+      "delegate_address_id",
+      "status_id"
+    ],
+    "votes": [
+      "action_index",
+      "block_index",
+      "poll_index",
+      "voter_address_id",
+      "choice",
+      "share",
+      "memo",
+      "resolved_block",
+      "status_id"
+    ],
+    "withdrawals": [
+      "action_index",
+      "contract_index",
+      "source_id",
+      "tick_id",
+      "amount",
+      "status_id",
+      "block_index"
+    ],
+    "xcalls": [
+      "action_index",
+      "version",
+      "call_id",
+      "contract_index",
+      "target_chain",
+      "target_contract_index",
+      "method",
+      "params_json",
+      "gas_limit",
+      "cross_hops",
+      "callback_method",
+      "callback_params_json",
+      "deadline_block",
+      "request_status",
+      "result_status",
+      "result_payload",
+      "resolved_block",
+      "callback_action_index",
+      "block_index",
+      "status_id"
+    ]
+  }
+}

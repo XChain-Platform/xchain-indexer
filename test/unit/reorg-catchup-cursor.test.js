@@ -36,7 +36,13 @@
 'use strict';
 
 const assert   = require('assert');
+const crypto   = require('crypto');
 const Database = require('../../src/db');
+
+// sha256 of a data payload, matching db._hashReorgData (the #2735 witness hash).
+function reorgHash(data) {
+    return crypto.createHash('sha256').update(String(data == null ? '' : data), 'utf8').digest('hex');
+}
 
 // Minimal indexer stub: db constructor only touches indexer.config + indexer.util.
 function stubIndexer() {
@@ -55,7 +61,7 @@ function stubIndexer() {
 // string (decoder side: array of orphaned blocks; indexer side: marker object).
 function makeDb(seedRows) {
     const db = new Database('h', 0, 'd', 'u', 'p', stubIndexer());
-    const rows = seedRows.map((r) => ({ id: r.id, data: r.data }));
+    const rows = seedRows.map((r) => ({ id: r.id, data: r.data, time: r.time, witness_time: r.witness_time, witness_hash: r.witness_hash }));
     let nextId = rows.reduce((m, r) => Math.max(m, r.id), 0) + 1;
 
     const exec = (query, args) => {
@@ -70,6 +76,15 @@ function makeDb(seedRows) {
         if (/WHERE code='REORG' ORDER BY id ASC/.test(query)) {
             return rows.slice().sort((a, b) => a.id - b.id).map((r) => ({ id: r.id, data: r.data }));
         }
+        // #2735 witness the cursor row / getReorgEventWitness -> the single REORG row at this id
+        if (/SELECT time, data FROM events WHERE id = \? AND code='REORG'/.test(query)) {
+            return rows.filter((r) => r.id === Number(args[0])).map((r) => ({ time: r.time, data: r.data }));
+        }
+        // #2735 getLastProcessedReorgWitness -> newest-first data + witness columns
+        if (/SELECT data, witness_time, witness_hash FROM events WHERE code='REORG' ORDER BY id DESC/.test(query)) {
+            return rows.slice().sort((a, b) => b.id - a.id)
+                       .map((r) => ({ data: r.data, witness_time: r.witness_time == null ? null : r.witness_time, witness_hash: r.witness_hash == null ? null : r.witness_hash }));
+        }
         // getLastProcessedReorgId / warnOnLegacyReorgCursor -> newest-first data scan
         if (/SELECT data FROM events WHERE code='REORG' ORDER BY id DESC/.test(query)) {
             return rows.slice().sort((a, b) => b.id - a.id).map((r) => ({ data: r.data }));
@@ -78,9 +93,9 @@ function makeDb(seedRows) {
         if (/SELECT MAX\(id\) AS max_id FROM events WHERE code='REORG'/.test(query)) {
             return [{ max_id: rows.length ? rows.reduce((m, r) => Math.max(m, r.id), 0) : null }];
         }
-        // createReorg -> INSERT a marker row
+        // createReorg -> INSERT a marker row (carrying the #2735 witness columns when supplied)
         if (/INSERT INTO events/.test(query)) {
-            rows.push({ id: nextId++, data: args[0] });
+            rows.push({ id: nextId++, data: args[0], witness_time: args[1] != null ? args[1] : null, witness_hash: args[2] != null ? args[2] : null });
             return { affectedRows: 1 };
         }
         throw new Error('unexpected query in test harness: ' + query);
@@ -184,5 +199,67 @@ describe('reorg cursor incarnation guard ( / RE-1)', function () {
     it('a null cursor (fresh indexer) never trips the guard', async function () {
         const emptyDecoderDb = makeDb([]);
         assert.deepStrictEqual(await emptyDecoderDb.getReorgsSince(null), []);
+    });
+});
+
+// #2735: witness the cursor row to close the UNDER-cursor silent skip. A rebuilt decoder whose
+// fresh AUTO_INCREMENT id space overtook a stranded cursor returns non-empty id>afterId results,
+// so the over-cursor guard (RE-1 above) never sees it. The additive witness check catches it.
+describe('reorg cursor under-cursor witness guard (#2735)', function () {
+    // A decoder REORG event with an explicit time (so witness comparison is meaningful).
+    function reorgRow(id, blockIndex, time) {
+        return { id, time, data: JSON.stringify([{ block_index: blockIndex, block_hash: 'a'.repeat(64) }]) };
+    }
+
+    it('(a) witnessed marker whose cursor row is MISSING throws RE-1', async function () {
+        // Decoder rebuilt: cursor id 50 no longer exists (only id 3 remains).
+        const decoderDb = makeDb([reorgRow(3, 100, '2026-07-19 00:00:00')]);
+        const witness   = { time: '2026-07-01 00:00:00', hash: reorgHash('whatever') };
+        await assert.rejects(() => decoderDb.getReorgsSince(50, witness), /Reorg cursor incoherent \(RE-1\)/);
+    });
+
+    it('(b) witnessed marker whose live time/hash MISMATCHES throws RE-1', async function () {
+        // The cursor id 10 still exists, but its live content differs from the recorded witness
+        // (a new-incarnation event landed on the reused id).
+        const row       = reorgRow(10, 100, '2026-07-19 12:00:00');
+        const decoderDb = makeDb([row, reorgRow(11, 150, '2026-07-19 12:05:00')]);
+        const staleWitness = { time: '2026-07-01 00:00:00', hash: reorgHash('a totally different payload') };
+        await assert.rejects(() => decoderDb.getReorgsSince(10, staleWitness), /Reorg cursor incoherent \(RE-1\)/);
+    });
+
+    it('(b2) a MATCHING witness does not throw and returns the newer reorgs', async function () {
+        const row       = reorgRow(10, 100, '2026-07-19 12:00:00');
+        const decoderDb = makeDb([row, reorgRow(11, 150, '2026-07-19 12:05:00')]);
+        const goodWitness = { time: row.time, hash: reorgHash(row.data) };
+        const result = await decoderDb.getReorgsSince(10, goodWitness);
+        assert.deepStrictEqual(result.map(r => r.id), [11]);
+    });
+
+    it('(c) a legacy null-witness marker falls back to the old guard (no throw at steady state)', async function () {
+        const decoderDb = makeDb([reorgRow(10, 100, '2026-07-19 12:00:00'), reorgRow(11, 150, '2026-07-19 12:05:00')]);
+        // Cursor row exists, no witness supplied -> no under-cursor comparison; old guard sees a
+        // steady-state cursor (== newest id) and does not throw.
+        assert.deepStrictEqual(await decoderDb.getReorgsSince(11, null), []);
+    });
+
+    it('(d) happy path: witnessed cursor still returns every newer reorg', async function () {
+        const row       = reorgRow(5, 90, '2026-07-19 11:00:00');
+        const decoderDb = makeDb([row, reorgRow(6, 200, '2026-07-19 11:05:00'), reorgRow(7, 150, '2026-07-19 11:06:00')]);
+        const goodWitness = { time: row.time, hash: reorgHash(row.data) };
+        const result = await decoderDb.getReorgsSince(5, goodWitness);
+        assert.deepStrictEqual(result, [{ id: 6, block_index: 200 }, { id: 7, block_index: 150 }]);
+    });
+
+    it('createReorg persists the witness columns; getLastProcessedReorgWitness reads them back', async function () {
+        const indexerView = makeDb([]);
+        await indexerView.createReorg(200, 7, '2026-07-19 12:00:00', reorgHash('payload7'));
+        const w = await indexerView.getLastProcessedReorgWitness();
+        assert.deepStrictEqual(w, { time: '2026-07-19 12:00:00', hash: reorgHash('payload7') });
+    });
+
+    it('getLastProcessedReorgWitness returns null for a legacy marker with no witness columns', async function () {
+        const indexerView = makeDb([]);
+        await indexerView.createReorg(200, 7); // no witness args -> NULL columns
+        assert.strictEqual(await indexerView.getLastProcessedReorgWitness(), null);
     });
 });

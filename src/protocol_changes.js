@@ -504,6 +504,39 @@ class ProtocolChanges {
         // at genesis (all zeros).
         this.addChange('COOLDOWN_BLOCKS_INTEGER', '2.0.0',1790812800,0,0,0,0,0);
 
+        // DEPLOY validity (Pkg6 / dede7788): an EXPLICIT SLASH_DESTINATION on a stakeable
+        // DEPLOY (v1/v3) must resolve to a well-formed chain address. Before this activation
+        // deploy.js only resolved the SDK's ^<id> compaction and never validated the result,
+        // so an unresolvable caret id or a malformed literal was interned into the IMMUTABLE
+        // contracts.slash_destination; every later slash then routed stake to an unspendable
+        // address (permanent money loss). After activation the resolved destination is checked
+        // with isCryptoAddress (mirroring mint.js / issue.js / dispenser.js). The 'BURN' sentinel
+        // and the default-to-BURN path are exempt (they resolve to the trusted configured burn
+        // address). Gated as its own consensus rule because rejecting a DEPLOY that historically
+        // committed 'valid' changes both the acceptance verdict AND the contract_hash
+        // (contracts.status_id is contract-hashed): an ungated flip forks a heterogeneous fleet
+        // and breaks from-genesis replay byte-identity on the first stakeable DEPLOY carrying a
+        // malformed SLASH_DESTINATION. mainnet pins the coordinated contract-era flag-day
+        // (2026-10-01 00:00:00 UTC); testnet/regtest activate at genesis (all zeros).
+        this.addChange('DEPLOY_SLASH_DEST_ADDRESS_VALID', '2.0.0',1790812800,0,0,0,0,0);
+
+        // UNSTAKE validity (Pkg6 / 048fdea9 + ce6a484f): strict contract-cooldown derivation.
+        // _parseContractUnstake historically computed COOLDOWN_END_BLOCK from
+        // `(contractInfo && contractInfo.cooldown_blocks) ? Number(...) : 1000` - a fallback to
+        // the capability-staking global 1000 that is a DEAD branch on the valid path (the
+        // handler already rejects a null/non-stakeable cooldown, and DEPLOY enforces an integer
+        // cooldown in [1,100000]) yet FIRED on every ERROR path (unknown target, not-stakeable,
+        // no active stake), persisting a phantom BLOCK_INDEX+1000 into the INVALID
+        // contract_unstakes row - a replicated, state_hash-covered column. After activation the
+        // handler rejects a non-positive-integer contract cooldown outright (closing the latent
+        // cross-file trap) and computes COOLDOWN_END_BLOCK only on the valid path, leaving error
+        // rows at 0. The valid-path value is UNCHANGED (it always took Number(cooldown_blocks)),
+        // so the only observable change is the error-path row value; gated so a from-genesis
+        // replay / heterogeneous fleet reproduces the historic (phantom-1000) error-row values
+        // below the flag-day. mainnet pins the coordinated contract-era flag-day (2026-10-01
+        // 00:00:00 UTC); testnet/regtest activate at genesis (all zeros).
+        this.addChange('UNSTAKE_CONTRACT_COOLDOWN_STRICT', '2.0.0',1790812800,0,0,0,0,0);
+
         // ISSUE validity: cumulative MINT_SUPPLY cap. Before this activation the only guard on
         // an ISSUE's MINT_SUPPLY was a single-shot `MINT_SUPPLY > MAX_SUPPLY` check, which
         // ignores supply that already exists: an owner could re-ISSUE the same tick with
@@ -713,6 +746,32 @@ class ProtocolChanges {
         // TIME with the ratified 2026-10-01 contract-era cohort (
         // batch); testnet/regtest activate at genesis (all zeros).
         this.addChange('BATCH_SUBACTION_NORMALIZATION', '2.0.0',1790812800,0,0,0,0,0);
+
+        //  (flag-day Pkg 11): numeric legacy-fee db_hits accumulation. The legacy
+        // (non-UNIFIED_FEES) transaction-fee model in dividend.js / callback.js / sweep.js
+        // accumulates a db_hits count and prices it via getTransactionFee. The original
+        // accumulators used `db_hits += this.util.bcmul(count, N, 0)`; bcmul returns a
+        // mathjs BigNumber whose valueOf() is a string, so the `+=` STRING-CONCATENATED the
+        // running integer instead of adding it (e.g. 4 + bcmul(2,3,0) -> 4 + "6" -> "46",
+        // and even a zero-escrow SWEEP concatenated "0" -> "10" -> "100"), inflating the
+        // priced fee by orders of magnitude (getTransactionFee("100") = 0.001 vs the correct
+        // 0.00001). Below this activation the code reproduces that string concatenation
+        // byte-for-byte, so a from-genesis replay and a heterogeneous fleet commit the
+        // IDENTICAL (inflated) fee that live pre-activation nodes committed. At/above it the
+        // count accumulates numerically and getTransactionFee prices the true db_hits.
+        // Gated as its own consensus rule because the fix CHANGES a consensus-visible ledger
+        // amount (fees.AMOUNT / the fee DEBIT, hashed into balances_root + ledger_hash): an
+        // ungated flip (the earlier un-gated numeric fix) forks a skewed fleet on the first
+        // fee-bearing DIVIDEND-legacy/CALLBACK/SWEEP and diverges a from-genesis replay from
+        // the committed ledger. Keyed on block_TIME (not block_index), mirroring the other
+        // multi-chain gates: these actions run on BTC, LTC and DOGE whose heights diverge by
+        // millions of blocks, so no single shared block height names one cutover across all
+        // three chains, but a single timestamp does. The mainnet timestamp joins the
+        // ratified coordinated contract-era anchor 1790812800 (2026-10-01 00:00:00 UTC);
+        // testnet/regtest activate at genesis (all zeros) so the numeric model holds from
+        // block 0 there and in the unit/e2e suites (the regtest stack is rebuilt fresh, so
+        // no pre-activation fee-bearing blocks remain to replay).
+        this.addChange('LEGACY_FEE_NUMERIC_DBHITS', '2.0.0',1790812800,0,0,0,0,0);
 
         // NOTE: STAKE_WEIGHTED_QUORUM (WI-1) is deliberately NOT registered here.
         // Standard activations gate on the LOCAL processing block via isEnabled();

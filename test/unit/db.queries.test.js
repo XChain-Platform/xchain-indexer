@@ -1504,6 +1504,31 @@ describe('Database.parseExpectedIndexes() @regression @tier1', function () {
             warn.restore();
         }
     });
+
+    // #2702: a declared UNIQUE index whose name is already held by a live NON-unique
+    // index of the same column set must be WARNED about (uniqueness drift is otherwise
+    // invisible and silently degrades ON DUPLICATE KEY UPDATE writers), never DDL'd
+    // (we must never DROP an index we did not create).
+    it('reconcileTableIndexes warns when a declared UNIQUE name is held by a live non-unique index', async function () {
+        const warn = sinon.stub(console, 'warn');
+        try {
+            const dbc = {
+                query: sinon.stub().resolves([
+                    // Same NAME and column set as the declared UNIQUE `address`, but NON_UNIQUE.
+                    { INDEX_NAME: 'address', NON_UNIQUE: 1, COLUMN_NAME: 'address', SEQ_IN_INDEX: 1, SUB_PART: null },
+                    { INDEX_NAME: 'block_index', NON_UNIQUE: 1, COLUMN_NAME: 'block_index', SEQ_IN_INDEX: 1, SUB_PART: null },
+                ]),
+            };
+            await db.reconcileTableIndexes('index_addresses.sql', dbc);
+            assert.strictEqual(dbc.query.callCount, 1, 'read-only: never DROP/CREATE an index we did not create');
+            const warned = warn.getCalls().map((c) => c.args.join(' ')).join('\n');
+            assert.match(warned, /name is already held by non-unique/, 'uniqueness drift must be surfaced');
+            assert.match(warned, /index_addresses/);
+            assert.match(warned, /address/);
+        } finally {
+            warn.restore();
+        }
+    });
 });
 
 // _migrationMode

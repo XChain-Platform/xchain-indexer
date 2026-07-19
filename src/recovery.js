@@ -103,11 +103,19 @@ class AnchorRecovery {
         // derived, diverging a recovery-fed node from a mirror-fed one. The INNER JOIN also drops
         // any row with a NULL status_id, which every production row resolves (anchor.js defaults
         // STATUS to 'valid'); do NOT loosen this to a LEFT JOIN accepting NULL, which reopens the hole.
+        // match_batch_seq is NOT unique: the _parseCheckpoint replay guard admits an EQUAL
+        // MATCH_BATCH_SEQ (a permissionless re-broadcast or failover double-publish stores a
+        // second v1/v6 head for the same batch, db.js 'match_batch_seq is NOT unique'). The
+        // rebuild below is order-dependent (latest-status-wins per match_id; finalized-wins full
+        // overwrite per (call_id,phase)), so equal-seq heads MUST replay in a deterministic total
+        // order or two nodes persist divergent finalized content. Break the tie on action_index
+        // ASC - unique + consensus-visible on this single-network table - mirroring the live head
+        // pick (db.getAnchorV1ByBatchSeq) and the chunk-assembly query below. #2695
         let v1s = await this.db.doQuery(
             `SELECT a.* FROM anchor_actions a
              JOIN index_statuses s ON s.id = a.status_id
              WHERE a.version IN (1, 6) AND s.status IN ('valid', 'unverified')
-             ORDER BY a.match_batch_seq ASC`);
+             ORDER BY a.match_batch_seq ASC, a.action_index ASC`);
         if(!v1s || v1s.length === 0){
             this.log('recovery: no archive anchors found (anchor_actions has no v1/v6 rows)');
             return report;
@@ -669,6 +677,13 @@ class AnchorRecovery {
         return (crc ^ 0xFFFFFFFF) >>> 0;
     }
 }
+
+// Test-only export: exposes _wrapperCanonical as a static so byte-parity tests
+// can call it without constructing a full AnchorRecovery(db, opts) instance.
+// Delegates to the real instance method; does not change its output.
+AnchorRecovery.wrapperCanonicalForTest = function(v1){
+    return AnchorRecovery.prototype._wrapperCanonical.call({}, v1);
+};
 
 module.exports = AnchorRecovery;
 

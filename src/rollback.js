@@ -1136,6 +1136,13 @@ class Rollback {
             if(this.decoderDb && typeof this.decoderDb.clearBlockTimeCache === 'function') this.decoderDb.clearBlockTimeCache();
             if(this.indexerDb && typeof this.indexerDb.clearBlockTimeCache === 'function') this.indexerDb.clearBlockTimeCache();
 
+            // Invalidate the early-decide tally watermark (). This reorg may have deleted
+            // and re-added ledger, vote, and delegation rows at or above block_index (and reused
+            // action_index values), so any cached poll fingerprint could now match spuriously and
+            // wrongly skip a re-tally on the replay. Drop them all; the forward replay re-tallies
+            // each armed poll on first sight, exactly as on a fresh process.
+            if(this.indexerDb && typeof this.indexerDb.clearPollTallyWatermark === 'function') this.indexerDb.clearPollTallyWatermark();
+
             // Destructive rollback is done and committed; clear the in-progress marker so
             // /health reflects a caught-up node again (#1812).
             if(this.indexer) this.indexer.stallReason = null;

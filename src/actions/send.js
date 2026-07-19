@@ -152,6 +152,19 @@ class Send {
         // Store original error value
         let origError = error;
 
+        // SOURCE sleeping-state check is byte-identical for every leg (same SOURCE, same
+        // BLOCK_INDEX, tick arg null), so run it once here instead of once per leg. Read-only,
+        // so hoisting it out of the loop does not change any leg's validation outcome; each leg
+        // still gates on it under its own !error guard below. Same motive as the ticks/
+        // preferences/gatedKeyHashes dedupe above: SEND runs on every ~5s index tick and the
+        // per-leg form scaled per-block DB work with recipient count.
+        let sourceActionAllowed = await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']);
+
+        // Memoize the TICK sleeping-state check per distinct tick. The check depends only on
+        // (TICK, BLOCK_INDEX); BLOCK_INDEX is fixed for the tx, so a repeated tick reuses the
+        // first result. A multi-send of the same tick to N recipients now costs one query, not N.
+        let tickActionAllowed = {};
+
         // Array of credits and debits
         let credits = [],
             debits  = [];
@@ -208,13 +221,17 @@ class Send {
              * General Validations
              ************************************************************/
 
-            // Verify SOURCE is not sleeping
-            if(!error && await this.indexerDb.isActionAllowed(send['SOURCE'], null, send['BLOCK_INDEX']) == false)
+            // Verify SOURCE is not sleeping (hoisted, byte-identical across legs)
+            if(!error && sourceActionAllowed == false)
                 error = 'invalid: SOURCE (sleeping)';
 
-            // Verify TICK is not sleeping
-            if(!error && await this.indexerDb.isActionAllowed(null, send['TICK'], send['BLOCK_INDEX']) == false)
-                error = 'invalid: TICK (sleeping)';
+            // Verify TICK is not sleeping (memoized per distinct tick for the tx's BLOCK_INDEX)
+            if(!error){
+                if(tickActionAllowed[send['TICK']] === undefined)
+                    tickActionAllowed[send['TICK']] = await this.indexerDb.isActionAllowed(null, send['TICK'], send['BLOCK_INDEX']);
+                if(tickActionAllowed[send['TICK']] == false)
+                    error = 'invalid: TICK (sleeping)';
+            }
 
             // Verify TICK action is allowed from SOURCE (allow/block lists)
             if(!error && await this.indexerDb.isActionAllowed(send['SOURCE'], send['TICK']) == false)

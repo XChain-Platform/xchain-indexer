@@ -411,6 +411,11 @@ class Anchor {
         }
 
         data['VALIDATOR_SIGNATURES'] = JSON.stringify(sigs);
+        // v4/v5/v6 publisher-attestation tail (#2486): persist the quorum-verified
+        // publisher signature list so createAnchorAction can store it in
+        // anchor_actions.publisher_attestations. Empty (null) for v0-v3, which carry
+        // no publisher tail. data['PUBLISHER'] is already set above for v4+.
+        data['PUBLISHER_ATTESTATIONS'] = (publisherSigs.length > 0) ? JSON.stringify(publisherSigs) : null;
         if(!data['STATUS']) data['STATUS'] = (error) ? error : 'valid';
 
         console.log("\t ANCHOR v" + format + " : " + data['CHAIN'] + '/' + data['NETWORK'] +
@@ -419,6 +424,33 @@ class Anchor {
                     ' : ' + data['STATUS']);
 
         await this.indexerDb.createAnchorAction(data);
+
+        // ── Head-side archive reassembly gate : the chunk-side gate in
+        //    _parseContinuation only fires when the parent v1/v6 head already
+        //    exists, so when the completing continuation chunk is broadcast
+        //    BEFORE its head every stored chunk is 'orphan' and the reassembly
+        //    CRC is never checked. Re-run the completeness + CRC check here when
+        //    the head lands last, so the signed BATCH_CRC32 is verified for that
+        //    arrival order too. Byte-identical to the chunk-side reassembly
+        //    (head blob + chunks sorted by index), hence deterministic across
+        //    nodes. Safe without a flag-day: in this ordering the stamped head
+        //    has no 'valid' v2 child (all completing chunks are 'orphan'), so
+        //    the invalid_archive stamp is invisible to the block state hash
+        //    (stateHash.js §6 requires a v2 child with status 'valid'). ─────────
+        if(!error && (format === 1 || format === 6) && data['STATUS'] === 'valid' &&
+           Number(data['TOTAL_CHUNKS']) > 1){
+            let chunks = await this.indexerDb.getAnchorChunks(Number(data['MATCH_BATCH_SEQ']));
+            if(chunks.length === Number(data['TOTAL_CHUNKS']) - 1){
+                let b64 = String(data['ARCHIVE_B64'] || '');
+                for(let c of chunks.sort((a, b) => Number(a.chunk_index) - Number(b.chunk_index))) b64 += c.archive_b64;
+                let crc = this._archiveCrc(b64);
+                if(crc === null || crc !== String(data['BATCH_CRC32'])){
+                    console.warn("\t ANCHOR v" + format + " : batch " + data['MATCH_BATCH_SEQ'] + ' head-side reassembly CRC mismatch, flagging invalid_archive');
+                    await this.indexerDb.setAnchorArchiveStatus(Number(data['ACTION_INDEX']), 'invalid_archive');
+                }
+            }
+        }
+
         await this.mapper.createMappings(data);
     }
 

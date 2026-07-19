@@ -400,8 +400,7 @@ class Xcall {
         // Mint the internal processing action (rollback anchor for the callback record).
         data['ACTION_INDEX'] = await this.indexerDb.createActionIndex({
             ACTION:      'XCALL',
-            BLOCK_INDEX: data['BLOCK_INDEX'],
-            FORMAT:      1
+            BLOCK_INDEX: data['BLOCK_INDEX']
         }, true);
 
         let resultStatus  = String(r.result_status || 'error');

@@ -170,6 +170,13 @@ class HubDbSync {
         this.pollIntervalMs = parseInt(options.pollInterval || process.env.HUB_DB_SYNC_POLL_INTERVAL || '30000');
         this.ws        = null;
         this.running   = false;
+        // True when the WebSocket path is unavailable and this mirror falls back to
+        // periodic REST polling (#2476). In poll mode the stream watermark must NOT
+        // advance: REST snapshot endpoints are append-only, so a poll cycle can never
+        // observe an in-place upsert or a row:deleted retraction, and certifying the
+        // mirror as live-complete would open the settlement barriers over data that can
+        // be silently stale. Set in start() when the fallback is selected.
+        this._pollMode = false;
 
         // Highest reference_block present in the local price_snapshots copy. Used by the
         // block-processing sync barrier (waitForPriceSyncHeight) so an indexer does not
@@ -430,6 +437,9 @@ class HubDbSync {
             }
         } else {
             console.warn('HubDbSync: ws package not available, falling back to periodic polling');
+            // Select the poll fallback BEFORE the first bootstrap so even that initial
+            // drain fails closed (does not certify the watermark); see _bootstrapAll (#2476).
+            this._pollMode = true;
         }
 
         // Bootstrap each tracked table after the subscription is confirmed active
@@ -491,7 +501,22 @@ class HubDbSync {
                 // mismatch parks the bootstrap), so any earlier live mismatch is
                 // resolved: re-open the watermark gate.
                 this._schemaMismatchSeen = false;
-                this._advanceWatermark(Math.min.apply(null, marks));
+                if (this._pollMode) {
+                    // Poll-mode fail-closed (#2476): the REST snapshot endpoints are
+                    // append-only, so a poll cycle observes new-id INSERTs but can NEVER
+                    // receive an in-place upsert (skipped->finalized, anchor stamp,
+                    // generation bump) or a row:deleted retraction the way the WS stream
+                    // does. Advancing the watermark here would certify the mirror as
+                    // live-complete through min(marks) and let the watermark-escape paths
+                    // in the settlement barriers open over data that can be silently
+                    // stale, forking the ledger. Freeze the watermark and warn every
+                    // cycle instead; the barriers fall back to their content paths and
+                    // DEFER rather than certify. Mirroring itself still ran above.
+                    console.warn('HubDbSync: poll-mode mirror: watermark frozen, WS unavailable, ' +
+                        'upserts/retractions cannot be received; settlement barriers will not certify');
+                } else {
+                    this._advanceWatermark(Math.min.apply(null, marks));
+                }
             } else if (this.running) {
                 console.warn('HubDbSync: bootstrap partial, retrying in ' + this.pollIntervalMs + 'ms (heartbeat gate stays closed)');
                 setTimeout(() => {
@@ -969,7 +994,16 @@ class HubDbSync {
         if (!Number.isFinite(ms) || ms <= 0) ms = 60000;
         return new Promise((resolve, reject) => {
             let waiter = { ts: blockTime, resolve: resolve, timer: null };
-            waiter.timer = setTimeout(() => {
+            waiter.timer = setTimeout(async () => {
+                // Self-heal before giving up, same as waitForPriceSyncHeight: the in-memory
+                // oracleSyncTimestamp only advances when a stream/bootstrap event drives
+                // _refreshOracleSyncTimestamp, so a missed refresh on a stream/reconnect
+                // edge can leave it stale behind a local mirror that is actually current,
+                // and then every block deferred the full timeout even though the data was
+                // present. Re-read the DB here; _refreshOracleSyncTimestamp resolves+clears
+                // this waiter via _releaseOracleWaiters if the mirror has since caught up.
+                try { await this._refreshOracleSyncTimestamp(); } catch (e) { /* fall through to reject */ }
+                if (this._oracleSyncSatisfied(blockTime)) return;   // already resolved by the refresh
                 this._oracleWaiters = this._oracleWaiters.filter(w => w !== waiter);
                 reject(new Error('oracle sync barrier timed out after ' + ms + 'ms waiting for block_time ' +
                                  blockTime + ' (oracle mirror at ' + this.oracleSyncTimestamp + ')'));
@@ -1383,7 +1417,14 @@ class HubDbSync {
         if (!Number.isFinite(ms) || ms <= 0) ms = 60000;
         return new Promise((resolve, reject) => {
             let waiter = { ts: blockTime, resolve: resolve, timer: null };
-            waiter.timer = setTimeout(() => {
+            waiter.timer = setTimeout(async () => {
+                // Self-heal before giving up, same as waitForPriceSyncHeight: a missed
+                // refresh on a stream/reconnect edge can leave matchSyncTimestamp stale
+                // behind a local mirror that is actually current. Re-read the DB here;
+                // _refreshMatchSyncTimestamp resolves+clears this waiter via
+                // _releaseMatchWaiters if the mirror has since caught up.
+                try { await this._refreshMatchSyncTimestamp(); } catch (e) { /* fall through to reject */ }
+                if (this._matchSyncSatisfied(blockTime)) return;   // already resolved by the refresh
                 this._matchWaiters = this._matchWaiters.filter(w => w !== waiter);
                 reject(new Error('match sync barrier timed out after ' + ms + 'ms waiting for block_time ' +
                                  blockTime + ' (match mirror at ' + this.matchSyncTimestamp + ')'));
@@ -1460,7 +1501,14 @@ class HubDbSync {
         if (!Number.isFinite(ms) || ms <= 0) ms = 60000;
         return new Promise((resolve, reject) => {
             let waiter = { ts: blockTime, resolve: resolve, timer: null };
-            waiter.timer = setTimeout(() => {
+            waiter.timer = setTimeout(async () => {
+                // Self-heal before giving up, same as waitForPriceSyncHeight: a missed
+                // refresh on a stream/reconnect edge can leave callSyncTimestamp stale
+                // behind a local mirror that is actually current. Re-read the DB here;
+                // _refreshCallSyncTimestamp resolves+clears this waiter via
+                // _releaseCallWaiters if the mirror has since caught up.
+                try { await this._refreshCallSyncTimestamp(); } catch (e) { /* fall through to reject */ }
+                if (this._callSyncSatisfied(blockTime)) return;   // already resolved by the refresh
                 this._callWaiters = this._callWaiters.filter(w => w !== waiter);
                 reject(new Error('call sync barrier timed out after ' + ms + 'ms waiting for block_time ' +
                                  blockTime + ' (call mirror at ' + this.callSyncTimestamp + ')'));
@@ -1549,7 +1597,15 @@ class HubDbSync {
         if (!Number.isFinite(ms) || ms <= 0) ms = 60000;
         return new Promise((resolve, reject) => {
             let waiter = { ts: blockTime, resolve: resolve, timer: null };
-            waiter.timer = setTimeout(() => {
+            waiter.timer = setTimeout(async () => {
+                // Self-heal before giving up, same intent as the scalar barriers above.
+                // Snapshot-presence is set-dependent (recomputed by a live query rather
+                // than a cached scalar), but release is still event-driven: a snapshot
+                // that mirrored in without firing a cross-chain event would leave this
+                // waiter armed until the timeout. Re-evaluate against the mirror here;
+                // _releaseSnapshotWaiters resolves+clears this waiter if satisfied now.
+                try { await this._releaseSnapshotWaiters(); } catch (e) { /* fall through to reject */ }
+                if (await this._snapshotSyncSatisfied(blockTime)) return;   // already resolved by the refresh
                 this._snapshotWaiters = this._snapshotWaiters.filter(w => w !== waiter);
                 reject(new Error('snapshot sync barrier timed out after ' + ms + 'ms waiting for block_time ' +
                                  blockTime + ' (a cross-chain match is missing its capability snapshot)'));
@@ -1704,6 +1760,15 @@ class HubDbSync {
             });
 
             ws.on('message', (data) => {
+                // Liveness stamp at frame ARRIVAL (#2477). The watchdog measures
+                // TRANSPORT liveness, so stamp on ANY inbound frame here, BEFORE the
+                // frame is enqueued to _msgChain. Stamping inside the chain instead (behind
+                // awaited row applies) measured PROCESSING: a row-apply backlog longer than
+                // watermarkTimeoutMs would terminate a healthy socket and force a
+                // re-bootstrap, a self-reinforcing loop. The hub emits a watermark at least
+                // every interval, so any frame arriving is sufficient proof of liveness;
+                // watermark ADVANCEMENT stays serialized behind row applies in _msgChain.
+                this._lastHeartbeatAt = Date.now();
                 let event;
                 try {
                     event = JSON.parse(data.toString());
@@ -1744,10 +1809,11 @@ class HubDbSync {
                 this._msgChain = this._msgChain.then(async () => {
                     try {
                         if (event.type === 'watermark') {
-                            // Liveness: any watermark frame proves the socket is still
-                            // receiving heartbeats, independent of whether the stream
-                            // watermark itself is allowed to advance below.
-                            this._lastHeartbeatAt = Date.now();
+                            // Liveness is stamped at frame ARRIVAL in the raw ws.on('message')
+                            // handler above (#2477), not here: stamping inside this serialized
+                            // chain (behind awaited row applies) let a row-apply backlog
+                            // terminate a healthy socket. Only stream-watermark ADVANCEMENT
+                            // stays serialized here.
                             // Stream-position heartbeat: every row event produced up to ts has
                             // been delivered on this socket. Safe to advance only once the
                             // bootstrap has drained (rows from before the subscription).
@@ -1833,9 +1899,13 @@ class HubDbSync {
         }, 5000);
     }
 
-    // Polling fallback when ws is not available. Snapshot responses carry the
-    // hub's stream watermark, so poll-mode mirrors get the same liveness
-    // semantics as the WS heartbeat (at poll-interval granularity).
+    // Polling fallback when ws is not available. Poll-mode mirrors do NOT get the
+    // same liveness semantics as the WS heartbeat (#2476): the REST snapshot
+    // endpoints are append-only, so a poll cycle can observe new-id INSERTs but can
+    // never receive an in-place upsert or a row:deleted retraction. _bootstrapAll
+    // therefore refuses to advance the stream watermark while _pollMode is set, so
+    // the settlement barriers fail closed (defer) rather than certify against a
+    // mirror that may be silently stale. Bootstrapping/mirroring still runs each cycle.
     _startPolling() {
         let poll = async () => {
             if (!this.running) return;

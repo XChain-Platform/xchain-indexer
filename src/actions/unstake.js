@@ -219,9 +219,32 @@ class Unstake {
 
         let staking         = this.config['STAKING'];
         let activationDelay = (staking && staking['ACTIVATION_DELAY_BLOCKS']) ? staking['ACTIVATION_DELAY_BLOCKS'] : this.config['ACTIVATION_DELAY_BLOCKS'];
-        let cooldownBlocks  = (contractInfo && contractInfo.cooldown_blocks) ? Number(contractInfo.cooldown_blocks) : 1000;
-        data['COOLDOWN_END_BLOCK'] = parseInt(data['BLOCK_INDEX']) + cooldownBlocks;
         data['AMOUNT']             = totalAmount;
+
+        // Pkg6 / 048fdea9 + ce6a484f (gated UNSTAKE_CONTRACT_COOLDOWN_STRICT): the cooldown is
+        // the target contract's own validated stake parameter (DEPLOY enforces an integer in
+        // [1,100000]). The legacy ternary fell back to the capability global 1000 whenever the
+        // contract cooldown_blocks was falsy - a DEAD branch on the valid path (195-197 already
+        // rejects a null/non-stakeable cooldown) that nonetheless FIRED on every ERROR path
+        // (unknown target / not-stakeable / no-active-stake -> contractInfo null/absent),
+        // persisting a phantom BLOCK_INDEX+1000 cooldown_end_block into the INVALID
+        // contract_unstakes row (a replicated, state_hash-covered column). At/after the flag-day:
+        // reject a non-positive-integer contract cooldown outright (closes the latent cross-file
+        // trap) and compute COOLDOWN_END_BLOCK only on the valid path, leaving error rows at 0.
+        // The valid-path value is unchanged. Below it: byte-identical to the legacy ternary so a
+        // from-genesis replay / heterogeneous fleet reproduces the historic (phantom-1000)
+        // error-row values.
+        if(await this.actions.protocolChanges.isEnabled('UNSTAKE_CONTRACT_COOLDOWN_STRICT', data['BLOCK_INDEX'])){
+            if(!error){
+                let cb = Number(contractInfo.cooldown_blocks);
+                if(!Number.isInteger(cb) || cb < 1)
+                    error = 'invalid: TARGET_CONTRACT_INDEX (contract cooldown invalid)';
+            }
+            data['COOLDOWN_END_BLOCK'] = (!error) ? (parseInt(data['BLOCK_INDEX']) + Number(contractInfo.cooldown_blocks)) : 0;
+        } else {
+            let cooldownBlocks = (contractInfo && contractInfo.cooldown_blocks) ? Number(contractInfo.cooldown_blocks) : 1000;
+            data['COOLDOWN_END_BLOCK'] = parseInt(data['BLOCK_INDEX']) + cooldownBlocks;
+        }
 
         let status = (error) ? error : 'valid';
         data['STATUS'] = status;

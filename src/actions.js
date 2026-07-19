@@ -37,16 +37,43 @@ const FEE_QUOTE_DENYLIST = new Set(['DEPLOY', 'EXECUTE', 'XEXEC', 'BATCH']);
 // the originating ORDER/SWAP/DISPENSER was created, so there is nothing for feequote to price.
 // They also can't be dry-run through the synthetic-tx harness: COINPAY/DISPENSE only settle
 // against a native-coin output paying a specific payee/dispenser (coinpay.js/dispense.js
-// early-exit "skip" when it's absent), and the *_MATCH/*_EXPIRE/*_CLOSE/CROSS_SETTLE actions
-// are system-synthesized during block processing, never wallet-broadcast. Quoting any of them
-// used to fall through to a misleading `dry-run produced no status`; instead answer honestly
-// with a zero-fee, feeExempt result. This is a read-only preflight classification, never a
-// consensus path: it changes what the quote reports, not what a handler charges on-chain.
+// early-exit "skip" when it's absent), and the *_MATCH/*_EXPIRE/*_CLOSE/CROSS_SETTLE/XCALL
+// actions are system-synthesized during block processing, never wallet-broadcast (XCALL is
+// VM-emitted/synthetic-only, like CROSS_SETTLE). Quoting any of them used to fall through to a
+// misleading `dry-run produced no status`; instead answer honestly with a zero-fee, feeExempt
+// result. This is a read-only preflight classification, never a consensus path: it changes
+// what the quote reports, not what a handler charges on-chain.
 const FEE_QUOTE_EXEMPT = new Set([
     'COINPAY', 'DISPENSE',
     'COINPAY_EXPIRE', 'ORDER_MATCH', 'ORDER_EXPIRE', 'SWAP_MATCH', 'SWAP_EXPIRE',
-    'DISPENSER_CLOSE', 'DISPENSER_EXPIRE', 'CROSS_SETTLE'
+    'DISPENSER_CLOSE', 'DISPENSER_EXPIRE', 'CROSS_SETTLE', 'XCALL'
 ]);
+
+// ACTION aliases, expanded to canonical names before any gate. Single module-level source of
+// truth: the constructor copies this into `this.actionAliases`, and classifyFeeQuoteAction
+// normalizes through it, so the fee-quote classifier de-aliases exactly as dispatch does.
+const ACTION_ALIASES = {
+    // Legacy BRC20 formats
+    'TRANSFER': 'SEND',
+    // Short aliases
+    'ADDR': 'ADDRESS',
+    'DROP': 'AIRDROP',
+    'CAST': 'BROADCAST',
+    'MSG':  'MESSAGE'
+};
+
+// Pure classifier bound to the fee-quote deny/exempt sets. Applies the SAME normalization
+// computeFeeQuote uses (trim, uppercase, single-pass de-alias), then returns exactly one of
+// 'denied' | 'exempt' | 'quotable'. Deny-before-exempt ordering is preserved so this is the one
+// classification path both the public feequote gate and the conformance test read.
+function classifyFeeQuoteAction(action){
+    let a = String(action == null ? '' : action).trim().toUpperCase();
+    if(Object.prototype.hasOwnProperty.call(ACTION_ALIASES, a))
+        a = ACTION_ALIASES[a];
+    if(FEE_QUOTE_DENYLIST.has(a)) return 'denied';
+    if(FEE_QUOTE_EXEMPT.has(a))   return 'exempt';
+    return 'quotable';
+}
 
 // Load indexer actions
 const address          = require('./actions/address.js');
@@ -719,7 +746,12 @@ class Actions {
                                ? base.blockIndex : await this.indexerDb.getLatestBlockIndex();
         let nowEpoch           = Math.floor(Date.now() / 1000);
         let maxPriceAgeSeconds = parseInt(this.config['ORACLE_MAX_PRICE_AGE_SECONDS']) || 1800;
-        let prices = await this.util.getFeeOraclePrices(this.indexerDb, coin, blockIndex, nowEpoch, maxPriceAgeSeconds);
+        // Staleness stays wall-clock (nowEpoch as refTime, deliberate for a pre-flight). The
+        // flag-day gate, however, must anchor on the quoted block's time (base.blockTime) so it
+        // flips on chain time, not the operator's clock; fall back to nowEpoch when no block time
+        // is carried.
+        let gateTime           = (base.blockTime !== undefined && base.blockTime !== null) ? base.blockTime : nowEpoch;
+        let prices = await this.util.getFeeOraclePrices(this.indexerDb, coin, blockIndex, nowEpoch, maxPriceAgeSeconds, gateTime);
         if(prices.error)
             return Object.assign(base, { valid: false, error: prices.error });
 
@@ -802,12 +834,17 @@ class Actions {
         if(!feeDestination || feeDestination === 'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX')
             return Object.assign(base, { supported: false, valid: false, error: 'native coin fee not enabled (no FEE_DESTINATION configured)' });
 
-        if(FEE_QUOTE_DENYLIST.has(action))
+        // Single classification path (classifyFeeQuoteAction) shared with the conformance test;
+        // it re-applies the same trim/uppercase/de-alias normalization (idempotent on the already
+        // normalized `action` above) and preserves deny-before-exempt ordering.
+        let feeClass = classifyFeeQuoteAction(action);
+
+        if(feeClass === 'denied')
             return Object.assign(base, { supported: false, valid: false, error: 'native fee pre-flight not supported for ' + action + ' (pay the fee in XCHAIN)' });
 
         // Fee-exempt settlement/lifecycle actions: no protocol fee to price, and their required
         // native outputs can't be reproduced by the dry-run harness. Answer zero, skip the engine.
-        if(FEE_QUOTE_EXEMPT.has(action))
+        if(feeClass === 'exempt')
             return Object.assign(base, {
                 valid:             true,
                 feeExempt:         true,
@@ -911,7 +948,10 @@ class Actions {
         // (missing/stale oracle) overwrite the handler's validity verdict: on this raw surface
         // the handler verdict is the headline and sizing is best-effort.
         if(valid && nativeEnabled){
-            let priced = await this._priceFeeQuote({ blockIndex: run.blockIndex }, run.xchainFee, undefined);
+            // Carry blockTime so _priceFeeQuote anchors the flag-day gate on the run's block
+            // time (via base.blockTime -> gateTime), not wall-clock; otherwise a block-time-based
+            // gate would silently no-op on this raw surface.
+            let priced = await this._priceFeeQuote({ blockIndex: run.blockIndex, blockTime: run.blockTime }, run.xchainFee, undefined);
             if(priced.valid !== false){
                 result.feeSupported      = true;
                 result.oracleRound       = priced.oracleRound;
@@ -972,3 +1012,9 @@ class Actions {
 }
 
 module.exports = Actions;
+// Pure fee-quote classifier and read-only views of the deny/exempt sets, exported for the
+// ActionManifestConformance test to bind classification to the dispatch table. The getters
+// return fresh Sets so callers cannot mutate module state.
+module.exports.classifyFeeQuoteAction = classifyFeeQuoteAction;
+module.exports.getFeeQuoteDenylist    = () => new Set(FEE_QUOTE_DENYLIST);
+module.exports.getFeeQuoteExempt      = () => new Set(FEE_QUOTE_EXEMPT);

@@ -540,6 +540,17 @@ describe('Utility @regression @tier1', function () {
         it('should handle the sat-divisor case correctly', function () {
             assert.strictEqual(util.bcfloor(util.bcdiv('0.00000003', '0.00000001', 64)), 3);
         });
+        it('returns the exact JS integer at the safe-integer boundary', function () {
+            // 2^53 - 1 is representable exactly; must NOT throw and must round-trip.
+            assert.strictEqual(util.bcfloor(util.bcnum(String(Number.MAX_SAFE_INTEGER))), Number.MAX_SAFE_INTEGER);
+        });
+        it('throws loudly above Number.MAX_SAFE_INTEGER instead of returning a lossy integer (2394)', function () {
+            // 2^53 + 1 is not representable as a double; .toNumber() would silently
+            // collapse it onto 2^53. The guard must throw a RangeError before consensus
+            // math consumes a corrupted unit count (mirrors encoder parseSatoshiAmount).
+            const over = util.bcnum(String(Number.MAX_SAFE_INTEGER)).plus(2); // 2^53 + 1, exact in bignumber space
+            assert.throws(() => util.bcfloor(over), /exceeds the maximum safe integer/);
+        });
     });
 
     describe('bcgt()', function () {

@@ -539,6 +539,20 @@ describe('Price (PRICE) @regression @tier3', function () {
             assert.ok(String(data['STATUS']).includes('VALUE'));
         });
 
+        it('uses the exact bcmath comparator for VALUE positivity, matching the FEE sibling (2396)', async function () {
+            // Zero in any decimal form is rejected; the smallest representable positive
+            // 8-decimal amount is accepted. The positivity gate now runs through
+            // util.bclte (exact) rather than parseFloat, matching the V1_FEE check.
+            for (const value of ['0', '0.00000000']) {
+                const data = v1Data();
+                await handler.parse(v1Params({ value }), data, null);
+                assert.ok(String(data['STATUS']).includes('VALUE'), 'VALUE ' + value + ' should be rejected');
+            }
+            const okData = v1Data();
+            await handler.parse(v1Params({ value: '0.00000001' }), okData, null);
+            assert.strictEqual(okData['VALIDATION_STATUS'], 'valid', 'smallest positive 8-decimal VALUE should be valid');
+        });
+
         it('accepts boundary FEE values 0, 1 and a legitimate fraction', async function () {
             for (const fee of ['0', '1', '0.05', '0.999999999999999999']) {
                 const data = v1Data();

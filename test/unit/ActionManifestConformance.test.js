@@ -49,6 +49,24 @@ describe('ACTION manifest conformance: indexer indexerHandled set @regression', 
             '. Edit xchain-documentation/protocol/action-manifest.json + re-vendor, or wire src/actions.js.');
     });
 
+    // #2721: the manifest's `aliases` map is expanded to canonical names before any gate
+    // (indexer actionAliases at src/actions.js:786). It was copied into the indexer with no
+    // conformance guard: a sixth alias added on only one side decodes on one and coerces to
+    // UNKNOWN on the other (the same silent-drop / ledger-fork class the dispatch guard above
+    // prevents, reached through the alias door). Bind the indexer alias table to the manifest.
+    it('the indexer actionAliases map exactly equals the manifest aliases map', function () {
+        const src = decomment(fs.readFileSync(path.join(__dirname, '..', '..', 'src', 'actions.js'), 'utf8'));
+        const local = {};
+        for (const m of src.matchAll(/this\.actionAliases\[\s*'([A-Z_]+)'\s*\]\s*=\s*'([A-Z_]+)'/g)) {
+            local[m[1]] = m[2];
+        }
+        const expected = MANIFEST.aliases || {};
+        assert.deepStrictEqual(local, expected,
+            'indexer actionAliases (src/actions.js) drifted from action-manifest.json aliases. ' +
+            'indexer=' + JSON.stringify(local) + ' manifest=' + JSON.stringify(expected) +
+            '. Edit xchain-documentation/protocol/action-manifest.json + re-vendor, or wire src/actions.js.');
+    });
+
     describe('byte-identity to canonical manifest', function () {
         const DOCS = process.env.XCHAIN_DOCS_DIR || path.join(__dirname, '..', '..', '..', 'xchain-documentation');
         const CANON = path.join(DOCS, 'protocol', 'action-manifest.json');
@@ -57,6 +75,40 @@ describe('ACTION manifest conformance: indexer indexerHandled set @regression', 
             assert.strictEqual(fs.readFileSync(VENDORED, 'utf8'), fs.readFileSync(CANON, 'utf8'),
                 'vendored action-manifest.json drifted from canonical; edit ' +
                 'xchain-documentation/protocol/action-manifest.json and re-vendor all copies.');
+        });
+    });
+
+    // #2694: bind the module-private FEE_QUOTE_DENYLIST / FEE_QUOTE_EXEMPT sets to the dispatch
+    // table via the exported classifier, so a name added to either set (or removed from dispatch)
+    // cannot drift silently. Reuses localIndexerSet() as the dispatch-scraper.
+    describe('fee-quote classification conformance @regression', function () {
+        const Actions = require('../../src/actions.js');
+        const denied  = Actions.getFeeQuoteDenylist();
+        const exempt  = Actions.getFeeQuoteExempt();
+
+        it('(a) every dispatched action classifies as exactly one of denied/exempt/quotable', function () {
+            const dispatched = localIndexerSet();
+            for (const a of dispatched) {
+                const c = Actions.classifyFeeQuoteAction(a);
+                assert.ok(['denied', 'exempt', 'quotable'].includes(c),
+                    a + ' classified as unexpected value ' + JSON.stringify(c));
+            }
+        });
+
+        it('(b) denied and exempt sets are disjoint', function () {
+            const overlap = [...denied].filter(a => exempt.has(a));
+            assert.deepStrictEqual(overlap, [], 'denied/exempt overlap: ' + JSON.stringify(overlap));
+        });
+
+        it('(c) neither set contains a name absent from the dispatch table', function () {
+            const dispatched = new Set(localIndexerSet());
+            const orphaned = [...denied, ...exempt].filter(a => !dispatched.has(a));
+            assert.deepStrictEqual(orphaned, [],
+                'deny/exempt names not in the dispatch table: ' + JSON.stringify(orphaned));
+        });
+
+        it('(d) denied set equals exactly {DEPLOY, EXECUTE, XEXEC, BATCH}', function () {
+            assert.deepStrictEqual([...denied].sort(), ['BATCH', 'DEPLOY', 'EXECUTE', 'XEXEC']);
         });
     });
 });

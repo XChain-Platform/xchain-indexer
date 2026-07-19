@@ -95,11 +95,14 @@ describe(' flag-day placeholder guard @regression @tier1', function () {
     // monorepo/aggregator checkout; standalone single-repo CI skips (unless a required-
     // sibling job sets XCHAIN_REQUIRE_SIBLINGS=1, where a missing sibling hard-fails).
     describe('sibling copies carry no placeholder regression', function () {
+        // NOTE (#2759): xchain-documentation/protocol/constants.js is deliberately NOT in
+        // this substring loop. Its `mainnet: 969500` substring is vacuously satisfied by
+        // ARCHIVE_REWARD_ACTIVATION, so a substring check on the docs file could never fail
+        // for the retraction gate. The docs arm is asserted by named export below instead.
         const SIBLING_FILES = [
             '../../../xchain-hub/src/anchor_reward_activation.js',
             '../../../xchain-hub/src/retraction_signing_activation.js',
             '../../../xchain-explorer/src/retraction_signing_activation.js',
-            '../../../xchain-documentation/protocol/constants.js',
         ];
 
         for (const rel of SIBLING_FILES) {
@@ -115,6 +118,63 @@ describe(' flag-day placeholder guard @regression @tier1', function () {
                     p + ' still carries the retired 983000 placeholder');
                 assert.ok(s.includes('mainnet: ' + RATIFIED_BTC_HEIGHT),
                     p + ' must pin the derived mainnet height ' + RATIFIED_BTC_HEIGHT);
+            });
+        }
+
+        // #2759: assert the retraction gate against the canonical inventory by NAMED
+        // EXPORT, not by substring. The vendored copies claim to be byte-equal to the
+        // RETRACTION_SIGNING_ACTIVATION map in xchain-documentation/protocol/constants.js;
+        // this makes that claim capable of failing (a re-anchor that moves the copies while
+        // the docs stay silent now trips CI).
+        it('xchain-documentation/protocol/constants.js pins RETRACTION_SIGNING_ACTIVATION by named export, value-equal to the vendored copy', function () {
+            const p = path.resolve(__dirname, '../../../xchain-documentation/protocol/constants.js');
+            if (!fs.existsSync(p)) {
+                if (process.env.XCHAIN_REQUIRE_SIBLINGS === '1')
+                    assert.fail('required sibling missing: ' + p);
+                return this.skip();
+            }
+            const canon = require(p);
+            assert.ok(canon.RETRACTION_SIGNING_ACTIVATION && typeof canon.RETRACTION_SIGNING_ACTIVATION === 'object',
+                'constants.js must export a RETRACTION_SIGNING_ACTIVATION map (the canonical authority for the three vendored copies)');
+            assert.strictEqual(canon.RETRACTION_SIGNING_ACTIVATION.mainnet, RATIFIED_BTC_HEIGHT,
+                'canonical retraction mainnet height must be the ratified ' + RATIFIED_BTC_HEIGHT);
+            const local = require(path.join(SRC, 'retraction_signing_activation.js')).RETRACTION_SIGNING_ACTIVATION;
+            assert.deepStrictEqual(local, canon.RETRACTION_SIGNING_ACTIVATION,
+                'the vendored retraction_signing_activation.js map drifted from the canonical constants.js map');
+        });
+    });
+
+    // #2734: retraction_signing_activation.js is a fork-relevant flag-day twin that
+    // exists in three byte-identical copies (hub, indexer, explorer). It decides
+    // whether a mirror REFUSES an unsigned quorum-class retraction, so a one-sided edit
+    // (a comparator flip >= -> >, a testnet/regtest value change, an added second map,
+    // or any body rewrite) would let the hub sign under one era rule while a mirror
+    // enforces another - with no CI signal. The substring checks above only prove the
+    // literal `mainnet: 969500` appears SOMEWHERE in each copy; they pass through all of
+    // those drifts. Assert full-file byte-identity of the hub and explorer copies against
+    // the local indexer copy (all three are byte-identical today, headers included, so a
+    // plain string compare is correct). Same skip machinery as the sibling sweep above.
+    describe('retraction_signing_activation.js is byte-identical across hub/indexer/explorer', function () {
+        const LOCAL = path.join(SRC, 'retraction_signing_activation.js');
+        const SIBLING_TWINS = [
+            '../../../xchain-hub/src/retraction_signing_activation.js',
+            '../../../xchain-explorer/src/retraction_signing_activation.js',
+        ];
+        for (const rel of SIBLING_TWINS) {
+            it(rel.replace(/^(\.\.\/)+/, '') + ' is byte-identical to the indexer copy', function () {
+                const p = path.resolve(__dirname, rel);
+                if (!fs.existsSync(p)) {
+                    if (process.env.XCHAIN_REQUIRE_SIBLINGS === '1')
+                        assert.fail('required sibling missing: ' + p);
+                    return this.skip();
+                }
+                const local   = fs.readFileSync(LOCAL, 'utf8');
+                const sibling = fs.readFileSync(p, 'utf8');
+                assert.strictEqual(sibling, local,
+                    p + ' has diverged from the indexer copy of retraction_signing_activation.js. ' +
+                    'All three copies (hub, indexer, explorer) must stay byte-identical; a one-sided ' +
+                    'edit to this flag-day twin forks retraction acceptance between the hub and its ' +
+                    'mirrors. Reconcile the three copies.');
             });
         }
     });

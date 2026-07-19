@@ -17,7 +17,9 @@ CREATE TABLE events (
     id   BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
     time DATETIME,
     code VARCHAR(50),
-    data VARCHAR(250)
+    data VARCHAR(250),
+    witness_time DATETIME,           -- #2735: REORG marker witness - the decoder event's `time` when recorded; NULL on legacy markers / non-REORG rows
+    witness_hash CHAR(64)            -- #2735: REORG marker witness - sha256 of the decoder event's data payload when recorded; NULL on legacy markers / non-REORG rows
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
 CREATE INDEX code_id ON events (code, id);

@@ -118,6 +118,14 @@ function selectAnchorRow(rows, filter) {
 // "not anchored yet" (abstain) apart from a positively-detected forge: the
 // checkpoint IS anchored, but not by the txid that was announced. Defaults to
 // !!row, which keeps a filterless caller's response semantics unchanged.
+// Coerce a stored version column to a number, normalizing null/undefined/NaN
+// to null so a missing version never surfaces as NaN in the response.
+function normalizeVersion(v) {
+    if (v === null || v === undefined) return null;
+    let n = Number(v);
+    return Number.isFinite(n) ? n : null;
+}
+
 function buildAnchorActionResponse(config, latest, row, extra) {
     let coin    = config['COIN'];
     let network = config['NETWORK'];
@@ -148,8 +156,10 @@ function buildAnchorActionResponse(config, latest, row, extra) {
         contract_hash:      row.contract_hash,
         checkpoint_seq:     Number(row.checkpoint_seq),
         snapshot_block:     (row.snapshot_block != null) ? Number(row.snapshot_block) : null,
-        state_root:         row.state_root || null,
-        block_merkle_root:  row.block_merkle_root || null,
+        state_root:           row.state_root || null,
+        state_root_version:   row.state_root ? normalizeVersion(row.state_root_version) : null,
+        block_merkle_root:    row.block_merkle_root || null,
+        block_merkle_version: row.block_merkle_root ? normalizeVersion(row.block_merkle_version) : null,
         block_index_doge:   dogeBlock,
         latest_block_index: latest,
         confirmations:      confirmations

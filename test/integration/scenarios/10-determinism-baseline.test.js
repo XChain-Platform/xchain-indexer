@@ -143,10 +143,20 @@ describe('Indexer cross-node determinism baseline @regression @tier1', function 
     it('hash chain matches the committed baseline (no consensus drift)', function () {
         const digest = chainDigest(firstChain);
 
-        if (REGEN || !fs.existsSync(BASELINE_PATH)) {
+        // Fail-closed (2436): regenerate ONLY under the explicit flag. Writing a fresh
+        // baseline just because the committed file is absent makes every assertion below
+        // compare the digest against one minted from the same run, passing tautologically;
+        // if INDEXER_STATE_BASELINE.json is ever lost (bad merge, over-broad clean glob,
+        // packaging that drops JSON), the consensus-drift guard would silently self-heal to
+        // guaranteed-green. A missing baseline without the flag must redden, not regenerate.
+        if (REGEN) {
             fs.writeFileSync(BASELINE_PATH,
                 JSON.stringify({ digest, chain: firstChain }, null, 2) + '\n');
-            console.log(`[indexer-determinism] wrote baseline (${REGEN ? 'REGEN' : 'file absent'}): ${BASELINE_PATH}`);
+            console.log(`[indexer-determinism] wrote baseline (REGEN): ${BASELINE_PATH}`);
+        } else if (!fs.existsSync(BASELINE_PATH)) {
+            assert.fail('committed indexer determinism baseline missing at ' + BASELINE_PATH +
+                '; regenerate deliberately with REGEN_INDEXER_STATE_BASELINE=1 and review the diff. ' +
+                'The guard fails closed rather than self-healing to a tautological green.');
         }
 
         const baseline = JSON.parse(fs.readFileSync(BASELINE_PATH, 'utf8'));

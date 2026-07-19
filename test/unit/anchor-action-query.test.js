@@ -119,6 +119,45 @@ describe('anchor-action-query: buildAnchorActionResponse()', function () {
         assert.strictEqual(v3.state_root, 'e'.repeat(64));
         assert.strictEqual(v3.block_merkle_root, 'f'.repeat(64));
     });
+
+    // ── state_root_version / block_merkle_version (item 2750) ────────────────
+    // ANCHOR_ACTIONS_SQL selects a.state_root_version and a.block_merkle_version
+    // alongside the roots; the response must carry both version discriminators,
+    // and a null root must never carry a version (a null root has no version to
+    // discriminate, so an ambient value there would be a phantom signal).
+
+    it('carries the stored version fields alongside each root when both are present', function () {
+        let r = buildAnchorActionResponse(CONFIG, 200, anchorRow({
+            state_root: 'e'.repeat(64), state_root_version: 3,
+            block_merkle_root: 'f'.repeat(64), block_merkle_version: 3
+        }));
+        assert.strictEqual(r.state_root, 'e'.repeat(64));
+        assert.strictEqual(r.state_root_version, 3);
+        assert.strictEqual(r.block_merkle_root, 'f'.repeat(64));
+        assert.strictEqual(r.block_merkle_version, 3);
+    });
+
+    it('reports both version fields null when the corresponding root is null', function () {
+        let r = buildAnchorActionResponse(CONFIG, 200, anchorRow({
+            state_root: null, state_root_version: 3,
+            block_merkle_root: null, block_merkle_version: 3
+        }));
+        assert.strictEqual(r.state_root, null);
+        assert.strictEqual(r.state_root_version, null);
+        assert.strictEqual(r.block_merkle_root, null);
+        assert.strictEqual(r.block_merkle_version, null);
+    });
+
+    it('reports version null when the root is present but the stored version column is null (never NaN)', function () {
+        let r = buildAnchorActionResponse(CONFIG, 200, anchorRow({
+            state_root: 'e'.repeat(64), state_root_version: null,
+            block_merkle_root: 'f'.repeat(64), block_merkle_version: undefined
+        }));
+        assert.strictEqual(r.state_root, 'e'.repeat(64));
+        assert.strictEqual(r.state_root_version, null);
+        assert.strictEqual(r.block_merkle_root, 'f'.repeat(64));
+        assert.strictEqual(r.block_merkle_version, null);
+    });
 });
 
 // ── txid / version narrowing (XANC-ELECTED-FORGE-1) ──────────────────────────

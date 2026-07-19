@@ -27,6 +27,7 @@
 // ms). Async only for the hub_push_queue stats fetch; all other fields are
 // derived synchronously from already-resolved values.
 const { computeArmedMapFingerprint } = require('./armedMapFingerprint');
+const { hubConfigStaleness } = require('./XChainIndexer');
 
 async function buildHealthResponse({ indexer, indexerRunning, indexerError, lastIndexedBlock, now, reorgStats }){
     let decoderDbCircuit = indexer.decoderDb ? indexer.decoderDb.circuitState : null;
@@ -41,9 +42,11 @@ async function buildHealthResponse({ indexer, indexerRunning, indexerError, last
     // the per-chain local config. This age reflects only tunable/display params
     // the overlay is permitted to apply.)
     let lastHubConfigFetchAt = indexer.lastHubConfigFetchAt || null;
-    let hubConfigAgeSeconds  = (lastHubConfigFetchAt != null)
-                                ? Math.floor((now - lastHubConfigFetchAt) / 1000)
-                                : null;
+    // Age + explicit staleness (past HUB_CONFIG_STALENESS_LIMIT_MS = 3 poll intervals), computed
+    // by the one shared helper so health and the /health api agree on the threshold.
+    let hubConfig            = hubConfigStaleness(lastHubConfigFetchAt, now);
+    let hubConfigAgeSeconds  = hubConfig.ageSeconds;
+    let hubConfigStale       = hubConfig.stale;
 
     // Pending and permanently-failed counts from the hub push retry queue.
     // null when no hub is configured. A non-zero `failed` count means price/oracle
@@ -82,9 +85,16 @@ async function buildHealthResponse({ indexer, indexerRunning, indexerError, last
         // from a tripped DB circuit breaker (decoderDbCircuit/indexerDbCircuit
         // === 'open') and a healthy catch-up, all of which otherwise present
         // identically as a growing lag.
-        stallReason:      indexer.stallReason || null,
+        // #2736: when the decoder has halted (durable REORG_HALT marker), attribute the stall to
+        // that rather than reporting ordinary lag/null. A halted decoder cannot advance, so the
+        // indexer's lag is a downstream symptom, not an indexer-side stall.
+        stallReason:      indexer.decoderReorgHalted
+                            ? (indexer.stallReason || 'decoder_reorg_halt: decoder wrote a REORG_HALT marker; full decoder resync required')
+                            : (indexer.stallReason || null),
+        decoderReorgHalted: !!indexer.decoderReorgHalted,
         lastHubConfigFetchAt: lastHubConfigFetchAt,
         hubConfigAgeSeconds:  hubConfigAgeSeconds,
+        hubConfigStale:       hubConfigStale,
         hub_push_queue:   hubPushQueue,
         action_counters:  actionCounters,
         // Reorg/rollback observability (#1813): total processed reorgs and the block

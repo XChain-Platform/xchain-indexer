@@ -362,7 +362,7 @@ class Price {
             error = 'invalid: FIAT (unsupported)';
 
         // Validate VALUE (positive 8-decimal string)
-        if(!error && (!data['V1_VALUE'] || !/^[0-9]+(\.[0-9]{1,8})?$/.test(data['V1_VALUE']) || parseFloat(data['V1_VALUE']) <= 0))
+        if(!error && (!data['V1_VALUE'] || !/^[0-9]+(\.[0-9]{1,8})?$/.test(data['V1_VALUE']) || this.util.bclte(data['V1_VALUE'], '0')))
             error = 'invalid: VALUE (format)';
 
         // Validate FEE (decimal between 0 and 1, optional). The regex caps precision

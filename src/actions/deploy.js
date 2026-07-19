@@ -143,7 +143,11 @@ class Deploy {
         // (the SDK compacts this field by default). The 'BURN' sentinel and null are
         // left untouched; a non-resolvable/malformed reference is left as-is. This
         // also keeps a malformed id off the slash-credit FK path. See resolveAddressRef.
-        if(!error && hasStaking && !this.util.isNull(data['SLASH_DESTINATION']) && data['SLASH_DESTINATION'] !== 'BURN')
+        // `slashDestExplicit` marks a user-supplied, non-BURN destination: only those
+        // get the isCryptoAddress format reject below (the BURN sentinel and the
+        // default-to-BURN path resolve to the trusted configured burn address).
+        let slashDestExplicit = hasStaking && !this.util.isNull(data['SLASH_DESTINATION']) && data['SLASH_DESTINATION'] !== 'BURN';
+        if(!error && slashDestExplicit)
             data['SLASH_DESTINATION'] = await this.indexerDb.resolveAddressRef(data['SLASH_DESTINATION']);
 
         // Validate v1/v3 staking config (both optional, but pairing rules apply)
@@ -194,6 +198,21 @@ class Deploy {
                 data['SLASH_DESTINATION'] = null;
             }
         }
+
+        // Pkg6 / dede7788 (gated DEPLOY_SLASH_DEST_ADDRESS_VALID): an EXPLICIT SLASH_DESTINATION
+        // must resolve to a well-formed chain address. resolveAddressRef leaves an unresolvable
+        // caret id or a malformed literal UNCHANGED, and isCryptoAddress is false for both, so
+        // without this guard a bogus destination is interned into the IMMUTABLE
+        // contracts.slash_destination and every later slash routes stake to an unspendable
+        // address (permanent money loss). Runs after the pairing/cooldown checks so the existing
+        // 'requires COOLDOWN_BLOCKS' verdict still wins for a dest-without-cooldown DEPLOY, and
+        // only for a still-present explicit destination (BURN paths already resolved to the
+        // trusted configured address). Gated because a reject here changes a historic 'valid'
+        // acceptance verdict and the contract_hash; see the flag-day note in protocol_changes.js.
+        if(!error && slashDestExplicit && !this.util.isNull(data['SLASH_DESTINATION'])
+            && await this.actions.protocolChanges.isEnabled('DEPLOY_SLASH_DEST_ADDRESS_VALID', data['BLOCK_INDEX'])
+            && !this.util.isCryptoAddress(data['SLASH_DESTINATION']))
+            error = 'invalid: SLASH_DESTINATION (invalid address)';
 
         // Convert NUMBER fields from string value to number value
         if(!error)
@@ -618,8 +637,9 @@ class Deploy {
                 // would carry: the new contract is the emitter, the DEPLOY's own
                 // action_index is the executing action (parent for CALL_DEPTH), and the
                 // deployer pays fees. A constructor is a root execution, so its call-path
-                // is '' (emitted ATTEST request_ids derive over (txHash:'':contractIndex:
-                // emissionIndex), matching the VM's constructor run at callPath '').
+                // is '' (emitted ATTEST request_ids derive over
+                // (txHash:rootActionIndex:callPath:contractIndex:emissionIndex) with
+                // callPath '', matching the VM's constructor run at callPath '').
                 let emissionContext = {
                     CONTRACT_ACTION_INDEX: data['ACTION_INDEX'],
                     ACTION_INDEX:          data['ACTION_INDEX'],

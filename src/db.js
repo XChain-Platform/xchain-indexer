@@ -174,6 +174,20 @@ class Database {
         // to one decoder-DB lookup per block.
         this._blockTimeCache = { block_index: null, block_time: null };
 
+        // Early-decide tally watermark (). processVoteFinalizations step 2 re-tallies
+        // every armed poll from full ledger/vote/delegation history on EVERY block, uncapped. A
+        // non-time_weighted poll's tally is a pure function of {the tick's credits/debits, the
+        // poll's votes, the tick's delegations, the (immutable) poll definition}; if none of
+        // those gained a row since the last block we tallied the poll, the tally - and therefore
+        // the early-decide decision - is byte-identical, and it already did NOT fire (else the
+        // poll would be terminal and no longer armed). So we cache, per armed poll, a fingerprint
+        // of its input tables' MAX(action_index); a matching fingerprint next block lets us skip
+        // the full re-tally. Reorg-invalidated (clearPollTallyWatermark, wired into rollback.js)
+        // because a reorg can delete/re-add ledger, vote, and delegation rows at or above the
+        // reorg block and reuse action_index values, which would make a stale fingerprint match
+        // spuriously. Empty on a fresh process, so the first sight of each poll always tallies.
+        this._pollTallyWatermark = new Map();
+
         // Recovery reward apply-hook gate (F1a id-determinism fix). recovery.js stages
         // archived rewards in recovery_pending_rewards keyed by raw source-address STRING
         // (no index id assigned), and createAddress materializes them into validator_rewards
@@ -380,8 +394,13 @@ class Database {
                             // rebaselined here so fleets that recorded the old checksum heal
                             // in place instead of failing every operator migrate run forever.
                             // Both hashes are pinned, so any OTHER edit still trips the guard.
-                            const rebase = Database.MIGRATION_CHECKSUM_REBASELINES[file];
-                            if(rebase && appliedByName.get(file) === rebase.from && checksum === rebase.to){
+                            // `from` may be a single hash or a list: the same reviewed edit
+                            // can supersede several historical file revisions, and each DB
+                            // recorded whichever revision it applied first. Normalize to a
+                            // list so every recorded predecessor heals to the current hash.
+                            const rebase   = Database.MIGRATION_CHECKSUM_REBASELINES[file];
+                            const fromList = rebase ? [].concat(rebase.from) : [];
+                            if(rebase && fromList.includes(appliedByName.get(file)) && checksum === rebase.to){
                                 await conn.query('UPDATE schema_migrations SET checksum = ? WHERE name = ?', [checksum, file]);
                                 console.log('runMigrations: rebaselined checksum for ' + file + ' (reviewed retag, executable SQL unchanged).');
                                 continue;
@@ -471,12 +490,26 @@ class Database {
     // Read a migration file's `-- xchain:migration mode=auto|manual` header tag.
     // Defaults to 'manual' when absent (conservative - unknown DDL never auto-runs).
     _migrationMode(raw){
-        // The mode tag is a header directive: only the leading header window may
-        // carry it. Scanning the whole file (the old /m behavior) let a `mode=auto`
-        // token buried in body prose or a data literal silently arm auto-apply for a
-        // destructive migration. Restrict the match to the first 10 lines.
-        const header = String(raw).split('\n').slice(0, 10).join('\n');
-        const m = header.match(/^\s*--\s*xchain:migration\b[^\n]*\bmode\s*=\s*(auto|manual)\b/im);
+        // The mode tag is a leading-prologue directive: it may only sit in the run of
+        // blank and `--`-comment lines BEFORE the first SQL statement. Scanning the
+        // whole file (the old /m behavior) let a `mode=auto` token buried in body prose
+        // or a data literal silently arm auto-apply for a destructive migration. A fixed
+        // first-N-lines window (the old slice(0,10)) fixed that but was too tight: the
+        // standard multi-line license banner pushes the tag past line 10, so every
+        // banner-prefixed `mode=auto` migration was silently read as the `manual`
+        // default and never auto-applied. Anchoring to the comment prologue keeps the
+        // body-buried protection (the scan stops at the first non-comment, non-blank
+        // line, so no data literal or trailing prose can be seen) while accommodating
+        // any length of leading comment banner. Kept byte-for-byte in step with the
+        // sibling runner at xchain-decoder/src/db.js:_migrationMode.
+        const lines    = String(raw).split('\n');
+        const prologue = [];
+        for(const line of lines){
+            const trimmed = line.trim();
+            if(trimmed === '' || trimmed.startsWith('--')){ prologue.push(line); continue; }
+            break;   // first non-blank, non-comment line ends the prologue
+        }
+        const m = prologue.join('\n').match(/^\s*--\s*xchain:migration\b[^\n]*\bmode\s*=\s*(auto|manual)\b/im);
         return m ? m[1].toLowerCase() : 'manual';
     }
 
@@ -693,6 +726,20 @@ class Database {
     //      would block the ALTER).
     // Doesn't touch types or defaults of existing columns. Index reconciliation
     // is handled separately by reconcileTableIndexes(). Each applied ALTER is loudly logged.
+    //
+    // Byte-identity scope boundary (#2456): COLUMN position IS part of the
+    // byte-identical SHOW CREATE TABLE goal - it affects on-disk row layout, which
+    // is why missing columns are placed with AFTER/FIRST above and why the
+    // 2026-07-16-reposition-state-key-bin migration exists. KEY / index declaration
+    // ORDER is explicitly OUT of scope: MySQL/MariaDB print KEY lines in internal
+    // index-creation order and attach no semantics to it, and a DROP+CREATE index
+    // migration necessarily re-appends the rebuilt index at the tail, so a migrated
+    // DB and a fresh install legitimately differ in KEY ordering for attests,
+    // votes, and index_addresses. This is cosmetic and has no consensus effect
+    // (consensus hashes ledger/state data, never SHOW CREATE TABLE text). The
+    // fresh-vs-migrated schema-convergence comparator should sort KEY lines before
+    // comparing; do NOT reorder the CREATE INDEX statements in the definition files
+    // to chase it (that would only converge installs bootstrapped after the edit).
     async alterTableForDrift(file, db){
         const dir      = path.join(__dirname, 'sql');
         const data     = fs.readFileSync(dir + '/' + file, "utf8");
@@ -839,7 +886,26 @@ class Database {
                     }
                     continue;                                               // already satisfied
                 }
-                if(liveNames.has(idx.name.toLowerCase())) continue;          // name taken by a different index - leave alone
+                if(liveNames.has(idx.name.toLowerCase())){
+                    // Name taken by a DIFFERENT live index (different column set, or same
+                    // name but not unique when we declare UNIQUE). We must never DROP an
+                    // index we did not create, so we leave it alone - but the declared
+                    // index is silently never applied, so the table can permanently run
+                    // without the declared uniqueness (degrading every
+                    // INSERT ... ON DUPLICATE KEY UPDATE to a plain INSERT) or without the
+                    // widened column set. Detect-and-warn so this drift is auditable
+                    // instead of invisible, matching the prefix-width branch above (#2261)
+                    // and the auto-dedup branch below (#2702).
+                    let liveInfo = null;
+                    for(const [nm, info] of byName){ if(nm.toLowerCase() === idx.name.toLowerCase()){ liveInfo = info; break; } }
+                    const liveDesc = liveInfo
+                        ? (liveInfo.unique ? 'UNIQUE' : 'non-unique') + ' on (' + liveInfo.cols.join(',') + ')'
+                        : 'a differently-defined index';
+                    console.warn('Schema drift on ' + table + ': declared ' + (idx.unique ? 'UNIQUE ' : '') +
+                        'index ' + idx.name + ' on (' + key + ') cannot be applied - the name is already held by ' + liveDesc +
+                        '. Not auto-healed (never DROP an index we did not create); apply a manual migration via node src/migrate.js to converge.');
+                    continue;
+                }
                 const colList = idx.columns.map(c => '`' + c + '`').join(', ');
 
                 if(!idx.unique){
@@ -1376,7 +1442,27 @@ class Database {
     // orphaned rows below the rollback point.
     // Processing the full set (and rolling back to the minimum block across it) closes that
     // gap. afterId is the decoder event id from getLastProcessedReorgId (null = none yet).
-    async getReorgsSince(afterId){
+    // Stable hash of a decoder REORG event's `data` payload, used as the reorg-marker witness
+    // (#2735). sha256 hex; null/undefined data hashes the empty string so a missing payload has a
+    // deterministic witness rather than throwing.
+    _hashReorgData(data){
+        const crypto = require('crypto');
+        return crypto.createHash('sha256').update(String(data == null ? '' : data), 'utf8').digest('hex');
+    }
+
+    // Build the canonical RE-1 (reorg cursor incoherent) error. One shared shape + operator
+    // recovery guidance for every incoherence cause (over-cursor, missing cursor row, witness
+    // mismatch), so the message never drifts. `detail` names the specific cause.
+    _reorgCursorIncoherentError(detail){
+        return new Error('Reorg cursor incoherent (RE-1): ' + detail + ' The decoder DB was likely ' +
+            'rebuilt or restored out-of-band; rollback detection would be silently disabled. ' +
+            'Recovery: rebuild decoder+indexer jointly (clean reindex), or restore a matching decoder DB.');
+    }
+
+    // `cursorWitness` (optional #2735): { time, hash } captured for the cursor's decoder REORG
+    // event when the marker was recorded. Non-null enables the additive under-cursor check;
+    // null (legacy marker) falls back to the pre-existing one-directional over-cursor guard.
+    async getReorgsSince(afterId, cursorWitness){
         let query, args;
         if(afterId === null || afterId === undefined){
             query = `SELECT id, data FROM events WHERE code='REORG' ORDER BY id ASC`;
@@ -1384,6 +1470,29 @@ class Database {
         } else {
             query = `SELECT id, data FROM events WHERE code='REORG' AND id > ? ORDER BY id ASC`;
             args  = [Number(afterId)];
+        }
+        // #2735 (witness the cursor row): closes the UNDER-cursor silent skip that the
+        // length===0 && maxId<afterId guard below cannot see. BEFORE the id>afterId select,
+        // confirm the exact decoder REORG event the cursor points at still exists; and, for a
+        // marker recorded WITH a witness, that its live time + payload hash still match what we
+        // recorded. A rebuilt decoder whose fresh id space overtook a stranded cursor returns
+        // non-empty id>afterId results, so without this it would silently drop new-incarnation
+        // REORG events at/below the cursor. Additive: a legacy (null-witness) marker keeps only
+        // the old over-cursor guard so upgrades are unaffected.
+        if(afterId !== null && afterId !== undefined){
+            let witnessRows = await this.doQueryStrict(
+                `SELECT time, data FROM events WHERE id = ? AND code='REORG'`, [Number(afterId)]);
+            if(witnessRows.length === 0)
+                throw this._reorgCursorIncoherentError('indexer cursor decoder_event_id=' + afterId +
+                    ' points at no live decoder REORG event (the cursor row is gone).');
+            if(cursorWitness && cursorWitness.time != null && cursorWitness.hash != null){
+                let live     = witnessRows[0];
+                let liveHash = this._hashReorgData(live.data);
+                if(String(live.time) !== String(cursorWitness.time) || liveHash !== String(cursorWitness.hash))
+                    throw this._reorgCursorIncoherentError('indexer cursor decoder_event_id=' + afterId +
+                        ' witness mismatch (the live decoder REORG event at that id has a different ' +
+                        'time/payload than when it was recorded).');
+            }
         }
         // doQueryStrict (not doQuery): this runs on decoderDb, which never opens a
         // transaction, so doQuery would collapse any read fault to [] - indistinguishable
@@ -1403,10 +1512,8 @@ class Database {
             let maxRow = await this.doQueryStrict(`SELECT MAX(id) AS max_id FROM events WHERE code='REORG'`);
             let maxId  = (maxRow.length > 0) ? maxRow[0]["max_id"] : null;
             if(maxId === null || Number(maxId) < Number(afterId)){
-                throw new Error('Reorg cursor incoherent (RE-1): indexer cursor decoder_event_id=' + afterId +
-                    ' exceeds the decoder\'s newest REORG event id (' + maxId + '). The decoder DB was likely ' +
-                    'rebuilt or restored out-of-band; rollback detection would be silently disabled. ' +
-                    'Recovery: rebuild decoder+indexer jointly (clean reindex), or restore a matching decoder DB.');
+                throw this._reorgCursorIncoherentError('indexer cursor decoder_event_id=' + afterId +
+                    ' exceeds the decoder\'s newest REORG event id (' + maxId + ').');
             }
         }
         let reorgs = [];
@@ -1455,6 +1562,20 @@ class Database {
         return reorgs;
     }
 
+    // #2736: probe for a durable REORG_HALT marker the decoder writes when it halts (e.g. a
+    // reorg deeper than it can safely rewind). getReorgsSince only ever selects code='REORG',
+    // so without this a halted decoder is invisible to the indexer and merely presents as idle
+    // or lagging. Runs on decoderDb with the SAME throwing read contract as getReorgsSince
+    // (doQueryStrict): a swallowed read fault must not masquerade as "not halted". Returns
+    // { halted:boolean, payload:(string|null) } - the payload is the marker's `data` column
+    // (operator context: why the decoder halted), null when not halted or absent.
+    async isReorgHalted(){
+        let rows = await this.doQueryStrict(
+            `SELECT data FROM events WHERE code='REORG_HALT' ORDER BY id DESC LIMIT 1`);
+        if(rows.length === 0) return { halted: false, payload: null };
+        return { halted: true, payload: (rows[0].data != null) ? String(rows[0].data) : null };
+    }
+
     // Get the decoder event id of the most-recent reorg the indexer has already recorded,
     // or null if none. getReorgsSince() selects every decoder reorg with an id greater than
     // this value - an IDENTITY check, not a block-height compare.
@@ -1493,6 +1614,38 @@ class Database {
         return null;
     }
 
+    // #2735: read back the stored witness ({ time, hash }) for the CURRENT reorg cursor - the
+    // newest new-format marker, the same one getLastProcessedReorgId returns an id for. Returns
+    // null when that marker predates the witness columns (legacy), so getReorgsSince falls back
+    // to the one-directional over-cursor guard. Runs on the indexer marker DB (doQueryStrict
+    // symmetry with getLastProcessedReorgId).
+    async getLastProcessedReorgWitness(){
+        let results = await this.doQueryStrict(
+            `SELECT data, witness_time, witness_hash FROM events WHERE code='REORG' ORDER BY id DESC LIMIT 200`);
+        for(let row of results){
+            try {
+                let parsed = JSON.parse(row["data"]);
+                if(parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed) && parsed.decoder_event_id !== undefined){
+                    if(row.witness_time != null && row.witness_hash != null)
+                        return { time: row.witness_time, hash: String(row.witness_hash) };
+                    return null; // newest new-format marker predates the witness columns
+                }
+            } catch(e){ /* legacy bare-number row; keep scanning */ }
+        }
+        return null;
+    }
+
+    // #2735: capture the witness ({ time, hash }) for a decoder REORG event by id, so the caller
+    // can persist it via createReorg. Runs on decoderDb (SELECT time, data ... code='REORG').
+    // Returns null when the event is absent. doQueryStrict for the throwing read contract shared
+    // with getReorgsSince.
+    async getReorgEventWitness(decoder_event_id){
+        let rows = await this.doQueryStrict(
+            `SELECT time, data FROM events WHERE id = ? AND code='REORG'`, [Number(decoder_event_id)]);
+        if(rows.length === 0) return null;
+        return { time: rows[0].time, hash: this._hashReorgData(rows[0].data) };
+    }
+
     // Startup probe: warn loudly if the indexer has REORG markers but NONE carry a decoder_event_id
     // (all legacy format). On a synced node that means the first reorg detection after upgrade would
     // replay the decoder's entire reorg history (REORG-4). Surfaced, not auto-fixed, because there is
@@ -1522,10 +1675,14 @@ class Database {
     // Handle creating a record of a block reorg. Persists the decoder event id alongside the
     // block index so reorgs can be matched by identity (see getLastProcessedReorgId), not by
     // block-height magnitude - which silently misses every reorg after the first.
-    async createReorg(block_index, decoder_event_id){
+    // `witnessTime`/`witnessHash` (optional #2735) witness the decoder REORG event this marker
+    // records: its `time` and a sha256 of its `data` payload, captured so getReorgsSince can
+    // later detect an out-of-band decoder rebuild that reused this cursor id for a different
+    // event. NULL when the caller does not supply them (legacy behavior / back-compat).
+    async createReorg(block_index, decoder_event_id, witnessTime, witnessHash){
         let payload = JSON.stringify({ block_index: Number(block_index), decoder_event_id: Number(decoder_event_id) });
-        let query = `INSERT INTO events (time, code, data) values (now(), 'REORG', ?)`;
-        let args  = [payload];
+        let query = `INSERT INTO events (time, code, data, witness_time, witness_hash) values (now(), 'REORG', ?, ?, ?)`;
+        let args  = [payload, (witnessTime != null ? witnessTime : null), (witnessHash != null ? String(witnessHash) : null)];
         // doQueryStrict (not doQuery): this marker advances the processed-reorg cursor and runs
         // outside any transaction, where doQuery would swallow an INSERT failure into []. A
         // swallowed failure leaves the cursor un-advanced while the loop replays past minReorgBlock,
@@ -1683,6 +1840,53 @@ class Database {
     // re-reads the new chain's block_time. Mirrors the decoder's per-height reorg clear.
     clearBlockTimeCache(){
         this._blockTimeCache = { block_index: null, block_time: null };
+    }
+
+    // Early-decide watermark helpers (). See the _pollTallyWatermark comment in the
+    // constructor and processVoteFinalizations step 2. The fingerprint is the highest
+    // action_index present in each of the poll's three tally-input tables (votes for the poll,
+    // delegations for the tick, and the tick's credits/debits ledger). All three are append-only
+    // during forward processing, so a strictly-higher MAX means a new input row landed; an
+    // unchanged tuple proves no input changed and the tally is byte-identical. action_index (not
+    // block_index) is used so the fingerprint moves even for multiple input rows within one block.
+    async getPollTallyInputWatermark(pollIndex, tick_id){
+        let rows = await this.doQuery(
+            `SELECT
+                (SELECT COALESCE(MAX(action_index),0) FROM votes WHERE poll_index=?)            AS v,
+                (SELECT COALESCE(MAX(action_index),0) FROM vote_delegations WHERE tick_id=?)     AS d,
+                (SELECT COALESCE(MAX(action_index),0) FROM (
+                    SELECT action_index FROM credits WHERE tick_id=?
+                    UNION ALL
+                    SELECT action_index FROM debits  WHERE tick_id=?
+                 ) led)                                                                          AS l`,
+            [pollIndex, tick_id, tick_id, tick_id]);
+        let r = (rows && rows[0]) ? rows[0] : {};
+        return String(r.v || 0) + ':' + String(r.d || 0) + ':' + String(r.l || 0);
+    }
+
+    // True when the poll's cached fingerprint equals `fingerprint` (no input changed since the
+    // last tally, so the full re-tally can be skipped). Missing entry (first sight this process,
+    // or just-cleared by a reorg) never matches, forcing a full tally.
+    pollTallyWatermarkMatches(pollIndex, fingerprint){
+        return this._pollTallyWatermark.get(Number(pollIndex)) === fingerprint;
+    }
+
+    // Record the fingerprint at which the poll was last tallied WITHOUT early-deciding.
+    setPollTallyWatermark(pollIndex, fingerprint){
+        this._pollTallyWatermark.set(Number(pollIndex), fingerprint);
+    }
+
+    // Drop a single poll's watermark (called once it finalizes so a reused action_index can never
+    // rehydrate a stale hit).
+    clearPollTallyWatermarkEntry(pollIndex){
+        this._pollTallyWatermark.delete(Number(pollIndex));
+    }
+
+    // Drop ALL cached poll watermarks. Called from rollback.js after a reorg commits, alongside
+    // clearBlockTimeCache: a reorg can delete and re-add ledger/vote/delegation rows at or above
+    // the reorg block (and reuse action_index values), so every cached fingerprint is suspect.
+    clearPollTallyWatermark(){
+        this._pollTallyWatermark = new Map();
     }
 
     // Get block hashes using credits/debits/actions table data and previous hash
@@ -5464,8 +5668,12 @@ class Database {
     // end_block finalizes via the time path). The sweep evaluates each one's
     // provisional tally at the current block to decide whether to close early.
     async getArmedPolls(block_index){
+        // tick_id / weight_mode / decide_threshold are returned alongside action_index so the
+        // sweep can compute the tally watermark and evaluate the threshold without a second
+        // getPoll() round-trip per armed poll per block (). These are immutable poll
+        // definition columns, so carrying them here is equivalent to the prior separate fetch.
         return await this.doQuery(
-            `SELECT action_index FROM polls
+            `SELECT action_index, tick_id, weight_mode, decide_threshold FROM polls
               WHERE poll_status='open'
                 AND decide_threshold IS NOT NULL AND decide_threshold <> ''
                 AND end_block > ?
@@ -7123,6 +7331,9 @@ class Database {
         let placeholders = ids.map(() => '?').join(',');
         let settled = await this.doQuery(
             `SELECT match_id FROM cross_chain_settlements WHERE match_id IN (${placeholders})`, ids);
+        // match_id is stored and compared verbatim on both sides; do not add normalization to
+        // only one side (unlike call_id, the match_id is never lowercased on write, so a one-
+        // sided .toLowerCase() here would DESYNC the compare rather than fix it).
         let settledSet = new Set(settled.map(r => r.match_id));
         return matches.filter(m => !settledSet.has(m.match_id));
     }
@@ -7239,14 +7450,47 @@ class Database {
         let placeholders = ids.map(() => '?').join(',');
         let executed = await this.doQuery(
             `SELECT call_id FROM cross_chain_call_executions WHERE call_id IN (${placeholders})`, ids);
-        let executedSet = new Set(executed.map(r => r.call_id));
-        return calls.filter(c => !executedSet.has(c.call_id)).slice(0, Number(limit) || 25);
+        // Local writes lowercase every call_id; a hub-mirrored call_id may arrive uppercase. The
+        // case-insensitive collation lets the SQL prefilter match, but the executions row comes
+        // back lowercase, so an unnormalized Set.has() would miss an uppercase mirror call_id and
+        // re-dispatch a call already executed. Compare both sides lowercased. No-op for all-
+        // lowercase data (no consensus change on the current chain).
+        let executedSet = new Set(executed.map(r => String(r.call_id).toLowerCase()));
+        return calls.filter(c => !executedSet.has(String(c.call_id).toLowerCase())).slice(0, Number(limit) || 25);
     }
 
     // Effective, unprocessed result rows for requests THIS chain originated -
     // drives the callback delivery pass. Same mirror/local split and ordering.
+    //
+    // cross_chain_calls is hub-mirrored (read via _mirrorDb) while the
+    // cross_chain_call_callbacks idempotency table is local. When the mirror IS the
+    // local DB (the hub / single-DB deployments, including the test + regtest env) we
+    // push the already-processed exclusion, the deterministic ordering, and the cap
+    // into one SQL statement via NOT EXISTS + ORDER BY + LIMIT, so the DB never
+    // materializes the already-delivered rows into JS. This is exactly equivalent to
+    // the JS path below: both tables are utf8_general_ci and every call_id is canonical
+    // lowercase on both sides, so NOT EXISTS matches iff the JS Set would, the ORDER BY
+    // is byte-identical, and LIMIT after the exclusion == the current filter-then-slice.
+    // When the mirror is a SEPARATE hub connection the callbacks table is not reachable
+    // from it, so we keep the original two-query JS filter unchanged; that remote-mirror
+    // path still materializes the full effective result set each tick (finalized result
+    // rows accumulate on the mirror and are re-scanned every block), a residual cost that
+    // a cross-database exclusion cannot address without a cross-DB join.
     async getEffectiveUnprocessedCallResults(coin, network, block_time, limit){
-        let results = await this._mirrorDb().doQuery(
+        let cap = Number(limit) || 25;
+        let mirror = this._mirrorDb();
+        if(mirror === this){
+            return await this.doQuery(
+                `SELECT c.* FROM cross_chain_calls c
+                 WHERE c.phase = 'result' AND c.status = 'finalized' AND c.network = ?
+                   AND c.source_chain = ? AND c.effective_time <= ?
+                   AND NOT EXISTS (
+                       SELECT 1 FROM cross_chain_call_callbacks k WHERE k.call_id = c.call_id)
+                 ORDER BY c.snapshot_block ASC, c.call_id ASC
+                 LIMIT ?`,
+                [network, coin, block_time, cap]);
+        }
+        let results = await mirror.doQuery(
             `SELECT * FROM cross_chain_calls
              WHERE phase = 'result' AND status = 'finalized' AND network = ?
                AND source_chain = ? AND effective_time <= ?
@@ -7257,8 +7501,10 @@ class Database {
         let placeholders = ids.map(() => '?').join(',');
         let processed = await this.doQuery(
             `SELECT call_id FROM cross_chain_call_callbacks WHERE call_id IN (${placeholders})`, ids);
-        let processedSet = new Set(processed.map(r => r.call_id));
-        return results.filter(r => !processedSet.has(r.call_id)).slice(0, Number(limit) || 25);
+        // Lowercase both sides: local callbacks are stored lowercase, a mirror call_id may be
+        // uppercase (see getEffectiveUndispatchedCalls). No-op for all-lowercase data.
+        let processedSet = new Set(processed.map(r => String(r.call_id).toLowerCase()));
+        return results.filter(r => !processedSet.has(String(r.call_id).toLowerCase())).slice(0, cap);
     }
 
     // Record an injected target-chain execution (idempotent on call_id; the
@@ -9502,6 +9748,21 @@ class Database {
         if(!this.util.isNull(tick_id)){
             where = ' AND d1.get_tick_id=?';
             args.push(tick_id);
+        } else if(dispenseCancellingMatch.isDispenseCancellingMatchActive(data['BLOCK_TIME'], this.config['NETWORK'])){
+            // Native-coin trigger: a bare native payment carries no COIN_TICK (only the
+            // token-SEND channel sets it, utility.js), so tick_id is null. Without a
+            // predicate the native branch left `where` empty and matched EVERY open
+            // dispenser at the address, including token-priced ones (get_tick_id non-null),
+            // then dispense.js settled the seller's escrow by comparing a native amount to a
+            // token-denominated GET_AMOUNT with no unit check - escrow dispensed against
+            // payment in the WRONG asset. A native trigger must only settle native-priced
+            // dispensers (get_tick_id IS NULL). Correcting the match set changes how
+            // already-valid blocks evaluate, so it rides the coordinated 2.0.0 flag-day
+            // shared by dispense_cancelling_match_activation (which gates the sibling
+            // correction in this same function): below the flag-day the legacy unbounded
+            // match is kept so historical replay stays byte-identical; at/after it the
+            // native branch is constrained to get_tick_id IS NULL.
+            where = ' AND d1.get_tick_id IS NULL';
         }
         // Latest-status correlation column (flag-day gated, see
         // dispense_cancelling_match_activation.js). The MAX(action_index) subquery must
@@ -11128,6 +11389,11 @@ class Database {
         let status_id   = await this.createStatus(data['STATUS']);
         let action_index = data['ACTION_INDEX'];
         let version      = Number(data['FORMAT']);
+        // Publisher tail (#2486): v4/v5/v6 only; NULL otherwise. Mirrors validator_signatures
+        // exactly: anchor.js pre-serializes the XANCPUB sig list to a JSON string (as it does
+        // VALIDATOR_SIGNATURES = JSON.stringify(sigs)) before dispatch, so both are stored as-is.
+        let publisher = data['PUBLISHER'] || null;
+        let publisherAttestations = data['PUBLISHER_ATTESTATIONS'] || null;
         let args = [
             version,
             data['CHAIN'] || null,
@@ -11150,6 +11416,11 @@ class Database {
             (data['CHUNK_INDEX'] != null) ? Number(data['CHUNK_INDEX']) : null,
             data['ARCHIVE_B64'] || null,
             data['VALIDATOR_SIGNATURES'] || null,
+            // v4/v5/v6 publisher-attestation tail (#2486). Both NULL for v0-v3. anchor.js must set
+            // data['PUBLISHER_ATTESTATIONS'] = JSON.stringify(publisherSigs) for the attestations
+            // to flow (that one-line hand-off is owned in anchor.js).
+            publisher,
+            publisherAttestations,
             status_id,
             data['BLOCK_INDEX']
         ];
@@ -11160,7 +11431,8 @@ class Database {
                         ledger_hash=?, actions_hash=?, contract_hash=?, checkpoint_seq=?, snapshot_block=?,
                         state_root=?, state_root_version=?, block_merkle_root=?, block_merkle_version=?,
                         match_batch_seq=?, match_count=?, batch_crc32=?, total_chunks=?, chunk_index=?,
-                        archive_b64=?, validator_signatures=?, status_id=?, block_index_doge=?
+                        archive_b64=?, validator_signatures=?, publisher=?, publisher_attestations=?,
+                        status_id=?, block_index_doge=?
                  WHERE action_index=?`, args.concat([action_index]));
         } else {
             await this.doQuery(
@@ -11169,8 +11441,9 @@ class Database {
                          contract_hash, checkpoint_seq, snapshot_block, state_root, state_root_version,
                          block_merkle_root, block_merkle_version, match_batch_seq, match_count,
                          batch_crc32, total_chunks, chunk_index, archive_b64, validator_signatures,
+                         publisher, publisher_attestations,
                          status_id, block_index_doge, action_index)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, args.concat([action_index]));
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, args.concat([action_index]));
         }
     }
 
@@ -13163,9 +13436,12 @@ class Database {
         return unclaimed;
     }
 }
-// Applied-migration files whose checksum may be healed in place. Entries are
-// (old sha256 -> new sha256) pairs pinned to a single reviewed edit; anything
-// else still fails the immutability guard in runMigrations().
+// Applied-migration files whose checksum may be healed in place. Each entry maps
+// a `from` predecessor hash (or a list of them) to a single `to` hash pinned to a
+// reviewed edit; anything else still fails the immutability guard in runMigrations().
+// `from` may be a list because one reviewed edit can supersede several historical
+// file revisions and each DB recorded whichever revision it applied first (mirrors
+// the sibling xchain-decoder ledger).
 Database.MIGRATION_CHECKSUM_REBASELINES = {
     // ba430f8 retagged the DROP from mode=auto to mode=manual (safety fix);
     // the executable statement is unchanged.

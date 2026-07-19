@@ -138,6 +138,7 @@ class DataGenerator extends DecoderSeeder {
             case 'normal':       return this._profileNormal(txsPerBlock, blockIdx);
             case 'token-launch': return this._profileTokenLaunch(txsPerBlock, blockIdx);
             case 'heavy-dex':    return this._profileHeavyDex(txsPerBlock, blockIdx, blockTime);
+            case 'standing-orders': return this._profileStandingOrders(txsPerBlock, blockIdx, blockTime);
             case 'mixed-heavy':  return this._profileMixedHeavy(txsPerBlock, blockIdx, blockTime);
             default:             return this._profileSendOnly(txsPerBlock, blockIdx);
         }
@@ -216,6 +217,42 @@ class DataGenerator extends DecoderSeeder {
             txs.push({
                 source: from,
                 data: `ORDER|0|BTC|TOKENA|${giveAmount}|BTC|TOKENB|${getAmount}||${expiry}`
+            });
+        }
+        return txs;
+    }
+
+    /**
+     * Valid, always-open DEX orders that accumulate a growth-unbounded standing set.
+     *
+     * Every order is the SAME direction (give 1 TOKENA, get 1 TOKENB) so no two ever
+     * cross-match, and the expiration sits inside the fee-free window but far past the
+     * scenario's block-time span, so none ever expires during the run. The net effect:
+     * the `orders`/`order_statuses` "open" set grows by `count` every block, which is
+     * exactly what the per-block expiry sweep (db.getExpiredItems) must re-scan on
+     * every block. This is what the grown-database regression scenario (07) leans on.
+     *
+     * NOTE: uses the current ORDER format 0, which carries GIVE_OWNERSHIP/GET_OWNERSHIP
+     * fields. The older `heavy-dex`/`mixed-heavy` profiles omit those, so their orders
+     * currently parse as invalid (GET_COIN lands on the wrong field) and never reach the
+     * order book. Kept separate here so 07 is not built on that latent gap.
+     */
+    _profileStandingOrders(count, blockIdx, blockTime) {
+        const txs = [];
+        const addrs = this.state.addresses;
+        // Sources that actually hold TOKENA after bootstrap: addrs[0] (bulk) plus
+        // addrs[2..]. addrs[1] holds only TOKENB, so it cannot escrow a TOKENA give.
+        const givers = [addrs[0], ...addrs.slice(2)];
+        // 80 days: inside the 90-day fee-free expiration window (gasCost 0) yet far
+        // beyond the run's block-time span, so every order stays open for the whole test.
+        const expiry = blockTime + 80 * 86400;
+        for (let i = 0; i < count; i++) {
+            const from = givers[i % givers.length];
+            // FORMAT 0: VERSION|GIVE_COIN|GIVE_TICK|GIVE_AMOUNT|GIVE_OWNERSHIP|
+            //           GET_COIN|GET_TICK|GET_AMOUNT|GET_OWNERSHIP|GET_ADDRESS|EXPIRATION
+            txs.push({
+                source: from,
+                data: `ORDER|0|BTC|TOKENA|1|0|BTC|TOKENB|1|0||${expiry}`
             });
         }
         return txs;
