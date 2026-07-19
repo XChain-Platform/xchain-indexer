@@ -80,8 +80,22 @@ DEST_VER="$(vm_version "$DEST")"
 if [ "$MODE" = "check" ]; then
     echo "vendor-vm: canonical=${SRC_VER:-<none>} vendored=${DEST_VER:-<none>}"
     if [ -z "$DEST_VER" ]; then
-        echo "vendor-vm: no vendored xchain-vm found at $DEST. Run 'npm run vendor:vm' to stage it." >&2
-        exit 1
+        # No vendored copy at all. The copy is gitignored, so every isolated
+        # checkout (the pre-push CI gate clones the bare commit) lands here by
+        # construction; with the canonical sibling present, stage the SOURCE
+        # files (no npm install: the gate's unit suite needs the files, not a
+        # built isolated-vm) and continue instead of failing a state no commit
+        # can ever satisfy. Drift detection is unaffected: whenever a vendored
+        # copy EXISTS (every dev tree), version + manifest still verify below.
+        echo "vendor-vm: no vendored copy at $DEST; staging src from canonical sibling."
+        rsync -a \
+            --exclude 'node_modules' \
+            --exclude '.git' \
+            --exclude 'test' \
+            --exclude 'bench' \
+            --exclude 'reports' \
+            "$SRC/" "$DEST/"
+        DEST_VER="$(vm_version "$DEST")"
     fi
     if [ "$SRC_VER" != "$DEST_VER" ]; then
         echo "vendor-vm: DRIFT - vendored CONSENSUS_VERSION ($DEST_VER) != canonical ($SRC_VER)." >&2
