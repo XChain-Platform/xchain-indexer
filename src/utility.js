@@ -1363,12 +1363,17 @@ class Utility {
             // is the direct 1:1 transfer; AIRDROP/DIVIDEND/SWEEP are bulk moves gated on the
             // AGGREGATE outbound move per controlled tick (one guard run: from=SOURCE, amount=total),
             // never per recipient (bounded VM work; a controller needing per-recipient control denies
-            // the aggregate). SWEEP ownership transfers are NOT gated by any class yet (separate
-            // capability; tracked as a follow-up).
+            // the aggregate).
             case 'SEND':
             case 'AIRDROP':
             case 'DIVIDEND':
             case 'SWEEP':            return 'transfer';
+            // The deed-over of a token's OWNERSHIP record is a separate capability from moving its
+            // balance, so it routes to its own `ownership` class (an issuer can make ownership
+            // non-sweepable while balances stay freely transferable, or vice versa). SWEEP_OWNERSHIP is
+            // synthetic: sweep.js emits it per swept ownership so the controller's guard runs on
+            // from=SOURCE, to=DESTINATION for the deeded tick. No on-chain action decodes to it.
+            case 'SWEEP_OWNERSHIP':  return 'ownership';
             case 'ORDER_CREATE':
             case 'SWAP_CREATE':
             case 'DISPENSER_CREATE': return 'trade';

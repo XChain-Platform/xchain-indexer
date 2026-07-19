@@ -33,6 +33,7 @@ describe('Execute (EXECUTE) @regression @tier2', function () {
         db.getCrossChainDataForVM  = sinon.stub().resolves({});
         db.getPollResultsForVM     = sinon.stub().resolves({ polls: {} });
         db.getContractStakeDataForVM = sinon.stub().resolves({});
+        db.getAttestationDataForVM = sinon.stub().resolves({ responses: {} });
         db.createContractExecution = sinon.stub().resolves();
         db.createContractState     = sinon.stub().resolves();
         db.createContractEmission  = sinon.stub().resolves();

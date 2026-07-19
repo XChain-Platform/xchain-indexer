@@ -109,6 +109,38 @@ class Order_Match {
                     continue;
                 }
 
+                // Native-coin (COINPay) reciprocity, the mirror of the bothTokenLegs gate for
+                // the two-phase path. findOrderMatches enforces the forward leg strictly but
+                // NULL-relaxes the reverse leg (orderInfo.GET == matchInfo.GIVE), so a
+                // token-for-COIN order (GET_TICK null) can pair with a token-for-token maker
+                // whose GIVE_TICK is a real token. That pair is NOT a coin trade: no side gives
+                // native coin to the coin-wanting side, yet the native settlement below would
+                // mint a bogus COINPay obligation and mis-assign the coin/seller roles (this
+                // file's GET_TICK-aware detection disagrees with coinpay.js / coinpay_expire.js's
+                // single-GIVE_TICK detection, releasing the wrong order's escrowed token). A
+                // legitimate native match mirrors both legs exactly - null-to-null (native coin)
+                // or the same real token+coin - so exactly one side GIVES native coin. Require
+                // that mirror and skip anything else. Gated by COINPAY_NATIVE_RECIPROCITY: it
+                // changes which matches settle (consensus-visible), so it flips at the
+                // coordinated flag-day and stays byte-identical below it.
+                let anyNullTick = this.util.isNull(orderInfo['GIVE_TICK']) || this.util.isNull(orderInfo['GET_TICK']) ||
+                                  this.util.isNull(matchInfo['GIVE_TICK']) || this.util.isNull(matchInfo['GET_TICK']);
+                if(anyNullTick && await this.actions.protocolChanges.isEnabled('COINPAY_NATIVE_RECIPROCITY', data['BLOCK_INDEX'])){
+                    let forwardMirror = (this.util.isNull(orderInfo['GIVE_TICK']) && this.util.isNull(matchInfo['GET_TICK'])) ||
+                                        (!this.util.isNull(orderInfo['GIVE_TICK']) && !this.util.isNull(matchInfo['GET_TICK']) &&
+                                         String(orderInfo['GIVE_TICK']) === String(matchInfo['GET_TICK']) &&
+                                         String(orderInfo['GIVE_COIN']) === String(matchInfo['GET_COIN']));
+                    let reverseMirror = (this.util.isNull(orderInfo['GET_TICK']) && this.util.isNull(matchInfo['GIVE_TICK'])) ||
+                                        (!this.util.isNull(orderInfo['GET_TICK']) && !this.util.isNull(matchInfo['GIVE_TICK']) &&
+                                         String(orderInfo['GET_TICK']) === String(matchInfo['GIVE_TICK']) &&
+                                         String(orderInfo['GET_COIN']) === String(matchInfo['GIVE_COIN']));
+                    if(!forwardMirror || !reverseMirror){
+                        if(this.debug)
+                            console.log('Skipping non-reciprocal native match (leg mismatch)', orderInfo['GIVE_TICK'], orderInfo['GET_TICK'], matchInfo['GIVE_TICK'], matchInfo['GET_TICK']);
+                        continue;
+                    }
+                }
+
                 // Set get/give remaining amounts for this order match
                 match['GIVE_REMAINING'] = matchInfo['GIVE_REMAINING'];
                 match['GET_REMAINING']  = matchInfo['GET_REMAINING'];

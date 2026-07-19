@@ -199,6 +199,37 @@ describe('Vote invariants (escrow conservation + callback metering) @regression 
             assert.strictEqual(actionParams[4], 'failed_quorum');
         });
 
+        //  footgun pin: the binding-poll callback EXECUTE is emitted as a
+        // fee-skipped, protocol-ceiling run whose gas is NOT drawn from or bounded
+        // by the poll's GAS_ESCROW. The emission carries IS_EMISSION (execute.js
+        // skipFee) and deliberately omits VM_GAS_LIMIT, so execute.js falls back to
+        // GAS_CEILING rather than an escrow-derived ceiling; gas_escrow always
+        // refunds in full (see _settleDeposit tests). This locks the documented
+        // deferred-metering behavior (ATTEST parity): a future fix that ties the
+        // callback's gas ceiling to gas_escrow must set VM_GAS_LIMIT here and will
+        // break this test on purpose.
+        it('callback EXECUTE is fee-skipped and NOT metered against gas_escrow (IS_EMISSION, no VM_GAS_LIMIT, runs as the contract)', async function () {
+            const p = bindingPoll({ poll_status: 'open', gas_escrow: '20' });
+            stubFinalize(p, { poll_status: 'finalized', winning_option: 1, total_counted_weight: '15', total_voters: 2, quorum_met: true, min_voters_met: true });
+
+            const data = createBaseData({ ACTION: 'VOTE', FORMAT: 2, ACTION_INDEX: null, IS_SYNTHETIC: true });
+            await handler.parse(['2', '100'], data, null);
+
+            assert.strictEqual(executeStub.parse.callCount, 1, 'callback fires exactly once');
+            const [, emissionData] = executeStub.parse.firstCall.args;
+            const contractRef = 'C:' + indexer.config['CHAIN'] + ':5';
+            assert.strictEqual(emissionData.IS_EMISSION, true,
+                'IS_EMISSION routes execute.js into its skipFee branch (no gas debit from any wallet)');
+            assert.ok(!('VM_GAS_LIMIT' in emissionData),
+                'no VM_GAS_LIMIT is passed: execute.js uses the protocol GAS_CEILING, so the callback gas is NOT bounded by gas_escrow');
+            assert.strictEqual(emissionData.SOURCE, contractRef,
+                'the callback runs AS the target contract, not the poll creator');
+            assert.strictEqual(emissionData.FEE_PAYER, contractRef,
+                'FEE_PAYER is the contract, not the creator whose gas_escrow is the poll deposit');
+            assert.strictEqual(emissionData.EMITTER, data['ACTION_INDEX'],
+                'emitted by the finalizing v2 action');
+        });
+
         it('a throwing callback rolls back only its own effects; the poll result still stands (no un-finalize)', async function () {
             const p = bindingPoll({ poll_status: 'open' });
             stubFinalize(p, { poll_status: 'finalized', winning_option: 0, total_counted_weight: '10', total_voters: 1, quorum_met: true, min_voters_met: true });

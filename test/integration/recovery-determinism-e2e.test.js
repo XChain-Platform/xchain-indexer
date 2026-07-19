@@ -45,6 +45,7 @@ process.env.INDEXER_COIN    = process.env.INDEXER_COIN    || 'BTC';
 process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
 
 const assert  = require('assert');
+const crypto  = require('crypto');
 const fs      = require('fs');
 const path    = require('path');
 const mariadb = require('mariadb');
@@ -54,6 +55,8 @@ const { makeKeypair, buildBatch, rawMatch } = require('../fixtures/anchor-archiv
 const Utility        = require('../../src/utility');
 const Database       = require('../../src/db');
 const AnchorRecovery = require('../../src/recovery.js');
+const Deploy         = require('../../src/actions/deploy.js');
+const Mapper         = require('../../src/mapper.js');
 const { buildStateHashData, INDEX_MAP_STATE_HASH_ACTIVATION } = require('../../src/stateHash');
 
 const DB_HOST = process.env.TEST_DB_HOST || '127.0.0.1';
@@ -61,9 +64,15 @@ const DB_PORT = parseInt(process.env.TEST_DB_PORT) || 3306;
 const DB_USER = process.env.TEST_DB_USER || 'root';
 const DB_PASS = process.env.TEST_DB_PASS;            // undefined => self-skip
 
-const DB_A      = 'xchain_recdet_a_btc';     // from-genesis node A (BTC indexer)
-const DB_B_BTC  = 'xchain_recdet_b_btc';     // recovered node B (BTC indexer)
-const DB_B_DOGE = 'xchain_recdet_b_doge';    // recovered node B archive source (DOGE indexer)
+// Database name prefix. Defaults to the historic `xchain_recdet` (unchanged in CI, whose
+// integration DB service grants that user CREATE on any schema); overridable via TEST_DB_NS
+// so a run against a least-privilege MariaDB (e.g. a dev box whose test user only holds DDL
+// on `test_%` schemas) can point the three throwaway DBs at a grantable prefix without
+// touching the assertions.
+const NS        = process.env.TEST_DB_NS || 'xchain_recdet';
+const DB_A      = NS + '_a_btc';     // from-genesis node A (BTC indexer)
+const DB_B_BTC  = NS + '_b_btc';     // recovered node B (BTC indexer)
+const DB_B_DOGE = NS + '_b_doge';    // recovered node B archive source (DOGE indexer)
 const ALL_DBS   = [DB_A, DB_B_BTC, DB_B_DOGE];
 
 const util = new Utility();
@@ -90,6 +99,95 @@ const REWARD_ROUND  = 1;
 const REWARD_TYPE   = 'anchor_BTC';
 
 const VALIDATOR = makeKeypair();   // the reward's signing validator (independent of federation signers)
+
+// ── Contract-heavy recovery leg  ────────────────────────────────────
+// The launch bundle deploys contracts via chunked DEPLOY: a run of v4 carriers each
+// carrying one ordered base64 slice of the source, then a v2/v3 that reassembles the
+// slices (keyed on CODE_HASH), sha256-verifies, and creates the contract. This leg
+// re-confirms that a contract-heavy chain reindexes byte-identically across the recovery
+// boundary: node A deploys it from-genesis, node B deploys the SAME contract after the
+// real AnchorRecovery pre-seed, and their `contracts` + `deploy_chunks` rows must match
+// row-for-row - including source_id, which is an index_addresses id (the F1a determinism
+// guarantee that recovery's out-of-band pre-seed does not offset the id map, now proven to
+// carry through to a contract's on-chain deployer binding). Node B records its carriers in a
+// DIFFERENT physical order than node A, so the match also pins the assembler's
+// ORDER BY chunk_index, action_index against a real engine (delivery-order independence).
+const CONTRACT_DEPLOYER = 'btc1qAaa';   // created in CHAIN block 1 (has a deterministic id on both nodes)
+const CONTRACT_BLOCK    = 5;            // after EARN/COLLECT so the deploy never perturbs the reward assertions
+const CONTRACT_CODE     = 'module.exports = { run: function(state, params) { return { value: 42 }; } };'
+                        + ' // chunked-DEPLOY recovery byte-identity regression: padded to force a multi-slice base64 body split across v4 carriers';
+const CONTRACT_HASH     = crypto.createHash('sha256').update(Buffer.from(CONTRACT_CODE, 'utf8')).digest('hex');
+const CONTRACT_CHUNKS   = 3;
+// Carrier action indices, one per chunk position, all below the assembling DEPLOY's index
+// so getDeployChunksForAssembly consumes them. Keyed by position, NOT by insertion order.
+const CARRIER_INDEX     = { 0: 5001, 1: 5002, 2: 5003 };
+const ASSEMBLE_INDEX    = 5010;
+
+// A DEPLOY handler bound to one real indexer DB. vm:null (the chunked-assembly + code_hash
+// path never runs VM code) and GAS_PRICE '0' (fee 0 -> the balance/native-fee legs are
+// skipped, so no gas token needs seeding); protocolChanges is stubbed enabled because this
+// regtest node is genesis-active for every DEPLOY gate. This drives the REAL Deploy /
+// DeployChunk handlers so the assertions cover the shipped assembler, not a reimplementation.
+function makeDeployHandler(db) {
+    const config = getTestConfig();
+    config['GAS_PRICE'] = '0';
+    const mapper = new Mapper({ config, decoderDb: db, indexerDb: db, util });
+    const action = { config, decoderDb: db, indexerDb: db, util, mapper,
+                     protocolChanges: { isEnabled: async () => true }, vm: null };
+    return new Deploy(action);
+}
+
+// Deploy the chunked contract on `db`: record the CONTRACT_CHUNKS v4 carriers (in `insertOrder`,
+// a permutation of the positions) then run the v2 assembly. Wrapped in one block transaction,
+// mirroring how the indexer processes a block.
+async function deployChunkedContract(db, insertOrder) {
+    const handler = makeDeployHandler(db);
+    const b64  = Buffer.from(CONTRACT_CODE, 'utf8').toString('base64');
+    const size = Math.ceil(b64.length / CONTRACT_CHUNKS);
+    const slice = (i) => b64.slice(i * size, (i + 1) * size);
+    await db.beginTransaction();
+    db.blockIndex = CONTRACT_BLOCK;
+    for (const pos of insertOrder) {
+        util.resetLists();
+        const data = { ACTION: 'DEPLOY', SOURCE: CONTRACT_DEPLOYER, BLOCK_INDEX: CONTRACT_BLOCK,
+                       BLOCK_TIME: 1700000000, TX_HASH: 'aa'.repeat(32), TX_INDEX: 0, TX_VOUT: 0,
+                       FORMAT: 4, ACTION_INDEX: CARRIER_INDEX[pos] };
+        await handler.parse(['4', CONTRACT_HASH, String(pos), String(CONTRACT_CHUNKS), slice(pos)], data, null);
+        assert.strictEqual(data['STATUS'], 'valid', 'v4 carrier ' + pos + ' must store valid: ' + data['STATUS']);
+    }
+    util.resetLists();
+    const data = { ACTION: 'DEPLOY', SOURCE: CONTRACT_DEPLOYER, BLOCK_INDEX: CONTRACT_BLOCK,
+                   BLOCK_TIME: 1700000000, TX_HASH: 'aa'.repeat(32), TX_INDEX: 0, TX_VOUT: 0,
+                   FORMAT: 2, ACTION_INDEX: ASSEMBLE_INDEX };
+    await handler.parse(['2', CONTRACT_HASH, '100000', ''], data, null);
+    assert.strictEqual(data['STATUS'], 'valid', 'v2 chunked-assembly deploy must be valid: ' + data['STATUS']);
+    await db.commitTransaction();
+}
+
+// contracts rows, status resolved to its STRING (index_statuses ids are per-DB surrogates and
+// NOT part of the F1a id-map guarantee, so compare by status text; source_id IS an
+// index_addresses id and IS guaranteed identical, so it stays in the comparison).
+async function contractRows(db) {
+    const rows = await db.doQuery(
+        "SELECT c.action_index, c.source_id, c.code, c.code_hash, c.api_version, s.status AS status, c.block_index " +
+        "FROM contracts c JOIN index_statuses s ON s.id = c.status_id ORDER BY c.action_index");
+    return rows.map(r => ({
+        action_index: String(r.action_index), source_id: String(r.source_id),
+        code: String(r.code), code_hash: String(r.code_hash),
+        api_version: String(r.api_version), status: String(r.status), block_index: String(r.block_index),
+    }));
+}
+
+async function deployChunkRows(db) {
+    const rows = await db.doQuery(
+        "SELECT dc.chunk_index, dc.total_chunks, dc.code_part, dc.source_id, dc.code_hash, st.status AS status " +
+        "FROM deploy_chunks dc JOIN index_statuses st ON st.id = dc.status_id ORDER BY dc.chunk_index");
+    return rows.map(r => ({
+        chunk_index: String(r.chunk_index), total_chunks: String(r.total_chunks),
+        code_part: String(r.code_part), source_id: String(r.source_id),
+        code_hash: String(r.code_hash), status: String(r.status),
+    }));
+}
 
 async function admin() {
     return mariadb.createConnection({ host: DB_HOST, port: DB_PORT, user: DB_USER, password: DB_PASS, multipleStatements: true });
@@ -218,6 +316,13 @@ describe('Recovery-determinism e2e (consensus) @integration', function () {
         assert.strictEqual(report.failed.length, 0, 'recovery batch must verify: ' + JSON.stringify(report.failed));
         assert.strictEqual(report.rewards, 1, 'recovery must stage exactly 1 reward');
         await replayChain(Bbtc);
+
+        // Contract-heavy leg : deploy the SAME chunked contract on both nodes, across
+        // the recovery boundary. Node A (from-genesis) records carriers in position order; node B
+        // (recovered) records them in a DIFFERENT order, so the byte-identity below also proves
+        // the assembler is independent of chunk delivery/storage order on a real engine.
+        await deployChunkedContract(A,    [0, 1, 2]);
+        await deployChunkedContract(Bbtc, [2, 0, 1]);
     });
 
     after(async function () {
@@ -279,6 +384,37 @@ describe('Recovery-determinism e2e (consensus) @integration', function () {
             }
         } finally {
             INDEX_MAP_STATE_HASH_ACTIVATION.regtest = prev;
+        }
+    });
+
+    // : contract-heavy re-confirm on the chunked-DEPLOY launch bundle. The v4-carrier +
+    // v2-assembly deploy must reindex byte-identically across the recovery boundary.
+    it('(5) chunked-DEPLOY contract is byte-identical A vs B across the recovery boundary', async function () {
+        const cA = await contractRows(A);
+        const cB = await contractRows(Bbtc);
+        assert.strictEqual(cA.length, 1, 'node A deployed exactly the one chunked contract');
+        assert.deepStrictEqual(cB, cA, 'recovered node must reproduce the from-genesis contract row-for-row');
+        // The stored source is the reassembled plaintext and its declared hash binds it.
+        assert.strictEqual(cA[0].code, CONTRACT_CODE, 'assembled code equals the deployed source');
+        assert.strictEqual(cA[0].code_hash, CONTRACT_HASH, 'code_hash is sha256 of the assembled source');
+        assert.strictEqual(cA[0].status, 'valid');
+        // source_id is an index_addresses id: identical only because F1a keeps the id map
+        // aligned across the recovery pre-seed. Pin it to the deployer's deterministic id.
+        const deployerIdA = String(await A.getAddressId(CONTRACT_DEPLOYER));
+        const deployerIdB = String(await Bbtc.getAddressId(CONTRACT_DEPLOYER));
+        assert.strictEqual(deployerIdB, deployerIdA, 'deployer id is identical across the recovery boundary');
+        assert.strictEqual(cA[0].source_id, deployerIdA, 'contract binds the deterministic deployer id');
+    });
+
+    it('(6) deploy_chunks carriers are byte-identical A vs B despite different insert order', async function () {
+        const kA = await deployChunkRows(A);
+        const kB = await deployChunkRows(Bbtc);
+        assert.strictEqual(kA.length, CONTRACT_CHUNKS, 'all v4 carriers were stored on node A');
+        assert.deepStrictEqual(kB, kA, 'recovered node stores byte-identical carrier rows (order-independent)');
+        // The chunk group is bound to the same deployer id and code_hash on both nodes.
+        for (const row of kA) {
+            assert.strictEqual(row.code_hash, CONTRACT_HASH);
+            assert.strictEqual(row.status, 'valid');
         }
     });
 });

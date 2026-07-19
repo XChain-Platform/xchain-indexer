@@ -44,16 +44,18 @@ const { rethrowIfInfraFault } = require('./faultGuard.js');
 // Sourced from the single provider registry so the two caps cannot drift.
 const PROVIDER_DEADLINE_WINDOWS = new ProviderRegistry().getDeadlineWindows();
 
-// Maximum smart-contract code size (64 KiB). Canonical value:
-// xchain-documentation/protocol/constants.js (MAX_CODE_SIZE); kept equal to the
-// SDK and VM by the cross-service regression suite, which reads the value
-// exported at the bottom of this module.
-const MAX_CODE_SIZE = 65536;
+// Maximum smart-contract code size (64 KiB). Vendored single source of truth:
+// ../protocol/constants.js (byte-identical to xchain-documentation/protocol/
+// constants.js, MAX_CODE_SIZE); kept equal to the SDK and VM by the
+// cross-service regression suite, which reads the value exported at the bottom
+// of this module.
+const PROTO = require('../protocol/constants.js');
+const MAX_CODE_SIZE = PROTO.MAX_CODE_SIZE;
 
-// Maximum chunks a chunked DEPLOY (v2/v3) may assemble. Canonical value:
-// xchain-documentation/protocol/constants.js (MAX_DEPLOY_CHUNKS); kept in lockstep
-// with the SDK + the v4 carrier handler by the cross-service regression suite.
-const MAX_DEPLOY_CHUNKS = 16;
+// Maximum chunks a chunked DEPLOY (v2/v3) may assemble. Vendored from
+// ../protocol/constants.js (MAX_DEPLOY_CHUNKS); kept in lockstep with the SDK +
+// the v4 carrier handler by the cross-service regression suite.
+const MAX_DEPLOY_CHUNKS = PROTO.MAX_DEPLOY_CHUNKS;
 
 // Gas ceiling for the constructor clamp below. Must stay in lockstep with
 // GAS_CEILING in actions/execute.js: if the ceiling ever changes, both files

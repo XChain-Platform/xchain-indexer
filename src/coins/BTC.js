@@ -45,6 +45,15 @@ module.exports = {
     // may override per coin via XCHAIN_CONFIRMATIONS_BTC; this is the factory value.
     confirmations: 6,
 
+    // Block/transaction wire-serialization family, consumed by the decoder (and
+    // utxo-tracker) to pick their parse path: 'default' = plain bitcoinjs, 'mweb' =
+    // strip Litecoin HogEx/MWEB marker+flag, 'auxpow' = merge-mined header stripped
+    // before the tx count. Declared here so onboarding a chain picks its wire shape
+    // in one place instead of a hardcoded coin-name list in each consumer. NOT part
+    // of the consensus hash (mirrors the pre-existing decoder-local constant it
+    // replaces); arming it into the pin would be a separate coordinated bump.
+    wireFormat: 'default',
+
     // Address roles excluded from the consensus subset/hash (display-only; not read
     // by the indexer). Every role NOT listed here is consensus-relevant and folds
     // into the pinned hash. Declared beside the data so a new display-only role is

@@ -28,6 +28,7 @@ const util      = require('./utility.js');
 const rollback  = require('./rollback.js');
 const mapper    = require('./mapper.js');
 const stateCommitment   = require('./stateCommitment.js');
+const retention         = require('./retention.js');
 const stateCommitAct    = require('./state_commitment_activation.js');
 const HubClient    = require('./hub_client.js');
 const HubDbSync    = require('./hub_db_sync.js');
@@ -440,6 +441,12 @@ class XChainIndexer {
         // deletion). Surfaces unbounded COW-node growth so we can measure it before building a
         // safe reclaiming sweep (see stateCommitment.reportOrphanStats for why deletion is deferred).
         this._startStateTreeMetric();
+
+        // Start the state-retention pruner. DEFAULT OFF: inert unless
+        // STATE_ROOT_RETENTION_BLOCKS is set (see src/retention.js +
+        // docs/DATA-RETENTION-POLICY.md). Phase-2 node reclaim, when opted in, runs
+        // under the db transaction mutex so it cannot interleave with block-root inserts.
+        this._startStateRetention();
 
         // Define placeholders for block parsing status
         let firstDecoderBlock     = null;
@@ -1184,6 +1191,53 @@ class XChainIndexer {
         }, intervalMs);
         if(this._stateTreeMetricTimer.unref) this._stateTreeMetricTimer.unref();
         console.log('XChainIndexer: state_tree orphan-metric started (interval ' + intervalMs + 'ms)');
+    }
+
+    // Periodic state-retention sweep. DEFAULT OFF: parseRetentionConfig returns
+    // enabled=false unless STATE_ROOT_RETENTION_BLOCKS is a positive integer, and
+    // this method returns before arming any timer in that case (current
+    // keep-everything behavior unchanged). When enabled it runs runSweep: phase-1
+    // root prune on a pooled connection, then, only if STATE_NODE_RECLAIM is opted
+    // in, phase-2 orphan-node reclaim serialized against the block loop via the db
+    // transaction mutex (runExclusive) so a concurrent forward insert can never
+    // re-reference a node between the mark and the delete.
+    _startStateRetention(){
+        if(this._stateRetentionTimer) return;
+        const cfg = retention.parseRetentionConfig(process.env);
+        if(!cfg.enabled) return;   // policy off: no timer, nothing prunes
+        const runExclusive = async (fn) => {
+            // Hold the same mutex block processing acquires in beginTransaction so
+            // the mark+delete never interleaves with a forward block-root insert.
+            await this.indexerDb._acquireTxLock();
+            try { return await fn(); }
+            finally { this.indexerDb._releaseTxLock(); }
+        };
+        this._stateRetentionRunning = false;
+        this._stateRetentionTimer = setInterval(async () => {
+            if(this._stateRetentionRunning) return;   // a prior slow sweep is still running
+            this._stateRetentionRunning = true;
+            try {
+                const result = await retention.runSweep(
+                    (sql, args) => this.indexerDb._poolQuery(sql, args),
+                    this.config['COIN'], this.config['NETWORK'], cfg,
+                    { runExclusive });
+                const rootsDeleted = result.roots && result.roots.deleted ? result.roots.deleted : 0;
+                const nodesDeleted = result.nodes && result.nodes.deleted ? result.nodes.deleted : 0;
+                if(rootsDeleted > 0 || nodesDeleted > 0){
+                    console.log('State retention: pruned ' + rootsDeleted + ' root(s) and reclaimed ' +
+                        nodesDeleted + ' orphan node(s) for ' + this.config['COIN'] + '/' + this.config['NETWORK']);
+                }
+            } catch(err) {
+                console.warn('XChainIndexer: state-retention sweep failed for ' +
+                    this.config['COIN'] + '/' + this.config['NETWORK'] + ':', err.message || err);
+            } finally {
+                this._stateRetentionRunning = false;
+            }
+        }, cfg.intervalMs);
+        if(this._stateRetentionTimer.unref) this._stateRetentionTimer.unref();
+        console.log('XChainIndexer: state-retention started (keep ' + cfg.rootKeepBlocks +
+            ' root-blocks, node-reclaim ' + (cfg.nodeReclaimEnabled ? 'ON' : 'off') +
+            ', interval ' + cfg.intervalMs + 'ms)');
     }
 
 }

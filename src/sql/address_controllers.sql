@@ -17,7 +17,7 @@ CREATE TABLE address_controllers (
     id                  BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
     action_index        BIGINT UNSIGNED NOT NULL,         -- ADDRESS action that emitted this bind/unbind event (rollback key)
     address_id          BIGINT UNSIGNED NOT NULL,         -- FK index_addresses.id (the self-gated account)
-    action_class        VARCHAR(16) NOT NULL,             -- transfer|trade|burn|mint|stake
+    action_class        VARCHAR(16) NOT NULL,             -- transfer|trade|burn|mint|stake|ownership
     contract_index      BIGINT UNSIGNED NOT NULL,         -- FK contracts.action_index (the guard contract; on unbind, the contract being dropped)
     is_unbind           TINYINT(1) NOT NULL DEFAULT 0,    -- 0 = bind, 1 = unbind (drop request)
     cooldown_blocks     INT UNSIGNED NOT NULL DEFAULT 0,  -- committed at bind; copied onto the unbind event for reference

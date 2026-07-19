@@ -74,6 +74,12 @@ describe('Programmable policy layer : Phase B enforcement @regression', function
             assert.strictEqual(util.controllerActionClass('MINT'), 'mint');
             assert.strictEqual(util.controllerActionClass('STAKE'), 'stake');
         });
+        it('SWEEP_OWNERSHIP → ownership (deed-over gated apart from balance transfer)', function () {
+            assert.strictEqual(util.controllerActionClass('SWEEP_OWNERSHIP'), 'ownership');
+            // The plain SWEEP (balance move) stays on `transfer`, so binding one class never
+            // silently gates the other.
+            assert.strictEqual(util.controllerActionClass('SWEEP'), 'transfer');
+        });
         it('an unmapped action → null (never gated)', function () {
             for (const a of ['ATTEST', 'XCALL', 'ISSUE', 'EXECUTE', ''])
                 assert.strictEqual(util.controllerActionClass(a), null);

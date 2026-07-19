@@ -45,8 +45,9 @@ class Attest {
         this.util      = action.util;
         this.mapper    = action.mapper;
 
-        // Providers are registered in-process via ProviderRegistry (http_get and llm supported).
-        this.providerRegistry = new ProviderRegistry();
+        // Providers are the built-in DEFAULTS (http_get, llm) overlaid with any
+        // ATTESTATION.PROVIDERS block in the coin config (see providerRegistry.js).
+        this.providerRegistry = new ProviderRegistry(this.config);
 
         // Per-version format strings
         this.formats = {};

@@ -251,6 +251,49 @@ class Sweep {
             }
         }
 
+        // Controller-bound tokens: gate the deed-over of each swept OWNERSHIP (the settlement
+        // OWNERSHIPS loop below turns each into a transfer ISSUE). For every tick whose ownership
+        // SOURCE currently holds, if that tick's `ownership` class is bound to a controller, run its
+        // `guard` once (actionType SWEEP_OWNERSHIP → class `ownership`; from=SOURCE, to=DESTINATION)
+        // before the deed settles - so an issuer can make ownership non-sweepable to an unapproved
+        // DESTINATION independent of whether balances are transferable. ANY deny fails the WHOLE SWEEP
+        // (fail-closed, mirroring the BALANCES guard: the deed must be gated BEFORE status is fixed to
+        // 'valid', since the settlement loop only runs on a valid sweep and cannot cleanly revert one
+        // ownership after the ledger has been written). SOURCE pays the cumulative guard gas in GAS,
+        // folded into the same `guardFee` the settlement debit bills and reserved out of `balances` as
+        // we go so the swept GAS credited to DESTINATION already excludes it. Guards run in byte order
+        // of the tick STRING - the consensus-stable key (see the BALANCES loop for the tick_id-
+        // divergence rationale), never DB/array order. Escrowed-ownership ticks are delivered by the
+        // ORDERS/SWAPS close path (a `trade` concern) and are already excluded from `ownerships`. Only
+        // runs when OWNERSHIPS are swept; a strict no-op before the CONTROLLER_GUARD flag-day.
+        if(!error && data['OWNERSHIPS']==1){
+            let ownershipTicks = [...ownerships]
+                .filter(t => !this.util.isNull(t))
+                .sort((a, b) => Buffer.compare(Buffer.from(String(a), 'utf8'), Buffer.from(String(b), 'utf8')));
+            let ownershipSeq = 0;
+            for(let tick of ownershipTicks){
+                if(error) break;
+                let result = await this.util.maybeRunControllerGuard(this.actions, this.indexerDb, {
+                    actionType:  'SWEEP_OWNERSHIP',
+                    tick:        tick,
+                    from:        data['SOURCE'],
+                    to:          data['DESTINATION'],
+                    amount:      '',
+                    data:        data,
+                    gasInfo:     gasInfo,
+                    gasBalances: balances,
+                    seq:         ownershipSeq++
+                });
+                if(result.error){
+                    error = 'invalid: ' + result.error;
+                } else if(this.util.bcgt(result.guardFee, 0)){
+                    guardFee = this.util.bcadd(guardFee, result.guardFee, 8);
+                    if(gasInfo)
+                        balances = this.util.debitBalances(balances, gasInfo['TICK_ID'], result.guardFee);
+                }
+            }
+        }
+
         // Determine final status
         let status = (error) ? error : 'valid';
         data['STATUS'] = sweep['STATUS'] = status;
@@ -393,7 +436,9 @@ class Sweep {
             // Create action mappings for this sweep
             await this.mapper.createMappings(data);
 
-            // Transfer token ownerships
+            // Transfer token ownerships. Each swept ownership's controller (if any) was already run
+            // in the validation-phase `ownership`-class guard loop above; a deny there failed the
+            // whole SWEEP before status reached 'valid', so every deed reaching here is authorized.
             if(data['OWNERSHIPS']==1){
                 for(let tick of ownerships){
 

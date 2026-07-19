@@ -591,6 +591,78 @@ describe('Order_Match action handler @regression @tier2', function () {
         sinon.assert.calledOnce(indexer.indexerDb.createCoinpayObligation);
     });
 
+    // : findOrderMatches NULL-relaxes the reverse leg, so a token-for-COIN order
+    // (GET_TICK null) can pair with a token-for-token maker whose GIVE_TICK is a real token.
+    // That is not a coin trade (no side gives native coin against the coin-wanting side), and
+    // settling it would mint a bogus COINPay obligation and mis-assign the coin/seller roles.
+    // With COINPAY_NATIVE_RECIPROCITY active the reciprocity gate must skip it.
+    it('skips a native match whose reverse leg is a real token, not native coin (, flag ON)', async function () {
+        indexer.indexerDb.getTokenInfo
+            .withArgs('SCAMTOKEN', sinon.match.any, sinon.match.any)
+            .resolves(createTokenInfo({ TICK: 'SCAMTOKEN', TICK_ID: 30, ALLOW_LIST: null, BLOCK_LIST: null }));
+
+        // orderInfo: GIVE RAREPEPE, GET native coin (GET_TICK null).
+        const orderWantsCoin = makeOrderInfo({
+            GIVE_TICK:      'RAREPEPE',
+            GIVE_REMAINING: '10',
+            GET_TICK:       null,      // wants native coin
+            GET_REMAINING:  '0.001',
+            GIVE_PRICE:     '0.0001',
+            GET_PRICE:      '10000',
+        });
+        // matchInfo: GETs RAREPEPE (forward leg holds) but GIVES a REAL token, not native coin
+        // (reverse leg violated - the NULL relaxation is what let this through findOrderMatches).
+        const tokenMaker = makeMatchInfo({
+            GIVE_TICK:      'SCAMTOKEN',   // a real token, NOT native coin
+            GIVE_REMAINING: '100',
+            GET_TICK:       'RAREPEPE',
+            GET_REMAINING:  '10',
+            GET_PRICE:      '0.0001',
+        });
+
+        indexer.indexerDb.getOrderInfo.resolves(orderWantsCoin);
+        indexer.indexerDb.findOrderMatches.resolves([tokenMaker]);
+
+        const data = createBaseData({ ACTION: 'ORDER_MATCH', BLOCK_TIME, ACTION_INDEX: 1, BLOCK_INDEX: 100 });
+        await orderMatch.parse([], data, false);
+
+        sinon.assert.notCalled(indexer.indexerDb.createCoinpayObligation);
+        sinon.assert.notCalled(indexer.indexerDb.createOrderMatch);
+    });
+
+    it('LEGACY (flag OFF): the mis-paired native match still settles (pre-flag-day replay parity)', async function () {
+        actionsCtx.protocolChanges.isEnabled = sinon.stub().resolves(false);
+
+        indexer.indexerDb.getTokenInfo
+            .withArgs('SCAMTOKEN', sinon.match.any, sinon.match.any)
+            .resolves(createTokenInfo({ TICK: 'SCAMTOKEN', TICK_ID: 30, ALLOW_LIST: null, BLOCK_LIST: null }));
+
+        const orderWantsCoin = makeOrderInfo({
+            GIVE_TICK:      'RAREPEPE',
+            GIVE_REMAINING: '10',
+            GET_TICK:       null,
+            GET_REMAINING:  '0.001',
+            GIVE_PRICE:     '0.0001',
+            GET_PRICE:      '10000',
+        });
+        const tokenMaker = makeMatchInfo({
+            GIVE_TICK:      'SCAMTOKEN',
+            GIVE_REMAINING: '100',
+            GET_TICK:       'RAREPEPE',
+            GET_REMAINING:  '10',
+            GET_PRICE:      '0.0001',
+        });
+
+        indexer.indexerDb.getOrderInfo.resolves(orderWantsCoin);
+        indexer.indexerDb.findOrderMatches.resolves([tokenMaker]);
+
+        const data = createBaseData({ ACTION: 'ORDER_MATCH', BLOCK_TIME, ACTION_INDEX: 1, BLOCK_INDEX: 100 });
+        await orderMatch.parse([], data, false);
+
+        // Below the flag-day the legacy behaviour (bogus obligation) is preserved byte-for-byte.
+        sinon.assert.calledOnce(indexer.indexerDb.createCoinpayObligation);
+    });
+
     it('GIVE_OWNERSHIP=1 on orderInfo calls transferTokenOwnership for the give side', async function () {
         const transferSpy = sinon.stub(indexer.util, 'transferTokenOwnership').resolves();
 
@@ -972,12 +1044,16 @@ describe('Order_Match action handler @regression @tier2', function () {
         sinon.assert.calledOnce(indexer.indexerDb.createOrderMatch);
     });
 
-    describe('native coin routing via GET_TICK null (lines 258-270)', function () {
+    // : the GET_TICK-null routing branches (order_match native cases 3/4) only ever fire
+    // for a MIS-PAIRED match - one side has a null GET_TICK (wants native coin) while the
+    // counterparty's GIVE_TICK is a real token, so no side actually gives native coin against
+    // the coin-wanting side. findOrderMatches' NULL-relaxed reverse leg lets the first shape
+    // through; the second is not even reachable (its forward leg fails). With
+    // COINPAY_NATIVE_RECIPROCITY active the reciprocity gate rejects both, so no bogus COINPay
+    // obligation is minted and the coin/seller roles are never mis-assigned downstream.
+    describe('native coin routing via GET_TICK null is rejected as mis-paired ', function () {
 
-        it('orderInfo GET_TICK null → matchInfo is coin payer, orderInfo is seller (line 259-263)', async function () {
-            // Both GIVE_TICKs are non-null, but orderInfo.GET_TICK is null →
-            // falls into the `else` block (line 257) → line 259: orderInfo.GET_TICK is null
-            // → coinOrder=matchInfo, sellerOrder=orderInfo, nativeCoinAmount=get_amount
+        it('orderInfo GET_TICK null but matchInfo GIVES a real token (not coin) → skipped, no obligation', async function () {
             const orderWantsNative = makeOrderInfo({
                 GIVE_TICK:      'RAREPEPE',
                 GIVE_REMAINING: '10',
@@ -988,7 +1064,7 @@ describe('Order_Match action handler @regression @tier2', function () {
                 GET_ADDRESS:    'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH',
             });
             const matchPaysNative = makeMatchInfo({
-                GIVE_TICK:      'PEPECASH', // non-null GIVE_TICK : not caught by first two elif branches
+                GIVE_TICK:      'PEPECASH', // a real token, NOT native coin : the mis-pair
                 GIVE_REMAINING: '100',
                 GET_TICK:       'RAREPEPE',
                 GET_REMAINING:  '10',
@@ -1008,19 +1084,15 @@ describe('Order_Match action handler @regression @tier2', function () {
             const data = createBaseData({ ACTION: 'ORDER_MATCH', BLOCK_TIME, ACTION_INDEX: 1, BLOCK_INDEX: 100 });
             await orderMatch.parse([], data, false);
 
-            // Should be a native coin match → pending_coinpay
-            sinon.assert.calledOnce(indexer.indexerDb.createCoinpayObligation);
-            assert.strictEqual(data['STATUS'], 'pending_coinpay');
+            sinon.assert.notCalled(indexer.indexerDb.createCoinpayObligation);
+            sinon.assert.notCalled(indexer.indexerDb.createOrderMatch);
         });
 
-        it('matchInfo GET_TICK null → orderInfo is coin payer, matchInfo is seller (lines 265-269)', async function () {
-            // Both GIVE_TICKs are non-null, orderInfo.GET_TICK is non-null, matchInfo.GET_TICK is null →
-            // falls to the else inside the else block (line 264-269)
-            // → coinOrder=orderInfo, sellerOrder=matchInfo, nativeCoinAmount=give_amount
+        it('matchInfo GET_TICK null against a token-for-token order (unreachable forward leg) → skipped', async function () {
             const orderPaysCoin = makeOrderInfo({
                 GIVE_TICK:      'PEPECASH',
                 GIVE_REMAINING: '100',
-                GET_TICK:       'RAREPEPE', // non-null
+                GET_TICK:       'RAREPEPE', // non-null : a token-for-token order
                 GET_REMAINING:  '10',
                 GIVE_PRICE:     '10',
                 GET_PRICE:      '0.1',
@@ -1029,7 +1101,7 @@ describe('Order_Match action handler @regression @tier2', function () {
             const matchWantsNative = makeMatchInfo({
                 GIVE_TICK:      'RAREPEPE', // non-null GIVE_TICK
                 GIVE_REMAINING: '10',
-                GET_TICK:       null,        // matchInfo wants native coin
+                GET_TICK:       null,        // matchInfo wants native coin : forward leg cannot mirror
                 GET_REMAINING:  '100',
                 GET_PRICE:      '10',
                 GET_ADDRESS:    'mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM',
@@ -1041,8 +1113,8 @@ describe('Order_Match action handler @regression @tier2', function () {
             const data = createBaseData({ ACTION: 'ORDER_MATCH', BLOCK_TIME, ACTION_INDEX: 1, BLOCK_INDEX: 100 });
             await orderMatch.parse([], data, false);
 
-            sinon.assert.calledOnce(indexer.indexerDb.createCoinpayObligation);
-            assert.strictEqual(data['STATUS'], 'pending_coinpay');
+            sinon.assert.notCalled(indexer.indexerDb.createCoinpayObligation);
+            sinon.assert.notCalled(indexer.indexerDb.createOrderMatch);
         });
 
     });

@@ -6904,21 +6904,55 @@ class Database {
         return pending;
     }
 
-    // List this chain's OPEN cross-chain SWAP offers (give_coin != get_coin) for the
-    // xchain-hub federation's matching view. Paginates by keyset on action_index.
-    // @param {limit}             integer Max rows (caller clamps)
+    // List this chain's OPEN cross-chain offers (SWAP + ORDER, give_coin != get_coin) for the
+    // xchain-hub federation's unified matching view (XCC-2). SWAP and ORDER offers are drawn in a
+    // single `UNION ALL` so ONE global `ORDER BY action_index ASC LIMIT ?` bounds the whole book
+    // and the returned cursor is correct across both kinds - the previous per-kind LIMIT capped
+    // swaps and orders independently, so a full page of one kind silently dropped the newest of
+    // that kind while the concat lost the global keyset order. Every action carries a unique
+    // global action_index (swaps and orders never collide), so the merged keyset is well defined.
+    //
+    // @param {limit}              integer Max rows over the merged book (caller clamps)
     // @param {after_action_index} integer Keyset cursor - return rows with action_index > this
-    // @param {to_coin}           string  Optional filter: only offers whose GET_COIN equals this
-    async getOpenCrossChainSwaps(limit, after_action_index, to_coin){
-        let where = [
+    // @param {to_coin}            string  Optional filter: only offers whose GET_COIN equals this
+    // @param {block_time}         integer Optional current block_time; when finite, offers already
+    //                                     past their EFFECTIVE expiration (edit-overlaid, mirroring
+    //                                     getExpiredItems: expired iff eff_expiration < block_time)
+    //                                     are excluded so a stale 'open' offer awaiting its next
+    //                                     block-loop expiry pass cannot occupy a bounded slot. A
+    //                                     NULL/never expiration is always kept.
+    //
+    // Returns an array of merged offers (each tagged `kind`), carrying two out-of-band props:
+    //   .truncated   - true when the page filled (rows === limit), so newer offers were dropped
+    //                  and the hub must page/alarm instead of matching a partial book.
+    //   .next_cursor - the largest action_index returned (feed back as after_action_index), or
+    //                  null on an empty page.
+    async getOpenCrossChainOffers(limit, after_action_index, to_coin, block_time){
+        // Per-kind base filters: latest status is 'open' + cross-chain (give != get) + optional
+        // to_coin. The effective-expiration overlay (last valid non-null edit wins, else base
+        // expiration) mirrors getExpiredItems so the read filter agrees with the block loop's
+        // own expiry rule. Each branch exposes the identical column list so UNION ALL is legal.
+        let swapArgs  = [];
+        let orderArgs = [];
+        let swapWhere = [
             `ss.action_index = (SELECT MAX(s3.action_index) FROM swap_statuses s3 WHERE s3.swap_action_index=s1.action_index)`,
             `st.status='open'`,
             `s1.give_coin_id != s1.get_coin_id`
         ];
-        let args = [];
-        if(!this.util.isNull(to_coin)){ where.push(`cc.coin=?`); args.push(to_coin); }
-        if(Number.isFinite(Number(after_action_index))){ where.push(`s1.action_index>?`); args.push(Number(after_action_index)); }
-        let query = `SELECT
+        let orderWhere = [
+            `os.action_index = (SELECT MAX(s3.action_index) FROM order_statuses s3 WHERE s3.order_action_index=o1.action_index)`,
+            `st.status='open'`,
+            `o1.give_coin_id != o1.get_coin_id`
+        ];
+        // Guard null explicitly on the cursor too: Number(null) === 0 is finite, which would
+        // append a pointless `action_index > 0` clause on the "no cursor" call.
+        let hasCursor = !this.util.isNull(after_action_index) && Number.isFinite(Number(after_action_index));
+        if(!this.util.isNull(to_coin)){ swapWhere.push(`cc.coin=?`);  swapArgs.push(to_coin); }
+        if(hasCursor){ swapWhere.push(`s1.action_index>?`); swapArgs.push(Number(after_action_index)); }
+        if(!this.util.isNull(to_coin)){ orderWhere.push(`cc.coin=?`); orderArgs.push(to_coin); }
+        if(hasCursor){ orderWhere.push(`o1.action_index>?`); orderArgs.push(Number(after_action_index)); }
+        let swapBranch = `SELECT
+                        'swap' as kind,
                         s1.action_index,
                         gc.coin    as give_coin,
                         gt.tick    as give_tick,
@@ -6934,7 +6968,8 @@ class Database {
                         s1.allow_list,
                         s1.block_list,
                         s1.payout_legs,
-                        t1.block_index
+                        t1.block_index,
+                        COALESCE((SELECT se.expiration FROM swap_edits se INNER JOIN index_statuses ses ON (ses.id=se.status_id) WHERE se.swap_action_index=s1.action_index AND ses.status='valid' AND se.expiration IS NOT NULL ORDER BY se.action_index DESC LIMIT 1), s1.expiration) as effective_expiration
                     FROM
                         swaps s1
                         INNER JOIN actions         a1 ON (a1.action_index=s1.action_index)
@@ -6947,56 +6982,9 @@ class Database {
                         LEFT  JOIN index_tickers   rt ON (rt.id=s1.get_tick_id)
                         INNER JOIN swap_statuses   ss ON (ss.swap_action_index=s1.action_index)
                         INNER JOIN index_statuses  st ON (st.id=ss.status_id)
-                    WHERE ` + where.join(' AND ') + `
-                    ORDER BY s1.action_index ASC
-                    LIMIT ?`;
-        args.push(Number(limit));
-        let results = await this.doQuery(query, args);
-        let mapped = results.map(row => ({
-            kind:           'swap',
-            action_index:   Number(row.action_index),
-            give_coin:      row.give_coin,
-            give_tick:      row.give_tick,
-            // Ownership offers carry no amount - expose virtual '1' so the hub's committed
-            // ledger + amount compare work uniformly (matches getOrderInfo's convention).
-            give_amount:    (Number(row.give_ownership) === 1 && this.util.isNull(row.give_amount)) ? '1' : row.give_amount,
-            give_ownership: Number(row.give_ownership),
-            get_coin:       row.get_coin,
-            get_tick:       row.get_tick,
-            get_amount:     (Number(row.get_ownership) === 1 && this.util.isNull(row.get_amount)) ? '1' : row.get_amount,
-            get_ownership:  Number(row.get_ownership),
-            get_address:    row.get_address,
-            source:         row.source,
-            expiration:     Number(row.expiration),
-            allow_list:     row.allow_list,
-            block_list:     row.block_list,
-            // Controller-guard royalty split (JSON [{to,bps}] or null). The hub copies it
-            // into the match row so settlement can apply it on the proceeds chain.
-            payout_legs:    row.payout_legs || null,
-            block_index:    Number(row.block_index)
-        }));
-        // Surface truncation the same way the validator-set RPCs do: a full page means
-        // the OLDEST `limit` open cross-chain swaps of this chain were returned and any
-        // newer ones are absent, so the hub can alarm/paginate instead of silently
-        // matching against a partial book (XCC-2). The RPC layer ORs swaps+orders.
-        mapped.truncated = results.length >= Number(limit);
-        return mapped;
-    }
-
-    // Open cross-chain ORDER offers (get on a different COIN network), for the hub's unified
-    // book. Parallels getOpenCrossChainSwaps but carries give_remaining/get_remaining (partial
-    // fills) so the hub matches against effective remaining and never over-fills escrow. The
-    // "from" chain is implicit (this indexer's COIN). Keyset-paginated by action_index.
-    async getOpenCrossChainOrders(limit, after_action_index, to_coin){
-        let where = [
-            `os.action_index = (SELECT MAX(s3.action_index) FROM order_statuses s3 WHERE s3.order_action_index=o1.action_index)`,
-            `st.status='open'`,
-            `o1.give_coin_id != o1.get_coin_id`
-        ];
-        let args = [];
-        if(!this.util.isNull(to_coin)){ where.push(`cc.coin=?`); args.push(to_coin); }
-        if(Number.isFinite(Number(after_action_index))){ where.push(`o1.action_index>?`); args.push(Number(after_action_index)); }
-        let query = `SELECT
+                    WHERE ` + swapWhere.join(' AND ');
+        let orderBranch = `SELECT
+                        'order' as kind,
                         o1.action_index,
                         gc.coin    as give_coin,
                         gt.tick    as give_tick,
@@ -7012,7 +7000,8 @@ class Database {
                         o1.allow_list,
                         o1.block_list,
                         o1.payout_legs,
-                        t1.block_index
+                        t1.block_index,
+                        COALESCE((SELECT oe.expiration FROM order_edits oe INNER JOIN index_statuses oes ON (oes.id=oe.status_id) WHERE oe.order_action_index=o1.action_index AND oes.status='valid' AND oe.expiration IS NOT NULL ORDER BY oe.action_index DESC LIMIT 1), o1.expiration) as effective_expiration
                     FROM
                         orders o1
                         INNER JOIN actions         a1 ON (a1.action_index=o1.action_index)
@@ -7025,30 +7014,42 @@ class Database {
                         LEFT  JOIN index_tickers   rt ON (rt.id=o1.get_tick_id)
                         INNER JOIN order_statuses  os ON (os.order_action_index=o1.action_index)
                         INNER JOIN index_statuses  st ON (st.id=os.status_id)
-                    WHERE ` + where.join(' AND ') + `
-                    ORDER BY o1.action_index ASC
+                    WHERE ` + orderWhere.join(' AND ');
+        // Merge, then apply the expiration filter + global keyset order + single LIMIT on the
+        // unified set (args ordered: swap branch, order branch, [expiration], limit).
+        let args = swapArgs.concat(orderArgs);
+        let outerWhere = '';
+        // Guard null/undefined explicitly: Number(null) === 0 is finite, which would wrongly
+        // apply a `>= 0` filter (a no-op that still diverges from the "no filter" contract).
+        if(!this.util.isNull(block_time) && Number.isFinite(Number(block_time))){
+            outerWhere = ` WHERE (u.effective_expiration IS NULL OR u.effective_expiration >= ?)`;
+            args.push(Number(block_time));
+        }
+        let query = `SELECT * FROM (
+                        ` + swapBranch + `
+                        UNION ALL
+                        ` + orderBranch + `
+                    ) u` + outerWhere + `
+                    ORDER BY u.action_index ASC
                     LIMIT ?`;
         args.push(Number(limit));
         let results = await this.doQuery(query, args);
-        let orders = [];
+        let offers = [];
         for(let row of results){
-            // Remaining (give/get) reflects all fills - local order_matches AND cross-chain
-            // settlements (both recorded in order_matches) - so the hub's reservation is exact.
-            let [give_remaining, get_remaining] = await this.getOrderAmountsRemaining(row.action_index);
             let isOwnGive = (Number(row.give_ownership) === 1 && this.util.isNull(row.give_amount));
             let isOwnGet  = (Number(row.get_ownership)  === 1 && this.util.isNull(row.get_amount));
-            orders.push({
-                kind:           'order',
+            let offer = {
+                kind:           (row.kind === 'order') ? 'order' : 'swap',
                 action_index:   Number(row.action_index),
                 give_coin:      row.give_coin,
                 give_tick:      row.give_tick,
+                // Ownership offers carry no amount - expose virtual '1' so the hub's committed
+                // ledger + amount compare work uniformly (matches getOrderInfo's convention).
                 give_amount:    isOwnGive ? '1' : row.give_amount,
-                give_remaining: String(give_remaining),
                 give_ownership: Number(row.give_ownership),
                 get_coin:       row.get_coin,
                 get_tick:       row.get_tick,
                 get_amount:     isOwnGet ? '1' : row.get_amount,
-                get_remaining:  String(get_remaining),
                 get_ownership:  Number(row.get_ownership),
                 get_address:    row.get_address,
                 source:         row.source,
@@ -7059,12 +7060,23 @@ class Database {
                 // into the match row so settlement can apply it on the proceeds chain.
                 payout_legs:    row.payout_legs || null,
                 block_index:    Number(row.block_index)
-            });
+            };
+            if(offer.kind === 'order'){
+                // Remaining (give/get) reflects all fills - local order_matches AND cross-chain
+                // settlements (both recorded in order_matches) - so the hub's reservation is exact.
+                let [give_remaining, get_remaining] = await this.getOrderAmountsRemaining(row.action_index);
+                offer.give_remaining = String(give_remaining);
+                offer.get_remaining  = String(get_remaining);
+            }
+            offers.push(offer);
         }
-        // Truncation marker (XCC-2), mirroring getOpenCrossChainSwaps + the validator RPCs:
-        // a full page means newer open cross-chain orders were dropped from the book.
-        orders.truncated = results.length >= Number(limit);
-        return orders;
+        // Surface truncation the same way the validator-set RPCs do: a full page means the OLDEST
+        // `limit` open cross-chain offers were returned and newer ones are absent, so the hub can
+        // page (via next_cursor) or alarm rather than silently matching against a partial book.
+        // Results are ORDER BY action_index ASC, so the last row carries the max action_index.
+        offers.truncated   = results.length >= Number(limit);
+        offers.next_cursor = results.length > 0 ? Number(results[results.length - 1].action_index) : null;
+        return offers;
     }
 
     // Record a cross-chain ORDER partial fill in order_matches so getOrderAmountsRemaining
@@ -10211,6 +10223,11 @@ class Database {
             // open foreign transaction when invoked on the view - defeating the reorg-path isolation
             // that routes createReorg / the rollback read-phase through this view (REORG-1).
             this._apiView.doQueryStrict = (query, args) => this._poolQuery(query, args);
+            // Own block_time memo so a federation read's getBlockTime (XCC-2 expiration filter)
+            // can never torn-write or evict the block loop's shared _blockTimeCache, which feeds
+            // the consensus-path ProtocolChanges.isEnabled. Without this the view inherits the
+            // instance's single-entry memo by reference (Object.create) and the two paths race.
+            this._apiView._blockTimeCache = { block_index: null, block_time: null };
         }
         return this._apiView;
     }
@@ -10578,8 +10595,9 @@ class Database {
         if(valid_id === null) return [];
         // Safety cap - see getActiveValidators. Bounds the result set so a
         // cache miss (or the uncached in-process call during block processing)
-        // can't return an unbounded set on a large federation. Override via
-        // VALIDATOR_QUERY_LIMIT.
+        // can't return an unbounded set on a large federation. VALIDATOR_QUERY_LIMIT
+        // is a frozen consensus constant; raising it requires a coordinated fleet
+        // upgrade, not a per-node override.
         let limit = this.config['VALIDATOR_QUERY_LIMIT'];
         let eff = this._effectiveCapabilitySetSql(valid_id, blockIndex, minStake);
         let query = `SELECT pubkey, MAX(total) AS total FROM (${eff.sql}) eff
@@ -10970,7 +10988,9 @@ class Database {
         let low    = parseInt(blockIndex) - window;
         // Safety cap matching the sibling validator-set RPCs (getActiveValidators,
         // getValidatorsByCapability, etc.) so this path can't return an unbounded
-        // set on a large federation. Override via VALIDATOR_QUERY_LIMIT.
+        // set on a large federation. VALIDATOR_QUERY_LIMIT is a frozen consensus
+        // constant; raising it requires a coordinated fleet upgrade, not a
+        // per-node override.
         let limit = this.config['VALIDATOR_QUERY_LIMIT'];
         let query = `SELECT DISTINCT ip.pubkey AS pubkey, sa.address AS source, fv.source_id AS source_id
                      FROM full_node_verifications fv
@@ -11573,6 +11593,82 @@ class Database {
         return { stakeByPubkeyTick, totalByTick, stakersByTick };
     }
 
+    // : build the read-only attestation-response snapshot the VM exposes through
+    // xchain.attestation.getResponse(requestId). Scoped to fulfilled requests emitted by
+    // THIS contract (the v0 request row's contract_index), visible as-of blockIndex.
+    // Returns a SERIALIZABLE snapshot { responses: { [request_id]: { status, payload,
+    // providerId, blockIndex, validatorCount } } }; xchain-vm/src/readonly-accessors.js
+    // rebuilds the synchronous getResponse accessor from it inside the forked worker
+    // (so this returns plain data, not closures, exactly like getContractStakeDataForVM).
+    // Only wired into the snapshot at/after the VM_ATTESTATION_GETRESPONSE flag-day; below
+    // it execute.js passes attestationData:null and getResponse() returns null.
+    //
+    // Dedup (#4373): the retry-then-ok lifecycle can write MULTIPLE v1 rows per request_id
+    // (a retryable no_quorum/provider_error round, then the terminal ok). getResponse must
+    // surface the response the callback fired on - the terminal ok - so we select only
+    // response_status='ok' rows and, on the (defensive) chance more than one exists, keep
+    // the EARLIEST by (block_index, action_index). A fulfilled request has exactly one ok
+    // in practice, but the tie-break keeps the choice deterministic regardless.
+    //
+    // Determinism + bounding: only 'valid' rows with block_index <= blockIndex are visible
+    // (an ok response that lands in a later block, or is rolled back, is not observable
+    // as-of this block). The result is capped at the most-recent GETRESPONSE_MAX fulfilled
+    // requests, ordered newest-first, so the surviving set is identical on every node; a
+    // contract reading a request older than the cap deterministically sees null on all
+    // nodes (the callback already delivered that response at fulfillment time, and a
+    // contract needing it long-term persists it to its own state).
+    async getAttestationDataForVM(contractIndex, blockIndex){
+        // Most-recent-N cap. Keeps the per-EXECUTE snapshot bounded (each payload can be
+        // up to the provider's max_response_bytes) while covering the re-consult-recent
+        // use case; the value is consensus-critical (it decides snapshot membership), so
+        // a change is a flag-day, not a config knob.
+        const GETRESPONSE_MAX = 100;
+        let responses = {};
+        let valid_id = await this.getStatusId('valid');
+        if(valid_id === null) return { responses };
+        let query = `SELECT v1.request_id, v1.provider_id, v1.response_payload, v1.response_status,
+                            v1.validator_signatures, v1.block_index, v1.action_index
+                     FROM attests v1
+                         INNER JOIN attests v0 ON (v0.request_id = v1.request_id AND v0.version = 0)
+                     WHERE v1.version = 1
+                       AND v1.response_status = 'ok'
+                       AND v1.status_id = ?
+                       AND v1.block_index <= ?
+                       AND v0.contract_index = ?
+                       AND v0.status_id = ?
+                     ORDER BY v1.block_index DESC, v1.action_index DESC
+                     LIMIT ?`;
+        let rows = await this.doQuery(query, [valid_id, Number(blockIndex), Number(contractIndex), valid_id, GETRESPONSE_MAX]);
+        // rid -> chosen row's (block, action), so the earliest-ok tie-break is explicit
+        // and does not rely on the SQL ordering alone.
+        let chosen = {};
+        for(let row of rows){
+            let rid = String(row.request_id || '').toLowerCase();
+            if(!rid) continue;
+            let cb = Number(row.block_index);
+            let ca = Number(row.action_index);
+            let prev = chosen[rid];
+            if(prev !== undefined && !(cb < prev.block || (cb === prev.block && ca < prev.action)))
+                continue;
+            // validatorCount = number of verified federation signatures inlined on the
+            // response row (JSON array); a malformed/absent column reads as 0.
+            let vc = 0;
+            if(row.validator_signatures){
+                try { let arr = JSON.parse(row.validator_signatures); if(Array.isArray(arr)) vc = arr.length; }
+                catch(e){ vc = 0; }
+            }
+            responses[rid] = {
+                status:         String(row.response_status),
+                payload:        row.response_payload != null ? String(row.response_payload) : '',
+                providerId:     String(row.provider_id || ''),
+                blockIndex:     cb,
+                validatorCount: vc
+            };
+            chosen[rid] = { block: cb, action: ca };
+        }
+        return { responses };
+    }
+
     // Slash a staker. Deducts `amount` from active contract_stakes rows first (LIFO by
     // activation_block / action_index), then from contract_unstakes rows if any remainder.
     // Returns the actual amount slashed (may be less than `amount` if available balance is lower).
@@ -11898,8 +11994,8 @@ class Database {
      * dataTables (DELETE WHERE action_index >= orphan, then forward replay re-creates the events).
      * "At most one live controller per (subject, class)" is enforced by the handlers: a BIND is
      * rejected when an effective controller already gates that class (replace = unbind-then-bind,
-     * which preserves the cooldown's teeth). action_class ∈ {transfer, trade, burn, mint, stake},
-     * validated by the handler. See Controller_Bound_Tokens.md.
+     * which preserves the cooldown's teeth). action_class ∈ {transfer, trade, burn, mint, stake,
+     * ownership}, validated by the handler. See Controller_Bound_Tokens.md.
      */
 
     // Append a token controller bind/unbind event. `evt` carries action_index, tick_id, action_class,

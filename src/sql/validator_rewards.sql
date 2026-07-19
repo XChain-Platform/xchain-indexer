@@ -24,6 +24,10 @@ CREATE TABLE validator_rewards (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
 CREATE UNIQUE INDEX reward_unique     ON validator_rewards (source_id, signing_pubkey_id, reward_type, round_reference);
-CREATE        INDEX source_id         ON validator_rewards (source_id);
+-- Composite (source_id, block_index): getUnclaimedRewardTotal SUMs a source's rewards
+-- per COLLECT, block-scoped for replay determinism. The composite lets the scoped SUM
+-- range-scan exactly the source's at-or-before-block rows and covers `WHERE source_id=?`
+-- as a leading-column prefix, so it replaces the old single-column source_id index.
+CREATE        INDEX source_block       ON validator_rewards (source_id, block_index);
 CREATE        INDEX signing_pubkey_id ON validator_rewards (signing_pubkey_id);
 CREATE        INDEX block_index       ON validator_rewards (block_index);

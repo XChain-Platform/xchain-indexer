@@ -17,7 +17,7 @@ CREATE TABLE token_controllers (
     id                  BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
     action_index        BIGINT UNSIGNED NOT NULL,         -- ISSUE action that emitted this bind/unbind event (rollback key)
     tick_id             BIGINT UNSIGNED NOT NULL,         -- FK index_tickers.id (the controlled token)
-    action_class        VARCHAR(16) NOT NULL,             -- transfer|trade|burn|mint|stake
+    action_class        VARCHAR(16) NOT NULL,             -- transfer|trade|burn|mint|stake|ownership
     contract_index      BIGINT UNSIGNED NOT NULL,         -- FK contracts.action_index (the guard contract; on unbind, the contract being dropped)
     bound_by_id         BIGINT UNSIGNED NOT NULL,         -- FK index_addresses.id (token owner who signed the event)
     is_unbind           TINYINT(1) NOT NULL DEFAULT 0,    -- 0 = bind, 1 = unbind (drop request)

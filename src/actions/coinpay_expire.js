@@ -60,10 +60,28 @@ class Coinpay_Expire {
         if(!giveOrderInfo || !getOrderInfo)
             return;
 
-        // Determine which order is the token seller (has escrowed tokens) and which is the coin offerer
-        // The coin offerer is the party whose GIVE_TICK is null/empty (offering native coin)
+        // Determine which order is the token seller (has escrowed tokens) and which is the coin
+        // offerer. This is the opposite unwind of coinpay.js's fulfill: it MUST identify the
+        // seller identically, or the wrong order's escrowed token is released back. Gated by
+        // COINPAY_NATIVE_RECIPROCITY: below the flag-day the legacy single-side check (coin
+        // offerer = the party whose GIVE_TICK is null/empty) is preserved byte-for-byte; at/after
+        // it the split keys on which side actually GIVES native coin, reading BOTH orders, and
+        // refuses to settle an ambiguous shape (which order_match no longer creates once active).
         let sellerOrder, coinOrder;
-        if(this.util.isNull(giveOrderInfo['GIVE_TICK']) || giveOrderInfo['GIVE_TICK'] == this.config['COIN']){
+        if(await this.actions.protocolChanges.isEnabled('COINPAY_NATIVE_RECIPROCITY', data['BLOCK_INDEX'])){
+            let giveIsCoin = this.util.isNull(giveOrderInfo['GIVE_TICK']) || giveOrderInfo['GIVE_TICK'] == this.config['COIN'];
+            let getIsCoin  = this.util.isNull(getOrderInfo['GIVE_TICK'])  || getOrderInfo['GIVE_TICK']  == this.config['COIN'];
+            if(giveIsCoin && !getIsCoin){
+                coinOrder   = giveOrderInfo;
+                sellerOrder = getOrderInfo;
+            } else if(getIsCoin && !giveIsCoin){
+                coinOrder   = getOrderInfo;
+                sellerOrder = giveOrderInfo;
+            } else {
+                console.log("\t COINPAY_EXPIRE (skip): ambiguous native roles for match " + obligationInfo['ACTION_INDEX']);
+                return;
+            }
+        } else if(this.util.isNull(giveOrderInfo['GIVE_TICK']) || giveOrderInfo['GIVE_TICK'] == this.config['COIN']){
             // giveOrder is offering native coin
             coinOrder   = giveOrderInfo;
             sellerOrder = getOrderInfo;

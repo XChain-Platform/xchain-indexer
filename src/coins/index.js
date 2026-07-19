@@ -59,6 +59,14 @@ const DEFAULT_CONFIRMATIONS = {};
 for(const tick of ALLOWED_COINS)
     DEFAULT_CONFIRMATIONS[tick] = COIN_FILES[tick].confirmations;
 
+// Block/tx wire-serialization family per coin ('default' | 'mweb' | 'auxpow').
+// Consumed by the decoder/utxo-tracker to pick their parse path from the registry
+// instead of a hardcoded coin-name list. Network-independent, so it is a plain
+// tick -> family map (not resolved per network). NOT part of the consensus subset.
+const WIRE_FORMAT = {};
+for(const tick of ALLOWED_COINS)
+    WIRE_FORMAT[tick] = COIN_FILES[tick].wireFormat;
+
 // Deep clone of plain data (coin files are pure JSON-compatible objects). Keeps
 // the require-cached source modules immutable across getCoinConfig calls.
 function clone(obj){
@@ -185,6 +193,7 @@ function getCoinConfig(tick, network){
         site:          src.site,
         decimals:      src.decimals,
         confirmations: src.confirmations,
+        wireFormat:    src.wireFormat,
         network:       network,
         net:           clone(netBlock.net),
         firstBlock:    netBlock.firstBlock,
@@ -329,6 +338,7 @@ module.exports = {
     COIN_FULL_NAME,
     FULL_NAME_TO_TICK,
     DEFAULT_CONFIRMATIONS,
+    WIRE_FORMAT,
     resolveConfirmations,
     getCoinConfig,
     getCoinConfigByFullName,

@@ -127,9 +127,29 @@ class Coinpay {
         if(!giveOrderInfo || !getOrderInfo)
             return;
 
-        // Determine which order is the token seller (escrowed tokens) and which is the coin offerer
+        // Determine which order is the token seller (escrowed tokens) and which is the coin
+        // offerer. The role split must match order_match.js (which created the obligation) and
+        // coinpay_expire.js (the opposite unwind) exactly, or the wrong order's escrowed token
+        // is released. Gated by COINPAY_NATIVE_RECIPROCITY: below the flag-day the legacy
+        // single-side check is preserved byte-for-byte; at/after it the split keys on which side
+        // actually GIVES native coin, reading BOTH orders. On a well-formed native match exactly
+        // one side gives coin, so the two agree; the robust form additionally refuses to settle
+        // an ambiguous shape (which order_match no longer creates once the flag is active).
         let sellerOrder, coinOrder;
-        if(this.util.isNull(giveOrderInfo['GIVE_TICK']) || giveOrderInfo['GIVE_TICK'] == this.config['COIN']){
+        if(await this.actions.protocolChanges.isEnabled('COINPAY_NATIVE_RECIPROCITY', data['BLOCK_INDEX'])){
+            let giveIsCoin = this.util.isNull(giveOrderInfo['GIVE_TICK']) || giveOrderInfo['GIVE_TICK'] == this.config['COIN'];
+            let getIsCoin  = this.util.isNull(getOrderInfo['GIVE_TICK'])  || getOrderInfo['GIVE_TICK']  == this.config['COIN'];
+            if(giveIsCoin && !getIsCoin){
+                coinOrder   = giveOrderInfo;
+                sellerOrder = getOrderInfo;
+            } else if(getIsCoin && !giveIsCoin){
+                coinOrder   = getOrderInfo;
+                sellerOrder = giveOrderInfo;
+            } else {
+                console.log("\t COINPAY (skip): ambiguous native roles for match " + obligationInfo['ACTION_INDEX']);
+                return;
+            }
+        } else if(this.util.isNull(giveOrderInfo['GIVE_TICK']) || giveOrderInfo['GIVE_TICK'] == this.config['COIN']){
             coinOrder   = giveOrderInfo;
             sellerOrder = getOrderInfo;
         } else {

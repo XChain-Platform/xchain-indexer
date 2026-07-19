@@ -22,5 +22,9 @@ CREATE TABLE reward_claims (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
 CREATE UNIQUE INDEX action_index ON reward_claims (action_index);
-CREATE        INDEX source_id    ON reward_claims (source_id);
+-- Composite (source_id, block_index): the other half of getUnclaimedRewardTotal SUMs a
+-- source's valid claims, block-scoped for replay determinism. The composite range-scans
+-- exactly the source's at-or-before-block rows and covers `WHERE source_id=?` as a leading
+-- prefix, so it replaces the old single-column source_id index.
+CREATE        INDEX source_block  ON reward_claims (source_id, block_index);
 CREATE        INDEX status_id    ON reward_claims (status_id);

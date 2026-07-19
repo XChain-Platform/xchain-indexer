@@ -97,14 +97,14 @@ describe('Programmable policy layer : Phase A binding wire contract @regression'
             config = require('../../src/config.js').getConfig();
         });
 
-        it('CONTROLLER_ACTION_CLASSES is exactly the five routable classes', function () {
+        it('CONTROLLER_ACTION_CLASSES is exactly the six routable classes', function () {
             assert.deepStrictEqual(config.CONTROLLER_ACTION_CLASSES,
-                ['transfer', 'trade', 'burn', 'mint', 'stake']);
+                ['transfer', 'trade', 'burn', 'mint', 'stake', 'ownership']);
         });
 
-        it("CONTROLLER_BINDABLE_CLASSES is the five routable classes plus the catch-all 'all'", function () {
+        it("CONTROLLER_BINDABLE_CLASSES is the six routable classes plus the catch-all 'all'", function () {
             assert.deepStrictEqual(config.CONTROLLER_BINDABLE_CLASSES,
-                ['transfer', 'trade', 'burn', 'mint', 'stake', 'all']);
+                ['transfer', 'trade', 'burn', 'mint', 'stake', 'ownership', 'all']);
         });
 
         it("'all' is BINDABLE but never ROUTABLE", function () {

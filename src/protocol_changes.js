@@ -397,6 +397,29 @@ class ProtocolChanges {
         // block 0).
         this.addChange('ATTEST_CANONICAL_LOWERCASE_ID', '2.0.0',1790812800,0,0,0,0,0);
 
+        // : VM xchain.attestation.getResponse(requestId) reader. Below this
+        // activation the VM snapshot's attestationData is always null, so
+        // getResponse() returns null for every request (the pre-reader behaviour);
+        // the callback EXECUTE remains the only channel a contract observes a
+        // response through. At/above it execute.js pre-loads this contract's
+        // fulfilled responses (getAttestationDataForVM) into the snapshot and
+        // getResponse() returns { status, payload, providerId, blockIndex,
+        // validatorCount } for any prior fulfilled request from the SAME contract.
+        // Gated as its own consensus rule because it adds a NEW read source to the
+        // VM: a contract that branches on getResponse() sees null on a legacy node
+        // and a populated object on an upgraded node, forking a heterogeneous fleet
+        // (and the per-block contract_hash, since the divergent branch writes
+        // different state) on the first getResponse-reading contract. Keyed on
+        // block_TIME (not block_index), mirroring VM_BALANCE_TOKENINFO: EXECUTE runs
+        // on BTC, LTC and DOGE whose heights diverge by millions of blocks, so no
+        // single shared block height names one cutover across all three chains, but
+        // a single timestamp does. The mainnet timestamp joins the ratified
+        // coordinated anchor 1790812800 (2026-10-01 00:00:00 UTC), the confirmed
+        // 2.0.0 contract-era cohort; a divergent value is a fork. testnet/regtest
+        // activate at genesis (no pre-reader history to preserve; the e2e/regtest
+        // stack exercises getResponse from block 0).
+        this.addChange('VM_ATTESTATION_GETRESPONSE', '2.0.0',1790812800,0,0,0,0,0);
+
         // Cross-chain royalty enforcement, layered on CONTROLLER_GUARD. Once the guard
         // produces royalty payout_legs (post-CONTROLLER_GUARD), a CROSS-CHAIN listing of
         // a royalty-bearing token needs its legs applied on the PROCEEDS chain, which
@@ -531,6 +554,36 @@ class ProtocolChanges {
         // 00:00:00 UTC); testnet/regtest activate at genesis (all zeros) so the correct
         // release is in force from block 0 there and in the unit/e2e suites.
         this.addChange('COINPAY_EXPIRE_TOKEN_AMOUNT', '2.0.0',1790812800,0,0,0,0,0);
+
+        // COINPAY native-coin match reciprocity + role detection. A native-coin ORDER_MATCH
+        // settles two-phase: order_match.js reserves the token seller's escrowed leg and
+        // records a coinpay_obligation whose PAYER is the coin offerer and PAYEE is the token
+        // seller; COINPAY/COINPAY_EXPIRE later release the seller's token leg. Which order is
+        // the coin offerer vs the token seller must be identified IDENTICALLY in all three
+        // files. findOrderMatches enforces the forward leg (orderInfo.GIVE == matchInfo.GET)
+        // strictly but NULL-relaxes the reverse leg (orderInfo.GET == matchInfo.GIVE) so a
+        // native-coin side can pair. That relaxation also lets a token-for-COIN order
+        // (GET_TICK null) match a token-for-token maker whose GIVE_TICK is a real token: no
+        // side actually gives native coin to the coin-wanting side, yet order_match would mint
+        // a bogus COINPay obligation, and its 4-case role detection (which reads GET_TICK)
+        // disagrees with coinpay.js / coinpay_expire.js's 2-case detection (which reads only a
+        // single GIVE_TICK) - releasing the WRONG order's escrowed token on fulfill/expire
+        // (a net-zero +credit / -phantom-escrow mint out of the global escrow pool, same class
+        // as OM-1 / the COINPAY_EXPIRE_TOKEN_AMOUNT bug, invisible to the supply sanity check).
+        // After activation order_match.js skips a native match whose legs are not an exact
+        // null-to-null / token mirror (so a legitimate native match has exactly one coin-giving
+        // side), and coinpay.js / coinpay_expire.js key the seller/coin split on which side
+        // actually GIVES native coin (checking BOTH orders) and refuse to settle an ambiguous
+        // shape. On the only reachable well-formed shapes (exactly one GIVE_TICK null) the new
+        // and legacy detections agree byte-for-byte, so this only removes the mis-paired path.
+        // Gated because it CHANGES which matches settle (a consensus-visible ledger movement
+        // hashed into balances_root + ledger_hash): an ungated flip forks a heterogeneous fleet
+        // and diverges a from-genesis replay. Keyed on block_TIME like the sibling native-coin
+        // gates (BTC/LTC/DOGE heights diverge; one timestamp names the cutover across all three).
+        // Same coordinated contract-era flag-day (2026-10-01 00:00:00 UTC); testnet/regtest
+        // activate at genesis (all zeros) so the correct routing holds from block 0 there and in
+        // the unit/e2e suites.
+        this.addChange('COINPAY_NATIVE_RECIPROCITY', '2.0.0',1790812800,0,0,0,0,0);
 
         // UNSTAKE cooldown-completion action attribution. When a capability/contract
         // UNSTAKE cooldown elapses, processCooldownCompletions credits the returned

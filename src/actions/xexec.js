@@ -52,8 +52,9 @@ const { rethrowIfInfraFault } = require('./faultGuard.js');
 
 // Return payloads are mirrored to every indexer AND ANCHOR-archived on DOGE,
 // so they are hard-capped. Oversize yields status 'payload_too_large' with an
-// empty payload (deterministic truncation rule). Canonical: protocol/constants.js.
-const XCALL_MAX_RETURN_BYTES = 1024;
+// empty payload (deterministic truncation rule). Vendored single source of
+// truth: ../protocol/constants.js (XCALL_MAX_RETURN_BYTES).
+const XCALL_MAX_RETURN_BYTES = require('../protocol/constants.js').XCALL_MAX_RETURN_BYTES;
 
 class Xexec {
 

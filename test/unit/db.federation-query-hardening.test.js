@@ -143,35 +143,89 @@ describe('getCapabilitySnapshotValidators() NULL-amount guard @regression @tier1
     });
 });
 
-describe('getOpenCrossChain{Swaps,Orders}() truncation marker @regression @tier1', function () {
-    // A full page (rows === limit) means newer open cross-chain offers were dropped;
-    // the marker lets the hub alarm rather than match against a partial book (XCC-2).
-    function swapRow(idx) {
-        return { action_index: idx, give_coin: 'BTC', give_tick: 'AAA', give_amount: '1', give_ownership: 0,
-                 get_coin: 'LTC', get_tick: null, get_amount: '1', get_ownership: 0, get_address: 'x',
-                 source: 's', expiration: 0, allow_list: null, block_list: null, payout_legs: null, block_index: 1 };
+describe('getOpenCrossChainOffers() UNION + cursor + expiration hardening (XCC-2) @regression @tier1', function () {
+    // The unified cross-chain book draws SWAP + ORDER in one UNION ALL under a single global
+    // LIMIT + keyset cursor (was two per-kind LIMITs concat'd, which silently dropped the
+    // newest of an over-cap kind and lost the global order). A full page (rows === limit) flags
+    // truncated so the hub pages via next_cursor rather than matching a partial book.
+    function offerRow(kind, idx, extra) {
+        return Object.assign(
+            { kind, action_index: idx, give_coin: 'BTC', give_tick: 'AAA', give_amount: '1', give_ownership: 0,
+              get_coin: 'LTC', get_tick: null, get_amount: '1', get_ownership: 0, get_address: 'x',
+              source: 's', expiration: 0, allow_list: null, block_list: null, payout_legs: null,
+              block_index: 1, effective_expiration: 0 },
+            extra || {});
     }
 
-    it('flags truncated=true on a full swap page', async function () {
+    it('draws swaps + orders in a single UNION ALL, not two per-kind LIMIT queries', async function () {
         const db = makeDb();
-        sinon.stub(db, 'doQuery').resolves([swapRow(1), swapRow(2)]);
-        const out = await db.getOpenCrossChainSwaps(2, null, null);
-        assert.strictEqual(out.truncated, true);
+        const calls = [];
+        sinon.stub(db, 'doQuery').callsFake((query, args) => { calls.push({ query, args }); return Promise.resolve([]); });
+        await db.getOpenCrossChainOffers(500, null, null, null);
+        assert.strictEqual(calls.length, 1, 'one merged query, not one per kind');
+        assert.match(calls[0].query, /UNION ALL/, 'swaps + orders unioned');
+        assert.match(calls[0].query, /ORDER BY u\.action_index ASC/, 'one global keyset order');
+        // exactly one LIMIT (the outer bound), bound as a param
+        assert.strictEqual((calls[0].query.match(/LIMIT \?/g) || []).length >= 1, true);
+        assert.strictEqual(calls[0].args[calls[0].args.length - 1], 500, 'bound limit is the last arg');
     });
 
-    it('flags truncated=false on a short swap page', async function () {
+    it('flags truncated=true + returns the max action_index as next_cursor on a full page', async function () {
         const db = makeDb();
-        sinon.stub(db, 'doQuery').resolves([swapRow(1)]);
-        const out = await db.getOpenCrossChainSwaps(2, null, null);
-        assert.strictEqual(out.truncated, false);
-    });
-
-    it('flags truncated on a full order page (getOrderAmountsRemaining stubbed)', async function () {
-        const db = makeDb();
-        sinon.stub(db, 'doQuery').resolves([swapRow(1), swapRow(2)]);
-        sinon.stub(db, 'getOrderAmountsRemaining').resolves(['1', '1']);
-        const out = await db.getOpenCrossChainOrders(2, null, null);
+        sinon.stub(db, 'doQuery').resolves([offerRow('swap', 4), offerRow('swap', 9)]);
+        const out = await db.getOpenCrossChainOffers(2, null, null, null);
         assert.strictEqual(out.truncated, true);
+        assert.strictEqual(out.next_cursor, 9, 'next_cursor is the last (max) action_index');
         assert.strictEqual(out.length, 2);
+    });
+
+    it('flags truncated=false + null next_cursor on an empty page', async function () {
+        const db = makeDb();
+        sinon.stub(db, 'doQuery').resolves([]);
+        const out = await db.getOpenCrossChainOffers(2, null, null, null);
+        assert.strictEqual(out.truncated, false);
+        assert.strictEqual(out.next_cursor, null);
+        assert.strictEqual(out.length, 0);
+    });
+
+    it('enriches ORDER rows with give/get remaining, leaves SWAP rows alone', async function () {
+        const db = makeDb();
+        sinon.stub(db, 'doQuery').resolves([offerRow('swap', 1), offerRow('order', 2)]);
+        const remaining = sinon.stub(db, 'getOrderAmountsRemaining').resolves(['7', '3']);
+        const out = await db.getOpenCrossChainOffers(10, null, null, null);
+        assert.strictEqual(out[0].kind, 'swap');
+        assert.strictEqual(out[0].give_remaining, undefined, 'swaps carry no remaining');
+        assert.strictEqual(out[1].kind, 'order');
+        assert.strictEqual(out[1].give_remaining, '7');
+        assert.strictEqual(out[1].get_remaining, '3');
+        assert.strictEqual(remaining.calledOnceWith(2), true, 'remaining looked up only for the order row');
+    });
+
+    it('applies the expiration filter + cursor as bound params only when provided', async function () {
+        const db = makeDb();
+        const calls = [];
+        sinon.stub(db, 'doQuery').callsFake((query, args) => { calls.push({ query, args }); return Promise.resolve([]); });
+        // No block_time / no cursor / no to_coin: outer WHERE absent, args = [limit] only.
+        await db.getOpenCrossChainOffers(100, null, null, null);
+        assert.doesNotMatch(calls[0].query, /effective_expiration IS NULL OR/);
+        assert.deepStrictEqual(calls[0].args, [100]);
+        // With block_time + cursor + to_coin: expiration clause present; args carry the
+        // to_coin + cursor per branch (swap then order), then block_time, then limit.
+        calls.length = 0;
+        await db.getOpenCrossChainOffers(100, 42, 'LTC', 1700000000);
+        assert.match(calls[0].query, /u\.effective_expiration IS NULL OR u\.effective_expiration >= \?/);
+        // swap: to_coin, cursor ; order: to_coin, cursor ; expiration ; limit
+        assert.deepStrictEqual(calls[0].args, ['LTC', 42, 'LTC', 42, 1700000000, 100]);
+    });
+
+    it('overlays edits for the effective-expiration filter (mirrors getExpiredItems)', async function () {
+        const db = makeDb();
+        const calls = [];
+        sinon.stub(db, 'doQuery').callsFake((query, args) => { calls.push({ query, args }); return Promise.resolve([]); });
+        await db.getOpenCrossChainOffers(100, null, null, 1700000000);
+        // both branches resolve effective_expiration from the latest valid non-null edit,
+        // falling back to the base expiration column.
+        assert.match(calls[0].query, /swap_edits se[\s\S]*ses\.status='valid'[\s\S]*se\.expiration IS NOT NULL[\s\S]*ORDER BY se\.action_index DESC/);
+        assert.match(calls[0].query, /order_edits oe[\s\S]*oes\.status='valid'[\s\S]*oe\.expiration IS NOT NULL[\s\S]*ORDER BY oe\.action_index DESC/);
     });
 });

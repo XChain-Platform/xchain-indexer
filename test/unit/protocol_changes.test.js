@@ -380,6 +380,69 @@ describe('ProtocolChanges @regression @tier3', function () {
         });
     });
 
+    // ─── VM_ATTESTATION_GETRESPONSE: the consensus anti-fork gate  ───
+    // The VM xchain.attestation.getResponse() reader. Below activation execute.js
+    // passes attestationData:null and getResponse() returns null for every request;
+    // at/above it the indexer feeds the getAttestationDataForVM snapshot and a
+    // contract reading a prior fulfilled response sees a populated object. A
+    // regression in its registration (a zeroed/wrong mainnet flag-day, regtest/
+    // testnet flipped off genesis, or the version bumped past the shipping node)
+    // silently changes the VM input on the first getResponse-reading contract →
+    // divergent state → contract_hash → federation checkpoint, forking the fleet.
+    // execute.js calls the REAL isEnabled() at the EXECUTE primary call site, so this
+    // block guards the registration that call site depends on. Keep in lockstep with
+    // protocol_changes.js.
+    describe('VM_ATTESTATION_GETRESPONSE activation gate (consensus)', function () {
+        const MAINNET_FLAG_DAY = 1790812800; // 2026-10-01 00:00:00 UTC, CONFIRMED 2026-07-07 (see protocol_changes.js)
+
+        function pcFor(network, version = '2.0.0') {
+            process.env.npm_package_version = version; // shipping consensus version
+            indexer.config.NETWORK = network; // constructor reads network from the validated config
+            return new ProtocolChanges(indexer);
+        }
+
+        it('is registered as a v2.0.0 change keyed on block_time, not block_index', function () {
+            const change = pcFor('regtest').changes['VM_ATTESTATION_GETRESPONSE'];
+            assert.ok(change, 'VM_ATTESTATION_GETRESPONSE must be defined');
+            assert.strictEqual(change.version_major, 2);
+            assert.strictEqual(change.version_minor, 0);
+            assert.strictEqual(change.version_revision, 0);
+            // Time-keyed (BTC/LTC/DOGE heights diverge by millions of blocks); all block gates stay 0.
+            assert.strictEqual(change.mainnet_block, 0);
+            assert.strictEqual(change.testnet_block, 0);
+            assert.strictEqual(change.regtest_block, 0);
+            // testnet/regtest activate at genesis; mainnet on the coordinated flag-day.
+            assert.strictEqual(change.testnet_time, 0);
+            assert.strictEqual(change.regtest_time, 0);
+            assert.strictEqual(change.mainnet_time, MAINNET_FLAG_DAY,
+                'mainnet flag-day must match protocol_changes.js; a wrong value is a fork');
+        });
+
+        it('regtest: enabled from genesis (gateway gets real getResponse data)', async function () {
+            const pc2 = pcFor('regtest');
+            indexer.decoderDb.getBlockTime.resolves(1);
+            assert.strictEqual(await pc2.isEnabled('VM_ATTESTATION_GETRESPONSE', 0), true);
+        });
+
+        it('mainnet: DISABLED one second below the flag-day (getResponse stays null)', async function () {
+            const pc2 = pcFor('mainnet');
+            indexer.decoderDb.getBlockTime.resolves(MAINNET_FLAG_DAY - 1);
+            assert.strictEqual(await pc2.isEnabled('VM_ATTESTATION_GETRESPONSE', 100), false);
+        });
+
+        it('mainnet: ENABLED at exactly the flag-day boundary', async function () {
+            const pc2 = pcFor('mainnet');
+            indexer.decoderDb.getBlockTime.resolves(MAINNET_FLAG_DAY);
+            assert.strictEqual(await pc2.isEnabled('VM_ATTESTATION_GETRESPONSE', 100), true);
+        });
+
+        it('a pre-reader (v1.x) node treats it as not-yet-active; getResponse stays null', async function () {
+            const pc1 = pcFor('regtest', '1.9.9');
+            indexer.decoderDb.getBlockTime.resolves(1);
+            assert.strictEqual(await pc1.isEnabled('VM_ATTESTATION_GETRESPONSE', 0), false);
+        });
+    });
+
     // ─── CONTROLLER_GUARD: the consensus anti-fork gate ─────────────────────
     // The programmable-policy controller guard. Below activation the bound controller's
     // `guard` method is NEVER run; every SEND/ORDER/SWAP/DISPENSER/DESTROY on a controlled

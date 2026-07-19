@@ -21,4 +21,9 @@ CREATE TABLE swap_statuses (
 
 CREATE        INDEX action_index      ON swap_statuses (action_index);
 CREATE        INDEX swap_action_index ON swap_statuses (swap_action_index);
-CREATE        INDEX status_id         ON swap_statuses (status_id);
+-- Composite (status_id, action_index) bounds the per-block expiry sweep's
+-- open-item probe: it filters swap_statuses by status_id (via the index_statuses
+-- 'open' join) and needs action_index for the latest-status check, so the leading
+-- column drives the join and the trailing column keeps it covering. Supersedes the
+-- old single-column status_id index (leftmost-prefix), which is therefore dropped.
+CREATE        INDEX status_action     ON swap_statuses (status_id, action_index);

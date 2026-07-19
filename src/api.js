@@ -727,25 +727,33 @@ async function startApi(){
                 // reverse order (rows then generation) could read orphaned rows pre-commit and stamp
                 // them with the post-commit G+1, letting them escape the fence permanently.
                 let pushGeneration = await db.getPushGeneration(indexer.config['COIN']);
-                // Unified cross-chain book: SWAP offers (Phase A, exact single-fill) + ORDER
-                // offers (Phase B, price-time partial fills). Each is tagged with `kind`.
-                let swaps  = await db.getOpenCrossChainSwaps(max, after_action_index, to_coin);
-                let orders = await db.getOpenCrossChainOrders(max, after_action_index, to_coin);
-                // Additive truncation marker (XCC-2): each query caps at `max` of its kind and
-                // returns the OLDEST by action_index, so a full page silently drops newer offers.
-                // `concat` returns a plain array (custom props are lost), so OR the two flags here
-                // before merging and surface it so the hub can alarm/paginate rather than match
-                // against a partial cross-chain book. null before the field existed = not truncated.
-                let truncated = (swaps.truncated === true) || (orders.truncated === true);
+                // Effective expiration filter (XCC-2): drop offers already past their (edit-
+                // overlaid) expiration relative to the tip's block_time, so a stale 'open' offer
+                // awaiting its next block-loop expiry pass cannot occupy a bounded slot. A missing
+                // block_time (older-schema gap) yields a non-finite value → the filter is skipped
+                // (fail open, unchanged behavior) rather than dropping the whole book.
+                // getBlockTime returns the `false` sentinel on a missing block / older-schema gap;
+                // coerce that (and any non-finite) to null so the filter is skipped rather than
+                // running as a `>= 0` no-op or, worse, a `>= NaN` that drops the whole book.
+                let rawBlockTime = await db.getBlockTime(latest);
+                let blockTime = (rawBlockTime !== false && Number.isFinite(Number(rawBlockTime)))
+                    ? Number(rawBlockTime) : null;
+                // Unified cross-chain book (XCC-2): SWAP (Phase A, exact single-fill) + ORDER
+                // (Phase B, price-time partial fills) drawn in one UNION ALL so a single global
+                // LIMIT + keyset cursor bounds the whole book. Each offer is tagged `kind`; the
+                // returned array carries .truncated + .next_cursor out-of-band.
+                let merged = await db.getOpenCrossChainOffers(max, after_action_index, to_coin, blockTime);
+                let truncated = merged.truncated === true;
                 if(truncated)
-                    console.warn('getopencrosschainorders hit the per-kind cap of ' + max + ' at block ' + latest + ' - the open cross-chain book is truncated (newer offers dropped); the hub should raise its limit or page.');
-                let merged = swaps.concat(orders);
+                    console.warn('getopencrosschainorders hit the cap of ' + max + ' at block ' + latest + ' - the open cross-chain book is truncated (newer offers dropped); the hub should page via next_cursor or raise its limit.');
                 for(let o of merged) o.push_generation = pushGeneration;
                 return {
                     latest_block_index: latest,
                     network:            indexer.config['NETWORK'],
                     count:              merged.length,
                     truncated:          truncated,
+                    // Keyset cursor for the hub's page loop: feed back as after_action_index.
+                    next_cursor:        (merged.next_cursor != null) ? merged.next_cursor : null,
                     orders:             merged
                 };
             } catch (err) {

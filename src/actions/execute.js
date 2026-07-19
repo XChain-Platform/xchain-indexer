@@ -41,13 +41,14 @@ const PROVIDER_DEADLINE_WINDOWS = new ProviderRegistry().getDeadlineWindows();
 // parse(); module-scoped now that processEmission validates against it too.)
 const GAS_CEILING = 1000000;
 
-// Cross-contract call protocol constants. Canonical:
-// xchain-documentation/protocol/constants.js (VM_MAX_CALL_DEPTH /
-// VM_MIN_CALL_GAS). The VM enforces both at emit time (gateway-emit.js);
-// these host-side checks are defense in depth so an older/compromised
-// bundled VM cannot bypass them.
-const MAX_CALL_DEPTH = 4;
-const MIN_CALL_GAS   = 5000;
+// Cross-contract call protocol constants. Vendored single source of truth:
+// ../protocol/constants.js (byte-identical to xchain-documentation/protocol/
+// constants.js, VM_MAX_CALL_DEPTH / VM_MIN_CALL_GAS). The VM enforces both at
+// emit time (gateway-emit.js); these host-side checks are defense in depth so
+// an older/compromised bundled VM cannot bypass them.
+const PROTO = require('../protocol/constants.js');
+const MAX_CALL_DEPTH = PROTO.VM_MAX_CALL_DEPTH;
+const MIN_CALL_GAS   = PROTO.VM_MIN_CALL_GAS;
 
 // Reserved method name a controller-bound token's contract must export. The
 // indexer invokes it before a guarded native action (SEND/ORDER/SWAP/DISPENSER)
@@ -250,6 +251,15 @@ class Execute {
             let pollTickVisible = await this.actions.protocolChanges.isEnabled('VOTE_POLL_TICK_VISIBLE', data['BLOCK_INDEX']);
             let pollData       = await this.indexerDb.getPollResultsForVM(data['BLOCK_INDEX'], pollTickVisible);
 
+            // : attestation-response snapshot backing xchain.attestation.getResponse().
+            // Gated on the VM_ATTESTATION_GETRESPONSE flag-day: below activation the gateway
+            // sees attestationData:null (getResponse returns null, the pre-reader behaviour),
+            // so a heterogeneous fleet never forks on the first getResponse-reading contract.
+            // Scoped to THIS contract's fulfilled requests (see getAttestationDataForVM).
+            let attestationData = null;
+            if(await this.actions.protocolChanges.isEnabled('VM_ATTESTATION_GETRESPONSE', data['BLOCK_INDEX']))
+                attestationData = await this.indexerDb.getAttestationDataForVM(data['CONTRACT_ACTION_INDEX'], data['BLOCK_INDEX']);
+
             // Pre-load contract-stake snapshot scoped to THIS contract. Backs the
             // xchain.contract.{getStake,getTotalStaked,getStakers,slash} APIs synchronously.
             // Implicit slash authorization: the accessor only knows this contract's stakes.
@@ -326,7 +336,7 @@ class Execute {
                 oracleData:        oracleData,
                 crossChainData:    crossChainData,
                 pollData:          pollData,
-                attestationData:   null, // TODO: getResponse() reader not currently wired into the VM context
+                attestationData:   attestationData, // : null pre-flag; populated at/after VM_ATTESTATION_GETRESPONSE
                 contractStakeData: contractStakeData,
                 providerDeadlines: PROVIDER_DEADLINE_WINDOWS
             });
@@ -640,6 +650,11 @@ class Execute {
                 oracleData:        oracleData,
                 crossChainData:    crossChainData,
                 pollData:          pollData,
+                // A controller guard is a lightweight allow/deny + royalty decision on a
+                // native action; it has no attestation-request surface (the gateway also
+                // disables attestation.request under isGuard), so it never reads responses.
+                // Keep attestationData:null here to avoid widening the guard's consensus
+                // read surface .
                 attestationData:   null,
                 contractStakeData: contractStakeData,
                 providerDeadlines: PROVIDER_DEADLINE_WINDOWS

@@ -43,16 +43,17 @@ const swq     = require('../stake_weighted_quorum.js');
 const eq      = require('../equivocation_header.js');
 const { rethrowIfInfraFault } = require('./faultGuard.js');
 
-// Mirrored from the canonical constants in
-// xchain-documentation/protocol/constants.js (same convention as the
-// VM_MAX_CALL_DEPTH / VM_MIN_CALL_GAS mirrors in execute.js). The VM enforces
-// these at emit time; this handler re-validates host-side (defense in depth).
-const XCALL_MIN_GAS             = 5000;     // = VM_MIN_CALL_GAS
-const XCALL_MAX_GAS             = 200000;   // target-side ceiling cap (calls are fee-less on the target chain)
-const XCALL_MAX_HOPS            = 2;        // user→Y = 1, Y→back = 2; further hops need a fresh user tx
-const XCALL_MIN_DEADLINE_BLOCKS = 10;
-const XCALL_MAX_DEADLINE_BLOCKS = 4000;     // generous: must cover both chains' confirmation depths + relay rounds
-const XCALL_MAX_CALLS_PER_BLOCK = 25;       // deterministic per-block injection cap (overflow carries forward; never dropped)
+// Vendored from ../protocol/constants.js (byte-identical to xchain-documentation/
+// protocol/constants.js; same convention as the VM_MAX_CALL_DEPTH /
+// VM_MIN_CALL_GAS mirrors in execute.js). The VM enforces these at emit time;
+// this handler re-validates host-side (defense in depth).
+const PROTO = require('../protocol/constants.js');
+const XCALL_MIN_GAS             = PROTO.XCALL_MIN_GAS;             // = VM_MIN_CALL_GAS
+const XCALL_MAX_GAS             = PROTO.XCALL_MAX_GAS;             // target-side ceiling cap (calls are fee-less on the target chain)
+const XCALL_MAX_HOPS            = PROTO.XCALL_MAX_HOPS;            // user→Y = 1, Y→back = 2; further hops need a fresh user tx
+const XCALL_MIN_DEADLINE_BLOCKS = PROTO.XCALL_MIN_DEADLINE_BLOCKS;
+const XCALL_MAX_DEADLINE_BLOCKS = PROTO.XCALL_MAX_DEADLINE_BLOCKS; // generous: must cover both chains' confirmation depths + relay rounds
+const XCALL_MAX_CALLS_PER_BLOCK = PROTO.XCALL_MAX_CALLS_PER_BLOCK; // deterministic per-block injection cap (overflow carries forward; never dropped)
 
 const ALLOWED_CHAINS = ['BTC', 'LTC', 'DOGE'];
 

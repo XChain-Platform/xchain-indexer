@@ -32,11 +32,12 @@
  *
  ********************************************************************/
 
-// Canonical values: xchain-documentation/protocol/constants.js
+// Vendored single source of truth: ../protocol/constants.js
 // (MAX_DEPLOY_CHUNKS / MAX_DEPLOYCHUNK_PART_BYTES); kept in lockstep with the SDK
 // validator + splitter by the cross-service regression suite.
-const MAX_DEPLOY_CHUNKS         = 16;
-const MAX_DEPLOYCHUNK_PART_BYTES = 7800;
+const PROTO = require('../protocol/constants.js');
+const MAX_DEPLOY_CHUNKS         = PROTO.MAX_DEPLOY_CHUNKS;
+const MAX_DEPLOYCHUNK_PART_BYTES = PROTO.MAX_DEPLOYCHUNK_PART_BYTES;
 
 class DeployChunk {
 

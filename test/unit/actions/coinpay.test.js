@@ -97,6 +97,7 @@ describe('Coinpay (COINPAY) @regression @tier2', function () {
             mapper:    indexer.mapper,
             decoderDb: indexer.decoderDb,
             indexerDb: indexer.indexerDb,
+            protocolChanges: indexer.protocolChanges,   // isEnabled -> true (regtest genesis) by default
         };
         handler = new Coinpay(actionsCtx);
         indexer.util.resetLists();
@@ -430,6 +431,54 @@ describe('Coinpay (COINPAY) @regression @tier2', function () {
 
             // Settlement should have completed: createCoinpayStatus with 'fulfilled'
             assert.ok(indexer.indexerDb.createCoinpayStatus.calledOnce);
+            const [, , st] = indexer.indexerDb.createCoinpayStatus.firstCall.args;
+            assert.strictEqual(st, 'fulfilled');
+        });
+
+        // : role detection keys on which side actually GIVES native coin, checking BOTH
+        // orders. A malformed obligation where NEITHER order gives native coin (both GIVE_TICK
+        // are real tokens) is ambiguous - the pre-fix single-side check silently picked getOrder
+        // as the coin side and released the wrong escrow. With COINPAY_NATIVE_RECIPROCITY active
+        // the handler refuses to settle it (order_match no longer creates this shape either).
+        it('refuses to settle when neither order gives native coin (ambiguous roles, flag ON)', async function () {
+            const giveTokenOrder = makeOrderInfo({ ACTION_INDEX: 11, GIVE_TICK: 'TEST',  SOURCE: SELLER, GET_ADDRESS: BUYER });
+            const getTokenOrder  = makeOrderInfo({ ACTION_INDEX: 10, GIVE_TICK: 'TEST2', SOURCE: BUYER,  GET_ADDRESS: SELLER });
+
+            indexer.indexerDb.getOrderMatchOrders.resolves({ give_action_index: 11, get_action_index: 10 });
+            indexer.indexerDb.getOrderInfo.withArgs(sinon.match.any, 11).resolves(giveTokenOrder);
+            indexer.indexerDb.getOrderInfo.withArgs(sinon.match.any, 10).resolves(getTokenOrder);
+
+            const data = createBaseData({
+                ACTION: 'COINPAY', FORMAT: 0,
+                COIN_DESTINATION: PAYEE, COIN_AMOUNT: '0.001', BLOCK_TIME: 1000,
+            });
+            await handler.parse(['0', '42'], data, null);
+
+            // No settlement: obligation is never marked fulfilled and no escrow is released.
+            assert.ok(indexer.indexerDb.createCoinpayStatus.notCalled, 'ambiguous match must not be settled');
+            assert.ok(indexer.indexerDb.createEscrow.notCalled, 'no escrow release on an ambiguous match');
+        });
+
+        it('LEGACY (flag OFF): both-token shape falls through to the pre-flag-day single-side split', async function () {
+            actionsCtx.protocolChanges.isEnabled = sinon.stub().resolves(false);
+
+            const giveTokenOrder = makeOrderInfo({ ACTION_INDEX: 11, GIVE_TICK: 'TEST',  SOURCE: SELLER, GET_ADDRESS: BUYER });
+            const getTokenOrder  = makeOrderInfo({ ACTION_INDEX: 10, GIVE_TICK: 'TEST2', SOURCE: BUYER,  GET_ADDRESS: SELLER });
+
+            indexer.indexerDb.getOrderMatchOrders.resolves({ give_action_index: 11, get_action_index: 10 });
+            indexer.indexerDb.getOrderInfo.withArgs(sinon.match.any, 11).resolves(giveTokenOrder);
+            indexer.indexerDb.getOrderInfo.withArgs(sinon.match.any, 10).resolves(getTokenOrder);
+
+            const data = createBaseData({
+                ACTION: 'COINPAY', FORMAT: 0,
+                COIN_DESTINATION: PAYEE, COIN_AMOUNT: '0.001', BLOCK_TIME: 1000,
+            });
+            await handler.parse(['0', '42'], data, null);
+
+            // Below the flag-day the legacy path still runs to completion (byte-for-byte replay
+            // parity), even for this malformed shape: giveOrderInfo gives a real token, so the
+            // legacy else-branch treats getOrder as the coin side and settles.
+            assert.ok(indexer.indexerDb.createCoinpayStatus.calledOnce, 'legacy path still settles below the flag-day');
             const [, , st] = indexer.indexerDb.createCoinpayStatus.firstCall.args;
             assert.strictEqual(st, 'fulfilled');
         });

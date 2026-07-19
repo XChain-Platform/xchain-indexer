@@ -114,6 +114,9 @@ function createMockDb() {
         getAddressBalances: sinon.stub().resolves({}),
         // VM gateway ledger snapshot (getBalance / getTokenInfo backing)
         buildVmBalancesAndTokenInfo: sinon.stub().resolves({ balances: {}, tokenInfo: {} }),
+        // VM attestation-response snapshot (xchain.attestation.getResponse backing, ).
+        // Default empty; suites asserting getResponse behaviour override per-test.
+        getAttestationDataForVM: sinon.stub().resolves({ responses: {} }),
         // Chunked DEPLOY (v4 carrier storage + DEPLOY v2/v3 assembly)
         recordDeployChunk: sinon.stub().resolves(),
         getDeployChunksForAssembly: sinon.stub().resolves([]),

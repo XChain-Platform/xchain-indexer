@@ -34,10 +34,10 @@ const parseIntMin0 = (val, defaultVal) => {
 
 // TICK of the protocol gas token (config['GAS']). This value is consensus: it
 // names the token debited for capability STAKE, VOTE deposits/escrows, and
-// contract gas billing. Exported so the cross-service drift guard can assert it
-// equals the canonical copy (xchain-documentation/protocol/constants.js GAS_TICK)
-// and the SDK co-signer's mirror.
-const GAS_TICK = 'XCHAIN';
+// contract gas billing. Vendored single source of truth: ./protocol/constants.js
+// (byte-identical to xchain-documentation/protocol/constants.js, GAS_TICK); the
+// cross-service drift guard asserts this and the SDK co-signer's mirror equal it.
+const GAS_TICK = require('./protocol/constants.js').GAS_TICK;
 
 module.exports = {
 
@@ -255,17 +255,21 @@ module.exports = {
         // contract. Derived by a STATIC map from the action name (never from data['ACTION']) so a
         // future action can't accidentally fall into a controlled class. See Controller_Bound_Tokens.md.
         // ROUTABLE set: an incoming action is mapped to exactly one of these (utility.controllerActionClass).
+        // `ownership` gates the deed-over of a token's ownership record (SWEEP OWNERSHIPS=1 routes here
+        // via the synthetic SWEEP_OWNERSHIP action, so an issuer can make ownership non-sweepable to a
+        // sanctioned/unapproved DESTINATION); it is distinct from `transfer`, which gates balance moves.
         config['CONTROLLER_ACTION_CLASSES'] = [
             'transfer',
             'trade',
             'burn',
             'mint',
-            'stake'
+            'stake',
+            'ownership'
         ];
 
         // BINDABLE set: the action-classes a bind (ISSUE v6 / ADDRESS v1) may target. Superset of the
         // routable set with the catch-all 'all' class: 'all' is BINDABLE but never ROUTABLE; routing
-        // still maps an action to one of the 5 concrete classes, and resolution falls back to an 'all'
+        // still maps an action to one of the concrete classes, and resolution falls back to an 'all'
         // binding only when no class-specific controller gates that class (most-specific-wins, single
         // guard, no stacking). 'all' means all classes present AND future; it auto-gates mint/stake the
         // moment those stub handlers wire their guards. See Controller_Bound_Tokens.md.
@@ -275,6 +279,7 @@ module.exports = {
             'burn',
             'mint',
             'stake',
+            'ownership',
             'all'
         ];
 

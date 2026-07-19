@@ -21,4 +21,9 @@ CREATE TABLE order_statuses (
 
 CREATE        INDEX action_index       ON order_statuses (action_index);
 CREATE        INDEX order_action_index ON order_statuses (order_action_index);
-CREATE        INDEX status_id          ON order_statuses (status_id);
+-- Composite (status_id, action_index) bounds the per-block expiry sweep's
+-- open-item probe: it filters order_statuses by status_id (via the index_statuses
+-- 'open' join) and needs action_index for the latest-status check, so the leading
+-- column drives the join and the trailing column keeps it covering. Supersedes the
+-- old single-column status_id index (leftmost-prefix), which is therefore dropped.
+CREATE        INDEX status_action      ON order_statuses (status_id, action_index);
