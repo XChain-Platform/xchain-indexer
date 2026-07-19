@@ -615,8 +615,25 @@ class Vote {
             catch(e){ callbackParams = []; }
         }
 
+        // : at/after the VOTE_POLL_TICK_VISIBLE flag-day the poll's
+        // electorate TICK is delivered to the callback (inserted after
+        // min_voters_met, before the developer params) so a binding-poll
+        // contract can verify WHICH token decided it (e.g. treasury.arm()
+        // pins poll.tick === govTick). Below the flag-day the signature is
+        // byte-identical to the pre-flag layout (no tick slot). The tick is
+        // NOT visible via xchain.getPollResult inside the callback (the
+        // visibility gate is resolved_block < block and this fires AT the
+        // finalization block), which is exactly why it rides the positional
+        // params like the rest of the result.
+        let tickVisible = await this.actions.protocolChanges.isEnabled('VOTE_POLL_TICK_VISIBLE', data['BLOCK_INDEX']);
+        let tickArg = [];
+        if(tickVisible){
+            let tick = this.util.isNull(poll.tick_id) ? '' : await this.indexerDb.getTicker(poll.tick_id);
+            tickArg = [String(this.util.isNull(tick) ? '' : tick)];
+        }
+
         // Callback signature: [pollIndex, status, winning_option, total_weight,
-        // total_voters, quorum_met, min_voters_met, ...originalCallbackParams].
+        // total_voters, quorum_met, min_voters_met, (tick,)? ...originalCallbackParams].
         let callbackArgs = [
             String(poll.action_index),
             String(result.poll_status),
@@ -625,6 +642,7 @@ class Vote {
             String(this.util.isNull(result.total_voters) ? '0' : result.total_voters),
             result.quorum_met ? '1' : '0',
             result.min_voters_met ? '1' : '0',
+            ...tickArg,
             ...callbackParams.map(String)
         ];
 

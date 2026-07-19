@@ -60,7 +60,12 @@ class ProtocolChanges {
         // package.json fallback closes that crash while keeping both production
         // launch paths (npm run / bare node) resolving to the same version.
         this.version = process.env.npm_package_version || require('../package.json').version;
-        this.network = process.env.INDEXER_NETWORK;
+        // Read the network from the validated config (config.getConfig() sets NETWORK after
+        // boot rejects an invalid network via coins.getCoinConfig) rather than re-reading the
+        // raw process.env.INDEXER_NETWORK. A single validated source keeps the consensus
+        // activation gate in isEnabled() aligned with every other config.NETWORK consumer and
+        // removes the chance of the two diverging if the env is ever mutated after boot.
+        this.network = this.config.NETWORK;
 
         this.changes = {};
         this.parseChanges();
@@ -339,6 +344,33 @@ class ProtocolChanges {
         // confirmed 2.0.0 contract-era cohort; a divergent value is a fork.
         // testnet/regtest activate at genesis.
         this.addChange('VOTE_RESPECTS_SLEEP', '2.0.0',1790812800,0,0,0,0,0);
+
+        //  (BonkDAO lesson 4): expose a poll's electorate TICK to
+        // contracts so a binding-poll callback can verify WHICH token decided
+        // it (the treasury template's arm() pins poll.tick === its governing
+        // govTick, defeating a "raid a throwaway token's poll to drain an
+        // unrelated treasury" swap). Two surfaces flip together at this
+        // activation: (1) the finalize/timelock callback EXECUTE gains a `tick`
+        // positional arg inserted after min_voters_met and before the
+        // developer callback params, and (2) each getPollResultsForVM snapshot
+        // entry (backing xchain.getPollResult) gains a `tick` field. The tick
+        // is the poll's immutable electorate (polls.tick_id resolved through
+        // index_tickers), deterministic on every node and on replay. Gated as
+        // its own consensus rule because BOTH changes alter VM execution
+        // inputs: the callback arg shifts every developer param one position
+        // (a contract reading getInputParam(7) reads a different value), and
+        // adding a snapshot key changes what a contract observes via the poll
+        // accessor - an ungated flip forks a heterogeneous fleet on the first
+        // binding-poll callback or tick-reading contract. Keyed on block_TIME
+        // (not block_index), mirroring the sibling VOTE flag-days: VOTE runs on
+        // BTC, LTC and DOGE whose heights diverge by millions of blocks, so no
+        // single shared block height names one cutover across all three chains,
+        // but a single timestamp can. The mainnet timestamp joins the ratified
+        // coordinated anchor 1790812800 (2026-10-01 00:00:00 UTC), the confirmed
+        // 2.0.0 contract-era cohort; a divergent value is a fork. testnet/regtest
+        // activate at genesis (no history to preserve; the e2e/regtest stack
+        // exercises the visible tick from block 0).
+        this.addChange('VOTE_POLL_TICK_VISIBLE', '2.0.0',1790812800,0,0,0,0,0);
 
         // : ATTEST v1 canonical id-case normalization. Below this activation
         // the canonical signing bytes (and the EQUIV ROUND_ID) use the RAW wire

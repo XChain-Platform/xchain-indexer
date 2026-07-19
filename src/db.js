@@ -5533,6 +5533,9 @@ class Database {
         let poll = await this.getPoll(pollIndex);
         if(this.util.isNull(poll)) return null;
         let options = JSON.parse(poll.options || '[]');
+        // Resolve the poll's electorate ticker : the read/explorer path
+        // always carries it; the consensus VM snapshot gates it (getPollResultsForVM).
+        let tick = this.util.isNull(poll.tick_id) ? null : await this.getTicker(poll.tick_id);
         let rows = await this.doQuery(
             `SELECT option_index, total_weight, voter_count FROM poll_results
               WHERE poll_index=? ORDER BY option_index ASC`, [pollIndex]);
@@ -5547,6 +5550,7 @@ class Database {
         }
         return {
             poll_index: Number(pollIndex),
+            tick: this.util.isNull(tick) ? null : String(tick),
             poll_status: poll.poll_status,
             winning_option: this.util.isNull(poll.winning_option) ? null : Number(poll.winning_option),
             total_weight: this.util.isNull(poll.total_weight) ? null : String(poll.total_weight),
@@ -5569,13 +5573,22 @@ class Database {
     // block_index). A poll is finalized by the per-block sweep AFTER that block's
     // actions run, so this bound also guarantees a poll never reads as decided
     // within its own finalization block, identically on every node and on replay.
-    async getPollResultsForVM(block_index){
+    //
+    // `includeTick` is the VOTE_POLL_TICK_VISIBLE flag-day gate (resolved by the
+    // caller from the host block): below it the entry shape is byte-identical to
+    // the pre-flag snapshot (no `tick` key); at/above it each entry gains a
+    // `tick` field (the poll's immutable electorate, resolved through
+    // index_tickers). Gating the KEY's presence, not just its value, keeps a
+    // from-genesis replay of a pre-flag block identical on every node.
+    async getPollResultsForVM(block_index, includeTick=false){
         let polls = {};
         let rows = await this.doQuery(
-            `SELECT action_index, poll_status, winning_option, total_weight, total_voters, decided_early
-               FROM polls
-              WHERE poll_status IN ('finalized','failed_quorum')
-                AND resolved_block IS NOT NULL AND resolved_block < ?`,
+            `SELECT p.action_index, p.poll_status, p.winning_option, p.total_weight,
+                    p.total_voters, p.decided_early, t.tick
+               FROM polls p
+               LEFT JOIN index_tickers t ON (t.id = p.tick_id)
+              WHERE p.poll_status IN ('finalized','failed_quorum')
+                AND p.resolved_block IS NOT NULL AND p.resolved_block < ?`,
             [Number(block_index) || 0]);
         for(let r of rows){
             let resultRows = await this.doQuery(
@@ -5586,7 +5599,7 @@ class Database {
                 weight: String(o.total_weight),
                 voters: Number(o.voter_count)
             }));
-            polls[String(r.action_index)] = {
+            let entry = {
                 status:         r.poll_status,
                 winning_option: this.util.isNull(r.winning_option) ? null : Number(r.winning_option),
                 total_weight:   this.util.isNull(r.total_weight) ? null : String(r.total_weight),
@@ -5594,6 +5607,8 @@ class Database {
                 decided_early:  this.util.isNull(r.decided_early) ? null : !!Number(r.decided_early),
                 options:        options
             };
+            if(includeTick) entry.tick = this.util.isNull(r.tick) ? null : String(r.tick);
+            polls[String(r.action_index)] = entry;
         }
         return { polls: polls };
     }

@@ -1135,6 +1135,18 @@ describe('Utility @regression @tier1', function () {
             assert.strictEqual(data[1].ACTION_INDEX, 2);
             assert.strictEqual(data[2].ACTION_INDEX, 1);
         });
+        it('should break GET_PRICE ties by ACTION_INDEX descending (matching the code comment)', function () {
+            const data = [
+                { GET_PRICE: '5', ACTION_INDEX: 10 },
+                { GET_PRICE: '5', ACTION_INDEX: 30 },
+                { GET_PRICE: '5', ACTION_INDEX: 20 },
+            ];
+            util.sortPriceActionIndex(data);
+            assert.deepStrictEqual(
+                data.map((d) => d.ACTION_INDEX),
+                [30, 20, 10]
+            );
+        });
     });
 
     // ─── Address/Ticker Tracking ──────────────────────────────────

@@ -1,0 +1,454 @@
+{
+  "$schema_note": "Byte-level field-layout contract between the xchain-sdk ACTION encoder (producer) and the xchain-indexer positional parser (consumer). Each vector pins one action/version's canonical wire string. The SDK must serialize `input` to exactly `wire`; the indexer's setActionParams must parse `wire` into exactly `parsed`. Both together prove producer and consumer agree on every field's byte position. Regenerate with xchain-sdk/test/fixtures/gen-action-roundtrip-golden.js after an intentional wire-format change; a diff here is a consensus-visible wire change and must be reviewed as one.",
+  "authority": "Vendored byte-identical into xchain-sdk/test/fixtures/ and xchain-indexer/test/fixtures/ so each repo's unit CI pins its own half without a sibling checkout. The two copies MUST stay identical; each side's test asserts byte-identity when the sibling checkout is present.",
+  "coverage_note": "Fixed-arity single-group formats only. Rest-field / repeating-group layouts (SEND v1-v3, LIST ...ITEM, EXECUTE ...PARAMS, DEPLOY ...CONSTRUCTOR_PARAMS, multi-recipient AIRDROP/DIVIDEND) are intentionally excluded: the indexer's positional setActionParams does not map them 1:1 (handlers parse those with custom logic), so they are not a clean round-trip through this codec. Includes the 2026-05 breaking-format actions (ORDER/SWAP/DISPENSER ownership flags, SWEEP escrow flags, STAKE/UNSTAKE/DELEGATE capability model) whose field insertions are exactly the byte-shift regressions this contract guards.",
+  "vectors": [
+    {
+      "label": "ISSUE full v0",
+      "action": "ISSUE",
+      "version": 0,
+      "input": {
+        "tick": "GOLDTOKEN",
+        "maxSupply": "21000000",
+        "maxMint": "1000",
+        "decimals": 8,
+        "description": "gold token",
+        "mintSupply": "1000",
+        "lockMaxSupply": 1,
+        "memo": "hello"
+      },
+      "wire": "ISSUE|0|GOLDTOKEN|21000000|1000|8|gold token|1000|||1|||||||||||||||hello",
+      "parsed": {
+        "VERSION": "0",
+        "TICK": "GOLDTOKEN",
+        "MAX_SUPPLY": "21000000",
+        "MAX_MINT": "1000",
+        "DECIMALS": "8",
+        "DESCRIPTION": "gold token",
+        "MINT_SUPPLY": "1000",
+        "TRANSFER": null,
+        "TRANSFER_SUPPLY": null,
+        "LOCK_MAX_SUPPLY": "1",
+        "LOCK_MAX_MINT": null,
+        "LOCK_DESCRIPTION": null,
+        "LOCK_SLEEP": null,
+        "LOCK_CALLBACK": null,
+        "CALLBACK_BLOCK": null,
+        "CALLBACK_TICK": null,
+        "CALLBACK_AMOUNT": null,
+        "ALLOW_LIST": null,
+        "BLOCK_LIST": null,
+        "MINT_ADDRESS_MAX": null,
+        "MINT_START_BLOCK": null,
+        "MINT_STOP_BLOCK": null,
+        "LOCK_MINT": null,
+        "LOCK_MINT_SUPPLY": null,
+        "MEMO": "hello",
+        "CONTROLLER": null,
+        "ACTION_CLASS": null,
+        "COOLDOWN_BLOCKS": null,
+        "UNBIND": null
+      }
+    },
+    {
+      "label": "ISSUE brief v1",
+      "action": "ISSUE",
+      "version": 1,
+      "input": {
+        "tick": "BRRR",
+        "description": "brrr desc",
+        "memo": "m",
+        "version": 1
+      },
+      "wire": "ISSUE|1|BRRR|brrr desc|m",
+      "parsed": {
+        "VERSION": "1",
+        "TICK": "BRRR",
+        "DESCRIPTION": "brrr desc",
+        "MEMO": "m",
+        "MAX_SUPPLY": null,
+        "MAX_MINT": null,
+        "DECIMALS": null,
+        "MINT_SUPPLY": null,
+        "TRANSFER": null,
+        "TRANSFER_SUPPLY": null,
+        "LOCK_MAX_SUPPLY": null,
+        "LOCK_MAX_MINT": null,
+        "LOCK_DESCRIPTION": null,
+        "LOCK_SLEEP": null,
+        "LOCK_CALLBACK": null,
+        "CALLBACK_BLOCK": null,
+        "CALLBACK_TICK": null,
+        "CALLBACK_AMOUNT": null,
+        "ALLOW_LIST": null,
+        "BLOCK_LIST": null,
+        "MINT_ADDRESS_MAX": null,
+        "MINT_START_BLOCK": null,
+        "MINT_STOP_BLOCK": null,
+        "LOCK_MINT": null,
+        "LOCK_MINT_SUPPLY": null,
+        "CONTROLLER": null,
+        "ACTION_CLASS": null,
+        "COOLDOWN_BLOCKS": null,
+        "UNBIND": null
+      }
+    },
+    {
+      "label": "SEND v0",
+      "action": "SEND",
+      "version": 0,
+      "input": {
+        "tick": "GOLDTOKEN",
+        "amount": "100",
+        "destination": "mqmJDcs5nXFHrj9q7a2G5sBVmjcQTDdUZp",
+        "memo": "pay"
+      },
+      "wire": "SEND|0|GOLDTOKEN|100|mqmJDcs5nXFHrj9q7a2G5sBVmjcQTDdUZp|pay",
+      "parsed": {
+        "VERSION": "0",
+        "TICK": "GOLDTOKEN",
+        "AMOUNT": "100",
+        "DESTINATION": "mqmJDcs5nXFHrj9q7a2G5sBVmjcQTDdUZp",
+        "MEMO": "pay"
+      }
+    },
+    {
+      "label": "MINT v0",
+      "action": "MINT",
+      "version": 0,
+      "input": {
+        "tick": "GOLDTOKEN",
+        "amount": "500",
+        "destination": "mqmJDcs5nXFHrj9q7a2G5sBVmjcQTDdUZp",
+        "memo": "mint"
+      },
+      "wire": "MINT|0|GOLDTOKEN|500|mqmJDcs5nXFHrj9q7a2G5sBVmjcQTDdUZp|mint",
+      "parsed": {
+        "VERSION": "0",
+        "TICK": "GOLDTOKEN",
+        "AMOUNT": "500",
+        "DESTINATION": "mqmJDcs5nXFHrj9q7a2G5sBVmjcQTDdUZp",
+        "MEMO": "mint"
+      }
+    },
+    {
+      "label": "DESTROY v0",
+      "action": "DESTROY",
+      "version": 0,
+      "input": {
+        "tick": "GOLDTOKEN",
+        "amount": "5",
+        "memo": "burn"
+      },
+      "wire": "DESTROY|0|GOLDTOKEN|5|burn",
+      "parsed": {
+        "VERSION": "0",
+        "TICK": "GOLDTOKEN",
+        "AMOUNT": "5",
+        "MEMO": "burn"
+      }
+    },
+    {
+      "label": "ORDER v0",
+      "action": "ORDER",
+      "version": 0,
+      "input": {
+        "giveTick": "GOLDTOKEN",
+        "giveAmount": "5",
+        "getTick": "BRRR",
+        "getAmount": "10",
+        "expiration": "100",
+        "memo": "o"
+      },
+      "wire": "ORDER|0||GOLDTOKEN|5|||BRRR|10|||100|||o",
+      "parsed": {
+        "VERSION": "0",
+        "GIVE_COIN": null,
+        "GIVE_TICK": "GOLDTOKEN",
+        "GIVE_AMOUNT": "5",
+        "GIVE_OWNERSHIP": null,
+        "GET_COIN": null,
+        "GET_TICK": "BRRR",
+        "GET_AMOUNT": "10",
+        "GET_OWNERSHIP": null,
+        "GET_ADDRESS": null,
+        "EXPIRATION": "100",
+        "ALLOW_LIST": null,
+        "BLOCK_LIST": null,
+        "MEMO": "o",
+        "ORDER_ACTION_INDEX": null
+      }
+    },
+    {
+      "label": "SWAP v0",
+      "action": "SWAP",
+      "version": 0,
+      "input": {
+        "giveTick": "GOLDTOKEN",
+        "giveAmount": "5",
+        "getTick": "BRRR",
+        "getAmount": "10",
+        "expiration": "100",
+        "memo": "s"
+      },
+      "wire": "SWAP|0||GOLDTOKEN|5|||BRRR|10|||100|||s",
+      "parsed": {
+        "VERSION": "0",
+        "GIVE_COIN": null,
+        "GIVE_TICK": "GOLDTOKEN",
+        "GIVE_AMOUNT": "5",
+        "GIVE_OWNERSHIP": null,
+        "GET_COIN": null,
+        "GET_TICK": "BRRR",
+        "GET_AMOUNT": "10",
+        "GET_OWNERSHIP": null,
+        "GET_ADDRESS": null,
+        "EXPIRATION": "100",
+        "ALLOW_LIST": null,
+        "BLOCK_LIST": null,
+        "MEMO": "s",
+        "SWAP_ACTION_INDEX": null
+      }
+    },
+    {
+      "label": "DISPENSER v0",
+      "action": "DISPENSER",
+      "version": 0,
+      "input": {
+        "giveTick": "GOLDTOKEN",
+        "giveAmount": "5",
+        "getCoin": "BTC",
+        "getAmount": "100000",
+        "getAddress": "mqmJDcs5nXFHrj9q7a2G5sBVmjcQTDdUZp",
+        "expiration": "500",
+        "memo": "d"
+      },
+      "wire": "DISPENSER|0||GOLDTOKEN|5|||BTC||100000|mqmJDcs5nXFHrj9q7a2G5sBVmjcQTDdUZp||||500|||d",
+      "parsed": {
+        "VERSION": "0",
+        "GIVE_COIN": null,
+        "GIVE_TICK": "GOLDTOKEN",
+        "GIVE_AMOUNT": "5",
+        "GIVE_OWNERSHIP": null,
+        "GIVE_ESCROW": null,
+        "GET_COIN": "BTC",
+        "GET_TICK": null,
+        "GET_AMOUNT": "100000",
+        "GET_ADDRESS": "mqmJDcs5nXFHrj9q7a2G5sBVmjcQTDdUZp",
+        "FIAT_CODE": null,
+        "FIAT_AMOUNT": null,
+        "ORACLE_ADDRESS": null,
+        "EXPIRATION": "500",
+        "ALLOW_LIST": null,
+        "BLOCK_LIST": null,
+        "MEMO": "d",
+        "DISPENSER_ACTION_INDEX": null
+      }
+    },
+    {
+      "label": "SWEEP v0",
+      "action": "SWEEP",
+      "version": 0,
+      "input": {
+        "destination": "mqmJDcs5nXFHrj9q7a2G5sBVmjcQTDdUZp",
+        "balances": 1,
+        "ownerships": 0,
+        "orders": 1,
+        "swaps": 1,
+        "dispensers": 0,
+        "memo": "sw"
+      },
+      "wire": "SWEEP|0|mqmJDcs5nXFHrj9q7a2G5sBVmjcQTDdUZp|1|0|1|1|0|sw",
+      "parsed": {
+        "VERSION": "0",
+        "DESTINATION": "mqmJDcs5nXFHrj9q7a2G5sBVmjcQTDdUZp",
+        "BALANCES": "1",
+        "OWNERSHIPS": "0",
+        "ORDERS": "1",
+        "SWAPS": "1",
+        "DISPENSERS": "0",
+        "MEMO": "sw"
+      }
+    },
+    {
+      "label": "STAKE v1",
+      "action": "STAKE",
+      "version": 1,
+      "input": {
+        "amount": "1000",
+        "signingPubkey": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "version": 1
+      },
+      "wire": "STAKE|1|1000|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "parsed": {
+        "VERSION": "1",
+        "AMOUNT": "1000",
+        "SIGNING_PUBKEY": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "TARGET_CONTRACT_INDEX": null,
+        "TICK": null
+      }
+    },
+    {
+      "label": "UNSTAKE v0",
+      "action": "UNSTAKE",
+      "version": 0,
+      "input": {
+        "signingPubkey": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "wire": "UNSTAKE|0|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "parsed": {
+        "VERSION": "0",
+        "SIGNING_PUBKEY": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "TARGET_CONTRACT_INDEX": null,
+        "TICK": null
+      }
+    },
+    {
+      "label": "DELEGATE v0",
+      "action": "DELEGATE",
+      "version": 0,
+      "input": {
+        "newSigningPubkey": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "wire": "DELEGATE|0|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "parsed": {
+        "VERSION": "0",
+        "NEW_SIGNING_PUBKEY": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "TARGET_CONTRACT_INDEX": null,
+        "TICK": null,
+        "SIGNING_PUBKEY": null
+      }
+    },
+    {
+      "label": "DEPOSIT v0",
+      "action": "DEPOSIT",
+      "version": 0,
+      "input": {
+        "contractActionIndex": "42",
+        "tick": "GOLDTOKEN",
+        "quantity": "250"
+      },
+      "wire": "DEPOSIT|0|42|GOLDTOKEN|250",
+      "parsed": {
+        "VERSION": "0",
+        "CONTRACT_ACTION_INDEX": "42",
+        "TICK": "GOLDTOKEN",
+        "QUANTITY": "250"
+      }
+    },
+    {
+      "label": "WITHDRAW v0",
+      "action": "WITHDRAW",
+      "version": 0,
+      "input": {
+        "contractActionIndex": "42",
+        "tick": "GOLDTOKEN",
+        "quantity": "250"
+      },
+      "wire": "WITHDRAW|0|42|GOLDTOKEN|250",
+      "parsed": {
+        "VERSION": "0",
+        "CONTRACT_ACTION_INDEX": "42",
+        "TICK": "GOLDTOKEN",
+        "QUANTITY": "250"
+      }
+    },
+    {
+      "label": "DIVIDEND v0",
+      "action": "DIVIDEND",
+      "version": 0,
+      "input": {
+        "tick": "GOLDTOKEN",
+        "dividendTick": "BRRR",
+        "amount": "3",
+        "memo": "div"
+      },
+      "wire": "DIVIDEND|0|GOLDTOKEN|BRRR|3|div",
+      "parsed": {
+        "VERSION": "0",
+        "TICK": "GOLDTOKEN",
+        "DIVIDEND_TICK": "BRRR",
+        "AMOUNT": "3",
+        "MEMO": "div"
+      }
+    },
+    {
+      "label": "LINK v0",
+      "action": "LINK",
+      "version": 0,
+      "input": {
+        "coin1": "BTC",
+        "coin1ActionIndex": "10",
+        "coin2": "LTC",
+        "coin2ActionIndex": "20",
+        "memo": "l"
+      },
+      "wire": "LINK|0|BTC|10|LTC|20|l",
+      "parsed": {
+        "VERSION": "0",
+        "COIN1": "BTC",
+        "COIN1_ACTION_INDEX": "10",
+        "COIN2": "LTC",
+        "COIN2_ACTION_INDEX": "20",
+        "MEMO": "l"
+      }
+    },
+    {
+      "label": "SLEEP v0",
+      "action": "SLEEP",
+      "version": 0,
+      "input": {
+        "resumeBlock": "900000",
+        "memo": "zzz"
+      },
+      "wire": "SLEEP|0|900000|zzz",
+      "parsed": {
+        "VERSION": "0",
+        "RESUME_BLOCK": "900000",
+        "MEMO": "zzz",
+        "TICK": null
+      }
+    },
+    {
+      "label": "BROADCAST v0",
+      "action": "BROADCAST",
+      "version": 0,
+      "input": {
+        "message": "hello world",
+        "value": "42"
+      },
+      "wire": "BROADCAST|0|hello world|42",
+      "parsed": {
+        "VERSION": "0",
+        "MESSAGE": "hello world",
+        "VALUE": "42",
+        "FEE": null,
+        "MEMO": null,
+        "BROADCAST_ACTION_INDEX": null
+      }
+    },
+    {
+      "label": "ADDRESS v0",
+      "action": "ADDRESS",
+      "version": 0,
+      "input": {
+        "feePreference": 1,
+        "requireMemo": 0,
+        "dispenserPreference": 1,
+        "memo": "a"
+      },
+      "wire": "ADDRESS|0|1|0|1|a",
+      "parsed": {
+        "VERSION": "0",
+        "FEE_PREFERENCE": "1",
+        "REQUIRE_MEMO": "0",
+        "DISPENSER_PREFERENCE": "1",
+        "MEMO": "a",
+        "CONTROLLER": null,
+        "ACTION_CLASS": null,
+        "COOLDOWN_BLOCKS": null,
+        "UNBIND": null
+      }
+    }
+  ]
+}

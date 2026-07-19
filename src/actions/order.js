@@ -192,6 +192,13 @@ class Order {
         if(!error && format==0 && !isCrossChain && !this.util.isNull(data['GET_AMOUNT']) && !this.util.isValidAmountFormat(getDecimals, data['GET_AMOUNT']))
             error = "invalid: GET_AMOUNT (format)";
 
+        // Require a strictly-positive GET_AMOUNT (ORDER-AMT-1 hardening). An empty or zero
+        // ask lets the maker escrow a positive GIVE for effectively nothing, a UX footgun.
+        // Skip ownership-GET orders (GET_AMOUNT must be empty, validated below) and
+        // cross-chain orders (the GET amount is validated by the xchain-hub federation).
+        if(!error && format==0 && !isCrossChain && !isOwnershipGet && !this.util.bcgt(data['GET_AMOUNT'], 0))
+            error = "invalid: GET_AMOUNT (must be positive)";
+
         // Verify GET_ADDRESS is given if COIN network differs from GET_COIN network
         if(!error && format==0 && this.config['COIN']!=data['GET_COIN'] && this.util.isNull(data['GET_ADDRESS']))
             error = "invalid: GET_ADDRESS";

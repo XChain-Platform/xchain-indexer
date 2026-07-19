@@ -20,9 +20,15 @@
 
 'use strict';
 
+process.env.INDEXER_COIN    = process.env.INDEXER_COIN    || 'BTC';
+process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
+
 const assert = require('assert');
 const sinon  = require('sinon');
 const { getStakeSourceByPubkey } = require('../../src/stake-source');
+const { getTestConfig } = require('../fixtures/config');
+const Utility           = require('../../src/utility');
+const Database          = require('../../src/db');
 
 const PUB = 'ab'.repeat(32); // 64 hex chars
 
@@ -32,6 +38,12 @@ function makeIndexer({ pubkeyId = 7, validId = 1, doQuery } = {}) {
         getStatusId: sinon.stub().resolves(validId),
         doQuery:     doQuery || sinon.stub().resolves([])
     };
+    // getStakeSourceByPubkey resolves through indexer.indexerDb.apiView() ( /
+    // H2 residual: a federation read must draw an independent pooled connection, never
+    // join the block's open transaction). The fake view returns the same stubbed db so
+    // the behaviour assertions below still observe db.doQuery / db.getPubkeyId; the
+    // pooled-isolation guarantee itself is exercised by the real-Database test below.
+    db.apiView = () => db;
     return { indexer: { indexerDb: db }, db };
 }
 
@@ -143,5 +155,49 @@ describe('getStakeSourceByPubkey()', function () {
         const { indexer } = makeIndexer({ doQuery });
         const r = await getStakeSourceByPubkey(indexer, { pubkey: PUB, block_index: 100 });
         assert.deepStrictEqual(r, { error: 'failed to resolve stake source' });
+    });
+
+    //  / H2 residual: a federation read landing mid-block must resolve on an
+    // independent pooled connection and NEVER on the block's open transaction
+    // connection. Drives getStakeSourceByPubkey against a real Database whose
+    // transactionConnection is set (simulating mid-block) and asserts every query
+    // ran on the pooled connection, matching the write-path apiView guarantee.
+    describe('routes off the open block transaction (real Database) @regression @tier1', function () {
+        function makeRealDb() {
+            const util = new Utility();
+            sinon.stub(util, 'logError'); // keep query-error logs out of test output
+            const indexer = { config: getTestConfig(), util };
+            const db = new Database('127.0.0.1', 3306, 'xchain_btc_regtest', 'u', 'p', indexer);
+            db.pool = { getConnection: sinon.stub() };
+            return db;
+        }
+
+        it('resolves a stake source without touching the transaction connection', async function () {
+            const db = makeRealDb();
+            // Simulate a block being processed: getConnection() would hand back this
+            // connection to any doQuery routed through the block path.
+            const txConn = { query: sinon.stub().resolves([]), release: sinon.stub().resolves() };
+            db.transactionConnection = txConn;
+            // The pooled connection answers the whole helper chain: pubkey id, status
+            // id, then the stakes-leg source lookup.
+            const poolConn = {
+                query: sinon.stub().callsFake(async (sql) => {
+                    if (/FROM index_pubkeys/i.test(sql))  return [{ id: 11 }];
+                    if (/FROM index_statuses/i.test(sql)) return [{ id: 1 }];
+                    if (/FROM stakes/i.test(sql))         return [{ source: 'stakeAddr' }];
+                    return [];
+                }),
+                release: sinon.stub().resolves()
+            };
+            db.pool.getConnection.resolves(poolConn);
+
+            const r = await getStakeSourceByPubkey({ indexerDb: db }, { pubkey: PUB, block_index: 850000 });
+            assert.deepStrictEqual(r, { source: 'stakeAddr' });
+            assert.ok(txConn.query.notCalled, 'no federation-read query may join the open block transaction');
+            assert.ok(poolConn.query.called, 'reads must run on the pooled connection');
+            // Every pooled connection this handler drew was released (pubkey id +
+            // status id + stakes leg), so it never leaks the block loop a connection.
+            assert.ok(poolConn.release.callCount >= 3, 'each pooled connection is released');
+        });
     });
 });

@@ -38,7 +38,13 @@ async function getStakeSourceByPubkey(indexer, { pubkey, block_index }){
     if(!indexer.indexerDb)
         return { error: 'indexer database not ready' };
     try {
-        let db = indexer.indexerDb;
+        // Federation READ isolation ( / H2 residual): resolve through apiView()
+        // so every read draws an independent pooled connection and sees only COMMITTED
+        // state. This handler backs the getstakesourcebypubkey federation RPC; a call
+        // landing mid-block must not join the block's open ACID transaction (sharing the
+        // physical connection is a per-block atomicity hazard) and must not resolve a
+        // source off stake/delegation rows the block may still roll back.
+        let db = indexer.indexerDb.apiView();
         let pubkey_id = await db.getPubkeyId(String(pubkey).toLowerCase());
         if(pubkey_id === null) return { source: null };
         let valid_id = await db.getStatusId('valid');

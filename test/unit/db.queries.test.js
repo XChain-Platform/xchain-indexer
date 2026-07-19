@@ -1609,6 +1609,30 @@ describe('Database.apiView() @regression @tier1', function () {
         assert.ok(txConn.query.calledOnce, 'block-loop queries must keep joining the transaction');
     });
 
+    //  / H2 residual: federation READ methods (not just the pushvalidatorrewards
+    // write) must resolve on a pooled connection. A read accessor invoked through the
+    // view routes its internal doQuery calls off the open block transaction, so a hub
+    // never reads validator-set rows the block may still roll back.
+    it('a read accessor (getActiveValidators) via apiView never touches the transaction connection', async function () {
+        const db     = makeDb();
+        const txConn = { query: sinon.stub().resolves([]), release: sinon.stub().resolves() };
+        db.transactionConnection = txConn;                // simulate mid-block state
+        const poolConn = {
+            query: sinon.stub().callsFake(async (sql) => {
+                if (/FROM index_statuses/i.test(sql)) return [{ id: 1 }];   // getStatusId('valid')
+                return [{ pubkey: 'ab'.repeat(32), total: '100' }];         // the validator query
+            }),
+            release: sinon.stub().resolves()
+        };
+        db.pool.getConnection.resolves(poolConn);
+
+        const validators = await db.apiView().getActiveValidators(850000);
+        assert.strictEqual(validators.length, 1);
+        assert.strictEqual(validators[0].pubkey, 'ab'.repeat(32));
+        assert.ok(poolConn.query.called, 'read must run on the pooled connection');
+        assert.ok(txConn.query.notCalled, 'a federation read must never join the open block transaction');
+    });
+
     it('returns the same cached view on repeated calls', function () {
         const db = makeDb();
         assert.strictEqual(db.apiView(), db.apiView());

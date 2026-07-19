@@ -193,7 +193,7 @@ describe('ProtocolChanges @regression @tier3', function () {
     describe('isEnabled network fail-closed (consensus backstop)', function () {
         it('throws on an unrecognized network instead of enabling every gated change', async function () {
             process.env.npm_package_version = '2.0.0';
-            process.env.INDEXER_NETWORK = 'mainnett'; // typo
+            indexer.config.NETWORK = 'mainnett'; // typo, from the validated config
             const bad = new ProtocolChanges(indexer);
             indexer.decoderDb.getBlockTime.resolves(1);
             await assert.rejects(() => bad.isEnabled('CONTROLLER_GUARD', 100), /unrecognized network/);
@@ -202,7 +202,7 @@ describe('ProtocolChanges @regression @tier3', function () {
         it('still evaluates normally for each valid network', async function () {
             for (const net of ['mainnet', 'testnet', 'regtest']) {
                 process.env.npm_package_version = '2.0.0';
-                process.env.INDEXER_NETWORK = net;
+                indexer.config.NETWORK = net;
                 const pc2 = new ProtocolChanges(indexer);
                 indexer.decoderDb.getBlockTime.resolves(1);
                 // SEND is genesis-active (1.0.0, all-zero gates), enabled on every valid network.
@@ -211,14 +211,40 @@ describe('ProtocolChanges @regression @tier3', function () {
         });
     });
 
+    // Locks in : the activation gate must read its network from the validated
+    // config (config.NETWORK), NOT re-read the raw process.env.INDEXER_NETWORK. Boot
+    // validates the network once and stores it on config; a second env read could
+    // diverge if the env is mutated post-boot, silently mis-gating consensus rules.
+    describe('network source is the validated config, not process.env ', function () {
+        it('reads this.network from config.NETWORK even when process.env.INDEXER_NETWORK disagrees', function () {
+            process.env.npm_package_version = '2.0.0';
+            indexer.config.NETWORK = 'mainnet';
+            process.env.INDEXER_NETWORK = 'regtest'; // stale/mutated env must be ignored
+            const pc2 = new ProtocolChanges(indexer);
+            assert.strictEqual(pc2.network, 'mainnet');
+        });
+
+        it('gates on config.NETWORK: mainnet flag-day applies even if env still says regtest', async function () {
+            const MAINNET_FLAG_DAY = 1790812800;
+            process.env.npm_package_version = '2.0.0';
+            indexer.config.NETWORK = 'mainnet';
+            process.env.INDEXER_NETWORK = 'regtest'; // env would (wrongly) enable from genesis
+            const pc2 = new ProtocolChanges(indexer);
+            indexer.decoderDb.getBlockTime.resolves(MAINNET_FLAG_DAY - 1);
+            // Under config.NETWORK='mainnet' the gate is DISABLED below the flag-day; a stale
+            // env read would have returned true (regtest genesis-active) and forked the ledger.
+            assert.strictEqual(await pc2.isEnabled('CONTROLLER_GUARD', 100), false);
+        });
+    });
+
     describe('DEPLOY_BASE64_CODE activation gate (consensus)', function () {
         const MAINNET_FLAG_DAY = 1790812800; // 2026-10-01 00:00:00 UTC, CONFIRMED 2026-07-07 (see protocol_changes.js)
 
-        // The constructor reads INDEXER_NETWORK + npm_package_version fresh, so a new
+        // The constructor reads config.NETWORK + npm_package_version fresh, so a new
         // instance per network/version is all that's needed (no module-cache reset).
         function pcFor(network, version = '2.0.0') {
             process.env.npm_package_version = version; // shipping consensus version
-            process.env.INDEXER_NETWORK = network;
+            indexer.config.NETWORK = network; // constructor reads network from the validated config
             return new ProtocolChanges(indexer);
         }
 
@@ -295,7 +321,7 @@ describe('ProtocolChanges @regression @tier3', function () {
 
         function pcFor(network, version = '2.0.0') {
             process.env.npm_package_version = version; // shipping consensus version
-            process.env.INDEXER_NETWORK = network;
+            indexer.config.NETWORK = network; // constructor reads network from the validated config
             return new ProtocolChanges(indexer);
         }
 
@@ -372,7 +398,7 @@ describe('ProtocolChanges @regression @tier3', function () {
 
         function pcFor(network, version = '2.0.0') {
             process.env.npm_package_version = version; // shipping consensus version
-            process.env.INDEXER_NETWORK = network;
+            indexer.config.NETWORK = network; // constructor reads network from the validated config
             return new ProtocolChanges(indexer);
         }
 

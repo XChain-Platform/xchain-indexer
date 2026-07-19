@@ -284,14 +284,22 @@ async function startApi(){
                 return { error: 'pubkey must be a 64-char hex string' };
             if(!indexer.indexerDb)
                 return { error: 'indexer database not ready' };
+            // Federation READ isolation ( / H2 residual): route every read
+            // through apiView() so it draws an independent pooled connection and
+            // sees only COMMITTED state. A federation read landing mid-block must
+            // never join the block's open ACID transaction: sharing that physical
+            // connection with the block loop is a per-block atomicity hazard, and
+            // reading the block's uncommitted rows can hand a hub a validator set
+            // the block may still roll back on a reorg/throw.
+            let db = indexer.indexerDb.apiView();
             let pk = String(pubkey).toLowerCase();
             try {
-                let blockIndex = await indexer.indexerDb.getLatestBlockIndex();
+                let blockIndex = await db.getLatestBlockIndex();
                 // Effective-set view (direct stake minus revocations, plus delegated-key
                 // resolution) so a delegation-only hub self-qualifies in step with the
                 // federation. This is the federation-read-only consumer; consensus handlers
                 // use getActiveStakeByPubkey (direct stake ownership) instead.
-                let stake = await indexer.indexerDb.getEffectiveStakeByPubkey(pk, blockIndex);
+                let stake = await db.getEffectiveStakeByPubkey(pk, blockIndex);
                 return {
                     pubkey:      pk,
                     block_index: blockIndex,
@@ -450,11 +458,13 @@ async function startApi(){
                 return { error: 'block_index must be a non-negative integer' };
             if(!indexer.indexerDb)
                 return { error: 'indexer database not ready' };
+            // Federation READ isolation : committed-only, off the block tx.
+            let db = indexer.indexerDb.apiView();
             try {
-                let latestBlock = await indexer.indexerDb.getLatestBlockIndex();
+                let latestBlock = await db.getLatestBlockIndex();
                 if(blk > latestBlock)
                     return { error: 'block_index ' + blk + ' not yet indexed (latest: ' + latestBlock + ')' };
-                let validators = await indexer.indexerDb.getActiveValidators(blk);
+                let validators = await db.getActiveValidators(blk);
                 return {
                     block_index: blk,
                     count:       validators.length,
@@ -483,11 +493,13 @@ async function startApi(){
                 return { error: 'block_index must be a non-negative integer' };
             if(!indexer.indexerDb)
                 return { error: 'indexer database not ready' };
+            // Federation READ isolation : committed-only, off the block tx.
+            let db = indexer.indexerDb.apiView();
             try {
-                let latestBlock = await indexer.indexerDb.getLatestBlockIndex();
+                let latestBlock = await db.getLatestBlockIndex();
                 if(blk > latestBlock)
                     return { error: 'block_index ' + blk + ' not yet indexed (latest: ' + latestBlock + ')' };
-                let validators = await indexer.indexerDb.getActiveStakeWeights(blk);
+                let validators = await db.getActiveStakeWeights(blk);
                 let sources = new Set(validators.map(v => v.source));
                 return {
                     block_index:  blk,
@@ -522,18 +534,20 @@ async function startApi(){
                 return { error: 'block_index must be a non-negative integer' };
             if(!indexer.indexerDb)
                 return { error: 'indexer database not ready' };
+            // Federation READ isolation : committed-only, off the block tx.
+            let db = indexer.indexerDb.apiView();
             // A capability absent from this indexer's STAKING.CAPABILITIES config would
             // otherwise produce an empty validator set indistinguishable from "no
             // qualified validators at this block". Surface it as an error so the hub's
             // CapabilitySnapshot treats it as a null snapshot (degraded mode) and the
             // operator gets a signal of config drift instead of a silent attestation drop.
-            if(!indexer.indexerDb.isCapabilityConfigured(capability))
+            if(!db.isCapabilityConfigured(capability))
                 return { error: 'capability not configured: ' + capability };
             try {
-                let latestBlock = await indexer.indexerDb.getLatestBlockIndex();
+                let latestBlock = await db.getLatestBlockIndex();
                 if(blk > latestBlock)
                     return { error: 'block_index ' + blk + ' not yet indexed (latest: ' + latestBlock + ')' };
-                let validators = await indexer.indexerDb.getValidatorsByCapability(capability, blk, min_stake);
+                let validators = await db.getValidatorsByCapability(capability, blk, min_stake);
                 // Confirm which threshold this snapshot actually filtered by, so a
                 // hub↔indexer MIN_STAKE mismatch is visible in the indexer log
                 // rather than surfacing only as a silently-divergent quorum N.
@@ -572,16 +586,18 @@ async function startApi(){
                 return { error: 'block_index must be a non-negative integer' };
             if(!indexer.indexerDb)
                 return { error: 'indexer database not ready' };
+            // Federation READ isolation : committed-only, off the block tx.
+            let db = indexer.indexerDb.apiView();
             try {
                 // Intersect the proof-window set with the LIVE full_node capability
                 // at this block (byte-identical to the eligibility rule in
                 // actions/nodeproof.js (_eligibleVerifierSet) and the reward split in
                 // actions/price.js, so the hub sizes quorum over the same set the
                 // chain will accept.
-                let raw = await indexer.indexerDb.getVerifiedFullNodeSet(blk);
+                let raw = await db.getVerifiedFullNodeSet(blk);
                 let validators = [];
                 for(let v of raw){
-                    if(await indexer.indexerDb.hasCapability(v.pubkey, 'full_node', blk))
+                    if(await db.hasCapability(v.pubkey, 'full_node', blk))
                         validators.push(v);
                 }
                 return {
@@ -613,13 +629,15 @@ async function startApi(){
                 return { error: 'block_index must be a non-negative integer' };
             if(!indexer.indexerDb)
                 return { error: 'indexer database not ready' };
-            if(!indexer.indexerDb.isCapabilityConfigured(capability))
+            // Federation READ isolation : committed-only, off the block tx.
+            let db = indexer.indexerDb.apiView();
+            if(!db.isCapabilityConfigured(capability))
                 return { error: 'capability not configured: ' + capability };
             try {
-                let latestBlock = await indexer.indexerDb.getLatestBlockIndex();
+                let latestBlock = await db.getLatestBlockIndex();
                 if(blk > latestBlock)
                     return { error: 'block_index ' + blk + ' not yet indexed (latest: ' + latestBlock + ')' };
-                let validators = await indexer.indexerDb.getStakeWeightsByCapability(capability, blk, min_stake);
+                let validators = await db.getStakeWeightsByCapability(capability, blk, min_stake);
                 let sources = new Set(validators.map(v => v.source));
                 let thresholdSource = (min_stake !== undefined && min_stake !== null)
                     ? String(min_stake) + ' (caller-supplied)'
@@ -665,9 +683,11 @@ async function startApi(){
             if(Number.isFinite(Number(after_block_index)) && Number.isFinite(Number(after_action_index))){
                 cursor = { after_block_index, after_action_index };
             }
+            // Federation READ isolation : committed-only, off the block tx.
+            let db = indexer.indexerDb.apiView();
             try {
-                let latest  = await indexer.indexerDb.getLatestBlockIndex();
-                let rows    = await indexer.indexerDb.getPendingAttestationRequests(provider_id, max, cursor);
+                let latest  = await db.getLatestBlockIndex();
+                let rows    = await db.getPendingAttestationRequests(provider_id, max, cursor);
                 return {
                     latest_block_index: latest,
                     count:              rows.length,
@@ -690,8 +710,10 @@ async function startApi(){
             let max = Number(limit);
             if(!Number.isFinite(max) || max <= 0) max = 100;
             if(max > 500) max = 500;
+            // Federation READ isolation : committed-only, off the block tx.
+            let db = indexer.indexerDb.apiView();
             try {
-                let latest = await indexer.indexerDb.getLatestBlockIndex();
+                let latest = await db.getLatestBlockIndex();
                 // Source-chain reorg fence (item 5308): stamp each offer with this chain's current
                 // push generation. The hub copies it onto the matched leg's a_/b_push_generation so a
                 // deferred retraction fences by generation and a re-published order at a recycled
@@ -704,11 +726,11 @@ async function startApi(){
                 // gone; gen G+1 means the commit happened, so the orphaned rows are already gone. The
                 // reverse order (rows then generation) could read orphaned rows pre-commit and stamp
                 // them with the post-commit G+1, letting them escape the fence permanently.
-                let pushGeneration = await indexer.indexerDb.getPushGeneration(indexer.config['COIN']);
+                let pushGeneration = await db.getPushGeneration(indexer.config['COIN']);
                 // Unified cross-chain book: SWAP offers (Phase A, exact single-fill) + ORDER
                 // offers (Phase B, price-time partial fills). Each is tagged with `kind`.
-                let swaps  = await indexer.indexerDb.getOpenCrossChainSwaps(max, after_action_index, to_coin);
-                let orders = await indexer.indexerDb.getOpenCrossChainOrders(max, after_action_index, to_coin);
+                let swaps  = await db.getOpenCrossChainSwaps(max, after_action_index, to_coin);
+                let orders = await db.getOpenCrossChainOrders(max, after_action_index, to_coin);
                 // Additive truncation marker (XCC-2): each query caps at `max` of its kind and
                 // returns the OLDEST by action_index, so a full page silently drops newer offers.
                 // `concat` returns a plain array (custom props are lost), so OR the two flags here
@@ -743,8 +765,10 @@ async function startApi(){
             let max = Number(limit);
             if(!Number.isFinite(max) || max <= 0) max = 100;
             if(max > 500) max = 500;
+            // Federation READ isolation : committed-only, off the block tx.
+            let db = indexer.indexerDb.apiView();
             try {
-                let latest = await indexer.indexerDb.getLatestBlockIndex();
+                let latest = await db.getLatestBlockIndex();
                 // Source-chain reorg fence (item 5308): stamp each call with this chain's current
                 // push generation. The hub copies it onto the dispatch row (and the result row
                 // inherits it), so a source-keyed deferred retraction fences by generation. Per-COIN.
@@ -752,8 +776,8 @@ async function startApi(){
                 // generation atomically with deleting the orphaned rows, so gen-first is safe wherever
                 // that commit lands, while rows-then-gen could stamp a pre-commit orphan with the
                 // post-commit generation and let it escape the fence. See getopencrosschainorders.
-                let pushGeneration = await indexer.indexerDb.getPushGeneration(indexer.config['COIN']);
-                let rows   = await indexer.indexerDb.getPendingCrossChainCallRequests(max);
+                let pushGeneration = await db.getPushGeneration(indexer.config['COIN']);
+                let rows   = await db.getPendingCrossChainCallRequests(max);
                 for(let c of rows) c.push_generation = pushGeneration;
                 return {
                     latest_block_index: latest,
@@ -776,9 +800,11 @@ async function startApi(){
                 return { error: 'indexer database not ready' };
             if(!call_id || !/^[0-9a-fA-F]{64}$/.test(String(call_id)))
                 return { error: 'call_id must be a 64-hex id' };
+            // Federation READ isolation : committed-only, off the block tx.
+            let db = indexer.indexerDb.apiView();
             try {
-                let latest = await indexer.indexerDb.getLatestBlockIndex();
-                let row    = await indexer.indexerDb.getCrossChainCallRequestById(String(call_id));
+                let latest = await db.getLatestBlockIndex();
+                let row    = await db.getCrossChainCallRequestById(String(call_id));
                 if(!row){
                     return { exists: false, network: indexer.config['NETWORK'], latest_block_index: latest };
                 }
@@ -816,15 +842,17 @@ async function startApi(){
                 return { error: 'indexer database not ready' };
             if(!call_id || !/^[0-9a-fA-F]{64}$/.test(String(call_id)))
                 return { error: 'call_id must be a 64-hex id' };
+            // Federation READ isolation : committed-only, off the block tx.
+            let db = indexer.indexerDb.apiView();
             try {
-                let latest = await indexer.indexerDb.getLatestBlockIndex();
-                let row    = await indexer.indexerDb.getCrossChainCallExecutionById(String(call_id));
+                let latest = await db.getLatestBlockIndex();
+                let row    = await db.getCrossChainCallExecutionById(String(call_id));
                 if(!row){
                     let res = { exists: false, network: indexer.config['NETWORK'], latest_block_index: latest };
                     // Surface refusal diagnostics (XDISP-1): a quorum-starved dispatch has
                     // no execution row, but the injection pass records WHY it keeps being
                     // refused. Node-local advisory only (never quorum-verified relay data).
-                    let rejection = await indexer.indexerDb.getCrossChainCallRejectionById(String(call_id));
+                    let rejection = await db.getCrossChainCallRejectionById(String(call_id));
                     if(rejection){
                         res.rejection = {
                             reason:      rejection.reason,
@@ -863,9 +891,11 @@ async function startApi(){
             let idx = Number(action_index);
             if(!Number.isInteger(idx) || idx <= 0)
                 return { error: 'action_index must be a positive integer' };
+            // Federation READ isolation : committed-only, off the block tx.
+            let db = indexer.indexerDb.apiView();
             try {
-                let latest = await indexer.indexerDb.getLatestBlockIndex();
-                let row    = await indexer.indexerDb.getActionInfo(idx);
+                let latest = await db.getLatestBlockIndex();
+                let row    = await db.getActionInfo(idx);
                 if(!row){
                     return {
                         coin:               indexer.config['COIN'],
@@ -921,9 +951,11 @@ async function startApi(){
                 return { error: 'indexer database not ready' };
             let v = anchorActionQuery.validateAnchorActionParams({ chain, network, block_index, checkpoint_seq, txid, version });
             if(!v.ok) return { error: v.error };
+            // Federation READ isolation : committed-only, off the block tx.
+            let db = indexer.indexerDb.apiView();
             try {
-                let latest = await indexer.indexerDb.getLatestBlockIndex();
-                let rows   = await indexer.indexerDb.doQuery(anchorActionQuery.ANCHOR_ACTIONS_SQL,
+                let latest = await db.getLatestBlockIndex();
+                let rows   = await db.doQuery(anchorActionQuery.ANCHOR_ACTIONS_SQL,
                     [chain, network, v.block_index, v.checkpoint_seq, ...anchorActionQuery.CHECKPOINT_VERSIONS]);
                 let row    = anchorActionQuery.selectAnchorRow(rows, { txid: v.txid, version: v.version });
                 return anchorActionQuery.buildAnchorActionResponse(indexer.config, latest, row,
@@ -952,8 +984,13 @@ async function startApi(){
                 return { error: 'decoder database not ready' };
             let v = reorgHistoryQuery.validateReorgHistoryParams({ since_id, block_index, block_hash, limit });
             if(!v.ok) return { error: v.error };
+            // Federation READ isolation : route through apiView for symmetry
+            // with the indexerDb federation reads. The decoder DB never opens a block
+            // transaction (its doQuery already pools), so this is defense-in-depth, but
+            // keeping every federation read on the pooled view removes the whole class.
+            let db = indexer.decoderDb.apiView();
             try {
-                let rows = await indexer.decoderDb.doQuery(reorgHistoryQuery.REORG_EVENTS_SQL, [v.since_id, v.limit]);
+                let rows = await db.doQuery(reorgHistoryQuery.REORG_EVENTS_SQL, [v.since_id, v.limit]);
                 return reorgHistoryQuery.buildReorgHistoryResponse(rows,
                     { block_index: v.block_index, block_hash: v.block_hash });
             } catch (err) {

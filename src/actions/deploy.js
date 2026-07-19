@@ -502,7 +502,8 @@ class Deploy {
                 network:          this.config['NETWORK'],
                 oracleData:       await ((this.actions && this.actions.hubDb) || this.indexerDb).getOracleDataForVM(data['BLOCK_INDEX'], data['BLOCK_TIME'], parseInt(this.config['ORACLE_MAX_PRICE_AGE_SECONDS']) || 1800),
                 crossChainData:   await this.indexerDb.getCrossChainDataForVM(data['BLOCK_INDEX']),
-                pollData:         await this.indexerDb.getPollResultsForVM(data['BLOCK_INDEX']),
+                // : expose each poll's electorate TICK in the VM snapshot at/after the flag-day.
+                pollData:         await this.indexerDb.getPollResultsForVM(data['BLOCK_INDEX'], await this.actions.protocolChanges.isEnabled('VOTE_POLL_TICK_VISIBLE', data['BLOCK_INDEX'])),
                 providerDeadlines: PROVIDER_DEADLINE_WINDOWS
             });
 

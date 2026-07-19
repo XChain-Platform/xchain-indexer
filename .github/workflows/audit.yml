@@ -1,0 +1,48 @@
+# Scheduled production-dependency vulnerability audit .
+#
+# The shared CI gate (ci.yml -> XChain-Platform/.github ci-reusable.yml) runs the
+# test suite, not `npm audit`. A CVE can be disclosed against a dependency we
+# already shipped, with no commit here, so the audit needs its own cadence rather
+# than riding on push.
+#
+# Deliberately --omit=dev + --audit-level=high: only advisories in code that
+# actually ships, and only high/critical. Dev-toolchain advisories never reach a
+# user, and failing on low/moderate trains people to ignore the gate. A red run
+# means a high/critical advisory now affects a production dependency.
+#
+# Triage convention when this goes red: claude/DEPENDENCY-AUDIT.md in the
+# XChain-Platform monorepo (bump / override / replace, or a documented
+# accept-with-justification). Pre-launch, no high/critical prod advisory ships
+# unresolved.
+name: audit
+
+on:
+  schedule:
+    # Mondays 07:00 UTC. Weekly suits a disclosure cadence and keeps advisory
+    # traffic modest across the repos that run this.
+    - cron: "0 7 * * 1"
+  # Re-run on demand, e.g. the moment a CVE lands in the news.
+  workflow_dispatch:
+  # Also audit when the locked dependency set changes, so a newly pulled-in
+  # vulnerable transitive dep is caught at review time, not only next Monday.
+  pull_request:
+    paths:
+      - package.json
+      - package-lock.json
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      # `npm audit` builds the tree from package-lock.json and queries the
+      # registry advisory endpoint; it needs no install, so skip `npm ci` for
+      # speed and so private deps never need registry auth here.
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high

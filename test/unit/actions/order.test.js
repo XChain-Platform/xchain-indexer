@@ -296,6 +296,54 @@ describe('Order action handler @regression @tier2', function () {
             sinon.assert.notCalled(indexer.indexerDb.updateBalances);
             sinon.assert.notCalled(actionsCtx.processAction);
         });
+
+        // ORDER-AMT-1 hardening: a non-ownership, non-cross-chain order must ask for a
+        // strictly-positive GET_AMOUNT (an empty or zero ask escrows GIVE for nothing).
+        it('empty GET_AMOUNT returns invalid (must be positive)', async function () {
+            const params = makeParams(`0|BTC|RAREPEPE|1||BTC|PEPECASH|||${OWNER_ADDR}|${EXPIRATION}|||`);
+            const data   = createBaseData({ ACTION: 'ORDER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
+
+            await order.parse(params, data, false);
+
+            assert.ok(data['STATUS'].includes('GET_AMOUNT') && data['STATUS'].includes('positive'),
+                `Expected GET_AMOUNT positive error, got "${data['STATUS']}"`);
+            sinon.assert.notCalled(indexer.indexerDb.updateBalances);
+        });
+
+        it('zero GET_AMOUNT returns invalid (must be positive)', async function () {
+            const params = makeParams(`0|BTC|RAREPEPE|1||BTC|PEPECASH|0||${OWNER_ADDR}|${EXPIRATION}|||`);
+            const data   = createBaseData({ ACTION: 'ORDER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
+
+            await order.parse(params, data, false);
+
+            assert.ok(data['STATUS'].includes('GET_AMOUNT') && data['STATUS'].includes('positive'),
+                `Expected GET_AMOUNT positive error, got "${data['STATUS']}"`);
+            sinon.assert.notCalled(indexer.indexerDb.updateBalances);
+        });
+
+        it('native-coin GET side still requires a positive GET_AMOUNT', async function () {
+            // GET_TICK empty (native BTC), GET_AMOUNT empty → invalid
+            const params = makeParams(`0|BTC|RAREPEPE|1||BTC|||0|${OWNER_ADDR}|${EXPIRATION}|||`);
+            const data   = createBaseData({ ACTION: 'ORDER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
+
+            await order.parse(params, data, false);
+
+            assert.ok(data['STATUS'].includes('GET_AMOUNT') && data['STATUS'].includes('positive'),
+                `Expected GET_AMOUNT positive error, got "${data['STATUS']}"`);
+        });
+
+        it('cross-chain order is exempt from the local positive-GET_AMOUNT check', async function () {
+            // GET amount for a cross-chain leg is validated by the xchain-hub federation,
+            // so an empty local GET_AMOUNT must not be rejected here.
+            const params = makeParams(`0|BTC|RAREPEPE|1||LTC|PEPECASH|||${OWNER_ADDR}|${EXPIRATION}|||`);
+            const data   = createBaseData({ ACTION: 'ORDER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
+
+            await order.parse(params, data, false);
+
+            // Not rejected for GET_AMOUNT (cross-chain leg escrows locally and settles via federation)
+            assert.ok(!data['STATUS'].includes('GET_AMOUNT'),
+                `Cross-chain order should not hit the GET_AMOUNT check, got "${data['STATUS']}"`);
+        });
     });
 
     describe('Format 1 – Cancel Order', function () {

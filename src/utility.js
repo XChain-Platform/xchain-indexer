@@ -1280,12 +1280,12 @@ class Utility {
     // Handle sorting an array of objects by price, then by action_index
     sortPriceActionIndex(data){
         data.sort((a, b) => {
-            // First, sort by 'GET_PRICE' in ascending order
+            // First, sort by 'GET_PRICE' in descending order (best price first)
             if(this.bcgt(a['GET_PRICE'], b['GET_PRICE']))
                 return -1;
             if(this.bclt(a['GET_PRICE'], b['GET_PRICE']))
                 return 1;
-            // Second, sort by 'ACTION_INDEX' in ascending order
+            // Second, break GET_PRICE ties by 'ACTION_INDEX' in descending order
             if(a['ACTION_INDEX'] > b['ACTION_INDEX'])
                 return -1;
             if(a['ACTION_INDEX'] < b['ACTION_INDEX'])

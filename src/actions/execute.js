@@ -246,7 +246,9 @@ class Execute {
             // Load read-only data for gateway (price data lives in local hub DB when configured)
             let oracleData = await ((this.actions && this.actions.hubDb) || this.indexerDb).getOracleDataForVM(data['BLOCK_INDEX'], data['BLOCK_TIME'], parseInt(this.config['ORACLE_MAX_PRICE_AGE_SECONDS']) || 1800);
             let crossChainData = await this.indexerDb.getCrossChainDataForVM(data['BLOCK_INDEX']);
-            let pollData       = await this.indexerDb.getPollResultsForVM(data['BLOCK_INDEX']);
+            // : expose each poll's electorate TICK in the VM snapshot at/after the flag-day.
+            let pollTickVisible = await this.actions.protocolChanges.isEnabled('VOTE_POLL_TICK_VISIBLE', data['BLOCK_INDEX']);
+            let pollData       = await this.indexerDb.getPollResultsForVM(data['BLOCK_INDEX'], pollTickVisible);
 
             // Pre-load contract-stake snapshot scoped to THIS contract. Backs the
             // xchain.contract.{getStake,getTotalStaked,getStakers,slash} APIs synchronously.
@@ -581,7 +583,9 @@ class Execute {
         let contractState = await this.indexerDb.getContractState(contractIndex, hostData['BLOCK_INDEX']);
         let oracleData = await ((this.actions && this.actions.hubDb) || this.indexerDb).getOracleDataForVM(hostData['BLOCK_INDEX'], hostData['BLOCK_TIME'], parseInt(this.config['ORACLE_MAX_PRICE_AGE_SECONDS']) || 1800);
         let crossChainData = await this.indexerDb.getCrossChainDataForVM(hostData['BLOCK_INDEX']);
-        let pollData       = await this.indexerDb.getPollResultsForVM(hostData['BLOCK_INDEX']);
+        // : expose each poll's electorate TICK in the VM snapshot at/after the flag-day.
+        let pollTickVisible = await this.actions.protocolChanges.isEnabled('VOTE_POLL_TICK_VISIBLE', hostData['BLOCK_INDEX']);
+        let pollData       = await this.indexerDb.getPollResultsForVM(hostData['BLOCK_INDEX'], pollTickVisible);
         let contractStakeData = await this.indexerDb.getContractStakeDataForVM(contractIndex, hostData['BLOCK_INDEX']);
         // Gated on the VM_BALANCE_TOKENINFO flag-day (see primary EXECUTE path).
         let guardLedger = { balances: null, tokenInfo: null };
