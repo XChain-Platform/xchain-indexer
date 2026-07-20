@@ -265,7 +265,11 @@ class Dispenser {
         // Verify SOURCE may open a dispenser on GET_ADDRESS.
         // SOURCE == GET_ADDRESS: always allowed (owner self-opening).
         // Otherwise: GET_ADDRESS must either set DISPENSER_PREFERENCE=2 (anyone),
-        // or be a fresh address (no prior on-chain activity as of BLOCK_INDEX − 1).
+        // be a fresh address (no prior on-chain activity as of BLOCK_INDEX − 1),
+        // or (DISPENSER_ORIGIN_STANDING) SOURCE must be the address's established
+        // origin: the SOURCE of a prior VALID dispenser create on GET_ADDRESS.
+        // Freshness is spent after the first create; origin standing is what
+        // lets the same main address keep opening dispensers on its sub-address.
         if(!error && format==0 && data['GET_ADDRESS']!=data['SOURCE']){
             let getPrefs = await this.indexerDb.getAddressPreferences(data['GET_ADDRESS'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
             if(Number(getPrefs['DISPENSER_PREFERENCE']) !== 2){
@@ -278,7 +282,10 @@ class Dispenser {
                         console.log('WARNING: utxo-tracker get_first_seen failed for ' + data['GET_ADDRESS'] + ': ', err);
                     }
                 }
-                if(!isFresh)
+                let hasStanding = false;
+                if(!isFresh && await this.actions.protocolChanges.isEnabled('DISPENSER_ORIGIN_STANDING', data['BLOCK_INDEX']))
+                    hasStanding = await this.indexerDb.hasDispenserOriginStanding(data['SOURCE'], data['GET_ADDRESS'], data['ACTION_INDEX']);
+                if(!isFresh && !hasStanding)
                     error = 'invalid: GET_ADDRESS (dispenser not permitted)';
             }
         }

@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `DISPENSER_ORIGIN_STANDING` (genesis-activated): the SOURCE of a prior valid dispenser create on an address may open additional dispensers on it without freshness or `DISPENSER_PREFERENCE=2`.
 - Armed the contract-era (Cohort A) flag-day at 2026-10-01 00:00 UTC (was the 2027-01-01 placeholder) across all six block_TIME gates, re-anchored the CROSS_CHAIN_ROYALTY create-side date to 2027-01-01 (one quarter after), and armed the four remaining BTC-anchored gates (checkpoint commitment, EQUIV header, stake-weighted quorum, anchor reward) at BTC 961000.
 - `STATE_COMMITMENT_ACTIVATION` armed mid-chain with per-chain '<COIN>:<network>' keys (same heights as the state-hash gates); the twin module and its call sites now take the coin, mirroring stateHash.js.
 - Armed `CROSS_CHAIN_ROYALTY_ACTIVATION` mainnet at BTC anchor 961000 (~2026-08-04, fleet deploy required first); the create-side `CROSS_CHAIN_ROYALTY` date was re-anchored to 2027-01-01 the same day (entry above).

@@ -496,6 +496,79 @@ describe('Dispenser action handler @regression @tier2', function () {
             // Throws caught → isFresh stays false → invalid
             assert.ok(data['STATUS'].includes('GET_ADDRESS') && data['STATUS'].includes('not permitted'));
         });
+
+        it('non-fresh GET_ADDRESS with origin standing is allowed (DISPENSER_ORIGIN_STANDING)', async function () {
+            indexer.indexerDb.getAddressPreferences
+                .withArgs(OTHER_ADDR, sinon.match.any, sinon.match.any)
+                .resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0, DISPENSER_PREFERENCE: 0 });
+
+            // Address has history (not fresh), but SOURCE opened a prior valid
+            // dispenser on it while it was fresh.
+            const utxoTracker = {
+                enabled: true,
+                getFirstSeen: sinon.stub().resolves({ height: 100 }),
+            };
+            actionsCtx.utxoTracker = utxoTracker;
+            dispenser = new Dispenser(actionsCtx);
+            indexer.indexerDb.hasDispenserOriginStanding
+                .withArgs(OWNER_ADDR, OTHER_ADDR, sinon.match.any)
+                .resolves(true);
+
+            const params = makeParams(`0|BTC|JDOG|1||10|BTC||0.01|${OTHER_ADDR}||||${EXPIRATION}|||`);
+            const data   = createBaseData({ ACTION: 'DISPENSER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC', BLOCK_INDEX: 800000 });
+
+            await dispenser.parse(params, data, false);
+
+            assert.strictEqual(data['STATUS'], 'valid');
+            assert.ok(indexer.indexerDb.hasDispenserOriginStanding.calledWith(OWNER_ADDR, OTHER_ADDR, sinon.match.any));
+        });
+
+        it('non-fresh GET_ADDRESS where a DIFFERENT address holds standing stays invalid', async function () {
+            indexer.indexerDb.getAddressPreferences
+                .withArgs(OTHER_ADDR, sinon.match.any, sinon.match.any)
+                .resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0, DISPENSER_PREFERENCE: 0 });
+
+            const utxoTracker = {
+                enabled: true,
+                getFirstSeen: sinon.stub().resolves({ height: 100 }),
+            };
+            actionsCtx.utxoTracker = utxoTracker;
+            dispenser = new Dispenser(actionsCtx);
+            // Default hasDispenserOriginStanding stub resolves false: this
+            // SOURCE never opened a dispenser on OTHER_ADDR.
+
+            const params = makeParams(`0|BTC|JDOG|1||10|BTC||0.01|${OTHER_ADDR}||||${EXPIRATION}|||`);
+            const data   = createBaseData({ ACTION: 'DISPENSER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC', BLOCK_INDEX: 800000 });
+
+            await dispenser.parse(params, data, false);
+
+            assert.ok(data['STATUS'].includes('GET_ADDRESS') && data['STATUS'].includes('not permitted'));
+        });
+
+        it('origin standing is not consulted when DISPENSER_ORIGIN_STANDING is inactive', async function () {
+            indexer.indexerDb.getAddressPreferences
+                .withArgs(OTHER_ADDR, sinon.match.any, sinon.match.any)
+                .resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0, DISPENSER_PREFERENCE: 0 });
+
+            const utxoTracker = {
+                enabled: true,
+                getFirstSeen: sinon.stub().resolves({ height: 100 }),
+            };
+            actionsCtx.utxoTracker = utxoTracker;
+            actionsCtx.protocolChanges.isEnabled = sinon.stub().callsFake(
+                async (name) => name !== 'DISPENSER_ORIGIN_STANDING',
+            );
+            dispenser = new Dispenser(actionsCtx);
+            indexer.indexerDb.hasDispenserOriginStanding.resolves(true);
+
+            const params = makeParams(`0|BTC|JDOG|1||10|BTC||0.01|${OTHER_ADDR}||||${EXPIRATION}|||`);
+            const data   = createBaseData({ ACTION: 'DISPENSER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC', BLOCK_INDEX: 800000 });
+
+            await dispenser.parse(params, data, false);
+
+            assert.ok(data['STATUS'].includes('GET_ADDRESS') && data['STATUS'].includes('not permitted'));
+            assert.ok(indexer.indexerDb.hasDispenserOriginStanding.notCalled);
+        });
     });
 
     describe('LIST field validation', function () {

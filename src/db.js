@@ -9400,6 +9400,31 @@ class Database {
         return dispenser;
     }
 
+    // Origin-standing check for DISPENSER creates (DISPENSER_ORIGIN_STANDING
+    // protocol change): true when `source` is the SOURCE of at least one prior
+    // VALID dispenser create on `getAddress` (action_index strictly earlier
+    // than the create being validated). Later status changes (closed /
+    // canceled / expired) do not revoke standing; only the create's own
+    // validity counts, so invalid create attempts confer nothing.
+    async hasDispenserOriginStanding(source, getAddress, action_index){
+        let query = `SELECT
+                        d1.action_index
+                    FROM
+                        dispensers d1
+                        INNER JOIN actions         a1 ON (a1.action_index=d1.action_index)
+                        INNER JOIN index_addresses a2 ON (a2.id=a1.source_id)
+                        INNER JOIN index_addresses a3 ON (a3.id=d1.get_address_id)
+                        INNER JOIN index_statuses  s1 ON (s1.id=d1.status_id)
+                    WHERE
+                        a2.address=? AND
+                        a3.address=? AND
+                        s1.status='valid' AND
+                        d1.action_index<?
+                    LIMIT 1`;
+        let results = await this.doQuery(query, [source, getAddress, action_index]);
+        return results.length > 0;
+    }
+
     // Create/Update record in `dispenser_edits` table
     async createDispenserEdit(data){
         data                       = this.normalizeDataValues(data);

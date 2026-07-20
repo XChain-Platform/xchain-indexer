@@ -222,6 +222,7 @@ function createMockDb() {
         findDispenserSends: sinon.stub().resolves([]),
         findMatchingDispensers: sinon.stub().resolves([]),
         getDispenserInfo: sinon.stub().resolves(null),
+        hasDispenserOriginStanding: sinon.stub().resolves(false),
         getDispenserEdits: sinon.stub().resolves([]),
         getDispenserAmountRemaining: sinon.stub().resolves(0),
         getSweepDestination: sinon.stub().resolves(null),

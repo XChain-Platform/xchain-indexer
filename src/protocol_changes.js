@@ -173,6 +173,14 @@ class ProtocolChanges {
         // xchain-hub federation drives cross-chain matching + mirror-delivered settlement.
         // Genesis-activated (pre-launch).
         this.addChange('CROSS_CHAIN_DEX','2.0.0',0,0,0,0,0,0);
+        // Origin-standing dispenser creates: the SOURCE of a prior VALID
+        // dispenser create on GET_ADDRESS (its "origin") may open additional
+        // dispensers on that address without the freshness check or
+        // DISPENSER_PREFERENCE=2. Completes the one-main-address-managing-
+        // many-dispenser-addresses pattern (origin already holds permanent
+        // refill/close authority via the v1/v2 owner check).
+        // Genesis-activated (pre-launch).
+        this.addChange('DISPENSER_ORIGIN_STANDING','2.0.0',0,0,0,0,0,0);
         // Issuance fee activation. Mainnet turns on at the historical block 862633;
         // testnet/regtest charge from block 0 so the fee path is exercisable there.
         // mainnet_block=862633 is a BTC block height used as an 'always-on' activation
