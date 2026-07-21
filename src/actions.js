@@ -146,6 +146,7 @@ const xexec              = require('./actions/xexec.js');
 
 // Full-node possession-proof verdict (verified-validator tier)
 const nodeproof          = require('./actions/nodeproof.js');
+const PreflightMemo      = require('./preflightMemo.js');
 
 class Actions {
 
@@ -164,6 +165,11 @@ class Actions {
 
         // utxo-tracker client used by DISPENSER fresh-address check
         this.utxoTracker = indexer.utxoTracker || null;
+
+        // Public validity-first pre-flight verdict memo , keyed on
+        // (action, params, source, blockIndex); a new tip changes the key.
+        this._preflightMemo = new PreflightMemo(
+            parseInt(process.env.INDEXER_PREFLIGHT_MEMO_MAX, 10) || 256);
 
         // Create action instances and pass database connections
         this.actionAddress         = new address(this);
@@ -967,6 +973,93 @@ class Actions {
             }
         }
 
+        return result;
+    }
+
+    // Public validity-first pre-flight . Answers "would the indexer accept this action?"
+    // decoupled from native-coin fee support: unlike computeFeeQuote (which returns
+    // supported:false when no FEE_DESTINATION is configured, conflating "no fee config" with
+    // "didn't run"), this reports supported:true whenever the handler actually ran, and its
+    // verdict is the action's on-chain validity STATUS. Reuses the same forced-rollback dry-run
+    // engine, the same admission cap + timeout, and guardInert:true (controller guards never
+    // enter the VM on this unauthenticated surface). VM actions stay denylisted; settlement/
+    // lifecycle actions stay feeExempt (no dry-runnable verdict). A block-height-keyed memo
+    // (this._preflightMemo) collapses identical same-height re-runs. No fee/pricing fields:
+    // that is computeFeeQuote's job. Surfaced publicly via the explorer's /{COIN}/api/preflight
+    // proxy. Never persists (the dry-run always rolls back).
+    //
+    // Native-fee entanglement caveat (spec §4.3): the synthetic tx carries the probe fee
+    // destination exactly as computeFeeQuote does, so a mandatory-native chain's fee-output
+    // presence check does not false-reject a structurally valid action; the SDK Tier-1 keeps
+    // native-fee-output aspects `unverified` regardless.
+    async computePreflight({ action, params, source }){
+        let coin           = this.config['COIN'];
+        let feeDestination = this.config['ADDRESS'] ? this.config['ADDRESS']['FEE_DESTINATION'] : null;
+        let probeDest      = (feeDestination && feeDestination !== 'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX') ? feeDestination : null;
+
+        // Normalize identically to computeFeeQuote / dispatch (trim, uppercase, de-alias).
+        action = String(action || '').trim().toUpperCase();
+        for(var alias in this.actionAliases){
+            if(action == alias) action = this.actionAliases[alias];
+        }
+        if(!Array.isArray(params)) params = String(params == null ? '' : params).split('|');
+        params = params.map(v => String(v).trim());
+
+        let base = { supported: true, action: action, coin: coin };
+
+        // Same classification path as the fee-quote gate (deny-before-exempt).
+        let feeClass = classifyFeeQuoteAction(action);
+        if(feeClass === 'denied')
+            return Object.assign(base, { supported: false, denied: true, valid: null,
+                error: action + ' is not available on the public pre-flight endpoint (VM action; use the authenticated dry-run)' });
+        if(feeClass === 'exempt')
+            return Object.assign(base, { supported: false, feeExempt: true, valid: null,
+                note: action + ' is a settlement/lifecycle action with no dry-runnable verdict' });
+
+        // Verdict memo keyed on (action, params, source, blockIndex). A new tip changes the key.
+        let blockIndex = await this.indexerDb.getLatestBlockIndex();
+        let memoKey    = this._preflightMemo.key(action, params, source, blockIndex);
+        let cached     = this._preflightMemo.get(memoKey);
+        if(cached) return Object.assign({}, cached, { cached: true });
+
+        let maxPending = parseInt(process.env.INDEXER_FEEQUOTE_MAX_PENDING, 10) || 8;
+        if((this._feeQuotePending || 0) >= maxPending)
+            return Object.assign(base, { valid: null, busy: true, retryable: true,
+                error: 'pre-flight busy (' + maxPending + ' dry-runs already pending); retry shortly' });
+
+        let timeoutMs = parseInt(process.env.INDEXER_FEEQUOTE_TIMEOUT_MS, 10) || 10000;
+        this._feeQuotePending = (this._feeQuotePending || 0) + 1;
+        let run;
+        try {
+            run = await this._dryRunAction({
+                action, params, source,
+                probeFeeDestination: probeDest,
+                timeoutMs: timeoutMs,
+                label: 'preflight ' + action,
+                guardInert: true
+            });
+        } finally {
+            this._feeQuotePending--;
+        }
+
+        // A controller-bound token whose guard the public path refused to run: the validity
+        // verdict genuinely depends on a guard we do not enter here. Surface it as a boolean
+        // so the client falls through to its authenticated/certified tier rather than trusting
+        // a guard-less verdict.
+        let guardInert = (typeof run.status === 'string' && run.status.indexOf('FEE_QUOTE_CONTROLLER_UNSUPPORTED') !== -1);
+        let valid      = (run.status === 'valid');
+
+        let result = Object.assign(base, {
+            valid:      guardInert ? null : valid,
+            status:     run.status,
+            error:      valid ? null : (run.error || run.status || 'dry-run produced no status'),
+            guardInert: guardInert,
+            feeExempt:  false,
+            blockIndex: run.blockIndex,
+            blockTime:  run.blockTime
+        });
+
+        this._preflightMemo.set(memoKey, result);
         return result;
     }
 

@@ -412,6 +412,28 @@ async function startApi(){
             }
         },
 
+        // Public validity-first pre-flight : "would the indexer accept this action?"
+        // decoupled from native-coin fee support. Same forced-rollback dry-run engine and the
+        // same admission cap / timeout / guardInert as feequote, but the response is the
+        // action's validity STATUS (not a fee band), and supported:true whenever the handler
+        // actually ran. VM actions stay denylisted; settlement/lifecycle actions stay
+        // feeExempt. Height-keyed memo collapses same-height re-runs. Public read (surfaced to
+        // wallets/SDK via the explorer /{COIN}/api/preflight proxy); NOT gated like
+        // feequotedryrun. Never persists.
+        // Body: { action, params, source }
+        async preflight({action, params, source}){
+            if(!action || typeof action !== 'string')
+                return { error: 'action is required' };
+            if(!indexer.indexerDb || !indexer.actions)
+                return { error: 'indexer not ready' };
+            try {
+                return await indexer.actions.computePreflight({ action, params, source });
+            } catch (err) {
+                console.error('preflight error:', err);
+                return { error: 'failed to compute pre-flight' };
+            }
+        },
+
         // OPT-IN raw dry-run: same engine as feequote but with no action deny-list, no
         // admission cap, the caller's literal feeOutputs (no probe injection), and the full
         // block watchdog as timeout. That unrestricted surface (VM actions on demand) is why
