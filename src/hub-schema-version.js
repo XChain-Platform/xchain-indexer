@@ -24,6 +24,10 @@
  *
  ********************************************************************/
 
-const HUB_SCHEMA_VERSION = 1;
+// v2 : capability_snapshots.uq_cap_snap gained `source`, so the hub now
+// mirrors both (source, pubkey) rows for a multi-source key. Lockstep with
+// xchain-hub/src/hub-schema-version.js (already at v2); a v1 indexer must reject
+// the v2 stream until its own uq_cap_snap is widened (2026-07-20 migration).
+const HUB_SCHEMA_VERSION = 2;
 
 module.exports = { HUB_SCHEMA_VERSION };
