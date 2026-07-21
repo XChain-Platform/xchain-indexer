@@ -228,6 +228,11 @@ class Dispense {
             });
         }
 
+        //  flag-day: at/above the activation the auto-close threshold is the
+        // dispenser's PER-UNIT price; below it the legacy aggregate-purchase
+        // comparison applies so historical replay stays byte-identical.
+        let perUnitClose = await this.actions.protocolChanges.isEnabled('DISPENSER_CLOSE_PER_UNIT', block_index);
+
         // Loop through dispenses and process each
         for(let idx in dispenses){
 
@@ -310,8 +315,15 @@ class Dispense {
             // Create action mappings
             await this.mapper.createMappings(dispense);
 
-            // Close the dispenser if GIVE_REMAINING is less than GIVE_AMOUNT
-            if(status=='valid' && this.util.bclt(dispenser['GIVE_REMAINING'], dispense['GIVE_AMOUNT'])){
+            // Close the dispenser when it can no longer serve a buyer. The correct
+            // threshold is the dispenser's PER-UNIT price (dispenser GIVE_AMOUNT):
+            // close only when remaining escrow cannot cover one more unit. The
+            // legacy comparison used the triggering dispense's aggregate
+            // give_amount (multiplier * per-unit), closing early after any large
+            // order; that behavior is preserved below the  flag-day so
+            // historical blocks replay byte-identically.
+            let closeThreshold = perUnitClose ? dispenser['GIVE_AMOUNT'] : dispense['GIVE_AMOUNT'];
+            if(status=='valid' && this.util.bclt(dispenser['GIVE_REMAINING'], closeThreshold)){
                 let action = 'DISPENSER_CLOSE';
                 let data = {};
                 data['ACTION']                 = action;

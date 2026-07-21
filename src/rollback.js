@@ -21,6 +21,7 @@
 const crypto    = require('crypto');
 const swq       = require('./stake_weighted_quorum.js');
 const lifecycle = require('./tableLifecycle.js');
+const { ARCHIVE_HEAD_VERSIONS_SQL } = require('./stateHash.js');
 
 class Rollback {
 
@@ -698,9 +699,9 @@ class Rollback {
                 // range containing only such a maturity leaves firstActionIndex null and would skip
                 // the reversal entirely, forking the ledger vs a from-genesis replay.
 
-                // Reset an anchor archive batch's parent v1 status that an orphaned final
-                // chunk flipped to 'invalid_archive' IN PLACE on a surviving row. A chunked
-                // archive batch spans multiple blocks: a v1 parent in an early block, then v2
+                // Reset an anchor archive batch's parent (v1/v6 archive-head) status that an
+                // orphaned final chunk flipped to 'invalid_archive' IN PLACE on a surviving row. A
+                // chunked archive batch spans multiple blocks: a head in an early block, then v2
                 // continuation chunks in later blocks. When the LAST v2 chunk lands, anchor.js
                 // reassembles the blob and, on a CRC mismatch against the parent's signed
                 // batch_crc32, stamps the parent 'invalid_archive' via a direct UPDATE on the
@@ -711,7 +712,7 @@ class Rollback {
                 // re-mined validly) would re-derive the parent's pre-flip status. anchor_actions
                 // .status_id is not in any block-hash projection, so this is a state-table
                 // divergence (and could mislead the archive-integrity flag / recovery selection,
-                // which read version=1 status IN ('valid','unverified')), not a consensus fork.
+                // which read version IN (1, 6) status IN ('valid','unverified')), not a consensus fork.
                 //
                 // Reset to 'unverified', the conservative re-verification state (anchor.js stores
                 // a v1 'unverified' whenever its signer snapshot isn't locally mirrored, and
@@ -734,10 +735,18 @@ class Rollback {
                     // matches nothing, silently no-oping the reset and leaving the parent wedged at
                     // 'invalid_archive'. createStatus interns it (INSERT IGNORE) so the JOIN is
                     // guaranteed non-empty; index_statuses ids are never hashed, so an in-rollback
-                    // intern is byte-neutral. The UPDATE's SQL text is deliberately left unchanged so
-                    // the cross-repo drift guard (xchain-sync rollback-coverage) still matches; the
-                    // replica converges via snapshot catch-up (it cannot intern locally without
-                    // diverging the replicated id, and anchor status_id is in no block-hash projection).
+                    // intern is byte-neutral. The UPDATE's JOIN text is pinned by the cross-repo
+                    // drift guard (xchain-sync rollback-coverage); the replica converges via
+                    // snapshot catch-up (it cannot intern locally without diverging the replicated
+                    // id, and anchor status_id is in no block-hash projection).
+                    //
+                    // Version predicate : the parent is any ARCHIVE_HEAD version (v1
+                    // legacy, v6 publisher-bearing post-ARCHIVE_REWARD), shared constant from
+                    // stateHash.js. Unconditionally widened: a v6 parent's stamp is exactly as
+                    // un-re-derivable after the chunk delete as a v1's, and this reset is not a
+                    // hash preimage (the GATED anchor_invalid state-hash class covers the stamp
+                    // itself), so no flag-day applies here. ClientRollback.js mirrors this;
+                    // the drift guard pins the widened predicate on both sides.
                     await this.indexerDb.createStatus('unverified');
                     query = `UPDATE anchor_actions p
                                 JOIN index_statuses ps ON ps.id = p.status_id AND ps.status = 'invalid_archive'
@@ -748,7 +757,7 @@ class Rollback {
                                 JOIN index_statuses cs ON cs.id = c.status_id AND cs.status = 'valid'
                                 JOIN index_statuses us ON us.status = 'unverified'
                                 SET p.status_id = us.id
-                                WHERE p.version = 1
+                                WHERE p.version ${ARCHIVE_HEAD_VERSIONS_SQL}
                                   AND p.action_index < ?`;
                     args = [firstActionIndex, firstActionIndex];
                     await this.indexerDb.doQuery(query, args);

@@ -194,6 +194,55 @@ function isTokenSupplyStateHashActive(blockIndex, network, coin){
     return b >= threshold;
 }
 
+// ── Archive-head anchor versions  ────────────────────────────────────
+// The anchor_actions versions that carry an archive HEAD (a signed batch header
+// whose v2 continuation chunks reassemble against it): v1 (legacy archive anchor)
+// and v6 (the publisher-bearing archive anchor of the ARCHIVE_REWARD flag-day,
+// ). Every predicate that selects "the archive parent of a v2 chunk" MUST
+// use this set: the invalid_archive stamp, its reorg reset, the forward
+// updated_rows class and the state-hash class below all target the same rows.
+// SINGLE SOURCE OF TRUTH for xchain-indexer rollback.js + this file's class 6,
+// and (via the byte-identical xchain-sync twin) ClientRollback.js +
+// updatedRows.js. db.js/recovery.js carry matching literal IN (1, 6) predicates.
+const ARCHIVE_HEAD_VERSIONS = [1, 6];
+// SQL fragment form, spliced as `p.version ` + ARCHIVE_HEAD_VERSIONS_SQL.
+const ARCHIVE_HEAD_VERSIONS_SQL = 'IN (' + ARCHIVE_HEAD_VERSIONS.join(', ') + ')';
+
+// ── invalid_archive v6-coverage state-hash flag-day  ─────────────────
+// Widens the anchor_invalid state-hash class (class 6 below) from v1-only
+// parents to the full ARCHIVE_HEAD_VERSIONS set, closing the integrity-hash
+// blind spot where an invalid_archive stamp on a v6 parent was invisible to the
+// follower's recompute (a follower silently dropping that upsert diverged with
+// no halt). Changes the class's row selection, hence the hashed preimage, so it
+// is gated exactly like POLL_FINALIZE above (per-chain keys on the chain's OWN
+// local block_index) and landed DEFAULT INERT: below the threshold the query
+// keeps the legacy v1-only predicate and the preimage stays byte-identical to
+// the pre-feature shape. Pin real per-chain heights via the  flag-day set
+// (ledger placeholder: mainnet ~983000) and deploy every indexer + sync process
+// BEFORE the earliest chain crosses its height. No STATE_HASH_VERSION bump: a
+// block is unambiguously pre- or post-activation on a given network. Keep
+// byte-identical to the xchain-sync twin.
+const ARCHIVE_INVALID_STATE_HASH_ACTIVATION = {
+    'BTC:mainnet':  999999999,  // INERT placeholder; pin via  before ARCHIVE_REWARD archives circulate
+    'LTC:mainnet':  999999999,  // INERT placeholder
+    'DOGE:mainnet': 999999999,  // INERT placeholder (DOGE is the anchor chain; arm first here)
+    'BTC:testnet':  999999999,  // INERT placeholder
+    'LTC:testnet':  999999999,  // INERT placeholder
+    'DOGE:testnet': 999999999,  // INERT placeholder
+    regtest: 0,                 // armed from genesis: fresh regtest stacks exercise the widened class end to end
+};
+
+// Whether the anchor_invalid class covers the full archive-head version set at
+// `blockIndex` on `network` for `coin`. Below the threshold / unknown network ->
+// off (safe; the class keeps its legacy v1-only selection, preimage unchanged).
+function isArchiveInvalidStateHashActive(blockIndex, network, coin){
+    let b = parseInt(blockIndex);
+    if(!Number.isFinite(b)) return false;
+    let threshold = _activationThreshold(ARCHIVE_INVALID_STATE_HASH_ACTIVATION, network, coin);
+    if(threshold === undefined) return false;
+    return b >= threshold;
+}
+
 const DEACTIVATION_TABLES = ['stakes', 'delegations', 'contract_stakes', 'contract_delegations'];
 const SLASH_SPECS = [
     { table: 'stakes',            debits: 'capability_slash_debits', target: 'stakes'            },
@@ -302,12 +351,17 @@ async function buildStateHashData(db, blockIndex, opts){
         } catch(e){ if(e && typeof e.errno === 'number' && e.errno !== 1146 && e.errno !== 1054) throw e; /* table may not exist on older schemas */ }
     }
 
-    // 6. invalid_archive stamp on anchor_actions v1 parent rows. When the final v2
-    //    chunk of a chunked archive batch lands at block B and the reassembled blob
-    //    fails its CRC check, anchor.js stamps the v1 parent 'invalid_archive' in
-    //    place. The parent's action_index is in an earlier block, so it is invisible
-    //    to the action-scoped consensus hashes and to the per-block stream. Resolved
-    //    via the status name (not status_id) to stay id-independent across nodes.
+    // 6. invalid_archive stamp on anchor_actions archive-head parent rows. When the
+    //    final v2 chunk of a chunked archive batch lands at block B and the
+    //    reassembled blob fails its CRC check, anchor.js stamps the parent (v1, or
+    //    v6 after the ARCHIVE_REWARD flag-day) 'invalid_archive' in place. The
+    //    parent's action_index is in an earlier block, so it is invisible to the
+    //    action-scoped consensus hashes and to the per-block stream. Resolved via
+    //    the status name (not status_id) to stay id-independent across nodes.
+    //    Version predicate GATED : legacy v1-only below the
+    //    ARCHIVE_INVALID_STATE_HASH activation, the full ARCHIVE_HEAD_VERSIONS set
+    //    at/after it, so the pre-flag preimage stays byte-identical.
+    let archiveInvalidActive = isArchiveInvalidStateHashActive(B, network, coin);
     let anchor_invalid = [];
     try {
         anchor_invalid = await db.doQuery(
@@ -315,7 +369,8 @@ async function buildStateHashData(db, blockIndex, opts){
             "JOIN anchor_actions c ON c.version = 2 AND c.match_batch_seq = p.match_batch_seq " +
             "JOIN index_statuses s ON s.id = p.status_id AND s.status = 'invalid_archive' " +
             "JOIN index_statuses cs ON cs.id = c.status_id AND cs.status = 'valid' " +
-            "WHERE p.version = 1 AND c.block_index BETWEEN ? AND ? " +
+            "WHERE p.version " + (archiveInvalidActive ? ARCHIVE_HEAD_VERSIONS_SQL : "= 1") +
+            " AND c.block_index BETWEEN ? AND ? " +
             "ORDER BY p.action_index ASC",
             [B, B]);
     } catch(e){ if(e && typeof e.errno === 'number' && e.errno !== 1146 && e.errno !== 1054) throw e; /* table/columns may not exist on older schemas */ }
@@ -428,4 +483,6 @@ module.exports = { buildStateHashData, STATE_HASH_VERSION,
                    DEACTIVATION_TABLES, SLASH_SPECS, REQUEST_STATUS_TABLES, COOLDOWN_TABLES,
                    INDEX_MAP_STATE_HASH_ACTIVATION, isIndexMapStateHashActive,
                    POLL_FINALIZE_STATE_HASH_ACTIVATION, isPollFinalizeStateHashActive,
-                   TOKEN_SUPPLY_STATE_HASH_ACTIVATION, isTokenSupplyStateHashActive };
+                   TOKEN_SUPPLY_STATE_HASH_ACTIVATION, isTokenSupplyStateHashActive,
+                   ARCHIVE_HEAD_VERSIONS, ARCHIVE_HEAD_VERSIONS_SQL,
+                   ARCHIVE_INVALID_STATE_HASH_ACTIVATION, isArchiveInvalidStateHashActive };

@@ -47,6 +47,12 @@
  */
 function rethrowIfInfraFault(e){
     if(e && e.code === 'EXECUTOR_UNAVAILABLE') throw e;
+    //  host assert: an injected execution context missing TX_HASH after the
+    // SYNTH_EXEC_TX_HASH flag-day is a regressed injector site (host bug), never a
+    // contract outcome; swallowing it as a callback verdict would commit the very
+    // stranding the assert exists to prevent. Deterministic on every node running
+    // the same code, so halting is loud, not forking.
+    if(e && e.code === 'EXEC_CONTEXT_TX_HASH_MISSING') throw e;
     if(e && typeof e.errno === 'number' && e.errno !== 1146 && e.errno !== 1054) throw e;
 }
 

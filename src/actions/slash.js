@@ -306,6 +306,19 @@ class Slash {
         };
         if(FIELD[engineTag] !== undefined){
             let i  = FIELD[engineTag];
+            // The CHECKPOINT engine tag carries TWO content families : the checkpoint
+            // root canonical (XCHECKPOINT|...) and the reward-attestation canonical
+            // (XANCPUB|scope|seq|snapshot_block|publisher|amount, both the per-chain and
+            // archive legs; see anchor.js _rewardCanonical). Dispatch the field index on the
+            // content's leading token; both messages must agree on the family (a matched
+            // field across DIFFERENT layouts proves nothing about a shared slot).
+            if(engineTag === eq.ENGINE_TAGS.CHECKPOINT){
+                let famA = contentA.split('|', 1)[0];
+                let famB = contentB.split('|', 1)[0];
+                if(famA !== famB)
+                    return { error: 'invalid: CHECKPOINT content family mismatch' };
+                if(famA === 'XANCPUB') i = 3;
+            }
             let fa = contentA.split('|')[i];
             let fb = contentB.split('|')[i];
             if(this.util.isNull(fa) || fa !== fb || !/^[0-9]+$/.test(String(fa)))

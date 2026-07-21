@@ -428,6 +428,58 @@ class ProtocolChanges {
         // stack exercises getResponse from block 0).
         this.addChange('VM_ATTESTATION_GETRESPONSE', '2.0.0',1790812800,0,0,0,0,0);
 
+        // : synthesized-execution TX_HASH on the injected-callback seam. Four
+        // sites inject a system EXECUTE that runs a contract callback (attest.js v1
+        // response + v2 expiry, vote.js poll-finalize, xcall.js result); two of them
+        // historically omitted TX_HASH, so a contract emitting ATTEST/XCALL from
+        // inside its expiry or poll-finalize callback was charged gas for an id the
+        // indexer then hard-rejected ('invalid: TX_HASH'), stranding the contract
+        // permanently. Below this activation those two sites keep the hashless
+        // context (the original behaviour, so a from-genesis mainnet replay stays
+        // byte-identical); at/above it every injected context carries a TX_HASH
+        // (real when the trigger rode an on-chain tx, else the deterministic
+        // sha256('TAG:NETWORK:CHAIN:UNIQUE_ID') synthesis in actions/execContext.js)
+        // and execute.js hard-asserts the invariant so a fifth injector site cannot
+        // regress the class. Gated as its own consensus rule because the switch is a
+        // validity LOOSENING: an ATTEST/XCALL emission every legacy node rejects
+        // becomes valid on an upgraded node, so an ungated flip forks a
+        // heterogeneous fleet on the first contract that emits from such a callback.
+        // Keyed on block_TIME (not block_index), mirroring the sibling VM flag-days:
+        // these callbacks run on BTC, LTC and DOGE whose heights diverge by millions
+        // of blocks, so no single shared block height names one cutover across all
+        // three chains, but a single timestamp can. The mainnet timestamp joins the
+        // ratified coordinated anchor 1790812800 (2026-10-01 00:00:00 UTC), the
+        // confirmed 2.0.0 contract-era cohort ; a divergent value is a fork.
+        // testnet/regtest activate at genesis (no hashless-callback history to
+        // preserve; the e2e/regtest stack exercises the synthesized hash from
+        // block 0).
+        this.addChange('SYNTH_EXEC_TX_HASH', '2.0.0',1790812800,0,0,0,0,0);
+
+        // : dispenser auto-close compares remaining inventory against the
+        // PER-UNIT price, not a buyer's aggregate purchase. The legacy check
+        // closes the dispenser when GIVE_REMAINING drops below the triggering
+        // dispense's total give_amount (multiplier * GIVE_AMOUNT), so a large
+        // order shuts a dispenser down early and non-deterministically based on
+        // any one buyer's order size, even though enough escrow remains to
+        // serve further single-unit buyers. At/above this activation the close
+        // fires only when GIVE_REMAINING < the dispenser's per-unit GIVE_AMOUNT
+        // (it genuinely cannot serve another unit). Gated as its own consensus
+        // rule because the switch changes WHICH BLOCK a DISPENSER_CLOSE system
+        // action lands in (different actions/dispenser_statuses rows, hence
+        // different consensus block hashes): an ungated flip forks a
+        // heterogeneous fleet on the first multi-unit dispense that empties
+        // below the aggregate but not the per-unit threshold. Keyed on
+        // block_TIME (not block_index), mirroring DEPLOY_BASE64_CODE: DISPENSE
+        // runs on BTC, LTC and DOGE whose heights diverge by millions of
+        // blocks, so no single shared block height names one cutover across
+        // all three chains, but a single timestamp can. The mainnet timestamp
+        // joins the ratified coordinated anchor 1790812800 (2026-10-01
+        // 00:00:00 UTC), the confirmed 2.0.0 contract-era cohort ; a
+        // divergent value is a fork. testnet/regtest activate at genesis (no
+        // early-close history to preserve; the e2e/regtest stack exercises the
+        // per-unit close from block 0).
+        this.addChange('DISPENSER_CLOSE_PER_UNIT', '2.0.0',1790812800,0,0,0,0,0);
+
         // Cross-chain royalty enforcement, layered on CONTROLLER_GUARD. Once the guard
         // produces royalty payout_legs (post-CONTROLLER_GUARD), a CROSS-CHAIN listing of
         // a royalty-bearing token needs its legs applied on the PROCEEDS chain, which

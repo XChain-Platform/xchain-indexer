@@ -32,6 +32,7 @@
  ********************************************************************/
 
 const { rethrowIfInfraFault } = require('./faultGuard.js');
+const { buildInjectedExecContext, SYNTH_EXEC_TX_HASH, SYNTH_TAGS } = require('./execContext.js');
 
 class Vote {
 
@@ -657,16 +658,26 @@ class Vote {
             SOURCE:      'C:' + chain + ':' + poll.callback_contract_index
         }, true);
 
-        let emissionData = {
-            ACTION_INDEX: emissionActionIndex,
-            SOURCE:       'C:' + chain + ':' + poll.callback_contract_index,
-            FEE_PAYER:    'C:' + chain + ':' + poll.callback_contract_index,
-            BLOCK_INDEX:  data['BLOCK_INDEX'],
-            BLOCK_TIME:   data['BLOCK_TIME'],
-            FORMAT:       0,
-            IS_EMISSION:  true,
-            EMITTER:      data['ACTION_INDEX']
-        };
+        // : the finalize/timelock callback has no real tx behind it (VOTE v2
+        // is system-synthesized). Post-SYNTH_EXEC_TX_HASH the context gets a
+        // deterministic synthetic TX_HASH (namespaced by the poll's action_index,
+        // unique per poll since the callback fires exactly once), so an ATTEST/XCALL
+        // the callback emits derives a resolvable id instead of being billed and
+        // hard-rejected. Below the flag-day the legacy hashless context is
+        // reproduced byte-identically (consensus replay safety).
+        let synthActive = await this.actions.protocolChanges.isEnabled(SYNTH_EXEC_TX_HASH, data['BLOCK_INDEX']);
+        let emissionData = buildInjectedExecContext({
+            chain:         chain,
+            network:       this.config['NETWORK'],
+            contractIndex: poll.callback_contract_index,
+            actionIndex:   emissionActionIndex,
+            blockIndex:    data['BLOCK_INDEX'],
+            blockTime:     data['BLOCK_TIME'],
+            emitter:       data['ACTION_INDEX'],
+            synthTag:      SYNTH_TAGS.VOTE_CALLBACK,
+            synthId:       poll.action_index,
+            includeTxHash: synthActive
+        });
 
         let savepoint = await this.indexerDb.createSavepoint('vote_callback_' + parseInt(poll.action_index));
         try {

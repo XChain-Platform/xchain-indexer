@@ -889,6 +889,24 @@ describe('Rollback @regression @tier3', function () {
         assert.ok(internCall.calledBefore(anchorUpdate), "createStatus('unverified') must run before the UPDATE");
     });
 
+    // ─── : the anchor invalid_archive reset covers BOTH archive-head versions (v1 + v6) ─────
+    it('widens the anchor invalid_archive reset predicate to the archive-head version set IN (1, 6)', async function () {
+        const { ARCHIVE_HEAD_VERSIONS, ARCHIVE_HEAD_VERSIONS_SQL } = require('../../src/stateHash.js');
+        assert.deepStrictEqual(ARCHIVE_HEAD_VERSIONS, [1, 6], 'shared archive-head set must be [1, 6]');
+        indexer.indexerDb.doQuery.onFirstCall().resolves([{ action_index: 50 }]); // firstActionIndex
+        indexer.indexerDb.doQuery.resolves([]);
+        indexer.indexerDb.createStatus = sinon.stub().resolves(1);
+        await rollback.rollback(100);
+        const anchorUpdate = indexer.indexerDb.doQuery.getCalls().find(c =>
+            /UPDATE anchor_actions p/.test(c.args[0]) && /status = 'invalid_archive'/.test(c.args[0]));
+        assert.ok(anchorUpdate, 'expected the anchor invalid_archive reset UPDATE');
+        assert.ok(anchorUpdate.args[0].includes('p.version ' + ARCHIVE_HEAD_VERSIONS_SQL),
+            'the reset must select archive-head parents via the shared IN (1, 6) predicate, ' +
+            'or a reorg-orphaned v6 archive batch stays wedged invalid_archive permanently');
+        assert.ok(!/p\.version = 1\b/.test(anchorUpdate.args[0]),
+            'the legacy v1-only predicate must be gone from the reset UPDATE');
+    });
+
     // ─── PRICE-SNAP-1: price_snapshots delete is reference_chain-qualified and BTC-only ─────
     it('qualifies the price_snapshots reorg delete by reference_chain and runs it only on BTC', async function () {
         // Mock config coin is BTC.

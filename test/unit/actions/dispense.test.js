@@ -246,6 +246,96 @@ describe('Dispense action handler @regression @tier2', function () {
         sinon.assert.notCalled(actionsCtx.processAction);
     });
 
+    // : per-unit auto-close threshold under the DISPENSER_CLOSE_PER_UNIT gate
+    it('gate active: large aggregate purchase does NOT close while a per-unit remains', async function () {
+        // GIVE_REMAINING=10, per-unit GIVE_AMOUNT=1, buyer pays 0.05 (5 units).
+        // After dispensing 5, remaining=5 >= per-unit 1 → must stay open.
+        // (Legacy aggregate comparison would also stay open here; the decisive
+        // case is the next test where remaining < aggregate but >= per-unit.)
+        indexer.indexerDb.getDispenserInfo.resolves(makeDispenserInfo({
+            GIVE_AMOUNT:    '1',
+            GIVE_REMAINING: '10',
+        }));
+
+        const data = createBaseData({
+            ACTION:      'DISPENSE',
+            SOURCE:      BUYER_ADDR,
+            COIN_AMOUNT: '0.05',
+            BLOCK_TIME,
+        });
+
+        await dispense.parse([], data, false);
+
+        sinon.assert.calledWith(actionsCtx.protocolChanges.isEnabled, 'DISPENSER_CLOSE_PER_UNIT', sinon.match.any);
+        sinon.assert.notCalled(actionsCtx.processAction);
+    });
+
+    it('gate active: remaining below aggregate but at/above per-unit stays OPEN', async function () {
+        // GIVE_REMAINING=8, per-unit=1, buyer pays 0.05 (5 units) → dispenses 5,
+        // remaining=3. Legacy check (3 < 5) would close; per-unit check
+        // (3 < 1 is false) keeps it open so later single-unit buyers are served.
+        indexer.indexerDb.getDispenserInfo.resolves(makeDispenserInfo({
+            GIVE_AMOUNT:    '1',
+            GIVE_REMAINING: '8',
+        }));
+
+        const data = createBaseData({
+            ACTION:      'DISPENSE',
+            SOURCE:      BUYER_ADDR,
+            COIN_AMOUNT: '0.05',
+            BLOCK_TIME,
+        });
+
+        await dispense.parse([], data, false);
+
+        sinon.assert.notCalled(actionsCtx.processAction);
+    });
+
+    it('gate active: closes when remaining falls below the per-unit price', async function () {
+        // GIVE_REMAINING=5, per-unit=1, buyer pays 0.05 → dispenses 5, remaining=0
+        // < per-unit 1 → close (genuinely cannot serve another unit).
+        indexer.indexerDb.getDispenserInfo.resolves(makeDispenserInfo({
+            GIVE_AMOUNT:    '1',
+            GIVE_REMAINING: '5',
+        }));
+
+        const data = createBaseData({
+            ACTION:      'DISPENSE',
+            SOURCE:      BUYER_ADDR,
+            COIN_AMOUNT: '0.05',
+            BLOCK_TIME,
+        });
+
+        await dispense.parse([], data, false);
+
+        sinon.assert.calledOnce(actionsCtx.processAction);
+        assert.strictEqual(actionsCtx.processAction.firstCall.args[0], 'DISPENSER_CLOSE');
+    });
+
+    it('gate INACTIVE: legacy aggregate comparison closes early (byte-identical replay)', async function () {
+        // Same scenario as the stays-OPEN test, but below the flag-day: the
+        // legacy aggregate comparison (remaining 3 < give_amount 5) must close.
+        actionsCtx.protocolChanges.isEnabled
+            .withArgs('DISPENSER_CLOSE_PER_UNIT', sinon.match.any)
+            .resolves(false);
+        indexer.indexerDb.getDispenserInfo.resolves(makeDispenserInfo({
+            GIVE_AMOUNT:    '1',
+            GIVE_REMAINING: '8',
+        }));
+
+        const data = createBaseData({
+            ACTION:      'DISPENSE',
+            SOURCE:      BUYER_ADDR,
+            COIN_AMOUNT: '0.05',
+            BLOCK_TIME,
+        });
+
+        await dispense.parse([], data, false);
+
+        sinon.assert.calledOnce(actionsCtx.processAction);
+        assert.strictEqual(actionsCtx.processAction.firstCall.args[0], 'DISPENSER_CLOSE');
+    });
+
     it('dispenser ALLOW_LIST excludes SOURCE: dispense invalid', async function () {
         indexer.indexerDb.getDispenserInfo.resolves(makeDispenserInfo({ ALLOW_LIST: '5' }));
         // The list does NOT include BUYER_ADDR

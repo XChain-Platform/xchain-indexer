@@ -60,6 +60,7 @@ const GUARD_METHOD = 'guard';
 // (canonical: xchain-documentation/protocol/constants.js).
 const { XCALL_MIN_GAS, XCALL_MAX_GAS, XCALL_MAX_HOPS } = require('./xcall.js');
 const { rethrowIfInfraFault } = require('./faultGuard.js');
+const { SYNTH_EXEC_TX_HASH } = require('./execContext.js');
 
 // Amount-bearing fields of every emittable action, mapping each amount param to the param
 // that names the tick it is denominated in (item 5346). processEmission normalizes each to
@@ -117,6 +118,23 @@ class Execute {
 
     // Handle parsing the EXECUTE transaction
     async parse(params, data, error){
+
+        //  host-side assert: post-SYNTH_EXEC_TX_HASH every injected/emitted
+        // execution context MUST carry a TX_HASH (real or synthesized via
+        // actions/execContext.js). A hashless context reaching the VM silently
+        // strands anything the contract emits (the VM derives a request_id, gas is
+        // charged, then the indexer hard-rejects the emission), so a regressing
+        // injector site is an infrastructure bug, not a contract outcome: throw a
+        // fault-classed error that faultGuard propagates, halting the block loudly
+        // instead of committing the stranding. Pre-activation the two legacy
+        // hashless sites are still live, so the assert stays dark (replay safety).
+        if(data['IS_EMISSION'] && !data['TX_HASH'] &&
+           await this.actions.protocolChanges.isEnabled(SYNTH_EXEC_TX_HASH, data['BLOCK_INDEX'])){
+            let fault = new Error('EXECUTE injected without TX_HASH (SYNTH_EXEC_TX_HASH active): ' +
+                'injector sites must build their context via actions/execContext.js');
+            fault.code = 'EXEC_CONTEXT_TX_HASH_MISSING';
+            throw fault;
+        }
 
         // Validate that format is known
         let format = data['FORMAT'];

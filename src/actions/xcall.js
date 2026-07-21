@@ -42,6 +42,7 @@ const ed25519 = require('../ed25519.js');
 const swq     = require('../stake_weighted_quorum.js');
 const eq      = require('../equivocation_header.js');
 const { rethrowIfInfraFault } = require('./faultGuard.js');
+const { buildInjectedExecContext, SYNTH_TAGS } = require('./execContext.js');
 
 // Vendored from ../protocol/constants.js (byte-identical to xchain-documentation/
 // protocol/constants.js; same convention as the VM_MAX_CALL_DEPTH /
@@ -502,27 +503,28 @@ class Xcall {
             SOURCE:      'C:' + chain + ':' + request.contract_index
         }, true);
 
-        // SOURCE = contract address (ATTEST callback precedent). The synthetic TX_HASH is
-        // chain/network-namespaced so anything the callback itself emits (ATTEST,
-        // emit.execute, crossExecute) derives collision-free ids. CROSS_HOPS carries the
-        // call's hop count into the callback context so a contract reacting to a callback
-        // by calling out again stays inside the hop budget.
-        let emissionData = {
-            ACTION_INDEX: emissionActionIndex,
-            SOURCE:       'C:' + chain + ':' + request.contract_index,
-            FEE_PAYER:    'C:' + chain + ':' + request.contract_index,
-            BLOCK_INDEX:  contextData['BLOCK_INDEX'],
-            BLOCK_TIME:   contextData['BLOCK_TIME'],
-            TX_HASH:      crypto.createHash('sha256').update(
-                              'XCALLCB:' + String(this.config['NETWORK']) + ':' + chain + ':' + request.call_id
-                          ).digest('hex'),
-            FORMAT:       0,
-            IS_EMISSION:  true,
-            EMITTER:      contextData['ACTION_INDEX'],
-            CALL_DEPTH:   0,
-            VM_GAS_LIMIT: XCALL_CALLBACK_GAS,
-            CROSS_HOPS:   Number(request.cross_hops) || 0
-        };
+        // SOURCE = contract address (ATTEST callback precedent). The synthetic TX_HASH
+        // ('XCALLCB' tag, live consensus, byte-identical to the pre- inline
+        // synthesis) is chain/network-namespaced so anything the callback itself emits
+        // (ATTEST, emit.execute, crossExecute) derives collision-free ids. CROSS_HOPS
+        // carries the call's hop count into the callback context so a contract reacting
+        // to a callback by calling out again stays inside the hop budget.
+        let emissionData = buildInjectedExecContext({
+            chain:         chain,
+            network:       this.config['NETWORK'],
+            contractIndex: request.contract_index,
+            actionIndex:   emissionActionIndex,
+            blockIndex:    contextData['BLOCK_INDEX'],
+            blockTime:     contextData['BLOCK_TIME'],
+            emitter:       contextData['ACTION_INDEX'],
+            synthTag:      SYNTH_TAGS.XCALL_CALLBACK,
+            synthId:       request.call_id,
+            extra: {
+                CALL_DEPTH:   0,
+                VM_GAS_LIMIT: XCALL_CALLBACK_GAS,
+                CROSS_HOPS:   Number(request.cross_hops) || 0
+            }
+        });
 
         let savepoint = await this.indexerDb.createSavepoint('xcall_callback_' + emissionActionIndex);
         try {

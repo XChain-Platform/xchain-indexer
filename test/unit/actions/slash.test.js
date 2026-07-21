@@ -246,6 +246,78 @@ describe('SLASH action handler: equivocation verifier @regression', function () 
         assert.ok(indexer.indexerDb.slashCapabilityStake.calledOnce);
     });
 
+    // ── CHECKPOINT engine tag: two content families  ──
+    // XCHECKPOINT (root canonical, snapshot_block at index 9) and XANCPUB (reward
+    // attestation, snapshot_block at index 3) share the CHECKPOINT engine tag.
+
+    // Realistic XCHECKPOINT raw canonical; snapshot_block is field index 9.
+    function checkpointContent(snap, ledgerHash) {
+        return ['XCHECKPOINT', 'BTC', 'regtest', '199', 'aa'.repeat(32), ledgerHash,
+                'cc'.repeat(32), 'dd'.repeat(32), '5', String(snap)].join('|');
+    }
+    // XANCPUB reward-attestation canonical (per-chain leg); snapshot_block is field index 3.
+    function ancpubContent(snap, publisher) {
+        return ['XANCPUB', 'anchor_BTC', '5', String(snap), publisher, '50'].join('|');
+    }
+    const CP_ROUND = 'cp_5';
+
+    it('ACCEPTS an XCHECKPOINT equivocation (snapshot_block at index 9)', async function () {
+        const msgA = eq.buildEquivCanonical(eq.ENGINE_TAGS.CHECKPOINT, CP_ROUND, 0, checkpointContent(100, 'e1'.repeat(32)));
+        const msgB = eq.buildEquivCanonical(eq.ENGINE_TAGS.CHECKPOINT, CP_ROUND, 0, checkpointContent(100, 'e2'.repeat(32)));
+        const d = data();
+        await handler.parse(params('oracle_publish', offender.pubHex, msgA, offender.privateKey, msgB, offender.privateKey), d, null);
+
+        assert.strictEqual(d['STATUS'], 'valid');
+        assert.deepStrictEqual(indexer.indexerDb.getValidatorsByCapability.firstCall.args, ['oracle_publish', 100]);
+        assert.ok(indexer.indexerDb.slashCapabilityStake.calledOnce);
+    });
+
+    it('ACCEPTS an XANCPUB equivocation (snapshot_block at index 3, )', async function () {
+        // Same round, two different attested publishers = a reward-attestation double-sign.
+        const round = 'XANCPUB|BTC|regtest|5|100';
+        const msgA = eq.buildEquivCanonical(eq.ENGINE_TAGS.CHECKPOINT, round, 0, ancpubContent(100, 'aaaa'.repeat(16)));
+        const msgB = eq.buildEquivCanonical(eq.ENGINE_TAGS.CHECKPOINT, round, 0, ancpubContent(100, 'bbbb'.repeat(16)));
+        const d = data();
+        await handler.parse(params('oracle_publish', offender.pubHex, msgA, offender.privateKey, msgB, offender.privateKey), d, null);
+
+        assert.strictEqual(d['STATUS'], 'valid');
+        assert.deepStrictEqual(indexer.indexerDb.getValidatorsByCapability.firstCall.args, ['oracle_publish', 100]);
+        assert.ok(indexer.indexerDb.slashCapabilityStake.calledOnce);
+    });
+
+    it('ACCEPTS an archive-leg XANCPUB equivocation (anchor_archive scope)', async function () {
+        const round = 'XANCPUB|archive|regtest|7|100';
+        const base  = (pub) => ['XANCPUB', 'anchor_archive', '7', '100', pub, '50'].join('|');
+        const msgA = eq.buildEquivCanonical(eq.ENGINE_TAGS.CHECKPOINT, round, 0, base('aaaa'.repeat(16)));
+        const msgB = eq.buildEquivCanonical(eq.ENGINE_TAGS.CHECKPOINT, round, 0, base('bbbb'.repeat(16)));
+        const d = data();
+        await handler.parse(params('oracle_publish', offender.pubHex, msgA, offender.privateKey, msgB, offender.privateKey), d, null);
+
+        assert.strictEqual(d['STATUS'], 'valid');
+        assert.deepStrictEqual(indexer.indexerDb.getValidatorsByCapability.firstCall.args, ['oracle_publish', 100]);
+    });
+
+    it('REJECTS an XANCPUB pair that disagrees on snapshot_block', async function () {
+        const round = 'XANCPUB|BTC|regtest|5|100';
+        const msgA = eq.buildEquivCanonical(eq.ENGINE_TAGS.CHECKPOINT, round, 0, ancpubContent(100, 'aaaa'.repeat(16)));
+        const msgB = eq.buildEquivCanonical(eq.ENGINE_TAGS.CHECKPOINT, round, 0, ancpubContent(101, 'aaaa'.repeat(16)));
+        const d = data();
+        await handler.parse(params('oracle_publish', offender.pubHex, msgA, offender.privateKey, msgB, offender.privateKey), d, null);
+
+        assert.ok(/snapshot_block/.test(d['STATUS']), 'got ' + d['STATUS']);
+        assert.ok(indexer.indexerDb.slashCapabilityStake.notCalled);
+    });
+
+    it('REJECTS a mixed XCHECKPOINT/XANCPUB pair (content family mismatch)', async function () {
+        const msgA = eq.buildEquivCanonical(eq.ENGINE_TAGS.CHECKPOINT, CP_ROUND, 0, checkpointContent(100, 'e1'.repeat(32)));
+        const msgB = eq.buildEquivCanonical(eq.ENGINE_TAGS.CHECKPOINT, CP_ROUND, 0, ancpubContent(100, 'aaaa'.repeat(16)));
+        const d = data();
+        await handler.parse(params('oracle_publish', offender.pubHex, msgA, offender.privateKey, msgB, offender.privateKey), d, null);
+
+        assert.ok(/family mismatch/.test(d['STATUS']), 'got ' + d['STATUS']);
+        assert.ok(indexer.indexerDb.slashCapabilityStake.notCalled);
+    });
+
     describe('_bountyTreasurySplit', function () {
         function withSlashConfig(cfg) {
             indexer.config.STAKING = { CAPABILITIES: { cross_chain: { MIN_STAKE: '5000', SLASH: cfg } } };

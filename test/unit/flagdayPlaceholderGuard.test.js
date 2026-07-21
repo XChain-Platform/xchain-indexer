@@ -51,13 +51,14 @@ const XC104_TS_GATES = [
     'VOTE_BINDING_MINIMUMS',
     'VOTE_CALLBACK_TIMELOCK',
     'ATTEST_CANONICAL_LOWERCASE_ID',
+    'DISPENSER_CLOSE_PER_UNIT',
 ];
 
 describe(' flag-day placeholder guard @regression @tier1', function () {
 
     const pcSource = fs.readFileSync(path.join(SRC, 'protocol_changes.js'), 'utf8');
 
-    it('the four hardening gates are armed on the ratified 2026-10-01 anchor', function () {
+    it('the  timestamp gates are armed on the ratified 2026-10-01 anchor', function () {
         for (const gate of XC104_TS_GATES) {
             const m = pcSource.match(new RegExp(
                 "this\\.addChange\\('" + gate + "', '2\\.0\\.0',(\\d+)"));

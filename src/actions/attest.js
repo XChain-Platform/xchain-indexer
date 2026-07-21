@@ -34,6 +34,7 @@ const swq     = require('../stake_weighted_quorum.js');
 const eq      = require('../equivocation_header.js');
 const ProviderRegistry = require('../attestation/providerRegistry.js');
 const { rethrowIfInfraFault } = require('./faultGuard.js');
+const { buildInjectedExecContext, SYNTH_EXEC_TX_HASH, SYNTH_TAGS } = require('./execContext.js');
 
 class Attest {
 
@@ -708,20 +709,26 @@ class Attest {
             SOURCE:      'C:' + chain + ':' + request.contract_index
         }, true);
 
-        // SOURCE = contract address so xchain.getSourceAddress() === xchain.getContractAddress() (spec §4.3)
-        let emissionData = {
-            ACTION_INDEX:  emissionActionIndex,
-            SOURCE:        'C:' + chain + ':' + request.contract_index,
-            FEE_PAYER:     'C:' + chain + ':' + request.contract_index,
-            BLOCK_INDEX:   responseData['BLOCK_INDEX'],
-            BLOCK_TIME:    responseData['BLOCK_TIME'],
-            TX_INDEX:      responseData['TX_INDEX'],
-            TX_HASH:       responseData['TX_HASH'],
-            TX_VOUT:       responseData['TX_VOUT'],
-            FORMAT:        0,
-            IS_EMISSION:   true,
-            EMITTER:       responseData['ACTION_INDEX']
-        };
+        // SOURCE = contract address so xchain.getSourceAddress() === xchain.getContractAddress() (spec §4.3).
+        // The v1 response rode a real broadcast tx, so its TX_HASH is passed through;
+        // post-SYNTH_EXEC_TX_HASH the builder throws rather than let a hashless
+        // context reach the VM ( class guard).
+        let synthActive = await this.actions.protocolChanges.isEnabled(SYNTH_EXEC_TX_HASH, responseData['BLOCK_INDEX']);
+        let emissionData = buildInjectedExecContext({
+            chain:         chain,
+            network:       this.config['NETWORK'],
+            contractIndex: request.contract_index,
+            actionIndex:   emissionActionIndex,
+            blockIndex:    responseData['BLOCK_INDEX'],
+            blockTime:     responseData['BLOCK_TIME'],
+            emitter:       responseData['ACTION_INDEX'],
+            txHash:        responseData['TX_HASH'],
+            includeTxHash: synthActive || Boolean(responseData['TX_HASH']),
+            extra: {
+                TX_INDEX: responseData['TX_INDEX'],
+                TX_VOUT:  responseData['TX_VOUT']
+            }
+        });
 
         // Unique per injected callback: a fixed name would be destroyed and re-created
         // by MariaDB on re-use, corrupting rollback when EXECUTE nests its own savepoints
@@ -777,16 +784,26 @@ class Attest {
             SOURCE:      'C:' + chain + ':' + request.contract_index
         }, true);
 
-        let emissionData = {
-            ACTION_INDEX: emissionActionIndex,
-            SOURCE:       'C:' + chain + ':' + request.contract_index,
-            FEE_PAYER:    'C:' + chain + ':' + request.contract_index,
-            BLOCK_INDEX:  expireData['BLOCK_INDEX'],
-            BLOCK_TIME:   expireData['BLOCK_TIME'],
-            FORMAT:       0,
-            IS_EMISSION:  true,
-            EMITTER:      expireData['ACTION_INDEX']
-        };
+        // : the expiry callback has no real tx behind it (ATTEST v2 is
+        // system-synthesized). Post-SYNTH_EXEC_TX_HASH the context gets a
+        // deterministic synthetic TX_HASH (namespaced by request_id, unique per
+        // request since expiry fires once), so anything the callback emits
+        // (ATTEST/XCALL/emit.execute) derives resolvable ids instead of being
+        // billed and hard-rejected. Below the flag-day the legacy hashless
+        // context is reproduced byte-identically (consensus replay safety).
+        let synthActive = await this.actions.protocolChanges.isEnabled(SYNTH_EXEC_TX_HASH, expireData['BLOCK_INDEX']);
+        let emissionData = buildInjectedExecContext({
+            chain:         chain,
+            network:       this.config['NETWORK'],
+            contractIndex: request.contract_index,
+            actionIndex:   emissionActionIndex,
+            blockIndex:    expireData['BLOCK_INDEX'],
+            blockTime:     expireData['BLOCK_TIME'],
+            emitter:       expireData['ACTION_INDEX'],
+            synthTag:      SYNTH_TAGS.ATTEST_EXPIRE_CALLBACK,
+            synthId:       request.request_id,
+            includeTxHash: synthActive
+        });
 
         // Unique per injected callback (see _injectCallbackExecute savepoint note).
         let savepoint = await this.indexerDb.createSavepoint('attestation_expire_callback_' + parseInt(emissionActionIndex));
