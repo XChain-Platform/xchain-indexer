@@ -539,6 +539,22 @@ class ProtocolChanges {
         // rule live, so genesis activation preserves its current behaviour).
         this.addChange('VM_BANNED_ASYNC', '2.0.0',VM_BANNED_ASYNC_MAINNET_TIME,0,0,0,0,0);
 
+        // VM deploy-linter hardening (flag-day Pkg 4 / ): one gate for the
+        // six hardened lint-core rules (exponentiation `**`/`**=` ban, reserved
+        // CONTRACT_WRAPPER control bindings, SAFE_MATH-complement Math ban,
+        // dynamic import() rejection, shorthand `{ Promise }` rejection, and the
+        // shadowed-local Promise relaxation), plus the VM's gated wrapper
+        // closure move and corroborated error classifier. Deploy verdicts are
+        // consensus: below the activation a deploy resolves exactly as it did
+        // historically; deploy.js threads the resolved activation into
+        // vm.validateSyntax(code, {enforceLintHardening}). Armed at the ratified
+        //  anchor, the SAME instant VM_BANNED_ASYNC activates (zero
+        // partially-hardened window); the literal timestamp is pinned by
+        // test/unit/flagdayPlaceholderGuard.test.js. testnet/regtest activate at
+        // genesis (no pre-activation history to preserve). A divergent value is
+        // a fork.
+        this.addChange('VM_LINT_HARDENING', '2.0.0',1790812800,0,0,0,0,0);
+
         // ISSUE validity: strict LOCK_MAX_SUPPLY guard. Before this activation the guard used
         // a truthy check, so an explicit LOCK_MAX_SUPPLY=0 field (a no-op lock intent with no
         // cap declared) incorrectly triggered the 'invalid: LOCK_MAX_SUPPLY (no max supply)'

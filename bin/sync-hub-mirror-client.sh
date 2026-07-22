@@ -28,7 +28,7 @@ SRC="$HERE/../src"
 ROOT="$(cd "$HERE/../.." && pwd)"
 
 CLIENT_FILES="hub_db_sync.js hub-schema-version.js"
-SQL_FILES="price_snapshots.sql oracle_prices.sql cross_chain_matches.sql cross_chain_calls.sql capability_snapshots.sql state_checkpoints.sql"
+SQL_FILES="price_snapshots.sql oracle_prices.sql cross_chain_matches.sql cross_chain_calls.sql capability_snapshots.sql state_checkpoints.sql anchor_reward_attestations.sql"
 SERVICES="xchain-explorer"
 
 CHECK=0

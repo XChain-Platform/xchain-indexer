@@ -37,6 +37,8 @@ const CONSTANTS_PATH = path.resolve(__dirname, '../../../xchain-documentation/pr
 const GATES = [
     ['checkpoint_commitment_activation.js', 'CHECKPOINT_COMMITMENT_ACTIVATION'],
     ['cross_chain_royalty_activation.js',   'CROSS_CHAIN_ROYALTY_ACTIVATION'],
+    ['attest_admission_activation.js',      'ATTEST_ADMISSION_ACTIVATION'],
+    ['anchor_reward_activation.js',         'ANCHOR_REWARD_DERIVE_ACTIVATION'],   // 
 ];
 
 describe('activation-gate constant parity to canonical constants.js @regression', function () {

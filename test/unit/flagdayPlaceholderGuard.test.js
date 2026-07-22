@@ -52,6 +52,9 @@ const XC104_TS_GATES = [
     'VOTE_CALLBACK_TIMELOCK',
     'ATTEST_CANONICAL_LOWERCASE_ID',
     'DISPENSER_CLOSE_PER_UNIT',
+    //  (flag-day Pkg 4): VM deploy-linter hardening arms at the SAME
+    // ratified anchor as VM_BANNED_ASYNC (zero partially-hardened window).
+    'VM_LINT_HARDENING',
 ];
 
 describe(' flag-day placeholder guard @regression @tier1', function () {

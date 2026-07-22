@@ -328,7 +328,11 @@ class Deploy {
             // activation for THIS block and pass it through; all other consensus rules
             // are always enforced.
             let enforceBannedAsync = await this.actions.protocolChanges.isEnabled('VM_BANNED_ASYNC', data['BLOCK_INDEX']);
-            let syntaxResult = this.actions.vm.validateSyntax(code, { enforceBannedAsync });
+            // The VM_LINT_HARDENING rule set (flag-day Pkg 4) is gated the same
+            // way: below its activation a deploy resolves exactly as it did
+            // historically (both gates share the ratified  anchor).
+            let enforceLintHardening = await this.actions.protocolChanges.isEnabled('VM_LINT_HARDENING', data['BLOCK_INDEX']);
+            let syntaxResult = this.actions.vm.validateSyntax(code, { enforceBannedAsync, enforceLintHardening });
             if(!syntaxResult.valid)
                 error = 'invalid: CODE_ENCODING (' + syntaxResult.error + ')';
 

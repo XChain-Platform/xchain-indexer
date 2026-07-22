@@ -148,7 +148,12 @@ const FULL_REPAGE_TABLES = ['capability_snapshots', 'price_snapshots', 'cross_ch
 // state-hash commitments (the explorer/SDK verification source). Append-only,
 // never retracted. A reorged height is superseded by a new row with a higher
 // checkpoint_seq. Not on any settlement-critical path (no block-loop barrier).
-const HUB_STATE_TABLES = ['state_checkpoints'];
+// anchor_reward_attestations  carries the hub's XANCPUB publisher-attestation
+// quorum per attested reward tuple; the BTC indexer derives the COLLECT-spendable
+// anchor/archive reward from it (mirror is transport, not trust: it re-verifies the
+// sigs against its own local oracle_publish set). Append-only, id-parity INSERT IGNORE,
+// never retracted (rows are written only post-quorum for a finalized checkpoint).
+const HUB_STATE_TABLES = ['state_checkpoints', 'anchor_reward_attestations'];
 
 // TTL for the per-table local-column cache. Bounds how long a hub-side column
 // rename can keep silently NULLing the mirror before _localColumns re-reads the

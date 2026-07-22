@@ -394,7 +394,15 @@ class Anchor {
             let attQuorumMet = weighted
                 ? swq.meetsStakeThreshold(validators, attSigners)
                 : (attSigners.length >= ((oracleN <= 1) ? 1 : Math.max(2 * Math.floor((oracleN - 1) / 3) + 1, Math.ceil((oracleN + 1) / 2))));
-            if(attQuorumMet && snapPubkeys.has(String(data['PUBLISHER']))){
+            if(ar.isAnchorRewardDeriveActive(Number(data['SNAPSHOT_BLOCK']), data['NETWORK'])){
+                //  Option C: at/above the derive-relocation flag-day the reward is
+                // materialized by the BTC indexer from the mirrored anchor_reward_attestations
+                // row (where the stake source resolves; ANCHOR is DOGE-only, capability staking
+                // is BTC-only). This DOGE-side write always silently dropped (no local stake), so
+                // stopping it is byte-neutral to the DOGE ledger and removes the wasted lookup.
+                // The attestation-quorum verification above still runs (anchor validity is
+                // unaffected); only the createValidatorReward/reconcile write is relocated.
+            } else if(attQuorumMet && snapPubkeys.has(String(data['PUBLISHER']))){
                 let rewardType  = (format === 6) ? 'anchor_archive' : 'anchor_' + data['CHAIN'];
                 let rewardRound = (format === 6) ? Number(data['MATCH_BATCH_SEQ']) : Number(data['CHECKPOINT_SEQ']);
                 let rewardAmt   = (format === 6) ? ar.ARCHIVE_REWARD_AMOUNT : ar.ANCHOR_REWARD_AMOUNT;

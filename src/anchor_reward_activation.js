@@ -94,11 +94,56 @@ function isArchiveRewardActive(snapshotBlock, network){
     return sb >= threshold;
 }
 
+// ─── ANCHOR_REWARD_DERIVE_ACTIVATION (, Option C derive-on-BTC-side) ────────────
+// The flag-day that RELOCATES anchor-reward derivation from the DOGE indexer to the BTC
+// indexer. ANCHOR is DOGE-only, but capability staking (hence the resolvable stake source
+// createValidatorReward needs) is BTC-only, so the DOGE-side derivation gated by
+// ANCHOR_REWARD_ACTIVATION / ARCHIVE_REWARD_ACTIVATION silently DROPS every publisher reward
+// (no local stake -> _resolveActiveStakeSourceId returns null). At/above THIS gate:
+//   - the DOGE indexer STOPS attempting the reward write (anchor.js skips createValidatorReward);
+//   - the hub INSERTs one append-only `anchor_reward_attestations` row per attested reward tuple
+//     after the XANCPUB quorum resolves, mirrored to every indexer via hub_db_sync;
+//   - the BTC indexer DERIVES the reward from the mirrored row, re-verifying the XANCPUB sigs
+//     against its OWN locally-computed oracle_publish/stake set at snapshot_block (mirror is
+//     transport, not trust) and materializing validator_rewards at block_index = snapshot_block,
+//     where the stake source actually resolves.
+// Below the gate: byte-identical legacy behavior everywhere (DOGE-side write still attempted and
+// silently dropped, no BTC-side derivation, no anchor_reward_attestations rows).
+//
+// This is CONSENSUS-relevant (validator_rewards is COLLECT-spendable) and must deploy hub + ALL
+// indexers (+ the docs canonical) atomically on the same flag-day, so it gates on the same
+// BTC-anchored snapshot_block height space as ANCHOR_REWARD_ACTIVATION (NOT a local processing
+// height). It CANNOT ride the existing 961000/969500 boundaries: those are already 0 (live) on
+// testnet/regtest, so riding them would flip the DOGE-skip + BTC-derive relocation the instant
+// code deploys, with no coordinated deploy-first-then-flip window, risking a COLLECT-mediated
+// fork across a mid-upgrade fleet; and one gate must cover BOTH the per-chain (v4/v5) and archive
+// (v6) reward families uniformly. Per the  flag-day placeholder-guard doctrine, mainnet and
+// testnet stay INERT (null = never active) until the operator ratifies a coordinated height;
+// regtest activates from genesis so the fix is exercised where the bug lives.
+const ANCHOR_REWARD_DERIVE_ACTIVATION = {
+    mainnet: null,        // INERT placeholder: operator-ratify a BTC snapshot_block before arming
+    testnet: null,        // INERT placeholder: operator-ratify a BTC snapshot_block before arming
+    regtest: 0,
+};
+
+// Whether anchor/archive reward derivation has RELOCATED to the BTC indexer for a reward tuple
+// whose BTC-anchored snapshot is at `snapshotBlock` on `network`. Below the threshold (or an
+// inert null / unknown network) -> off (legacy DOGE-side silent-drop path stays byte-identical).
+function isAnchorRewardDeriveActive(snapshotBlock, network){
+    let sb = parseInt(snapshotBlock);
+    if(!Number.isFinite(sb)) return false;
+    let threshold = ANCHOR_REWARD_DERIVE_ACTIVATION[network];
+    if(threshold === null || threshold === undefined) return false;
+    return sb >= threshold;
+}
+
 module.exports = {
     ANCHOR_REWARD_ACTIVATION,
     ANCHOR_REWARD_AMOUNT,
     isAnchorRewardActive,
     ARCHIVE_REWARD_ACTIVATION,
     ARCHIVE_REWARD_AMOUNT,
-    isArchiveRewardActive
+    isArchiveRewardActive,
+    ANCHOR_REWARD_DERIVE_ACTIVATION,
+    isAnchorRewardDeriveActive
 };

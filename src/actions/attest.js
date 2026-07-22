@@ -31,6 +31,7 @@
 const crypto  = require('crypto');
 const ed25519 = require('../ed25519.js');
 const swq     = require('../stake_weighted_quorum.js');
+const attestAdmission = require('../attest_admission_activation.js');
 const eq      = require('../equivocation_header.js');
 const ProviderRegistry = require('../attestation/providerRegistry.js');
 const { rethrowIfInfraFault } = require('./faultGuard.js');
@@ -214,6 +215,26 @@ class Attest {
                 error = 'invalid: insufficient funds (FEE_AMOUNT)';
         }
 
+        // Pkg 7 / 87441a53 admission rejection (flag-day gated): at/above the
+        // ATTEST_ADMISSION activation, reject a request whose responsible set at
+        // this block is smaller than REDUNDANCY. Unservable by construction: the
+        // v1 path requires >= REDUNDANCY valid signatures and only responsible-set
+        // members can sign, so the hub skips the round (unfinalizable-round guard)
+        // and pre-gate the request would sit pending until deadline expiry. The
+        // shrink comes from SWQ source-dedupe (one slot per staking source) or a
+        // small qualifying snapshot. Below the gate the legacy accept-then-expire
+        // path runs verbatim so replay stays bit-identical. Deterministic: the set
+        // derives from block-anchored stake state every validator replays alike.
+        // The computed set is reused as the pinned RESPONSIBLE_SET_JSON below.
+        let admissionSet = null;
+        if(!error && attestAdmission.isAttestAdmissionActive(data['BLOCK_INDEX'], this.config['NETWORK'])){
+            admissionSet = await this._computeResponsibleSet(
+                String(data['REQUEST_ID'] || '').toLowerCase(), data['REDUNDANCY'], data['BLOCK_INDEX']);
+            let neededSlots = Math.max(1, Number(data['REDUNDANCY']) || 1);
+            if(admissionSet.length < neededSlots)
+                error = 'invalid: REDUNDANCY (responsible set ' + admissionSet.length + ' < ' + neededSlots + ' at request block)';
+        }
+
         let status = (error) ? error : 'valid';
         data['STATUS'] = status;
 
@@ -247,8 +268,9 @@ class Attest {
         // the recompute; a 'rejected' row is invisible to the expiry sweep, so skip the stake
         // query for it. Uses the SAME _computeResponsibleSet the v1 verify + v2 expiry paths
         // use, evaluated at the request's own block_index (the set the recompute keys on).
+        // (Reuses the admission-gate set when the gate already computed it.)
         if(data['REQUEST_STATUS'] === 'pending'){
-            let responsibleSet = await this._computeResponsibleSet(
+            let responsibleSet = admissionSet !== null ? admissionSet : await this._computeResponsibleSet(
                 String(data['REQUEST_ID'] || '').toLowerCase(), data['REDUNDANCY'], data['BLOCK_INDEX']);
             data['RESPONSIBLE_SET_JSON'] = JSON.stringify(responsibleSet);
         }

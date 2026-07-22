@@ -59,6 +59,16 @@ describe('anchor_reward_activation twin parity @regression @tier1', function () 
         assert.strictEqual(indexer.isArchiveRewardActive('not-a-number', 'mainnet'), false);
     });
 
+    it(' derive-relocation gate is an inert null placeholder on mainnet/testnet, active on regtest', function () {
+        assert.strictEqual(indexer.ANCHOR_REWARD_DERIVE_ACTIVATION.mainnet, null);
+        assert.strictEqual(indexer.ANCHOR_REWARD_DERIVE_ACTIVATION.testnet, null);
+        assert.strictEqual(indexer.ANCHOR_REWARD_DERIVE_ACTIVATION.regtest, 0);
+        assert.strictEqual(indexer.isAnchorRewardDeriveActive(999999999, 'mainnet'), false);   // inert null
+        assert.strictEqual(indexer.isAnchorRewardDeriveActive(999999999, 'testnet'), false);   // inert null
+        assert.strictEqual(indexer.isAnchorRewardDeriveActive(0, 'regtest'), true);
+        assert.strictEqual(indexer.isAnchorRewardDeriveActive(5, 'bogusnet'), false);
+    });
+
     it('gate predicate is height-gated per network (below off, at/above on, unknown off)', function () {
         assert.strictEqual(indexer.isAnchorRewardActive(960999, 'mainnet'), false);
         assert.strictEqual(indexer.isAnchorRewardActive(961000, 'mainnet'), true);

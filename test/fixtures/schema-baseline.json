@@ -39,6 +39,18 @@
       "memo_id",
       "status_id"
     ],
+    "anchor_reward_attestations": [
+      "id",
+      "chain",
+      "network",
+      "reward_type",
+      "round_reference",
+      "snapshot_block",
+      "publisher",
+      "reward_amount",
+      "publisher_attestations",
+      "created_at"
+    ],
     "anchor_actions": [
       "action_index",
       "version",

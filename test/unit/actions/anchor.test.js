@@ -23,6 +23,7 @@ const Anchor  = require('../../../src/actions/anchor.js');
 const ed25519 = require('../../../src/ed25519.js');
 const swq     = require('../../../src/stake_weighted_quorum.js');
 const eq      = require('../../../src/equivocation_header.js');
+const arMod   = require('../../../src/anchor_reward_activation.js');
 
 const PUBKEY_A = 'a'.repeat(64);
 const PUBKEY_B = 'b'.repeat(64);
@@ -160,7 +161,7 @@ function v6Params(archiveJson, overrides = {}) {
 const ARCHIVE_JSON = JSON.stringify({ v: 1, network: 'regtest', batch_seq: 0, matches: [{ match_id: 'm1' }], capability_snapshots: [] });
 
 describe('Anchor (ANCHOR) @regression @tier3', function () {
-    let indexer, handler, verifyStub, swqStub;
+    let indexer, handler, verifyStub, swqStub, deriveGateStub;
 
     function addAnchorDbStubs(db) {
         db.getValidatorsByCapability  = sinon.stub().resolves([{ pubkey: PUBKEY_A, amount: '1' }]);
@@ -186,8 +187,14 @@ describe('Anchor (ANCHOR) @regression @tier3', function () {
         // quorum active at every block, so pin the legacy path: the oracle_publish
         // mocks here carry no source/weight. Weighted coverage: StakeWeightedQuorum.test.js.
         swqStub = sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(false);
+        // : these cases assert the LEGACY DOGE-side reward derivation (still the
+        // behavior below the derive-relocation flag-day / on mainnet, where the gate is an
+        // inert placeholder). Pin the derive gate OFF so anchor.js runs the DOGE-side write;
+        // the at/above-gate skip + BTC-side relocation are covered by anchorRewardDerive.test.js
+        // and the dedicated 'derive-relocation flag-day' describe below.
+        deriveGateStub = sinon.stub(arMod, 'isAnchorRewardDeriveActive').returns(false);
     });
-    afterEach(function () { verifyStub.restore(); swqStub.restore(); });
+    afterEach(function () { verifyStub.restore(); swqStub.restore(); deriveGateStub.restore(); });
 
     function lastWrite() { return indexer.indexerDb.createAnchorAction.lastCall.args[0]; }
 
@@ -315,6 +322,17 @@ describe('Anchor (ANCHOR) @regression @tier3', function () {
         assert.deepStrictEqual(indexer.indexerDb.createValidatorReward.firstCall.args,
             [PUBKEY_A, 0, 'anchor_BTC', '10.00000000', 100, true]);
         assert.ok(indexer.indexerDb.reconcileAnchorRewardWinner.calledOnceWith(0, 'anchor_BTC'));
+    });
+
+    it(': at/above the derive-relocation gate the DOGE-side write is SKIPPED (relocated to BTC), anchor still valid', async function () {
+        deriveGateStub.returns(true);                                   // derive relocated to the BTC indexer
+        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 4, COIN: 'DOGE' });
+        await handler.parse(v4Params(), data, null);
+        assert.strictEqual(data['STATUS'], 'valid');                    // attestation verification unaffected
+        assert.strictEqual(data['PUBLISHER'], PUBKEY_A);
+        assert.ok(indexer.indexerDb.createValidatorReward.notCalled, 'DOGE no longer writes the reward at/above the gate');
+        assert.ok(indexer.indexerDb.reconcileAnchorRewardWinner.notCalled);
+        assert.ok(indexer.indexerDb.createAnchorAction.calledOnce);     // the anchor is still recorded
     });
 
     it('v5 (root-bearing) is valid, stores the roots, and derives the reward', async function () {

@@ -19,6 +19,7 @@ const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
 
 const Attest  = require('../../../src/actions/attest.js');
 const swq     = require('../../../src/stake_weighted_quorum.js');
+const attestAdmission = require('../../../src/attest_admission_activation.js');
 // Same module instance Attest holds a reference to (Node module cache); stubbing
 // `verify` here controls signature acceptance inside the handler.
 const ed25519 = require('../../../src/ed25519.js');
@@ -117,6 +118,11 @@ describe('Attest (ATTEST) @regression @tier3', function () {
         // source-deduped weighted path has its own describe below. (regtest
         // activates weighting at genesis, so this must be stubbed off here.)
         sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(false);
+        // Default the Pkg 7 admission gate OFF (legacy accept-then-expire) so the
+        // fixtures' redundancy-3 requests against a 1-validator snapshot stay
+        // 'valid'; the gate's own describe below re-enables it. (regtest arms the
+        // gate at genesis, so this must be stubbed off here, mirroring swq above.)
+        sinon.stub(attestAdmission, 'isAttestAdmissionActive').returns(false);
     });
 
     afterEach(function () {
@@ -1424,6 +1430,90 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             await handler._computeResponsibleSet('req-3', 1, 90);
             assert.ok(indexer.indexerDb.getStakeWeightsByCapability.calledWith('attestation', 90));
             assert.ok(indexer.indexerDb.getValidatorsByCapability.notCalled);
+        });
+    });
+
+    // Pkg 7 / 87441a53 admission rejection: at/above ATTEST_ADMISSION_ACTIVATION
+    // an ATTEST v0 whose responsible set at the request block is smaller than
+    // REDUNDANCY is rejected at admission (immediate, never enters 'pending');
+    // below the gate the legacy accept-then-expire behavior is bit-identical.
+    describe('ATTEST_ADMISSION flag-day: unservable-redundancy rejection', function () {
+
+        function v0Data(overrides = {}) {
+            return createBaseData({
+                ACTION: 'ATTEST', FORMAT: 0, IS_EMISSION: true, EMITTER: 5, EMITTER_POSITION: 0,
+                EMITTER_PATH: '0', ROOT_ACTION_INDEX: 100, BLOCK_INDEX: 100,
+                ...overrides,
+            });
+        }
+        function v0Params(reqId, redundancy) {
+            return ['0', reqId, 'http_get', 'q', 'onResult', '[]', String(redundancy), '50'];
+        }
+        function validReqId(data) {
+            return deriveReqId(data['TX_HASH'], data['ROOT_ACTION_INDEX'], data['EMITTER_PATH'], data['EMITTER'], data['EMITTER_POSITION']);
+        }
+
+        beforeEach(function () {
+            attestAdmission.isAttestAdmissionActive.returns(true);   // stubbed off in outer beforeEach
+        });
+
+        it('rejects a request whose responsible set is smaller than REDUNDANCY', async function () {
+            // Snapshot has ONE validator (default stub); redundancy 3 is unservable.
+            const data = v0Data();
+            await handler.parse(v0Params(validReqId(data), 3), data, null);
+            assert.ok(String(data['STATUS']).includes('REDUNDANCY'),
+                'expected responsible-set rejection, got: ' + data['STATUS']);
+            assert.strictEqual(data['REQUEST_STATUS'], 'rejected');
+            assert.strictEqual(data['RESPONSIBLE_SET_JSON'], undefined,
+                'a rejected request must not pin a responsible set');
+        });
+
+        it('accepts a request whose responsible set covers REDUNDANCY, pinning the SAME computed set', async function () {
+            const data = v0Data();
+            await handler.parse(v0Params(validReqId(data), 1), data, null);
+            assert.strictEqual(data['STATUS'], 'valid');
+            assert.strictEqual(data['REQUEST_STATUS'], 'pending');
+            assert.deepStrictEqual(JSON.parse(data['RESPONSIBLE_SET_JSON']), [PUBKEY_A]);
+            // Reuses the admission-gate set: exactly ONE responsible-set query.
+            assert.strictEqual(indexer.indexerDb.getValidatorsByCapability.callCount, 1,
+                'admission gate + RESPONSIBLE_SET_JSON pin must share one computed set');
+        });
+
+        it('SWQ source-dedupe shrink below REDUNDANCY is rejected when the gate is active', async function () {
+            // Weighted selection dedupes S1's delegated keys to one slot: 2 distinct
+            // sources < redundancy 3, the exact 87441a53 liveness hole.
+            swq.isStakeWeightedQuorumActive.returns(true);
+            indexer.indexerDb.getStakeWeightsByCapability.resolves([
+                { pubkey: 'k1a', source: 'S1', weight: '100' },
+                { pubkey: 'k1b', source: 'S1', weight: '100' },
+                { pubkey: 'k2',  source: 'S2', weight: '100' },
+            ]);
+            const data = v0Data();
+            await handler.parse(v0Params(validReqId(data), 3), data, null);
+            assert.ok(String(data['STATUS']).includes('responsible set 2 < 3'),
+                'expected deduped-set rejection, got: ' + data['STATUS']);
+            assert.strictEqual(data['REQUEST_STATUS'], 'rejected');
+        });
+
+        it('below the gate the legacy accept-then-expire path is preserved (replay bit-identical)', async function () {
+            attestAdmission.isAttestAdmissionActive.returns(false);
+            const data = v0Data();
+            await handler.parse(v0Params(validReqId(data), 3), data, null);
+            assert.strictEqual(data['STATUS'], 'valid', 'pre-gate replay must still accept: ' + data['STATUS']);
+            assert.strictEqual(data['REQUEST_STATUS'], 'pending');
+        });
+
+        it('gate queries the request block and network (real module map sanity)', function () {
+            // Un-stubbed module semantics: regtest/testnet armed at genesis,
+            // mainnet at the STAKE_WEIGHTED_QUORUM anchor, unknown network off.
+            const real = require('../../../src/attest_admission_activation.js');
+            const fn   = attestAdmission.isAttestAdmissionActive.wrappedMethod || real.isAttestAdmissionActive;
+            assert.strictEqual(real.ATTEST_ADMISSION_ACTIVATION.mainnet, 961000);
+            assert.strictEqual(fn.call(real, 0, 'regtest'), true);
+            assert.strictEqual(fn.call(real, 960999, 'mainnet'), false);
+            assert.strictEqual(fn.call(real, 961000, 'mainnet'), true);
+            assert.strictEqual(fn.call(real, 100, 'nonet'), false);
+            assert.strictEqual(fn.call(real, 'x', 'regtest'), false);
         });
     });
 });

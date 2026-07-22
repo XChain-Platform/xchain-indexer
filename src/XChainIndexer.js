@@ -32,6 +32,7 @@ const retention         = require('./retention.js');
 const stateCommitAct    = require('./state_commitment_activation.js');
 const HubClient    = require('./hub_client.js');
 const HubDbSync    = require('./hub_db_sync.js');
+const anchorRewardDerive = require('./anchor_reward_derive.js');
 const HubPushQueue = require('./hub_push_queue.js');
 const UtxoTracker  = require('./UtxoTracker.js');
 const Genesis      = require('./genesis.js');
@@ -840,6 +841,14 @@ class XChainIndexer {
                         // validator-signed / block-height-deterministic; see
                         // utility.processCrossChainCalls)
                         await this.util.processCrossChainCalls(this.actions, this.indexerDb, blockToParse, blockTime);
+
+                        //  Option C: derive matured anchor/archive publisher rewards from the
+                        // hub-mirrored anchor_reward_attestations rows (re-verifying the XANCPUB
+                        // quorum against this node's own oracle_publish set). BTC-only + gated by the
+                        // derive-relocation flag-day; below the gate (or off-BTC) this is a no-op, so
+                        // legacy behavior stays byte-identical. The reward lands at block_index =
+                        // snapshot_block; a null return / empty set is the common case.
+                        await anchorRewardDerive.deriveAnchorRewards(this.indexerDb, this.config, blockToParse);
 
                         // Check for any cancelled items (dispensers)
                         await this.util.processCancellations(this.actions, this.indexerDb, blockToParse, blockTime);

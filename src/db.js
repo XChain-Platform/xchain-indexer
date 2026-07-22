@@ -10223,6 +10223,26 @@ class Database {
         return (rows && rows.length > 0) ? rows[0].source_id : null;
     }
 
+    //  Option C (derive-on-BTC-side): mirrored anchor_reward_attestations rows whose
+    // reward has NOT yet been derived into validator_rewards, matured to `maxSnapshotBlock`
+    // (the current BTC block, so the reward's block_index = snapshot_block is never in the
+    // future). Returned flat, ordered by (reward_type, round_reference, publisher) so the
+    // caller can group each logical reward and reconcile the smallest-pubkey winner across a
+    // failover double-publish. NOT-EXISTS-scoped so a group already derived is skipped and a
+    // reorg that block-scoped-deletes the reward at snapshot_block re-exposes it for replay.
+    async getPendingAnchorRewardAttestations(network, maxSnapshotBlock){
+        return await this.doQuery(
+            'SELECT ara.chain, ara.network, ara.reward_type, ara.round_reference, ara.snapshot_block, ' +
+            '       ara.publisher, ara.publisher_attestations ' +
+            '  FROM anchor_reward_attestations ara ' +
+            ' WHERE ara.network = ? AND ara.snapshot_block <= ? ' +
+            '   AND NOT EXISTS (SELECT 1 FROM validator_rewards vr ' +
+            '                    WHERE vr.reward_type = ara.reward_type ' +
+            '                      AND vr.round_reference = ara.round_reference) ' +
+            ' ORDER BY ara.reward_type, ara.round_reference, ara.publisher, ara.id',
+            [network, maxSnapshotBlock]);
+    }
+
     // upsert: deterministic block-processing writers pass true so their value
     //         always wins over a best-effort hub push that raced them - the
     //         derived row is the consensus row (replay produces it byte-equal)

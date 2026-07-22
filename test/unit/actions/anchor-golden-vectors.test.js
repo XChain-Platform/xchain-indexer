@@ -29,6 +29,7 @@ const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
 const Anchor   = require('../../../src/actions/anchor.js');
 const ed25519  = require('../../../src/ed25519.js');
 const swq      = require('../../../src/stake_weighted_quorum.js');
+const arMod    = require('../../../src/anchor_reward_activation.js');
 
 const fs     = require('fs');
 const path   = require('path');
@@ -70,7 +71,7 @@ function wireToParams(vector) {
 }
 
 describe('Anchor frozen canonical wire vectors (parser side) @regression', function () {
-    let indexer, handler, verifyStub, swqStub;
+    let indexer, handler, verifyStub, swqStub, deriveGateStub;
 
     beforeEach(function () {
         indexer = createMockIndexer();
@@ -93,8 +94,11 @@ describe('Anchor frozen canonical wire vectors (parser side) @regression', funct
         // Pin the legacy COUNT quorum path (regtest stake-weighted quorum is active at
         // every block); the fixture sigs carry no source/weight.
         swqStub = sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(false);
+        // : pin the derive-relocation gate OFF so these vectors exercise the legacy
+        // DOGE-side reward write (the below-gate / mainnet behavior).
+        deriveGateStub = sinon.stub(arMod, 'isAnchorRewardDeriveActive').returns(false);
     });
-    afterEach(function () { verifyStub.restore(); swqStub.restore(); });
+    afterEach(function () { verifyStub.restore(); swqStub.restore(); deriveGateStub.restore(); });
 
     function lastWrite() { return indexer.indexerDb.createAnchorAction.lastCall.args[0]; }
 

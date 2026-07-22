@@ -331,7 +331,8 @@ describe('consensus parameters are frozen (track 8 guard) @regression', function
             'STATE_KEY_NUL_GATE_BLOCK_TIME',
             'METERING_EVAL_ORDER_GATE_BLOCK_TIME',
             'STATE_KEY_TYPE_GATE_BLOCK_TIME',
-            'CALL_SPREAD_METER_GATE_BLOCK_TIME'
+            'CALL_SPREAD_METER_GATE_BLOCK_TIME',
+            'VM_LINT_HARDENING_GATE_BLOCK_TIME'
         ];
         for(const gate of GATE_EXPORTS){
             assert.notStrictEqual(vm[gate], undefined,
