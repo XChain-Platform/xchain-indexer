@@ -32,6 +32,14 @@
  * and type-gated LIST items). The invariant is SDK-compacted ⊆ indexer-assigned:
  * the SDK must never emit a ^id the indexer would not recognise.
  *
+ * One single-value field is held back from compaction even though the indexer
+ * assigns it an id: DISPENSER.GET_ADDRESS (marked `noCompact`). It is the
+ * dispenser's operating-address key, and the DECODER gates dispense detection on
+ * that key but has no way to resolve a `^<id>` reference (its index_addresses id
+ * space differs from the indexer's), so a compacted open would register a dead
+ * dispenser that never matches a payment. The SDK therefore emits the full
+ * address for it; the per-action compactable sets live in SDK_COMPACTABLE_BY_ACTION.
+ *
  * Excluded on purpose:
  *  - SOURCE: the tx sender, registered first in db.createActionIndex; it is
  *    never a wire field and so is never a ^id reference.
@@ -49,24 +57,28 @@
 // Per-ACTION address-bearing fields. `multi:true` marks a field that can repeat
 // (multi-recipient SEND); `listType:true` marks LIST.ITEM, which holds addresses
 // only when the list's TYPE denotes an address list (the indexer gates on the
-// same TYPE the LIST handler uses; the SDK does not compact it).
+// same TYPE the LIST handler uses; the SDK does not compact it). `noCompact:true`
+// marks a single-value field the indexer still assigns an id for but the SDK must
+// NOT emit in `^<id>` form (DISPENSER.GET_ADDRESS — see the consensus note above).
 const ADDRESS_REF_FIELDS = {
     SEND:      [{ field: 'DESTINATION', multi: true }],
     MINT:      [{ field: 'DESTINATION' }],
     MESSAGE:   [{ field: 'DESTINATION' }],
     SWEEP:     [{ field: 'DESTINATION' }],
     ISSUE:     [{ field: 'TRANSFER' }, { field: 'TRANSFER_SUPPLY' }],
-    DISPENSER: [{ field: 'GET_ADDRESS' }, { field: 'ORACLE_ADDRESS' }],
+    DISPENSER: [{ field: 'GET_ADDRESS', noCompact: true }, { field: 'ORACLE_ADDRESS' }],
     ORDER:     [{ field: 'GET_ADDRESS' }],
     SWAP:      [{ field: 'GET_ADDRESS' }],
     DEPLOY:    [{ field: 'SLASH_DESTINATION' }],   // may be the "BURN" sentinel (resolved to the config burn address before id assignment)
     LIST:      [{ field: 'ITEM', multi: true, listType: true }],
 };
 
-// The unconditional, single-value fields the SDK may safely compact to ^id.
-// Excludes multi-value (array) and type-gated (LIST.ITEM) fields, which the SDK
-// leaves as full addresses. A field name appears once even if several actions
-// use it (the SDK resolver keys by field name across actions, like tickResolver).
+// The single-value fields the SDK may compact to ^id, as a flat field-name set
+// (the union across actions, IGNORING per-action `noCompact` exemptions). Excludes
+// multi-value (array) and type-gated (LIST.ITEM) fields, which the SDK leaves as
+// full addresses. This flat set documents the eligible field names and is the
+// consensus-drift guard; the ACTION-AWARE gate the resolver actually applies is
+// SDK_COMPACTABLE_BY_ACTION below.
 const SDK_COMPACTABLE = (() => {
     const set = new Set();
     for (const action of Object.keys(ADDRESS_REF_FIELDS))
@@ -75,4 +87,23 @@ const SDK_COMPACTABLE = (() => {
     return Array.from(set).sort();
 })();
 
-module.exports = { ADDRESS_REF_FIELDS, SDK_COMPACTABLE };
+// Per-action compactable field sets — the ACTION-AWARE gate the SDK address
+// resolver applies. Each action's set is the flat SDK_COMPACTABLE MINUS the fields
+// that action marks `noCompact`. Basing it on the flat set preserves the existing
+// field-name compaction (e.g. a single-recipient SEND DESTINATION is still
+// compacted; a multi-recipient array value is skipped by the resolver's runtime
+// array guard), while the per-action subtraction lets one action hold a field back
+// that another still compacts — DISPENSER.GET_ADDRESS is emitted in full while
+// ORDER/SWAP.GET_ADDRESS stay compacted. The union stays ⊆ the indexer-assigned set.
+const SDK_COMPACTABLE_BY_ACTION = (() => {
+    const map = {};
+    for (const action of Object.keys(ADDRESS_REF_FIELDS)) {
+        const held = new Set();
+        for (const spec of ADDRESS_REF_FIELDS[action])
+            if (spec.noCompact) held.add(spec.field);
+        map[action] = SDK_COMPACTABLE.filter((f) => !held.has(f));
+    }
+    return map;
+})();
+
+module.exports = { ADDRESS_REF_FIELDS, SDK_COMPACTABLE, SDK_COMPACTABLE_BY_ACTION };

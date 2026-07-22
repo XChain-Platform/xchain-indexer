@@ -47,6 +47,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Index-map `state_hash` promotion: per-block `index_addresses`/`index_tickers` preimage class, activation-gated and consensus-inert until flag-day.
+- Shared address-reference field map (byte-identical SDK twin): mark `DISPENSER.GET_ADDRESS` `noCompact` and add the per-action `SDK_COMPACTABLE_BY_ACTION` map. Indexer id assignment is unchanged; this only stops the SDK from compacting the delegated dispenser address to an `^<id>` the decoder cannot resolve.
 
 ### Security
 - Resolve a wire `^<id>` index reference only when it is canonical (`^[1-9][0-9]*`, no leading zero) and backs an existing block-stamped row, across `getAddressId`, `getTickerId`, and `resolveAddressRef`.
