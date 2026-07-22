@@ -834,6 +834,18 @@ async function startApi(){
             let db = indexer.indexerDb.apiView();
             try {
                 let latest = await db.getLatestBlockIndex();
+                // Source-chain reorg fence (item 5308): the hub follower pins this call's
+                // generation against the leader's proposed dispatch row
+                // (CrossChainCallEngine._validateDispatch). The field is stamped on the row but
+                // never enters the signed canonical, so the pin is what stops a Byzantine leader
+                // inflating it to evade a later source-keyed retraction. Omitting it here made
+                // the follower re-derive 0 for every call, which matched only until the first
+                // rollback on this chain bumped the generation - after that no honest follower
+                // could ever co-sign a dispatch again.
+                //
+                // Read the generation BEFORE the row (HUB-RETRACT-1), same ordering and for the
+                // same reason as getopencrosschainorders / getpendingcrosschaincalls above.
+                let pushGeneration = await db.getPushGeneration(indexer.config['COIN']);
                 let row    = await db.getCrossChainCallRequestById(String(call_id));
                 if(!row){
                     return { exists: false, network: indexer.config['NETWORK'], latest_block_index: latest };
@@ -854,7 +866,8 @@ async function startApi(){
                         gas_limit:             Number(row.gas_limit),
                         cross_hops:            Number(row.cross_hops),
                         deadline_block:        Number(row.deadline_block),
-                        request_status:        row.request_status
+                        request_status:        row.request_status,
+                        push_generation:       pushGeneration
                     }
                 };
             } catch (err) {

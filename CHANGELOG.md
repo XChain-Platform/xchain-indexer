@@ -38,6 +38,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - VOTE ballots are stored append-only (unique key gains `action_index`; tally reads each voter's latest set), so a reorg orphaning a re-vote restores the voter's prior ballot instead of losing it forever.
 - Amount strings are rendered in normal notation everywhere (`Utility.bcstr`): sub-1e-7 amounts previously stringified exponentially ("3e-8"), which the SMT leaf encoder rejects, hard-wedging the indexer at that block.
 - VM-emitted VOTE deposits/gas escrows are classified in the emission amount-truncation map (fixed GAS denomination).
+- `getcrosschaincall` now stamps `push_generation`, restoring XCALL dispatch quorum on any source chain that has reorged ().
 
 ### Added
 - `recovery_pending_rewards` staging table: recovery-local scratch for archived validator rewards, not consensus-hashed, rollback-exempt, and excluded from replication.
