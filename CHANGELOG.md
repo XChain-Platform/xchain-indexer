@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `src/dispenserDivergenceMetrics.js` observability counters (log-only, no state change): sizes where the indexer's full DISPENSER lifecycle (cancel format 1, EXPIRATION edit format 2) diverges from the create-only upstream decoder view. Counts cancels applied, EXPIRATION edits (shortened vs lengthened), and DISPENSE triggers dropped because the target dispenser was already cancelled or expired, emitted per-block and cumulatively under a stable `DISPENSER_DIVERGENCE` log prefix. Adds the read-only `getClosedDispenserAtAddress` db helper to resolve the reason tag; changes no validation, accept/reject, or persisted state.
 - `DISPENSER_ORIGIN_STANDING` (genesis-activated): the SOURCE of a prior valid dispenser create on an address may open additional dispensers on it without freshness or `DISPENSER_PREFERENCE=2`.
 - Armed the contract-era (Cohort A) flag-day at 2026-10-01 00:00 UTC (was the 2027-01-01 placeholder) across all six block_TIME gates, re-anchored the CROSS_CHAIN_ROYALTY create-side date to 2027-01-01 (one quarter after), and armed the four remaining BTC-anchored gates (checkpoint commitment, EQUIV header, stake-weighted quorum, anchor reward) at BTC 961000.
 - `STATE_COMMITMENT_ACTIVATION` armed mid-chain with per-chain '<COIN>:<network>' keys (same heights as the state-hash gates); the twin module and its call sites now take the coin, mirroring stateHash.js.

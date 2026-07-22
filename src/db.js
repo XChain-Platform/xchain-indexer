@@ -9836,6 +9836,43 @@ class Database {
         return dispensers;
     }
 
+    // Observability helper (read-only): given the COIN network and a paid address,
+    // return the most recent dispenser at that address whose LATEST status is
+    // 'cancelled' or 'expired', or false if none. Used by dispense.js to tag a
+    // DISPENSE trigger that matched no open dispenser: when the address DID hold a
+    // dispenser the indexer has since closed or re-dated, this identifies which one
+    // and why. Purely for metrics - it changes no validation or state outcome, and
+    // uses the same latest-status idiom as findMatchingDispensers / getDispenserInfo.
+    async getClosedDispenserAtAddress(coin, address){
+        let query = `SELECT
+                        d1.action_index,
+                        s3.status
+                    FROM
+                        dispensers d1
+                        INNER JOIN index_addresses    a3 ON (a3.id=d1.get_address_id)
+                        INNER JOIN index_coins        c1 ON (c1.id=d1.get_coin_id)
+                        INNER JOIN dispenser_statuses s1 ON (s1.dispenser_action_index=d1.action_index)
+                        INNER JOIN index_statuses     s3 ON (s3.id=s1.status_id)
+                    WHERE
+                        s1.action_index = (
+                            SELECT
+                                MAX(s4.action_index)
+                            FROM
+                                dispenser_statuses s4
+                            WHERE
+                                s4.dispenser_action_index=d1.action_index
+                        ) AND
+                        c1.coin=? AND
+                        a3.address=? AND
+                        s3.status IN ('cancelled', 'expired')
+                    ORDER BY d1.action_index DESC
+                    LIMIT 1`;
+        let results = await this.doQuery(query, [coin, address]);
+        if(results.length > 0)
+            return { ACTION_INDEX: Number(results[0].action_index), REASON: results[0].status };
+        return false;
+    }
+
 
     // Return the address recorded as the canceller for a dispenser's most recent
     // 'cancelling' status row, or null if there isn't one. Used by dispenser_close

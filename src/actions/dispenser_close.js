@@ -13,10 +13,12 @@
  **********************************************************************
  *
  * XChain Platform Action - DISPENSER_CLOSE
- * 
+ *
  * This action processes dispensers that need to be closed
  *
  ********************************************************************/
+
+const divergenceMetrics = require('../dispenserDivergenceMetrics.js');
 
 class Dispenser_Close {
 
@@ -55,6 +57,13 @@ class Dispenser_Close {
 
             // Print status message
             console.log("\t DISPENSER_CLOSE : " + this.config['COIN'] + ':' + dispenser['ACTION_INDEX'] + ' : ' + data['STATUS']);
+
+            // Observability: a close carrying DISPENSER_STATUS='cancelled' is a
+            // cancel (DISPENSER format 1) taking effect. Count it so the volume of
+            // cancels the upstream decoder does not mirror can be sized from logs.
+            // Measurement only - no state change.
+            if(data['DISPENSER_STATUS'] === 'cancelled')
+                divergenceMetrics.recordCancel(this.config['COIN'], data['BLOCK_INDEX'], dispenser['ACTION_INDEX'], dispenser['GET_ADDRESS']);
 
             // Array of credits, debits, and escrows
             let credits = [],

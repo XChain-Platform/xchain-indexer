@@ -18,6 +18,8 @@
   *
  ********************************************************************/
 
+const divergenceMetrics = require('../dispenserDivergenceMetrics.js');
+
 class Dispense {
 
     // Handle constructing a class instance
@@ -49,8 +51,19 @@ class Dispense {
         let action_indexes = await this.indexerDb.findMatchingDispensers(data);
 
         // If we found no valid dispensers, delete the action_index that we created for this DISPENSE
-        if(action_indexes.length==0)
+        if(action_indexes.length==0){
             await this.indexerDb.deleteActionIndex(data['ACTION_INDEX']);
+
+            // Observability: a DISPENSE trigger that matches no open dispenser is dropped.
+            // When the paid address DID have a dispenser that is now cancelled or expired,
+            // this is the upstream decoder still proposing DISPENSE for a dispenser the
+            // indexer already closed/re-dated. Tag the reason and count it so the volume of
+            // this split can be sized from logs. Measurement only - the drop above is
+            // unchanged; this adds no accept/reject behavior.
+            let closed = await this.indexerDb.getClosedDispenserAtAddress(data['COIN'], data['COIN_DESTINATION']);
+            if(closed)
+                divergenceMetrics.recordRejectedDispense(data['COIN'], block_index, data['COIN_DESTINATION'], closed['ACTION_INDEX'], closed['REASON']);
+        }
 
         // Loop through dispensers and generate a list of valid DISPENSE actions
         // Note: Dispense transactions which do not match an valid dispenser are ignored

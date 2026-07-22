@@ -43,6 +43,8 @@
  *
  ********************************************************************/
 
+const divergenceMetrics = require('../dispenserDivergenceMetrics.js');
+
 class Dispenser {
 
     // Handle constructing a class instance
@@ -448,6 +450,17 @@ class Dispenser {
         if(format==2){
             await this.indexerDb.updateActionIndex(data['ACTION_INDEX'], 'DISPENSER_EDIT');
             await this.indexerDb.createDispenserEdit(dispenser);
+
+            // Observability: a valid edit that re-dates EXPIRATION moves the indexer's
+            // effective expiry while the upstream decoder still holds the original. Log
+            // the change (old vs new, shortened vs lengthened) so this half of the split
+            // can be sized from logs. dispenserInfo['EXPIRATION'] is the current effective
+            // value (prior edits applied). Measurement only - no state change.
+            if(status=='valid' && !this.util.isNull(data['EXPIRATION']) && dispenserInfo &&
+               Number(data['EXPIRATION']) !== Number(dispenserInfo['EXPIRATION']))
+                divergenceMetrics.recordExpirationEdit(this.config['COIN'], data['BLOCK_INDEX'],
+                    data['DISPENSER_ACTION_INDEX'], dispenserInfo['GET_ADDRESS'],
+                    dispenserInfo['EXPIRATION'], data['EXPIRATION']);
         }
 
         // Store the SOURCE, GIVE_TICK, and GET_TICK in addresses list
