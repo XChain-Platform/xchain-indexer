@@ -27,7 +27,7 @@
 // ms). Async only for the hub_push_queue stats fetch; all other fields are
 // derived synchronously from already-resolved values.
 const { computeArmedMapFingerprint } = require('./armedMapFingerprint');
-const { hubConfigStaleness } = require('./XChainIndexer');
+const { hubConfigStaleness, stallWedged } = require('./XChainIndexer');
 
 async function buildHealthResponse({ indexer, indexerRunning, indexerError, lastIndexedBlock, now, reorgStats }){
     let decoderDbCircuit = indexer.decoderDb ? indexer.decoderDb.circuitState : null;
@@ -92,6 +92,14 @@ async function buildHealthResponse({ indexer, indexerRunning, indexerError, last
                             ? (indexer.stallReason || 'decoder_reorg_halt: decoder wrote a REORG_HALT marker; full decoder resync required')
                             : (indexer.stallReason || null),
         decoderReorgHalted: !!indexer.decoderReorgHalted,
+        // Advance-recency for the stall discriminator , mirrored from the /status
+        // healthcheck so both endpoints tell one story: the epoch-ms of the last successful
+        // block commit, and whether a set stallReason is a healthy-degraded barrier defer (the
+        // counter is still advancing) rather than a genuine wedge.
+        lastBlockCommittedAt: indexer.lastBlockCommittedAt || null,
+        degraded:         !!indexer.stallReason
+                            && !stallWedged(indexer.stallReason, indexer.lastBlockCommittedAt,
+                                            indexer.healthStallGraceMs, now),
         lastHubConfigFetchAt: lastHubConfigFetchAt,
         hubConfigAgeSeconds:  hubConfigAgeSeconds,
         hubConfigStale:       hubConfigStale,

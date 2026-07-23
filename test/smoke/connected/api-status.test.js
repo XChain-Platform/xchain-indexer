@@ -28,6 +28,15 @@ const http       = require('http');
 const express    = require('express');
 const helmet     = require('helmet');
 
+// Standalone copy of src/XChainIndexer.js stallWedged (the smoke harness deliberately
+// reconstructs the route rather than importing the module, which pulls in native DB
+// deps). The canonical function is unit-tested in test/unit/stall-health.test.js.
+function stallWedged(stallReason, lastBlockCommittedAt, graceMs, now){
+    if(!stallReason) return false;
+    if(lastBlockCommittedAt == null) return false;
+    return (now - lastBlockCommittedAt) > graceMs;
+}
+
 function getJson(port, path) {
     return new Promise((resolve, reject) => {
         const req = http.request({
@@ -68,10 +77,13 @@ function buildApp(indexer) {
             indexerDbUnreachable = true;
         }
         let decoderBlock = (indexer.lastDecoderBlock != null) ? Number(indexer.lastDecoderBlock) : null;
-        // Same status-code contract as api.js: 503 on DB-unreachable/stall so
-        // the http_get container healthcheck can observe unhealthy; a mere
-        // not-synced catch-up stays 200.
-        let unhealthy = indexerDbUnreachable || !!indexer.stallReason;
+        // Same status-code contract as api.js: 503 on DB-unreachable/wedge so the
+        // http_get container healthcheck can observe unhealthy; a not-synced catch-up
+        // AND a stalled-but-still-advancing barrier defer (degraded) both stay 200 .
+        let stalled   = !!indexer.stallReason;
+        let wedged    = stallWedged(indexer.stallReason, indexer.lastBlockCommittedAt,
+                                    indexer.healthStallGraceMs, Date.now());
+        let unhealthy = indexerDbUnreachable || wedged;
         res.status(unhealthy ? 503 : 200).json({
             indexerBlock: indexerBlock,
             decoderBlock: decoderBlock,
@@ -79,7 +91,9 @@ function buildApp(indexer) {
                             ? decoderBlock - indexerBlock
                             : null,
             isSynced:     indexer.isSynced(),
-            stallReason:  indexer.stallReason || null
+            stallReason:  indexer.stallReason || null,
+            degraded:     stalled && !wedged,
+            lastBlockCommittedAt: indexer.lastBlockCommittedAt || null
         });
     });
     return app;
@@ -161,30 +175,60 @@ describe('Smoke: REST /status', function () {
         }
     });
 
-    it('SM-05d: GET /status returns 503 when stalled, 200 during plain catch-up', async function () {
-        const stalled = {
+    it('SM-05d: GET /status returns 503 only on a WEDGED stall (no advance in the grace window)', async function () {
+        // A set stallReason with no committed block inside the grace window is a genuine
+        // wedge -> 503. lastBlockCommittedAt is 10 min stale against a 2 min grace.
+        const wedged = {
             indexerDb: { async getLatestBlockIndex() { return 120000; } },
             lastDecoderBlock: 120500,
             isSynced() { return false; },
             stallReason: 'hub-sync barrier timeout',
+            healthStallGraceMs: 120000,
+            lastBlockCommittedAt: Date.now() - 600000,
         };
-        let { server, port } = await listen(stalled);
+        let { server, port } = await listen(wedged);
         try {
             const { status, body } = await getJson(port, '/status');
-            assert.strictEqual(status, 503, `Expected HTTP 503 when stalled but got ${status}`);
+            assert.strictEqual(status, 503, `Expected HTTP 503 when wedged but got ${status}`);
             assert.strictEqual(body.stallReason, 'hub-sync barrier timeout');
+            assert.strictEqual(body.degraded, false, 'a wedge is not degraded');
         } finally {
             server.close();
         }
-        // Plain catch-up (not synced, no stall, DB fine) stays 200.
-        ({ server, port } = await listen({
+    });
+
+    it('SM-05e: GET /status stays 200 with degraded:true when stalled but still advancing ', async function () {
+        // The BTC-mainnet steady state: the price-sync barrier is deferring the newest block
+        // (stallReason set) but a block committed seconds ago, so the counter is advancing.
+        const degraded = {
+            indexerDb: { async getLatestBlockIndex() { return 959283; } },
+            lastDecoderBlock: 959284,
+            isSynced() { return false; },
+            stallReason: 'price_sync_barrier',
+            healthStallGraceMs: 120000,
+            lastBlockCommittedAt: Date.now() - 5000,
+        };
+        let { server, port } = await listen(degraded);
+        try {
+            const { status, body } = await getJson(port, '/status');
+            assert.strictEqual(status, 200, `Expected HTTP 200 while advancing-but-barrier-deferring but got ${status}`);
+            assert.strictEqual(body.degraded, true, 'a barrier defer over an advancing counter is degraded');
+            assert.strictEqual(body.stallReason, 'price_sync_barrier');
+        } finally {
+            server.close();
+        }
+    });
+
+    it('SM-05f: GET /status stays 200 during plain catch-up (no stall)', async function () {
+        const { server, port } = await listen({
             indexerDb: { async getLatestBlockIndex() { return 100; } },
             lastDecoderBlock: 120500,
             isSynced() { return false; },
-        }));
+        });
         try {
-            const { status } = await getJson(port, '/status');
+            const { status, body } = await getJson(port, '/status');
             assert.strictEqual(status, 200, `Expected HTTP 200 during catch-up but got ${status}`);
+            assert.strictEqual(body.degraded, false, 'a plain catch-up is not degraded');
         } finally {
             server.close();
         }

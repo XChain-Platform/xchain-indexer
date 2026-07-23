@@ -56,6 +56,23 @@ function hubConfigStaleness(lastHubConfigFetchAt, now){
     return { ageSeconds: Math.floor(ageMs / 1000), stale: ageMs > HUB_CONFIG_STALENESS_LIMIT_MS };
 }
 
+// Discriminate a genuinely WEDGED indexer from one that is merely deferring the
+// newest block behind a sync barrier that is itself advancing. A set stallReason
+// alone is not a wedge: a BTC-mainnet indexer's price mirror sits perpetually ~1
+// block behind the decoder tip, so the height-keyed price-sync barrier defers the
+// newest block on almost every poll (stallReason='price_sync_barrier') even though
+// the counter advances every few seconds as the mirror publishes each round
+// . Used by api.js's /status HTTP-code contract so the xchain-node
+// container healthcheck only reports unhealthy on a real stall. `lastBlockCommittedAt`
+// and `now` are epoch-ms; graceMs is the no-progress window a stall must exceed.
+// A stall with no committed block yet (lastBlockCommittedAt == null) is NOT wedged:
+// a slow initial catch-up must never trip the container restart loop.
+function stallWedged(stallReason, lastBlockCommittedAt, graceMs, now){
+    if(!stallReason) return false;
+    if(lastBlockCommittedAt == null) return false;
+    return (now - lastBlockCommittedAt) > graceMs;
+}
+
 class XChainIndexer {
 
     constructor(decoderDbHost, decoderDbPort, decoderDbName, decoderDbUser, decoderDbPass, indexerDbHost, indexerDbPort, indexerDbName, indexerDbUser, indexerDbPass, hubDbHost, hubDbPort, hubDbName, hubDbUser, hubDbPass, utxoTrackerUrl, utxoTrackerPort){
@@ -107,6 +124,11 @@ class XChainIndexer {
         // an operator can tell WHY lag is growing (a sync-barrier stall, a circuit
         // breaker, and a host fault otherwise all look identical: a rising lag).
         this.stallReason = null;
+        // Wall-clock (epoch ms) of the most recent SUCCESSFUL block commit, or null until the
+        // first block commits. Stamped at the commit point alongside the stallReason clear, and
+        // read by the /status healthcheck to tell an advancing-but-barrier-deferring indexer
+        // (healthy) from a genuinely wedged one (see stallWedged / ).
+        this.lastBlockCommittedAt = null;
         // #2736: set true when the decoder has written a durable REORG_HALT marker (a reorg it
         // could not safely rewind). Surfaced on /health so a halted decoder is not mistaken for
         // ordinary idle/lag. Updated by _checkDecoderReorgHalt(); the log-tick counter keeps the
@@ -135,6 +157,16 @@ class XChainIndexer {
         // validation is deterministic across operators. On timeout the block is deferred and
         // retried rather than validated against a stale price copy.
         this.priceSyncTimeoutMs = parseInt(process.env.HUB_PRICE_SYNC_TIMEOUT_MS || '60000');
+
+        // Grace window (ms) for the /status healthcheck's stall discriminator. A set stallReason
+        // reports the container unhealthy (503) only after NO block has committed for this long, so
+        // a BTC-mainnet indexer perpetually deferring the newest block behind a price mirror that is
+        // itself advancing (its steady state) commits every few seconds and stays healthy, while a
+        // genuinely wedged indexer (mirror down, host fault) trips 503 once it exceeds the window.
+        // Defaults to comfortably more than one barrier-timeout cycle so a single legitimate defer
+        // never flaps the healthcheck. Purely operational, NOT a consensus parameter.
+        this.healthStallGraceMs = parseInt(process.env.INDEXER_HEALTH_STALL_GRACE_MS
+                                           || String(Math.max(2 * this.priceSyncTimeoutMs, 120000)), 10);
 
         // Direct-hub-DB call-presence barrier timeout (ms). In single-host / direct-hub-DB
         // mode there is no HubDbSync mirror, so the cross-chain-call sync barrier is skipped.
@@ -924,8 +956,11 @@ class XChainIndexer {
                     lastIndexerBlock = blockToParse;
 
                     // A block advanced, so we are no longer stalled. Clear any deferral
-                    // reason set by a barrier timeout or host fault on a prior iteration.
+                    // reason set by a barrier timeout or host fault on a prior iteration, and
+                    // stamp the commit time so the /status healthcheck can tell an
+                    // advancing-but-barrier-deferring indexer from a wedged one .
                     this.stallReason = null;
+                    this.lastBlockCommittedAt = Date.now();
 
                     // Log the total parse time for this block
                     let parseTime = this.util.getTimer(debugTimer);
@@ -1336,3 +1371,4 @@ module.exports = XChainIndexer;
 module.exports.DEFAULT_HUB_CONFIG_POLL_INTERVAL_MS = DEFAULT_HUB_CONFIG_POLL_INTERVAL_MS;
 module.exports.HUB_CONFIG_STALENESS_LIMIT_MS       = HUB_CONFIG_STALENESS_LIMIT_MS;
 module.exports.hubConfigStaleness                  = hubConfigStaleness;
+module.exports.stallWedged                         = stallWedged;

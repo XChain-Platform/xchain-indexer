@@ -1201,10 +1201,18 @@ async function startApi(){
         let hubConfigStale       = hubConfig.stale;
         // Status-code contract for the xchain-node http_get healthcheck (wget
         // exits 0 on any 2xx): 503 when the indexer DB is unreachable or the
-        // block counter is stalled (stallReason set), matching the encoder /
-        // utxo-tracker / sync siblings. isSynced=false alone stays 200: a
-        // healthy initial catch-up must not trip restart loops.
-        let unhealthy = indexerDbUnreachable || !!indexer.stallReason;
+        // block counter is genuinely WEDGED, matching the encoder / utxo-tracker /
+        // sync siblings. A set stallReason ALONE no longer trips 503 : a
+        // BTC-mainnet indexer perpetually defers the newest block behind a price
+        // mirror one block back, so it is almost always mid-barrier at probe time
+        // even though it advances every few seconds. Reserve 503 for a stall with
+        // no committed block inside the grace window; a stalled-but-advancing
+        // indexer stays 200 with degraded:true. isSynced=false alone likewise
+        // stays 200: a healthy initial catch-up must not trip restart loops.
+        let stalled   = !!indexer.stallReason;
+        let wedged    = XChainIndexer.stallWedged(indexer.stallReason, indexer.lastBlockCommittedAt,
+                                                  indexer.healthStallGraceMs, Date.now());
+        let unhealthy = indexerDbUnreachable || wedged;
         res.status(unhealthy ? 503 : 200).json({
             indexerBlock: indexerBlock,
             decoderBlock: decoderBlock,
@@ -1217,6 +1225,13 @@ async function startApi(){
             // executor host fault. Lets a monitoring probe tell these stalls apart from
             // a healthy catch-up, all of which otherwise present only as a growing lag.
             stallReason:  indexer.stallReason || null,
+            // true when a sync barrier is deferring blocks but the counter is still
+            // advancing (healthy-degraded, stays 200); distinct from a wedge, which is
+            // stalled AND making no progress inside the grace window (503).
+            degraded:     stalled && !wedged,
+            // epoch-ms of the most recent successful block commit (null until the first),
+            // so a probe can read advance-recency directly rather than infer it from lag.
+            lastBlockCommittedAt: indexer.lastBlockCommittedAt || null,
             lastHubConfigFetchAt: lastHubConfigFetchAt,
             hubConfigAgeSeconds:  hubConfigAgeSeconds,
             hubConfigStale:       hubConfigStale
