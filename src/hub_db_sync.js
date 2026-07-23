@@ -72,6 +72,50 @@ const RETRACTION_COLUMNS = {
     oracle_prices:   'action_index'
 };
 
+// ── Watermark grace margins: frozen protocol constants ( / Package 12) ──
+// The three barrier grace margins (seconds) are NOT operational timeouts: they
+// decide WHEN the block-loop consensus barriers open via the stream-watermark
+// escape (_priceSyncSatisfied / _oracleSyncSatisfied / the match+call barriers).
+// A per-node divergence forks settlement: operator A with grace 60 settles a
+// block without a retroactive-effective-time row that lands inside the window
+// while operator B with grace 600 waits and settles it differently. An
+// unparseable value yields NaN, making every `blockTime + NaN` comparison false
+// and permanently wedging the tip. So every node MUST use identical values.
+//
+// These are NODE-LOCAL TIMING BARRIERS (a wait decision), never persisted or
+// hashed state, so pinning them needs NO activation gate: a reindex replays with
+// the mirror already far ahead of the tip, so the barrier opens immediately
+// regardless of grace, and the value never enters any ledger row. There is no
+// historical byte-shape that a height gate would have to preserve.
+const HUB_SYNC_WATERMARK_GRACE_S = Object.freeze({
+    price:  600,
+    oracle: 600,
+    match:  120,
+});
+
+// Resolve one grace margin. `frozen` is the pinned protocol constant; `envKey`
+// the operator override honored ONLY on regtest (test tunability). Off-regtest a
+// differing override is IGNORED with a loud startup warning and the frozen value
+// wins, mirroring resolveFeeDestination (src/coins/index.js). On regtest a SET
+// override that is not a non-negative integer THROWS an actionable startup error
+// (NaN / negative / fractional / non-numeric) rather than being swallowed and
+// stamped as a silent value that later wedges every barrier with `+ NaN`.
+function resolveWatermarkGrace(frozen, envKey, network){
+    const override = process.env[envKey];
+    if(override === undefined || override === '') return frozen;
+    if(network !== 'regtest'){
+        if(String(override) !== String(frozen))
+            console.log('WARNING: ' + envKey + ' is set but IGNORED on ' + String(network) +
+                '; using the frozen protocol grace constant ' + frozen + 's. Watermark graces are ' +
+                'consensus inputs (a per-node value forks settlement) and are not operator-tunable off regtest.');
+        return frozen;
+    }
+    if(!/^\d+$/.test(String(override).trim()))
+        throw new Error('Invalid ' + envKey + '="' + override + '": watermark grace must be a ' +
+            'non-negative integer number of seconds (frozen protocol default ' + frozen + ').');
+    return parseInt(String(override).trim(), 10);
+}
+
 // ──  signed-retraction verification helpers ───────────────────────────
 
 // Rebuild the retraction canonical from the wire event. MUST byte-match the
@@ -295,9 +339,12 @@ class HubDbSync {
         // price rounds finalize via PBFT some time after their anchor block, and
         // matches are stamped with the hub's wall clock (skew only).
         this.streamWatermark      = 0;
-        this.priceWatermarkGraceS  = parseInt(options.priceWatermarkGraceS  || process.env.HUB_SYNC_PRICE_GRACE_S  || '600');
-        this.oracleWatermarkGraceS = parseInt(options.oracleWatermarkGraceS || process.env.HUB_SYNC_ORACLE_GRACE_S || '600');
-        this.matchWatermarkGraceS  = parseInt(options.matchWatermarkGraceS  || process.env.HUB_SYNC_MATCH_GRACE_S  || '120');
+        // Frozen protocol constants (600/600/120), env-overridable only on regtest;
+        // off-regtest the override is ignored with a warning and a bad value throws.
+        // See HUB_SYNC_WATERMARK_GRACE_S / resolveWatermarkGrace above .
+        this.priceWatermarkGraceS  = resolveWatermarkGrace(HUB_SYNC_WATERMARK_GRACE_S.price,  'HUB_SYNC_PRICE_GRACE_S',  this.network);
+        this.oracleWatermarkGraceS = resolveWatermarkGrace(HUB_SYNC_WATERMARK_GRACE_S.oracle, 'HUB_SYNC_ORACLE_GRACE_S', this.network);
+        this.matchWatermarkGraceS  = resolveWatermarkGrace(HUB_SYNC_WATERMARK_GRACE_S.match,  'HUB_SYNC_MATCH_GRACE_S',  this.network);
 
         // Watermark advancement is gated on a completed bootstrap: WS heartbeats
         // certify only what was delivered ON THE SOCKET, so until the REST

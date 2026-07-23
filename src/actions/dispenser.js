@@ -44,6 +44,8 @@
  ********************************************************************/
 
 const divergenceMetrics = require('../dispenserDivergenceMetrics.js');
+const dispenserFreshness = require('../dispenser_freshness_activation.js');
+const dispenserCaps = require('../dispenser_caps_activation.js');
 
 class Dispenser {
 
@@ -276,7 +278,15 @@ class Dispenser {
             let getPrefs = await this.indexerDb.getAddressPreferences(data['GET_ADDRESS'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
             if(Number(getPrefs['DISPENSER_PREFERENCE']) !== 2){
                 let isFresh = false;
-                if(this.utxoTracker && this.utxoTracker.enabled){
+                // Freshness causality flag-day (dispenser_freshness_activation.js /
+                // b7ecae51 / ). At/after the gate the verdict derives from
+                // deterministic indexer-local chain state (no XChain activity strictly
+                // before BLOCK_INDEX); the external utxo-tracker is NEVER consulted. Below
+                // the gate the legacy tracker HTTP path runs byte-identically so historical
+                // replay is preserved.
+                if(dispenserFreshness.isDispenserFreshnessLocalActive(data['BLOCK_INDEX'], this.config['NETWORK'], this.config['COIN'])){
+                    isFresh = !(await this.indexerDb.hasXChainActivityBefore(data['GET_ADDRESS'], data['BLOCK_INDEX']));
+                } else if(this.utxoTracker && this.utxoTracker.enabled){
                     try {
                         let firstSeen = await this.utxoTracker.getFirstSeen(data['GET_ADDRESS']);
                         isFresh = !firstSeen || firstSeen.height >= data['BLOCK_INDEX'];
@@ -303,6 +313,21 @@ class Dispenser {
         // Validate DISPENSER_ACTION_INDEX is valid dispenser with a status of open
         if(!error && format!=0 && dispenserInfo['DISPENSER_STATUS']!='open')
             error = 'invalid: DISPENSER_ACTION_INDEX (dispenser not open)';
+
+        // MAX_REFILLS cap (dispenser_caps_activation.js / ). A refill is a
+        // format-2 DISPENSER_EDIT that tops up GIVE_ESCROW; each refill resets the
+        // dispense count (derived since the last refill in dispense.js), and the 6th
+        // refill is rejected (Counterparty parity). Rate/give-quantity are inherently
+        // unchanged (format-2 edits carry only give_escrow/expiration/lists, never
+        // give_amount/get_amount) and owner authority is enforced above. Gated with the
+        // dispenser-family cohort so historical replay stays byte-identical below it.
+        if(!error && format==2 && !this.util.isNull(data['GIVE_ESCROW']) &&
+           this.util.bcgt(data['GIVE_ESCROW'], 0) &&
+           dispenserCaps.isDispenserCapsActive(data['BLOCK_TIME'], this.config['NETWORK'])){
+            let refills = await this.indexerDb.getDispenserRefillCount(data['DISPENSER_ACTION_INDEX']);
+            if(refills >= this.config['MAX_REFILLS'])
+                error = 'invalid: MAX_REFILLS (dispenser refill limit reached)';
+        }
 
         // Validate that EXPIRATION is greater than current BLOCK_TIME
         if(!error && !this.util.isNull(data['EXPIRATION']) && this.util.bclte(data['EXPIRATION'], data['BLOCK_TIME']))

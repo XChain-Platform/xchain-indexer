@@ -223,6 +223,14 @@ function createMockDb() {
         findMatchingDispensers: sinon.stub().resolves([]),
         getDispenserInfo: sinon.stub().resolves(null),
         hasDispenserOriginStanding: sinon.stub().resolves(false),
+        // Indexer-local dispenser freshness (dispenser_freshness_activation.js).
+        // Default false = no prior XChain activity = fresh address; tests that need a
+        // stale/non-fresh GET_ADDRESS resolve(true).
+        hasXChainActivityBefore: sinon.stub().resolves(false),
+        // Derived dispenser caps counts (dispenser_caps_activation.js). Defaults model
+        // a fresh dispenser (no refills, no dispenses); cap tests resolve specific counts.
+        getDispenserRefillCount: sinon.stub().resolves(0),
+        getDispenserDispenseCount: sinon.stub().resolves(0),
         getDispenserEdits: sinon.stub().resolves([]),
         getDispenserAmountRemaining: sinon.stub().resolves(0),
         getSweepDestination: sinon.stub().resolves(null),

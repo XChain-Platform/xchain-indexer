@@ -640,4 +640,54 @@ describe('Dispense action handler @regression @tier2', function () {
         const rec = indexer.indexerDb.createDispense.firstCall.args[0];
         assert.strictEqual(rec['DISPENSER_ACTION_INDEX'], 11);
     });
+
+    // ── MAX_DISPENSES cap (dispenser_caps_activation.js / ). The dispense that
+    //    reaches the cap still executes; then the dispenser auto-closes with reason
+    //    'max_dispenses_reached' and refunds remaining escrow (DISPENSER_CLOSE routes to
+    //    SOURCE for an auto-close). Count is derived since the last refill. Gated on the
+    //    dispenser-family cohort (mainnet block_time 1790812800, testnet/regtest genesis).
+    describe('MAX_DISPENSES cap auto-close', function () {
+
+        function capsCloseCall() {
+            return actionsCtx.processAction.getCalls().find(
+                c => c.args[0] === 'DISPENSER_CLOSE' && c.args[2] && c.args[2]['DISPENSER_STATUS'] === 'max_dispenses_reached');
+        }
+
+        it('reaching the cap (1000) still dispenses, then auto-closes with max_dispenses_reached', async function () {
+            // Remaining (10) still covers a unit (1), so the "empty" close does NOT fire;
+            // the max-dispenses close does. Count includes the just-settled dispense.
+            indexer.indexerDb.getDispenserDispenseCount.resolves(1000);
+
+            const data = createBaseData({ ACTION: 'DISPENSE', SOURCE: BUYER_ADDR, COIN_AMOUNT: '0.01', BLOCK_TIME });
+            await dispense.parse([], data, false);
+
+            // The 1000th dispense executed.
+            sinon.assert.calledOnce(indexer.indexerDb.createDispense);
+            assert.strictEqual(indexer.indexerDb.createDispense.firstCall.args[0]['STATUS'], 'valid');
+            // Then the dispenser auto-closed with the cap reason.
+            const close = capsCloseCall();
+            assert.ok(close, 'a DISPENSER_CLOSE with max_dispenses_reached must be issued');
+            assert.strictEqual(close.args[2]['DISPENSER_ACTION_INDEX'], 10);
+        });
+
+        it('below the cap (999) does NOT auto-close', async function () {
+            indexer.indexerDb.getDispenserDispenseCount.resolves(999);
+
+            const data = createBaseData({ ACTION: 'DISPENSE', SOURCE: BUYER_ADDR, COIN_AMOUNT: '0.01', BLOCK_TIME });
+            await dispense.parse([], data, false);
+
+            assert.ok(!capsCloseCall(), 'no max-dispenses close below the cap');
+        });
+
+        it('below the caps flag-day (mainnet block_time < 1790812800): no cap even at 1000', async function () {
+            actionsCtx.config = Object.assign({}, indexer.config, { NETWORK: 'mainnet', COIN: 'BTC' });
+            dispense = new Dispense(actionsCtx);
+            indexer.indexerDb.getDispenserDispenseCount.resolves(1000);
+
+            const data = createBaseData({ ACTION: 'DISPENSE', SOURCE: BUYER_ADDR, COIN_AMOUNT: '0.01', BLOCK_TIME });
+            await dispense.parse([], data, false);
+
+            assert.ok(!capsCloseCall(), 'below the flag-day the legacy uncapped behavior must run');
+        });
+    });
 });

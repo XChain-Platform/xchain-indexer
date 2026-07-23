@@ -19,6 +19,7 @@
  ********************************************************************/
 
 const divergenceMetrics = require('../dispenserDivergenceMetrics.js');
+const ownershipCancelGate = require('../dispenser_ownership_cancel_activation.js');
 
 class Dispenser_Close {
 
@@ -84,16 +85,32 @@ class Dispenser_Close {
 
             if(Number(dispenser['GIVE_OWNERSHIP']||0) == 1){
                 // Ownership dispenser closure. If the escrow is still set, this is a
-                // cancel/expire/sweep path (no successful DISPENSE), so release the gate;
-                // if the destination differs from SOURCE, transfer ownership accordingly.
-                // If the escrow has already been cleared (because DISPENSE settled and
-                // triggered the auto-close), no further action is needed.
+                // cancel/expire/sweep path (no successful DISPENSE), so release the gate
+                // and route the ownership record. If the escrow has already been cleared
+                // (because DISPENSE settled and triggered the auto-close), no action.
+                //
+                // Ownership routing (DISPENSER.md:122): a cancel or expire returns the
+                // token's issuer rights to SOURCE; ONLY a SWEEP-closure delivers them to
+                // a non-SOURCE destination. The legacy path transferred to the computed
+                // `destination` (sweep > canceller > SOURCE), and cancel authority
+                // includes GET_ADDRESS, so a GET_ADDRESS/SOURCE canceller acquired the
+                // token's ownership for free (1678). Gated
+                // (dispenser_ownership_cancel_activation.js): below the flag-day the
+                // legacy canceller-takes-ownership routing runs so historical replay is
+                // byte-identical; at/after it only the SWEEP path transfers ownership and
+                // cancel/expire leave it with SOURCE (matching dispenser_expire.js, which
+                // was already correct). The GIVE token-balance refund routing is separate
+                // (handled per DISPENSER cancel semantics) and unaffected here.
+                let ownershipCancelActive = ownershipCancelGate.isDispenserOwnershipCancelActive(data['BLOCK_TIME'], this.config['NETWORK']);
+                let ownershipDest = ownershipCancelActive
+                                  ? ((!this.util.isNull(sweepDest)) ? sweepDest : dispenser['SOURCE'])
+                                  : destination;
                 let currentEscrow = await this.indexerDb.getTokenEscrow(dispenser['GIVE_TICK']);
                 if(Number(currentEscrow) === Number(dispenser['ACTION_INDEX'])){
-                    if(destination == dispenser['SOURCE']){
+                    if(ownershipDest == dispenser['SOURCE']){
                         await this.indexerDb.clearTokenEscrow(dispenser['GIVE_TICK']);
                     } else {
-                        await this.util.transferTokenOwnership(this.indexerDb, this.mapper, data, dispenser['GIVE_TICK'], dispenser['SOURCE'], destination);
+                        await this.util.transferTokenOwnership(this.indexerDb, this.mapper, data, dispenser['GIVE_TICK'], dispenser['SOURCE'], ownershipDest);
                     }
                 }
             } else if(this.util.bcgt(dispenser['GIVE_REMAINING'], 0)){

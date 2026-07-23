@@ -50,7 +50,7 @@ const GOLDEN_GAS_SCHEDULE = {
     VM_EMISSION:        500,
     VM_COMPUTATION:     1
 };
-const EXPECTED_VM_CONSENSUS_VERSION = '2';
+const EXPECTED_VM_CONSENSUS_VERSION = '3';
 // Frozen digest of the bundled VM's deploy/execution contract surface, asserted in
 // lockstep with the version above. Any change to the sandbox strip set or the deploy
 // validator's CONSENSUS_RULES must bump EXPECTED_VM_CONSENSUS_VERSION (and the VM's
@@ -62,13 +62,13 @@ const EXPECTED_VM_CONSENSUS_VERSION = '2';
 const EXPECTED_VM_STRIPPED_GLOBAL_NAMES = [
     'Atomics', 'BigInt', 'Date', 'FinalizationRegistry', 'Intl',
     'Promise', 'Proxy', 'Reflect', 'SharedArrayBuffer', 'Temporal',
-    'WeakRef', 'WebSocket', 'XMLHttpRequest', 'clearImmediate', 'clearInterval',
-    'clearTimeout', 'fetch', 'performance', 'queueMicrotask', 'setImmediate',
-    'setInterval', 'setTimeout', 'structuredClone'
+    'WeakRef', 'WebAssembly', 'WebSocket', 'XMLHttpRequest', 'clearImmediate',
+    'clearInterval', 'clearTimeout', 'fetch', 'performance', 'queueMicrotask',
+    'setImmediate', 'setInterval', 'setTimeout', 'structuredClone'
 ];
 const EXPECTED_VM_CONSENSUS_RULES = [
-    'banned-async', 'banned-literal', 'banned-math',
-    'invalid-type', 'reserved-identifier', 'unsupported-syntax'
+    'banned-async', 'banned-generator', 'banned-literal', 'banned-math',
+    'banned-wasm', 'invalid-type', 'reserved-identifier', 'unsupported-syntax'
 ];
 // The sandbox neuters more than the global strip set: prototype-method strips
 // (regex + locale/ICU), the prototype .constructor neuters, and the SafeMath

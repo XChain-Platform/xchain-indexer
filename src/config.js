@@ -140,8 +140,14 @@ module.exports = {
         config['MAX_BROADCAST_MESSAGE_LENGTH']  = 250;
         config['MAX_BROADCAST_VALUE_LENGTH']    = 25; 
 
-        // MAX number of dispenses per dispenser
+        // MAX number of dispenses per dispenser fill (enforced at/after the
+        // dispenser-caps flag-day, dispenser_caps_activation.js / ).
         config['MAX_DISPENSES'] = 1000;
+
+        // MAX number of refills (GIVE_ESCROW top-ups) per dispenser; each refill
+        // resets the dispense count to 0. The 6th refill is rejected. Lifetime
+        // ceiling: 6 fills x MAX_DISPENSES. Enforced with MAX_DISPENSES.
+        config['MAX_REFILLS'] = 5;
 
         // MESSAGE encryption methods
         config['MESSAGE_ENCRYPTION_METHODS'] = [

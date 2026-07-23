@@ -37,6 +37,7 @@ const crypto = require('crypto');
 const DeployChunk = require('./deploy_chunk.js');
 const ProviderRegistry = require('../attestation/providerRegistry.js');
 const { rethrowIfInfraFault } = require('./faultGuard.js');
+const vmDeployLintPkg3 = require('../vm_deploy_lint_pkg3_activation.js');
 
 // Per-provider deadline windows, injected into the VM gateway so a constructor's
 // attestation.request() rejects an over-limit deadlineBlocks at call time rather
@@ -332,7 +333,18 @@ class Deploy {
             // way: below its activation a deploy resolves exactly as it did
             // historically (both gates share the ratified  anchor).
             let enforceLintHardening = await this.actions.protocolChanges.isEnabled('VM_LINT_HARDENING', data['BLOCK_INDEX']);
-            let syntaxResult = this.actions.vm.validateSyntax(code, { enforceBannedAsync, enforceLintHardening });
+            // banned-generator (29912bd8) + banned-wasm (75190596 deploy half) are the
+            // Package 3 deploy-lint legs. They share ONE gate with the VM-side runtime
+            // strips (xchain-vm PKG3_SANDBOX_ACTIVATION), keyed per-coin on block HEIGHT
+            // (not block-time, so it cannot ride protocolChanges.isEnabled, which has no
+            // coin dimension); resolved via the standalone activation module the same
+            // shape as dispenser_freshness. Below each coin's height both flags are false,
+            // so validateSyntax drops both rules and the historical accepted verdict
+            // replays byte-identically. Both threaded exactly like the two flags above.
+            let enforcePkg3DeployLint = vmDeployLintPkg3.isVmDeployLintPkg3Active(data['BLOCK_INDEX'], this.config['NETWORK'], this.config['COIN']);
+            let enforceBannedGenerator = enforcePkg3DeployLint;
+            let enforceBannedWasm = enforcePkg3DeployLint;
+            let syntaxResult = this.actions.vm.validateSyntax(code, { enforceBannedAsync, enforceLintHardening, enforceBannedGenerator, enforceBannedWasm });
             if(!syntaxResult.valid)
                 error = 'invalid: CODE_ENCODING (' + syntaxResult.error + ')';
 

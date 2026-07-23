@@ -193,4 +193,81 @@ describe('Dispenser_Close action handler @regression @tier2', function () {
         assert.strictEqual(String(escrows[0][1]), '-' + REMAINING, 'escrow return keeps all 18 decimals');
         assert.notStrictEqual(String(escrows[0][1]), String(-Number(REMAINING)), 'not the truncated JS-float negation');
     });
+
+    // ── 1678: ownership cancel/expire routing flag-day ────────────────────────
+    // Cancelling an OWNERSHIP dispenser must NOT hand the canceller (which may be
+    // GET_ADDRESS) the token's issuer rights. Per DISPENSER.md:122 only a SWEEP
+    // delivers ownership to a non-SOURCE destination; cancel/expire leave it with
+    // SOURCE. Gated (dispenser_ownership_cancel_activation.js) so historical replay
+    // stays byte-identical below the flag-day.
+    describe('1678 ownership cancel/expire routing gate @regression @tier1', function () {
+        const ocg      = require('../../../src/dispenser_ownership_cancel_activation.js');
+        const FLAG_DAY = ocg.DISPENSER_OWNERSHIP_CANCEL_ACTIVATION.mainnet; // 1790812800
+        const SOURCE   = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
+        const GET_ADDR = 'mqmJDcs5nXFHrj9q7a2G5sBVmjcQTDdUZp'; // != SOURCE, and the canceller
+        const SWEEP    = 'mzMsvKm5N4vmAWKFDbwjc7hqCkGwANhCwn';
+
+        // A GET_ADDRESS-cancelled ownership dispenser: no sweep, canceller = GET_ADDRESS.
+        function cancelSetup() {
+            const dispenser = makeDispenser({ GIVE_OWNERSHIP: 1, ACTION_INDEX: 50, SOURCE, GET_ADDRESS: GET_ADDR });
+            indexer.indexerDb.getDispenserInfo.resolves(dispenser);
+            indexer.indexerDb.getSweepDestination.resolves(null);
+            indexer.indexerDb.getDispenserCanceller.resolves(GET_ADDR);
+            indexer.indexerDb.getTokenEscrow = sinon.stub().resolves(50); // matches ACTION_INDEX
+            indexer.indexerDb.clearTokenEscrow = sinon.stub().resolves();
+            sinon.stub(indexer.util, 'transferTokenOwnership').resolves();
+        }
+
+        it('mainnet below the flag-day keeps legacy routing (canceller acquires ownership) for byte-identical replay', async function () {
+            actionsCtx.config.NETWORK = 'mainnet';
+            cancelSetup();
+            const data = createBaseData({ ACTION: 'DISPENSER_CLOSE', DISPENSER_ACTION_INDEX: 50, BLOCK_INDEX: 200, DISPENSER_STATUS: 'cancelled', BLOCK_TIME: FLAG_DAY - 1 });
+            await handler.parse(null, data, null);
+            sinon.assert.calledOnce(indexer.util.transferTokenOwnership);
+            assert.strictEqual(indexer.util.transferTokenOwnership.getCall(0).args[5], GET_ADDR, 'legacy: ownership routed to the canceller');
+            sinon.assert.notCalled(indexer.indexerDb.clearTokenEscrow);
+        });
+
+        it('mainnet at/after the flag-day leaves ownership with SOURCE on a cancel (only clears the gate)', async function () {
+            actionsCtx.config.NETWORK = 'mainnet';
+            cancelSetup();
+            const data = createBaseData({ ACTION: 'DISPENSER_CLOSE', DISPENSER_ACTION_INDEX: 50, BLOCK_INDEX: 200, DISPENSER_STATUS: 'cancelled', BLOCK_TIME: FLAG_DAY });
+            await handler.parse(null, data, null);
+            sinon.assert.notCalled(indexer.util.transferTokenOwnership);
+            sinon.assert.calledOnce(indexer.indexerDb.clearTokenEscrow);
+        });
+
+        it('at/after the flag-day a SWEEP still transfers ownership to the sweep destination', async function () {
+            actionsCtx.config.NETWORK = 'mainnet';
+            const dispenser = makeDispenser({ GIVE_OWNERSHIP: 1, ACTION_INDEX: 50, SOURCE, GET_ADDRESS: GET_ADDR });
+            indexer.indexerDb.getDispenserInfo.resolves(dispenser);
+            indexer.indexerDb.getSweepDestination.resolves(SWEEP);
+            indexer.indexerDb.getTokenEscrow = sinon.stub().resolves(50);
+            indexer.indexerDb.clearTokenEscrow = sinon.stub().resolves();
+            sinon.stub(indexer.util, 'transferTokenOwnership').resolves();
+            const data = createBaseData({ ACTION: 'DISPENSER_CLOSE', DISPENSER_ACTION_INDEX: 50, BLOCK_INDEX: 200, DISPENSER_STATUS: 'cancelled', BLOCK_TIME: FLAG_DAY });
+            await handler.parse(null, data, null);
+            sinon.assert.calledOnce(indexer.util.transferTokenOwnership);
+            assert.strictEqual(indexer.util.transferTokenOwnership.getCall(0).args[5], SWEEP, 'sweep still delivers ownership to the sweep destination');
+            sinon.assert.notCalled(indexer.indexerDb.clearTokenEscrow);
+        });
+
+        it('regtest is corrected from genesis: a cancel leaves ownership with SOURCE', async function () {
+            actionsCtx.config.NETWORK = 'regtest';
+            cancelSetup();
+            const data = createBaseData({ ACTION: 'DISPENSER_CLOSE', DISPENSER_ACTION_INDEX: 50, BLOCK_INDEX: 200, DISPENSER_STATUS: 'cancelled', BLOCK_TIME: 1 });
+            await handler.parse(null, data, null);
+            sinon.assert.notCalled(indexer.util.transferTokenOwnership);
+            sinon.assert.calledOnce(indexer.indexerDb.clearTokenEscrow);
+        });
+
+        it('activation predicate: flips at the mainnet flag-day, genesis on testnet/regtest, off for unknown/bad input', function () {
+            assert.strictEqual(ocg.isDispenserOwnershipCancelActive(FLAG_DAY - 1, 'mainnet'), false);
+            assert.strictEqual(ocg.isDispenserOwnershipCancelActive(FLAG_DAY, 'mainnet'), true);
+            assert.strictEqual(ocg.isDispenserOwnershipCancelActive(0, 'testnet'), true);
+            assert.strictEqual(ocg.isDispenserOwnershipCancelActive(0, 'regtest'), true);
+            assert.strictEqual(ocg.isDispenserOwnershipCancelActive(FLAG_DAY, 'stagenet'), false);
+            assert.strictEqual(ocg.isDispenserOwnershipCancelActive('nonsense', 'mainnet'), false);
+        });
+    });
 });

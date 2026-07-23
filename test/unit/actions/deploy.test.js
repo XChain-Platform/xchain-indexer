@@ -179,6 +179,63 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
 
     });
 
+    describe('Pkg 3 deploy-lint gate threading (banned-generator + banned-wasm)', function () {
+        // deploy.js resolves the per-coin Pkg 3 height gate (vm_deploy_lint_pkg3_activation)
+        // and threads two flags into validateSyntax (enforceBannedGenerator /
+        // enforceBannedWasm). Below each coin's height both are false so the historical
+        // accepted verdict replays byte-identically; at/after it both are true so the deploy
+        // validator blocks. The vm is stubbed here, so this pins the WIRING (which flags,
+        // resolved from which height), not the rule logic (proven in
+        // xchain-vm/test/unit/lint-generator-wasm.test.js).
+
+        async function optsFor(network, coin, blockIndex) {
+            actionsCtx.config['NETWORK'] = network;
+            actionsCtx.config['COIN']    = coin;
+            const vm = makeVm();
+            actionsCtx.vm = vm;
+            handler = new Deploy(actionsCtx);
+            const data = deployData({ FORMAT: 0, BLOCK_INDEX: blockIndex });
+            await handler.parse(['0', VALID_CODE_B64, String(blockIndex || 100), ''], data, null);
+            return { data, opts: vm.validateSyntax.firstCall.args[1] };
+        }
+
+        it('below the BTC mainnet height (960999): both flags OFF, contract still accepted', async function () {
+            const { data, opts } = await optsFor('mainnet', 'BTC', 960999);
+            assert.strictEqual(opts.enforceBannedGenerator, false);
+            assert.strictEqual(opts.enforceBannedWasm, false);
+            assert.strictEqual(data['STATUS'], 'valid', 'below-gate deploy verdict must be unchanged (accepted)');
+        });
+
+        it('at the BTC mainnet height (961000): both flags ON', async function () {
+            const { opts } = await optsFor('mainnet', 'BTC', 961000);
+            assert.strictEqual(opts.enforceBannedGenerator, true);
+            assert.strictEqual(opts.enforceBannedWasm, true);
+        });
+
+        it('is per-coin: LTC and DOGE mainnet at the BTC height stay OFF', async function () {
+            assert.strictEqual((await optsFor('mainnet', 'LTC', 961000)).opts.enforceBannedGenerator, false);
+            assert.strictEqual((await optsFor('mainnet', 'DOGE', 961000)).opts.enforceBannedWasm, false);
+        });
+
+        it('LTC and DOGE flip ON at their own ratified heights', async function () {
+            assert.strictEqual((await optsFor('mainnet', 'LTC', 3154250)).opts.enforceBannedGenerator, true);
+            assert.strictEqual((await optsFor('mainnet', 'DOGE', 6319000)).opts.enforceBannedWasm, true);
+        });
+
+        it('regtest is genesis-armed (both flags ON from height 0)', async function () {
+            const { opts } = await optsFor('regtest', 'BTC', 0);
+            assert.strictEqual(opts.enforceBannedGenerator, true);
+            assert.strictEqual(opts.enforceBannedWasm, true);
+        });
+
+        it('threads the new flags ALONGSIDE the existing async / lint-hardening flags (no regression)', async function () {
+            const { opts } = await optsFor('regtest', 'BTC', 0);
+            assert.ok('enforceBannedAsync' in opts, 'enforceBannedAsync must still be threaded');
+            assert.ok('enforceLintHardening' in opts, 'enforceLintHardening must still be threaded');
+            assert.ok('enforceBannedGenerator' in opts && 'enforceBannedWasm' in opts, 'new flags must be threaded');
+        });
+    });
+
     describe('source sleeping', function () {
 
         it('rejects when SOURCE is sleeping', async function () {

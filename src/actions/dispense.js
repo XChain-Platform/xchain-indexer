@@ -19,6 +19,7 @@
  ********************************************************************/
 
 const divergenceMetrics = require('../dispenserDivergenceMetrics.js');
+const dispenserCaps = require('../dispenser_caps_activation.js');
 
 class Dispense {
 
@@ -346,7 +347,27 @@ class Dispense {
                 data['DISPENSER_ACTION_INDEX'] = dispenser['ACTION_INDEX'];
                 data['DISPENSER_STATUS']       = 'empty';
                 await this.actions.processAction(action, null, data, null);
-            }                    
+            } else if(status=='valid' && dispenserCaps.isDispenserCapsActive(block_time, this.config['NETWORK'])){
+                // MAX_DISPENSES cap (dispenser_caps_activation.js / ). The dispense
+                // that reaches the cap already executed above; now the dispenser auto-closes
+                // and refunds remaining escrow to the owner. DISPENSER_CLOSE routes the refund
+                // sweep > canceller > SOURCE, which resolves to SOURCE for this auto-close (no
+                // sweep, no canceller). The count is derived from valid dispenses since the last
+                // refill (a refill resets it), matching Counterparty dispense.py. Gated with the
+                // dispenser-family cohort so historical replay stays byte-identical below it.
+                let dispenseCount = await this.indexerDb.getDispenserDispenseCount(dispenser['ACTION_INDEX']);
+                if(dispenseCount >= this.config['MAX_DISPENSES']){
+                    let action = 'DISPENSER_CLOSE';
+                    let cdata = {};
+                    cdata['ACTION']                 = action;
+                    cdata['BLOCK_INDEX']            = block_index;
+                    cdata['BLOCK_TIME']             = block_time;
+                    cdata['TX_INDEX']               = tx_index;
+                    cdata['DISPENSER_ACTION_INDEX'] = dispenser['ACTION_INDEX'];
+                    cdata['DISPENSER_STATUS']       = 'max_dispenses_reached';
+                    await this.actions.processAction(action, null, cdata, null);
+                }
+            }
         }
     }
 }

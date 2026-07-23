@@ -28,6 +28,7 @@ const { canonicalizeHashAddress } = require('./protocolAddressRoles');
 const swqCap = require('./swq_source_cap_activation');
 const dispenseCancellingMatch = require('./dispense_cancelling_match_activation');
 const stateKeyCollation = require('./state_key_collation_activation');
+const snapshotAgeCausality = require('./oracle_snapshot_age_causality_activation');
 const { CHECKPOINT_VERSIONS: ANCHOR_CHECKPOINT_VERSIONS } = require('./anchor-action-query');
 const { rethrowIfInfraFault } = require('./actions/faultGuard');
 
@@ -2276,6 +2277,23 @@ class Database {
         return id;
     }
 
+    // XChain-local dispenser fresh-address verdict (b7ecae51 / ; gated by
+    // dispenser_freshness_activation.js). Returns true iff `address` has PRIOR
+    // XChain-tagged activity as of `blockIndex`: an index_addresses row assigned a
+    // block_index STRICTLY before blockIndex (BLOCK_INDEX-1 semantics). Used, at/after
+    // the freshness flag-day, in place of the external utxo-tracker getFirstSeen HTTP
+    // call so the verdict is a deterministic function of chain state (an external,
+    // per-node-reachability call in a hashed verdict forks the ledger). An address
+    // first interned in THIS block has block_index == blockIndex and does NOT count as
+    // prior activity, so a same-block-only GET_ADDRESS is fresh. `block_index IS NOT
+    // NULL` excludes out-of-band legacy ids that are never part of the deterministic set.
+    async hasXChainActivityBefore(address, blockIndex){
+        let results = await this.doQuery(
+            "SELECT id FROM index_addresses WHERE `address`=? AND block_index IS NOT NULL AND block_index < ? LIMIT 1",
+            [address, blockIndex]);
+        return results.length > 0;
+    }
+
     // Handle returning the next explicit id for the `index_addresses` table.
     // Mirrors getNextActionIndex: the surviving MAX(id)+1 (1 on an empty table).
     // Assigning ids explicitly (rather than via AUTO_INCREMENT, which never rewinds
@@ -3240,23 +3258,40 @@ class Database {
         if(type){
             let query = '';
             let args  = [action_index];
+            // CONSENSUS: list_items has no ORDER BY on the AUTO_INCREMENT insert
+            // order, so the row order MariaDB returns is engine/plan-arbitrary. The
+            // consuming AIRDROP recipient loop (airdrop.js) builds credits in this
+            // order, so an unordered list makes the credit-insert order (and any
+            // order-sensitive step) diverge across independently-built nodes. Pin a
+            // deterministic total order on the resolved item string with a BINARY
+            // collation, mirroring the getHolders/getBlockHashes hardening
+            // (index_addresses is utf8_general_ci = case/accent-folding). Duplicate
+            // items resolve to byte-identical strings, so the ordering is total for
+            // consensus purposes (a tie is byte-identical and the consumer dedups).
+            // Left UNGATED, mirroring getHolders' own ungated sort: the ledger hash is
+            // invariant to this order because getBlockHashes re-sorts credits on the
+            // resolved (address, tick, amount) columns and never hashes a surrogate
+            // id, so ordered and unordered produce byte-identical block hashes; this
+            // removes the engine-order dependency at the source (3c05dcb9).
             if(type==1){
-                query = `SELECT 
-                            t.tick as item 
-                        FROM 
+                query = `SELECT
+                            t.tick as item
+                        FROM
                             list_items l
                             INNER JOIN index_tickers t ON (l.item_id=t.id)
                         WHERE
-                            l.action_index=?`;
+                            l.action_index=?
+                        ORDER BY t.tick COLLATE utf8mb4_bin ASC`;
             }
             if(type==2){
-                query = `SELECT 
-                            a.address as item 
+                query = `SELECT
+                            a.address as item
                         FROM
                             list_items l
                             INNER JOIN index_addresses a ON (l.item_id=a.id)
-                        WHERE 
-                            l.action_index=?`;
+                        WHERE
+                            l.action_index=?
+                        ORDER BY a.address COLLATE utf8_bin ASC`;
             }
             let results = await this.doQuery(query, args);
             if(results.length > 0)
@@ -9644,6 +9679,45 @@ class Database {
         return remaining;
     }
 
+    // DISPENSER caps (dispenser_caps_activation.js / ). Both counts are
+    // DERIVED from existing rollback-covered tables (dispenses / dispenser_edits),
+    // matching the house pattern that recomputes GIVE_REMAINING rather than storing
+    // a mutable counter: a reorg that deletes those rows automatically corrects the
+    // count, so no new column/table and no migration are needed.
+
+    // Count of VALID refills (a dispenser_edits row that tops up GIVE_ESCROW, i.e.
+    // give_escrow > 0) for this dispenser. Used to reject the 6th refill (MAX_REFILLS).
+    async getDispenserRefillCount(action_index){
+        let query = `SELECT COUNT(*) AS c
+                     FROM dispenser_edits e
+                     INNER JOIN index_statuses s ON (s.id=e.status_id)
+                     WHERE e.dispenser_action_index=? AND s.status='valid'
+                       AND e.give_escrow IS NOT NULL AND e.give_escrow > 0`;
+        let rows = await this.doQuery(query, [action_index]);
+        return (rows.length > 0) ? Number(rows[0].c) : 0;
+    }
+
+    // Count of VALID dispenses for this dispenser SINCE its most recent refill.
+    // A refill resets the dispense count (Counterparty parity), so only dispenses
+    // recorded after the last refill's action_index count toward MAX_DISPENSES; no
+    // refill -> all valid dispenses (since 0). The just-settled dispense is already
+    // persisted when dispense.js calls this, so the returned count includes it.
+    async getDispenserDispenseCount(action_index){
+        let refillQ = `SELECT MAX(e.action_index) AS r
+                       FROM dispenser_edits e
+                       INNER JOIN index_statuses s ON (s.id=e.status_id)
+                       WHERE e.dispenser_action_index=? AND s.status='valid'
+                         AND e.give_escrow IS NOT NULL AND e.give_escrow > 0`;
+        let refillRows = await this.doQuery(refillQ, [action_index]);
+        let sinceIndex = (refillRows.length > 0 && refillRows[0].r !== null) ? refillRows[0].r : 0;
+        let countQ = `SELECT COUNT(*) AS c
+                      FROM dispenses d
+                      INNER JOIN index_statuses s ON (s.id=d.status_id)
+                      WHERE d.dispenser_action_index=? AND s.status='valid' AND d.action_index > ?`;
+        let rows = await this.doQuery(countQ, [action_index, sinceIndex]);
+        return (rows.length > 0) ? Number(rows[0].c) : 0;
+    }
+
     // Lookup items that need to be cancelled and return a list
     async findCancelledDispensers(block_time){
         let cancels = [];
@@ -13223,9 +13297,28 @@ class Database {
         let refTime = parseInt(blockTime);
         let maxAge  = parseInt(maxAgeSeconds);
 
-        // Pre-load the latest finalized snapshot age (blocks since last snapshot)
-        let ageQuery = "SELECT MAX(reference_block) AS latest_block FROM price_snapshots WHERE status = 'finalized'";
-        let ageRows = await this.doQuery(ageQuery);
+        // Cap every snapshot read at the block being processed so a replay never
+        // observes a FUTURE snapshot. Defined once here (was previously declared
+        // only for the getPrice/getPriceAtRound queries below) so the age query
+        // can share the same cap. blockIndex falsy -> 999999999 (no effective cap),
+        // matching the sibling queries' idiom.
+        let blockCap = blockIndex || 999999999;
+
+        // Pre-load the latest finalized snapshot age (blocks since last snapshot).
+        // Snapshot-age causality gate (oracle_snapshot_age_causality_activation.js):
+        // the legacy age query has NO block cap, unlike every sibling below, so a
+        // node replaying block N whose DB already holds a future finalized snapshot
+        // at N+k reads it and computes snapshotAge 0, while the node that first
+        // processed N computed a positive age. getSnapshotAge() is VM-visible, so
+        // that divergence forks the contract hash. At/after the activation height
+        // the age query is causally capped at blockCap; below it the uncapped legacy
+        // query runs so historical blocks replay byte-identically. Execution-path
+        // gate (VM read), indexer-only: xchain-sync never re-runs the VM.
+        let ageCausal = snapshotAgeCausality.isOracleSnapshotAgeCausalityActive(
+            blockIndex, this.config['NETWORK'], this.config['COIN']);
+        let ageQuery = "SELECT MAX(reference_block) AS latest_block FROM price_snapshots WHERE status = 'finalized'"
+                     + (ageCausal ? " AND reference_block <= ?" : "");
+        let ageRows = await this.doQuery(ageQuery, ageCausal ? [blockCap] : undefined);
         let latestBlock = (ageRows.length > 0 && ageRows[0].latest_block !== null) ? ageRows[0].latest_block : 0;
         let snapshotAge = (blockIndex && latestBlock > 0) ? Math.max(0, blockIndex - latestBlock) : Number.MAX_SAFE_INTEGER;
 
@@ -13244,7 +13337,7 @@ class Database {
         // inside the worker. (These were previously async DB closures - incompatible
         // with the VM's synchronous applySync bridge, so oracle reads silently
         // resolved a Promise. This conversion also fixes that latent bug.)
-        let blockCap = blockIndex || 999999999;
+        // blockCap is defined once above (shared with the snapshot-age query).
 
         // getPrice(): latest finalized price per coin_pair at/<= block, one row
         // per pair (GROUP BY guarantees correctness), staleness-applied.

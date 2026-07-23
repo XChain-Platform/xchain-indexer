@@ -412,6 +412,58 @@ describe('Dispenser action handler @regression @tier2', function () {
 
             sinon.assert.calledWith(indexer.indexerDb.updateActionIndex, sinon.match.any, 'DISPENSER_EDIT');
         });
+
+        // ── MAX_REFILLS cap (dispenser_caps_activation.js / ). A refill is a
+        //    format-2 edit that tops up GIVE_ESCROW; the 6th is rejected. Gated on the
+        //    dispenser-family cohort (mainnet block_time 1790812800, testnet/regtest genesis).
+        describe('MAX_REFILLS cap', function () {
+
+            it('rejects the 6th refill (caps active, regtest genesis)', async function () {
+                indexer.indexerDb.getDispenserRefillCount.resolves(5); // already at the limit
+                const params = makeParams(`2|50|20|${EXPIRATION + 86400}|||`);   // GIVE_ESCROW=20 top-up
+                const data   = createBaseData({ ACTION: 'DISPENSER', FORMAT: 2, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
+
+                await dispenser.parse(params, data, false);
+
+                assert.ok(data['STATUS'].includes('MAX_REFILLS'), 'the 6th refill must be rejected: ' + data['STATUS']);
+                assert.ok(indexer.indexerDb.getDispenserRefillCount.calledWith(data['DISPENSER_ACTION_INDEX']),
+                    'the refill count must be queried for the edited dispenser');
+            });
+
+            it('allows the 5th refill (below the limit)', async function () {
+                indexer.indexerDb.getDispenserRefillCount.resolves(4);
+                const params = makeParams(`2|50|20|${EXPIRATION + 86400}|||`);
+                const data   = createBaseData({ ACTION: 'DISPENSER', FORMAT: 2, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
+
+                await dispenser.parse(params, data, false);
+
+                assert.strictEqual(data['STATUS'], 'valid');
+            });
+
+            it('does NOT count a non-refill edit (no GIVE_ESCROW) against the cap', async function () {
+                indexer.indexerDb.getDispenserRefillCount.resolves(5); // at the limit
+                // Expiration-only edit: GIVE_ESCROW empty, so it is not a refill.
+                const params = makeParams(`2|50||${EXPIRATION + 86400}|||`);
+                const data   = createBaseData({ ACTION: 'DISPENSER', FORMAT: 2, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
+
+                await dispenser.parse(params, data, false);
+
+                assert.strictEqual(data['STATUS'], 'valid', 'a non-refill edit must not be blocked by MAX_REFILLS');
+            });
+
+            it('below the caps flag-day (mainnet block_time < 1790812800): no refill limit', async function () {
+                actionsCtx.config = Object.assign({}, indexer.config, { NETWORK: 'mainnet', COIN: 'BTC' });
+                dispenser = new Dispenser(actionsCtx);
+                indexer.indexerDb.getDispenserRefillCount.resolves(5); // would be rejected if the cap were active
+                const params = makeParams(`2|50|20|${EXPIRATION + 86400}|||`);
+                // BLOCK_TIME 1700000000 < 1790812800 => caps inactive
+                const data   = createBaseData({ ACTION: 'DISPENSER', FORMAT: 2, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
+
+                await dispenser.parse(params, data, false);
+
+                assert.strictEqual(data['STATUS'], 'valid', 'below the flag-day the legacy uncapped behavior must run');
+            });
+        });
     });
 
     describe('Unknown format', function () {
@@ -425,7 +477,7 @@ describe('Dispenser action handler @regression @tier2', function () {
         });
     });
 
-    describe('GET_ADDRESS different from SOURCE validation', function () {
+    describe('GET_ADDRESS different from SOURCE validation (freshness)', function () {
 
         it('GET_ADDRESS with DISPENSER_PREFERENCE=2 allows any opener', async function () {
             // GET_ADDRESS != SOURCE, but GET_ADDRESS has DISPENSER_PREFERENCE=2 (open to anyone)
@@ -441,133 +493,168 @@ describe('Dispenser action handler @regression @tier2', function () {
             assert.strictEqual(data['STATUS'], 'valid');
         });
 
-        it('GET_ADDRESS without DISPENSER_PREFERENCE=2 and no utxoTracker returns invalid', async function () {
-            // GET_ADDRESS != SOURCE, no special preference, no utxoTracker → not fresh → invalid
-            indexer.indexerDb.getAddressPreferences
-                .withArgs(OTHER_ADDR, sinon.match.any, sinon.match.any)
-                .resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0, DISPENSER_PREFERENCE: 0 });
+        // ── AT/ABOVE the freshness flag-day (regtest is genesis-active): the verdict
+        //    derives from indexer-local chain state (db.hasXChainActivityBefore); the
+        //    external utxo-tracker is NEVER consulted. dispenser_freshness_activation.js.
+        describe('local path (freshness flag-day active, regtest genesis)', function () {
 
-            const params = makeParams(`0|BTC|JDOG|1||10|BTC||0.01|${OTHER_ADDR}||||${EXPIRATION}|||`);
-            const data   = createBaseData({ ACTION: 'DISPENSER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
+            it('fresh GET_ADDRESS (no prior XChain activity) is allowed, and the tracker is NOT consulted', async function () {
+                indexer.indexerDb.getAddressPreferences
+                    .withArgs(OTHER_ADDR, sinon.match.any, sinon.match.any)
+                    .resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0, DISPENSER_PREFERENCE: 0 });
+                indexer.indexerDb.hasXChainActivityBefore.resolves(false); // fresh
 
-            await dispenser.parse(params, data, false);
+                // Wire a tracker too, to prove the local path never touches it.
+                const getFirstSeen = sinon.stub().resolves({ height: 1 }); // would say "not fresh" if consulted
+                actionsCtx.utxoTracker = { enabled: true, getFirstSeen };
+                dispenser = new Dispenser(actionsCtx);
 
-            assert.ok(data['STATUS'].includes('GET_ADDRESS') && data['STATUS'].includes('not permitted'));
+                const params = makeParams(`0|BTC|JDOG|1||10|BTC||0.01|${OTHER_ADDR}||||${EXPIRATION}|||`);
+                const data   = createBaseData({ ACTION: 'DISPENSER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
+
+                await dispenser.parse(params, data, false);
+
+                assert.strictEqual(data['STATUS'], 'valid');
+                assert.ok(indexer.indexerDb.hasXChainActivityBefore.calledWith(OTHER_ADDR, data['BLOCK_INDEX']),
+                    'local freshness query must be consulted with BLOCK_INDEX');
+                assert.ok(getFirstSeen.notCalled, 'the external utxo-tracker must NOT be consulted above the gate');
+            });
+
+            it('non-fresh GET_ADDRESS (prior XChain activity) is not permitted', async function () {
+                indexer.indexerDb.getAddressPreferences
+                    .withArgs(OTHER_ADDR, sinon.match.any, sinon.match.any)
+                    .resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0, DISPENSER_PREFERENCE: 0 });
+                indexer.indexerDb.hasXChainActivityBefore.resolves(true); // has history
+
+                const params = makeParams(`0|BTC|JDOG|1||10|BTC||0.01|${OTHER_ADDR}||||${EXPIRATION}|||`);
+                const data   = createBaseData({ ACTION: 'DISPENSER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
+
+                await dispenser.parse(params, data, false);
+
+                assert.ok(data['STATUS'].includes('GET_ADDRESS') && data['STATUS'].includes('not permitted'));
+            });
+
+            it('non-fresh GET_ADDRESS with origin standing is allowed (DISPENSER_ORIGIN_STANDING)', async function () {
+                indexer.indexerDb.getAddressPreferences
+                    .withArgs(OTHER_ADDR, sinon.match.any, sinon.match.any)
+                    .resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0, DISPENSER_PREFERENCE: 0 });
+                indexer.indexerDb.hasXChainActivityBefore.resolves(true); // not fresh
+                indexer.indexerDb.hasDispenserOriginStanding
+                    .withArgs(OWNER_ADDR, OTHER_ADDR, sinon.match.any)
+                    .resolves(true);
+
+                const params = makeParams(`0|BTC|JDOG|1||10|BTC||0.01|${OTHER_ADDR}||||${EXPIRATION}|||`);
+                const data   = createBaseData({ ACTION: 'DISPENSER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC', BLOCK_INDEX: 800000 });
+
+                await dispenser.parse(params, data, false);
+
+                assert.strictEqual(data['STATUS'], 'valid');
+                assert.ok(indexer.indexerDb.hasDispenserOriginStanding.calledWith(OWNER_ADDR, OTHER_ADDR, sinon.match.any));
+            });
+
+            it('non-fresh GET_ADDRESS where a DIFFERENT address holds standing stays invalid', async function () {
+                indexer.indexerDb.getAddressPreferences
+                    .withArgs(OTHER_ADDR, sinon.match.any, sinon.match.any)
+                    .resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0, DISPENSER_PREFERENCE: 0 });
+                indexer.indexerDb.hasXChainActivityBefore.resolves(true); // not fresh
+                // Default hasDispenserOriginStanding resolves false.
+
+                const params = makeParams(`0|BTC|JDOG|1||10|BTC||0.01|${OTHER_ADDR}||||${EXPIRATION}|||`);
+                const data   = createBaseData({ ACTION: 'DISPENSER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC', BLOCK_INDEX: 800000 });
+
+                await dispenser.parse(params, data, false);
+
+                assert.ok(data['STATUS'].includes('GET_ADDRESS') && data['STATUS'].includes('not permitted'));
+            });
+
+            it('origin standing is not consulted when DISPENSER_ORIGIN_STANDING is inactive', async function () {
+                indexer.indexerDb.getAddressPreferences
+                    .withArgs(OTHER_ADDR, sinon.match.any, sinon.match.any)
+                    .resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0, DISPENSER_PREFERENCE: 0 });
+                indexer.indexerDb.hasXChainActivityBefore.resolves(true); // not fresh
+                actionsCtx.protocolChanges.isEnabled = sinon.stub().callsFake(
+                    async (name) => name !== 'DISPENSER_ORIGIN_STANDING',
+                );
+                dispenser = new Dispenser(actionsCtx);
+                indexer.indexerDb.hasDispenserOriginStanding.resolves(true);
+
+                const params = makeParams(`0|BTC|JDOG|1||10|BTC||0.01|${OTHER_ADDR}||||${EXPIRATION}|||`);
+                const data   = createBaseData({ ACTION: 'DISPENSER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC', BLOCK_INDEX: 800000 });
+
+                await dispenser.parse(params, data, false);
+
+                assert.ok(data['STATUS'].includes('GET_ADDRESS') && data['STATUS'].includes('not permitted'));
+                assert.ok(indexer.indexerDb.hasDispenserOriginStanding.notCalled);
+            });
         });
 
-        it('GET_ADDRESS with utxoTracker fresh address is allowed', async function () {
-            indexer.indexerDb.getAddressPreferences
-                .withArgs(OTHER_ADDR, sinon.match.any, sinon.match.any)
-                .resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0, DISPENSER_PREFERENCE: 0 });
+        // ── BELOW the freshness flag-day: byte-identical legacy behavior. The verdict
+        //    comes from the external utxo-tracker getFirstSeen HTTP call and the local
+        //    query is NEVER consulted. Modelled with a mainnet-BTC config below 961000
+        //    (util keeps its own regtest config, so the regtest test addresses still
+        //    validate; only the freshness gate sees mainnet).
+        describe('legacy path (below the freshness flag-day: mainnet BTC < 961000)', function () {
 
-            // Wire a utxoTracker with enabled=true and getFirstSeen returning null (never seen)
-            const utxoTracker = {
-                enabled: true,
-                getFirstSeen: sinon.stub().resolves(null),
-            };
-            actionsCtx.utxoTracker = utxoTracker;
-            dispenser = new Dispenser(actionsCtx);
+            function mainnetBelowGateCtx() {
+                actionsCtx.config = Object.assign({}, indexer.config, { NETWORK: 'mainnet', COIN: 'BTC' });
+            }
 
-            const params = makeParams(`0|BTC|JDOG|1||10|BTC||0.01|${OTHER_ADDR}||||${EXPIRATION}|||`);
-            const data   = createBaseData({ ACTION: 'DISPENSER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
+            it('tracker-fresh GET_ADDRESS is allowed, and the local query is NOT consulted', async function () {
+                indexer.indexerDb.getAddressPreferences
+                    .withArgs(OTHER_ADDR, sinon.match.any, sinon.match.any)
+                    .resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0, DISPENSER_PREFERENCE: 0 });
+                // If the local query were (wrongly) consulted it would say "has history".
+                indexer.indexerDb.hasXChainActivityBefore.resolves(true);
 
-            await dispenser.parse(params, data, false);
+                mainnetBelowGateCtx();
+                const getFirstSeen = sinon.stub().resolves(null); // never seen => fresh
+                actionsCtx.utxoTracker = { enabled: true, getFirstSeen };
+                dispenser = new Dispenser(actionsCtx);
 
-            assert.strictEqual(data['STATUS'], 'valid');
-        });
+                const params = makeParams(`0|BTC|JDOG|1||10|BTC||0.01|${OTHER_ADDR}||||${EXPIRATION}|||`);
+                const data   = createBaseData({ ACTION: 'DISPENSER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC', BLOCK_INDEX: 500 });
 
-        it('GET_ADDRESS with utxoTracker throwing falls back to not-fresh (invalid)', async function () {
-            indexer.indexerDb.getAddressPreferences
-                .withArgs(OTHER_ADDR, sinon.match.any, sinon.match.any)
-                .resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0, DISPENSER_PREFERENCE: 0 });
+                await dispenser.parse(params, data, false);
 
-            const utxoTracker = {
-                enabled: true,
-                getFirstSeen: sinon.stub().rejects(new Error('db error')),
-            };
-            actionsCtx.utxoTracker = utxoTracker;
-            dispenser = new Dispenser(actionsCtx);
+                assert.strictEqual(data['STATUS'], 'valid');
+                assert.ok(getFirstSeen.calledWith(OTHER_ADDR), 'legacy path must consult the tracker');
+                assert.ok(indexer.indexerDb.hasXChainActivityBefore.notCalled,
+                    'below the gate the local freshness query must NOT be consulted');
+            });
 
-            const params = makeParams(`0|BTC|JDOG|1||10|BTC||0.01|${OTHER_ADDR}||||${EXPIRATION}|||`);
-            const data   = createBaseData({ ACTION: 'DISPENSER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
+            it('tracker-not-fresh GET_ADDRESS is not permitted', async function () {
+                indexer.indexerDb.getAddressPreferences
+                    .withArgs(OTHER_ADDR, sinon.match.any, sinon.match.any)
+                    .resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0, DISPENSER_PREFERENCE: 0 });
 
-            await dispenser.parse(params, data, false);
+                mainnetBelowGateCtx();
+                actionsCtx.utxoTracker = { enabled: true, getFirstSeen: sinon.stub().resolves({ height: 100 }) };
+                dispenser = new Dispenser(actionsCtx);
 
-            // Throws caught → isFresh stays false → invalid
-            assert.ok(data['STATUS'].includes('GET_ADDRESS') && data['STATUS'].includes('not permitted'));
-        });
+                const params = makeParams(`0|BTC|JDOG|1||10|BTC||0.01|${OTHER_ADDR}||||${EXPIRATION}|||`);
+                const data   = createBaseData({ ACTION: 'DISPENSER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC', BLOCK_INDEX: 500 });
 
-        it('non-fresh GET_ADDRESS with origin standing is allowed (DISPENSER_ORIGIN_STANDING)', async function () {
-            indexer.indexerDb.getAddressPreferences
-                .withArgs(OTHER_ADDR, sinon.match.any, sinon.match.any)
-                .resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0, DISPENSER_PREFERENCE: 0 });
+                await dispenser.parse(params, data, false);
 
-            // Address has history (not fresh), but SOURCE opened a prior valid
-            // dispenser on it while it was fresh.
-            const utxoTracker = {
-                enabled: true,
-                getFirstSeen: sinon.stub().resolves({ height: 100 }),
-            };
-            actionsCtx.utxoTracker = utxoTracker;
-            dispenser = new Dispenser(actionsCtx);
-            indexer.indexerDb.hasDispenserOriginStanding
-                .withArgs(OWNER_ADDR, OTHER_ADDR, sinon.match.any)
-                .resolves(true);
+                assert.ok(data['STATUS'].includes('GET_ADDRESS') && data['STATUS'].includes('not permitted'));
+            });
 
-            const params = makeParams(`0|BTC|JDOG|1||10|BTC||0.01|${OTHER_ADDR}||||${EXPIRATION}|||`);
-            const data   = createBaseData({ ACTION: 'DISPENSER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC', BLOCK_INDEX: 800000 });
+            it('tracker throwing falls back to not-fresh (invalid), byte-identical legacy behavior', async function () {
+                indexer.indexerDb.getAddressPreferences
+                    .withArgs(OTHER_ADDR, sinon.match.any, sinon.match.any)
+                    .resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0, DISPENSER_PREFERENCE: 0 });
 
-            await dispenser.parse(params, data, false);
+                mainnetBelowGateCtx();
+                actionsCtx.utxoTracker = { enabled: true, getFirstSeen: sinon.stub().rejects(new Error('db error')) };
+                dispenser = new Dispenser(actionsCtx);
 
-            assert.strictEqual(data['STATUS'], 'valid');
-            assert.ok(indexer.indexerDb.hasDispenserOriginStanding.calledWith(OWNER_ADDR, OTHER_ADDR, sinon.match.any));
-        });
+                const params = makeParams(`0|BTC|JDOG|1||10|BTC||0.01|${OTHER_ADDR}||||${EXPIRATION}|||`);
+                const data   = createBaseData({ ACTION: 'DISPENSER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC', BLOCK_INDEX: 500 });
 
-        it('non-fresh GET_ADDRESS where a DIFFERENT address holds standing stays invalid', async function () {
-            indexer.indexerDb.getAddressPreferences
-                .withArgs(OTHER_ADDR, sinon.match.any, sinon.match.any)
-                .resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0, DISPENSER_PREFERENCE: 0 });
+                await dispenser.parse(params, data, false);
 
-            const utxoTracker = {
-                enabled: true,
-                getFirstSeen: sinon.stub().resolves({ height: 100 }),
-            };
-            actionsCtx.utxoTracker = utxoTracker;
-            dispenser = new Dispenser(actionsCtx);
-            // Default hasDispenserOriginStanding stub resolves false: this
-            // SOURCE never opened a dispenser on OTHER_ADDR.
-
-            const params = makeParams(`0|BTC|JDOG|1||10|BTC||0.01|${OTHER_ADDR}||||${EXPIRATION}|||`);
-            const data   = createBaseData({ ACTION: 'DISPENSER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC', BLOCK_INDEX: 800000 });
-
-            await dispenser.parse(params, data, false);
-
-            assert.ok(data['STATUS'].includes('GET_ADDRESS') && data['STATUS'].includes('not permitted'));
-        });
-
-        it('origin standing is not consulted when DISPENSER_ORIGIN_STANDING is inactive', async function () {
-            indexer.indexerDb.getAddressPreferences
-                .withArgs(OTHER_ADDR, sinon.match.any, sinon.match.any)
-                .resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0, DISPENSER_PREFERENCE: 0 });
-
-            const utxoTracker = {
-                enabled: true,
-                getFirstSeen: sinon.stub().resolves({ height: 100 }),
-            };
-            actionsCtx.utxoTracker = utxoTracker;
-            actionsCtx.protocolChanges.isEnabled = sinon.stub().callsFake(
-                async (name) => name !== 'DISPENSER_ORIGIN_STANDING',
-            );
-            dispenser = new Dispenser(actionsCtx);
-            indexer.indexerDb.hasDispenserOriginStanding.resolves(true);
-
-            const params = makeParams(`0|BTC|JDOG|1||10|BTC||0.01|${OTHER_ADDR}||||${EXPIRATION}|||`);
-            const data   = createBaseData({ ACTION: 'DISPENSER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC', BLOCK_INDEX: 800000 });
-
-            await dispenser.parse(params, data, false);
-
-            assert.ok(data['STATUS'].includes('GET_ADDRESS') && data['STATUS'].includes('not permitted'));
-            assert.ok(indexer.indexerDb.hasDispenserOriginStanding.notCalled);
+                assert.ok(data['STATUS'].includes('GET_ADDRESS') && data['STATUS'].includes('not permitted'));
+            });
         });
     });
 
