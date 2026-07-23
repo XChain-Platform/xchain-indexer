@@ -207,7 +207,7 @@ const STATE_COMMITMENT_ACTIVATION = {
 // (2026-07-07; BTC anchor ~2026-08-04), not a disabled placeholder.
 const CHECKPOINT_COMMITMENT_ACTIVATION = {
     mainnet: 961000,      // ARMED 2026-07-07: BTC anchor ~2026-08-04; deploy hub + ALL indexers (+ sdk/explorer/sync copies) before this height
-    testnet: 0,
+    testnet: 146000,      // ARMED 2026-07-22 ( lead 0e418c8c): first BTC-testnet anchor past all three STATE_COMMITMENT testnet thresholds; was 0, which forced the SPV root suffix from testnet genesis before the indexer computes roots, so the hub refused to sign every testnet checkpoint
     regtest: 0,
 };
 
