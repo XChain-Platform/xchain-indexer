@@ -419,10 +419,18 @@ class Anchor {
         }
 
         data['VALIDATOR_SIGNATURES'] = JSON.stringify(sigs);
-        // v4/v5/v6 publisher-attestation tail (#2486): persist the quorum-verified
-        // publisher signature list so createAnchorAction can store it in
-        // anchor_actions.publisher_attestations. Empty (null) for v0-v3, which carry
-        // no publisher tail. data['PUBLISHER'] is already set above for v4+.
+        // v4/v5/v6 publisher-attestation tail (#2486): persist the RAW wire publisher
+        // signature list (publisherSigs, hex-shape-checked only at parse time) so
+        // createAnchorAction can store it in anchor_actions.publisher_attestations.
+        // NOTE (#3076): this is UNVERIFIED transport, NOT the quorum-verified subset.
+        // The Ed25519/oracle_publish-snapshot verification above builds a separate
+        // attSigners array that is not persisted; the reward-skipped path still lands
+        // here, so the stored JSON can include sigs that failed verification, signers
+        // absent from the snapshot, or the tail of an anchor whose attestation quorum
+        // was not met. Any consumer MUST re-verify (as anchor_reward_derive.js does
+        // from anchor_reward_attestations) and never treat this column as pre-verified.
+        // Empty (null) for v0-v3, which carry no publisher tail. data['PUBLISHER'] is
+        // already set above for v4+.
         data['PUBLISHER_ATTESTATIONS'] = (publisherSigs.length > 0) ? JSON.stringify(publisherSigs) : null;
         if(!data['STATUS']) data['STATUS'] = (error) ? error : 'valid';
 

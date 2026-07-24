@@ -95,6 +95,18 @@ describe(' flag-day placeholder guard @regression @tier1', function () {
         assert.strictEqual(mod.isRetractionSigningActive(RATIFIED_BTC_HEIGHT, 'mainnet'), true);
     });
 
+    it('SLASH_BURNS_PENDING_STAKE mainnet_block equals EQUIV_HEADER_ACTIVATION.mainnet (no duplicated-constant drift, #3134)', function () {
+        // The gate is deliberately anchored to the EQUIV flag-day HEIGHT, but the literal
+        // 961000 is duplicated in protocol_changes.js rather than derived from the shared map.
+        // Bind the two so a re-arm of the EQUIV anchor cannot silently leave this gate behind.
+        const equivMainnet = require(path.join(SRC, 'equivocation_header.js')).EQUIV_HEADER_ACTIVATION.mainnet;
+        const m = pcSource.match(new RegExp(
+            "this\\.addChange\\('SLASH_BURNS_PENDING_STAKE', '2\\.0\\.0',\\d+,\\d+,\\d+,(\\d+)"));
+        assert.ok(m, 'SLASH_BURNS_PENDING_STAKE must be registered with a mainnet_block gate');
+        assert.strictEqual(parseInt(m[1]), equivMainnet,
+            'SLASH_BURNS_PENDING_STAKE mainnet_block must equal EQUIV_HEADER_ACTIVATION.mainnet; divergence reopens the burn-pending window the gate exists to close');
+    });
+
     // Cross-service sweep: resolved by monorepo-relative path, so this only runs in the
     // monorepo/aggregator checkout; standalone single-repo CI skips (unless a required-
     // sibling job sets XCHAIN_REQUIRE_SIBLINGS=1, where a missing sibling hard-fails).

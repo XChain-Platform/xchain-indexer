@@ -44,14 +44,16 @@ function ctx(opts){
         }
         return opts.rows || [{ ts: null }];
     });
+    const sleepSpy = sinon.spy((ms) => new Promise(r => setTimeout(r, ms)));
     return {
         hubDb: opts.noHubDb ? null : { doQuery },
         callPresenceTimeoutMs: opts.timeoutMs != null ? opts.timeoutMs : 10000,
         util: {
-            sleep: (ms) => new Promise(r => setTimeout(r, ms)),
+            sleep: sleepSpy,
             throwError: (msg) => { throw new Error(msg); }
         },
-        _doQuery: doQuery
+        _doQuery: doQuery,
+        _sleep: sleepSpy
     };
 }
 
@@ -79,20 +81,17 @@ describe('XChainIndexer._waitForDirectCallPresence (direct-hub-DB call barrier)'
         // first query, so the barrier returns with one query and no sleep (zero added latency).
         const bt = NOW_S();
         const self = ctx({ rows: [{ ts: bt + 5 }] });
-        const started = Date.now();
         await run(self, bt);
-        const elapsed = Date.now() - started;
         assert.strictEqual(self._doQuery.calledOnce, true);
-        assert.ok(elapsed < 100, 'fast path must add no latency, took ' + elapsed + 'ms');
+        assert.strictEqual(self._sleep.called, false, 'fast path must add no latency (no sleep)');
     });
 
     it('(fast path) proceeds at once when the hub holds no finalized calls (nothing to wait on)', async function(){
         // Empty table: nothing can be effective at/before block_time, so proceed immediately.
         const self = ctx({ rows: [{ ts: null }] });
-        const started = Date.now();
         await run(self, NOW_S());
         assert.strictEqual(self._doQuery.calledOnce, true);
-        assert.ok(Date.now() - started < 100);
+        assert.strictEqual(self._sleep.called, false, 'fast path must not sleep');
     });
 
     it('(fast path) does NOT proceed on the wall-clock gate when the mirror is behind', async function(){

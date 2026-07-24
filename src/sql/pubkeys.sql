@@ -17,5 +17,7 @@
 DROP TABLE IF EXISTS pubkeys;
 CREATE TABLE pubkeys (
   address_id BIGINT UNSIGNED NOT NULL PRIMARY KEY,
-  pubkey     VARCHAR(66) NOT NULL
+  -- 130 hex chars to hold uncompressed (65-byte) source_pubkey values copied from
+  -- the decoder; VARCHAR(66) silently truncated/dropped them across the seam.
+  pubkey     VARCHAR(130) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;

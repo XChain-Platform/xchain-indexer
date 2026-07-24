@@ -86,7 +86,7 @@ module.exports = {
                 messagePrefix:        '\x19Dogecoin Signed Message:\n',
                 bip32:                { public: 0x0432a9a8, private: 0x0432a243 },
                 pubKeyHash:           0x71,
-                scriptHash:           0xc4,
+                scriptHash:           0xc4, // Dogecoin testnet SCRIPT_ADDRESS=196, same byte as Bitcoin testnet (upstream, intentional)
                 wif:                  0xf1,
                 dustThreshold:        100000,
                 supportsSegwit:       false,

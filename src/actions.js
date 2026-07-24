@@ -43,15 +43,23 @@ const FEE_QUOTE_DENYLIST = new Set(['DEPLOY', 'EXECUTE', 'XEXEC', 'BATCH']);
 // misleading `dry-run produced no status`; instead answer honestly with a zero-fee, feeExempt
 // result. This is a read-only preflight classification, never a consensus path: it changes
 // what the quote reports, not what a handler charges on-chain.
+// ATTEST is exempt (not denylisted) because it stages no wallet-priceable fee AND must never
+// dry-run on the public path: ATTEST v0 is VM-emission-only, and ATTEST v1 (validator response)
+// injects a contract callback EXECUTE (attest.js _injectCallbackExecute) that enters the VM while
+// the dry-run holds the block-loop mutex. Its protocol fee is charged at the v0 request origin and
+// settled by _settleRequestFee, so there is nothing for feequote to price; exempting it short-
+// circuits classifyFeeQuoteAction before _dryRunAction, closing the unauthenticated VM-compute-
+// under-mutex reachable by replaying a pending v1 response's mempool bytes into feequote/preflight.
 const FEE_QUOTE_EXEMPT = new Set([
     'COINPAY', 'DISPENSE',
     'COINPAY_EXPIRE', 'ORDER_MATCH', 'ORDER_EXPIRE', 'SWAP_MATCH', 'SWAP_EXPIRE',
-    'DISPENSER_CLOSE', 'DISPENSER_EXPIRE', 'CROSS_SETTLE', 'XCALL'
+    'DISPENSER_CLOSE', 'DISPENSER_EXPIRE', 'CROSS_SETTLE', 'XCALL', 'ATTEST'
 ]);
 
 // ACTION aliases, expanded to canonical names before any gate. Single module-level source of
-// truth: the constructor copies this into `this.actionAliases`, and classifyFeeQuoteAction
-// normalizes through it, so the fee-quote classifier de-aliases exactly as dispatch does.
+// truth (#3133): the constructor copies this via Object.assign into `this.actionAliases`, and
+// classifyFeeQuoteAction normalizes through this same constant, so the fee-quote classifier
+// de-aliases exactly as dispatch does. The conformance test binds ACTION_ALIASES to the manifest.
 const ACTION_ALIASES = {
     // Legacy BRC20 formats
     'TRANSFER': 'SEND',
@@ -278,17 +286,11 @@ class Actions {
         this.actionXcall            = new xcall(this);
         this.actionXexec            = new xexec(this);
 
-        // Define ACTION aliases
-        this.actionAliases = {};
-
-        // Legacy BRC20 formats
-        this.actionAliases['TRANSFER'] = 'SEND';
-
-        // Short aliases
-        this.actionAliases['ADDR'] = 'ADDRESS';
-        this.actionAliases['DROP'] = 'AIRDROP';
-        this.actionAliases['CAST'] = 'BROADCAST';
-        this.actionAliases['MSG']  = 'MESSAGE';
+        // ACTION aliases: copied from the single module-level ACTION_ALIASES source (#3133,
+        // was a hand-duplicated literal block that the 'single source of truth' comment
+        // falsely claimed was a copy). Dispatch de-aliases through this.actionAliases and
+        // classifyFeeQuoteAction through ACTION_ALIASES; both now derive from one constant.
+        this.actionAliases = Object.assign({}, ACTION_ALIASES);
 
         // Lightweight in-process observability counters: accepted and rejected counts per
         // ACTION type, accumulated since this instance started. Pure in-memory, never

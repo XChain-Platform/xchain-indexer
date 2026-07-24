@@ -134,12 +134,24 @@ class DecoderSeeder {
 
     /**
      * Seed a REORG event in the decoder's events table.
+     *
+     * Emits the CURRENT producer payload the live decoder writes (#3197):
+     * `[{block_index, block_hash}]` objects, NOT the legacy bare-number array the
+     * decoder no longer produces (xchain-decoder/src/db.js deleteBlockByIndex +
+     * events.sql). Each block gets a deterministic 64-hex block_hash so the harness
+     * exercises the indexer's object-unwrap leg (db.js `block.block_index`) rather
+     * than the historical-only bare-number fallback.
      * @param {number[]} blockNumbers - Array of affected block numbers
      */
     async seedReorgEvent(blockNumbers) {
+        const payload = blockNumbers.map(n => ({
+            block_index: n,
+            // deterministic 64-hex placeholder hash derived from the block index
+            block_hash: Number(n).toString(16).padStart(64, '0')
+        }));
         await this.query(
             `INSERT INTO events (time, code, data) VALUES (NOW(), 'REORG', ?)`,
-            [JSON.stringify(blockNumbers)]
+            [JSON.stringify(payload)]
         );
     }
 }

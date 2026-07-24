@@ -56,7 +56,13 @@ async function main(){
     try {
         console.log('migrate: applying pending migrations (auto + manual) to ' + name + ' ...');
         const res = await db.runMigrations({ includeManual: true });
-        console.log('migrate: done. applied=' + JSON.stringify(res.applied) + ' still-pending=' + JSON.stringify(res.pending));
+        if(res.lockSkipped){
+            // #3162: a lock-skip examined nothing; do not report it as a completed run.
+            console.error('migrate: SKIPPED - another process holds the migration lock (xchain_migrate_' + name + '). Nothing was applied and the schema may still be un-migrated. Re-run once the other migrator finishes.');
+            process.exitCode = 2;
+        } else {
+            console.log('migrate: done. applied=' + JSON.stringify(res.applied) + ' still-pending=' + JSON.stringify(res.pending));
+        }
     } catch(err){
         console.error('migrate: FAILED: ' + ((err && err.stack) || err));
         process.exitCode = 1;

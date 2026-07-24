@@ -85,6 +85,9 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
             // base64-fixture tests below behave as on a post-activation node; the gate
             // describe block flips it to false to exercise the pre-activation hex path.
             protocolChanges: { isEnabled: sinon.stub().resolves(true) },
+            // deploy now fails CLOSED (EXECUTOR_UNAVAILABLE host fault) without a VM,
+            // so the default ctx carries a permissive stub; gate-specific tests override.
+            vm: makeVm(),
         };
         handler = new Deploy(actionsCtx);
         indexer.util.resetLists();
@@ -616,7 +619,7 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
             localIndexer.indexerDb.getTokenInfo.resolves({ TICK_ID: 1 });
             localIndexer.indexerDb.getAddressBalances.resolves({ 1: '1000000' });
 
-            const ctx = { config: localIndexer.config, util: localIndexer.util, mapper: localIndexer.mapper, decoderDb: localIndexer.decoderDb, indexerDb: localIndexer.indexerDb, protocolChanges: { isEnabled: sinon.stub().resolves(true) } };
+            const ctx = { config: localIndexer.config, util: localIndexer.util, mapper: localIndexer.mapper, decoderDb: localIndexer.decoderDb, indexerDb: localIndexer.indexerDb, vm: makeVm(), protocolChanges: { isEnabled: sinon.stub().resolves(true) } };
             const h = new Deploy(ctx);
 
             sinon.stub(localIndexer.util, 'detectFeePaymentMode').returns('native');
@@ -636,7 +639,7 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
             localIndexer.indexerDb.getTokenInfo.resolves({ TICK_ID: 1 });
             localIndexer.indexerDb.getAddressBalances.resolves({ 1: '1000000' });
 
-            const ctx = { config: localIndexer.config, util: localIndexer.util, mapper: localIndexer.mapper, decoderDb: localIndexer.decoderDb, indexerDb: localIndexer.indexerDb, protocolChanges: { isEnabled: sinon.stub().resolves(true) } };
+            const ctx = { config: localIndexer.config, util: localIndexer.util, mapper: localIndexer.mapper, decoderDb: localIndexer.decoderDb, indexerDb: localIndexer.indexerDb, vm: makeVm(), protocolChanges: { isEnabled: sinon.stub().resolves(true) } };
             const h = new Deploy(ctx);
 
             sinon.stub(localIndexer.util, 'detectFeePaymentMode').returns('native');
@@ -656,7 +659,7 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
             localIndexer.indexerDb.getTokenInfo.resolves({ TICK_ID: 1 });
             localIndexer.indexerDb.getAddressBalances.resolves({ 1: '1000000' });
 
-            const ctx = { config: localIndexer.config, util: localIndexer.util, mapper: localIndexer.mapper, decoderDb: localIndexer.decoderDb, indexerDb: localIndexer.indexerDb, protocolChanges: { isEnabled: sinon.stub().resolves(true) } };
+            const ctx = { config: localIndexer.config, util: localIndexer.util, mapper: localIndexer.mapper, decoderDb: localIndexer.decoderDb, indexerDb: localIndexer.indexerDb, vm: makeVm(), protocolChanges: { isEnabled: sinon.stub().resolves(true) } };
             const h = new Deploy(ctx);
 
             sinon.stub(localIndexer.util, 'detectFeePaymentMode').returns('rejected');
@@ -676,7 +679,7 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
             // Zero balance; fee check will fail
             localIndexer.indexerDb.getAddressBalances.resolves({ 1: '0' });
 
-            const ctx = { config: localIndexer.config, util: localIndexer.util, mapper: localIndexer.mapper, decoderDb: localIndexer.decoderDb, indexerDb: localIndexer.indexerDb, protocolChanges: { isEnabled: sinon.stub().resolves(true) } };
+            const ctx = { config: localIndexer.config, util: localIndexer.util, mapper: localIndexer.mapper, decoderDb: localIndexer.decoderDb, indexerDb: localIndexer.indexerDb, vm: makeVm(), protocolChanges: { isEnabled: sinon.stub().resolves(true) } };
             const h = new Deploy(ctx);
 
             // Ensure xchain mode is used (detectFeePaymentMode returns 'xchain')

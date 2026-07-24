@@ -132,7 +132,7 @@ describe('Chunked DEPLOY : DEPLOY v2/v3 assembly @regression @tier2', function (
         indexer.indexerDb.getAddressBalances.resolves({ 1: '1000000' });
         // Inline (v0/v1) decode is gated on DEPLOY_BASE64_CODE; default the stub to
         // enabled (base64) so these v0/v1 fixtures behave as on a post-activation node.
-        ctx = { config: indexer.config, util: indexer.util, mapper: indexer.mapper, decoderDb: indexer.decoderDb, indexerDb: indexer.indexerDb, vm: null, protocolChanges: { isEnabled: sinon.stub().resolves(true) } };
+        ctx = { config: indexer.config, util: indexer.util, mapper: indexer.mapper, decoderDb: indexer.decoderDb, indexerDb: indexer.indexerDb, vm: { validateSyntax: () => ({ valid: true, errors: [] }), checkFloatWarnings: () => [], readManifest: async () => ({ ok: true, methods: [] }), execute: async () => ({ success: true, gasUsed: 0 }) }, protocolChanges: { isEnabled: sinon.stub().resolves(true) } };
         handler = new Deploy(ctx);
         indexer.util.resetLists();
     });

@@ -50,14 +50,18 @@ describe('ACTION manifest conformance: indexer indexerHandled set @regression', 
     });
 
     // #2721: the manifest's `aliases` map is expanded to canonical names before any gate
-    // (indexer actionAliases at src/actions.js:786). It was copied into the indexer with no
-    // conformance guard: a sixth alias added on only one side decodes on one and coerces to
-    // UNKNOWN on the other (the same silent-drop / ledger-fork class the dispatch guard above
-    // prevents, reached through the alias door). Bind the indexer alias table to the manifest.
-    it('the indexer actionAliases map exactly equals the manifest aliases map', function () {
+    // (indexer ACTION_ALIASES module constant in src/actions.js, ~line 62; the constructor
+    // copies it into this.actionAliases via Object.assign, #3133/#3189). It was copied into
+    // the indexer with no conformance guard: a sixth alias added on only one side decodes on
+    // one and coerces to UNKNOWN on the other (the same silent-drop / ledger-fork class the
+    // dispatch guard above prevents, reached through the alias door). Bind the single
+    // ACTION_ALIASES source to the manifest.
+    it('the indexer ACTION_ALIASES map exactly equals the manifest aliases map', function () {
         const src = decomment(fs.readFileSync(path.join(__dirname, '..', '..', 'src', 'actions.js'), 'utf8'));
         const local = {};
-        for (const m of src.matchAll(/this\.actionAliases\[\s*'([A-Z_]+)'\s*\]\s*=\s*'([A-Z_]+)'/g)) {
+        const blockMatch = src.match(/const ACTION_ALIASES\s*=\s*\{([\s\S]*?)\};/);
+        assert.ok(blockMatch, 'ACTION_ALIASES object literal not found in src/actions.js');
+        for (const m of blockMatch[1].matchAll(/'([A-Z_]+)'\s*:\s*'([A-Z_]+)'/g)) {
             local[m[1]] = m[2];
         }
         const expected = MANIFEST.aliases || {};

@@ -59,7 +59,7 @@ CREATE TABLE anchor_actions (
     archive_b64          MEDIUMTEXT,                      -- base64url gzip archive chunk (v1 chunk 0 / v2 continuation)
     validator_signatures MEDIUMTEXT,                      -- JSON [{pubkey,sig}] over the canonical (v0/v1)
     publisher            VARCHAR(64),                     -- elected PUBLISHER pubkey carried by the v4/v5/v6 tail; NULL for v0-v3
-    publisher_attestations MEDIUMTEXT,                    -- JSON [{pubkey,sig}] second-quorum XANCPUB attestation (v4/v5/v6); NULL for v0-v3
+    publisher_attestations MEDIUMTEXT,                    -- JSON [{pubkey,sig}] RAW wire XANCPUB tail (v4/v5/v6), UNVERIFIED transport not the quorum-verified subset (#3076); consumers must re-verify. NULL for v0-v3
     status_id            BIGINT UNSIGNED,                 -- FK to index_statuses
     block_index_doge     BIGINT UNSIGNED NOT NULL,        -- DOGE block the ANCHOR action landed in (rollback anchor)
     PRIMARY KEY (action_index)

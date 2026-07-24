@@ -17,7 +17,7 @@ CREATE TABLE capability_slash_events (
     id                  BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
     slash_action_index  BIGINT UNSIGNED NOT NULL,        -- FK to actions.action_index (the SLASH wire action)
     signing_pubkey_id   BIGINT UNSIGNED NOT NULL,        -- FK to index_pubkeys (the equivocating validator whose bond was burned)
-    capability          VARCHAR(64)  NOT NULL,           -- the consensus engine the equivocation occurred in (ENGINE_TAG family, e.g. XDEX/XCALL/XCHECKPOINT); the (pubkey,capability) dedup key
+    capability          VARCHAR(64)  NOT NULL,           -- the membership CAPABILITY label the equivocation maps to (cross_chain/oracle_publish/price/attestation/config), NOT the raw ENGINE_TAG; slash.js ENGINE_CAPABILITY maps the tag to this label. The (pubkey,capability) dedup key (#3165)
     equiv_key           VARCHAR(250) NOT NULL,           -- the shared equivocation key (ENGINE_TAG|ROUND_ID|VIEW) the two conflicting signatures proved
     amount              VARCHAR(250) NOT NULL,           -- total XCHAIN burned (active stakes + cooldown-locked unstakes)
     bounty_amount       VARCHAR(250) NOT NULL DEFAULT '0',  -- paid to the submitter (governance-configured cap; Phase D)

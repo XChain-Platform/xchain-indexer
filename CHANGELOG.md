@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- review review-round fixes: ATTEST exempt from fee-quote preflight, migration lock-skip reported honestly, boot fails fast on bad DB creds, action-alias single source with guard, DEPLOY halts as host-fault when the VM is unavailable, pubkeys widen migration, consensus-guard test escalations, reorg seeder format.
+
 ### Added
 - `src/dispenserDivergenceMetrics.js` observability counters (log-only, no state change): sizes where the indexer's full DISPENSER lifecycle (cancel format 1, EXPIRATION edit format 2) diverges from the create-only upstream decoder view. Counts cancels applied, EXPIRATION edits (shortened vs lengthened), and DISPENSE triggers dropped because the target dispenser was already cancelled or expired, emitted per-block and cumulatively under a stable `DISPENSER_DIVERGENCE` log prefix. Adds the read-only `getClosedDispenserAtAddress` db helper to resolve the reason tag; changes no validation, accept/reject, or persisted state.
 - `DISPENSER_ORIGIN_STANDING` (genesis-activated): the SOURCE of a prior valid dispenser create on an address may open additional dispensers on it without freshness or `DISPENSER_PREFERENCE=2`.

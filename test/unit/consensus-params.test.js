@@ -305,8 +305,15 @@ describe('consensus parameters are frozen (track 8 guard) @regression', function
     });
 
     it('the VM async/binary flag-day timestamps match the indexer protocol_changes (cross-repo byte-gate)', function(){
-        const { vm, full } = resolveVmConsensus();
-        if(!vm || !full){ this.skip(); return; } // standalone CI without the real VM present
+        const { vm, full, pkgErr } = resolveVmConsensus();
+        // Under the required-siblings lane a stale/absent vendored VM (the exact
+        // one-sided-edit threat this cross-repo byte-gate exists to catch) must
+        // redden, not degrade to a silent pending. Only standalone CI legitimately skips.
+        if(!vm || !full){
+            if(process.env.XCHAIN_REQUIRE_SIBLINGS === '1')
+                assert.fail('XCHAIN_REQUIRE_SIBLINGS=1 but xchain-vm did not resolve to its full package surface (stale/absent vendored VM): ' + (pkgErr ? String(pkgErr.message) : 'package not present'));
+            this.skip(); return;
+        } // standalone CI without the real VM present
         const pc = require('../../src/protocol_changes.js');
         // These VM gates and the indexer's VM_BANNED_ASYNC mainnet_time flip the SAME
         // coordinated 2.0.0 consensus boundary. They live in two repos with independent

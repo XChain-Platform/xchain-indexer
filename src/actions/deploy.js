@@ -321,6 +321,24 @@ class Deploy {
          * VM Syntax Validation (before charging gas)
          ****************************************************************/
 
+        // Fail CLOSED when the VM executor is unavailable, exactly as the
+        // execute path does (execute.js: `controller (vm unavailable)`).
+        // Without this, a node whose optional `require('xchain-vm')` failed
+        // (actions.js sets this.vm=null and only warns) would SKIP the entire
+        // syntax/lint/consensus gate below plus the manifest read and record
+        // the deploy VALID, while the rest of the fleet rejects it: a
+        // host-condition-induced ledger divergence (fail-open). Throwing an
+        // EXECUTOR_UNAVAILABLE host fault instead writes NO verdict at all:
+        // faultGuard.rethrowIfInfraFault treats this code as an infra halt, so
+        // the block loop rolls back and retries without committing until the
+        // native VM is rebuilt. No consensus rule changes, so no flag-day is
+        // needed - a healthy node validates exactly as before.
+        if(!error && !this.actions.vm){
+            let e = new Error('deploy VM executor unavailable');
+            e.code = 'EXECUTOR_UNAVAILABLE';
+            throw e;
+        }
+
         let floatWarnings = [];
         if(!error && this.actions.vm){
             // banned-async (async/await/Promise) is a consensus-gated deploy rule:

@@ -44,7 +44,10 @@ const { collapseOutputFanout } = require('./output_fanout.js');
 // HUB_CONFIG_POLL_INTERVAL_MS. Purely operational/observability, NOT a consensus parameter.
 const DEFAULT_HUB_CONFIG_POLL_INTERVAL_MS = 60000;
 // An overlay older than this is reported `stale`. Three poll intervals tolerates a couple of
-// missed/slow polls before flagging, matching the WS_WATERMARK grace convention.
+// missed/slow polls before flagging: a purely operational outage-observability margin (#3199).
+// This is independent of the WS_WATERMARK_GRACE constants (600s price/oracle, 120s match),
+// which gate consensus-critical block-processing barriers; the two serve different concerns
+// and their values need not (and do not) match.
 const HUB_CONFIG_STALENESS_LIMIT_MS = DEFAULT_HUB_CONFIG_POLL_INTERVAL_MS * 3;
 
 // Shared age/staleness computation for the hub-config overlay, used by both health.js and api.js

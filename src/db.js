@@ -236,6 +236,10 @@ class Database {
             password: this.pass,
             port:     this.port
         };
+        // Bounded retry (#3168): retry only transient connect faults, and fail fast on a
+        // non-retryable auth error (bad credentials never self-heal). An unbounded loop here
+        // left the process silently hung on bad creds instead of exiting for pm2 to surface.
+        let attempt = 0;
         while(true){
             try {
                 let db      = await mariadb.createConnection(connectionParams);
@@ -245,7 +249,11 @@ class Database {
                     return true;
                 return false;
             } catch (e){
-                console.error('Error checking if database ' + this.dbName + ' exists:', e)
+                if(Database._isNonRetryableDbError(e))
+                    throw new Error('verifyDatabase: non-retryable DB error for ' + this.dbName + ' (' + (e && (e.code || e.errno)) + '): ' + (e && e.message) + '. Check DB credentials/grants; not retrying.');
+                if(++attempt >= Database.DB_CONNECT_MAX_ATTEMPTS)
+                    throw new Error('verifyDatabase: gave up after ' + attempt + ' attempts reaching ' + this.dbName + ': ' + (e && e.message));
+                console.error('Error checking if database ' + this.dbName + ' exists (attempt ' + attempt + '/' + Database.DB_CONNECT_MAX_ATTEMPTS + '):', e)
                 await this.util.sleep(5000); // Wait 5 seconds
             }
         }
@@ -265,6 +273,8 @@ class Database {
         if(!/^[A-Za-z0-9_]+$/.test(this.dbName))
             throw new Error('Invalid database name: ' + this.dbName);
         console.log("Creating " + this.dbName + " database!");
+        // Bounded retry (#3168): same fail-fast-on-auth / cap-transient policy as verifyDatabase.
+        let attempt = 0;
         while(!databaseCreated){
             try {
                 let db      = await mariadb.createConnection(connectionParams);
@@ -272,7 +282,11 @@ class Database {
                 await db.end();
                 databaseCreated = true;
             } catch(e){
-                console.error('Error creating database ' + this.dbName + ':', e)
+                if(Database._isNonRetryableDbError(e))
+                    throw new Error('createDatabase: non-retryable DB error for ' + this.dbName + ' (' + (e && (e.code || e.errno)) + '): ' + (e && e.message) + '. Check DB credentials/grants; not retrying.');
+                if(++attempt >= Database.DB_CONNECT_MAX_ATTEMPTS)
+                    throw new Error('createDatabase: gave up after ' + attempt + ' attempts creating ' + this.dbName + ': ' + (e && e.message));
+                console.error('Error creating database ' + this.dbName + ' (attempt ' + attempt + '/' + Database.DB_CONNECT_MAX_ATTEMPTS + '):', e)
                 await this.util.sleep(5000); // Waiting 5 seconds
             }
         }
@@ -340,7 +354,7 @@ class Database {
         const crypto        = require('crypto');
         const includeManual = !!opts.includeManual;
         const dir           = path.join(__dirname, 'sql', 'migrations');
-        const result        = { applied: [], pending: [] };
+        const result        = { applied: [], pending: [], lockSkipped: false };
 
         let files = [];
         try { files = fs.readdirSync(dir).filter(f => f.endsWith('.sql')).sort(); }
@@ -356,6 +370,10 @@ class Database {
             const got = await conn.query('SELECT GET_LOCK(?, 30) AS l', [lockName]);
             if(!got || !got[0] || String(got[0].l) !== '1'){
                 console.warn('runMigrations: could not acquire lock ' + lockName + ' (another process is migrating). Skipping this run.');
+                // #3162: flag the skip so callers do NOT read the empty applied/pending shape as
+                // a completed run. The operator CLI must not print "done" and exit 0 when nothing
+                // was even examined - the schema may still be un-migrated.
+                result.lockSkipped = true;
                 return result;
             }
             try {
@@ -13611,6 +13629,20 @@ class Database {
         return unclaimed;
     }
 }
+// Startup DB-connect resilience (#3168). Cap transient connect retries so a boot never
+// hangs silently forever; a non-retryable auth/grant error fails fast so pm2 surfaces it
+// (a crash-loop is a visible signal, an unbounded silent hang is not).
+Database.DB_CONNECT_MAX_ATTEMPTS = 12; // ~60s of 5s backoff before giving up on a transient fault
+Database._isNonRetryableDbError = function(e){
+    if(!e) return false;
+    // MariaDB/MySQL auth + grant errnos: 1045 access denied (bad password),
+    // 1044 access denied to database, 1698 auth-plugin denied. These never self-heal.
+    let errno = e.errno;
+    if(errno === 1045 || errno === 1044 || errno === 1698) return true;
+    let code = String(e.code || '');
+    return code === 'ER_ACCESS_DENIED_ERROR' || code === 'ER_DBACCESS_DENIED_ERROR';
+};
+
 // Applied-migration files whose checksum may be healed in place. Each entry maps
 // a `from` predecessor hash (or a list of them) to a single `to` hash pinned to a
 // reviewed edit; anything else still fails the immutability guard in runMigrations().

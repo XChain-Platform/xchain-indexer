@@ -1,0 +1,42 @@
+--********************************************************************
+--
+-- Copyright © 2025-2026 Dankest, LLC
+-- Based on XChain Platform by Dankest, LLC - https://dankest.llc
+--
+-- SPDX-License-Identifier: AGPL-3.0-or-later
+--
+-- This file is part of XChain Platform. Licensed under the GNU Affero
+-- General Public License v3.0 or later; see LICENSE.md. A commercial
+-- license (without AGPL source-disclosure terms) is available -
+-- contact legal@dankest.llc.
+--
+--********************************************************************
+
+-- xchain:migration mode=manual
+-- (manual: the statement is a safe column WIDEN that preserves every existing value,
+--  but `MODIFY ... NOT NULL` is indistinguishable from a narrowing to the auto-apply
+--  destructive-DDL classifier, and widening past 85 chars forces a COPY table rebuild
+--  under a metadata lock. Gated to an explicit operator run so it applies with the
+--  writer quiesced rather than silently at startup.)
+--
+-- Migration: pubkeys.pubkey  VARCHAR(66) -> VARCHAR(130)
+--
+-- WHY
+-- ---
+-- The indexer copies source_pubkey from the decoder (getDecoderBlockData LEFT JOIN
+-- pubkeys, then createPubkey). The decoder accepts uncompressed (65-byte, 130 hex)
+-- public keys, but this column was VARCHAR(66), so an uncompressed key was truncated
+-- to 66 chars (non-strict sql_mode) or rejected with errno 1406 (STRICT_TRANS_TABLES).
+-- Widening to VARCHAR(130) matches the producer width so uncompressed keys persist
+-- intact and the seam field stops being deployment-dependent. (#3195; mirrors the
+-- decoder migration of the same name.)
+--
+-- NOTE: widening a VARCHAR past 85 chars changes the row-format length prefix, so this
+-- is a COPY rebuild (not ALGORITHM=INSTANT) under a shared metadata lock. Apply at
+-- startup or with the writer quiesced, not against a heavy live writer.
+--
+-- IDEMPOTENT: re-running MODIFY to the same type is a no-op; the schema_migrations
+-- ledger records this file once per DB. Fresh installs already get VARCHAR(130) from
+-- src/sql/pubkeys.sql.
+
+ALTER TABLE pubkeys MODIFY pubkey VARCHAR(130) NOT NULL;

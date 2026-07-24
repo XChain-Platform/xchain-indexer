@@ -1,8 +1,8 @@
 {
   "$schema_note": "Authoritative registry of every XChain protocol ACTION and which repos must wire it. Single source of truth for the cross-repo action lockstep. Adding an action = add one entry here, re-vendor the copies, and the per-repo ActionManifestConformance guards force every repo to wire it (or fail CI). Generated from live wiring at HEAD; it codifies what IS, not an aspiration.",
-  "authority": "xchain-documentation/protocol/action-manifest.json is authoritative. xchain-{decoder,indexer,sdk,wallet,explorer}/test/fixtures/action-manifest.json vendor byte-identical copies so each repo CI asserts its slice without a sibling checkout. Keep all copies identical.",
+  "authority": "xchain-documentation/protocol/action-manifest.json is authoritative. xchain-{decoder,encoder,indexer,sdk,wallet,explorer}/test/fixtures/action-manifest.json vendor byte-identical copies so each repo CI asserts its slice without a sibling checkout. Keep all copies identical.",
   "flags": {
-    "wireDecoded": "top-level ACTION-encoded on-chain tx the DECODER must decode (xchain-decoder VALID_ACTION_NAMES)",
+    "wireDecoded": "top-level ACTION-encoded on-chain tx the DECODER must decode (xchain-decoder VALID_ACTION_NAMES); also enforced pre-broadcast by the ENCODER's own VALID_ACTION_NAMES/ACTION_ALIASES gate (xchain-encoder src/validator.js)",
     "indexerHandled": "the INDEXER dispatches a handler for it (xchain-indexer src/actions.js action== switch)",
     "userEncodable": "the SDK can author it (xchain-sdk Formats keys)",
     "explorerRender": "the EXPLORER renders it (xchain-explorer getActionData)",

@@ -76,19 +76,16 @@ class Dispense {
             // Get full dispenser info including GIVE_REMAINING
             let dispenser = await this.indexerDb.getDispenserInfo(this.config['COIN'], action_index, data['BLOCK_TIME']);
 
-            // Only proceed if we have a valid dispenser
-            if(!error && !dispenser)
-                error = 'invalid: Dispenser unknown'
-
             // Unknown dispenser: no dispenserInfo entry exists to settle against, so
             // skip this action_index entirely rather than pushing a dispense record
-            // that references a missing dispenser (no settlement occurs).
-            if(error == 'invalid: Dispenser unknown')
+            // that references a missing dispenser (no settlement occurs). (#3120: was a
+            // sentinel-string round-trip through `error` with two provably-dead !error
+            // branches; `error` is false here, so this is behavior-identical.)
+            if(!dispenser)
                 continue;
 
             // Store the dispenser info for easy reference
-            if(!error)
-                dispenserInfo[dispenser['ACTION_INDEX']] = dispenser;
+            dispenserInfo[dispenser['ACTION_INDEX']] = dispenser;
 
             // FIAT dispenser: reverse price match to determine effective GET_AMOUNT
             // Two pricing modes:
