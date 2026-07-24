@@ -167,4 +167,98 @@ describe('Collect (COLLECT) @regression @tier3', function () {
         assert.strictEqual(second['STATUS'], 'valid');
         assert.strictEqual(second['AMOUNT'], '100');
     });
+
+    // -----------------------------------------------------------------------
+    //  : partial claim (trailing optional AMOUNT, PARTIAL_UNSTAKE_COLLECT)
+    // -----------------------------------------------------------------------
+
+    describe('partial claim ', function () {
+
+        function setGate(enabled) {
+            actionsCtx.protocolChanges = {
+                isDefined: sinon.stub().returns(true),
+                isEnabled: sinon.stub().callsFake(async (name) =>
+                    name === 'PARTIAL_UNSTAKE_COLLECT' ? enabled : true),
+            };
+        }
+
+        beforeEach(function () {
+            setGate(true);
+        });
+
+        it('partial amount → valid, claims only the canonical partial', async function () {
+            const data = collectData();
+            await handler.parse(['0', '40'], data, null);
+
+            assert.strictEqual(data['STATUS'], 'valid');
+            assert.strictEqual(data['AMOUNT'], '40.00000000');
+            assert.strictEqual(indexer.indexerDb.createDebit.firstCall.args[2], '40.00000000');
+            assert.strictEqual(indexer.indexerDb.createCredit.firstCall.args[2], '40.00000000');
+        });
+
+        it('remainder stays pending: partial claim then full claim of the rest', async function () {
+            const first = collectData();
+            await handler.parse(['0', '40'], first, null);
+            assert.strictEqual(first['STATUS'], 'valid');
+
+            // The mock returns the shrunken unclaimed total the real query would produce
+            indexer.indexerDb.getUnclaimedRewardTotal.resolves('60.00000000');
+            const second = collectData();
+            await handler.parse(['0'], second, null);
+            assert.strictEqual(second['STATUS'], 'valid');
+            assert.strictEqual(second['AMOUNT'], '60.00000000');
+        });
+
+        it('AMOUNT equal to the full unclaimed total is state-identical to the absent form', async function () {
+            const data = collectData();
+            // byte-different wire form ('100.0' vs the mock's '100')
+            await handler.parse(['0', '100.0'], data, null);
+
+            assert.strictEqual(data['STATUS'], 'valid');
+            assert.strictEqual(data['AMOUNT'], '100');   // the absent-form value, untouched
+        });
+
+        it('over-ask REJECTS (never clamps) and nothing moves', async function () {
+            const data = collectData();
+            await handler.parse(['0', '100.00000001'], data, null);
+
+            assert.ok(String(data['STATUS']).includes('exceeds unclaimed rewards'));
+            assert.ok(indexer.indexerDb.createDebit.notCalled);
+            assert.ok(indexer.indexerDb.createCredit.notCalled);
+        });
+
+        it('zero and malformed amounts → invalid', async function () {
+            for (const bad of ['0', '', 'abc', '1.123456789']) {
+                const data = collectData();
+                await handler.parse(['0', bad], data, null);
+                assert.ok(String(data['STATUS']).includes('AMOUNT') || String(data['STATUS']).includes('greater than 0'),
+                    `expected reject for "${bad}", got ${data['STATUS']}`);
+            }
+        });
+
+        it('partial claim still respects the reward-pool coverage check', async function () {
+            indexer.indexerDb.getAddressBalances.resolves({ 1: '30' });
+            const data = collectData();
+            await handler.parse(['0', '40'], data, null);
+            assert.ok(String(data['STATUS']).includes('insufficient reward pool'));
+        });
+
+        it('below the flag-day a present AMOUNT is IGNORED (legacy full claim)', async function () {
+            setGate(false);
+            const data = collectData();
+            await handler.parse(['0', '40'], data, null);
+
+            assert.strictEqual(data['STATUS'], 'valid');
+            assert.strictEqual(data['AMOUNT'], '100');
+        });
+
+        it('below the flag-day even a MALFORMED trailing field is ignored', async function () {
+            setGate(false);
+            const data = collectData();
+            await handler.parse(['0', 'garbage'], data, null);
+
+            assert.strictEqual(data['STATUS'], 'valid');
+            assert.strictEqual(data['AMOUNT'], '100');
+        });
+    });
 });

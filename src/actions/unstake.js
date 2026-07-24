@@ -19,8 +19,15 @@
  *   v1 (contract):   any chain; scoped to a single (target, pubkey, tick) triple.
  *
  * FORMATS:
- *   v0 - VERSION|SIGNING_PUBKEY                                       (capability stake, all rows for pubkey)
- *   v1 - VERSION|SIGNING_PUBKEY|TARGET_CONTRACT_INDEX|TICK            (contract-targeted stake, per (target, tick))
+ *   v0 - VERSION|SIGNING_PUBKEY[|AMOUNT]                                    (capability stake, all rows for pubkey)
+ *   v1 - VERSION|SIGNING_PUBKEY|TARGET_CONTRACT_INDEX|TICK[|AMOUNT]         (contract-targeted stake, per (target, tick))
+ *
+ * The trailing AMOUNT is OPTIONAL (, gated by PARTIAL_UNSTAKE_COLLECT):
+ * absent = full sweep (the historical behavior, byte-identical); present = move
+ * only AMOUNT into cooldown, the residual stays staked via a synthetic re-stake
+ * row that activates exactly when the swept rows deactivate. Below the flag-day
+ * a present AMOUNT is ignored (a legacy node cannot see it, so ignoring is the
+ * only rule the whole fleet agrees on pre-activation).
  *
  ********************************************************************/
 
@@ -37,8 +44,8 @@ class Unstake {
 
         // Define list of known FORMATS
         this.formats = {};
-        this.formats[0] = 'VERSION|SIGNING_PUBKEY';                                          // capability unstake
-        this.formats[1] = 'VERSION|SIGNING_PUBKEY|TARGET_CONTRACT_INDEX|TICK';               // contract-targeted unstake
+        this.formats[0] = 'VERSION|SIGNING_PUBKEY|AMOUNT';                                   // capability unstake (AMOUNT optional)
+        this.formats[1] = 'VERSION|SIGNING_PUBKEY|TARGET_CONTRACT_INDEX|TICK|AMOUNT';        // contract-targeted unstake (AMOUNT optional)
     }
 
     // Handle parsing the UNSTAKE transaction
@@ -109,6 +116,27 @@ class Unstake {
             error = 'invalid: SOURCE (sleeping)';
 
         /*****************************************************************
+         * Optional partial AMOUNT (, gated by PARTIAL_UNSTAKE_COLLECT)
+         ****************************************************************/
+
+        // A present-but-full AMOUNT falls through with requestedAmount null so the
+        // resulting state is byte-identical to the absent-amount form. Over-ask and
+        // malformed amounts REJECT (never clamp). Below the flag-day the field is
+        // never read, preserving the legacy ignore-extra-params behavior exactly.
+        let requestedAmount = null;
+        if(!error && params.length > 2 && await this.actions.protocolChanges.isEnabled('PARTIAL_UNSTAKE_COLLECT', data['BLOCK_INDEX'])){
+            let amountStr = String(params[2]);
+            if(!/^[0-9]+(\.[0-9]{1,8})?$/.test(amountStr))
+                error = 'invalid: AMOUNT (format)';
+            else if(!this.util.bcgt(amountStr, '0'))
+                error = 'invalid: AMOUNT (must be greater than 0)';
+            else if(this.util.bcgt(amountStr, totalAmount))
+                error = 'invalid: AMOUNT (exceeds active stake)';
+            else if(this.util.bclt(amountStr, totalAmount))
+                requestedAmount = this.util.bcformat(amountStr, 8);
+        }
+
+        /*****************************************************************
          * Cooldown / Deactivation Calculation
          ****************************************************************/
 
@@ -116,7 +144,7 @@ class Unstake {
         let cooldownBlocks  = (staking && staking['COOLDOWN_BLOCKS'])         ? staking['COOLDOWN_BLOCKS']         : 1000;
         let activationDelay = (staking && staking['ACTIVATION_DELAY_BLOCKS']) ? staking['ACTIVATION_DELAY_BLOCKS'] : this.config['ACTIVATION_DELAY_BLOCKS'];
         data['COOLDOWN_END_BLOCK'] = parseInt(data['BLOCK_INDEX']) + cooldownBlocks;
-        data['AMOUNT']             = totalAmount;
+        data['AMOUNT']             = (requestedAmount !== null) ? requestedAmount : totalAmount;
 
         // Determine final status
         let status = (error) ? error : 'valid';
@@ -136,6 +164,29 @@ class Unstake {
                 parseInt(data['BLOCK_INDEX']) + activationDelay,
                 parseInt(data['BLOCK_INDEX'])
             );
+
+        // Partial unstake: re-stake the residual as a synthetic top-up row keyed by this
+        // UNSTAKE's own action_index (unique in `stakes`; deleted with this block on
+        // rollback, exactly like a real STAKE row). Its activation_block is the SAME
+        // block the swept rows deactivate at, and active-set reads gate on
+        // (activation_block <= blk AND deactivation_block > blk), so the residual takes
+        // over the instant the old rows drop out: stake weight is continuous, with no
+        // double-count window and no gap. During the handoff window a second UNSTAKE on
+        // this pubkey rejects (the residual is still pending activation), matching the
+        // existing full-unstake re-unstake guard (item 4617).
+        if(status === 'valid' && requestedAmount !== null){
+            let residual = this.util.bcformat(this.util.bcsub(totalAmount, requestedAmount, 8), 8);
+            await this.indexerDb.createStake({
+                'STATUS':           'valid',
+                'SOURCE':           data['SOURCE'],
+                'SIGNING_PUBKEY':   data['SIGNING_PUBKEY'],
+                'ACTION_INDEX':     data['ACTION_INDEX'],
+                'VERSION':          2,
+                'AMOUNT':           residual,
+                'BLOCK_INDEX':      data['BLOCK_INDEX'],
+                'ACTIVATION_BLOCK': parseInt(data['BLOCK_INDEX']) + activationDelay
+            });
+        }
 
         // Store the SOURCE and GAS tick in addresses list
         let gas = this.config['GAS'];
@@ -217,9 +268,36 @@ class Unstake {
         if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
             error = 'invalid: SOURCE (sleeping)';
 
+        // Optional partial AMOUNT (, gated by PARTIAL_UNSTAKE_COLLECT). Same
+        // semantics as the v0 lane; precision is bounded by the staked token's own
+        // decimals (mirroring STAKE v3's AMOUNT validation), and a present-but-full
+        // amount falls through as a full sweep for byte-identity with the absent form.
+        let requestedAmount = null;
+        let tickDecimals    = 8;
+        if(!error && params.length > 4 && await this.actions.protocolChanges.isEnabled('PARTIAL_UNSTAKE_COLLECT', data['BLOCK_INDEX'])){
+            let amountStr = String(params[4]);
+            let tickTokenInfo = await this.indexerDb.getTokenInfo(data['TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
+            if(tickTokenInfo && tickTokenInfo['DECIMALS'] !== undefined && tickTokenInfo['DECIMALS'] !== null)
+                tickDecimals = Number(tickTokenInfo['DECIMALS']);
+            if(!/^[0-9]+(\.[0-9]+)?$/.test(amountStr)){
+                error = 'invalid: AMOUNT (format)';
+            } else {
+                let parts = amountStr.split('.');
+                let fracDigits = parts.length > 1 ? parts[1].replace(/0+$/, '').length : 0;
+                if(fracDigits > tickDecimals)
+                    error = 'invalid: AMOUNT (exceeds token decimals)';
+            }
+            if(!error && !this.util.bcgt(amountStr, '0'))
+                error = 'invalid: AMOUNT (must be greater than 0)';
+            if(!error && this.util.bcgt(amountStr, totalAmount))
+                error = 'invalid: AMOUNT (exceeds active stake)';
+            if(!error && this.util.bclt(amountStr, totalAmount))
+                requestedAmount = this.util.bcformat(amountStr, tickDecimals);
+        }
+
         let staking         = this.config['STAKING'];
         let activationDelay = (staking && staking['ACTIVATION_DELAY_BLOCKS']) ? staking['ACTIVATION_DELAY_BLOCKS'] : this.config['ACTIVATION_DELAY_BLOCKS'];
-        data['AMOUNT']             = totalAmount;
+        data['AMOUNT']             = (requestedAmount !== null) ? requestedAmount : totalAmount;
 
         // Pkg6 / 048fdea9 + ce6a484f (gated UNSTAKE_CONTRACT_COOLDOWN_STRICT): the cooldown is
         // the target contract's own validated stake parameter (DEPLOY enforces an integer in
@@ -267,6 +345,25 @@ class Unstake {
                 parseInt(data['BLOCK_INDEX']) + activationDelay,
                 parseInt(data['BLOCK_INDEX'])
             );
+
+            // Partial unstake: re-stake the residual as a synthetic row keyed by this
+            // UNSTAKE's own action_index, activating exactly when the swept rows
+            // deactivate (see the v0 lane comment for the continuity/rollback argument).
+            if(requestedAmount !== null){
+                let residual = this.util.bcformat(this.util.bcsub(totalAmount, requestedAmount, tickDecimals), tickDecimals);
+                await this.indexerDb.createContractStake({
+                    'STATUS':                'valid',
+                    'SOURCE':                data['SOURCE'],
+                    'SIGNING_PUBKEY':        data['SIGNING_PUBKEY'],
+                    'TARGET_CONTRACT_INDEX': data['TARGET_CONTRACT_INDEX'],
+                    'TICK':                  data['TICK'],
+                    'ACTION_INDEX':          data['ACTION_INDEX'],
+                    'VERSION':               3,
+                    'AMOUNT':                residual,
+                    'BLOCK_INDEX':           data['BLOCK_INDEX'],
+                    'ACTIVATION_BLOCK':      parseInt(data['BLOCK_INDEX']) + activationDelay
+                });
+            }
         }
 
         // Tickers/addresses tracking (no credits/debits at unstake time; funds are released by block-end sweep)

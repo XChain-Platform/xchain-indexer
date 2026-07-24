@@ -849,6 +849,36 @@ class ProtocolChanges {
         // no pre-activation fee-bearing blocks remain to replay).
         this.addChange('LEGACY_FEE_NUMERIC_DBHITS', '2.0.0',1790812800,0,0,0,0,0);
 
+        // : partial claim + partial unstake. UNSTAKE v0/v1 and COLLECT v0 gain a
+        // trailing OPTIONAL AMOUNT field (no new action versions):
+        //   UNSTAKE v0: VERSION|SIGNING_PUBKEY[|AMOUNT]
+        //   UNSTAKE v1: VERSION|SIGNING_PUBKEY|TARGET_CONTRACT_INDEX|TICK[|AMOUNT]
+        //   COLLECT v0: VERSION[|AMOUNT]
+        // AMOUNT absent = the historical full sweep, byte-identical, so every action
+        // already on-chain decodes and applies unchanged. AMOUNT present at/after this
+        // flag-day = partial: UNSTAKE moves only that much into cooldown and the residual
+        // stays staked (a synthetic re-stake row keyed by the UNSTAKE's own action_index,
+        // activating exactly when the swept rows deactivate, so stake weight is continuous
+        // with no double-count window); COLLECT claims only that much and the remainder
+        // stays pending. An AMOUNT equal to the full balance is treated exactly as absent
+        // (identical resulting state). Over-ask and malformed amounts REJECT (operator
+        // decision 2026-07-23; matches house validator strictness, never clamps). BELOW
+        // the flag-day a present AMOUNT is IGNORED (full sweep): every legacy layer
+        // (decoder pass-through, actions.js blind split, the handlers' positional reads)
+        // already drops extra trailing fields, so ignoring is the only pre-activation rule
+        // an un-upgraded indexer can agree with; rejecting early would itself fork the
+        // fleet on the first early-broadcast partial. Gated because honoring the field
+        // changes consensus-visible state (unstakes/stakes/reward_claims rows, balances,
+        // stake weights, all hashed): an ungated flip forks a heterogeneous fleet on the
+        // first partial action. Keyed on block_TIME (not block_index), mirroring
+        // DEPLOY_BASE64_CODE: UNSTAKE v1 runs on BTC, LTC and DOGE whose heights diverge
+        // by millions of blocks, so no single shared block height names one cutover, but a
+        // single timestamp does. The mainnet timestamp joins the ratified coordinated
+        // contract-era anchor 1790812800 (2026-10-01 00:00:00 UTC); a divergent value is a
+        // fork. testnet/regtest activate at genesis (no partial-era history to preserve;
+        // the e2e/regtest stack exercises partials from block 0).
+        this.addChange('PARTIAL_UNSTAKE_COLLECT', '2.0.0',1790812800,0,0,0,0,0);
+
         // NOTE: STAKE_WEIGHTED_QUORUM (WI-1) is deliberately NOT registered here.
         // Standard activations gate on the LOCAL processing block via isEnabled();
         // stake-weighted quorum must gate on the BTC-anchored `snapshot_block`

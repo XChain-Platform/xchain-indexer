@@ -300,7 +300,8 @@
         "VERSION": "0",
         "SIGNING_PUBKEY": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         "TARGET_CONTRACT_INDEX": null,
-        "TICK": null
+        "TICK": null,
+        "AMOUNT": null
       }
     },
     {

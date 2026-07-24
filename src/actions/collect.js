@@ -19,6 +19,13 @@
  *
  * PARAMS:
  * - VERSION - Format Version
+ * - AMOUNT  - OPTIONAL trailing partial-claim amount (, gated by
+ *             PARTIAL_UNSTAKE_COLLECT): absent = claim the full unclaimed
+ *             total (the historical behavior, byte-identical); present =
+ *             claim only AMOUNT, the remainder stays pending. Below the
+ *             flag-day a present AMOUNT is ignored (a legacy node cannot
+ *             see it, so ignoring is the only pre-activation rule the
+ *             whole fleet agrees on).
  *
  * FORMATS:
  * - 0 = Collect accrued validator rewards
@@ -39,7 +46,7 @@ class Collect {
 
         // Define list of known FORMATS
         this.formats = {};
-        this.formats[0] = 'VERSION';
+        this.formats[0] = 'VERSION|AMOUNT';    // AMOUNT optional ( partial claim)
     }
 
     // Handle parsing the COLLECT transaction
@@ -91,6 +98,23 @@ class Collect {
             rewardAmount = await this.indexerDb.getUnclaimedRewardTotal(data['SOURCE'], data['BLOCK_INDEX']);
             if(this.util.bclte(rewardAmount, '0'))
                 error = 'invalid: no unclaimed rewards';
+        }
+
+        // Optional partial AMOUNT (, gated by PARTIAL_UNSTAKE_COLLECT). A
+        // present-but-full amount falls through untouched so the resulting state is
+        // byte-identical to the absent form. Over-ask and malformed amounts REJECT
+        // (never clamp). Below the flag-day the field is never read, preserving the
+        // legacy ignore-extra-params behavior exactly.
+        if(!error && params.length > 1 && await this.actions.protocolChanges.isEnabled('PARTIAL_UNSTAKE_COLLECT', data['BLOCK_INDEX'])){
+            let amountStr = String(params[1]);
+            if(!/^[0-9]+(\.[0-9]{1,8})?$/.test(amountStr))
+                error = 'invalid: AMOUNT (format)';
+            else if(!this.util.bcgt(amountStr, '0'))
+                error = 'invalid: AMOUNT (must be greater than 0)';
+            else if(this.util.bcgt(amountStr, rewardAmount))
+                error = 'invalid: AMOUNT (exceeds unclaimed rewards)';
+            else if(this.util.bclt(amountStr, rewardAmount))
+                rewardAmount = this.util.bcformat(amountStr, 8);
         }
 
         // Verify the reward pool can cover this claim. Rewards are paid by debiting the
