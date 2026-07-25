@@ -30,8 +30,9 @@
  *
  ********************************************************************/
 
-const ed25519 = require('../ed25519.js');
-const swq     = require('../stake_weighted_quorum.js');
+const ed25519   = require('../ed25519.js');
+const swq       = require('../stake_weighted_quorum.js');
+const pricePair = require('../price_pair_activation.js');
 
 class Price {
 
@@ -99,12 +100,26 @@ class Price {
             if(!Number.isFinite(pairCount) || pairCount < 1)
                 throw new Error('invalid PAIR_COUNT');
 
+            // Pair-name bound, resolved ONCE per action (, price_pair_activation.js).
+            // Below the flag-day the ticker side is capped at 5 characters, which cannot
+            // express the 6-character gas ticker XCHAIN and so makes the XCHAIN/USD pair
+            // the native-fee path needs unrepresentable; at/above it, 6 is accepted.
+            // Keyed on this action's own block time because a PRICE round can land on any
+            // of BTC/LTC/DOGE and their heights diverge.
+            //
+            // A malformed pair still throws out of the WHOLE action rather than skipping
+            // the entry, unchanged by the gate and deliberately so: the pair set is inside
+            // the payload the validators signed (buildPriceV0Payload below reconstructs it
+            // from `pairs`), so dropping one entry would change the payload and fail every
+            // signature. A signed round is atomic.
+            let pairPattern = pricePair.pricePairPattern(data['BLOCK_TIME'], this.config['NETWORK']);
+
             let idx = 5;
             for(let i = 0; i < pairCount; i++){
                 let pair  = params[idx++];
                 let price = params[idx++];
                 if(!pair || !price) throw new Error('missing pair data at index ' + i);
-                if(!/^[A-Z]{3,5}\/[A-Z]{3,5}$/.test(pair)) throw new Error('invalid pair format: ' + pair);
+                if(!pairPattern.test(pair)) throw new Error('invalid pair format: ' + pair);
                 if(!/^[0-9]+(\.[0-9]+)?$/.test(price)) throw new Error('invalid price format: ' + price);
                 pairs.push({ pair: pair, price: price });
             }

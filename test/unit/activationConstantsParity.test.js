@@ -39,6 +39,7 @@ const GATES = [
     ['cross_chain_royalty_activation.js',   'CROSS_CHAIN_ROYALTY_ACTIVATION'],
     ['attest_admission_activation.js',      'ATTEST_ADMISSION_ACTIVATION'],
     ['anchor_reward_activation.js',         'ANCHOR_REWARD_DERIVE_ACTIVATION'],   // 
+    ['price_pair_activation.js',            'PRICE_PAIR_WIDEN_ACTIVATION'],       // 
 ];
 
 describe('activation-gate constant parity to canonical constants.js @regression', function () {
