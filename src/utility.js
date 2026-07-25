@@ -1075,6 +1075,36 @@ class Utility {
         return 'rejected';
     }
 
+    // Pure PRICE v1 oracle-usage fee math . Counterparty parity: the address
+    // OPENING a Mode B dispenser pays the oracle operator up front, proportional to the
+    // whole escrow's projected proceeds, rather than buyers paying per dispense.
+    //
+    // Counterparty's calculate_oracle_fee (counterparty-core dispenser.py) is
+    //     oracle_mainchainrate_btc = fiat_price_per_dispense / oracle_price
+    //     remaining                = floor(escrow_quantity / give_quantity)
+    //     fee                      = remaining * oracle_mainchainrate_btc * fee_multiplier
+    // where ITS oracle broadcasts the COIN/FIAT rate. XChain's PRICE v1 oracle prices the
+    // TOKEN in fiat instead (the COIN/FIAT rate comes from the validator federation), so
+    // the per-dispense fiat cost is `oraclePrice * giveAmount` and the dispense count is
+    // `giveEscrow / giveAmount`. giveAmount cancels, leaving the simpler identity below.
+    // Kept as the same product Counterparty computes, just with the cancellation applied:
+    //
+    //     projected_fiat_total = oraclePrice * giveEscrow
+    //     projected_coin_total = projected_fiat_total / coinFiatPrice
+    //     fee                  = projected_coin_total * feeFraction
+    //
+    // All bignumber, 18-decimal intermediates and an 8-decimal (satoshi) result, matching
+    // computeNativeFeeBand's precision discipline so a client's output sizing and the
+    // validator's acceptance test cannot disagree by a rounding step.
+    //
+    // Returns a bignumber. Callers treat a result below the chain's dust threshold as
+    // "no output required" (Counterparty skips the output below DEFAULT_REGULAR_DUST_SIZE).
+    computeOracleFee(oraclePrice, giveEscrow, coinFiatPrice, feeFraction){
+        let projectedFiat = this.bcmul(oraclePrice, giveEscrow, 18);
+        let projectedCoin = this.bcdiv(projectedFiat, coinFiatPrice, 18);
+        return this.bcmul(projectedCoin, feeFraction, 8);
+    }
+
     // Pure native-coin fee math, shared by validateNativeCoinFee (the on-chain consensus
     // check) and the read-only feequote pre-flight (Actions.computeFeeQuote). Keeping the
     // arithmetic in one place guarantees a client's output sizing and the validator's
