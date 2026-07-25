@@ -693,13 +693,35 @@ class XChainIndexer {
                 //
                 // Price rounds are anchored to BTC block heights, so this height comparison is
                 // only meaningful for a BTC indexer; other chains' block heights are not
-                // comparable to the anchor. At/after the NATIVE_FEE_PRICE_TIME_GATE flag-day
-                // (H-3), non-BTC chains gate on the time-keyed barrier instead: fee validation
-                // there selects rounds by consensus timestamp (db.getLatestPrice selectByTime),
-                // so the mirror must hold every round with block_timestamp <= this block's
-                // time. Both sides use the same shared predicate so query and barrier can
-                // never gate differently. No barrier when hub-db sync is disabled
-                // (single-host: the local hub DB is the hub itself, always current).
+                // comparable to the anchor. Non-BTC chains gate on the time-keyed barrier
+                // instead, so the mirror must hold every round with block_timestamp <= this
+                // block's time. No barrier when hub-db sync is disabled (single-host: the local
+                // hub DB is the hub itself, always current).
+                //
+                // : the time-keyed barrier is NOT conditioned on the
+                // NATIVE_FEE_PRICE_TIME_GATE flag-day. It was originally introduced as the
+                // twin of that gate's fee-validation change (H-3: db.getLatestPrice
+                // selectByTime), but native fees are not the only time-keyed reader of
+                // price_snapshots. FIAT dispenser settlement reads the table bounded on
+                // `block_timestamp <= this block's time` on EVERY chain from day one, in both
+                // modes: reversePriceMatch directly, and reverseOraclePriceMatch for the
+                // validator coin price behind a user oracle quote. Gating the barrier on the
+                // fee flag-day therefore left LTC/DOGE mainnet settling FIAT dispenses against
+                // an unbarriered mirror below 1790812800, where two operators with different
+                // mirror states credit different token amounts for the same payment and fork
+                // the chain. The barrier now runs whenever sync is enabled.
+                //
+                // Widening a barrier is safe in both directions that matter. It cannot fork:
+                // it is a node-local WAIT decision, never persisted or hashed, so a reindex
+                // (mirror far ahead of the tip) opens it immediately and replays byte-identically
+                // (see the HUB_SYNC_WATERMARK_GRACE_S note in hub_db_sync.js on why barriers
+                // need no activation gate). It cannot freeze a quiet chain either:
+                // _priceTimeSyncSatisfied's second case opens on the hub's stream watermark, so
+                // a chain with no rounds yet, or sitting in a round gap, proceeds once the hub
+                // confirms it has sent everything through this instant. Only a genuinely-behind
+                // mirror (hub unreachable, watermark frozen) defers, which is the intent.
+                // Strictly-stricter than the fee query below the flag-day, which is the safe
+                // direction: an extra wait can delay a block but can never change its verdict.
                 if(this.hubDbSync && this.config['COIN'] === 'BTC'){
                     try {
                         await this.hubDbSync.waitForPriceSyncHeight(blockToParse, this.priceSyncTimeoutMs, blockTime);
@@ -711,8 +733,7 @@ class XChainIndexer {
                         this.stallReason = 'price_sync_barrier';
                         break;
                     }
-                } else if(this.hubDbSync &&
-                          changes.isNativeFeePriceTimeGateActive(this.config['NETWORK'], blockTime)){
+                } else if(this.hubDbSync){
                     try {
                         await this.hubDbSync.waitForPriceSyncTime(blockTime, this.priceSyncTimeoutMs);
                     } catch(err){
