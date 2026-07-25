@@ -98,21 +98,39 @@ const SDK_COMPACTABLE = (() => {
     return Array.from(set).sort();
 })();
 
-// Per-action compactable field sets — the ACTION-AWARE gate the SDK address
-// resolver applies. Each action's set is the flat SDK_COMPACTABLE MINUS the fields
-// that action marks `noCompact`. Basing it on the flat set preserves the existing
-// field-name compaction (e.g. a single-recipient SEND DESTINATION is still
-// compacted; a multi-recipient array value is skipped by the resolver's runtime
-// array guard), while the per-action subtraction lets one action hold a field back
-// that another still compacts — DISPENSER.GET_ADDRESS is emitted in full while
-// ORDER/SWAP.GET_ADDRESS stay compacted. The union stays ⊆ the indexer-assigned set.
+// Per-action compactable field sets: the ACTION-AWARE gate the SDK address
+// resolver applies. Each action's set is built from THAT ACTION'S OWN specs:
+// a field is compactable for an action only if that action declares it
+// single-value, non-type-gated and not `noCompact`.
+//
+// : this used to be derived from the FLAT SDK_COMPACTABLE name set minus
+// the action's `noCompact` fields, which silently defeated `multi`. SEND
+// declares {field:'DESTINATION', multi:true} and is correctly kept out of the
+// flat set by SEND. But MINT/MESSAGE/SWEEP each declare a single-value
+// DESTINATION, so the NAME entered the flat set and came straight back to SEND.
+// The SDK therefore compacted single-recipient SEND destinations, and
+// `src/actions/send.js` is the ONE address-bearing handler with no
+// resolveAddressRef call (every other action resolves), so those actions were
+// rejected `invalid: DESTINATION (format)` on chain. Because compaction only
+// happens once an address HAS an id, and the first send to an address is what
+// assigns it, this made the first send to any address succeed and every
+// subsequent one fail, with fees spent and tokens not moved.
+//
+// Deciding per action rather than by field NAME is the general fix: a field
+// name shared by two actions can no longer carry one action's permission into
+// another. It also strictly narrows every other action's set (their extra
+// entries were inert, since the resolver only compacts fields actually present
+// in the params), so SEND is the only behavioural change.
+//
+// The invariant this restores is the one stated at the top of this file:
+// SDK-compacted ⊆ indexer-resolvable. It must never be widened by accident.
 const SDK_COMPACTABLE_BY_ACTION = (() => {
     const map = {};
     for (const action of Object.keys(ADDRESS_REF_FIELDS)) {
-        const held = new Set();
-        for (const spec of ADDRESS_REF_FIELDS[action])
-            if (spec.noCompact) held.add(spec.field);
-        map[action] = SDK_COMPACTABLE.filter((f) => !held.has(f));
+        map[action] = ADDRESS_REF_FIELDS[action]
+            .filter((spec) => !spec.multi && !spec.listType && !spec.noCompact)
+            .map((spec) => spec.field)
+            .sort();
     }
     return map;
 })();
