@@ -233,6 +233,36 @@ class Dispenser {
         if(!error && format==0 && !this.util.isNull(data['FIAT_CODE']) && !this.util.isNull(data['FIAT_AMOUNT']) && !this.util.isValidFiatFormat(2, data['FIAT_AMOUNT']))
             error = 'invalid: FIAT_AMOUNT (format)';
 
+        // PRICE v1 oracle usage fee , Counterparty parity: a Mode B dispenser
+        // pays the oracle operator UP FRONT, as a real native-coin output, charged to the
+        // address opening (or refilling) it rather than to buyers per dispense. The fee
+        // scales with the escrow this action adds, so a refill pays for what it adds and
+        // an opener cannot escrow one token, pay nothing, then top up to millions.
+        //
+        // Gated with the rest of FIAT settlement: below activation no fee is owed and the
+        // create behaves exactly as it did before this rule existed.
+        //
+        // v0 charges on the opening GIVE_ESCROW; v2 charges on its refill amount, read
+        // from the existing dispenser for the fields the edit format does not carry.
+        // Ownership dispensers escrow no balance (GIVE_ESCROW empty), so nothing is owed.
+        if(!error && (format==0 || format==2) && !this.util.isNull(data['GIVE_ESCROW']) &&
+           this.util.bcgt(data['GIVE_ESCROW'], '0') &&
+           await this.actions.protocolChanges.isEnabled('FIAT_DISPENSER_PRICING', data['BLOCK_INDEX'])){
+            let oracleAddress = (format==0) ? data['ORACLE_ADDRESS'] : (dispenserInfo ? dispenserInfo['ORACLE_ADDRESS'] : null);
+            if(!this.util.isNull(oracleAddress)){
+                let feeCheck = await this.util.validateOracleFee(data, {
+                    ORACLE_ADDRESS: oracleAddress,
+                    GIVE_COIN:      (format==0) ? data['GIVE_COIN'] : dispenserInfo['GIVE_COIN'],
+                    GIVE_TICK:      (format==0) ? data['GIVE_TICK'] : dispenserInfo['GIVE_TICK'],
+                    FIAT_CODE:      (format==0) ? data['FIAT_CODE'] : dispenserInfo['FIAT'],
+                    GET_COIN:       (format==0) ? data['GET_COIN']  : dispenserInfo['GET_COIN'],
+                    GIVE_ESCROW:    data['GIVE_ESCROW'],
+                }, this.indexerDb);
+                if(!feeCheck.valid)
+                    error = feeCheck.error;
+            }
+        }
+
 
         /*****************************************************************
          * General Validations

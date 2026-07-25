@@ -799,4 +799,98 @@ describe('Dispenser action handler @regression @tier2', function () {
             assert.ok(data['STATUS'].includes('insufficient funds') || data['STATUS'].startsWith('invalid'));
         });
     });
+
+    // : Counterparty parity. A Mode B dispenser (ORACLE_ADDRESS set) pays the
+    // oracle operator UP FRONT as a real native-coin output, charged to the address
+    // opening it. These pin the wiring: that the charge fires only for Mode B, only
+    // when escrow is added, only under the gate, and that it rejects the create when
+    // the output is missing. The fee arithmetic and every branch of the check itself
+    // are covered in utility.computeOracleFee / utility.validateOracleFee tests.
+    describe('Format 0 - oracle usage fee ', function () {
+        const ORACLE_ADDR = OTHER_ADDR;   // any valid address that is not the opener
+
+        function modeBParams(escrow = '1000') {
+            return makeParams(
+                `0|BTC|JDOG|1||${escrow}|BTC||0|${OWNER_ADDR}|USD||${ORACLE_ADDR}|${EXPIRATION}|||Mode B`);
+        }
+        const modeBData = () => createBaseData(
+            { ACTION: 'DISPENSER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
+
+        it('rejects the create when the oracle fee output is missing', async function () {
+            indexer.indexerDb.getOraclePrice = sinon.stub().resolves({ value: '0.05', fee: '0.01' });
+            indexer.indexerDb.getPricesInTimeRange = sinon.stub().resolves([{ price: '50000' }]);
+
+            const data = modeBData();                 // no TX_OUTPUTS at all
+            await dispenser.parse(modeBParams(), data, false);
+
+            assert.strictEqual(data['STATUS'], 'invalid: ORACLE_ADDRESS (missing oracle fee output)');
+            // createDispenser still records the invalid attempt (see the GIVE_TICK case
+            // above); what must not happen is the escrow moving.
+            sinon.assert.notCalled(indexer.indexerDb.updateBalances);
+        });
+
+        it('accepts the create when the output pays the oracle', async function () {
+            indexer.indexerDb.getOraclePrice = sinon.stub().resolves({ value: '0.05', fee: '0.01' });
+            indexer.indexerDb.getPricesInTimeRange = sinon.stub().resolves([{ price: '50000' }]);
+
+            const data = modeBData();
+            data['TX_OUTPUTS'] = [{ address: ORACLE_ADDR, value: '0.00001' }];
+            await dispenser.parse(modeBParams(), data, false);
+
+            assert.strictEqual(data['STATUS'], 'valid');
+            sinon.assert.calledOnce(indexer.indexerDb.createDispenser);
+        });
+
+        it('rejects the create when the oracle has no effective price', async function () {
+            // Operator ruling: a dispenser must reference an oracle that has prices set.
+            indexer.indexerDb.getOraclePrice = sinon.stub().resolves(null);
+
+            const data = modeBData();
+            data['TX_OUTPUTS'] = [{ address: ORACLE_ADDR, value: '1' }];
+            await dispenser.parse(modeBParams(), data, false);
+
+            assert.strictEqual(data['STATUS'], 'invalid: ORACLE_ADDRESS (no effective oracle price)');
+        });
+
+        it('never charges a Mode A dispenser, which has no oracle operator to pay', async function () {
+            // FIAT_AMOUNT-only pricing reads validator snapshots, and validators are
+            // already compensated, so the oracle lookup must not even be attempted.
+            const getOraclePrice = sinon.stub().resolves({ value: '0.05', fee: '0.01' });
+            indexer.indexerDb.getOraclePrice = getOraclePrice;
+
+            const params = makeParams(
+                `0|BTC|JDOG|1||10|BTC||0|${OWNER_ADDR}|USD|0.05||${EXPIRATION}|||Mode A`);
+            const data = modeBData();
+            await dispenser.parse(params, data, false);
+
+            assert.strictEqual(data['STATUS'], 'valid');
+            sinon.assert.notCalled(getOraclePrice);
+        });
+
+        it('does not charge below the activation gate', async function () {
+            actionsCtx.protocolChanges.isEnabled
+                .withArgs('FIAT_DISPENSER_PRICING', sinon.match.any).resolves(false);
+            const getOraclePrice = sinon.stub().resolves({ value: '0.05', fee: '0.01' });
+            indexer.indexerDb.getOraclePrice = getOraclePrice;
+
+            const data = modeBData();                 // no output, yet must still pass
+            await dispenser.parse(modeBParams(), data, false);
+
+            assert.strictEqual(data['STATUS'], 'valid');
+            sinon.assert.notCalled(getOraclePrice);
+        });
+
+        it('does not charge an ownership dispenser, which escrows no balance', async function () {
+            const getOraclePrice = sinon.stub().resolves({ value: '0.05', fee: '0.01' });
+            indexer.indexerDb.getOraclePrice = getOraclePrice;
+
+            // GIVE_OWNERSHIP=1 carries empty GIVE_AMOUNT/GIVE_ESCROW.
+            const params = makeParams(
+                `0|BTC|JDOG||1||BTC||0|${OWNER_ADDR}|USD||${ORACLE_ADDR}|${EXPIRATION}|||Ownership`);
+            const data = modeBData();
+            await dispenser.parse(params, data, false);
+
+            sinon.assert.notCalled(getOraclePrice);
+        });
+    });
 });
