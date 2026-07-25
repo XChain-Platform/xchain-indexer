@@ -158,6 +158,79 @@ describe('Dispense action handler @regression @tier2', function () {
             `give_amount ${dispenseRecord['GIVE_AMOUNT']} exceeds GIVE_REMAINING 3`);
     });
 
+    // : the give-remaining walk (multiplier--, one bignumber multiply per
+    // iteration) is now a closed-form clamp to min(multiplier, floor(GIVE_REMAINING
+    // / GIVE_AMOUNT)). These pin the identity of the rewrite on the edges that a
+    // loop and a division disagree on, plus the DoS the loop enabled.
+    it(' clamp: lands exactly on capacity, not merely under it', async function () {
+        // Payment covers 5 units, only 3 in escrow: the loop stopped at 3, so the
+        // clamp must too. Asserted exactly rather than <= 3, which a broken clamp
+        // returning 0 or 1 would also satisfy.
+        indexer.indexerDb.getDispenserInfo.resolves(makeDispenserInfo({ GIVE_REMAINING: '3' }));
+        const data = createBaseData({ ACTION: 'DISPENSE', SOURCE: BUYER_ADDR, COIN_AMOUNT: '0.05', BLOCK_TIME });
+
+        await dispense.parse([], data, false);
+
+        const rec = indexer.indexerDb.createDispense.firstCall.args[0];
+        assert.strictEqual(rec['STATUS'], 'valid');
+        assert.strictEqual(String(rec['GIVE_AMOUNT']), '3');
+    });
+
+    it(' clamp: floors a fractional capacity', async function () {
+        // GIVE_AMOUNT 2 with 5 remaining: capacity is floor(5/2) = 2, giving 4.
+        // A clamp that forgot to floor would try 2.5 units and overspend escrow.
+        indexer.indexerDb.getDispenserInfo.resolves(makeDispenserInfo({
+            GIVE_AMOUNT: '2', GIVE_REMAINING: '5',
+        }));
+        const data = createBaseData({ ACTION: 'DISPENSE', SOURCE: BUYER_ADDR, COIN_AMOUNT: '0.05', BLOCK_TIME });
+
+        await dispense.parse([], data, false);
+
+        const rec = indexer.indexerDb.createDispense.firstCall.args[0];
+        assert.strictEqual(rec['STATUS'], 'valid');
+        assert.strictEqual(String(rec['GIVE_AMOUNT']), '4');
+    });
+
+    it(' clamp: skipped for an ownership dispenser with no GIVE_AMOUNT', async function () {
+        // Ownership dispensers carry empty GIVE_AMOUNT/GIVE_ESCROW. bcmul() coerced
+        // that to 0, so `0 > GIVE_REMAINING` was false and the loop never ran; the
+        // clamp must skip rather than divide by zero.
+        indexer.indexerDb.clearTokenEscrow = sinon.stub().resolves();
+        indexer.indexerDb.getDispenserInfo.resolves(makeDispenserInfo({
+            GIVE_OWNERSHIP: 1, GIVE_AMOUNT: null, GIVE_REMAINING: null,
+        }));
+        const data = createBaseData({ ACTION: 'DISPENSE', SOURCE: BUYER_ADDR, COIN_AMOUNT: '0.01', BLOCK_TIME });
+
+        await dispense.parse([], data, false);
+
+        const rec = indexer.indexerDb.createDispense.firstCall.args[0];
+        assert.strictEqual(rec['STATUS'], 'valid', 'ownership dispense must still settle');
+        sinon.assert.called(indexer.indexerDb.clearTokenEscrow);
+    });
+
+    it(': a saturated FIAT unit count settles promptly instead of spinning', async function () {
+        // The DoS: a FIAT multiplier is bounded by an externally-chosen price, not
+        // by GET_AMOUNT. At MAX_SAFE_INTEGER units the old loop would have run 9e15
+        // bignumber multiplies to walk down to capacity, so the block never
+        // finishes. Reaching an assertion at all is the proof it is closed; the
+        // verdict must also still be capacity-correct.
+        indexer.indexerDb.getDispenserInfo.resolves(makeDispenserInfo({
+            FIAT: 'USD', FIAT_AMOUNT: '100', ORACLE_ADDRESS: null, GET_AMOUNT: null,
+            GIVE_AMOUNT: '1', GIVE_REMAINING: '7',
+        }));
+        sinon.stub(indexer.util, 'reversePriceMatch').resolves({ units: Number.MAX_SAFE_INTEGER });
+
+        const data = createBaseData({ ACTION: 'DISPENSE', SOURCE: BUYER_ADDR, COIN_AMOUNT: '1', BLOCK_TIME });
+        const started = process.hrtime.bigint();
+        await dispense.parse([], data, false);
+        const elapsedMs = Number(process.hrtime.bigint() - started) / 1e6;
+
+        const rec = indexer.indexerDb.createDispense.firstCall.args[0];
+        assert.strictEqual(rec['STATUS'], 'valid');
+        assert.strictEqual(String(rec['GIVE_AMOUNT']), '7', 'clamped to the 7 tokens in escrow');
+        assert.ok(elapsedMs < 5000, 'settled in ' + elapsedMs.toFixed(0) + 'ms, so no per-unit walk');
+    });
+
     it('COIN_AMOUNT less than GET_AMOUNT returns invalid dispense', async function () {
         const data = createBaseData({
             ACTION:      'DISPENSE',

@@ -474,6 +474,37 @@ class Utility {
         return floored.toNumber();
     }
 
+    // bcfloor, but saturating at Number.MAX_SAFE_INTEGER instead of throwing.
+    //
+    // For the FIAT dispenser unit counts ONLY . Those are
+    //   Mode A: coin_amount / (FIAT_AMOUNT / coin_price)
+    //   Mode B: (coin_amount * coin_price) / oracle_price
+    // so unlike the non-FIAT coin_amount / GET_AMOUNT they scale with an
+    // externally-chosen price and can run many orders of magnitude higher. PRICE
+    // v1 validates VALUE only as a positive 8-decimal string (actions/price.js),
+    // so a 0.00000001 quote on a high-magnitude fiat pair pushes the count past
+    // 2^53-1 for well under one coin of payment, sent to an address the dispenser
+    // operator controls: the coin comes straight back and the attack costs a
+    // transaction fee.
+    //
+    // Throwing there is worse than saturating. A throw on the block-processing
+    // path rolls the block back and the loop retries the SAME block forever (the
+    // wedge shape recorded in the protocol_changes.js constructor comment about
+    // this.version.split), taking every indexer on the chain down with it.
+    //
+    // Saturating is safe because the caller immediately clamps the multiplier to
+    // the dispenser's real capacity, floor(GIVE_REMAINING / GIVE_AMOUNT), which
+    // is smaller than this ceiling for any plausible dispenser: the two paths
+    // land on the same verdict. Where capacity itself exceeds the ceiling the
+    // saturated count is a documented bound rather than an equivalence, and it
+    // needs no activation gate either way, because the behavior it replaces was
+    // "no node commits anything for this block".
+    bcfloorSaturating(num){
+        const floored = this.bcnum(num).floor();
+        if(floored.gt(Number.MAX_SAFE_INTEGER)) return Number.MAX_SAFE_INTEGER;
+        return floored.toNumber();
+    }
+
     // Handle comparing two big numbers: returns true if numA > numB
     //
     // Uses decimal.js's native .gt/.lt/.gte/.lte (exact) rather than
@@ -1985,7 +2016,8 @@ class Utility {
             // Compute: tokens = (coin_amount × coin_fiat_price) / token_fiat_price
             let coinFiatTotal = this.bcmul(coinAmount, coinFiatPrice, 18);
             let rawTokens     = this.bcdiv(coinFiatTotal, op.price, 64);
-            let units         = this.bcfloor(rawTokens);
+            // Saturating, not throwing: a throw here wedges the block loop .
+            let units         = this.bcfloorSaturating(rawTokens);
             if(units >= 1){
                 return {
                     units:         units,
@@ -2012,7 +2044,8 @@ class Utility {
             // Calculate how many units the buyer's coin amount covers
             // raw_multiplier = coin_amount / btc_per_token
             let rawMultiplier = this.bcdiv(coinAmount, btcPerToken, 64);
-            let units = this.bcfloor(rawMultiplier);
+            // Saturating, not throwing: a throw here wedges the block loop .
+            let units = this.bcfloorSaturating(rawMultiplier);
             if(units >= 1){
                 return {
                     units:        units,

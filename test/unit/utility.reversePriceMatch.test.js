@@ -209,19 +209,35 @@ describe('Utility FIAT dispenser price matching @regression', function () {
             assert.strictEqual(r.units, 5000000000);
         });
 
-        it(': overflows to a RangeError once the unit count passes MAX_SAFE_INTEGER', async function () {
+        it(': saturates instead of throwing once the count passes MAX_SAFE_INTEGER', async function () {
             // A 1e-8 oracle price on a high-magnitude fiat pair puts the unit
-            // count past 2^53-1. bcfloor refuses to lose precision and throws,
-            // and a throw on the block-processing path rolls the block back and
-            // retries it forever. Pinned so the fix flips this expectation
-            // deliberately rather than silently.
+            // count past 2^53-1 for under one coin of payment, sent to an address
+            // the operator controls (so the attack costs a tx fee). This used to
+            // reach plain bcfloor and throw, and a throw on the block-processing
+            // path rolls the block back and retries the same block forever,
+            // wedging every indexer on the chain. It must now return a verdict.
             const db = fakeDb([snap('140000000', NOW - 60)], [oracle('0.00000001', NOW - 60)]);
-            await assert.rejects(
-                () => util.reverseOraclePriceMatch(
-                    '1', '1OracleAddr', 'BTC', 'PEPECASH', 'KRW', NOW, WINDOW, db),
-                RangeError,
-                'expected the documented bcfloor overflow'
-            );
+            const r = await util.reverseOraclePriceMatch(
+                '1', '1OracleAddr', 'BTC', 'PEPECASH', 'KRW', NOW, WINDOW, db);
+            assert(r, 'must return a match rather than throwing');
+            assert.strictEqual(r.units, Number.MAX_SAFE_INTEGER,
+                'the count saturates at the safe-integer ceiling');
+            // Mode A is not reachable at plausible amounts (FIAT_AMOUNT is floored
+            // at 2 decimals), but the same guard covers it.
+            const dbA = fakeDb([snap('140000000000000', NOW - 60)]);
+            const rA = await util.reversePriceMatch('1000000', '0.01', 'BTC/KRW', NOW, WINDOW, dbA);
+            assert.strictEqual(rA.units, Number.MAX_SAFE_INTEGER);
+        });
+
+        it('bcfloor itself still throws, so non-FIAT consensus math keeps failing loudly', function () {
+            // Only the two FIAT unit counts saturate. Every other caller must keep
+            // the fail-fast behavior rather than silently returning a lossy integer.
+            assert.throws(() => util.bcfloor('9007199254740992'), RangeError);
+            assert.strictEqual(util.bcfloorSaturating('9007199254740992'),
+                Number.MAX_SAFE_INTEGER);
+            // Below the ceiling the two agree exactly.
+            assert.strictEqual(util.bcfloor('137.99999999999'), 137);
+            assert.strictEqual(util.bcfloorSaturating('137.99999999999'), 137);
         });
     });
 });

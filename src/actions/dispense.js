@@ -146,12 +146,35 @@ class Dispense {
             if(isOwnershipDispenser && multiplier > 1)
                 multiplier = 1;
 
-            // Calculate how much to dispense based on the payment amount
+            // Give out the maximum amount allowed by the dispenser and payment amount:
+            // clamp the multiplier to what the dispenser can actually still give.
+            //
+            // This replaces a decrement loop (multiplier--, with a bignumber multiply
+            // per iteration) that was O(multiplier). On a FIAT dispenser the multiplier
+            // scales with an externally-chosen price rather than with GET_AMOUNT, so it
+            // can be many orders of magnitude larger: a payment worth ~1e7 units against
+            // a nearly-empty dispenser spun ten million bignumber multiplies inside one
+            // block and could blow BLOCK_PROCESS_TIMEOUT .
+            //
+            // Identical by construction, not merely equivalent: the loop stopped at the
+            // largest m <= multiplier with m * GIVE_AMOUNT <= GIVE_REMAINING, and that is
+            // exactly min(multiplier, floor(GIVE_REMAINING / GIVE_AMOUNT)).
+            //
+            // Two guards keep the rewrite byte-identical on the edges:
+            //   - GIVE_AMOUNT is empty/NULL on an ownership dispenser, where bcmul()
+            //     coerced it to 0 so `0 > GIVE_REMAINING` was false and the loop never
+            //     ran. Skip the clamp there rather than dividing by zero.
+            //   - capacity is only computed when the overspill test says the multiplier
+            //     does NOT fit, which means capacity < multiplier, and multiplier is
+            //     already a safe JS integer. So this bcfloor can never be the one that
+            //     overflows.
+            let giveAmountIsPositive = !this.util.isNull(dispenser['GIVE_AMOUNT']) &&
+                                       this.util.bcgt(dispenser['GIVE_AMOUNT'], '0');
             let give_amount = this.util.bcmul(multiplier, dispenser['GIVE_AMOUNT'], 64);
-
-            // Give out the maximum amount allowed by the dispenser and payment amount
-            while(multiplier > 0 && this.util.bcgt(give_amount, dispenser['GIVE_REMAINING'])){
-                multiplier--;
+            if(multiplier > 0 && giveAmountIsPositive &&
+               this.util.bcgt(give_amount, dispenser['GIVE_REMAINING'])){
+                multiplier  = this.util.bcfloor(
+                    this.util.bcdiv(dispenser['GIVE_REMAINING'], dispenser['GIVE_AMOUNT'], 64));
                 give_amount = this.util.bcmul(multiplier, dispenser['GIVE_AMOUNT'], 64);
             }
 
