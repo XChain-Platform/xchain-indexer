@@ -32,13 +32,23 @@
  * and type-gated LIST items). The invariant is SDK-compacted ⊆ indexer-assigned:
  * the SDK must never emit a ^id the indexer would not recognise.
  *
- * One single-value field is held back from compaction even though the indexer
- * assigns it an id: DISPENSER.GET_ADDRESS (marked `noCompact`). It is the
- * dispenser's operating-address key, and the DECODER gates dispense detection on
- * that key but has no way to resolve a `^<id>` reference (its index_addresses id
- * space differs from the indexer's), so a compacted open would register a dead
- * dispenser that never matches a payment. The SDK therefore emits the full
- * address for it; the per-action compactable sets live in SDK_COMPACTABLE_BY_ACTION.
+ * Two single-value fields are held back from compaction even though the indexer
+ * assigns them ids, and for the same underlying reason: the DECODER keys work off
+ * them but has no way to resolve a `^<id>` reference (its index_addresses id space
+ * differs from the indexer's).
+ *
+ *  - DISPENSER.GET_ADDRESS (`noCompact`): the dispenser's operating-address key,
+ *    which the decoder gates dispense detection on, so a compacted open would
+ *    register a dead dispenser that never matches a payment.
+ *  - DISPENSER.ORACLE_ADDRESS (`noCompact`): a Mode B dispenser pays its PRICE v1
+ *    oracle operator up front as a real native-coin output, and the indexer rejects
+ *    the create when that output is missing (validateOracleFee, ). The indexer
+ *    only sees outputs the DECODER persisted, and the decoder captures the oracle
+ *    output by reading ORACLE_ADDRESS out of this payload  - so a compacted
+ *    reference means no capture, and the create is rejected however much was paid.
+ *
+ * The SDK therefore emits the full address for both; the per-action compactable sets
+ * live in SDK_COMPACTABLE_BY_ACTION.
  *
  * Excluded on purpose:
  *  - SOURCE: the tx sender, registered first in db.createActionIndex; it is
@@ -59,14 +69,15 @@
 // only when the list's TYPE denotes an address list (the indexer gates on the
 // same TYPE the LIST handler uses; the SDK does not compact it). `noCompact:true`
 // marks a single-value field the indexer still assigns an id for but the SDK must
-// NOT emit in `^<id>` form (DISPENSER.GET_ADDRESS — see the consensus note above).
+// NOT emit in `^<id>` form: DISPENSER.GET_ADDRESS and DISPENSER.ORACLE_ADDRESS
+// (see the consensus note above).
 const ADDRESS_REF_FIELDS = {
     SEND:      [{ field: 'DESTINATION', multi: true }],
     MINT:      [{ field: 'DESTINATION' }],
     MESSAGE:   [{ field: 'DESTINATION' }],
     SWEEP:     [{ field: 'DESTINATION' }],
     ISSUE:     [{ field: 'TRANSFER' }, { field: 'TRANSFER_SUPPLY' }],
-    DISPENSER: [{ field: 'GET_ADDRESS', noCompact: true }, { field: 'ORACLE_ADDRESS' }],
+    DISPENSER: [{ field: 'GET_ADDRESS', noCompact: true }, { field: 'ORACLE_ADDRESS', noCompact: true }],
     ORDER:     [{ field: 'GET_ADDRESS' }],
     SWAP:      [{ field: 'GET_ADDRESS' }],
     DEPLOY:    [{ field: 'SLASH_DESTINATION' }],   // may be the "BURN" sentinel (resolved to the config burn address before id assignment)
