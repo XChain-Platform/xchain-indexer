@@ -661,13 +661,21 @@ describe('Dispense action handler @regression @tier2', function () {
         indexer.indexerDb.getDispenserInfo.resolves(makeDispenserInfo({
             FIAT: 'JPY', FIAT_AMOUNT: '1000', ORACLE_ADDRESS: '1OracleAddrXXXXXXXXXXXXXXXXXXXX', GET_AMOUNT: null,
         }));
-        sinon.stub(indexer.util, 'reverseOraclePriceMatch').resolves({ units: 1 });
+        const match = sinon.stub(indexer.util, 'reverseOraclePriceMatch').resolves({ units: 1 });
 
         const data = createBaseData({ ACTION: 'DISPENSE', SOURCE: BUYER_ADDR, COIN_AMOUNT: '0.01', BLOCK_TIME });
         await dispense.parse([], data, false);
 
         const rec = indexer.indexerDb.createDispense.firstCall.args[0];
         assert.strictEqual(rec['STATUS'], 'valid');
+
+        // The matcher takes the priced-token chain (GIVE_COIN) for the oracle row
+        // and the PAY coin (GET_COIN) for the validator pair. Equal today under the
+        // same-chain guard, so pin the wiring rather than the values: passing
+        // GIVE_COIN for both would be invisible until cross-chain dispensers land.
+        const args = match.firstCall.args;
+        assert.strictEqual(args[2], 'BTC', 'arg 3 is GIVE_COIN, the priced token chain');
+        assert.strictEqual(args[8], 'BTC', 'arg 9 is GET_COIN, the coin the buyer pays');
     });
 
     it('FIAT oracle dispenser rejects when no oracle price matches', async function () {

@@ -1996,7 +1996,22 @@ class Utility {
     //   tokens = (0.001 × 15000000) / 7.50 = 2000 PEPECASH
     //
     // Returns { units, oraclePrice, coinFiatPrice } or null if no match found.
-    async reverseOraclePriceMatch(coinAmount, oracleAddress, coin, tick, fiat, blockTime, priceWindow, db){
+    // `coin` and `payCoin` are two DIFFERENT things and must not be conflated:
+    //   coin    - which chain's token the oracle prices, i.e. the dispenser's
+    //             GIVE_COIN. Selects the oracle_prices row.
+    //   payCoin - the coin the BUYER actually pays in, i.e. the dispenser's
+    //             GET_COIN. Selects the validator COIN/FIAT pair below.
+    // They are equal on every dispenser that can exist today, because
+    // actions/dispenser.js guards BOTH GIVE_COIN and GET_COIN to the indexer's
+    // own chain (lines 146-153), so passing one for the other was inert. It was
+    // still a trap: cross-chain dispensers are only shelved, not refused forever
+    // (, whose own prerequisites list a fiat-oracle decision), and the day
+    // GIVE_COIN != GET_COIN becomes possible, a single `coin` argument would
+    // silently price the payment against the wrong validator pair. Mode A already
+    // builds its pair from GET_COIN; this makes Mode B agree.
+    // payCoin falls back to coin so the argument stays optional for callers that
+    // genuinely have only one.
+    async reverseOraclePriceMatch(coinAmount, oracleAddress, coin, tick, fiat, blockTime, priceWindow, db, payCoin){
         let priceDb = (db.indexer && db.indexer.hubDb) ? db.indexer.hubDb : db;
         let startTime = blockTime - priceWindow;
 
@@ -2005,7 +2020,7 @@ class Utility {
         if(!oraclePrices || oraclePrices.length === 0) return null;
 
         // For each historical oracle price, also fetch the validator's COIN/FIAT price at the same effective time
-        let coinPair = coin + '/' + fiat;
+        let coinPair = (this.isNull(payCoin) ? coin : payCoin) + '/' + fiat;
         for(let op of oraclePrices){
             // Get the validator price at the time this oracle price was effective
             // (use the earliest available validator price at or before the oracle's effective_at)

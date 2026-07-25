@@ -180,6 +180,27 @@ describe('Utility FIAT dispenser price matching @regression', function () {
             assert.strictEqual(r.oraclePrice.actionIndex, 1);
         });
 
+        it('keys the validator pair on the PAY coin, not the priced token chain', async function () {
+            // The two are the same on every dispenser that can exist today (both
+            // GIVE_COIN and GET_COIN are guarded to the indexer's own chain), so this
+            // pins the distinction before cross-chain dispensers  make it
+            // reachable and a single argument silently prices against the wrong pair.
+            const db = fakeDb([snap('15000000', NOW - 600)], [oracle('7.50', NOW - 600)]);
+            await util.reverseOraclePriceMatch(
+                '0.001', '1OracleAddr', 'DOGE', 'PEPECASH', 'JPY', NOW, WINDOW, db, 'BTC');
+            assert.strictEqual(db.calls.prices[0].coinPair, 'BTC/JPY',
+                'the validator pair must use the coin the buyer pays (GET_COIN)');
+            assert.strictEqual(db.calls.oracle[0].coin, 'DOGE',
+                'the oracle lookup must still use the chain of the priced token (GIVE_COIN)');
+        });
+
+        it('falls back to the priced-token coin when no pay coin is given', async function () {
+            const db = fakeDb([snap('15000000', NOW - 600)], [oracle('7.50', NOW - 600)]);
+            await util.reverseOraclePriceMatch(
+                '0.001', '1OracleAddr', 'BTC', 'PEPECASH', 'JPY', NOW, WINDOW, db);
+            assert.strictEqual(db.calls.prices[0].coinPair, 'BTC/JPY');
+        });
+
         it('bounds the oracle query to [block_time - window, block_time]', async function () {
             const db = fakeDb([snap('15000000', NOW - 600)], [oracle('7.50', NOW - 600)]);
             await util.reverseOraclePriceMatch(

@@ -118,7 +118,12 @@ class Dispense {
                     dispenser['FIAT'],
                     data['BLOCK_TIME'],
                     this.config['FIAT_DISPENSER_PRICE_WINDOW'],
-                    this.indexerDb
+                    this.indexerDb,
+                    // Validator pair is keyed on what the BUYER pays (GET_COIN),
+                    // not on the chain of the token being priced (GIVE_COIN above).
+                    // Equal today under the same-chain guard; see the note on
+                    // reverseOraclePriceMatch.
+                    dispenser['GET_COIN']
                 );
                 if(priceMatch){
                     multiplier = priceMatch.units;
