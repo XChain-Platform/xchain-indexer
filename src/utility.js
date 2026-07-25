@@ -1105,6 +1105,120 @@ class Utility {
         return this.bcmul(projectedCoin, feeFraction, 8);
     }
 
+    // This chain's dust threshold as a decimal coin amount (bignumber).
+    //
+    // dustThreshold lives in SATOSHIS on the coin bundle's `net` block
+    // (src/coins/<COIN>.js: BTC 546, DOGE 100000), which is NOT merged onto the
+    // indexer's runtime config - `config.net` is undefined there, so it has to be read
+    // from the bundle directly. TX_OUTPUTS values are decimal coin, hence the /1e8.
+    //
+    // Consensus-relevant (it decides whether an oracle-fee output is required at all),
+    // so it is read from the pinned coin bundle rather than from anything an operator
+    // can set. Cached because it is constant for the life of the process.
+    getDustThresholdCoin(){
+        if(this._dustThresholdCoin === undefined){
+            let sats = 0;
+            try {
+                let bundle = require('./coins').getCoinConfig(this.config['COIN'], this.config['NETWORK']);
+                sats = (bundle && bundle.net && bundle.net.dustThreshold) || 0;
+            } catch(e){
+                sats = 0;   // unknown coin/network: no dust floor rather than a hard failure
+            }
+            this._dustThresholdCoin = this.bcdiv(sats, '100000000', 8);
+        }
+        return this._dustThresholdCoin;
+    }
+
+    // Consensus check for the PRICE v1 oracle usage fee on a Mode B dispenser open or
+    // refill . Deliberately the same shape as validateNativeCoinFee below: derive
+    // an expected native amount from oracle prices, find the required output in
+    // data['TX_OUTPUTS'], reject when it is missing or short of a tolerance band. Sharing
+    // the shape (and the FEE_TOLERANCE_* band) is what keeps a payer's output sizing and a
+    // validator's acceptance test from disagreeing.
+    //
+    //   dispenser: { ORACLE_ADDRESS, GIVE_COIN, GIVE_TICK, FIAT_CODE, GIVE_ESCROW, GET_COIN }
+    //              GIVE_ESCROW is the amount being escrowed by THIS action, so a v2 refill
+    //              passes the increase and is charged proportionally rather than re-charged
+    //              on the whole balance.
+    //
+    // Every read is bounded by this block's own time, so two nodes processing the same
+    // block compute the same fee and reach the same verdict. The validator coin price is
+    // anchored at BLOCK_TIME (not at the oracle row's effective time, which is what
+    // SETTLEMENT uses) because this fee is a charge levied at the create moment, not a
+    // reconstruction of what a buyer saw.
+    //
+    // Returns { valid, error?, expectedFee, paidAmount?, belowDust? }.
+    async validateOracleFee(data, dispenser, db){
+        let oracleAddress = dispenser['ORACLE_ADDRESS'];
+        let blockTime     = Number(data['BLOCK_TIME']);
+
+        // The oracle must already have an EFFECTIVE price. Operator ruling 2026-07-25: a
+        // dispenser must reference an oracle that has prices set. Oracle operators are a
+        // separate, ongoing service from dispenser operators, so the normal path is to
+        // point at an established feed whose price is already effective; only someone
+        // standing up their own oracle for their own dispenser meets the 24h activation
+        // delay (§5.4), and waiting is correct for them. Accepting the create with no fee
+        // instead would be a free-oracle-usage loophole: publish, create immediately,
+        // never pay.
+        let oracleRow = await db.getOraclePrice(
+            oracleAddress, dispenser['GIVE_COIN'], dispenser['GIVE_TICK'],
+            dispenser['FIAT_CODE'], blockTime);
+        if(!oracleRow)
+            return { valid: false, error: 'invalid: ORACLE_ADDRESS (no effective oracle price)' };
+
+        // A zero or absent FEE is the common case and requires no output at all.
+        let feeFraction = this.bcnum(oracleRow.fee || 0);
+        if(this.bclte(feeFraction, 0))
+            return { valid: true, expectedFee: '0' };
+
+        // Validator COIN/FIAT price for the coin the buyer will pay in, same pair
+        // settlement uses (GET_COIN, not GIVE_COIN - see reverseOraclePriceMatch).
+        let window   = parseInt(this.config['FIAT_DISPENSER_PRICE_WINDOW']) || 86400;
+        let coinPair = dispenser['GET_COIN'] + '/' + dispenser['FIAT_CODE'];
+        let priceDb  = (db.indexer && db.indexer.hubDb) ? db.indexer.hubDb : db;
+        let snapshots = await priceDb.getPricesInTimeRange(coinPair, blockTime - window, blockTime);
+        if(!snapshots || snapshots.length === 0)
+            return { valid: false, error: 'invalid: ORACLE_ADDRESS (no validator price to value the oracle fee)' };
+
+        let expectedFee = this.computeOracleFee(
+            oracleRow.value, dispenser['GIVE_ESCROW'], snapshots[0].price, feeFraction);
+
+        // Below dust the output would be unspendable, so none is required. Mirrors
+        // Counterparty skipping the output below DEFAULT_REGULAR_DUST_SIZE.
+        let dustCoin = this.getDustThresholdCoin();
+        if(this.bclt(expectedFee, dustCoin))
+            return { valid: true, expectedFee: this.bcformat(expectedFee, 8), belowDust: true };
+
+        // Same output matcher as validateNativeCoinFee: first output paying the address.
+        let feeOutput = null;
+        let txOutputs = data['TX_OUTPUTS'];
+        if(txOutputs && Array.isArray(txOutputs)){
+            for(let output of txOutputs){
+                if(output.address === oracleAddress || output.scriptPubKey_address === oracleAddress){
+                    feeOutput = output;
+                    break;
+                }
+            }
+        }
+        if(!feeOutput)
+            return { valid: false, error: 'invalid: ORACLE_ADDRESS (missing oracle fee output)',
+                     expectedFee: this.bcformat(expectedFee, 8) };
+
+        let paidAmount   = this.bcnum(feeOutput.value || feeOutput.amount || 0);
+        let toleranceMin = this.bcnum(this.config['FEE_TOLERANCE_MIN'] || '0.95');
+        let minAcceptable = this.bcmul(expectedFee, toleranceMin, 8);
+        if(this.bclt(paidAmount, minAcceptable))
+            return { valid: false,
+                     error: 'invalid: ORACLE_ADDRESS (insufficient oracle fee, paid ' +
+                            this.bcformat(paidAmount, 8) + ', expected ' + this.bcformat(expectedFee, 8) + ')',
+                     expectedFee: this.bcformat(expectedFee, 8),
+                     paidAmount:  this.bcformat(paidAmount, 8) };
+
+        return { valid: true,
+                 expectedFee: this.bcformat(expectedFee, 8),
+                 paidAmount:  this.bcformat(paidAmount, 8) };
+    }
+
     // Pure native-coin fee math, shared by validateNativeCoinFee (the on-chain consensus
     // check) and the read-only feequote pre-flight (Actions.computeFeeQuote). Keeping the
     // arithmetic in one place guarantees a client's output sizing and the validator's
