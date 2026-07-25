@@ -93,8 +93,22 @@ class Dispense {
             //     The oracle prices the dispensed token directly; FIAT_AMOUNT is ignored.
             //   - Without ORACLE_ADDRESS: use the validator COIN/FIAT snapshot (PRICE v0).
             //     FIAT_AMOUNT defines how much of the FIAT currency 1 GIVE unit costs.
+            //
+            // FIAT_DISPENSER_PRICING gate (protocol_changes.js). Genesis-active on every
+            // network today, so this reads true in production and the reverse-match paths
+            // below behave exactly as before. It exists so the settlement path appears in
+            // the activation inventory alongside every sibling dispenser rule, and so a
+            // future correction to the matching algorithm has a height to hang off. Below
+            // activation a FIAT dispenser cannot settle: rejecting is the only well-defined
+            // "off" state, because the pre-FIAT code would have divided by the GET_AMOUNT
+            // of 0 that FIAT dispensers carry by convention.
             let multiplier = 0;
-            if(!error && !this.util.isNull(dispenser['FIAT']) && !this.util.isNull(dispenser['ORACLE_ADDRESS'])){
+            let fiatPricingActive = this.util.isNull(dispenser['FIAT'])
+                ? true
+                : await this.actions.protocolChanges.isEnabled('FIAT_DISPENSER_PRICING', block_index);
+            if(!error && !this.util.isNull(dispenser['FIAT']) && !fiatPricingActive){
+                error = 'invalid: FIAT dispenser pricing not active';
+            } else if(!error && !this.util.isNull(dispenser['FIAT']) && !this.util.isNull(dispenser['ORACLE_ADDRESS'])){
                 // User oracle path: combines PEPECASH/JPY (oracle) with BTC/JPY (validator) for cross-conversion
                 let priceMatch = await this.util.reverseOraclePriceMatch(
                     data['COIN_AMOUNT'],

@@ -559,6 +559,78 @@ describe('Dispense action handler @regression @tier2', function () {
         sinon.assert.notCalled(indexer.indexerDb.createEscrow);   // no balance escrow move
     });
 
+    // FIAT_DISPENSER_PRICING gate ( follow-on, operator decision 2026-07-24).
+    // Genesis-active everywhere today, retrofitted while every mainnet chain held
+    // zero dispensers, so it is byte-identical to the ungated code. Registered so
+    // the settlement path is in the activation inventory with its siblings and so a
+    // future matching correction has a height to hang off. These pin both states,
+    // because an "off" branch nothing ever exercises is an unverified branch.
+    describe('FIAT_DISPENSER_PRICING gate', function () {
+
+        it('is genesis-active, so a FIAT dispenser settles normally', async function () {
+            indexer.indexerDb.getDispenserInfo.resolves(makeDispenserInfo({
+                FIAT: 'USD', FIAT_AMOUNT: '100', ORACLE_ADDRESS: null, GET_AMOUNT: null,
+            }));
+            sinon.stub(indexer.util, 'reversePriceMatch').resolves({ units: 2 });
+
+            const data = createBaseData({ ACTION: 'DISPENSE', SOURCE: BUYER_ADDR, COIN_AMOUNT: '0.02', BLOCK_TIME });
+            await dispense.parse([], data, false);
+
+            const rec = indexer.indexerDb.createDispense.firstCall.args[0];
+            assert.strictEqual(rec['STATUS'], 'valid',
+                'the gate must be on from genesis, or live FIAT dispensers stop settling');
+        });
+
+        it('below activation a FIAT dispense is rejected without consulting any price', async function () {
+            // Only this gate is flipped, so the rejection cannot be attributed to
+            // some other dispenser gate going off at the same time.
+            actionsCtx.protocolChanges.isEnabled
+                .withArgs('FIAT_DISPENSER_PRICING', sinon.match.any).resolves(false);
+            indexer.indexerDb.getDispenserInfo.resolves(makeDispenserInfo({
+                FIAT: 'USD', FIAT_AMOUNT: '100', ORACLE_ADDRESS: null, GET_AMOUNT: null,
+            }));
+            const match = sinon.stub(indexer.util, 'reversePriceMatch').resolves({ units: 2 });
+
+            const data = createBaseData({ ACTION: 'DISPENSE', SOURCE: BUYER_ADDR, COIN_AMOUNT: '0.02', BLOCK_TIME });
+            await dispense.parse([], data, false);
+
+            const rec = indexer.indexerDb.createDispense.firstCall.args[0];
+            assert.strictEqual(rec['STATUS'], 'invalid: FIAT dispenser pricing not active');
+            sinon.assert.notCalled(match);
+        });
+
+        it('below activation an ORACLE_ADDRESS dispense is rejected the same way', async function () {
+            actionsCtx.protocolChanges.isEnabled
+                .withArgs('FIAT_DISPENSER_PRICING', sinon.match.any).resolves(false);
+            indexer.indexerDb.getDispenserInfo.resolves(makeDispenserInfo({
+                FIAT: 'JPY', FIAT_AMOUNT: null, ORACLE_ADDRESS: '1OracleAddrXXXXXXXXXXXXXXXXXXXX', GET_AMOUNT: null,
+            }));
+            const match = sinon.stub(indexer.util, 'reverseOraclePriceMatch').resolves({ units: 5 });
+
+            const data = createBaseData({ ACTION: 'DISPENSE', SOURCE: BUYER_ADDR, COIN_AMOUNT: '0.02', BLOCK_TIME });
+            await dispense.parse([], data, false);
+
+            const rec = indexer.indexerDb.createDispense.firstCall.args[0];
+            assert.strictEqual(rec['STATUS'], 'invalid: FIAT dispenser pricing not active');
+            sinon.assert.notCalled(match);
+        });
+
+        it('the gate never touches a non-FIAT dispenser', async function () {
+            // A non-FIAT dispense must not consult FIAT_DISPENSER_PRICING at all, so
+            // turning the gate off can never disturb the ordinary GET_AMOUNT path.
+            const isEnabled = actionsCtx.protocolChanges.isEnabled;
+            indexer.indexerDb.getDispenserInfo.resolves(makeDispenserInfo());
+
+            const data = createBaseData({ ACTION: 'DISPENSE', SOURCE: BUYER_ADDR, COIN_AMOUNT: '0.01', BLOCK_TIME });
+            await dispense.parse([], data, false);
+
+            const rec = indexer.indexerDb.createDispense.firstCall.args[0];
+            assert.strictEqual(rec['STATUS'], 'valid');
+            assert.ok(!isEnabled.getCalls().some(c => c.args[0] === 'FIAT_DISPENSER_PRICING'),
+                'non-FIAT dispenses must not query the FIAT gate');
+        });
+    });
+
     it('FIAT dispenser resolves units via reversePriceMatch', async function () {
         indexer.indexerDb.getDispenserInfo.resolves(makeDispenserInfo({
             FIAT: 'USD', FIAT_AMOUNT: '100', ORACLE_ADDRESS: null, GET_AMOUNT: null,

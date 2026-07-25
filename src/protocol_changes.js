@@ -181,6 +181,32 @@ class ProtocolChanges {
         // refill/close authority via the v1/v2 owner check).
         // Genesis-activated (pre-launch).
         this.addChange('DISPENSER_ORIGIN_STANDING','2.0.0',0,0,0,0,0,0);
+        // FIAT dispenser settlement: a dispenser carrying FIAT_CODE is priced by
+        // reverse price matching rather than by GET_AMOUNT, in either mode
+        // (validator PRICE v0 snapshot, or a user PRICE v1 oracle when
+        // ORACLE_ADDRESS is set). Below activation a FIAT dispenser cannot settle
+        // at all and its dispense records 'invalid: FIAT dispenser pricing not
+        // active'; above it, actions/dispense.js runs the reverse match.
+        //
+        // Genesis-activated (pre-launch), and provably free of replay
+        // consequences: retrofitted 2026-07-24 after confirming every mainnet
+        // chain holds ZERO dispensers and ZERO dispenses (BTC, LTC and DOGE
+        // mainnet indexer DBs all read 0/0/0), so there is no history in which
+        // the gated branch was ever taken and genesis-on is byte-identical to
+        // the ungated code it replaces.
+        //
+        // Registered for two reasons even though it is on everywhere today.
+        // First, inventory: every sibling dispenser rule is gated
+        // (dispenser_caps, dispenser_freshness, dispenser_ownership_cancel,
+        // DISPENSER_CLOSE_PER_UNIT, DISPENSER_ORIGIN_STANDING) and a
+        // consensus-affecting settlement path that appears in no activation map
+        // is invisible to the flag-day tooling. Second, and the reason to do it
+        // now rather than later: any future correction to the matching algorithm
+        // needs a gate to hang a height off, and once a mainnet FIAT dispenser
+        // exists that retrofit costs a cohort height plus a replay-compatibility
+        // branch. Doing it while the set is empty costs nothing ( already
+        // demonstrated the shape of correction this will need).
+        this.addChange('FIAT_DISPENSER_PRICING','2.0.0',0,0,0,0,0,0);
         // Issuance fee activation. Mainnet turns on at the historical block 862633;
         // testnet/regtest charge from block 0 so the fee path is exercisable there.
         // mainnet_block=862633 is a BTC block height used as an 'always-on' activation
