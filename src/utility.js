@@ -1148,9 +1148,18 @@ class Utility {
     // reconstruction of what a buyer saw.
     //
     // Returns { valid, error?, expectedFee, paidAmount?, belowDust? }.
-    async validateOracleFee(data, dispenser, db){
-        let oracleAddress = dispenser['ORACLE_ADDRESS'];
-        let blockTime     = Number(data['BLOCK_TIME']);
+    // How much oracle fee a dispenser open/refill owes, WITHOUT looking at any output.
+    //
+    // Deliberately the single source of truth for the amount: validateOracleFee (the
+    // consensus check) and the oraclefeequote API (what a payer sizes its output from)
+    // both call this. If the quote and the check computed the amount separately they
+    // could drift, and every drift is either a rejected honest create or an underpaid
+    // oracle. Same reason getFeeOraclePrices is shared by the native-fee check and its
+    // pre-flight.
+    //
+    // Returns { valid, error?, expectedFee (bignumber), belowDust? }.
+    async quoteOracleFee(blockTime, dispenser, db){
+        blockTime = Number(blockTime);
 
         // The oracle must already have an EFFECTIVE price. Operator ruling 2026-07-25: a
         // dispenser must reference an oracle that has prices set. Oracle operators are a
@@ -1161,7 +1170,7 @@ class Utility {
         // instead would be a free-oracle-usage loophole: publish, create immediately,
         // never pay.
         let oracleRow = await db.getOraclePrice(
-            oracleAddress, dispenser['GIVE_COIN'], dispenser['GIVE_TICK'],
+            dispenser['ORACLE_ADDRESS'], dispenser['GIVE_COIN'], dispenser['GIVE_TICK'],
             dispenser['FIAT_CODE'], blockTime);
         if(!oracleRow)
             return { valid: false, error: 'invalid: ORACLE_ADDRESS (no effective oracle price)' };
@@ -1169,7 +1178,7 @@ class Utility {
         // A zero or absent FEE is the common case and requires no output at all.
         let feeFraction = this.bcnum(oracleRow.fee || 0);
         if(this.bclte(feeFraction, 0))
-            return { valid: true, expectedFee: '0' };
+            return { valid: true, expectedFee: this.bcnum(0), belowDust: true };
 
         // Validator COIN/FIAT price for the coin the buyer will pay in, same pair
         // settlement uses (GET_COIN, not GIVE_COIN - see reverseOraclePriceMatch).
@@ -1185,9 +1194,20 @@ class Utility {
 
         // Below dust the output would be unspendable, so none is required. Mirrors
         // Counterparty skipping the output below DEFAULT_REGULAR_DUST_SIZE.
-        let dustCoin = this.getDustThresholdCoin();
-        if(this.bclt(expectedFee, dustCoin))
-            return { valid: true, expectedFee: this.bcformat(expectedFee, 8), belowDust: true };
+        return { valid: true, expectedFee: expectedFee,
+                 belowDust: this.bclt(expectedFee, this.getDustThresholdCoin()) };
+    }
+
+    async validateOracleFee(data, dispenser, db){
+        let oracleAddress = dispenser['ORACLE_ADDRESS'];
+
+        let quote = await this.quoteOracleFee(data['BLOCK_TIME'], dispenser, db);
+        if(!quote.valid) return quote;
+
+        let expectedFee = quote.expectedFee;
+        if(quote.belowDust)
+            return { valid: true, expectedFee: this.bcformat(expectedFee, 8),
+                     belowDust: true };
 
         // Same output matcher as validateNativeCoinFee: first output paying the address.
         let feeOutput = null;

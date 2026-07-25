@@ -88,7 +88,7 @@ describe('Utility.validateOracleFee() -  @regression @tier1', function () {
             const r = await util.validateOracleFee(
                 withOutputs([]), dispenserFields(), fakeDb({ oracleRow: { value: '0.05', fee: '0' } }));
             assert.strictEqual(r.valid, true);
-            assert.strictEqual(r.expectedFee, '0');
+            assert.strictEqual(r.expectedFee, '0.00000000');   // 8-dp like every other return
         });
 
         it('requires no output when FEE is absent entirely', async function () {
@@ -200,6 +200,50 @@ describe('Utility.validateOracleFee() -  @regression @tier1', function () {
                 withOutputs([]), dispenserFields({ GIVE_ESCROW: '100000' }), fakeDb());
             assert.strictEqual(r.valid, false);
             assert.match(r.error, /missing oracle fee output/);
+        });
+    });
+
+    // The whole point of the oraclefeequote API is that a payer can size an output the
+    // validator will accept. If the quote and the check ever computed the amount
+    // separately they would drift, and every drift is either a rejected honest create or
+    // an underpaid oracle. They share quoteOracleFee(); these pin that they still do.
+    describe('the quote and the consensus check cannot disagree', function () {
+
+        it('quoteOracleFee returns exactly what validateOracleFee expects', async function () {
+            for (const escrow of ['1000', '2000', '999999', '7']) {
+                const fields = dispenserFields({ GIVE_ESCROW: escrow });
+                const quote  = await util.quoteOracleFee(BLOCK_TIME, fields, fakeDb());
+                const check  = await util.validateOracleFee(
+                    withOutputs([{ address: ORACLE_ADDR, value: '100' }]), fields, fakeDb());
+                assert.strictEqual(util.bcformat(quote.expectedFee, 8), check.expectedFee,
+                    'quote and check disagree at escrow ' + escrow);
+            }
+        });
+
+        it('a payment sized from the quote is accepted by the check', async function () {
+            // The round trip a real payer performs: quote, then pay exactly that.
+            const fields = dispenserFields();
+            const quote  = await util.quoteOracleFee(BLOCK_TIME, fields, fakeDb());
+            const paid   = util.bcformat(quote.expectedFee, 8);
+            const check  = await util.validateOracleFee(
+                withOutputs([{ address: ORACLE_ADDR, value: paid }]), fields, fakeDb());
+            assert.strictEqual(check.valid, true, check.error);
+        });
+
+        it('the API endpoint delegates rather than recomputing', function () {
+            // Source-shape pin: oraclefeequote must call quoteOracleFee. A future edit
+            // that inlines the arithmetic there would reintroduce the drift this
+            // structure exists to prevent.
+            const fs   = require('fs');
+            const path = require('path');
+            const src  = fs.readFileSync(path.resolve(__dirname, '../../src/api.js'), 'utf8');
+            const start = src.indexOf('async oraclefeequote(');
+            assert.ok(start > 0, 'the oraclefeequote endpoint must exist');
+            const body = src.slice(start, start + 2000);
+            assert.ok(/quoteOracleFee\(/.test(body),
+                'oraclefeequote must delegate to utility.quoteOracleFee');
+            assert.ok(!/computeOracleFee\(/.test(body),
+                'oraclefeequote must not compute the fee itself');
         });
     });
 
