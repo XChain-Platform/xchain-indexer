@@ -887,6 +887,13 @@ class XChainIndexer {
                         // Check for any expired items (orders, swaps, dispensers)
                         await this.util.processExpirations(this.actions, this.indexerDb, blockToParse, blockTime);
 
+                        // BET end-of-block pass: latch feeds closed at DEADLINE, then
+                        // expire feeds past expire_at (system BET_EXPIRE refunds). Both
+                        // steps are bounded per block (deliberately NOT part of the
+                        // unbounded processExpirations scan above); see
+                        // Utility.processBetPasses for the ordering/deferral rules
+                        await this.util.processBetPasses(this.actions, this.indexerDb, blockToParse, blockTime);
+
                         // Settle this chain's leg of any effective cross-chain DEX matches
                         // (validator-signed, mirror-delivered; verified inside CROSS_SETTLE)
                         await this.util.processCrossChainSettlements(this.actions, this.indexerDb, blockToParse, blockTime);

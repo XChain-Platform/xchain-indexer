@@ -98,6 +98,8 @@ describe('Hash coverage guard @regression', function () {
             'anchor_actions', // invalid_archive stamp class
             'polls',          // finalization-flip class (flag-day gated; structural binding below)
             'tokens',         // supply-refresh class (F-1 closure; flag-day gated; structural binding below)
+            'bet_feeds',      // BET latch + terminal-flip class ( P4; flag-day gated; structural binding below)
+            'bets',           // BET settlement-flip class (same flag-day; structural binding below)
         ]);
         assert.deepStrictEqual(
             lifecycle.hashClassTables('state_hash').sort(),
@@ -172,6 +174,27 @@ describe('Hash coverage guard @regression', function () {
         const map = stateHash.TOKEN_SUPPLY_STATE_HASH_ACTIVATION;
         for (const key of ['BTC:mainnet', 'LTC:mainnet', 'DOGE:mainnet', 'BTC:testnet', 'LTC:testnet', 'DOGE:testnet', 'regtest'])
             assert.ok(Number.isFinite(map[key]), `TOKEN_SUPPLY_STATE_HASH_ACTIVATION['${key}'] missing`);
+    });
+
+    it('bet_status class: gated selections exist, keyed by the three stamps, armed per chain ( P4)', function () {
+        // Structural binding for the bet_feeds/bets state_hash declarations: the
+        // gathering SQL must select by the stamp columns (the same keys the
+        // updated_rows BET forward channel and both rollback resets use) behind
+        // the activation gate, resolving status strings via index_statuses
+        // (never hashing the surrogate status_id), with per-chain armed heights.
+        const src = read('src/stateHash.js');
+        assert.ok(/FROM bet_feeds f JOIN index_statuses s ON \(s\.id = f\.feed_status_id\)[\s\S]{0,120}?WHERE f\.closed_block = \? OR f\.terminal_block = \? ORDER BY f\.action_index ASC/.test(src),
+            'stateHash.js no longer gathers the bet_feeds flips by closed_block/terminal_block; the bet_feeds state_hash declaration is stale');
+        assert.ok(/FROM bets b JOIN index_statuses s ON \(s\.id = b\.bet_status_id\) [\s\S]{0,80}?WHERE b\.settled_block = \? ORDER BY b\.action_index ASC/.test(src),
+            'stateHash.js no longer gathers the bets settlement flip by settled_block; the bets state_hash declaration is stale');
+        const map = stateHash.BET_STATUS_STATE_HASH_ACTIVATION;
+        for (const key of ['BTC:mainnet', 'LTC:mainnet', 'DOGE:mainnet', 'BTC:testnet', 'LTC:testnet', 'DOGE:testnet', 'regtest'])
+            assert.ok(Number.isFinite(map[key]), `BET_STATUS_STATE_HASH_ACTIVATION['${key}'] missing`);
+        // Surrogate-id guard: the selected columns resolve the status string and
+        // must never include the surrogate ids on the rows.
+        for (const sel of [src.match(/SELECT[\s\S]{0,200}?FROM bet_feeds f JOIN index_statuses/)[0], src.match(/SELECT[\s\S]{0,200}?FROM bets b JOIN index_statuses/)[0]])
+            for (const banned of ['tick_id', 'memo_id', 'feed_status_id,', 'bet_status_id,'])
+                assert.ok(sel.indexOf(banned) === -1, `bet_status preimage must not hash surrogate id column ${banned}`);
     });
 
     it('both state-hash conformance callers thread the (network, coin) gate pair', function () {

@@ -35,6 +35,12 @@ const GOLDEN_GAS_SCHEDULE = {
     OWNERSHIP_ESCROW:   50000,
     AIRDROP_PER_RECIPIENT: 100,
     DIVIDEND_PER_RECIPIENT: 100,
+    // BET ( P4, decision F): duration-metered feed creation (own key so the
+    // betting and order-book families re-price independently) + per-credit place
+    // pre-funding. Landed pre-freeze with the BET action itself; the coins-registry
+    // consensus_pin regenerated in the same change.
+    BET_FEED_PER_DAY:   550,
+    BET_PER_CREDIT:     100,
     VM_EXECUTE_BASE:    1000,
     VM_GUARD_GAS_CEILING: 200000,
     VM_DEPLOY_BASE:     100000,

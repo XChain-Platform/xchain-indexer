@@ -412,6 +412,31 @@ class Utility {
         return this.bcnum(mathjs.format(floored, {notation: 'fixed', precision: d}));
     }
 
+    // floor(A * B / C) at d decimal places, entirely in decimal.js space. Backs the
+    // BET parimutuel payout (stake * pot / winning-pool, floored to the tick's
+    // decimals, spec claude/specs/BETTING_SYSTEM_SPEC.md section 7): floor keeps
+    // sum(payouts) <= pot exactly, so the escrow-conservation invariant holds and
+    // rounding remainders land in the oracle's dust credit rather than minting.
+    // Determinism: the product and quotient are computed at the house-wide mathjs
+    // bignumber precision (64 significant digits) that every consensus math path
+    // already uses (bcdiv/getPrice), then floored with Decimal.js native .floor()
+    // like bcmulfloor (never mathjs.format's banker's rounding). Every node runs
+    // the same arithmetic at the same precision, so results are node-identical by
+    // construction. C = 0 returns 0 (bcdiv convention).
+    bcmuldivfloor(numA, numB, numC, decimals){
+        let a = (!this.isNull(numA)) ? numA : 0;
+        let b = (!this.isNull(numB)) ? numB : 0;
+        let c = (!this.isNull(numC)) ? numC : 0;
+        let d = (!this.isNull(decimals)) ? parseInt(decimals) : 0;
+        if(String(c) === '0' || c === 0)
+            return this.bcnum(mathjs.format(mathjs.bignumber(0), {notation: 'fixed', precision: d}));
+        let product  = mathjs.multiply(mathjs.bignumber(a), mathjs.bignumber(b));
+        let quotient = this.bcnum(mathjs.divide(product, mathjs.bignumber(c)));
+        let scale    = mathjs.bignumber(10).pow(d);
+        let floored  = quotient.times(scale).floor().div(scale);
+        return this.bcnum(mathjs.format(floored, {notation: 'fixed', precision: d}));
+    }
+
     // Round a bignumber to d decimal places, half-up, entirely in decimal.js space.
     // Implemented as floor(n * 10^d + 0.5) / 10^d so the rounding mode is explicit and
     // config-independent: it does NOT depend on the global decimal.js/mathjs rounding
@@ -1436,21 +1461,42 @@ class Utility {
     }
 
     // Calculate expiration fee (unified gas schedule)
+    // Duration-metered creation fee shared by every action family that occupies a
+    // per-block scan index for its lifetime: ORDER / SWAP / DISPENSER (EXPIRATION_PER_DAY,
+    // via getUnifiedExpirationFee below) and BET feeds (BET_FEED_PER_DAY, spec decision F:
+    // standardized on this mechanism rather than a betting-specific one). Extracted as a
+    // pure transplant of the historical format-0 arithmetic so byte-identity across the
+    // families is structural; a unit test pins the two paths equal across the free-window
+    // boundary. NOTE the day count uses bcdiv at 0 decimals, which formats through mathjs
+    // fixed-precision and therefore ROUNDS TO NEAREST (90.4 days -> 90, 90.5 days -> 91).
+    // That is the shipped consensus behavior for ORDER fees; do NOT "fix" it to a floor
+    // here or every fractional-day boundary forks from the historical fee.
+    getUnifiedDurationFee(untilTimestamp, blockTime, gasKey){
+        let schedule  = this.config['GAS_SCHEDULE'];
+        let freeDays  = this.config['UNIFIED_EXPIRATION_FEE_FREE_DAYS'] || 90;
+        let gasCost   = 0;
+        let fee       = 0;
+        let expire_seconds = this.bcsub(untilTimestamp, blockTime, 0);
+        let expire_days    = this.bcdiv(expire_seconds, 86400, 0);
+        let chargeableDays = this.bcsub(expire_days, freeDays, 0);
+        if(this.bcgt(chargeableDays, 0)){
+            gasCost = this.bcmul(chargeableDays, schedule[gasKey], 0);
+            fee     = this.bcmul(gasCost, this.config['GAS_PRICE'], 8);
+        }
+        return { gasCost: gasCost, fee: fee };
+    }
+
     getUnifiedExpirationFee(data, info){
         let schedule  = this.config['GAS_SCHEDULE'];
         let freeDays  = this.config['UNIFIED_EXPIRATION_FEE_FREE_DAYS'] || 90;
         let gasCost   = 0;
         let fee       = 0;
         let format    = data['FORMAT'];
-        // Create Order / Swap / Dispenser
+        // Create Order / Swap / Dispenser (shared duration arithmetic; see above)
         if(format==0){
-            let expire_seconds = this.bcsub(data['EXPIRATION'], data['BLOCK_TIME'], 0);
-            let expire_days    = this.bcdiv(expire_seconds, 86400, 0);
-            let chargeableDays = this.bcsub(expire_days, freeDays, 0);
-            if(this.bcgt(chargeableDays, 0)){
-                gasCost = this.bcmul(chargeableDays, schedule.EXPIRATION_PER_DAY, 0);
-                fee     = this.bcmul(gasCost, this.config['GAS_PRICE'], 8);
-            }
+            let duration = this.getUnifiedDurationFee(data['EXPIRATION'], data['BLOCK_TIME'], 'EXPIRATION_PER_DAY');
+            gasCost = duration.gasCost;
+            fee     = duration.fee;
         }
         // Edit Order / Swap / Dispenser
         if(format==2 && info && this.bcgt(data['EXPIRATION'], info['EXPIRATION'])){
@@ -2020,6 +2066,60 @@ class Utility {
             data['BLOCK_TIME']   = block_time;
             data['ACTION_INDEX'] = info.action_index;
             await actions.processAction(action, null, data, null);
+        }
+    }
+
+    // BET end-of-block pass: latch feeds closed at DEADLINE, expire feeds at
+    // expire_at (spec claude/specs/BETTING_SYSTEM_SPEC.md sections 4/6). Runs
+    // AFTER all user txs in the block (call site next to processExpirations),
+    // inside the block's atomic write. A deliberate BOUNDED sibling of
+    // processExpirations, NOT an extension of it: that pass scans its whole due
+    // set with no cap (the  shape), which is tolerable there only because
+    // orders/dispensers cost real fees to open. Feed creation inside the free
+    // window is cheap, so both steps here cap their per-block work; deferral is
+    // safe because both predicates are monotone in time and the user-facing
+    // checks (place, resolve) read the clock directly rather than trusting the
+    // latch alone. Deterministic: due sets are ordered (deadline|expire_at ASC,
+    // action_index ASC tiebreak), so every node processes and defers the same
+    // feeds.
+    async processBetPasses(actions, db, block_index, block_time){
+        // Step 1 - latch: every open feed whose DEADLINE has passed becomes
+        // `closed`, one-way, at most MAX_BET_PASS_ROWS feeds per block. The stored
+        // latch (not a derived predicate) is what stops a miner mining a backdated
+        // block after the deadline crossed and injecting an informed bet. The
+        // write is idempotence-guarded in SQL (only where closed_block IS NULL and
+        // the status still reads open), so a crash-restart replay of this block
+        // cannot latch twice.
+        let dueLatch = await db.getBetFeedsDueLatch(block_time, this.config['MAX_BET_PASS_ROWS']);
+        for(let feed of dueLatch)
+            await db.latchBetFeedClosed(feed.action_index, block_index);
+
+        // Step 2 - expire: feeds past expire_at with no resolve get a system
+        // BET_EXPIRE (refund all, no fee). WHOLE feeds in expire_at ASC order,
+        // doubly bounded: by feed count (MAX_BET_PASS_ROWS, or a flood of
+        // zero-bet feeds - which consume no credits - would make the credit
+        // budget alone unbounded) and by refund credits (MAX_BET_PASS_CREDITS,
+        // or one block could emit ROWS x MAX_BETS_PER_FEED credits). The loop
+        // STOPS at the first feed that does not fit the remaining credit budget
+        // (never skips past it): the processed set is always an exact prefix of
+        // the ordered due list, identical on every node. MAX_BET_PASS_CREDITS >=
+        // MAX_BETS_PER_FEED guarantees any single feed fits a full budget, so a
+        // deferred max-size feed expires first thing next block rather than
+        // wedging. A feed can latch (step 1) and expire (here) in the same pass
+        // on a large block-time jump over a small refund window.
+        let dueExpiry     = await db.getBetFeedsDueExpiry(block_time, this.config['MAX_BET_PASS_ROWS']);
+        let creditBudget  = this.config['MAX_BET_PASS_CREDITS'];
+        for(let feed of dueExpiry){
+            let refunds = Number(feed.open_bets) || 0;
+            if(refunds > creditBudget)
+                break;
+            creditBudget -= refunds;
+            let data = {};
+            data['ACTION']       = 'BET_EXPIRE';
+            data['BLOCK_INDEX']  = block_index;
+            data['BLOCK_TIME']   = block_time;
+            data['ACTION_INDEX'] = feed.action_index;
+            await actions.processAction('BET_EXPIRE', null, data, null);
         }
     }
 

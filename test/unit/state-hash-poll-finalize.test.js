@@ -35,6 +35,7 @@ const Utility = require('../../src/utility');
 const {
     buildStateHashData, isPollFinalizeStateHashActive, POLL_FINALIZE_STATE_HASH_ACTIVATION,
     TOKEN_SUPPLY_STATE_HASH_ACTIVATION, INDEX_MAP_STATE_HASH_ACTIVATION,
+    BET_STATUS_STATE_HASH_ACTIVATION,
 } = require('../../src/stateHash');
 
 const util = new Utility();
@@ -84,13 +85,16 @@ describe('state_hash poll-finalize class (VOTE flag-day, armed) @regression', fu
     let tokenPrev;
     // (index-map likewise: armed on regtest since 2026-07-16, )
     let indexPrev;
+    let betPrev;
     before(function(){
         tokenPrev = TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest; TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest = 999999999;
         indexPrev = INDEX_MAP_STATE_HASH_ACTIVATION.regtest;    INDEX_MAP_STATE_HASH_ACTIVATION.regtest    = 999999999;
+        betPrev   = BET_STATUS_STATE_HASH_ACTIVATION.regtest;   BET_STATUS_STATE_HASH_ACTIVATION.regtest   = 999999999;
     });
     after(function(){
         TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest = tokenPrev;
         INDEX_MAP_STATE_HASH_ACTIVATION.regtest    = indexPrev;
+        BET_STATUS_STATE_HASH_ACTIVATION.regtest   = betPrev;
     });
 
     it('gate: regtest armed from genesis; mainnet/testnet armed per chain at real heights; coin-less lookup fail-inert', function(){

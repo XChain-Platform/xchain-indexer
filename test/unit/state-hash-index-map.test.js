@@ -31,6 +31,7 @@ const Utility = require('../../src/utility');
 const {
     buildStateHashData, isIndexMapStateHashActive, INDEX_MAP_STATE_HASH_ACTIVATION,
     POLL_FINALIZE_STATE_HASH_ACTIVATION, TOKEN_SUPPLY_STATE_HASH_ACTIVATION,
+    BET_STATUS_STATE_HASH_ACTIVATION,
 } = require('../../src/stateHash');
 
 const util = new Utility();
@@ -68,19 +69,22 @@ describe('state_hash index-map class (id-determinism P4) @regression', function(
     // The index-map class itself is also disarmed suite-locally (armed on regtest
     // since 2026-07-16, ) so the inert-shape tests below still exercise the
     // below-threshold preimage; withArmed() re-arms per test.
-    let pollPrev, tokenPrev, indexPrev;
+    let pollPrev, tokenPrev, indexPrev, betPrev;
     before(function(){
         pollPrev  = POLL_FINALIZE_STATE_HASH_ACTIVATION.regtest;
         tokenPrev = TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest;
         indexPrev = INDEX_MAP_STATE_HASH_ACTIVATION.regtest;
+        betPrev   = BET_STATUS_STATE_HASH_ACTIVATION.regtest;
         POLL_FINALIZE_STATE_HASH_ACTIVATION.regtest = 999999999;
         TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest  = 999999999;
         INDEX_MAP_STATE_HASH_ACTIVATION.regtest     = 999999999;
+        BET_STATUS_STATE_HASH_ACTIVATION.regtest    = 999999999;
     });
     after(function(){
         POLL_FINALIZE_STATE_HASH_ACTIVATION.regtest = pollPrev;
         TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest  = tokenPrev;
         INDEX_MAP_STATE_HASH_ACTIVATION.regtest     = indexPrev;
+        BET_STATUS_STATE_HASH_ACTIVATION.regtest    = betPrev;
     });
 
     it('gate: every network armed at genesis (height 0, regtest via ); at/above threshold activates', function(){

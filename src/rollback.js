@@ -488,6 +488,61 @@ class Rollback {
                 args  = [block_index];
                 await this.indexerDb.doQuery(query, args);
 
+                // BET in-place flip resets ( P4; the polls/attests pattern
+                // applied to all three BET stamps). A feed row created in an
+                // EARLIER block survives the bulk delete below, but its
+                // feed_status_id was flipped in place by the latch pass
+                // (closed_block stamp) and/or a terminal path (terminal_block
+                // stamp: resolve tx / cancel tx / BET_EXPIRE pass); a bet row
+                // likewise flips bet_status_id in place at settlement
+                // (settled_block stamp). Without these resets a reorg past a
+                // latch block leaves the feed permanently closed (rejecting
+                // valid bets on the re-mined chain) and a reorg past a
+                // settlement block leaves stakes marked won/lost with their
+                // credits deleted - stranded escrow. Reset order matters:
+                // (a) terminal feeds whose latch SURVIVES (closed_block below
+                //     the reorg point) go back to 'closed';
+                // (b) terminal feeds with no surviving latch go back to 'open';
+                // (c) any surviving latch stamped in the orphaned range is
+                //     un-latched (runs last so feeds reset by (b) also clear
+                //     their orphaned closed_block).
+                // Status names resolve through index_statuses (bet_feeds/bets
+                // store status_id, unlike polls' inline strings); the interned
+                // 'open'/'closed' rows are created by the BET handlers, and the
+                // resets are no-ops (JOIN misses) before any BET activity.
+                await this.indexerDb.createStatus('open');
+                await this.indexerDb.createStatus('closed');
+                query = `UPDATE bet_feeds f
+                            JOIN index_statuses cs ON (cs.status = 'closed')
+                            SET f.feed_status_id = cs.id, f.terminal_block = NULL
+                            WHERE f.terminal_block >= ?
+                              AND f.closed_block IS NOT NULL
+                              AND f.closed_block < ?`;
+                args  = [block_index, block_index];
+                await this.indexerDb.doQuery(query, args);
+                query = `UPDATE bet_feeds f
+                            JOIN index_statuses os ON (os.status = 'open')
+                            SET f.feed_status_id = os.id, f.terminal_block = NULL
+                            WHERE f.terminal_block >= ?
+                              AND (f.closed_block IS NULL OR f.closed_block >= ?)`;
+                args  = [block_index, block_index];
+                await this.indexerDb.doQuery(query, args);
+                query = `UPDATE bet_feeds f
+                            JOIN index_statuses os ON (os.status = 'open')
+                            SET f.feed_status_id = os.id, f.closed_block = NULL
+                            WHERE f.closed_block >= ?`;
+                args  = [block_index];
+                await this.indexerDb.doQuery(query, args);
+                // Bets settled in the orphaned range re-open (their terminal
+                // credits/escrow releases are deleted generically, so the stake
+                // is back in escrow, exactly the pre-settlement state)
+                query = `UPDATE bets b
+                            JOIN index_statuses os ON (os.status = 'open')
+                            SET b.bet_status_id = os.id, b.settled_block = NULL
+                            WHERE b.settled_block >= ?`;
+                args  = [block_index];
+                await this.indexerDb.doQuery(query, args);
+
                 //  timelock: a DEFERRED binding-callback fire whose due block is
                 // orphaned while the finalization itself survives (resolved_block below
                 // the reorg point, callback_due_block at/above it). The injected EXECUTE

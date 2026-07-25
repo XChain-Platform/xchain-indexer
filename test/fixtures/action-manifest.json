@@ -67,7 +67,12 @@
     "BET": {
       "category": "wire-user",
       "wireDecoded": true,
-      "userEncodable": true
+      "userEncodable": true,
+      "indexerHandled": true
+    },
+    "BET_EXPIRE": {
+      "category": "lifecycle",
+      "indexerHandled": true
     },
     "BROADCAST": {
       "category": "wire-user",

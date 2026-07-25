@@ -131,6 +131,29 @@ module.exports = {
         // Max MEMO length
         config['MAX_MEMO_LENGTH'] = 250;
 
+        // BET parimutuel betting limits (spec claude/specs/BETTING_SYSTEM_SPEC.md
+        // section 9; CONSENSUS-CRITICAL: these bound validation, settlement work,
+        // and the per-block latch/expiry passes, so every node must agree).
+        // MAX_BET_DETAILS_LENGTH is DECODED bytes and is 4096, NOT 8192: DETAILS
+        // rides the wire base64-encoded (+33%) and shares the single 8192-byte
+        // compiled ACTION ceiling with LABEL/OUTCOMES/TICK/MEMO, so a decoded cap
+        // of 8192 composes un-broadcastable feeds (see spec section 9 arithmetic;
+        // decoder + encoder suites pin the relationship, so re-raising this fails
+        // CI rather than shipping dead feeds)
+        config['MAX_BET_LABEL_LENGTH']     = 250;
+        config['MAX_BET_OUTCOMES']         = 16;
+        config['MAX_BET_OUTCOME_LENGTH']   = 64;
+        config['MAX_FEED_FEE']             = '10.00';     // percent of the pot, 2dp
+        config['DEFAULT_BET_REFUND_WINDOW']= 1209600;     // 14d (Counterparty parity)
+        config['MIN_BET_REFUND_WINDOW']    = 3600;        // 1h
+        config['MAX_BET_REFUND_WINDOW']    = 31536000;    // 1y
+        config['MAX_BET_DETAILS_LENGTH']   = 4096;        // decoded bytes (see above)
+        config['MAX_BET_DETAILS_DEPTH']    = 8;           // JSON nesting cap (bounds renderer/schema recursion)
+        config['MAX_BETS_PER_FEED']        = 10000;       // bounds single-block settlement work
+        config['MAX_BET_DEADLINE_HORIZON'] = 31536000;    // 1y past BLOCK_TIME (bounds expire_at arithmetic)
+        config['MAX_BET_PASS_ROWS']        = 5000;        // latch/expiry feeds per block (both steps)
+        config['MAX_BET_PASS_CREDITS']     = 20000;       // expiry refund credits per block; MUST be >= MAX_BETS_PER_FEED
+
         // MAX FILE lengths
         config['MAX_FILE_NAME_LENGTH']  = 250;
         config['MAX_FILE_TYPE_LENGTH']  = 255; // MAX MIME type length according to RFC 4288
@@ -205,6 +228,12 @@ module.exports = {
             'CONTRACT_INDEX',
             'CONTROLLER',
             'COOLDOWN_BLOCKS',
+            // DEADLINE / FEED_ACTION_INDEX / MIN_AMOUNT / OUTCOME / REFUND_WINDOW:
+            // BET wire fields (spec claude/specs/BETTING_SYSTEM_SPEC.md), numeric-or-
+            // NULL normalized for storage; MIN_AMOUNT additionally in lockstep with
+            // the SDK NUMBER_FIELDS so both sides canonicalize to fixed decimal (a
+            // raw "1e-8" minimum stake would otherwise store verbatim;  class)
+            'DEADLINE',
             'DECIMALS',
             // DEPOSIT / GAS_ESCROW: VOTE v0 poll-creator escrow amounts. Kept in
             // lockstep with the SDK NUMBER_FIELDS so both sides canonicalize the
@@ -217,6 +246,7 @@ module.exports = {
             'EXPIRATION', 
             'FEE',
             'FEE_AMOUNT',
+            'FEED_ACTION_INDEX',
             'FIAT_AMOUNT',
             'GAS_ESCROW',
             'GET_AMOUNT',
@@ -228,9 +258,12 @@ module.exports = {
             'MINT_ADDRESS_MAX', 
             'MINT_START_BLOCK', 
             'MINT_STOP_BLOCK',
-            'MINT_SUPPLY', 
+            'MIN_AMOUNT',
+            'MINT_SUPPLY',
             'ORDER_ACTION_INDEX',
+            'OUTCOME',
             'OWNERSHIPS',
+            'REFUND_WINDOW',
             'RESUME_BLOCK',
             'SWAP_ACTION_INDEX',
             'TARGET_CONTRACT_INDEX',

@@ -133,6 +133,46 @@
       "action_index",
       "status_id"
     ],
+    "bet_feed_statuses": [
+      "action_index",
+      "feed_action_index",
+      "status_id"
+    ],
+    "bet_feeds": [
+      "action_index",
+      "label",
+      "outcomes",
+      "tick_id",
+      "fee",
+      "deadline",
+      "refund_window",
+      "expire_at",
+      "min_amount",
+      "allow_list",
+      "block_list",
+      "details",
+      "memo_id",
+      "status_id",
+      "feed_status_id",
+      "closed_block",
+      "terminal_block"
+    ],
+    "bet_statuses": [
+      "action_index",
+      "bet_action_index",
+      "status_id"
+    ],
+    "bets": [
+      "action_index",
+      "feed_action_index",
+      "outcome",
+      "tick_id",
+      "amount",
+      "memo_id",
+      "status_id",
+      "bet_status_id",
+      "settled_block"
+    ],
     "blocks": [
       "id",
       "block_index",

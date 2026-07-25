@@ -838,6 +838,83 @@ async function startApi(){
             }
         },
 
+        // BET parimutuel betting reads (spec claude/specs/BETTING_SYSTEM_SPEC.md
+        // section 8: raw reads for ops tooling and e2e; the PUBLIC surface is the
+        // explorer REST layer). Paged listing of betting feeds.
+        // Body: { status?, source?, tick?, limit?, after_action_index? }
+        async getbetfeeds({status, source, tick, limit, after_action_index}){
+            if(!indexer.indexerDb)
+                return { error: 'indexer database not ready' };
+            let max = Number(limit);
+            if(!Number.isFinite(max) || max <= 0) max = 100;
+            if(max > 500) max = 500;
+            // Committed-only read off an independent pooled connection 
+            let db = indexer.indexerDb.apiView();
+            try {
+                let latest = await db.getLatestBlockIndex();
+                let rows   = await db.getBetFeedRows({ status, source, tick, limit: max, after_action_index });
+                return {
+                    latest_block_index: latest,
+                    network:            indexer.config['NETWORK'],
+                    count:              rows.length,
+                    next_cursor:        (rows.length === max) ? rows[rows.length - 1].action_index : null,
+                    feeds:              rows
+                };
+            } catch (err) {
+                console.error('getbetfeeds error:', err);
+                return { error: 'failed to look up bet feeds' };
+            }
+        },
+
+        // One betting feed + its per-outcome open pools.
+        // Body: { action_index }
+        async getbetfeed({action_index}){
+            if(!indexer.indexerDb)
+                return { error: 'indexer database not ready' };
+            if(!Number.isFinite(Number(action_index)))
+                return { error: 'action_index must be numeric' };
+            let db = indexer.indexerDb.apiView();
+            try {
+                let feed = await db.getBetFeedInfo(Number(action_index));
+                if(!feed)
+                    return { error: 'unknown feed' };
+                let pools = await db.getBetFeedPools(Number(action_index));
+                return {
+                    network: indexer.config['NETWORK'],
+                    feed:    feed,
+                    pools:   pools
+                };
+            } catch (err) {
+                console.error('getbetfeed error:', err);
+                return { error: 'failed to look up bet feed' };
+            }
+        },
+
+        // Paged listing of bets.
+        // Body: { feed?, source?, status?, limit?, after_action_index? }
+        async getbets({feed, source, status, limit, after_action_index}){
+            if(!indexer.indexerDb)
+                return { error: 'indexer database not ready' };
+            let max = Number(limit);
+            if(!Number.isFinite(max) || max <= 0) max = 100;
+            if(max > 500) max = 500;
+            let db = indexer.indexerDb.apiView();
+            try {
+                let latest = await db.getLatestBlockIndex();
+                let rows   = await db.getBetRows({ feed, source, status, limit: max, after_action_index });
+                return {
+                    latest_block_index: latest,
+                    network:            indexer.config['NETWORK'],
+                    count:              rows.length,
+                    next_cursor:        (rows.length === max) ? rows[rows.length - 1].action_index : null,
+                    bets:               rows
+                };
+            } catch (err) {
+                console.error('getbets error:', err);
+                return { error: 'failed to look up bets' };
+            }
+        },
+
         // Pending XCALL v0 (cross-chain call request) rows awaiting federation
         // dispatch. Used by xchain-hub's CrossChainCallEngine to discover work;
         // the hub confirmation-gates on (block_index, latest_block_index) and

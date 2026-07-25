@@ -102,10 +102,11 @@ describe('ProtocolChanges @regression @tier3', function () {
         it('should return true for defined actions', function () {
             assert.strictEqual(pc.isDefined('SEND'), true);
             assert.strictEqual(pc.isDefined('ISSUE'), true);
+            assert.strictEqual(pc.isDefined('BET'), true); //  P4: BET registered, genesis-active
         });
 
         it('should return false for undefined actions', function () {
-            assert.strictEqual(pc.isDefined('BET'), false);
+            assert.strictEqual(pc.isDefined('FAKEACTION'), false);
             assert.strictEqual(pc.isDefined('NONEXISTENT'), false);
         });
 
@@ -123,7 +124,7 @@ describe('ProtocolChanges @regression @tier3', function () {
         });
 
         it('should return false for undefined action', async function () {
-            const enabled = await pc.isEnabled('BET', 100);
+            const enabled = await pc.isEnabled('FAKEACTION', 100);
             assert.strictEqual(enabled, false);
         });
 

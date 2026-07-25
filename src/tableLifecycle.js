@@ -224,6 +224,20 @@ const TABLES = [
     { table: 'polls', owner: 'indexer', replication: 'stream:action', rollback: 'action', replicaRollback: 'mirror',
       hashed: { classes: ['state_hash'],
                 note: 'The in-place finalization flip on a surviving polls row (updated_rows POLL_FINALIZE channel) is covered by the state_hash poll_finalize class, flag-day gated per chain (POLL_FINALIZE_STATE_HASH_ACTIVATION, armed 2026-07-07 at tip + margin; fleet must deploy before the earliest height). New rows are otherwise action-derived.' } },
+
+    // ── BET parimutuel betting ( P4) ─────────────────────────────
+    { table: 'bet_feeds', owner: 'indexer', replication: 'stream:action', rollback: 'action', replicaRollback: 'mirror',
+      hashed: { classes: ['state_hash'],
+                note: 'Three in-place flips on surviving rows, each block-stamped: the closed latch (closed_block, written by the end-of-block pass with NO causing action) and the terminal flip (terminal_block: resolved/resolved_void/cancelled/expired). Covered by the state_hash bet_feed_status class (BET_STATUS_STATE_HASH_ACTIVATION, per-chain flag-day) and the updated_rows BET channel; rollback.js resets both stamps explicitly (closed/open two-step). New rows are otherwise action-derived.' } },
+    { table: 'bets', owner: 'indexer', replication: 'stream:action', rollback: 'action', replicaRollback: 'mirror',
+      hashed: { classes: ['state_hash'],
+                note: 'The settlement flip (open -> won/lost/refunded, stamped settled_block) is an in-place mutation on a surviving row; the state_hash bet_status class covers it (same flag-day as bet_feeds), the updated_rows BET channel replicates it, and rollback.js re-opens stakes settled in an orphaned range. New rows are otherwise action-derived.' } },
+    // Status history: every row is caused by a real action (create / cancel /
+    // resolve tx or BET_EXPIRE's minted action row), so the generic
+    // action-scoped delete covers rollback. The closed latch writes NO history
+    // row by design (no causing action; bet_feeds.closed_block is its record).
+    { table: 'bet_feed_statuses', owner: 'indexer', replication: 'stream:action', rollback: 'action', replicaRollback: 'mirror', hashed: DERIVED },
+    { table: 'bet_statuses',      owner: 'indexer', replication: 'stream:action', rollback: 'action', replicaRollback: 'mirror', hashed: DERIVED },
     { table: 'votes', owner: 'indexer', replication: 'stream:action', rollback: 'action', replicaRollback: 'mirror',
       hashed: DERIVED,
       note: 'Append-only: a re-vote inserts a new action_index set and tallies read each voter\'s MAX(action_index) set, so the generic delete re-exposes the prior surviving ballot on reorg.' },

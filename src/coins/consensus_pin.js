@@ -37,15 +37,15 @@ module.exports = {
         mainnet: null,
 
         testnet: {
-            BTC:  '63dbeef3ea93fa5ece4ea823f4e1f13d299f274fd869e264d713b58d0e79a66d',
-            LTC:  '39862b4a35bd5c255e68fb065b3bfe0cb3752f4b9a3562a2a23f674fed0482ea',
-            DOGE: 'c5dca915fb5c8233b52eeac061853b4aa9843d19569870c45ec19d8853136cf6',
+            BTC:  '211086b82b345092a8ce18ca08ab945a6b294c59efa5588c70eacdb5ee515e62',
+            LTC:  '7e4cc52a609606024d1ea8d26c743957e195c660b0bb749e523f4cbdcc82baf8',
+            DOGE: 'd61706332ddcb921b4bb3d0a9f077119426405692fc118eaba8d1a6a9ecb28d0',
         },
 
         regtest: {
-            BTC:  '3a33f0830b7138245b05767a905a1820c51b04b4bffd1178a4628e0bf41cafac',
-            LTC:  '6e8a60b0aa4f78f1e64353778252b01d09f41b01ad351d6aa26ab354be4d9645',
-            DOGE: '51a8be37d15a183723338bf157365d2fa2c28fad36440db958df2dae86f544fb',
+            BTC:  'd900b05a7df14595ff4a2be4bbd9505a661f0c6cef4237f1e00aace3b2397f0e',
+            LTC:  '769d91cad98ea674494290ac680bb1c0ddb8bcd3b75cbffa131365bf97811db1',
+            DOGE: '3de84c0bf6478e985f0ea0cc0ece155cf2780f0e932c3f6e063d3f01bfc38197',
         },
     },
 };

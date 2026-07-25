@@ -53,7 +53,8 @@ const FEE_QUOTE_DENYLIST = new Set(['DEPLOY', 'EXECUTE', 'XEXEC', 'BATCH']);
 const FEE_QUOTE_EXEMPT = new Set([
     'COINPAY', 'DISPENSE',
     'COINPAY_EXPIRE', 'ORDER_MATCH', 'ORDER_EXPIRE', 'SWAP_MATCH', 'SWAP_EXPIRE',
-    'DISPENSER_CLOSE', 'DISPENSER_EXPIRE', 'CROSS_SETTLE', 'XCALL', 'ATTEST'
+    'DISPENSER_CLOSE', 'DISPENSER_EXPIRE', 'CROSS_SETTLE', 'XCALL', 'ATTEST',
+    'BET_EXPIRE'
 ]);
 
 // ACTION aliases, expanded to canonical names before any gate. Single module-level source of
@@ -87,7 +88,8 @@ function classifyFeeQuoteAction(action){
 const address          = require('./actions/address.js');
 const airdrop          = require('./actions/airdrop.js');
 const batch            = require('./actions/batch.js');
-// const bet              = require('./actions/bet.js');
+const bet              = require('./actions/bet.js');
+const bet_expire       = require('./actions/bet_expire.js');
 const broadcast        = require('./actions/broadcast.js');
 const callback         = require('./actions/callback.js');
 const coinpay          = require('./actions/coinpay.js');
@@ -200,6 +202,8 @@ class Actions {
         this.actionList            = new list(this);
         this.actionMessage         = new message(this);
         this.actionMint            = new mint(this);
+        this.actionBet             = new bet(this);
+        this.actionBetExpire       = new bet_expire(this);
         this.actionOrder           = new order(this);
         this.actionOrderExpire     = new order_expire(this);
         this.actionOrderMatch      = new order_match(this);
@@ -432,7 +436,8 @@ class Actions {
         if(action=='ADDRESS')            await this.actionAddress.parse(params, data, error);
         if(action=='AIRDROP')            await this.actionAirdrop.parse(params, data, error);
         if(action=='BATCH')              await this.actionBatch.parse(params, data, error);
-        // if(action=='BET')                await this.actionBet.parse(params, data, error);
+        if(action=='BET')                await this.actionBet.parse(params, data, error);
+        if(action=='BET_EXPIRE')         await this.actionBetExpire.parse(params, data, error);
         if(action=='BROADCAST')          await this.actionBroadcast.parse(params, data, error);
         if(action=='CALLBACK')           await this.actionCallback.parse(params, data, error);
         if(action=='COINPAY')             await this.actionCoinpay.parse(params, data, error);

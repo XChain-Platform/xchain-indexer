@@ -194,6 +194,44 @@ function isTokenSupplyStateHashActive(blockIndex, network, coin){
     return b >= threshold;
 }
 
+// ── BET status-flip state-hash flag-day ( P4) ──────────────────────────
+// The hash twin of the updated_rows BET replication classes. BET carries THREE
+// in-place mutations on surviving rows, all stamped with the block that made
+// them: the closed latch (bet_feeds.closed_block), the feed terminal flip
+// (bet_feeds.terminal_block: resolved/resolved_void/cancelled/expired) and the
+// per-bet settlement flip (bets.settled_block: won/lost/refunded). None of them
+// is visible to the action-scoped ledger hashes once the row's creating action
+// is below the block, so a follower silently dropping one diverged with no halt
+// (the exact class this file's header documents). Although the BET action is
+// genesis-active, the hash class CANNOT be: mainnet/testnet fleets already
+// compare state hashes every block, so an ungated preimage-shape change would
+// halt a mixed-version fleet instantly. Same per-chain arming model as
+// POLL_FINALIZE/TOKEN_SUPPLY above.
+const BET_STATUS_STATE_HASH_ACTIVATION = {
+    // PROVISIONAL heights, targeted at the  pre-freeze activation train
+    // (~2026-08 deploy window; derived from the 2026-07-07 POLL_FINALIZE tips +
+    // chain cadence). CONFIRM against live tips at train assembly before push:
+    // every indexer + sync process must run this exact map BEFORE each chain
+    // reaches its height.
+    'BTC:mainnet':  963000,
+    'LTC:mainnet':  3161000,
+    'DOGE:mainnet': 6337000,
+    'BTC:testnet':  149500,
+    'LTC:testnet':  4823000,
+    'DOGE:testnet': 68000000,   // fast chain, wide margin
+    regtest: 0,                 // armed from genesis: fresh regtest stacks exercise the class end to end
+};
+
+// Whether the BET status-flip class is folded into state_hash at `blockIndex`
+// on `network` for `coin`. Same fail-inert semantics as the gates above.
+function isBetStatusStateHashActive(blockIndex, network, coin){
+    let b = parseInt(blockIndex);
+    if(!Number.isFinite(b)) return false;
+    let threshold = _activationThreshold(BET_STATUS_STATE_HASH_ACTIVATION, network, coin);
+    if(threshold === undefined) return false;
+    return b >= threshold;
+}
+
 // ── Archive-head anchor versions  ────────────────────────────────────
 // The anchor_actions versions that carry an archive HEAD (a signed batch header
 // whose v2 continuation chunks reassemble against it): v1 (legacy archive anchor)
@@ -448,6 +486,36 @@ async function buildStateHashData(db, blockIndex, opts){
         } catch(e){ if(e && typeof e.errno === 'number' && e.errno !== 1146 && e.errno !== 1054) throw e; /* table/columns may not exist on older schemas */ }
     }
 
+    // 10. BET status flips: feeds latched or terminal at block B (a feed can do
+    //     BOTH in one pass on a large block-time jump: the latch stamps
+    //     closed_block, then the expiry step flips terminal in the same block)
+    //     and bets settled at block B. Keyed by the stamp columns, the SAME keys
+    //     the forward updated_rows BET classes select by and the reverse
+    //     rollback resets. Status strings resolved via index_statuses (never a
+    //     surrogate id); row identity is action_index (unique), so ORDER BY
+    //     action_index is a total order. GATED INERT below the per-chain
+    //     activation height; queries appended after every existing call so the
+    //     doQuery call order is unchanged when inert.
+    let betStatusActive = isBetStatusStateHashActive(B, network, coin);
+    let bet_feed_status = [];
+    let bet_status = [];
+    if(betStatusActive){
+        try {
+            bet_feed_status = await db.doQuery(
+                "SELECT f.action_index, s.status AS feed_status, f.closed_block, f.terminal_block " +
+                "FROM bet_feeds f JOIN index_statuses s ON (s.id = f.feed_status_id) " +
+                "WHERE f.closed_block = ? OR f.terminal_block = ? ORDER BY f.action_index ASC",
+                [B, B]);
+        } catch(e){ if(e && typeof e.errno === 'number' && e.errno !== 1146 && e.errno !== 1054) throw e; /* table/columns may not exist on older schemas */ }
+        try {
+            bet_status = await db.doQuery(
+                "SELECT b.action_index, s.status AS bet_status, b.settled_block " +
+                "FROM bets b JOIN index_statuses s ON (s.id = b.bet_status_id) " +
+                "WHERE b.settled_block = ? ORDER BY b.action_index ASC",
+                [B]);
+        } catch(e){ if(e && typeof e.errno === 'number' && e.errno !== 1146 && e.errno !== 1054) throw e; /* table/columns may not exist on older schemas */ }
+    }
+
     // Fixed key order: the hash preimage. NOT chained on a previous state_hash
     // (the adjacent three hashes already carry chain-continuity; a chain would only
     // make NULL-backfill of historical blocks poison every successor).
@@ -474,6 +542,10 @@ async function buildStateHashData(db, blockIndex, opts){
     if(tokenSupplyActive){
         preimage.token_supply = token_supply;
     }
+    if(betStatusActive){
+        preimage.bet_feed_status = bet_feed_status;
+        preimage.bet_status      = bet_status;
+    }
     preimage.block_index        = B;
     preimage.state_hash_version = STATE_HASH_VERSION;
     return preimage;
@@ -484,5 +556,6 @@ module.exports = { buildStateHashData, STATE_HASH_VERSION,
                    INDEX_MAP_STATE_HASH_ACTIVATION, isIndexMapStateHashActive,
                    POLL_FINALIZE_STATE_HASH_ACTIVATION, isPollFinalizeStateHashActive,
                    TOKEN_SUPPLY_STATE_HASH_ACTIVATION, isTokenSupplyStateHashActive,
+                   BET_STATUS_STATE_HASH_ACTIVATION, isBetStatusStateHashActive,
                    ARCHIVE_HEAD_VERSIONS, ARCHIVE_HEAD_VERSIONS_SQL,
                    ARCHIVE_INVALID_STATE_HASH_ACTIVATION, isArchiveInvalidStateHashActive };

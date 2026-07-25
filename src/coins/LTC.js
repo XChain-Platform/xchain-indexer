@@ -157,6 +157,14 @@ module.exports = {
         OWNERSHIP_ESCROW:      50000,
         AIRDROP_PER_RECIPIENT: 100,
         DIVIDEND_PER_RECIPIENT: 100,
+        // BET (parimutuel betting, spec decision F): feed creation is duration-
+        // metered like ORDER/SWAP/DISPENSER expiration (same free window via
+        // UNIFIED_EXPIRATION_FEE_FREE_DAYS) but under its OWN per-day key so the
+        // two families can be re-priced independently; BET_PER_CREDIT pre-funds
+        // each bet's single terminal credit at place time (AIRDROP/DIVIDEND
+        // per-recipient parity). Resolve and cancel are free by design.
+        BET_FEED_PER_DAY:      550,
+        BET_PER_CREDIT:        100,
         VM_EXECUTE_BASE:       1000,
         VM_DEPLOY_BASE:        100000,
         VM_DEPLOY_PER_BYTE:    10,

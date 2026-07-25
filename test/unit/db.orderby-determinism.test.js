@@ -78,6 +78,13 @@ const ALLOWLIST = [
         clause: 'a2.action',
         reason: 'market action-type counts: paired with GROUP BY a2.action, so a2.action ' +
                 'is unique per returned row (a total order by construction).'
+    },
+    {
+        clause: 'b.outcome ASC',
+        reason: 'getBetFeedPools: paired with GROUP BY b.outcome within one feed, so ' +
+                'b.outcome is unique per returned row (a total order by construction). ' +
+                'Non-consensus besides: an explorer/ops pool listing, never a settlement input ' +
+                '(settlement recomputes pools from getOpenBetsByFeed, action_index ASC).'
     }
 ];
 
