@@ -34,7 +34,8 @@
       "wireDecoded": true,
       "indexerHandled": true,
       "userEncodable": true,
-      "explorerRender": true
+      "explorerRender": true,
+      "walletForm": true
     },
     "AIRDROP": {
       "category": "wire-user",
