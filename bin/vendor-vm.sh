@@ -37,19 +37,36 @@
 
 set -euo pipefail
 
-# Fail closed off-Linux: the npm install below compiles isolated-vm for the HOST
-# platform, so a Mac-side run poisons the vendored tree with Mach-O binaries the
-# Linux runtime cannot load (PROM-029 incident). Run this on devhost instead.
-if [ "$(uname -s)" != "Linux" ]; then
-    echo "vendor-vm: refusing to run on $(uname -s): npm install would build a non-Linux isolated-vm into the vendored tree." >&2
-    echo "vendor-vm: run this script on devhost (Linux), e.g.: ssh devhost 'cd $(pwd) && bin/vendor-vm.sh'" >&2
-    exit 1
-fi
-
 INDEXER_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SRC="${XCHAIN_VM_SOURCE:-$INDEXER_ROOT/../xchain-vm}"
 DEST="$INDEXER_ROOT/xchain-vm"
 MODE="${1:-fix}"
+
+# Fail closed off-Linux: the npm install in the WRITE path compiles isolated-vm
+# for the HOST platform, so a Mac-side run poisons the vendored tree with Mach-O
+# binaries the Linux runtime cannot load (PROM-029 incident). Run that on
+# devhost instead.
+#
+# `check` is exempt, and the distinction matters more than it looks. It writes
+# nothing: it greps CONSENSUS_VERSION out of the frozen export and sha1s src/**,
+# never loading isolated-vm, and the hashing helper below already falls back to
+# `shasum -a 1` precisely because sha1sum is absent on macOS. So the guard was
+# built to be portable and this gate, sitting above the mode parsing rather than
+# below it, was blocking it anyway.
+#
+# The cost of that was not a missing check but a MISLEADING one: bin/ci-all.sh
+# treats any non-zero exit here as vendored-VM drift and prints
+# "ERROR: xchain-indexer vendored xchain-vm drift", pointing at a resync that
+# would also refuse. On a Mac that fired on every run with the trees perfectly
+# in sync, which is a false alarm on the one artifact that EXECUTES AT CONSENSUS
+# TIME and whose real drift once shipped two missing consensus gates under an
+# identical version string. A guard that cries wolf on the primary dev machine
+# is a guard people learn to route around.
+if [ "$MODE" != "check" ] && [ "$(uname -s)" != "Linux" ]; then
+    echo "vendor-vm: refusing to $MODE on $(uname -s): npm install would build a non-Linux isolated-vm into the vendored tree." >&2
+    echo "vendor-vm: run this script on devhost (Linux), e.g.: ssh devhost 'cd $(pwd) && bin/vendor-vm.sh'" >&2
+    exit 1
+fi
 
 # Read CONSENSUS_VERSION straight from the frozen export so the check never needs to
 # load isolated-vm. Empty if the file/const is missing.
