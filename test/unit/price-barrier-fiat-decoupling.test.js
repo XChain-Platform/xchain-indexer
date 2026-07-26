@@ -76,11 +76,20 @@ describe(' price barrier decoupled from the fee flag-day @regression @tier1', fu
             'price_snapshots time-keyed on every chain from day one ');
     });
 
-    it('the non-BTC branch gates only on hub-db sync being enabled', function () {
+    it('the time barrier gates only on hub-db sync being enabled', function () {
         const block = barrierBlock();
-        assert.ok(/\}\s*else if\(this\.hubDbSync\)\{/.test(block),
-            'the else-branch condition must be exactly `this.hubDbSync`, so the barrier ' +
-            'runs whenever a mirror is in play and is a no-op only on single-host stacks');
+        // Was pinned as `} else if(this.hubDbSync){` when the time barrier was the
+        // non-BTC ALTERNATIVE to the height barrier.  made the two additive
+        // (BTC needs both; see the barrier comment in XChainIndexer.js), so the
+        // condition is now a bare `if`. The property this test exists for is
+        // unchanged and strictly stronger: the barrier runs whenever a mirror is in
+        // play, and is a no-op only on single-host stacks.
+        assert.ok(/\}\s*\n\s*if\(this\.hubDbSync\)\{/.test(block),
+            'the time-barrier condition must be exactly `this.hubDbSync`, unguarded by ' +
+            'chain or flag-day, so it runs whenever a mirror is in play');
+        assert.ok(!/else if\(this\.hubDbSync\)/.test(block),
+            'the time barrier must NOT be an else-branch of the BTC height barrier: on ' +
+            'BTC the height check does not imply time coverage ');
     });
 
     it('the flag-day predicate itself is retained for the fee-side query', function () {

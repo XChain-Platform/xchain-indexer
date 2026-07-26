@@ -722,6 +722,36 @@ class XChainIndexer {
                 // mirror (hub unreachable, watermark frozen) defers, which is the intent.
                 // Strictly-stricter than the fee query below the flag-day, which is the safe
                 // direction: an extra wait can delay a block but can never change its verdict.
+                // : the two barriers are ADDITIVE on BTC, not alternatives. The height
+                // barrier alone does NOT imply time coverage, and FIAT settlement reads by
+                // time, so BTC needed the time barrier as much as LTC/DOGE did.
+                //
+                // Why the height check is not sufficient. `_priceSyncSatisfied`'s first case is
+                // a pure `priceSyncHeight >= blockHeight` test, where priceSyncHeight is the max
+                // `reference_block` in the local mirror. A round's `reference_block` is the BTC
+                // height it anchors to; its `block_timestamp` is the wall-clock instant the
+                // validators STAMPED it (xchain-hub PriceAggregator: both arrive together in the
+                // round push, and the two are independent quantities). Bitcoin lets a miner
+                // timestamp a block up to 2 hours ahead of network-adjusted time, so a
+                // forward-dated block H is processed with a `blockTime` that real wall-clock has
+                // not reached yet. One local round anchored at >= H satisfies the height barrier
+                // immediately, while for the next two hours the hub keeps finalizing rounds whose
+                // `block_timestamp` is still <= blockTime and therefore still INSIDE the
+                // `[blockTime - FIAT_DISPENSER_PRICE_WINDOW, blockTime]` range that
+                // getPricesInTimeRange scans, each one newer than the last under its
+                // `block_timestamp DESC, round_number DESC` ordering. Two operators whose mirrors
+                // stopped at different rounds in that window read a different newest price,
+                // reversePriceMatch floors a different unit count, and the dispense credits a
+                // different amount: a fork. A fresh resync is the worst case, because its mirror
+                // holds every one of those rounds while the live node that first processed H
+                // held none of them. That is exactly the live-node-vs-resync divergence the §8.4
+                // mirror barriers exist to close, and the height-keyed one does not close it.
+                //
+                // The height barrier is RETAINED rather than replaced: below the
+                // NATIVE_FEE_PRICE_TIME_GATE flag-day, native-fee validation still selects the
+                // latest round by HEIGHT (db.getLatestPrice), so dropping it would un-barrier the
+                // fee path and diverge a from-genesis replay. The two gate different readers of
+                // the same table and both are needed.
                 if(this.hubDbSync && this.config['COIN'] === 'BTC'){
                     try {
                         await this.hubDbSync.waitForPriceSyncHeight(blockToParse, this.priceSyncTimeoutMs, blockTime);
@@ -733,7 +763,8 @@ class XChainIndexer {
                         this.stallReason = 'price_sync_barrier';
                         break;
                     }
-                } else if(this.hubDbSync){
+                }
+                if(this.hubDbSync){
                     try {
                         await this.hubDbSync.waitForPriceSyncTime(blockTime, this.priceSyncTimeoutMs);
                     } catch(err){
