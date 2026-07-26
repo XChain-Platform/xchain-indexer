@@ -180,6 +180,28 @@ jobs:
             console.log("consensus pin conformance OK (testnet, regtest)");
           '
 
+      # Pre-flight drift gate (confirm/decode/pre-flight spec §8.5). The SDK's
+      # Tier-2 client checks mirror validity logic that is authoritative in
+      # src/actions/*.js here, and a handler change that lands without a paired
+      # review of the mirror silently turns the client tier into a wrong answer
+      # the user is shown BEFORE signing. The gate lives in the SDK (with the map
+      # it reads) but has to run where both repos exist, which is this job.
+      #
+      # It was specced with slice 1 and never wired up, and the first run after
+      # wiring found two handlers six days out of date - a live demonstration
+      # that a gate nobody runs is not a gate.
+      - name: Check out the pre-flight client checks (xchain-sdk)
+        uses: actions/checkout@v4
+        with:
+          repository: XChain-Platform/xchain-sdk
+          ssh-key: ${{ secrets.XCHAIN_SDK_DEPLOY_KEY }}
+          path: xchain-sdk
+
+      - name: Pre-flight <-> handler drift gate
+        env:
+          XCHAIN_INDEXER_PATH: ${{ github.workspace }}/xchain-indexer
+        run: node xchain-sdk/bin/check-preflight-drift.js
+
   # Coverage ratchet : re-run the unit suite under c8 and fail if line or
   # branch coverage drops below this repo's floor in bin/coverage-thresholds.json
   # (mirrored into the `coverage:check` npm script). Catches silent coverage
