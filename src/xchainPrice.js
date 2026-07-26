@@ -87,7 +87,18 @@ function isUsableFill(util, fill) {
  * @returns {object|null}  null when no usable fill survives or no reference is
  *   available (the caller then holds the previous value or the bootstrap).
  *   Otherwise { rate, usedCount, clampedCount, droppedCount, totalXchain,
- *   refRate, lower, upper } with `rate` an 8dp decimal string: BTC per XCHAIN.
+ *   totalCoin, rawRate, refRate, lower, upper } with `rate` an 8dp decimal
+ *   string: BTC per XCHAIN.
+ *
+ *   `totalCoin` is the window's BTC-side notional (spec D2: the measured
+ *   quantity for the supersession threshold), summed post-exclusion and
+ *   PRE-winsorize, so the threshold is compared against what the market
+ *   actually paid rather than against clamped stand-ins. `rawRate` is the
+ *   unwinsorized sum(coin)/sum(xchain) and exists only for §10 step 6
+ *   observability: publishing it beside `rate` is what makes a clamped round
+ *   auditable after the fact. Neither feeds the published price, but both are
+ *   computed here rather than by the caller so there is exactly one
+ *   implementation of the sums.
  */
 function deriveXchainRate(util, fills, refRate, opts = {}) {
     if (!Array.isArray(fills) || fills.length === 0) return null;
@@ -129,6 +140,12 @@ function deriveXchainRate(util, fills, refRate, opts = {}) {
     let totalXchain = '0';
     let numerator   = '0';
     let clampedCount = 0;
+    // BTC-side notional, summed pre-winsorize. This is the D2 threshold quantity
+    // and the §10.6 volume metric, and it is deliberately NOT `numerator`: for a
+    // clamped fill the numerator carries the band edge, not the BTC actually paid,
+    // so reusing it would let a clamped wash print inflate the very measurement
+    // that decides whether the market is real enough to supersede the bootstrap.
+    let totalCoin = '0';
 
     for (let f of usable) {
         let rate = util.bcdiv(f.coinAmount, f.xchainAmount, RATE_PRECISION);
@@ -144,6 +161,7 @@ function deriveXchainRate(util, fills, refRate, opts = {}) {
         }
         numerator   = util.bcadd(numerator, contribution, RATE_PRECISION);
         totalXchain = util.bcadd(totalXchain, f.xchainAmount, RATE_PRECISION);
+        totalCoin   = util.bcadd(totalCoin, f.coinAmount, RATE_PRECISION);
     }
 
     if (!util.bcgt(totalXchain, '0')) return null;
@@ -151,12 +169,19 @@ function deriveXchainRate(util, fills, refRate, opts = {}) {
     let rate = util.bcdiv(numerator, totalXchain, PRICE_PRECISION);
     if (!util.bcgt(rate, '0')) return null;   // rounded away to zero: not a usable price
 
+    // Unwinsorized VWAP, for observability only. Computed from the same sums so a
+    // reader can see exactly how far the defence moved the print: rate === rawRate
+    // whenever clampedCount is 0, and the gap between them IS the winsorization.
+    let rawRate = util.bcdiv(totalCoin, totalXchain, PRICE_PRECISION);
+
     return {
         rate:         util.bcformat(rate, PRICE_PRECISION),
         usedCount:    usable.length,
         clampedCount: clampedCount,
         droppedCount: droppedCount,
         totalXchain:  util.bcformat(totalXchain, PRICE_PRECISION),
+        totalCoin:    util.bcformat(totalCoin, PRICE_PRECISION),
+        rawRate:      util.bcformat(rawRate, PRICE_PRECISION),
         refRate:      util.bcformat(refRate, PRICE_PRECISION),
         lower:        util.bcformat(lower, PRICE_PRECISION),
         upper:        util.bcformat(upper, PRICE_PRECISION),

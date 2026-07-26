@@ -221,6 +221,55 @@ describe('XCHAIN price derivation from realized fills @regression', function () 
         });
     });
 
+    // The BTC-side notional (D2's threshold quantity) and the unwinsorized VWAP
+    // (§10 step 6). Neither reaches the published price, so nothing else in this
+    // file would notice them being wrong.
+    describe('volume and the pre-winsorize audit trail', function () {
+
+        it('sums the BTC side of the window as the threshold quantity', function () {
+            const r = deriveXchainRate(util, [fill('100', '0.001'), fill('300', '0.003')], REF);
+            assert.strictEqual(r.totalCoin, '0.00400000');
+        });
+
+        it('counts a CLAMPED fill at the BTC actually paid, not at the band edge', function () {
+            // The whole point of measuring volume pre-winsorize. This fill's rate is
+            // far above the band, so its contribution to the price is the band edge,
+            // but only 0.001 BTC really changed hands. Taking the volume from the
+            // numerator instead would report 0.02 and let a clamped wash print
+            // manufacture the very evidence that says the market is real.
+            const r = deriveXchainRate(util, [fill('1000', '1')], REF);
+            assert.strictEqual(r.clampedCount, 1);
+            assert.strictEqual(r.totalCoin, '1.00000000');
+            assert.strictEqual(r.rate, '0.00002000');       // clamped to the upper edge
+        });
+
+        it('excludes dropped rows from the volume, matching the price', function () {
+            // A degenerate fill is not a trade, so it must not count toward the
+            // threshold either, or a free zero-BTC print would help clear the bar.
+            const r = deriveXchainRate(util, [fill('100', '0.001'), fill('50', '0')], REF);
+            assert.strictEqual(r.droppedCount, 1);
+            assert.strictEqual(r.usedCount, 1);
+            assert.strictEqual(r.totalCoin, '0.00100000');
+        });
+
+        it('reports rawRate equal to the price when nothing was clamped', function () {
+            const r = deriveXchainRate(util, [fill('100', '0.001'), fill('300', '0.0045')], REF);
+            assert.strictEqual(r.clampedCount, 0);
+            assert.strictEqual(r.rawRate, r.rate);
+        });
+
+        it('reports rawRate diverging from the price exactly when the band bites', function () {
+            // 100 XCHAIN at the reference plus 100 at 100x it. The raw average is
+            // dragged to ~0.0005; the published price is held near the band edge.
+            // The gap between the two IS the defence, and it is only visible here.
+            const r = deriveXchainRate(util, [fill('100', '0.001'), fill('100', '0.1')], REF);
+            assert.strictEqual(r.clampedCount, 1);
+            assert.strictEqual(r.rawRate, '0.00050500');
+            assert.strictEqual(r.rate, '0.00001500');
+            assert.ok(util.bcgt(r.rawRate, r.rate), 'raw must exceed the winsorized print here');
+        });
+    });
+
     describe('precision and determinism', function () {
 
         it('rounds HALF-UP, not half-even, matching the indexer bcmath', function () {
