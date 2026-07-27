@@ -1286,14 +1286,14 @@ class Utility {
     // validateNativeCoinFee and computeFeeQuote.
     // Returns { coinUsdPrice, xchainUsdPrice, oracleRound } on success, or { error } on
     // a missing/stale/invalid price.
-    // `gateTime` (optional, 6th arg) anchors ONLY the NATIVE_FEE_PRICE_TIME_GATE flag-day
-    // predicate; it defaults to refTime when null/undefined. The consensus caller
-    // (validateNativeCoinFee) passes BLOCK_TIME as refTime and omits gateTime, so gateTime
-    // resolves to refTime and this path stays byte-identical. The public feequote pre-flight
-    // passes wall-clock as refTime (staleness is deliberately judged against real-world price
-    // age) but the quoted block's time as gateTime, so the flag-day gate is anchored on a
-    // chain-derived time, not the operator's clock, while staleness stays on refTime.
-    async getFeeOraclePrices(db, coin, blockIndex, refTime, maxAgeSeconds, gateTime){
+    // `refTime` anchors ALL THREE time-sensitive decisions here (round selection on non-BTC
+    // chains, the staleness guard, and the NATIVE_FEE_PRICE_TIME_GATE flag-day predicate), and
+    // every caller must pass a CHAIN-derived time: the consensus caller passes the evaluated
+    // block's BLOCK_TIME, the read-only feequote/feeschedule pre-flights pass the quoted (tip)
+    // block's time. Anchoring one of those decisions on the operator's wall clock while the
+    // chain anchors on block time is , and it makes a pre-flight disagree with the very
+    // check it exists to predict.
+    async getFeeOraclePrices(db, coin, blockIndex, refTime, maxAgeSeconds){
         let priceDb;
         if(db.indexer && db.indexer.hubDb){
             priceDb = db.indexer.hubDb;
@@ -1326,11 +1326,9 @@ class Utility {
         // block loop enforces the matching time-keyed price barrier
         // (XChainIndexer/hub_db_sync), gated by the SAME shared predicate.
         let network      = this.config['NETWORK'] || process.env.INDEXER_NETWORK;
-        // Gate anchored on a chain-derived time (gateTime, default refTime); staleness stays on
-        // refTime via opts.blockTime.
-        let gateAt       = (gateTime === null || gateTime === undefined) ? refTime : gateTime;
+        // One chain-derived anchor drives the gate, the selection and the staleness guard.
         let selectByTime = (coin !== 'BTC') &&
-            protocolChanges.isNativeFeePriceTimeGateActive(network, gateAt);
+            protocolChanges.isNativeFeePriceTimeGateActive(network, refTime);
         let opts = { blockTime: refTime, maxAgeSeconds: maxAgeSeconds, selectByTime: selectByTime };
 
         let coinPriceData = await priceDb.getLatestPrice(coin + '/USD', blockIndex, opts);

@@ -107,10 +107,10 @@ describe('native coin fee quote @regression @tier1', function () {
         });
     });
 
-    // #2693: the flag-day gate (NATIVE_FEE_PRICE_TIME_GATE) must anchor on a chain-derived time
-    // (gateTime), not the operator wall-clock, while staleness stays on refTime. The 6th arg
-    // threads gateTime; default gateTime = refTime keeps the consensus caller byte-identical.
-    describe('getFeeOraclePrices() gate-time threading', function () {
+    // #2693 / : every time-sensitive decision in getFeeOraclePrices (flag-day gate, non-BTC
+    // round selection, staleness) anchors on the SINGLE chain-derived refTime the caller passes.
+    // There is no separate wall-clock anchor to disagree with it.
+    describe('getFeeOraclePrices() single chain-time anchor', function () {
         const GATE = require('../../src/protocol_changes.js').NATIVE_FEE_PRICE_TIME_GATE_MAINNET_TIME;
         // DB stub that records the opts (selectByTime, blockTime) getLatestPrice was called with.
         function makeCapturingDb(){
@@ -131,29 +131,32 @@ describe('native coin fee quote @regression @tier1', function () {
             return util;
         }
 
-        it('quote path: block time before the gate + wall-clock after keeps the gate INACTIVE', async function () {
+        it('refTime before the gate => INACTIVE, and selection/staleness use that same refTime', async function () {
             let util = mainnetUtil();
             let { db, seen } = makeCapturingDb();
-            // refTime = wall-clock after the flag-day; gateTime = quoted block before it.
-            let r = await util.getFeeOraclePrices(db, 'DOGE', 100, GATE + 1000, 1800, GATE - 1000);
+            let r = await util.getFeeOraclePrices(db, 'DOGE', 100, GATE - 1000, 1800);
             assert.ok(!r.error, r.error);
-            assert.strictEqual(seen.opts.selectByTime, false, 'gate must follow chain time (before), not wall-clock');
-            assert.strictEqual(seen.opts.blockTime, GATE + 1000, 'staleness stays anchored on refTime');
-        });
-
-        it('default gateTime = refTime (consensus caller) is unchanged: refTime after gate => ACTIVE', async function () {
-            let util = mainnetUtil();
-            let { db, seen } = makeCapturingDb();
-            // No 6th arg: gateTime defaults to refTime (validateNativeCoinFee passes BLOCK_TIME).
-            await util.getFeeOraclePrices(db, 'DOGE', 100, GATE + 1000, 1800);
-            assert.strictEqual(seen.opts.selectByTime, true, 'default gateTime=refTime, gate active past flag-day');
-        });
-
-        it('default gateTime = refTime: refTime before gate => INACTIVE', async function () {
-            let util = mainnetUtil();
-            let { db, seen } = makeCapturingDb();
-            await util.getFeeOraclePrices(db, 'DOGE', 100, GATE - 1000, 1800);
             assert.strictEqual(seen.opts.selectByTime, false);
+            assert.strictEqual(seen.opts.blockTime, GATE - 1000, 'one anchor drives gate and staleness');
+        });
+
+        it('refTime after the gate => ACTIVE (consensus caller, byte-identical)', async function () {
+            let util = mainnetUtil();
+            let { db, seen } = makeCapturingDb();
+            // validateNativeCoinFee passes BLOCK_TIME as refTime and nothing else.
+            await util.getFeeOraclePrices(db, 'DOGE', 100, GATE + 1000, 1800);
+            assert.strictEqual(seen.opts.selectByTime, true, 'gate active past the flag-day');
+            assert.strictEqual(seen.opts.blockTime, GATE + 1000);
+        });
+
+        it('takes no wall-clock override: a 6th argument cannot split the anchor', async function () {
+            let util = mainnetUtil();
+            let { db, seen } = makeCapturingDb();
+            // A stale caller still threading the removed gateTime must not resurrect the split
+            // anchor that  removed: the gate follows refTime and ignores the extra arg.
+            await util.getFeeOraclePrices(db, 'DOGE', 100, GATE + 1000, 1800, GATE - 1000);
+            assert.strictEqual(seen.opts.selectByTime, true);
+            assert.strictEqual(seen.opts.blockTime, GATE + 1000);
         });
     });
 
@@ -198,6 +201,133 @@ describe('native coin fee quote @regression @tier1', function () {
             assert.strictEqual(q.valid, false);
             assert.ok(/missing or stale/.test(q.error), q.error);
         });
+    });
+
+    // : the pre-flight exists to predict validateNativeCoinFee, which reads prices as of
+    // the evaluated BLOCK's time. Anchoring the pre-flight on the operator's wall clock instead
+    // made it disagree with the chain in both directions. These cases pin the anchor.
+    describe('_priceFeeQuote() chain-time anchoring', function () {
+        const GATE = require('../../src/protocol_changes.js').NATIVE_FEE_PRICE_TIME_GATE_MAINNET_TIME;
+
+        // Price store reproducing db.getLatestPrice's real selection + staleness semantics over
+        // an in-memory row set, so these cases exercise the interaction the live venue hit and
+        // not just an argument-passing stub. Rows: { pair, price, round, ts, refBlock }.
+        function makePriceDb(rows, { blockIndex = 100, blockTime = null } = {}){
+            let seen = { opts: [] };
+            let db = {
+                getLatestBlockIndex: async () => blockIndex,
+                getBlockTime:        async () => blockTime,
+                getLatestPrice: async (pair, blockHeight, opts) => {
+                    seen.opts.push(opts);
+                    let eligible = rows.filter(r => r.pair === pair).filter(r =>
+                        (opts && opts.selectByTime)
+                            ? r.ts <= Number(opts.blockTime)
+                            : r.refBlock <= blockHeight);
+                    if(eligible.length === 0) return null;
+                    let row = eligible.sort((a, b) => b.round - a.round)[0];
+                    if(opts && parseInt(opts.maxAgeSeconds) > 0 &&
+                       (parseInt(opts.blockTime) - row.ts) > parseInt(opts.maxAgeSeconds))
+                        return null;
+                    return { price: row.price, roundNumber: row.round, block_timestamp: row.ts };
+                }
+            };
+            return { db, seen };
+        }
+
+        // A chain whose clock runs ahead of real time (mock-time regtest, or any skewed venue):
+        // the newest rounds carry timestamps in the future relative to wall clock.
+        const AHEAD_TIP = GATE + 86400;
+        function dogeRows(tipTime){
+            return [
+                { pair: 'DOGE/USD',   price: '0.10000000', round: 9, ts: tipTime - 120, refBlock: 50 },
+                { pair: 'XCHAIN/USD', price: '1.00000000', round: 9, ts: tipTime - 120, refBlock: 50 }
+            ];
+        }
+
+        it('clock-ahead venue: a non-BTC quote reads the rounds the chain can see', async function () {
+            let util = makeUtil('DOGE', FEE_DEST);
+            util.config['NETWORK'] = 'mainnet';
+            let { db, seen } = makePriceDb(dogeRows(AHEAD_TIP));
+            let ctx = ctxFor(util, db);
+            let q = await ctx._priceFeeQuote.call(ctx, { blockIndex: 100, blockTime: AHEAD_TIP }, '1.00000000', undefined);
+            assert.ok(!q.error, q.error);
+            assert.strictEqual(q.valid, true);
+            assert.strictEqual(q.oracleRound, 9);
+            assert.strictEqual(seen.opts[0].blockTime, AHEAD_TIP, 'anchored on the quoted block time');
+            assert.strictEqual(seen.opts[0].selectByTime, true, 'past the flag-day, non-BTC selects by time');
+        });
+
+        it('clock-ahead venue: wall-clock anchoring would have excluded every round', async function () {
+            // The pre- behaviour, reproduced by anchoring on a wall clock a day behind the
+            // chain: `block_timestamp <= refTime` drops the future-stamped rounds outright, which
+            // is what made LTC/DOGE feequote structurally dead on those venues.
+            let util = makeUtil('DOGE', FEE_DEST);
+            util.config['NETWORK'] = 'mainnet';
+            let { db } = makePriceDb(dogeRows(AHEAD_TIP));
+            let wallClock = AHEAD_TIP - 86400;
+            let r = await util.getFeeOraclePrices(db, 'DOGE', 100, wallClock, 1800);
+            assert.ok(/no current oracle price for DOGE\/USD/.test(r.error), 'expected the old dead-quote error');
+            // Same store, same instant, anchored on chain time instead: a live round ~120s old.
+            let ok = await util.getFeeOraclePrices(db, 'DOGE', 100, AHEAD_TIP, 1800);
+            assert.ok(!ok.error, ok.error);
+            assert.strictEqual(ok.oracleRound, 9);
+        });
+
+        it('BTC block drought: a round stamped at the tip block is not called stale', async function () {
+            // Rounds are stamped from reference-chain block times, so during a drought the newest
+            // round ages against wall clock while the chain still prices off it. Tip block time is
+            // the quantity consensus uses, and by it the round is fresh.
+            let util = makeUtil('BTC', FEE_DEST);
+            let tipTime = 1900000000;
+            let { db, seen } = makePriceDb([
+                { pair: 'BTC/USD',    price: '50000.00000000', round: 4, ts: tipTime, refBlock: 100 },
+                { pair: 'XCHAIN/USD', price: '1.00000000',     round: 4, ts: tipTime, refBlock: 100 }
+            ]);
+            let ctx = ctxFor(util, db);
+            let q = await ctx._priceFeeQuote.call(ctx, { blockIndex: 100, blockTime: tipTime }, '1.00000000', undefined);
+            assert.strictEqual(q.valid, true, q.error);
+            assert.strictEqual(q.requiredFeeSats, 2000);
+            assert.strictEqual(seen.opts[0].blockTime, tipTime);
+            // Anchored on a wall clock 2000s past the drought's last block, the same store reports
+            // the pair stale: the false negative  describes.
+            let stale = await util.getFeeOraclePrices(db, 'BTC', 100, tipTime + 2000, 1800);
+            assert.ok(/missing or stale/.test(stale.error), stale.error);
+        });
+
+        it('falls back to wall clock only when the quote carries no block time', async function () {
+            let util = makeUtil('BTC', FEE_DEST);
+            let nowEpoch = Math.floor(Date.now() / 1000);
+            let { db, seen } = makePriceDb([
+                { pair: 'BTC/USD',    price: '50000.00000000', round: 4, ts: nowEpoch - 60, refBlock: 100 },
+                { pair: 'XCHAIN/USD', price: '1.00000000',     round: 4, ts: nowEpoch - 60, refBlock: 100 }
+            ]);
+            let ctx = ctxFor(util, db);
+            let q = await ctx._priceFeeQuote.call(ctx, { blockIndex: 100 }, '1.00000000', undefined);
+            assert.strictEqual(q.valid, true, q.error);
+            assert.ok(Math.abs(seen.opts[0].blockTime - nowEpoch) <= 5, 'wall-clock fallback, got ' + seen.opts[0].blockTime);
+        });
+
+        it('getFeeSchedule() prices off the tip block time too, and reports it', async function () {
+            let util = makeUtil('DOGE', FEE_DEST);
+            util.config['NETWORK'] = 'mainnet';
+            let { db, seen } = makePriceDb(dogeRows(AHEAD_TIP), { blockTime: AHEAD_TIP });
+            let ctx = ctxFor(util, db);
+            ctx.getFeeSchedule = Actions.prototype.getFeeSchedule;
+            let s = await ctx.getFeeSchedule.call(ctx);
+            assert.strictEqual(s.blockTime, AHEAD_TIP);
+            assert.strictEqual(seen.opts[0].blockTime, AHEAD_TIP);
+            assert.strictEqual(s.prices.available, true, s.prices.error);
+            assert.strictEqual(s.prices.oracleRound, 9);
+        });
+
+        // Minimal Actions-like context for the pricing methods (no dry-run engine involved).
+        function ctxFor(util, db){
+            return {
+                config: util.config, util: util, indexerDb: db,
+                _nativeFeeMandatory: Actions.prototype._nativeFeeMandatory,
+                _priceFeeQuote:      Actions.prototype._priceFeeQuote
+            };
+        }
     });
 
     describe('computeFeeQuote() [dry-run-backed default]', function () {

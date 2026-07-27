@@ -775,18 +775,21 @@ class Actions {
         }
 
         // Value it in native coin via current oracle prices (shared with validateNativeCoinFee).
-        // Staleness is judged against wall-clock now so the freshness verdict reflects real-world
-        // price age (a pre-flight isn't tied to a specific future block).
         let blockIndex         = (base.blockIndex !== undefined && base.blockIndex !== null)
                                ? base.blockIndex : await this.indexerDb.getLatestBlockIndex();
-        let nowEpoch           = Math.floor(Date.now() / 1000);
         let maxPriceAgeSeconds = parseInt(this.config['ORACLE_MAX_PRICE_AGE_SECONDS']) || 1800;
-        // Staleness stays wall-clock (nowEpoch as refTime, deliberate for a pre-flight). The
-        // flag-day gate, however, must anchor on the quoted block's time (base.blockTime) so it
-        // flips on chain time, not the operator's clock; fall back to nowEpoch when no block time
-        // is carried.
-        let gateTime           = (base.blockTime !== undefined && base.blockTime !== null) ? base.blockTime : nowEpoch;
-        let prices = await this.util.getFeeOraclePrices(this.indexerDb, coin, blockIndex, nowEpoch, maxPriceAgeSeconds, gateTime);
+        // : anchor the WHOLE price read (round selection, staleness, flag-day gate) on the
+        // quoted block's own time, because that is the single quantity the on-chain check uses
+        // (validateNativeCoinFee passes BLOCK_TIME). A pre-flight anchored on the operator's wall
+        // clock answers a different question from the chain and disagrees with it in both
+        // directions: it calls a pair stale during a reference-chain block drought that the chain
+        // would price off the round the next block carries, and on any venue whose chain clock
+        // runs ahead of real time the non-BTC time-keyed selection (block_timestamp <= refTime)
+        // excludes every round the chain can see, leaving LTC/DOGE quotes structurally dead.
+        // Wall clock is the fallback only when the quote carries no usable block time at all.
+        let chainTime          = Number(base.blockTime);
+        let refTime            = Number.isFinite(chainTime) ? chainTime : Math.floor(Date.now() / 1000);
+        let prices = await this.util.getFeeOraclePrices(this.indexerDb, coin, blockIndex, refTime, maxPriceAgeSeconds);
         if(prices.error)
             return Object.assign(base, { valid: false, error: prices.error });
 
@@ -1116,9 +1119,9 @@ class Actions {
         // (missing/stale oracle) overwrite the handler's validity verdict: on this raw surface
         // the handler verdict is the headline and sizing is best-effort.
         if(valid && nativeEnabled){
-            // Carry blockTime so _priceFeeQuote anchors the flag-day gate on the run's block
-            // time (via base.blockTime -> gateTime), not wall-clock; otherwise a block-time-based
-            // gate would silently no-op on this raw surface.
+            // Carry blockTime: it is what _priceFeeQuote anchors the whole price read on (round
+            // selection, staleness, flag-day gate). Without it this raw surface would silently
+            // fall back to wall clock and quote off a different price set than the chain.
             let priced = await this._priceFeeQuote({ blockIndex: run.blockIndex, blockTime: run.blockTime }, run.xchainFee, undefined);
             if(priced.valid !== false){
                 result.feeSupported      = true;
@@ -1235,11 +1238,16 @@ class Actions {
         let enabled        = !!(feeDestination && feeDestination !== 'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX');
         let maxPriceAgeSeconds = parseInt(this.config['ORACLE_MAX_PRICE_AGE_SECONDS']) || 1800;
         let blockIndex     = await this.indexerDb.getLatestBlockIndex();
+        let blockTime      = await this.indexerDb.getBlockTime(blockIndex);
 
         // Current oracle prices (best-effort; a missing/stale feed doesn't fail the schedule call;
         // prices.available=false tells the client native fees can't be priced right now).
-        let nowEpoch = Math.floor(Date.now() / 1000);
-        let prices   = await this.util.getFeeOraclePrices(this.indexerDb, coin, blockIndex, nowEpoch, maxPriceAgeSeconds);
+        // Anchored on the tip block's time for the same reason _priceFeeQuote is : this
+        // view exists to predict what the chain will charge, so it has to read the prices the
+        // chain reads, not the ones the operator's clock happens to agree with.
+        let chainTime = Number(blockTime);
+        let refTime   = Number.isFinite(chainTime) ? chainTime : Math.floor(Date.now() / 1000);
+        let prices    = await this.util.getFeeOraclePrices(this.indexerDb, coin, blockIndex, refTime, maxPriceAgeSeconds);
         let priceInfo = prices.error
             ? { available: false, error: prices.error }
             : {
@@ -1260,6 +1268,9 @@ class Actions {
             toleranceMax:       this.config['FEE_TOLERANCE_MAX'] || '1.10',
             maxPriceAgeSeconds: maxPriceAgeSeconds,
             blockIndex:         blockIndex,
+            // The instant the price read above was judged against, so a client can tell a stale
+            // feed from an indexer whose tip is behind.
+            blockTime:          blockTime,
             prices:             priceInfo
         };
     }
