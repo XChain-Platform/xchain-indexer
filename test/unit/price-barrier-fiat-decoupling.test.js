@@ -84,9 +84,17 @@ describe(' price barrier decoupled from the fee flag-day @regression @tier1', fu
         // condition is now a bare `if`. The property this test exists for is
         // unchanged and strictly stronger: the barrier runs whenever a mirror is in
         // play, and is a no-op only on single-host stacks.
-        assert.ok(/\}\s*\n\s*if\(this\.hubDbSync\)\{/.test(block),
-            'the time-barrier condition must be exactly `this.hubDbSync`, unguarded by ' +
-            'chain or flag-day, so it runs whenever a mirror is in play');
+        //  added the mayReadPrice conjunct: a block that reads no price is
+        // byte-identical against a current mirror and a stale one, so the wait is
+        // pure cost. The property this test exists for is unchanged: the guard
+        // still carries NO chain term and NO flag-day term, so the barrier runs on
+        // every chain whenever a mirror is in play and the block can read it.
+        assert.ok(/\}\s*\n\s*if\(this\.hubDbSync && mayReadPrice\)\{/.test(block),
+            'the time-barrier condition must be exactly `this.hubDbSync && mayReadPrice`, ' +
+            'unguarded by chain or flag-day, so it runs whenever a mirror is in play');
+        assert.ok(!/if\(this\.hubDbSync[^)]*COIN[^)]*\)/.test(block),
+            'the time barrier must never regain a chain term: FIAT settlement reads ' +
+            'price_snapshots time-keyed on every chain ');
         assert.ok(!/else if\(this\.hubDbSync\)/.test(block),
             'the time barrier must NOT be an else-branch of the BTC height barrier: on ' +
             'BTC the height check does not imply time coverage ');

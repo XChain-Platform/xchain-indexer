@@ -65,8 +65,11 @@ const INDEXER_SRC = fs.readFileSync(
 // cannot satisfy these assertions by accident.
 function priceBarrierBlock() {
     // Anchored on the BTC guard rather than on the call inside it, so the
-    // chain condition itself is inside the slice.
-    const start = INDEXER_SRC.indexOf("if(this.hubDbSync && this.config['COIN'] === 'BTC'){");
+    // chain condition itself is inside the slice.  added the mayReadPrice
+    // conjunct (skip the wait on a block that provably reads no price); the
+    // chain guard it sits next to is still asserted below.
+    const start = INDEXER_SRC.search(
+        /if\(this\.hubDbSync && mayReadPrice && this\.config\['COIN'\] === 'BTC'\)\{/);
     const end   = INDEXER_SRC.indexOf('waitForOracleSyncTimestamp(');
     assert.ok(start > 0, 'the BTC-guarded height barrier must still exist');
     assert.ok(end > start, 'the oracle barrier must still follow the price barriers');
@@ -92,6 +95,25 @@ describe(' BTC price barrier covers time as well as height @regression @tier1', 
         assert.ok(/this\.config\['COIN'\] === 'BTC'/.test(block),
             'the height barrier stays BTC-only: other chains\' heights are not ' +
             'comparable to a round\'s BTC reference_block anchor');
+    });
+
+    //  narrowed WHEN the barriers run. That is only safe while the skip
+    // condition is the price-read predicate and nothing else: a chain term or a
+    // flag-day term here would silently un-barrier a real reader.
+    it('the only thing that may skip a barrier is the price-read predicate', function () {
+        const block = priceBarrierBlock();
+        // Height, time, and the oracle barrier that closes the slice.
+        const guards = block.match(/if\(this\.hubDbSync[^)]*\)\{/g) || [];
+        assert.strictEqual(guards.length, 3,
+            'all three mirror barriers in this slice must still be guarded on hub-db sync');
+        for (const guard of guards)
+            assert.ok(/mayReadPrice/.test(guard),
+                'a barrier that skips on anything other than mayReadPrice would drop the ' +
+                'wait for a block that does read the mirror: ' + guard);
+        assert.ok(!/isNativeFeePriceTimeGateActive|isEnabled\(/.test(block),
+            'the skip decision must never be flag-day gated: it is a node-local wait, ' +
+            'so it needs no activation height, and gating it would make coverage differ ' +
+            'across the fleet at exactly the heights that matter');
     });
 
     it('both barriers defer the block rather than processing it', function () {

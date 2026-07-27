@@ -1211,6 +1211,33 @@ class Database {
                 ' after teardown (current epoch ' + this._txEpoch + '); zombie write rejected');
     }
 
+    //  fail-closed backstop for the action-scoped price barrier. The block loop skips
+    // the price/oracle mirror barriers when priceReadPredicate proved the block carries no
+    // transaction-borne price reader. That predicate cannot see the end-of-block passes:
+    // processCrossChainCalls injects XEXEC actions and runs XCALL callback isolates from
+    // hub-mirror state on blocks with no transaction at all, and the VM exposes
+    // oracle.getPrice to contract code. Rather than predict those (their due sets are
+    // queried inside the block transaction and the mirror keeps syncing concurrently, so any
+    // prediction is racy), every price-mirror read asserts here: if this block skipped the
+    // barrier and something reads anyway, fail the block instead of reading an uncovered
+    // mirror. The block rolls back, priceBarrierForceBlock makes the retry take the barrier,
+    // and it commits on the second attempt. Same machinery the watchdog path already uses.
+    //
+    // Scoped to block processing by the txEpochStore context, which only the block loop
+    // installs and which propagates across awaits into sibling Database instances (the hub
+    // mirror reads run on this exact path). No stored context = an API / healthcheck read,
+    // which is free to read whatever the mirror currently holds and is never fenced. That
+    // scoping is what stops a concurrent api.js fee quote from tripping a consensus guard.
+    _assertPriceBarrierNotSkipped(site){
+        if(txEpochStore.getStore() === undefined) return;
+        const ix = this.indexer;
+        if(!ix || !ix.priceBarrierSkipped) return;
+        // Escalate THIS block: the retry must not skip again, or it loops forever.
+        ix.priceBarrierForceBlock = ix.priceBarrierBlock;
+        this.util.throwError('price barrier skipped  but ' + site + ' read the price mirror at block ' +
+            ix.priceBarrierBlock + '; deferring the block so it re-runs with the barrier enforced');
+    }
+
     // Handle beginning a SQL transaction
     async beginTransaction(){
         await this._acquireTxLock();
@@ -13963,6 +13990,7 @@ class Database {
     // unix seconds, so every node replaying the block computes the same result and
     // historical backfill is never falsely flagged stale. maxAgeSeconds <= 0 disables the guard.
     async getOracleDataForVM(blockIndex, blockTime, maxAgeSeconds){
+        this._assertPriceBarrierNotSkipped('getOracleDataForVM');
         let self = this;
         let refTime = parseInt(blockTime);
         let maxAge  = parseInt(maxAgeSeconds);
@@ -14072,6 +14100,7 @@ class Database {
     // both chain-derived unix seconds, so the check is deterministic across nodes and does
     // not false-trigger during historical backfill.
     async getLatestPrice(coinPair, blockHeight, opts){
+        this._assertPriceBarrierNotSkipped('getLatestPrice');
         let query, args;
         if(opts && opts.selectByTime && Number.isFinite(Number(opts.blockTime))){
             // H-3 (NATIVE_FEE_PRICE_TIME_GATE): on non-reference chains the
@@ -14130,6 +14159,7 @@ class Database {
     // gated by blockTime so two nodes processing the same block see the same price.
     // The 24-hour lock window is enforced by `effective_at` - only prices whose effective_at <= blockTime are returned.
     async getOraclePrice(sourceAddress, coin, tick, fiat, blockTime){
+        this._assertPriceBarrierNotSkipped('getOraclePrice');
         let query = `SELECT id, source_address, source_chain, coin, tick, fiat, value, fee, memo,
                             block_time, effective_at, action_index
                      FROM oracle_prices
@@ -14163,6 +14193,7 @@ class Database {
     // Get oracle prices for a (sourceAddress, coin, tick, fiat) within a time range (newest-first)
     // Used by reverseOraclePriceMatch for FIAT dispenser settlement.
     async getOraclePricesInTimeRange(sourceAddress, coin, tick, fiat, startTime, endTime){
+        this._assertPriceBarrierNotSkipped('getOraclePricesInTimeRange');
         let query = `SELECT value, block_time, effective_at, action_index
                      FROM oracle_prices
                      WHERE source_address = ? AND coin = ? AND tick = ? AND fiat = ?
@@ -14179,6 +14210,7 @@ class Database {
 
     // Get finalized prices for a coin pair within a time range (newest-first)
     async getPricesInTimeRange(coinPair, startTime, endTime){
+        this._assertPriceBarrierNotSkipped('getPricesInTimeRange');
         let query = `SELECT price, round_number, block_timestamp
                      FROM price_snapshots
                      WHERE coin_pair = ? AND status = 'finalized' AND price IS NOT NULL

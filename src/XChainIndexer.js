@@ -37,6 +37,7 @@ const HubPushQueue = require('./hub_push_queue.js');
 const UtxoTracker  = require('./UtxoTracker.js');
 const Genesis      = require('./genesis.js');
 const { collapseOutputFanout } = require('./output_fanout.js');
+const { blockMayReadPrice }    = require('./priceReadPredicate.js');
 
 // Hub->indexer config poll cadence (ms). This is the sole staleness / propagation bound for the
 // live-polled governance overlay: nothing else refreshes it, so an overlay older than a small
@@ -161,6 +162,19 @@ class XChainIndexer {
         // retried rather than validated against a stale price copy.
         this.priceSyncTimeoutMs = parseInt(process.env.HUB_PRICE_SYNC_TIMEOUT_MS || '60000');
 
+        //  action-scoped barrier state, all node-local and never hashed.
+        // priceBarrierBlock      - the block the two flags below describe.
+        // priceBarrierSkipped    - the price/oracle barriers were skipped for it because
+        //                          priceReadPredicate proved no transaction-borne price
+        //                          reader; read by db._assertPriceBarrierNotSkipped().
+        // priceBarrierForceBlock - a block that must take the barriers unconditionally on
+        //                          its next attempt, set when that assertion fired. Cleared
+        //                          once that block commits, so it is a one-shot escalation
+        //                          rather than a latch that would re-arm the every-block wait.
+        this.priceBarrierBlock      = null;
+        this.priceBarrierSkipped    = false;
+        this.priceBarrierForceBlock = null;
+
         // Grace window (ms) for the /status healthcheck's stall discriminator. A set stallReason
         // reports the container unhealthy (503) only after NO block has committed for this long, so
         // a BTC-mainnet indexer perpetually deferring the newest block behind a price mirror that is
@@ -239,6 +253,27 @@ class XChainIndexer {
                     ' live delivery failed; HubPushQueue will retry:', err && err.message);
             }
         }
+    }
+
+    // : decide whether this block takes the price/oracle mirror barriers, and record
+    // that decision for db._assertPriceBarrierNotSkipped(). Returns true to wait.
+    //
+    // Three ways to end up waiting, and the last two are the safety rails:
+    //   - blockMayReadPrice says the block carries transactions, so a reader is possible.
+    //   - this block already tripped the fail-closed assertion on a previous attempt, so
+    //     priceBarrierForceBlock pins it; skipping again would loop forever.
+    //   - malformed input, which priceReadPredicate resolves to "wait" by contract.
+    //
+    // priceBarrierSkipped is deliberately AND-ed with hubDbSync. On a single-host stack
+    // there is no mirror and the barriers never ran in the first place, so flagging a skip
+    // there would arm the choke-point assertion against reads that were always legitimate
+    // and wedge the node on its first priced block.
+    _evaluatePriceBarrier(blockToParse, blockTransactions){
+        let mayReadPrice = blockMayReadPrice(blockTransactions)
+                           || this.priceBarrierForceBlock === blockToParse;
+        this.priceBarrierBlock   = blockToParse;
+        this.priceBarrierSkipped = !!this.hubDbSync && !mayReadPrice;
+        return mayReadPrice;
     }
 
     async _waitForDirectCallPresence(blockTime){
@@ -752,7 +787,20 @@ class XChainIndexer {
                 // latest round by HEIGHT (db.getLatestPrice), so dropping it would un-barrier the
                 // fee path and diverge a from-genesis replay. The two gate different readers of
                 // the same table and both are needed.
-                if(this.hubDbSync && this.config['COIN'] === 'BTC'){
+                //
+                // : only blocks that can actually READ the mirror take these waits.
+                // The hub finalizes one price round per 600s, the same cadence as a BTC
+                // block, so a tip block is essentially never covered by a round anchored at
+                // or after it and burns the full timeout every time. A block that reads no
+                // price is byte-identical against a current mirror and a stale one, so that
+                // wait buys nothing. blockMayReadPrice is a deliberate over-approximation
+                // (see priceReadPredicate.js): any transaction at all means wait, and the
+                // end-of-block passes, which can run the VM on a transaction-free block, are
+                // caught fail-closed at the read itself by db._assertPriceBarrierNotSkipped().
+                // Safe without a flag day because a skipped barrier changes no hashed value,
+                // only whether this node paused first.
+                let mayReadPrice = this._evaluatePriceBarrier(blockToParse, blockTransactions);
+                if(this.hubDbSync && mayReadPrice && this.config['COIN'] === 'BTC'){
                     try {
                         await this.hubDbSync.waitForPriceSyncHeight(blockToParse, this.priceSyncTimeoutMs, blockTime);
                     } catch(err){
@@ -764,7 +812,7 @@ class XChainIndexer {
                         break;
                     }
                 }
-                if(this.hubDbSync){
+                if(this.hubDbSync && mayReadPrice){
                     try {
                         await this.hubDbSync.waitForPriceSyncTime(blockTime, this.priceSyncTimeoutMs);
                     } catch(err){
@@ -784,7 +832,11 @@ class XChainIndexer {
                 // (not BTC height), so unlike the price barrier this applies on every chain. The
                 // barrier is a no-op when sync is disabled or the mirror holds no oracle prices at
                 // all (deployments without FIAT oracles), so non-oracle chains never stall on it.
-                if(this.hubDbSync){
+                // Same  gate as the price barriers above: oracle_prices has the same
+                // reader set (FIAT settlement via reverseOraclePriceMatch, the DISPENSER
+                // create's oracle-fee quote), so a block that reaches neither reads nothing
+                // here either, and the choke-point assertion covers the rest.
+                if(this.hubDbSync && mayReadPrice){
                     try {
                         await this.hubDbSync.waitForOracleSyncTimestamp(blockTime, this.priceSyncTimeoutMs);
                     } catch(err){
@@ -1024,6 +1076,15 @@ class XChainIndexer {
                     this.stallReason = null;
                     this.lastBlockCommittedAt = Date.now();
 
+                    // : the block is committed, so nothing else may attribute a price
+                    // read to it. Clearing priceBarrierSkipped keeps the choke-point
+                    // assertion inert outside block processing, and clearing the force flag
+                    // (only when THIS block was the escalated one) keeps the escalation a
+                    // one-shot retry rather than a permanent return to waiting every block.
+                    this.priceBarrierSkipped = false;
+                    if(this.priceBarrierForceBlock === blockToParse)
+                        this.priceBarrierForceBlock = null;
+
                     // Log the total parse time for this block
                     let parseTime = this.util.getTimer(debugTimer);
                     console.log('Block Parsed' + "\t: " + lastIndexerBlock + ' [ledger:' + ledger + ' actions:' + actions + ' contracts:' + contracts + '] (' + parseTime + ')');
@@ -1062,6 +1123,12 @@ class XChainIndexer {
                 } catch(error){
                     // Roll back all writes for this block so the DB stays at the end of the previous block
                     await this.indexerDb.rollbackTransaction();
+
+                    // : the block is no longer in flight, so no read can be attributed
+                    // to it. priceBarrierForceBlock is deliberately NOT cleared here: when
+                    // this rollback IS the price-barrier escalation, that flag is what makes
+                    // the retry take the barrier instead of skipping again and looping.
+                    this.priceBarrierSkipped = false;
 
                     // Host fault (out-of-process VM executor cannot run a contract on THIS
                     // machine: fork EAGAIN, isolated-vm load failure). This is NOT a contract
