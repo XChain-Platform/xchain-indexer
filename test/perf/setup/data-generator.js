@@ -10,11 +10,28 @@
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
 
+const crypto = require('crypto');
 const DecoderSeeder = require('../../integration/setup/decoder-seeder');
 
 // 34-char GAS address for BTC regtest
 const GAS_ADDR = 'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX';
 const TICK_GAS = 'XCHAIN';
+
+// P2PKH version byte shared by BTC, LTC and DOGE on regtest (utility.js
+// ADDRESS_PARAMS), so one synthetic address pool validates on every chain the
+// perf suite drives.
+const REGTEST_P2PKH_VERSION = 0x6f;
+
+// Default rows per multi-row INSERT in the bulk seeding path. Large enough that a
+// 50k-transaction fee-spike backlog seeds in tens of statements instead of 150k
+// round trips, small enough to stay well inside max_allowed_packet.
+const BULK_CHUNK_SIZE = 1000;
+
+// Opening balances handed to each wide-pool address (see seedWideAddressPool). Both sit
+// far above what any one address spends in a scenario, so no send in the fee-spike drain
+// can fail for want of funds and quietly turn into a cheap rejection.
+const WIDE_POOL_GAS   = 10000;
+const WIDE_POOL_TOKEN = 500;
 
 // 10 test addresses, valid regtest P2PKH (isCryptoAddress verifies base58check)
 const PERF_ADDRS = [
@@ -33,9 +50,11 @@ class DataGenerator extends DecoderSeeder {
             tokens: {},       // tick → { issuer, supply, maxMint, decimals }
             balances: {},     // addr → { tick → amount }
             addresses: [...PERF_ADDRS],
+            wideAddresses: [],  // filled by seedWideAddressPool(); used by the fee-spike profile
             gasAddr: GAS_ADDR,
             nextTick: 0,
         };
+        this._util = null;
         // Use high offset to avoid collision with parent's txCounter
         this.txCounter = 1000000;
     }
@@ -115,20 +134,158 @@ class DataGenerator extends DecoderSeeder {
      * @param {string} profile     - Action profile name
      * @param {number} startBlock  - First block number
      * @param {number} baseTime    - Unix timestamp for first block
+     * @param {object} [opts]
+     * @param {number} [opts.spacingSeconds=600] - Chain cadence between blocks. 600 is
+     *        the BTC/LTC target; the fast-chain regime (scenario 08) passes 60 for DOGE.
+     * @param {boolean} [opts.bulk=false] - Seed through the batched multi-row INSERT path
+     *        instead of one statement trio per transaction. Required for the fee-spike
+     *        regime (scenario 09), whose 50k-transaction backlog is unseedable row by row.
      * @returns {{ firstBlock, lastBlock, blocksSeeded }}
      */
-    async generateBlocks(count, txsPerBlock, profile, startBlock, baseTime) {
+    async generateBlocks(count, txsPerBlock, profile, startBlock, baseTime, opts = {}) {
+        const spacing = opts.spacingSeconds || 600;
+        const pending = [];
         for (let i = 0; i < count; i++) {
             const blockIdx = startBlock + i;
-            const blockTime = baseTime + (i * 600);
+            const blockTime = baseTime + (i * spacing);
             const txs = this._buildTxsForProfile(profile, txsPerBlock, blockIdx, blockTime);
-            await this.seedBlock(blockIdx, blockTime, txs);
+            if (opts.bulk) pending.push({ blockIndex: blockIdx, blockTime, txs });
+            else          await this.seedBlock(blockIdx, blockTime, txs);
         }
+        if (opts.bulk) await this.seedBlocksBulk(pending, opts);
         return {
             firstBlock: startBlock,
             lastBlock: startBlock + count - 1,
             blocksSeeded: count
         };
+    }
+
+    /**
+     * Batched seeding path: seed many blocks with multi-row INSERTs.
+     *
+     * seedBlock() costs three round trips per transaction (hash insert, hash read back,
+     * transaction insert), which is fine at the hundreds of transactions the older
+     * scenarios seed and hopeless at the 50k of a fee-spike backlog. This path interns
+     * every new address once, assigns index_transactions ids EXPLICITLY from the seeder's
+     * own monotonic counter (the column is a plain AUTO_INCREMENT PK, so an explicit id is
+     * legal and removes the read-back), and writes blocks and transactions in chunks.
+     *
+     * Only handles transactions with no destination, which is every profile here: the
+     * XChain destination travels inside the action string, not as a coin output. A tx
+     * carrying a destination needs the transaction_outputs row that seedBlock() writes,
+     * so this path rejects it rather than silently dropping the output.
+     *
+     * @param {Array} blocks - [{ blockIndex, blockTime, txs }] in ascending block order
+     * @param {object} [opts]
+     * @param {number} [opts.chunkSize=1000] - Rows per INSERT statement
+     */
+    async seedBlocksBulk(blocks, opts = {}) {
+        const chunkSize = opts.chunkSize || BULK_CHUNK_SIZE;
+
+        // Intern every address the batch mentions that is not already cached.
+        const unseen = new Set();
+        for (const b of blocks) {
+            for (const tx of b.txs) {
+                if (tx.destination)
+                    throw new Error('seedBlocksBulk cannot seed a tx with a destination (needs transaction_outputs); use seedBlock');
+                if (tx.source && !this.addressCache[tx.source]) unseen.add(tx.source);
+            }
+        }
+        const newAddrs = [...unseen];
+        for (let i = 0; i < newAddrs.length; i += chunkSize) {
+            const slice = newAddrs.slice(i, i + chunkSize);
+            const marks = slice.map(() => '?').join(',');
+            await this.query('INSERT IGNORE INTO index_addresses (address) VALUES ' +
+                slice.map(() => '(?)').join(','), slice);
+            const rows = await this.query(
+                'SELECT id, address FROM index_addresses WHERE address IN (' + marks + ')', slice);
+            for (const row of rows) this.addressCache[row.address] = Number(row.id);
+        }
+
+        // Build every row up front so the counter advances in strict block order, which
+        // keeps tx_index monotonic across the batch exactly like the row-by-row path.
+        const blockRows = [];
+        const hashRows  = [];
+        const txRows    = [];
+        for (const b of blocks) {
+            blockRows.push([b.blockIndex, b.blockTime]);
+            for (const tx of b.txs) {
+                this.txCounter++;
+                const txIndex = this.txCounter;
+                const txHash  = tx.txHash || this.generateTxHash(txIndex);
+                this.txHashCache[txHash] = txIndex;
+                hashRows.push([txIndex, txHash]);
+                txRows.push([txIndex, txIndex, b.blockIndex,
+                             this.addressCache[tx.source] || null, null,
+                             tx.amount || '0', tx.data]);
+            }
+        }
+
+        await this._insertRows('blocks', ['block_index', 'block_time'], blockRows, chunkSize);
+        await this._insertRows('index_transactions', ['id', 'hash'], hashRows, chunkSize);
+        await this._insertRows('transactions',
+            ['tx_index', 'tx_hash_id', 'block_index', 'source_id', 'destination_id', 'amount', 'data'],
+            txRows, chunkSize);
+    }
+
+    /**
+     * Create and fund a wide pool of distinct sender addresses.
+     *
+     * The ten bootstrap addresses are enough for throughput profiles but understate a
+     * real fee spike, where the backlog comes from thousands of unrelated senders and
+     * every one of them is a fresh balance row. Each pool address is funded with gas and
+     * TOKENA so its sends are VALID actions: a rejected action is far cheaper than an
+     * accepted one, so an unfunded pool would quietly measure the wrong thing.
+     *
+     * @param {number} count      - Pool size
+     * @param {number} startBlock - First funding block
+     * @param {number} baseTime   - Unix timestamp of the first funding block
+     * @param {object} [opts]
+     * @param {number} [opts.spacingSeconds=600]
+     * @returns {number} the next free block number
+     */
+    async seedWideAddressPool(count, startBlock, baseTime, opts = {}) {
+        const spacing = opts.spacingSeconds || 600;
+        const pool = this.generateAddresses(count);
+        this.state.wideAddresses = pool;
+
+        // Gas first, then the token: an address must be able to pay before it can send.
+        const gasTxs   = pool.map(addr => ({ source: GAS_ADDR, data: `SEND|0|${TICK_GAS}|${WIDE_POOL_GAS}|${addr}|` }));
+        const tokenTxs = pool.map(addr => ({ source: this.state.addresses[0], data: `SEND|0|TOKENA|${WIDE_POOL_TOKEN}|${addr}|` }));
+
+        await this.seedBlocksBulk([
+            { blockIndex: startBlock,     blockTime: baseTime,           txs: gasTxs },
+            { blockIndex: startBlock + 1, blockTime: baseTime + spacing, txs: tokenTxs }
+        ], opts);
+
+        for (const addr of pool) {
+            this.state.balances[addr] = { [TICK_GAS]: WIDE_POOL_GAS, TOKENA: WIDE_POOL_TOKEN };
+        }
+        this.state.balances[this.state.addresses[0]]['TOKENA'] -= count * WIDE_POOL_TOKEN;
+
+        return startBlock + 2;
+    }
+
+    /**
+     * Deterministic pool of valid regtest P2PKH addresses.
+     *
+     * Derived from a counter rather than randomness so a rerun seeds byte-identical
+     * fixture data, and built with the SHIPPED base58check encoder so an encoder change
+     * can never leave the fixture generating addresses the indexer would reject.
+     *
+     * @param {number} count
+     * @param {string} [seedPrefix] - Namespace for the derivation, for disjoint pools
+     * @returns {string[]}
+     */
+    generateAddresses(count, seedPrefix = 'xchain-perf-wide') {
+        const util = this._utility();
+        const out = [];
+        for (let i = 0; i < count; i++) {
+            const hash160 = crypto.createHash('sha256').update(seedPrefix + ':' + i).digest().subarray(0, 20);
+            out.push(util.base58CheckEncode(
+                Buffer.concat([Buffer.from([REGTEST_P2PKH_VERSION]), hash160])));
+        }
+        return out;
     }
 
     _buildTxsForProfile(profile, txsPerBlock, blockIdx, blockTime) {
@@ -140,6 +297,7 @@ class DataGenerator extends DecoderSeeder {
             case 'heavy-dex':    return this._profileHeavyDex(txsPerBlock, blockIdx, blockTime);
             case 'standing-orders': return this._profileStandingOrders(txsPerBlock, blockIdx, blockTime);
             case 'mixed-heavy':  return this._profileMixedHeavy(txsPerBlock, blockIdx, blockTime);
+            case 'fee-spike':    return this._profileFeeSpike(txsPerBlock, blockIdx);
             default:             return this._profileSendOnly(txsPerBlock, blockIdx);
         }
     }
@@ -301,7 +459,51 @@ class DataGenerator extends DecoderSeeder {
         return txs;
     }
 
+    /**
+     * A drained fee-spike backlog: a flood of plain transfers from many distinct senders.
+     *
+     * A fee spike is not an exotic action mix, it is ordinary traffic at ten to a hundred
+     * times the usual rate, so the profile is deliberately narrow: what it varies is
+     * VOLUME and SENDER CARDINALITY, the two things the older profiles hold small. Senders
+     * are drawn from the wide pool in a ring so every address receives roughly as much as
+     * it sends and no balance drains over a long run. One send in ten moves gas rather
+     * than the token, matching holders scrambling to reposition fee funds during a spike.
+     */
+    _profileFeeSpike(count, blockIdx) {
+        const pool = this.state.wideAddresses.length ? this.state.wideAddresses : this.state.addresses;
+        const txs = [];
+        for (let i = 0; i < count; i++) {
+            const from = pool[(blockIdx + i) % pool.length];
+            const to   = pool[(blockIdx + i + 1) % pool.length];
+            const tick = (i % 10 === 9) ? TICK_GAS : 'TOKENA';
+            txs.push({ source: from, data: `SEND|0|${tick}|1|${to}|` });
+        }
+        return txs;
+    }
+
     // --- Helpers ---
+
+    /** Chunked multi-row INSERT. `rows` is an array of value arrays matching `columns`. */
+    async _insertRows(table, columns, rows, chunkSize = BULK_CHUNK_SIZE) {
+        const placeholder = '(' + columns.map(() => '?').join(',') + ')';
+        for (let i = 0; i < rows.length; i += chunkSize) {
+            const slice = rows.slice(i, i + chunkSize);
+            await this.query(
+                'INSERT INTO ' + table + ' (' + columns.join(',') + ') VALUES ' +
+                slice.map(() => placeholder).join(','),
+                slice.flat());
+        }
+    }
+
+    /** Lazily built Utility, borrowed only for its base58check encoder. */
+    _utility() {
+        if (!this._util) {
+            const Utility = require('../../../src/utility.js');
+            const config  = require('../../../src/config.js');
+            this._util = new Utility(config.getConfig());
+        }
+        return this._util;
+    }
 
     _nextTick(blockIdx, txIdx) {
         this.state.nextTick++;

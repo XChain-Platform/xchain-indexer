@@ -139,6 +139,36 @@ jobs:
           XCHAIN_DECODER_SQL_PATH: ${{ github.workspace }}/.xchain-decoder/src/sql
         run: npm run test:perf:grown
 
+      # Load-regime coverage . Every other perf scenario drives a
+      # BTC-shaped chain: 600-second blocks, with load dialed up by putting more
+      # transactions into a block. Two regimes that bite in production look
+      # nothing like that and were unmodelled -- DOGE's fast sparse chain (60s
+      # blocks, ~10 blocks/s on a node that is behind, where the PER-BLOCK fixed
+      # cost decides whether it keeps up) and a fee-spike mempool backlog
+      # draining over a run of full blocks from many distinct senders. Both gate
+      # on ratios measured inside a single run, so they hold on any runner.
+      #
+      # Sizes are trimmed from the scenarios' local defaults to fit this job's
+      # wall clock; the gates themselves are unchanged. The one exception is the
+      # fast-chain per-block BUDGET, which is an absolute millisecond figure: a
+      # shared runner's absolute timings are not DOGE's 100 ms budget, so it is
+      # relaxed here and the real budget is what a local or bare-metal run
+      # measures. The scale-free gates (cost drift, query fan-out) carry the
+      # regression-catching weight in CI.
+      - name: Run the load-regime perf scenarios
+        env:
+          TEST_DB_HOST: 127.0.0.1
+          TEST_DB_PORT: "3306"
+          TEST_DB_USER: root
+          TEST_DB_PASS: xchain-fixture-throwaway
+          XCHAIN_DECODER_SQL_PATH: ${{ github.workspace }}/.xchain-decoder/src/sql
+          PERF_FASTCHAIN_BLOCKS: "200"
+          PERF_FASTCHAIN_BUDGET_MS: "250"
+          PERF_FEESPIKE_TXS: "2000"
+          PERF_FEESPIKE_TX_PER_BLOCK: "250"
+          PERF_FEESPIKE_SENDERS: "200"
+        run: npm run test:perf:regimes
+
   # Cross-repo drift guards (SD-1 / ): this repo vendors the canonical
   # coin registry from xchain-hub, and per-repo CI cannot see sibling repos, so
   # a drifted vendored copy previously shipped green (the byte-identity checks

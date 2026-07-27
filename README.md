@@ -119,6 +119,7 @@ npm run api
 | `npm run test:mutation:tier1` | Tier1 mutation tests |
 | `npm run test:mutation:report` | Mutation tests with coverage report |
 | `npm run test:perf` | All performance tests |
+| `npm run test:perf:regimes` | Load-regime scenarios: fast chain (DOGE) and fee spike |
 | `npm run test:regression` | Regression tests (tagged across all suites) |
 | `npm run test:regression:fast` | Fast regression (tier1 + tier4, unit only) |
 | `npm run test:regression:full` | Full regression suite |
