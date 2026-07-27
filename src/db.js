@@ -29,6 +29,7 @@ const swqCap = require('./swq_source_cap_activation');
 const dispenseCancellingMatch = require('./dispense_cancelling_match_activation');
 const stateKeyCollation = require('./state_key_collation_activation');
 const snapshotAgeCausality = require('./oracle_snapshot_age_causality_activation');
+const listEditResolution = require('./list_edit_resolution_activation');
 const { CHECKPOINT_VERSIONS: ANCHOR_CHECKPOINT_VERSIONS } = require('./anchor-action-query');
 const { rethrowIfInfraFault } = require('./actions/faultGuard');
 
@@ -693,7 +694,12 @@ class Database {
         // (matches ...)`) that otherwise fool the top-level-comma split below into
         // emitting phantom columns and triggering bogus ADD COLUMN drift fixes.
         sqlData = this.stripSqlLineComments(sqlData);
-        const m = sqlData.match(/CREATE\s+TABLE\s+\S+\s*\(([\s\S]+?)\)\s*ENGINE/i);
+        // `IF NOT EXISTS` is optional: the src/sql/<table>.sql definitions omit it, but a
+        // dated migration that CREATEs a whole new table always carries it (idempotent
+        // replay), and the schema-parity guard runs this same parser over those migrations
+        // so a migration-created table is checked against its definition instead of being
+        // parked in the pre-ledger baseline (#3164).
+        const m = sqlData.match(/CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?\S+\s*\(([\s\S]+?)\)\s*ENGINE/i);
         if(!m) return null;
         // Split on top-level commas (i.e. commas not inside type parens like VARCHAR(250))
         const parts = m[1].split(/,(?![^()]*\))/g);
@@ -3269,13 +3275,81 @@ class Database {
         return type;
     }
 
+    // Whether the  LIST edit-chain resolution is in effect at `block_index`
+    // on this indexer's chain. Wrapper so action handlers gate on the same
+    // predicate getList uses without re-deriving network/coin.
+    // @param {block_index}  integer  block being processed
+    isListEditResolutionActive(block_index){
+        return listEditResolution.isListEditResolutionActive(block_index, this.config['NETWORK'], this.config['COIN']);
+    }
+
+    // Walk a LIST reference up to the CREATE action that roots its edit chain.
+    // An edit row carries the index of the list it edits in lists.list_action_index;
+    // a create row carries NULL. Post-flag-day list.js normalizes every edit to
+    // point straight at the root, so this is a single hop in practice; the bounded
+    // loop covers legacy rows that named another edit (and can never spin on a
+    // cycle, which a malformed chain could otherwise produce).
+    // @param {action_index}  integer  ACTION_INDEX of any LIST create or edit
+    async getListRootIndex(action_index){
+        let root = action_index;
+        let seen = {};
+        for(let hop = 0; hop < 16; hop++){
+            if(seen[String(root)]) break;
+            seen[String(root)] = true;
+            let rows = await this.doQuery("SELECT list_action_index FROM lists WHERE action_index=? LIMIT 1", [root]);
+            if(rows.length == 0) break;
+            let parent = rows[0]['list_action_index'];
+            if(this.util.isNull(parent)) break;
+            root = parent;
+        }
+        return root;
+    }
+
+    // Resolve a LIST reference to the action whose list_items rows ARE the list's
+    // CURRENT membership: the newest VALID action in its edit chain, or the create
+    // itself when it has no valid edits. Every valid edit persists a COMPLETE
+    // membership snapshot (list.js splices the final item array and writes all of
+    // it), so the head's rows are the whole list, never a delta. Ordering is by
+    // action_index DESC, a total order (action_index is unique and monotonic), so
+    // independently-built nodes resolve the same head. Invalid edits are excluded:
+    // they write no list_items rows at all, so picking one would empty the list.
+    // @param {action_index}  integer  ACTION_INDEX of any LIST create or edit
+    async getListHeadIndex(action_index){
+        let root = await this.getListRootIndex(action_index);
+        let query = `SELECT
+                        l.action_index
+                    FROM
+                        lists l
+                        INNER JOIN index_statuses s ON (s.id=l.status_id)
+                    WHERE
+                        l.list_action_index=?
+                        AND s.status='valid'
+                    ORDER BY l.action_index DESC
+                    LIMIT 1`;
+        let rows = await this.doQuery(query, [root]);
+        return (rows.length > 0) ? rows[0]['action_index'] : root;
+    }
+
     // Return a list given a tx_hash
-    async getList(action_index){
+    // @param {action_index}  integer  ACTION_INDEX of a LIST (as pinned by consumers)
+    // @param {block_index}   integer  block being processed; gates edit resolution
+    async getList(action_index, block_index){
         let type = await this.getListType(action_index);
         let list = [];
         if(type){
+            // : a LIST edit writes its resulting items under the EDIT's own
+            // action_index and never touches the parent's rows, so reading the
+            // pinned (create) index returned create-time membership forever and
+            // on-chain lists were immutable. Resolve the edit chain's head
+            // instead. Flag-day gated per chain (list_edit_resolution_activation.js)
+            // because it changes which actions the allow/block gates accept, hence
+            // historical replay; below the height (or with no block context) the
+            // legacy create-index read runs unchanged.
+            let resolved = action_index;
+            if(listEditResolution.isListEditResolutionActive(block_index, this.config['NETWORK'], this.config['COIN']))
+                resolved = await this.getListHeadIndex(action_index);
             let query = '';
-            let args  = [action_index];
+            let args  = [resolved];
             // CONSENSUS: list_items has no ORDER BY on the AUTO_INCREMENT insert
             // order, so the row order MariaDB returns is engine/plan-arbitrary. The
             // consuming AIRDROP recipient loop (airdrop.js) builds credits in this
@@ -3510,6 +3584,13 @@ class Database {
         // Force lock fields to integer values 
         let lock_max_supply    = (data['LOCK_MAX_SUPPLY']==1) ? 1 : 0;
         let lock_mint          = (data['LOCK_MINT']==1) ? 1 : 0;
+        // LOCK_MINT_SUPPLY is the seventh token lock and is folded by getTokenInfo() from the
+        // issues rows like the other six. It was missing from this derivation (and from the
+        // INSERT/UPDATE below), so tokens.lock_mint_supply sat at its column default forever
+        // and every read API reported the lock unset even where the chain enforces it (#).
+        // Consensus never depended on this column (issue.js re-folds `issues`), but the wallet's
+        // mint form and lock matrix read it and would offer a mint/lock the chain then rejects.
+        let lock_mint_supply   = (data['LOCK_MINT_SUPPLY']==1) ? 1 : 0;
         let lock_max_mint      = (data['LOCK_MAX_MINT']==1) ? 1 : 0;
         let lock_description   = (data['LOCK_DESCRIPTION']==1) ? 1 : 0;
         let lock_sleep         = (data['LOCK_SLEEP']==1) ? 1 : 0;
@@ -3536,6 +3617,7 @@ class Database {
                         description=?,
                         lock_max_supply=?,
                         lock_mint=?,
+                        lock_mint_supply=?,
                         lock_max_mint=?,
                         lock_description=?,
                         lock_sleep=?,
@@ -3553,7 +3635,7 @@ class Database {
                         last_action_index=?
                     WHERE
                         tick_id=?`;
-            args = [max_supply, max_mint, decimals, description, lock_max_supply, lock_mint, lock_max_mint,lock_description, lock_sleep, lock_callback, callback_block, callback_tick_id, callback_amount, allow_list, block_list, mint_address_max, mint_start_block, mint_stop_block, supply, owner_id, action_index, tick_id];
+            args = [max_supply, max_mint, decimals, description, lock_max_supply, lock_mint, lock_mint_supply, lock_max_mint,lock_description, lock_sleep, lock_callback, callback_block, callback_tick_id, callback_amount, allow_list, block_list, mint_address_max, mint_start_block, mint_stop_block, supply, owner_id, action_index, tick_id];
         } else {
             // INSERT record
             query = `INSERT INTO tokens (
@@ -3561,8 +3643,9 @@ class Database {
                         max_mint, 
                         decimals, 
                         description, 
-                        lock_max_supply, 
-                        lock_mint, 
+                        lock_max_supply,
+                        lock_mint,
+                        lock_mint_supply,
                         lock_max_mint,
                         lock_description,
                         lock_sleep,
@@ -3580,8 +3663,8 @@ class Database {
                         action_index,
                         last_action_index,
                         tick_id
-                    ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
-            args    = [max_supply, max_mint, decimals, description, lock_max_supply, lock_mint, lock_max_mint,lock_description, lock_sleep, lock_callback, callback_block, callback_tick_id, callback_amount, allow_list, block_list, mint_address_max, mint_start_block, mint_stop_block, supply, owner_id, action_index, action_index, tick_id];
+                    ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+            args    = [max_supply, max_mint, decimals, description, lock_max_supply, lock_mint, lock_mint_supply, lock_max_mint,lock_description, lock_sleep, lock_callback, callback_block, callback_tick_id, callback_amount, allow_list, block_list, mint_address_max, mint_start_block, mint_stop_block, supply, owner_id, action_index, action_index, tick_id];
         }
         results = await this.doQuery(query, args);
 
@@ -4066,8 +4149,8 @@ class Database {
             const hasAllowList = info && !this.util.isNull(info['ALLOW_LIST']) && this.util.isNumeric(info['ALLOW_LIST']);
             const hasBlockList = info && !this.util.isNull(info['BLOCK_LIST']) && this.util.isNumeric(info['BLOCK_LIST']);
             const [allowList, blockList] = await Promise.all([
-                hasAllowList ? this.getList(info['ALLOW_LIST']) : Promise.resolve(null),
-                hasBlockList ? this.getList(info['BLOCK_LIST']) : Promise.resolve(null)
+                hasAllowList ? this.getList(info['ALLOW_LIST'], block_index) : Promise.resolve(null),
+                hasBlockList ? this.getList(info['BLOCK_LIST'], block_index) : Promise.resolve(null)
             ]);
             // False if we have an ALLOW_LIST and address is NOT on it
             if(allow && allowList && !allowList.includes(address))
@@ -6699,6 +6782,88 @@ class Database {
             query = `INSERT INTO bets (feed_action_index, outcome, tick_id, amount, memo_id, status_id, bet_status_id, settled_block, action_index) values (?, ?, ?, ?, ?, ?, ?, NULL, ?)`;
             args = [feed_index, outcome, tick_id, amount, memo_id, status_id, bet_status_id, action_index];
         }
+        results = await this.doQuery(query, args);
+    }
+
+    // Create/Update record in `bet_cancels` table (BET format 1). Written for every
+    // cancel action whatever its parse status - that is the table's reason to exist
+    // : a rejected cancel used to write nothing at all, so no API consumer
+    // could distinguish it from a successful one. `status_id` is the PARSE status;
+    // the feed's lifecycle status lives in bet_feed_statuses / bet_feeds
+    async createBetCancel(data){
+        data                  = this.normalizeDataValues(data);
+        let memo_id           = await this.createMemo(data['MEMO']);
+        let status_id         = await this.createStatus(data['STATUS']);
+        let action_index      = data['ACTION_INDEX'];
+        let feed_action_index = data['FEED_ACTION_INDEX'];
+        // Check if record already exists for this cancel
+        let query  = `SELECT
+                            action_index
+                        FROM
+                            bet_cancels
+                        WHERE
+                            action_index=?`;
+        let args = [action_index];
+        let exists = false;
+        let results = await this.doQuery(query, args);
+        if(results.length > 0)
+            exists = true;
+        if(exists){
+            // UPDATE record
+            query = `UPDATE
+                        bet_cancels
+                    SET
+                        feed_action_index=?,
+                        memo_id=?,
+                        status_id=?
+                    WHERE
+                        action_index=?`;
+        } else {
+            // INSERT record
+            query = `INSERT INTO bet_cancels (feed_action_index, memo_id, status_id, action_index) values (?, ?, ?, ?)`;
+        }
+        args    = [feed_action_index, memo_id, status_id, action_index];
+        results = await this.doQuery(query, args);
+    }
+
+    // Create/Update record in `bet_resolves` table (BET format 3). Same discipline as
+    // createBetCancel: stored whatever the parse status. `outcome` is the outcome the
+    // oracle CLAIMED, so on an invalid row it settles nothing and is audit data only
+    async createBetResolve(data){
+        data                  = this.normalizeDataValues(data);
+        let memo_id           = await this.createMemo(data['MEMO']);
+        let status_id         = await this.createStatus(data['STATUS']);
+        let action_index      = data['ACTION_INDEX'];
+        let feed_action_index = data['FEED_ACTION_INDEX'];
+        let outcome           = data['OUTCOME'];
+        // Check if record already exists for this resolve
+        let query  = `SELECT
+                            action_index
+                        FROM
+                            bet_resolves
+                        WHERE
+                            action_index=?`;
+        let args = [action_index];
+        let exists = false;
+        let results = await this.doQuery(query, args);
+        if(results.length > 0)
+            exists = true;
+        if(exists){
+            // UPDATE record
+            query = `UPDATE
+                        bet_resolves
+                    SET
+                        feed_action_index=?,
+                        outcome=?,
+                        memo_id=?,
+                        status_id=?
+                    WHERE
+                        action_index=?`;
+        } else {
+            // INSERT record
+            query = `INSERT INTO bet_resolves (feed_action_index, outcome, memo_id, status_id, action_index) values (?, ?, ?, ?, ?)`;
+        }
+        args    = [feed_action_index, outcome, memo_id, status_id, action_index];
         results = await this.doQuery(query, args);
     }
 

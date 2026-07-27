@@ -133,6 +133,11 @@ function createMockDb() {
         isValidList: sinon.stub().resolves(false),
         getListType: sinon.stub().resolves(false),
         getList: sinon.stub().resolves([]),
+        //  edit-chain resolution: armed on regtest, so the mock answers true
+        // and getListRootIndex is identity unless a test overrides it.
+        isListEditResolutionActive: sinon.stub().returns(true),
+        getListRootIndex: sinon.stub().callsFake(async (action_index) => action_index),
+        getListHeadIndex: sinon.stub().callsFake(async (action_index) => action_index),
 
         // BET parimutuel betting ( P4)
         getBetFeedInfo: sinon.stub().resolves(false),
@@ -140,6 +145,8 @@ function createMockDb() {
         countOpenBetsByFeed: sinon.stub().resolves(0),
         createBetFeed: sinon.stub().resolves(),
         createBet: sinon.stub().resolves(),
+        createBetCancel: sinon.stub().resolves(),
+        createBetResolve: sinon.stub().resolves(),
         createBetFeedStatus: sinon.stub().resolves(),
         createBetStatus: sinon.stub().resolves(),
         setBetFeedTerminal: sinon.stub().resolves(),

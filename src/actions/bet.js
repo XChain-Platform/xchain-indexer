@@ -291,12 +291,12 @@ class Bet {
             // list changes never affect already-placed bets). Checks run allow-then-
             // block and BLOCK_LIST WINS: an address on both lists is rejected
             if(!error && !this.util.isNull(feedInfo['ALLOW_LIST'])){
-                let allowList = await this.indexerDb.getList(feedInfo['ALLOW_LIST']);
+                let allowList = await this.indexerDb.getList(feedInfo['ALLOW_LIST'], data['BLOCK_INDEX']);
                 if(!allowList.includes(data['SOURCE']))
                     error = 'invalid: SOURCE (not authorized)';
             }
             if(!error && !this.util.isNull(feedInfo['BLOCK_LIST'])){
-                let blockList = await this.indexerDb.getList(feedInfo['BLOCK_LIST']);
+                let blockList = await this.indexerDb.getList(feedInfo['BLOCK_LIST'], data['BLOCK_INDEX']);
                 if(blockList.includes(data['SOURCE']))
                     error = 'invalid: SOURCE (not authorized)';
             }
@@ -450,13 +450,22 @@ class Bet {
         if(format==3)
             console.log("\t BET_RESOLVE : " + this.config['COIN'] + ':' + data['FEED_ACTION_INDEX'] + ' -> ' + data['OUTCOME'] + ' : ' + data['STATUS']);
 
-        // Create record in bet_feeds / bets tables (create and place store a row
-        // whatever the status, house convention; cancel and resolve live in the
-        // actions table + status history rows only)
+        // Every format stores its own typed row, whatever the status (house
+        // convention). The cancel/resolve rows are what make a REJECTED cancel or
+        // resolve reportable at all : those legs used to write nothing but a
+        // bet_feed_statuses history row, and only on the valid path, so the explorer
+        // served the action with a NULL status and the SDK could not tell a rejection
+        // from a success (statusKnown:false / statusSource:assumed, ). These
+        // rows carry the PARSE status; the feed's lifecycle status stays in
+        // bet_feed_statuses and is still written only by the legs that move it
         if(format==0)
             await this.indexerDb.createBetFeed(bet);
+        if(format==1)
+            await this.indexerDb.createBetCancel(bet);
         if(format==2)
             await this.indexerDb.createBet(bet);
+        if(format==3)
+            await this.indexerDb.createBetResolve(bet);
 
         // Store the SOURCE and wagered TICK in addresses list
         if(format==0)

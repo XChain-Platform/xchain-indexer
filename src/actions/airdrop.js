@@ -207,7 +207,7 @@ class Airdrop {
             // Lookup list information
             if(!error){
                 type = await this.indexerDb.getListType(airdrop['LIST_ACTION_INDEX']);
-                list = await this.indexerDb.getList(airdrop['LIST_ACTION_INDEX']);
+                list = await this.indexerDb.getList(airdrop['LIST_ACTION_INDEX'], data['BLOCK_INDEX']);
             }
 
             // Verify LIST exist
@@ -253,8 +253,8 @@ class Airdrop {
             let approved = [];
             let hasAllowList = tokenInfo && !this.util.isNull(tokenInfo['ALLOW_LIST']) && this.util.isNumeric(tokenInfo['ALLOW_LIST']);
             let hasBlockList = tokenInfo && !this.util.isNull(tokenInfo['BLOCK_LIST']) && this.util.isNumeric(tokenInfo['BLOCK_LIST']);
-            let recipientAllowList = hasAllowList ? await this.indexerDb.getList(tokenInfo['ALLOW_LIST']) : null;
-            let recipientBlockList = hasBlockList ? await this.indexerDb.getList(tokenInfo['BLOCK_LIST']) : null;
+            let recipientAllowList = hasAllowList ? await this.indexerDb.getList(tokenInfo['ALLOW_LIST'], data['BLOCK_INDEX']) : null;
+            let recipientBlockList = hasBlockList ? await this.indexerDb.getList(tokenInfo['BLOCK_LIST'], data['BLOCK_INDEX']) : null;
 
             // Verify airdrop is allowed to recipient (allow/block lists)
             for(let address of recipients){

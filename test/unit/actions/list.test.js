@@ -149,6 +149,93 @@ describe('List @regression @tier3', function () {
             assert.ok(data['STATUS'].includes('invalid'));
         });
 
+        // : the edit must be built on the list's CURRENT membership (the head
+        // of its edit chain), not on the create-time item set, and the parent it
+        // stores must be the CREATE that roots the chain so the next edit finds it.
+        it('reads the parent membership with block context so the flag day can gate it', async function () {
+            indexer.indexerDb.getListType.resolves(2);
+            indexer.indexerDb.getList.resolves([ADDR1]);
+            indexer.indexerDb.isActionAllowed.resolves(true);
+
+            const data   = createBaseData({ ACTION: 'LIST', FORMAT: 1, SOURCE, BLOCK_INDEX: 4242 });
+            const params = ['1', '1', '5', ADDR2];
+
+            await handler.parse(params, data, null);
+
+            assert.strictEqual(data['STATUS'], 'valid');
+            const call = indexer.indexerDb.getList.getCall(0);
+            assert.ok(call, 'getList should be called for an edit');
+            assert.strictEqual(call.args[1], 4242, 'getList must receive the block index');
+        });
+
+        it('normalizes LIST_ACTION_INDEX to the CREATE that roots the edit chain', async function () {
+            indexer.indexerDb.getListType.resolves(2);
+            indexer.indexerDb.getList.resolves([ADDR1]);
+            indexer.indexerDb.isActionAllowed.resolves(true);
+            // The wire named edit 7; edit 7 is itself an edit of create 5.
+            indexer.indexerDb.getListRootIndex.withArgs('7').resolves(5);
+            indexer.indexerDb.getListRootIndex.withArgs(7).resolves(5);
+
+            const data   = createBaseData({ ACTION: 'LIST', FORMAT: 1, SOURCE });
+            const params = ['1', '1', '7', ADDR2];
+
+            await handler.parse(params, data, null);
+
+            assert.strictEqual(data['STATUS'], 'valid');
+            assert.strictEqual(Number(data['LIST_ACTION_INDEX']), 5,
+                'the stored parent must be the create, so every edit hangs off one root');
+            assert.strictEqual(Number(indexer.indexerDb.getList.getCall(0).args[0]), 5,
+                'the membership read must use the normalized root');
+        });
+
+        it('leaves LIST_ACTION_INDEX untouched while the flag day is inert', async function () {
+            indexer.indexerDb.getListType.resolves(2);
+            indexer.indexerDb.getList.resolves([ADDR1]);
+            indexer.indexerDb.isActionAllowed.resolves(true);
+            indexer.indexerDb.isListEditResolutionActive.returns(false);
+
+            const data   = createBaseData({ ACTION: 'LIST', FORMAT: 1, SOURCE });
+            const params = ['1', '1', '7', ADDR2];
+
+            await handler.parse(params, data, null);
+
+            assert.strictEqual(data['STATUS'], 'valid');
+            assert.ok(!indexer.indexerDb.getListRootIndex.called,
+                'no normalization below the activation height');
+            assert.strictEqual(Number(data['LIST_ACTION_INDEX']), 7, 'the wire value is stored verbatim');
+        });
+
+        it('a REMOVE writes the spliced membership, dropping the removed item', async function () {
+            indexer.indexerDb.getListType.resolves(2);
+            indexer.indexerDb.getList.resolves([ADDR1, ADDR2]);
+            indexer.indexerDb.isActionAllowed.resolves(true);
+
+            const data   = createBaseData({ ACTION: 'LIST', FORMAT: 1, SOURCE });
+            const params = ['1', '2', '5', ADDR1];  // EDIT=2 (remove) ADDR1
+
+            await handler.parse(params, data, null);
+
+            assert.strictEqual(data['STATUS'], 'valid');
+            const written = indexer.indexerDb.createListItem.getCalls().map(c => c.args[1]);
+            assert.deepStrictEqual(written, [ADDR2],
+                'the edit snapshot must be the full remaining membership');
+        });
+
+        it('a REMOVE of the last member writes an EMPTY snapshot', async function () {
+            indexer.indexerDb.getListType.resolves(2);
+            indexer.indexerDb.getList.resolves([ADDR1]);
+            indexer.indexerDb.isActionAllowed.resolves(true);
+
+            const data   = createBaseData({ ACTION: 'LIST', FORMAT: 1, SOURCE });
+            const params = ['1', '2', '5', ADDR1];
+
+            await handler.parse(params, data, null);
+
+            assert.strictEqual(data['STATUS'], 'valid');
+            assert.strictEqual(indexer.indexerDb.createListItem.callCount, 0,
+                'an emptied list writes no item rows, which getList reads back as []');
+        });
+
         it('invalid EDIT value → invalid', async function () {
             indexer.indexerDb.getListType.resolves(2);
             indexer.indexerDb.getList.resolves([]);

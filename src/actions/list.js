@@ -99,7 +99,19 @@ class List {
         // Lookup list information
         if(!error && format==1){
             data['TYPE'] = type;
-            list         = await this.indexerDb.getList(data['LIST_ACTION_INDEX']);
+            // : normalize LIST_ACTION_INDEX to the CREATE that roots the edit
+            // chain, so every edit of a list hangs off the same parent and the
+            // "newest valid edit" lookup in getList is exact. Without it an edit
+            // naming an earlier EDIT's index would start a side chain that
+            // getList(createIndex) never sees, and the change would be silently
+            // lost. Flag-day gated with the resolution change itself: below the
+            // height the wire value is stored verbatim, as it always was.
+            if(this.indexerDb.isListEditResolutionActive(data['BLOCK_INDEX']))
+                data['LIST_ACTION_INDEX'] = await this.indexerDb.getListRootIndex(data['LIST_ACTION_INDEX']);
+            // Reads the CURRENT membership (the head of the edit chain), so edits
+            // compose: an ADD after a REMOVE builds on the removal, not on the
+            // create-time item set.
+            list = await this.indexerDb.getList(data['LIST_ACTION_INDEX'], data['BLOCK_INDEX']);
         }
 
         /*****************************************************************

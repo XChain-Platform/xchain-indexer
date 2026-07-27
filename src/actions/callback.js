@@ -67,8 +67,8 @@ class Callback {
         let holders     = await this.indexerDb.getHolders(data['TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
 
         // List of addresses allowed or blocked from holding CALLBACK_TICK
-        let allowList = (callbackTokenInfo && callbackTokenInfo['ALLOW_LIST']) ? await this.indexerDb.getList(callbackTokenInfo['ALLOW_LIST']) : [];
-        let blockList = (callbackTokenInfo && callbackTokenInfo['BLOCK_LIST']) ? await this.indexerDb.getList(callbackTokenInfo['BLOCK_LIST']) : [];
+        let allowList = (callbackTokenInfo && callbackTokenInfo['ALLOW_LIST']) ? await this.indexerDb.getList(callbackTokenInfo['ALLOW_LIST'], data['BLOCK_INDEX']) : [];
+        let blockList = (callbackTokenInfo && callbackTokenInfo['BLOCK_LIST']) ? await this.indexerDb.getList(callbackTokenInfo['BLOCK_LIST'], data['BLOCK_INDEX']) : [];
 
         // Create the fees object 
         let fees = await this.util.createFeesObject(this.indexerDb, data, preferences);

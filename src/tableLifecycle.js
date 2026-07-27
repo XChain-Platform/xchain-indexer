@@ -141,6 +141,16 @@ const TABLES = [
     { table: 'gated_files', owner: 'indexer', replication: 'stream:action', rollback: 'action', replicaRollback: 'mirror', hashed: DERIVED },
     { table: 'issues',    owner: 'indexer', replication: 'stream:action', rollback: 'action', replicaRollback: 'mirror', hashed: DERIVED },
     { table: 'links',     owner: 'indexer', replication: 'stream:action', rollback: 'action', replicaRollback: 'mirror', hashed: DERIVED },
+    // LIST create + edits. Every row is owned by the action that wrote it and is
+    // NEVER mutated in place: a valid edit writes a COMPLETE new membership
+    // snapshot under its OWN action_index, and getList resolves a list reference
+    // to the newest valid action in its edit chain (,
+    // list_edit_resolution_activation.js). That is deliberately NOT the BET-latch
+    // shape - remapping an edit's item rows onto the parent's action_index would
+    // mutate rows written in an earlier block and would then need a block stamp, a
+    // rollback reset and a state-hash class. As written, the action-scoped stream
+    // carries each edit with its own block and the generic action-scoped delete
+    // rolls it back, after which resolution falls back to the previous head.
     { table: 'lists',     owner: 'indexer', replication: 'stream:action', rollback: 'action', replicaRollback: 'mirror', hashed: DERIVED },
     { table: 'list_edits', owner: 'indexer', replication: 'stream:action', rollback: 'action', replicaRollback: 'mirror', hashed: DERIVED },
     { table: 'list_items', owner: 'indexer', replication: 'stream:action', rollback: 'action', replicaRollback: 'mirror', hashed: DERIVED },
@@ -238,6 +248,14 @@ const TABLES = [
     // row by design (no causing action; bet_feeds.closed_block is its record).
     { table: 'bet_feed_statuses', owner: 'indexer', replication: 'stream:action', rollback: 'action', replicaRollback: 'mirror', hashed: DERIVED },
     { table: 'bet_statuses',      owner: 'indexer', replication: 'stream:action', rollback: 'action', replicaRollback: 'mirror', hashed: DERIVED },
+    // Typed rows for the two lifecycle legs that used to own no row at all (BET
+    // format 1 cancel / format 3 resolve), the order_cancels / dispenser_cancels
+    // pattern. One row per action, written whatever the parse status, so a
+    // chain-rejected cancel or resolve persists a readable status instead of
+    // vanishing . Pure reporting: no validation or settlement path reads
+    // them, so they are action-derived for hashing like the other BET projections.
+    { table: 'bet_cancels',       owner: 'indexer', replication: 'stream:action', rollback: 'action', replicaRollback: 'mirror', hashed: DERIVED },
+    { table: 'bet_resolves',      owner: 'indexer', replication: 'stream:action', rollback: 'action', replicaRollback: 'mirror', hashed: DERIVED },
     { table: 'votes', owner: 'indexer', replication: 'stream:action', rollback: 'action', replicaRollback: 'mirror',
       hashed: DERIVED,
       note: 'Append-only: a re-vote inserts a new action_index set and tallies read each voter\'s MAX(action_index) set, so the generic delete re-exposes the prior surviving ballot on reorg.' },
