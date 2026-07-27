@@ -114,5 +114,18 @@ describe('ACTION manifest conformance: indexer indexerHandled set @regression', 
         it('(d) denied set equals exactly {DEPLOY, EXECUTE, XEXEC, BATCH}', function () {
             assert.deepStrictEqual([...denied].sort(), ['BATCH', 'DEPLOY', 'EXECUTE', 'XEXEC']);
         });
+
+        // : the static (no-VM) quote set is a strict subset of the deny-list. A name added
+        // to FEE_QUOTE_STATIC that is NOT denied would be quoted twice (schedule AND dry-run);
+        // one that is not dispatched would quote a fee for an action the chain cannot run.
+        it('(e) the static-quote set is a dispatched subset of the denied set', function () {
+            const staticSet  = Actions.getFeeQuoteStatic();
+            const dispatched = new Set(localIndexerSet());
+            assert.deepStrictEqual([...staticSet].sort(), ['DEPLOY', 'EXECUTE']);
+            for (const a of staticSet) {
+                assert.ok(denied.has(a), a + ' is statically quoted but not denied');
+                assert.ok(dispatched.has(a), a + ' is statically quoted but not dispatched');
+            }
+        });
     });
 });

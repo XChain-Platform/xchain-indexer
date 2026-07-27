@@ -393,9 +393,11 @@ async function startApi(){
         // handler's own verdict for ANY quotable action (class-A fee/price failures AND
         // class-B action failures: insufficient balance, taken ticker, ...), and the fee is
         // the handler's staged number valued at current oracle prices, judged (optionally)
-        // against the on-chain tolerance. Nothing persists. VM/compound actions
-        // (DEPLOY/EXECUTE/XEXEC/BATCH) stay unquotable here; quotes are admission-capped and
-        // time-boxed so this public read can't starve the block loop (see computeFeeQuote).
+        // against the on-chain tolerance. Nothing persists. VM/compound actions never reach the
+        // dry-run engine here: DEPLOY/EXECUTE answer with a schedule-priced fee carrying
+        // `valid:null` (payable, unverified), XEXEC/BATCH stay unquotable. Quotes are
+        // admission-capped and time-boxed so this public read can't starve the block loop
+        // (see computeFeeQuote).
         // Public read (surfaced to wallets/SDK via the explorer proxy); not a write or
         // federation method.
         // Body: { action, params, source, feeOutputSats? }

@@ -28,10 +28,32 @@ const { ADDRESS_REF_FIELDS } = require('./addressRefFields.js');
 // caller-supplied code in the VM (up to the VM CPU cap) while the dry-run holds the shared
 // transaction mutex, XEXEC re-runs a target contract, and BATCH can smuggle any of them as
 // a sub-action; quoting these on a shared node would hand unauthenticated callers a
-// block-loop-stalling compute primitive. They keep the Phase-1 `supported:false` answer
-// (pay the fee in XCHAIN; the wallet txSimulator covers client-side validity). The raw
-// `feequotedryrun` RPC (regtest + INDEXER_ENABLE_DRYRUN + API key) has no such restriction.
+// block-loop-stalling compute primitive. The raw `feequotedryrun` RPC (regtest +
+// INDEXER_ENABLE_DRYRUN + API key) has no such restriction.
 const FEE_QUOTE_DENYLIST = new Set(['DEPLOY', 'EXECUTE', 'XEXEC', 'BATCH']);
+
+// Denied actions that still get a FEE-ONLY quote, priced from the gas schedule with no VM
+// . The old blanket answer was `supported:false` + "pay the fee in XCHAIN", which is
+// BTC-era advice: LTC/DOGE settle the protocol fee in native coin and have no XCHAIN fee lane,
+// so a denied action there was composable but literally unpayable (no way to size the required
+// output), and any client offering it burned a network fee on a guaranteed-invalid action.
+//
+// Safe because the fee these two stage is decided BEFORE the VM runs and is pure arithmetic
+// over the gas schedule: deploy.js charges VM_DEPLOY_BASE + codeBytes * VM_DEPLOY_PER_BYTE and
+// execute.js charges VM_EXECUTE_BASE, and that pre-VM number is exactly what
+// validateNativeCoinFee judges the native output against (the post-VM recalculation from metered
+// gas re-prices the recorded fee, never the acceptance rule). So a static quote reproduces the
+// acceptance rule byte-for-byte while never entering the VM: no dry-run, no mutex, no compute
+// primitive. What it CANNOT answer is on-chain validity (class-B: contract exists, source has
+// funds, code compiles), so the quote reports `valid: null` and `validated: false` rather than
+// claiming a verdict it did not compute.
+//
+// XEXEC and BATCH stay fee-unquotable: XEXEC is system-injected from the cross-chain mirror
+// (never wallet-broadcast, so there is no caller to quote for), and a BATCH's fee is the sum of
+// its sub-actions' state-dependent fees, which cannot be priced without running them. Quoting a
+// BATCH from a partial schedule would under-size the output, which is the same funds-burning
+// direction this closes.
+const FEE_QUOTE_STATIC = new Set(['DEPLOY', 'EXECUTE']);
 
 // Settlement and lifecycle legs that stage NO protocol fee: the fee was already charged when
 // the originating ORDER/SWAP/DISPENSER was created, so there is nothing for feequote to price.
@@ -801,14 +823,147 @@ class Actions {
         });
     }
 
+    // True when this chain has no XCHAIN fee lane, so a protocol fee can ONLY be paid with a
+    // native-coin output. Mirrors the runtime rule in utility.detectFeePaymentMode (BTC falls
+    // back to an XCHAIN balance debit when no fee output is present; every other coin rejects).
+    // Message-shaping only: nothing consensus-bearing reads this.
+    _nativeFeeMandatory(){
+        let feeDestination = this.config['ADDRESS'] ? this.config['ADDRESS']['FEE_DESTINATION'] : null;
+        if(!feeDestination || feeDestination === 'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX') return false;
+        return this.config['COIN'] !== 'BTC';
+    }
+
+    // Decode a DEPLOY's inline CODE_ENCODING to its UTF-8 source byte count, byte-identically to
+    // deploy.js (same DEPLOY_BASE64_CODE flag-day gate, same canonical-base64 round-trip, same
+    // lenient pre-activation hex). Only the SIZE is wanted, but the decode has to match exactly:
+    // codeBytes is multiplied by VM_DEPLOY_PER_BYTE, so a decode that differs from the handler's
+    // would quote a fee the chain does not accept. Returns { bytes } or { error } with the
+    // handler's own verbatim reject string.
+    async _decodeDeployCodeBytes(encoded, blockIndex){
+        if(this.util.isNull(encoded))
+            return { error: 'invalid: CODE_ENCODING (required)' };
+        // Bound the decode before doing it: this runs on an unauthenticated endpoint, and no
+        // encoding of a legal contract is longer than hex's 2x of MAX_CODE_SIZE. Anything past
+        // that is over the size cap whatever it decodes to, so reject it without the work.
+        if(String(encoded).length > deploy.MAX_CODE_SIZE * 2)
+            return { error: 'invalid: CODE_ENCODING (exceeds max size)' };
+        let code = '';
+        if(await this.protocolChanges.isEnabled('DEPLOY_BASE64_CODE', blockIndex)){
+            try {
+                let b64 = String(encoded);
+                code = Buffer.from(b64, 'base64').toString('utf8');
+                // Buffer.from is lenient; round-trip so non-canonical base64 rejects here the
+                // same way it will on-chain instead of being quoted a fee it would forfeit.
+                if(Buffer.from(code, 'utf8').toString('base64') !== b64)
+                    return { error: 'invalid: CODE_ENCODING (base64 decode failed)' };
+            } catch(e){
+                return { error: 'invalid: CODE_ENCODING (base64 decode failed)' };
+            }
+        } else {
+            try {
+                code = Buffer.from(String(encoded), 'hex').toString('utf8');
+            } catch(e){
+                return { error: 'invalid: CODE_ENCODING (hex decode failed)' };
+            }
+        }
+        let bytes = Buffer.byteLength(code, 'utf8');
+        if(bytes > deploy.MAX_CODE_SIZE)
+            return { error: 'invalid: CODE_ENCODING (exceeds max size)' };
+        return { bytes: bytes };
+    }
+
+    // Gas-schedule-only price for a FEE_QUOTE_STATIC action : the XCHAIN-denominated
+    // protocol fee the handler stages BEFORE it enters the VM, which is the amount
+    // validateNativeCoinFee checks the native output against. Reproduces the handler arithmetic
+    // per DEPLOY format family:
+    //   v0/v1 inline   - VM_DEPLOY_BASE + codeBytes * VM_DEPLOY_PER_BYTE (deploy.js)
+    //   v2/v3 chunked  - VM_DEPLOY_BASE only; the v4 carriers already paid per-byte (deploy.js)
+    //   v4 carrier     - CODE_PART bytes * VM_DEPLOY_PER_BYTE (deploy_chunk.js)
+    //   EXECUTE        - VM_EXECUTE_BASE (execute.js; metered gas re-prices only the record)
+    // Returns { gasCost, xchainFee }, { error } for an input the handler would reject outright,
+    // or null when the action has no statically knowable fee.
+    async _staticProtocolFee(action, params, blockIndex){
+        let schedule = this.config['GAS_SCHEDULE'] || {};
+        let gasCost  = null;
+
+        if(action === 'EXECUTE'){
+            gasCost = schedule.VM_EXECUTE_BASE;
+        } else if(action === 'DEPLOY'){
+            let format = this.util.getFormatVersion(params[0]);
+            if(format === 0 || format === 1){
+                let decoded = await this._decodeDeployCodeBytes(params[1], blockIndex);
+                if(decoded.error) return { error: decoded.error };
+                gasCost = schedule.VM_DEPLOY_BASE + (decoded.bytes * schedule.VM_DEPLOY_PER_BYTE);
+            } else if(format === 2 || format === 3){
+                gasCost = schedule.VM_DEPLOY_BASE;
+            } else if(format === 4){
+                // The carrier is billed on the base64 slice as carried, not on decoded bytes.
+                gasCost = Buffer.byteLength(String(params[4] == null ? '' : params[4]), 'utf8')
+                        * schedule.VM_DEPLOY_PER_BYTE;
+            } else {
+                return { error: 'invalid: VERSION (unknown)' };
+            }
+        }
+
+        if(gasCost === null || !Number.isFinite(Number(gasCost)))
+            return null;
+        return { gasCost: gasCost, xchainFee: this.util.bcmul(gasCost, this.config['GAS_PRICE'], 8) };
+    }
+
+    // The denied-action answer for the public feequote . FEE_QUOTE_STATIC actions get a
+    // real, payable fee sized from the gas schedule (see _staticProtocolFee) so a client can build
+    // the FEE_DESTINATION output on a native-fee chain; everything else keeps the flat refusal,
+    // worded for the chain it is answering on (advising "pay it in XCHAIN" on LTC/DOGE, which have
+    // no XCHAIN fee lane, is what made those actions unpayable rather than merely unverified).
+    //
+    // The engine is never invoked on this path, so `valid` is deliberately null, not true: a
+    // sized fee is not a verdict. The one verdict this path CAN reach is a negative one (a caller-
+    // supplied output below the band's minimum, or an input the handler rejects before the VM),
+    // and those stay valid:false because they are computed, not assumed.
+    async _staticFeeQuote(base, action, params, feeOutputSats){
+        if(!FEE_QUOTE_STATIC.has(action))
+            return Object.assign(base, { supported: false, valid: false, denied: true,
+                error: 'native fee pre-flight not supported for ' + action +
+                       (this._nativeFeeMandatory()
+                        ? ' (no fee quote is available for it on ' + this.config['COIN'] + ')'
+                        : ' (pay the fee in XCHAIN)') });
+
+        let blockIndex = await this.indexerDb.getLatestBlockIndex();
+        let blockTime  = await this.indexerDb.getBlockTime(blockIndex);
+        base.blockIndex = blockIndex;
+        base.blockTime  = blockTime;
+
+        // A schedule that cannot price the action (a key missing or mistyped) fails CLOSED, back
+        // to the refusal: quoting a fee from a half-read schedule is how an output gets under-sized.
+        let staticFee = await this._staticProtocolFee(action, params, blockIndex);
+        if(staticFee === null)
+            return Object.assign(base, { supported: false, valid: false, denied: true,
+                error: 'native fee pre-flight not supported for ' + action });
+
+        base.staticQuote = true;
+        base.validated   = false;
+        if(staticFee.error)
+            return Object.assign(base, { valid: false, error: staticFee.error, xchainFee: null });
+
+        base.gasCost = staticFee.gasCost;
+        let quote = await this._priceFeeQuote(base, staticFee.xchainFee, feeOutputSats);
+        if(quote.valid === true) quote.valid = null;
+        quote.note = action + ' is priced from the gas schedule without a dry-run: the fee is the ' +
+            'protocol fee the chain checks the native-coin output against, but on-chain validity ' +
+            'is NOT pre-judged (the public pre-flight never runs caller-supplied VM code).';
+        return quote;
+    }
+
     // Read-only native-coin fee pre-flight (the public `feequote` JSON-RPC). Phase 2: runs the
     // REAL action handler in a forced-rollback dry-run (_dryRunAction), so validity is
     // authoritative for any quotable action: class-A failures (fee sizing, oracle price) AND
     // class-B failures the Phase-1 estimator could never see (insufficient balance, taken
     // ticker, expired order, ...), surfaced verbatim in `error`/`status`. The fee is the
     // handler's own staged number, so there is no estimator to drift (estimateActionFee is
-    // retired) and no supported-subset restriction; only the VM/compound actions in
-    // FEE_QUOTE_DENYLIST stay unquotable on this public path. Never persists.
+    // retired) and no supported-subset restriction. The VM/compound actions in
+    // FEE_QUOTE_DENYLIST never reach the engine here; DEPLOY/EXECUTE instead get a
+    // schedule-priced, verdict-free quote (FEE_QUOTE_STATIC / _staticFeeQuote) and XEXEC/BATCH
+    // stay unquotable. Never persists.
     //
     // Guardrails for a public endpoint: quotes serialize against the block loop on the db
     // transaction mutex, so each is time-boxed (INDEXER_FEEQUOTE_TIMEOUT_MS, default 10s,
@@ -853,7 +1008,7 @@ class Actions {
         let feeClass = classifyFeeQuoteAction(action);
 
         if(feeClass === 'denied')
-            return Object.assign(base, { supported: false, valid: false, error: 'native fee pre-flight not supported for ' + action + ' (pay the fee in XCHAIN)' });
+            return await this._staticFeeQuote(base, action, params, feeOutputSats);
 
         // Fee-exempt settlement/lifecycle actions: no protocol fee to price, and their required
         // native outputs can't be reproduced by the dry-run harness. Answer zero, skip the engine.
@@ -1118,3 +1273,4 @@ module.exports = Actions;
 module.exports.classifyFeeQuoteAction = classifyFeeQuoteAction;
 module.exports.getFeeQuoteDenylist    = () => new Set(FEE_QUOTE_DENYLIST);
 module.exports.getFeeQuoteExempt      = () => new Set(FEE_QUOTE_EXEMPT);
+module.exports.getFeeQuoteStatic      = () => new Set(FEE_QUOTE_STATIC);
