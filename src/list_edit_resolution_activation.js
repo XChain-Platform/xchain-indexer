@@ -56,16 +56,18 @@
 // block_index. Pinned to the  pre-freeze activation train, the same
 // cohort as BET_STATUS_STATE_HASH_ACTIVATION in stateHash.js: BET members-only
 // markets are the loudest consumer of a mutable list, so the two flip together
-// and operators reason about one boundary. PROVISIONAL, same caveat as that
-// map: CONFIRM against live tips at train assembly, and every indexer must run
-// this map BEFORE its chain reaches the height.
+// and operators reason about one boundary. RE-PINNED 2026-07-27 against live tips
+// in lockstep with that map (read its header for the rule and for the LTC:testnet
+// height the chain had already passed). These two maps must stay equal value for
+// value; the explorer vendors this one byte-identically behind a guard test.
+// CONFIRM again at train assembly: they are only as good as the day measured.
 const LIST_EDIT_RESOLUTION_ACTIVATION = {
-    'BTC:mainnet':  963000,
-    'LTC:mainnet':  3161000,
-    'DOGE:mainnet': 6337000,
-    'BTC:testnet':  149500,
-    'LTC:testnet':  4823000,
-    'DOGE:testnet': 68000000,   // fast chain, wide margin
+    'BTC:mainnet':  963000,   // tip 959,853 (2026-07-27) + 21d @144/day = 962,877
+    'LTC:mainnet':  3162000,   // tip 3,149,481 + 21d @576/day = 3,161,577
+    'DOGE:mainnet': 6338000,   // tip 6,307,307 + 21d @1440/day = 6,337,547
+    'BTC:testnet':  149500,   // tip 145,963; keeps the wider existing margin
+    'LTC:testnet':  4837000,   // tip 4,824,850 had already PASSED the old 4,823,000
+    'DOGE:testnet': 68000000,   // fast chain, wide margin; tip 67,789,569
     regtest: 0,                 // armed from genesis: fresh regtest stacks exercise list edits end to end
 };
 

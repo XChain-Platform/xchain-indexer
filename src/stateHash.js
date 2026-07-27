@@ -208,17 +208,24 @@ function isTokenSupplyStateHashActive(blockIndex, network, coin){
 // halt a mixed-version fleet instantly. Same per-chain arming model as
 // POLL_FINALIZE/TOKEN_SUPPLY above.
 const BET_STATUS_STATE_HASH_ACTIVATION = {
-    // PROVISIONAL heights, targeted at the  pre-freeze activation train
-    // (~2026-08 deploy window; derived from the 2026-07-07 POLL_FINALIZE tips +
-    // chain cadence). CONFIRM against live tips at train assembly before push:
-    // every indexer + sync process must run this exact map BEFORE each chain
-    // reaches its height.
-    'BTC:mainnet':  963000,
-    'LTC:mainnet':  3161000,
-    'DOGE:mainnet': 6337000,
-    'BTC:testnet':  149500,
-    'LTC:testnet':  4823000,
-    'DOGE:testnet': 68000000,   // fast chain, wide margin
+    // Heights for the  pre-freeze activation train (~2026-08 deploy window).
+    // RE-PINNED 2026-07-27 against live tips read from the fleet's own indexers and
+    // nodes, replacing values derived from the 2026-07-07 POLL_FINALIZE tips. The
+    // rule, applied per chain: roundUp1000(tip + 21 days x nominal blocks/day), and
+    // never BELOW what was already pinned, since shrinking a margin is what
+    // re-introduces the failure this pass found. That failure was LTC:testnet, whose
+    // 4,823,000 the chain had already passed (tip 4,824,850): a height in the past is
+    // not a flag day at all, because a node replaying from genesis applies the rule
+    // from it while a long-running node never did, and the two diverge at the first
+    // hash comparison. Nothing was live yet (no prod indexer carried this map), so it
+    // cost a re-pin rather than a fork. CONFIRM again at train assembly: these are
+    // only as good as the day they were measured.
+    'BTC:mainnet':  963000,   // tip 959,853 (2026-07-27) + 21d @144/day = 962,877
+    'LTC:mainnet':  3162000,   // tip 3,149,481 + 21d @576/day = 3,161,577
+    'DOGE:mainnet': 6338000,   // tip 6,307,307 + 21d @1440/day = 6,337,547
+    'BTC:testnet':  149500,   // tip 145,963; keeps the wider existing margin
+    'LTC:testnet':  4837000,   // tip 4,824,850 had already PASSED the old 4,823,000
+    'DOGE:testnet': 68000000,   // fast chain, wide margin; tip 67,789,569
     regtest: 0,                 // armed from genesis: fresh regtest stacks exercise the class end to end
 };
 
