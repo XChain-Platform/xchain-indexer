@@ -38,9 +38,17 @@ const { makeKeypair, buildBatch, rawMatch, rawCall, SNAPSHOT_BLOCK } = require('
 const util = new Utility();
 
 // In-memory DOGE indexer DB for the recovery query surface.
-function memDb(v1s, v2s) {
+// opts.noTx: expose ONLY doQuery, modelling a raw query handle with no transaction API
+// (recovery must still rebuild against one; see the back-compat case below). Otherwise the
+// stub implements begin/commit/rollback with snapshot semantics, so the per-batch
+// transaction (#3213) is exercised by every test in this file.
+function memDb(v1s, v2s, opts) {
+    opts = opts || {};
     let matches = [], snapshots = [], calls = [];
-    return {
+    let saved = null;
+    const clone = (rows) => rows.map(r => Object.assign({}, r));
+    const restore = (target, rows) => { target.length = 0; for (let r of rows) target.push(r); };
+    let db = {
         matches, snapshots, calls,
         async doQuery(sql, params) {
             params = params || [];
@@ -73,8 +81,20 @@ function memDb(v1s, v2s) {
             if (sql.startsWith('SELECT match_id FROM cross_chain_matches'))
                 return matches.filter(r => r.match_id === params[0]).map(r => ({ match_id: r.match_id }));
             if (sql.startsWith('UPDATE cross_chain_matches SET status')) {
-                // params = [status, anchorTxid, match_id]; anchor_txid upgrades
-                // NULL->value only (COALESCE semantics in recovery._rebuild).
+                if (sql.includes('effective_time')) {
+                    // Revive content upgrade (#3208). params = [status, effective_time,
+                    // finalizing_view, validator_signatures, anchorTxid, match_id].
+                    for (let r of matches) if (r.match_id === params[5]) {
+                        r.status               = params[0];
+                        r.effective_time       = params[1];
+                        r.finalizing_view      = params[2];
+                        r.validator_signatures = params[3];
+                        if (r.anchor_txid == null) r.anchor_txid = params[4];
+                    }
+                    return [];
+                }
+                // Status-only update (non-finalized incoming). params = [status, anchorTxid,
+                // match_id]; anchor_txid upgrades NULL->value only (COALESCE semantics).
                 for (let r of matches) if (r.match_id === params[2]) {
                     r.status = params[0];
                     if (r.anchor_txid == null) r.anchor_txid = params[1];
@@ -86,6 +106,7 @@ function memDb(v1s, v2s) {
                 // royalty columns sit at 11 (a_payout_legs) / 20 (b_payout_legs), status at 23;
                 // anchor_txid is the last param, finalizing_view second-to-last.
                 matches.push({ match_id: params[0], a_payout_legs: params[11], b_payout_legs: params[20],
+                               effective_time: params[21], validator_signatures: params[22],
                                status: params[23], finalizing_view: params[params.length - 2],
                                anchor_txid: params[params.length - 1] });
                 return [];
@@ -118,6 +139,28 @@ function memDb(v1s, v2s) {
             return [];
         }
     };
+    if (opts.noTx) return { matches, snapshots, calls, doQuery: db.doQuery };
+    // Snapshot/restore transaction semantics: enough to prove a rolled-back batch leaves
+    // NOTHING behind, which is the whole point of the per-batch transaction (#3213).
+    db.txDepth = 0;
+    db.commits = 0;
+    db.rollbacks = 0;
+    db.beginTransaction = async function () {
+        assert.strictEqual(db.txDepth, 0, 'recovery must not nest transactions on one handle');
+        db.txDepth = 1;
+        saved = { matches: clone(matches), snapshots: clone(snapshots), calls: clone(calls) };
+    };
+    db.commitTransaction = async function () {
+        assert.strictEqual(db.txDepth, 1, 'commit without an open transaction');
+        db.txDepth = 0; db.commits++; saved = null;
+    };
+    db.rollbackTransaction = async function () {
+        if (db.txDepth === 0) return;                     // no-op after a commit, like Database
+        db.txDepth = 0; db.rollbacks++;
+        restore(matches, saved.matches); restore(snapshots, saved.snapshots); restore(calls, saved.calls);
+        saved = null;
+    };
+    return db;
 }
 
 // BTC indexer stub: every pubkey in `staked` holds an active stake (the raw
@@ -156,20 +199,37 @@ function capSetFromKeys(keys) {
 // captures that INSERT. It must NOT call createAddress/getOrCreatePubkeyId at restore time;
 // expose them as poisoned to assert the id-assignment path is gone (the apply hook assigns
 // ids later, during the reindex, not here).
-function rewardBtcDbStub() {
+// opts.failOnRewardIndex: throw when staging the Nth (0-based) reward row, modelling a DB
+// error part-way through a batch. opts.noTx: raw handle with no transaction API.
+function rewardBtcDbStub(opts) {
+    opts = opts || {};
     let rewards = [];
-    return {
+    let saved = null;
+    let db = {
         rewards,
         async createAddress() { throw new Error('recovery must not assign index ids at restore time (F1a)'); },
         async getOrCreatePubkeyId() { throw new Error('recovery must not assign pubkey ids at restore time (F1a)'); },
         async doQuery(sql, params) {
             if (sql.includes('INSERT INTO recovery_pending_rewards')) {
+                if (opts.failOnRewardIndex === rewards.length) throw new Error('ER_LOCK_DEADLOCK: staging failed');
                 rewards.push({ source_address: params[0], validator_pubkey: params[1], reward_type: params[2],
                                round_reference: params[3], amount: params[4], block_index: params[5] });
             }
             return [];
         }
     };
+    if (opts.noTx) return db;
+    db.commits = 0;
+    db.rollbacks = 0;
+    db.beginTransaction = async function () { saved = rewards.map(r => Object.assign({}, r)); };
+    db.commitTransaction = async function () { db.commits++; saved = null; };
+    db.rollbackTransaction = async function () {
+        if (saved === null) return;
+        db.rollbacks++;
+        rewards.length = 0; for (let r of saved) rewards.push(r);
+        saved = null;
+    };
+    return db;
 }
 
 describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () {
@@ -204,6 +264,56 @@ describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () 
         assert.strictEqual(report.verified, 2);
         assert.strictEqual(db.matches.length, 1);
         assert.strictEqual(db.matches[0].status, 'retracted');
+    });
+
+    it('revive-wins: a later batch re-finalizes a retracted match with NEW content (#3208)', async function () {
+        // A source-chain reorg retracts a crossing; the SAME crossing re-forms at the same
+        // BTC snapshot_block, so _deriveMatchId yields the identical match_id and the hub
+        // REVIVES the row with this round's effective_time / view / signatures
+        // (CrossChainDexEngine._insertMatchRow), re-archiving it in a later batch. A
+        // status-only update on the existing-row branch kept batch 0's effective_time - which
+        // GATES the settlement block - and batch 0's signature set under status='finalized',
+        // so a recovery-fed node settled at a different block than a mirror-fed one and
+        // failed 2f+1 re-verification. effective_time is signed into the match canonical, so
+        // batch 1's signatures differ from batch 0's automatically.
+        let pre  = Object.assign(rawMatch('m1', 'retracted'), { effective_time: 1700000000, finalizing_view: 0 });
+        let post = Object.assign(rawMatch('m1', 'finalized'), { effective_time: 1700009999, finalizing_view: 3 });
+        let b0 = buildBatch(0, [pre],  oracleKeys, crossKeys);
+        let b1 = buildBatch(1, [post], oracleKeys, crossKeys);
+        let db = memDb([b0.v1, b1.v1], []);
+        let report = await new AnchorRecovery(db, quiet).run();
+
+        assert.strictEqual(report.verified, 2);
+        assert.strictEqual(db.matches.length, 1);
+        let row = db.matches[0];
+        assert.strictEqual(row.status, 'finalized', 'revived status wins');
+        assert.strictEqual(Number(row.effective_time), 1700009999, 'revived effective_time wins');
+        assert.strictEqual(Number(row.finalizing_view), 3, 'revived finalizing_view wins');
+        // The stored signatures must be batch 1's, over the NEW (later effective_time,
+        // view 3) canonical - not batch 0's stale set.
+        let sigs    = JSON.parse(row.validator_signatures);
+        let archive = require('../fixtures/anchor-archive.js');
+        let expect  = archive.signHex(crossKeys[0], archive.matchCanonical(post));
+        assert.ok(sigs.some(s => s.pubkey === crossKeys[0].pubkey && s.sig === expect),
+            'validator_signatures are the revived round\'s, over the new effective_time/view');
+    });
+
+    it('a retraction after a finalize moves only the status, never the signed content (#3208)', async function () {
+        // The inverse guard: the hub never rewrites content on a retraction, so neither may
+        // recovery. Otherwise the revive upgrade above would become a general last-batch-wins
+        // overwrite and a retraction batch could regress a row's signed terms.
+        let first = Object.assign(rawMatch('m1', 'finalized'), { effective_time: 1700000000, finalizing_view: 2 });
+        let later = Object.assign(rawMatch('m1', 'retracted'), { effective_time: 1700009999, finalizing_view: 9 });
+        let b0 = buildBatch(0, [first], oracleKeys, crossKeys);
+        let b1 = buildBatch(1, [later], oracleKeys, crossKeys);
+        let db = memDb([b0.v1, b1.v1], []);
+        let report = await new AnchorRecovery(db, quiet).run();
+
+        assert.strictEqual(report.verified, 2);
+        assert.strictEqual(db.matches.length, 1);
+        assert.strictEqual(db.matches[0].status, 'retracted');
+        assert.strictEqual(Number(db.matches[0].effective_time), 1700000000, 'content untouched by a retraction');
+        assert.strictEqual(Number(db.matches[0].finalizing_view), 2, 'content untouched by a retraction');
     });
 
     it('skips anchor rows the chain parse recorded as invalid (status filter, not replayed)', async function () {
@@ -420,9 +530,112 @@ describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () 
 
         it('fails the batch when rewards are present but no BTC DB handle was provided', async function () {
             let { v1 } = buildBatch(0, [rawMatch('m1')], oracleKeys, crossKeys, { rewards: [reward()] });
-            let report = await new AnchorRecovery(memDb([v1], []), quiet).run();
+            let db = memDb([v1], []);
+            let report = await new AnchorRecovery(db, quiet).run();
             assert.strictEqual(report.verified, 0);
             assert.ok(report.failed[0].reason.includes('no BTC indexer DB handle'));
+            // #3213: the guard is hoisted ahead of every write, so the batch leaves nothing
+            // behind. It used to fire only after the match rows had already been committed.
+            assert.strictEqual(db.matches.length, 0, 'a batch that cannot restore its rewards writes nothing');
+            assert.strictEqual(db.snapshots.length, 0);
+            assert.strictEqual(report.matches, 0, 'the report never counts rows the batch did not land');
+        });
+
+        it('a mid-batch write failure rolls the WHOLE batch back, on both handles (#3213)', async function () {
+            // The batch verifies, so the rebuild starts writing: snapshots, matches, then the
+            // reward staging - where the second row hits a DB error. Before the per-batch
+            // transaction, the first reward row plus every match and snapshot of the batch
+            // stayed committed while run() reported the batch FAILED, so a re-run re-staged
+            // the reward that HAD landed (recovery_pending_rewards has no unique key to
+            // dedupe it) and double-credited the COLLECT rail.
+            let { v1 } = buildBatch(0, [rawMatch('m1'), rawMatch('m2')], oracleKeys, crossKeys,
+                                    { rewards: [reward(), reward({ round_number: 8 })] });
+            let db    = memDb([v1], []);
+            let btcDb = rewardBtcDbStub({ failOnRewardIndex: 1 });
+            let report = await new AnchorRecovery(db, Object.assign({ btcDb }, quiet)).run();
+
+            assert.strictEqual(report.verified, 0);
+            assert.strictEqual(report.failed.length, 1);
+            assert.ok(report.failed[0].reason.includes('ER_LOCK_DEADLOCK'));
+            assert.strictEqual(db.matches.length, 0, 'match rows rolled back');
+            assert.strictEqual(db.snapshots.length, 0, 'snapshot rows rolled back');
+            assert.strictEqual(btcDb.rewards.length, 0, 'the reward row that HAD landed is rolled back too');
+            assert.strictEqual(db.rollbacks, 1);
+            assert.strictEqual(btcDb.rollbacks, 1);
+            assert.strictEqual(db.commits, 0, 'nothing may commit on a failed batch');
+            assert.strictEqual(btcDb.commits, 0);
+            assert.strictEqual(report.rewards, 0, 'the report never counts rolled-back rows');
+        });
+
+        it('one failing batch does not roll back the batches that already committed (#3213)', async function () {
+            // Per-BATCH atomicity, not per-run: an operator re-runs recovery after fixing the
+            // cause, and every batch that already landed must stay landed (its writes are
+            // idempotent on replay).
+            let good = buildBatch(0, [rawMatch('m1')], oracleKeys, crossKeys, { rewards: [reward()] });
+            let bad  = buildBatch(1, [rawMatch('m2')], oracleKeys, crossKeys, { rewards: [reward({ round_number: 8 })] });
+            let db    = memDb([good.v1, bad.v1], []);
+            let btcDb = rewardBtcDbStub({ failOnRewardIndex: 1 });
+            let report = await new AnchorRecovery(db, Object.assign({ btcDb }, quiet)).run();
+
+            assert.strictEqual(report.verified, 1);
+            assert.strictEqual(report.failed.length, 1);
+            assert.deepStrictEqual(db.matches.map(m => m.match_id), ['m1'], 'batch 0 stays committed');
+            assert.strictEqual(btcDb.rewards.length, 1);
+            assert.strictEqual(db.commits, 1);
+            assert.strictEqual(btcDb.commits, 1);
+            assert.strictEqual(report.matches, 1);
+            assert.strictEqual(report.rewards, 1);
+        });
+
+        it('the DOGE mirror commits BEFORE the reward staging (crash-window ordering, #3213)', async function () {
+            // MariaDB has no cross-database atomic commit, so the window between the two
+            // commits is made harmless by ORDER: the idempotent handle (matches/calls/
+            // snapshots) commits first and the NON-idempotent reward staging second. A crash
+            // in between rolls the rewards back, and the re-run stages them exactly once.
+            // The reverse order would leave rewards staged under a FAILED batch and
+            // double-credit on the re-run.
+            let seq = [];
+            let { v1 } = buildBatch(0, [rawMatch('m1')], oracleKeys, crossKeys, { rewards: [reward()] });
+            let db    = memDb([v1], []);
+            let btcDb = rewardBtcDbStub();
+            let dogeCommit = db.commitTransaction.bind(db);
+            let btcCommit  = btcDb.commitTransaction.bind(btcDb);
+            db.commitTransaction    = async () => { seq.push('doge'); return dogeCommit(); };
+            btcDb.commitTransaction = async () => { seq.push('btc');  return btcCommit(); };
+
+            let report = await new AnchorRecovery(db, Object.assign({ btcDb }, quiet)).run();
+            assert.strictEqual(report.verified, 1);
+            assert.deepStrictEqual(seq, ['doge', 'btc']);
+        });
+
+        it('a failing second begin does not strand the first transaction (#3213)', async function () {
+            // The DOGE transaction is already open when the BTC handle refuses to start one.
+            // Leaving it open would hold Database's transaction mutex and hang the NEXT
+            // batch's beginTransaction forever, so the batch must unwind what it opened.
+            let { v1 } = buildBatch(0, [rawMatch('m1')], oracleKeys, crossKeys, { rewards: [reward()] });
+            let db    = memDb([v1], []);
+            let btcDb = rewardBtcDbStub();
+            btcDb.beginTransaction = async () => { throw new Error('ER_CON_COUNT_ERROR: too many connections'); };
+            let report = await new AnchorRecovery(db, Object.assign({ btcDb }, quiet)).run();
+
+            assert.strictEqual(report.verified, 0);
+            assert.ok(report.failed[0].reason.includes('ER_CON_COUNT_ERROR'));
+            assert.strictEqual(db.txDepth, 0, 'the DOGE transaction must not be left open');
+            assert.strictEqual(db.rollbacks, 1);
+            assert.strictEqual(db.matches.length, 0);
+        });
+
+        it('a raw query handle with no transaction API still rebuilds (back-compat)', async function () {
+            // Recovery is also driven by plain doQuery handles (embedders, fixtures). Those
+            // keep the pre-#3213 autocommit behavior rather than throwing on beginTransaction.
+            let { v1 } = buildBatch(0, [rawMatch('m1')], oracleKeys, crossKeys, { rewards: [reward()] });
+            let db     = memDb([v1], [], { noTx: true });
+            let btcDb  = rewardBtcDbStub({ noTx: true });
+            let report = await new AnchorRecovery(db, Object.assign({ btcDb }, quiet)).run();
+
+            assert.strictEqual(report.verified, 1);
+            assert.strictEqual(db.matches.length, 1);
+            assert.strictEqual(btcDb.rewards.length, 1);
         });
 
         it('rejects a reward row missing its earn-time source', async function () {

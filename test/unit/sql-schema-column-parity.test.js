@@ -105,6 +105,64 @@ function collectMigrationColumns() {
     return out;
 }
 
+// Tables a dated migration CREATEs outright: { file, table, columns:[{name,spec}], tail }.
+// A migration can add a whole TABLE, not just a column, and such a table is ledger-covered
+// exactly like a migration-added column: a replica converged by replaying migrations alone
+// DOES gain it. Without this parse the guard below saw its columns as definition-only
+// orphans, and the only way to quiet it was to park the table in the PRE-LEDGER baseline -
+// a false provenance claim that then hid every later drift on that table (#3164).
+// Uses the SAME parser as the definitions (parseExpectedColumns handles the migration's
+// `IF NOT EXISTS`), so the two sides are compared through one code path.
+function collectMigrationCreatedTables() {
+    const out = [];
+    for (const file of fs.readdirSync(MIG_DIR).filter(f => f.endsWith('.sql')).sort()) {
+        const raw = stripComments(fs.readFileSync(path.join(MIG_DIR, file), 'utf8'));
+        for (const m of raw.matchAll(/CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?`?(\w+)`?\s*\([\s\S]+?\)\s*(ENGINE[^;]*)/gi)) {
+            const columns = Database.prototype.parseExpectedColumns.call(
+                { stripSqlLineComments: Database.prototype.stripSqlLineComments }, m[0]);
+            if (!columns) continue;
+            out.push({
+                file, table: m[1],
+                columns: columns.map(c => ({
+                    name: c.name,
+                    spec: normalizeSpec(c.definition.replace(new RegExp('^\\s*`?' + c.name + '`?\\s*', 'i'), '')),
+                })),
+                // Inline KEY/UNIQUE KEY clauses + the ENGINE/CHARSET tail: both are part of a
+                // byte-identical SHOW CREATE TABLE, and neither is a "column", so they are
+                // compared as a normalized body rather than per-column.
+                body: normalizeCreateBody(m[0]),
+            });
+        }
+    }
+    return out;
+}
+
+// The whole CREATE TABLE block reduced to a comparable form: no backticks, collapsed
+// whitespace, uppercased, and with the optional `IF NOT EXISTS` removed. Two blocks that
+// compare equal produce the same SHOW CREATE TABLE.
+function normalizeCreateBody(sql) {
+    return String(sql)
+        .replace(/`/g, '')
+        .replace(/\bIF\s+NOT\s+EXISTS\s+/i, '')
+        .replace(/\s+/g, ' ')
+        .replace(/\s*,\s*/g, ',')
+        .replace(/\s*\(\s*/g, '(')
+        .replace(/\s*\)\s*/g, ')')
+        .trim()
+        .toUpperCase();
+}
+
+// The definition file's own CREATE TABLE block, normalized the same way. Keyed by table.
+function collectDefinitionBodies() {
+    const out = {};
+    for (const file of fs.readdirSync(SQL_DIR).filter(f => f.endsWith('.sql'))) {
+        const raw = stripComments(fs.readFileSync(path.join(SQL_DIR, file), 'utf8'));
+        const m   = raw.match(/CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?`?(\w+)`?\s*\([\s\S]+?\)\s*(ENGINE[^;]*)/i);
+        if (m) out[m[1]] = normalizeCreateBody(m[0]);
+    }
+    return out;
+}
+
 // Every column a dated migration retypes in place: { file, table, name, spec }.
 // MODIFY cannot restate table-level constraints, so an inline PRIMARY KEY in the
 // definition is normalized away before comparison (the key itself is untouched
@@ -243,6 +301,10 @@ describe('SQL schema column parity (definition path vs ledger path) @regression'
 
         // Columns any dated migration ADDs, as `table.col` (reuses the proven parser).
         const migrated = new Set(collectMigrationColumns().map(c => (c.table + '.' + c.name).toLowerCase()));
+        // Plus every column of a table a dated migration CREATEs outright: those arrive on
+        // the ledger path through the CREATE TABLE, not an ADD COLUMN (#3164).
+        for (const t of collectMigrationCreatedTables())
+            for (const c of t.columns) migrated.add((t.table + '.' + c.name).toLowerCase());
 
         const orphans = [];
         for (const [table, cols] of Object.entries(collectDefinitionColumns())) {
@@ -261,6 +323,51 @@ describe('SQL schema column parity (definition path vs ledger path) @regression'
             'them. Ship a dated migration (ADD COLUMN IF NOT EXISTS ... with the AFTER anchor matching the ' +
             'definition). If the column genuinely predates the migration ledger, add it to ' +
             'test/fixtures/schema-baseline.json deliberately:\n  ' + orphans.join('\n  '));
+    });
+
+    // #3164: the guard above had no notion of a migration-created TABLE. Its columns are
+    // neither pre-ledger nor ADD COLUMN-ed, so the only way to quiet the definition-path
+    // check was to list the table in the PRE-LEDGER baseline - which is false (the table
+    // does not predate the ledger; a migration creates it) and, worse, permanently exempts
+    // every one of its columns from parity, so the migration's CREATE TABLE could drift
+    // from the definition unnoticed. These three cases replace that hiding place with a
+    // real gate.
+    it('sanity: the parser finds migration-created tables (CREATE TABLE guard is not vacuous)', function () {
+        const created = collectMigrationCreatedTables();
+        assert.ok(created.length > 0,
+            'found no CREATE TABLE in src/sql/migrations; the regex above has gone stale and the ' +
+            'migration-created-table cases below would pass vacuously');
+        const anchorAttest = created.find(t => t.table === 'anchor_reward_attestations');
+        assert.ok(anchorAttest, 'the 2026-07-21 anchor_reward_attestations CREATE TABLE is no longer parsed');
+        assert.ok(anchorAttest.columns.length >= 10, 'CREATE TABLE columns no longer parsed out of the migration');
+    });
+
+    it('a migration-created table matches its definition byte-for-byte (columns, keys, engine)', function () {
+        const bodies    = collectDefinitionBodies();
+        const mismatches = [];
+        for (const t of collectMigrationCreatedTables()) {
+            if (!bodies[t.table]) { mismatches.push({ table: t.table, file: t.file, reason: 'no src/sql/' + t.table + '.sql definition declares this table' }); continue; }
+            if (bodies[t.table] !== t.body) mismatches.push({ table: t.table, file: t.file, reason: 'CREATE TABLE differs from the definition', definition: bodies[t.table], migration: t.body });
+        }
+        assert.deepStrictEqual(mismatches, [],
+            'A dated migration CREATEs these tables, so a fresh install (createTable from the definition) and a ' +
+            'DB converged by replaying migrations must end up with the IDENTICAL table. They do not:\n' +
+            mismatches.map(m => `  ${m.table} (${m.file}): ${m.reason}` +
+                (m.definition ? `\n    definition: ${m.definition}\n    migration:  ${m.migration}` : '')).join('\n'));
+    });
+
+    it('a migration-created table is NOT parked in the pre-ledger baseline', function () {
+        const baseline = JSON.parse(fs.readFileSync(
+            path.join(__dirname, '..', 'fixtures', 'schema-baseline.json'), 'utf8'));
+        const based  = new Set(Object.keys(baseline.baseline || {}));
+        const parked = collectMigrationCreatedTables().filter(t => based.has(t.table));
+
+        assert.deepStrictEqual(parked.map(t => t.table + ' <- ' + t.file), [],
+            'These tables are CREATEd by a dated migration, so they do NOT predate the migration ledger and must ' +
+            'not sit in test/fixtures/schema-baseline.json. Baselining them claims their columns need no ' +
+            'migration and exempts the whole table from column parity forever, so the migration\'s CREATE TABLE ' +
+            'can silently drift from src/sql/<table>.sql. Remove the entry; the migration-created-table case ' +
+            'above is what covers them.');
     });
 
     it('sanity: the baseline fixture is not vacuous and references only real tables', function () {

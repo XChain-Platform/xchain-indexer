@@ -1,5 +1,5 @@
 {
-  "_comment": "Columns that predate the migration ledger (original CREATE TABLE columns that legitimately have no dated migration). Consumed by sql-schema-column-parity.test.js to guard the definition->ledger direction: any NEW column added to a src/sql/<table>.sql definition must either be added by a dated migration under src/sql/migrations/ OR added here deliberately. Regenerating this file in the same commit that adds the column silently waives the guard - review baseline diffs.",
+  "_comment": "Columns that predate the migration ledger (original CREATE TABLE columns that legitimately have no dated migration). Consumed by sql-schema-column-parity.test.js to guard the definition->ledger direction: any NEW column added to a src/sql/<table>.sql definition must either be added by a dated migration under src/sql/migrations/ OR added here deliberately. Regenerating this file in the same commit that adds the column silently waives the guard - review baseline diffs. A table CREATEd by a dated migration does NOT belong here (it is ledger-covered by its CREATE TABLE); the parity suite compares that migration against the definition directly and fails if the table is parked here (#3164).",
   "_known_unledgered_comment": "Columns present in a definition today with no migration that are KNOWN debt awaiting their own migration. The test skips these but keeps them visible. Delete each entry when its migration ships. Empty = no outstanding debt.",
   "known_unledgered": [],
   "baseline": {
@@ -38,18 +38,6 @@
       "amount",
       "memo_id",
       "status_id"
-    ],
-    "anchor_reward_attestations": [
-      "id",
-      "chain",
-      "network",
-      "reward_type",
-      "round_reference",
-      "snapshot_block",
-      "publisher",
-      "reward_amount",
-      "publisher_attestations",
-      "created_at"
     ],
     "anchor_actions": [
       "action_index",

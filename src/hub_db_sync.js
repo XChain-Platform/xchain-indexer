@@ -181,11 +181,15 @@ const CROSS_CHAIN_TABLES = ['cross_chain_matches', 'cross_chain_calls', 'capabil
 // so it can never re-fetch an in-place UPGRADE that kept the same hub id. Three
 // mirrored tables are upgraded in place on the hub (price_snapshots skipped->
 // finalized, cross_chain_calls re-finalized, cross_chain_matches anchor_txid
-// stamping); if the upgrade broadcast is missed while this mirror is disconnected,
-// only a full re-page re-delivers the row so the idempotent _applyRow ODKUs converge
-// it (#2491). capability_snapshots is here for a related reason (locally-assigned
-// ids, #2270). The three keep hub-id parity (only capability_snapshots strips id in
-// _applyRow); the re-page cost is O(table) per reconnect, accepted.
+// stamping AND retract->revive content); if the upgrade broadcast is missed while
+// this mirror is disconnected, only a full re-page re-delivers the row so the
+// idempotent _applyRow ODKUs converge it (#2491, #3211). capability_snapshots is here
+// for a related reason (locally-assigned ids, #2270). The three keep hub-id parity
+// (only capability_snapshots strips id in _applyRow); the re-page cost is O(table)
+// per reconnect, accepted. cross_chain_matches additionally runs a reconciliation
+// pass over the completed re-page (_reconcileRetractedMatches), because the one
+// mutation the hub CANNOT re-serve is a retraction: the snapshot endpoint filters
+// retracted rows out entirely, so there is no row to converge against.
 const FULL_REPAGE_TABLES = ['capability_snapshots', 'price_snapshots', 'cross_chain_calls', 'cross_chain_matches'];
 
 // Hub federation state tables. state_checkpoints carries quorum-signed per-chain
@@ -638,6 +642,14 @@ class HubDbSync {
         let applyErrors = 0;
         let lastPageCount = 0;
         let watermark = null;
+        // cross_chain_matches only: the ODKU converges every mutation the hub can SERVE, but
+        // the bootstrap endpoint filters `status <> 'retracted'` (hub api.js), so a match the
+        // hub retracted while this mirror was disconnected is simply ABSENT from every page -
+        // there is no row to converge against, and the stale local copy keeps settling
+        // forever. Collect what the full re-page did serve so the reconciliation pass below
+        // can close that half of #3211.
+        let servedMatchIds = (table === 'cross_chain_matches') ? new Set() : null;
+        let maxServedId    = 0;
         for (let page = 0; page < MAX_PAGES; page++) {
             let path = '/hub-db/snapshot/' + table + '?since_id=' + lastId + '&limit=' + PAGE_LIMIT;
             let result = await this._httpGet(path);
@@ -660,6 +672,11 @@ class HubDbSync {
             for (let row of result.rows) {
                 try {
                     await this._applyRow(table, row);
+                    if (servedMatchIds) {
+                        servedMatchIds.add(String(row.match_id));
+                        let sid = Number(row.id);
+                        if (Number.isFinite(sid) && sid > maxServedId) maxServedId = sid;
+                    }
                     applied++;
                 } catch (err) {
                     applyErrors++;
@@ -740,6 +757,11 @@ class HubDbSync {
         // Fully drained only if the final page wasn't full and everything applied.
         let fullyDrained = lastPageCount < PAGE_LIMIT && applyErrors === 0;
 
+        // Reconcile the retractions the bootstrap can never re-deliver (#3211). Only after a
+        // COMPLETE re-page: a partial drain has not seen every row the hub holds, so a
+        // "missing" match may simply be on a page we never fetched.
+        if (fullyDrained && servedMatchIds) await this._reconcileRetractedMatches(servedMatchIds, maxServedId);
+
         // Only arm this table's barrier state once it FULLY drained. The per-table refresh
         // sets <x>Bootstrapped = true and caches its scalar; on a PARTIAL drain (rows fetched
         // but thrown on apply, so the local table is empty or holed) that would arm the
@@ -788,6 +810,62 @@ class HubDbSync {
 
         if (!fullyDrained) return null;
         return watermark !== null ? watermark : 0;
+    }
+
+    // Converge the half of a retract/revive the bootstrap cannot re-deliver (#3211).
+    //
+    // The hub never DELETEs a retracted match: retractMatchesForReorg UPDATEs it to
+    // status='retracted' and broadcasts a deletion event, and the snapshot endpoint then
+    // filters those rows out (`status <> 'retracted'`) so a bootstrapping mirror matches a
+    // streamed one. That works only while the mirror SAW the deletion. A mirror that was
+    // disconnected across the retraction - or that legitimately refused the event under the
+    //  /  receive-side guards - holds a finalized row the hub has retracted, and
+    // no later delivery can fix it: the row is absent from every bootstrap page, so the
+    // convergence ODKU never gets a version to compare against. The mirror keeps settling a
+    // match the hub retracted, which is a money-bearing fork from a streamed peer.
+    //
+    // After a COMPLETE re-page, a local finalized row whose id is at or below the highest id
+    // the hub served, and whose match_id the hub did not serve at all, can only be such a
+    // retraction: ids are hub-parity and ascending, the hub never deletes, and the pages
+    // covered every non-retracted row up to that ceiling. Rows ABOVE the ceiling are exempt -
+    // they are newer than this snapshot and may simply have arrived after it.
+    //
+    // Converge by marking status='retracted', NOT by deleting:
+    //   - consensus reads filter status='finalized' (db.getEffectiveUnsettledMatches), so the
+    //     settlement effect is identical to the DELETE the streamed path applies;
+    //   - a REVIVE is still able to win it back, because the convergence ODKU compares a
+    //     later effective_time (a delete would leave the revive to INSERT, which is also
+    //     fine, but marking keeps the row's provenance and matches AnchorRecovery's already
+    //     documented retracted-row carve-out);
+    //   - a mistaken mark is fail-CLOSED (a match stops settling), where a mistaken delete
+    //     would also lose the signed row itself.
+    async _reconcileRetractedMatches(servedMatchIds, maxServedId) {
+        if (!Number.isFinite(maxServedId) || maxServedId <= 0) return;   // nothing served, nothing to judge
+        let locals;
+        try {
+            locals = await this.hubDb.doQuery(
+                "SELECT id, match_id FROM cross_chain_matches WHERE id <= ? AND status = 'finalized'", [maxServedId]);
+        } catch (e) {
+            console.warn('HubDbSync: match retraction reconciliation skipped (read failed):', e);
+            return;
+        }
+        let stale = (locals || []).filter(r => !servedMatchIds.has(String(r.match_id))).map(r => Number(r.id));
+        if (stale.length === 0) return;
+        // Chunked so one oversized IN list can never blow the statement limit.
+        for (let i = 0; i < stale.length; i += 500) {
+            let chunk = stale.slice(i, i + 500);
+            try {
+                await this.hubDb.doQuery(
+                    "UPDATE cross_chain_matches SET status = 'retracted' WHERE id IN (" +
+                    chunk.map(() => '?').join(',') + ") AND status = 'finalized'", chunk);
+            } catch (e) {
+                console.warn('HubDbSync: match retraction reconciliation failed for a chunk:', e);
+                return;
+            }
+        }
+        console.warn('HubDbSync: reconciled ' + stale.length + ' cross_chain_matches row(s) the hub has retracted ' +
+                     'but this mirror still held as finalized (missed retraction converged, #3211)');
+        await this._refreshMatchSyncTimestamp();
     }
 
     // Re-read EVERY barrier height/timestamp from the local mirror and release the
@@ -1153,6 +1231,10 @@ class HubDbSync {
         if (table === 'oracle_prices' && cols.includes('push_generation')) {
             let updatable = cols.filter(c => c !== 'id' && c !== 'source_chain' && c !== 'action_index' && c !== 'push_generation');
             let sets = updatable.map(c => '`' + c + '` = IF(VALUES(`push_generation`) >= `push_generation`, VALUES(`' + c + '`), `' + c + '`)');
+            // push_generation is BOTH the gate and an assignment target, and MariaDB reads the
+            // already-updated value in a later ODKU assignment, so it must stay LAST: lifting
+            // it earlier would make every following column compare the incoming generation
+            // against itself (the cross_chain_matches ordering trap, #3211).
             sets.push('push_generation = IF(VALUES(`push_generation`) >= `push_generation`, VALUES(`push_generation`), `push_generation`)');
             let query = 'INSERT INTO oracle_prices (' + cols.map(c => '`' + c + '`').join(', ') + ') VALUES (' + placeholders + ')'
                       + ' ON DUPLICATE KEY UPDATE ' + sets.join(', ');
@@ -1160,16 +1242,84 @@ class HubDbSync {
             return;
         }
 
-        // cross_chain_matches needs a NARROW in-place upgrade path, not plain INSERT
-        // IGNORE. The signed match content is immutable once quorum-signed, but
-        // anchor_txid is stamped LATER (StateAnchorPublisher._backfillBatch, first-
-        // stamp-wins COALESCE) when the ANCHOR v1 archive publishes, and the hub
-        // re-broadcasts the stamped row. A plain INSERT IGNORE would no-op against
-        // the already-mirrored row and leave anchor_txid NULL on streamed mirrors
-        // forever, while a fresh REST bootstrap serves the stamp (divergent mirrors).
-        // Only anchor_txid upgrades, NULL->value with the hub's own COALESCE
-        // semantics, so a late or duplicate event can never mutate signed columns.
+        // cross_chain_matches needs an in-place upgrade path, not plain INSERT IGNORE.
+        // TWO distinct mutations reach a match after it was first mirrored:
+        //
+        //   1. anchor_txid is stamped LATER (StateAnchorPublisher._backfillBatch, first-
+        //      stamp-wins COALESCE) when the ANCHOR v1 archive publishes, and the hub
+        //      re-broadcasts the stamped row. A plain INSERT IGNORE would no-op against
+        //      the already-mirrored row and leave anchor_txid NULL on streamed mirrors
+        //      forever, while a fresh REST bootstrap serves the stamp (divergent mirrors).
+        //
+        //   2. RETRACT -> REVIVE. Match content is NOT immutable per match_id. A source-
+        //      chain reorg retracts the crossing (the hub UPDATEs status='retracted' and
+        //      broadcasts a deletion event this mirror applies as a DELETE); when the SAME
+        //      crossing re-forms at the same BTC snapshot_block, _deriveMatchId yields the
+        //      IDENTICAL match_id and CrossChainDexEngine._insertMatchRow revives the row
+        //      with THIS round's effective_time / finalizing_view / validator_signatures,
+        //      then re-broadcasts it. A mirror that missed either half - disconnected over
+        //      the deletion, or the / receive-side guards legitimately refused
+        //      an unfenced/unsigned retraction - kept the pre-reorg row, and an anchor_txid-
+        //      only ODKU could NEVER converge it: neither the live re-broadcast nor the
+        //      FULL_REPAGE bootstrap (which re-delivers the row through this same path)
+        //      moved the stale effective_time, which GATES the settlement block
+        //      (db.getEffectiveUnsettledMatches), or the stale signature set. That is a
+        //      permanent money-bearing divergence from a mirror-fed peer, the same class
+        //      the price_snapshots / cross_chain_calls / oracle_prices paths already close
+        //      (#3211).
+        //
+        // Convergence is ORDERING-INDEPENDENT: each delivery is judged against the local
+        // row's own version, so a late/duplicate/out-of-order event is a no-op rather than a
+        // regression. The version order is the hub's own (effective_time, status-rank) with
+        // rank finalized=0 < anything-else=1: a revive always carries a strictly greater
+        // effective_time (the proposing leader stamps _nowSeconds(), and followers refuse a
+        // value more than an hour off), while a retraction leaves effective_time untouched -
+        // so at EQUAL effective_time the retracted version is the later one and wins,
+        // converging a missed retraction to a status consensus reads skip. `>=` on the tie
+        // keeps re-delivery of the identical row idempotent.
+        //
+        // This is transport convergence, not trust: the settlement pass re-verifies every
+        // match's 2f+1 signatures against the local capability_snapshots before applying it,
+        // and a hostile hub could already replace content with a delete+insert.
         if (table === 'cross_chain_matches' && cols.includes('anchor_txid')) {
+            if (cols.includes('effective_time') && cols.includes('status')) {
+                let wins = '(VALUES(`effective_time`) > `effective_time` OR (VALUES(`effective_time`) = `effective_time`'
+                         + " AND IF(VALUES(`status`) = 'finalized', 0, 1) >= IF(`status` = 'finalized', 0, 1)))";
+                // The per-leg reorg fences are monotonic, independent of which version wins:
+                // LOWERING a_push_generation / b_push_generation would let a stale fenced
+                // retraction (DELETE ... WHERE gen <= fence) match this row and blow a
+                // permanent hole in the mirror, so they only ever move up.
+                let fences    = ['a_push_generation', 'b_push_generation'].filter(c => cols.includes(c));
+                let pinned    = new Set(['id', 'match_id', 'anchor_txid'].concat(fences));
+                let updatable = cols.filter(c => !pinned.has(c));
+                // ASSIGNMENT ORDER IS LOAD-BEARING. MariaDB evaluates ON DUPLICATE KEY UPDATE
+                // assignments left to right and later expressions read the ALREADY-UPDATED
+                // value, so the two columns the gate reads must be assigned LAST, `status`
+                // then `effective_time`:
+                //   - every other column then compares against the row's ORIGINAL version;
+                //   - `status` likewise (effective_time is still original when it runs);
+                //   - `effective_time` runs with status already settled, which re-evaluates
+                //     the gate to the SAME verdict (if the incoming row won, status now
+                //     equals VALUES(status), so the tie branch holds; if it lost, nothing
+                //     moved), so it lands consistently with the rest of the row.
+                // Assigned in the naive column order instead, a strictly-newer REVIVE lifted
+                // effective_time first and every later column then saw a tie against itself,
+                // leaving status stuck at 'retracted' with the new content: a half-applied
+                // row. Verified against MariaDB on the regtest stack, not just by reading.
+                let gated = updatable.filter(c => c !== 'status' && c !== 'effective_time');
+                let sets  = gated.map(c => '`' + c + '` = IF(' + wins + ', VALUES(`' + c + '`), `' + c + '`)');
+                for (let c of ['status', 'effective_time'])
+                    sets.push('`' + c + '` = IF(' + wins + ', VALUES(`' + c + '`), `' + c + '`)');
+                for (let f of fences)
+                    sets.push('`' + f + '` = GREATEST(COALESCE(`' + f + '`, 0), COALESCE(VALUES(`' + f + '`), 0))');
+                sets.push('anchor_txid = COALESCE(anchor_txid, VALUES(anchor_txid))');
+                let query = 'INSERT INTO cross_chain_matches (' + cols.map(c => '`' + c + '`').join(', ') + ') VALUES (' + placeholders + ')'
+                          + ' ON DUPLICATE KEY UPDATE ' + sets.join(', ');
+                await this.hubDb.doQuery(query, args);
+                return;
+            }
+            // Older hub (or a mirror whose local table lacks effective_time/status): no
+            // version to compare, so keep the narrow anchor-stamp upgrade and never guess.
             let query = 'INSERT INTO cross_chain_matches (' + cols.map(c => '`' + c + '`').join(', ') + ') VALUES (' + placeholders + ')'
                       + ' ON DUPLICATE KEY UPDATE anchor_txid = COALESCE(anchor_txid, VALUES(anchor_txid))';
             await this.hubDb.doQuery(query, args);

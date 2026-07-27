@@ -431,6 +431,68 @@ describe('HubDbSync bootstrap pagination + retry @regression @tier2', function (
         });
     });
 
+    // #3211, the half no ODKU can reach: the hub's snapshot endpoint filters
+    // `status <> 'retracted'`, so a match retracted while this mirror was disconnected is
+    // ABSENT from every bootstrap page. There is no row to converge against, and the stale
+    // local copy keeps settling a match the hub retracted. After a COMPLETE re-page, a local
+    // finalized row at or below the highest served id whose match_id was never served can
+    // only be such a retraction (hub-parity ascending ids; the hub never deletes a match).
+    describe('cross_chain_matches missed-retraction reconciliation (#3211)', function () {
+
+        // hubDb stub: local finalized rows for the reconciliation read, capturing UPDATEs.
+        function makeReconcileSync(localRows) {
+            const sync = makeBootstrapSync();
+            const updates = [];
+            sync.hubDb.doQuery = sinon.stub().callsFake(async (sql, args) => {
+                if (/^SELECT id, match_id FROM cross_chain_matches/.test(sql)) {
+                    return localRows.filter(r => Number(r.id) <= Number(args[0]));
+                }
+                if (/^UPDATE cross_chain_matches SET status = 'retracted'/.test(sql)) { updates.push(args); return []; }
+                return [{ max_id: null }];
+            });
+            return { sync, updates };
+        }
+
+        it('marks a local finalized row the hub no longer serves as retracted', async function () {
+            const { sync, updates } = makeReconcileSync([{ id: 1, match_id: 'M1' }, { id: 2, match_id: 'GONE' }, { id: 3, match_id: 'M3' }]);
+            sinon.stub(sync, '_httpGet').resolves({ rows: [{ id: 1, match_id: 'M1' }, { id: 3, match_id: 'M3' }], watermark: 7 });
+            await sync._bootstrapTable('cross_chain_matches');
+            assert.deepStrictEqual(updates, [[2]], 'only the unserved row converges');
+        });
+
+        it('never touches a row ABOVE the highest served id (it may just be newer than the snapshot)', async function () {
+            const { sync, updates } = makeReconcileSync([{ id: 3, match_id: 'M3' }, { id: 9, match_id: 'NEWER' }]);
+            sinon.stub(sync, '_httpGet').resolves({ rows: [{ id: 3, match_id: 'M3' }], watermark: 7 });
+            await sync._bootstrapTable('cross_chain_matches');
+            assert.deepStrictEqual(updates, [], 'a row past the served ceiling is exempt');
+        });
+
+        it('does NOT reconcile on a partial drain (an unfetched page is not evidence of a retraction)', async function () {
+            const { sync, updates } = makeReconcileSync([{ id: 1, match_id: 'M1' }, { id: 2, match_id: 'UNSEEN' }]);
+            // A full page means more rows remain; the loop stops on the apply hole below.
+            sync._applyRow.onSecondCall().rejects(new Error('ER_SOMETHING'));
+            sinon.stub(sync, '_httpGet').resolves({ rows: [{ id: 1, match_id: 'M1' }, { id: 2, match_id: 'X' }], watermark: 7 });
+            await sync._bootstrapTable('cross_chain_matches');
+            assert.deepStrictEqual(updates, [], 'a holed/partial drain must never reconcile');
+        });
+
+        it('is a no-op when the hub served nothing at all (empty mirror, no ceiling to judge against)', async function () {
+            const { sync, updates } = makeReconcileSync([{ id: 1, match_id: 'M1' }]);
+            sinon.stub(sync, '_httpGet').resolves({ rows: [], watermark: 7 });
+            await sync._bootstrapTable('cross_chain_matches');
+            assert.deepStrictEqual(updates, []);
+        });
+
+        it('runs for cross_chain_matches only, never for a sibling mirror table', async function () {
+            for (const table of ['cross_chain_calls', 'price_snapshots', 'capability_snapshots']) {
+                const { sync, updates } = makeReconcileSync([{ id: 2, match_id: 'GONE' }]);
+                sinon.stub(sync, '_httpGet').resolves({ rows: [{ id: 1 }, { id: 3 }], watermark: 7 });
+                await sync._bootstrapTable(table);
+                assert.deepStrictEqual(updates, [], table + ' must not run the match reconciliation');
+            }
+        });
+    });
+
     it('_applyRow strips the wire id for capability_snapshots so a local PK can never collide (#2270)', async function () {
         const doQuery = sinon.stub().resolves([]);
         const sync = new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test' });
@@ -675,19 +737,30 @@ describe('HubDbSync _applyRow oracle_prices generation upgrade @regression @tier
     });
 });
 
-describe('HubDbSync _applyRow cross_chain_matches anchor-stamp upgrade @regression @tier2', function () {
+describe('HubDbSync _applyRow cross_chain_matches convergence upgrade @regression @tier2', function () {
 
-    // The ANCHOR v1 archive stamps cross_chain_matches.anchor_txid AFTER the row was
-    // quorum-signed and streamed (StateAnchorPublisher._backfillBatch), and the hub
-    // re-broadcasts the stamped row on the mirror feed. A plain INSERT IGNORE would
-    // no-op against the already-mirrored row and leave anchor_txid NULL on streamed
-    // mirrors while a fresh REST bootstrap serves the stamp (divergent mirrors).
-    // _applyRow must upgrade anchor_txid in place, first-stamp-wins (the hub's own
-    // COALESCE back-fill semantics), and never reassign the quorum-signed columns.
+    // Two mutations reach a mirrored match after its first delivery:
+    //  1. anchor_txid, stamped later by the ANCHOR v1 archive
+    //     (StateAnchorPublisher._backfillBatch) and re-broadcast. A plain INSERT IGNORE
+    //     would no-op and leave anchor_txid NULL on streamed mirrors while a fresh REST
+    //     bootstrap serves the stamp (divergent mirrors). First-stamp-wins COALESCE.
+    //  2. RETRACT -> REVIVE (#3211): a source-chain reorg retracts the crossing (mirrored
+    //     as a DELETE); the same crossing re-forms at the same snapshot_block, so
+    //     _deriveMatchId yields the identical match_id and the hub revives the row with a
+    //     NEW effective_time / finalizing_view / validator_signatures. A mirror that missed
+    //     the deletion (disconnected, or the / guards refused the event) kept
+    //     the pre-reorg row, and an anchor_txid-only ODKU could never converge it - not on
+    //     the live re-broadcast and not on the FULL_REPAGE bootstrap, which re-delivers
+    //     through this same path. effective_time GATES the settlement block, so the mirror
+    //     stayed permanently, money-bearingly divergent from a mirror-fed peer.
+    // The upgrade must be ORDERING-INDEPENDENT: judged per row against the local version
+    // (effective_time, then finalized-before-retracted at a tie), so a late/duplicate/
+    // out-of-order delivery is a no-op instead of a regression.
 
     const CM_COLS = ['id', 'match_id', 'snapshot_block', 'network', 'a_chain', 'a_amount',
-                     'b_chain', 'b_amount', 'status', 'validator_signatures',
-                     'batch_root', 'anchor_txid', 'created_at'];
+                     'b_chain', 'b_amount', 'effective_time', 'finalizing_view', 'status',
+                     'validator_signatures', 'batch_root', 'anchor_txid',
+                     'a_push_generation', 'b_push_generation', 'created_at'];
 
     function makeApplySync(localCols) {
         const doQuery = sinon.stub();
@@ -700,9 +773,14 @@ describe('HubDbSync _applyRow cross_chain_matches anchor-stamp upgrade @regressi
     function matchRow(txid) {
         return { id: 12, match_id: 'a'.repeat(64), snapshot_block: 900, network: 'regtest',
                  a_chain: 'BTC', a_amount: '1', b_chain: 'DOGE', b_amount: '2',
+                 effective_time: 1700000000, finalizing_view: 0,
                  status: 'finalized', validator_signatures: '[]',
-                 batch_root: null, anchor_txid: txid, created_at: '2026-07-06 00:00:00' };
+                 batch_root: null, anchor_txid: txid,
+                 a_push_generation: 3, b_push_generation: 4, created_at: '2026-07-06 00:00:00' };
     }
+
+    const updateClauseOf = (doQuery) =>
+        doQuery.getCalls().find(c => /ON DUPLICATE KEY UPDATE/.test(c.args[0])).args[0].split('ON DUPLICATE KEY UPDATE')[1];
 
     it('uses an ON DUPLICATE KEY UPDATE upsert (not INSERT IGNORE) for cross_chain_matches', async function () {
         const { sync, doQuery } = makeApplySync(CM_COLS);
@@ -713,18 +791,60 @@ describe('HubDbSync _applyRow cross_chain_matches anchor-stamp upgrade @regressi
         assert.ok(!/^INSERT IGNORE/.test(insert.args[0]), 'must NOT be a plain INSERT IGNORE');
     });
 
-    it('upgrades ONLY anchor_txid, first-stamp-wins, never reassigning signed or key columns', async function () {
+    it('converges the revive content on a version gate, so a missed retract/revive cannot strand the mirror (#3211)', async function () {
         const { sync, doQuery } = makeApplySync(CM_COLS);
         await sync._applyRow('cross_chain_matches', matchRow('d0ge'.repeat(16)));
-        const sql = doQuery.getCalls().find(c => /ON DUPLICATE KEY UPDATE/.test(c.args[0])).args[0];
-        const updateClause = sql.split('ON DUPLICATE KEY UPDATE')[1];
-        // first-stamp-wins: an existing local stamp is never overwritten
-        assert.ok(/anchor_txid = COALESCE\(anchor_txid, VALUES\(anchor_txid\)\)/.test(updateClause));
-        // no signed/content column and no key column appears in the UPDATE clause
-        for (const col of ['a_amount', 'b_amount', 'status', 'validator_signatures',
-                           'match_id', 'id', 'snapshot_block']) {
-            assert.ok(!new RegExp('`?' + col + '`? =').test(updateClause.replace(/anchor_txid = COALESCE\(anchor_txid, VALUES\(anchor_txid\)\)/, '')),
-                      col + ' must not be reassigned');
+        const clause = updateClauseOf(doQuery);
+        // The gate: strictly newer effective_time wins; at a tie the non-finalized
+        // (retracted) version wins, because a retraction leaves effective_time untouched
+        // while a revive always stamps a later one. `>=` keeps re-delivery idempotent.
+        const gate = /VALUES\(`effective_time`\) > `effective_time` OR \(VALUES\(`effective_time`\) = `effective_time` AND IF\(VALUES\(`status`\) = 'finalized', 0, 1\) >= IF\(`status` = 'finalized', 0, 1\)\)/;
+        assert.ok(gate.test(clause), 'ordering-independent version gate missing:\n' + clause);
+        // The money-bearing columns move under that gate, and ONLY under it.
+        for (const col of ['effective_time', 'finalizing_view', 'validator_signatures', 'status']) {
+            assert.ok(new RegExp('`' + col + '` = IF\\(\\(VALUES').test(clause), col + ' must upgrade under the version gate');
+        }
+    });
+
+    it('assigns status then effective_time LAST, because MariaDB evaluates the SET list left to right', async function () {
+        // Load-bearing, and caught only by running it: MariaDB reads the ALREADY-UPDATED
+        // value in a later ODKU assignment. With effective_time assigned in plain column
+        // order, a strictly-newer REVIVE lifted it first, every later column then saw a tie
+        // against itself, and status stayed 'retracted' while the content moved - a
+        // half-applied row. Assigning the two gate columns last (status, then effective_time)
+        // makes every assignment agree on one verdict. Verified end-to-end against MariaDB.
+        const { sync, doQuery } = makeApplySync(CM_COLS);
+        await sync._applyRow('cross_chain_matches', matchRow('d0ge'.repeat(16)));
+        const clause = updateClauseOf(doQuery);
+        const gatedOrder = CM_COLS.filter(c => new RegExp('`' + c + '` = IF\\(\\(VALUES').test(clause))
+            .sort((a, b) => clause.indexOf('`' + a + '` = IF((VALUES') - clause.indexOf('`' + b + '` = IF((VALUES'));
+        assert.deepStrictEqual(gatedOrder.slice(-2), ['status', 'effective_time'],
+            'the two columns the version gate READS must be the last two gated assignments, in this order');
+    });
+
+    it('never reassigns the row key or the hub id, and keeps anchor_txid first-stamp-wins', async function () {
+        const { sync, doQuery } = makeApplySync(CM_COLS);
+        await sync._applyRow('cross_chain_matches', matchRow('d0ge'.repeat(16)));
+        const clause = updateClauseOf(doQuery);
+        assert.ok(/anchor_txid = COALESCE\(anchor_txid, VALUES\(anchor_txid\)\)/.test(clause),
+            'anchor_txid stays first-stamp-wins, outside the version gate');
+        // match_id is the unique key and id is the hub-parity PK: reassigning either would
+        // move the row, not upgrade it.
+        assert.ok(!/`match_id` =/.test(clause), 'match_id must not be reassigned');
+        assert.ok(!/`id` =/.test(clause), 'id must not be reassigned');
+        // anchor_txid must not ALSO ride the version gate (that would let a later revive
+        // clear an already-stamped txid back to NULL).
+        assert.ok(!/`anchor_txid` = IF\(/.test(clause), 'anchor_txid must not ride the version gate');
+    });
+
+    it('the per-leg reorg fences only ever move UP (a lowered fence would invite a stale delete)', async function () {
+        const { sync, doQuery } = makeApplySync(CM_COLS);
+        await sync._applyRow('cross_chain_matches', matchRow(null));
+        const clause = updateClauseOf(doQuery);
+        for (const col of ['a_push_generation', 'b_push_generation']) {
+            assert.ok(new RegExp('`' + col + '` = GREATEST\\(COALESCE\\(`' + col + '`, 0\\), COALESCE\\(VALUES\\(`' + col + '`\\), 0\\)\\)').test(clause),
+                col + ' must be monotonic (GREATEST), not gated');
+            assert.ok(!new RegExp('`' + col + '` = IF\\(').test(clause), col + ' must not ride the version gate');
         }
     });
 
@@ -739,7 +859,7 @@ describe('HubDbSync _applyRow cross_chain_matches anchor-stamp upgrade @regressi
     });
 
     it('still filters hub-only columns the local mirror does not carry', async function () {
-        const { sync, doQuery } = makeApplySync(['match_id', 'status', 'anchor_txid']);
+        const { sync, doQuery } = makeApplySync(['match_id', 'effective_time', 'status', 'anchor_txid']);
         let row = matchRow('ff00'.repeat(16));
         row.batch_seq = 7;             // hub-side-only archive bookkeeping
         row.archived_status = 'finalized';
@@ -748,6 +868,15 @@ describe('HubDbSync _applyRow cross_chain_matches anchor-stamp upgrade @regressi
         assert.ok(!sql.includes('batch_seq'), 'hub-only column dropped');
         assert.ok(!sql.includes('archived_status'), 'hub-only column dropped');
         assert.ok(/ON DUPLICATE KEY UPDATE/.test(sql));
+    });
+
+    it('falls back to the anchor-stamp-only upgrade when the row carries no version columns (older hub)', async function () {
+        const { sync, doQuery } = makeApplySync(['match_id', 'status', 'anchor_txid']);
+        await sync._applyRow('cross_chain_matches', { match_id: 'b'.repeat(64), status: 'finalized', anchor_txid: 'ab'.repeat(32) });
+        const clause = updateClauseOf(doQuery);
+        // With no effective_time there is no version to compare, so never guess: keep the
+        // narrow stamp upgrade rather than clobbering content on an unordered feed.
+        assert.strictEqual(clause.trim(), 'anchor_txid = COALESCE(anchor_txid, VALUES(anchor_txid))');
     });
 
     it('falls back to INSERT IGNORE if the row carries no anchor_txid column', async function () {

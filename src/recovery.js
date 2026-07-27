@@ -371,7 +371,82 @@ class AnchorRecovery {
         } catch(e){ return null; }
     }
 
+    // Begin a transaction on a DB handle when it supports one. Recovery is also driven
+    // by raw doQuery stubs (unit fixtures, and any embedder holding only a query handle),
+    // so a handle without the transaction API degrades to the pre-#3213 autocommit
+    // behavior instead of throwing. Returns whether a transaction is actually open.
+    async _begin(handle){
+        if(!handle || typeof handle.beginTransaction !== 'function') return false;
+        await handle.beginTransaction();
+        return true;
+    }
+
+    // Roll back without masking the original failure: the caller is already unwinding a
+    // batch error, and a rollback that itself fails must not replace that reason.
+    async _safeRollback(handle){
+        try {
+            if(handle && typeof handle.rollbackTransaction === 'function') await handle.rollbackTransaction();
+        } catch(e){
+            this.log('recovery: WARNING rollback failed: ' + ((e && e.message) || e));
+        }
+    }
+
+    // Rebuild ONE verified batch atomically (#3213). Every write of a batch lands or none
+    // does: before this, a batch that threw part-way (a malformed reward row, a DB error on
+    // the third of ten matches) left its earlier rows committed while run() reported the
+    // batch FAILED, so the operator's "N/M verified" line understated what the DB actually
+    // held, and a re-run re-staged the reward rows that HAD landed - double-crediting the
+    // COLLECT rail, which recovery_pending_rewards has no unique key to dedupe.
+    //
+    // Two handles are involved and MariaDB gives us no cross-database atomic commit, so the
+    // ORDER of the two commits is what makes the window between them harmless:
+    //   1. this.db (DOGE mirror: matches, calls, capability snapshots) commits FIRST. Every
+    //      write on this handle is idempotent under replay (INSERT IGNORE / keyed UPDATE),
+    //      so re-running the batch after a crash converges on the same rows.
+    //   2. this.btcDb (staged anchor rewards) commits SECOND, because its INSERT is the one
+    //      write that is NOT idempotent. A crash or error between the two commits leaves the
+    //      BTC transaction unresolved, so the server rolls it back and the batch reports
+    //      FAILED with NO reward rows staged; the re-run stages them exactly once.
+    // Committing in the other order would leave rewards staged under a batch reported FAILED,
+    // and the re-run would stage them a second time.
+    //
+    // The transaction also makes write errors LOUD: db.doQuery swallows a query error into []
+    // outside a transaction (so a failed INSERT here used to leave the batch reported OK with
+    // rows silently missing) and re-throws inside one, which is what this per-batch rollback
+    // then acts on. A DR tool must never report a batch verified when its rows did not land.
     async _rebuild(archive, report, network, anchorTxid = null){
+        let rewards = archive.rewards || [];
+        // Hoisted ahead of every write: a batch that cannot restore its rewards must fail
+        // before it half-writes its matches, which is the exact partial-batch shape #3213
+        // is about (and the only shape a non-transactional handle can still hit).
+        if(rewards.length > 0 && !this.btcDb)
+            throw new Error('archive carries ' + rewards.length + ' reward rows but no BTC indexer DB handle was provided (set BTC_INDEXER_DB_NAME); restoring without them would corrupt COLLECT replay');
+
+        // Counters stay local until both commits land, so a rolled-back batch never
+        // inflates the run report with rows that are not in the DB.
+        let delta  = { matches: 0, snapshots: 0, calls: 0, rewards: 0 };
+        // Both begins sit INSIDE the try: if the second one fails, the first transaction is
+        // still open and holding Database's transaction mutex, and the next batch's
+        // beginTransaction would block on that lock forever (a silent hang mid-recovery).
+        let dogeTx = false, btcTx = false;
+        try {
+            dogeTx = await this._begin(this.db);
+            btcTx  = (rewards.length > 0) ? await this._begin(this.btcDb) : false;
+            await this._writeBatch(archive, delta, network, anchorTxid, rewards);
+            if(dogeTx) await this.db.commitTransaction();
+            if(btcTx)  await this.btcDb.commitTransaction();
+        } catch(e){
+            if(btcTx)  await this._safeRollback(this.btcDb);
+            if(dogeTx) await this._safeRollback(this.db);
+            throw e;
+        }
+        report.matches   += delta.matches;
+        report.snapshots += delta.snapshots;
+        report.calls     += delta.calls;
+        report.rewards   += delta.rewards;
+    }
+
+    async _writeBatch(archive, report, network, anchorTxid, rewards){
         // Parity carve-out (documented): unlike cross_chain_matches/calls below,
         // capability_snapshots is rebuilt WITHOUT an id, deliberately. The archive
         // cannot carry one (hub ids are hub-local; every hub persists these rows
@@ -388,7 +463,6 @@ class AnchorRecovery {
             let existing = await this.db.doQuery(
                 'SELECT match_id FROM cross_chain_matches WHERE match_id = ? LIMIT 1', [m.match_id]);
             if(existing && existing.length > 0){
-                // Same immutable terms; only the status can move (finalized to retracted).
                 // anchor_txid upgrades NULL->value only, matching the hub mirror's
                 // first-stamp-wins COALESCE semantics (hub_db_sync.js).
                 // Parity carve-out (documented, non-consensus): a retraction here flips the
@@ -398,9 +472,36 @@ class AnchorRecovery {
                 // Consensus reads filter status='finalized' and cross_chain_settlements snapshots
                 // both leg refs, so neither read observes the difference; the row-presence gap is
                 // benign and intentional, not a replay divergence.
-                await this.db.doQuery(
-                    'UPDATE cross_chain_matches SET status = ?, anchor_txid = COALESCE(anchor_txid, ?) WHERE match_id = ?',
-                    [m.status, anchorTxid, m.match_id]);
+                if(m.status === 'finalized'){
+                    // REVIVE content upgrade (#3208), mirroring the hub's own revive UPDATE
+                    // (CrossChainDexEngine._insertMatchRow: status/validator_signatures/
+                    // finalizing_view/effective_time WHERE status='retracted'). A match is NOT
+                    // content-immutable per match_id: when a source-chain reorg retracts a
+                    // crossing and the SAME crossing re-forms at the same BTC snapshot_block,
+                    // _deriveMatchId yields the identical match_id and the hub revives the row
+                    // with THIS round's effective_time, view and quorum signatures, then
+                    // re-archives it, so both versions land in successive batches. A status-only
+                    // update here kept the FIRST batch's effective_time (which GATES the
+                    // settlement block, db.getEffectiveUnsettledMatches) and its stale signature
+                    // set under status='finalized' - so a recovery-fed node settles the match at
+                    // a different block than a mirror-fed one and fails 2f+1 re-verification at
+                    // the archived view. Only the columns the hub itself can move on a revive are
+                    // upgraded; the signed terms (chains/refs/amounts/fills/payouts) are bound
+                    // into match_id and never change for a given key.
+                    await this.db.doQuery(
+                        `UPDATE cross_chain_matches SET status = ?, effective_time = ?, finalizing_view = ?,
+                             validator_signatures = ?, anchor_txid = COALESCE(anchor_txid, ?)
+                         WHERE match_id = ?`,
+                        [m.status, Number(m.effective_time), Number(m.finalizing_view) || 0,
+                         m.validator_signatures, anchorTxid, m.match_id]);
+                } else {
+                    // Non-finalized incoming (a later batch retracts): only the lifecycle
+                    // status moves. Content upgrades happen on the revive branch above,
+                    // matching the hub, which never rewrites content on a retraction.
+                    await this.db.doQuery(
+                        'UPDATE cross_chain_matches SET status = ?, anchor_txid = COALESCE(anchor_txid, ?) WHERE match_id = ?',
+                        [m.status, anchorTxid, m.match_id]);
+                }
             } else {
                 // Rebuild under the ORIGINAL hub-assigned id as provenance only.
                 // Settlement order is (snapshot_block, match_id), so replay does
@@ -441,10 +542,8 @@ class AnchorRecovery {
         // historically valid claims re-validate as 'no unclaimed rewards' and
         // the recovered ledger diverges. Runbook ordering: DOGE archive extract,
         // then BTC reward restore (this), then BTC reindex.
-        let rewards = archive.rewards || [];
         if(rewards.length > 0){
-            if(!this.btcDb)
-                throw new Error('archive carries ' + rewards.length + ' reward rows but no BTC indexer DB handle was provided (set BTC_INDEXER_DB_NAME); restoring without them would corrupt COLLECT replay');
+            // The missing-btcDb guard is hoisted into _rebuild so it fires before any write.
             // F1a id-determinism fix: do NOT assign index ids at restore time. The old path
             // called createAddress/getOrCreatePubkeyId here, OUTSIDE a block tx, which seeded
             // low AUTO_INCREMENT ids that offset every subsequent in-block deterministic id
