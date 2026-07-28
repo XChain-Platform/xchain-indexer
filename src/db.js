@@ -9304,24 +9304,75 @@ class Database {
     }
 
     // Lookup items that need to be expired and return a list
+    //
+    // The expiration cut is applied IN SQL . It used to pull the ENTIRE
+    // open order/swap/dispenser book back to the client every block, resolve the
+    // edits overlay with a second batched query per type, and only then apply the
+    // cutoff in JS, so per-block row transfer and memory scaled with the whole
+    // open book rather than the (usually tiny) set expiring this block. The
+    // returned rows, their order, and their values are unchanged.
+    //
+    // NULL expiration semantics - CONSENSUS-CRITICAL, preserved exactly:
+    // all six `expiration` columns (orders/swaps/dispensers and their `_edits`)
+    // are nullable. The old JS predicate was `info.expiration < block_time`,
+    // where JS coerces a null expiration to 0, so a null effective expiration
+    // meant "expired at time 0" and the item expired on the first block that
+    // swept it. A naive SQL `eff_expiration < ?` evaluates to NULL for those
+    // rows, drops them, and that item would NEVER expire - a silent consensus
+    // change. `COALESCE(eff_expiration, 0) < ?` is the byte-equivalent form and
+    // is what is used below. Note this deliberately does NOT agree with
+    // getOpenCrossChainOffers, which keeps a null-expiration offer as
+    // never-expiring; that divergence is pre-existing and out of scope here.
+    // In practice a null BASE expiration is unreachable on current code: the
+    // ORDER/SWAP/DISPENSER create handlers all fill in util.getDefaultExpiration()
+    // when the field is absent. Null EDIT expirations are normal and mean "leave
+    // the expiration unchanged".
+    //
+    // Effective expiration = the last `valid` edit carrying a non-null expiration
+    // (highest edit action_index), else the base row's expiration. That is the
+    // same rule the old ascending "last non-null wins" JS loop implemented, and
+    // the same overlay getOpenCrossChainOffers applies.
     async getExpiredItems(block_time){
         let expired = [];
         let types   = ['order','swap','dispenser'];
         let query   = '';
         let args    = [];
-        // Build out the query for each of the table types to get 'open' items
+        // A non-numeric block_time made every old JS compare false (`x < undefined`,
+        // `x < null` compared against 0), so nothing expired. Return that same answer
+        // instead of binding NULL/NaN into SQL, where comparison semantics differ.
+        let cutoff = Number(block_time);
+        if(this.util.isNull(block_time) || !Number.isFinite(cutoff))
+            return expired;
+        // Build out the query for each of the table types to get 'open' items whose
+        // effective expiration has already passed.
         for(let type of types){
             if(query!='')
                 query += 'UNION ';
-            query += `SELECT 
-                        m.action_index, 
-                        m.expiration,
+            // Scalar subquery for the edits overlay: newest `valid` edit that actually
+            // set an expiration wins, NULL when the item has no such edit.
+            let editExpiration = `(
+                            SELECT
+                                e1.expiration
+                            FROM
+                                ` + type + `_edits e1
+                                INNER JOIN index_statuses e2 ON (e2.id=e1.status_id)
+                            WHERE
+                                e1.` + type + `_action_index=m.action_index AND
+                                e2.status='valid' AND
+                                e1.expiration IS NOT NULL
+                            ORDER BY
+                                e1.action_index DESC
+                            LIMIT 1
+                        )`;
+            query += `SELECT
+                        m.action_index,
+                        COALESCE(` + editExpiration + `, m.expiration) as expiration,
                         '` + type + `' as type
-                    FROM 
+                    FROM
                         ` + type + `s m
                         INNER JOIN ` + type + `_statuses s1 ON (s1.` + type + `_action_index=m.action_index)
                         INNER JOIN index_statuses        s2 ON (s2.id=s1.status_id)
-                    WHERE 
+                    WHERE
                         s1.action_index = (
                             SELECT
                                 MAX(s3.action_index)
@@ -9330,64 +9381,22 @@ class Database {
                             WHERE
                                 s3.` + type + `_action_index=m.action_index
                         ) AND
-                        s2.status='open'`
+                        s2.status='open' AND
+                        COALESCE(` + editExpiration + `, m.expiration, 0) < ? `;
+            args.push(cutoff);
         }
         // Process expirations in ascending global action_index order so every
         // instance derives identical AUTO_INCREMENT IDs for the same block.
         // (UNION result: order by the output column name, not a table alias.)
         query += ' ORDER BY action_index ASC';
         let results = await this.doQuery(query, args);
-        if(results.length > 0){
-            // Resolve the effective expiration for every open item in ONE batched
-            // edits query per type (was an N+1: one edits query per open item, every
-            // block). Semantics preserved exactly: iterate `valid` edits in ascending
-            // action_index and let the LAST non-null expiration win; items with no
-            // edits (or only null-expiration edits) keep their base expiration.
-            let byType = {};
-            for(let info of results){
-                if(!byType[info.type])
-                    byType[info.type] = [];
-                byType[info.type].push(info);
-            }
-            for(let type of Object.keys(byType)){
-                let items        = byType[type];
-                let placeholders = items.map(() => '?').join(',');
-                query  = `SELECT
-                            s1.` + type + `_action_index as item_action_index,
-                            s1.expiration
-                        FROM
-                            ` + type + `_edits s1
-                            INNER JOIN index_statuses s2 ON (s2.id=s1.status_id)
-                        WHERE
-                            s1.` + type + `_action_index IN (` + placeholders + `) AND
-                            s2.status=?
-                        ORDER BY
-                            s1.action_index ASC`;
-                args         = items.map(i => i.action_index).concat(['valid']);
-                let results2 = await this.doQuery(query, args);
-                if(results2.length > 0){
-                    let latest = {};
-                    for(let row of results2){
-                        if(!this.util.isNull(row.expiration))
-                            latest[row.item_action_index] = row.expiration;
-                    }
-                    for(let info of items){
-                        if(latest[info.action_index] !== undefined)
-                            info.expiration = latest[info.action_index];
-                    }
-                }
-            }
-            // If the item expiration is less than the current block_time, expire the item.
-            // `results` is already ORDER BY action_index ASC, so output order is unchanged.
-            for(let info of results){
-                if(info.expiration < block_time){
-                    expired.push({
-                        type:         info.type,
-                        action_index: Number(info.action_index),
-                        expiration:   Number(info.expiration)
-                    });
-                }
-            }
+        for(let info of results){
+            expired.push({
+                type:         info.type,
+                action_index: Number(info.action_index),
+                // Number(null) === 0, matching the old null-coerced expiration value.
+                expiration:   Number(info.expiration)
+            });
         }
         return expired;
     }
@@ -14348,6 +14357,38 @@ Database.MIGRATION_CHECKSUM_REBASELINES = {
     '2026-07-10-contract-state-bin-key-index.sql': {
         from: '04656bbe931851e254f51c2f4552e8e0ab2c47067cb7eb39dcbb7f4695d38dd1',
         to:   '15599a2f13a372767468cd72ec05b7dff50d03e095e77cd40ee16bcba52754c6',
+    },
+    // . Two of the three renamed legacy migrations carry their own filename inside
+    // the "HOW TO RUN" comment block, so 81960e2 (the rename) had to update that comment
+    // line as well. The ledger rename heal re-keys the ROW NAME but deliberately carries
+    // the recorded checksum over unchanged, so every DB migrated before 2026-07-12 (the
+    // whole prod fleet) then compared a pre-rename hash against the post-rename file and
+    // logged `content CHANGED` on every single start. A guard that always fires cannot
+    // report a real migration edit, so both files are rebaselined here.
+    //
+    // Each `from` list is the file's complete set of pre-current committed revisions since
+    // the ledgered runner existed (351604c); every delta between them and `to` is a comment
+    // line only, verified by diff:
+    //   351604c-era -> 81960e2 : the HOW TO RUN path comment gained the dated filename.
+    //   397e373     -> 88469e6 : the license-header sweep prepended a 14-line banner and
+    //                            was reverted the same day for exactly this reason; a DB
+    //                            that migrated inside that window recorded the banner hash.
+    // The executable DDL is byte-identical across all of them, so re-reading the current
+    // file against a DB on any of these revisions would be a no-op. Revisions older than
+    // 351604c are intentionally NOT listed: no ledger existed to record them.
+    '2026-06-03-unique-full-column-index-addresses.sql': {
+        from: [
+            '9fdbbcbda36b860a3214d5fcc3d057f3bdf413a99c9d5407e7ef9951a318fb1e', // 351604c, pre-rename
+            '8193fe4eca04ac802b5963a7f3b100bf2b3f3103aaeb18e8eb5ff88b8f5f557d', // 397e373, header sweep
+        ],
+        to: 'a5ffca0798dc5e58c15f2dce7d678452666fef4814d7b560bc4b39c89c1f7dc5',
+    },
+    '2026-06-09-cross-chain-matches-partial-fill-columns.sql': {
+        from: [
+            '289d9fe5fb41f8012e7cbcdb3d6c2e2a8c983ca84afd920d73b386a33d64e602', // 351604c, pre-rename
+            '7fe66226c936023b72121c24fb3cfbea5bd4e52e70964542a6617f12b2a74451', // 397e373, header sweep
+        ],
+        to: '5adb9505a4986bd5a0d0c82bf1fff46a39621c7a2d17b4846d5d51eb224bc20e',
     },
 };
 

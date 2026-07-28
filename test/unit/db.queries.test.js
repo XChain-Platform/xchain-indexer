@@ -3788,48 +3788,73 @@ describe('Database.getExpiredItems() @regression @tier1', function () {
         assert.deepStrictEqual(result, []);
     });
 
-    // Regression for uuid:4fe690ab: the per-open-item edits lookup was an N+1
-    // (one edits query per open item, every block). It is now ONE batched edits
-    // query per type, with identical semantics: ascending-action_index valid
-    // edits, last non-null expiration wins, no-edit items keep base expiration.
-    it('batches the edits lookup (no per-item N+1) and preserves edit semantics', async function () {
+    // : the expiration cut is applied in SQL, so exactly ONE query runs and
+    // only the rows actually expiring this block come back. Previously the whole
+    // open book was fetched, overlaid by a second batched edits query per type,
+    // and filtered in JS. (Supersedes the uuid:4fe690ab N+1 regression, whose
+    // batched edits query no longer exists.)
+    it('runs one query with the expiration cut and the edits overlay pushed into SQL', async function () {
         const db = makeDb();
         const dq = sinon.stub(db, 'doQuery');
-        // Base UNION: three open orders.
         dq.onCall(0).resolves([
-            { action_index: 1, expiration: 100, type: 'order' },
             { action_index: 2, expiration: 100, type: 'order' },
             { action_index: 3, expiration: 100, type: 'order' },
         ]);
-        // ONE batched order_edits query: item 1 extended past block_time (two
-        // edits, later one wins), item 2 has a null-expiration edit (ignored),
-        // item 3 has no edits at all.
-        dq.onCall(1).resolves([
-            { item_action_index: 1, expiration: 50 },
-            { item_action_index: 1, expiration: 5000 },
-            { item_action_index: 2, expiration: null },
-        ]);
         const result = await db.getExpiredItems(200);
-        // Exactly two queries total: base UNION + one batched edits query.
-        assert.strictEqual(dq.callCount, 2);
-        // Item 1 extended to 5000 (not expired); items 2 and 3 stay at 100 (expired).
+        assert.strictEqual(dq.callCount, 1, 'expiry sweep must be a single round trip');
         assert.deepStrictEqual(result, [
             { type: 'order', action_index: 2, expiration: 100 },
             { type: 'order', action_index: 3, expiration: 100 },
         ]);
-        // The batched query carries all three item ids plus the 'valid' status arg.
-        const [sql, args] = dq.getCall(1).args;
-        assert.ok(/IN \(\?,\?,\?\)/.test(sql));
-        assert.deepStrictEqual(args, [1, 2, 3, 'valid']);
+        const [sql, args] = dq.getCall(0).args;
+        // One cutoff bind per type branch (order/swap/dispenser).
+        assert.deepStrictEqual(args, [200, 200, 200]);
+        // The edits overlay is a newest-valid-non-null scalar subquery per branch.
+        for (const type of ['order', 'swap', 'dispenser']) {
+            assert.ok(
+                sql.includes(type + '_edits e1'),
+                'expected an inline ' + type + '_edits overlay'
+            );
+        }
+        assert.ok(/ORDER BY\s+e1\.action_index DESC/.test(sql), 'newest valid edit must win');
+        assert.ok(/e1\.expiration IS NOT NULL/.test(sql), 'null-expiration edits must be ignored');
+        // Consensus trap guard: a bare `eff < ?` would drop null-expiration rows
+        // (never expiring them). The zero-default keeps the old JS null coercion.
+        assert.strictEqual(
+            (sql.match(/, m\.expiration, 0\) < \?/g) || []).length,
+            3,
+            'every branch must default a null effective expiration to 0 in the cut'
+        );
+        assert.ok(/ORDER BY action_index ASC/.test(sql), 'deterministic output order');
     });
 
-    it('issues no edits query at all when no items are open', async function () {
+    // A null effective expiration is "expired at time 0" (the old JS predicate
+    // coerced null to 0), and it is reported with expiration 0, not null.
+    it('reports a null effective expiration as 0', async function () {
         const db = makeDb();
         const dq = sinon.stub(db, 'doQuery');
-        dq.onCall(0).resolves([]);
+        dq.onCall(0).resolves([{ action_index: 7, expiration: null, type: 'swap' }]);
         const result = await db.getExpiredItems(200);
-        assert.deepStrictEqual(result, []);
-        assert.strictEqual(dq.callCount, 1);
+        assert.deepStrictEqual(result, [{ type: 'swap', action_index: 7, expiration: 0 }]);
+    });
+
+    // The old JS compare was false for every row when block_time was not a
+    // number, so nothing expired. Binding that into SQL would change the answer.
+    it('expires nothing and issues no query for a non-numeric block_time', async function () {
+        for (const bad of [undefined, null, 'not-a-time', NaN]) {
+            const db = makeDb();
+            const dq = sinon.stub(db, 'doQuery');
+            const result = await db.getExpiredItems(bad);
+            assert.deepStrictEqual(result, [], 'block_time ' + String(bad) + ' must expire nothing');
+            assert.strictEqual(dq.callCount, 0);
+        }
+    });
+
+    it('accepts a numeric-string block_time (same coercion the JS compare had)', async function () {
+        const db = makeDb();
+        const dq = sinon.stub(db, 'doQuery').resolves([]);
+        await db.getExpiredItems('200');
+        assert.deepStrictEqual(dq.getCall(0).args[1], [200, 200, 200]);
     });
 });
 

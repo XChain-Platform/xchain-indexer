@@ -491,4 +491,154 @@ describe('Database.MIGRATION_CHECKSUM_REBASELINES @regression @tier1', function 
                 'otherwise the heal path would rewrite the ledger to a hash that still mismatches.');
         }
     });
+
+    // . The two legacy migrations that were renamed AND carry their own filename in
+    // a HOW TO RUN comment: the rename edited that comment, the ledger rename heal carried
+    // the pre-rename checksum across, and every prod indexer logged `content CHANGED` for
+    // them on every start. Pin the predecessor hashes so a real migration edit is loud again.
+    const XC805 = {
+        '2026-06-03-unique-full-column-index-addresses.sql': [
+            '9fdbbcbda36b860a3214d5fcc3d057f3bdf413a99c9d5407e7ef9951a318fb1e',
+            '8193fe4eca04ac802b5963a7f3b100bf2b3f3103aaeb18e8eb5ff88b8f5f557d',
+        ],
+        '2026-06-09-cross-chain-matches-partial-fill-columns.sql': [
+            '289d9fe5fb41f8012e7cbcdb3d6c2e2a8c983ca84afd920d73b386a33d64e602',
+            '7fe66226c936023b72121c24fb3cfbea5bd4e52e70964542a6617f12b2a74451',
+        ],
+    };
+
+    Object.entries(XC805).forEach(function ([file, expected]) {
+        it(file + ': heals from both its pre-rename and its license-header revision', function () {
+            const r = Database.MIGRATION_CHECKSUM_REBASELINES[file];
+            assert.ok(r, file + ' must have a rebaseline entry - without it the immutability ' +
+                'guard fires on every indexer start and can no longer flag a genuine edit.');
+            const fromList = [].concat(r.from);
+            expected.forEach(function (hash) {
+                assert.ok(fromList.includes(hash),
+                    file + ': recorded revision ' + hash.slice(0, 12) + ' is not covered by the ' +
+                    'rebaseline, so DBs that applied it keep logging content CHANGED.');
+            });
+        });
+    });
+});
+
+// End-to-end over the runner's mismatch branch itself, against a stubbed connection:
+// the pinned-predecessor case must re-key the ledger row and stay silent, while any
+// other divergence must still be reported. This is what "restart an indexer and see
+// zero `content CHANGED` lines" checks, minus the live DB.
+describe('runMigrations() checksum heal branch @regression @tier1', function () {
+
+    const crypto  = require('crypto');
+    const MIG_DIR = path.join(__dirname, '..', '..', 'src', 'sql', 'migrations');
+
+    const sha256 = (s) => crypto.createHash('sha256').update(s).digest('hex');
+    const fileChecksums = () => {
+        const out = new Map();
+        for (const f of fs.readdirSync(MIG_DIR).filter(f => f.endsWith('.sql'))) {
+            out.set(f, sha256(fs.readFileSync(path.join(MIG_DIR, f), 'utf8')));
+        }
+        return out;
+    };
+
+    // Runs runMigrations against a fake connection seeded with `ledger` (name -> checksum),
+    // capturing every UPDATE and every console line. Nothing is applied: the ledger passed
+    // in always covers every file on disk, so the runner only walks the compare branch.
+    async function runAgainst(ledger) {
+        const updates = [];
+        const logged  = [];
+        const conn = {
+            query: async function (sql, params) {
+                if (/GET_LOCK/i.test(sql))     return [{ l: 1 }];
+                if (/RELEASE_LOCK/i.test(sql)) return [{}];
+                if (/SELECT name, checksum FROM schema_migrations/i.test(sql)) {
+                    return Array.from(ledger, ([name, checksum]) => ({ name, checksum }));
+                }
+                // The ledger's own CREATE TABLE IF NOT EXISTS runs on every call; it is
+                // setup, not a write the runner decided to make, so it is not recorded.
+                if (/CREATE TABLE IF NOT EXISTS schema_migrations/i.test(sql)) return {};
+                if (/^(UPDATE|INSERT|CREATE|ALTER|DROP)/i.test(sql.trim())) { updates.push({ sql, params }); return {}; }
+                return [];
+            },
+            release: async function () {},
+        };
+        const db = {
+            dbName: 'test_indexer',
+            getConnection: async () => conn,
+            _ensureMigrationsLedger: Database.prototype._ensureMigrationsLedger,
+            _migrationMode: Database.prototype._migrationMode,
+            splitSqlStatements: Database.prototype.splitSqlStatements,
+            stripSqlLineComments: Database.prototype.stripSqlLineComments,
+            _destructiveAutoStatement: Database.prototype._destructiveAutoStatement,
+            _isIdRepairUpdate: Database.prototype._isIdRepairUpdate,
+        };
+        const realLog = console.log, realErr = console.error, realWarn = console.warn;
+        console.log = console.error = console.warn = (...a) => { logged.push(a.join(' ')); };
+        try {
+            await Database.prototype.runMigrations.call(db, {});
+        } finally {
+            console.log = realLog; console.error = realErr; console.warn = realWarn;
+        }
+        return { updates, logged };
+    }
+
+    it('a fully current ledger produces no heal and no divergence log', async function () {
+        const { updates, logged } = await runAgainst(fileChecksums());
+        assert.deepStrictEqual(updates, [], 'nothing should be written when every checksum matches');
+        assert.ok(!logged.some(l => /content CHANGED/.test(l)), 'unexpected divergence: ' + logged.join(' | '));
+    });
+
+    it('the  pre-rename ledger heals silently instead of logging content CHANGED', async function () {
+        // Exactly the prod-fleet shape: migrated before the 2026-07-12 rename, so the two
+        // files that carry their own name in a comment recorded the pre-rename hashes.
+        const ledger = fileChecksums();
+        ledger.set('2026-06-03-unique-full-column-index-addresses.sql',
+            '9fdbbcbda36b860a3214d5fcc3d057f3bdf413a99c9d5407e7ef9951a318fb1e');
+        ledger.set('2026-06-09-cross-chain-matches-partial-fill-columns.sql',
+            '289d9fe5fb41f8012e7cbcdb3d6c2e2a8c983ca84afd920d73b386a33d64e602');
+
+        const { updates, logged } = await runAgainst(ledger);
+        assert.ok(!logged.some(l => /content CHANGED/.test(l)),
+            'the guard still cries wolf: ' + logged.filter(l => /content CHANGED/.test(l)).join(' | '));
+
+        const healed = new Map(updates
+            .filter(u => /SET checksum/i.test(u.sql))
+            .map(u => [u.params[1], u.params[0]]));
+        assert.strictEqual(healed.size, 2, 'both rows should be re-keyed, got: ' + JSON.stringify([...healed]));
+        for (const [file, checksum] of healed) {
+            assert.strictEqual(checksum, sha256(fs.readFileSync(path.join(MIG_DIR, file), 'utf8')),
+                file + ': healed to something other than the current file checksum');
+        }
+    });
+
+    it('a never-re-keyed ledger heals name AND checksum in one pass', async function () {
+        // The untouched original shape: rows still under the legacy undated names, holding
+        // the checksums of the content that was applied. Both heals must run in order (the
+        // rename re-key first, then the rebaseline) or the file reads as never-applied and
+        // a manual migration silently re-enters the pending list.
+        const ledger = fileChecksums();
+        const renames = Database.MIGRATION_LEDGER_RENAMES;
+        ledger.delete(renames['unique_full_column_index_addresses.sql']);
+        ledger.delete(renames['add_cross_chain_matches_partial_fill_columns.sql']);
+        ledger.set('unique_full_column_index_addresses.sql',
+            '9fdbbcbda36b860a3214d5fcc3d057f3bdf413a99c9d5407e7ef9951a318fb1e');
+        ledger.set('add_cross_chain_matches_partial_fill_columns.sql',
+            '289d9fe5fb41f8012e7cbcdb3d6c2e2a8c983ca84afd920d73b386a33d64e602');
+
+        const { updates, logged } = await runAgainst(ledger);
+        assert.ok(!logged.some(l => /content CHANGED/.test(l)), 'divergence still logged: ' + logged.join(' | '));
+        assert.strictEqual(updates.filter(u => /SET name/i.test(u.sql)).length, 2, 'both rows should be re-keyed by name');
+        assert.strictEqual(updates.filter(u => /SET checksum/i.test(u.sql)).length, 2, 'both rows should then be rebaselined');
+        assert.deepStrictEqual(updates.filter(u => /^INSERT/i.test(u.sql.trim())), [],
+            'a re-keyed row must not be re-applied as if it were pending');
+    });
+
+    it('an unpinned edit to a rebaselined file still trips the immutability guard', async function () {
+        const ledger = fileChecksums();
+        ledger.set('2026-06-03-unique-full-column-index-addresses.sql', 'f'.repeat(64));
+        const { updates, logged } = await runAgainst(ledger);
+        assert.deepStrictEqual(updates.filter(u => /SET checksum/i.test(u.sql)), [],
+            'an unrecognized hash must never be healed away');
+        assert.ok(logged.some(l => /content CHANGED/.test(l) && /unique-full-column-index-addresses/.test(l)),
+            'a genuine migration edit must still be reported');
+    });
 });
