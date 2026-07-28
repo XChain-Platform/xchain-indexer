@@ -15,7 +15,7 @@
  *
  * DISPENSER lifetime caps flag-day ( / Package 14). MAX_DISPENSES and
  * MAX_REFILLS enforcement is gated WITH the dispenser-family cohort: block-TIME,
- * mainnet 1790812800, testnet/regtest genesis (byte-for-byte the shape of
+ * mainnet 1786924800, testnet/regtest genesis (byte-for-byte the shape of
  * dispense_cancelling_match / dispenser_ownership_cancel). These tests pin the
  * predicate both sides of the gate.
  */
@@ -28,10 +28,10 @@ const { isDispenserCapsActive, DISPENSER_CAPS_ACTIVATION } =
 
 describe('dispenser caps activation predicate  @regression @tier1', function () {
 
-    it('mainnet flips at the coordinated 2.0.0 flag-day (1790812800)', function () {
-        assert.strictEqual(isDispenserCapsActive(1790812799, 'mainnet'), false);
-        assert.strictEqual(isDispenserCapsActive(1790812800, 'mainnet'), true);
-        assert.strictEqual(isDispenserCapsActive(1790812801, 'mainnet'), true);
+    it('mainnet flips at the coordinated 2.0.0 flag-day (1786924800)', function () {
+        assert.strictEqual(isDispenserCapsActive(1786924799, 'mainnet'), false);
+        assert.strictEqual(isDispenserCapsActive(1786924800, 'mainnet'), true);
+        assert.strictEqual(isDispenserCapsActive(1786924801, 'mainnet'), true);
     });
 
     it('testnet and regtest are genesis-active (pre-launch cohort)', function () {
@@ -47,7 +47,7 @@ describe('dispenser caps activation predicate  @regression @tier1', function () 
     });
 
     it('shares the dispenser-family cohort timestamp', function () {
-        assert.strictEqual(DISPENSER_CAPS_ACTIVATION.mainnet, 1790812800);
+        assert.strictEqual(DISPENSER_CAPS_ACTIVATION.mainnet, 1786924800);
         assert.strictEqual(DISPENSER_CAPS_ACTIVATION.testnet, 0);
         assert.strictEqual(DISPENSER_CAPS_ACTIVATION.regtest, 0);
     });
