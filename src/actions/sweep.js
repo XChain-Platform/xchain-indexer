@@ -64,10 +64,15 @@ class Sweep {
             data = this.util.setNumberFormats(data);
 
         // Resolve a compacted ^<id> DESTINATION back to its canonical address
-        // before validation/use (see resolveAddressRef); non-resolvable or
-        // malformed references are left as-is and rejected by isCryptoAddress.
-        if(!error)
-            data['DESTINATION'] = await this.indexerDb.resolveAddressRef(data['DESTINATION']);
+        // before validation/use (see resolveAddressRefChecked). At/after the 
+        // flag-day an unresolvable reference is a hard reject; below it the value is
+        // left as-is and rejected by isCryptoAddress.
+        if(!error){
+            let destRef = await this.indexerDb.resolveAddressRefChecked(data['DESTINATION'], data['BLOCK_INDEX']);
+            data['DESTINATION'] = destRef.value;
+            if(destRef.rejected)
+                error = 'invalid: DESTINATION (unresolvable ^id)';
+        }
 
         // Get source address balances, preferences, and token ownerships
         let balances    = await this.indexerDb.getAddressBalances(data['SOURCE'], null, data['BLOCK_INDEX'], data['ACTION_INDEX']);

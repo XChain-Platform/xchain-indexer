@@ -160,6 +160,142 @@ describe('Price (PRICE) @regression @tier3', function () {
                 'gate must receive the round BTC anchor (799000), not the local BLOCK_INDEX (5700000)');
         });
 
+        // . The tally keeps at most one signature per pubkey. WHERE the pubkey
+        // enters the dedupe set is consensus: marking on first encounter (the legacy
+        // ordering) lets a garbage signature carrying a qualified oracle's pubkey,
+        // placed AHEAD of that oracle's real one, consume the slot, so the real
+        // signature is skipped as a duplicate and a legitimately quorate round is
+        // rejected on chain. Anyone who sees a round before broadcast can mint that
+        // list; the sigs are public. Gated because PRICE is genesis-active on mainnet
+        // with live history, so below the gate the legacy ordering must survive
+        // verbatim or a from-genesis reindex diverges.
+        describe('signature-tally ordering flag-day ', function () {
+
+            const BAD_SIG = '9'.repeat(128);
+
+            beforeEach(function () {
+                // Only BAD_SIG fails to verify; every other signature is good.
+                ed25519.verify.callsFake((payload, sig) => sig !== BAD_SIG);
+            });
+
+            it('at/above the gate: a garbage sig ordered AHEAD of the same signer\'s valid one still tallies', async function () {
+                indexer.indexerDb.getActiveCapabilityCount.resolves(1); // quorum 1
+                const data = v0Data();
+                await handler.parse(v0Params(ONE_PAIR, [
+                    { pubkey: PUBKEY_A, sig: BAD_SIG },   // garbage, first on the wire
+                    { pubkey: PUBKEY_A, sig: SIG_A },     // the oracle's real signature
+                ]), data, null);
+                assert.strictEqual(data['VALIDATION_STATUS'], 'valid',
+                    'the real signature must not be skipped as a duplicate of a signature that never verified');
+            });
+
+            it('at/above the gate: ordering does not change the verdict (valid-first is still valid)', async function () {
+                indexer.indexerDb.getActiveCapabilityCount.resolves(1);
+                const data = v0Data();
+                await handler.parse(v0Params(ONE_PAIR, [
+                    { pubkey: PUBKEY_A, sig: SIG_A },
+                    { pubkey: PUBKEY_A, sig: BAD_SIG },
+                ]), data, null);
+                assert.strictEqual(data['VALIDATION_STATUS'], 'valid');
+            });
+
+            it('at/above the gate: a signer with ONLY garbage entries still does not count', async function () {
+                indexer.indexerDb.getActiveCapabilityCount.resolves(1); // quorum 1
+                const data = v0Data();
+                await handler.parse(v0Params(ONE_PAIR, [
+                    { pubkey: PUBKEY_A, sig: BAD_SIG },
+                    { pubkey: PUBKEY_A, sig: BAD_SIG },
+                ]), data, null);
+                assert.strictEqual(data['VALIDATION_STATUS'], 'invalid',
+                    'verify-then-mark must not become "retry until something passes"');
+            });
+
+            it('at/above the gate: a repeated VALID signer still counts exactly once', async function () {
+                // 4 validators -> quorum 3. Two distinct signers, one of them repeated
+                // three times: if the repeat inflated the tally this would pass.
+                indexer.indexerDb.getActiveCapabilityCount.resolves(4);
+                const data = v0Data();
+                await handler.parse(v0Params(ONE_PAIR, [
+                    { pubkey: PUBKEY_A, sig: SIG_A },
+                    { pubkey: PUBKEY_A, sig: SIG_B },
+                    { pubkey: PUBKEY_A, sig: SIG_C },
+                    { pubkey: PUBKEY_B, sig: SIG_B },
+                ]), data, null);
+                assert.strictEqual(data['VALIDATION_STATUS'], 'invalid');
+                assert.ok(String(data['STATUS']).includes('2/3'),
+                    'expected a 2-of-3 quorum failure, got: ' + data['STATUS']);
+            });
+
+            it('at/above the gate: one capability read per DISTINCT pubkey, not per signature', async function () {
+                // Verify-first no longer short-circuits a repeated pubkey, so without the
+                // memo a list padded with one pubkey would issue one DB read per entry.
+                indexer.indexerDb.getActiveCapabilityCount.resolves(1);
+                const data = v0Data();
+                await handler.parse(v0Params(ONE_PAIR, [
+                    { pubkey: PUBKEY_A, sig: BAD_SIG },
+                    { pubkey: PUBKEY_A, sig: BAD_SIG },
+                    { pubkey: PUBKEY_A, sig: SIG_A },
+                ]), data, null);
+                assert.strictEqual(indexer.indexerDb.hasCapability.callCount, 1);
+            });
+
+            it('below the gate: the legacy mark-then-verify verdict is preserved verbatim', async function () {
+                // The whole point of gating. mainnet arms at 969500; a round anchored
+                // below it must still be rejected exactly as the deployed fleet rejects
+                // it today, or a from-genesis reindex diverges from the agreed chain.
+                indexer.config['NETWORK'] = 'mainnet';
+                indexer.indexerDb.getActiveCapabilityCount.resolves(1); // quorum 1
+                const data = v0Data();
+                await handler.parse(v0Params(ONE_PAIR, [
+                    { pubkey: PUBKEY_A, sig: BAD_SIG },
+                    { pubkey: PUBKEY_A, sig: SIG_A },
+                ], { btcHeight: '969499' }), data, null);
+                assert.strictEqual(data['VALIDATION_STATUS'], 'invalid',
+                    'below the flag-day the garbage entry must still consume the dedupe slot');
+            });
+
+            it('flips on the round BTC anchor, so mainnet at 969500 takes the corrected tally', async function () {
+                indexer.config['NETWORK'] = 'mainnet';
+                indexer.indexerDb.getActiveCapabilityCount.resolves(1);
+                const data = v0Data();
+                await handler.parse(v0Params(ONE_PAIR, [
+                    { pubkey: PUBKEY_A, sig: BAD_SIG },
+                    { pubkey: PUBKEY_A, sig: SIG_A },
+                ], { btcHeight: '969500' }), data, null);
+                assert.strictEqual(data['VALIDATION_STATUS'], 'valid');
+            });
+
+            it('keys on the BTC anchor, NOT the local BLOCK_INDEX (a DOGE-height round is still below the mainnet gate)', async function () {
+                // Same trap #2268 caught for stake-weighted quorum: a DOGE local height
+                // (~5.7M) dwarfs the BTC anchor, so a BLOCK_INDEX-keyed gate would read
+                // as active on DOGE months before BTC and split the fleet on one round.
+                indexer.config['NETWORK'] = 'mainnet';
+                indexer.indexerDb.getActiveCapabilityCount.resolves(1);
+                const data = v0Data({ BLOCK_INDEX: 5700000 });
+                await handler.parse(v0Params(ONE_PAIR, [
+                    { pubkey: PUBKEY_A, sig: BAD_SIG },
+                    { pubkey: PUBKEY_A, sig: SIG_A },
+                ], { btcHeight: '969499' }), data, null);
+                assert.strictEqual(data['VALIDATION_STATUS'], 'invalid');
+            });
+
+            it('at/above the gate: the reward split follows the widened signer set', async function () {
+                // The tally change is monotone, so it moves reward rows as well as the
+                // accept/reject verdict; that is the second reason it cannot ship ungated.
+                indexer.indexerDb.getActiveCapabilityCount.resolves(1); // quorum 1
+                const data = v0Data();
+                await handler.parse(v0Params(ONE_PAIR, [
+                    { pubkey: PUBKEY_A, sig: BAD_SIG },   // A's slot-stealing garbage
+                    { pubkey: PUBKEY_A, sig: SIG_A },
+                    { pubkey: PUBKEY_B, sig: SIG_B },
+                ]), data, null);
+                assert.strictEqual(data['VALIDATION_STATUS'], 'valid');
+                const paid = indexer.indexerDb.createValidatorReward.getCalls().map(c => c.args[0]);
+                assert.deepStrictEqual(paid.slice().sort(), [PUBKEY_A, PUBKEY_B].sort(),
+                    'both signers earn a share; under the legacy ordering A would be dropped');
+            });
+        });
+
         it('rejects a malformed pair string', async function () {
             const data = v0Data();
             await handler.parse(v0Params([{ pair: 'not-a-pair', price: '1' }], [{ pubkey: PUBKEY_A, sig: SIG_A }]), data, null);

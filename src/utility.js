@@ -635,11 +635,28 @@ class Utility {
     }
 
     // Handle validating lock status
-    isValidLock(tokenInfo, data, lock){
+    // @param {tokenInfo}       object  Replayed token state, or null when the tick is new
+    // @param {data}            object  Parsed ISSUE params carrying the requested lock value
+    // @param {lock}            string  Lock field name (LOCK_DESCRIPTION, LOCK_MINT, ...)
+    // @param {nullPriorUnset}  bool     flag-day (LOCK_NULL_PRIOR_UNSET): treat an
+    //                                  absent/NULL prior as unset. Callers on the consensus
+    //                                  path MUST resolve this from protocolChanges.isEnabled
+    //                                  against the processing block; it defaults to false so
+    //                                  legacy replay below the flag-day is byte-identical.
+    isValidLock(tokenInfo, data, lock, nullPriorUnset){
         // Get lock VALUE
         let value = data[lock];
         // If we dont have any info on the token, it hasn't been created yet, so all flags are valid
         if(this.isNull(tokenInfo))
+            return true;
+        // Post-flag-day: a prior of NULL/undefined means the flag was never written, which is
+        // the shape getTokenInfo produces whenever the genesis ISSUE omitted the lock fields.
+        // Unset is unlocked, so treat it exactly like the "" prior handled just below. Without
+        // this branch `undefined`/`null` matches none of the loose-equality tests that follow
+        // (undefined=="", undefined==1 and undefined==0 are all false), the function returned
+        // false, and the token was permanently unlockable while the read APIs reported it
+        // unlocked. Gated because accepting a previously-invalid action is consensus-relevant.
+        if(nullPriorUnset && this.isNull(tokenInfo[lock]))
             return true;
         // If token exists and lock value does not exist yet, its valid
         if(tokenInfo[lock]=="")

@@ -86,12 +86,22 @@ class Dispenser {
             data = this.util.setNumberFormats(data);
 
         // Resolve compacted ^<id> address references (GET_ADDRESS, ORACLE_ADDRESS)
-        // back to their canonical address strings before validation/use; the SDK
-        // compacts both by default. Non-resolvable/malformed references are left
-        // as-is and rejected by the isCryptoAddress checks below. See resolveAddressRef.
+        // back to their canonical address strings before validation/use. At/after the
+        //  flag-day an unresolvable reference is a hard reject here; below it the
+        // value is left as-is and rejected by the isCryptoAddress checks lower down.
+        // ORACLE_ADDRESS is exactly why the resolver has to state the verdict: its
+        // format check only runs when `usingOracle` is true, so a malformed reference
+        // on a non-oracle dispenser rides straight through the legacy path.
+        // See resolveAddressRefChecked / caret_ref_strict_activation.js.
         if(!error){
-            data['GET_ADDRESS']    = await this.indexerDb.resolveAddressRef(data['GET_ADDRESS']);
-            data['ORACLE_ADDRESS'] = await this.indexerDb.resolveAddressRef(data['ORACLE_ADDRESS']);
+            let getRef = await this.indexerDb.resolveAddressRefChecked(data['GET_ADDRESS'], data['BLOCK_INDEX']);
+            data['GET_ADDRESS'] = getRef.value;
+            let oracleRef = await this.indexerDb.resolveAddressRefChecked(data['ORACLE_ADDRESS'], data['BLOCK_INDEX']);
+            data['ORACLE_ADDRESS'] = oracleRef.value;
+            if(getRef.rejected)
+                error = 'invalid: GET_ADDRESS (unresolvable ^id)';
+            else if(oracleRef.rejected)
+                error = 'invalid: ORACLE_ADDRESS (unresolvable ^id)';
         }
 
         // Default ownership flag to 0 when omitted; coerce to Number for downstream comparisons

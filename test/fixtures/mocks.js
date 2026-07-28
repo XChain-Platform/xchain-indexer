@@ -55,6 +55,11 @@ function createMockDb() {
         // keeps existing handler-validation outcomes. Override per-test to exercise
         // ^<id> resolution.
         resolveAddressRef: sinon.stub().callsFake(async (v) => v),
+        //  gated companion: same identity resolution, verdict OFF by default so
+        // existing handler expectations (reject via the field's own isCryptoAddress
+        // check) are unchanged. Override per-test to exercise the strict flag-day.
+        resolveAddressRefChecked: sinon.stub().callsFake(async (v) => ({ value: v, rejected: false })),
+        isCaretRefStrictActive: sinon.stub().returns(false),
         getBlockId: sinon.stub().resolves(1),
         getActionId: sinon.stub().resolves(1),
         createAction: sinon.stub().resolves(1),

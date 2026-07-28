@@ -105,11 +105,19 @@ class Issue {
         // Resolve compacted ^<id> TRANSFER / TRANSFER_SUPPLY references back to their
         // canonical addresses before the clone-for-storage and validation below, so the
         // SDK's default ^<id> wire form validates and is stored/credited identically to
-        // the full address. Non-resolvable/malformed references are left as-is and
-        // rejected by the isCryptoAddress checks. See resolveAddressRef.
+        // the full address. At/after the  flag-day an unresolvable reference is a
+        // hard reject here; below it the value is left as-is and rejected by the
+        // isCryptoAddress checks (which the IS_GENESIS path skips, so those two fields
+        // had no rejection at all on that path). See resolveAddressRefChecked.
         if(!error){
-            data['TRANSFER']        = await this.indexerDb.resolveAddressRef(data['TRANSFER']);
-            data['TRANSFER_SUPPLY'] = await this.indexerDb.resolveAddressRef(data['TRANSFER_SUPPLY']);
+            let transferRef = await this.indexerDb.resolveAddressRefChecked(data['TRANSFER'], data['BLOCK_INDEX']);
+            data['TRANSFER'] = transferRef.value;
+            let supplyRef = await this.indexerDb.resolveAddressRefChecked(data['TRANSFER_SUPPLY'], data['BLOCK_INDEX']);
+            data['TRANSFER_SUPPLY'] = supplyRef.value;
+            if(transferRef.rejected)
+                error = 'invalid: TRANSFER (unresolvable ^id)';
+            else if(supplyRef.rejected)
+                error = 'invalid: TRANSFER_SUPPLY (unresolvable ^id)';
         }
 
         // Clone the raw data for storage in issues table
@@ -286,10 +294,20 @@ class Issue {
         if(!error && tokenInfo && !data['IS_GENESIS'] && await this.indexerDb.isOwnershipEscrowed(data['TICK']))
             error = 'invalid: TICK (ownership escrowed)';
 
-        // Verify LOCK fields cannot be changed once enabled/locked
+        // Verify LOCK fields cannot be changed once enabled/locked.
+        //
+        // Gate: LOCK_NULL_PRIOR_UNSET  makes isValidLock read an absent/NULL prior
+        // as unset instead of falling through to "locked". getTokenInfo skips NULL columns
+        // when it replays the `issues` rows, so a token whose genesis ISSUE omitted the lock
+        // fields arrived here with an undefined prior and every later LOCK was refused with
+        // "invalid: <FIELD> (locked)" on a flag that had never been locked. Resolved once for
+        // the whole field loop against the processing block: the gate must not be able to
+        // differ field to field within one action. Below the flag-day the legacy verdict
+        // stands, so from-genesis replay stays byte-identical.
+        let lockNullPriorUnset = await this.actions.protocolChanges.isEnabled('LOCK_NULL_PRIOR_UNSET', data['BLOCK_INDEX']);
         for(let name of this.fieldList['LOCK']){
             let value = issue[name];
-            if(!error && tokenInfo && !this.util.isNull(value) && !this.util.isValidLock(tokenInfo, issue, name))
+            if(!error && tokenInfo && !this.util.isNull(value) && !this.util.isValidLock(tokenInfo, issue, name, lockNullPriorUnset))
                 error = "invalid: " + name + " (locked)";
         }
 

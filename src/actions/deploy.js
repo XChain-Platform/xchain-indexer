@@ -143,13 +143,24 @@ class Deploy {
         // Resolve a compacted ^<id> SLASH_DESTINATION back to its canonical address
         // (the SDK compacts this field by default). The 'BURN' sentinel and null are
         // left untouched; a non-resolvable/malformed reference is left as-is. This
-        // also keeps a malformed id off the slash-credit FK path. See resolveAddressRef.
+        // also keeps a malformed id off the slash-credit FK path. See resolveAddressRefChecked.
         // `slashDestExplicit` marks a user-supplied, non-BURN destination: only those
         // get the isCryptoAddress format reject below (the BURN sentinel and the
         // default-to-BURN path resolve to the trusted configured burn address).
+        // At/after the  flag-day an unresolvable reference is a hard reject, which
+        // no longer depends on the separate DEPLOY_SLASH_DEST_ADDRESS_VALID gate being
+        // live: below that gate a bogus caret is interned into the IMMUTABLE
+        // contracts.slash_destination and every later slash routes stake nowhere. The
+        // verdict is captured here but APPLIED with the sibling address check further
+        // down, so the existing pairing/cooldown verdicts still win (same ordering the
+        // DEPLOY_SLASH_DEST_ADDRESS_VALID check was written to preserve).
         let slashDestExplicit = hasStaking && !this.util.isNull(data['SLASH_DESTINATION']) && data['SLASH_DESTINATION'] !== 'BURN';
-        if(!error && slashDestExplicit)
-            data['SLASH_DESTINATION'] = await this.indexerDb.resolveAddressRef(data['SLASH_DESTINATION']);
+        let slashDestUnresolvable = false;
+        if(!error && slashDestExplicit){
+            let slashRef = await this.indexerDb.resolveAddressRefChecked(data['SLASH_DESTINATION'], data['BLOCK_INDEX']);
+            data['SLASH_DESTINATION'] = slashRef.value;
+            slashDestUnresolvable = slashRef.rejected;
+        }
 
         // Validate v1/v3 staking config (both optional, but pairing rules apply)
         if(!error && hasStaking){
@@ -214,6 +225,14 @@ class Deploy {
             && await this.actions.protocolChanges.isEnabled('DEPLOY_SLASH_DEST_ADDRESS_VALID', data['BLOCK_INDEX'])
             && !this.util.isCryptoAddress(data['SLASH_DESTINATION']))
             error = 'invalid: SLASH_DESTINATION (invalid address)';
+
+        // : the same reject for an unresolvable ^<id>, on its own flag-day and
+        // independent of the gate above (an unresolvable caret is a wire-reference
+        // fault, not merely a badly-formatted address). Same position, so the
+        // pairing/cooldown verdicts and the address-format verdict both still win, and
+        // only while the destination survived the clear-on-no-cooldown path above.
+        if(!error && slashDestUnresolvable && !this.util.isNull(data['SLASH_DESTINATION']))
+            error = 'invalid: SLASH_DESTINATION (unresolvable ^id)';
 
         // Convert NUMBER fields from string value to number value
         if(!error)

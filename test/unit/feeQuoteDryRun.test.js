@@ -26,8 +26,10 @@ const FEE_DEST = 'feeDestinationAddr111111111111111';
 // can assert the dry-run opens exactly one transaction, reads the staged fee inside it, and
 // always rolls back.
 function makeCtx({ status = 'valid', actionIndex = 55, feeAmount = '1.00000000',
-                   processThrows = false, processHangs = false, prices = {} } = {}){
-    let calls = { order: [], begin: 0, rollback: 0, processed: null };
+                   processThrows = false, processHangs = false, prices = {},
+                   addressId = 7, tickId = 3, addressBalances = { 3: '19898' },
+                   balanceThrows = false } = {}){
+    let calls = { order: [], begin: 0, rollback: 0, processed: null, createdAddresses: 0 };
     let util  = new Utility();
     util.config['COIN']                         = 'BTC';
     util.config['ADDRESS']                      = Object.assign({}, util.config['ADDRESS'] || {}, { FEE_DESTINATION: FEE_DEST });
@@ -48,6 +50,17 @@ function makeCtx({ status = 'valid', actionIndex = 55, feeAmount = '1.00000000',
             // mirrors the real Database contract (fixed epoch, pass-through run).
             currentTxEpoch:      () => 0,
             runInTxEpoch:        (epoch, fn) => fn(),
+            // Fee-balance surface . getAddressId is the READ-ONLY id lookup (null for
+            // an address the ledger has never seen); createAddress is stubbed only so the test
+            // can prove the balance read never reaches it.
+            getAddressId:        async (addr) => { calls.order.push('getAddressId:' + addr); return addressId; },
+            createAddress:       async () => { calls.createdAddresses++; return 999; },
+            getTickerId:         async (tick) => { calls.order.push('getTickerId:' + tick); return tickId; },
+            getAddressBalances:  async (id) => {
+                calls.order.push('getAddressBalances:' + id);
+                if(balanceThrows) throw new Error('balance read exploded');
+                return addressBalances;
+            },
             // The handler-staged fee row, readable only between begin and rollback.
             getFeeRecord:        async (ai) => {
                 calls.order.push('getFeeRecord:' + ai);
@@ -134,6 +147,64 @@ describe('_dryRunAction (shared dry-run engine)', () => {
         let r = await ctx._dryRunAction.call(ctx, { action: 'SEND', params: ['0', 'T', '1', 'd'], source: 'neverSeenAddr', timeoutMs: 300000 });
         assert.strictEqual(calls.begin, 1, 'transaction opened for a fresh source');
         assert.strictEqual(r.status, 'invalid: insufficient funds', 'handler judged it');
+    });
+
+    // : the fee-token balance the pre-flight needs to tell a payer WHY an XCHAIN-settled
+    // fee would fail. Read inside the same transaction as the handler, and read-only.
+    describe('payer fee-token balance (feeBalanceTick)', () => {
+
+        it('reads the balance inside the transaction, BEFORE the handler runs', async () => {
+            let { ctx, calls } = makeCtx({ status: 'valid' });
+            let r = await ctx._dryRunAction.call(ctx, { action: 'ISSUE', params: ['0', 'NEWTOK'], source: 'payer',
+                                                        feeBalanceTick: 'XCHAIN', timeoutMs: 300000 });
+            assert.strictEqual(r.sourceFeeBalance, '19898');
+            assert.deepStrictEqual(calls.order,
+                ['begin', 'getAddressId:payer', 'getTickerId:XCHAIN', 'getAddressBalances:7',
+                 'process', 'getFeeRecord:55', 'rollback'],
+                'pre-action snapshot, inside the one transaction, rolled back with it');
+            assert.strictEqual(calls.createdAddresses, 0, 'the balance read must never WRITE an address row');
+        });
+
+        it('an address the ledger has never seen holds zero (no id, no balance query)', async () => {
+            let { ctx, calls } = makeCtx({ status: 'valid', addressId: null });
+            let r = await ctx._dryRunAction.call(ctx, { action: 'ISSUE', params: ['0', 'NEWTOK'], source: 'freshAddr',
+                                                        feeBalanceTick: 'XCHAIN', timeoutMs: 300000 });
+            assert.strictEqual(r.sourceFeeBalance, '0');
+            assert.ok(calls.order.indexOf('getAddressBalances:7') === -1, 'nothing to look up');
+            assert.strictEqual(calls.createdAddresses, 0);
+        });
+
+        it('an indexed address with no XCHAIN row reports 0, not null', async () => {
+            let { ctx } = makeCtx({ status: 'valid', addressBalances: { 9: '5' } });
+            let r = await ctx._dryRunAction.call(ctx, { action: 'ISSUE', params: ['0', 'NEWTOK'], source: 'payer',
+                                                        feeBalanceTick: 'XCHAIN', timeoutMs: 300000 });
+            assert.strictEqual(r.sourceFeeBalance, '0');
+        });
+
+        it('an unknown fee tick is null (unknown), never a fabricated zero', async () => {
+            let { ctx } = makeCtx({ status: 'valid', tickId: null });
+            let r = await ctx._dryRunAction.call(ctx, { action: 'ISSUE', params: ['0', 'NEWTOK'], source: 'payer',
+                                                        feeBalanceTick: 'NOSUCH', timeoutMs: 300000 });
+            assert.strictEqual(r.sourceFeeBalance, null);
+        });
+
+        it('is skipped entirely when the caller does not ask for it', async () => {
+            let { ctx, calls } = makeCtx({ status: 'valid' });
+            let r = await ctx._dryRunAction.call(ctx, { action: 'ISSUE', params: ['0', 'NEWTOK'], source: 'payer', timeoutMs: 300000 });
+            assert.strictEqual(r.sourceFeeBalance, null);
+            assert.deepStrictEqual(calls.order, ['begin', 'process', 'getFeeRecord:55', 'rollback'],
+                'no extra reads on the fee-quote path');
+        });
+
+        it('a failing balance read degrades to null and leaves the verdict untouched', async () => {
+            let { ctx, calls } = makeCtx({ status: 'valid', balanceThrows: true });
+            let r = await ctx._dryRunAction.call(ctx, { action: 'ISSUE', params: ['0', 'NEWTOK'], source: 'payer',
+                                                        feeBalanceTick: 'XCHAIN', timeoutMs: 300000 });
+            assert.strictEqual(r.sourceFeeBalance, null, 'advisory field degrades');
+            assert.strictEqual(r.status, 'valid', 'the handler verdict still stands');
+            assert.strictEqual(r.xchainFee, '1.00000000');
+            assert.strictEqual(calls.rollback, 1);
+        });
     });
 
     it('bounds a hung handler with the caller timeout and releases the lock', async () => {

@@ -77,12 +77,16 @@ class Swap {
         if(!error)
             data = this.util.setNumberFormats(data);
 
-        // Resolve a compacted ^<id> GET_ADDRESS back to its canonical address
-        // before the default-to-SOURCE and validation logic (see resolveAddressRef);
-        // non-resolvable or malformed references are left as-is and rejected by
-        // isCryptoAddress.
-        if(!error)
-            data['GET_ADDRESS'] = await this.indexerDb.resolveAddressRef(data['GET_ADDRESS']);
+        // Resolve a compacted ^<id> GET_ADDRESS back to its canonical address before
+        // the default-to-SOURCE and validation logic (see resolveAddressRefChecked).
+        // At/after the  flag-day an unresolvable reference is a hard reject;
+        // below it the value is left as-is and rejected by isCryptoAddress.
+        if(!error){
+            let getRef = await this.indexerDb.resolveAddressRefChecked(data['GET_ADDRESS'], data['BLOCK_INDEX']);
+            data['GET_ADDRESS'] = getRef.value;
+            if(getRef.rejected)
+                error = 'invalid: GET_ADDRESS (unresolvable ^id)';
+        }
 
         // Get information on the GIVE and GET tokens
         let giveTokenInfo = false;

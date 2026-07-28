@@ -33,6 +33,7 @@
 const ed25519   = require('../ed25519.js');
 const swq       = require('../stake_weighted_quorum.js');
 const pricePair = require('../price_pair_activation.js');
+const priceSigTally = require('../price_sig_tally_activation.js');
 
 class Price {
 
@@ -155,15 +156,41 @@ class Price {
             let payload    = ed25519.buildPriceV0Payload(round, timestamp, pairs, this.config['NETWORK'], btcBlockHeight);
             let validSigs  = 0;
             let seenPubkey = new Set();
+
+            // PRICE_SIG_TALLY : WHERE the pubkey enters the dedupe set.
+            // At/above the gate it enters only after a successful verify, so a
+            // garbage signature carrying a qualified oracle's pubkey cannot be
+            // ordered ahead of that oracle's real one to consume its slot and
+            // under-count the round. Below the gate the legacy mark-on-first-
+            // encounter ordering is preserved verbatim, so replay of every
+            // pre-flag-day round stays bit-identical. Keyed on the round's signed
+            // BTC anchor (NOT the landing chain's local height) so the hub and
+            // every chain's indexer flip together; see price_sig_tally_activation.js.
+            // Either way a pubkey counts AT MOST ONCE.
+            let verifyFirst = priceSigTally.isPriceSigTallyVerifyFirstActive(
+                data['BTC_BLOCK_HEIGHT'], this.config['NETWORK']);
+
+            // Capability is a pure function of (pubkey, block), so memoize it. Under
+            // verify-first a repeated pubkey is no longer short-circuited by the
+            // dedupe set, and without this cache a list padded with one pubkey would
+            // issue one DB read per entry. Below the gate the first-encounter dedupe
+            // means this is never consulted twice, so it changes nothing there.
+            let capabilityCache = new Map();
+
             for(let s of sigs){
                 if(seenPubkey.has(s.pubkey)){
                     // Duplicate pubkey signature: count only once
                     continue;
                 }
-                seenPubkey.add(s.pubkey);
+                if(!verifyFirst) seenPubkey.add(s.pubkey);
 
                 // Verify the validator's stake qualifies for the `price` capability at this block
-                if(!await this.indexerDb.hasCapability(s.pubkey, 'price', data['BLOCK_INDEX'])){
+                let capable = capabilityCache.get(s.pubkey);
+                if(capable === undefined){
+                    capable = await this.indexerDb.hasCapability(s.pubkey, 'price', data['BLOCK_INDEX']);
+                    capabilityCache.set(s.pubkey, capable);
+                }
+                if(!capable){
                     continue;
                 }
 
@@ -171,6 +198,7 @@ class Price {
                 if(!ed25519.verify(payload, s.sig, s.pubkey))
                     continue;
 
+                if(verifyFirst) seenPubkey.add(s.pubkey);
                 validSigs++;
                 qualifiedSigners.push(s.pubkey);
             }

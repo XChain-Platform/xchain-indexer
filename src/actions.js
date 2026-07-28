@@ -669,10 +669,14 @@ class Actions {
     // (util.validateNativeCoinFee), so oversizing can never be the reason a quote rejects;
     // sizing the real output is the caller's job (computeFeeQuote prices the extracted fee).
     //
-    // Returns { blockIndex, blockTime, status, error, xchainFee } where xchainFee is the
-    // handler-recorded fee ('0' for a valid zero-fee action, null when the run never got far
-    // enough to stage one).
-    async _dryRunAction({ action, params, source, feeOutputs, probeFeeDestination, timeoutMs, label, guardInert }){
+    // `feeBalanceTick` (optional) asks for the SOURCE's balance of that tick, read at
+    // pre-action state inside the same transaction the handler runs in. Advisory only: it
+    // never changes the verdict, and it degrades to null rather than failing the run.
+    //
+    // Returns { blockIndex, blockTime, status, error, xchainFee, sourceFeeBalance } where
+    // xchainFee is the handler-recorded fee ('0' for a valid zero-fee action, null when the
+    // run never got far enough to stage one).
+    async _dryRunAction({ action, params, source, feeOutputs, probeFeeDestination, timeoutMs, label, guardInert, feeBalanceTick }){
         let blockIndex = await this.indexerDb.getLatestBlockIndex();
         let blockTime  = await this.indexerDb.getBlockTime(blockIndex);
 
@@ -703,7 +707,7 @@ class Actions {
             guard_inert:   guardInert === true
         };
 
-        let status = null, feeRecord = null, dryRunError = null;
+        let status = null, feeRecord = null, dryRunError = null, sourceFeeBalance = null;
         // beginTransaction acquires the db transaction mutex (serializes against block processing
         // and reorgs); the finally guarantees rollback + lock release even on a handler throw.
         await this.indexerDb.beginTransaction();
@@ -714,6 +718,28 @@ class Actions {
         // rejects those zombie writes inside the db layer before they reach the driver.
         let dryRunEpoch = this.indexerDb.currentTxEpoch();
         try {
+            // : the payer's fee-token balance at PRE-action state, read inside this
+            // transaction so it is the same snapshot the handler's own balance check reads.
+            // Read-only by construction: getAddressId returns null for an address the ledger
+            // has never seen (createAddress would WRITE one), so quoting from a fresh address
+            // stays a pure read. Strictly advisory - any failure degrades to null and the
+            // handler's verdict stands untouched.
+            if(feeBalanceTick && !this.util.isNull(source)){
+                try {
+                    sourceFeeBalance = await this.indexerDb.runInTxEpoch(dryRunEpoch, async () => {
+                        let addressId = await this.indexerDb.getAddressId(source);
+                        if(addressId === null || addressId === undefined) return '0';
+                        let tickId = await this.indexerDb.getTickerId(feeBalanceTick);
+                        if(tickId === null || tickId === undefined) return null;
+                        let balances = await this.indexerDb.getAddressBalances(addressId);
+                        let balance  = balances ? balances[tickId] : null;
+                        return (balance === null || balance === undefined) ? '0' : String(balance);
+                    });
+                } catch(e){
+                    console.warn('dry-run fee-balance read failed: ' + ((e && e.message) ? e.message : e));
+                    sourceFeeBalance = null;
+                }
+            }
             // Bound the synthetic run. The dry-run holds the shared _txLock for the whole
             // handler, so a stuck handler would otherwise wedge block advancement for the full
             // hang; on timeout the catch+finally roll back and release the lock within the
@@ -749,7 +775,8 @@ class Actions {
             status:     status,
             error:      dryRunError,
             xchainFee:  feeRecord ? String(feeRecord.amount)
-                       : ((status === 'valid') ? '0' : null)
+                       : ((status === 'valid') ? '0' : null),
+            sourceFeeBalance: sourceFeeBalance
         };
     }
 
@@ -1149,18 +1176,40 @@ class Actions {
     // engine, the same admission cap + timeout, and guardInert:true (controller guards never
     // enter the VM on this unauthenticated surface). VM actions stay denylisted; settlement/
     // lifecycle actions stay feeExempt (no dry-runnable verdict). A block-height-keyed memo
-    // (this._preflightMemo) collapses identical same-height re-runs. No fee/pricing fields:
-    // that is computeFeeQuote's job. Surfaced publicly via the explorer's /{COIN}/api/preflight
+    // (this._preflightMemo) collapses identical same-height re-runs. Echoes the dry-run's own
+    // `xchainFee`  but no PRICING fields: converting that to a native-coin output is
+    // computeFeeQuote's job. Surfaced publicly via the explorer's /{COIN}/api/preflight
     // proxy. Never persists (the dry-run always rolls back).
     //
-    // Native-fee entanglement caveat (spec §4.3): the synthetic tx carries the probe fee
-    // destination exactly as computeFeeQuote does, so a mandatory-native chain's fee-output
-    // presence check does not false-reject a structurally valid action; the SDK Tier-1 keeps
-    // native-fee-output aspects `unverified` regardless.
-    async computePreflight({ action, params, source }){
+    // FEE SETTLEMENT MODE . The verdict is only truthful if the dry-run settles the
+    // protocol fee the way the payer's real transaction will. computeFeeQuote always injects
+    // the probe fee output (it is pricing a NATIVE output, so native mode is the question it
+    // asks), and pre-flight used to copy that unconditionally - which silently exempted every
+    // quote from the XCHAIN balance debit and made "payer holds zero XCHAIN" invisible: the
+    // endpoint answered valid, the wallet signed, the miner fee was spent, and the chain
+    // indexed `invalid: insufficient funds (FEE)`. So the mode is chosen here:
+    //   - `feeMode: 'native'`  injects the probe output (fee settles from a coin output).
+    //   - `feeMode: 'xchain'`  injects nothing, so detectFeePaymentMode picks the XCHAIN
+    //                          balance debit and the handler checks the payer's balance.
+    //   - default: 'native' on a mandatory-native chain (LTC/DOGE, where no other mode
+    //     exists), 'xchain' everywhere else - which is the mode a BTC wallet composes by
+    //     default. A configured-but-unusable FEE_DESTINATION falls back to 'xchain'.
+    // The mode is part of the memo key, so the two answers can never be served for each other.
+    // Native-fee OUTPUT SIZING is still out of scope here (spec §4.3): this surface prices
+    // nothing, and the SDK Tier-1 keeps native-fee-output aspects `unverified` regardless.
+    async computePreflight({ action, params, source, feeMode }){
         let coin           = this.config['COIN'];
         let feeDestination = this.config['ADDRESS'] ? this.config['ADDRESS']['FEE_DESTINATION'] : null;
         let probeDest      = (feeDestination && feeDestination !== 'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX') ? feeDestination : null;
+        let feeTick        = this.config['GAS'];
+
+        let requestedMode  = String(feeMode == null ? '' : feeMode).trim().toLowerCase();
+        let resolvedMode   = (requestedMode === 'native' || requestedMode === 'xchain')
+                           ? requestedMode
+                           : (this._nativeFeeMandatory() ? 'native' : 'xchain');
+        // Native settlement needs somewhere to pay: with no usable FEE_DESTINATION the chain
+        // itself falls back to the XCHAIN debit (utility.detectFeePaymentMode), so match it.
+        if(resolvedMode === 'native' && !probeDest) resolvedMode = 'xchain';
 
         // Normalize identically to computeFeeQuote / dispatch (trim, uppercase, de-alias).
         action = String(action || '').trim().toUpperCase();
@@ -1181,9 +1230,10 @@ class Actions {
             return Object.assign(base, { supported: false, feeExempt: true, valid: null,
                 note: action + ' is a settlement/lifecycle action with no dry-runnable verdict' });
 
-        // Verdict memo keyed on (action, params, source, blockIndex). A new tip changes the key.
+        // Verdict memo keyed on (action, params, source, blockIndex, feeMode). A new tip
+        // changes the key; so does the settlement mode, whose verdicts genuinely differ.
         let blockIndex = await this.indexerDb.getLatestBlockIndex();
-        let memoKey    = this._preflightMemo.key(action, params, source, blockIndex);
+        let memoKey    = this._preflightMemo.key(action, params, source, blockIndex, resolvedMode);
         let cached     = this._preflightMemo.get(memoKey);
         if(cached) return Object.assign({}, cached, { cached: true });
 
@@ -1198,10 +1248,11 @@ class Actions {
         try {
             run = await this._dryRunAction({
                 action, params, source,
-                probeFeeDestination: probeDest,
+                probeFeeDestination: (resolvedMode === 'native') ? probeDest : null,
                 timeoutMs: timeoutMs,
                 label: 'preflight ' + action,
-                guardInert: true
+                guardInert: true,
+                feeBalanceTick: feeTick
             });
         } finally {
             this._feeQuotePending--;
@@ -1214,12 +1265,43 @@ class Actions {
         let guardInert = (typeof run.status === 'string' && run.status.indexOf('FEE_QUOTE_CONTROLLER_UNSUPPORTED') !== -1);
         let valid      = (run.status === 'valid');
 
+        // The dry-run already staged the handler's fee record, so echoing it costs nothing and
+        // saves the caller a second round-trip to /feequote purely to disclose the fee .
+        // `xchainFee` is the XCHAIN-denominated protocol fee in EVERY payment mode (the fee row
+        // is always XCHAIN-denominated; native mode only changes how it is settled), which is
+        // exactly what a confirm screen owes the user in the default XCHAIN mode. Sizing the
+        // native-coin output stays computeFeeQuote's job: this surface never prices the fee, so
+        // the probe output injected above cannot mislead. null when the run never staged a fee
+        // (rejected before the handler recorded one); '0.00000000' for a valid zero-fee action.
+        let xchainFee = (run.xchainFee == null) ? null : this.util.bcformat(this.util.bcnum(run.xchainFee), 8);
+
+        // The payer's fee-token balance next to the fee it owes . Two callers need it:
+        // a client that wants to say "you need N XCHAIN, you hold M" instead of relaying a bare
+        // error string, and a native-mode caller, whose verdict above deliberately does NOT
+        // depend on the XCHAIN balance but whose user may still want to see it. null when the
+        // read was unavailable (no source, unknown fee tick), never a guessed zero.
+        let feeTokenBalance = (run.sourceFeeBalance == null)
+                            ? null : this.util.bcformat(this.util.bcnum(run.sourceFeeBalance), 8);
+        // Only meaningful for the mode that settles from that balance; null (not false) in
+        // native mode so nobody reads "cannot afford" into a fee that is not paid in XCHAIN.
+        // Judged on the RAW values, not the 8dp display strings: a ledger balance carries more
+        // precision than the display, and rounding it up to 8dp could call a fractionally
+        // short payer affordable, which is exactly the false PASS this field exists to end.
+        let feeAffordable = (resolvedMode !== 'xchain' || run.sourceFeeBalance == null || run.xchainFee == null)
+                          ? null
+                          : this.util.bcgte(this.util.bcnum(run.sourceFeeBalance), this.util.bcnum(run.xchainFee));
+
         let result = Object.assign(base, {
             valid:      guardInert ? null : valid,
             status:     run.status,
             error:      valid ? null : (run.error || run.status || 'dry-run produced no status'),
             guardInert: guardInert,
             feeExempt:  false,
+            xchainFee:  xchainFee,
+            feeMode:    resolvedMode,
+            feeTick:    feeTick,
+            feeTokenBalance: feeTokenBalance,
+            feeAffordable:   feeAffordable,
             blockIndex: run.blockIndex,
             blockTime:  run.blockTime
         });

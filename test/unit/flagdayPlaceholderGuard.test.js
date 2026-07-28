@@ -119,6 +119,9 @@ describe(' flag-day placeholder guard @regression @tier1', function () {
             '../../../xchain-hub/src/anchor_reward_activation.js',
             '../../../xchain-hub/src/retraction_signing_activation.js',
             '../../../xchain-explorer/src/retraction_signing_activation.js',
+            // : the PRICE v0 signature-tally gate rides the SAME ratified 969500
+            // anchor, so a future re-anchor has to move it along with the pair above.
+            '../../../xchain-hub/src/price_sig_tally_activation.js',
         ];
 
         for (const rel of SIBLING_FILES) {
@@ -157,6 +160,28 @@ describe(' flag-day placeholder guard @regression @tier1', function () {
             const local = require(path.join(SRC, 'retraction_signing_activation.js')).RETRACTION_SIGNING_ACTIVATION;
             assert.deepStrictEqual(local, canon.RETRACTION_SIGNING_ACTIVATION,
                 'the vendored retraction_signing_activation.js map drifted from the canonical constants.js map');
+        });
+
+        // , same reasoning: the PRICE v0 signature-tally gate is armed to the
+        // ratified 969500 anchor, so it belongs to the height cohort this file guards.
+        // A substring check on the docs file is vacuous here (several maps carry that
+        // literal), so bind it by NAMED EXPORT to both the ratified height and the local
+        // copy: a re-anchor that moves one side and not the other now trips CI.
+        it('xchain-documentation/protocol/constants.js pins PRICE_SIG_TALLY_ACTIVATION by named export, value-equal to the local copy', function () {
+            const p = path.resolve(__dirname, '../../../xchain-documentation/protocol/constants.js');
+            if (!fs.existsSync(p)) {
+                if (process.env.XCHAIN_REQUIRE_SIBLINGS === '1')
+                    assert.fail('required sibling missing: ' + p);
+                return this.skip();
+            }
+            const canon = require(p);
+            assert.ok(canon.PRICE_SIG_TALLY_ACTIVATION && typeof canon.PRICE_SIG_TALLY_ACTIVATION === 'object',
+                'constants.js must export a PRICE_SIG_TALLY_ACTIVATION map (the canonical authority for the indexer + hub copies)');
+            assert.strictEqual(canon.PRICE_SIG_TALLY_ACTIVATION.mainnet, RATIFIED_BTC_HEIGHT,
+                'canonical PRICE signature-tally mainnet height must be the ratified ' + RATIFIED_BTC_HEIGHT);
+            const local = require(path.join(SRC, 'price_sig_tally_activation.js')).PRICE_SIG_TALLY_ACTIVATION;
+            assert.deepStrictEqual(local, canon.PRICE_SIG_TALLY_ACTIVATION,
+                'the local price_sig_tally_activation.js map drifted from the canonical constants.js map');
         });
     });
 

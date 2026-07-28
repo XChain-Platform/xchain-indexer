@@ -31,6 +31,21 @@ const VM_BANNED_ASYNC_MAINNET_TIME = 1790812800;
 // fleet on the first fee-bearing LTC/DOGE action after the earlier timestamp.
 const NATIVE_FEE_PRICE_TIME_GATE_MAINNET_TIME = 1790812800;
 
+//  coordinated flag-day train, Key A (shared mainnet block TIME).
+// 1796083200 = 2026-12-01 00:00:00 UTC, the §3 activation surface in
+// claude/specs/-FLAGDAY-TRAIN-SPEC.md. Deliberately NOT the 1790812800
+// (2026-10-01) cohort: that train already carries unshipped cargo and deploys on
+// its own schedule, and spec §9 forbids this train touching its constants.
+// Key A is forced here rather than a per-chain height map because ISSUE runs on
+// BTC, LTC and DOGE, whose heights diverge by millions of blocks, so only a
+// timestamp can name one simultaneous cutover across all three (spec §2).
+// The value is the spec's PROPOSED surface pending operator ratification (spec §10
+// decision 1); if the operator ratifies a different instant this one constant moves
+// and every gate registered against it follows. A divergent value between fleet
+// members is a fork, so it lives in exactly one place and
+// test/unit/lock-null-prior-unset.test.js pins it.
+const XC637_TRAIN_TIME = 1796083200;
+
 // Single shared predicate for the NATIVE_FEE_PRICE_TIME_GATE flag-day, used by
 // utility.getFeeOraclePrices (query selection) and XChainIndexer (sync
 // barrier) so the two can never gate differently. Semantics match the
@@ -593,6 +608,36 @@ class ProtocolChanges {
         // from-genesis replay. testnet/regtest activate at genesis (all zeros).
         this.addChange('LOCK_MAX_SUPPLY_EXACT', '2.0.0',1790812800,0,0,0,0,0);
 
+        // ISSUE validity : a NULL/absent prior lock value counts as UNSET.
+        // getTokenInfo rebuilds token state by replaying the `issues` rows and SKIPS a
+        // column that is NULL, so a token whose genesis ISSUE simply omitted the lock
+        // fields (the create-time "don't lock anything" path, and 108 of 109 ticks on the
+        // BTC regtest venue) reaches isValidLock with an UNDEFINED prior. Every comparison
+        // there is loose-equality against '' / value / 0, and `undefined` matches none of
+        // them, so the function fell through to false and issue.js reported
+        // "invalid: <FIELD> (locked)" for a flag that had never been locked. Net effect:
+        // a later LOCK was impossible for effectively every token, the create-time
+        // checkbox was the only way a token ever became locked, each attempt burned a
+        // protocol fee on a guaranteed-invalid action, and the refusal text asserted the
+        // opposite of the truth. After activation an unset prior is treated exactly like
+        // the '' prior the function already accepted, so an owner can freeze
+        // supply/description/mint after launch. Locking stays one-way: a prior of 1 is
+        // still refused a move to 0 on both sides of the gate.
+        //
+        // Gated because it CHANGES WHICH ACTIONS ARE VALID: an ungated flip would accept
+        // an ISSUE that peers still running the old binary reject, forking a heterogeneous
+        // fleet on the first post-genesis LOCK, and would break from-genesis replay
+        // byte-identity for any historical LOCK that committed 'invalid'. Registered on
+        // the  train (Key A / block TIME) per the ledger entry, NOT on the
+        // 2026-10-01 cohort its LOCK_MAX_SUPPLY_EXACT sibling rides. The paired question
+        // about tokens already carrying NULL lock history is answered by the gate itself:
+        // the rule is applied to prior state, not to issuance date, so below the flag-day
+        // every token replays exactly as it did, and at/above it EVERY token with an unset
+        // prior becomes lockable regardless of when it was issued - no reconciliation pass
+        // and no per-token grandfathering. testnet/regtest activate at genesis (all zeros)
+        // so fresh regtest stacks exercise the post-activation path end to end.
+        this.addChange('LOCK_NULL_PRIOR_UNSET', '2.0.0',XC637_TRAIN_TIME,0,0,0,0,0);
+
         // DEPLOY validity: integer COOLDOWN_BLOCKS. Before this activation the staking
         // cooldown was gated only by isNumeric + range, so a fractional value ('50.5')
         // deployed successfully and stored a fractional contracts.cooldown_blocks,
@@ -1051,3 +1096,6 @@ module.exports.VM_BANNED_ASYNC_MAINNET_TIME = VM_BANNED_ASYNC_MAINNET_TIME;
 // H-3 price-selection flag-day + its shared gate predicate (see registration).
 module.exports.NATIVE_FEE_PRICE_TIME_GATE_MAINNET_TIME = NATIVE_FEE_PRICE_TIME_GATE_MAINNET_TIME;
 module.exports.isNativeFeePriceTimeGateActive = isNativeFeePriceTimeGateActive;
+//  train Key A anchor, exported so the flag-day guard suites can assert every
+// gate registered against it shares one instant (a split value is a fork window).
+module.exports.XC637_TRAIN_TIME = XC637_TRAIN_TIME;

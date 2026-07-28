@@ -42,6 +42,7 @@ const reorgHistoryQuery = require('./reorg-history-query');
 const merkle        = require('./merkle');
 const ar            = require('./anchor_reward_activation.js');
 const crypto        = require('crypto');
+const { installObservability } = require('./observability');   // : default-off /metrics + structured log shim
 
 // Constant-time API-key comparison. A plain `!==` short-circuits at the first
 // mismatching byte, leaking the key that guards reward-forging writes through
@@ -198,6 +199,20 @@ async function startApi(){
         standardHeaders: true,
         legacyHeaders: false
     }));
+
+    // : Prometheus /metrics plus a structured log shim, both DEFAULT OFF.
+    // Nothing is registered and no timer starts unless METRICS_ENABLED (and, for
+    // log shipping, LOG_SHIP_ENABLED + LOG_SHIP_URL) are set. The coin/network
+    // labels let one Prometheus scrape distinguish the per-chain indexers.
+    // See src/observability/README.md.
+    let indexerVersion = '';
+    try { indexerVersion = require('../package.json').version; } catch { /* version label is cosmetic */ }
+    installObservability(app, {
+        service: 'xchain-indexer',
+        version: indexerVersion,
+        coin:    process.env.INDEXER_COIN || '',
+        network: INDEXER_NETWORK || ''
+    });
 
     // API key enforcement for write + federation read + gated exec methods.
     // These methods forge spendable validator_rewards rows or enumerate the
@@ -476,14 +491,18 @@ async function startApi(){
         // feeExempt. Height-keyed memo collapses same-height re-runs. Public read (surfaced to
         // wallets/SDK via the explorer /{COIN}/api/preflight proxy); NOT gated like
         // feequotedryrun. Never persists.
-        // Body: { action, params, source }
-        async preflight({action, params, source}){
+        // `feeMode` ('xchain' | 'native', optional) says how the caller's real transaction will
+        // settle the protocol fee, because the verdict differs : the XCHAIN mode debits
+        // the payer's balance and the native mode pays a coin output. Omitted, the indexer picks
+        // the mode the chain itself defaults to.
+        // Body: { action, params, source, feeMode? }
+        async preflight({action, params, source, feeMode}){
             if(!action || typeof action !== 'string')
                 return { error: 'action is required' };
             if(!indexer.indexerDb || !indexer.actions)
                 return { error: 'indexer not ready' };
             try {
-                return await indexer.actions.computePreflight({ action, params, source });
+                return await indexer.actions.computePreflight({ action, params, source, feeMode });
             } catch (err) {
                 console.error('preflight error:', err);
                 return { error: 'failed to compute pre-flight' };

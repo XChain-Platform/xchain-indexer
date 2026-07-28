@@ -30,6 +30,7 @@ const dispenseCancellingMatch = require('./dispense_cancelling_match_activation'
 const stateKeyCollation = require('./state_key_collation_activation');
 const snapshotAgeCausality = require('./oracle_snapshot_age_causality_activation');
 const listEditResolution = require('./list_edit_resolution_activation');
+const caretRefStrict = require('./caret_ref_strict_activation');
 const { CHECKPOINT_VERSIONS: ANCHOR_CHECKPOINT_VERSIONS } = require('./anchor-action-query');
 const { rethrowIfInfraFault } = require('./actions/faultGuard');
 
@@ -2533,6 +2534,11 @@ class Database {
     // likewise returned unchanged and rejected. The digit string is handed to SQL
     // verbatim (never via Number()), so a large id keeps full precision and an
     // out-of-range id simply matches no row.
+    //
+    // : returning the value unchanged states no verdict, so rejection depends on
+    // the caller's own format check. Prefer resolveAddressRefChecked below, which
+    // resolves identically and additionally reports the activation-gated hard-invalid
+    // verdict; this raw form stays for callers with no block context.
     async resolveAddressRef(value){
         if(this.util.isNull(value))
             return value;
@@ -2553,6 +2559,38 @@ class Database {
         if(results.length > 0 && !this.util.isNull(results[0].address))
             return String(results[0].address);
         return value;
+    }
+
+    // Whether the  strict `^<id>` rejection is in effect at `block_index` on
+    // this indexer's chain. Wrapper so handlers gate on the same predicate
+    // resolveAddressRefChecked uses without re-deriving network/coin.
+    // @param {block_index}  integer  block being processed
+    isCaretRefStrictActive(block_index){
+        return caretRefStrict.isCaretRefStrictActive(block_index, this.config['NETWORK'], this.config['COIN']);
+    }
+
+    // Resolve a wire ^<id> address reference AND state the activation-gated verdict
+    // on it. THE call action handlers should use: resolveAddressRef alone reports a
+    // malformed/dangling reference only by leaving the value untouched, which is safe
+    // solely while every caller remembers to format-check the field afterwards (see
+    // caret_ref_strict_activation.js for the three call sites where that does not
+    // hold, and  for what the same omission cost on SEND).
+    //
+    // Returns { value, rejected }:
+    //   value    - the resolved address, or the input unchanged when resolution failed.
+    //              IDENTICAL in both eras: the verdict never rides inside the value,
+    //              because handlers persist their cloned `data` row even for invalid
+    //              actions and a sentinel would silently rewrite the stored bytes.
+    //   rejected - true only at/after the flag-day AND when the value is still a
+    //              caret reference (resolution failed). Below the flag-day, or with no
+    //              block context, always false: legacy fail-open, replay byte-identical.
+    // @param {value}        string   wire field value (may be a full address, a ^<id>, or null)
+    // @param {block_index}  integer  block being processed (data['BLOCK_INDEX'])
+    async resolveAddressRefChecked(value, block_index){
+        let resolved = await this.resolveAddressRef(value);
+        let rejected = caretRefStrict.isUnresolvedCaretRef(resolved)
+            && this.isCaretRefStrictActive(block_index);
+        return { value: resolved, rejected: rejected };
     }
 
     // Lookup a record in the `blocks` table and return record id

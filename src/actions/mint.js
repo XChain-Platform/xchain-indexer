@@ -61,10 +61,16 @@ class Mint {
 
         // Resolve a compacted ^<id> DESTINATION back to its canonical address
         // before validation/use, so the SDK's default ^<id> wire form validates
-        // and credits identically to the full address. A non-resolvable or
-        // malformed reference is left as-is and rejected by isCryptoAddress below.
-        if(!error)
-            data['DESTINATION'] = await this.indexerDb.resolveAddressRef(data['DESTINATION']);
+        // and credits identically to the full address. At/after the  flag-day
+        // an unresolvable reference is a hard reject here; below it the value is left
+        // as-is and the isCryptoAddress check below rejects it (see
+        // caret_ref_strict_activation.js).
+        if(!error){
+            let destRef = await this.indexerDb.resolveAddressRefChecked(data['DESTINATION'], data['BLOCK_INDEX']);
+            data['DESTINATION'] = destRef.value;
+            if(destRef.rejected)
+                error = 'invalid: DESTINATION (unresolvable ^id)';
+        }
 
         // Clone the raw data for storage in mints table
         let mint = Object.assign({}, data);

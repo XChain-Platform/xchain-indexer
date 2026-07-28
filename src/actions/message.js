@@ -69,10 +69,15 @@ class Message {
             data = this.util.setNumberFormats(data);
 
         // Resolve a compacted ^<id> DESTINATION back to its canonical address
-        // before validation/use (see resolveAddressRef); non-resolvable or
-        // malformed references are left as-is and rejected by isCryptoAddress.
-        if(!error)
-            data['DESTINATION'] = await this.indexerDb.resolveAddressRef(data['DESTINATION']);
+        // before validation/use (see resolveAddressRefChecked). At/after the 
+        // flag-day an unresolvable reference is a hard reject; below it the value is
+        // left as-is and rejected by isCryptoAddress.
+        if(!error){
+            let destRef = await this.indexerDb.resolveAddressRefChecked(data['DESTINATION'], data['BLOCK_INDEX']);
+            data['DESTINATION'] = destRef.value;
+            if(destRef.rejected)
+                error = 'invalid: DESTINATION (unresolvable ^id)';
+        }
 
         // MESSAGE v2 (VERSION|COIN|DESTINATION|ENCRYPTED_MESSAGE) carries no
         // ENCRYPTION_METHOD on the wire; absence implies ECIES (1) by protocol.

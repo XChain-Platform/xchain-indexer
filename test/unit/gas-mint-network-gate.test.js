@@ -58,6 +58,7 @@ async function runMint({ network, source, amount, tick, mintStartBlock = 0, bloc
     const indexerDb = {
         getTokenInfo:                async () => tokenInfo,
         resolveAddressRef:           async (v) => v,
+        resolveAddressRefChecked:    async (v) => ({ value: v, rejected: false }),
         getActionCreditDebitAmount:  async () => 0,
         getSelfMintedAmount:         async () => 0,
         validTickerBeforeTxIndex:    async () => true,
