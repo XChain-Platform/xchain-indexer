@@ -42,7 +42,7 @@
  *   3. the end-to-end ISSUE verdict, driving the exact on-chain repro
  *      `ISSUE|3|S20ADM|||1` that was rejected as action 1157;
  *   4. the gate registration itself: correct train anchor, genesis-armed on
- *      testnet/regtest, and NOT folded into the 2026-10-01 cohort.
+ *      testnet/regtest, and NOT folded into the 2026-08-17 cohort.
  ********************************************************************/
 
 process.env.INDEXER_COIN    = 'BTC';
@@ -324,9 +324,9 @@ describe(' LOCK_NULL_PRIOR_UNSET @regression @tier1', function () {
             assert.strictEqual(change.mainnet_time, ProtocolChanges.XC637_TRAIN_TIME);
         });
 
-        it('it is NOT folded into the 2026-10-01 cohort, which deploys on its own schedule', function () {
+        it('it is NOT folded into the 2026-08-17 cohort, which deploys on its own schedule', function () {
             const change = makeChanges().changes['LOCK_NULL_PRIOR_UNSET'];
-            assert.notStrictEqual(change.mainnet_time, 1790812800);
+            assert.notStrictEqual(change.mainnet_time, 1786924800);
         });
 
         it('testnet and regtest are armed from genesis so the new path gets real coverage', function () {

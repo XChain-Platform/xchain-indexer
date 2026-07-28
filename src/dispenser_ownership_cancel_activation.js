@@ -42,7 +42,7 @@
  * legacy behavior) and reuses the EXISTING house dispenser flag-day cohort. It is
  * keyed on block TIME with the coordinated 2.0.0 timestamp, byte-for-byte the
  * shape of its sibling dispense_cancelling_match_activation.js (mainnet
- * 1790812800, testnet/regtest genesis), so ONE fleet deploy-by date governs the
+ * 1786924800, testnet/regtest genesis), so ONE fleet deploy-by date governs the
  * whole dispenser-family flip.
  *
  * EXECUTION-PATH gate (dispenser close routing), NOT a hashing-path change, so
@@ -56,7 +56,7 @@
 // flag-day; testnet/regtest are active from genesis, mirroring the 2.0.0
 // protocol_changes cohort and dispense_cancelling_match_activation.js.
 const DISPENSER_OWNERSHIP_CANCEL_ACTIVATION = {
-    mainnet: 1790812800,    // 2026-10-01 00:00:00 UTC - coordinated 2.0.0 flag-day; deploy ALL indexers before this time
+    mainnet: 1786924800,    // 2026-08-17 00:00:00 UTC - coordinated 2.0.0 flag-day; deploy ALL indexers before this time
     testnet: 0,
     regtest: 0,
 };

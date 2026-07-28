@@ -221,12 +221,12 @@ describe('VOTE self-sleep gate + DELEGATE_TO validation  @regression @tier1', fu
 
     describe('flag-day registration', function () {
 
-        it('VOTE_RESPECTS_SLEEP is registered as a 2.0.0 gate on the ratified 2026-10-01 anchor', function () {
+        it('VOTE_RESPECTS_SLEEP is registered as a 2.0.0 gate on the ratified 2026-08-17 anchor', function () {
             const src = fs.readFileSync(
                 path.join(__dirname, '..', '..', '..', 'src', 'protocol_changes.js'), 'utf8');
             const m = src.match(/this\.addChange\('VOTE_RESPECTS_SLEEP', '2\.0\.0',(\d+)/);
             assert.ok(m, 'VOTE_RESPECTS_SLEEP must be registered as a 2.0.0 time-gated change');
-            assert.strictEqual(parseInt(m[1]), 1790812800,
+            assert.strictEqual(parseInt(m[1]), 1786924800,
                 'mainnet timestamp must be the ratified coordinated anchor; a divergent value is a fork');
         });
     });

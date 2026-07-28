@@ -64,7 +64,7 @@ afterEach(function () {
 describe('NATIVE_FEE_PRICE_TIME_GATE predicate @regression @tier1', function () {
 
     it('the flag day is the pinned coordinated contract-era timestamp', function () {
-        assert.strictEqual(GATE, 1790812800);
+        assert.strictEqual(GATE, 1786924800);
     });
 
     it('mainnet: inactive one second below the flag day, active at it', function () {

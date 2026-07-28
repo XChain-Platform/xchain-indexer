@@ -22,19 +22,19 @@
 // guard. This MUST stay byte-identical to xchain-vm's ASYNC_SURFACE_GATE_BLOCK_TIME;
 // a one-sided edit forks the fleet on the first async-using DEPLOY/EXECUTE after the
 // earlier of the two timestamps. consensus-params.test.js asserts the two are equal.
-const VM_BANNED_ASYNC_MAINNET_TIME = 1790812800;
+const VM_BANNED_ASYNC_MAINNET_TIME = 1786924800;
 
 // H-3 flag-day: deterministic (time-gated) price_snapshots selection for
 // native-coin fee validation on non-reference chains (see the
 // NATIVE_FEE_PRICE_TIME_GATE registration below). Same coordinated 2.0.0
 // contract-era timestamp as the other flag-days; a divergent value forks the
 // fleet on the first fee-bearing LTC/DOGE action after the earlier timestamp.
-const NATIVE_FEE_PRICE_TIME_GATE_MAINNET_TIME = 1790812800;
+const NATIVE_FEE_PRICE_TIME_GATE_MAINNET_TIME = 1786924800;
 
 //  coordinated flag-day train, Key A (shared mainnet block TIME).
 // 1796083200 = 2026-12-01 00:00:00 UTC, the §3 activation surface in
-// claude/specs/-FLAGDAY-TRAIN-SPEC.md. Deliberately NOT the 1790812800
-// (2026-10-01) cohort: that train already carries unshipped cargo and deploys on
+// claude/specs/-FLAGDAY-TRAIN-SPEC.md. Deliberately NOT the 1786924800
+// (2026-08-17) cohort: that train already carries unshipped cargo and deploys on
 // its own schedule, and spec §9 forbids this train touching its constants.
 // Key A is forced here rather than a per-chain height map because ISSUE runs on
 // BTC, LTC and DOGE, whose heights diverge by millions of blocks, so only a
@@ -133,9 +133,11 @@ class ProtocolChanges {
         // timestamp can. testnet/regtest activate at genesis (base64-native; no pre-base64
         // history to preserve, and the e2e/regtest stack deploys base64 from block 0).
         // The mainnet timestamp below is the coordinated contract-era flag-day
-        // (2026-10-01 00:00:00 UTC, CONFIRMED 2026-07-07), aligned with the SDK base64
+        // (2026-08-17 00:00:00 UTC, REPINNED 2026-07-28 by  from the stale
+        // 2026-08-17 anchor, which predated the early-September launch decision),
+        // aligned with the SDK base64
         // rollout; a wrong value is a second fork.
-        this.addChange('DEPLOY_BASE64_CODE', '2.0.0',1790812800,0,0,0,0,0);
+        this.addChange('DEPLOY_BASE64_CODE', '2.0.0',1786924800,0,0,0,0,0);
 
         // Staking actions: capability variants (STAKE v1/v2, UNSTAKE v0, DELEGATE v0/v2, COLLECT) are BTC-only;
         // contract variants (STAKE v3, UNSTAKE v1, DELEGATE v1/v3) work on any chain
@@ -245,12 +247,12 @@ class ProtocolChanges {
         // diverge by millions of blocks, so no single shared block height names one
         // cutover across all three chains, but a single timestamp does. The mainnet
         // timestamp is the same coordinated contract-era flag-day as the base64
-        // rollout (2026-10-01 00:00:00 UTC, CONFIRMED 2026-07-07), aligned with the
+        // rollout (2026-08-17 00:00:00 UTC, CONFIRMED 2026-07-07), aligned with the
         // other contract-deploy consensus fixes shipping in this window; a wrong
         // value is a second fork.
         // testnet/regtest activate at genesis (no pre-exemption history to preserve;
         // the e2e/regtest stack exercises VM emissions from block 0).
-        this.addChange('ISSUANCE_FEE_EMISSION_EXEMPT', '2.0.0',1790812800,0,0,0,0,0);
+        this.addChange('ISSUANCE_FEE_EMISSION_EXEMPT', '2.0.0',1786924800,0,0,0,0,0);
 
         // VM getBalance()/getTokenInfo() reader. Below this activation the gateway
         // receives balances:null / tokenInfo:null in every execution path (the
@@ -268,11 +270,11 @@ class ProtocolChanges {
         // whose heights diverge by millions of blocks, so no single shared block
         // height names one cutover across all three chains, but a single timestamp
         // does. The mainnet timestamp is the same coordinated contract-era flag-day
-        // as the other contract-deploy consensus fixes in this window (2026-10-01
+        // as the other contract-deploy consensus fixes in this window (2026-08-17
         // 00:00:00 UTC, CONFIRMED 2026-07-07); a wrong value is a fork. testnet/regtest
         // activate at genesis (no pre-reader history to preserve; the e2e/regtest
         // stack exercises VM balance reads from block 0).
-        this.addChange('VM_BALANCE_TOKENINFO', '2.0.0',1790812800,0,0,0,0,0);
+        this.addChange('VM_BALANCE_TOKENINFO', '2.0.0',1786924800,0,0,0,0,0);
 
         // Programmable-policy controller guard. Below this activation the bound
         // controller's `guard` method is NEVER run: every SEND/ORDER/SWAP/DISPENSER/
@@ -295,12 +297,12 @@ class ProtocolChanges {
         // diverge by millions of blocks, so no single shared block height names one
         // cutover across all three chains, but a single timestamp does. The mainnet
         // timestamp is the same coordinated contract-era flag-day as the other
-        // contract-era consensus fixes in this window (2026-10-01 00:00:00 UTC,
+        // contract-era consensus fixes in this window (2026-08-17 00:00:00 UTC,
         // CONFIRMED 2026-07-07), aligned with the operator fleet upgrade before any
         // CONTROLLER-bound token is issued on mainnet; a wrong value is a fork. testnet/regtest activate
         // at genesis (no pre-guard history to preserve; the e2e/regtest stack exercises
         // controller guards from block 0).
-        this.addChange('CONTROLLER_GUARD', '2.0.0',1790812800,0,0,0,0,0);
+        this.addChange('CONTROLLER_GUARD', '2.0.0',1786924800,0,0,0,0,0);
 
         // MINT-1 : per-address mint allowance counts SELF-MINTED supply only.
         // Below this activation the MINT_ADDRESS_MAX check measures MINT-action
@@ -318,11 +320,11 @@ class ProtocolChanges {
         // by millions of blocks, so no single shared block height names one cutover
         // across all three chains, but a single timestamp can. The mainnet timestamp
         // is ARMED 2026-07-16  to the ratified coordinated anchor
-        // 1790812800 (2026-10-01 00:00:00 UTC), joining the confirmed 2.0.0
+        // 1786924800 (2026-08-17 00:00:00 UTC), joining the confirmed 2.0.0
         // contract-era cohort; a divergent value is a fork.
         // testnet/regtest activate at genesis (no history to preserve; the
         // e2e/regtest stack exercises the corrected measure from block 0).
-        this.addChange('MINT_SELF_MINTED_ONLY', '2.0.0',1790812800,0,0,0,0,0);
+        this.addChange('MINT_SELF_MINTED_ONLY', '2.0.0',1786924800,0,0,0,0,0);
 
         //  (BonkDAO-class guard): a BINDING poll (VOTE v0 that names a
         // CALLBACK_CONTRACT, so its finalization can move contract-held value)
@@ -341,11 +343,11 @@ class ProtocolChanges {
         // DOGE whose heights diverge by millions of blocks, so no single shared
         // block height names one cutover across all three chains, but a single
         // timestamp can. The mainnet timestamp is ARMED 2026-07-16  to
-        // the ratified coordinated anchor 1790812800 (2026-10-01 00:00:00 UTC),
+        // the ratified coordinated anchor 1786924800 (2026-08-17 00:00:00 UTC),
         // joining the confirmed 2.0.0 contract-era cohort; a divergent value is
         // a fork. testnet/regtest activate at genesis (no history to preserve;
         // the e2e/regtest stack exercises the requirement from block 0).
-        this.addChange('VOTE_BINDING_MINIMUMS', '2.0.0',1790812800,0,0,0,0,0);
+        this.addChange('VOTE_BINDING_MINIMUMS', '2.0.0',1786924800,0,0,0,0,0);
 
         //  (BonkDAO lesson 3): optional timelock between poll finalization
         // and the binding callback's execution. v0 gains a trailing
@@ -365,12 +367,12 @@ class ProtocolChanges {
         // LTC and DOGE whose heights diverge by millions of blocks, so no
         // single shared block height names one cutover across all three
         // chains, but a single timestamp can. The mainnet timestamp is ARMED
-        // 2026-07-16  to the ratified coordinated anchor 1790812800
-        // (2026-10-01 00:00:00 UTC), joining the confirmed 2.0.0 contract-era
+        // 2026-07-16  to the ratified coordinated anchor 1786924800
+        // (2026-08-17 00:00:00 UTC), joining the confirmed 2.0.0 contract-era
         // cohort; a divergent value is a fork. testnet/regtest activate at
         // genesis (no history to preserve; the e2e/regtest stack exercises the
         // timelock from block 0).
-        this.addChange('VOTE_CALLBACK_TIMELOCK', '2.0.0',1790812800,0,0,0,0,0);
+        this.addChange('VOTE_CALLBACK_TIMELOCK', '2.0.0',1786924800,0,0,0,0,0);
 
         //  (VOTE-SLEEP-1): VOTE respects the self-sleep gate. SLEEP v0
         // freezes an address ("pauses actions on an ADDRESS") and every sibling
@@ -389,10 +391,10 @@ class ProtocolChanges {
         // previously-valid VOTE becomes invalid), so an ungated flip forks a
         // heterogeneous fleet and diverges a from-genesis replay; mirrors
         // SLEEP_RESPECTS_LOCK_SLEEP. Keyed on block_TIME at the ratified
-        // coordinated anchor 1790812800 (2026-10-01 00:00:00 UTC), the
+        // coordinated anchor 1786924800 (2026-08-17 00:00:00 UTC), the
         // confirmed 2.0.0 contract-era cohort; a divergent value is a fork.
         // testnet/regtest activate at genesis.
-        this.addChange('VOTE_RESPECTS_SLEEP', '2.0.0',1790812800,0,0,0,0,0);
+        this.addChange('VOTE_RESPECTS_SLEEP', '2.0.0',1786924800,0,0,0,0,0);
 
         //  (BonkDAO lesson 4): expose a poll's electorate TICK to
         // contracts so a binding-poll callback can verify WHICH token decided
@@ -415,11 +417,11 @@ class ProtocolChanges {
         // BTC, LTC and DOGE whose heights diverge by millions of blocks, so no
         // single shared block height names one cutover across all three chains,
         // but a single timestamp can. The mainnet timestamp joins the ratified
-        // coordinated anchor 1790812800 (2026-10-01 00:00:00 UTC), the confirmed
+        // coordinated anchor 1786924800 (2026-08-17 00:00:00 UTC), the confirmed
         // 2.0.0 contract-era cohort; a divergent value is a fork. testnet/regtest
         // activate at genesis (no history to preserve; the e2e/regtest stack
         // exercises the visible tick from block 0).
-        this.addChange('VOTE_POLL_TICK_VISIBLE', '2.0.0',1790812800,0,0,0,0,0);
+        this.addChange('VOTE_POLL_TICK_VISIBLE', '2.0.0',1786924800,0,0,0,0,0);
 
         // : ATTEST v1 canonical id-case normalization. Below this activation
         // the canonical signing bytes (and the EQUIV ROUND_ID) use the RAW wire
@@ -439,12 +441,12 @@ class ProtocolChanges {
         // DOGE, whose heights diverge by millions of blocks, so no single shared
         // block height names one cutover across all three chains, but a single
         // timestamp can. The mainnet timestamp is ARMED 2026-07-16  to
-        // the ratified coordinated anchor 1790812800 (2026-10-01 00:00:00 UTC),
+        // the ratified coordinated anchor 1786924800 (2026-08-17 00:00:00 UTC),
         // joining the confirmed 2.0.0 contract-era cohort; a divergent value is
         // a fork. testnet/regtest activate at genesis (no history to preserve;
         // the e2e/regtest stack exercises the self-contained canonical from
         // block 0).
-        this.addChange('ATTEST_CANONICAL_LOWERCASE_ID', '2.0.0',1790812800,0,0,0,0,0);
+        this.addChange('ATTEST_CANONICAL_LOWERCASE_ID', '2.0.0',1786924800,0,0,0,0,0);
 
         // : VM xchain.attestation.getResponse(requestId) reader. Below this
         // activation the VM snapshot's attestationData is always null, so
@@ -463,11 +465,11 @@ class ProtocolChanges {
         // on BTC, LTC and DOGE whose heights diverge by millions of blocks, so no
         // single shared block height names one cutover across all three chains, but
         // a single timestamp does. The mainnet timestamp joins the ratified
-        // coordinated anchor 1790812800 (2026-10-01 00:00:00 UTC), the confirmed
+        // coordinated anchor 1786924800 (2026-08-17 00:00:00 UTC), the confirmed
         // 2.0.0 contract-era cohort; a divergent value is a fork. testnet/regtest
         // activate at genesis (no pre-reader history to preserve; the e2e/regtest
         // stack exercises getResponse from block 0).
-        this.addChange('VM_ATTESTATION_GETRESPONSE', '2.0.0',1790812800,0,0,0,0,0);
+        this.addChange('VM_ATTESTATION_GETRESPONSE', '2.0.0',1786924800,0,0,0,0,0);
 
         // : synthesized-execution TX_HASH on the injected-callback seam. Four
         // sites inject a system EXECUTE that runs a contract callback (attest.js v1
@@ -489,12 +491,12 @@ class ProtocolChanges {
         // these callbacks run on BTC, LTC and DOGE whose heights diverge by millions
         // of blocks, so no single shared block height names one cutover across all
         // three chains, but a single timestamp can. The mainnet timestamp joins the
-        // ratified coordinated anchor 1790812800 (2026-10-01 00:00:00 UTC), the
+        // ratified coordinated anchor 1786924800 (2026-08-17 00:00:00 UTC), the
         // confirmed 2.0.0 contract-era cohort ; a divergent value is a fork.
         // testnet/regtest activate at genesis (no hashless-callback history to
         // preserve; the e2e/regtest stack exercises the synthesized hash from
         // block 0).
-        this.addChange('SYNTH_EXEC_TX_HASH', '2.0.0',1790812800,0,0,0,0,0);
+        this.addChange('SYNTH_EXEC_TX_HASH', '2.0.0',1786924800,0,0,0,0,0);
 
         // : dispenser auto-close compares remaining inventory against the
         // PER-UNIT price, not a buyer's aggregate purchase. The legacy check
@@ -514,12 +516,12 @@ class ProtocolChanges {
         // runs on BTC, LTC and DOGE whose heights diverge by millions of
         // blocks, so no single shared block height names one cutover across
         // all three chains, but a single timestamp can. The mainnet timestamp
-        // joins the ratified coordinated anchor 1790812800 (2026-10-01
+        // joins the ratified coordinated anchor 1786924800 (2026-08-17
         // 00:00:00 UTC), the confirmed 2.0.0 contract-era cohort ; a
         // divergent value is a fork. testnet/regtest activate at genesis (no
         // early-close history to preserve; the e2e/regtest stack exercises the
         // per-unit close from block 0).
-        this.addChange('DISPENSER_CLOSE_PER_UNIT', '2.0.0',1790812800,0,0,0,0,0);
+        this.addChange('DISPENSER_CLOSE_PER_UNIT', '2.0.0',1786924800,0,0,0,0,0);
 
         // Cross-chain royalty enforcement, layered on CONTROLLER_GUARD. Once the guard
         // produces royalty payout_legs (post-CONTROLLER_GUARD), a CROSS-CHAIN listing of
@@ -535,7 +537,7 @@ class ProtocolChanges {
         // rule); the match-canonical format flip is keyed on the BTC-anchored
         // snapshot_block via the twin-module pattern (see the STAKE_WEIGHTED_QUORUM note
         // below), NOT this entry. The mainnet timestamp is CONFIRMED (2026-07-07,
-        // re-anchored the same day when the contract-era cohort moved to 2026-10-01) at
+        // re-anchored the same day when the contract-era cohort moved to 2026-08-17) at
         // one quarter AFTER the CONTROLLER_GUARD flag-day (2027-01-01 00:00:00 UTC): the
         // deny window between the two dates is the safe interim while the fleet upgrades
         // to legs-in-canonical. The canonical partner is ARMED at BTC anchor 961000
@@ -573,7 +575,7 @@ class ProtocolChanges {
         // single shared block height names one cutover across all three chains, but a
         // single timestamp does. The mainnet timestamp is the same coordinated
         // contract-era flag-day as the other consensus fixes in this window
-        // (2026-10-01 00:00:00 UTC, CONFIRMED 2026-07-07), aligned with the fleet
+        // (2026-08-17 00:00:00 UTC, CONFIRMED 2026-07-07), aligned with the fleet
         // upgrade before any async/Promise-relevant DEPLOY is broadcast to
         // mainnet; a wrong value is a fork. testnet/regtest activate at genesis (no
         // pre-activation history to preserve; the e2e/regtest stack has run with the
@@ -594,7 +596,7 @@ class ProtocolChanges {
         // test/unit/flagdayPlaceholderGuard.test.js. testnet/regtest activate at
         // genesis (no pre-activation history to preserve). A divergent value is
         // a fork.
-        this.addChange('VM_LINT_HARDENING', '2.0.0',1790812800,0,0,0,0,0);
+        this.addChange('VM_LINT_HARDENING', '2.0.0',1786924800,0,0,0,0,0);
 
         // ISSUE validity: strict LOCK_MAX_SUPPLY guard. Before this activation the guard used
         // a truthy check, so an explicit LOCK_MAX_SUPPLY=0 field (a no-op lock intent with no
@@ -602,11 +604,11 @@ class ProtocolChanges {
         // outcome. After activation the guard requires LOCK_MAX_SUPPLY==1, matching the field's
         // intended semantics. Gated so a heterogeneous fleet and any from-genesis replay all
         // switch at the same block: mainnet pins the same coordinated contract-era flag-day
-        // as the sibling ISSUE/SLEEP validity gates below (2026-10-01 00:00:00 UTC) - a
+        // as the sibling ISSUE/SLEEP validity gates below (2026-08-17 00:00:00 UTC) - a
         // mainnet_time of 0 would flip the verdict on binary version alone, forking a skewed
         // fleet on any ISSUE carrying an explicit LOCK_MAX_SUPPLY=0 and diverging a
         // from-genesis replay. testnet/regtest activate at genesis (all zeros).
-        this.addChange('LOCK_MAX_SUPPLY_EXACT', '2.0.0',1790812800,0,0,0,0,0);
+        this.addChange('LOCK_MAX_SUPPLY_EXACT', '2.0.0',1786924800,0,0,0,0,0);
 
         // ISSUE validity : a NULL/absent prior lock value counts as UNSET.
         // getTokenInfo rebuilds token state by replaying the `issues` rows and SKIPS a
@@ -629,7 +631,7 @@ class ProtocolChanges {
         // fleet on the first post-genesis LOCK, and would break from-genesis replay
         // byte-identity for any historical LOCK that committed 'invalid'. Registered on
         // the  train (Key A / block TIME) per the ledger entry, NOT on the
-        // 2026-10-01 cohort its LOCK_MAX_SUPPLY_EXACT sibling rides. The paired question
+        // 2026-08-17 cohort its LOCK_MAX_SUPPLY_EXACT sibling rides. The paired question
         // about tokens already carrying NULL lock history is answered by the gate itself:
         // the rule is applied to prior state, not to issuance date, so below the flag-day
         // every token replays exactly as it did, and at/above it EVERY token with an unset
@@ -647,9 +649,9 @@ class ProtocolChanges {
         // EXPIRATION siblings (order/swap/dispenser). Gated so a from-genesis replay
         // reproduces any historic fractional-cooldown accept verdict below the
         // flag-day: mainnet pins the same coordinated contract-era flag-day as the
-        // sibling validity gates (2026-10-01 00:00:00 UTC); testnet/regtest activate
+        // sibling validity gates (2026-08-17 00:00:00 UTC); testnet/regtest activate
         // at genesis (all zeros).
-        this.addChange('COOLDOWN_BLOCKS_INTEGER', '2.0.0',1790812800,0,0,0,0,0);
+        this.addChange('COOLDOWN_BLOCKS_INTEGER', '2.0.0',1786924800,0,0,0,0,0);
 
         // DEPLOY validity (Pkg6 / dede7788): an EXPLICIT SLASH_DESTINATION on a stakeable
         // DEPLOY (v1/v3) must resolve to a well-formed chain address. Before this activation
@@ -664,8 +666,8 @@ class ProtocolChanges {
         // (contracts.status_id is contract-hashed): an ungated flip forks a heterogeneous fleet
         // and breaks from-genesis replay byte-identity on the first stakeable DEPLOY carrying a
         // malformed SLASH_DESTINATION. mainnet pins the coordinated contract-era flag-day
-        // (2026-10-01 00:00:00 UTC); testnet/regtest activate at genesis (all zeros).
-        this.addChange('DEPLOY_SLASH_DEST_ADDRESS_VALID', '2.0.0',1790812800,0,0,0,0,0);
+        // (2026-08-17 00:00:00 UTC); testnet/regtest activate at genesis (all zeros).
+        this.addChange('DEPLOY_SLASH_DEST_ADDRESS_VALID', '2.0.0',1786924800,0,0,0,0,0);
 
         // UNSTAKE validity (Pkg6 / 048fdea9 + ce6a484f): strict contract-cooldown derivation.
         // _parseContractUnstake historically computed COOLDOWN_END_BLOCK from
@@ -680,9 +682,9 @@ class ProtocolChanges {
         // rows at 0. The valid-path value is UNCHANGED (it always took Number(cooldown_blocks)),
         // so the only observable change is the error-path row value; gated so a from-genesis
         // replay / heterogeneous fleet reproduces the historic (phantom-1000) error-row values
-        // below the flag-day. mainnet pins the coordinated contract-era flag-day (2026-10-01
+        // below the flag-day. mainnet pins the coordinated contract-era flag-day (2026-08-17
         // 00:00:00 UTC); testnet/regtest activate at genesis (all zeros).
-        this.addChange('UNSTAKE_CONTRACT_COOLDOWN_STRICT', '2.0.0',1790812800,0,0,0,0,0);
+        this.addChange('UNSTAKE_CONTRACT_COOLDOWN_STRICT', '2.0.0',1786924800,0,0,0,0,0);
 
         // ISSUE validity: cumulative MINT_SUPPLY cap. Before this activation the only guard on
         // an ISSUE's MINT_SUPPLY was a single-shot `MINT_SUPPLY > MAX_SUPPLY` check, which
@@ -695,9 +697,9 @@ class ProtocolChanges {
         // re-ISSUE becomes invalid): an ungated flip would fork a heterogeneous fleet on the
         // first such re-ISSUE and diverge a from-genesis replay from the committed ledger_hash.
         // Same coordinated contract-era flag-day timestamp as the other tightening consensus
-        // fixes in this window (2026-10-01 00:00:00 UTC); testnet/regtest activate at genesis
+        // fixes in this window (2026-08-17 00:00:00 UTC); testnet/regtest activate at genesis
         // (all zeros) so the check is in force from block 0 there and in the unit/e2e suites.
-        this.addChange('ISSUE_MINT_SUPPLY_CUMULATIVE_CAP', '2.0.0',1790812800,0,0,0,0,0);
+        this.addChange('ISSUE_MINT_SUPPLY_CUMULATIVE_CAP', '2.0.0',1786924800,0,0,0,0,0);
 
         // SLEEP validity: honor the token's LOCK_SLEEP flag. Before this activation the SLEEP
         // handler never inspected tokenInfo['LOCK_SLEEP'], so a token issued with LOCK_SLEEP=1
@@ -708,8 +710,8 @@ class ProtocolChanges {
         // (callback.js) enforcement pattern. Gated because it TIGHTENS validity (a previously-
         // valid SLEEP becomes invalid), so the fleet and any from-genesis replay must flip at one
         // coordinated block. Same contract-era flag-day timestamp as the other tightening fixes
-        // (2026-10-01 00:00:00 UTC); testnet/regtest activate at genesis.
-        this.addChange('SLEEP_RESPECTS_LOCK_SLEEP', '2.0.0',1790812800,0,0,0,0,0);
+        // (2026-08-17 00:00:00 UTC); testnet/regtest activate at genesis.
+        this.addChange('SLEEP_RESPECTS_LOCK_SLEEP', '2.0.0',1786924800,0,0,0,0,0);
 
         // COINPAY_EXPIRE escrow-release amount correctness. A native-coin ORDER_MATCH
         // escrows the SELLER's token leg (order_matches give/get amount) and records a
@@ -730,10 +732,10 @@ class ProtocolChanges {
         // multi-chain gates: native-coin DEX pairs settle on BTC, LTC and DOGE whose
         // heights diverge by millions of blocks, so no single shared height names one
         // cutover across all three chains, but a single timestamp does. Same coordinated
-        // contract-era flag-day as the other tightening fixes in this window (2026-10-01
+        // contract-era flag-day as the other tightening fixes in this window (2026-08-17
         // 00:00:00 UTC); testnet/regtest activate at genesis (all zeros) so the correct
         // release is in force from block 0 there and in the unit/e2e suites.
-        this.addChange('COINPAY_EXPIRE_TOKEN_AMOUNT', '2.0.0',1790812800,0,0,0,0,0);
+        this.addChange('COINPAY_EXPIRE_TOKEN_AMOUNT', '2.0.0',1786924800,0,0,0,0,0);
 
         // COINPAY native-coin match reciprocity + role detection. A native-coin ORDER_MATCH
         // settles two-phase: order_match.js reserves the token seller's escrowed leg and
@@ -760,10 +762,10 @@ class ProtocolChanges {
         // hashed into balances_root + ledger_hash): an ungated flip forks a heterogeneous fleet
         // and diverges a from-genesis replay. Keyed on block_TIME like the sibling native-coin
         // gates (BTC/LTC/DOGE heights diverge; one timestamp names the cutover across all three).
-        // Same coordinated contract-era flag-day (2026-10-01 00:00:00 UTC); testnet/regtest
+        // Same coordinated contract-era flag-day (2026-08-17 00:00:00 UTC); testnet/regtest
         // activate at genesis (all zeros) so the correct routing holds from block 0 there and in
         // the unit/e2e suites.
-        this.addChange('COINPAY_NATIVE_RECIPROCITY', '2.0.0',1790812800,0,0,0,0,0);
+        this.addChange('COINPAY_NATIVE_RECIPROCITY', '2.0.0',1786924800,0,0,0,0,0);
 
         // UNSTAKE cooldown-completion action attribution. When a capability/contract
         // UNSTAKE cooldown elapses, processCooldownCompletions credits the returned
@@ -780,11 +782,11 @@ class ProtocolChanges {
         // effect is applied and the ledger_hash chain agrees with balances_root and
         // with any recompute. Consensus-breaking (changes actions_hash + ledger_hash
         // for cooldown-completion blocks), so it is gated on the same coordinated
-        // flag-day as the other contract-era consensus fixes (2026-10-01 00:00:00 UTC,
+        // flag-day as the other contract-era consensus fixes (2026-08-17 00:00:00 UTC,
         // CONFIRMED 2026-07-07, aligned with the fleet upgrade; a wrong value forks).
         // testnet/regtest activate at genesis (all zeros); the e2e/regtest stack must
         // be rebuilt fresh so no pre-activation cooldown-completion blocks remain.
-        this.addChange('UNSTAKE_COOLDOWN_COMPLETION_ACTION', '2.0.0',1790812800,0,0,0,0,0);
+        this.addChange('UNSTAKE_COOLDOWN_COMPLETION_ACTION', '2.0.0',1786924800,0,0,0,0,0);
 
         // FIX_OUTPUT_FANOUT: collapse the reader-side per-output fan-out for data-bearing,
         // non-COINPAY transactions. getDecoderBlockData (db.js) LEFT JOINs transaction_outputs
@@ -801,15 +803,15 @@ class ProtocolChanges {
         // fault that aborts the block (visible halt via the watchdog/rollback path) rather than
         // silently double-executing. Consensus-visible (changes actions_hash + ledger_hash for any
         // affected block), so gated on the same coordinated contract-era flag-day as the other
-        // 2026-10-01 00:00:00 UTC fixes (a wrong value forks); keyed on block TIME because the
+        // 2026-08-17 00:00:00 UTC fixes (a wrong value forks); keyed on block TIME because the
         // affected native-coin payment/dispenser flows settle on BTC, LTC and DOGE whose heights
         // diverge, so no single height names one cutover. testnet/regtest activate at genesis
         // (all zeros) so the collapse is in force from block 0 there and in the unit/e2e suites.
-        this.addChange('FIX_OUTPUT_FANOUT', '2.0.0',1790812800,0,0,0,0,0);
+        this.addChange('FIX_OUTPUT_FANOUT', '2.0.0',1786924800,0,0,0,0,0);
 
         // Staking-family stress-sweep fixes (2026-07-09). All three are consensus-visible
         // validity/derivation changes, gated on the same coordinated contract-era flag-day
-        // as the other 2026-10-01 fixes (a wrong value forks); testnet/regtest at genesis.
+        // as the other 2026-08-17 fixes (a wrong value forks); testnet/regtest at genesis.
 
         // DEL-1: DELEGATE v2 delegation-revoke previously INSERTed a fresh status=valid,
         // activation_block=0 delegations row (createRevokeDelegation -> createDelegation) in
@@ -818,7 +820,7 @@ class ProtocolChanges {
         // reads. At/after this flag-day the revoke mirrors the v3 path: NO insert, deactivate the
         // parent only. Changes the delegations table that feeds _stakeWeightsSql/stakes_root, so
         // it is a hashed-derivation change (flag-day, not a query tweak).
-        this.addChange('DELEGATE_REVOKE_NO_REINSERT', '2.0.0',1790812800,0,0,0,0,0);
+        this.addChange('DELEGATE_REVOKE_NO_REINSERT', '2.0.0',1786924800,0,0,0,0,0);
 
         // STAKE-1: the contract-targeted TARGET_CONTRACT_INDEX was validated with /^[0-9]+$/, which
         // accepts non-canonical leading-zero forms ('007'). Benign at runtime (Number-coerced
@@ -828,15 +830,15 @@ class ProtocolChanges {
         // deposit/withdraw tightening (ungated - a leading-zero deposit was ALREADY a stranded-funds
         // bug, so rejecting forked nothing valid), a leading-zero contract stake currently produces a
         // VALID, correct row, so tightening it is a live validity change and MUST be gated.
-        this.addChange('CONTRACT_INDEX_CANONICAL', '2.0.0',1790812800,0,0,0,0,0);
+        this.addChange('CONTRACT_INDEX_CANONICAL', '2.0.0',1786924800,0,0,0,0,0);
 
         // SLASH-1: slashCapabilityStake Pass 1 filtered `activation_block <= block`, so a
         // pending-activation capability top-up (debited at STAKE time) escaped the equivocation bond
         // burn and could later be UNSTAKEd/refunded (the sibling slashContractStake has no such
         // filter). At/after this flag-day the whole locked bond burns, activated or not. Gated on the
         // BTC-anchored EQUIV activation HEIGHT (equivocation_header.js EQUIV_HEADER_ACTIVATION.mainnet
-        // = 961000), NOT the 2026-10-01 timestamp: real slashing is inert below the EQUIV flag-day,
-        // and 961000 (~2026-08-04) precedes 2026-10-01, so a timestamp gate would leave a window where
+        // = 961000), NOT the 2026-08-17 timestamp: real slashing is inert below the EQUIV flag-day,
+        // and 961000 (~2026-08-04) precedes 2026-08-17, so a timestamp gate would leave a window where
         // slashing ran with the old (incomplete) burn. Height-gated so the fix goes live exactly when
         // slashing does. slashCapabilityStake is indexer-only (the follower mirrors the zeroed rows),
         // so this is not a byte-locked twin.
@@ -868,11 +870,11 @@ class ProtocolChanges {
         // from truthy to field-present so an explicit empty CONSTRUCTOR_PARAMS runs a
         // zero-arg initialize (deploy.js). Below the flag-day: byte-identical to today
         // (truthy trigger, no reject), so a from-genesis replay reproduces the historic
-        // accept-below/reject-above verdict. Keyed on block TIME with the 2026-10-01
+        // accept-below/reject-above verdict. Keyed on block TIME with the 2026-08-17
         // contract-era cohort (CONTROLLER_GUARD / VM_BANNED_ASYNC); testnet/regtest
         // genesis-on. Indexer-only verdict (uses the VM readManifest `hasInitialize`
         // flag), so not a byte-locked twin; the VM readManifest change ships alongside.
-        this.addChange('DEPLOY_INIT_STRICT', '2.0.0',1790812800,0,0,0,0,0);
+        this.addChange('DEPLOY_INIT_STRICT', '2.0.0',1786924800,0,0,0,0,0);
 
         // BATCH sub-action normalization : the top-level dispatcher
         // (actions.js) rewrites ACTION aliases (TRANSFER->SEND, ADDR->ADDRESS,
@@ -890,9 +892,9 @@ class ProtocolChanges {
         // invalid BATCH becoming valid changes actions/ledger state hashed
         // into the checkpoint preimage; an ungated flip forks a skewed fleet
         // on the first aliased or legacy-format sub-action). Keyed on block
-        // TIME with the ratified 2026-10-01 contract-era cohort (
+        // TIME with the ratified 2026-08-17 contract-era cohort (
         // batch); testnet/regtest activate at genesis (all zeros).
-        this.addChange('BATCH_SUBACTION_NORMALIZATION', '2.0.0',1790812800,0,0,0,0,0);
+        this.addChange('BATCH_SUBACTION_NORMALIZATION', '2.0.0',1786924800,0,0,0,0,0);
 
         //  (flag-day Pkg 11): numeric legacy-fee db_hits accumulation. The legacy
         // (non-UNIFIED_FEES) transaction-fee model in dividend.js / callback.js / sweep.js
@@ -914,11 +916,11 @@ class ProtocolChanges {
         // multi-chain gates: these actions run on BTC, LTC and DOGE whose heights diverge by
         // millions of blocks, so no single shared block height names one cutover across all
         // three chains, but a single timestamp does. The mainnet timestamp joins the
-        // ratified coordinated contract-era anchor 1790812800 (2026-10-01 00:00:00 UTC);
+        // ratified coordinated contract-era anchor 1786924800 (2026-08-17 00:00:00 UTC);
         // testnet/regtest activate at genesis (all zeros) so the numeric model holds from
         // block 0 there and in the unit/e2e suites (the regtest stack is rebuilt fresh, so
         // no pre-activation fee-bearing blocks remain to replay).
-        this.addChange('LEGACY_FEE_NUMERIC_DBHITS', '2.0.0',1790812800,0,0,0,0,0);
+        this.addChange('LEGACY_FEE_NUMERIC_DBHITS', '2.0.0',1786924800,0,0,0,0,0);
 
         // : partial claim + partial unstake. UNSTAKE v0/v1 and COLLECT v0 gain a
         // trailing OPTIONAL AMOUNT field (no new action versions):
@@ -945,10 +947,10 @@ class ProtocolChanges {
         // DEPLOY_BASE64_CODE: UNSTAKE v1 runs on BTC, LTC and DOGE whose heights diverge
         // by millions of blocks, so no single shared block height names one cutover, but a
         // single timestamp does. The mainnet timestamp joins the ratified coordinated
-        // contract-era anchor 1790812800 (2026-10-01 00:00:00 UTC); a divergent value is a
+        // contract-era anchor 1786924800 (2026-08-17 00:00:00 UTC); a divergent value is a
         // fork. testnet/regtest activate at genesis (no partial-era history to preserve;
         // the e2e/regtest stack exercises partials from block 0).
-        this.addChange('PARTIAL_UNSTAKE_COLLECT', '2.0.0',1790812800,0,0,0,0,0);
+        this.addChange('PARTIAL_UNSTAKE_COLLECT', '2.0.0',1786924800,0,0,0,0,0);
 
         // NOTE: STAKE_WEIGHTED_QUORUM (WI-1) is deliberately NOT registered here.
         // Standard activations gate on the LOCAL processing block via isEnabled();

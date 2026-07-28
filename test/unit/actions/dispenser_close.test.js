@@ -202,7 +202,7 @@ describe('Dispenser_Close action handler @regression @tier2', function () {
     // stays byte-identical below the flag-day.
     describe('1678 ownership cancel/expire routing gate @regression @tier1', function () {
         const ocg      = require('../../../src/dispenser_ownership_cancel_activation.js');
-        const FLAG_DAY = ocg.DISPENSER_OWNERSHIP_CANCEL_ACTIVATION.mainnet; // 1790812800
+        const FLAG_DAY = ocg.DISPENSER_OWNERSHIP_CANCEL_ACTIVATION.mainnet; // 1786924800
         const SOURCE   = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
         const GET_ADDR = 'mqmJDcs5nXFHrj9q7a2G5sBVmjcQTDdUZp'; // != SOURCE, and the canceller
         const SWEEP    = 'mzMsvKm5N4vmAWKFDbwjc7hqCkGwANhCwn';

@@ -38,7 +38,7 @@ const Utility           = require('../../src/utility');
 const Database          = require('../../src/db');
 const dcm               = require('../../src/dispense_cancelling_match_activation');
 
-const FLAG_DAY = dcm.DISPENSE_CANCELLING_MATCH_ACTIVATION.mainnet; // 1790812800
+const FLAG_DAY = dcm.DISPENSE_CANCELLING_MATCH_ACTIVATION.mainnet; // 1786924800
 
 // Build a Database with an injected config + a captured doQuery.
 function dbFor(network) {
