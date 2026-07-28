@@ -28,7 +28,7 @@ const Utility        = require('../../src/utility.js');
 // Publisher-faithful archive builder shared with the recovery-determinism e2e
 // (test/integration/recovery-determinism-e2e.test.js). Single source for the
 // hub serialization both tests verify against.
-const { makeKeypair, buildBatch, rawMatch, rawCall, SNAPSHOT_BLOCK } = require('../fixtures/anchor-archive.js');
+const { makeKeypair, signHex, buildBatch, rawMatch, rawCall, SNAPSHOT_BLOCK } = require('../fixtures/anchor-archive.js');
 
 // Stake-weighted quorum (WI-1) is active for every regtest snapshot_block
 // (STAKE_WEIGHTED_QUORUM_ACTIVATION.regtest = 0), so recovery takes the weighted
@@ -767,6 +767,66 @@ describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () 
             assert.ok(report.failed[0].reason.includes('fails quorum against the archived cross_chain set'));
             assert.ok(report.failed[0].reason.includes('result'));
             assert.strictEqual(db.calls.length, 0);
+        });
+    });
+
+    // Pkg 13 / : the recovery tally marks a pubkey into the dedupe set only
+    // after its signature verifies. This is the consumer twin of the hub finalizer
+    // (StateAnchorPublisher._quorumVerified, pinned by its own  test), so
+    // the two must agree on the same crafted list or a rebuilt node and a live hub
+    // would reach opposite verdicts on the same archived batch.
+    describe('_quorumVerified verify-then-mark ordering (Pkg 13 twin parity)', function () {
+        const CANON = 'XCHECKPOINTV1|recovery-parity-probe';
+        const BAD   = 'ab'.repeat(64);   // well-formed hex, verifies against nothing
+
+        // Four equal-weight sources: 3 of 4 clears both the weighted 3*tally > 2*S
+        // bar and the legacy 2f+1 count, 2 of 4 clears neither.
+        function setOf(keys) {
+            return keys.map((k, i) => ({ pubkey: k.pubkey, source: 'src' + i, weight: '100' }));
+        }
+        function rec() {
+            return new AnchorRecovery(memDb([], []), quiet);
+        }
+
+        it('counts a qualified signer whose valid sig is ordered AFTER a garbage one', function () {
+            let keys = [makeKeypair(), makeKeypair(), makeKeypair(), makeKeypair()];
+            let set  = setOf(keys);
+            let sigs = [
+                { pubkey: keys[0].pubkey, sig: BAD },                       // garbage first
+                { pubkey: keys[0].pubkey, sig: signHex(keys[0], CANON) },   // the real one, second
+                { pubkey: keys[1].pubkey, sig: signHex(keys[1], CANON) },
+                { pubkey: keys[2].pubkey, sig: signHex(keys[2], CANON) }
+            ];
+            assert.strictEqual(rec()._quorumVerified(CANON, sigs, set, true), true,
+                'weighted: the leading garbage entry must not drop a real signer');
+            assert.strictEqual(rec()._quorumVerified(CANON, sigs, set, false), true,
+                'count: same verdict on the legacy 2f+1 path');
+        });
+
+        it('still counts a repeated valid signer ONCE (dedupe intact)', function () {
+            let keys = [makeKeypair(), makeKeypair(), makeKeypair(), makeKeypair()];
+            let set  = setOf(keys);
+            let sigs = [
+                { pubkey: keys[0].pubkey, sig: signHex(keys[0], CANON) },
+                { pubkey: keys[0].pubkey, sig: signHex(keys[0], CANON) },   // repeat of the same signer
+                { pubkey: keys[1].pubkey, sig: signHex(keys[1], CANON) }
+            ];
+            assert.strictEqual(rec()._quorumVerified(CANON, sigs, set, true), false,
+                'a repeated signer must not inflate the stake tally to quorum');
+            assert.strictEqual(rec()._quorumVerified(CANON, sigs, set, false), false);
+        });
+
+        it('a signer with only garbage entries never counts, whatever the ordering', function () {
+            let keys = [makeKeypair(), makeKeypair(), makeKeypair(), makeKeypair()];
+            let set  = setOf(keys);
+            let sigs = [
+                { pubkey: keys[0].pubkey, sig: BAD },
+                { pubkey: keys[0].pubkey, sig: 'cd'.repeat(64) },
+                { pubkey: keys[1].pubkey, sig: signHex(keys[1], CANON) },
+                { pubkey: keys[2].pubkey, sig: signHex(keys[2], CANON) }
+            ];
+            assert.strictEqual(rec()._quorumVerified(CANON, sigs, set, true), false,
+                'verify gate is not weakened: two of four sources is sub-quorum');
         });
     });
 });

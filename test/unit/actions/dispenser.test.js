@@ -284,6 +284,40 @@ describe('Dispenser action handler @regression @tier2', function () {
             sinon.assert.notCalled(indexer.indexerDb.updateBalances);
         });
 
+        // Delegated dispensers (GET_ADDRESS != SOURCE): the ownership gate accepts EITHER
+        // the create SOURCE or the GET_ADDRESS the dispenser operates on. This is the
+        // contract the recognition-only decoder mirrors when it resolves a cancel/edit by
+        // acting address (it has no action_index of its own), so both arms are pinned
+        // here: a decoder that keys on only one of them keeps a cancelled dispenser in its
+        // open view and keeps proposing DISPENSE triggers the indexer drops .
+        it('a delegated dispenser can be cancelled by its original creator', async function () {
+            indexer.indexerDb.getDispenserInfo.resolves(makeDispenserInfo({
+                SOURCE:      OWNER_ADDR,   // opened the dispenser
+                GET_ADDRESS: OTHER_ADDR,   // but it operates on (and is paid at) OTHER
+            }));
+            const params = makeParams('1|50|');
+            const data   = createBaseData({ ACTION: 'DISPENSER', FORMAT: 1, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
+
+            await dispenser.parse(params, data, false);
+
+            assert.strictEqual(data['STATUS'], 'valid');
+            sinon.assert.calledOnce(indexer.indexerDb.createDispenserCancel);
+        });
+
+        it('a delegated dispenser can also be cancelled by its GET_ADDRESS', async function () {
+            indexer.indexerDb.getDispenserInfo.resolves(makeDispenserInfo({
+                SOURCE:      OWNER_ADDR,
+                GET_ADDRESS: OTHER_ADDR,
+            }));
+            const params = makeParams('1|50|');
+            const data   = createBaseData({ ACTION: 'DISPENSER', FORMAT: 1, SOURCE: OTHER_ADDR, BLOCK_TIME, COIN: 'BTC' });
+
+            await dispenser.parse(params, data, false);
+
+            assert.strictEqual(data['STATUS'], 'valid');
+            sinon.assert.calledOnce(indexer.indexerDb.createDispenserCancel);
+        });
+
         it('cancel of unknown dispenser (getDispenserInfo returns null) throws before validation', async function () {
             // When dispenserInfo is null, the code crashes at line 99 of dispenser.js (info['GIVE_TICK'])
             // before the validation check can run (this is a known code limitation).

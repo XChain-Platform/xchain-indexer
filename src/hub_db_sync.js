@@ -1533,9 +1533,15 @@ class HubDbSync {
             let pk  = String(s && s.pubkey || '').toLowerCase();
             let sig = String(s && s.sig || '').toLowerCase();
             if (!pk || seen.has(pk)) continue;
-            seen.add(pk);
             if (!snapPubkeys.has(pk)) continue;
             if (!verifyEd25519(canonical, sig, pk)) continue;
+            // Mark seen only AFTER the signature verifies (Pkg 13 / ), matching
+            // the hub producer twin (RetractionConsensus._handleFinalized) and the
+            // sibling tallies in anchor.js / recovery.js / StateAnchorPublisher. Marking
+            // on first encounter lets a garbage-then-valid pair for one snapshot member
+            // consume the dedupe slot and suppress the real signature, under-counting the
+            // quorum and refusing a retraction the hub itself finalized.
+            seen.add(pk);
             validSigners.push(pk);
         }
         let weighted = swq.isStakeWeightedQuorumActive(sb, this.network);

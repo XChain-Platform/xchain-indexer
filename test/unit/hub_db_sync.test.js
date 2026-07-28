@@ -1972,4 +1972,46 @@ describe('HubDbSync._applyRetraction signed retractions  @regression @tier1', fu
         await sync._applyRetraction(evt);
         assert.strictEqual(deletes.length, 1, 'pre-bootstrap there is no signer set to verify against');
     });
+
+    // Pkg 13 /  twin parity: the tally marks a pubkey into the dedupe set only
+    // AFTER its signature verifies, exactly as the hub producer twin
+    // (RetractionConsensus._handleFinalized) and the sibling tallies in anchor.js,
+    // recovery.js and StateAnchorPublisher already do. Pre-fix this consumer marked on
+    // first encounter, so a garbage entry ordered ahead of the real one for the same
+    // snapshot member silently under-counted the quorum and refused a hub-finalized
+    // retraction (order-dependent false-reject).
+    it('counts a snapshot member whose VALID signature is ordered AFTER a garbage one (verify-then-mark)', async function () {
+        const s = makeSigner();
+        const { sync, deletes } = makeSigned({ snapRows: [{ signing_pubkey: s.pubkey, amount: '100', source: 'srcA' }] });
+        await sync._applyRetraction(signedEvent([
+            { pubkey: s.pubkey, sig: 'ab'.repeat(64) },            // well-formed length, does not verify
+            { pubkey: s.pubkey, sig: s.sign(GOLDEN_CANONICAL) }    // the real one, ordered second
+        ]));
+        assert.strictEqual(deletes.length, 1,
+            'the leading garbage entry must not consume the dedupe slot for a valid signer');
+    });
+
+    it('still counts a duplicated pubkey ONCE when both entries verify (dedupe intact)', async function () {
+        const signers = [makeSigner(), makeSigner(), makeSigner(), makeSigner()];
+        const snapRows = signers.map((s, i) => ({ signing_pubkey: s.pubkey, amount: '100', source: 'src' + i }));
+        const { sync, deletes } = makeSigned({ snapRows });
+        // Two real signers, one of them repeated: 2 of 4 sources is still sub-quorum.
+        // Were the repeat counted twice, the weighted tally would cross the 2/3 bar.
+        await sync._applyRetraction(signedEvent([
+            { pubkey: signers[0].pubkey, sig: signers[0].sign(GOLDEN_CANONICAL) },
+            { pubkey: signers[0].pubkey, sig: signers[0].sign(GOLDEN_CANONICAL) },
+            { pubkey: signers[1].pubkey, sig: signers[1].sign(GOLDEN_CANONICAL) }
+        ]));
+        assert.strictEqual(deletes.length, 0, 'a repeated valid signer must not inflate the quorum tally');
+    });
+
+    it('an invalid signature alone still fails the quorum (verify gate is not weakened)', async function () {
+        const s = makeSigner();
+        const { sync, deletes } = makeSigned({ snapRows: [{ signing_pubkey: s.pubkey, amount: '100', source: 'srcA' }] });
+        await sync._applyRetraction(signedEvent([
+            { pubkey: s.pubkey, sig: 'ab'.repeat(64) },
+            { pubkey: s.pubkey, sig: 'cd'.repeat(64) }
+        ]));
+        assert.strictEqual(deletes.length, 0, 'no verifying signature means no quorum, whatever the ordering');
+    });
 });
