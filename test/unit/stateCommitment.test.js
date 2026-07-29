@@ -190,6 +190,14 @@ function makeRootsMockDb({ priorRows, balances }){
         if(/SELECT balances_root FROM state_tree_roots/.test(sql)){
             return priorRows;
         }
+        // The touched-set guard's query also matches UNION ALL + credits, so it
+        // must be routed FIRST or it captures the net-balance scan's rows and the
+        // guard then sees phantom ledger keys. It is distinguishable by its join
+        // to `actions` (the net-balance scan has none). Empty is faithful here:
+        // this suite models prior-root threading, not a block's ledger rows.
+        if(/UNION ALL/.test(sql) && /INNER JOIN actions/.test(sql)){
+            return [];         // no ledger rows attributed to this block
+        }
         if(/UNION ALL/.test(sql) && /credits/.test(sql)){
             return balances;   // buildFullBalancesRoot net-balance scan
         }

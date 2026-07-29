@@ -471,58 +471,103 @@ async function buildFullBalancesRoot(db, chain, network, blockIndex, opts){
     return root;
 }
 
-// Opt-in audit of the touched-key set against the block's actual ledger rows
-// . OFF unless INDEXER_SMT_TOUCH_AUDIT=1, so it costs a production node
-// nothing; one extra query per ledger-changing block when enabled.
+// ---- Touched-set guard  ---------------------------------------------
 //
-// WHY THIS EXISTS RATHER THAN ANOTHER FIX. Balance leaves have gone missing on
-// every regtest venue (BTC 15 of 1531 ledger-changing blocks, LTC 8 of 880, DOGE
-// 2 of 648). Two real defects were found and fixed, both of which produce the
-// signature exactly: a touched key recorded under a non-canonical name makes
-// getNetBalance return 0, _leafOrNull turns that into null, and the commitment
-// deletes a key that never existed, so the block's balances_root is unchanged
-// and no error is raised anywhere. But BTC regtest block 10296 skipped under
-// conditions that exclude BOTH of them (fresh resolver caches after a restart,
-// no rollback since, and an ISSUE whose address is a real decoded SOURCE), so at
-// least one mechanism is still unaccounted for.
+// ON BY DEFAULT, and it refuses to commit the block rather than committing a
+// balances_root known to be incomplete.
 //
-// The thing that has been missing throughout is not a theory, it is a DETECTOR.
-// The failure is silent by construction, so it can only be caught in the act.
-// This compares what the choke point recorded against what the block's ledger
-// rows say it should have recorded, and reports the difference in both
-// directions with the exact keys, which is the evidence no post-hoc probe can
-// recover once the block is committed.
-async function _auditTouchedSet(db, blockIndex, touched){
-    if(process.env.INDEXER_SMT_TOUCH_AUDIT !== '1') return;
-    try {
-        const rows = await db.doQueryStrict(
-            `SELECT DISTINCT ia.address AS address, it.tick AS tick
-               FROM (
-                    SELECT action_index, address_id, tick_id FROM credits
-                    UNION ALL
-                    SELECT action_index, address_id, tick_id FROM debits
-               ) s
-               INNER JOIN actions a        ON a.action_index = s.action_index
-               INNER JOIN index_addresses ia ON ia.id = s.address_id
-               INNER JOIN index_tickers   it ON it.id = s.tick_id
-              WHERE a.block_index = ?`, [blockIndex]);
-        const expected = new Set();
-        for(const r of (rows || []))
-            if(r.address != null && r.tick != null && r.tick !== '')
-                expected.add(r.address + '\t' + r.tick);
-        const got     = new Set(touched);
-        const missing = [...expected].filter(k => !got.has(k));   // ledger moved, no touch: the defect
-        const extra   = [...got].filter(k => !expected.has(k));   // touched a key the ledger did not move
-        if(missing.length || extra.length){
-            console.error('SMT-TOUCH-AUDIT block=' + blockIndex +
-                ' missing=' + JSON.stringify(missing.map(k => k.split('\t'))) +
-                ' extra='   + JSON.stringify(extra.map(k => k.split('\t'))));
-        }
-    } catch(e){
-        // Diagnostics must never take a block down. A consensus path that can be
-        // broken by its own instrumentation is worse than the bug it hunts.
-        console.error('SMT-TOUCH-AUDIT failed for block ' + blockIndex + ': ' + (e && e.message));
+// WHY THIS IS A GUARD AND NOT A DIAGNOSTIC. Balance leaves have gone missing on
+// every regtest venue (BTC 15 of 1531 ledger-changing blocks, LTC 8 of 880,
+// DOGE 2 of 648). Two real defects were found and fixed, and BOTH were mis-
+// diagnosed at least once first. Block 10296 then skipped under conditions that
+// exclude both of them, so at least one mechanism is still unknown. The
+// unifying property is not the cause, it is the SILENCE: a touched key recorded
+// under a key the ledger does not name makes getNetBalance return 0,
+// _leafOrNull maps 0 to null, and the commitment deletes a key that never
+// existed. The update is a no-op, the root does not move, nothing errors, and
+// every peer running the same code agrees. It only surfaces when some node
+// full-rebuilds (a follower's seedSnapshotRoots, a flag-day arming block) and
+// diverges from the chain it is following.
+//
+// So this stops trying to enumerate causes and closes the class: whatever the
+// mechanism, a block whose ledger moved keys that the touched set did not apply
+// is refused. That protects against the mechanisms not yet found, which is the
+// whole point of doing it this way.
+//
+// ---- Why the check is a SUBSET and not an equality -------------------------
+//
+// missing (expected minus applied) is the fault and is enforcing. extra (applied
+// minus expected) has legitimate causes and must NEVER halt a chain:
+//
+//   - escrows. createLedgerChangeRecord records a touch for credits, debits AND
+//     escrows, while the expected set below reads credits and debits only, so an
+//     escrow-only key is legitimately applied and not expected.
+//   - backdated cooldown-refund credits, which reuse an EARLIER block's
+//     action_index. The choke point captures them in the block that WRITES them
+//     while a block-range query attributes them to the block that OWNS the
+//     action. That asymmetry is deliberate and documented at the choke point.
+//
+// Both only ADD to applied, so expected is a subset of applied whenever the
+// commitment is healthy, and the subset direction stays exact. extra is
+// therefore reported only under INDEXER_SMT_TOUCH_AUDIT=1, where it is the
+// direction that would NAME an unknown mechanism.
+//
+// ---- Failure posture -------------------------------------------------------
+//
+// Fail closed, matching what this codebase does everywhere else: the follower
+// halts on divergence, doQueryStrict throws rather than returning [], the
+// arming block refuses rather than guessing. Throwing here rolls the block back
+// and it is retried, so a transient cause clears itself and a real one stops
+// the node instead of forking it.
+//
+// INDEXER_TOUCH_GUARD=warn downgrades to a log. That is an operational safety
+// valve, not a tuning knob: a node running with it committed a balances_root it
+// knows is incomplete, and will diverge from any node that full-rebuilds.
+async function _enforceTouchedSet(db, blockIndex, touched){
+    // doQueryStrict, never doQuery: inside the block transaction a failed read
+    // throws and the block retries. A guard that reads through the fail-soft
+    // path would see [] as "the ledger moved nothing" and pass every block,
+    // which is worse than not having a guard at all (M-17).
+    const rows = await db.doQueryStrict(
+        `SELECT DISTINCT ia.address AS address, it.tick AS tick
+           FROM (
+                SELECT action_index, address_id, tick_id FROM credits
+                UNION ALL
+                SELECT action_index, address_id, tick_id FROM debits
+           ) s
+           INNER JOIN actions a          ON a.action_index = s.action_index
+           INNER JOIN index_addresses ia ON ia.id = s.address_id
+           INNER JOIN index_tickers   it ON it.id = s.tick_id
+          WHERE a.block_index = ?`, [blockIndex]);
+
+    const expected = new Set();
+    for(const r of (rows || []))
+        if(r.address != null && r.tick != null && r.tick !== '')
+            expected.add(r.address + '\t' + r.tick);
+    if(!expected.size) return;
+
+    const applied = new Set(touched);
+    const missing = [...expected].filter(k => !applied.has(k));
+
+    if(process.env.INDEXER_SMT_TOUCH_AUDIT === '1'){
+        const extra = [...applied].filter(k => !expected.has(k));
+        if(extra.length)
+            console.log('SMT-TOUCH-AUDIT block=' + blockIndex +
+                ' extra=' + JSON.stringify(extra.map(k => k.split('\t'))));
     }
+
+    if(!missing.length) return;
+
+    const detail = JSON.stringify(missing.map(k => k.split('\t')));
+    const msg = 'balances touched-set guard FAILED at block ' + blockIndex +
+        ': the ledger moved ' + missing.length + ' key(s) the commitment did not apply, so ' +
+        'balances_root would be committed incomplete. keys=' + detail + ' ';
+    if(process.env.INDEXER_TOUCH_GUARD === 'warn'){
+        console.error(msg + ' [INDEXER_TOUCH_GUARD=warn: COMMITTING ANYWAY, this node will ' +
+            'diverge from any node that full-rebuilds]');
+        return;
+    }
+    throw new Error(msg);
 }
 
 // ---- Orchestrator -----------------------------------------------------------
@@ -610,7 +655,7 @@ async function computeAndStoreRoots(db, chain, network, blockIndex, isActivation
             root = await ESC.applyEscrowLeaves(db, smt, root, chain, network, blockIndex);
         }
         balancesRoot = root;
-        await _auditTouchedSet(db, blockIndex, touched);
+        await _enforceTouchedSet(db, blockIndex, touched);
     }
 
     // stakes_root: BTC-only; LTC/DOGE commit the empty-SMT root.
