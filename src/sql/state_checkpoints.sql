@@ -33,6 +33,15 @@ CREATE TABLE state_checkpoints (
     -- never retracted. Append-only: a reorged height is superseded by a NEW row
     -- with a higher checkpoint_seq (readers take MAX(checkpoint_seq) per height).
     -- The hub-side anchor_txid audit column is NOT mirrored.
-    UNIQUE KEY uq_chain_block_seq (chain, network, block_index, checkpoint_seq),
+    --  split-brain fence, mirrored from the hub (). The key is
+    -- (chain, network, checkpoint_seq), NOT the older wider
+    -- (chain, network, block_index, checkpoint_seq): checkpoint_seq is derived
+    -- deterministically from snapshot_block, so two BTC-tip-skewed leaders cannot
+    -- mint divergent payloads under one seq. The wider key admitted BOTH rows of a
+    -- same-seq split-brain whenever their block_index differed, which is exactly the
+    -- fork the fence exists to stop, and it survived here on the side most readers
+    -- actually query. Keeping the hub and the mirror on the same key is what makes
+    -- "MAX(checkpoint_seq) resolves one row" true wherever it is read.
+    UNIQUE KEY uq_chain_seq (chain, network, checkpoint_seq),
     KEY idx_checkpoint_seq (chain, network, checkpoint_seq)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
