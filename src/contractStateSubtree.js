@@ -101,6 +101,31 @@
  *    comparison against a full build reveals it. state_tree_nodes is
  *    copy-on-write and rollback-exempt precisely so this holds across reorgs.
  *
+ * ---- STRICT READS (M-17) -------------------------------------------------
+ *
+ * Every read here uses doQueryStrict, never doQuery. doQuery collapses a
+ * NON-transactional query error into [], which is indistinguishable from a
+ * genuinely empty result, and each of these reads has a different wrong answer
+ * waiting behind that []:
+ *
+ *   touchedContractStateKeys -> [] means "this block touched nothing", so the
+ *     root threads forward unchanged while every other node applies the block;
+ *   latestStateValue         -> [] means "tombstone", so the key is DELETED
+ *     from the tree instead of updated;
+ *   buildFullContractStateRoot -> [] means the EMPTY root is committed over a
+ *     populated table.
+ *
+ * All three are silent forks on this node alone. Inside the block transaction
+ * doQuery already re-throws, so the two are equivalent there; outside one
+ * (seedSnapshotRoots, tooling) they are not, and that is precisely where this
+ * module runs untransacted. A throw halts the node instead, which the block
+ * retry then clears if the fault was transient.
+ *
+ * The prior-root read is the one case where [] is survivable (it degrades to a
+ * full build, which is correct but expensive). It is strict anyway: a reader
+ * that is strict everywhere cannot be made soft by a later edit moving a query
+ * from one function to another.
+ *
  * ---- COLLATION -----------------------------------------------------------
  *
  * Every query here groups and matches on state_key_bin, the utf8_bin generated
@@ -132,7 +157,7 @@ function contractStateLeaf(stateValue){
 // state_key_bin is both grouped AND selected, so the returned text is the exact
 // key bytes rather than a case-folded representative of a group.
 async function touchedContractStateKeys(db, blockIndex){
-    const rows = await db.doQuery(
+    const rows = await db.doQueryStrict(
         'SELECT DISTINCT contract_index AS contract_index, state_key_bin AS state_key ' +
         'FROM contract_state WHERE block_index = ?',
         [blockIndex]);
@@ -144,7 +169,7 @@ async function touchedContractStateKeys(db, blockIndex){
 // ORDER BY id DESC LIMIT 1 is the index-backed spelling of MAX(id) here
 // (idx_latest_bin is (contract_index, state_key_bin, id DESC)).
 async function latestStateValue(db, contractIndex, stateKey){
-    const rows = await db.doQuery(
+    const rows = await db.doQueryStrict(
         'SELECT state_value FROM contract_state ' +
         'WHERE contract_index = ? AND state_key_bin = ? ORDER BY id DESC LIMIT 1',
         [contractIndex, stateKey]);
@@ -161,7 +186,7 @@ async function latestStateValue(db, contractIndex, stateKey){
 // VM's maxStateKeys; contract count is not). Measuring this on the largest
 // testnet set is spec §3-A item 6, before any mainnet height is set.
 async function buildFullContractStateRoot(db, smt, chain, network){
-    const rows = await db.doQuery(
+    const rows = await db.doQueryStrict(
         'SELECT cs.contract_index AS contract_index, cs.state_key_bin AS state_key, ' +
         '       cs.state_value AS state_value ' +
         'FROM contract_state cs ' +
@@ -201,7 +226,7 @@ async function resolveContractStateRoot(db, smt, chain, network, blockIndex, sha
     // so each height uses exactly one column, and the arming block deliberately
     // full-builds (its committed column has no predecessor) rather than inheriting
     // a value from the shadow run.
-    const prior = await db.doQuery(shadow
+    const prior = await db.doQueryStrict(shadow
         ? 'SELECT contract_state_root_shadow AS r FROM state_tree_roots WHERE chain=? AND network=? AND block_index=? LIMIT 1'
         : 'SELECT contract_state_root AS r FROM state_tree_roots WHERE chain=? AND network=? AND block_index=? LIMIT 1',
         [chain, network, blockIndex - 1]);

@@ -177,32 +177,37 @@ describe('state-commitment flag-day activation @regression', function(){
 function makeRootsMockDb({ priorRows, balances }){
     const nodes = new Map();
     const persisted = {};
-    const db = {
-        getBlockLeafRows: async () => [],
-        doQuery: async (sql, params) => {
-            if(/FROM state_tree_nodes/.test(sql)){
-                const v = nodes.get(params[0]);
-                return v ? [v] : [];
-            }
-            if(/INSERT IGNORE INTO state_tree_nodes/.test(sql)){
-                if(!nodes.has(params[0]))
-                    nodes.set(params[0], { left_hash: params[1], right_hash: params[2] });
-                return [];
-            }
-            if(/SELECT balances_root FROM state_tree_roots/.test(sql)){
-                return priorRows;
-            }
-            if(/UNION ALL/.test(sql) && /credits/.test(sql)){
-                return balances;   // buildFullBalancesRoot net-balance scan
-            }
-            if(/INSERT INTO\s+state_tree_roots/.test(sql)){
-                // [chain, network, blockIndex, balances_root, stakes_root, state_root, block_merkle_root]
-                persisted.balances_root = params[3];
-                persisted.state_root    = params[5];
-                return [];
-            }
+    const route = async (sql, params) => {
+        if(/FROM state_tree_nodes/.test(sql)){
+            const v = nodes.get(params[0]);
+            return v ? [v] : [];
+        }
+        if(/INSERT IGNORE INTO state_tree_nodes/.test(sql)){
+            if(!nodes.has(params[0]))
+                nodes.set(params[0], { left_hash: params[1], right_hash: params[2] });
             return [];
         }
+        if(/SELECT balances_root FROM state_tree_roots/.test(sql)){
+            return priorRows;
+        }
+        if(/UNION ALL/.test(sql) && /credits/.test(sql)){
+            return balances;   // buildFullBalancesRoot net-balance scan
+        }
+        if(/INSERT INTO\s+state_tree_roots/.test(sql)){
+            // [chain, network, blockIndex, balances_root, stakes_root, state_root, block_merkle_root]
+            persisted.balances_root = params[3];
+            persisted.state_root    = params[5];
+            return [];
+        }
+        return [];
+    };
+    // Both readers: computeAndStoreRoots reads strictly (M-17), and a stub
+    // carrying only doQuery would fail with "not a function" rather than
+    // exercising the fallback this suite is about.
+    const db = {
+        getBlockLeafRows: async () => [],
+        doQuery: route,
+        doQueryStrict: route
     };
     return { db, persisted };
 }

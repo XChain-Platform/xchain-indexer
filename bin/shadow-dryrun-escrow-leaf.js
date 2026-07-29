@@ -80,8 +80,14 @@ function parseArgs(argv){
 function journalOverlay(db){
     const rows = [];                       // {address, tick, locked_amount, block_index, id}
     let nextId = 1;
-    const realQuery = db.doQuery.bind(db);
-    db.doQuery = async function(sql, args){
+    // BOTH readers are wrapped. The writer inserts through doQuery while the
+    // reader (escrowLeafSubtree.js) reads through doQueryStrict (M-17), so
+    // wrapping only one leaves the other talking to the real database: the
+    // reads would then miss every overlaid row and the harness would report a
+    // clean "incremental equals replay" over two empty sets.
+    const realQuery  = db.doQuery.bind(db);
+    const realStrict = db.doQueryStrict ? db.doQueryStrict.bind(db) : realQuery;
+    const overlay = async function(sql, args, passthrough){
         if(sql.indexOf('INSERT INTO escrow_leaf_journal') === 0){
             rows.push({ id: nextId++, address: args[0], tick: args[1],
                         locked_amount: args[2], block_index: args[3] });
@@ -113,8 +119,10 @@ function journalOverlay(db){
             }
             return Array.from(max.values()).map(r => ({ address: r.address, tick: r.tick, locked_amount: r.locked_amount }));
         }
-        return realQuery(sql, args);
+        return passthrough(sql, args);
     };
+    db.doQuery       = async (sql, args) => overlay(sql, args, realQuery);
+    db.doQueryStrict = async (sql, args) => overlay(sql, args, realStrict);
     return { rows, reset(){ rows.length = 0; nextId = 1; } };
 }
 

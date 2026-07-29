@@ -70,6 +70,13 @@ class FakeDb {
         this.nodes  = new Map();   // state_tree_nodes
         this.nextId = 1;
         this.stateQueries = 0;     // every contract_state read, for the inertness count
+        // M-17: which reader each SQL string arrived through. The derivation must
+        // use doQueryStrict for ALL of its reads, because doQuery collapses a
+        // non-transactional error into [] and every [] here is a meaningful (and
+        // wrong) answer rather than an error signal.
+        this.softSql   = [];
+        this.strictSql = [];
+        this.failOn    = null;     // substring: reads matching it throw, for fault injection
     }
     write(blockIndex, contractIndex, stateKey, stateValue){
         this.rows.push({ id: this.nextId++, contract_index: contractIndex,
@@ -104,7 +111,23 @@ class FakeDb {
             async put(h, l, r){ if(!self.nodes.has(h)) self.nodes.set(h, { left_hash: l, right_hash: r }); }
         });
     }
+    // The two readers are deliberately NOT one method: the node store
+    // (stateCommitment's DbNodeStore) legitimately uses doQuery, so recording
+    // which one each SQL string came through is what lets a vector prove the
+    // derivation's own reads went strict.
     async doQuery(sql, args){
+        this.softSql.push(sql);
+        return await this._run(sql, args);
+    }
+    async doQueryStrict(sql, args){
+        this.strictSql.push(sql);
+        return await this._run(sql, args);
+    }
+    async _run(sql, args){
+        // Fault injection: model a transient DB fault. doQueryStrict propagates
+        // it; doQuery would have swallowed it into [] outside a transaction.
+        if(this.failOn && sql.indexOf(this.failOn) !== -1)
+            throw new Error('injected DB fault');
         if(sql.indexOf('state_tree_nodes') !== -1){
             if(sql.indexOf('INSERT') === 0 || sql.indexOf('INSERT') > -1 && sql.indexOf('SELECT') === -1){
                 if(!this.nodes.has(args[0])) this.nodes.set(args[0], { left_hash: args[1], right_hash: args[2] });
@@ -639,6 +662,99 @@ describe('contract_state_root: arming boundary and reorg @regression', function(
                 'a follower seeded from a snapshot must commit the same slot as a node that threaded to it');
             assert.notStrictEqual(seededRow.state_root, V1_STATE_ROOT,
                 'and both are above the arming height, so neither is still on the v1 assembly');
+        });
+    });
+});
+
+// ---------------------------------------------------------------------------
+// M-17: the derivation reads STRICTLY, so a DB fault halts instead of forking.
+//
+// doQuery collapses a NON-transactional query error into [], and an empty
+// result is a meaningful answer at every read here, not an error signal. These
+// vectors pin both halves: that no read uses the soft reader, and that when a
+// read does fault, the derivation refuses to produce a root at all. The second
+// half is the one that matters, because a future edit could reintroduce
+// doQuery and only the fault injection would notice.
+// ---------------------------------------------------------------------------
+describe('contract_state_root: strict reads @regression', function(){
+
+    const ARMED = 500;
+
+    it('every derivation read goes through doQueryStrict, never doQuery', async function(){
+        await armedAt(ARMED, async () => {
+            const db = new FakeDb();
+            db.write(ARMED - 1, 7, 'below', '"b"');
+            db.write(ARMED, 7, 'a', '"1"');
+            // Full build (arming block) and then the incremental thread, so both
+            // code paths' reads are observed rather than just one.
+            const c0 = await SC.reservedSubRootCandidates(db, CHAIN, NETWORK, ARMED);
+            db.storeRoot(ARMED, SUB.gateSubRoots(c0, ARMED, NETWORK, CHAIN).contract_state_root);
+            db.write(ARMED + 1, 7, 'a', '"2"');
+            await SC.reservedSubRootCandidates(db, CHAIN, NETWORK, ARMED + 1);
+
+            const soft = db.softSql.filter(s => s.indexOf('contract_state') !== -1
+                                             || s.indexOf('state_tree_roots') !== -1);
+            assert.deepStrictEqual(soft, [],
+                'the derivation must not read contract_state or state_tree_roots through doQuery');
+            assert.ok(db.strictSql.some(s => s.indexOf('FROM contract_state') !== -1),
+                'and it must actually have read contract_state (a no-op cannot pass vacuously)');
+            assert.ok(db.strictSql.some(s => s.indexOf('FROM state_tree_roots') !== -1),
+                'including the prior-root read');
+        });
+    });
+
+    it('a faulting touched-key read THROWS rather than threading the block forward unchanged', async function(){
+        await armedAt(ARMED, async () => {
+            const db = new FakeDb();
+            db.write(ARMED, 7, 'a', '"1"');
+            const c0 = await SC.reservedSubRootCandidates(db, CHAIN, NETWORK, ARMED);
+            const armedRoot = SUB.gateSubRoots(c0, ARMED, NETWORK, CHAIN).contract_state_root;
+            db.storeRoot(ARMED, armedRoot);
+
+            // Block ARMED+1 changes the key. Under doQuery the DISTINCT read
+            // would return [] and this block would commit `armedRoot` unchanged:
+            // a silent fork against every node that applied the write.
+            db.write(ARMED + 1, 7, 'a', '"2"');
+            db.failOn = 'SELECT DISTINCT';
+            await assert.rejects(
+                () => SC.reservedSubRootCandidates(db, CHAIN, NETWORK, ARMED + 1),
+                /injected DB fault/,
+                'a faulting touched-key read must halt the block, not commit the prior root');
+
+            // And with the fault cleared the same block moves the root, which is
+            // what proves the assertion above was about the fault and not about
+            // an empty block.
+            db.failOn = null;
+            const c1 = await SC.reservedSubRootCandidates(db, CHAIN, NETWORK, ARMED + 1);
+            assert.notStrictEqual(SUB.gateSubRoots(c1, ARMED + 1, NETWORK, CHAIN).contract_state_root,
+                armedRoot, 'the block really did change the tree');
+        });
+    });
+
+    it('a faulting full build THROWS rather than committing EMPTY over a populated table', async function(){
+        await armedAt(ARMED, async () => {
+            const db = new FakeDb();
+            db.write(ARMED - 1, 7, 'k', '"v"');
+            db.failOn = 'INNER JOIN';                  // the MAX(id) full-build join
+            await assert.rejects(
+                () => SC.reservedSubRootCandidates(db, CHAIN, NETWORK, ARMED),
+                /injected DB fault/,
+                'the arming block must not commit EMPTY because its own read failed');
+        });
+    });
+
+    it('a faulting latest-value read THROWS rather than DELETING the key from the tree', async function(){
+        await armedAt(ARMED, async () => {
+            const db = new FakeDb();
+            db.write(ARMED, 7, 'a', '"1"');
+            const c0 = await SC.reservedSubRootCandidates(db, CHAIN, NETWORK, ARMED);
+            db.storeRoot(ARMED, SUB.gateSubRoots(c0, ARMED, NETWORK, CHAIN).contract_state_root);
+            db.write(ARMED + 1, 7, 'a', '"2"');
+            db.failOn = 'ORDER BY id DESC LIMIT 1';    // the per-key winning-row read
+            await assert.rejects(
+                () => SC.reservedSubRootCandidates(db, CHAIN, NETWORK, ARMED + 1),
+                /injected DB fault/,
+                'an empty winning-row read is the tombstone mapping, so it must never come from a fault');
         });
     });
 });

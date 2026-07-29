@@ -59,6 +59,29 @@
  * which is exactly the condition the reconciliation invariant exists to catch,
  * and committing it is worse than halting on it.
  *
+ * ---- STRICT READS (M-17) -------------------------------------------------
+ *
+ * Every read here uses doQueryStrict, never doQuery, for the reason spelled out
+ * at length in contractStateSubtree.js: doQuery collapses a NON-transactional
+ * query error into [], and an empty result is a MEANINGFUL answer at every one
+ * of these call sites rather than an error signal.
+ *
+ *   touchedEscrowKeys    -> [] means "no locker moved in this block", so the
+ *     tree threads forward while the rest of the fleet applies the changes;
+ *   latestLockedAmount   -> [] means "nothing locked", which is delete-on-zero,
+ *     so the leaf is REMOVED instead of updated;
+ *   liveEscrowLeaves     -> [] means a full balances rebuild that silently drops
+ *     every locked leaf, which is the quiet fork spec §3-B item 2 names;
+ *   the shadow prior-root read degrades to a full build, survivable, strict
+ *     anyway for the same uniformity reason Stage A gives.
+ *
+ * latestLockedAmount's asOfBlock branch is the as-of-height proof read. The
+ * explorer does not route through it (it has its own copy in db.js, over a
+ * doQuery that already throws unconditionally), so this branch has no
+ * production caller today. It is strict for when one arrives: served outside a
+ * transaction, a fail-soft [] there is a verifying NON-INCLUSION proof for a
+ * key that is in fact locked, which is a worse outcome than an error.
+ *
  **********************************************************************/
 
 'use strict';
@@ -82,7 +105,7 @@ function escrowLeaf(lockedAmount){
 // because the SMT key is derived from the strings (BLOCK_HASH_VERSION's
 // id-independence rule) and the two twins must not depend on id assignment.
 async function touchedEscrowKeys(db, blockIndex){
-    const rows = await db.doQuery(
+    const rows = await db.doQueryStrict(
         'SELECT DISTINCT a.address AS address, t.tick AS tick ' +
         'FROM escrow_leaf_journal j ' +
         'INNER JOIN index_addresses a ON a.id = j.address_id ' +
@@ -99,7 +122,7 @@ async function touchedEscrowKeys(db, blockIndex){
 // (idx_latest is (address_id, tick_id, id DESC)).
 async function latestLockedAmount(db, address, tick, asOfBlock){
     const bounded = (asOfBlock !== undefined && asOfBlock !== null);
-    const rows = await db.doQuery(
+    const rows = await db.doQueryStrict(
         'SELECT j.locked_amount AS locked_amount ' +
         'FROM escrow_leaf_journal j ' +
         'INNER JOIN index_addresses a ON a.id = j.address_id ' +
@@ -114,7 +137,7 @@ async function latestLockedAmount(db, address, tick, asOfBlock){
 // join shape exactly, with the tombstone filter applied in JS so the mapping
 // lives in escrowLeaf() alone and cannot drift between the two paths.
 async function liveEscrowLeaves(db){
-    const rows = await db.doQuery(
+    const rows = await db.doQueryStrict(
         'SELECT a.address AS address, t.tick AS tick, j.locked_amount AS locked_amount ' +
         'FROM escrow_leaf_journal j ' +
         'INNER JOIN ( ' +
@@ -168,7 +191,7 @@ async function applyEscrowLeaves(db, smt, rootHex, chain, network, blockIndex){
 // catch-up). ARMED WINS is the caller's job: this is only reached while the
 // leaf is shadow-active, never at armed heights.
 async function resolveShadowBalancesRoot(db, smt, chain, network, blockIndex, balanceUpdates, fullBuild){
-    const prior = await db.doQuery(
+    const prior = await db.doQueryStrict(
         'SELECT balances_root_escrow_shadow AS r FROM state_tree_roots WHERE chain=? AND network=? AND block_index=? LIMIT 1',
         [chain, network, blockIndex - 1]);
     const priorRoot = (prior && prior.length && prior[0].r) ? String(prior[0].r) : null;

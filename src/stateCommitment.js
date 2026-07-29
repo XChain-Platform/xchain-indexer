@@ -49,15 +49,34 @@ const EMPTY0_HEX     = M.toHex(M.EMPTY[0]);
 //            async put(nodeHashHex, leftHex, rightHex) -> void  (idempotent / INSERT IGNORE)
 
 // MariaDB-backed content-addressed store over `state_tree_nodes`.
+//
+// M-17: every read and write in this file uses doQueryStrict. doQuery collapses
+// a NON-transactional query error into [], and inside a transaction the two are
+// identical, so this changes nothing on the block path. It changes the paths
+// that run WITHOUT a transaction (seedSnapshotRoots on the follower, and the
+// bin/ harnesses), where a fail-soft [] is not an error signal but a meaningful
+// and WRONG answer:
+//
+//   DbNodeStore.get -> [] is "this subtree is empty", so _descend keeps
+//     building against a truncated tree and emits a root that looks perfectly
+//     valid. This is the worst of the set: nothing downstream can detect it.
+//   DbNodeStore.put -> a swallowed write means the node is missing on a LATER
+//     block, which then reads as an empty subtree by the same route.
+//   buildFullBalancesRoot -> [] commits EMPTY_ROOT over a populated ledger.
+//   the prior-root read -> [] degrades to a full rebuild: correct, expensive,
+//     and strict anyway so no read here is left soft for a later edit to move.
+//
+// getNetBalance was already loud by accident (it indexes rows[0]); it is strict
+// now by intent rather than by luck.
 class DbNodeStore {
     constructor(db){ this.db = db; }
     async get(nodeHashHex){
-        const rows = await this.db.doQuery(
+        const rows = await this.db.doQueryStrict(
             'SELECT left_hash, right_hash FROM state_tree_nodes WHERE node_hash=? LIMIT 1', [nodeHashHex]);
         return rows.length ? rows[0] : null;
     }
     async put(nodeHashHex, leftHex, rightHex){
-        await this.db.doQuery(
+        await this.db.doQueryStrict(
             'INSERT IGNORE INTO state_tree_nodes (node_hash, left_hash, right_hash) VALUES (?, ?, ?)',
             [nodeHashHex, leftHex, rightHex]);
     }
@@ -337,7 +356,7 @@ function _leafOrNull(amountStr){
 }
 
 async function getNetBalance(db, address, tick){
-    const rows = await db.doQuery(
+    const rows = await db.doQueryStrict(
         `SELECT
             (SELECT COALESCE(SUM(CAST(c.amount AS DECIMAL(60,18))),0) FROM credits c
                 INNER JOIN index_addresses a ON a.id=c.address_id
@@ -420,7 +439,7 @@ async function computeBlockMerkleRoot(db, blockIndex){
 async function buildFullBalancesRoot(db, chain, network, blockIndex, opts){
     const smt = new PersistentSMT(new DbNodeStore(db));
     let root = EMPTY_ROOT_HEX;
-    const bals = await db.doQuery(
+    const bals = await db.doQueryStrict(
         `SELECT a.address AS address, t.tick AS tick, CAST(SUM(s.amt) AS CHAR) AS net FROM (
             SELECT address_id, tick_id,  CAST(amount AS DECIMAL(60,18)) AS amt FROM credits
             UNION ALL
@@ -497,7 +516,7 @@ async function computeAndStoreRoots(db, chain, network, blockIndex, isActivation
     // makes the shadow full-build too).
     let balancesRoot;
     let shadowBalanceUpdates = null;
-    const prior = isActivationBlock ? [] : await db.doQuery(
+    const prior = isActivationBlock ? [] : await db.doQueryStrict(
         'SELECT balances_root FROM state_tree_roots WHERE chain=? AND network=? AND block_index=? LIMIT 1',
         [chain, network, blockIndex - 1]);
     if(isActivationBlock || !prior.length){
@@ -570,7 +589,7 @@ async function computeAndStoreRoots(db, chain, network, blockIndex, isActivation
         await ESC.resolveShadowBalancesRoot(db, smt, chain, network, blockIndex, shadowBalanceUpdates,
             () => buildFullBalancesRoot(db, chain, network, blockIndex, { forceEscrowLeaves: true }));
 
-    await db.doQuery(
+    await db.doQueryStrict(
         `INSERT INTO state_tree_roots
             (chain, network, block_index, balances_root, stakes_root, state_root, block_merkle_root, contract_state_root, contract_state_root_shadow, balances_root_escrow_shadow)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)

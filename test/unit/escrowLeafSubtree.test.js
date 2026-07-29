@@ -47,7 +47,15 @@ const TICK  = 'XCHAIN';
 // Fake db over the journal + the two index tables it joins. Rows are appended
 // exactly as the source appends them: one per key whose total CHANGED in a block.
 class FakeDb {
-    constructor(){ this.rows = []; this.nodes = new Map(); this.nextId = 1; this.journalQueries = 0; }
+    constructor(){
+        this.rows = []; this.nodes = new Map(); this.nextId = 1; this.journalQueries = 0;
+        // M-17: which reader each SQL string arrived through, plus fault injection.
+        // Every journal read must be strict, because doQuery turns a
+        // non-transactional fault into [], and [] is delete-on-zero here.
+        this.softSql   = [];
+        this.strictSql = [];
+        this.failOn    = null;
+    }
     write(blockIndex, address, tick, lockedAmount){
         this.rows.push({ id: this.nextId++, address: address, tick: tick,
                          locked_amount: lockedAmount, block_index: blockIndex });
@@ -60,7 +68,20 @@ class FakeDb {
             async put(h, l, r){ if(!self.nodes.has(h)) self.nodes.set(h, { left_hash: l, right_hash: r }); }
         });
     }
+    // Two readers, deliberately not one method: the balances path around this
+    // module legitimately uses doQuery, so recording which reader each SQL
+    // string came through is what proves the journal reads went strict.
     async doQuery(sql, args){
+        this.softSql.push(sql);
+        return await this._run(sql, args);
+    }
+    async doQueryStrict(sql, args){
+        this.strictSql.push(sql);
+        return await this._run(sql, args);
+    }
+    async _run(sql, args){
+        if(this.failOn && sql.indexOf(this.failOn) !== -1)
+            throw new Error('injected DB fault');
         if(sql.indexOf('escrow_leaf_journal') === -1) throw new Error('unexpected query: ' + sql.slice(0, 60));
         this.journalQueries++;
         if(sql.indexOf('SELECT DISTINCT') === 0){
@@ -122,11 +143,16 @@ describe('XCHAIN_ESC locked leaf: inertness @regression', function(){
         // the cheapest proof of that is that the journal is never even read.
         const db = new FakeDb();
         db.write(100, ADDR, TICK, '5');
+        // BOTH readers are counted. The journal read is strict (M-17) while the
+        // credits/debits reads around it are not, so stubbing only doQuery would
+        // make this pass by missing the very query it is counting.
+        const count = async (sql) => {
+            if(sql.indexOf('escrow_leaf_journal') !== -1){ db.journalQueries++; return []; }
+            return [];                           // no credits/debits either
+        };
         const root = await SC.buildFullBalancesRoot(
-            Object.assign(db, { doQuery: async (sql) => {
-                if(sql.indexOf('escrow_leaf_journal') !== -1){ db.journalQueries++; return []; }
-                return [];                       // no credits/debits either
-            } }), CHAIN, NETWORK, 999999999);
+            Object.assign(db, { doQuery: count, doQueryStrict: count }),
+            CHAIN, NETWORK, 999999999);
         assert.strictEqual(db.journalQueries, 0, 'inert chain must not read the journal');
         assert.strictEqual(root, SC.EMPTY_ROOT_HEX);
     });
@@ -135,7 +161,8 @@ describe('XCHAIN_ESC locked leaf: inertness @regression', function(){
         // The height is a new parameter; an un-updated caller must degrade to v1
         // rather than to "arm everywhere".
         const db = new FakeDb();
-        db.doQuery = async (sql) => { if(sql.indexOf('escrow_leaf_journal') !== -1){ db.journalQueries++; } return []; };
+        const count = async (sql) => { if(sql.indexOf('escrow_leaf_journal') !== -1){ db.journalQueries++; } return []; };
+        db.doQuery = count; db.doQueryStrict = count;
         await SC.buildFullBalancesRoot(db, CHAIN, NETWORK);
         assert.strictEqual(db.journalQueries, 0);
     });
@@ -278,8 +305,11 @@ describe('XCHAIN_ESC locked leaf: the §7 shadow thread @regression', function()
     // read on top.
     function shadowDb(priors){
         const db = new FakeDb();
-        const orig = db.doQuery.bind(db);
-        db.doQuery = async function(sql, args){
+        // Patch _run, not doQuery: the module reads strictly now (M-17), and
+        // overriding the soft reader would leave the shadow prior-row read
+        // unstubbed while quietly passing.
+        const orig = db._run.bind(db);
+        db._run = async function(sql, args){
             if(sql.indexOf('balances_root_escrow_shadow') !== -1){
                 const r = priors[args[2]];
                 return r ? [{ r }] : [];
@@ -320,8 +350,11 @@ describe('XCHAIN_ESC locked leaf: the §7 shadow thread @regression', function()
         prior = await ESC.applyEscrowLeaves(db, smt, prior, CHAIN, NETWORK, 499);
 
         const priors = {}; priors[499] = prior;
-        const orig = db.doQuery.bind(db);
-        db.doQuery = async function(sql, args){
+        // Patch _run, not doQuery: the module reads strictly now (M-17), and
+        // overriding the soft reader would leave the shadow prior-row read
+        // unstubbed while quietly passing.
+        const orig = db._run.bind(db);
+        db._run = async function(sql, args){
             if(sql.indexOf('balances_root_escrow_shadow') !== -1){
                 const r = priors[args[2]];
                 return r ? [{ r }] : [];
@@ -361,5 +394,57 @@ describe('XCHAIN_ESC locked leaf: the §7 shadow thread @regression', function()
             assert.ok(!/balancesRoot\s*=\s*.*balancesEscrowShadow/.test(src),
                 p + ': shadow value must never become the committed balances root');
         }
+    });
+});
+
+// ---------------------------------------------------------------------------
+// M-17: the journal reads STRICTLY, so a DB fault halts instead of forking.
+//
+// Delete-on-zero makes this stage's exposure worse than Stage A's: doQuery's
+// fail-soft [] is not merely "no data", it is the exact encoding of "nothing is
+// locked here", so a transient fault silently REMOVES locked leaves from
+// balances_root rather than failing to add them.
+// ---------------------------------------------------------------------------
+describe('XCHAIN_ESC locked leaf: strict reads @regression', function(){
+
+    it('every journal read goes through doQueryStrict, never doQuery', async function(){
+        const db = new FakeDb();
+        db.write(500, ADDR, TICK, M.canonicalAmount('5'));
+        await ESC.applyEscrowLeaves(db, db.smt(), SC.EMPTY_ROOT_HEX, CHAIN, NETWORK, 500);
+        await ESC.liveEscrowLeaves(db);
+        await ESC.latestLockedAmount(db, ADDR, TICK, 500);
+
+        assert.deepStrictEqual(db.softSql.filter(s => s.indexOf('escrow_leaf_journal') !== -1), [],
+            'no journal read may use the fail-soft reader');
+        assert.ok(db.strictSql.length >= 3, 'and the reads really happened');
+    });
+
+    it('a faulting touched-key read THROWS rather than leaving the locked leaves stale', async function(){
+        const db = new FakeDb();
+        db.write(500, ADDR, TICK, M.canonicalAmount('5'));
+        db.failOn = 'SELECT DISTINCT';
+        await assert.rejects(
+            () => ESC.applyEscrowLeaves(db, db.smt(), SC.EMPTY_ROOT_HEX, CHAIN, NETWORK, 500),
+            /injected DB fault/,
+            'an empty touched set means "no locker moved", which must never come from a fault');
+    });
+
+    it('a faulting per-key read THROWS rather than DELETING the leaf (delete-on-zero)', async function(){
+        const db = new FakeDb();
+        db.write(500, ADDR, TICK, M.canonicalAmount('5'));
+        db.failOn = 'ORDER BY j.id DESC LIMIT 1';
+        await assert.rejects(
+            () => ESC.applyEscrowLeaves(db, db.smt(), SC.EMPTY_ROOT_HEX, CHAIN, NETWORK, 500),
+            /injected DB fault/,
+            'a fail-soft [] here is delete-on-zero: the lock would vanish from balances_root');
+    });
+
+    it('a faulting live-set read THROWS rather than rebuilding balances_root with no locked leaves', async function(){
+        // The quiet fork spec §3-B item 2 names: a full rebuild that silently
+        // drops every locked leaf looks exactly like a healthy v1 root.
+        const db = new FakeDb();
+        db.write(500, ADDR, TICK, M.canonicalAmount('5'));
+        db.failOn = 'INNER JOIN ( ';
+        await assert.rejects(() => ESC.liveEscrowLeaves(db), /injected DB fault/);
     });
 });

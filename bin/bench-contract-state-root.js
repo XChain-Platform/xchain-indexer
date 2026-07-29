@@ -93,7 +93,10 @@ function syntheticDb(n){
         rows.push({ contract_index: 1 + (i % Math.max(1, Math.floor(n / 25))),
                     state_key: 'key_' + i,
                     state_value: JSON.stringify({ i: i, pad: 'x'.repeat(32) }) });
-    return { async doQuery(){ return rows; } };
+    // Both readers: the derivation reads strictly (M-17), and a stub carrying
+    // only doQuery would make buildFullContractStateRoot throw here rather than
+    // benchmark anything.
+    return { async doQuery(){ return rows; }, async doQueryStrict(){ return rows; } };
 }
 
 async function runSynthetic(sizes){
