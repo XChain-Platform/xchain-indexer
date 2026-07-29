@@ -45,20 +45,28 @@
  * block.
  *
  * WHY THE SCRATCH MODE EXISTS, since the spec originally deferred this figure to a
- * venue that does not exist. The storage term is a function of the KEY COUNT and
- * the tree shape, not of what the contracts meant: every key is the same 256-level
- * descent whatever value hangs off it. So the honest half of the "--db figure" -
- * how much a real node store costs per key - does NOT need a venue carrying real
- * contract state, only a database. Waiting for real contract state to measure it
+ * venue that does not exist. The storage term is a function of the KEY COUNT alone:
+ * every key is the same 256-level copy-on-write descent whatever value hangs off it.
+ * So "how much does a real node store cost per key" does NOT need a venue carrying
+ * real contract state, only a database. Waiting for real contract state to measure it
  * left the decisive number (round trips, not hashes) unquoted while a portable
- * measurement was available the whole time. What the scratch mode still cannot
- * tell you is the SHAPE of a production key set (how many contracts, how deep the
- * shared prefixes run); that is what a real --db run adds on top.
+ * measurement was available the whole time.
+ *
+ * AND THE SHAPE QUESTION IS ANSWERED RATHER THAN DEFERRED, which is what --shape is
+ * for. The worry was that a production key set's shape (many contracts vs few, keys
+ * sharing long prefixes) might change the cost. It cannot, and now that is measured
+ * instead of argued: copy-on-write writes a NEW node at all 256 levels of every
+ * update, so the row count is exactly 256 per key no matter how the keys cluster, and
+ * the key digest is a hash so contract clustering does not cluster the descent either.
+ * Measured 2026-07-29 at 500 keys, all four shapes: 128,000 node rows each, to the
+ * row, and 46-50 ms/key, a spread of 7% which is run-to-run noise. Quote the key
+ * COUNT when choosing an arming height and ignore the shape.
  *
  * USAGE
  *   node bin/bench-contract-state-root.js --synthetic 1000
  *   node bin/bench-contract-state-root.js --synthetic 1000,10000,50000
  *   node bin/bench-contract-state-root.js --synthetic 100,1000 --persist --scratch bench_state_tree_nodes
+ *   node bin/bench-contract-state-root.js --synthetic 500 --shape spread,deep,wide,prefix
  *   node bin/bench-contract-state-root.js --db XChain_BTC_Regtest_Indexer --chain BTC --network regtest
  *
  * DB and scratch modes read credentials the same way the indexer does (its own
@@ -73,7 +81,7 @@ const SC  = require('../src/stateCommitment.js');
 
 function parseArgs(argv){
     const out = { synthetic: null, db: null, chain: 'BTC', network: 'regtest', persist: false,
-                  scratch: null, keep: false };
+                  scratch: null, keep: false, shapes: ['spread'] };
     for(let i = 2; i < argv.length; i++){
         switch(argv[i]){
             case '--synthetic': out.synthetic = String(argv[++i] || '').split(',').map(s => parseInt(s, 10)); break;
@@ -90,6 +98,14 @@ function parseArgs(argv){
                 out.scratch = argv[++i];
                 if(!out.scratch){ console.error('--scratch needs a database name'); process.exit(64); }
                 break;
+            case '--shape':
+                out.shapes = String(argv[++i] || '').split(',').filter(Boolean);
+                for(const s of out.shapes)
+                    if(!SHAPES.includes(s)){
+                        console.error('unknown --shape "' + s + '" (want ' + SHAPES.join(', ') + ')');
+                        process.exit(64);
+                    }
+                break;
             case '--keep':      out.keep = true; break;
             case '-h': case '--help':
                 console.log(require('fs').readFileSync(__filename, 'utf8').split('*/')[0]);
@@ -105,16 +121,34 @@ function parseArgs(argv){
 }
 
 // A db stub serving N synthetic live keys through the REAL full-build query shape.
-// Keys are spread across contracts the way real state is (many contracts, bounded
-// keys each) rather than all under one, because the SMT path depends on the KEY
-// digest and clustering changes nothing, but the row set shape should still look
-// like production for anyone reading this later.
-function syntheticDb(n){
+//
+// SHAPES, because "what does a production key set look like" was the last open leg of
+// the arming-cost question and it is answerable rather than something to wait for a
+// venue to reveal. The four below bracket the space: keys spread thinly over many
+// contracts, all keys under one contract, one key per contract, and the adversarial
+// case where every state_key shares a long common prefix. If the cost were sensitive
+// to any of that, these would disagree.
+//
+//   spread  n/25 contracts x 25 keys      (the default, closest to real state)
+//   deep    1 contract x n keys
+//   wide    n contracts x 1 key
+//   prefix  1 contract, keys sharing a 48-char common prefix
+const SHAPES = ['spread', 'deep', 'wide', 'prefix'];
+
+function syntheticDb(n, shape){
     const rows = [];
-    for(let i = 0; i < n; i++)
-        rows.push({ contract_index: 1 + (i % Math.max(1, Math.floor(n / 25))),
-                    state_key: 'key_' + i,
+    for(let i = 0; i < n; i++){
+        let contract, key;
+        switch(shape){
+            case 'deep':   contract = 1;     key = 'key_' + i; break;
+            case 'wide':   contract = 1 + i; key = 'key_0';    break;
+            case 'prefix': contract = 1;     key = 'k'.repeat(48) + '_' + i; break;
+            default:       contract = 1 + (i % Math.max(1, Math.floor(n / 25)));
+                           key = 'key_' + i;
+        }
+        rows.push({ contract_index: contract, state_key: key,
                     state_value: JSON.stringify({ i: i, pad: 'x'.repeat(32) }) });
+    }
     // Both readers: the derivation reads strictly (M-17), and a stub carrying
     // only doQuery would make buildFullContractStateRoot throw here rather than
     // benchmark anything.
@@ -143,19 +177,20 @@ function countingStore(inner){
     };
 }
 
-async function runSynthetic(sizes){
+async function runSynthetic(sizes, shapes){
     console.log('# synthetic full build (in-memory node store; a FLOOR, no storage I/O)');
-    console.log('# keys        ms       ms/key    nodes      get+put ops');
+    console.log('# shape     keys        ms       ms/key    nodes      get+put ops');
+    for(const shape of shapes)
     for(const n of sizes){
         if(!Number.isInteger(n) || n <= 0){ console.error('bad size: ' + n); continue; }
         const inner = new SC.MemoryNodeStore();
         const store = countingStore(inner);
         const smt   = new SC.PersistentSMT(store);
-        const db    = syntheticDb(n);
+        const db    = syntheticDb(n, shape);
         const t0    = process.hrtime.bigint();
         const root  = await CST.buildFullContractStateRoot(db, smt, 'BTC', 'regtest');
         const ms    = Number(process.hrtime.bigint() - t0) / 1e6;
-        console.log('  ' + String(n).padEnd(10) + ms.toFixed(0).padEnd(9) +
+        console.log('  ' + shape.padEnd(10) + String(n).padEnd(10) + ms.toFixed(0).padEnd(9) +
                     (ms / n).toFixed(4).padEnd(10) + String(inner.size).padEnd(11) +
                     (store.stat.gets + store.stat.puts));
         if(!root || root.length !== 64) throw new Error('benchmark produced no root');
@@ -220,15 +255,16 @@ async function runSyntheticPersisted(opts){
     await db.doQueryStrict(ddl, []);
     const proxy = tableRedirect(db, opts.scratch);
     console.log('# synthetic full build, REAL DbNodeStore, REAL transaction, scratch table ' + opts.scratch);
-    console.log('# keys      build ms   ms/key    commit ms  node rows   gets     puts     ms/op');
+    console.log('# shape     keys      build ms   ms/key    commit ms  node rows   gets     puts     ms/op');
     try {
+        for(const shape of opts.shapes)
         for(const n of opts.synthetic){
             if(!Number.isInteger(n) || n <= 0){ console.error('bad size: ' + n); continue; }
             await db.doQueryStrict('TRUNCATE TABLE ' + opts.scratch, []);
 
             const store = countingStore(new SC.DbNodeStore(proxy));
             const smt   = new SC.PersistentSMT(store);
-            const rows  = syntheticDb(n);
+            const rows  = syntheticDb(n, shape);
 
             // Inside a transaction, because that is where the arming block runs it and
             // because the transaction SIZE is half of what makes this expensive.
@@ -248,7 +284,7 @@ async function runSyntheticPersisted(opts){
 
             const cnt = await db.doQueryStrict('SELECT COUNT(*) AS c FROM ' + opts.scratch, []);
             const ops = store.stat.gets + store.stat.puts;
-            console.log('  ' + String(n).padEnd(10) +
+            console.log('  ' + shape.padEnd(10) + String(n).padEnd(10) +
                         buildMs.toFixed(0).padEnd(11) +
                         (buildMs / n).toFixed(2).padEnd(10) +
                         commitMs.toFixed(0).padEnd(11) +
@@ -328,7 +364,7 @@ async function runDb(opts){
                       'quote an in-memory figure to someone who asked for the persisted one.');
         process.exit(64);
     }
-    else                                     await runSynthetic(opts.synthetic);
+    else                                     await runSynthetic(opts.synthetic, opts.shapes);
     // Explicit, because a Database whose build predates close() leaves pool sockets on
     // the event loop and the tool hangs after printing its results. That looks exactly
     // like a benchmark still running, which is the one illusion a benchmark must not
