@@ -22,11 +22,16 @@
  * the chain's block interval the fleet falls behind at exactly the moment everyone
  * is watching, so the figure has to exist before a mainnet height is chosen.
  *
- * TWO MODES, because they measure different halves and only one is portable:
+ * THREE MODES, because they measure different halves and only one is portable:
  *
  *   --synthetic N     Hash-and-tree cost for N keys through the REAL derivation
  *                     with an in-memory node store. Portable, deterministic, no DB.
  *                     This is a FLOOR: it excludes storage I/O entirely.
+ *
+ *   --synthetic N --persist --scratch <table>
+ *                     The same N synthetic keys through the REAL DbNodeStore against
+ *                     a REAL MariaDB, inside a REAL transaction, in a throwaway table
+ *                     this tool creates and drops. This is the storage term.
  *
  *   --db <name>       The real thing against a live indexer database: the actual
  *                     row set, the actual MariaDB node store, the actual queries.
@@ -37,16 +42,27 @@
  * that is not an empty subtree is a SEQUENTIAL round trip to state_tree_nodes. On a
  * populated tree the DB term dominates the hashing term by orders of magnitude, so
  * a synthetic number that looks comfortable proves nothing about a real arming
- * block. Quote the --db figure when setting a height; quote the synthetic one only
- * to reason about scaling shape.
+ * block.
+ *
+ * WHY THE SCRATCH MODE EXISTS, since the spec originally deferred this figure to a
+ * venue that does not exist. The storage term is a function of the KEY COUNT and
+ * the tree shape, not of what the contracts meant: every key is the same 256-level
+ * descent whatever value hangs off it. So the honest half of the "--db figure" -
+ * how much a real node store costs per key - does NOT need a venue carrying real
+ * contract state, only a database. Waiting for real contract state to measure it
+ * left the decisive number (round trips, not hashes) unquoted while a portable
+ * measurement was available the whole time. What the scratch mode still cannot
+ * tell you is the SHAPE of a production key set (how many contracts, how deep the
+ * shared prefixes run); that is what a real --db run adds on top.
  *
  * USAGE
  *   node bin/bench-contract-state-root.js --synthetic 1000
  *   node bin/bench-contract-state-root.js --synthetic 1000,10000,50000
+ *   node bin/bench-contract-state-root.js --synthetic 100,1000 --persist --scratch bench_state_tree_nodes
  *   node bin/bench-contract-state-root.js --db XChain_BTC_Regtest_Indexer --chain BTC --network regtest
  *
- * DB mode reads credentials the same way the indexer does (its own config layer),
- * and never takes them on the command line.
+ * DB and scratch modes read credentials the same way the indexer does (its own
+ * config layer), and never take them on the command line.
  *
  *********************************************************************/
 
@@ -56,7 +72,8 @@ const CST = require('../src/contractStateSubtree.js');
 const SC  = require('../src/stateCommitment.js');
 
 function parseArgs(argv){
-    const out = { synthetic: null, db: null, chain: 'BTC', network: 'regtest', persist: false };
+    const out = { synthetic: null, db: null, chain: 'BTC', network: 'regtest', persist: false,
+                  scratch: null, keep: false };
     for(let i = 2; i < argv.length; i++){
         switch(argv[i]){
             case '--synthetic': out.synthetic = String(argv[++i] || '').split(',').map(s => parseInt(s, 10)); break;
@@ -69,6 +86,11 @@ function parseArgs(argv){
             case '--chain':     out.chain   = String(argv[++i] || '').toUpperCase(); break;
             case '--network':   out.network = argv[++i]; break;
             case '--persist':   out.persist = true; break;
+            case '--scratch':
+                out.scratch = argv[++i];
+                if(!out.scratch){ console.error('--scratch needs a database name'); process.exit(64); }
+                break;
+            case '--keep':      out.keep = true; break;
             case '-h': case '--help':
                 console.log(require('fs').readFileSync(__filename, 'utf8').split('*/')[0]);
                 process.exit(0);
@@ -99,24 +121,160 @@ function syntheticDb(n){
     return { async doQuery(){ return rows; }, async doQueryStrict(){ return rows; } };
 }
 
+// Wrap a node store to count the two operations that ARE the storage term. The
+// counts are a property of the derivation, not of the backend, so counting them in
+// both modes is what turns "the DB one is slower" into a per-round-trip figure.
+function countingStore(inner){
+    const stat = { gets: 0, puts: 0, getMs: 0, putMs: 0 };
+    return {
+        stat: stat,
+        async get(h){
+            stat.gets++;
+            const t = process.hrtime.bigint();
+            try { return await inner.get(h); }
+            finally { stat.getMs += Number(process.hrtime.bigint() - t) / 1e6; }
+        },
+        async put(h, l, r){
+            stat.puts++;
+            const t = process.hrtime.bigint();
+            try { return await inner.put(h, l, r); }
+            finally { stat.putMs += Number(process.hrtime.bigint() - t) / 1e6; }
+        }
+    };
+}
+
 async function runSynthetic(sizes){
     console.log('# synthetic full build (in-memory node store; a FLOOR, no storage I/O)');
-    console.log('# keys        ms       ms/key    nodes');
+    console.log('# keys        ms       ms/key    nodes      get+put ops');
     for(const n of sizes){
         if(!Number.isInteger(n) || n <= 0){ console.error('bad size: ' + n); continue; }
-        const store = new SC.MemoryNodeStore();
+        const inner = new SC.MemoryNodeStore();
+        const store = countingStore(inner);
         const smt   = new SC.PersistentSMT(store);
         const db    = syntheticDb(n);
         const t0    = process.hrtime.bigint();
         const root  = await CST.buildFullContractStateRoot(db, smt, 'BTC', 'regtest');
         const ms    = Number(process.hrtime.bigint() - t0) / 1e6;
         console.log('  ' + String(n).padEnd(10) + ms.toFixed(0).padEnd(9) +
-                    (ms / n).toFixed(4).padEnd(10) + store.size);
+                    (ms / n).toFixed(4).padEnd(10) + String(inner.size).padEnd(11) +
+                    (store.stat.gets + store.stat.puts));
         if(!root || root.length !== 64) throw new Error('benchmark produced no root');
     }
     console.log('\n# The per-key figure is roughly flat: each key is an independent 256-level');
     console.log('# descent. Extrapolate linearly in the key count, then ADD the storage term,');
-    console.log('# which --db mode is the only way to measure.');
+    console.log('# which --persist mode measures (scratch DB) or --db mode measures in situ.');
+}
+
+// The scratch is a TABLE inside the indexer's own database, not a database of its
+// own: an indexer's DB user is scoped to its schema and has no CREATE DATABASE
+// grant, and benchmarking is not a reason to hand one out. One guard, and it is the
+// one that matters: the name must SAY it is a bench table, so the live
+// `state_tree_nodes` can never be named here by accident.
+function assertScratchNameSafe(name){
+    if(!/bench/i.test(name) || !/^[A-Za-z0-9_]+$/.test(name)){
+        console.error('--scratch refuses "' + name + '": it must be a plain identifier containing ' +
+                      '"bench", so the live state_tree_nodes can never be named here by accident.');
+        process.exit(64);
+    }
+}
+
+// Point the REAL DbNodeStore at the scratch table by rewriting the one identifier in
+// its statements, rather than retyping them here. The store's SQL stays the SQL the
+// arming block runs; only the table it lands in changes, in one visible place.
+function tableRedirect(db, table){
+    const swap = sql => String(sql).replace(/state_tree_nodes/g, table);
+    return {
+        async doQueryStrict(sql, args){ return db.doQueryStrict(swap(sql), args); },
+        async doQuery(sql, args){ return db.doQuery(swap(sql), args); }
+    };
+}
+
+async function openIndexerDb(opts){
+    const Database = require('../src/db.js');
+    const config   = require('../src/config.js');
+    const Utility  = require('../src/utility.js');
+    const host = process.env.INDEXER_DB_HOST;
+    const port = process.env.INDEXER_DB_PORT;
+    const user = process.env.INDEXER_DB_USER;
+    const pass = process.env.INDEXER_DB_PASS;
+    const name = opts.db || process.env.INDEXER_DB_NAME;
+    if(!host || !user || !name){
+        console.error('bench: INDEXER_DB_HOST / INDEXER_DB_USER / INDEXER_DB_NAME must be set ' +
+                      '(load the service .env).');
+        process.exit(2);
+    }
+    const cfg = config.getConfig(opts.chain, opts.network);
+    return new Database(host, port, name, user, pass, { config: cfg, util: new Utility(cfg) });
+}
+
+async function runSyntheticPersisted(opts){
+    assertScratchNameSafe(opts.scratch);
+    const db = await openIndexerDb(opts);
+    // The table definition is the indexer's own, read rather than retyped, so the
+    // benchmark cannot drift from the schema the arming block actually writes.
+    const ddl = require('fs').readFileSync(require('path').join(__dirname, '..', 'src', 'sql',
+                                                                'state_tree_nodes.sql'), 'utf8')
+        .replace(/^\s*--.*$/gm, '')
+        .replace('CREATE TABLE state_tree_nodes', 'CREATE TABLE IF NOT EXISTS ' + opts.scratch)
+        .trim().replace(/;$/, '');
+    await db.doQueryStrict(ddl, []);
+    const proxy = tableRedirect(db, opts.scratch);
+    console.log('# synthetic full build, REAL DbNodeStore, REAL transaction, scratch table ' + opts.scratch);
+    console.log('# keys      build ms   ms/key    commit ms  node rows   gets     puts     ms/op');
+    try {
+        for(const n of opts.synthetic){
+            if(!Number.isInteger(n) || n <= 0){ console.error('bad size: ' + n); continue; }
+            await db.doQueryStrict('TRUNCATE TABLE ' + opts.scratch, []);
+
+            const store = countingStore(new SC.DbNodeStore(proxy));
+            const smt   = new SC.PersistentSMT(store);
+            const rows  = syntheticDb(n);
+
+            // Inside a transaction, because that is where the arming block runs it and
+            // because the transaction SIZE is half of what makes this expensive.
+            await db.beginTransaction();
+            const t0   = process.hrtime.bigint();
+            let root;
+            try {
+                root = await CST.buildFullContractStateRoot(rows, smt, opts.chain, opts.network);
+            } catch(e){
+                await db.rollbackTransaction();
+                throw e;
+            }
+            const buildMs = Number(process.hrtime.bigint() - t0) / 1e6;
+            const t1 = process.hrtime.bigint();
+            await db.commitTransaction();
+            const commitMs = Number(process.hrtime.bigint() - t1) / 1e6;
+
+            const cnt = await db.doQueryStrict('SELECT COUNT(*) AS c FROM ' + opts.scratch, []);
+            const ops = store.stat.gets + store.stat.puts;
+            console.log('  ' + String(n).padEnd(10) +
+                        buildMs.toFixed(0).padEnd(11) +
+                        (buildMs / n).toFixed(2).padEnd(10) +
+                        commitMs.toFixed(0).padEnd(11) +
+                        String(cnt[0].c).padEnd(12) +
+                        String(store.stat.gets).padEnd(9) +
+                        String(store.stat.puts).padEnd(9) +
+                        (ops ? (store.stat.getMs + store.stat.putMs) / ops : 0).toFixed(3));
+            if(!root || root.length !== 64) throw new Error('benchmark produced no root');
+        }
+    } finally {
+        if(!opts.keep){
+            // A failed DROP must not swallow the figures the run just produced, so
+            // report the leftover table by name instead of throwing over it.
+            try {
+                await db.doQueryStrict('DROP TABLE IF EXISTS ' + opts.scratch, []);
+                console.log('\n# scratch table ' + opts.scratch + ' dropped (--keep to retain it)');
+            } catch(e){
+                console.log('\n# could not drop ' + opts.scratch + ' (' + (e && (e.code || e.message)) +
+                            '); drop it by hand.');
+            }
+        }
+        if(db.close) await db.close();
+    }
+    console.log('# ms/op is the number to extrapolate with: the build is SEQUENTIAL round trips,');
+    console.log('# so a key set of K costs about (ops/key) * K * ms/op regardless of hardware speed');
+    console.log('# in the hashing term. Compare against the target chain\'s block interval.');
 }
 
 async function runDb(opts){
@@ -163,6 +321,17 @@ async function runDb(opts){
 
 (async () => {
     const opts = parseArgs(process.argv);
-    if(opts.db) await runDb(opts);
-    else        await runSynthetic(opts.synthetic);
+    if(opts.db)                              await runDb(opts);
+    else if(opts.persist && opts.scratch)    await runSyntheticPersisted(opts);
+    else if(opts.persist){
+        console.error('--persist needs either --db <live db> or --scratch <bench table>. Refusing to ' +
+                      'quote an in-memory figure to someone who asked for the persisted one.');
+        process.exit(64);
+    }
+    else                                     await runSynthetic(opts.synthetic);
+    // Explicit, because a Database whose build predates close() leaves pool sockets on
+    // the event loop and the tool hangs after printing its results. That looks exactly
+    // like a benchmark still running, which is the one illusion a benchmark must not
+    // create: the first scratch run was read as 10 minutes when it took 12 seconds.
+    process.exit(0);
 })().catch(e => { console.error(e); process.exit(1); });

@@ -1160,6 +1160,20 @@ class Database {
         }  
     }
 
+    // Drain the connection pool so a process holding this Database can exit. The
+    // long-running services never call it (they hold their pool for their lifetime),
+    // but every bin/ harness ends with `if(db.close) await db.close()` and there was
+    // no such method, so the guard silently did nothing and the pool's idle sockets
+    // kept the event loop alive: the tool printed its results and then hung until it
+    // was killed, which reads as a slow benchmark rather than as a finished one.
+    async close(){
+        await this.releaseConnection();
+        if(this.pool){
+            try { await this.pool.end(); } catch(_){}
+            this.pool = null;
+        }
+    }
+
     // Acquire the transaction mutex (this._txLock). Resolves once the lock is held.
     // Non-reentrant: a single flow must not call this twice before releasing.
     _acquireTxLock(){
