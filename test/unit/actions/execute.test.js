@@ -637,6 +637,18 @@ describe('Execute (EXECUTE) @regression @tier2', function () {
             assert.ok(indexer.indexerDb.createCredit.notCalled);
         });
 
+        //  seam pin. The VM's new '|' guard on contract.slash's token is
+        // defense-in-depth precisely because this handler reads the emission by
+        // NAMED field; if it ever pipe-splits instead, a '|'-bearing token would
+        // shift fields and the guard stops being optional. Assert the property.
+        it('consumes a delimiter-bearing token whole (named-field read, never pipe-split)', async function () {
+            wireSlashDb();
+            await handler._processSlashEmission(slashEmission({ token: 'ST|K' }), slashData());
+            assert.ok(indexer.indexerDb.getTickerId.calledWith('ST|K'),
+                'token must reach the ticker lookup intact, not split on "|"');
+            assert.ok(indexer.indexerDb.createCredit.calledWith(99, 'ST|K', '100', '1SlashDestXXXXXXXXXXXXXXXXXXXXX'));
+        });
+
         it('no-ops when nothing was actually slashed (0 available)', async function () {
             wireSlashDb({ slashContractStake: sinon.stub().resolves('0') });
             await handler._processSlashEmission(slashEmission(), slashData());
