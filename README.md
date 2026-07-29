@@ -119,6 +119,7 @@ parity gate in `bin/check-observability-parity.js`.
 | Command | Description |
 |---|---|
 | `npm run api` | Start the indexer and API server |
+| `bin/run-db-tiers.sh` | Run the DB-backed tiers against a throwaway MariaDB it starts and drops |
 | `npm test` | Run unit tests (~820 tests) |
 | `npm run test:integration` | Integration tests (~929 tests, requires MariaDB) |
 | `npm run test:e2e` | End-to-end tests (43 tests, requires full stack) |
@@ -139,6 +140,31 @@ parity gate in `bin/check-observability-parity.js`.
 | `npm run test:regression:full` | Full regression suite |
 | `npm run test:nodb` | All tests that don't require a database |
 | `npm run test:full` | Complete test suite |
+
+### Running the DB-backed tiers
+
+`bin/run-db-tiers.sh` starts a throwaway tmpfs-backed MariaDB, wires the environment
+the tiers expect, runs them and drops the container again.
+
+```bash
+bin/run-db-tiers.sh                    # integration tier
+bin/run-db-tiers.sh unit integration
+bin/run-db-tiers.sh -- test/integration/scenarios/14-multi-chain-parity.test.js
+```
+
+**Its preflight matters more than the database does.** Reassembling this environment
+by hand produces false results rather than inconvenience:
+
+- `xchain-vm` is a `file:./xchain-vm` dependency and the vendored directory is **not
+  tracked in git**, so any tree built without untracked files (`git archive HEAD`, for
+  instance) lacks it. Every DEPLOY/EXECUTE suite then fails with "deploy VM executor
+  unavailable", which reads exactly like a product defect. The script refuses to run
+  unless `require('xchain-vm')` actually loads.
+- the SDK-parity and decoder-schema suites are cross-repo consensus drift guards that
+  deliberately hard-fail rather than skip, so a missing sibling reads as a red tier.
+  Both paths are checked before anything starts.
+- `INDEXER_COIN` / `INDEXER_NETWORK` are pinned, because a coin-less lookup makes the
+  per-chain activation gates resolve to "off" and quietly changes what is tested.
 
 ## Test Suite
 
