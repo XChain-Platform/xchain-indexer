@@ -2865,6 +2865,22 @@ class Database {
     // ticker". Soft-failing into a cached absence is the two defects composing
     // into a permanent, silent consensus omission, so the read throws instead and
     // the block is retried.
+    // Cached address_id -> canonical address resolver, the address-axis twin of
+    // _smtTickName and subject to exactly the same two rules: a resolved mapping
+    // is immutable so the NAME is cached, an ABSENCE is never cached (an id can
+    // be interned moments later, and a rollback can delete an id that is then
+    // re-interned), and the read is STRICT so a transient fault throws instead of
+    // being indistinguishable from "no such address".
+    async _smtAddressName(address_id){
+        if(!this._smtAddressNameCache) this._smtAddressNameCache = new Map();
+        if(this._smtAddressNameCache.has(address_id)) return this._smtAddressNameCache.get(address_id);
+        let rows = await this.doQueryStrict("SELECT address FROM index_addresses WHERE id=? LIMIT 1", [address_id]);
+        let name = (rows.length > 0) ? rows[0].address : null;
+        if(name != null && name !== '')
+            this._smtAddressNameCache.set(address_id, name);
+        return name;
+    }
+
     async _smtTickName(tick_id){
         if(!this._smtTickNameCache) this._smtTickNameCache = new Map();
         if(this._smtTickNameCache.has(tick_id)) return this._smtTickNameCache.get(tick_id);
@@ -3777,10 +3793,27 @@ class Database {
         // robust to backdated cooldown-refund credits (which reuse an EARLIER
         // block's action_index, so a block-range query would miss them). Active
         // only while the indexer has installed a per-block set.
-        if(this._smtTouched && address != null && tick_id != null){
+        // BOTH axes must be canonical, and for a long time only the tick one was
+        // . The address argument has the SAME hazards the tick argument
+        // has: getAddressId accepts a wire "^<id>" reference and resolves it to a
+        // row whose stored `address` is the real address, so a handler passing
+        // "^123" wrote a correct credit row and then recorded the touched key as
+        // the literal "^123".
+        //
+        // What that costs is not a wrong leaf, it is NO leaf and no error:
+        // getNetBalance('^123', tick) joins index_addresses.address = '^123',
+        // matches nothing, returns 0, and _leafOrNull turns 0 into null, which
+        // makes stateCommitment DELETE a key that never existed. The update is a
+        // no-op, balances_root does not move for that block, and the real
+        // address's leaf is simply never written. On BTC regtest that presented
+        // as 15 of 1531 ledger-changing blocks committing a byte-identical
+        // balances_root to their predecessor, and a key was lost permanently
+        // only when no later block happened to touch it again.
+        if(this._smtTouched && address != null && tick_id != null && address_id != null){
             let canonTick = await this._smtTickName(tick_id);
-            if(canonTick != null && canonTick !== '')
-                this._smtTouched.add(address + '\t' + canonTick);
+            let canonAddr = await this._smtAddressName(address_id);
+            if(canonTick != null && canonTick !== '' && canonAddr != null && canonAddr !== '')
+                this._smtTouched.add(canonAddr + '\t' + canonTick);
         }
         // Round amount to the tick's actual decimal precision before storing.
         // Without this, fractional amounts (e.g. VM gas fees calculated at 8
