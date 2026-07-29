@@ -100,6 +100,10 @@ const REWARD_TYPE   = 'anchor_BTC';
 
 const VALIDATOR = makeKeypair();   // the reward's signing validator (independent of federation signers)
 
+// The DOGE address that publishes the seeded archive anchor: head and every continuation
+// chunk are authored by it, which is what binds the chunks to the head since #3075.
+const ARCHIVE_PUBLISHER = 'DArchivePublisher0000000000000000';
+
 // ── Contract-heavy recovery leg  ────────────────────────────────────
 // The launch bundle deploys contracts via chunked DEPLOY: a run of v4 carriers each
 // carrying one ordered base64 slice of the source, then a v2/v3 that reassembles the
@@ -244,6 +248,22 @@ async function seedArchive(dogeDb) {
     // seeded v1 MUST carry a real status_id (a NULL status_id is dropped by the INNER JOIN, which is
     // a fixture defect, not a reason to loosen the query). anchor.js defaults a clean parse to 'valid'.
     const validStatusId = await dogeDb.createStatus('valid');
+    // Every anchor row also needs its `actions` row (#3075): a v2 continuation chunk is
+    // now authenticated by matching the archive head's AUTHOR, resolved through
+    // actions.source_id -> index_addresses, so a seeded anchor with no action linkage
+    // resolves to a NULL author, matches nothing, and the batch reports 'incomplete
+    // batch'. Same class of fixture defect as the NULL status_id noted above: seed the
+    // linkage, never loosen the query. Head and chunks share ONE publisher, which is the
+    // legitimate shape - a real batch is published by a single validator.
+    dogeDb.blockIndex = 500;
+    await dogeDb.createAddress(ARCHIVE_PUBLISHER);
+    const publisherId = await dogeDb.getAddressId(ARCHIVE_PUBLISHER);
+    const anchorActionId = await dogeDb.createAction('ANCHOR');
+    const linkAction = (actionIndex, format) => dogeDb.doQuery(
+        `INSERT INTO actions (action_index, block_index, tx_index, tx_vout, action_id, action_format, source_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [actionIndex, 500, actionIndex, 0, anchorActionId, format, publisherId]);
+    await linkAction(1, 1);
     await dogeDb.doQuery(
         `INSERT INTO anchor_actions
             (action_index, version, chain, network, block_index, block_hash, ledger_hash,
@@ -255,6 +275,7 @@ async function seedArchive(dogeDb) {
          v1.match_count, v1.batch_crc32, v1.total_chunks, v1.archive_b64, v1.validator_signatures, validStatusId, 500]);
     let ai = 2;
     for (const c of v2s) {
+        await linkAction(ai, 2);
         await dogeDb.doQuery(
             `INSERT INTO anchor_actions
                 (action_index, version, match_batch_seq, chunk_index, total_chunks, archive_b64, block_index_doge)

@@ -39,6 +39,7 @@ const { getStakeSourceByPubkey } = require('./stake-source');
 const { canonicalizeRewardType } = require('./reward-push-gate');
 const anchorActionQuery = require('./anchor-action-query');
 const reorgHistoryQuery = require('./reorg-history-query');
+const { stampGiveDecimals } = require('./crossChainOfferDecimals');
 const merkle        = require('./merkle');
 const stateSubtree  = require('./state_subtree_activation');
 const ar            = require('./anchor_reward_activation.js');
@@ -859,6 +860,12 @@ async function startApi(){
                 if(truncated)
                     console.warn('getopencrosschainorders hit the cap of ' + max + ' at block ' + latest + ' - the open cross-chain book is truncated (newer offers dropped); the hub should page via next_cursor or raise its limit.');
                 for(let o of merged) o.push_generation = pushGeneration;
+                // Give-side decimal grid (): the hub quantizes each cross-chain
+                // fill on the grid of the leg that gives it, and declines the match outright
+                // rather than guessing when it is absent. Resolution lives in
+                // crossChainOfferDecimals.js (it delegates to the same getTokenInfo
+                // order_match.js uses, so the two grids cannot drift).
+                await stampGiveDecimals(db, indexer.util, indexer.config['COIN_DECIMALS'], merged, latest);
                 return {
                     latest_block_index: latest,
                     network:            indexer.config['NETWORK'],

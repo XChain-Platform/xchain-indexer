@@ -35,7 +35,8 @@ const caretRefStrict = require('./caret_ref_strict_activation');
 // byte-identical from xchain-documentation/protocol/constants.js, same convention
 // as the XCALL_MAX_CALLS_PER_BLOCK sibling it mirrors.
 const { ATTEST_MAX_EXPIRIES_PER_BLOCK } = require('./protocol/constants.js');
-const { CHECKPOINT_VERSIONS: ANCHOR_CHECKPOINT_VERSIONS } = require('./anchor-action-query');
+const { CHECKPOINT_VERSIONS: ANCHOR_CHECKPOINT_VERSIONS,
+        ARCHIVE_CHUNK_SET_SQL, dedupeArchiveChunks } = require('./anchor-action-query');
 const { rethrowIfInfraFault } = require('./actions/faultGuard');
 
 // Tables whose highest-`id`-survivor dedupe rule is validated and safe to auto-apply at
@@ -12580,9 +12581,20 @@ class Database {
     // action_index wins' tie-break the v2-continuation dedup below already uses. Order on
     // action_index (consensus-visible, unique on this single-network table), never the local
     // AUTO_INCREMENT id, which differs per node.
+    // The row also carries `source`: the head's AUTHOR address, resolved through
+    // actions.source_id (#3075). anchor.js binds every v2 continuation chunk to it, so a
+    // junk chunk can no longer squat a slot and deny the batch. LEFT JOINed so the head
+    // PICK is unchanged from the pre-#3075 query (an inner join would skip an unlinked
+    // head and select a different one, moving a consensus-visible geometry verdict); an
+    // unresolvable author arrives as null and anchor.js fails the chunk closed.
     async getAnchorV1ByBatchSeq(batchSeq){
         let rows = await this.doQuery(
-            "SELECT * FROM anchor_actions WHERE version IN (1, 6) AND match_batch_seq = ? ORDER BY action_index ASC LIMIT 1", [batchSeq]);
+            `SELECT a.*, adr.address AS source
+             FROM anchor_actions a
+             LEFT JOIN actions         act ON act.action_index = a.action_index
+             LEFT JOIN index_addresses adr ON adr.id           = act.source_id
+             WHERE a.version IN (1, 6) AND a.match_batch_seq = ?
+             ORDER BY a.action_index ASC LIMIT 1`, [batchSeq]);
         return rows.length > 0 ? rows[0] : null;
     }
 
@@ -12598,18 +12610,16 @@ class Database {
     // 'incomplete batch' forever (finding #2269). 'orphan' rows are KEPT: a
     // chunk that landed before its parent v1 carries legitimate archive
     // bytes. Mirrors rollback.js's valid-chunk self-join and the recovery.js
-    // v1 status filter; recovery._verifyBatch inlines this same shape (it
-    // only holds a doQuery handle) - keep the two in step.
+    // v1 status filter. #3075 added the authorship term and moved the whole
+    // query into anchor-action-query.js (ARCHIVE_CHUNK_SET_SQL), which
+    // recovery._verifyBatch now requires verbatim, so the two can no longer
+    // drift by hand-copy: only chunks authored by the CANONICAL archive head
+    // count, which is what stops a junk chunk broadcast BEFORE the head (stored
+    // 'orphan', so it carries no rejection verdict of its own) from squatting a
+    // slot and denying the batch permanently.
     async getAnchorChunks(batchSeq){
-        let rows = await this.doQuery(
-            `SELECT a.* FROM anchor_actions a
-             JOIN index_statuses s ON s.id = a.status_id
-             WHERE a.version = 2 AND a.match_batch_seq = ? AND s.status NOT LIKE 'invalid:%'
-             ORDER BY a.chunk_index ASC, a.action_index ASC`, [batchSeq]);
-        let byIndex = new Map();
-        for(let r of rows)
-            if(!byIndex.has(Number(r.chunk_index))) byIndex.set(Number(r.chunk_index), r);
-        return Array.from(byIndex.values());
+        let rows = await this.doQuery(ARCHIVE_CHUNK_SET_SQL, [batchSeq, batchSeq]);
+        return dedupeArchiveChunks(rows);
     }
 
     // Flag an anchor row (e.g. 'invalid_archive' when chunk reassembly fails CRC).

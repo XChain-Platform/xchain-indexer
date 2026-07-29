@@ -496,9 +496,24 @@ class Anchor {
                 data['STATUS'] = 'orphan';
             else if(Number(parent.total_chunks) !== Number(data['TOTAL_CHUNKS']))
                 error = 'invalid: TOTAL_CHUNKS (does not match parent v1)';
+            // Authorship (#3075): "authenticated by its parent v1" now MEANS it. A chunk
+            // is valid only when its author is the canonical archive head's author, so a
+            // slot can only be occupied by the publisher whose batch it is. Without this,
+            // the duplicate guard below turned first-broadcast-wins into permanent denial:
+            // anyone could fill a slot with junk and the real chunk was rejected as a
+            // duplicate. parent.source comes from actions.source_id (authoritative for
+            // auth); a null one means the head's author cannot be resolved at all, which
+            // fails closed rather than waving the chunk through unauthenticated.
+            else if(!parent.source)
+                error = 'invalid: SOURCE (archive head author unresolvable)';
+            else if(String(data['SOURCE'] || '') !== String(parent.source))
+                error = 'invalid: SOURCE (not the archive head publisher)';
         }
 
-        // Duplicate chunk guard (same batch + index already stored).
+        // Duplicate chunk guard (same batch + index already stored). Since #3075 the
+        // occupancy set getAnchorChunks returns is author-bound, so a junk chunk that
+        // landed BEFORE the head (status 'orphan', no verdict of its own) no longer
+        // counts as occupying the slot and can no longer get the real chunk rejected here.
         if(!error && parent){
             let existing = await this.indexerDb.getAnchorChunks(Number(data['MATCH_BATCH_SEQ']));
             if(existing.some(c => Number(c.chunk_index) === Number(data['CHUNK_INDEX'])))

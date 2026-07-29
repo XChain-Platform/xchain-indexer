@@ -37,6 +37,13 @@ const { makeKeypair, signHex, buildBatch, rawMatch, rawCall, SNAPSHOT_BLOCK } = 
 // (3·Σweight > 2·S) reduces to the legacy 2f+1 signer count.
 const util = new Utility();
 
+// The address every fixture anchor is authored by, i.e. the archive head's SOURCE
+// (#3075). A chunk is only counted when it shares the canonical head's author, so
+// fixtures that omit `source` on either side are treated as this one and behave exactly
+// as they did before the authorship filter existed.
+const AUTHOR   = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
+const OUTSIDER = 'mzBc4XEFSdzCDcTxAgf6EZXgsZWpztRhef';
+
 // In-memory DOGE indexer DB for the recovery query surface.
 // opts.noTx: expose ONLY doQuery, modelling a raw query handle with no transaction API
 // (recovery must still rebuild against one; see the back-compat case below). Otherwise the
@@ -63,15 +70,28 @@ function memDb(v1s, v2s, opts) {
                     return st === 'valid' || st === 'unverified';
                 });
             }
-            // The chunk query now joins index_statuses and drops rejected rows
-            // (status LIKE 'invalid:%'), keeping 'valid' and 'orphan' (#2269).
-            // Model the filter here; recovery's own JS does the per-index dedupe.
-            if (sql.startsWith('SELECT c.chunk_index, c.archive_b64, c.action_index FROM anchor_actions c'))
+            // The chunk query joins index_statuses and drops rejected rows
+            // (status LIKE 'invalid:%'), keeping 'valid' and 'orphan' (#2269), and since
+            // #3075 also drops every chunk not authored by the batch's CANONICAL archive
+            // head (earliest v1/v6 row by action_index, status-agnostic). Model both
+            // filters here; recovery's own JS does the per-index dedupe. Fixture rows
+            // default to AUTHOR on both sides, so pre-#3075 fixtures are unaffected.
+            // Whitespace-normalized: the query is no longer a local one-liner but the
+            // shared ARCHIVE_CHUNK_SET_SQL constant, which is indented across lines.
+            if (String(sql).replace(/\s+/g, ' ').trim()
+                    .startsWith('SELECT c.*, cadr.address AS source FROM anchor_actions c')) {
+                let head = v1s
+                    .filter(v => Number(v.match_batch_seq) === Number(params[0]))
+                    .sort((a, b) => Number(a.action_index || 0) - Number(b.action_index || 0))[0];
+                let headAuthor = head ? (head.source === undefined ? AUTHOR : head.source) : null;
                 return v2s
                     .filter(c => Number(c.match_batch_seq) === Number(params[0]))
                     .filter(c => !String(c.status == null ? 'valid' : c.status).startsWith('invalid:'))
+                    .filter(c => headAuthor !== null && headAuthor !== undefined &&
+                                 (c.source === undefined ? AUTHOR : c.source) === headAuthor)
                     .sort((a, b) => (Number(a.chunk_index) - Number(b.chunk_index)) ||
                                     (Number(a.action_index || 0) - Number(b.action_index || 0)));
+            }
             if (sql.startsWith('INSERT IGNORE INTO capability_snapshots')) {
                 let [snapshot_block, capability, signing_pubkey, amount] = params;
                 if (!snapshots.some(r => r.snapshot_block === snapshot_block && r.capability === capability && r.signing_pubkey === signing_pubkey))
@@ -366,6 +386,40 @@ describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () 
         assert.strictEqual(report.failed.length, 0);
         assert.strictEqual(db.matches.length, 1);
         assert.strictEqual(db.matches[0].match_id, 'm3');
+    });
+
+    // ── #3075: the case parse-time authorship cannot judge. A junk chunk broadcast
+    //    BEFORE its head has no parent to authenticate against, so it is stored 'orphan'
+    //    (a status that must stay usable - a legitimate early chunk carries real archive
+    //    bytes). Unfiltered, that row wins the lowest-action_index dedupe for its slot,
+    //    its junk bytes enter the concat, and the batch fails its signed CRC forever.
+    //    The authorship term in the shared chunk query is what excludes it. ────────────
+    it('a junk ORPHAN chunk from an outsider never enters the reassembly (#3075)', async function () {
+        let multi = buildBatch(3, [rawMatch('m4')], oracleKeys, crossKeys, { chunkSize: 200 });
+        assert.ok(multi.v2s.length >= 1, 'batch should actually chunk');
+        // Lower action_index than the real chunk, so it would win the per-index dedupe.
+        let junk = { version: 2, match_batch_seq: 3, chunk_index: multi.v2s[0].chunk_index,
+                     archive_b64: 'AAAAjunkAAAA', action_index: 1, status: 'orphan', source: OUTSIDER };
+        let real = multi.v2s.map(c => Object.assign({ action_index: 100, source: AUTHOR }, c));
+        let db = memDb([Object.assign({}, multi.v1, { action_index: 50, source: AUTHOR })], [junk].concat(real));
+        let report = await new AnchorRecovery(db, quiet).run();
+
+        assert.strictEqual(report.verified, 1, JSON.stringify(report.failed));
+        assert.strictEqual(db.matches.length, 1);
+        assert.strictEqual(db.matches[0].match_id, 'm4');
+    });
+
+    // Teeth for the test above: the SAME orphan chunk authored by the head's own
+    // publisher DOES count (that is the legitimate head-lands-last case), so the
+    // assertion above turns on authorship and not on the row being an orphan.
+    it('an orphan chunk from the head publisher still counts (#3075 does not reject orphans)', async function () {
+        let multi = buildBatch(4, [rawMatch('m5')], oracleKeys, crossKeys, { chunkSize: 200 });
+        let orphans = multi.v2s.map(c => Object.assign({ action_index: 10, source: AUTHOR, status: 'orphan' }, c));
+        let db = memDb([Object.assign({}, multi.v1, { action_index: 50, source: AUTHOR })], orphans);
+        let report = await new AnchorRecovery(db, quiet).run();
+
+        assert.strictEqual(report.verified, 1, JSON.stringify(report.failed));
+        assert.strictEqual(db.matches[0].match_id, 'm5');
     });
 
     it('rejects a sub-quorum wrapper and sub-quorum match signatures', async function () {

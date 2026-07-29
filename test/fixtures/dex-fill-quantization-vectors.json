@@ -4,7 +4,7 @@
   "contract": [
     "1. The derived side of the bottleneck clamp is multiplied at PRECISION 64 on both sides. The hub ran this at 18 (fixed 2026-07-28); getPrice already yields a 64-digit rate, so 18 discarded digits the indexer keeps.",
     "2. bcround is floor(n * 10^d + 0.5) / 10^d, half-up, explicit and config-independent, identical in xchain-indexer/src/utility.js and xchain-hub/src/bcmath.js.",
-    "3. TICK QUANTIZATION IS NOT YET AT PARITY. The indexer snaps both derived amounts onto their own tick's decimal grid (order_match.js:219-220). The hub cannot: its cross-chain offers carry give_tick/get_tick but no decimals, and it mirrors no token table. The `tick_quantization` vectors below therefore pin the INDEXER's behavior only, and are marked hub_reachable:false. They become a parity requirement the moment offers carry decimals."
+    "3. TICK QUANTIZATION IS AT PARITY (closed 2026-07-29). Both engines snap each derived amount onto the decimal grid of the tick that side GIVES. The indexer reads that tick's DECIMALS locally (order_match.js:219-220); the hub takes the same value from the offer itself, which its home indexer now reports as give_decimals in getopencrosschainorders (resolved there through the same getTokenInfo, so the two cannot drift). The hub NEVER infers decimals: an offer without them produces no match at all. The vectors below are binding on BOTH halves."
   ],
   "precision_alignment": [
     {
@@ -44,7 +44,7 @@
   "tick_quantization": [
     {
       "label": "sub-ULP artifact recovers to a whole unit",
-      "hub_reachable": false,
+      "hub_reachable": true,
       "note": "The canonical reason bcround exists: a 64-digit derivation can land one ULP under an exact integer, and the grid snap recovers it.",
       "amount": "0.999999999999999999",
       "decimals": 8,
@@ -52,15 +52,15 @@
     },
     {
       "label": "indivisible (0-decimal) tick forces an integer fill",
-      "hub_reachable": false,
-      "note": "An NFT-style tick must never settle a fractional quantity. A COIN_DECIMALS=8 default would silently pass 1.6 through here, which is why the hub must not guess decimals.",
+      "hub_reachable": true,
+      "note": "An NFT-style tick must never settle a fractional quantity. A COIN_DECIMALS=8 default would silently pass 1.6 through here, which is why the hub takes the decimals from the offer and declines the match when they are absent rather than guessing.",
       "amount": "1.6",
       "decimals": 0,
       "expected": "2"
     },
     {
       "label": "half-up at the grid boundary",
-      "hub_reachable": false,
+      "hub_reachable": true,
       "note": "Pins the rounding MODE, not just the width: banker's rounding would give 0.00000002.",
       "amount": "0.000000025",
       "decimals": 8,
@@ -68,7 +68,7 @@
     },
     {
       "label": "dust below the grid rounds to zero and the fill is dropped",
-      "hub_reachable": false,
+      "hub_reachable": true,
       "note": "Both engines drop a fill that quantizes to zero rather than settling dust.",
       "amount": "0.000000004",
       "decimals": 8,

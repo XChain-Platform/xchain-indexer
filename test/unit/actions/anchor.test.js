@@ -160,6 +160,13 @@ function v6Params(archiveJson, overrides = {}) {
 
 const ARCHIVE_JSON = JSON.stringify({ v: 1, network: 'regtest', batch_seq: 0, matches: [{ match_id: 'm1' }], capability_snapshots: [] });
 
+// The archive head's AUTHOR address (#3075), i.e. what db.getAnchorV1ByBatchSeq now
+// returns as `source`. Deliberately createBaseData's SOURCE: a v2 continuation chunk is
+// authenticated by matching it, so every legitimate-chunk fixture below publishes as this
+// address and the hostile ones publish as OUTSIDER.
+const PUBLISHER = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
+const OUTSIDER  = 'mzBc4XEFSdzCDcTxAgf6EZXgsZWpztRhef';
+
 describe('Anchor (ANCHOR) @regression @tier3', function () {
     let indexer, handler, verifyStub, swqStub, deriveGateStub;
 
@@ -527,8 +534,10 @@ describe('Anchor (ANCHOR) @regression @tier3', function () {
         await handler.parse(['2', '9', '1', '3', gz64('x')], data, null);
         assert.strictEqual(data['STATUS'], 'orphan');
 
-        // Parent present, fresh chunk → valid
-        indexer.indexerDb.getAnchorV1ByBatchSeq.resolves({ action_index: 1, total_chunks: 3, archive_b64: 'AAA', batch_crc32: 'deadbeef' });
+        // Parent present, fresh chunk from the head's OWN publisher → valid. `source` is
+        // the head author the chunk is bound to (#3075); createBaseData's SOURCE is the
+        // chunk author, so the two must match for the chunk to be authenticated at all.
+        indexer.indexerDb.getAnchorV1ByBatchSeq.resolves({ action_index: 1, total_chunks: 3, archive_b64: 'AAA', batch_crc32: 'deadbeef', source: PUBLISHER });
         let data2 = createBaseData({ ACTION: 'ANCHOR', FORMAT: 2, COIN: 'DOGE', ACTION_INDEX: 3 });
         await handler.parse(['2', '9', '1', '3', 'BBBB'], data2, null);
         assert.strictEqual(data2['STATUS'], 'valid');
@@ -540,11 +549,70 @@ describe('Anchor (ANCHOR) @regression @tier3', function () {
         assert.ok(String(data3['STATUS']).startsWith('invalid: CHUNK_INDEX (duplicate)'));
     });
 
+    // ── #3075: chunk-slot poisoning. "Authenticated by its parent v1" used to mean only
+    //    that a parent existed with matching geometry, so the FIRST broadcast into a slot
+    //    won permanently: a junk chunk took the slot, the real publisher's chunk was
+    //    rejected as a duplicate, and the batch could never reassemble. ─────────────────
+    describe('v2 chunk authorship (#3075)', function () {
+
+        const headOf = (source) => ({ action_index: 1, total_chunks: 3, archive_b64: 'AAA', batch_crc32: 'deadbeef', source });
+
+        it('rejects a chunk whose author is not the archive head publisher', async function () {
+            indexer.indexerDb.getAnchorV1ByBatchSeq.resolves(headOf(PUBLISHER));
+            let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 2, COIN: 'DOGE', ACTION_INDEX: 7, SOURCE: OUTSIDER });
+            await handler.parse(['2', '9', '1', '3', 'BBBB'], data, null);
+            assert.strictEqual(data['STATUS'], 'invalid: SOURCE (not the archive head publisher)');
+        });
+
+        it('the real publisher keeps its slot: an outsider chunk no longer makes it a duplicate', async function () {
+            // The denial the finding describes, driven end to end. The junk chunk is
+            // rejected on authorship, so it is NOT in the occupancy set getAnchorChunks
+            // returns (that query excludes 'invalid: ...' rows), and the legitimate chunk
+            // for the same index parses 'valid' instead of 'invalid: CHUNK_INDEX (duplicate)'.
+            indexer.indexerDb.getAnchorV1ByBatchSeq.resolves(headOf(PUBLISHER));
+            let junk = createBaseData({ ACTION: 'ANCHOR', FORMAT: 2, COIN: 'DOGE', ACTION_INDEX: 8, SOURCE: OUTSIDER });
+            await handler.parse(['2', '9', '1', '3', 'JUNK'], junk, null);
+            assert.ok(String(junk['STATUS']).startsWith('invalid: SOURCE'));
+
+            let real = createBaseData({ ACTION: 'ANCHOR', FORMAT: 2, COIN: 'DOGE', ACTION_INDEX: 9, SOURCE: PUBLISHER });
+            await handler.parse(['2', '9', '1', '3', 'BBBB'], real, null);
+            assert.strictEqual(real['STATUS'], 'valid');
+        });
+
+        it('fails closed when the head author cannot be resolved at all', async function () {
+            // A head whose actions/index_addresses linkage is missing yields source null.
+            // Waving the chunk through then would authenticate it against nothing.
+            indexer.indexerDb.getAnchorV1ByBatchSeq.resolves(headOf(null));
+            let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 2, COIN: 'DOGE', ACTION_INDEX: 10 });
+            await handler.parse(['2', '9', '1', '3', 'BBBB'], data, null);
+            assert.strictEqual(data['STATUS'], 'invalid: SOURCE (archive head author unresolvable)');
+        });
+
+        it('geometry still outranks authorship, so the pre-#3075 verdict is unchanged', async function () {
+            // TOTAL_CHUNKS is checked first: a wrong-geometry chunk from the right
+            // publisher must keep reporting the geometry reason, not the new one.
+            indexer.indexerDb.getAnchorV1ByBatchSeq.resolves(headOf(PUBLISHER));
+            let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 2, COIN: 'DOGE', ACTION_INDEX: 11 });
+            await handler.parse(['2', '9', '1', '4', 'BBBB'], data, null);
+            assert.ok(String(data['STATUS']).startsWith('invalid: TOTAL_CHUNKS'));
+        });
+
+        it('an orphan chunk is still stored unjudged: there is no head to authenticate against', async function () {
+            // Legitimate early chunks exist (the head can land last, ), so an
+            // orphan must NOT be rejected on authorship. Excluding a junk orphan is the
+            // read path's job (ARCHIVE_CHUNK_SET_SQL), not this one's.
+            indexer.indexerDb.getAnchorV1ByBatchSeq.resolves(null);
+            let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 2, COIN: 'DOGE', ACTION_INDEX: 12, SOURCE: OUTSIDER });
+            await handler.parse(['2', '9', '1', '3', 'BBBB'], data, null);
+            assert.strictEqual(data['STATUS'], 'orphan');
+        });
+    });
+
     it('v2 reassembly: the final chunk triggers CRC verification and flags a bad batch', async function () {
         let json = ARCHIVE_JSON;
         let b64  = gz64(json);
         let cut1 = Math.ceil(b64.length / 3), cut2 = 2 * cut1;
-        let parent = { action_index: 1, total_chunks: 3, archive_b64: b64.slice(0, cut1), batch_crc32: crc32Hex(json) };
+        let parent = { action_index: 1, total_chunks: 3, archive_b64: b64.slice(0, cut1), batch_crc32: crc32Hex(json), source: PUBLISHER };
         indexer.indexerDb.getAnchorV1ByBatchSeq.resolves(parent);
         // First call per parse = duplicate guard (before this chunk is stored);
         // second call = reassembly read (after the store).

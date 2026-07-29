@@ -67,6 +67,7 @@ const swq     = require('./stake_weighted_quorum.js');
 const eq      = require('./equivocation_header.js');
 const ccr     = require('./cross_chain_royalty_activation.js');
 const ar      = require('./anchor_reward_activation.js');
+const { ARCHIVE_CHUNK_SET_SQL, dedupeArchiveChunks } = require('./anchor-action-query.js');
 
 class AnchorRecovery {
 
@@ -161,25 +162,21 @@ class AnchorRecovery {
         let totalChunks = Number(v1.total_chunks) || 1;
         let b64 = String(v1.archive_b64 || '');
         if(totalChunks > 1){
-            // Same status filter + per-index dedupe as db.js::getAnchorChunks
-            // (inlined because recovery only holds a doQuery handle - keep the
-            // two in step). Rejected 'invalid: ...' rows are excluded so one
-            // permissionless junk v2 tx cannot inflate the count and block the
-            // batch forever ('incomplete batch', finding #2269); 'orphan' rows
-            // are KEPT (a chunk that landed before its parent v1 carries
-            // legitimate archive bytes). Lowest action_index wins per index,
-            // deterministically. Mirrors the v1 status join above and
+            // The SAME query the live path uses, imported rather than hand-copied
+            // (#3075): recovery holds only a doQuery handle, so the shape used to be
+            // inlined here with a "keep the two in step" note, and the authorship term
+            // is exactly the kind of addition that would have drifted. Rejected
+            // 'invalid: ...' rows are excluded so one permissionless junk v2 tx cannot
+            // inflate the count and block the batch forever ('incomplete batch',
+            // finding #2269); 'orphan' rows are KEPT (a chunk that landed before its
+            // parent head carries legitimate archive bytes) and are exactly why the
+            // authorship filter must be in the read path; and only chunks authored by
+            // the canonical archive head count at all. Lowest action_index wins per
+            // index, deterministically. Mirrors the v1 status join above and
             // rollback.js's valid-chunk self-join; do NOT loosen to unfiltered.
-            let rows = await this.db.doQuery(
-                `SELECT c.chunk_index, c.archive_b64, c.action_index FROM anchor_actions c
-                 JOIN index_statuses s ON s.id = c.status_id
-                 WHERE c.version = 2 AND c.match_batch_seq = ? AND s.status NOT LIKE 'invalid:%'
-                 ORDER BY c.chunk_index ASC, c.action_index ASC`,
-                [Number(v1.match_batch_seq)]);
-            let byIndex = new Map();
-            for(let r of (rows || []))
-                if(!byIndex.has(Number(r.chunk_index))) byIndex.set(Number(r.chunk_index), r);
-            let chunks = Array.from(byIndex.values());
+            let rows = await this.db.doQuery(ARCHIVE_CHUNK_SET_SQL,
+                [Number(v1.match_batch_seq), Number(v1.match_batch_seq)]);
+            let chunks = dedupeArchiveChunks(rows);
             if(chunks.length !== totalChunks - 1)
                 throw new Error('incomplete batch: ' + chunks.length + '/' + (totalChunks - 1) + ' continuation chunks');
             for(let c of chunks) b64 += c.archive_b64;

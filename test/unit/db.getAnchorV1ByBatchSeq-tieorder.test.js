@@ -96,11 +96,45 @@ describe('Database.getAnchorV1ByBatchSeq() head-selection determinism @regressio
         let captured = null;
         sinon.stub(db, 'doQuery').callsFake(async (sql) => { captured = sql; return []; });
         await db.getAnchorV1ByBatchSeq(42);
-        assert.match(captured, /ORDER BY\s+action_index\s+ASC/i,
+        // The alias is optional in the pattern only because #3075 joined actions in (both
+        // tables have an action_index column, so the ORDER BY has to qualify it now).
+        assert.match(captured, /ORDER BY\s+(?:[A-Za-z0-9_]+\.)?action_index\s+ASC/i,
             'head selection must ORDER BY action_index ASC (canonical/earliest head)');
         assert.match(captured, /LIMIT\s+1/i);
         // Must NOT order on the local AUTO_INCREMENT surrogate (per-node divergent).
         assert.doesNotMatch(orderClause(captured), /\bid\b/i);
+    });
+
+    // #3075: the head row must carry its AUTHOR, because anchor.js binds every v2
+    // continuation chunk to it. The address is resolved through actions.source_id
+    // (authoritative for auth) - anchor_actions has no source column of its own, and its
+    // `publisher` column is the v4/v5/v6 elected-PUBLISHER pubkey, a different thing.
+    it('resolves the head AUTHOR through actions.source_id as `source` (#3075)', async function () {
+        const db = makeDb();
+        let captured = null;
+        sinon.stub(db, 'doQuery').callsFake(async (sql) => { captured = sql; return []; });
+        await db.getAnchorV1ByBatchSeq(42);
+        assert.match(captured, /index_addresses/i, 'the author must come from index_addresses');
+        assert.match(captured, /source_id/i,       'joined on actions.source_id, never re-derived from the tx');
+        assert.match(captured, /AS\s+source/i,     'anchor.js reads parent.source');
+        assert.doesNotMatch(captured, /a\.publisher\b/i,
+            'publisher is the elected-PUBLISHER pubkey (v4/v5/v6 tail), not the author');
+    });
+
+    // The join must not be able to change WHICH head is selected: an inner join would
+    // skip a head whose action linkage is missing and silently pick the NEXT one, moving
+    // a consensus-visible geometry verdict (TOTAL_CHUNKS) and the authorship rule with it.
+    // An unresolvable author must arrive as null instead, which anchor.js fails closed on.
+    it('joins the author LEFT so the head PICK stays byte-identical to pre-#3075', async function () {
+        const db = makeDb();
+        let captured = null;
+        sinon.stub(db, 'doQuery').callsFake(async (sql) => { captured = sql; return []; });
+        await db.getAnchorV1ByBatchSeq(42);
+        const joins = captured.match(/\b(LEFT\s+JOIN|INNER\s+JOIN|(?<!LEFT\s)(?<!OUTER\s)JOIN)\b/gi) || [];
+        assert.ok(joins.length > 0, 'the author has to be joined in from somewhere');
+        for (const j of joins)
+            assert.match(j, /LEFT\s+JOIN/i,
+                'every join on the head-selection query must be LEFT (author resolution must never filter the pick)');
     });
 
     it('returns the EARLIEST head (lowest action_index) when a batch_seq is duplicated', async function () {
