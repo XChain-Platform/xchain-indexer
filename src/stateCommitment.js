@@ -471,6 +471,60 @@ async function buildFullBalancesRoot(db, chain, network, blockIndex, opts){
     return root;
 }
 
+// Opt-in audit of the touched-key set against the block's actual ledger rows
+// . OFF unless INDEXER_SMT_TOUCH_AUDIT=1, so it costs a production node
+// nothing; one extra query per ledger-changing block when enabled.
+//
+// WHY THIS EXISTS RATHER THAN ANOTHER FIX. Balance leaves have gone missing on
+// every regtest venue (BTC 15 of 1531 ledger-changing blocks, LTC 8 of 880, DOGE
+// 2 of 648). Two real defects were found and fixed, both of which produce the
+// signature exactly: a touched key recorded under a non-canonical name makes
+// getNetBalance return 0, _leafOrNull turns that into null, and the commitment
+// deletes a key that never existed, so the block's balances_root is unchanged
+// and no error is raised anywhere. But BTC regtest block 10296 skipped under
+// conditions that exclude BOTH of them (fresh resolver caches after a restart,
+// no rollback since, and an ISSUE whose address is a real decoded SOURCE), so at
+// least one mechanism is still unaccounted for.
+//
+// The thing that has been missing throughout is not a theory, it is a DETECTOR.
+// The failure is silent by construction, so it can only be caught in the act.
+// This compares what the choke point recorded against what the block's ledger
+// rows say it should have recorded, and reports the difference in both
+// directions with the exact keys, which is the evidence no post-hoc probe can
+// recover once the block is committed.
+async function _auditTouchedSet(db, blockIndex, touched){
+    if(process.env.INDEXER_SMT_TOUCH_AUDIT !== '1') return;
+    try {
+        const rows = await db.doQueryStrict(
+            `SELECT DISTINCT ia.address AS address, it.tick AS tick
+               FROM (
+                    SELECT action_index, address_id, tick_id FROM credits
+                    UNION ALL
+                    SELECT action_index, address_id, tick_id FROM debits
+               ) s
+               INNER JOIN actions a        ON a.action_index = s.action_index
+               INNER JOIN index_addresses ia ON ia.id = s.address_id
+               INNER JOIN index_tickers   it ON it.id = s.tick_id
+              WHERE a.block_index = ?`, [blockIndex]);
+        const expected = new Set();
+        for(const r of (rows || []))
+            if(r.address != null && r.tick != null && r.tick !== '')
+                expected.add(r.address + '\t' + r.tick);
+        const got     = new Set(touched);
+        const missing = [...expected].filter(k => !got.has(k));   // ledger moved, no touch: the defect
+        const extra   = [...got].filter(k => !expected.has(k));   // touched a key the ledger did not move
+        if(missing.length || extra.length){
+            console.error('SMT-TOUCH-AUDIT block=' + blockIndex +
+                ' missing=' + JSON.stringify(missing.map(k => k.split('\t'))) +
+                ' extra='   + JSON.stringify(extra.map(k => k.split('\t'))));
+        }
+    } catch(e){
+        // Diagnostics must never take a block down. A consensus path that can be
+        // broken by its own instrumentation is worse than the bug it hunts.
+        console.error('SMT-TOUCH-AUDIT failed for block ' + blockIndex + ': ' + (e && e.message));
+    }
+}
+
 // ---- Orchestrator -----------------------------------------------------------
 // Compute + persist the per-block roots, INSIDE the block transaction (the caller
 // runs this after sanityCheck, before commit). chain = COIN, network = NETWORK.
@@ -556,6 +610,7 @@ async function computeAndStoreRoots(db, chain, network, blockIndex, isActivation
             root = await ESC.applyEscrowLeaves(db, smt, root, chain, network, blockIndex);
         }
         balancesRoot = root;
+        await _auditTouchedSet(db, blockIndex, touched);
     }
 
     // stakes_root: BTC-only; LTC/DOGE commit the empty-SMT root.
