@@ -116,6 +116,20 @@ const XCALL_MAX_CALLS_PER_BLOCK = 25;
 // under the  batch because the fleet-wide replay recomputes all of it.
 const ATTEST_MAX_EXPIRIES_PER_BLOCK = 25;
 
+// ── Token-gated content (PC-29) ─────────────────────────────────────────────
+// Fixed fractional scale for comparing FILE.GATE_MIN_AMOUNT thresholds against a
+// holder's balance. The wallet scales both sides to this many fractional digits
+// as BigInt (packages/core THRESHOLD_SCALE); the indexer compares with mathjs
+// bignumber. A threshold carrying MORE decimal places than this is
+// unrepresentable on the wallet side, so the two implementations would disagree
+// on the last digit for values neither considers malformed. The indexer therefore
+// bounds a threshold's decimal places at min(gate tick divisibility,
+// THRESHOLD_SCALE) rather than at divisibility alone.
+//
+// Cross-repo twin: xchain-wallet packages/core THRESHOLD_SCALE. These two must
+// move together or the disagreement returns.
+const THRESHOLD_SCALE = 18;
+
 // ── Chunked DEPLOY (DEPLOY v4 carriers + DEPLOY v2/v3 assemble) ─────────────
 // A contract whose base64(code) exceeds the single-tx budget is split across
 // ordered DEPLOY v4 carrier actions and reassembled by a DEPLOY v2/v3 keyed on
@@ -344,6 +358,7 @@ module.exports = {
     XCALL_MAX_RETURN_BYTES,
     XCALL_MAX_CALLS_PER_BLOCK,
     ATTEST_MAX_EXPIRIES_PER_BLOCK,
+    THRESHOLD_SCALE,
     STAKE_WEIGHTED_QUORUM_ACTIVATION,
     EQUIV_HEADER_ACTIVATION,
     STATE_COMMITMENT_ACTIVATION,

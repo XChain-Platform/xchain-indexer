@@ -29,11 +29,19 @@
  * - GATE_TICKER       - (optional) Token ticker gating this file. Empty = public.
  * - ENCRYPTION_METHOD - (optional) 1 = AES-256-GCM. Required when GATE_TICKER set.
  * - KEY_HASH          - (optional) hex sha256(K), 64 chars. Required when GATE_TICKER set.
+ * - GATE_MIN_AMOUNT   - (optional, PC-29) minimum GATE_TICKER balance a recipient
+ *                       must hold to be given the key. Absent/empty = no threshold.
  *
  * Trailing empty fields are stripped by the encoder, so non-gated files
  * remain wire-compatible with the original 4-field FILE encoding.
  *
  ********************************************************************/
+
+// PC-29: wire bound on GATE_MIN_AMOUNT (matches the SDK validator and the
+// gated_files.gate_min_amount column width), and the fixed comparison scale the
+// wallet uses. Vendored byte-identical from xchain-documentation/protocol/constants.js.
+const { THRESHOLD_SCALE } = require('../protocol/constants.js');
+const GATE_MIN_AMOUNT_MAX_LENGTH = 40;
 
 class File {
 
@@ -49,7 +57,9 @@ class File {
 
         // Define list of known FORMATS
         this.formats = {};
-        this.formats[0] = 'VERSION|NAME|TYPE|TITLE|MEMO|GATE_TICKER|ENCRYPTION_METHOD|KEY_HASH';
+        // PC-29 /  P9: optional NINTH field, the unlock threshold. The
+        // eight-field form is byte-identical, so historical FILEs replay unchanged.
+        this.formats[0] = 'VERSION|NAME|TYPE|TITLE|MEMO|GATE_TICKER|ENCRYPTION_METHOD|KEY_HASH|GATE_MIN_AMOUNT';
 
     }
 
@@ -121,8 +131,61 @@ class File {
                     error = 'invalid: SOURCE (not GATE_TICKER issuer)';
                 else if(await this.indexerDb.isOwnershipEscrowed(data['GATE_TICKER']))
                     error = 'invalid: GATE_TICKER (ownership escrowed)';
+
+                /*************************************************************
+                 * PC-29: GATE_MIN_AMOUNT, validated STRICT.
+                 *
+                 * A present but invalid threshold REJECTS the FILE rather than
+                 * being dropped. That is replay-safe without a flag-day because
+                 * no conforming emitter has ever produced a nine-field FILE: the
+                 * SDK drops unknown positional fields, so the wallet/SDK path
+                 * could not have emitted one. Dropping instead of rejecting would
+                 * be the dangerous choice, because a FILE is immutable: the
+                 * publisher would believe a threshold was in force while the
+                 * chain recorded none.
+                 *
+                 * Note the gate-tick existence clause the spec left open is MOOT
+                 * here: an unknown GATE_TICKER already rejects the whole FILE
+                 * above, so a present threshold can never reach a tick whose
+                 * divisibility is unresolvable.
+                 *************************************************************/
+                if(!error && !this.util.isNull(data['GATE_MIN_AMOUNT']) &&
+                   String(data['GATE_MIN_AMOUNT']).length > 0){
+                    let raw = String(data['GATE_MIN_AMOUNT']);
+                    // Format rules, byte-for-byte the SDK's stateless set (spec §5.2).
+                    if(raw.length > GATE_MIN_AMOUNT_MAX_LENGTH)
+                        error = 'invalid: GATE_MIN_AMOUNT';
+                    else if(!/^\d+(\.\d+)?$/.test(raw))
+                        error = 'invalid: GATE_MIN_AMOUNT';
+                    else if(/^0\d/.test(raw))
+                        error = 'invalid: GATE_MIN_AMOUNT';
+                    else if(!/[1-9]/.test(raw))
+                        error = 'invalid: GATE_MIN_AMOUNT';   // every zero spelling
+                    if(!error){
+                        // Divisibility: the STATE-dependent half the SDK cannot do.
+                        // Bounded at min(tick divisibility, THRESHOLD_SCALE) because a
+                        // threshold with more than THRESHOLD_SCALE decimals is
+                        // unrepresentable in the wallet's fixed-scale BigInt compare,
+                        // so the two sides would disagree on the last digit for a value
+                        // neither considers malformed.
+                        let dot      = raw.indexOf('.');
+                        let places   = (dot === -1) ? 0 : (raw.length - dot - 1);
+                        let tickDec  = Number(tokenInfo['DECIMALS']);
+                        if(!Number.isFinite(tickDec)) tickDec = 0;
+                        let maxPlaces = Math.min(tickDec, THRESHOLD_SCALE);
+                        if(places > maxPlaces)
+                            error = 'invalid: GATE_MIN_AMOUNT';
+                    }
+                }
             }
         }
+
+        // A threshold with no gate is meaningless and must not be storable: it would
+        // sit in gated_files with no gate_ticker to weigh a balance against. Rejected
+        // rather than ignored, for the same immutability reason as above.
+        if(!error && !isGated && !this.util.isNull(data['GATE_MIN_AMOUNT']) &&
+           String(data['GATE_MIN_AMOUNT']).length > 0)
+            error = 'invalid: GATE_MIN_AMOUNT';
 
         // Determine final status
         let status = (error) ? error : 'valid';

@@ -1135,11 +1135,15 @@ class Execute {
                 // FORMAT: VERSION|TICK|MEMO
                 return [0, params.tick, params.memo || ''];
             case 'FILE':
-                // FORMAT: VERSION|NAME|TYPE|TITLE|MEMO|GATE_TICKER|ENCRYPTION_METHOD|KEY_HASH
+                // FORMAT: VERSION|NAME|TYPE|TITLE|MEMO|GATE_TICKER|ENCRYPTION_METHOD|KEY_HASH|GATE_MIN_AMOUNT
                 // Trailing gated-file fields default to empty (public file); a contract may set
-                // them to emit a token-gated FILE.
+                // them to emit a token-gated FILE. PC-29 added GATE_MIN_AMOUNT as the ninth:
+                // emitted FILEs must carry it too, or a contract-emitted gated FILE would be
+                // silently unconditional while the wire format says otherwise. The arity guard
+                // in test/unit/emission-params-arity.test.js is what caught this.
                 return [0, params.name || '', params.type || '', params.title || '', params.memo || '',
-                        params.gateTicker || '', params.encryptionMethod || '', params.keyHash || ''];
+                        params.gateTicker || '', params.encryptionMethod || '', params.keyHash || '',
+                        params.gateMinAmount || ''];
             case 'LIST':
                 // FORMAT: VERSION|TYPE|ITEM
                 return [0, params.type || '', params.item || ''];

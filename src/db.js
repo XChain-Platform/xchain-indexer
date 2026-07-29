@@ -5242,6 +5242,13 @@ class Database {
         let gate_ticker   = data['GATE_TICKER'];
         let enc_method    = Number(data['ENCRYPTION_METHOD']) || 1;
         let key_hash      = String(data['KEY_HASH'] || '').toLowerCase();
+        // PC-29: the publishing SOURCE scopes the pack, and the threshold governs it.
+        // An empty/absent threshold is stored as NULL, never '': the pack rule reads
+        // "any file with no threshold makes the pack unconditional", and having two
+        // spellings of "no threshold" would make that rule depend on which one landed.
+        let publisher     = String(data['SOURCE'] || '');
+        let min_amount    = (data['GATE_MIN_AMOUNT'] === undefined || data['GATE_MIN_AMOUNT'] === null ||
+                             String(data['GATE_MIN_AMOUNT']) === '') ? null : String(data['GATE_MIN_AMOUNT']);
         let status_id     = await this.createStatus(data['STATUS']);
         let raw_data      = data['RAW_DATA'] || null;
 
@@ -5253,11 +5260,11 @@ class Database {
         let query;
         let args;
         if(exists){
-            query = `UPDATE gated_files SET gate_ticker=?, encryption_method=?, key_hash=?, status_id=?, raw_data=? WHERE action_index=?`;
-            args  = [gate_ticker, enc_method, key_hash, status_id, raw_data, action_index];
+            query = `UPDATE gated_files SET gate_ticker=?, encryption_method=?, key_hash=?, publisher_address=?, gate_min_amount=?, status_id=?, raw_data=? WHERE action_index=?`;
+            args  = [gate_ticker, enc_method, key_hash, publisher, min_amount, status_id, raw_data, action_index];
         } else {
-            query = `INSERT INTO gated_files (action_index, gate_ticker, encryption_method, key_hash, status_id, raw_data) values (?, ?, ?, ?, ?, ?)`;
-            args  = [action_index, gate_ticker, enc_method, key_hash, status_id, raw_data];
+            query = `INSERT INTO gated_files (action_index, gate_ticker, encryption_method, key_hash, publisher_address, gate_min_amount, status_id, raw_data) values (?, ?, ?, ?, ?, ?, ?, ?)`;
+            args  = [action_index, gate_ticker, enc_method, key_hash, publisher, min_amount, status_id, raw_data];
         }
         await this.doQuery(query, args);
     }
