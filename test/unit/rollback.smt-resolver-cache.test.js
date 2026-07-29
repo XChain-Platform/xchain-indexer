@@ -61,6 +61,25 @@ describe('rollback drops the SMT resolver caches @regression', function(){
             'the caches live on the indexer db instance that the choke point uses');
     });
 
+    it('the clear sits immediately after commit, beside the block-time memo', function(){
+        // WHERE it happens is load-bearing and was wrong once. A rollback that has
+        // already COMMITTED must not be able to skip the invalidation, and there is
+        // a catch/throw between the commit and the end of rollback(): a clear placed
+        // at the end is skipped on that path, leaving exactly the stale cache this
+        // guards against. Anchoring to the block-time memo keeps the two siblings
+        // together, since they invalidate for the identical reason.
+        const commitAt = src.indexOf('await this.indexerDb.commitTransaction()');
+        const btAt     = src.indexOf('clearBlockTimeCache()');
+        const smtAt    = src.indexOf('_smtTickNameCache    = null');
+        assert.ok(commitAt > -1 && btAt > -1 && smtAt > -1, 'all three anchors must exist');
+        assert.ok(smtAt > commitAt,
+            'the caches must be cleared AFTER commit, so the forward replay re-reads the new chain');
+        // Same region as the block-time clear rather than at the end of the method.
+        assert.ok(smtAt - btAt < 2000,
+            'the clear must sit beside the block-time memo clear, not later in rollback() where ' +
+            'a throw on an already-committed rollback would skip it');
+    });
+
     it('a nulled cache is rebuilt lazily and resolves the NEW name', async function(){
         // The consequence of the clear, driven through the real resolver: after a
         // rollback frees id 277 and a new ISSUE reuses it, the next lookup must
