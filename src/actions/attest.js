@@ -596,6 +596,35 @@ class Attest {
     // within-subset quorum stays count-based. CONSENSUS-CRITICAL: must match the
     // hub's AttestationRound._computeResponsibleSet byte-for-byte or validation forks.
     async _computeResponsibleSet(requestId, redundancy, blockIndex){
+        // : the SWQ gate is BTC-ANCHORED, so only evaluate it where
+        // `blockIndex` actually is a BTC height.
+        //
+        // isStakeWeightedQuorumActive() compares its argument against 961000, a BTC
+        // height (~2026-08-04). `blockIndex` here is the ATTEST action's LOCAL height on
+        // whatever chain this indexer runs, and ATTEST is registered on all three. LTC
+        // and DOGE sit at ~3.16M and ~6.3M local, so `blockIndex >= 961000` is ALREADY
+        // true there: a non-BTC indexer resolved `weighted` TRUE out of band, long
+        // before the anchor, while the hub resolved it FALSE from a real BTC height
+        // (xchain-hub AttestationRound polls the BTC indexer, so its block_index is
+        // genuinely BTC). This function's own header requires byte-for-byte agreement
+        // with that hub routine "or validation forks", and off BTC the two disagreed.
+        //
+        // Today the disagreement is LATENT, not exploitable: capability staking is
+        // BTC-only and LTC/DOGE declare no STAKING.CAPABILITIES at all, so both the
+        // weighted and unweighted lookups fall through to `if(!capConfig) return []`
+        // and the responsible set is empty either way. It becomes a live fork the
+        // moment `attestation` is configured off BTC, or the off-BTC redirect in
+        // getStakeWeightsByCapability / getValidatorsByCapability (today scoped to
+        // cross_chain and oracle_publish) is widened to cover it.
+        //
+        // So the fix is the plane, not the symptom: a non-BTC indexer has no
+        // responsible set to compute and returns empty EXPLICITLY, without consulting
+        // a gate it cannot evaluate correctly. Behaviour is unchanged at HEAD, which is
+        // what makes it safe to ship ungated; the rebase replays it identically.
+        if(this.config['COIN'] !== 'BTC')
+            return [];
+        // On BTC, `blockIndex` IS a BTC height, so the gate is on its intended plane
+        // and flips at the anchor in lockstep with the hub.
         let weighted = swq.isStakeWeightedQuorumActive(blockIndex, this.config['NETWORK']);
         let validators = weighted
             ? await this.indexerDb.getStakeWeightsByCapability('attestation', blockIndex)

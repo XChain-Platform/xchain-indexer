@@ -14,6 +14,8 @@ process.env.INDEXER_NETWORK = 'regtest';
 const assert = require('assert');
 const sinon  = require('sinon');
 const crypto = require('crypto');
+const fs     = require('fs');
+const path   = require('path');
 
 const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
 
@@ -1515,5 +1517,92 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             assert.strictEqual(fn.call(real, 100, 'nonet'), false);
             assert.strictEqual(fn.call(real, 'x', 'regtest'), false);
         });
+    });
+});
+
+/*********************************************************************
+ * : the responsible-set SWQ gate is BTC-ANCHORED.
+ *
+ * isStakeWeightedQuorumActive() compares against 961000, a BTC height. But
+ * _computeResponsibleSet was handed the ATTEST action's LOCAL height, and ATTEST
+ * is registered on all three chains. LTC and DOGE sit at ~3.16M and ~6.3M local,
+ * so a non-BTC indexer resolved `weighted` TRUE out of band, long before the
+ * anchor, while xchain-hub's AttestationRound resolved it FALSE from a real BTC
+ * height (it polls the BTC indexer). The function's own header demands
+ * byte-for-byte agreement with that hub routine "or validation forks".
+ *
+ * The disagreement is LATENT at HEAD, not exploitable: capability staking is
+ * BTC-only and LTC/DOGE declare no STAKING.CAPABILITIES, so both lookups return
+ * [] and the set is empty either way. These tests pin the plane so it stays
+ * fixed if attestation is ever configured or mirrored off BTC, which is the
+ * moment it would otherwise become a live fork.
+ ********************************************************************/
+describe('ATTEST responsible-set is BTC-anchored (#3233) @regression @tier1', function () {
+
+    // A local height comfortably past the 961000 BTC anchor, which is where every
+    // LTC/DOGE indexer already sits.
+    const PAST_ANCHOR = 3160000;
+
+    function handlerForCoin(coin) {
+        const ix = createMockIndexer();
+        ix.config.COIN    = coin;
+        ix.config.NETWORK = 'mainnet';
+        const db = ix.indexerDb;
+        // Both lookups return a NON-empty set, so the test can observe which branch
+        // ran. At HEAD these are empty off BTC, which is exactly what hides the bug.
+        db.getStakeWeightsByCapability = sinon.stub().resolves([
+            { pubkey: 'a'.repeat(64), source: 'src1' },
+            { pubkey: 'b'.repeat(64), source: 'src2' }
+        ]);
+        db.getValidatorsByCapability = sinon.stub().resolves([
+            { pubkey: 'a'.repeat(64) },
+            { pubkey: 'b'.repeat(64) }
+        ]);
+        return { handler: new Attest({
+            config: ix.config, util: ix.util, mapper: ix.mapper,
+            decoderDb: ix.decoderDb, indexerDb: db,
+            protocolChanges: { isDefined: sinon.stub().returns(true), isEnabled: sinon.stub().resolves(true) }
+        }), db };
+    }
+
+    afterEach(() => sinon.restore());
+
+    for (const coin of ['LTC', 'DOGE']) {
+        it(`${coin}: returns an empty set without consulting the BTC-anchored gate`, async function () {
+            const { handler, db } = handlerForCoin(coin);
+            const out = await handler._computeResponsibleSet('req-1', 2, PAST_ANCHOR);
+            assert.deepStrictEqual(out, [],
+                'capability staking is BTC-only; a non-BTC indexer has no responsible set');
+            assert.strictEqual(db.getStakeWeightsByCapability.called, false,
+                'the weighted branch must not be reached off BTC: resolving it from a local ' +
+                'height already past 961000 is the out-of-band selection this fixes');
+            assert.strictEqual(db.getValidatorsByCapability.called, false);
+        });
+    }
+
+    it('BTC: still evaluates the gate, because there the local height IS a BTC height', async function () {
+        const { handler, db } = handlerForCoin('BTC');
+        const out = await handler._computeResponsibleSet('req-1', 2, PAST_ANCHOR);
+        assert.strictEqual(out.length, 2, 'BTC must still resolve a responsible set');
+        assert.strictEqual(db.getStakeWeightsByCapability.called, true,
+            'past the anchor on BTC the weighted branch is correct and must still run');
+    });
+
+    it('BTC below the anchor takes the legacy unweighted branch', async function () {
+        const { handler, db } = handlerForCoin('BTC');
+        await handler._computeResponsibleSet('req-1', 2, 900000);
+        assert.strictEqual(db.getValidatorsByCapability.called, true);
+        assert.strictEqual(db.getStakeWeightsByCapability.called, false,
+            'below 961000 the gate is off, so replay of pre-anchor history is unchanged');
+    });
+
+    // The two implementations are required to agree byte-for-byte; agreeing only by
+    // both reaching [] via different routes is how they drift apart later.
+    it('rollback.js short-circuits on the SAME condition, not just to the same answer', function () {
+        const src = fs.readFileSync(path.join(__dirname, '../../../src/rollback.js'), 'utf8');
+        assert.match(src, /if\(this\.config\['COIN'\] === 'BTC'\)/,
+            'the reorg recompute must gate on COIN the way attest.js does, or ' +
+            'reorg-recomputed missed_count diverges from the live expiry path');
+        assert.match(src, /#3233/, 'and say why, so it is not "simplified" back');
     });
 });

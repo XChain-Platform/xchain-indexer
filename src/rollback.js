@@ -1492,11 +1492,24 @@ class Rollback {
                 let reqBlock = Number(req.block_index);
                 let cached   = validatorsByBlock.get(reqBlock);
                 if(cached === undefined){
-                    let weighted = swq.isStakeWeightedQuorumActive(reqBlock, this.config['NETWORK']);
-                    let vs       = weighted
-                        ? await this.indexerDb.getStakeWeightsByCapability('attestation', reqBlock)
-                        : await this.indexerDb.getValidatorsByCapability('attestation', reqBlock);
-                    cached = { weighted, validators: vs || [] };
+                    // , mirroring actions/attest.js _computeResponsibleSet: the SWQ
+                    // gate is BTC-anchored, and `reqBlock` is the request's LOCAL height, so
+                    // off BTC it is already past the 961000 anchor and would resolve
+                    // `weighted` TRUE out of band. This function's header requires
+                    // byte-for-byte agreement with attest.js "or reorg-recomputed
+                    // missed_count diverges from the live expiry path", so the two must
+                    // short-circuit on the SAME condition, not just reach the same empty
+                    // answer by different routes. Capability staking is BTC-only, so a
+                    // non-BTC indexer has no responsible set to recompute.
+                    let cached_weighted = false;
+                    let vs = [];
+                    if(this.config['COIN'] === 'BTC'){
+                        cached_weighted = swq.isStakeWeightedQuorumActive(reqBlock, this.config['NETWORK']);
+                        vs = cached_weighted
+                            ? await this.indexerDb.getStakeWeightsByCapability('attestation', reqBlock)
+                            : await this.indexerDb.getValidatorsByCapability('attestation', reqBlock);
+                    }
+                    cached = { weighted: cached_weighted, validators: vs || [] };
                     validatorsByBlock.set(reqBlock, cached);
                 }
                 responsible = this._responsibleSet(String(req.request_id), cached.validators, Number(req.redundancy), cached.weighted);
