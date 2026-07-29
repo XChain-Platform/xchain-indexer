@@ -56,7 +56,18 @@ const SQL_DIR = path.join(__dirname, '../../src/sql');
 // The apply hook touches index_addresses + index_pubkeys + validator_rewards, and reads the
 // recovery_pending_rewards staging table.
 const SCHEMA_FILES = ['index_addresses.sql', 'index_pubkeys.sql', 'validator_rewards.sql', 'recovery_pending_rewards.sql'];
-const SCHEMA = SCHEMA_FILES.map(f => fs.readFileSync(path.join(SQL_DIR, f), 'utf8')).join('\n');
+// Strip `--` line comments with the PRODUCT's own stripper rather than a second
+// implementation. This fixture sent the files verbatim and had been failing with errno
+// 1064 since the license-header sweep (397e373, 2026-07-16) prepended a
+// `--********...` banner to every src/sql file: `--` is a comment to MySQL only when
+// followed by whitespace, and that banner has none, so the very first line of the
+// concatenated schema is a syntax error. Production never hit it because
+// db.createTable strips comments before executing. GitHub Actions stopped executing
+// 2026-07-15, one day before the sweep, so nothing ran this for thirteen days.
+const stripSqlLineComments = Database.prototype.stripSqlLineComments;   // pure, uses no `this`
+const SCHEMA = SCHEMA_FILES
+    .map(f => stripSqlLineComments(fs.readFileSync(path.join(SQL_DIR, f), 'utf8')))
+    .join('\n');
 
 const SEQ    = ['bc1qAlice', 'bc1qBob', 'bc1qCarol'];   // in-block address sequence (both nodes)
 const PRESEED = ['bc1qLegacy1', 'bc1qLegacy2'];          // out-of-tx createAddress (the primitive)
