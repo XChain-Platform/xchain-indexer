@@ -2842,13 +2842,32 @@ class Database {
     }
 
     // Cached tick_id -> canonical name resolver for the light-client touched-key
-    // set. The mapping is immutable (a tick_id always names the same tick), so the
-    // cache persists for the connection lifetime.
+    // set. A RESOLVED mapping is immutable (a tick_id always names the same tick),
+    // so a name is cached for the connection lifetime.
+    //
+    // AN ABSENCE IS NOT CACHED, and that distinction is the whole point .
+    // The immutability argument covers names only: an id with no row *right now*
+    // can have one moments later, because tickers are interned during block
+    // processing, and a rollback can delete an id that is then re-interned. If a
+    // null were cached, createLedgerChangeRecord's `canonTick != null` guard would
+    // skip EVERY later touch for that tick, permanently, for the connection
+    // lifetime, and the balance leaf would silently never be committed. That is
+    // all-or-nothing per ticker, which is exactly the shape found on BTC regtest:
+    // 4 tickers of 276 with every one of their keys missing from the committed
+    // balances_root, and 0 tickers missing only some.
+    //
+    // The read is STRICT for the same reason (M-17): through doQuery a transient
+    // fault returns [], which this function cannot distinguish from "no such
+    // ticker". Soft-failing into a cached absence is the two defects composing
+    // into a permanent, silent consensus omission, so the read throws instead and
+    // the block is retried.
     async _smtTickName(tick_id){
         if(!this._smtTickNameCache) this._smtTickNameCache = new Map();
         if(this._smtTickNameCache.has(tick_id)) return this._smtTickNameCache.get(tick_id);
-        let name = await this.getTicker(tick_id);
-        this._smtTickNameCache.set(tick_id, name);
+        let rows = await this.doQueryStrict("SELECT tick FROM index_tickers WHERE id=? LIMIT 1", [tick_id]);
+        let name = (rows.length > 0) ? rows[0].tick : null;
+        if(name != null && name !== '')
+            this._smtTickNameCache.set(tick_id, name);
         return name;
     }
 
