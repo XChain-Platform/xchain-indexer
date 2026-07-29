@@ -69,8 +69,16 @@ function makeDb(){
             return db.nodes.map(n => ({ node_hash: n.node_hash, left_hash: n.left_hash, right_hash: n.right_hash }));
         }
         if(sql.includes('UNION')){
+            // Union exactly the columns the SQL actually names, so a sub-root
+            // column missing from the real query is missing here too. A fake that
+            // hardcodes balances+stakes would mark a node reachable that the
+            // production query never reaches, and phase 2 would delete it in
+            // production while the test stayed green.
             const set = new Set();
-            for(const r of db.roots){ set.add(r.balances_root); set.add(r.stakes_root); }
+            const cols = ['balances_root', 'stakes_root', 'contract_state_root'].filter(c => sql.includes(c));
+            for(const r of db.roots)
+                for(const c of cols)
+                    if(r[c] != null) set.add(r[c]);
             return Array.from(set).map(r => ({ r }));
         }
         if(sql.startsWith('DELETE FROM state_tree_nodes')){
@@ -192,6 +200,32 @@ describe('retention: phase-2 orphan reachability + reclaim', () => {
         // Fork-safety: B was ALSO under the pruned root C, yet it survives because
         // the retained root A still reaches it. Deleting it would fork balances_root.
         assert.ok(survivors.includes(B));
+    });
+
+    it('NEVER reclaims a node reachable only through contract_state_root', async () => {
+        // The reserved-slot trap: once a slot is armed, its sub-root is the ONLY
+        // path to that tree's nodes. If the reachability union still asks for
+        // balances+stakes alone, phase 2 deletes those nodes, and the next
+        // incremental _descend reads the missing rows as an EMPTY SUBTREE rather
+        // than erroring: the chain keeps running and commits a forked root. This
+        // vector fails loudly the day a new slot is added without updating the
+        // union in retention.computeReachable.
+        const db = makeDb();
+        const E = 'e'.repeat(64), F = 'f'.repeat(64);
+        db.nodes.push({ node_hash: E, left_hash: F, right_hash: EMPTY });
+        db.nodes.push({ node_hash: F, left_hash: EMPTY, right_hash: EMPTY });
+        // The surviving tip row carries an armed contract_state_root; the pruned
+        // row has NULL there, which is what every inert row stores.
+        db.roots = db.roots.filter(r => r.block_index === 100);
+        db.roots[0].contract_state_root = E;
+
+        const cfg = R.parseRetentionConfig({ STATE_ROOT_RETENTION_BLOCKS: '50', STATE_NODE_RECLAIM: '1' });
+        const res = await R.reclaimOrphanNodes(db.query, 'BTC', 'regtest', cfg);
+
+        const survivors = db.nodes.map(n => n.node_hash);
+        assert.ok(survivors.includes(E), 'the armed contract_state_root itself must survive');
+        assert.ok(survivors.includes(F), 'and so must every node it reaches');
+        assert.strictEqual(res.deleted, 2, 'only the genuinely orphaned nodes (C, D) are reclaimed');
     });
 
     it('is inert when node reclaim is not opted in', async () => {

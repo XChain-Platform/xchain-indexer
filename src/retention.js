@@ -129,8 +129,19 @@ async function pruneStateRoots(query, chain, network, cfg){
 }
 
 // Build the reachable-node set from the UNION of every RETAINED state_tree_roots
-// row's balances_root + stakes_root. Identical skip rules to
-// stateCommitment.reportOrphanStats. Returns { nodes: Map, reachable: Set }.
+// row's balances_root + stakes_root + contract_state_root. Identical skip rules
+// to stateCommitment.reportOrphanStats. Returns { nodes: Map, reachable: Set }.
+//
+// EVERY committed sub-root MUST appear in this union, and unlike the
+// reportOrphanStats copy that is not an accuracy concern: phase 2 DELETES the
+// nodes this set does not reach. A sub-root missing here means the pruner
+// reclaims nodes the tree still references, and the next incremental _descend
+// reads those missing rows as an EMPTY SUBTREE rather than failing, so the chain
+// keeps running and silently commits a forked root. Adding a slot to
+// merkle.STATE_SUBTREES without adding it here is therefore a data-loss bug that
+// only fires once the slot is armed AND the retention window rolls past it.
+// contract_state_root is NULL on every inert row and IS NOT NULL drops those, so
+// the union is unchanged until a chain arms the slot.
 async function computeReachable(query, chain, network){
     const rows = await query('SELECT node_hash, left_hash, right_hash FROM state_tree_nodes', []);
     const nodes = new Map();
@@ -138,8 +149,9 @@ async function computeReachable(query, chain, network){
 
     const rootRows = await query(
         'SELECT DISTINCT balances_root AS r FROM state_tree_roots WHERE chain=? AND network=? ' +
-        'UNION SELECT DISTINCT stakes_root AS r FROM state_tree_roots WHERE chain=? AND network=?',
-        [chain, network, chain, network]);
+        'UNION SELECT DISTINCT stakes_root AS r FROM state_tree_roots WHERE chain=? AND network=? ' +
+        'UNION SELECT DISTINCT contract_state_root AS r FROM state_tree_roots WHERE chain=? AND network=? AND contract_state_root IS NOT NULL',
+        [chain, network, chain, network, chain, network]);
 
     const reachable = new Set();
     const stack = [];

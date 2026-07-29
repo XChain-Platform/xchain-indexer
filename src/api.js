@@ -40,6 +40,7 @@ const { canonicalizeRewardType } = require('./reward-push-gate');
 const anchorActionQuery = require('./anchor-action-query');
 const reorgHistoryQuery = require('./reorg-history-query');
 const merkle        = require('./merkle');
+const stateSubtree  = require('./state_subtree_activation');
 const ar            = require('./anchor_reward_activation.js');
 const crypto        = require('crypto');
 const { installObservability } = require('./observability');   // : default-off /metrics + structured log shim
@@ -387,13 +388,27 @@ async function startApi(){
                     // Additive light-client roots (SPV spec §4/§5): null before the
                     // STATE_COMMITMENT flag-day, present after. Phase 2's checkpoint
                     // engine signs over state_root + block_merkle_root. The version
-                    // bytes travel WITH their root (the frozen merkle.js scheme
-                    // version under which the stored root was computed) so the hub
-                    // signs root+version as a unit; null whenever the root is null.
+                    // bytes travel WITH their root (the scheme version under which
+                    // the stored root was computed) so the hub signs root+version as
+                    // a unit; null whenever the root is null.
+                    //
+                    // state_root_version is DERIVED AT THE ROW'S OWN HEIGHT, not read
+                    // off the static merkle constant and NOT derived at the chain tip.
+                    // This response is the only place the version is minted: the hub's
+                    // checkpoint engine copies it verbatim into the signed canonical
+                    // and from there into the anchor row, so a wrong value here is
+                    // signed by the validator set rather than merely displayed. Tip
+                    // derivation is the specific trap: it passes any "no static
+                    // constant" check while relabelling every below-boundary
+                    // checkpoint as version 2 once a slot arms, which is a lie about
+                    // what those blocks committed.
                     balances_root:        stored.balances_root     || null,
                     stakes_root:          stored.stakes_root       || null,
                     state_root:           stored.state_root        || null,
-                    state_root_version:   stored.state_root        ? merkle.STATE_ROOT_VERSION   : null,
+                    state_root_version:   stored.state_root
+                        ? stateSubtree.stateRootVersion(Number(stored.block_index),
+                                                        indexer.config['NETWORK'], indexer.config['COIN'])
+                        : null,
                     block_merkle_root:    stored.block_merkle_root || null,
                     block_merkle_version: stored.block_merkle_root ? merkle.BLOCK_MERKLE_VERSION : null
                 };

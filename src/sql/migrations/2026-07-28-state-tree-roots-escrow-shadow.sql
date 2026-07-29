@@ -1,0 +1,60 @@
+--********************************************************************
+--
+-- Copyright © 2025-2026 Dankest, LLC
+-- Based on XChain Platform by Dankest, LLC - https://dankest.llc
+--
+-- SPDX-License-Identifier: AGPL-3.0-or-later
+--
+-- This file is part of XChain Platform. Licensed under the GNU Affero
+-- General Public License v3.0 or later; see LICENSE.md. A commercial
+-- license (without AGPL source-disclosure terms) is available -
+-- contact legal@dankest.llc.
+--
+--********************************************************************
+
+-- xchain:migration mode=auto
+--
+-- Migration: state_tree_roots gains the balances_root_escrow_shadow column
+--
+-- WHY
+-- ---
+-- SPV sub-tree spec Stage B (claude/specs/spv-state-subtree-extension.md,
+-- ) commits XCHAIN_ESC locked-balance leaves INSIDE balances_root. Its
+-- §7 shadow window therefore cannot reuse the committed balances_root column
+-- the way no slot's shadow could reuse its committed column: the follower
+-- compares balances_root every block and the explorer reassembles state_root
+-- from it, so a below-arming would-be value there is either a false halt or a
+-- proof outage. The shadow threads through this column instead, exactly as
+-- contract_state_root_shadow threads through its own: both twins derive the
+-- WOULD-BE balances_root (spendable leaves as committed, plus the journal's
+-- locked leaves) below the armed height, and zero cross-twin divergence over
+-- the window is the §7 arming precondition.
+--
+-- NULL MEANS "NOT SHADOWING", WHICH IS WHY THERE IS NO BACKFILL
+-- -------------------------------------------------------------
+-- The shadow map (ESCROW_LOCKED_LEAF_SHADOW) is empty everywhere, so nothing
+-- writes this column until a chain is deliberately put in a shadow window,
+-- and historical rows never carry one. Nothing outside the derivation reads
+-- it: the reassembly helpers derive their slot set from merkle.STATE_SUBTREES
+-- names, which this is not.
+--
+-- CONSENSUS IS NOT AFFECTED BY THIS MIGRATION, and not by the shadow window
+-- either: the shadow value never reaches assembleStateRoot (armed wins, and
+-- the committed path never reads this column), so no committed root can move.
+--
+-- IDEMPOTENT: ADD COLUMN IF NOT EXISTS re-runs as a no-op, and the AFTER
+-- anchor matches src/sql/state_tree_roots.sql so a migrated table and a fresh
+-- install converge on the same column order.
+--
+-- THE FILENAME IS LOAD-BEARING, and it was wrong once. Migrations apply in
+-- FILENAME ORDER, and this one's AFTER anchor names a column added by
+-- 2026-07-28-state-tree-roots-contract-state-root.sql, so it MUST sort after
+-- that file. The original name (...-balances-escrow-shadow.sql) sorted BEFORE
+-- it ('b' < 'c'), and on a real aged database the run failed with errno 1054,
+-- "Unknown column 'contract_state_root_shadow'". Dropping the AFTER clause
+-- would have fixed the ordering by giving up the column-order convergence the
+-- anchor exists for, so the dependency is expressed in the name instead. If
+-- this file is ever renamed again, keep it sorting after its anchor's file.
+
+ALTER TABLE state_tree_roots
+  ADD COLUMN IF NOT EXISTS balances_root_escrow_shadow CHAR(64) NULL AFTER contract_state_root_shadow;

@@ -130,6 +130,25 @@ function escrowKey(chain, network, address, tick){
 function stakeKey(pubkey, capability){
     return smtKey('XCHAIN_STK', [pubkey, capability]);
 }
+// contract_state_root key (sub-tree spec §3 Stage A): "XCHAIN_CST" over
+// (chain, network, contract_index, state_key).
+//
+// contract_index is String()d HERE rather than trusted from the call site: it is
+// a BIGINT UNSIGNED, and a MariaDB driver may hand it back as a number, a string
+// or a BigInt depending on its bigint options, which the indexer and the sync
+// follower are not obliged to configure the same way. All three render to the
+// same decimal text, so pinning the conversion in the derivation makes the key a
+// function of the VALUE and not of each repo's driver config. Getting this wrong
+// is invisible until the twins disagree on a root.
+//
+// state_key enters RAW. joinFields still throws on a 0x00-bearing key, which is
+// deliberate: that is the same surface block_merkle_root has carried all along,
+// and the fix is the VM-side NUL rejection ( -> ), which must be
+// ARMED before any Stage A height arms. The encoding route that would have made
+// this total was considered and closed by operator decision.
+function contractStateKey(chain, network, contractIndex, stateKey){
+    return smtKey('XCHAIN_CST', [chain, network, String(contractIndex), stateKey]);
+}
 // SMT value leaf for an amount-valued key (balance / escrow): leafHash(amountString).
 function amountLeaf(amount){
     return leafHash(canonicalAmount(amount));
@@ -413,7 +432,7 @@ module.exports = {
     // hashing primitives
     sha256, leafHash, nodeHash, toBuf, toHex,
     // encodings
-    canonicalAmount, joinFields, smtKey, balanceKey, escrowKey, stakeKey, amountLeaf, bitAt,
+    canonicalAmount, joinFields, smtKey, balanceKey, escrowKey, stakeKey, contractStateKey, amountLeaf, bitAt,
     STAKE_TOTAL_PUBKEY, stakeMemberLeaf, stakeTotalLeaf, sumCanonicalAmounts,
     // SMT
     SparseMerkleTree, verifySmtProof,

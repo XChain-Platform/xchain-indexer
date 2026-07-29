@@ -37,6 +37,9 @@
 
 const M = require('./merkle.js');
 const SUB = require('./state_subtree_activation.js');
+const CST = require('./contractStateSubtree.js');
+const ESC = require('./escrowLeafSubtree.js');
+const EJW = require('./escrowJournalWriter.js');   // SOURCE ONLY: the follower replicates these rows
 
 const EMPTY_ROOT_HEX = M.toHex(M.EMPTY_SMT_ROOT);   // root of an empty depth-256 SMT
 const EMPTY0_HEX     = M.toHex(M.EMPTY[0]);
@@ -156,9 +159,13 @@ const EMPTY_CONSTANTS = (function(){
 // Reports total vs reachable internal nodes in the content-addressed COW
 // state_tree_nodes store so unbounded growth (reorg orphans + per-block stake-
 // subtree buildFull churn) is measurable. Reachability marks from the UNION of
-// EVERY retained state_tree_roots row's balances_root + stakes_root: the
-// explorer SPV proof server descends historical roots, so a node is live if
-// ANY retained root reaches it.
+// EVERY retained state_tree_roots row's balances_root + stakes_root +
+// contract_state_root: the explorer SPV proof server descends historical roots,
+// so a node is live if ANY retained root reaches it. The extension column is
+// NULL on every inert row and IS NOT NULL filters those out, so the union is
+// unchanged until a slot arms; leaving it out instead would under-report
+// reachability the moment one does, which is a reporting bug now and a
+// correctness trap for any future sweep that trusts these numbers.
 //
 // Deliberately does NOT delete. A safe reclaiming sweep must serialize against
 // block-root insertion: a content-addressed node orphaned by a reorg is commonly
@@ -190,8 +197,9 @@ async function reportOrphanStats(query, chain, network, opts){
         for(const r of sampleRows) sampleNodes.set(r.node_hash, { l: r.left_hash, r: r.right_hash });
         const sampleRootRows = await query(
             'SELECT DISTINCT balances_root AS r FROM state_tree_roots WHERE chain=? AND network=? ' +
-            'UNION SELECT DISTINCT stakes_root AS r FROM state_tree_roots WHERE chain=? AND network=?',
-            [chain, network, chain, network]);
+            'UNION SELECT DISTINCT stakes_root AS r FROM state_tree_roots WHERE chain=? AND network=? ' +
+            'UNION SELECT DISTINCT contract_state_root AS r FROM state_tree_roots WHERE chain=? AND network=? AND contract_state_root IS NOT NULL',
+            [chain, network, chain, network, chain, network]);
         const sampleVisited = new Set();
         const sampleStack = [];
         for(const rr of sampleRootRows){
@@ -219,8 +227,9 @@ async function reportOrphanStats(query, chain, network, opts){
 
     const rootRows = await query(
         'SELECT DISTINCT balances_root AS r FROM state_tree_roots WHERE chain=? AND network=? ' +
-        'UNION SELECT DISTINCT stakes_root AS r FROM state_tree_roots WHERE chain=? AND network=?',
-        [chain, network, chain, network]);
+        'UNION SELECT DISTINCT stakes_root AS r FROM state_tree_roots WHERE chain=? AND network=? ' +
+        'UNION SELECT DISTINCT contract_state_root AS r FROM state_tree_roots WHERE chain=? AND network=? AND contract_state_root IS NOT NULL',
+        [chain, network, chain, network, chain, network]);
 
     // Iterative DFS from every retained root; only push hashes that actually have a
     // row (EMPTY constants and absent children are skipped). visited == reachable set.
@@ -265,14 +274,48 @@ function assembleStateRoot(balancesRootHex, stakesRootHex, extraSubRoots){
     return M.toHex(M.stateRoot(subRoots));
 }
 
-// Candidate reserved sub-roots for one block, before gating. NONE are derived yet
-// (Stage A contract_state_root / Stage B escrow leaf in the design doc), so this
-// is null and the gate collapses the assembly to the v1 two-root form. It exists
-// as the single seam a landed derivation plugs into: the gate is already on the
-// block path, so arming a slot is a change here plus a height in
-// state_subtree_activation.js, never a re-plumb of the commit path.
-async function reservedSubRootCandidates(/* db, chain, network, blockIndex */){
-    return null;
+// Persisted column value for one reserved slot, taken from the GATED sub-root
+// object. Returns null (SQL NULL = EMPTY) when the slot is inert at this height
+// or the gate dropped it, so a row's extension column always describes the same
+// leaf set as the row's own state_root.
+function extraSubRootColumn(extraSubRoots, slotName){
+    return (extraSubRoots && extraSubRoots[slotName]) ? extraSubRoots[slotName] : null;
+}
+
+// Candidate reserved sub-roots for one block, before gating. Stage A's
+// contract_state_root is derived here (contractStateSubtree.js, byte-identical
+// across the twins); Stage B's escrow leaf is not a slot and does not appear.
+// This is the single seam all three block paths share, which is why arming a
+// slot stays a height change plus this function rather than a re-plumb of the
+// commit path.
+//
+// The isSubtreeActive check below is a COST guard, NOT the consensus gate.
+// gateSubRoots remains the only thing that decides what enters state_root, and
+// it re-checks. This early return exists so that while every map is empty the
+// fleet issues ZERO additional queries per block, which is what makes "nothing
+// changes until a height is armed" provable by inspection instead of argued
+// from the gate's behaviour. Do not delete gateSubRoots on the strength of it.
+//
+// Deriving BELOW an armed height (spec §7's shadow-compute window, where the
+// candidate is computed and stored but not committed) is a deliberate future
+// change to this one condition, and it is safe precisely because the column
+// read is gated separately.
+async function reservedSubRootCandidates(db, chain, network, blockIndex){
+    if(!SUB.isSubtreeActive('contract_state_root', blockIndex, network, chain)) return null;
+    const smt = new PersistentSMT(new DbNodeStore(db));
+    return { contract_state_root: await CST.resolveContractStateRoot(db, smt, chain, network, blockIndex, false) };
+}
+
+// Shadow-compute window (spec §7 step 1): the WOULD-BE sub-roots at a height where
+// the slot is NOT committed. Returned separately from the candidates above and
+// never handed to gateSubRoots, so there is no path by which a shadow value can
+// reach state_root; it is persisted to its own column for cross-twin comparison.
+// Null while nothing is shadowing, which is the fleet's state today, and the same
+// zero-query rule applies: an inert chain does not read contract_state at all.
+async function shadowSubRoots(db, chain, network, blockIndex){
+    if(!SUB.isSubtreeShadowActive('contract_state_root', blockIndex, network, chain)) return null;
+    const smt = new PersistentSMT(new DbNodeStore(db));
+    return { contract_state_root: await CST.resolveContractStateRoot(db, smt, chain, network, blockIndex, true) };
 }
 
 // ---- Leaf value derivation (authoritative, never the balances cache) --------
@@ -314,18 +357,17 @@ async function getNetBalance(db, address, tick){
     return db.util.bcstr(db.util.bcsub(cr, dr, 18));
 }
 
-// Locked-escrow leaf is DEFERRED out of v1 (SPV spec §4.2 D2, revised). The
-// escrows table keys a lock (+amount) to the order SOURCE but keys the match
-// release (-amount) to the recipient GET_ADDRESS (order.js:466 vs
-// order_match.js:331/349), so SUM(escrows) per (address, tick) does NOT net to
-// zero on a match: the locker key is left stale-positive and the recipient key
-// goes negative. Only the per-tick GLOBAL sum nets to zero (which is all the
-// aggregate supply sanityCheck verifies). A per-address locked leaf therefore
-// cannot be derived from SUM(escrows): it both crashes the non-negative amount
-// encoder on the negative key and mis-reports a stale lock on the locker key.
-// balances_root commits ONLY the net-spendable balance leaf in v1 (already net
-// of escrow, so it stays correct); a true per-address locked-balance commitment
-// is deferred to Phase 2 with an open-order-derived source.
+// Locked-escrow leaf (XCHAIN_ESC): BUILT and gated, no longer deferred (SPV
+// sub-tree spec §3 Stage B, ). The 2026-06-18 finding that killed the
+// naive derivation still stands and is why the journal exists: the escrows
+// table keys a lock (+amount) to the order SOURCE but keys nine release sites
+// to the recipient, so SUM(escrows) per (address, tick) does NOT net per key
+// and only the per-tick GLOBAL sum nets to zero. The journal writer
+// (escrowJournalWriter.js) re-keys those rows to their locker at write time;
+// escrowLeafSubtree.js derives the leaves from the journal, applied inside
+// balances_root when ESCROW_LOCKED_LEAF_ACTIVATION arms a height (and into
+// the shadow column while ESCROW_LOCKED_LEAF_SHADOW does). Until then
+// balances_root commits ONLY the net-spendable leaf, byte-identical to v1.
 
 // ---- Stakes sub-tree (BTC-only, §4.1) ---------------------------------------
 // Built fresh each BTC block from the authoritative capability stake-weight query
@@ -375,7 +417,7 @@ async function computeBlockMerkleRoot(db, blockIndex){
 // pre-existing nonzero net balances (escrow leaf deferred from v1, see note
 // above). (At genesis activation this is just the boundary block's own
 // effects.) Persists nodes.
-async function buildFullBalancesRoot(db, chain, network){
+async function buildFullBalancesRoot(db, chain, network, blockIndex, opts){
     const smt = new PersistentSMT(new DbNodeStore(db));
     let root = EMPTY_ROOT_HEX;
     const bals = await db.doQuery(
@@ -394,7 +436,19 @@ async function buildFullBalancesRoot(db, chain, network){
         if(leaf == null) continue;
         root = await smt.update(root, M.balanceKey(chain, network, r.address, r.tick), leaf);
     }
-    // Escrow (locked) leaf intentionally omitted from v1 (see deferral note above).
+    // XCHAIN_ESC locked-balance leaves (Stage B), height-gated. Work item 2: this
+    // function had NO height and three callers (activation-boundary init, the
+    // indexer self-heal full recompute, seedSnapshotRoots), so after the escrow
+    // leaf arms it could not decide whether locked leaves belong in the tree, and
+    // the self-heal path would have silently rebuilt a locked-leaf-FREE
+    // balances_root on the SOURCE. That is a quiet fork, the worst kind, so the
+    // height is now a parameter and a caller that omits it gets the v1 leaf set.
+    // opts.forceEscrowLeaves is the §7 shadow window's build of the SAME set at
+    // heights where the leaf is not yet committed; only the shadow path passes it.
+    if(SUB.isEscrowLockedLeafActive(blockIndex, network, chain) || (opts && opts.forceEscrowLeaves)){
+        for(const e of await ESC.liveEscrowLeaves(db))
+            root = await smt.update(root, M.escrowKey(chain, network, e.address, e.tick), e.leaf);
+    }
     return root;
 }
 
@@ -404,9 +458,45 @@ async function buildFullBalancesRoot(db, chain, network){
 async function computeAndStoreRoots(db, chain, network, blockIndex, isActivationBlock){
     const smt = new PersistentSMT(new DbNodeStore(db));
 
+    // escrow_leaf_journal (Stage B), SOURCE ONLY. This runs BEFORE the roots are
+    // computed so the derivation below sees this block's rows, and it has no
+    // counterpart in computeFollowerRoots: the follower REPLICATES these rows
+    // rather than deriving them, which is what keeps the attribution rules (the
+    // nine recipient-keyed release sites re-keyed to their locker) from having
+    // to exist twice and agree byte-for-byte. The writer derives each key's
+    // total from the block's own escrows LEDGER rows, never from family
+    // aggregates or status predicates (see escrowJournalWriter.js for why).
+    //
+    // The ARMING BLOCK gets a full-history replay of the escrows ledger instead
+    // of this block's rows. That is what lets the leaf arm with no operational
+    // backfill: the replay lands as ordinary journal rows, replicates, and both
+    // twins then full-build from the journal exactly as on any other block.
+    // Without it the arming block would commit a balances_root with no locked
+    // leaves at all on a chain that has open positions, which is a silent fork.
+    // The writer also runs through a §7 SHADOW window (consensus-free: the
+    // journal is not a commitment, and its rows replicate to the follower
+    // exactly as when armed, which is what lets the window exercise writer,
+    // replication and application end to end). Full-pass triggers, each a
+    // one-shot: the true ARMING block always replays the whole ledger, even
+    // when a shadow ran right up to it, because armed-wins correction of a
+    // drifted shadow journal is the arming block's job; a shadow WINDOW START
+    // replays too, so the dry run covers positions opened long before it.
+    const escArmed  = SUB.isEscrowLockedLeafActive(blockIndex, network, chain);
+    const escShadow = SUB.isEscrowLockedLeafShadowActive(blockIndex, network, chain);
+    if(escArmed || escShadow){
+        const armingBlock = escArmed && !SUB.isEscrowLockedLeafActive(blockIndex - 1, network, chain);
+        const windowStart = escShadow && !SUB.isEscrowLockedLeafShadowActive(blockIndex - 1, network, chain);
+        await EJW.writeEscrowJournal(db, blockIndex, { full: armingBlock || windowStart });
+    }
+
     // balances_root: full init on the activation boundary, else incremental over
-    // the (address, tick) set the ledger touched this block.
+    // the (address, tick) set the ledger touched this block. When the escrow
+    // leaf is SHADOWING, the incremental branch also collects this block's
+    // spendable-leaf updates so the shadow thread can replay the identical
+    // spendable set on its own root (null on the full-recompute branch, which
+    // makes the shadow full-build too).
     let balancesRoot;
+    let shadowBalanceUpdates = null;
     const prior = isActivationBlock ? [] : await db.doQuery(
         'SELECT balances_root FROM state_tree_roots WHERE chain=? AND network=? AND block_index=? LIMIT 1',
         [chain, network, blockIndex - 1]);
@@ -425,15 +515,26 @@ async function computeAndStoreRoots(db, chain, network, blockIndex, isActivation
             console.warn('stateCommitment: no prior state_tree_roots row for ' + chain + '/' + network +
                 ' block ' + (blockIndex - 1) + '; full-recomputing balances_root for block ' + blockIndex +
                 ' instead of threading from the empty root (snapshot-bootstrap or activation rolled below this height)');
-        balancesRoot = await buildFullBalancesRoot(db, chain, network);
+        balancesRoot = await buildFullBalancesRoot(db, chain, network, blockIndex);
     } else {
         let root = prior[0].balances_root;
         const touched = db._smtTouched ? Array.from(db._smtTouched) : [];
+        if(escShadow) shadowBalanceUpdates = [];
         for(const entry of touched){
             const [address, tick] = entry.split('\t');
             const balLeaf = _leafOrNull(await getNetBalance(db, address, tick));
-            root = await smt.update(root, M.balanceKey(chain, network, address, tick), balLeaf);
-            // Escrow (locked) leaf intentionally omitted from v1 (see deferral note above).
+            const balKey  = M.balanceKey(chain, network, address, tick);
+            root = await smt.update(root, balKey, balLeaf);
+            if(shadowBalanceUpdates) shadowBalanceUpdates.push({ key: balKey, leaf: balLeaf });
+        }
+        // XCHAIN_ESC locked-balance leaves for this block (Stage B), height-gated.
+        // Applied AFTER the spendable leaves and driven by its OWN touched set: an
+        // order match writes the escrows release row against the recipient
+        // GET_ADDRESS while the leaf that moves is the LOCKER's, so the balance
+        // touched set is the wrong input and reusing it would update the wrong key
+        // and miss the right one on every match. The journal answers per locker.
+        if(SUB.isEscrowLockedLeafActive(blockIndex, network, chain)){
+            root = await ESC.applyEscrowLeaves(db, smt, root, chain, network, blockIndex);
         }
         balancesRoot = root;
     }
@@ -448,17 +549,41 @@ async function computeAndStoreRoots(db, chain, network, blockIndex, isActivation
     const extraSubRoots   = SUB.gateSubRoots(await reservedSubRootCandidates(db, chain, network, blockIndex), blockIndex, network, chain);
     const stateRoot       = assembleStateRoot(balancesRoot, stakesRoot, extraSubRoots);
     const blockMerkleRoot = await computeBlockMerkleRoot(db, blockIndex);
+    // Extension columns are read back OUT of the gated object, never off the
+    // candidate: the column and the state_root it must reassemble to are then
+    // written by one statement from one value, so no rewrite path (reorg,
+    // self-heal, ON DUPLICATE KEY UPDATE) can leave the column stale against
+    // its own root. NULL means EMPTY, which is why historical rows need no
+    // backfill and why an inert chain keeps writing NULL forever.
+    const contractStateRoot = extraSubRootColumn(extraSubRoots, 'contract_state_root');
+    // Shadow-compute window (spec §7): derived at heights where the slot is NOT
+    // committed, written to its OWN column, and never routed through gateSubRoots,
+    // so there is no path by which it can reach state_root. Null on every chain
+    // today, and an inert chain does not query contract_state at all.
+    const contractStateShadow = extraSubRootColumn(
+        await shadowSubRoots(db, chain, network, blockIndex), 'contract_state_root');
+    // Stage B's shadow (spec §7, amended): the would-be balances_root with the
+    // locked leaves applied, threading through its own column. Never routed
+    // anywhere near assembleStateRoot, so no committed root can move; null on
+    // every chain today (the shadow map is empty).
+    const balancesEscrowShadow = !escShadow ? null :
+        await ESC.resolveShadowBalancesRoot(db, smt, chain, network, blockIndex, shadowBalanceUpdates,
+            () => buildFullBalancesRoot(db, chain, network, blockIndex, { forceEscrowLeaves: true }));
 
     await db.doQuery(
         `INSERT INTO state_tree_roots
-            (chain, network, block_index, balances_root, stakes_root, state_root, block_merkle_root)
-         VALUES (?, ?, ?, ?, ?, ?, ?)
+            (chain, network, block_index, balances_root, stakes_root, state_root, block_merkle_root, contract_state_root, contract_state_root_shadow, balances_root_escrow_shadow)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON DUPLICATE KEY UPDATE
             balances_root=VALUES(balances_root), stakes_root=VALUES(stakes_root),
-            state_root=VALUES(state_root), block_merkle_root=VALUES(block_merkle_root)`,
-        [chain, network, blockIndex, balancesRoot, stakesRoot, stateRoot, blockMerkleRoot]);
+            state_root=VALUES(state_root), block_merkle_root=VALUES(block_merkle_root),
+            contract_state_root=VALUES(contract_state_root),
+            contract_state_root_shadow=VALUES(contract_state_root_shadow),
+            balances_root_escrow_shadow=VALUES(balances_root_escrow_shadow)`,
+        [chain, network, blockIndex, balancesRoot, stakesRoot, stateRoot, blockMerkleRoot, contractStateRoot, contractStateShadow, balancesEscrowShadow]);
 
-    return { balances_root: balancesRoot, stakes_root: stakesRoot, state_root: stateRoot, block_merkle_root: blockMerkleRoot };
+    return { balances_root: balancesRoot, stakes_root: stakesRoot, state_root: stateRoot,
+             block_merkle_root: blockMerkleRoot, contract_state_root: contractStateRoot };
 }
 
 module.exports = {
@@ -467,6 +592,9 @@ module.exports = {
     MemoryNodeStore,
     PersistentSMT,
     assembleStateRoot,
+    extraSubRootColumn,
+    reservedSubRootCandidates,
+    shadowSubRoots,
     getNetBalance,
     gatherStakeEntries,
     computeBlockMerkleRoot,
