@@ -116,11 +116,11 @@ class Send {
         // needs O(distinct ticks) queries, not one per leg. Same dedupe pattern as
         // `ticks` and `preferences` above; SEND runs on every ~5s index tick, so the
         // per-leg form scaled per-block DB work with recipient count.
-        let gatedKeyHashes = {};
+        let gatedPacks = {};
         for(let send of sends){
             let tick = send[0];
-            if(gatedKeyHashes[tick] === undefined)
-                gatedKeyHashes[tick] = await this.indexerDb.getActiveGatedKeyHashes(tick);
+            if(gatedPacks[tick] === undefined)
+                gatedPacks[tick] = await this.indexerDb.getGatedPackThresholds(tick);
         }
 
         // Consolidate sends by DESTINATION and TICK
@@ -137,6 +137,25 @@ class Send {
         sends = [];
         for(let key in keys)
             sends.push(keys[key]);
+
+        // PC-29 rule 3: the destination's PRE-SEND balance, snapshotted once here,
+        // before any leg of this action settles. Scoping by (BLOCK_INDEX, ACTION_INDEX)
+        // is what makes the snapshot base right: it includes every preceding
+        // transaction in the block AND every preceding action in this transaction, so
+        // two SEND actions of the same tick in one transaction COMPOUND rather than
+        // both reading the pre-transaction balance. Validating against pre-tx state
+        // would reopen the split-the-amount bypass one level up.
+        //
+        // Only fetched when the tick actually has gated packs: an ungated SEND must not
+        // pay for a destination-balance read on every leg.
+        let destBalances = {};
+        for(let send of sends){
+            let [tick, , destination] = send;
+            if((gatedPacks[tick] || []).length === 0) continue;
+            if(destBalances[destination] !== undefined) continue;
+            destBalances[destination] = await this.indexerDb.getAddressBalances(
+                destination, null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
+        }
 
         // Get source address balances
         let balances = await this.indexerDb.getAddressBalances(data['SOURCE'], null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
@@ -268,23 +287,66 @@ class Send {
             // correctness at unlock time.
             // See xchain-documentation/protocol/TOKEN_GATED_CONTENT.md.
             if(!error){
-                let gatedHashes = gatedKeyHashes[send['TICK']] || [];
-                if(gatedHashes.length > 0){
-                    let siblings = data['SIBLING_ACTIONS'] || [];
-                    let foundHandoff = false;
-                    for(let s of siblings){
-                        if(s.action !== 'MESSAGE') continue;
-                        // MESSAGE v2 fields: VERSION|COIN|DESTINATION|ENCRYPTED_MESSAGE
-                        // (s.params[0]=VERSION, [1]=COIN, [2]=DESTINATION, [3]=ENCRYPTED_MESSAGE)
-                        let ver  = String(s.params[0] || '');
-                        let dest = String(s.params[2] || '');
-                        if(ver === '2' && dest === send['DESTINATION']){
-                            foundHandoff = true;
-                            break;
-                        }
+                let packs = gatedPacks[send['TICK']] || [];
+                if(packs.length > 0){
+                    /*********************************************************
+                     * PC-29 rule 3-5: the handoff is now CONDITIONAL.
+                     *
+                     * Previously ANY gated FILE on a tick made EVERY send of it
+                     * require a handoff. Now a pack only compels one when the
+                     * recipient will actually end up able to unlock it.
+                     *
+                     * POST-SEND balance, not the amount sent: a recipient who
+                     * already holds enough crosses the threshold on any transfer,
+                     * and one who holds nothing may not cross it even on a large
+                     * one. Both halves matter, so the comparison is
+                     * (pre-send balance + everything this action sends them).
+                     *
+                     * The "everything this action sends them" half is already
+                     * exact here and it is worth saying why, because it looks
+                     * like a gap: legs were CONSOLIDATED by (DESTINATION, TICK)
+                     * further up, so send['AMOUNT'] is the TOTAL for this pair,
+                     * not one leg. That consolidation is what closes the
+                     * split-120-into-two-60s bypass; it is structural rather
+                     * than something this block re-derives, and a vector pins it
+                     * so a future de-consolidation cannot silently reopen it.
+                     *
+                     * Self-send (DESTINATION === SOURCE) is deliberately NOT
+                     * special-cased: the rule applies literally, the resulting
+                     * overcount is accepted for determinism, and the MESSAGE the
+                     * sender addresses to itself satisfies the requirement.
+                     *********************************************************/
+                    let destBal = destBalances[send['DESTINATION']] || {};
+                    let held    = destBal[tokenInfo['TICK_ID']];
+                    if(this.util.isNull(held)) held = '0';
+                    let postSend = this.util.bcadd(held, send['AMOUNT'], 18);
+
+                    // Rule 4: a pack is REQUIRED when it is unconditional (no
+                    // threshold at all) or the post-send balance reaches its
+                    // threshold. Rule 5: the MESSAGE is required iff ANY pack is.
+                    let required = false;
+                    for(let pack of packs){
+                        if(pack.threshold === null){ required = true; break; }
+                        if(!this.util.bclt(postSend, pack.threshold)){ required = true; break; }
                     }
-                    if(!foundHandoff)
-                        error = 'invalid: gated token transfer requires key handoff message';
+
+                    if(required){
+                        let siblings = data['SIBLING_ACTIONS'] || [];
+                        let foundHandoff = false;
+                        for(let s of siblings){
+                            if(s.action !== 'MESSAGE') continue;
+                            // MESSAGE v2 fields: VERSION|COIN|DESTINATION|ENCRYPTED_MESSAGE
+                            // (s.params[0]=VERSION, [1]=COIN, [2]=DESTINATION, [3]=ENCRYPTED_MESSAGE)
+                            let ver  = String(s.params[0] || '');
+                            let dest = String(s.params[2] || '');
+                            if(ver === '2' && dest === send['DESTINATION']){
+                                foundHandoff = true;
+                                break;
+                            }
+                        }
+                        if(!foundHandoff)
+                            error = 'invalid: gated token transfer requires key handoff message';
+                    }
                 }
             }
 

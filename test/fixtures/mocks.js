@@ -182,6 +182,9 @@ function createMockDb() {
         // tests that exercise those features override the stub per-case.
         isOwnershipEscrowed: sinon.stub().resolves(false),
         getActiveGatedKeyHashes: sinon.stub().resolves([]),
+        // PC-29: packs with thresholds. Default is 'no gated packs', so an ungated
+        // SEND needs no per-test setup and never reads a destination balance.
+        getGatedPackThresholds: sinon.stub().resolves([]),
         getIssueTick: sinon.stub().resolves(null),
 
         // Action records

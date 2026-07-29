@@ -5284,6 +5284,54 @@ class Database {
     // to determine whether a transfer requires a paired MESSAGE handoff.
     // A pack of N files contributes one entry. Returns [] if the token has
     // no gated content.
+    // PC-29: the gated PACKS for a token, with each pack's effective threshold.
+    //
+    // A pack is (publisher_address, gate_ticker, key_hash): files that share one key
+    // and unlock together. Its EFFECTIVE THRESHOLD is the MINIMUM gate_min_amount
+    // across its files, and any file with no threshold makes the whole pack
+    // unconditional, because that file is readable by anyone holding the key and the
+    // key is shared across the pack.
+    //
+    // The minimum is computed HERE IN JS, not with SQL MIN(). gate_min_amount is a
+    // VARCHAR, so SQL MIN() compares lexicographically: it would rank '100' below
+    // '9' and pick a threshold ten times too small. Decimal comparison has to go
+    // through the same bignumber helpers consensus uses everywhere else.
+    //
+    // Returns [{ publisher, keyHash, threshold }] where threshold === null means the
+    // pack is unconditional. Ordered deterministically so two nodes building the same
+    // list from the same rows agree, for the same reason #3085 needed an ORDER BY.
+    async getGatedPackThresholds(tick){
+        let q = `SELECT gf.publisher_address, gf.key_hash, gf.gate_min_amount
+                 FROM gated_files gf
+                 INNER JOIN index_statuses s ON s.id = gf.status_id
+                 WHERE gf.gate_ticker = ?
+                   AND s.status = 'valid'
+                 ORDER BY gf.publisher_address ASC, gf.key_hash ASC, gf.action_index ASC`;
+        let rows = await this.doQuery(q, [tick]);
+        let packs = new Map();
+        for(let r of rows){
+            let publisher = r.publisher_address == null ? '' : String(r.publisher_address);
+            let keyHash   = String(r.key_hash || '').toLowerCase();
+            let key       = publisher + '|' + keyHash;
+            let raw       = (r.gate_min_amount == null || String(r.gate_min_amount) === '')
+                          ? null : String(r.gate_min_amount);
+            let pack = packs.get(key);
+            if(pack === undefined){
+                packs.set(key, { publisher, keyHash, threshold: raw, unconditional: (raw === null) });
+                continue;
+            }
+            // Once any file in the pack carries no threshold the pack is
+            // unconditional, and no later file can re-impose one.
+            if(pack.unconditional) continue;
+            if(raw === null){ pack.unconditional = true; pack.threshold = null; continue; }
+            if(this.util.bclt(raw, pack.threshold)) pack.threshold = raw;
+        }
+        return Array.from(packs.values()).map(p => ({
+            publisher: p.publisher, keyHash: p.keyHash,
+            threshold: p.unconditional ? null : p.threshold
+        }));
+    }
+
     async getActiveGatedKeyHashes(tick){
         // Active = status maps to 'valid' (the canonical accepted status id).
         let q = `SELECT DISTINCT gf.key_hash
