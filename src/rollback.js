@@ -1264,6 +1264,32 @@ class Rollback {
             }
         }
 
+        // Drop the light-client touched-key resolver caches . They map a
+        // surrogate id to the canonical name it resolves to, and both are cached
+        // for the connection lifetime on the premise that the mapping is
+        // immutable. A ROLLBACK is exactly where that premise fails: it deletes
+        // index_tickers / index_addresses rows above the reorg point and frees
+        // their dense ids, and createTicker/createAddress then REASSIGN those ids
+        // to whatever the new chain interns (which is why createTicker refuses to
+        // mint under suppressIndexIdCreation: resurrecting a deleted id would
+        // re-open the wire ^<id> fork).
+        //
+        // A stale entry does not produce a wrong leaf, it produces NO leaf and no
+        // error: the touched key is recorded against the OLD name, getNetBalance
+        // matches nothing, _leafOrNull turns that into null, and the commitment
+        // deletes a key that never existed. The block's balances_root then comes
+        // out byte-identical to its predecessor's. ISSUE is over-represented in
+        // the observed skips precisely because it is the action that mints new
+        // ids onto the freed range.
+        //
+        // Clearing is cheap (both are pure memoisation, refilled on demand) and
+        // the alternative, invalidating per deleted id, would have to enumerate
+        // rows this pass has already deleted.
+        if(this.indexerDb){
+            this.indexerDb._smtTickNameCache    = null;
+            this.indexerDb._smtAddressNameCache = null;
+        }
+
         // Structured completion summary so a successful rollback is distinguishable
         // from a hung/partial one in the log stream (#1812): target block, the rolled-
         // back action range, the staged hub retractions, and elapsed time.

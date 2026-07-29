@@ -2846,8 +2846,12 @@ class Database {
     }
 
     // Cached tick_id -> canonical name resolver for the light-client touched-key
-    // set. A RESOLVED mapping is immutable (a tick_id always names the same tick),
-    // so a name is cached for the connection lifetime.
+    // set. A resolved mapping is stable WITHIN a chain segment, so the name is
+    // cached; it is NOT immutable across a reorg, because a rollback deletes
+    // index_tickers rows above the reorg point and frees their dense ids for
+    // createTicker to reassign. rollback.js therefore drops this cache on
+    // completion . A stale entry here keys the touched set to the OLD
+    // tick name, which commits no leaf at all and moves no root.
     //
     // AN ABSENCE IS NOT CACHED, and that distinction is the whole point .
     // The immutability argument covers names only: an id with no row *right now*
@@ -2866,11 +2870,13 @@ class Database {
     // into a permanent, silent consensus omission, so the read throws instead and
     // the block is retried.
     // Cached address_id -> canonical address resolver, the address-axis twin of
-    // _smtTickName and subject to exactly the same two rules: a resolved mapping
-    // is immutable so the NAME is cached, an ABSENCE is never cached (an id can
-    // be interned moments later, and a rollback can delete an id that is then
-    // re-interned), and the read is STRICT so a transient fault throws instead of
-    // being indistinguishable from "no such address".
+    // _smtTickName and subject to exactly the same rules: an ABSENCE is never
+    // cached, the read is STRICT so a transient fault throws instead of being
+    // indistinguishable from "no such address", and the cache is only valid
+    // WITHIN a chain segment. A rollback frees dense ids for reuse, so
+    // rollback.js drops this cache when it completes . Do not restore the
+    // old "the mapping is immutable" justification: it is true only until a
+    // reorg reassigns the id.
     async _smtAddressName(address_id){
         if(!this._smtAddressNameCache) this._smtAddressNameCache = new Map();
         if(this._smtAddressNameCache.has(address_id)) return this._smtAddressNameCache.get(address_id);
