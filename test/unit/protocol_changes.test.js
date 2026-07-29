@@ -18,10 +18,10 @@ describe('ProtocolChanges @regression @tier3', function () {
     beforeEach(function () {
         indexer = createMockIndexer();
         // Set version for the indexer package
-        process.env.npm_package_version = '1.0.0';
         process.env.INDEXER_NETWORK = 'regtest';
         ProtocolChanges = require('../../src/protocol_changes.js');
-        pc = new ProtocolChanges(indexer);
+        // Consensus version is passed explicitly now that it is a compiled pin (#3087).
+        pc = new ProtocolChanges(indexer, '1.0.0');
     });
 
     describe('parseChanges()', function () {
@@ -171,9 +171,9 @@ describe('ProtocolChanges @regression @tier3', function () {
         });
 
         it('should enable when current version exceeds required', async function () {
-            process.env.npm_package_version = '2.0.0';
-            // Recreate to pick up new version
-            pc = new ProtocolChanges(indexer);
+            // Recreate with an explicit consensus version (#3087: the pin means the
+            // environment no longer supplies one).
+            pc = new ProtocolChanges(indexer, '2.0.0');
             indexer.decoderDb.getBlockTime.resolves(1700000000);
             const enabled = await pc.isEnabled('SEND', 100);
             assert.strictEqual(enabled, true);
@@ -193,18 +193,16 @@ describe('ProtocolChanges @regression @tier3', function () {
     // mis-networked node would activate gated consensus rules early and fork the fleet.
     describe('isEnabled network fail-closed (consensus backstop)', function () {
         it('throws on an unrecognized network instead of enabling every gated change', async function () {
-            process.env.npm_package_version = '2.0.0';
             indexer.config.NETWORK = 'mainnett'; // typo, from the validated config
-            const bad = new ProtocolChanges(indexer);
+            const bad = new ProtocolChanges(indexer, '2.0.0');
             indexer.decoderDb.getBlockTime.resolves(1);
             await assert.rejects(() => bad.isEnabled('CONTROLLER_GUARD', 100), /unrecognized network/);
         });
 
         it('still evaluates normally for each valid network', async function () {
             for (const net of ['mainnet', 'testnet', 'regtest']) {
-                process.env.npm_package_version = '2.0.0';
                 indexer.config.NETWORK = net;
-                const pc2 = new ProtocolChanges(indexer);
+                const pc2 = new ProtocolChanges(indexer, '2.0.0');
                 indexer.decoderDb.getBlockTime.resolves(1);
                 // SEND is genesis-active (1.0.0, all-zero gates), enabled on every valid network.
                 assert.strictEqual(await pc2.isEnabled('SEND', 0), true, net + ' should evaluate');
@@ -218,19 +216,17 @@ describe('ProtocolChanges @regression @tier3', function () {
     // diverge if the env is mutated post-boot, silently mis-gating consensus rules.
     describe('network source is the validated config, not process.env ', function () {
         it('reads this.network from config.NETWORK even when process.env.INDEXER_NETWORK disagrees', function () {
-            process.env.npm_package_version = '2.0.0';
             indexer.config.NETWORK = 'mainnet';
             process.env.INDEXER_NETWORK = 'regtest'; // stale/mutated env must be ignored
-            const pc2 = new ProtocolChanges(indexer);
+            const pc2 = new ProtocolChanges(indexer, '2.0.0');
             assert.strictEqual(pc2.network, 'mainnet');
         });
 
         it('gates on config.NETWORK: mainnet flag-day applies even if env still says regtest', async function () {
             const MAINNET_FLAG_DAY = 1786924800;
-            process.env.npm_package_version = '2.0.0';
             indexer.config.NETWORK = 'mainnet';
             process.env.INDEXER_NETWORK = 'regtest'; // env would (wrongly) enable from genesis
-            const pc2 = new ProtocolChanges(indexer);
+            const pc2 = new ProtocolChanges(indexer, '2.0.0');
             indexer.decoderDb.getBlockTime.resolves(MAINNET_FLAG_DAY - 1);
             // Under config.NETWORK='mainnet' the gate is DISABLED below the flag-day; a stale
             // env read would have returned true (regtest genesis-active) and forked the ledger.
@@ -241,12 +237,13 @@ describe('ProtocolChanges @regression @tier3', function () {
     describe('DEPLOY_BASE64_CODE activation gate (consensus)', function () {
         const MAINNET_FLAG_DAY = 1786924800; // 2026-08-17 00:00:00 UTC, CONFIRMED 2026-07-07 (see protocol_changes.js)
 
-        // The constructor reads config.NETWORK + npm_package_version fresh, so a new
-        // instance per network/version is all that's needed (no module-cache reset).
+        // The constructor reads config.NETWORK fresh and takes the consensus version as an
+        // explicit argument (#3087), so a new instance per network/version is all that is
+        // needed (no module-cache reset, and no environment mutation).
         function pcFor(network, version = '2.0.0') {
-            process.env.npm_package_version = version; // shipping consensus version
+            // Shipping consensus version passed explicitly (#3087 pin).
             indexer.config.NETWORK = network; // constructor reads network from the validated config
-            return new ProtocolChanges(indexer);
+            return new ProtocolChanges(indexer, version);
         }
 
         it('is registered as a v2.0.0 change keyed on block_time, not block_index', function () {
@@ -321,9 +318,9 @@ describe('ProtocolChanges @regression @tier3', function () {
         const MAINNET_FLAG_DAY = 1786924800; // 2026-08-17 00:00:00 UTC, CONFIRMED 2026-07-07 (see protocol_changes.js)
 
         function pcFor(network, version = '2.0.0') {
-            process.env.npm_package_version = version; // shipping consensus version
+            // Shipping consensus version passed explicitly (#3087 pin).
             indexer.config.NETWORK = network; // constructor reads network from the validated config
-            return new ProtocolChanges(indexer);
+            return new ProtocolChanges(indexer, version);
         }
 
         it('is registered as a v2.0.0 change keyed on block_time, not block_index', function () {
@@ -397,9 +394,9 @@ describe('ProtocolChanges @regression @tier3', function () {
         const MAINNET_FLAG_DAY = 1786924800; // 2026-08-17 00:00:00 UTC, CONFIRMED 2026-07-07 (see protocol_changes.js)
 
         function pcFor(network, version = '2.0.0') {
-            process.env.npm_package_version = version; // shipping consensus version
+            // Shipping consensus version passed explicitly (#3087 pin).
             indexer.config.NETWORK = network; // constructor reads network from the validated config
-            return new ProtocolChanges(indexer);
+            return new ProtocolChanges(indexer, version);
         }
 
         it('is registered as a v2.0.0 change keyed on block_time, not block_index', function () {
@@ -461,9 +458,9 @@ describe('ProtocolChanges @regression @tier3', function () {
         const MAINNET_FLAG_DAY = 1786924800; // 2026-08-17 00:00:00 UTC, CONFIRMED 2026-07-07 (see protocol_changes.js)
 
         function pcFor(network, version = '2.0.0') {
-            process.env.npm_package_version = version; // shipping consensus version
+            // Shipping consensus version passed explicitly (#3087 pin).
             indexer.config.NETWORK = network; // constructor reads network from the validated config
-            return new ProtocolChanges(indexer);
+            return new ProtocolChanges(indexer, version);
         }
 
         it('is registered as a v2.0.0 change keyed on block_time, not block_index', function () {
@@ -547,6 +544,88 @@ describe('ProtocolChanges @regression @tier3', function () {
                 assert.strictEqual(change.mainnet_time, anchor,
                     `${name} mainnet_time must equal VM_BANNED_ASYNC_MAINNET_TIME; a partial flag-day edit forks the ledger`);
             }
+        });
+    });
+
+    // ─── #3087: the consensus version is a compiled pin, not npm metadata ───
+    // isEnabled() compares the resolved version against every registered change, so
+    // whatever supplies it decides which consensus rules this node applies. Sourcing
+    // it from npm_package_version (with a package.json fallback) meant a version bump,
+    // a bare `node src/api.js`, or a host with a divergent installed package.json
+    // moved consensus silently. These pin the compiled constant and its no-op proof.
+    describe('consensus version pin (#3087)', function () {
+        it('is a compiled constant equal to the package version', function () {
+            const packaged = require('../../package.json').version;
+            assert.strictEqual(typeof ProtocolChanges.CONSENSUS_VERSION, 'string',
+                'CONSENSUS_VERSION must be exported');
+            assert.strictEqual(ProtocolChanges.CONSENSUS_VERSION, packaged,
+                'CONSENSUS_VERSION must equal package.json version; the two moving apart ' +
+                'unnoticed is exactly what the pin exists to prevent');
+        });
+
+        it('resolves from the compiled pin, ignoring npm_package_version entirely', function () {
+            const saved = process.env.npm_package_version;
+            try {
+                // The pre-pin code read this env var straight into consensus.
+                process.env.npm_package_version = '9.9.9';
+                const pinned = new ProtocolChanges(indexer);
+                assert.strictEqual(pinned.version, ProtocolChanges.CONSENSUS_VERSION,
+                    'a hostile/stale npm_package_version must not reach consensus');
+                // And with the var absent, which used to hit the package.json fallback.
+                delete process.env.npm_package_version;
+                assert.strictEqual(new ProtocolChanges(indexer).version, ProtocolChanges.CONSENSUS_VERSION);
+            } finally {
+                if (saved === undefined) delete process.env.npm_package_version;
+                else process.env.npm_package_version = saved;
+            }
+        });
+
+        it('rejects a malformed explicit override instead of falling back to the pin', function () {
+            // A silent fallback would let a broken test seam masquerade as production.
+            assert.throws(() => new ProtocolChanges(indexer, '2.0'), /semantic version/);
+            assert.throws(() => new ProtocolChanges(indexer, 200), /semantic version/);
+            assert.throws(() => new ProtocolChanges(indexer, null), /semantic version/);
+        });
+
+        it('no-op proof passes on a matching host and throws on a drifted npm_package_version', function () {
+            const saved = process.env.npm_package_version;
+            try {
+                delete process.env.npm_package_version;
+                assert.strictEqual(ProtocolChanges.assertConsensusVersionPin(),
+                    ProtocolChanges.CONSENSUS_VERSION);
+                process.env.npm_package_version = ProtocolChanges.CONSENSUS_VERSION;
+                assert.doesNotThrow(() => ProtocolChanges.assertConsensusVersionPin());
+                // A host that would have resolved a DIFFERENT version pre-pin is a host
+                // where shipping the pin moves consensus: abort rather than report.
+                process.env.npm_package_version = '1.2.3';
+                assert.throws(() => ProtocolChanges.assertConsensusVersionPin(), /NOT a no-op/);
+            } finally {
+                if (saved === undefined) delete process.env.npm_package_version;
+                else process.env.npm_package_version = saved;
+            }
+        });
+    });
+
+    // ───  redesign: LOCK_NULL_PRIOR_UNSET ships ungated ───────────────
+    // Built under the v1 three-key train and registered on its Key A block TIME
+    // (1796083200 / 2026-12-01). The redesign (spec §0) replaced the activation
+    // surface with a mandatory fleet-wide wipe-and-replay rebase, so this rule ships
+    // plain. A reintroduced flag day here is a divergence window: nodes replaying
+    // before and after the date would disagree.
+    describe('LOCK_NULL_PRIOR_UNSET is ungated ( redesign)', function () {
+        it('carries no activation time or block on any network', function () {
+            const change = pc.changes['LOCK_NULL_PRIOR_UNSET'];
+            assert.ok(change, 'LOCK_NULL_PRIOR_UNSET must be registered');
+            for (const field of ['mainnet_time', 'testnet_time', 'regtest_time',
+                                 'mainnet_block', 'testnet_block', 'regtest_block']) {
+                assert.strictEqual(change[field], 0,
+                    `${field} must be 0; the  batch ships ungated (spec §0)`);
+            }
+        });
+
+        it('retired the v1 train constant rather than leaving it dangling', function () {
+            assert.strictEqual(ProtocolChanges.XC637_TRAIN_TIME, undefined,
+                'the v1  Key A anchor must not survive the redesign');
         });
     });
 });

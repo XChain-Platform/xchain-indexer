@@ -58,6 +58,10 @@ describe('SLASH action handler: equivocation verifier @regression', function () 
         db.getOrCreatePubkeyId       = sinon.stub().resolves(7);
         db.hasCapabilitySlashEvent   = sinon.stub().resolves(false);
         db.slashCapabilityStake      = sinon.stub().resolves('1000');
+        // #3163: the handler resolves a delegated offender to its owning stake source at
+        // the equivocation height before burning. Default to null (offender stakes in its
+        // own name); the delegated-offender case overrides this per-test.
+        db.getStakeSourceForDelegatedPubkey = sinon.stub().resolves(null);
         db.createCapabilitySlashEvent = sinon.stub().resolves();
         db.getAddressId              = sinon.stub().resolves(1);
         db.getAttestationRequestById = sinon.stub().resolves(null);
@@ -103,8 +107,32 @@ describe('SLASH action handler: equivocation verifier @regression', function () 
         assert.strictEqual(d['STATUS'], 'valid');
         assert.ok(indexer.indexerDb.slashCapabilityStake.calledOnce, 'slashCapabilityStake must be called once');
         // 4th arg is burnPending (SLASH-1): true here since the mock flag defaults on.
-        assert.deepStrictEqual(indexer.indexerDb.slashCapabilityStake.firstCall.args, [7, 200, 999, true]);
+        // 5th is ownerSourceId (#3163): null because this offender stakes in its own name.
+        assert.deepStrictEqual(indexer.indexerDb.slashCapabilityStake.firstCall.args, [7, 200, 999, true, null]);
         assert.ok(indexer.indexerDb.createCapabilitySlashEvent.calledOnce, 'an audit event must be written');
+    });
+
+    // . A delegated signing key owns no stake, so burning by its own pubkey
+    // matched nothing: the slash recorded as valid and burned ZERO. The handler must
+    // resolve the owning source AT THE EQUIVOCATION HEIGHT and burn there.
+    it('a DELEGATED offender burns the owning source\'s bond, resolved at the equivocation height', async function () {
+        indexer.indexerDb.getStakeSourceForDelegatedPubkey = sinon.stub().resolves(42);
+        const { msgA, msgB } = dexProof();
+        const d = data();
+        await handler.parse(params('cross_chain', offender.pubHex, msgA, offender.privateKey, msgB, offender.privateKey), d, null);
+
+        assert.strictEqual(d['STATUS'], 'valid');
+        const resolve = indexer.indexerDb.getStakeSourceForDelegatedPubkey.firstCall;
+        assert.ok(resolve, 'the handler must attempt a delegated-owner resolution');
+        assert.strictEqual(resolve.args[0], 7, 'resolved for the offending pubkey id');
+        // 100 is the proof's snapshot_block (dexContent snapA); 200 is BLOCK_INDEX, the
+        // processing height. They differ here on purpose: that gap is the whole point of
+        // the pinned resolution. Revoking the delegation between 100 and 200 must not
+        // orphan the proof, so the resolution must read 100.
+        assert.strictEqual(resolve.args[1], 100,
+            'must resolve at the EQUIVOCATION height (proof snapshot_block), not the processing height');
+        assert.strictEqual(indexer.indexerDb.slashCapabilityStake.firstCall.args[4], 42,
+            'the burn must target the owning stake source');
     });
 
     it('REJECTS an honest view change (R-3): same round, different view → different key', async function () {

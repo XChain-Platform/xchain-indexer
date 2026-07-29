@@ -229,3 +229,71 @@ describe('getOpenCrossChainOffers() UNION + cursor + expiration hardening (XCC-2
         assert.match(calls[0].query, /order_edits oe[\s\S]*oes\.status='valid'[\s\S]*oe\.expiration IS NOT NULL[\s\S]*ORDER BY oe\.action_index DESC/);
     });
 });
+
+/*********************************************************************
+ *  : the capability_snapshots reads must be ORDERED.
+ *
+ * Both feed stake-weighted quorum / the cross_chain validator set on off-BTC
+ * indexers. An unordered SELECT hands row order to the storage engine, so two
+ * nodes can return the same rows in different sequences; that stays invisible
+ * until a consumer dedupes, tie-breaks or truncates, and then they disagree
+ * about the validator set and validation forks.
+ *
+ * The ordering must also be NODE-IDENTICAL, which rules out the obvious
+ * `ORDER BY id`: the schema documents `id` as a LOCAL surrogate with no hub
+ * parity (hubs persist independently, AnchorRecovery rebuilds rows id-less, and
+ * the mirror strips wire ids), so ordering by it would be stable per node and
+ * divergent across the fleet. The natural key uq_cap_snap is the only safe
+ * source of a total order here.
+ ********************************************************************/
+describe('capability_snapshots reads are deterministically ordered (#3085) @regression @tier1', function () {
+
+    function capture(method, args) {
+        const db = makeDb();
+        const calls = [];
+        sinon.stub(db, 'doQuery').callsFake((query, a) => { calls.push({ query, args: a }); return Promise.resolve([]); });
+        return db[method](...args).then(() => calls[0]);
+    }
+
+    for (const method of ['getCapabilitySnapshotWeights', 'getCapabilitySnapshotValidators']) {
+
+        it(`${method} orders by the natural key, giving a TOTAL order`, async function () {
+            const call = await capture(method, ['cross_chain', 961000]);
+            assert.match(call.query, /FROM capability_snapshots/);
+            // WHERE pins (capability, snapshot_block); uq_cap_snap's remaining
+            // components are (signing_pubkey, source), and the unique key makes that
+            // pair distinct, so exactly one ordering is valid.
+            assert.match(call.query, /ORDER BY\s+signing_pubkey ASC,\s*source ASC/,
+                'must order by the natural key so every node returns one identical sequence');
+        });
+
+        it(`${method} does NOT order by the node-local surrogate id`, async function () {
+            const call = await capture(method, ['cross_chain', 961000]);
+            assert.doesNotMatch(call.query, /ORDER BY[^`]*\bid\b/,
+                '`id` has no hub parity; ordering by it is stable per node and divergent ' +
+                'across the fleet, which is worse than no ordering at all');
+        });
+    }
+
+    // getCapabilitySnapshotValidators selects only (pubkey, amount), so it would be
+    // tempting to order by pubkey alone. A pubkey delegated by TWO sources yields two
+    // rows, so pubkey alone is not total; source must remain in the ordering even
+    // though it is not projected.
+    it('validators ordering keeps `source` as the tie-break despite not selecting it', async function () {
+        const call = await capture('getCapabilitySnapshotValidators', ['cross_chain', 961000]);
+        assert.doesNotMatch(call.query, /SELECT[\s\S]*?\bsource\b[\s\S]*?FROM/,
+            'source is intentionally not projected here');
+        assert.match(call.query, /ORDER BY\s+signing_pubkey ASC,\s*source ASC/,
+            'a multi-source delegated pubkey produces duplicate pubkeys, so pubkey alone ties');
+    });
+
+    // The existence check is order-insensitive by construction: any matching row
+    // proves presence, so its LIMIT 1 needs no ORDER BY and must not grow one.
+    it('isPubkeyInCapabilitySnapshot stays an order-insensitive existence check', async function () {
+        const call = await capture('isPubkeyInCapabilitySnapshot', ['aa'.repeat(32), 'cross_chain', 961000]);
+        assert.match(call.query, /SELECT 1 FROM capability_snapshots/);
+        assert.match(call.query, /LIMIT 1/);
+        assert.doesNotMatch(call.query, /ORDER BY/,
+            'presence is independent of which row answers, so no ordering is required');
+    });
+});

@@ -31,20 +31,25 @@ const VM_BANNED_ASYNC_MAINNET_TIME = 1786924800;
 // fleet on the first fee-bearing LTC/DOGE action after the earlier timestamp.
 const NATIVE_FEE_PRICE_TIME_GATE_MAINNET_TIME = 1786924800;
 
-//  coordinated flag-day train, Key A (shared mainnet block TIME).
-// 1796083200 = 2026-12-01 00:00:00 UTC, the §3 activation surface in
-// claude/specs/-FLAGDAY-TRAIN-SPEC.md. Deliberately NOT the 1786924800
-// (2026-08-17) cohort: that train already carries unshipped cargo and deploys on
-// its own schedule, and spec §9 forbids this train touching its constants.
-// Key A is forced here rather than a per-chain height map because ISSUE runs on
-// BTC, LTC and DOGE, whose heights diverge by millions of blocks, so only a
-// timestamp can name one simultaneous cutover across all three (spec §2).
-// The value is the spec's PROPOSED surface pending operator ratification (spec §10
-// decision 1); if the operator ratifies a different instant this one constant moves
-// and every gate registered against it follows. A divergent value between fleet
-// members is a fork, so it lives in exactly one place and
-// test/unit/lock-null-prior-unset.test.js pins it.
-const XC637_TRAIN_TIME = 1796083200;
+// Consensus protocol version, COMPILED IN ().
+//
+// isEnabled() compares this against the version registered on every protocol
+// change, so it decides WHICH consensus rules this node applies. It used to be
+// `process.env.npm_package_version || require('../package.json').version`,
+// which made a consensus input out of npm packaging metadata: a routine
+// `npm version` bump moved it, a bare `node src/api.js` resolved it
+// differently from `npm run`, and a host whose node_modules/package.json
+// disagreed resolved it differently again. Two nodes resolving two values fork
+// on the first version-gated action, silently, with no flag-day involved.
+//
+// Pinning it here decouples packaging from consensus in both directions:
+// releasing a new npm version no longer touches consensus, and moving consensus
+// is now a deliberate one-line edit reviewed on its own merits. The pin is kept
+// equal to the package version by assertConsensusVersionPin() (called at
+// indexer boot) and by test/unit/protocol_changes.test.js, so the two cannot
+// drift apart unnoticed; that equality is what makes this change a no-op on
+// every host today (spec §7 pre-window gate).
+const CONSENSUS_VERSION = '2.7.17';
 
 // Single shared predicate for the NATIVE_FEE_PRICE_TIME_GATE flag-day, used by
 // utility.getFeeOraclePrices (query selection) and XChainIndexer (sync
@@ -57,24 +62,64 @@ function isNativeFeePriceTimeGateActive(network, blockTime){
     return Number.isFinite(Number(blockTime)) && Number(blockTime) >= NATIVE_FEE_PRICE_TIME_GATE_MAINNET_TIME;
 }
 
+// No-op proof for the #3087 consensus-version pin (spec §7 pre-window gate).
+//
+// Called at indexer boot. Asserts that pinning the consensus version changed
+// nothing on THIS host, by comparing the compiled pin against the value the
+// pre-pin code would have resolved. Both pre-pin sources are checked: the
+// package.json this process actually loaded, and npm_package_version when the
+// launcher set it. A mismatch means this host's consensus rules would have
+// moved at the moment the pin shipped, which is the fork the pin exists to
+// prevent, so it aborts the boot instead of reporting it.
+//
+// It stays in place after the rollout as a drift guard: it is what keeps a
+// later `npm version` bump from silently separating the package version from
+// the consensus version. Bumping the package is then a two-line change, and the
+// second line is the deliberate consensus decision.
+function assertConsensusVersionPin(){
+    const packaged = require('../package.json').version;
+    if(packaged !== CONSENSUS_VERSION)
+        throw new Error('ProtocolChanges: consensus version pin ' + CONSENSUS_VERSION +
+            ' does not match package.json version ' + packaged +
+            '. These must move together: update CONSENSUS_VERSION in src/protocol_changes.js ' +
+            'as a deliberate consensus decision, or revert the package bump. Refusing to boot ' +
+            'rather than apply a consensus rule set this host was not meant to apply.');
+    const env = process.env.npm_package_version;
+    if(env && env !== CONSENSUS_VERSION)
+        throw new Error('ProtocolChanges: consensus version pin ' + CONSENSUS_VERSION +
+            ' does not match npm_package_version ' + env +
+            '. Before the pin this host resolved consensus from that env var, so the pin is ' +
+            'NOT a no-op here and deploying it would move this node\'s activation set.');
+    return CONSENSUS_VERSION;
+}
+
 class ProtocolChanges {
 
-    constructor(indexer){
+    // @param {indexer}          object  Indexer instance
+    // @param {consensusVersion} string  TEST-ONLY explicit consensus version
+    //                                   (semantic XX.XX.XX). Production passes
+    //                                   nothing and gets the compiled pin.
+    constructor(indexer, consensusVersion){
         this.config    = indexer.config;
         this.util      = indexer.util;
         this.decoderDb = indexer.decoderDb;
         this.indexerDb = indexer.indexerDb;
 
-        // XChain Indexer Version and network.
-        // Prefer process.env.npm_package_version (set under `npm run …`, and the
-        // hook tests inject it to simulate a shipping consensus version), and fall
-        // back to package.json when it is absent. A bare `node src/api.js` (Docker
-        // entrypoints, one-off debugging) does NOT set the env var, which left
-        // this.version undefined and made isEnabled()'s this.version.split('.')
-        // throw, rolling back and silently retrying the same block forever; the
-        // package.json fallback closes that crash while keeping both production
-        // launch paths (npm run / bare node) resolving to the same version.
-        this.version = process.env.npm_package_version || require('../package.json').version;
+        // Consensus version: the compiled pin, never npm metadata (#3087, see
+        // CONSENSUS_VERSION). The override exists so the activation suites can
+        // drive isEnabled() across version boundaries without reaching through
+        // the environment; it is an explicit argument precisely so no ambient
+        // value can supply it by accident, and production (XChainIndexer:
+        // `new changes(this)`) never passes it. A malformed override throws
+        // rather than falling back, since a silent fallback would let a broken
+        // test seam masquerade as the production pin.
+        if(consensusVersion !== undefined){
+            if(typeof consensusVersion !== 'string' || consensusVersion.split('.').length !== 3)
+                throw new Error('ProtocolChanges: consensusVersion override must be a semantic version string (XX.XX.XX), got ' + JSON.stringify(consensusVersion));
+            this.version = consensusVersion;
+        } else {
+            this.version = CONSENSUS_VERSION;
+        }
         // Read the network from the validated config (config.getConfig() sets NETWORK after
         // boot rejects an invalid network via coins.getCoinConfig) rather than re-reading the
         // raw process.env.INDEXER_NETWORK. A single validated source keeps the consensus
@@ -626,19 +671,30 @@ class ProtocolChanges {
         // supply/description/mint after launch. Locking stays one-way: a prior of 1 is
         // still refused a move to 0 on both sides of the gate.
         //
-        // Gated because it CHANGES WHICH ACTIONS ARE VALID: an ungated flip would accept
-        // an ISSUE that peers still running the old binary reject, forking a heterogeneous
-        // fleet on the first post-genesis LOCK, and would break from-genesis replay
-        // byte-identity for any historical LOCK that committed 'invalid'. Registered on
-        // the  train (Key A / block TIME) per the ledger entry, NOT on the
-        // 2026-08-17 cohort its LOCK_MAX_SUPPLY_EXACT sibling rides. The paired question
-        // about tokens already carrying NULL lock history is answered by the gate itself:
-        // the rule is applied to prior state, not to issuance date, so below the flag-day
-        // every token replays exactly as it did, and at/above it EVERY token with an unset
-        // prior becomes lockable regardless of when it was issued - no reconciliation pass
-        // and no per-token grandfathering. testnet/regtest activate at genesis (all zeros)
-        // so fresh regtest stacks exercise the post-activation path end to end.
-        this.addChange('LOCK_NULL_PRIOR_UNSET', '2.0.0',XC637_TRAIN_TIME,0,0,0,0,0);
+        // UNGATED as of the  redesign (spec §0). This rule was built under the
+        // v1 three-key train and registered on its Key A block TIME (1796083200 =
+        // 2026-12-01), because it CHANGES WHICH ACTIONS ARE VALID: an ungated flip on a
+        // LIVE network would accept an ISSUE that peers on the old binary reject, forking
+        // a heterogeneous fleet, and would break from-genesis replay byte-identity for any
+        // historical LOCK that committed 'invalid'.
+        //
+        // Both of those hazards are what the redesign's mandatory fleet-wide
+        // wipe-and-replay rebase removes: the platform has not launched, every byte of
+        // derived state is operator-owned, no service keeps pre-batch derived state
+        // through the window, and every node replays from genesis under these rules. With
+        // no old prefix to preserve and no mixed fleet to straddle, the flag day protects
+        // nothing and only costs a divergence risk of its own (a node that replays before
+        // the date and one that replays after would disagree). So the gate is removed
+        // rather than moved, per spec §0 "Fixes ship plain".
+        //
+        // The rule is applied to PRIOR STATE, not to issuance date, so on replay every
+        // token with an unset lock prior becomes lockable regardless of when it was
+        // issued: no reconciliation pass and no per-token grandfathering. Locking stays
+        // one-way (a prior of 1 is still refused a move to 0). Any historical LOCK whose
+        // verdict flips from 'invalid' to 'valid' on replay surfaces in the §3.1
+        // snapshot diff and is adjudicated in the deploy report, which is exactly the
+        // mechanism the redesign put there for this class of change.
+        this.addChange('LOCK_NULL_PRIOR_UNSET', '2.0.0',0,0,0,0,0,0);
 
         // DEPLOY validity: integer COOLDOWN_BLOCKS. Before this activation the staking
         // cooldown was gated only by isNumeric + range, so a fractional value ('50.5')
@@ -1098,6 +1154,8 @@ module.exports.VM_BANNED_ASYNC_MAINNET_TIME = VM_BANNED_ASYNC_MAINNET_TIME;
 // H-3 price-selection flag-day + its shared gate predicate (see registration).
 module.exports.NATIVE_FEE_PRICE_TIME_GATE_MAINNET_TIME = NATIVE_FEE_PRICE_TIME_GATE_MAINNET_TIME;
 module.exports.isNativeFeePriceTimeGateActive = isNativeFeePriceTimeGateActive;
-//  train Key A anchor, exported so the flag-day guard suites can assert every
-// gate registered against it shares one instant (a split value is a fork window).
-module.exports.XC637_TRAIN_TIME = XC637_TRAIN_TIME;
+// Compiled consensus-version pin (#3087) and its no-op proof. Exported for the
+// boot path (XChainIndexer) and for test/unit/protocol_changes.test.js, which
+// pins the constant against package.json so the two cannot drift.
+module.exports.CONSENSUS_VERSION = CONSENSUS_VERSION;
+module.exports.assertConsensusVersionPin = assertConsensusVersionPin;

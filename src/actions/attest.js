@@ -227,6 +227,11 @@ class Attest {
         // derives from block-anchored stake state every validator replays alike.
         // The computed set is reused as the pinned RESPONSIBLE_SET_JSON below.
         let admissionSet = null;
+        // LOCAL-HEIGHT plane (): BLOCK_INDEX is this request's height on
+        // its own chain, which is what this gate is defined against. It is deliberately
+        // NOT the BTC-anchored plane the stake_weighted_quorum / price_sig_tally gates
+        // use; see attest_admission_activation.js for why the two differ and why the
+        // difference must not be "corrected" without its own flag-day.
         if(!error && attestAdmission.isAttestAdmissionActive(data['BLOCK_INDEX'], this.config['NETWORK'])){
             admissionSet = await this._computeResponsibleSet(
                 String(data['REQUEST_ID'] || '').toLowerCase(), data['REDUNDANCY'], data['BLOCK_INDEX']);

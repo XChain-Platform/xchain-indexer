@@ -249,7 +249,22 @@ class Slash {
             // SLASH-1: at/after SLASH_BURNS_PENDING_STAKE (EQUIV-height-gated) burn pending-activation
             // stakes too, so an equivocator's just-submitted top-up can't survive the burn.
             let burnPending = await this.actions.protocolChanges.isEnabled('SLASH_BURNS_PENDING_STAKE', data['BLOCK_INDEX']);
-            let burned = await this.indexerDb.slashCapabilityStake(pubkeyId, data['BLOCK_INDEX'], data['ACTION_INDEX'], burnPending);
+
+            // : if the offender was a DELEGATED signing key, the bond is held by
+            // the source that delegated to it, not by rows keyed on the delegated pubkey.
+            // Burning by signing_pubkey_id matched nothing and burned ZERO while still
+            // writing a valid slash event, so equivocating through a delegated key cost
+            // the staker nothing. Resolve the owner AT THE EQUIVOCATION HEIGHT
+            // (snapshotBlock, recovered from the proof above) rather than at processing
+            // time, so a delegation revoked after the offence cannot orphan the proof and
+            // the target is a pure function of the proof itself.
+            //
+            // A key that stakes in its own name resolves to null and keeps the original
+            // targeting. A bond that has since fully unstaked and withdrawn burns zero:
+            // that is deliberate, not a rejection, so the outcome never depends on stake
+            // motion after the offence.
+            let ownerSourceId = await this.indexerDb.getStakeSourceForDelegatedPubkey(pubkeyId, snapshotBlock);
+            let burned = await this.indexerDb.slashCapabilityStake(pubkeyId, data['BLOCK_INDEX'], data['ACTION_INDEX'], burnPending, ownerSourceId);
 
             // Bounty / treasury split. Governance config (Phase D); absent → pure burn.
             let split = this._bountyTreasurySplit(capability, burned);

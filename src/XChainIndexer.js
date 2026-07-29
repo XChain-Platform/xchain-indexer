@@ -426,6 +426,12 @@ class XChainIndexer {
             }
         }
 
+        // Prove the #3087 consensus-version pin is a no-op on this host BEFORE any
+        // activation is evaluated. Throws (aborting boot, and with it the rollout on
+        // this host) if the compiled pin disagrees with the version the pre-pin code
+        // would have resolved here. See protocol_changes.assertConsensusVersionPin.
+        changes.assertConsensusVersionPin();
+
         // Create instance of the protocol changes class
         this.protocolChanges = new changes(this);
 

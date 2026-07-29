@@ -30,19 +30,28 @@
  * unlocked, because the materialized `tokens` row stores 0 where `issues` stores
  * NULL).
  *
- * The fix treats an unset prior as unlocked, which CHANGES WHICH ACTIONS ARE VALID,
- * so it ships behind the LOCK_NULL_PRIOR_UNSET flag-day on the  train (Key A
- * / shared mainnet block TIME, because ISSUE runs on BTC, LTC and DOGE and no
- * single height names one cutover across all three).
+ * The fix treats an unset prior as unlocked, which CHANGES WHICH ACTIONS ARE VALID.
+ * It was originally built behind a LOCK_NULL_PRIOR_UNSET flag-day on the v1 
+ * three-key train (Key A / shared mainnet block TIME 1796083200). The 
+ * REDESIGN (spec §0) retired that activation surface: the platform has not launched,
+ * all derived state is operator-owned, and the batch ships ungated behind one
+ * mandatory fleet-wide wipe-and-replay rebase instead. So the rule is now
+ * registered with all-zero gates on every network, and the Key A constant is gone.
+ *
+ * The handler still resolves the rule through isEnabled(), which simply always
+ * returns true for it now. That keeps the two verdict branches testable, which
+ * matters: the gate-OFF branch is the PRE-BATCH verdict, and the §3.1 snapshot
+ * diff needs it reproducible to adjudicate any historical LOCK whose validity
+ * flips on replay.
  *
  * What these tests pin:
  *   1. the root cause: a NULL lock column replays to an ABSENT key, not to 0;
- *   2. isValidLock semantics on both sides of the gate, including that locking
- *      stays one-way (1 -> 0 is still refused) after activation;
+ *   2. isValidLock semantics on both branches, including that locking
+ *      stays one-way (1 -> 0 is still refused) under the shipped rule;
  *   3. the end-to-end ISSUE verdict, driving the exact on-chain repro
  *      `ISSUE|3|S20ADM|||1` that was rejected as action 1157;
- *   4. the gate registration itself: correct train anchor, genesis-armed on
- *      testnet/regtest, and NOT folded into the 2026-08-17 cohort.
+ *   4. the registration itself: ungated on every network, the v1 train anchor
+ *      retired, and NOT folded into the 2026-08-17 cohort.
  ********************************************************************/
 
 process.env.INDEXER_COIN    = 'BTC';
@@ -251,7 +260,11 @@ describe(' LOCK_NULL_PRIOR_UNSET @regression @tier1', function () {
 
         afterEach(function () { sinon.restore(); });
 
-        it('BELOW the flag-day: still rejected with the (locked) text, so replay is unchanged', async function () {
+        // The registration is UNGATED after the  redesign, so the gate-off branch is
+        // no longer reachable in production. It is still pinned here on purpose: it is the
+        // pre-batch verdict the §3.1 snapshot diff compares replayed state against, so it
+        // has to stay reproducible to adjudicate any LOCK whose validity flips.
+        it('gate OFF (pre-batch verdict): rejected with the (locked) text', async function () {
             const { handler } = makeHandler(false);
             const data = createBaseData({ ACTION: 'ISSUE', FORMAT: 3, BLOCK_INDEX: 100 });
             await handler.parse(REPRO_PARAMS, data, null);
@@ -259,14 +272,14 @@ describe(' LOCK_NULL_PRIOR_UNSET @regression @tier1', function () {
                 'the historical verdict must be reproduced byte for byte below the flag-day');
         });
 
-        it('AT/ABOVE the flag-day: the same action indexes valid', async function () {
+        it('gate ON (shipped rule): the same action indexes valid', async function () {
             const { handler } = makeHandler(true);
             const data = createBaseData({ ACTION: 'ISSUE', FORMAT: 3, BLOCK_INDEX: 100 });
             await handler.parse(REPRO_PARAMS, data, null);
             assert.strictEqual(data.STATUS, 'valid', 'expected valid but got: ' + data.STATUS);
         });
 
-        it('AT/ABOVE the flag-day: the flag actually flips (LOCK_DESCRIPTION rides through as 1)', async function () {
+        it('gate ON (shipped rule): the flag actually flips (LOCK_DESCRIPTION rides through as 1)', async function () {
             const { handler } = makeHandler(true);
             const data = createBaseData({ ACTION: 'ISSUE', FORMAT: 3, BLOCK_INDEX: 100 });
             await handler.parse(REPRO_PARAMS, data, null);
@@ -275,7 +288,7 @@ describe(' LOCK_NULL_PRIOR_UNSET @regression @tier1', function () {
                 'a valid LOCK must carry the set flag into the token write, not just pass validation');
         });
 
-        it('AT/ABOVE the flag-day: an unlock attempt on an already-locked flag is still refused', async function () {
+        it('gate ON (shipped rule): an unlock attempt on an already-locked flag is still refused', async function () {
             const { handler, indexer } = makeHandler(true);
             indexer.indexerDb.getTokenInfo.resolves(tokenInfoWithUnsetLocks({
                 TICK: 'S20ADM', OWNER: SOURCE, SUPPLY: '0', MAX_SUPPLY: '1000', LOCK_DESCRIPTION: 1
@@ -317,11 +330,18 @@ describe(' LOCK_NULL_PRIOR_UNSET @regression @tier1', function () {
             assert.strictEqual(makeChanges().isDefined('LOCK_NULL_PRIOR_UNSET'), true);
         });
 
-        it('it arms on the  train anchor (2026-12-01 00:00:00 UTC)', function () {
+        // Was: "it arms on the  train anchor (2026-12-01)". The  redesign
+        // (spec §0) replaced the v1 three-key activation surface with a mandatory
+        // fleet-wide wipe-and-replay rebase, so this rule ships ungated and the Key A
+        // anchor is retired. Reintroducing a flag day here is a divergence window,
+        // because a node replaying before the date and one replaying after would
+        // compute different validity for the same historical LOCK.
+        it('it ships UNGATED on every network ( redesign, spec §0)', function () {
             const change = makeChanges().changes['LOCK_NULL_PRIOR_UNSET'];
-            assert.strictEqual(ProtocolChanges.XC637_TRAIN_TIME, 1796083200,
-                'the  Key A anchor is 2026-12-01 00:00:00 UTC; a divergent value is a fork');
-            assert.strictEqual(change.mainnet_time, ProtocolChanges.XC637_TRAIN_TIME);
+            assert.strictEqual(change.mainnet_time, 0,
+                'the  batch carries no activation dates; mainnet_time must be 0');
+            assert.strictEqual(ProtocolChanges.XC637_TRAIN_TIME, undefined,
+                'the v1 Key A anchor must be retired, not left dangling for a gate to re-adopt');
         });
 
         it('it is NOT folded into the 2026-08-17 cohort, which deploys on its own schedule', function () {

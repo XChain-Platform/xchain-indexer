@@ -31,6 +31,10 @@ const stateKeyCollation = require('./state_key_collation_activation');
 const snapshotAgeCausality = require('./oracle_snapshot_age_causality_activation');
 const listEditResolution = require('./list_edit_resolution_activation');
 const caretRefStrict = require('./caret_ref_strict_activation');
+// Per-block cap on the ATTEST deadline-expiry sweep (). Vendored
+// byte-identical from xchain-documentation/protocol/constants.js, same convention
+// as the XCALL_MAX_CALLS_PER_BLOCK sibling it mirrors.
+const { ATTEST_MAX_EXPIRIES_PER_BLOCK } = require('./protocol/constants.js');
 const { CHECKPOINT_VERSIONS: ANCHOR_CHECKPOINT_VERSIONS } = require('./anchor-action-query');
 const { rethrowIfInfraFault } = require('./actions/faultGuard');
 
@@ -12036,10 +12040,32 @@ class Database {
 
     // Read the hub-mirrored SOURCE-KEYED weights for a capability at a snapshot block
     // (non-BTC chains). Carries `source` so the verifier can dedupe by staking address.
+    // ORDER BY is CONSENSUS-CRITICAL here ( / ). This feeds
+    // stake-weighted quorum for off-BTC chains, and an unordered SELECT hands the
+    // row order to the storage engine, so two nodes can return the same rows in
+    // different sequences. That is harmless only for as long as every consumer is
+    // order-insensitive; the moment one dedupes, tie-breaks or truncates, the two
+    // nodes disagree about the validator set and validation forks.
+    //
+    // The ordering deliberately does NOT use `id`. It is the obvious choice and it
+    // is wrong here: the schema documents `id` as a LOCAL surrogate with NO hub
+    // parity (hubs persist independently and AnchorRecovery rebuilds rows id-less,
+    // so the mirror strips wire ids). Ordering by it would be stable per node and
+    // divergent across the fleet, which is the worst shape a bug can take.
+    //
+    // Use the natural key instead. The WHERE already pins (capability,
+    // snapshot_block), so within the result set the remaining components of
+    // uq_cap_snap (snapshot_block, capability, signing_pubkey, source) are
+    // (signing_pubkey, source), and the unique key guarantees that pair is
+    // distinct. Exactly one ordering is therefore valid, and it is computed from
+    // mirrored natural-key columns that every node holds identically. The unique
+    // key and this ORDER BY are compared under the same table collation, so the
+    // pair cannot tie here while being accepted as distinct by the index.
     async getCapabilitySnapshotWeights(capability, snapshotBlock){
         let query = `SELECT signing_pubkey AS pubkey, source, amount AS weight
                      FROM capability_snapshots
-                     WHERE capability = ? AND snapshot_block = ?`;
+                     WHERE capability = ? AND snapshot_block = ?
+                     ORDER BY signing_pubkey ASC, source ASC`;
         let rows = await this._mirrorDb().doQuery(query, [capability, snapshotBlock]);
         return rows.map(r => ({
             pubkey: String(r.pubkey),
@@ -12275,10 +12301,17 @@ class Database {
     // Read the hub-mirrored qualifying validator set for a capability at a BTC-anchored
     // snapshot block. Presence in capability_snapshots = qualified (the hub only mirrors
     // pubkeys already past min_stake). Lets a non-BTC indexer resolve the cross_chain set.
+    // Ordered for the same reason as the sibling getCapabilitySnapshotWeights
+    // (): this resolves the cross_chain validator set on non-BTC indexers,
+    // so an engine-dependent row order is a fork waiting for the first consumer that
+    // dedupes or truncates. Same natural-key ordering, and `source` is ordered on
+    // even though it is not selected: a pubkey delegated by two sources produces two
+    // rows here, so pubkey alone is not a total order.
     async getCapabilitySnapshotValidators(capability, snapshotBlock){
         let query = `SELECT signing_pubkey AS pubkey, amount
                      FROM capability_snapshots
-                     WHERE capability = ? AND snapshot_block = ?`;
+                     WHERE capability = ? AND snapshot_block = ?
+                     ORDER BY signing_pubkey ASC, source ASC`;
         let rows = await this._mirrorDb().doQuery(query, [capability, snapshotBlock]);
         // Guard a NULL amount to '0' so all three snapshot read methods render it
         // identically: the sibling getCapabilitySnapshotWeights (r.weight == null ?
@@ -12960,7 +12993,18 @@ class Database {
     // set) AND its tokens are mirrored into a cooldown `unstakes` row, so Pass 1 must skip that
     // phantom copy (Pass 2 burns the cooldown row) - each token burned exactly once. The
     // (pubkey,capability) dedup that makes a first slash idempotent lives in the SLASH handler.
-    async slashCapabilityStake(pubkeyId, blockIndex, slashActionIndex, burnPending){
+    // ownerSourceId (): when the offender is a DELEGATED signing key, the bond
+    // lives on the OWNING source's stakes, not on rows keyed by the delegated pubkey.
+    // Callers resolve it with getStakeSourceForDelegatedPubkey() AT THE EQUIVOCATION
+    // HEIGHT and pass it here; null keeps the original signing_pubkey_id targeting for
+    // a key that stakes in its own name.
+    //
+    // The burn is min(target, remaining) by construction rather than by arithmetic:
+    // each row is zeroed for exactly the amount it still holds, and rows already at 0
+    // are skipped. So a bond that has since fully unstaked and been withdrawn burns
+    // ZERO and the SLASH still records as valid, which is the pinned resolution: the
+    // outcome must not depend on stake motion after the offence.
+    async slashCapabilityStake(pubkeyId, blockIndex, slashActionIndex, burnPending, ownerSourceId = null){
         let valid_id = await this.getStatusId('valid');
         if(valid_id === null) return '0';
         let totalSlashed = '0';
@@ -12981,13 +13025,18 @@ class Database {
         // replay/fleet consistency. The `deactivation_block IS NULL` guard is INDEPENDENT and stays
         // in both regimes (it is the Pass-1/Pass-2 double-burn defense, not an activation gate).
         let activationClause = burnPending ? '' : 'AND activation_block <= ?';
+        // Target the owning source when the offender was a delegated key (#3163),
+        // otherwise the offender's own signing key. Exactly one column is matched, so
+        // there is no chance of double-counting a row across both spellings.
+        let targetCol = (ownerSourceId !== null && ownerSourceId !== undefined) ? 'source_id' : 'signing_pubkey_id';
+        let targetVal = (ownerSourceId !== null && ownerSourceId !== undefined) ? ownerSourceId : pubkeyId;
         let stakesQ = `SELECT action_index, amount FROM stakes
-                       WHERE signing_pubkey_id=? AND status_id=?
+                       WHERE ${targetCol}=? AND status_id=?
                          ${activationClause}
                          AND CAST(amount AS DECIMAL(30,8)) > 0
                          AND deactivation_block IS NULL
                        ORDER BY action_index DESC`;
-        let stakeArgs = burnPending ? [pubkeyId, valid_id] : [pubkeyId, valid_id, blockIndex];
+        let stakeArgs = burnPending ? [targetVal, valid_id] : [targetVal, valid_id, blockIndex];
         let stakeRows = await this.doQuery(stakesQ, stakeArgs);
         for(let row of stakeRows){
             let rowAmt = String(row.amount);
@@ -13003,11 +13052,13 @@ class Database {
         let unstakeStatusIds = [valid_id];
         if(pendingId !== null) unstakeStatusIds.push(pendingId);
         let placeholders = unstakeStatusIds.map(() => '?').join(',');
+        // Same owner-vs-own-key targeting as Pass 1 (#3163): cooldown-locked tokens of a
+        // delegated key's OWNER are part of the bond and must burn with it.
         let unstakesQ = `SELECT action_index, amount FROM unstakes
-                         WHERE signing_pubkey_id=? AND status_id IN (${placeholders})
+                         WHERE ${targetCol}=? AND status_id IN (${placeholders})
                            AND CAST(amount AS DECIMAL(30,8)) > 0
                          ORDER BY action_index DESC`;
-        let unstakeRows = await this.doQuery(unstakesQ, [pubkeyId, ...unstakeStatusIds]);
+        let unstakeRows = await this.doQuery(unstakesQ, [targetVal, ...unstakeStatusIds]);
         for(let row of unstakeRows){
             let rowAmt = String(row.amount);
             if(!this.util.bcgt(rowAmt, '0')) continue;
@@ -13538,15 +13589,29 @@ class Database {
 
     // Find ATTEST v0 (request) rows whose deadline_block has passed without a response.
     // Returns full rows so the expiry handler doesn't have to refetch.
-    async getExpiredAttestationRequests(blockIndex){
+    //
+    // CAPPED per block at ATTEST_MAX_EXPIRIES_PER_BLOCK (). Unbounded, one
+    // block could inherit an arbitrary backlog of expiries, each of which synthesizes
+    // an ATTEST v2 and fires a contract callback, so block processing time became a
+    // function of how many deadlines happened to coincide: an attacker picks that
+    // number by batching requests on a common deadline.
+    //
+    // The overflow is NOT dropped, it carries to the next block. That is safe only
+    // because the ORDER BY is a TOTAL order: deadline_block is not unique, but
+    // action_index is, so (deadline_block ASC, action_index ASC) has exactly one
+    // valid ordering and every node takes the same prefix. A cap over a partial or
+    // planner-dependent order would let two nodes select different subsets and fork,
+    // which is why the ordering is spelled out here rather than left implicit.
+    async getExpiredAttestationRequests(blockIndex, limit = ATTEST_MAX_EXPIRIES_PER_BLOCK){
         let query = `SELECT ar.*, ia.address AS fee_payer
                      FROM attests ar
                      LEFT JOIN index_addresses ia ON ia.id = ar.fee_payer_id
                      WHERE ar.version = 0
                        AND ar.request_status = 'pending'
                        AND ar.deadline_block < ?
-                     ORDER BY ar.deadline_block ASC, ar.action_index ASC`;
-        return await this.doQuery(query, [blockIndex]);
+                     ORDER BY ar.deadline_block ASC, ar.action_index ASC
+                     LIMIT ?`;
+        return await this.doQuery(query, [blockIndex, limit]);
     }
 
     // Set callback_execute_action_index on an ATTEST v1 (response) row (after the system EXECUTE is injected)
@@ -13555,6 +13620,42 @@ class Database {
                      SET callback_execute_action_index = ?
                      WHERE action_index = ? AND version = 1`;
         await this.doQuery(query, [callbackExecuteActionIndex, responseActionIndex]);
+    }
+
+    // Resolve an equivocating DELEGATED signing key to the stake source that backs it
+    // ().
+    //
+    // A delegated key signs on behalf of a staker but owns no stake itself: the
+    // `stakes` rows carry the OWNER's source_id and (for delegation-only stakers) a
+    // different signing_pubkey_id entirely. slashCapabilityStake burns by
+    // signing_pubkey_id, so a proof against a delegated key matched zero rows and
+    // burned NOTHING while still recording a valid slash event. Equivocation via a
+    // delegated key was therefore free, which is the whole point of the bond.
+    //
+    // The mapping is read AT THE EQUIVOCATION HEIGHT, not at processing time. That is
+    // the pinned resolution (spec P7): the delegation that was in force when the
+    // offence happened is the one that identifies the responsible stake, so an
+    // offender cannot revoke the delegation afterwards to orphan the proof, and the
+    // answer is a pure function of the proof rather than of when it was submitted.
+    // Returns the owning source_id, or null when the key was not a delegated key at
+    // that height (in which case it stakes in its own name and the caller's existing
+    // signing_pubkey_id burn is already correct).
+    async getStakeSourceForDelegatedPubkey(pubkeyId, equivocationBlock){
+        if(pubkeyId === null || pubkeyId === undefined) return null;
+        let valid_id = await this.getStatusId('valid');
+        if(valid_id === null) return null;
+        let blk = parseInt(equivocationBlock);
+        if(!Number.isFinite(blk)) return null;
+        // Active AT the equivocation height: activated at or before it, and not yet
+        // deactivated as of it. Deliberately the same window predicate the capability
+        // set uses, so a key that was eligible to sign is a key that resolves here.
+        let query = `SELECT source_id FROM delegations
+                     WHERE signing_pubkey_id=? AND status_id=?
+                       AND activation_block <= ?
+                       AND (deactivation_block IS NULL OR deactivation_block > ?)
+                     ORDER BY action_index DESC LIMIT 1`;
+        let rows = await this.doQuery(query, [pubkeyId, valid_id, blk, blk]);
+        return rows.length > 0 ? rows[0].source_id : null;
     }
 
     // Get the delegation holding a pubkey, regardless of source - used for the

@@ -36,16 +36,21 @@ module.exports = {
         // Armed in a coordinated release (plan Phase 6). null = skip verification.
         mainnet: null,
 
+        // REGENERATED 2026-07-28 ( batch, ): folding `wireFormat` into
+        // consensusSubset() changes every hash by construction. Every service that
+        // bundles these must ship the SAME new values in one wave; a straggler
+        // fail-closes on verifyConsensusPin() rather than forking, which is the
+        // designed behavior but halts that node until it is updated.
         testnet: {
-            BTC:  '211086b82b345092a8ce18ca08ab945a6b294c59efa5588c70eacdb5ee515e62',
-            LTC:  '7e4cc52a609606024d1ea8d26c743957e195c660b0bb749e523f4cbdcc82baf8',
-            DOGE: 'd61706332ddcb921b4bb3d0a9f077119426405692fc118eaba8d1a6a9ecb28d0',
+            BTC:  '6db27c44dfa99968fb89ddc310413ba2d7a9ad59e3b8624b933a76b7cc4de156',
+            LTC:  '03f62fc2f57151924aa6a76ff5ee97684aece17ca54a3f39eb7d8167bd34a20b',
+            DOGE: '3ec0ad2f7290e36887d09a880761c217ea6b0eeb06078d708ee5c200ef2a2410',
         },
 
         regtest: {
-            BTC:  'd900b05a7df14595ff4a2be4bbd9505a661f0c6cef4237f1e00aace3b2397f0e',
-            LTC:  '769d91cad98ea674494290ac680bb1c0ddb8bcd3b75cbffa131365bf97811db1',
-            DOGE: '3de84c0bf6478e985f0ea0cc0ece155cf2780f0e932c3f6e063d3f01bfc38197',
+            BTC:  '6535e995e5890c3a0d5a2df970b2f3b94f8d60e83aa563ea861a5909a3f80288',
+            LTC:  '786d903d2b347803c06a1b5b157011834ebc25a246be54f5c27ddd27629eba57',
+            DOGE: '9f448912ed9d24ac50dc16f132619c91115355c165e8f1a5bb3b630ea090f2e0',
         },
     },
 };

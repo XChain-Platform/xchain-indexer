@@ -1999,6 +1999,41 @@ describe('Database.getExpiredAttestationRequests() @regression @tier1', function
         const result = await db.getExpiredAttestationRequests(100);
         assert.strictEqual(result.length, 1);
     });
+
+    // . Unbounded, one block could inherit an arbitrary backlog of
+    // expiries (each synthesizing an ATTEST v2 and firing a callback), so block
+    // processing time was attacker-selectable by batching a common deadline.
+    describe('per-block cap (#3078)', function () {
+        const { ATTEST_MAX_EXPIRIES_PER_BLOCK } = require('../../src/protocol/constants.js');
+
+        it('bounds the sweep with LIMIT at the pinned constant by default', async function () {
+            const db = dbWithDoQuery([]);
+            await db.getExpiredAttestationRequests(100);
+            assert.match(db.doQuery.firstCall.args[0], /LIMIT \?/,
+                'the sweep must be bounded by a LIMIT, not by however many rows exist');
+            assert.deepStrictEqual(db.doQuery.firstCall.args[1], [100, ATTEST_MAX_EXPIRIES_PER_BLOCK]);
+        });
+
+        it('orders by a TOTAL order so the capped prefix is identical on every node', async function () {
+            const db = dbWithDoQuery([]);
+            await db.getExpiredAttestationRequests(100);
+            const sql = db.doQuery.firstCall.args[0];
+            // deadline_block alone is not unique; action_index is. Both, in this
+            // order, are what make the LIMIT deterministic rather than a fork.
+            assert.match(sql, /ORDER BY\s+ar\.deadline_block ASC,\s*ar\.action_index ASC/,
+                'a capped selection over a partial or planner-dependent order lets two ' +
+                'nodes take different subsets and fork');
+            assert.ok(sql.indexOf('ORDER BY') < sql.indexOf('LIMIT'),
+                'the ORDER BY must constrain the LIMIT, not follow it');
+        });
+
+        it('is a pinned consensus constant, not a local literal', function () {
+            assert.strictEqual(typeof ATTEST_MAX_EXPIRIES_PER_BLOCK, 'number');
+            assert.ok(Number.isInteger(ATTEST_MAX_EXPIRIES_PER_BLOCK) && ATTEST_MAX_EXPIRIES_PER_BLOCK > 0,
+                'the cap decides which block an expiry lands in, so it is consensus-visible ' +
+                'and lives in protocol/constants.js with its cross-repo twins');
+        });
+    });
 });
 
 // setAttestationResponseCallbackIndex

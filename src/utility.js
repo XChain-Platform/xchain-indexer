@@ -1855,6 +1855,10 @@ class Utility {
     // Driven by block_index (not block_time) because attestation deadlines are
     // measured in blocks, matching the wire format DEADLINE_BLOCKS.
     async processAttestationExpirations(actions, db, block_index, block_time){
+        // Capped per block (, ATTEST_MAX_EXPIRIES_PER_BLOCK). Overflow needs
+        // no bookkeeping here: the rows this block did not take are still 'pending'
+        // with deadline_block < block_index, so the next block's sweep selects them,
+        // in the same total order, until the backlog drains.
         let expired = await db.getExpiredAttestationRequests(block_index);
         for(let info of expired){
             let data = {};

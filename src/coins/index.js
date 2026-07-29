@@ -257,6 +257,14 @@ function consensusSubset(tick, network){
 
     const subset = {
         net:        netBlock.net,
+        // wireFormat is a CONSENSUS input (): XChainBlockDecoder keys its
+        // block parser on it (default / mweb / auxpow) and XChainDecoder derives
+        // this.auxPow from it, so it decides how every block's bytes are read. It sat
+        // outside this subset, which meant CONSENSUS_CONFIG_PIN did not cover it and a
+        // node whose bundle declared LTC as 'default' instead of 'mweb' would decode
+        // different transactions out of the same block while its pin verified clean.
+        // Coin-level rather than per-network, matching where the coin files declare it.
+        wireFormat: coin.wireFormat,
         addresses:  addresses,
         legacyFees: coin.legacyFees,
         GAS_PRICE:  coin.GAS_PRICE,

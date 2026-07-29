@@ -248,6 +248,13 @@ module.exports = {
         REWARD_SHARE:                 '0',
         REWARD_PASS_WINDOW_BLOCKS:   1008,
         MIN_PASS_RATE_BPS:           7000,
+        // Collection closes when the tip reaches epoch + this many blocks. Anchored to
+        // chain height so every hub closes on the same block and the leader has the same
+        // answer set before proposing the PASS list. That makes it a consensus input:
+        // hubs disagreeing on it propose different PASS lists. It lived only as an env
+        // var with a '3' literal in FullNodeChallengeRound (), outside the pin;
+        // it is pinned here so a divergent value is caught by pin verification.
+        COLLECT_DEPTH_BLOCKS:            3,
         GENESIS_VERIFIERS:            [],
         $regtestSidecar:   'fullnode.regtest.json',
         $regtestEnvOverrides: {
@@ -258,6 +265,7 @@ module.exports = {
             REWARD_PASS_WINDOW_BLOCKS:    { env: 'FULLNODE_REWARD_PASS_WINDOW_BLOCKS',    type: 'int' },
             MIN_PASS_RATE_BPS:            { env: 'FULLNODE_MIN_PASS_RATE_BPS',            type: 'int' },
             REWARD_SHARE:                 { env: 'FULLNODE_REWARD_SHARE',                 type: 'str' },
+            COLLECT_DEPTH_BLOCKS:         { env: 'FULLNODE_COLLECT_DEPTH_BLOCKS',         type: 'int' },
             GENESIS_VERIFIERS:            { env: 'FULLNODE_GENESIS_VERIFIERS',            type: 'csv_lower' },
         },
     },

@@ -97,6 +97,25 @@ const XCALL_MAX_RETURN_BYTES = 1024;
 // forward to the next block in (snapshot_block, call_id) order. Never dropped.
 const XCALL_MAX_CALLS_PER_BLOCK = 25;
 
+// ── ATTEST expiry sweep ─────────────────────────────────────────────────────
+// Deterministic per-block cap on the ATTEST v0 deadline-expiry sweep ().
+// Each expired request synthesizes an ATTEST v2 action that flips the request to
+// 'expired' and fires its callback, so an unbounded sweep lets a single block
+// inherit an arbitrary backlog: one block's processing time (and its actions
+// rows) becomes a function of how many requests happened to expire at once,
+// which an attacker controls by batching requests with a common deadline.
+//
+// Overflow carries forward to the next block rather than being dropped: the
+// selection is ordered (deadline_block ASC, action_index ASC), a TOTAL order
+// because action_index is unique, so the same requests expire in the same order
+// on every node, just spread across more blocks. Mirrors the XCALL sibling cap
+// above in both value and carry-forward semantics.
+//
+// CONSENSUS-VISIBLE: the cap decides which block an expiry lands in, which moves
+// actions rows, the contract hash and the checkpoint preimage. It ships ungated
+// under the  batch because the fleet-wide replay recomputes all of it.
+const ATTEST_MAX_EXPIRIES_PER_BLOCK = 25;
+
 // ── Chunked DEPLOY (DEPLOY v4 carriers + DEPLOY v2/v3 assemble) ─────────────
 // A contract whose base64(code) exceeds the single-tx budget is split across
 // ordered DEPLOY v4 carrier actions and reassembled by a DEPLOY v2/v3 keyed on
@@ -324,6 +343,7 @@ module.exports = {
     XCALL_MAX_DEADLINE_BLOCKS,
     XCALL_MAX_RETURN_BYTES,
     XCALL_MAX_CALLS_PER_BLOCK,
+    ATTEST_MAX_EXPIRIES_PER_BLOCK,
     STAKE_WEIGHTED_QUORUM_ACTIVATION,
     EQUIV_HEADER_ACTIVATION,
     STATE_COMMITMENT_ACTIVATION,
