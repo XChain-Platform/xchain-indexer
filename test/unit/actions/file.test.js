@@ -219,6 +219,65 @@ describe('File action handler @regression @tier3', function () {
                 assert.strictEqual(data['STATUS'], 'invalid: GATE_MIN_AMOUNT',
                     'nothing would weigh a balance against, so it must not be storable');
             });
+
+            // ── Shared vector fixture (spec section 6.5) ──────────────────────
+            // The tests above are this repo's own reading of the rules. These run the
+            // SAME vectors the SDK and the wallet run, from a byte-identical file, so
+            // the three implementations are pinned to one another instead of to three
+            // separately-written suites that agree today by coincidence. The FORMAT
+            // half must match the SDK exactly; the DIVISIBILITY half is this repo's
+            // alone, because it is chain state the SDK cannot see.
+            describe('shared GATE_MIN_AMOUNT vectors', function () {
+                const fs      = require('fs');
+                const path    = require('path');
+                const FIXTURE = path.join(__dirname, '../../fixtures/gate-min-amount-vectors.json');
+                const vectors = JSON.parse(fs.readFileSync(FIXTURE, 'utf8'));
+
+                for (const vec of vectors.format) {
+                    it(`${vec.label}: ${JSON.stringify(vec.value)} is ${vec.valid ? 'valid' : 'invalid'}`, async function () {
+                        // Divisibility is set generously so a format vector can only fail
+                        // on its format: an 18-decimal tick accepts every well-formed
+                        // value in the set, which keeps this half honest about WHY a
+                        // vector was rejected.
+                        const status = await statusFor(vec.value, { DECIMALS: 18 });
+                        assert.strictEqual(status, vec.valid ? 'valid' : 'invalid: GATE_MIN_AMOUNT');
+                    });
+                }
+
+                for (const vec of vectors.divisibility) {
+                    it(`${vec.label}: ${vec.value} at ${vec.tick_decimals}dp is ${vec.valid ? 'valid' : 'invalid'}`, async function () {
+                        const status = await statusFor(vec.value, { DECIMALS: vec.tick_decimals });
+                        assert.strictEqual(status, vec.valid ? 'valid' : 'invalid: GATE_MIN_AMOUNT');
+                    });
+                }
+
+                // The asymmetry the shared fixture exposed, pinned from this side too:
+                // utility.setActionParams trims EVERY action field on the way in (a
+                // platform-wide rule long predating this one), so a whitespace-padded
+                // threshold arrives here already trimmed and is accepted as the trimmed
+                // value, while the SDK refuses to emit it at all. Safe direction (the
+                // producer is stricter than consensus) and fork-free (every indexer runs
+                // the same trim), but it does mean two byte-different FILEs can carry the
+                // same threshold. Closing it would mean changing the trim for every field
+                // of every action, which is a platform-wide consensus change and out of
+                // scope for this batch. If that ever happens, these flip to invalid.
+                for (const vec of vectors.layer_asymmetry.sdk_rejects_indexer_normalizes) {
+                    it(`${vec.label}: ${JSON.stringify(vec.value)} normalizes to ${JSON.stringify(vec.normalizes_to)} and is accepted`, async function () {
+                        assert.strictEqual(await statusFor(vec.value, { DECIMALS: 18 }), 'valid');
+                    });
+                }
+
+                it('is byte-identical to the canonical xchain-sdk copy', function () {
+                    const sibling = path.join(__dirname, '../../../../xchain-sdk/test/fixtures/gate-min-amount-vectors.json');
+                    if (!fs.existsSync(sibling)) {
+                        if (process.env.XCHAIN_REQUIRE_SIBLINGS === '1')
+                            throw new Error('sibling xchain-sdk fixture missing: ' + sibling);
+                        return this.skip();
+                    }
+                    assert.ok(fs.readFileSync(sibling).equals(fs.readFileSync(FIXTURE)),
+                        'the vendored copy drifted from the canonical sdk copy');
+                });
+            });
         });
 
         it('ENCRYPTION_METHOD != 1 → invalid', async function () {

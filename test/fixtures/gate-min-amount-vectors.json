@@ -1,0 +1,301 @@
+{
+  "$schema_note": " P9 / PC-29 shared vector fixture (spec section 6.5). Pins the GATE_MIN_AMOUNT contract across the three implementations that read the field: the SDK's stateless format validator, the indexer's STRICT consensus validation, and the wallet's fixed-scale threshold comparison. Every repo vendors this file BYTE-IDENTICALLY and each side's unit suite asserts its own half, so no side can drift alone. A diff here is a consensus-visible change to which FILEs are valid, or to who is owed an unlock key, and must be reviewed as one.",
+  "authority": "Canonical copy lives in xchain-sdk/test/fixtures/; vendored byte-identical into xchain-indexer/test/fixtures/ and xchain-wallet/test/fixtures/. Regenerating means re-deriving every side and re-reviewing, not copying one side's output over the others.",
+  "contract": [
+    "1. FORMAT is stateless and identical in the SDK and the indexer: at most 40 characters (the storage column is VARCHAR(40), and consensus validity must never depend on what a DB does to an oversized value), digits with at most one '.', a non-empty fractional part when a '.' is present, no sign and no exponent, no leading zeros unless the integer part is exactly '0', and strictly greater than zero (every zero spelling is rejected, because a zero threshold is one nobody can fail rather than an absent one).",
+    "2. DIVISIBILITY is state and belongs to the indexer ALONE, bounded at min(the gate tick's divisibility, THRESHOLD_SCALE = 18). The SDK deliberately does not check it: a tick's divisibility is chain state at the FILE's block, and a second weaker opinion would disagree at the boundary. The 18 exists because the wallet compares thresholds as BigInt at a fixed scale of 18, so a value with more places is unrepresentable there.",
+    "3. STRICT, never dropped: a present-but-invalid threshold rejects the FILE. A FILE is immutable, so dropping would leave the publisher believing a threshold was in force while the chain recorded none. A threshold on a NON-gated FILE is rejected for the same reason: there would be no gate token to weigh a balance against.",
+    "4. An ABSENT or empty field means no threshold, which is what every FILE published before the field existed carries. It is not the same as zero.",
+    "5. PACK thresholds are the MINIMUM across the pack's files, keyed on (publisher_address, gate_ticker, key_hash), and any file in the pack without a threshold makes the whole pack unconditional. The minimum must be computed NUMERICALLY: gate_min_amount is stored as a VARCHAR, so a lexicographic comparison ranks '100' below '9' and picks a threshold ten times too small.",
+    "6. pack_threshold vectors compare the effective threshold NUMERICALLY, not by spelling: 100 and 100.00000000 are the same value and either may be returned. Only null (unconditional) versus non-null is a shape distinction."
+  ],
+  "format": [
+    {
+      "label": "a plain integer threshold",
+      "value": "100",
+      "valid": true
+    },
+    {
+      "label": "a fractional threshold",
+      "value": "0.5",
+      "valid": true
+    },
+    {
+      "label": "zero integer part with a fraction is the one allowed leading zero",
+      "value": "0.00000001",
+      "valid": true
+    },
+    {
+      "label": "trailing fractional zeros are permitted and carry no meaning",
+      "note": "Comparison is numeric, so 100 and 100.00000000 are the same threshold.",
+      "value": "100.00000000",
+      "valid": true
+    },
+    {
+      "label": "exactly 40 characters is inside the bound",
+      "note": "21 + 1 + 18 = 40. The column is VARCHAR(40), so this must round-trip untruncated. 18 decimal places keeps it inside the THRESHOLD_SCALE bound, so this vector tests the length rule alone.",
+      "value": "111111111111111111111.222222222222222222",
+      "valid": true
+    },
+    {
+      "label": "41 characters is over the bound",
+      "note": "Rejected at the format layer so storage can never truncate a value consensus already accepted. Kept at 18 decimal places so LENGTH is what rejects it, not the divisibility bound.",
+      "value": "1111111111111111111111.222222222222222222",
+      "valid": false,
+      "reason": "length"
+    },
+    {
+      "label": "zero",
+      "note": "A zero threshold is not an absent one; it is a threshold nobody can fail.",
+      "value": "0",
+      "valid": false,
+      "reason": "zero"
+    },
+    {
+      "label": "zero with a fraction",
+      "value": "0.0",
+      "valid": false,
+      "reason": "zero"
+    },
+    {
+      "label": "zero spelled long",
+      "value": "0.00000000",
+      "valid": false,
+      "reason": "zero"
+    },
+    {
+      "label": "leading zero in the integer part",
+      "note": "One value must have one spelling, or two byte-different FILEs mean the same threshold.",
+      "value": "0100",
+      "valid": false,
+      "reason": "leading_zero"
+    },
+    {
+      "label": "leading zero with a fraction",
+      "value": "01.5",
+      "valid": false,
+      "reason": "leading_zero"
+    },
+    {
+      "label": "bare point with an empty fraction",
+      "value": "1.",
+      "valid": false,
+      "reason": "shape"
+    },
+    {
+      "label": "bare point with an empty integer part",
+      "value": ".5",
+      "valid": false,
+      "reason": "shape"
+    },
+    {
+      "label": "two decimal points",
+      "value": "1.2.3",
+      "valid": false,
+      "reason": "shape"
+    },
+    {
+      "label": "a negative threshold",
+      "value": "-1",
+      "valid": false,
+      "reason": "shape"
+    },
+    {
+      "label": "an explicitly signed positive threshold",
+      "value": "+1",
+      "valid": false,
+      "reason": "shape"
+    },
+    {
+      "label": "exponent notation",
+      "value": "1e3",
+      "valid": false,
+      "reason": "shape"
+    },
+    {
+      "label": "a thousands separator",
+      "value": "1,000",
+      "valid": false,
+      "reason": "shape"
+    },
+    {
+      "label": "the field separator itself",
+      "note": "Would corrupt the field layout of every following field.",
+      "value": "1|2",
+      "valid": false,
+      "reason": "shape"
+    },
+    {
+      "label": "the BATCH command separator",
+      "value": "1;2",
+      "valid": false,
+      "reason": "shape"
+    },
+    {
+      "label": "not a number at all",
+      "value": "many",
+      "valid": false,
+      "reason": "shape"
+    }
+  ],
+  "divisibility": [
+    {
+      "label": "8 decimal places on an 8-decimal tick",
+      "value": "0.00000001",
+      "tick_decimals": 8,
+      "valid": true
+    },
+    {
+      "label": "9 decimal places on an 8-decimal tick",
+      "note": "The threshold would be unreachable: no balance can express it.",
+      "value": "0.000000001",
+      "tick_decimals": 8,
+      "valid": false
+    },
+    {
+      "label": "an integer threshold on an indivisible tick",
+      "value": "3",
+      "tick_decimals": 0,
+      "valid": true
+    },
+    {
+      "label": "any fractional threshold on an indivisible tick",
+      "value": "0.5",
+      "tick_decimals": 0,
+      "valid": false
+    },
+    {
+      "label": "18 decimal places on an 18-decimal tick is exactly the scale bound",
+      "value": "0.000000000000000001",
+      "tick_decimals": 18,
+      "valid": true
+    },
+    {
+      "label": "the tick's own divisibility governs below the scale bound",
+      "value": "0.001",
+      "tick_decimals": 2,
+      "valid": false
+    }
+  ],
+  "pack_threshold": [
+    {
+      "label": "the minimum across the pack governs",
+      "thresholds": [
+        "100",
+        "50",
+        "250"
+      ],
+      "effective": "50"
+    },
+    {
+      "label": "the minimum is NUMERIC, not lexicographic",
+      "note": "Sorting these as strings puts '100' before '9' and picks a threshold ten times too small. This is the defect the JS-side minimum exists to avoid, since the column is a VARCHAR.",
+      "thresholds": [
+        "9",
+        "100"
+      ],
+      "effective": "9"
+    },
+    {
+      "label": "differing spellings of the same value compare equal",
+      "thresholds": [
+        "100.00000000",
+        "100"
+      ],
+      "effective": "100",
+      "note": "Trailing fractional zeros carry no meaning, so these are the same threshold. Which SPELLING an implementation returns is not part of the contract (the wallet returns whichever equal minimum it saw first), so this vector is compared NUMERICALLY. Pinning a spelling here would freeze an incidental detail as consensus."
+    },
+    {
+      "label": "one threshold-less file makes the whole pack unconditional",
+      "note": "The files share one key, so the weakest condition governs what that key unlocks.",
+      "thresholds": [
+        "100",
+        null
+      ],
+      "effective": null
+    },
+    {
+      "label": "an empty string counts as threshold-less, like an absent field",
+      "thresholds": [
+        "100",
+        ""
+      ],
+      "effective": null
+    },
+    {
+      "label": "a pack with no thresholds at all is unconditional",
+      "thresholds": [
+        null,
+        null
+      ],
+      "effective": null
+    }
+  ],
+  "handoff_required": [
+    {
+      "label": "a recipient who reaches the threshold is owed the key",
+      "pack_threshold": "100",
+      "balance_before": "0",
+      "sent": "100",
+      "required": true
+    },
+    {
+      "label": "at the threshold exactly, not just above it",
+      "pack_threshold": "100",
+      "balance_before": "99",
+      "sent": "1",
+      "required": true
+    },
+    {
+      "label": "below the threshold after the transfer, so a plain SEND is valid",
+      "note": "The recipient deliberately receives no key; they can be handed one on the transfer that crosses.",
+      "pack_threshold": "100",
+      "balance_before": "0",
+      "sent": "99",
+      "required": false
+    },
+    {
+      "label": "an existing holding counts toward the threshold",
+      "note": "A holder who already has enough crosses on ANY transfer, however small.",
+      "pack_threshold": "100",
+      "balance_before": "100",
+      "sent": "0.00000001",
+      "required": true
+    },
+    {
+      "label": "the post-send balance totals every leg to the same destination",
+      "note": "Per-leg evaluation would let one transaction split 120 into two legs of 60 against a threshold of 100 and deliver an above-threshold balance with no key.",
+      "pack_threshold": "100",
+      "balance_before": "0",
+      "sent": "60",
+      "sent_second_leg": "60",
+      "required": true
+    },
+    {
+      "label": "an unconditional pack always requires the handoff",
+      "pack_threshold": null,
+      "balance_before": "0",
+      "sent": "0.00000001",
+      "required": true
+    }
+  ],
+  "layer_asymmetry": {
+    "note": "Vectors the SDK REJECTS and the indexer NORMALIZES, recorded because they are a real difference between the two layers rather than a bug in either. utility.setActionParams trims every action field on the way in (a platform-wide rule that long predates this field), so a whitespace-padded threshold reaches consensus already trimmed and is accepted as the trimmed value. The SDK refuses to emit it at all. The asymmetry is in the SAFE direction (the producer is stricter than consensus) and is fork-free (every indexer trims with the same code), but it does mean two byte-different FILEs can carry the same threshold, which the leading-zero rule exists to prevent in the cases the trim does not cover. Closing it would mean changing the trim for EVERY field of EVERY action, which is a platform-wide consensus change and deliberately out of scope here.",
+    "sdk_rejects_indexer_normalizes": [
+      {
+        "label": "leading whitespace",
+        "value": " 1",
+        "valid": false,
+        "reason": "shape",
+        "normalizes_to": "1"
+      },
+      {
+        "label": "trailing whitespace",
+        "value": "1 ",
+        "valid": false,
+        "reason": "shape",
+        "normalizes_to": "1"
+      }
+    ]
+  }
+}
