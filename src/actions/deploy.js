@@ -413,7 +413,28 @@ class Deploy {
         let declaredMaxTakeBps  = null;   // number   | null
         let hasInitialize       = false;  // contract exports a callable constructor (DEPLOY_INIT_STRICT)
         if(!error && this.actions.vm){
-            let manifestRead = await this.actions.vm.readManifest(code);
+            // : read the manifest under THIS DEPLOY'S block, not under the
+            // pre-activation defaults. The verdict below hashes into deploy status, so
+            // resolving the VM's activation gates from an absent block context meant the
+            // manifest was read under one sandbox rule set while every later execute()
+            // of the same contract ran under another. Same context shape the constructor
+            // execution below uses, so the two agree by construction.
+            // contractAddress is passed too, and it is load-bearing rather than
+            // cosmetic: the Pkg 3 sandbox gate derives its COIN from this string
+            // (pkg3CoinFromAddress), and with no coin the mainnet threshold lookup
+            // misses and the gate resolves false regardless of height. Passing only
+            // network + height would therefore fix testnet/regtest and silently leave
+            // mainnet on the old pre-activation reading. It is the identical
+            // expression used for the constructor execution further down, and both
+            // inputs are already known here, so the two cannot disagree.
+            let manifestRead = await this.actions.vm.readManifest(code, {
+                network:         this.config['NETWORK'],
+                contractAddress: 'C:' + this.config['CHAIN'] + ':' + data['ACTION_INDEX'],
+                blockContext: {
+                    height:    data['BLOCK_INDEX'],
+                    timestamp: data['BLOCK_TIME']
+                }
+            });
             if(manifestRead && manifestRead.success && manifestRead.manifest){
                 let m = manifestRead.manifest;
                 hasInitialize = (m.hasInitialize === true);
