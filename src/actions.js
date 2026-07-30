@@ -431,6 +431,10 @@ class Actions {
         // Create a record of this action in the actions table
         data['ACTION_INDEX'] = await this.indexerDb.createActionIndex(data);
 
+        // Scoped to THIS transaction: the originating action's own verdict, captured if a
+        // follow-on matcher takes its record over (see processAction below).
+        this._primaryVerdict = null;
+
         // Process the specific ACTION commands
         await this.processAction(action, params, data, error);
 
@@ -444,6 +448,24 @@ class Actions {
     async processAction(action, params, data, error){
         // Reset the address/tickers/transactions list on each parse
         this.util.resetLists();
+
+        // ORDER_MATCH / SWAP_MATCH are dispatched by the ORDER / SWAP handler with the
+        // ORIGINATING action's OWN record (order.js / swap.js), and they overwrite its
+        // STATUS and ACTION_INDEX with the match's (order_match.js sets STATUS to
+        // 'pending_coinpay' for a native-coin leg, and takes ACTION_INDEX for the match row).
+        // On the real path that is invisible: the block loop discards processTransaction's
+        // return value and every row was already written from the handler's own state. The
+        // read-only fee-quote DRY RUN is its ONLY consumer, so without this snapshot it
+        // reports the MATCH's verdict as the quoted action's - and an ORDER that fills
+        // instantly against a native-coin counterparty is then quoted
+        // `valid:false, error:"pending_coinpay", xchainFee:null`, i.e. indistinguishable from
+        // a real rejection, for an action the chain accepts. That refused the taker side of
+        // the whole CoinPay lane in every wallet that pre-flights (measured 2026-07-29 on LTC
+        // regtest). Captured here rather than in the two handlers so one rule covers both, and
+        // scoped per transaction by processTransaction above. These two actions are never
+        // top-level: the decoder cannot produce them and the public quote deny-lists them.
+        if((action == 'ORDER_MATCH' || action == 'SWAP_MATCH') && data && this._primaryVerdict == null)
+            this._primaryVerdict = { status: data['STATUS'], actionIndex: data['ACTION_INDEX'] };
 
         // Deterministic index-id pre-pass: register the NEW wire-field addresses this
         // action introduces, in byte-sorted VALUE order, BEFORE the handler runs. This
@@ -757,10 +779,18 @@ class Actions {
                 dryRunProcessing,
                 timeoutMs,
                 label || ('feequote dry-run ' + (action || '')));
-            status = (resultData && resultData['STATUS'] !== undefined) ? resultData['STATUS'] : null;
+            // Prefer the QUOTED action's own verdict over whatever the record holds now: a
+            // follow-on matcher runs inside the handler and overwrites both fields with the
+            // match's (see processAction). Quoting an ORDER must answer for the ORDER.
+            let primary = this._primaryVerdict;
+            status = primary
+                ? primary.status
+                : ((resultData && resultData['STATUS'] !== undefined) ? resultData['STATUS'] : null);
             // Extract the handler-computed fee while the transaction is still open (the row
             // vanishes on rollback). `amount` is XCHAIN-denominated in every payment mode.
-            let actionIndex = (resultData && resultData['ACTION_INDEX'] !== undefined) ? resultData['ACTION_INDEX'] : null;
+            let actionIndex = primary
+                ? primary.actionIndex
+                : ((resultData && resultData['ACTION_INDEX'] !== undefined) ? resultData['ACTION_INDEX'] : null);
             if(actionIndex !== null)
                 feeRecord = await this.indexerDb.getFeeRecord(actionIndex);
         } catch(e){
