@@ -128,11 +128,22 @@ describe('state_root reserved sub-trees: gate is inert EXCEPT the armed set @reg
                 assert.strictEqual(SUB.isEscrowLockedLeafActive(h, 'mainnet', coin), false);
     });
 
-    it('the escrow locked-balance leaf is off on every chain, network and height', function(){
+    it('the escrow locked-balance leaf is off everywhere EXCEPT the armed chain', function(){
+        // Scoped around the armed chain rather than deleted. A blanket "off everywhere"
+        // assertion has to be REMOVED to arm anything, and removing it drops the
+        // protection for every other chain at the same moment; pinning the exception
+        // keeps an unintended arming anywhere else a failure.
         for(const coin of COINS)
             for(const network of NETWORKS)
-                for(const h of HEIGHTS)
-                    assert.strictEqual(SUB.isEscrowLockedLeafActive(h, network, coin), false);
+                for(const h of HEIGHTS){
+                    const armed = (coin === 'BTC' && network === 'regtest' && h >= 11200);
+                    assert.strictEqual(SUB.isEscrowLockedLeafActive(h, network, coin), armed,
+                        coin + '/' + network + '@' + h);
+                }
+        // The positive complement: a gate that never opens passes every "off" assertion
+        // ever written, so the armed chain is checked at its exact boundary.
+        assert.strictEqual(SUB.isEscrowLockedLeafActive(11199, 'regtest', 'BTC'), false);
+        assert.strictEqual(SUB.isEscrowLockedLeafActive(11200, 'regtest', 'BTC'), true);
     });
 
     it('the escrow-leaf SHADOW window is off everywhere too, and ARMED WINS when both maps name a height', function(){
@@ -144,6 +155,17 @@ describe('state_root reserved sub-trees: gate is inert EXCEPT the armed set @reg
         // Scratch-arm both: shadow answers true only BETWEEN its own height and
         // the armed height, so each height uses exactly one column and nothing
         // ever computes twice (spec §7; same contract as isSubtreeShadowActive).
+        // Snapshot both keys, because BTC:regtest now carries a REAL armed height and
+        // the cleanup below used to `delete` them. While the map was empty, delete and
+        // restore were indistinguishable; the moment a height exists, deleting it
+        // silently DISARMS the chain for every later test in the process. That is not
+        // hypothetical: it is exactly what the Stage A arming hit, and it presented as
+        // an armed-height assertion failing while the same gate answered armed
+        // elsewhere in the run.
+        const hadShadow = Object.prototype.hasOwnProperty.call(SUB.ESCROW_LOCKED_LEAF_SHADOW, 'BTC:regtest');
+        const priorShadow = SUB.ESCROW_LOCKED_LEAF_SHADOW['BTC:regtest'];
+        const hadArmed = Object.prototype.hasOwnProperty.call(SUB.ESCROW_LOCKED_LEAF_ACTIVATION, 'BTC:regtest');
+        const priorArmed = SUB.ESCROW_LOCKED_LEAF_ACTIVATION['BTC:regtest'];
         try {
             SUB.ESCROW_LOCKED_LEAF_SHADOW['BTC:regtest']     = 500;
             SUB.ESCROW_LOCKED_LEAF_ACTIVATION['BTC:regtest'] = 800;
@@ -158,9 +180,16 @@ describe('state_root reserved sub-trees: gate is inert EXCEPT the armed set @reg
             // Chain-local, as every map here is.
             assert.strictEqual(SUB.isEscrowLockedLeafShadowActive(600, 'regtest', 'LTC'), false);
         } finally {
-            delete SUB.ESCROW_LOCKED_LEAF_SHADOW['BTC:regtest'];
-            delete SUB.ESCROW_LOCKED_LEAF_ACTIVATION['BTC:regtest'];
+            // RESTORE, never delete: see the snapshot comment above.
+            if(hadShadow) SUB.ESCROW_LOCKED_LEAF_SHADOW['BTC:regtest'] = priorShadow;
+            else delete SUB.ESCROW_LOCKED_LEAF_SHADOW['BTC:regtest'];
+            if(hadArmed) SUB.ESCROW_LOCKED_LEAF_ACTIVATION['BTC:regtest'] = priorArmed;
+            else delete SUB.ESCROW_LOCKED_LEAF_ACTIVATION['BTC:regtest'];
         }
+        // And the real armed set survived this test, which is the assertion that
+        // catches a regression in the restore itself.
+        assert.strictEqual(SUB.ESCROW_LOCKED_LEAF_ACTIVATION['BTC:regtest'], 11200,
+            'restored to the real armed height, not wiped');
     });
 
     it('stateRootVersion reports 1 everywhere EXCEPT at and above the armed height', function(){
@@ -184,8 +213,12 @@ describe('state_root reserved sub-trees: gate is inert EXCEPT the armed set @reg
         assert.deepStrictEqual(SUB.STATE_SUBTREE_ACTIVATION.ownership_root, {});
         assert.deepStrictEqual(SUB.STATE_SUBTREE_ACTIVATION.tokens_root, {});
         assert.deepStrictEqual(SUB.STATE_SUBTREE_ACTIVATION.contract_state_root, { 'BTC:regtest': 10000 });
-        // Stage B is still inert everywhere: it cannot arm before Stage A holds.
-        assert.deepStrictEqual(SUB.ESCROW_LOCKED_LEAF_ACTIVATION, {});
+        // Stage B armed on the same chain, above Stage A's height: it cannot arm before
+        // Stage A holds, and 11200 > 10000 pins that ordering here rather than in prose.
+        assert.deepStrictEqual(SUB.ESCROW_LOCKED_LEAF_ACTIVATION, { 'BTC:regtest': 11200 });
+        assert.ok(SUB.ESCROW_LOCKED_LEAF_ACTIVATION['BTC:regtest'] >
+                  SUB.STATE_SUBTREE_ACTIVATION.contract_state_root['BTC:regtest'],
+            'Stage B must not arm below the Stage A height on the same chain');
         assert.deepStrictEqual(SUB.ESCROW_LOCKED_LEAF_SHADOW, {});
     });
 

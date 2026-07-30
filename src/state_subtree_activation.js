@@ -19,9 +19,11 @@
  *
  * state_root_version 1 commits the first two for real and the last three as
  * EMPTY_SMT_ROOT. This module is the gate that decides, per slot and per chain,
- * when a reserved slot may stop being EMPTY. It is INERT: every map is empty, so
- * every lookup answers "off" and every committed state_root stays byte-identical
- * to the two-sub-root v1 assembly.
+ * when a reserved slot may stop being EMPTY. It is ARMED ON BTC REGTEST ONLY:
+ * contract_state_root from block 10000 and the escrow locked-balance leaf from
+ * block 11200. Every other chain, network and slot answers "off", and MAINNET IS
+ * UNARMED for every slot, so their committed state_root stays byte-identical to
+ * the two-sub-root v1 assembly.
  *
  * Why a gate and not a plain version flip: the chains flip at different heights
  * (they always have - see state_commitment_activation.js), so one map per slot
@@ -145,7 +147,8 @@ const STATE_SUBTREE_SHADOW = {
 };
 
 // Locked-balance leaf inside balances_root (SPV sub-tree spec §3 Stage B,
-// ). INERT. The derivation exists: an append-only, source-authored and
+// ). ARMED ON BTC:regtest AT BLOCK 11200 (2026-07-30), and nowhere else.
+// The derivation exists: an append-only, source-authored and
 // replicated escrow_leaf_journal whose totals are the escrows LEDGER rows
 // re-keyed to their locker (xchain-indexer/src/escrowJournalWriter.js), read
 // by the byte-identical escrowLeafSubtree.js twin. Arming this moves
@@ -160,7 +163,7 @@ const STATE_SUBTREE_SHADOW = {
 // below the armed height using ITS carrier of this file, and the SDK verifier
 // independently refuses using its own, so neither a lagging nor a hostile
 // server can turn "not committed" into a verified absence (spec §4).
-const ESCROW_LOCKED_LEAF_ACTIVATION = {};
+const ESCROW_LOCKED_LEAF_ACTIVATION = { 'BTC:regtest': 11200 };
 
 // SHADOW-COMPUTE WINDOW for the escrow leaf (spec §7 step 1, Stage B). INERT.
 //

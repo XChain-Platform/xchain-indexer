@@ -129,13 +129,20 @@ async function armed(height, fn){
 
 describe('XCHAIN_ESC locked leaf: inertness @regression', function(){
 
-    it('ships inert on every chain, network and height', function(){
-        assert.deepStrictEqual(Object.keys(SUB.ESCROW_LOCKED_LEAF_ACTIVATION), []);
+    it('is inert on every chain, network and height EXCEPT the armed one', function(){
+        // Was "ships inert everywhere", correct while the map was empty and replaced
+        // rather than deleted the moment BTC:regtest armed. The mainnet half is the
+        // assertion that must never be relaxed.
+        assert.deepStrictEqual(SUB.ESCROW_LOCKED_LEAF_ACTIVATION, { 'BTC:regtest': 11200 });
+        for(const key of Object.keys(SUB.ESCROW_LOCKED_LEAF_ACTIVATION))
+            assert.ok(!/mainnet/.test(key), 'the escrow leaf is armed on mainnet (' + key + ')');
         for(const coin of ['BTC', 'LTC', 'DOGE'])
             for(const network of ['mainnet', 'testnet', 'regtest'])
-                for(const h of [0, 1, 958500, 962500, 6335000, 999999999])
-                    assert.strictEqual(SUB.isEscrowLockedLeafActive(h, network, coin), false,
+                for(const h of [0, 1, 958500, 962500, 6335000, 999999999]){
+                    const armed = (coin === 'BTC' && network === 'regtest' && h >= 11200);
+                    assert.strictEqual(SUB.isEscrowLockedLeafActive(h, network, coin), armed,
                         coin + '/' + network + '@' + h);
+                }
     });
 
     it('an inert chain issues ZERO journal queries from the full rebuild', async function(){
@@ -150,11 +157,31 @@ describe('XCHAIN_ESC locked leaf: inertness @regression', function(){
             if(sql.indexOf('escrow_leaf_journal') !== -1){ db.journalQueries++; return []; }
             return [];                           // no credits/debits either
         };
+        // BELOW the armed height, which is where "inert" now lives on this chain: the
+        // height used to be 999999999, which arming BTC:regtest at 11200 turned into an
+        // ARMED height, so the test was asserting the opposite of its own name.
         const root = await SC.buildFullBalancesRoot(
             Object.assign(db, { doQuery: count, doQueryStrict: count }),
-            CHAIN, NETWORK, 999999999);
+            CHAIN, NETWORK, 11199);
         assert.strictEqual(db.journalQueries, 0, 'inert chain must not read the journal');
         assert.strictEqual(root, SC.EMPTY_ROOT_HEX);
+    });
+
+    it('the ARMED height DOES read the journal (the gate really opened)', async function(){
+        // The other half of the property above. Counting zero reads proves nothing about
+        // the gate unless the armed side is shown to read, which is the same
+        // positive-complement rule the Stage A arming had to learn.
+        const db = new FakeDb();
+        db.write(100, ADDR, TICK, '5');
+        let journalQueries = 0;
+        const count = async (sql) => {
+            if(sql.indexOf('escrow_leaf_journal') !== -1){ journalQueries++; return []; }
+            return [];
+        };
+        await SC.buildFullBalancesRoot(
+            Object.assign(db, { doQuery: count, doQueryStrict: count }),
+            CHAIN, NETWORK, 11200);
+        assert.ok(journalQueries > 0, 'armed chain must read the journal at the armed height');
     });
 
     it('a full rebuild with NO height argument keeps the v1 leaf set (fail closed)', async function(){
