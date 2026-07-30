@@ -13745,6 +13745,91 @@ class Database {
         }));
     }
 
+    //  relay: every ATTEST v0 request this chain holds only as a MATERIALIZED
+    // relay leg, i.e. whose row carries an origin_chain that is some OTHER chain, with
+    // its terminal response attached when one exists. On BTC that is exactly the set of
+    // v3-materialized requests, at any lifecycle status. The predicate is
+    // self-restricting rather than coin-gated: on an ORIGIN chain a relay-eligible
+    // row's origin_chain equals that coin, so it never matches and this returns empty.
+    //
+    // ONE READ, TWO QUESTIONS, and the first is why it is driven by the request rather
+    // than the response. xchain-hub's relay driver must not materialize a request that
+    // is already on BTC, and its only home-side view was the PENDING queue: a request
+    // that had been fulfilled or had expired was no longer pending, so it read as
+    // never materialized and the driver would broadcast a second v3, which v3 admission
+    // rejects as a duplicate REQUEST_ID after the fee is already spent. Returning the
+    // request row whatever its status answers that; the LEFT JOIN answers the second
+    // question, which response is owed back to the origin chain as an ATTEST v4.
+    //
+    // The response join is deliberately narrow. Only the two TERMINAL statuses can
+    // relay: the retryable ones (no_quorum / timeout / provider_error) leave the
+    // request pending for another round, and relaying one would close an origin
+    // request the home chain still intends to fulfill. That, plus the valid-status
+    // match, is what makes the join produce AT MOST one response row per request: the
+    // retry-then-ok lifecycle writes several v1 rows, but only one can be both valid
+    // and terminal, every later one being rejected as 'REQUEST already fulfilled'.
+    // The status id is resolved once and compared as an integer so the filter can sit
+    // in the ON clause, where a LEFT JOIN needs it, without a third join.
+    //
+    // response_hash is returned alongside response_payload deliberately: the stored
+    // payload is the UTF-8 DECODE of the bytes that were hashed, so a non-UTF-8
+    // attested body cannot be re-encoded to the same bytes. The caller compares the
+    // two and refuses to relay a body it cannot reproduce (see AttestationRelay).
+    async getRelayedAttestationRequests(coin, requestId, limit, cursor){
+        let validStatusId = await this.getStatusId('valid');
+        let where = `req.version = 0
+                       AND req.origin_chain IS NOT NULL
+                       AND req.origin_chain <> ?`;
+        let args = [validStatusId, String(coin || '')];
+        if(requestId){
+            where += ' AND req.request_id = ?';
+            args.push(String(requestId).toLowerCase());
+        }
+        // Same keyset cursor contract as getPendingAttestationRequests: the caller pages
+        // forward by the last (block_index, action_index) it consumed, so a backlog
+        // larger than `limit` does not starve newer rows forever. The cursor is on the
+        // REQUEST's pair, which is the ordering, so a caller can page this read with
+        // exactly the code it uses for the pending one.
+        let afterBlock  = cursor ? Number(cursor.after_block_index)  : NaN;
+        let afterAction = cursor ? Number(cursor.after_action_index) : NaN;
+        if(Number.isFinite(afterBlock) && Number.isFinite(afterAction)){
+            where += ' AND (req.block_index > ? OR (req.block_index = ? AND req.action_index > ?))';
+            args.push(afterBlock, afterBlock, afterAction);
+        }
+        // Floored and hard-capped here, at the interpolation site, for the same reason
+        // getPendingAttestationRequests does it: a fractional limit is a MariaDB syntax
+        // error and an unclamped one is an unbounded scan, and this method owns the SQL.
+        let max = Number(limit);
+        max = (Number.isFinite(max) && max > 0) ? Math.min(Math.floor(max), 500) : 100;
+        let query = `SELECT req.action_index, req.block_index, req.request_id, req.provider_id,
+                            req.origin_chain, req.origin_action_index, req.request_status,
+                            resp.action_index  AS response_action_index,
+                            resp.block_index   AS response_block_index,
+                            resp.response_hash, resp.response_payload,
+                            resp.response_status, resp.meta
+                     FROM attests req
+                     LEFT JOIN attests resp
+                            ON (resp.request_id = req.request_id
+                                AND resp.version = 1
+                                AND resp.status_id = ?
+                                AND resp.response_status IN ('ok','expired'))
+                     WHERE ` + where + `
+                     ORDER BY req.block_index ASC, req.action_index ASC
+                     LIMIT ?`;
+        args.push(max);
+        let rows = await this.doQuery(query, args);
+        // BigInt -> Number for the express JSON serializer, as in
+        // getPendingAttestationRequests; every column here is a bounded chain value.
+        return rows.map(r => ({
+            ...r,
+            action_index:          typeof r.action_index          === 'bigint' ? Number(r.action_index)          : r.action_index,
+            block_index:           typeof r.block_index           === 'bigint' ? Number(r.block_index)           : r.block_index,
+            response_action_index: typeof r.response_action_index === 'bigint' ? Number(r.response_action_index) : r.response_action_index,
+            response_block_index:  typeof r.response_block_index  === 'bigint' ? Number(r.response_block_index)  : r.response_block_index,
+            origin_action_index:   typeof r.origin_action_index   === 'bigint' ? Number(r.origin_action_index)   : r.origin_action_index
+        }));
+    }
+
     // Find ATTEST v0 (request) rows whose deadline_block has passed without a response.
     // Returns full rows so the expiry handler doesn't have to refetch.
     //

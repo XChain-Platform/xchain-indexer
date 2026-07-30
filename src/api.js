@@ -155,6 +155,7 @@ const FEDERATION_READ_METHODS = new Set([
     'getstakesourcebypubkey',
     'getfullnodeverifiers',
     'getpendingattestation_requests',
+    'getrelayedattestation_requests',
     'getopencrosschainorders',
     'getactionconfirmations',
     'getanchoraction',
@@ -809,6 +810,46 @@ async function startApi(){
             } catch (err) {
                 console.error('getpendingattestation_requests error:', err);
                 return { error: 'failed to look up pending attestation requests' };
+            }
+        },
+
+        //  relay: list the ATTEST v0 requests this chain holds only as a
+        // MATERIALIZED relay leg (an origin_chain that is not this coin), at any
+        // lifecycle status, each carrying its terminal response when one exists.
+        // xchain-hub's AttestationRelay uses it for both halves of the round trip: to
+        // know a request is already on this chain whatever its status (the pending
+        // queue alone answers that only while it is pending, so a fulfilled one read as
+        // never materialized and drew a duplicate v3), and to discover the responses it
+        // owes back as an ATTEST v4. A co-signing peer re-reads ONE row through it
+        // (request_id filter) to independently confirm a leader's proposed v4 rather
+        // than trusting the proposal. latest_block_index rides along so the caller can
+        // apply its confirmation depth without a follow-up getlatestblock.
+        // Body: { request_id?: string, limit?: number,
+        //         after_block_index?: number, after_action_index?: number }
+        async getrelayedattestation_requests({request_id, limit, after_block_index, after_action_index}){
+            if(!indexer.indexerDb)
+                return { error: 'indexer database not ready' };
+            let max = Number(limit);
+            if(!Number.isFinite(max) || max <= 0) max = 100;
+            if(max > 500) max = 500;
+            let cursor = null;
+            if(Number.isFinite(Number(after_block_index)) && Number.isFinite(Number(after_action_index))){
+                cursor = { after_block_index, after_action_index };
+            }
+            // Federation READ isolation : committed-only, off the block tx.
+            let db = indexer.indexerDb.apiView();
+            try {
+                let latest = await db.getLatestBlockIndex();
+                let rows   = await db.getRelayedAttestationRequests(
+                    indexer.config['COIN'], request_id, max, cursor);
+                return {
+                    latest_block_index: latest,
+                    count:              rows.length,
+                    requests:           rows
+                };
+            } catch (err) {
+                console.error('getrelayedattestation_requests error:', err);
+                return { error: 'failed to look up relayed attestation requests' };
             }
         },
 
