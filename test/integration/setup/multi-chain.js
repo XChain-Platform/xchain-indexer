@@ -69,10 +69,19 @@ function forceXchainFeeMode(indexer) {
  * next coin starts from zero. `fn` receives { indexer, seeder, coin } and its return value
  * is passed through.
  *
+ * The chain env is RESTORED afterwards. Mocha runs every file in one process, so leaving
+ * INDEXER_COIN on the last coin of the sweep silently re-chains whichever suite runs next:
+ * on LTC/DOGE the native-fee path is live, and a BTC-shaped fixture then fails with
+ * 'insufficient fee (native coin output required)', which reads as a product defect and is
+ * not one. Today an unrelated suite happens to re-pin BTC in between; that is luck, not a
+ * contract.
+ *
  * @param {object} [opts]
  * @param {boolean} [opts.xchainFeeMode] - apply forceXchainFeeMode after init.
  */
 async function withCoin(coin, network, fn, opts = {}) {
+    const prevCoin    = process.env.INDEXER_COIN;
+    const prevNetwork = process.env.INDEXER_NETWORK;
     process.env.INDEXER_COIN    = coin;
     process.env.INDEXER_NETWORK = network || 'regtest';
 
@@ -86,7 +95,15 @@ async function withCoin(coin, network, fn, opts = {}) {
         return await fn({ indexer, seeder, coin });
     } finally {
         await destroyIndexer(indexer);
+        restoreEnv('INDEXER_COIN',    prevCoin);
+        restoreEnv('INDEXER_NETWORK', prevNetwork);
     }
+}
+
+// Put one env var back exactly as it was, including "was not set at all".
+function restoreEnv(name, value) {
+    if (value === undefined) delete process.env[name];
+    else process.env[name] = value;
 }
 
 module.exports = { COINS, withCoin, processBlocks, forceXchainFeeMode };

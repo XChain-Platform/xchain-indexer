@@ -165,15 +165,26 @@ describe('Phase E permissions manifest: deploy persistence (real DB + real VM) @
     });
 
     it('ENFORCES the allowlist: a PERMITTED constructor emission passes the manifest gate', async function () {
-        // CTOR_POS permits ISSUE, so its constructor ISSUE is NOT blocked by the allowlist. It
-        // gets past the gate (and only then fails downstream on the issuance FEE the unfunded
-        // contract address can't pay). The discriminating proof: exactly ONE 'not permitted'
-        // denial exists across all deploys: the CTOR_NEG one, not the ISSUE-permitting CTOR_POS.
+        // CTOR_POS permits ISSUE, so its constructor ISSUE is NOT blocked by the allowlist.
+        // The discriminating proof: exactly ONE 'not permitted' denial exists across all
+        // deploys: the CTOR_NEG one, not the ISSUE-permitting CTOR_POS.
         const errs = await execErrors();
         const denied = errs.filter(e => /not permitted/.test(e));
         assert.strictEqual(denied.length, 1,
             'only the ISSUE-forbidding contract was denied by the allowlist, not the ISSUE-permitting one; denied=' + JSON.stringify(denied));
-        assert.ok(errs.some(e => /CTORPOS/.test(e) || /insufficient funds/.test(e)),
-            'the permitted ISSUE reached action processing (failed later on fee, not on the allowlist)');
+        // The permitted emission is asserted by its EFFECT: token CTORPOS really exists.
+        // This assertion used to look for a downstream FAILURE instead ('...failed later on
+        // the issuance FEE the unfunded contract address can't pay'), which stopped being
+        // true once ISSUANCE_FEE_EMISSION_EXEMPT activated: a VM-emitted ISSUE is fee-exempt
+        // by design (issue.js, the deployer already paid DEPLOY gas), so the permitted ISSUE
+        // now commits outright. Asserting the token exists is the stronger check anyway,
+        // and it is the exact mirror of the CTORNEG case above.
+        assert.strictEqual(await tokenExists('CTORPOS'), true,
+            'the permitted ISSUE passed the allowlist and applied; execution errors=' + JSON.stringify(errs));
+        // And nothing about CTOR_POS failed at all: its deploy committed.
+        const row = await rowFor(CTOR_POS);
+        assert.ok(row, 'the ISSUE-permitting contract was deployed');
+        assert.strictEqual(row.status, 'valid',
+            'the ISSUE-permitting deploy is valid (its constructor emission succeeded), got: ' + row.status);
     });
 });

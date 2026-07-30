@@ -39,7 +39,7 @@
  *     would reject fee-bearing actions absent fee outputs, and the env-
  *     placeholder route now fails closed at startup on those chains).
  *
- * Exactly THREE per-chain artifacts remain, all normalized (not ignored)
+ * Exactly FOUR per-chain artifacts remain, all normalized (not ignored)
  * before comparison; anything else that differs is a chain-dependence bug:
  *   1. transactions.data stores the raw ACTION string, which contains the
  *      run's coin literal (ORDER/DISPENSER give+get fields).
@@ -47,6 +47,16 @@
  *   3. index_addresses holds the chain's own special addresses (the ISSUE
  *      fee is credited to the per-coin DONATE1 constant from config.ADDRESS).
  *      Their POSITIONS (ids) must still match; referencing rows compare raw.
+ *   4. the per-block replication-integrity STATE hash, which is a CONSEQUENCE
+ *      of artifact 3 and is the one hash that cannot be normalized away. See
+ *      the block comment on the hash-chain test below: since P4 (05d6056) the
+ *      state-hash preimage folds the index map in RAW (stateHash.js selects
+ *      `id, address FROM index_addresses WHERE block_index = ?`), so the
+ *      per-coin DONATE1 string reaches the digest even though artifact 3
+ *      rewrites it in the table. The interned hash STRING is normalized in
+ *      index_transactions and the cross-coin value assertion is dropped; the
+ *      ledger/actions/contract hashes resolve every id to a canonical string
+ *      and so stay fully compared across coins.
  *
  * NOTE: this parity holds only in the UNIFIED_FEES era (active since 2.0.0).
  * The pre-2.0.0 LEGACY fee constants are per-coin BY DESIGN (BTC issuance
@@ -113,9 +123,10 @@ describe('14 – Multi-chain full-state parity @regression @tier1', function () 
     const states = {};
     const chains = {};
 
-    // Normalize the three documented per-chain artifacts (see header) so the
-    // remaining comparison is exhaustive.
-    function normalizeState(state, coin, specialAddresses) {
+    // Normalize the four documented per-chain artifacts (see header) so the
+    // remaining comparison is exhaustive. `stateHashes` is this run's set of
+    // per-block state-hash strings, read from the hash chain before capture.
+    function normalizeState(state, coin, specialAddresses, stateHashes) {
         const out = { ...state };
         // Re-sort each transformed table: captures are sorted canonical
         // strings, and replacement can change the order.
@@ -130,6 +141,18 @@ describe('14 – Multi-chain full-state parity @regression @tier1', function () 
             s = s.replace('"' + GAS_FUNDER + '"', '"<GAS_FUNDER>"');
             for (const [key, addr] of Object.entries(specialAddresses)) {
                 s = s.replace('"' + addr + '"', '"<' + key + '>"');
+            }
+            return s;
+        }).sort();
+        // Artifact 4: blocks.state_hash_id points at an index_transactions row whose
+        // `hash` IS the state hash, so the coin-bound digest surfaces here as a differing
+        // row. Normalize the VALUE and keep the row's id, so the interning POSITION is
+        // still compared byte-wise (that is the part that must match across coins) while
+        // the coin-bound digest itself is not. Only state hashes are rewritten: the
+        // ledger/actions/contract hash rows in the same table stay raw.
+        out.index_transactions = state.index_transactions.map(s => {
+            for (const h of stateHashes) {
+                if (s.includes('"' + h + '"')) return s.split('"' + h + '"').join('"<STATE_HASH>"');
             }
             return s;
         }).sort();
@@ -149,10 +172,13 @@ describe('14 – Multi-chain full-state parity @regression @tier1', function () 
                 assert.strictEqual(processed, CORPUS_BLOCKS,
                     `${coin}: expected ${CORPUS_BLOCKS} blocks, processed ${processed}`);
                 await assertStateInvariants(indexerQuery);
+                // Read the hash chain FIRST: its resolved state-hash strings are what
+                // normalizeState needs to find the interned state-hash rows.
+                chains[coin] = await readHashChain(indexerQuery);
                 states[coin] = normalizeState(
                     await captureDbState(indexerQuery), coin,
-                    (indexer.config && indexer.config.ADDRESS) || {});
-                chains[coin] = await readHashChain(indexerQuery);
+                    (indexer.config && indexer.config.ADDRESS) || {},
+                    new Set(chains[coin].map(b => b.state).filter(Boolean)));
             }, { xchainFeeMode: true });
         }
     });
@@ -171,16 +197,53 @@ describe('14 – Multi-chain full-state parity @regression @tier1', function () 
         }
     });
 
-    it('LTC full state is byte-identical to BTC (modulo the 3 normalized artifacts)', function () {
+    it('LTC full state is byte-identical to BTC (modulo the 4 normalized artifacts)', function () {
         assertCapturedStatesEqual(states.BTC, states.LTC, { labelA: 'BTC', labelB: 'LTC' });
     });
 
-    it('DOGE full state is byte-identical to BTC (modulo the 3 normalized artifacts)', function () {
+    it('DOGE full state is byte-identical to BTC (modulo the 4 normalized artifacts)', function () {
         assertCapturedStatesEqual(states.BTC, states.DOGE, { labelA: 'BTC', labelB: 'DOGE' });
     });
 
     it('the consensus hash chains are identical across all three chains', function () {
-        assertHashChainsEqual(chains.BTC, chains.LTC, 'BTC', 'LTC');
-        assertHashChainsEqual(chains.BTC, chains.DOGE, 'BTC', 'DOGE');
+        // skipStateHash, and this is deliberate rather than an oversight - do NOT
+        // "restore" the state-hash comparison here.
+        //
+        // The hub-signed consensus triple (ledger/actions/contracts) resolves every
+        // surrogate id to a canonical string before hashing, so it is genuinely
+        // coin-agnostic and stays fully compared. The replication-integrity STATE hash
+        // is the one that does not: since P4 (05d6056, "fold index-map into state_hash",
+        //  ^id compaction) its preimage folds the index map in RAW - stateHash.js
+        // selects `id, address FROM index_addresses WHERE block_index = ?` - so the
+        // address STRING itself reaches the digest.
+        //
+        // The index map is coin-bound BY CONSTRUCTION: DONATE1, GAS and FEE_DESTINATION
+        // are per-coin constants, so any corpus that pays a fee interns a different
+        // address on each chain. Measured : of the fourteen block-100 preimage
+        // keys exactly one differs across BTC/LTC/DOGE, `index_addresses_new`, and it
+        // differs only in the address string (id 5 on all three) - each coin's DONATE1,
+        // the artifact this suite's header already documents as normalized for the TABLE
+        // comparison. There is no equivalent normalization hook inside a finished hash.
+        //
+        // So cross-coin state-hash equality stopped being a true property when P4 landed;
+        // it was never a property this corpus could hold. Nothing real is lost: what P4
+        // promoted to a follower halt is SAME-chain state-hash parity, and that is still
+        // asserted, by 13-cross-node-equivalence and 16-rollback-replay-idempotency.
+        assertHashChainsEqual(chains.BTC, chains.LTC,  'BTC', 'LTC',  { skipStateHash: true });
+        assertHashChainsEqual(chains.BTC, chains.DOGE, 'BTC', 'DOGE', { skipStateHash: true });
+    });
+
+    // The state hash is not compared across coins (above), so pin it as a per-chain
+    // property instead: every block must still commit a well-formed state hash on every
+    // chain. Without this a regression that stopped writing state_hash entirely (or wrote
+    // it NULL) would pass silently now that the cross-coin value assertion is gone.
+    it('every block still commits a well-formed state hash on every chain', function () {
+        for (const coin of COINS) {
+            assert.ok(chains[coin].length > 0, `${coin}: no blocks in the hash chain`);
+            for (const b of chains[coin]) {
+                assert.ok(/^[0-9a-f]{64}$/.test(String(b.state)),
+                    `${coin} block ${b.block_index}: state hash is missing or malformed: ${b.state}`);
+            }
+        }
     });
 });

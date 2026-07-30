@@ -127,17 +127,58 @@ const CONTRACT_CHUNKS   = 3;
 const CARRIER_INDEX     = { 0: 5001, 1: 5002, 2: 5003 };
 const ASSEMBLE_INDEX    = 5010;
 
-// A DEPLOY handler bound to one real indexer DB. vm:null (the chunked-assembly + code_hash
-// path never runs VM code) and GAS_PRICE '0' (fee 0 -> the balance/native-fee legs are
-// skipped, so no gas token needs seeding); protocolChanges is stubbed enabled because this
-// regtest node is genesis-active for every DEPLOY gate. This drives the REAL Deploy /
-// DeployChunk handlers so the assertions cover the shipped assembler, not a reimplementation.
+// The REAL xchain-vm, built once and shared by both nodes' DEPLOY handlers.
+//
+// This fixture used to pass `vm: null` on the theory that the chunked-assembly + code_hash
+// path never runs VM code. That was true of the v4 CARRIERS (deploy.js delegates them to
+// DeployChunk before any VM work) but never of the v2 ASSEMBLY, and it stopped being
+// survivable when deploy.js gained its fail-CLOSED guard: a DEPLOY reaching the shared
+// validation path with no executor now throws EXECUTOR_UNAVAILABLE rather than skipping the
+// syntax/manifest gate, because a VM-less node that recorded such a deploy VALID would fork
+// the ledger against the rest of the fleet. So the fixture needs a real executor; the
+// product is correct and it is this fixture that was stale.
+//
+// Only the syntax + manifest gates actually run here: CONSTRUCTOR_PARAMS is empty on the
+// assembling DEPLOY, so runConstructor is false and no contract code executes.
+let vmInstance;
+let vmLoadFailed = false;
+function sharedVm() {
+    if (vmInstance || vmLoadFailed) return vmInstance || null;
+    try {
+        const XChainVM = require('xchain-vm');
+        // Same subprocess executor the indexer runs in production (src/actions.js), so the
+        // gates this fixture drives are the ones a real node applies.
+        vmInstance = new XChainVM({
+            execution:   'subprocess',
+            gasSchedule: getTestConfig()['GAS_SCHEDULE'],
+            gasCeiling:  1000000,
+            limits:      { maxCpuTimeMs: 30000, maxMemory: 8, maxEmissions: 50,
+                           maxStateKeys: 10000, maxStateValueSize: 65536,
+                           maxCodeSize: Deploy.MAX_CODE_SIZE },
+        });
+    } catch (e) {
+        // xchain-vm is a file: dependency whose vendored directory is untracked, so a tree
+        // assembled without it cannot run this leg. Skip that leg loudly rather than
+        // reporting a venue gap as a consensus failure (the trap  records twice);
+        // bin/run-db-tiers.sh refuses to start a tier at all in that state.
+        vmLoadFailed = true;
+        console.log('WARNING: xchain-vm unavailable; SKIPPING the chunked-DEPLOY recovery leg ' +
+                    '(tests 5/6). This is a VENUE gap, not a passing consensus check: ' + e.message);
+    }
+    return vmInstance || null;
+}
+
+// A DEPLOY handler bound to one real indexer DB. GAS_PRICE '0' (fee 0 -> the balance/
+// native-fee legs are skipped, so no gas token needs seeding); protocolChanges is stubbed
+// enabled because this regtest node is genesis-active for every DEPLOY gate. This drives the
+// REAL Deploy / DeployChunk handlers so the assertions cover the shipped assembler, not a
+// reimplementation.
 function makeDeployHandler(db) {
     const config = getTestConfig();
     config['GAS_PRICE'] = '0';
     const mapper = new Mapper({ config, decoderDb: db, indexerDb: db, util });
     const action = { config, decoderDb: db, indexerDb: db, util, mapper,
-                     protocolChanges: { isEnabled: async () => true }, vm: null };
+                     protocolChanges: { isEnabled: async () => true }, vm: sharedVm() };
     return new Deploy(action);
 }
 
@@ -313,6 +354,8 @@ async function rewardRows(db) {
 describe('Recovery-determinism e2e (consensus) @integration', function () {
     this.timeout(120000);
     let A, Bbtc, Bdoge;
+    // Whether the contract-heavy leg actually ran (it needs the vendored xchain-vm).
+    let contractLegRan = false;
 
     before(async function () {
         if (DB_PASS === undefined) { this.skip(); return; }
@@ -342,11 +385,17 @@ describe('Recovery-determinism e2e (consensus) @integration', function () {
         // the recovery boundary. Node A (from-genesis) records carriers in position order; node B
         // (recovered) records them in a DIFFERENT order, so the byte-identity below also proves
         // the assembler is independent of chunk delivery/storage order on a real engine.
-        await deployChunkedContract(A,    [0, 1, 2]);
-        await deployChunkedContract(Bbtc, [2, 0, 1]);
+        // A real DEPLOY needs a real executor (see sharedVm); without the vendored VM this
+        // leg is skipped and tests (5)/(6) report pending instead of a false red.
+        if (sharedVm()) {
+            await deployChunkedContract(A,    [0, 1, 2]);
+            await deployChunkedContract(Bbtc, [2, 0, 1]);
+            contractLegRan = true;
+        }
     });
 
     after(async function () {
+        if (vmInstance) { try { await vmInstance.shutdown(); } catch (e) {} }
         for (const db of [A, Bbtc, Bdoge]) { if (db && db.pool) { try { await db.pool.end(); } catch (e) {} } }
         if (DB_PASS === undefined) return;
         try { const a = await admin(); for (const n of ALL_DBS) await a.query('DROP DATABASE IF EXISTS ' + n); await a.end(); } catch (e) {}
@@ -411,6 +460,7 @@ describe('Recovery-determinism e2e (consensus) @integration', function () {
     // : contract-heavy re-confirm on the chunked-DEPLOY launch bundle. The v4-carrier +
     // v2-assembly deploy must reindex byte-identically across the recovery boundary.
     it('(5) chunked-DEPLOY contract is byte-identical A vs B across the recovery boundary', async function () {
+        if (!contractLegRan) return this.skip();
         const cA = await contractRows(A);
         const cB = await contractRows(Bbtc);
         assert.strictEqual(cA.length, 1, 'node A deployed exactly the one chunked contract');
@@ -428,6 +478,7 @@ describe('Recovery-determinism e2e (consensus) @integration', function () {
     });
 
     it('(6) deploy_chunks carriers are byte-identical A vs B despite different insert order', async function () {
+        if (!contractLegRan) return this.skip();
         const kA = await deployChunkRows(A);
         const kB = await deployChunkRows(Bbtc);
         assert.strictEqual(kA.length, CONTRACT_CHUNKS, 'all v4 carriers were stored on node A');

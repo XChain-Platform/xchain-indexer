@@ -145,8 +145,19 @@ async function readHashChain(queryFn) {
 }
 
 /** Assert two resolved hash chains are identical, reporting the FIRST
- *  divergent block + field (that is where the consensus fork begins). */
-function assertHashChainsEqual(chainA, chainB, labelA = 'node A', labelB = 'node B') {
+ *  divergent block + field (that is where the consensus fork begins).
+ *
+ *  opts.skipStateHash compares only the hub-signed consensus triple
+ *  (ledger/actions/contracts) and leaves the replication-integrity state hash
+ *  alone. ONLY correct for two chains that are not required to assign the same
+ *  index ids in the first place, i.e. runs of DIFFERENT coins: since P4
+ *  (05d6056) the state hash folds the index map in, and the index map is
+ *  coin-bound by construction (DONATE1 / GAS / FEE_DESTINATION are per-coin
+ *  constants), so two coins processing the same corpus legitimately hash
+ *  different addresses. For two nodes on the SAME chain the state hash is the
+ *  follower-halt guard and MUST be compared, which is why this defaults off. */
+function assertHashChainsEqual(chainA, chainB, labelA = 'node A', labelB = 'node B', opts = {}) {
+    const skipStateHash = opts.skipStateHash === true;
     const len = Math.min(chainA.length, chainB.length);
     for (let i = 0; i < len; i++) {
         const a = chainA[i], b = chainB[i];
@@ -162,6 +173,7 @@ function assertHashChainsEqual(chainA, chainB, labelA = 'node A', labelB = 'node
         // Replication-integrity state hash: not part of the hub-signed consensus
         // triple, but a follower recomputes it and HALTS on mismatch, so survivor
         // and resync must agree on the resolved string all the same.
+        if (skipStateHash) continue;
         assert.strictEqual(a.state, b.state,
             `REPLICATION-INTEGRITY DIVERGENCE: state hash diverges at block ` +
             `${a.block_index}: ${labelA}=${a.state} ${labelB}=${b.state} ` +
