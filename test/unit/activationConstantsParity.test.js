@@ -38,6 +38,7 @@ const GATES = [
     ['checkpoint_commitment_activation.js', 'CHECKPOINT_COMMITMENT_ACTIVATION'],
     ['cross_chain_royalty_activation.js',   'CROSS_CHAIN_ROYALTY_ACTIVATION'],
     ['attest_admission_activation.js',      'ATTEST_ADMISSION_ACTIVATION'],
+    ['attest_relay_activation.js',          'ATTEST_RELAY_ACTIVATION'],       // 
     ['anchor_reward_activation.js',         'ANCHOR_REWARD_DERIVE_ACTIVATION'],   // 
     ['price_pair_activation.js',            'PRICE_PAIR_WIDEN_ACTIVATION'],       // 
     ['price_sig_tally_activation.js',       'PRICE_SIG_TALLY_ACTIVATION'],        // 

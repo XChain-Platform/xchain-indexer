@@ -49,6 +49,8 @@ CREATE TABLE attests (
     request_status                ENUM('pending','fulfilled','expired','errored','rejected'), -- lifecycle of the request (v0 rows only; 'rejected' = failed structural validation, never serviceable)
     resolved_block                BIGINT UNSIGNED,                 -- block at which request_status went terminal; the reorg-rollback reset key (v0 rows only)
     responsible_set_json          MEDIUMTEXT,                      -- v0: ordered responsible-set pubkeys (JSON array) pinned AS-OF block_index at request time (ATT-RECOMP-1); the reorg missed_count recompute reads this verbatim instead of re-deriving via getStakeWeightsByCapability (which sums the CURRENT mutable stakes.amount, corrupted by a surviving slash). NULL on legacy/rejected rows -> recompute falls back to the live re-derive.
+    origin_chain                  VARCHAR(8),                      --  relay: on a BTC v3-materialized request, the origin chain (LTC/DOGE) it was emitted on; on an origin v0 request, that chain itself, which is what marks the row relay-eligible for the hub poll. NULL on every native single-chain request.
+    origin_action_index           BIGINT UNSIGNED,                 --  relay: the origin chain's v0 action_index; the correlation key the response leg (ATTEST v4) relays back on
     -- response (version 1) fields
     response_hash                 CHAR(64),                        -- SHA256 of the canonical response body
     response_payload              MEDIUMTEXT,                      -- inlined response body
@@ -72,6 +74,9 @@ CREATE UNIQUE INDEX action_index    ON attests (action_index);
 -- code (createAttestationRequest skips a duplicate v0 for an existing request_id). The
 -- leftmost prefix still serves request_id-only lookups.
 CREATE INDEX request_id_version ON attests (request_id, version);
+--  relay: serves the hub's relay poll (relay-eligible pending v0 requests on an
+-- origin chain) and the BTC side's origin-row resolution; both would otherwise scan.
+CREATE        INDEX origin_chain_status ON attests (origin_chain, request_status, version);
 CREATE        INDEX version_status  ON attests (version, request_status, deadline_block);
 CREATE        INDEX contract_index  ON attests (contract_index);
 CREATE        INDEX provider_id     ON attests (provider_id);

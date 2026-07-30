@@ -14,10 +14,23 @@
  *
  * XChain Platform Action - ATTEST
  *
- * External-data attestation lifecycle with three version-discriminated phases:
+ * External-data attestation lifecycle with five version-discriminated phases:
  *   v0: Request (VM emission only; originated by xchain.attestation.request())
  *   v1: Response (validator-broadcast PBFT bundle with signatures)
  *   v2: Expire (system-synthesized; never user-broadcast)
+ *   v3: Relay request  (cross_chain-federation-broadcast, BTC only; )
+ *   v4: Relay response (cross_chain-federation-broadcast, origin chain only; )
+ *
+ * v3/v4 are the cross-chain delivery legs (spec §12, framework Phase 5). All
+ * `attestation` capability stake lives on BTC, so an ATTEST emitted by an LTC or
+ * DOGE contract has no responsible set of its own and cannot be fulfilled where
+ * it landed. v3 materializes such a request ONTO BTC, giving it a real BTC
+ * block_index: that is the whole point of the model, because CapabilitySnapshot
+ * keys the responsible set on a BTC height, and a foreign-origin block_index
+ * (DOGE ~6.3M / LTC ~3.16M against BTC ~962K) has no deterministic anchor. Once
+ * materialized, the existing v0/v1 machinery services it unchanged. v4 carries
+ * the BTC response back so the origin chain can fire the contract callback.
+ * Both legs are flag-day gated; see attest_relay_activation.js.
  *
  * Spec: xchain-documentation/protocol/actions/ATTEST.md
  *
@@ -25,6 +38,8 @@
  *   v0 - VERSION|REQUEST_ID|PROVIDER_ID|REQUEST_PAYLOAD|CALLBACK_METHOD|CALLBACK_PARAMS_JSON|REDUNDANCY|DEADLINE_BLOCKS
  *   v1 - VERSION|REQUEST_ID|PROVIDER_ID|RESPONSE_PAYLOAD|STATUS|META|SIG_COUNT|PUBKEY|SIG|...
  *   v2 - VERSION|REQUEST_ID         (synthesized only; REQUEST_ID is sufficient, handler looks up the row)
+ *   v3 - VERSION|REQUEST_ID|ORIGIN_CHAIN|ORIGIN_ACTION_INDEX|PROVIDER_ID|REQUEST_PAYLOAD|REDUNDANCY|DEADLINE_BLOCKS|SNAPSHOT_BLOCK|SIG_COUNT|PUBKEY|SIG|...
+ *   v4 - VERSION|REQUEST_ID|HOME_RESPONSE_ACTION_INDEX|RESPONSE_PAYLOAD|STATUS|META|SNAPSHOT_BLOCK|SIG_COUNT|PUBKEY|SIG|...
  *
  ********************************************************************/
 
@@ -32,10 +47,21 @@ const crypto  = require('crypto');
 const ed25519 = require('../ed25519.js');
 const swq     = require('../stake_weighted_quorum.js');
 const attestAdmission = require('../attest_admission_activation.js');
+const attestRelay     = require('../attest_relay_activation.js');
 const eq      = require('../equivocation_header.js');
 const ProviderRegistry = require('../attestation/providerRegistry.js');
 const { rethrowIfInfraFault } = require('./faultGuard.js');
 const { buildInjectedExecContext, SYNTH_EXEC_TX_HASH, SYNTH_TAGS } = require('./execContext.js');
+
+// The chain every `attestation` capability stake lives on, and therefore the only
+// chain whose heights can key a responsible set. Relay requests are materialized
+// here (v3) and nowhere else.
+const HOME_CHAIN = 'BTC';
+
+// Chains a relay request may originate from. Deliberately not derived from the
+// coin registry: a chain becomes relay-eligible by protocol decision, not by
+// being configured, and BTC is excluded because it needs no relay.
+const ALLOWED_ORIGIN_CHAINS = ['LTC', 'DOGE'];
 
 class Attest {
 
@@ -61,6 +87,13 @@ class Attest {
         this.formats[0] = 'VERSION|REQUEST_ID|PROVIDER_ID|REQUEST_PAYLOAD|CALLBACK_METHOD|CALLBACK_PARAMS_JSON|REDUNDANCY|DEADLINE_BLOCKS|FEE_TICK|FEE_AMOUNT';
         this.formats[1] = 'VERSION|REQUEST_ID|PROVIDER_ID|RESPONSE_PAYLOAD|STATUS|META|SIG_COUNT|PUBKEY|SIG|...';
         this.formats[2] = 'VERSION|REQUEST_ID';
+        //  cross-chain relay legs. Both are broadcast by the elected
+        // cross_chain leader on behalf of the federation and carry their quorum
+        // inline, structurally mirroring v1. Both are flag-day gated: below
+        // activation the handlers write nothing and persist nothing, which is
+        // byte-identical to how a pre- node treats an unknown VERSION.
+        this.formats[3] = 'VERSION|REQUEST_ID|ORIGIN_CHAIN|ORIGIN_ACTION_INDEX|PROVIDER_ID|REQUEST_PAYLOAD|REDUNDANCY|DEADLINE_BLOCKS|SNAPSHOT_BLOCK|SIG_COUNT|PUBKEY|SIG|...';
+        this.formats[4] = 'VERSION|REQUEST_ID|HOME_RESPONSE_ACTION_INDEX|RESPONSE_PAYLOAD|STATUS|META|SNAPSHOT_BLOCK|SIG_COUNT|PUBKEY|SIG|...';
     }
 
     // Dispatch on VERSION
@@ -73,6 +106,8 @@ class Attest {
         if(format === 0) return await this._parseRequest(params, data, error);
         if(format === 1) return await this._parseResponse(params, data, error);
         if(format === 2) return await this._parseExpire(params, data, error);
+        if(format === 3) return await this._parseRelayRequest(params, data, error);
+        if(format === 4) return await this._parseRelayResponse(params, data, error);
     }
 
     // ATTEST v0: Request (VM emission only)
@@ -226,13 +261,30 @@ class Attest {
         // path runs verbatim so replay stays bit-identical. Deterministic: the set
         // derives from block-anchored stake state every validator replays alike.
         // The computed set is reused as the pinned RESPONSIBLE_SET_JSON below.
+        //  (Phase 5, spec §12): the origin-side half of the cross-chain relay.
+        // On LTC/DOGE _computeResponsibleSet returns [] by construction (attestation
+        // stake is BTC-only), and ATTEST_ADMISSION is already satisfied there on local
+        // height, so today EVERY off-BTC request is rejected at admission. At/above
+        // ATTEST_RELAY_ORIGIN such a request is instead admitted 'pending' and stamped
+        // with its origin chain, which is what makes it visible to the hub's relay
+        // driver; the driver materializes it onto BTC as a v3, where it gets a real BTC
+        // block_index and a real responsible set. Nothing else about admission moves:
+        // every other validation above still rejects, and on BTC this is a no-op
+        // (relayOrigin is false there, and a BTC responsible set is never empty by
+        // construction). Gated on block TIME, not height, because the rule must flip on
+        // LTC and DOGE whose local heights sit millions of blocks above any BTC-derived
+        // threshold; see the ATTEST_RELAY_ORIGIN note in protocol_changes.js.
+        let relayOrigin = false;
+        if(!error && this.config['COIN'] !== HOME_CHAIN)
+            relayOrigin = await this.actions.protocolChanges.isEnabled('ATTEST_RELAY_ORIGIN', data['BLOCK_INDEX']);
+
         let admissionSet = null;
         // LOCAL-HEIGHT plane (): BLOCK_INDEX is this request's height on
         // its own chain, which is what this gate is defined against. It is deliberately
         // NOT the BTC-anchored plane the stake_weighted_quorum / price_sig_tally gates
         // use; see attest_admission_activation.js for why the two differ and why the
         // difference must not be "corrected" without its own flag-day.
-        if(!error && attestAdmission.isAttestAdmissionActive(data['BLOCK_INDEX'], this.config['NETWORK'])){
+        if(!error && !relayOrigin && attestAdmission.isAttestAdmissionActive(data['BLOCK_INDEX'], this.config['NETWORK'])){
             admissionSet = await this._computeResponsibleSet(
                 String(data['REQUEST_ID'] || '').toLowerCase(), data['REDUNDANCY'], data['BLOCK_INDEX']);
             let neededSlots = Math.max(1, Number(data['REDUNDANCY']) || 1);
@@ -257,6 +309,12 @@ class Attest {
         // later block's flip (request_status IN ('fulfilled','errored','expired')
         // AND resolved_block >= reorg point), never promotes it back to pending.
         data['REQUEST_STATUS'] = (error) ? 'rejected' : 'pending';
+
+        // : stamp the origin chain on an admitted relay-eligible request. This is
+        // the ONLY marker the hub's relay poll keys on, and it is written only for a
+        // row that actually reached 'pending', so a rejected request is never relayed.
+        data['ORIGIN_CHAIN'] = (relayOrigin && data['REQUEST_STATUS'] === 'pending')
+                             ? String(this.config['COIN']) : null;
 
         console.log("\t ATTEST v0 : id=" + (data['REQUEST_ID'] ? String(data['REQUEST_ID']).substring(0,16) + '...' : '?') +
                     ' : provider=' + data['PROVIDER_ID'] +
@@ -494,6 +552,20 @@ class Attest {
                 // and the v0 escrow (earlier action_index) survives intact.
                 await this._settleRequestFee(request, data, newRequestStatus);
 
+                // : a relay-materialized request (v3) carries the ORIGIN chain it
+                // came from. Its contract lives there, not here, so BTC must not try to
+                // execute a callback against a contract_index that means nothing locally.
+                // The response relays back as a v4 instead and the origin chain fires the
+                // callback. Self-gating: only a v3, which is itself flag-day gated, can
+                // produce a row whose origin_chain differs from this coin, so no separate
+                // activation check is needed and pre-activation replay is untouched.
+                if(this._isForeignOrigin(request)){
+                    console.log("\t ATTEST v1 : id=" + String(requestId).substring(0,16) + '...' +
+                                ' : origin=' + request.origin_chain + ', callback deferred to the relay leg');
+                    await this.mapper.createMappings(data);
+                    return;
+                }
+
                 // Inject the callback EXECUTE. Wrapped in a savepoint so a failing callback
                 // does NOT roll back the response row.
                 try {
@@ -575,9 +647,14 @@ class Attest {
             console.warn('Attestation expire: missed_count update failed:', e);
         }
 
-        // Synthesize the callback EXECUTE so the contract can clean up (status='expired')
+        // Synthesize the callback EXECUTE so the contract can clean up (status='expired').
+        // : skipped for a relay-materialized row on the home chain, whose contract
+        // lives on the origin chain (see the same guard on the v1 path). The origin
+        // chain's own copy of the request expires on its own deadline and fires the
+        // contract's expired callback there.
         try {
-            await this._injectExpiredCallback(request, data);
+            if(!this._isForeignOrigin(request))
+                await this._injectExpiredCallback(request, data);
         } catch(e){
             // Same infra-fault gate as the response-path callback above (faultGuard.js).
             rethrowIfInfraFault(e);
@@ -646,6 +723,390 @@ class Attest {
             });
         }
         return withHash.slice(0, Math.max(1, Number(redundancy) || 1)).map(v => v.pubkey);
+    }
+
+    // ──  cross-chain relay (spec §12, framework Phase 5) ───────────────
+
+    // True when `request` is one leg of a relay whose contract lives on ANOTHER
+    // chain, i.e. the BTC row a v3 materialized. The callback paths consult this
+    // because executing a callback against a foreign contract_index is meaningless
+    // locally. A native request has origin_chain NULL; an origin-side relay row has
+    // origin_chain equal to this coin, so both answer false.
+    _isForeignOrigin(request){
+        let origin = request && request.origin_chain;
+        return Boolean(origin) && String(origin) !== String(this.config['COIN']);
+    }
+
+    _sha256(s){
+        return crypto.createHash('sha256').update(String(s), 'utf8').digest('hex');
+    }
+
+    // Canonical signing string for the relay REQUEST leg (v3). MUST byte-match the
+    // hub's relay driver. Same construction rules as the XCALL dispatch canonical
+    // (xexec.js::_canonical): pipe-joined fixed field order, the free-form payload
+    // folded in as a hash rather than inline, and the EQUIV uniform header wrapped
+    // around it at/above the flag-day. ROUND_ID folds the phase in so the request
+    // and response legs of one request_id can never collide in the equivocation
+    // detector's key space.
+    _relayRequestCanonical(f){
+        let raw = [
+            'ATTEST', 'RELAY_REQUEST', String(f.requestId), String(f.snapshotBlock), String(f.network),
+            String(f.originChain), String(f.originActionIndex), String(f.providerId),
+            this._sha256(f.requestPayload == null ? '' : f.requestPayload),
+            String(f.redundancy), String(f.deadlineBlocks)
+        ].join('|');
+        if(eq.isEquivHeaderActive(f.snapshotBlock, f.network))
+            return eq.buildEquivCanonical(eq.ENGINE_TAGS.ATTEST,
+                this._sha256('ATTESTRELAY|request|' + String(f.requestId)), 0, raw);
+        return raw;
+    }
+
+    // Canonical signing string for the relay RESPONSE leg (v4). See the request
+    // canonical above; the response body is folded in as its sha256 so the signed
+    // bytes stay bounded no matter how large the attested payload is, exactly as
+    // the v1 canonical does.
+    _relayResponseCanonical(f){
+        let raw = [
+            'ATTEST', 'RELAY_RESPONSE', String(f.requestId), String(f.snapshotBlock), String(f.network),
+            String(f.originChain), String(f.homeResponseActionIndex), String(f.providerId),
+            String(f.responseHash), String(f.status), String(f.meta == null ? '' : f.meta)
+        ].join('|');
+        if(eq.isEquivHeaderActive(f.snapshotBlock, f.network))
+            return eq.buildEquivCanonical(eq.ENGINE_TAGS.ATTEST,
+                this._sha256('ATTESTRELAY|response|' + String(f.requestId)), 0, raw);
+        return raw;
+    }
+
+    // Parse the trailing SIG_COUNT|PUBKEY|SIG|... tail both relay legs share.
+    // Returns null on any structural fault so the caller can reject the action
+    // rather than silently proceed with a short signature list.
+    _parseRelaySigs(params, offset){
+        let count = parseInt(params[offset]);
+        if(!Number.isFinite(count) || count < 1) return null;
+        let sigs = [];
+        for(let i = 0; i < count; i++){
+            let pubkey = params[offset + 1 + 2 * i];
+            let sig    = params[offset + 1 + 2 * i + 1];
+            if(!pubkey || !sig) return null;
+            if(!/^[0-9a-fA-F]{64}$/.test(pubkey))  return null;
+            if(!/^[0-9a-fA-F]{128}$/.test(sig))    return null;
+            sigs.push({ pubkey: String(pubkey).toLowerCase(), sig: String(sig).toLowerCase() });
+        }
+        return sigs;
+    }
+
+    // Verify the `cross_chain` federation quorum over a relay canonical, against the
+    // capability snapshot pinned at the BTC-anchored `snapshotBlock`. Deliberately
+    // byte-for-byte the same rule xexec.js applies to an XCALL dispatch, because both
+    // are the same trust decision on the same rail: stake-weighted (source-deduped)
+    // at/above STAKE_WEIGHTED_QUORUM, else the legacy 2f+1 signer count. Duplicate
+    // pubkeys are marked seen only AFTER their signature verifies, so a
+    // garbage-then-valid pair for one qualified validator cannot suppress the real
+    // signature and under-count a quorate relay.
+    async _verifyRelayQuorum(canonical, sigs, snapshotBlock, network){
+        let weighted   = swq.isStakeWeightedQuorumActive(snapshotBlock, network);
+        let validators = weighted
+            ? await this.indexerDb.getStakeWeightsByCapability('cross_chain', snapshotBlock)
+            : await this.indexerDb.getValidatorsByCapability('cross_chain', snapshotBlock);
+        let N = (validators && validators.length) ? validators.length : 0;
+        if(N === 0)
+            return { ok: false, detail: 'cross_chain snapshot empty at block ' + snapshotBlock };
+
+        let snapPubkeys  = new Set(validators.map(v => String(v.pubkey).toLowerCase()));
+        let validSigners = [], seen = new Set();
+        for(let s of sigs){
+            if(seen.has(s.pubkey)) continue;
+            if(!snapPubkeys.has(s.pubkey)) continue;
+            if(!ed25519.verify(canonical, s.sig, s.pubkey)) continue;
+            seen.add(s.pubkey);
+            validSigners.push(s.pubkey);
+        }
+        let met = weighted
+            ? swq.meetsStakeThreshold(validators, validSigners)
+            : (validSigners.length >= ((N <= 1) ? 1 : Math.max(2 * Math.floor((N - 1) / 3) + 1, Math.ceil((N + 1) / 2))));
+        if(!met){
+            return { ok: false, detail: weighted
+                ? 'insufficient signer stake (' + validSigners.length + ' valid signers of ' + N + ' snapshot keys)'
+                : 'insufficient valid signatures (' + validSigners.length + '/' + N + ')' };
+        }
+        return { ok: true, validSigners: validSigners };
+    }
+
+    // ATTEST v3: relay request (federation-broadcast on the home chain).
+    //
+    // Materializes an LTC/DOGE-origin request onto BTC. The row it writes is an
+    // ordinary request row (version 0 in `attests`, the lifecycle table keyed on
+    // request_id) carrying origin_chain/origin_action_index, so every existing
+    // consumer works on it unchanged: the hub's pending poll finds it, the
+    // responsible set resolves at THIS action's BTC block_index, the v1 response
+    // path fulfills it, and the deadline sweep expires it. Only the callback is
+    // suppressed (the contract is not on this chain); the response relays back
+    // as a v4 instead.
+    async _parseRelayRequest(params, data, error){
+
+        // Home-chain-only leg. Written as a hard return rather than a stored
+        // 'invalid' row so a v3 that strays onto an origin chain is treated exactly
+        // as an unknown VERSION is: nothing persisted, nothing hashed.
+        if(String(this.config['COIN']) !== HOME_CHAIN){
+            console.warn("\t ATTEST v3 : rejected (relay requests materialize on " + HOME_CHAIN + " only)");
+            return;
+        }
+
+        // Flag-day gate on this action's OWN block_index, which on the home chain IS
+        // a BTC height and, unlike the SNAPSHOT_BLOCK below, cannot be forged by the
+        // broadcaster. Below activation: write nothing, persist nothing, byte-identical
+        // to how a pre- node treats VERSION 3.
+        if(!attestRelay.isAttestRelayActive(data['BLOCK_INDEX'], this.config['NETWORK']))
+            return;
+
+        let requestId      = String(params[1] || '').toLowerCase();
+        let originChain    = String(params[2] || '');
+        let originAction   = parseInt(params[3]);
+        let providerId     = String(params[4] || '');
+        let requestPayload = (params[5] == null) ? '' : String(params[5]);
+        let redundancy     = parseInt(params[6]);
+        let deadlineBlocks = parseInt(params[7]);
+        let snapshotBlock  = parseInt(params[8]);
+
+        if(!error && !/^[0-9a-f]{64}$/.test(requestId))
+            error = 'invalid: REQUEST_ID (format)';
+        if(!error && ALLOWED_ORIGIN_CHAINS.indexOf(originChain) === -1)
+            error = 'invalid: ORIGIN_CHAIN (unknown)';
+        if(!error && (!Number.isInteger(originAction) || originAction <= 0))
+            error = 'invalid: ORIGIN_ACTION_INDEX (must be a positive integer)';
+        if(!error && !this.providerRegistry.isKnown(providerId))
+            error = 'invalid: PROVIDER_ID (unknown)';
+        if(!error && !this.providerRegistry.isRedundancyAllowed(providerId, redundancy))
+            error = 'invalid: REDUNDANCY (not allowed for provider)';
+        if(!error && !this.providerRegistry.isPayloadSizeAllowed(providerId, Buffer.byteLength(requestPayload, 'utf8')))
+            error = 'invalid: REQUEST_PAYLOAD (exceeds provider max)';
+
+        let deadlineBlock = parseInt(data['BLOCK_INDEX']) + (Number.isFinite(deadlineBlocks) ? deadlineBlocks : 0);
+        if(!error && !this.providerRegistry.isDeadlineAllowed(providerId, parseInt(data['BLOCK_INDEX']), deadlineBlock))
+            error = 'invalid: DEADLINE (outside provider window)';
+
+        // The snapshot the federation signed against must already exist at this
+        // action's height. Without the upper bound a broadcaster could name a future
+        // snapshot and have the quorum resolved against whatever the mirror holds
+        // latest, which both defeats the flag-day and un-pins the signer set from the
+        // block it was supposed to be frozen at.
+        if(!error && (!Number.isFinite(snapshotBlock) || snapshotBlock < 0 || snapshotBlock > parseInt(data['BLOCK_INDEX'])))
+            error = 'invalid: SNAPSHOT_BLOCK (must be a past or current block on this chain)';
+
+        let sigs = error ? [] : this._parseRelaySigs(params, 9);
+        if(!error && sigs === null)
+            error = 'invalid: SIG_COUNT (malformed signature list)';
+
+        // One request_id materializes exactly once. A duplicate v3 is rejected here
+        // rather than deduped in the DB layer so the outcome is an explicit, stored
+        // verdict every node reaches identically.
+        if(!error && await this.indexerDb.getAttestationRequestById(requestId))
+            error = 'invalid: REQUEST_ID (already present on this chain)';
+
+        if(!error){
+            let canonical = this._relayRequestCanonical({
+                requestId, snapshotBlock, network: this.config['NETWORK'],
+                originChain, originActionIndex: originAction, providerId,
+                requestPayload, redundancy, deadlineBlocks
+            });
+            let quorum = await this._verifyRelayQuorum(canonical, sigs, snapshotBlock, this.config['NETWORK']);
+            if(!quorum.ok)
+                error = 'invalid: cross_chain quorum (' + quorum.detail + ')';
+        }
+
+        data['REQUEST_ID']          = requestId;
+        data['PROVIDER_ID']         = providerId;
+        data['REQUEST_PAYLOAD']     = requestPayload;
+        // The callback lives on the origin chain and never runs here, so these stay
+        // off the home-chain wire and out of the home-chain row entirely.
+        data['CALLBACK_METHOD']     = null;
+        data['CALLBACK_PARAMS']     = null;
+        data['REDUNDANCY']          = redundancy;
+        data['DEADLINE_BLOCK']      = deadlineBlock;
+        data['GAS_ESCROW']          = '0';
+        // Feeless on the home chain: the requester's fee was escrowed on the origin
+        // chain at its v0 and settles there. A fee_payer here would name an address
+        // that never paid anything on this chain.
+        data['FEE_PAYER']           = null;
+        data['FEE_TICK']            = null;
+        data['FEE_AMOUNT']          = null;
+        data['CONTRACT_INDEX']      = null;
+        data['ORIGIN_CHAIN']        = originChain;
+        data['ORIGIN_ACTION_INDEX'] = originAction;
+
+        data['STATUS']         = (error) ? error : 'valid';
+        data['REQUEST_STATUS'] = (error) ? 'rejected' : 'pending';
+
+        console.log("\t ATTEST v3 : id=" + requestId.substring(0,16) + '...' +
+                    ' : origin=' + originChain + ':' + originAction +
+                    ' : provider=' + providerId +
+                    ' : redundancy=' + redundancy +
+                    ' : snapshot=' + snapshotBlock +
+                    ' : ' + data['STATUS']);
+
+        // Pin the responsible set as-of THIS block, the same ATT-RECOMP-1 rule a
+        // native v0 follows. This is the anchor the whole model exists to provide:
+        // block_index here is a genuine BTC height, so the set (and the block-echo
+        // determinism check that reads it back) resolves exactly as it would for a
+        // natively emitted request.
+        if(data['REQUEST_STATUS'] === 'pending'){
+            let responsibleSet = await this._computeResponsibleSet(requestId, redundancy, data['BLOCK_INDEX']);
+            data['RESPONSIBLE_SET_JSON'] = JSON.stringify(responsibleSet);
+        }
+
+        await this.indexerDb.createAttestationRequest(data);
+        await this.mapper.createMappings(data);
+    }
+
+    // ATTEST v4: relay response (federation-broadcast on the origin chain).
+    //
+    // Carries the home chain's fulfilled v1 back to the chain the request was
+    // emitted on. The origin indexer verifies the SAME cross_chain quorum rail the
+    // XCALL result leg uses, against the BTC-anchored snapshot, then closes its own
+    // pending request and fires the contract callback.
+    async _parseRelayResponse(params, data, error){
+
+        // Never valid on the home chain: a home-chain request is fulfilled by a v1
+        // in place and has nothing to relay to itself.
+        if(String(this.config['COIN']) === HOME_CHAIN){
+            console.warn("\t ATTEST v4 : rejected (relay responses land on origin chains only)");
+            return;
+        }
+
+        let requestId       = String(params[1] || '').toLowerCase();
+        let homeResponseIdx = parseInt(params[2]);
+        let payloadB64      = String(params[3] || '');
+        let responseStatus  = String(params[4] || '');
+        let meta            = (params[5] == null) ? '' : String(params[5]);
+        let snapshotBlock   = parseInt(params[6]);
+
+        // Flag-day gate. The origin chain has no BTC height of its own, so the gate is
+        // evaluated on the BTC-anchored SNAPSHOT_BLOCK the canonical carries, NOT on
+        // where this action landed: a BTC-derived threshold compared against an LTC or
+        // DOGE local height is already satisfied there and would ship the leg live
+        // instead of inert (the ATTEST_ADMISSION plane trap). A broadcaster cannot use
+        // that to jump the gate: the same value pins the signer set, so a forged
+        // SNAPSHOT_BLOCK has to be signed by a quorum of the real cross_chain
+        // federation, and the matching origin request only exists at all once
+        // ATTEST_RELAY_ORIGIN has admitted it.
+        if(!Number.isFinite(snapshotBlock) ||
+           !attestRelay.isAttestRelayActive(snapshotBlock, this.config['NETWORK']))
+            return;
+
+        if(!error && !/^[0-9a-f]{64}$/.test(requestId))
+            error = 'invalid: REQUEST_ID (format)';
+        if(!error && (!Number.isInteger(homeResponseIdx) || homeResponseIdx <= 0))
+            error = 'invalid: HOME_RESPONSE_ACTION_INDEX (must be a positive integer)';
+
+        // Only the two TERMINAL outcomes relay. The retryable statuses
+        // (no_quorum / timeout / provider_error) leave the home-chain request pending
+        // for another round, so relaying one would close an origin request the home
+        // chain still intends to fulfill.
+        let allowedStatuses = ['ok', 'expired'];
+        if(!error && allowedStatuses.indexOf(responseStatus) === -1)
+            error = 'invalid: STATUS (not a terminal relay status)';
+
+        let responseBodyBytes;
+        try { responseBodyBytes = Buffer.from(payloadB64, 'base64'); }
+        catch(_){ responseBodyBytes = Buffer.alloc(0); }
+        let responsePayload = responseBodyBytes.toString('utf8');
+        let responseHash    = crypto.createHash('sha256').update(responseBodyBytes).digest('hex');
+
+        let sigs = error ? [] : this._parseRelaySigs(params, 7);
+        if(!error && sigs === null)
+            error = 'invalid: SIG_COUNT (malformed signature list)';
+
+        // The local request must be one this chain admitted for relay and has not
+        // already closed. A native (non-relay) request is NOT relay-closable: it never
+        // left this chain, so a v4 naming it is either a mistake or an attempt to close
+        // a request the federation was never asked to service.
+        let request = null;
+        if(!error){
+            request = await this.indexerDb.getAttestationRequestById(requestId);
+            if(!request)
+                error = 'invalid: REQUEST_ID (no matching request)';
+            else if(String(request.origin_chain || '') !== String(this.config['COIN']))
+                error = 'invalid: REQUEST is not relay-eligible on this chain';
+            else if(request.request_status !== 'pending')
+                error = 'invalid: REQUEST already ' + request.request_status;
+        }
+
+        if(!error){
+            let canonical = this._relayResponseCanonical({
+                requestId, snapshotBlock, network: this.config['NETWORK'],
+                originChain: String(this.config['COIN']),
+                homeResponseActionIndex: homeResponseIdx,
+                providerId: String(request.provider_id), responseHash,
+                status: responseStatus, meta
+            });
+            let quorum = await this._verifyRelayQuorum(canonical, sigs, snapshotBlock, this.config['NETWORK']);
+            if(!quorum.ok)
+                error = 'invalid: cross_chain quorum (' + quorum.detail + ')';
+        }
+
+        data['REQUEST_ID']       = requestId;
+        // attests.provider_id is NOT NULL, and a v4 does not carry the provider on the
+        // wire (the request row owns it). A rejected v4 with no matching request has no
+        // provider to name, so it stores the empty string rather than failing the INSERT
+        // and losing the audit row.
+        data['PROVIDER_ID']      = request ? String(request.provider_id) : '';
+        data['RESPONSE_PAYLOAD'] = responsePayload;
+        data['RESPONSE_STATUS']  = responseStatus;
+        data['META']             = meta;
+        data['RESPONSE_HASH']    = responseHash;
+        data['VALID_SIGS']       = 0;
+        data['STATUS']           = (error) ? error : 'valid';
+        // The signatures on this row are cross_chain relay signatures, not the
+        // attestation quorum that produced the body. That quorum is recorded on the
+        // home chain's v1 row, which homeResponseIdx names; inlining them here would
+        // invite a reader to mistake one for the other.
+        data['VALIDATOR_SIGNATURES'] = null;
+
+        console.log("\t ATTEST v4 : id=" + requestId.substring(0,16) + '...' +
+                    ' : home_response=' + homeResponseIdx +
+                    ' : status=' + responseStatus +
+                    ' : snapshot=' + snapshotBlock +
+                    ' : ' + data['STATUS']);
+
+        await this.indexerDb.createAttestationResponse(data);
+
+        if(data['STATUS'] === 'valid'){
+            let newRequestStatus = (responseStatus === 'ok') ? 'fulfilled' : 'errored';
+            await this.indexerDb.updateAttestationRequestStatus(requestId, newRequestStatus, data['BLOCK_INDEX']);
+
+            // Settle the fee the origin v0 escrowed, on the same terms a local
+            // fulfillment would. The responsible set it splits to is the ORIGIN row's,
+            // which is empty off BTC, so the fee lands in the REWARD pool and no
+            // per-validator reward row is written; paying the BTC-staked validators
+            // out of an origin-chain pool is Phase 3 economics work, not a relay
+            // concern (see the open questions in the  report).
+            await this._settleRequestFee(request, data, newRequestStatus);
+
+            // Fire the contract callback here, on the chain the contract lives on.
+            // Same savepoint discipline as the v1 path: a failing callback must not
+            // roll back the response row.
+            try {
+                let callbackActionIndex = await this._injectRelayCallback(request, data);
+                if(callbackActionIndex)
+                    await this.indexerDb.setAttestationResponseCallbackIndex(data['ACTION_INDEX'], callbackActionIndex);
+            } catch(e){
+                rethrowIfInfraFault(e);
+                console.warn('Attestation relay callback injection failed:', e);
+            }
+        }
+
+        await this.mapper.createMappings(data);
+    }
+
+    // Inject the contract callback for a relayed response. The 'ok' path is the v1
+    // callback verbatim; a relayed 'expired' delivers the same empty-payload shape
+    // the local expiry path does, so a contract cannot tell whether its attestation
+    // was serviced locally or across chains, which is the property that makes the
+    // relay transparent to contract authors.
+    async _injectRelayCallback(request, responseData){
+        if(String(responseData['RESPONSE_STATUS']) === 'ok')
+            return await this._injectCallbackExecute(request, responseData);
+        return await this._injectExpiredCallback(request, responseData);
     }
 
     // Settle the request fee escrowed at v0 (E1 paid attestations). Runs at the

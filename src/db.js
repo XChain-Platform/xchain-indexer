@@ -13529,6 +13529,13 @@ class Database {
         // verbatim instead of re-deriving it against the CURRENT mutable stakes.amount. NULL for
         // rejected/feeless-legacy rows (the recompute falls back to the live re-derive).
         let responsible_set  = !this.util.isNull(data['RESPONSIBLE_SET_JSON']) ? String(data['RESPONSIBLE_SET_JSON']) : null;
+        //  cross-chain relay: NULL on every native single-chain request, so a
+        // pre-activation replay writes exactly the columns it wrote before. Set to the
+        // origin chain on a relay-eligible LTC/DOGE v0 (what the hub's relay poll keys
+        // on) and on the BTC v3 row that materializes it (where it also suppresses the
+        // local callback, since the contract is not on BTC).
+        let origin_chain     = !this.util.isNull(data['ORIGIN_CHAIN']) ? String(data['ORIGIN_CHAIN']) : null;
+        let origin_action    = !this.util.isNull(data['ORIGIN_ACTION_INDEX']) ? Number(data['ORIGIN_ACTION_INDEX']) : null;
 
         let query  = "SELECT action_index FROM attests WHERE action_index=? LIMIT 1";
         let exists = false;
@@ -13538,12 +13545,14 @@ class Database {
             query = `UPDATE attests SET
                         version=0, request_id=?, contract_index=?, fee_payer_id=?, provider_id=?, payload=?,
                         callback_method=?, callback_params_json=?, redundancy=?, deadline_block=?,
-                        gas_escrow=?, fee_tick_id=?, fee_amount=?, responsible_set_json=?, request_status=?, status_id=?, block_index=?
+                        gas_escrow=?, fee_tick_id=?, fee_amount=?, responsible_set_json=?,
+                        origin_chain=?, origin_action_index=?, request_status=?, status_id=?, block_index=?
                     WHERE action_index=?`;
             await this.doQuery(query, [
                 request_id, contract_index, fee_payer_id, provider_id, payload,
                 callback_method, callback_params, redundancy, deadline_block,
-                gas_escrow, fee_tick_id, fee_amount, responsible_set, request_status, status_id, block_index, action_index
+                gas_escrow, fee_tick_id, fee_amount, responsible_set,
+                origin_chain, origin_action, request_status, status_id, block_index, action_index
             ]);
         } else {
             // v0 single-request integrity. The (request_id, version) index was relaxed to
@@ -13561,12 +13570,14 @@ class Database {
             query = `INSERT INTO attests
                         (action_index, version, request_id, contract_index, fee_payer_id, provider_id, payload,
                          callback_method, callback_params_json, redundancy, deadline_block,
-                         gas_escrow, fee_tick_id, fee_amount, responsible_set_json, request_status, status_id, block_index)
-                    VALUES (?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+                         gas_escrow, fee_tick_id, fee_amount, responsible_set_json,
+                         origin_chain, origin_action_index, request_status, status_id, block_index)
+                    VALUES (?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
             await this.doQuery(query, [
                 action_index, request_id, contract_index, fee_payer_id, provider_id, payload,
                 callback_method, callback_params, redundancy, deadline_block,
-                gas_escrow, fee_tick_id, fee_amount, responsible_set, request_status, status_id, block_index
+                gas_escrow, fee_tick_id, fee_amount, responsible_set,
+                origin_chain, origin_action, request_status, status_id, block_index
             ]);
         }
     }
@@ -13707,6 +13718,7 @@ class Database {
         let query = `SELECT action_index, request_id, contract_index, fee_payer_id, provider_id,
                             payload, callback_method, callback_params_json,
                             redundancy, deadline_block, gas_escrow, fee_tick_id, fee_amount,
+                            origin_chain, origin_action_index,
                             request_status, status_id, block_index
                      FROM attests
                      WHERE ` + where + `
@@ -13726,6 +13738,9 @@ class Database {
             fee_tick_id:    typeof r.fee_tick_id    === 'bigint' ? Number(r.fee_tick_id)    : r.fee_tick_id,
             deadline_block: typeof r.deadline_block === 'bigint' ? Number(r.deadline_block) : r.deadline_block,
             status_id:      typeof r.status_id      === 'bigint' ? Number(r.status_id)      : r.status_id,
+            // : NULL on every native request. Non-null marks the row as one leg of a
+            // cross-chain relay, which is what the hub's relay driver filters on.
+            origin_action_index: typeof r.origin_action_index === 'bigint' ? Number(r.origin_action_index) : r.origin_action_index,
             block_index:    typeof r.block_index    === 'bigint' ? Number(r.block_index)    : r.block_index
         }));
     }

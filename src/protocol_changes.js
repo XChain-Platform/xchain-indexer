@@ -493,6 +493,33 @@ class ProtocolChanges {
         // block 0).
         this.addChange('ATTEST_CANONICAL_LOWERCASE_ID', '2.0.0',1786924800,0,0,0,0,0);
 
+        //  (attestation Phase 5, spec §12): the origin-side half of the
+        // cross-chain relay. Below this activation an ATTEST v0 emitted by an
+        // LTC or DOGE contract is REJECTED at admission, because
+        // Attest._computeResponsibleSet returns [] on any non-BTC chain (the
+        // capability stake that qualifies attestation validators exists only on
+        // BTC) and ATTEST_ADMISSION_ACTIVATION rejects a request whose
+        // responsible set is smaller than its REDUNDANCY. At/above it such a
+        // request is instead admitted 'pending' and marked with its origin
+        // chain, so the hub's relay driver can materialize it onto BTC (ATTEST
+        // v3) and relay the response back (ATTEST v4). Nothing else about
+        // admission changes: a request that fails any OTHER validation is still
+        // rejected, and on BTC the rule is a no-op because a BTC responsible set
+        // is never empty by construction.
+        //
+        // Keyed on block_TIME for the same reason ATTEST_CANONICAL_LOWERCASE_ID
+        // above is: the rule must flip on LTC and DOGE, whose local heights sit
+        // millions of blocks above any BTC-derived threshold, so a height gate
+        // carrying a BTC value would already be satisfied there and would ship
+        // the rule live instead of inert (the ATTEST_ADMISSION_ACTIVATION plane
+        // trap, documented in attest_admission_activation.js). The mainnet
+        // timestamp is ARMED to the same ratified  cohort anchor
+        // 1786924800; a divergent value is a fork. The BTC-anchored half of
+        // Phase 5 (accepting v3/v4 on the wire) rides ATTEST_RELAY_ACTIVATION in
+        // attest_relay_activation.js; either order of the two is safe, see the
+        // note there. testnet/regtest activate at genesis.
+        this.addChange('ATTEST_RELAY_ORIGIN', '2.0.0',1786924800,0,0,0,0,0);
+
         // : VM xchain.attestation.getResponse(requestId) reader. Below this
         // activation the VM snapshot's attestationData is always null, so
         // getResponse() returns null for every request (the pre-reader behaviour);
