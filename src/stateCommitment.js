@@ -524,26 +524,7 @@ async function buildFullBalancesRoot(db, chain, network, blockIndex, opts){
 // valve, not a tuning knob: a node running with it committed a balances_root it
 // knows is incomplete, and will diverge from any node that full-rebuilds.
 async function _enforceTouchedSet(db, blockIndex, touched){
-    // doQueryStrict, never doQuery: inside the block transaction a failed read
-    // throws and the block retries. A guard that reads through the fail-soft
-    // path would see [] as "the ledger moved nothing" and pass every block,
-    // which is worse than not having a guard at all (M-17).
-    const rows = await db.doQueryStrict(
-        `SELECT DISTINCT ia.address AS address, it.tick AS tick
-           FROM (
-                SELECT action_index, address_id, tick_id FROM credits
-                UNION ALL
-                SELECT action_index, address_id, tick_id FROM debits
-           ) s
-           INNER JOIN actions a          ON a.action_index = s.action_index
-           INNER JOIN index_addresses ia ON ia.id = s.address_id
-           INNER JOIN index_tickers   it ON it.id = s.tick_id
-          WHERE a.block_index = ?`, [blockIndex]);
-
-    const expected = new Set();
-    for(const r of (rows || []))
-        if(r.address != null && r.tick != null && r.tick !== '')
-            expected.add(r.address + '\t' + r.tick);
+    const expected = await _ledgerKeysForBlock(db, blockIndex);
     if(!expected.size) return;
 
     const applied = new Set(touched);
@@ -562,6 +543,99 @@ async function _enforceTouchedSet(db, blockIndex, touched){
     const msg = 'balances touched-set guard FAILED at block ' + blockIndex +
         ': the ledger moved ' + missing.length + ' key(s) the commitment did not apply, so ' +
         'balances_root would be committed incomplete. keys=' + detail + ' ';
+    if(process.env.INDEXER_TOUCH_GUARD === 'warn'){
+        console.error(msg + ' [INDEXER_TOUCH_GUARD=warn: COMMITTING ANYWAY, this node will ' +
+            'diverge from any node that full-rebuilds]');
+        return;
+    }
+    throw new Error(msg);
+}
+
+// The (address, tick) keys THIS block's ledger moved, as canonical strings
+// resolved through the index tables, which is the same derivation the
+// commitment's own key uses. Shared by the touched-set guard above and the
+// leaf-presence assertion below so the two can never drift into disagreeing
+// about what the block moved.
+//
+// doQueryStrict, never doQuery: inside the block transaction a failed read
+// throws and the block retries. A guard that reads through the fail-soft path
+// would see [] as "the ledger moved nothing" and pass every block, which is
+// worse than not having a guard at all (M-17).
+async function _ledgerKeysForBlock(db, blockIndex){
+    const rows = await db.doQueryStrict(
+        `SELECT DISTINCT ia.address AS address, it.tick AS tick
+           FROM (
+                SELECT action_index, address_id, tick_id FROM credits
+                UNION ALL
+                SELECT action_index, address_id, tick_id FROM debits
+           ) s
+           INNER JOIN actions a          ON a.action_index = s.action_index
+           INNER JOIN index_addresses ia ON ia.id = s.address_id
+           INNER JOIN index_tickers   it ON it.id = s.tick_id
+          WHERE a.block_index = ?`, [blockIndex]);
+
+    const keys = new Set();
+    for(const r of (rows || []))
+        if(r.address != null && r.tick != null && r.tick !== '')
+            keys.add(r.address + '\t' + r.tick);
+    return keys;
+}
+
+// ---- Post-commit leaf-presence assertion  ---------------------------
+//
+// The touched-set guard above compares SET MEMBERSHIP in both directions, and
+// the  fault class is not a membership failure. The key IS touched and IS
+// in `applied`; getNetBalance then answers 0 for it, _leafOrNull maps 0 to null,
+// and the commitment DELETES a key that never existed. `missing` is empty,
+// nothing throws, nothing logs, and the leaf never lands. That was PROVEN on the
+//  replay venue: with the guard live and the audit armed, block 103
+// neither threw nor logged, while the per-key probe reported that same block's
+// key absent from the committed tree. The guard asks "was the key touched" and
+// the probe asks "did the leaf land"; only the second question is the one that
+// decides whether balances_root is complete, so this asks it too.
+//
+// It asks in vivo, at the one moment the answer is still recoverable: after the
+// block's balances_root is final and before it is written, prove every key the
+// block's ledger moved against that root.
+//
+// A key whose leaf is ABSENT is a fault only when its net is non-zero. A
+// net-zero key is applied as a DELETE and correctly leaves no leaf (§4.2
+// delete-on-zero), which is exactly why a healthy block can leave the root
+// untouched, so treating absence alone as a fault would halt healthy chains.
+// Judging by anything other than the net AS OF THIS HEIGHT invents faults too:
+// the  per-key sweep produced four spurious hits from today's balance and
+// zero from the block's own. Inside the block transaction getNetBalance IS the
+// as-of-height net, which is what makes an in-block assertion both cheap and
+// exact where an after-the-fact one is neither.
+//
+// Cost: one descent per moved key, and the net re-read is deferred until a leaf
+// is actually found absent, so a healthy block pays no extra history scan. The
+// measured shape on BTC regtest is 1972 moved keys over 1516 healthy
+// ledger-changing blocks (~1.3 per block) with zero false positives.
+//
+// Value equality (leaf == leafHash(net)) is deliberately NOT asserted: it would
+// cost an O(history) net scan per moved key on every block to re-check a value
+// this same block wrote from that same query, while the fault class being closed
+// is absence.
+async function _assertCommittedLeaves(db, smt, chain, network, blockIndex, balancesRootHex){
+    const expected = await _ledgerKeysForBlock(db, blockIndex);
+    if(!expected.size) return;
+
+    const absent = [];
+    for(const entry of expected){
+        const [address, tick] = entry.split('\t');
+        const proof = await smt.prove(balancesRootHex, M.balanceKey(chain, network, address, tick));
+        if(proof.leaf_value != null) continue;               // the leaf landed
+        const net = await getNetBalance(db, address, tick);
+        if(_leafOrNull(net) == null) continue;               // net-zero: no leaf by design
+        absent.push([address, tick, _nz(net)]);
+    }
+    if(!absent.length) return;
+
+    const msg = 'balances leaf-presence assertion FAILED at block ' + blockIndex + ': ' +
+        absent.length + ' key(s) the ledger moved have NO leaf in the committed balances_root ' +
+        'while their net is non-zero, so balances_root would be committed incomplete. ' +
+        'keys=' + JSON.stringify(absent) + ' ';
     if(process.env.INDEXER_TOUCH_GUARD === 'warn'){
         console.error(msg + ' [INDEXER_TOUCH_GUARD=warn: COMMITTING ANYWAY, this node will ' +
             'diverge from any node that full-rebuilds]');
@@ -656,6 +730,12 @@ async function computeAndStoreRoots(db, chain, network, blockIndex, isActivation
         }
         balancesRoot = root;
         await _enforceTouchedSet(db, blockIndex, touched);
+        // Set membership cannot see a leaf that never landed , so the
+        // block's own ledger keys are proved against the root that is about to
+        // be committed. It runs AFTER the escrow leaves, on the exact value that
+        // goes into the row, because a root nobody proved against is the thing
+        // that made this fault class silent for three investigations.
+        await _assertCommittedLeaves(db, smt, chain, network, blockIndex, balancesRoot);
     }
 
     // stakes_root: BTC-only; LTC/DOGE commit the empty-SMT root.
@@ -719,5 +799,11 @@ module.exports = {
     computeBlockMerkleRoot,
     buildFullBalancesRoot,
     computeAndStoreRoots,
-    reportOrphanStats
+    reportOrphanStats,
+    // Exported for test/unit/stateCommitment.touch-guard.test.js. Both halves of
+    // the guard are module-private on the block path, and this is the half whose
+    // BEHAVIOUR (not source shape) has to be pinned by execution: the nine
+    // touch-guard cases can only read the source, which is how a guard that
+    // cannot detect its own fault class passed all nine.
+    _assertCommittedLeaves
 };
