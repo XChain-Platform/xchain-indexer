@@ -44,14 +44,59 @@ const SUB = require('../../src/state_subtree_activation.js');
 // a scratch-arm can restore rather than delete (deleting disarms the chain for
 // every later test in the process).
 const ARMED_LIVE = Object.assign({}, SUB.STATE_SUBTREE_ACTIVATION.contract_state_root);
+const ESCROW_ARMED_LIVE = Object.assign({}, SUB.ESCROW_LOCKED_LEAF_ACTIVATION);
+// Every slot map, so a helper that scratches a DIFFERENT slot restores that one
+// rather than the armed one. Restoring from the wrong snapshot is not
+// hypothetical: the bare-network test below scratches tokens_root and used to
+// restore it from ARMED_LIVE, which silently ARMED tokens_root on BTC:regtest at
+// 10000 for the rest of the process. It stayed invisible only because this file
+// sorted last, and tokens_root has NO derivation, so anything that then read it
+// would commit a slot nothing computes.
+const SLOTS_LIVE = {};
+for(const slot of SUB.RESERVED_SUBTREES)
+    SLOTS_LIVE[slot] = Object.assign({}, SUB.STATE_SUBTREE_ACTIVATION[slot]);
 
 const COINS    = ['BTC', 'LTC', 'DOGE'];
 const NETWORKS = ['mainnet', 'testnet', 'regtest'];
 // Heights spanning genesis, every armed flag-day cohort, and far past any of them.
 const HEIGHTS  = [0, 1, 145000, 958500, 962500, 3160000, 6335000, 67500000, 999999999];
 
+// THE ARMED SET for reserved slots, pinned exhaustively and in ONE place. This
+// suite used to assert blanket inertness, which was the right guard while nothing
+// was armed and the wrong one the moment something was: a blanket assertion has
+// to be deleted to arm, and deleting it removes the protection for every OTHER
+// chain at the same time. Pinning the exact set keeps the guard at full strength
+// (an unintended arming anywhere still fails) while recording the intended one.
+//
+// It lives at module scope rather than inside the inertness describe because the
+// "every INERT chain" loops further down have to scope themselves around it. They
+// used to skip a hardcoded BTC/regtest pair, which was correct while exactly one
+// chain was armed and became a silently narrowed assertion the moment a second
+// one was (BTC:testnet, 2026-07-30): the loop would have claimed every other
+// chain gates to null while quietly walking over a chain that does not.
+const ARMED = { contract_state_root: { 'BTC:regtest': 10000, 'BTC:testnet': 146500 } };
+
+// Is this chain armed for ANY reserved slot, at any height?
+function isArmedChain(coin, network){
+    return Object.values(ARMED).some(m => Object.prototype.hasOwnProperty.call(m, coin + ':' + network));
+}
+
 // Deterministic stand-in sub-roots (any 32-byte hex works; these are not real trees).
 function rootFor(tag){ return M.toHex(M.sha256(Buffer.from('subroot:' + tag, 'utf8'))); }
+
+// THE NET UNDER ALL OF IT. Every scratch-arm helper here restores what it
+// touched, and this proves the whole file did: a delete-instead-of-restore is
+// invisible to the test that commits it (its own assertions pass) and surfaces
+// as an unrelated suite failing later in the same process, which is expensive to
+// diagnose and has already happened twice. Asserting the maps are as-found makes
+// the offending FILE fail instead of its innocent neighbour.
+after(function(){
+    for(const slot of SUB.RESERVED_SUBTREES)
+        assert.deepStrictEqual(SUB.STATE_SUBTREE_ACTIVATION[slot], SLOTS_LIVE[slot],
+            'a test in this file left the ' + slot + ' map altered');
+    assert.deepStrictEqual(SUB.ESCROW_LOCKED_LEAF_ACTIVATION, ESCROW_ARMED_LIVE,
+        'a test in this file left the escrow-leaf map altered');
+});
 
 describe('state_root reserved sub-trees: slot list @regression', function(){
 
@@ -82,13 +127,8 @@ describe('state_root reserved sub-trees: slot list @regression', function(){
 
 describe('state_root reserved sub-trees: gate is inert EXCEPT the armed set @regression', function(){
 
-    // THE ARMED SET, pinned exhaustively. This suite used to assert blanket
-    // inertness, which was the right guard while nothing was armed and the wrong
-    // one the moment something was: a blanket assertion has to be deleted to arm,
-    // and deleting it removes the protection for every OTHER chain at the same
-    // time. Pinning the exact set keeps the guard at full strength (an unintended
-    // arming anywhere still fails) while recording the intended one.
-    const ARMED = { contract_state_root: { 'BTC:regtest': 10000 } };
+    // ARMED and isArmedChain are module-scoped: see the comment at their
+    // definition for why the inertness loops must share one source of truth.
 
     it('exactly the armed set is armed, and nothing else on any chain or height', function(){
         for(const name of SUB.RESERVED_SUBTREES)
@@ -113,7 +153,33 @@ describe('state_root reserved sub-trees: gate is inert EXCEPT the armed set @reg
                 'arming BTC regtest must not arm ' + coin);
         for(const network of ['mainnet', 'testnet'])
             assert.strictEqual(SUB.isSubtreeActive('contract_state_root', 10000, network, 'BTC'), false,
-                'arming regtest must not arm ' + network);
+                'arming regtest must not arm ' + network + ' at the REGTEST height');
+    });
+
+    it('BTC:testnet has its own boundary at 146500, above its collation height', function(){
+        // The second height ever set in this file (2026-07-30). Its own boundary,
+        // not the regtest one: a per-network map that accidentally shared a
+        // threshold would pass the exhaustive test above by symmetry, so the two
+        // networks are pinned apart here.
+        assert.strictEqual(SUB.isSubtreeActive('contract_state_root', 146499, 'testnet', 'BTC'), false);
+        assert.strictEqual(SUB.isSubtreeActive('contract_state_root', 146500, 'testnet', 'BTC'), true);
+        assert.strictEqual(SUB.isSubtreeActive('contract_state_root', 146501, 'testnet', 'BTC'), true);
+        // Precondition 1 in test form rather than prose: Stage A may never arm
+        // below the chain's state_key_collation height, or the SMT is built over a
+        // collation-FOLDED key set and forks against a binary-collation reader.
+        const COLLATION_BTC_TESTNET = 146000;
+        assert.ok(SUB.STATE_SUBTREE_ACTIVATION.contract_state_root['BTC:testnet'] >= COLLATION_BTC_TESTNET,
+            'BTC:testnet Stage A height must be at or above its collation height');
+        // Chain-local in the other two directions too: the other testnet chains
+        // stay inert at this height, and BTC mainnet stays inert at every height.
+        for(const coin of ['LTC', 'DOGE'])
+            assert.strictEqual(SUB.isSubtreeActive('contract_state_root', 146500, 'testnet', coin), false,
+                'arming BTC testnet must not arm ' + coin + ' testnet');
+        assert.strictEqual(SUB.isSubtreeActive('contract_state_root', 146500, 'mainnet', 'BTC'), false);
+        // The escrow leaf is a SEPARATE flag day and did NOT come along: Stage B
+        // stays regtest-only until BTC:testnet has crossed this height.
+        assert.strictEqual(SUB.isEscrowLockedLeafActive(146500, 'testnet', 'BTC'), false,
+            'Stage B must not ride along with a Stage A arming');
     });
 
     it('MAINNET IS UNARMED for every slot, at every height (the launch guard)', function(){
@@ -192,17 +258,22 @@ describe('state_root reserved sub-trees: gate is inert EXCEPT the armed set @reg
             'restored to the real armed height, not wiped');
     });
 
-    it('stateRootVersion reports 1 everywhere EXCEPT at and above the armed height', function(){
+    it('stateRootVersion reports 1 everywhere EXCEPT at and above an armed height', function(){
         for(const coin of COINS)
             for(const network of NETWORKS)
                 for(const h of HEIGHTS){
-                    const armed = (coin === 'BTC' && network === 'regtest' && h >= 10000);
+                    const threshold = (ARMED.contract_state_root || {})[coin + ':' + network];
+                    const armed = (threshold !== undefined) && h >= threshold;
                     assert.strictEqual(SUB.stateRootVersion(h, network, coin), armed ? 2 : 1,
                         coin + '/' + network + '@' + h + ' version');
                 }
-        // The version is DERIVED, so the armed chain flips at exactly the boundary.
-        assert.strictEqual(SUB.stateRootVersion(9999,  'regtest', 'BTC'), 1);
-        assert.strictEqual(SUB.stateRootVersion(10000, 'regtest', 'BTC'), 2);
+        // The version is DERIVED, so each armed chain flips at exactly its own
+        // boundary. Both are checked: a version derived from the wrong network's
+        // threshold would still satisfy one of them.
+        assert.strictEqual(SUB.stateRootVersion(9999,   'regtest', 'BTC'), 1);
+        assert.strictEqual(SUB.stateRootVersion(10000,  'regtest', 'BTC'), 2);
+        assert.strictEqual(SUB.stateRootVersion(146499, 'testnet', 'BTC'), 1);
+        assert.strictEqual(SUB.stateRootVersion(146500, 'testnet', 'BTC'), 2);
         // The frozen wire constant still declares 1: it is the FLOOR every chain
         // starts at, not a claim about armed chains, and merkle.js does not know
         // about heights. The per-height value is what api.js reports.
@@ -212,9 +283,12 @@ describe('state_root reserved sub-trees: gate is inert EXCEPT the armed set @reg
     it('the activation maps hold EXACTLY the armed set (arming is a code change, not config)', function(){
         assert.deepStrictEqual(SUB.STATE_SUBTREE_ACTIVATION.ownership_root, {});
         assert.deepStrictEqual(SUB.STATE_SUBTREE_ACTIVATION.tokens_root, {});
-        assert.deepStrictEqual(SUB.STATE_SUBTREE_ACTIVATION.contract_state_root, { 'BTC:regtest': 10000 });
+        assert.deepStrictEqual(SUB.STATE_SUBTREE_ACTIVATION.contract_state_root,
+            { 'BTC:regtest': 10000, 'BTC:testnet': 146500 });
         // Stage B armed on the same chain, above Stage A's height: it cannot arm before
         // Stage A holds, and 11200 > 10000 pins that ordering here rather than in prose.
+        // It is deliberately still REGTEST-ONLY: each stage is its own flag day, so a
+        // Stage A testnet arming must not drag Stage B onto testnet with it.
         assert.deepStrictEqual(SUB.ESCROW_LOCKED_LEAF_ACTIVATION, { 'BTC:regtest': 11200 });
         assert.ok(SUB.ESCROW_LOCKED_LEAF_ACTIVATION['BTC:regtest'] >
                   SUB.STATE_SUBTREE_ACTIVATION.contract_state_root['BTC:regtest'],
@@ -256,7 +330,7 @@ describe('state_root reserved sub-trees: gateSubRoots @regression', function(){
         // property that keeps "landing this changes nothing" true for them.
         for(const coin of COINS)
             for(const network of NETWORKS){
-                if(coin === 'BTC' && network === 'regtest') continue;      // armed
+                if(isArmedChain(coin, network)) continue;                 // armed, see ARMED
                 assert.strictEqual(SUB.gateSubRoots(candidates, 999999999, network, coin), null);
             }
     });
@@ -352,7 +426,13 @@ describe('state_root reserved sub-trees: gateSubRoots @regression', function(){
             SUB.ESCROW_LOCKED_LEAF_ACTIVATION['BTC:regtest'] = null;
             assert.strictEqual(SUB.isEscrowLockedLeafActive(1500, 'regtest', 'BTC'), false);
         } finally {
-            delete SUB.ESCROW_LOCKED_LEAF_ACTIVATION['BTC:regtest'];
+            // RESTORE, never delete: BTC:regtest carries the REAL 11200 height, and
+            // deleting it disarms the chain for every test that runs after this one
+            // in the same process. Harmless while the suite happened to run last
+            // alphabetically, and a landmine the moment anything reorders it.
+            if(Object.prototype.hasOwnProperty.call(ESCROW_ARMED_LIVE, 'BTC:regtest'))
+                SUB.ESCROW_LOCKED_LEAF_ACTIVATION['BTC:regtest'] = ESCROW_ARMED_LIVE['BTC:regtest'];
+            else delete SUB.ESCROW_LOCKED_LEAF_ACTIVATION['BTC:regtest'];
         }
     });
 
@@ -406,8 +486,12 @@ describe('state_root reserved sub-trees: gateSubRoots @regression', function(){
             assert.strictEqual(SUB.isSubtreeActive('tokens_root', 20, 'regtest', 'BTC'), true);
             assert.strictEqual(SUB.isSubtreeActive('tokens_root', 20, 'regtest', 'LTC'), false);
         } finally {
+            // Restore from THIS slot's snapshot. Using ARMED_LIVE here (the
+            // contract_state_root snapshot) armed tokens_root instead of clearing it.
             delete map.regtest;
-            if(Object.prototype.hasOwnProperty.call(ARMED_LIVE, 'BTC:regtest')) map['BTC:regtest'] = ARMED_LIVE['BTC:regtest']; else delete map['BTC:regtest'];
+            if(Object.prototype.hasOwnProperty.call(SLOTS_LIVE.tokens_root, 'BTC:regtest'))
+                map['BTC:regtest'] = SLOTS_LIVE.tokens_root['BTC:regtest'];
+            else delete map['BTC:regtest'];
         }
     });
 });
@@ -451,7 +535,7 @@ describe('assembleStateRoot: reserved-slot carrier is inert @regression', functi
         // property that keeps "landing this changes nothing" true for them.
         for(const coin of COINS)
             for(const network of NETWORKS){
-                if(coin === 'BTC' && network === 'regtest') continue;      // armed
+                if(isArmedChain(coin, network)) continue;                 // armed, see ARMED
                 const gated = SUB.gateSubRoots({ contract_state_root: rootFor('cst') }, 999999999, network, coin);
                 assert.strictEqual(gated, null);
                 assert.strictEqual(SC.assembleStateRoot(bal, stk, gated), v1);

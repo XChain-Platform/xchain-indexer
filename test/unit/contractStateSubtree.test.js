@@ -204,7 +204,8 @@ describe('contract_state_root: inertness @regression', function(){
         // The mainnet half is the assertion that must never be relaxed.
         assert.deepStrictEqual(SUB.STATE_SUBTREE_ACTIVATION.ownership_root, {});
         assert.deepStrictEqual(SUB.STATE_SUBTREE_ACTIVATION.tokens_root, {});
-        assert.deepStrictEqual(SUB.STATE_SUBTREE_ACTIVATION.contract_state_root, { 'BTC:regtest': 10000 });
+        assert.deepStrictEqual(SUB.STATE_SUBTREE_ACTIVATION.contract_state_root,
+            { 'BTC:regtest': 10000, 'BTC:testnet': 146500 });
         for(const slot of SUB.RESERVED_SUBTREES)
             for(const key of Object.keys(SUB.STATE_SUBTREE_ACTIVATION[slot]))
                 assert.ok(!/mainnet/.test(key), slot + ' is armed on mainnet (' + key + ')');
@@ -217,7 +218,12 @@ describe('contract_state_root: inertness @regression', function(){
         for(const coin of ['BTC', 'LTC', 'DOGE'])
             for(const network of ['mainnet', 'testnet', 'regtest'])
                 for(const h of [0, 1, 958500, 962500, 6335000, 999999999]){
-                    if(coin === 'BTC' && network === 'regtest' && h >= 10000) continue;   // the armed chain
+                    // Skip every ARMED chain, derived from the map rather than a
+                    // hardcoded pair: with two heights armed (BTC:regtest 10000 and
+                    // BTC:testnet 146500) a hardcoded skip would quietly walk over a
+                    // chain that DOES query, and assert the opposite of its own name.
+                    const armedAt = SUB.STATE_SUBTREE_ACTIVATION.contract_state_root[coin + ':' + network];
+                    if(armedAt !== undefined && h >= armedAt) continue;                   // the armed chains
                     const db = new FakeDb();
                     db.write(h, 7, 'k', '"v"');   // real rows present, and still not read
                     const candidates = await SC.reservedSubRootCandidates(db, coin, network, h);

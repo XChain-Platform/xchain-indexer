@@ -19,11 +19,13 @@
  *
  * state_root_version 1 commits the first two for real and the last three as
  * EMPTY_SMT_ROOT. This module is the gate that decides, per slot and per chain,
- * when a reserved slot may stop being EMPTY. It is ARMED ON BTC REGTEST ONLY:
- * contract_state_root from block 10000 and the escrow locked-balance leaf from
- * block 11200. Every other chain, network and slot answers "off", and MAINNET IS
- * UNARMED for every slot, so their committed state_root stays byte-identical to
- * the two-sub-root v1 assembly.
+ * when a reserved slot may stop being EMPTY. What is armed today:
+ *   BTC:regtest  contract_state_root from 10000, escrow locked leaf from 11200
+ *   BTC:testnet  contract_state_root from 146500 (Stage A only; the escrow leaf
+ *                is a SEPARATE flag day and has NOT followed it onto testnet)
+ * Every other chain, network and slot answers "off", and MAINNET IS UNARMED for
+ * every slot, so their committed state_root stays byte-identical to the
+ * two-sub-root v1 assembly.
  *
  * Why a gate and not a plain version flip: the chains flip at different heights
  * (they always have - see state_commitment_activation.js), so one map per slot
@@ -90,24 +92,49 @@ const RESERVED_SUBTREES = ['ownership_root', 'tokens_root', 'contract_state_root
 // OWN block_index. At/after the height the slot MAY carry a real sub-root; below
 // it (and for any chain absent from the map) the slot commits EMPTY_SMT_ROOT.
 //
-// *** ARMED 2026-07-28: contract_state_root on BTC:regtest at 10000. ***
-// Everything else is still inert, on every chain and network.
+// *** ARMED: contract_state_root on BTC:regtest at 10000 (2026-07-28) and on
+// *** BTC:testnet at 146500 (2026-07-30).
+// Everything else is still inert, on every chain and network. MAINNET IS UNARMED
+// for every slot, and stays that way until  arms on 2026-08-17.
 //
-// Regtest arms FIRST and alone, and only now that the derivation exists. The
+// Regtest armed FIRST and alone, and only once the derivation existed. The
 // earlier rule here ("a slot stays off even on regtest, because an armed slot
 // with no derivation commits a WRONG root rather than a missing one") was about
 // the carrier era; Stage A's derivation, its golden vectors, its serving surface
-// and its real-venue conformance all landed before this height was set. Regtest
+// and its real-venue conformance all landed before that height was set. Regtest
 // is where being wrong costs a chain reset and nothing more, so it is the venue
 // that earns the right to arm testnet, and testnet earns mainnet.
 //
-// Both hard preconditions are satisfied here (spec §3 Stage A):
-//   1. collation: state_key_collation_activation arms regtest from genesis (0),
-//      so this height is trivially at or above it and the SMT is built over the
-//      binary-collation key set rather than a folded one;
+// BTC:testnet 146500 joins it (2026-07-30). Both hard preconditions hold, and
+// they hold for DIFFERENT reasons than on regtest (spec §3 Stage A):
+//   1. collation: state_key_collation_activation arms BTC:testnet at 146000, and
+//      146500 is above it, so the SMT is built over the binary-collation key set
+//      rather than a collation-FOLDED one. Regtest satisfies the same rule
+//      trivially, being armed from genesis (0).
 //   2. NUL keys: isStateKeyNulRejectActive returns true unconditionally for
-//      regtest (xchain-vm), so no contract can plant a key that throws in
-//      joinFields and halts the arming block's buildFull.
+//      testnet AND regtest (xchain-vm), so on neither network can a contract
+//      plant a key that throws in joinFields and halts the arming block's
+//      buildFull. Mainnet is a DATE (2026-08-17, ) and is why no mainnet
+//      height may be set here yet.
+//
+// Why BTC:testnet and not the other two testnet chains, which is a measurement
+// rather than a preference:
+//   - LTC:testnet is BELOW its own collation height (tip ~4,825,000 against
+//     4,890,000) and at its measured ~4.7 blocks/hour will not reach it for
+//     roughly 575 days, so precondition 1 forbids it outright today.
+//   - DOGE:testnet is eligible (tip ~67.79M over a 67.5M collation height) but
+//     has NO follower: it is SYNC_EXCLUDE'd on the origin-host sync client, so
+//     arming it exercises the source alone. BTC:testnet is the only testnet
+//     chain with a live source-plus-follower pair, which makes it the only one
+//     whose arming boundary gets a cross-twin check.
+//
+// Honest limit on what this height proves: BTC:testnet holds ZERO contract_state
+// rows, so the armed slot commits EMPTY_SMT_ROOT and state_root does not move at
+// all (a named-but-empty slot is byte-identical to a padded one, see the header).
+// What the boundary really exercises is the version path: state_root_version
+// flips 1 -> 2 and flows through getblockhashes into the signed checkpoint
+// canonical. Exercising the DERIVATION on testnet needs contract state on the
+// chain first.
 //
 // Arming order is fixed by the design doc: contract_state_root first (Stage A,
 // and never below that chain's state_key_collation_activation height, or the SMT
@@ -115,7 +142,7 @@ const RESERVED_SUBTREES = ['ownership_root', 'tokens_root', 'contract_state_root
 const STATE_SUBTREE_ACTIVATION = {
     ownership_root:      {},
     tokens_root:         {},
-    contract_state_root: { 'BTC:regtest': 10000 },
+    contract_state_root: { 'BTC:regtest': 10000, 'BTC:testnet': 146500 },
 };
 
 // SHADOW-COMPUTE WINDOW (spec §7 step 1). INERT: every map empty.
