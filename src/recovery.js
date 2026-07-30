@@ -95,9 +95,10 @@ class AnchorRecovery {
         let report = { batches: 0, verified: 0, failed: [], matches: 0, snapshots: 0, calls: 0, rewards: 0 };
 
         // Restrict to the SAME statuses every other reader of anchor_actions accepts
-        // (getMaxAnchorBatchSeq / getMaxAnchorCheckpointSeq: version=1 AND status IN
-        // ('valid','unverified')). anchor_actions stores a row for EVERY parsed ANCHOR, valid or
-        // not (anchor.js records the verdict in STATUS rather than dropping the row), so without
+        // (getArchiveReplayWatermarks / getMaxAnchorCheckpointSeq: archive-head or
+        // checkpoint-bearing versions AND status IN ('valid','unverified')). anchor_actions stores
+        // a row for EVERY parsed ANCHOR, valid or not (anchor.js records the verdict in STATUS
+        // rather than dropping the row), so without
         // this join recovery replayed batches the on-chain parse recorded as invalid - e.g.
         // 'insufficient valid signatures' or a stale CHECKPOINT_SEQ / MATCH_BATCH_SEQ replay -
         // into cross_chain_matches / cross_chain_calls that a normally-synced indexer never

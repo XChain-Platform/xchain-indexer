@@ -305,9 +305,36 @@ class Anchor {
             if(maxSeq !== null && Number(data['CHECKPOINT_SEQ']) < maxSeq)
                 error = 'invalid: CHECKPOINT_SEQ (stale; replay of an older checkpoint)';
         }
+        // The archive half of the guard needs a second condition, and  is why:
+        // MATCH_BATCH_SEQ is a DENSE counter the hub allocates from its own tables
+        // (StateAnchorPublisher._getNextBatchSeq: MAX(batch_seq)+1 over
+        // cross_chain_matches / cross_chain_calls / validator_rewards), and those
+        // tables are reset by a wipe-and-replay rebase while THIS watermark, read
+        // from replayed anchor_actions, returns to the pre-rebase maximum. Seq alone
+        // therefore cannot tell "the hub's counter restarted" from "someone is
+        // replaying an old archive", and reading it alone fails the first case
+        // closed: every post-rebase archive indexes invalid, the invalid row does not
+        // advance the watermark, and the rail stays down for as many batches as
+        // history had while paying real DOGE for each attempt.
+        //
+        // The wrapper checkpoint seq settles it, because CHECKPOINT_SEQ is NOT dense:
+        //  made it = snapshot_block, a chain value that keeps advancing across
+        // any wipe. A genuine replay is signature-bound to its original canonical and
+        // so carries the OLD checkpoint seq; a post-rebase archive carries a strictly
+        // higher one. So a low batch seq is stale only when the checkpoint is ALSO
+        // behind the newest archive's.
+        //
+        // Deliberately "behind", not "not ahead": two archives can legitimately ride
+        // ONE checkpoint (a second batch draining leftover rows in the same cadence),
+        // and the equal case is already the tolerated one everywhere else in this
+        // guard - an exact re-broadcast is signature-bound to identical content, so it
+        // can only produce a duplicate row, which the archive-head pick is already
+        // required to handle deterministically.
         if(!error && (format === 1 || format === 6)){
-            let maxBatch = await this.indexerDb.getMaxAnchorBatchSeq();
-            if(maxBatch !== null && Number(data['MATCH_BATCH_SEQ']) < maxBatch)
+            let wm = await this.indexerDb.getArchiveReplayWatermarks();
+            let batchStale      = (wm.batchSeq !== null && Number(data['MATCH_BATCH_SEQ']) < wm.batchSeq);
+            let checkpointStale = (wm.checkpointSeq !== null && Number(data['CHECKPOINT_SEQ']) < wm.checkpointSeq);
+            if(batchStale && checkpointStale)
                 error = 'invalid: MATCH_BATCH_SEQ (stale; replay of an older archive batch)';
         }
 

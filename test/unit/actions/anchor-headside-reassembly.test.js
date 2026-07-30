@@ -64,7 +64,7 @@ describe('Anchor head-side reassembly gate  @regression', function () {
     function addAnchorDbStubs(db) {
         db.getValidatorsByCapability  = sinon.stub().resolves([{ pubkey: PUBKEY_A, amount: '1' }]);
         db.getMaxAnchorCheckpointSeq  = sinon.stub().resolves(null);
-        db.getMaxAnchorBatchSeq       = sinon.stub().resolves(null);
+        db.getArchiveReplayWatermarks = sinon.stub().resolves({ batchSeq: null, checkpointSeq: null });
         db.createAnchorAction         = sinon.stub().resolves();
         db.getAnchorV1ByBatchSeq      = sinon.stub().resolves(null);
         db.getAnchorChunks            = sinon.stub().resolves([]);

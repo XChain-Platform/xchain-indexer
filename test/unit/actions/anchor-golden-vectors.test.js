@@ -82,7 +82,7 @@ describe('Anchor frozen canonical wire vectors (parser side) @regression', funct
             SIGS.map(s => ({ pubkey: s.pubkey, amount: '1' })));
         indexer.indexerDb.hasCapability              = sinon.stub().resolves(true);
         indexer.indexerDb.getMaxAnchorCheckpointSeq  = sinon.stub().resolves(null);
-        indexer.indexerDb.getMaxAnchorBatchSeq       = sinon.stub().resolves(null);
+        indexer.indexerDb.getArchiveReplayWatermarks = sinon.stub().resolves({ batchSeq: null, checkpointSeq: null });
         indexer.indexerDb.createAnchorAction         = sinon.stub().resolves();
         indexer.indexerDb.getAnchorV1ByBatchSeq      = sinon.stub().resolves(null);
         indexer.indexerDb.getAnchorChunks            = sinon.stub().resolves([]);

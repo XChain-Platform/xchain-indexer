@@ -60,7 +60,7 @@ function memDb(v1s, v2s, opts) {
         async doQuery(sql, params) {
             params = params || [];
             // recovery.run() now joins index_statuses and restricts to status IN
-            // ('valid','unverified'), matching getMaxAnchorBatchSeq. Model that here: a fixture
+            // ('valid','unverified'), matching getArchiveReplayWatermarks. Model that here: a fixture
             // row's optional `status` property drives the filter (absent = 'valid', so the
             // pre-existing fixtures are unaffected). A row parsed as invalid is excluded, exactly
             // as the INNER JOIN + status set drops it against the real schema.
@@ -342,7 +342,7 @@ describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () 
         // intact but a non-'valid' status. recovery.run() must not select it - otherwise a
         // recovery-fed indexer replays matches/calls a mirror-fed indexer never derived, or a
         // self-consistent forged archive authenticates itself in. Every sibling reader
-        // (getMaxAnchorBatchSeq) already restricts to status IN ('valid','unverified').
+        // (getArchiveReplayWatermarks) already restricts to status IN ('valid','unverified').
         let good = buildBatch(0, [rawMatch('m1')], oracleKeys, crossKeys);
         let bad  = buildBatch(1, [rawMatch('m2')], oracleKeys, crossKeys);
         bad.v1.status = 'invalid: insufficient valid signatures';

@@ -23,7 +23,7 @@ const mariadb = require('mariadb');
 const fs      = require('fs');
 const path    = require('path');
 const { AsyncLocalStorage } = require('async_hooks');
-const { buildStateHashData } = require('./stateHash');
+const { buildStateHashData, ARCHIVE_HEAD_VERSIONS } = require('./stateHash');
 const { canonicalizeHashAddress } = require('./protocolAddressRoles');
 const swqCap = require('./swq_source_cap_activation');
 const dispenseCancellingMatch = require('./dispense_cancelling_match_activation');
@@ -12556,15 +12556,40 @@ class Database {
         return rows.length > 0 ? rows[0] : null;
     }
 
-    // Highest VALID archive batch seq recorded - the v1 batch replay guard
-    // (mirrors getMaxAnchorCheckpointSeq).
-    async getMaxAnchorBatchSeq(){
-        let query = `SELECT MAX(a.match_batch_seq) AS max_seq
+    // The two watermarks the v1/v6 archive replay guard needs, read from ONE row
+    // set so they cannot disagree: the highest archive batch seq recorded, and the
+    // highest wrapper checkpoint seq among those same archive-head rows.
+    //
+    // : they are returned together deliberately. The guard rejects a stale
+    // batch seq only when the wrapper checkpoint is ALSO not advancing, so two
+    // independently-read watermarks could describe row sets that never coexisted
+    // (one stubbed, one live; one filtered on a drifted version list) and the guard
+    // would then reject a legitimate archive or admit a replay. Reading both in one
+    // statement makes the impossible combination unrepresentable, and the version
+    // predicate comes from ARCHIVE_HEAD_VERSIONS rather than a literal IN (1, 6)
+    // for the same reason getMaxAnchorCheckpointSeq stopped hand-copying its set
+    // (a copied literal once omitted v4/v5 and froze that guard).
+    //
+    // 'unverified' is included for the same reason it is in getMaxAnchorCheckpointSeq:
+    // a node with no mirrored oracle_publish snapshot cannot verify signatures and
+    // stores every well-formed ANCHOR unverified, so excluding it would make the
+    // watermark differ between mirrored and unmirrored nodes. Note the direction of
+    // that exposure: a poisoned row can only push either watermark UP, which makes
+    // the guard stricter, never more permissive.
+    async getArchiveReplayWatermarks(){
+        let versions = ARCHIVE_HEAD_VERSIONS;
+        let query = `SELECT MAX(a.match_batch_seq) AS max_batch_seq,
+                            MAX(a.checkpoint_seq)  AS max_checkpoint_seq
                      FROM anchor_actions a
                      JOIN index_statuses s ON s.id = a.status_id
-                     WHERE a.version IN (1, 6) AND s.status IN ('valid', 'unverified')`;
-        let rows = await this.doQuery(query, []);
-        return (rows.length > 0 && rows[0].max_seq != null) ? Number(rows[0].max_seq) : null;
+                     WHERE a.version IN (${versions.map(() => '?').join(', ')})
+                       AND s.status IN ('valid', 'unverified')`;
+        let rows = await this.doQuery(query, [...versions]);
+        let row  = rows.length > 0 ? rows[0] : {};
+        return {
+            batchSeq:      (row.max_batch_seq      != null) ? Number(row.max_batch_seq)      : null,
+            checkpointSeq: (row.max_checkpoint_seq != null) ? Number(row.max_checkpoint_seq) : null,
+        };
     }
 
     // The archive-head anchor (v1, or the publisher-bearing v6) that started an

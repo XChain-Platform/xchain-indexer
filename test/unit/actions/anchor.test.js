@@ -174,7 +174,7 @@ describe('Anchor (ANCHOR) @regression @tier3', function () {
         db.getValidatorsByCapability  = sinon.stub().resolves([{ pubkey: PUBKEY_A, amount: '1' }]);
         db.hasCapability              = sinon.stub().resolves(true);
         db.getMaxAnchorCheckpointSeq  = sinon.stub().resolves(null);
-        db.getMaxAnchorBatchSeq       = sinon.stub().resolves(null);
+        db.getArchiveReplayWatermarks = sinon.stub().resolves({ batchSeq: null, checkpointSeq: null });
         db.createAnchorAction         = sinon.stub().resolves();
         db.getAnchorV1ByBatchSeq      = sinon.stub().resolves(null);
         db.getAnchorChunks            = sinon.stub().resolves([]);
@@ -475,11 +475,57 @@ describe('Anchor (ANCHOR) @regression @tier3', function () {
     });
 
     it('v6 replay guard: a match_batch_seq below the recorded max is stale', async function () {
-        indexer.indexerDb.getMaxAnchorBatchSeq.resolves(3);
+        // Both watermarks are behind-worthy: seq 2 < 3 AND the payload's checkpoint
+        // seq (0) is behind the newest archive's (5).  made the second half
+        // load-bearing, so a fixture that only pinned the batch seq would now pass
+        // for the wrong reason.
+        indexer.indexerDb.getArchiveReplayWatermarks.resolves({ batchSeq: 3, checkpointSeq: 5 });
         let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 6, COIN: 'DOGE' });
         await handler.parse(v6Params(ARCHIVE_JSON, { batch_seq: '2' }), data, null);
         assert.ok(String(data['STATUS']).startsWith('invalid: MATCH_BATCH_SEQ (stale'));
         assert.ok(indexer.indexerDb.createValidatorReward.notCalled);
+    });
+
+    // . The rebase resets the hub's dense batch-seq allocator
+    // (StateAnchorPublisher._getNextBatchSeq counts its own tables) while this
+    // watermark, read from replayed anchor_actions, returns to the pre-rebase max.
+    // Both directions are pinned here because the two failures are opposite and
+    // equally bad: reject the fresh batch and the archive rail is dead for as many
+    // batches as history had; admit the old one and a stale archive can be replayed.
+    it(' v1 replay guard: a restarted batch seq is ACCEPTED when its wrapper checkpoint advances', async function () {
+        indexer.indexerDb.getArchiveReplayWatermarks.resolves({ batchSeq: 40, checkpointSeq: 900000 });
+        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 1, COIN: 'DOGE' });
+        // Post-rebase: the hub's counter restarted at 0, but checkpoint_seq is
+        // snapshot_block  and the chain kept moving.
+        await handler.parse(v1Params(ARCHIVE_JSON, { batch_seq: '0', seq: '961000' }), data, null);
+        assert.strictEqual(data['STATUS'], 'valid');
+    });
+
+    it(' v1 replay guard: a stale batch seq with a stale checkpoint is still rejected', async function () {
+        indexer.indexerDb.getArchiveReplayWatermarks.resolves({ batchSeq: 40, checkpointSeq: 900000 });
+        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 1, COIN: 'DOGE' });
+        // A genuine replay is signature-bound to its original canonical, so it can
+        // only carry the OLD checkpoint seq. That is what still catches it.
+        await handler.parse(v1Params(ARCHIVE_JSON, { batch_seq: '12', seq: '880000' }), data, null);
+        assert.ok(String(data['STATUS']).startsWith('invalid: MATCH_BATCH_SEQ (stale'));
+    });
+
+    it(' v1 replay guard: a second batch riding the SAME checkpoint is not treated as stale', async function () {
+        indexer.indexerDb.getArchiveReplayWatermarks.resolves({ batchSeq: 40, checkpointSeq: 961000 });
+        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 1, COIN: 'DOGE' });
+        // Equal, not ahead: one cadence can publish a second batch draining leftover
+        // rows, and the guard elsewhere already treats an equal seq as the tolerated
+        // duplicate case rather than a replay.
+        await handler.parse(v1Params(ARCHIVE_JSON, { batch_seq: '2', seq: '961000' }), data, null);
+        assert.strictEqual(data['STATUS'], 'valid');
+    });
+
+    it(' v6 replay guard: the reward rail rides the same exemption, so a restarted batch still derives its reward', async function () {
+        indexer.indexerDb.getArchiveReplayWatermarks.resolves({ batchSeq: 40, checkpointSeq: 900000 });
+        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 6, COIN: 'DOGE' });
+        await handler.parse(v6Params(ARCHIVE_JSON, { batch_seq: '0', seq: '961000' }), data, null);
+        assert.strictEqual(data['STATUS'], 'valid');
+        assert.ok(indexer.indexerDb.createValidatorReward.called);
     });
 
     it('determinism: two independent parses of identical v6 bytes derive the identical archive reward row', async function () {
@@ -505,7 +551,7 @@ describe('Anchor (ANCHOR) @regression @tier3', function () {
     });
 
     it('replay guard: a v1 match_batch_seq below the recorded max is stale', async function () {
-        indexer.indexerDb.getMaxAnchorBatchSeq.resolves(3);
+        indexer.indexerDb.getArchiveReplayWatermarks.resolves({ batchSeq: 3, checkpointSeq: 5 });
         let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 1, COIN: 'DOGE' });
         await handler.parse(v1Params(ARCHIVE_JSON, { batch_seq: '2' }), data, null);
         assert.ok(String(data['STATUS']).startsWith('invalid: MATCH_BATCH_SEQ (stale'));
