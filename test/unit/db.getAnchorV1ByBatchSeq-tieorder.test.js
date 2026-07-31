@@ -151,4 +151,53 @@ describe('Database.getAnchorV1ByBatchSeq() head-selection determinism @regressio
         const wrong = applyOrder(dupRows, '' /* pre-fix: no ORDER BY */)[0];
         assert.strictEqual(wrong.action_index, 9);
     });
+
+    // ── : publisher-scoped head pick ───────────────────────────────────────
+    // With an author supplied the candidate set narrows to that publisher's heads, so a
+    // junk head squatting the batch seq is the head of its own batch and of nothing
+    // else. Everything that made the pick deterministic must survive the narrowing.
+    describe('author-scoped pick ', function () {
+
+        it('binds the author as a parameter and keeps the deterministic order', async function () {
+            const db = makeDb();
+            let captured = null, args = null;
+            sinon.stub(db, 'doQuery').callsFake(async (sql, params) => { captured = sql; args = params; return []; });
+            await db.getAnchorV1ByBatchSeq(42, 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH');
+            assert.match(captured, /adr\.address\s*=\s*\?/i, 'the author must be a bound parameter, never inlined');
+            assert.deepStrictEqual(args, [42, 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH']);
+            assert.match(captured, /ORDER BY\s+(?:[A-Za-z0-9_]+\.)?action_index\s+ASC/i);
+            assert.match(captured, /LIMIT\s+1/i);
+            const joins = captured.match(/\b(LEFT\s+JOIN|INNER\s+JOIN|(?<!LEFT\s)(?<!OUTER\s)JOIN)\b/gi) || [];
+            for (const j of joins) assert.match(j, /LEFT\s+JOIN/i);
+        });
+
+        it('adds NOTHING to the query when no author is supplied (inert below the flag day)', async function () {
+            const db = makeDb();
+            let captured = null, args = null;
+            sinon.stub(db, 'doQuery').callsFake(async (sql, params) => { captured = sql; args = params; return []; });
+            await db.getAnchorV1ByBatchSeq(42);
+            assert.doesNotMatch(captured, /adr\.address\s*=/i,
+                'the legacy canonical-head pick must not gain an authorship predicate');
+            assert.deepStrictEqual(args, [42]);
+        });
+
+        it('returns the earliest head OF THAT AUTHOR, not the earliest head overall', async function () {
+            // Rows as MariaDB would return them for the narrowed predicate: the junk head
+            // (action_index 1, another author) is not a candidate at all.
+            const db = makeDb();
+            sinon.stub(db, 'doQuery').callsFake(async (sql, params) => {
+                const rows = [
+                    { action_index: 1, source: 'OUTSIDER', batch_crc32: 'junk' },
+                    { action_index: 5, source: 'PUBLISHER', batch_crc32: 'aaaa' },
+                    { action_index: 9, source: 'PUBLISHER', batch_crc32: 'bbbb' }
+                ].filter(r => /adr\.address\s*=\s*\?/i.test(sql) ? r.source === params[1] : true);
+                return applyOrder(rows, orderClause(sql)).slice(0, 1);
+            });
+            const head = await db.getAnchorV1ByBatchSeq(42, 'PUBLISHER');
+            assert.strictEqual(head.action_index, 5);
+            assert.strictEqual(head.batch_crc32, 'aaaa');
+            const captured = await db.getAnchorV1ByBatchSeq(42);
+            assert.strictEqual(captured.action_index, 1, 'unscoped, the junk head is still the canonical head');
+        });
+    });
 });

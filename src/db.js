@@ -36,7 +36,8 @@ const caretRefStrict = require('./caret_ref_strict_activation');
 // as the XCALL_MAX_CALLS_PER_BLOCK sibling it mirrors.
 const { ATTEST_MAX_EXPIRIES_PER_BLOCK } = require('./protocol/constants.js');
 const { CHECKPOINT_VERSIONS: ANCHOR_CHECKPOINT_VERSIONS,
-        ARCHIVE_CHUNK_SET_SQL, dedupeArchiveChunks } = require('./anchor-action-query');
+        ARCHIVE_CHUNK_SET_SQL, ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL,
+        dedupeArchiveChunks } = require('./anchor-action-query');
 const { rethrowIfInfraFault } = require('./actions/faultGuard');
 
 // Tables whose highest-`id`-survivor dedupe rule is validated and safe to auto-apply at
@@ -12612,14 +12613,26 @@ class Database {
     // PICK is unchanged from the pre-#3075 query (an inner join would skip an unlinked
     // head and select a different one, moving a consensus-visible geometry verdict); an
     // unresolvable author arrives as null and anchor.js fails the chunk closed.
-    async getAnchorV1ByBatchSeq(batchSeq){
+    // : `author`, when supplied, narrows the candidates to heads authored by
+    // that address, i.e. the batch key becomes (match_batch_seq, head author). The
+    // caller (anchor.js, gated on the flag day) passes it so a junk head broadcast at
+    // another publisher's batch seq can no longer be the parent that governs that
+    // publisher's chunks. Omitted / null keeps the legacy canonical-head pick exactly,
+    // including the query text, so nothing moves below the flag day. The narrowing
+    // rides on the SAME LEFT-joined address the row already exposes as `source`: a head
+    // whose author cannot be resolved compares unequal and is skipped, which is
+    // fail-closed (the chunk lands 'orphan' rather than authenticated against nothing).
+    async getAnchorV1ByBatchSeq(batchSeq, author){
+        let scoped = (author !== undefined && author !== null);
         let rows = await this.doQuery(
             `SELECT a.*, adr.address AS source
              FROM anchor_actions a
              LEFT JOIN actions         act ON act.action_index = a.action_index
              LEFT JOIN index_addresses adr ON adr.id           = act.source_id
-             WHERE a.version IN (1, 6) AND a.match_batch_seq = ?
-             ORDER BY a.action_index ASC LIMIT 1`, [batchSeq]);
+             WHERE a.version IN (1, 6) AND a.match_batch_seq = ?` +
+            (scoped ? ` AND adr.address = ?` : ``) +
+            ` ORDER BY a.action_index ASC LIMIT 1`,
+            scoped ? [batchSeq, String(author)] : [batchSeq]);
         return rows.length > 0 ? rows[0] : null;
     }
 
@@ -12642,8 +12655,16 @@ class Database {
     // count, which is what stops a junk chunk broadcast BEFORE the head (stored
     // 'orphan', so it carries no rejection verdict of its own) from squatting a
     // slot and denying the batch permanently.
-    async getAnchorChunks(batchSeq){
-        let rows = await this.doQuery(ARCHIVE_CHUNK_SET_SQL, [batchSeq, batchSeq]);
+    // : `author`, when supplied, replaces "authored by the canonical head" with
+    // "authored by THIS address", the read-path half of publisher-scoped archive
+    // batches. anchor.js supplies it (gated) so the chunk set a head reassembles - and
+    // the occupancy set the duplicate guard reads - belong to that head's own
+    // publisher, not to whoever happened to broadcast the earliest row for the seq.
+    // Omitted / null runs the legacy canonical-head query unchanged.
+    async getAnchorChunks(batchSeq, author){
+        let rows = (author !== undefined && author !== null)
+            ? await this.doQuery(ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL, [batchSeq, String(author)])
+            : await this.doQuery(ARCHIVE_CHUNK_SET_SQL, [batchSeq, batchSeq]);
         return dedupeArchiveChunks(rows);
     }
 

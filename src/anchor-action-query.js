@@ -138,6 +138,43 @@ const ARCHIVE_CHUNK_SET_SQL =
        AND cadr.address = (${ARCHIVE_HEAD_AUTHOR_SQL})
      ORDER BY c.chunk_index ASC, c.action_index ASC`;
 
+// ── Publisher-scoped archive batches (, flag-day gated) ────────────────
+// The same chunk set, but bound to a SUPPLIED author instead of the canonical
+// head's. At/after the ARCHIVE_BATCH_AUTHOR flag day the archive batch key is
+// (match_batch_seq, head author), so each head governs only its own publisher's
+// chunks and a junk head squatting the batch seq governs nothing: it captured
+// both the geometry gate and the #3075 authorship rule while "the batch" meant
+// "the earliest row carrying that seq". Everything else is byte-identical to
+// ARCHIVE_CHUNK_SET_SQL (rejected rows out, 'orphan' kept, deterministic order),
+// and with exactly one publisher per batch seq - honest operation - the two
+// queries return the same rows.
+// Params: [batchSeq, author].
+const ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL =
+    `SELECT c.*, cadr.address AS source
+     FROM anchor_actions c
+     JOIN index_statuses s ON s.id = c.status_id
+     LEFT JOIN actions         cact ON cact.action_index = c.action_index
+     LEFT JOIN index_addresses cadr ON cadr.id           = cact.source_id
+     WHERE c.version = 2 AND c.match_batch_seq = ? AND s.status NOT LIKE 'invalid:%'
+       AND cadr.address = ?
+     ORDER BY c.chunk_index ASC, c.action_index ASC`;
+
+// The batch's CANONICAL head row identity (earliest v1/v6 row for the seq,
+// status-agnostic) reduced to what the flag-day predicate needs: the DOGE height it
+// landed at. This is the ONE row every node agrees on for a batch seq without
+// consulting status - which is why the  gate is anchored to it rather than to
+// the chunk's own block, so a head and its chunks can never straddle two rules.
+// block_index_doge, NOT block_index: the latter is the CHECKPOINTED height on the
+// checkpointed chain (and is NULL on a v2 chunk), while the flag day is a height on
+// the chain the ANCHOR itself lands on.
+// Params: [batchSeq].
+const ARCHIVE_HEAD_GATE_SQL =
+    `SELECT h.action_index, h.block_index_doge
+     FROM anchor_actions h
+     WHERE h.version ${ARCHIVE_HEAD_VERSIONS_SQL} AND h.match_batch_seq = ?
+     ORDER BY h.action_index ASC
+     LIMIT 1`;
+
 // Dedupe an ARCHIVE_CHUNK_SET_SQL result to ONE row per chunk_index, lowest
 // action_index first (the query's ORDER BY guarantees that arrival). Shared so the
 // live path and recovery cannot drift on the tie-break either.
@@ -256,6 +293,7 @@ function buildAnchorActionResponse(config, latest, row, extra) {
 
 module.exports = {
     CHECKPOINT_VERSIONS, ANCHOR_ROW_LIMIT, ANCHOR_ACTIONS_SQL,
-    ARCHIVE_HEAD_AUTHOR_SQL, ARCHIVE_CHUNK_SET_SQL, dedupeArchiveChunks,
+    ARCHIVE_HEAD_AUTHOR_SQL, ARCHIVE_CHUNK_SET_SQL, ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL,
+    ARCHIVE_HEAD_GATE_SQL, dedupeArchiveChunks,
     validateAnchorActionParams, selectAnchorRow, buildAnchorActionResponse
 };

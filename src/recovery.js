@@ -67,7 +67,9 @@ const swq     = require('./stake_weighted_quorum.js');
 const eq      = require('./equivocation_header.js');
 const ccr     = require('./cross_chain_royalty_activation.js');
 const ar      = require('./anchor_reward_activation.js');
-const { ARCHIVE_CHUNK_SET_SQL, dedupeArchiveChunks } = require('./anchor-action-query.js');
+const abas    = require('./archive_batch_author_activation.js');
+const { ARCHIVE_CHUNK_SET_SQL, ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL,
+        ARCHIVE_HEAD_GATE_SQL, dedupeArchiveChunks } = require('./anchor-action-query.js');
 
 class AnchorRecovery {
 
@@ -113,9 +115,16 @@ class AnchorRecovery {
         // order or two nodes persist divergent finalized content. Break the tie on action_index
         // ASC - unique + consensus-visible on this single-network table - mirroring the live head
         // pick (db.getAnchorV1ByBatchSeq) and the chunk-assembly query below. #2695
+        // The head's AUTHOR rides along (LEFT joined, so the row set is unchanged): under
+        // the  publisher-scoped flag day a head reassembles its own publisher's
+        // chunks, and recovery has to reassemble the same set the live path did or a
+        // recovery-fed node diverges from a mirror-fed one. Resolved through
+        // actions.source_id, authoritative for auth, exactly like the live head pick.
         let v1s = await this.db.doQuery(
-            `SELECT a.* FROM anchor_actions a
+            `SELECT a.*, adr.address AS source FROM anchor_actions a
              JOIN index_statuses s ON s.id = a.status_id
+             LEFT JOIN actions         act ON act.action_index = a.action_index
+             LEFT JOIN index_addresses adr ON adr.id           = act.source_id
              WHERE a.version IN (1, 6) AND s.status IN ('valid', 'unverified')
              ORDER BY a.match_batch_seq ASC, a.action_index ASC`);
         if(!v1s || v1s.length === 0){
@@ -158,6 +167,19 @@ class AnchorRecovery {
 
     // ── Per-batch verification ──────────────────────────────────────────────────
 
+    // The author this head's chunk set is scoped to , or null while the
+    // publisher-scoped flag day is inert for the batch. `network` comes off the anchor
+    // row itself, never a process-level default: the parse path rejects an ANCHOR whose
+    // NETWORK is not this indexer's ('invalid: NETWORK (not this network)'), so every
+    // replayable row already carries the network the live gate resolved against.
+    async _archiveAuthorScope(v1){
+        let gate = await this.db.doQuery(ARCHIVE_HEAD_GATE_SQL, [Number(v1.match_batch_seq)]);
+        let head = (gate && gate.length > 0) ? gate[0] : null;
+        if(!head) return null;
+        if(!abas.isArchiveBatchAuthorActive(Number(head.block_index_doge), v1.network)) return null;
+        return String(v1.source || '');
+    }
+
     async _verifyBatch(v1){
         // Reassemble v1 chunk 0 + v2 continuations.
         let totalChunks = Number(v1.total_chunks) || 1;
@@ -175,8 +197,19 @@ class AnchorRecovery {
             // the canonical archive head count at all. Lowest action_index wins per
             // index, deterministically. Mirrors the v1 status join above and
             // rollback.js's valid-chunk self-join; do NOT loosen to unfiltered.
-            let rows = await this.db.doQuery(ARCHIVE_CHUNK_SET_SQL,
-                [Number(v1.match_batch_seq), Number(v1.match_batch_seq)]);
+            // : at/after the publisher-scoped flag day the batch key is
+            // (match_batch_seq, head author), so THIS head reassembles the chunks of its
+            // own publisher and a junk head squatting the seq can no longer filter them
+            // out. Gated on the batch's canonical head (earliest v1/v6 row, the one row
+            // resolved identically on every node without consulting status), byte-for-byte
+            // the anchor the live parse path uses, so recovery and the live path never
+            // apply different rules to the same batch. Below the flag day the legacy
+            // canonical-head query runs unchanged.
+            let scope = await this._archiveAuthorScope(v1);
+            let rows = (scope !== null)
+                ? await this.db.doQuery(ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL, [Number(v1.match_batch_seq), scope])
+                : await this.db.doQuery(ARCHIVE_CHUNK_SET_SQL,
+                    [Number(v1.match_batch_seq), Number(v1.match_batch_seq)]);
             let chunks = dedupeArchiveChunks(rows);
             if(chunks.length !== totalChunks - 1)
                 throw new Error('incomplete batch: ' + chunks.length + '/' + (totalChunks - 1) + ' continuation chunks');

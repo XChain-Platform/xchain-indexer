@@ -44,6 +44,13 @@ const util = new Utility();
 const AUTHOR   = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
 const OUTSIDER = 'mzBc4XEFSdzCDcTxAgf6EZXgsZWpztRhef';
 
+// DOGE height a fixture archive head landed at (anchor_actions.block_index_doge). Only
+// the  cases set it: the publisher-scoped rule is armed on regtest from genesis,
+// so a head that carries one is judged under it while the older fixtures - which model
+// batches with a single publisher, where both rules select the same head - stay on the
+// canonical-head path and keep asserting exactly what they always did.
+const ARMED_DOGE_BLOCK = 500;
+
 // In-memory DOGE indexer DB for the recovery query surface.
 // opts.noTx: expose ONLY doQuery, modelling a raw query handle with no transaction API
 // (recovery must still rebuild against one; see the back-compat case below). Otherwise the
@@ -64,11 +71,27 @@ function memDb(v1s, v2s, opts) {
             // row's optional `status` property drives the filter (absent = 'valid', so the
             // pre-existing fixtures are unaffected). A row parsed as invalid is excluded, exactly
             // as the INNER JOIN + status set drops it against the real schema.
-            if (sql.startsWith('SELECT a.* FROM anchor_actions a')) {
+            // Matched on the leading `SELECT a.*` rather than a literal prefix: 
+            // LEFT-joined the head's author into the driver's select list (recovery must
+            // reassemble the same publisher-scoped chunk set the live path did), which a
+            // literal prefix match would have silently stopped recognizing.
+            if (/^SELECT a\.\*/.test(String(sql).replace(/\s+/g, ' ').trim())) {
                 return v1s.filter(v => {
                     let st = (v.status == null) ? 'valid' : String(v.status);
                     return st === 'valid' || st === 'unverified';
-                });
+                }).map(v => Object.assign({ source: AUTHOR }, v));
+            }
+            //  flag-day anchor: the batch's CANONICAL head (earliest v1/v6 row for
+            // the seq, status-agnostic), reduced to the DOGE height that decides whether
+            // the batch is publisher-scoped. That is block_index_doge (where the ANCHOR
+            // landed), never block_index (the CHECKPOINTED height on the checkpointed
+            // chain). A fixture head without one leaves the rule inert, which is how the
+            // pre- cases below keep asserting the canonical-head behavior.
+            if (String(sql).replace(/\s+/g, ' ').trim().startsWith('SELECT h.action_index, h.block_index_doge')) {
+                let head = v1s
+                    .filter(v => Number(v.match_batch_seq) === Number(params[0]))
+                    .sort((a, b) => Number(a.action_index || 0) - Number(b.action_index || 0))[0];
+                return head ? [{ action_index: head.action_index, block_index_doge: head.block_index_doge }] : [];
             }
             // The chunk query joins index_statuses and drops rejected rows
             // (status LIKE 'invalid:%'), keeping 'valid' and 'orphan' (#2269), and since
@@ -78,12 +101,18 @@ function memDb(v1s, v2s, opts) {
             // default to AUTHOR on both sides, so pre-#3075 fixtures are unaffected.
             // Whitespace-normalized: the query is no longer a local one-liner but the
             // shared ARCHIVE_CHUNK_SET_SQL constant, which is indented across lines.
+            //  added a second shape with the SAME select list: the author is a bound
+            // parameter (publisher-scoped batch) instead of the canonical-head subquery,
+            // so the two are told apart by the predicate, not the prefix.
             if (String(sql).replace(/\s+/g, ' ').trim()
                     .startsWith('SELECT c.*, cadr.address AS source FROM anchor_actions c')) {
+                let scoped = /cadr\.address\s*=\s*\?/.test(String(sql));
                 let head = v1s
                     .filter(v => Number(v.match_batch_seq) === Number(params[0]))
                     .sort((a, b) => Number(a.action_index || 0) - Number(b.action_index || 0))[0];
-                let headAuthor = head ? (head.source === undefined ? AUTHOR : head.source) : null;
+                let headAuthor = scoped
+                    ? params[1]
+                    : (head ? (head.source === undefined ? AUTHOR : head.source) : null);
                 return v2s
                     .filter(c => Number(c.match_batch_seq) === Number(params[0]))
                     .filter(c => !String(c.status == null ? 'valid' : c.status).startsWith('invalid:'))
@@ -420,6 +449,47 @@ describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () 
 
         assert.strictEqual(report.verified, 1, JSON.stringify(report.failed));
         assert.strictEqual(db.matches[0].match_id, 'm5');
+    });
+
+    // : a junk head at the same batch seq used to CAPTURE the batch. It is the
+    // earliest v1/v6 row, the head pick is status-agnostic (it must be, or mirrored and
+    // unmirrored nodes fork), so its author became the only author whose chunks counted
+    // and the real batch reassembled from nothing: 'incomplete batch', forever. Under
+    // publisher-scoped batches each head reassembles its own publisher's chunks.
+    it('a junk head squatting the batch seq no longer denies the real archive ', async function () {
+        let multi = buildBatch(5, [rawMatch('m6')], oracleKeys, crossKeys, { chunkSize: 200 });
+        assert.ok(multi.v2s.length >= 1, 'batch should actually chunk');
+        // The capture: broadcast first (lowest action_index), signatures that do not
+        // verify (stored 'invalid: ...', so the replay driver skips it while the head
+        // pick still sees it), and a bogus geometry for good measure.
+        let junkHead = Object.assign({}, multi.v1, {
+            action_index: 1, source: OUTSIDER, status: 'invalid: insufficient valid signatures',
+            total_chunks: 99, archive_b64: 'JUNK', block_index_doge: ARMED_DOGE_BLOCK });
+        let realHead = Object.assign({}, multi.v1, { action_index: 50, source: AUTHOR, block_index_doge: ARMED_DOGE_BLOCK });
+        let chunks   = multi.v2s.map(c => Object.assign({ action_index: 100, source: AUTHOR }, c));
+        let db = memDb([junkHead, realHead], chunks);
+        let report = await new AnchorRecovery(db, quiet).run();
+
+        assert.strictEqual(report.verified, 1, JSON.stringify(report.failed));
+        assert.strictEqual(db.matches.length, 1);
+        assert.strictEqual(db.matches[0].match_id, 'm6');
+    });
+
+    // Teeth: the junk head's own (unpublished) batch still fails on its own merits, so
+    // the case above is not "authorship stopped being checked". Same seq, same rows,
+    // but the head under test is the outsider's and it has no chunks of its own.
+    it('a junk head reassembles only its own chunks, so it still fails ', async function () {
+        let multi = buildBatch(6, [rawMatch('m7')], oracleKeys, crossKeys, { chunkSize: 200 });
+        // status 'valid', so the driver replays it too.
+        let junkHead = Object.assign({}, multi.v1, { action_index: 1, source: OUTSIDER, block_index_doge: ARMED_DOGE_BLOCK });
+        let realHead = Object.assign({}, multi.v1, { action_index: 50, source: AUTHOR, block_index_doge: ARMED_DOGE_BLOCK });
+        let chunks   = multi.v2s.map(c => Object.assign({ action_index: 100, source: AUTHOR }, c));
+        let db = memDb([junkHead, realHead], chunks);
+        let report = await new AnchorRecovery(db, quiet).run();
+
+        assert.strictEqual(report.verified, 1, 'the real publisher batch still verifies');
+        assert.strictEqual(report.failed.length, 1, 'the outsider head has no chunks of its own');
+        assert.match(report.failed[0].reason, /incomplete batch/);
     });
 
     it('rejects a sub-quorum wrapper and sub-quorum match signatures', async function () {

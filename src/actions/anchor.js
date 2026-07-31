@@ -52,6 +52,7 @@ const swq     = require('../stake_weighted_quorum.js');
 const eq      = require('../equivocation_header.js');
 const ckpt    = require('../checkpoint_commitment_activation.js');
 const ar      = require('../anchor_reward_activation.js');
+const abas    = require('../archive_batch_author_activation.js');
 
 const ALLOWED_CHAINS = ['BTC', 'LTC', 'DOGE'];
 
@@ -482,7 +483,10 @@ class Anchor {
         //    (stateHash.js §6 requires a v2 child with status 'valid'). ─────────
         if(!error && (format === 1 || format === 6) && data['STATUS'] === 'valid' &&
            Number(data['TOTAL_CHUNKS']) > 1){
-            let chunks = await this.indexerDb.getAnchorChunks(Number(data['MATCH_BATCH_SEQ']));
+            // : at/after the flag day the head reassembles its OWN publisher's
+            // chunks. Below it, the canonical-head rule (whatever it selects) is kept.
+            let scope = await this._archiveAuthorScope(data['MATCH_BATCH_SEQ'], data['SOURCE']);
+            let chunks = await this.indexerDb.getAnchorChunks(Number(data['MATCH_BATCH_SEQ']), scope);
             if(chunks.length === Number(data['TOTAL_CHUNKS']) - 1){
                 let b64 = String(data['ARCHIVE_B64'] || '');
                 for(let c of chunks.sort((a, b) => Number(a.chunk_index) - Number(b.chunk_index))) b64 += c.archive_b64;
@@ -495,6 +499,23 @@ class Anchor {
         }
 
         await this.mapper.createMappings(data);
+    }
+
+    // The author an archive batch's chunk set is scoped to , or null when the
+    // publisher-scoped flag day is not active for this batch, in which case every
+    // caller keeps the legacy canonical-head behavior.
+    //
+    // The gate is anchored to the batch's CANONICAL head (earliest v1/v6 row for the
+    // seq): it is the one row every node resolves identically without consulting
+    // status, so head-side and chunk-side verdicts for one batch always apply the SAME
+    // rule. No head at all means no batch to scope, hence null. The height is
+    // block_index_doge (where the ANCHOR landed), never block_index (the CHECKPOINTED
+    // height on the checkpointed chain, a different chain's scale entirely).
+    async _archiveAuthorScope(batchSeq, source){
+        let canonical = await this.indexerDb.getAnchorV1ByBatchSeq(Number(batchSeq));
+        if(!canonical) return null;
+        if(!abas.isArchiveBatchAuthorActive(Number(canonical.block_index_doge), this.config['NETWORK'])) return null;
+        return String(source || '');
     }
 
     // ANCHOR v2: archive continuation chunk (authenticated by its parent v1)
@@ -517,8 +538,28 @@ class Anchor {
         // The parent v1 must exist with matching chunk geometry; its absence makes
         // this an orphan (stored, but recovery ignores batches that never assemble).
         let parent = null;
+        // : the author the batch's chunk set is scoped to, or null while the
+        // publisher-scoped flag day is inert (legacy canonical-head rule).
+        let scope  = null;
         if(!error){
-            parent = await this.indexerDb.getAnchorV1ByBatchSeq(Number(data['MATCH_BATCH_SEQ']));
+            // The canonical head (earliest v1/v6 row for the seq, status-agnostic) is
+            // both the legacy parent AND the flag-day anchor, so a head and its chunks
+            // can never be judged under two different rules.
+            let canonical = await this.indexerDb.getAnchorV1ByBatchSeq(Number(data['MATCH_BATCH_SEQ']));
+            if(canonical && abas.isArchiveBatchAuthorActive(Number(canonical.block_index_doge), this.config['NETWORK'])){
+                // Publisher-scoped batch: the parent is the earliest head for this seq
+                // authored by THIS chunk's publisher. A junk head squatting the seq is
+                // then the head of its own batch only, and governs neither the geometry
+                // gate nor the chunk set of anyone else's. A chunk with no resolvable
+                // author of its own scopes to nothing and lands 'orphan' (fail-closed).
+                scope  = String(data['SOURCE'] || '');
+                parent = !scope ? null
+                       : (String(canonical.source || '') === scope)
+                            ? canonical
+                            : await this.indexerDb.getAnchorV1ByBatchSeq(Number(data['MATCH_BATCH_SEQ']), scope);
+            } else {
+                parent = canonical;
+            }
             if(!parent)
                 data['STATUS'] = 'orphan';
             else if(Number(parent.total_chunks) !== Number(data['TOTAL_CHUNKS']))
@@ -531,9 +572,13 @@ class Anchor {
             // duplicate. parent.source comes from actions.source_id (authoritative for
             // auth); a null one means the head's author cannot be resolved at all, which
             // fails closed rather than waving the chunk through unauthenticated.
-            else if(!parent.source)
+            // Under a publisher-scoped batch  both verdicts are unreachable by
+            // construction - the parent was SELECTED by this chunk's author - so they are
+            // skipped rather than dead-checked, and a chunk with no head of its own author
+            // is an 'orphan' (no head to authenticate against) instead of a rejection.
+            else if(scope === null && !parent.source)
                 error = 'invalid: SOURCE (archive head author unresolvable)';
-            else if(String(data['SOURCE'] || '') !== String(parent.source))
+            else if(scope === null && String(data['SOURCE'] || '') !== String(parent.source))
                 error = 'invalid: SOURCE (not the archive head publisher)';
         }
 
@@ -541,8 +586,10 @@ class Anchor {
         // occupancy set getAnchorChunks returns is author-bound, so a junk chunk that
         // landed BEFORE the head (status 'orphan', no verdict of its own) no longer
         // counts as occupying the slot and can no longer get the real chunk rejected here.
+        // Under  the occupancy set is this publisher's own, so a slot filled in
+        // someone else's batch at the same seq does not collide either.
         if(!error && parent){
-            let existing = await this.indexerDb.getAnchorChunks(Number(data['MATCH_BATCH_SEQ']));
+            let existing = await this.indexerDb.getAnchorChunks(Number(data['MATCH_BATCH_SEQ']), scope);
             if(existing.some(c => Number(c.chunk_index) === Number(data['CHUNK_INDEX'])))
                 error = 'invalid: CHUNK_INDEX (duplicate)';
         }
@@ -557,7 +604,7 @@ class Anchor {
         // When the last chunk lands, verify the reassembled archive against the
         // parent v1's signed CRC and flag the parent if the blob doesn't bind.
         if(!error && parent && data['STATUS'] === 'valid'){
-            let chunks = await this.indexerDb.getAnchorChunks(Number(data['MATCH_BATCH_SEQ']));
+            let chunks = await this.indexerDb.getAnchorChunks(Number(data['MATCH_BATCH_SEQ']), scope);
             if(chunks.length === Number(data['TOTAL_CHUNKS']) - 1){
                 let b64 = String(parent.archive_b64 || '');
                 for(let c of chunks.sort((a, b) => Number(a.chunk_index) - Number(b.chunk_index))) b64 += c.archive_b64;
