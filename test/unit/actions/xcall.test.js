@@ -107,6 +107,13 @@ describe('Xcall (XCALL) @regression @tier3', function () {
             decoderDb:     indexer.decoderDb,
             indexerDb:     indexer.indexerDb,
             actionExecute: executeStub,
+            // : the undeliverable-result retirement paths consult the flag-day
+            // gate. Open here (the mock models regtest, genesis-active), so the
+            // "nothing recorded" assertions below prove the AGE-OUT clock holds them
+            // back, not a closed gate: the request's deadline_block (300) is ahead of
+            // the processing block (200), and the result rows are 100s past their
+            // effective_time, far inside XCALL_RESULT_ORPHAN_GRACE_SECONDS.
+            protocolChanges: indexer.protocolChanges,
         };
         handler = new Xcall(actionsCtx);
         indexer.util.resetLists();

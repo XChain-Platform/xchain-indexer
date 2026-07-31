@@ -29,6 +29,12 @@
  * utility.processCrossChainCalls (injection passes) and actions/xexec.js
  * (target-chain execution).
  *
+ * A mirrored result row that can never deliver here (no local request, a routing
+ * mismatch, or signatures that miss the cross_chain quorum) is RETIRED once it has
+ * aged out, rather than being re-rejected on every block forever: see
+ * _retireUndeliverableResult . Retirement is consensus-visible and
+ * flag-day gated.
+ *
  * Spec: xchain-documentation/protocol/actions/XCALL.md
  *
  * FORMATS:
@@ -55,8 +61,13 @@ const XCALL_MAX_HOPS            = PROTO.XCALL_MAX_HOPS;            // user→Y =
 const XCALL_MIN_DEADLINE_BLOCKS = PROTO.XCALL_MIN_DEADLINE_BLOCKS;
 const XCALL_MAX_DEADLINE_BLOCKS = PROTO.XCALL_MAX_DEADLINE_BLOCKS; // generous: must cover both chains' confirmation depths + relay rounds
 const XCALL_MAX_CALLS_PER_BLOCK = PROTO.XCALL_MAX_CALLS_PER_BLOCK; // deterministic per-block injection cap (overflow carries forward; never dropped)
+const XCALL_RESULT_ORPHAN_GRACE_SECONDS = PROTO.XCALL_RESULT_ORPHAN_GRACE_SECONDS; // age-out clock for a result row with no local request 
 
 const ALLOWED_CHAINS = ['BTC', 'LTC', 'DOGE'];
+
+// Flag-day gating the retirement of undeliverable result rows . See the
+// registration in src/protocol_changes.js and _retireUndeliverableResult below.
+const ORPHAN_RETIREMENT_GATE = 'XCALL_RESULT_ORPHAN_RETIREMENT';
 
 class Xcall {
 
@@ -344,10 +355,13 @@ class Xcall {
     // either the capability snapshot is not mirrored yet (defer, as processResult
     // does) OR the 2f+1 quorum verifies. A finalized-but-unverifiable result row
     // (Byzantine/buggy hub mirror) returns FALSE, so deadline expiry still fires:
-    // otherwise processResult rejects that row every block (never pruning it, since
-    // no callback is recorded) while the expiry gate saw only its presence and
-    // suppressed expiry forever - deadlocking the requester's callback and diverging
-    // indexers that mirror different hubs on whether the v2 expiry action exists.
+    // otherwise processResult rejects that row every block while the expiry gate saw
+    // only its presence and suppressed expiry forever - deadlocking the requester's
+    // callback and diverging indexers that mirror different hubs on whether the v2
+    // expiry action exists. (Since  processResult also RETIRES such a row once
+    // the request's deadline_block has passed, which is downstream of this gate: the
+    // request must reach that deadline in the first place, and it only does because
+    // this returns false.)
     // Mirrors processResult's exact delivery gates (network, local request, routing,
     // quorum) so the two paths agree byte-for-byte on deliverability.
     async resultSuppressesExpiry(r){
@@ -362,11 +376,102 @@ class Xcall {
         return q.synced ? q.quorumMet : true;
     }
 
+    // Has an undeliverable result row aged out, i.e. can it no longer become
+    // deliverable on any branch this chain could still adopt? 
+    //
+    // Two clocks, both node-invariant, both read only from consensus inputs (the
+    // block being processed and the quorum-signed mirror row), never wall-clock:
+    //
+    //   request present  the request's OWN deadline_block is exact. Past it the
+    //                    request is terminal (the expiry pass has flipped it, or a
+    //                    result already completed it), so no future block can turn
+    //                    this row into a delivered callback. Used for the routing
+    //                    mismatch and definitively-unquorate cases.
+    //
+    //   request absent   nothing local carries a deadline, and the mirrored row has
+    //                    no deadline field, so the clock is the row's quorum-signed
+    //                    effective_time plus XCALL_RESULT_ORPHAN_GRACE_SECONDS of
+    //                    block time. The federation only signs a result after the
+    //                    request is buried at its source chain's relay confirmation
+    //                    depth, and the grace covers the deepest of those windows, so
+    //                    a request still absent that far past effectiveness is absent
+    //                    because its branch is gone. Should a deeper-than-designed
+    //                    reorg restore it anyway, the retirement row is anchored to a
+    //                    rollback-able action_index and is erased with it.
+    //
+    // A row deferred because the capability snapshot is not mirrored yet never reaches
+    // here (processResult returns earlier): that row is still expected to deliver, and
+    // resultSuppressesExpiry keeps its request alive to receive it.
+    _resultAgedOut(r, request, data){
+        if(request){
+            let deadline = parseInt(request.deadline_block);
+            let block    = parseInt(data['BLOCK_INDEX']);
+            if(!Number.isFinite(deadline) || !Number.isFinite(block)) return false;
+            return block > deadline;
+        }
+        // parseInt, not Number: Number(null) is 0, which would read a row with a missing
+        // effective_time as infinitely old and retire it on sight.
+        let effective = parseInt(r.effective_time);
+        let blockTime = parseInt(data['BLOCK_TIME']);
+        if(!Number.isFinite(effective) || !Number.isFinite(blockTime)) return false;
+        return (blockTime - effective) >= XCALL_RESULT_ORPHAN_GRACE_SECONDS;
+    }
+
+    // Retire a result row this chain can never deliver, so it stops being re-selected
+    // by the capped delivery pass every block . Returns true when the row was
+    // retired (the caller must then stop processing it).
+    //
+    // Without this, an undeliverable row is rejected on every block and pruned by
+    // nothing, because pruning is keyed on a recorded callback and the reject paths
+    // record none. getEffectiveUnprocessedCallResults orders by (snapshot_block,
+    // call_id) and the pass takes only XCALL_MAX_CALLS_PER_BLOCK rows, so as few as 25
+    // such rows at a low snapshot_block hold the head of the queue forever and starve
+    // every legitimate result behind them ( test-host: 229 rows, head slice 25/25
+    // unmatched, blocking the drill's own result at the tail).
+    //
+    // CONSENSUS-VISIBLE, deliberately. Retirement mints an actions row and frees a slot
+    // in a capped per-block pass, which decides which block a real callback EXECUTE
+    // lands in; a node-local retirement would fork the delivered set against a node that
+    // kept the row. So it is flag-day gated (ORPHAN_RETIREMENT_GATE), decided purely
+    // from consensus inputs (_resultAgedOut), and written against a rollback-able
+    // action_index like every other cross-chain bookkeeping row, so a source-chain reorg
+    // that restores the missing request also erases the retirement and lets the result
+    // deliver normally on the branch that carries the request.
+    //
+    // It delivers NO callback: the requesting contract, if it exists at all, hears the
+    // 'expired' outcome from the deadline path, which is the only outcome a chain that
+    // never saw the request can agree on.
+    async _retireUndeliverableResult(r, data, callId, request, reason){
+        if(!(await this.actions.protocolChanges.isEnabled(ORPHAN_RETIREMENT_GATE, data['BLOCK_INDEX'])))
+            return false;
+        if(!this._resultAgedOut(r, request, data))
+            return false;
+
+        // Mint the retirement's own action_index (the rollback anchor). Minted only once
+        // the row is genuinely retired: an index minted on a row that stays in the queue
+        // would move every later action_index for nothing.
+        data['ACTION_INDEX'] = await this.indexerDb.createActionIndex({
+            ACTION:      'XCALL',
+            BLOCK_INDEX: data['BLOCK_INDEX']
+        }, true);
+
+        console.log("\t XCALL result : id=" + callId.substring(0,16) + '...' +
+                    ' : undeliverable (' + reason + ') and aged out, retiring' +
+                    ' : block=' + data['BLOCK_INDEX']);
+
+        await this.indexerDb.recordCrossChainCallCallback(
+            data['ACTION_INDEX'], callId, 'retired:' + reason, data['BLOCK_INDEX']);
+        return true;
+    }
+
     // Process one mirrored, effective result row for a request THIS chain originated
     // (driven by utility.processCrossChainCalls in (snapshot_block, call_id) order).
     // Verifies the 2f+1 signatures, applies the exactly-once interlock against the
     // deadline-expiry path, injects the requester's callback, and records the
     // processing in cross_chain_call_callbacks (idempotency + rollback anchor).
+    // Every exit that is NOT a deferral records something in that table, so no row can
+    // sit in the capped queue forever: delivery and the interlock record their outcome,
+    // and the three undeliverable exits retire the row once it has aged out .
     async processResult(r, data){
         let callId = String(r.call_id || '').toLowerCase();
 
@@ -377,10 +482,12 @@ class Xcall {
         // routing: a forged result for someone else's call_id can never deliver.
         let request = await this.indexerDb.getCrossChainCallRequestById(callId);
         if(!request){
+            if(await this._retireUndeliverableResult(r, data, callId, null, 'no_request')) return;
             console.warn("\t XCALL result : id=" + callId.substring(0,16) + '... : no matching local request, skipping');
             return;
         }
         if(String(request.target_chain) !== String(r.target_chain)){
+            if(await this._retireUndeliverableResult(r, data, callId, request, 'routing')) return;
             console.warn("\t XCALL result : id=" + callId.substring(0,16) + '... : target_chain mismatch, skipping');
             return;
         }
@@ -394,6 +501,7 @@ class Xcall {
         }
         let N = q.N, validSigners = q.validSigners;
         if(!q.quorumMet){
+            if(await this._retireUndeliverableResult(r, data, callId, request, 'no_quorum')) return;
             console.warn("\t XCALL result : id=" + callId.substring(0,16) + '... : insufficient ' + (q.weighted ? 'signer stake' : 'valid signatures (' + validSigners.length + '/' + N + ')') + ', skipping');
             return;
         }
@@ -548,3 +656,5 @@ module.exports.XCALL_MAX_HOPS            = XCALL_MAX_HOPS;
 module.exports.XCALL_MIN_DEADLINE_BLOCKS = XCALL_MIN_DEADLINE_BLOCKS;
 module.exports.XCALL_MAX_DEADLINE_BLOCKS = XCALL_MAX_DEADLINE_BLOCKS;
 module.exports.XCALL_MAX_CALLS_PER_BLOCK = XCALL_MAX_CALLS_PER_BLOCK;
+module.exports.XCALL_RESULT_ORPHAN_GRACE_SECONDS = XCALL_RESULT_ORPHAN_GRACE_SECONDS;
+module.exports.ORPHAN_RETIREMENT_GATE           = ORPHAN_RETIREMENT_GATE;

@@ -1035,6 +1035,34 @@ class ProtocolChanges {
         // the e2e/regtest stack exercises partials from block 0).
         this.addChange('PARTIAL_UNSTAKE_COLLECT', '2.0.0',1786924800,0,0,0,0,0);
 
+        // : retirement of XCALL result rows the source chain can never deliver.
+        // A mirrored, finalized result row that matches no local XCALL v0 request (or
+        // whose request routes to a different target chain, or whose signatures do not
+        // meet the cross_chain quorum) is rejected by processResult on every block and
+        // pruned by nothing, because pruning is keyed on a recorded callback and those
+        // paths record none. The delivery pass is capped at XCALL_MAX_CALLS_PER_BLOCK,
+        // so as few as 25 such rows at a low snapshot_block occupy the whole per-block
+        // slice permanently and starve every real result behind them (measured on the
+        //  test-host venue: 229 rows, head slice 25/25 unmatched, re-fetched every
+        // block forever). At/above this activation such a row is retired once it can no
+        // longer become deliverable: past the request's deadline_block where a request
+        // exists, or XCALL_RESULT_ORPHAN_GRACE_SECONDS of block time past the row's
+        // quorum-signed effective_time where none does. Retirement records a
+        // 'skipped:<reason>' cross_chain_call_callbacks row against a freshly minted
+        // action_index, exactly like the existing already-terminal skip branch.
+        //
+        // Gated because retirement is CONSENSUS-VISIBLE in two ways: it mints an actions
+        // row (hashed), and freeing a capped delivery slot moves which block a real
+        // result's callback EXECUTE lands in (contract hash, action indices). An ungated
+        // flip would fork a heterogeneous fleet on the first orphaned result row. Keyed
+        // on block_TIME, mirroring the other multi-chain gates: XCALL runs on BTC, LTC
+        // and DOGE whose heights diverge by millions of blocks, so no single height names
+        // one cutover but a single timestamp does. The mainnet timestamp joins the
+        // ratified coordinated contract-era anchor 1786924800 (2026-08-17 00:00:00 UTC);
+        // testnet/regtest activate at genesis (no orphaned-result history worth
+        // preserving there, and the  drill venue needs the rule from block 0).
+        this.addChange('XCALL_RESULT_ORPHAN_RETIREMENT', '2.0.0',1786924800,0,0,0,0,0);
+
         // NOTE: STAKE_WEIGHTED_QUORUM (WI-1) is deliberately NOT registered here.
         // Standard activations gate on the LOCAL processing block via isEnabled();
         // stake-weighted quorum must gate on the BTC-anchored `snapshot_block`

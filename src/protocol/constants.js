@@ -97,6 +97,32 @@ const XCALL_MAX_RETURN_BYTES = 1024;
 // forward to the next block in (snapshot_block, call_id) order. Never dropped.
 const XCALL_MAX_CALLS_PER_BLOCK = 25;
 
+// Age-out window (seconds of consensus block time, measured from a mirrored
+// result row's quorum-signed effective_time) past which the SOURCE chain retires
+// a result row it can never deliver .
+//
+// A result row whose call_id matches no local XCALL v0 request is rejected on
+// every block and pruned by nothing (pruning is keyed on a recorded callback),
+// so a handful of such rows permanently occupy the head of the
+// XCALL_MAX_CALLS_PER_BLOCK delivery slice and starve every real result behind
+// them. The mirrored row carries no deadline_block of its own, so the age-out
+// clock is effective_time: the federation only signs a result after the request
+// is buried at its source chain's relay confirmation depth, and one hour covers
+// the deepest of those windows (BTC 6 blocks x 600s, LTC 12 x 150s, DOGE 60 x
+// 60s). A request still absent an hour past effectiveness is absent because its
+// branch is gone, not because this node is behind, and no honest reorg brings it
+// back. Where a local request DOES exist (routing mismatch, or a definitively
+// unquorate result), its own deadline_block is the exact age-out clock and this
+// window is not used.
+//
+// Retirement is CONSENSUS-VISIBLE: it mints an action row and frees a slot in a
+// capped per-block pass, which decides which block a real callback lands in. It
+// is therefore flag-day gated (XCALL_RESULT_ORPHAN_RETIREMENT in the indexer's
+// protocol_changes.js) and anchored to a rollback-able action_index, so a
+// source-chain reorg that restores the missing request also erases the
+// retirement and the result delivers normally.
+const XCALL_RESULT_ORPHAN_GRACE_SECONDS = 3600;
+
 // ── ATTEST expiry sweep ─────────────────────────────────────────────────────
 // Deterministic per-block cap on the ATTEST v0 deadline-expiry sweep ().
 // Each expired request synthesizes an ATTEST v2 action that flips the request to
@@ -357,6 +383,7 @@ module.exports = {
     XCALL_MAX_DEADLINE_BLOCKS,
     XCALL_MAX_RETURN_BYTES,
     XCALL_MAX_CALLS_PER_BLOCK,
+    XCALL_RESULT_ORPHAN_GRACE_SECONDS,
     ATTEST_MAX_EXPIRIES_PER_BLOCK,
     THRESHOLD_SCALE,
     STAKE_WEIGHTED_QUORUM_ACTIVATION,
