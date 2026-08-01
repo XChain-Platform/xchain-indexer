@@ -407,6 +407,10 @@ class Actions {
         // while holding the block-loop mutex. Sourced from tx.guard_inert, which only
         // computeFeeQuote's synthetic tx carries; ALWAYS false for real decoded transactions.
         data['GUARD_INERT']      = tx.guard_inert === true;
+        // Read-only dry-run marker for output-matching fee checks (see _dryRunAction's
+        // fee_probe). Sourced from tx.fee_probe, which only the public feequote/preflight
+        // synthetic tx carries; ALWAYS false for real decoded transactions.
+        data['FEE_PROBE']        = tx.fee_probe === true;
 
         // Treat plain BTC transactions (empty data) as DISPENSE triggers
         // The decoder records these when the destination matches an active dispenser address
@@ -698,7 +702,7 @@ class Actions {
     // Returns { blockIndex, blockTime, status, error, xchainFee, sourceFeeBalance } where
     // xchainFee is the handler-recorded fee ('0' for a valid zero-fee action, null when the
     // run never got far enough to stage one).
-    async _dryRunAction({ action, params, source, feeOutputs, probeFeeDestination, timeoutMs, label, guardInert, feeBalanceTick }){
+    async _dryRunAction({ action, params, source, feeOutputs, probeFeeDestination, timeoutMs, label, guardInert, feeProbe, feeBalanceTick }){
         let blockIndex = await this.indexerDb.getLatestBlockIndex();
         let blockTime  = await this.indexerDb.getBlockTime(blockIndex);
 
@@ -726,7 +730,18 @@ class Actions {
             // feequote path; see computeFeeQuote). Set only here on the synthetic tx and
             // only when the caller asks, so it is absent from every decoder-fed block tx
             // and from the API-key-gated feequotedryrun path (which opts to run the VM).
-            guard_inert:   guardInert === true
+            guard_inert:   guardInert === true,
+            // Marks a run that has no real transaction behind it, so a handler check that
+            // matches a required OUTPUT cannot be satisfied by anything the caller could
+            // have done. The native-coin fee check is already served by the probe output
+            // above; the  oracle usage fee is checked the same way and had no
+            // counterpart, so every Mode B dispenser quoted and pre-flighted
+            // `invalid: ORACLE_ADDRESS (missing oracle fee output)` - a refusal no client
+            // can act on, because the amount it demands is what the refused quote exists
+            // to compute. Set by the two public read-only surfaces (computeFeeQuote,
+            // computePreflight) and never by feequotedryrun, whose whole purpose is to
+            // reproduce what a real broadcast would do with the outputs it was handed.
+            fee_probe:     feeProbe === true
         };
 
         let status = null, feeRecord = null, dryRunError = null, sourceFeeBalance = null;
@@ -1098,7 +1113,9 @@ class Actions {
                 label: 'feequote ' + action,
                 // Public unauthenticated path: a controller guard must never enter the VM
                 // here (see _invokeController). feequotedryrun deliberately omits this.
-                guardInert: true
+                guardInert: true,
+                // No transaction exists yet, so output-matching fee checks are unanswerable.
+                feeProbe: true
             });
         } finally {
             this._feeQuotePending--;
@@ -1282,6 +1299,10 @@ class Actions {
                 timeoutMs: timeoutMs,
                 label: 'preflight ' + action,
                 guardInert: true,
+                // Same reason as computeFeeQuote, and it bites harder here: this surface
+                // answers "would the network accept this?", and in xchain fee mode it
+                // passes no probe output at all.
+                feeProbe: true,
                 feeBalanceTick: feeTick
             });
         } finally {

@@ -121,6 +121,43 @@ describe('_dryRunAction (shared dry-run engine)', () => {
         assert.deepStrictEqual(calls.processed.tx_outputs, outs);
     });
 
+    it('marks a probe run so output-matching fee checks know there is no transaction', async () => {
+        // The oracle usage fee  is checked by matching an OUTPUT, exactly like the
+        // native fee - but it cannot be served by the probe output above, because
+        // ORACLE_ADDRESS may be a ^id the handler only resolves later. So the run is
+        // MARKED instead, and dispenser.js checks the knowable half only. Without this,
+        // every Mode B dispenser quotes `invalid: ORACLE_ADDRESS (missing oracle fee
+        // output)` - a refusal whose remedy is the amount the refused quote computes.
+        let { ctx, calls } = makeCtx({});
+        await ctx._dryRunAction.call(ctx, { action: 'DISPENSER', params: ['0'], source: 's',
+            probeFeeDestination: FEE_DEST, feeProbe: true, timeoutMs: 300000 });
+        assert.strictEqual(calls.processed.fee_probe, true);
+    });
+
+    it('a run that was NOT asked to probe is not marked (feequotedryrun keeps real behaviour)', async () => {
+        // The raw regtest RPC exists to reproduce what a real broadcast would do with the
+        // outputs it was handed, so it must keep failing on a missing oracle fee output.
+        let { ctx, calls } = makeCtx({});
+        await ctx._dryRunAction.call(ctx, { action: 'DISPENSER', params: ['0'], source: 's',
+            feeOutputs: [], timeoutMs: 300000 });
+        assert.strictEqual(calls.processed.fee_probe, false);
+    });
+
+    it('both public read-only surfaces ask for the probe marker', () => {
+        // In xchain fee mode computePreflight passes NO probe output at all, so the marker
+        // is the only thing standing between a Mode B dispenser and a false refusal there.
+        // Source-shape pin: these two call sites are the whole wiring.
+        const fs   = require('fs');
+        const path = require('path');
+        const src  = fs.readFileSync(path.resolve(__dirname, '../../src/actions.js'), 'utf8');
+        for (const label of ['feequote', 'preflight']) {
+            const at = src.indexOf(`label: '${label} ' + action`);
+            assert.ok(at > 0, `the ${label} dry-run call site must exist`);
+            assert.ok(/feeProbe:\s*true/.test(src.slice(at - 400, at + 400)),
+                `the ${label} dry-run must set feeProbe`);
+        }
+    });
+
     it('no probe destination and no outputs: synthetic tx carries an empty output set', async () => {
         let { ctx, calls } = makeCtx({});
         await ctx._dryRunAction.call(ctx, { action: 'SEND', params: ['0', 'T', '1', 'd'], source: 's', timeoutMs: 300000 });
