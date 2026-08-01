@@ -337,4 +337,100 @@ describe('File action handler @regression @tier3', function () {
             assert.ok(data['STATUS'].includes('MEMO'));
         });
     });
+
+    // ------------------------------------------------------------------
+    // COMPRESSION ( Part B), the tenth optional field.
+    //
+    // The whole point of these tests is a NEGATIVE: the field is parsed and
+    // stored and can never, under any value, change a validity verdict.
+    // Compression is presentational (spec §5.5); a reader that rejected a
+    // malformed code while shipped indexers ignored it would fork validity
+    // across the fleet.
+    // ------------------------------------------------------------------
+    describe('COMPRESSION field ( Part B)', function () {
+        const BASE = ['0', 'doc.txt', 'text/plain', 'Doc', 'memo'];
+        // Local copies: the gated-content block's fixtures are scoped to it, and
+        // these assertions must stand on their own.
+        const SOURCE = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
+        const gatedParams = () => ['0', 'secret.enc', 'application/octet-stream',
+            'Gated File', '', 'TEST', '1', 'a'.repeat(64)];
+
+        beforeEach(function () {
+            // Mirror the gated-content block's stubs so a gated FILE can reach
+            // 'valid': the gate ticker must resolve to a token owned by SOURCE
+            // and not escrowed.
+            const { createTokenInfo } = require('../../fixtures/mocks');
+            indexer.indexerDb.createGatedFile = sinon.stub().resolves();
+            indexer.indexerDb.getTokenInfo.resolves(
+                createTokenInfo({ TICK: 'TEST', TICK_ID: 1, OWNER: SOURCE })
+            );
+            indexer.indexerDb.isOwnershipEscrowed.resolves(false);
+        });
+
+        it('parses the declared codec into COMPRESSION', async function () {
+            const data = createBaseData({ ACTION: 'FILE', FORMAT: 0 });
+            await handler.parse([...BASE, '', '', '', '', '1'], data, null);
+            assert.strictEqual(data['STATUS'], 'valid');
+            assert.strictEqual(data['COMPRESSION'], '1');
+        });
+
+        it('an ABSENT field parses as null and stays valid (every historical FILE)', async function () {
+            const data = createBaseData({ ACTION: 'FILE', FORMAT: 0 });
+            await handler.parse(BASE, data, null);
+            assert.strictEqual(data['STATUS'], 'valid');
+            assert.ok(data['COMPRESSION'] === null || data['COMPRESSION'] === undefined);
+        });
+
+        it('NO value can invalidate the action, including hostile ones', async function () {
+            // Each of these would be a fleet-forking rejection if the field
+            // were validated. Every one must come back 'valid'.
+            const values = [
+                '1', '', '0', '2', '99', 'zstd', 'true', 'null',
+                'deflate-raw', '-1', '1.0', ' 1', '1 ', 'A'.repeat(500),
+                '<script>', "'; DROP TABLE files;--", ' ', '☃'
+            ];
+            for (const value of values) {
+                const data = createBaseData({ ACTION: 'FILE', FORMAT: 0 });
+                await handler.parse([...BASE, '', '', '', '', value], data, null);
+                assert.strictEqual(data['STATUS'], 'valid',
+                    `COMPRESSION=${JSON.stringify(value)} must never affect validity`);
+            }
+        });
+
+        it('the verdict is IDENTICAL with and without the field, valid or invalid', async function () {
+            // Same inputs, once with the field and once without: whatever the
+            // verdict is, the field must not move it. This is the property that
+            // keeps a new indexer bit-compatible with an old one.
+            const cases = [
+                { params: BASE, expect: 'valid' },
+                { params: ['0', 'a.txt', 'text/plain', 'T', 'bad|memo'], expect: 'MEMO' },
+                { params: ['0', 'a.txt', 'text/plain', 'T', 'bad;memo'], expect: 'MEMO' }
+            ];
+            for (const c of cases) {
+                const withoutData = createBaseData({ ACTION: 'FILE', FORMAT: 0 });
+                await handler.parse(c.params, withoutData, null);
+
+                const withData = createBaseData({ ACTION: 'FILE', FORMAT: 0 });
+                await handler.parse([...c.params, '', '', '', '', '1'], withData, null);
+
+                assert.strictEqual(withData['STATUS'], withoutData['STATUS'],
+                    `verdict drifted when COMPRESSION was present (${c.expect})`);
+            }
+        });
+
+        it('does not disturb the gating fields that precede it', async function () {
+            const data = createBaseData({ ACTION: 'FILE', FORMAT: 0, SOURCE });
+            await handler.parse([...gatedParams(), '', '1'], data, null);
+            assert.strictEqual(data['STATUS'], 'valid');
+            assert.strictEqual(data['COMPRESSION'], '1');
+            assert.ok(String(data['GATE_TICKER']).length > 0, 'GATE_TICKER still parsed');
+            assert.strictEqual(String(data['ENCRYPTION_METHOD']), '1');
+        });
+
+        it('a gated FILE with a hostile COMPRESSION value is still judged only on its gating fields', async function () {
+            const data = createBaseData({ ACTION: 'FILE', FORMAT: 0, SOURCE });
+            await handler.parse([...gatedParams(), '', 'not-a-codec'], data, null);
+            assert.strictEqual(data['STATUS'], 'valid');
+        });
+    });
 });

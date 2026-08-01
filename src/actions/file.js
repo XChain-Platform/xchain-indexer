@@ -31,6 +31,9 @@
  * - KEY_HASH          - (optional) hex sha256(K), 64 chars. Required when GATE_TICKER set.
  * - GATE_MIN_AMOUNT   - (optional, PC-29) minimum GATE_TICKER balance a recipient
  *                       must hold to be given the key. Absent/empty = no threshold.
+ * - COMPRESSION       - (optional,  Part B) payload compression codec.
+ *                       Absent/empty = raw (every historical FILE); '1' = deflate-raw.
+ *                       PARSE-AND-STORE ONLY, NEVER VALIDATED (see below).
  *
  * Trailing empty fields are stripped by the encoder, so non-gated files
  * remain wire-compatible with the original 4-field FILE encoding.
@@ -59,7 +62,29 @@ class File {
         this.formats = {};
         // PC-29 /  P9: optional NINTH field, the unlock threshold. The
         // eight-field form is byte-identical, so historical FILEs replay unchanged.
-        this.formats[0] = 'VERSION|NAME|TYPE|TITLE|MEMO|GATE_TICKER|ENCRYPTION_METHOD|KEY_HASH|GATE_MIN_AMOUNT';
+        //
+        //  Part B: optional TENTH field, COMPRESSION. Deliberately absent
+        // from every validation below, and that absence is the design:
+        //
+        //  - compression is PRESENTATIONAL, not consensus (spec §5.5). FILE
+        //    validity never inspects rawData content, so an indexer that has
+        //    never heard of this field produces identical verdicts and identical
+        //    state. Parsing it changes nothing about what is valid.
+        //  - therefore it MUST NOT be validated. Shipped indexers silently drop
+        //    unknown trailing fields, so an indexer that rejected a malformed
+        //    COMPRESSION value while its neighbours ignored it would fork
+        //    VALIDITY across the fleet: the one consensus break Part B promises
+        //    cannot happen. Unknown/invalid codes are inert here and degrade to
+        //    serve-raw at the reader.
+        //
+        // Note also there is deliberately NO gated_files/files column for it.
+        // Serve paths derive COMPRESSION from the stored ACTION STRING at serve
+        // time (spec §5.1), never from a parsed-at-ingest column: a compressed
+        // FILE mined before an indexer upgrade would otherwise be stored
+        // marker-less and served as deflated garbage forever, even after the
+        // upgrade. The full action string is already preserved verbatim, so a
+        // column would only invite the parsed-at-ingest trap.
+        this.formats[0] = 'VERSION|NAME|TYPE|TITLE|MEMO|GATE_TICKER|ENCRYPTION_METHOD|KEY_HASH|GATE_MIN_AMOUNT|COMPRESSION';
 
     }
 

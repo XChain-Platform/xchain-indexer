@@ -1135,15 +1135,24 @@ class Execute {
                 // FORMAT: VERSION|TICK|MEMO
                 return [0, params.tick, params.memo || ''];
             case 'FILE':
-                // FORMAT: VERSION|NAME|TYPE|TITLE|MEMO|GATE_TICKER|ENCRYPTION_METHOD|KEY_HASH|GATE_MIN_AMOUNT
+                // FORMAT: VERSION|NAME|TYPE|TITLE|MEMO|GATE_TICKER|ENCRYPTION_METHOD|KEY_HASH|GATE_MIN_AMOUNT|COMPRESSION
                 // Trailing gated-file fields default to empty (public file); a contract may set
                 // them to emit a token-gated FILE. PC-29 added GATE_MIN_AMOUNT as the ninth:
                 // emitted FILEs must carry it too, or a contract-emitted gated FILE would be
                 // silently unconditional while the wire format says otherwise. The arity guard
                 // in test/unit/emission-params-arity.test.js is what caught this.
+                //
+                //  Part B added COMPRESSION as the tenth, and it is PINNED EMPTY here,
+                // not passed through from params. COMPRESSION describes rawData payload bytes,
+                // and an emitted action has no rawData: the VM emission path carries an action
+                // string only. Letting a contract assert COMPRESSION=1 over a payload that does
+                // not exist would publish a permanently lying field (readers would degrade to
+                // stored-form forever) for no reachable benefit. Empty also keeps the emitted
+                // wire string byte-identical to what pre-Part-B contracts produce, since
+                // trailing empties are stripped.
                 return [0, params.name || '', params.type || '', params.title || '', params.memo || '',
                         params.gateTicker || '', params.encryptionMethod || '', params.keyHash || '',
-                        params.gateMinAmount || ''];
+                        params.gateMinAmount || '', ''];
             case 'LIST':
                 // FORMAT: VERSION|TYPE|ITEM
                 return [0, params.type || '', params.item || ''];
