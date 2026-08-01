@@ -1426,7 +1426,8 @@ async function startApi(){
         // stays 200: a healthy initial catch-up must not trip restart loops.
         let stalled   = !!indexer.stallReason;
         let wedged    = XChainIndexer.stallWedged(indexer.stallReason, indexer.lastBlockCommittedAt,
-                                                  indexer.healthStallGraceMs, Date.now());
+                                                  indexer.healthStallGraceMs, Date.now(),
+                                                  indexer.stallClearsAt);
         let unhealthy = indexerDbUnreachable || wedged;
         res.status(unhealthy ? 503 : 200).json({
             indexerBlock: indexerBlock,
@@ -1440,6 +1441,12 @@ async function startApi(){
             // executor host fault. Lets a monitoring probe tell these stalls apart from
             // a healthy catch-up, all of which otherwise present only as a growing lag.
             stallReason:  indexer.stallReason || null,
+            // : epoch-ms at which the current time-keyed barrier can first be
+            // satisfied, or null. Non-null means this indexer is waiting on WALL CLOCK
+            // because the block it is on is stamped in the future, which is expected and
+            // self-clearing; it is not counted as a wedge, and it tells a probe when the
+            // chain should move again rather than leaving a valid stall looking like death.
+            stallClearsAt: indexer.stallClearsAt || null,
             // true when a sync barrier is deferring blocks but the counter is still
             // advancing (healthy-degraded, stays 200); distinct from a wedge, which is
             // stalled AND making no progress inside the grace window (503).

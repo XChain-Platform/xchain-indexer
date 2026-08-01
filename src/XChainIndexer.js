@@ -71,9 +71,23 @@ function hubConfigStaleness(lastHubConfigFetchAt, now){
 // and `now` are epoch-ms; graceMs is the no-progress window a stall must exceed.
 // A stall with no committed block yet (lastBlockCommittedAt == null) is NOT wedged:
 // a slow initial catch-up must never trip the container restart loop.
-function stallWedged(stallReason, lastBlockCommittedAt, graceMs, now){
+//
+// : `stallClearsAtMs` is the wall-clock instant a time-keyed barrier can FIRST
+// be satisfied, or null when the stall has no such instant. A block stamped in the
+// future (Bitcoin permits ~2h ahead of median-time-past, and miner clocks routinely run
+// minutes fast) cannot have its eligible price-round set finalized until that time
+// arrives, so the barrier waits and NO block commits for the whole skew. Against a 120s
+// grace that reads as wedged within two minutes, and the indexer reports 503/unhealthy
+// over a perfectly valid block, fleet-wide and simultaneously, with a restart achieving
+// nothing because the barrier re-arms on the same block. While the instant is still in
+// the future the wait is expected and self-clearing, so it is not a wedge. Once wall
+// clock passes it and the stall persists, the mirror really is stuck and the normal
+// grace-window verdict applies again. This is a HEALTH verdict only: it changes no
+// hashed value and no barrier waits any differently for it.
+function stallWedged(stallReason, lastBlockCommittedAt, graceMs, now, stallClearsAtMs = null){
     if(!stallReason) return false;
     if(lastBlockCommittedAt == null) return false;
+    if(Number.isFinite(stallClearsAtMs) && now < stallClearsAtMs) return false;
     return (now - lastBlockCommittedAt) > graceMs;
 }
 
@@ -128,6 +142,13 @@ class XChainIndexer {
         // an operator can tell WHY lag is growing (a sync-barrier stall, a circuit
         // breaker, and a host fault otherwise all look identical: a rising lag).
         this.stallReason = null;
+        // : wall-clock (epoch ms) at which the CURRENT stall's barrier can first be
+        // satisfied, or null when the stall has no such instant. Only the time-keyed barriers
+        // set it, because only they wait on wall clock: a future-stamped block defers until
+        // its own timestamp (plus the watermark grace) actually arrives. Read by stallWedged()
+        // so that expected, self-clearing wait is not reported as a wedge. Cleared alongside
+        // stallReason on every successful commit.
+        this.stallClearsAt = null;
         // Wall-clock (epoch ms) of the most recent SUCCESSFUL block commit, or null until the
         // first block commits. Stamped at the commit point alongside the stallReason clear, and
         // read by the /status healthcheck to tell an advancing-but-barrier-deferring indexer
@@ -268,6 +289,24 @@ class XChainIndexer {
     // there is no mirror and the barriers never ran in the first place, so flagging a skip
     // there would arm the choke-point assertion against reads that were always legitimate
     // and wedge the node on its first priced block.
+    // : the wall-clock instant at which a time-keyed hub-sync barrier can FIRST be
+    // satisfied for a block, or null when that cannot be determined. Every such barrier has
+    // the same escape hatch (`streamWatermark >= blockTime + grace`), and the watermark only
+    // advances as real time does, so a block stamped in the FUTURE cannot clear before
+    // blockTime + grace no matter how healthy the mirror is. Their other satisfaction case
+    // (the mirror already holds a row at/past blockTime) cannot fire early either, because
+    // rows effective at a future instant do not exist yet. Returns null when sync is off or
+    // the inputs are not finite, which leaves the caller's verdict exactly as it was before.
+    //
+    // Used ONLY for the /status health verdict. It gates no wait, no read and no write.
+    _barrierClearsAt(blockTime, graceField){
+        blockTime = Number(blockTime);
+        if(!this.hubDbSync || !Number.isFinite(blockTime)) return null;
+        let graceS = Number(this.hubDbSync[graceField]);
+        if(!Number.isFinite(graceS)) graceS = 0;
+        return (blockTime + graceS) * 1000;
+    }
+
     _evaluatePriceBarrier(blockToParse, blockTransactions){
         let mayReadPrice = blockMayReadPrice(blockTransactions)
                            || this.priceBarrierForceBlock === blockToParse;
@@ -815,6 +854,7 @@ class XChainIndexer {
                         // it against a stale price copy. No transaction is open yet.
                         console.warn('Deferring block ' + blockToParse + ' (price sync): ', err);
                         this.stallReason = 'price_sync_barrier';
+                        this.stallClearsAt = null;          // : height case can clear early
                         break;
                     }
                 }
@@ -825,6 +865,12 @@ class XChainIndexer {
                         // Same defer semantics as the height barrier above.
                         console.warn('Deferring block ' + blockToParse + ' (price time-sync): ', err);
                         this.stallReason = 'price_sync_barrier';
+                        // : this barrier waits on WALL CLOCK. It is satisfied once a
+                        // round at/past blockTime is mirrored, or the hub's stream watermark
+                        // passes blockTime + grace; both advance only as real time does. Record
+                        // that instant so a future-stamped block is not reported as a wedge
+                        // while the wait is expected and self-clearing.
+                        this.stallClearsAt = this._barrierClearsAt(blockTime, 'priceWatermarkGraceS');
                         break;
                     }
                 }
@@ -851,6 +897,7 @@ class XChainIndexer {
                         // against a stale oracle copy. No transaction is open yet.
                         console.warn('Deferring block ' + blockToParse + ' (oracle sync): ', err);
                         this.stallReason = 'oracle_sync_barrier';
+                        this.stallClearsAt = this._barrierClearsAt(blockTime, 'oracleWatermarkGraceS');
                         break;
                     }
                 }
@@ -865,6 +912,7 @@ class XChainIndexer {
                     } catch(err){
                         console.warn('Deferring block ' + blockToParse + ' (cross-chain match sync): ', err);
                         this.stallReason = 'match_sync_barrier';
+                        this.stallClearsAt = this._barrierClearsAt(blockTime, 'matchWatermarkGraceS');
                         break;
                     }
                 }
@@ -879,6 +927,7 @@ class XChainIndexer {
                     } catch(err){
                         console.warn('Deferring block ' + blockToParse + ' (cross-chain call sync): ', err);
                         this.stallReason = 'call_sync_barrier';
+                        this.stallClearsAt = this._barrierClearsAt(blockTime, 'matchWatermarkGraceS');
                         break;
                     }
                 }
@@ -904,6 +953,7 @@ class XChainIndexer {
                     } catch(err){
                         console.warn('Deferring block ' + blockToParse + ' (direct call-presence barrier): ', err);
                         this.stallReason = 'call_presence_barrier';
+                        this.stallClearsAt = null;          // : no watermark fallback to key on
                         break;
                     }
                 }
@@ -918,6 +968,7 @@ class XChainIndexer {
                     } catch(err){
                         console.warn('Deferring block ' + blockToParse + ' (cross-chain snapshot sync): ', err);
                         this.stallReason = 'snapshot_sync_barrier';
+                        this.stallClearsAt = null;          // : snapshot presence, not wall clock
                         break;
                     }
                 }
@@ -1080,6 +1131,7 @@ class XChainIndexer {
                     // stamp the commit time so the /status healthcheck can tell an
                     // advancing-but-barrier-deferring indexer from a wedged one .
                     this.stallReason = null;
+                    this.stallClearsAt = null;              // : stall is over, so is its deadline
                     this.lastBlockCommittedAt = Date.now();
 
                     // : the block is committed, so nothing else may attribute a price
@@ -1150,6 +1202,7 @@ class XChainIndexer {
                             `HALTING block processing (not committing; a fabricated result would fork). ` +
                             `Retrying after ${this.config['BLOCK_CHECK_INTERVAL']}ms; will resume when the host recovers.`);
                         this.stallReason = 'vm_executor_unavailable';
+                        this.stallClearsAt = null;          // : a host fault has no deadline
                     } else {
                         // Log the error
                         this.util.logError(`Error while parsing block data at block ${lastIndexerBlock}:`, error);

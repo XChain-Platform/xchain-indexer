@@ -99,7 +99,13 @@ async function buildHealthResponse({ indexer, indexerRunning, indexerError, last
         lastBlockCommittedAt: indexer.lastBlockCommittedAt || null,
         degraded:         !!indexer.stallReason
                             && !stallWedged(indexer.stallReason, indexer.lastBlockCommittedAt,
-                                            indexer.healthStallGraceMs, now),
+                                            indexer.healthStallGraceMs, now, indexer.stallClearsAt),
+        // : epoch-ms at which the current time-keyed barrier can first be satisfied,
+        // or null. Non-null means the indexer is waiting on WALL CLOCK (a future-stamped
+        // block), which is expected and self-clearing rather than a wedge, and it tells an
+        // operator exactly when to expect the chain to move again instead of leaving a
+        // multi-hour, entirely valid stall looking like a dead service.
+        stallClearsAt:    indexer.stallClearsAt || null,
         lastHubConfigFetchAt: lastHubConfigFetchAt,
         hubConfigAgeSeconds:  hubConfigAgeSeconds,
         hubConfigStale:       hubConfigStale,

@@ -31,9 +31,10 @@ const helmet     = require('helmet');
 // Standalone copy of src/XChainIndexer.js stallWedged (the smoke harness deliberately
 // reconstructs the route rather than importing the module, which pulls in native DB
 // deps). The canonical function is unit-tested in test/unit/stall-health.test.js.
-function stallWedged(stallReason, lastBlockCommittedAt, graceMs, now){
+function stallWedged(stallReason, lastBlockCommittedAt, graceMs, now, stallClearsAtMs = null){
     if(!stallReason) return false;
     if(lastBlockCommittedAt == null) return false;
+    if(Number.isFinite(stallClearsAtMs) && now < stallClearsAtMs) return false;   // 
     return (now - lastBlockCommittedAt) > graceMs;
 }
 
@@ -82,7 +83,7 @@ function buildApp(indexer) {
         // AND a stalled-but-still-advancing barrier defer (degraded) both stay 200 .
         let stalled   = !!indexer.stallReason;
         let wedged    = stallWedged(indexer.stallReason, indexer.lastBlockCommittedAt,
-                                    indexer.healthStallGraceMs, Date.now());
+                                    indexer.healthStallGraceMs, Date.now(), indexer.stallClearsAt);
         let unhealthy = indexerDbUnreachable || wedged;
         res.status(unhealthy ? 503 : 200).json({
             indexerBlock: indexerBlock,
