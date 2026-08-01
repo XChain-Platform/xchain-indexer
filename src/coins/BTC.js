@@ -76,7 +76,16 @@ module.exports = {
                 scriptHash:                  0x05,
                 wif:                         0x80,
                 dustThreshold:               546,
-                minStandardTxNonWitnessSize: 65,
+                // RELAY POLICY floor, not the consensus one . Bitcoin
+                // Core rejects "tx-size-small" below MIN_STANDARD_TX_NONWITNESS_SIZE
+                // = 82; the 65 that stood here until 2026-07-31 is the CONSENSUS
+                // MIN_TRANSACTION_NON_WITNESS_SIZE guarding the 64-byte-transaction
+                // CVE, which no relay ever enforces on its own. At 65 the encoder's
+                // reveal floor-pad never fired on Bitcoin, so any P2WSH reveal
+                // spending a single data chunk (71 stripped bytes) was rejected by
+                // every node and stranded its funding output. Measured live on BTC
+                // regtest: 71 rejected, 82 accepted.
+                minStandardTxNonWitnessSize: 82,
                 singleOpReturnPolicy:        true,
             },
             // Indexing start boundary only; NOT part of any consensus hash.
@@ -114,7 +123,16 @@ module.exports = {
                 scriptHash:                  0xc4,
                 wif:                         0xef,
                 dustThreshold:               546,
-                minStandardTxNonWitnessSize: 65,
+                // RELAY POLICY floor, not the consensus one . Bitcoin
+                // Core rejects "tx-size-small" below MIN_STANDARD_TX_NONWITNESS_SIZE
+                // = 82; the 65 that stood here until 2026-07-31 is the CONSENSUS
+                // MIN_TRANSACTION_NON_WITNESS_SIZE guarding the 64-byte-transaction
+                // CVE, which no relay ever enforces on its own. At 65 the encoder's
+                // reveal floor-pad never fired on Bitcoin, so any P2WSH reveal
+                // spending a single data chunk (71 stripped bytes) was rejected by
+                // every node and stranded its funding output. Measured live on BTC
+                // regtest: 71 rejected, 82 accepted.
+                minStandardTxNonWitnessSize: 82,
                 singleOpReturnPolicy:        true,
             },
             firstBlock: 138000,
@@ -140,7 +158,16 @@ module.exports = {
                 scriptHash:                  0xc4,
                 wif:                         0xef,
                 dustThreshold:               546,
-                minStandardTxNonWitnessSize: 65,
+                // RELAY POLICY floor, not the consensus one . Bitcoin
+                // Core rejects "tx-size-small" below MIN_STANDARD_TX_NONWITNESS_SIZE
+                // = 82; the 65 that stood here until 2026-07-31 is the CONSENSUS
+                // MIN_TRANSACTION_NON_WITNESS_SIZE guarding the 64-byte-transaction
+                // CVE, which no relay ever enforces on its own. At 65 the encoder's
+                // reveal floor-pad never fired on Bitcoin, so any P2WSH reveal
+                // spending a single data chunk (71 stripped bytes) was rejected by
+                // every node and stranded its funding output. Measured live on BTC
+                // regtest: 71 rejected, 82 accepted.
+                minStandardTxNonWitnessSize: 82,
                 singleOpReturnPolicy:        true,
             },
             firstBlock: 0,
