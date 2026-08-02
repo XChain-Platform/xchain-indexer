@@ -111,6 +111,24 @@ function resolveGenesis(genesisBlock, network){
     return stripDescriptors(genesisBlock);
 }
 
+// Is there a real filesystem under us, or are we a bundle in someone's browser?
+//
+// This file is canonical here and vendored into ten services, one of which
+// (xchain-sdk) is bundled into the wallet's web, extension and both mobile
+// shells. Every member is checked rather than just `process.versions.node`,
+// because the thing that actually breaks is a SHIM: a bundler can define
+// `process` and hand back a `path` object that has no `resolve`, which is
+// exactly the shape that threw in the mobile shells. Checking the functions we
+// are about to call is the only form of this test a partial polyfill cannot
+// fool.
+function hasNodeFilesystem(){
+    return typeof process === 'object' && process !== null
+        && typeof process.cwd === 'function'
+        && typeof path?.resolve === 'function'
+        && typeof fs?.existsSync === 'function'
+        && typeof fs?.readFileSync === 'function';
+}
+
 // Resolve FULLNODE. mainnet/testnet return the frozen defaults untouched. regtest
 // applies, in increasing precedence: a fullnode.regtest.json sidecar in cwd, then
 // per-key env vars. Mirrors the prior configs/BTC.js regtest behavior exactly.
@@ -129,7 +147,14 @@ function resolveFullnode(fullnode, network){
         out.GENESIS_VERIFIERS = out.GENESIS_VERIFIERS.map(s => String(s).toLowerCase());
     if(network !== 'regtest') return out;
 
-    if(fullnode.$regtestSidecar){
+    // The sidecar is a file on a developer's disk, so it is Node-only by nature.
+    // Ask before reaching, rather than reaching and apologising : in a
+    // browser bundle `fs` and `path` are shims, `path.resolve` is undefined, and
+    // this threw a TypeError on EVERY launch of both mobile shells. The catch
+    // below swallowed it into a console line reading "FULLNODE regtest sidecar
+    // ignored: r.resolve is not a function", which is a wallet telling its user
+    // about a full-node dev path in a build headed for an app store.
+    if(fullnode.$regtestSidecar && hasNodeFilesystem()){
         try {
             const p = path.resolve(process.cwd(), fullnode.$regtestSidecar);
             if(fs.existsSync(p)){
