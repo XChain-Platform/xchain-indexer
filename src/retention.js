@@ -16,8 +16,9 @@
 // commitment tables (state_tree_roots + state_tree_nodes). DEFAULT OFF: with
 // no retention env var set the module is inert and the current keep-everything
 // behavior is byte-for-byte unchanged (nothing is deleted). See
-// docs/DATA-RETENTION-POLICY.md for the platform-wide policy this implements
-// and the safety argument for the two-phase order.
+// the data-retention page under components/indexer/ in xchain-documentation
+// for the platform-wide policy this implements and the safety argument for
+// the two-phase order.
 //
 // Two-phase pruning (order is load-bearing):
 //   Phase 1  pruneStateRoots   - drop state_tree_roots rows older than the

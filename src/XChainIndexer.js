@@ -586,8 +586,9 @@ class XChainIndexer {
         this._startStateTreeMetric();
 
         // Start the state-retention pruner. DEFAULT OFF: inert unless
-        // STATE_ROOT_RETENTION_BLOCKS is set (see src/retention.js +
-        // docs/DATA-RETENTION-POLICY.md). Phase-2 node reclaim, when opted in, runs
+        // STATE_ROOT_RETENTION_BLOCKS is set (see src/retention.js + the
+        // data-retention page under components/indexer/ in xchain-documentation).
+        // Phase-2 node reclaim, when opted in, runs
         // under the db transaction mutex so it cannot interleave with block-root inserts.
         this._startStateRetention();
 
