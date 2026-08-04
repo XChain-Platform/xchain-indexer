@@ -223,7 +223,7 @@ describe('ProtocolChanges @regression @tier3', function () {
         });
 
         it('gates on config.NETWORK: mainnet flag-day applies even if env still says regtest', async function () {
-            const MAINNET_FLAG_DAY = 1786924800;
+            const MAINNET_FLAG_DAY = 1786060800;
             indexer.config.NETWORK = 'mainnet';
             process.env.INDEXER_NETWORK = 'regtest'; // env would (wrongly) enable from genesis
             const pc2 = new ProtocolChanges(indexer, '2.0.0');
@@ -235,7 +235,7 @@ describe('ProtocolChanges @regression @tier3', function () {
     });
 
     describe('DEPLOY_BASE64_CODE activation gate (consensus)', function () {
-        const MAINNET_FLAG_DAY = 1786924800; // 2026-08-17 00:00:00 UTC, CONFIRMED 2026-07-07 (see protocol_changes.js)
+        const MAINNET_FLAG_DAY = 1786060800; // 2026-08-07 00:00:00 UTC, CONFIRMED 2026-07-07 (see protocol_changes.js)
 
         // The constructor reads config.NETWORK fresh and takes the consensus version as an
         // explicit argument (#3087), so a new instance per network/version is all that is
@@ -315,7 +315,7 @@ describe('ProtocolChanges @regression @tier3', function () {
     // guards the registration the call sites depend on. Keep in lockstep with
     // protocol_changes.js.
     describe('VM_BALANCE_TOKENINFO activation gate (consensus)', function () {
-        const MAINNET_FLAG_DAY = 1786924800; // 2026-08-17 00:00:00 UTC, CONFIRMED 2026-07-07 (see protocol_changes.js)
+        const MAINNET_FLAG_DAY = 1786060800; // 2026-08-07 00:00:00 UTC, CONFIRMED 2026-07-07 (see protocol_changes.js)
 
         function pcFor(network, version = '2.0.0') {
             // Shipping consensus version passed explicitly (#3087 pin).
@@ -391,7 +391,7 @@ describe('ProtocolChanges @regression @tier3', function () {
     // block guards the registration that call site depends on. Keep in lockstep with
     // protocol_changes.js.
     describe('VM_ATTESTATION_GETRESPONSE activation gate (consensus)', function () {
-        const MAINNET_FLAG_DAY = 1786924800; // 2026-08-17 00:00:00 UTC, CONFIRMED 2026-07-07 (see protocol_changes.js)
+        const MAINNET_FLAG_DAY = 1786060800; // 2026-08-07 00:00:00 UTC, CONFIRMED 2026-07-07 (see protocol_changes.js)
 
         function pcFor(network, version = '2.0.0') {
             // Shipping consensus version passed explicitly (#3087 pin).
@@ -455,7 +455,7 @@ describe('ProtocolChanges @regression @tier3', function () {
     // REAL isEnabled() at the single shared chokepoint, so this block guards the registration
     // that gate depends on. Keep in lockstep with protocol_changes.js.
     describe('CONTROLLER_GUARD activation gate (consensus)', function () {
-        const MAINNET_FLAG_DAY = 1786924800; // 2026-08-17 00:00:00 UTC, CONFIRMED 2026-07-07 (see protocol_changes.js)
+        const MAINNET_FLAG_DAY = 1786060800; // 2026-08-07 00:00:00 UTC, CONFIRMED 2026-07-07 (see protocol_changes.js)
 
         function pcFor(network, version = '2.0.0') {
             // Shipping consensus version passed explicitly (#3087 pin).

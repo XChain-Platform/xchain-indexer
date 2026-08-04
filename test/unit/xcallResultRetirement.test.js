@@ -272,7 +272,7 @@ describe('XCALL undeliverable result retirement  @regression', function () {
             const pc = new ProtocolChanges(createMockIndexer(), '2.0.0');
             const change = pc.changes['XCALL_RESULT_ORPHAN_RETIREMENT'];
             assert.ok(change, 'the retirement gate must be registered');
-            assert.strictEqual(change.mainnet_time, 1786924800, 'mainnet must ride the ratified 2026-08-17 anchor');
+            assert.strictEqual(change.mainnet_time, 1786060800, 'mainnet must ride the ratified 2026-08-07 anchor');
             assert.strictEqual(change.testnet_time, 0);
             assert.strictEqual(change.regtest_time, 0);
             assert.strictEqual(change.mainnet_block, 0);

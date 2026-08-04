@@ -51,7 +51,7 @@
  *   3. the end-to-end ISSUE verdict, driving the exact on-chain repro
  *      `ISSUE|3|S20ADM|||1` that was rejected as action 1157;
  *   4. the registration itself: ungated on every network, the v1 train anchor
- *      retired, and NOT folded into the 2026-08-17 cohort.
+ *      retired, and NOT folded into the 2026-08-07 cohort.
  ********************************************************************/
 
 process.env.INDEXER_COIN    = 'BTC';
@@ -344,9 +344,9 @@ describe(' LOCK_NULL_PRIOR_UNSET @regression @tier1', function () {
                 'the v1 Key A anchor must be retired, not left dangling for a gate to re-adopt');
         });
 
-        it('it is NOT folded into the 2026-08-17 cohort, which deploys on its own schedule', function () {
+        it('it is NOT folded into the 2026-08-07 cohort, which deploys on its own schedule', function () {
             const change = makeChanges().changes['LOCK_NULL_PRIOR_UNSET'];
-            assert.notStrictEqual(change.mainnet_time, 1786924800);
+            assert.notStrictEqual(change.mainnet_time, 1786060800);
         });
 
         it('testnet and regtest are armed from genesis so the new path gets real coverage', function () {

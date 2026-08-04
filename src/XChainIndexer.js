@@ -788,7 +788,7 @@ class XChainIndexer {
                 // modes: reversePriceMatch directly, and reverseOraclePriceMatch for the
                 // validator coin price behind a user oracle quote. Gating the barrier on the
                 // fee flag-day therefore left LTC/DOGE mainnet settling FIAT dispenses against
-                // an unbarriered mirror below 1786924800, where two operators with different
+                // an unbarriered mirror below 1786060800, where two operators with different
                 // mirror states credit different token amounts for the same payment and fork
                 // the chain. The barrier now runs whenever sync is enabled.
                 //

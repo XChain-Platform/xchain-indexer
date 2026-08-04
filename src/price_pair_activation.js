@@ -64,7 +64,7 @@ const PRICE_PAIR_TICKER_MAX_WIDE   = 6;
 //
 // UNARMED on mainnet: 9999999999 is a far-future sentinel (year 2286), NOT a
 // scheduled flag-day.  D6, the pre-launch instant this arms at, is an open
-// operator decision; the usual contract-era stamp 1786924800 (2026-08-17) is not
+// operator decision; the usual contract-era stamp 1786060800 (2026-08-07) is not
 // usable because it falls AFTER the early-September launch target and would leave
 // LTC/DOGE native-coin fees unpayable straight through launch.
 const PRICE_PAIR_WIDEN_ACTIVATION = {

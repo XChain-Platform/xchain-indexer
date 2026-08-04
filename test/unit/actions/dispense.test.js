@@ -798,7 +798,7 @@ describe('Dispense action handler @regression @tier2', function () {
     //    reaches the cap still executes; then the dispenser auto-closes with reason
     //    'max_dispenses_reached' and refunds remaining escrow (DISPENSER_CLOSE routes to
     //    SOURCE for an auto-close). Count is derived since the last refill. Gated on the
-    //    dispenser-family cohort (mainnet block_time 1786924800, testnet/regtest genesis).
+    //    dispenser-family cohort (mainnet block_time 1786060800, testnet/regtest genesis).
     describe('MAX_DISPENSES cap auto-close', function () {
 
         function capsCloseCall() {
@@ -832,7 +832,7 @@ describe('Dispense action handler @regression @tier2', function () {
             assert.ok(!capsCloseCall(), 'no max-dispenses close below the cap');
         });
 
-        it('below the caps flag-day (mainnet block_time < 1786924800): no cap even at 1000', async function () {
+        it('below the caps flag-day (mainnet block_time < 1786060800): no cap even at 1000', async function () {
             actionsCtx.config = Object.assign({}, indexer.config, { NETWORK: 'mainnet', COIN: 'BTC' });
             dispense = new Dispense(actionsCtx);
             indexer.indexerDb.getDispenserDispenseCount.resolves(1000);

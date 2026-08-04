@@ -38,7 +38,7 @@
  *
  * Keyed on block TIME with the coordinated 2.0.0 contract-era timestamp
  * (VM_BANNED_ASYNC_MAINNET_TIME / NATIVE_FEE_PRICE_TIME_GATE and the 2.0.0
- * protocol_changes cohort all use 1786924800), so ONE fleet deploy-by date
+ * protocol_changes cohort all use 1786060800), so ONE fleet deploy-by date
  * governs the flip. Registered as a standalone twin-style module rather than
  * a protocol_changes.addChange entry to keep this file self-contained and
  * greppable next to the query it gates.
@@ -50,7 +50,7 @@
 // flag-day; testnet/regtest are active from genesis, mirroring the 2.0.0
 // protocol_changes cohort (testnet_time/regtest_time = 0).
 const DISPENSE_CANCELLING_MATCH_ACTIVATION = {
-    mainnet: 1786924800,    // 2026-08-17 00:00:00 UTC - coordinated 2.0.0 flag-day; deploy ALL indexers before this time
+    mainnet: 1786060800,    // 2026-08-07 00:00:00 UTC - coordinated 2.0.0 flag-day; deploy ALL indexers before this time
     testnet: 0,
     regtest: 0,
 };

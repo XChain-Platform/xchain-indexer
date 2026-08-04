@@ -15,7 +15,7 @@
  *
  *  flag-day placeholder regression gate.
  *
- * On 2026-07-16 the operator ratified 2026-08-17 00:00 UTC (unix 1786924800)
+ * On 2026-07-16 the operator ratified 2026-08-07 00:00 UTC (unix 1786060800)
  * as the coordinated activation anchor, and  derived every remaining
  * placeholder from it:
  *   - the four 2026-07-15 hardening gates in protocol_changes.js moved from
@@ -23,7 +23,7 @@
  *     joining the confirmed 2.0.0 contract-era cohort;
  *   - ARCHIVE_REWARD_ACTIVATION and RETRACTION_SIGNING_ACTIVATION moved from
  *     the 983000 (~2027-01-01) BTC placeholder to 969500, the BTC
- *     snapshot_block landing ~2026-08-17 (tip 957062 on 07-07 + ~144/day).
+ *     snapshot_block landing ~2026-08-07 (tip 957062 on 07-07 + ~144/day).
  *
  * This suite is the gate the runbook's "grep for placeholder regressions"
  * verify step automates: a re-introduced placeholder (or a gate silently
@@ -42,8 +42,8 @@ const path   = require('path');
 
 const SRC = path.join(__dirname, '..', '..', 'src');
 
-const RATIFIED_ANCHOR_TS  = 1786924800;   // 2026-08-17 00:00:00 UTC
-const RATIFIED_BTC_HEIGHT = 969500;       // BTC snapshot_block ~2026-08-17
+const RATIFIED_ANCHOR_TS  = 1786060800;   // 2026-08-07 00:00:00 UTC
+const RATIFIED_BTC_HEIGHT = 969500;       // BTC snapshot_block ~2026-08-07
 const ROYALTY_CREATE_SIDE = 1798761600;   // 2027-01-01, CONFIRMED (deny window)
 
 const XC104_TS_GATES = [
@@ -61,7 +61,7 @@ describe(' flag-day placeholder guard @regression @tier1', function () {
 
     const pcSource = fs.readFileSync(path.join(SRC, 'protocol_changes.js'), 'utf8');
 
-    it('the  timestamp gates are armed on the ratified 2026-08-17 anchor', function () {
+    it('the  timestamp gates are armed on the ratified 2026-08-07 anchor', function () {
         for (const gate of XC104_TS_GATES) {
             const m = pcSource.match(new RegExp(
                 "this\\.addChange\\('" + gate + "', '2\\.0\\.0',(\\d+)"));

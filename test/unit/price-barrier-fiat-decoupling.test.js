@@ -25,7 +25,7 @@
  * reverseOraclePriceMatch for the validator coin price behind a user oracle
  * quote). While the barrier was gated on the fee flag-day, LTC and DOGE
  * mainnet settled FIAT dispenses against an unbarriered mirror below
- * 1786924800: two operators with different mirror states credit different
+ * 1786060800: two operators with different mirror states credit different
  * token amounts for the same payment, which forks the chain.
  *
  * These pin the two halves that keep that closed:
@@ -105,9 +105,9 @@ describe(' price barrier decoupled from the fee flag-day @regression @tier1', fu
         // would change getLatestPrice's historical round selection and fork a
         // from-genesis replay.
         assert.strictEqual(typeof changes.isNativeFeePriceTimeGateActive, 'function');
-        assert.strictEqual(changes.NATIVE_FEE_PRICE_TIME_GATE_MAINNET_TIME, 1786924800);
+        assert.strictEqual(changes.NATIVE_FEE_PRICE_TIME_GATE_MAINNET_TIME, 1786060800);
         assert.strictEqual(
-            changes.isNativeFeePriceTimeGateActive('mainnet', 1786924800 - 1), false);
+            changes.isNativeFeePriceTimeGateActive('mainnet', 1786060800 - 1), false);
     });
 
     it('the widened barrier still opens on the watermark with no local rounds', async function () {

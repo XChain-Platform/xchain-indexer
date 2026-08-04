@@ -32,7 +32,7 @@
  *
  * GATED WITH THE EXISTING DISPENSER-FAMILY COHORT. Keyed on the block's consensus
  * timestamp (data['BLOCK_TIME']) at the coordinated 2.0.0 flag-day (mainnet
- * 1786924800, testnet/regtest genesis), byte-for-byte the shape of its siblings
+ * 1786060800, testnet/regtest genesis), byte-for-byte the shape of its siblings
  * dispense_cancelling_match_activation.js and dispenser_ownership_cancel_activation.js,
  * so ONE fleet deploy-by date governs the whole dispenser-family flip and the
  * family stays calendar-coherent. (The pre-961000 train HEIGHT gate would fit the
@@ -53,7 +53,7 @@
 // flag-day; testnet/regtest are active from genesis, mirroring the 2.0.0
 // protocol_changes cohort and the sibling dispenser-family activations.
 const DISPENSER_CAPS_ACTIVATION = {
-    mainnet: 1786924800,    // 2026-08-17 00:00:00 UTC - coordinated 2.0.0 flag-day; deploy ALL indexers before this time
+    mainnet: 1786060800,    // 2026-08-07 00:00:00 UTC - coordinated 2.0.0 flag-day; deploy ALL indexers before this time
     testnet: 0,
     regtest: 0,
 };

@@ -449,7 +449,7 @@ describe('Dispenser action handler @regression @tier2', function () {
 
         // ── MAX_REFILLS cap (dispenser_caps_activation.js / ). A refill is a
         //    format-2 edit that tops up GIVE_ESCROW; the 6th is rejected. Gated on the
-        //    dispenser-family cohort (mainnet block_time 1786924800, testnet/regtest genesis).
+        //    dispenser-family cohort (mainnet block_time 1786060800, testnet/regtest genesis).
         describe('MAX_REFILLS cap', function () {
 
             it('rejects the 6th refill (caps active, regtest genesis)', async function () {
@@ -485,12 +485,12 @@ describe('Dispenser action handler @regression @tier2', function () {
                 assert.strictEqual(data['STATUS'], 'valid', 'a non-refill edit must not be blocked by MAX_REFILLS');
             });
 
-            it('below the caps flag-day (mainnet block_time < 1786924800): no refill limit', async function () {
+            it('below the caps flag-day (mainnet block_time < 1786060800): no refill limit', async function () {
                 actionsCtx.config = Object.assign({}, indexer.config, { NETWORK: 'mainnet', COIN: 'BTC' });
                 dispenser = new Dispenser(actionsCtx);
                 indexer.indexerDb.getDispenserRefillCount.resolves(5); // would be rejected if the cap were active
                 const params = makeParams(`2|50|20|${EXPIRATION + 86400}|||`);
-                // BLOCK_TIME 1700000000 < 1786924800 => caps inactive
+                // BLOCK_TIME 1700000000 < 1786060800 => caps inactive
                 const data   = createBaseData({ ACTION: 'DISPENSER', FORMAT: 2, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
 
                 await dispenser.parse(params, data, false);
