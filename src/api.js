@@ -34,7 +34,7 @@ const cors          = require('cors');
 const rateLimit     = require('express-rate-limit');
 const XChainIndexer = require('./XChainIndexer');
 const jsonRouter    = require('express-json-rpc-router');
-const { buildHealthResponse } = require('./health');
+const { buildHealthResponse, committedView, inFlightBlockIndex } = require('./health');
 const { getStakeSourceByPubkey } = require('./stake-source');
 const { canonicalizeRewardType } = require('./reward-push-gate');
 const anchorActionQuery = require('./anchor-action-query');
@@ -273,23 +273,38 @@ async function startApi(){
         // a database outage (the breaker trips after repeated connection failures).
         async health(){
             let lastIndexedBlock = null;
+            // Snapshot the in-flight block BEFORE the awaited read: it is a
+            // synchronous peek at block-loop state, so taking it first means a
+            // block committing mid-handler can only ever collapse the pair
+            // toward the truth, never invent an in-flight block.
+            let inFlightBlock = inFlightBlockIndex(indexer.indexerDb);
             try {
                 if(indexer.indexerDb)
-                    lastIndexedBlock = await indexer.indexerDb.getLatestBlockIndex();
+                    // : committed-only read. A bare getLatestBlockIndex() here
+                    // routes through getConnection() -> the block's OPEN transaction,
+                    // so health advertised a height every federation query guard (which
+                    // all read via apiView) rejects, and that a reorg may never commit.
+                    lastIndexedBlock = await committedView(indexer.indexerDb).getLatestBlockIndex();
             } catch (err) {
                 // Database unreachable; leave lastIndexedBlock null. The circuit
                 // state below tells the operator why.
             }
+            // The block committed while we were reading, so it is no longer in flight.
+            if(inFlightBlock != null && lastIndexedBlock != null && inFlightBlock <= lastIndexedBlock)
+                inFlightBlock = null;
             let reorgStats = null;
             try {
                 if(indexer.indexerDb)
-                    reorgStats = await indexer.indexerDb.getReorgHealthStats();
+                    // Same committed-only view: reorg counters written by an in-flight
+                    // block roll back with it, so a dirty read here over-counts.
+                    reorgStats = await committedView(indexer.indexerDb).getReorgHealthStats();
             } catch (err) {
                 // DB unreachable; leave reorg counters null (getReorgHealthStats is
                 // already non-throwing, this is belt-and-braces).
             }
             return buildHealthResponse({
-                indexer, indexerRunning, indexerError, lastIndexedBlock, now: Date.now(), reorgStats
+                indexer, indexerRunning, indexerError, lastIndexedBlock, inFlightBlock,
+                now: Date.now(), reorgStats
             });
         },
 
@@ -340,9 +355,16 @@ async function startApi(){
             if(!indexer.indexerDb)
                 return { error: 'indexer database not ready' };
             try {
-                let block_index = await indexer.indexerDb.getLatestBlockIndex();
+                // : committed-only, like health and every federation query
+                // guard. The hub anchors its consensus snapshot at whatever height
+                // this returns; an in-flight height would anchor a snapshot on rows
+                // no other reader can see and a reorg may still erase.
+                let inFlight    = inFlightBlockIndex(indexer.indexerDb);
+                let block_index = await committedView(indexer.indexerDb).getLatestBlockIndex();
+                if(inFlight != null && inFlight <= block_index) inFlight = null;
                 return {
                     block_index,
+                    in_flight_block: inFlight,
                     decoder_block: indexer.lastDecoderBlock,
                     lag: indexer.lastDecoderBlock != null
                         ? indexer.lastDecoderBlock - block_index
@@ -360,20 +382,37 @@ async function startApi(){
         // XCHECKPOINT canonical (spec: protocol/actions/ANCHOR.md). Omitting
         // block_index returns the latest indexed block. Public read: these hashes
         // are the platform's verifiability primitive, not sensitive state.
+        //
+        // COMMITTED-ONLY read (, the signing-path sibling of ). A bare
+        // read routes through db.getConnection(), which hands back the block loop's
+        // open transactionConnection while a block is processing, so both the default
+        // target height and the hash row itself would come from INSIDE the uncommitted
+        // block. That is worse here than on health: the hub's StateCheckpointEngine
+        // quorum-SIGNS this response into the XCHECKPOINT canonical, so a mid-block
+        // read means the validator set signs a state hash for a block a reorg (or a
+        // guard throwing before commit) may still erase, and the signature outlives
+        // the rollback. committedView() draws the independent pooled connection every
+        // federation query guard uses, so the worst case is "block not indexed: N"
+        // (the caller retries) instead of a signed hash for a block that never was.
         async getblockhashes({block_index}){
             if(!indexer.indexerDb || !indexer.decoderDb)
                 return { error: 'indexer database not ready' };
             try {
+                let db        = committedView(indexer.indexerDb);
+                // The decoder DB carries no indexer-owned transaction today, but the
+                // chain block hash is signed alongside the triple, so it reads through
+                // the same committed-only view rather than depending on that staying true.
+                let decoderDb = committedView(indexer.decoderDb);
                 let target = (block_index !== undefined && block_index !== null)
                     ? Number(block_index)
-                    : await indexer.indexerDb.getLatestBlockIndex();
+                    : await db.getLatestBlockIndex();
                 if(!Number.isFinite(target) || target < 0)
                     return { error: 'invalid block_index' };
-                let stored = await indexer.indexerDb.getStoredBlockHashes(target);
+                let stored = await db.getStoredBlockHashes(target);
                 if(!stored)
                     return { error: 'block not indexed: ' + target };
                 let blockHash = null;
-                let rows = await indexer.decoderDb.doQuery(
+                let rows = await decoderDb.doQuery(
                     'SELECT t.hash AS block_hash FROM blocks b ' +
                     'LEFT JOIN index_transactions t ON (t.id = b.block_hash_id) WHERE b.block_index = ? LIMIT 1',
                     [target]);
@@ -1384,19 +1423,27 @@ async function startApi(){
     // require. Surfaces the indexer's current block height, the decoder's current
     // tip, the computed indexer→decoder lag, and the sync flag, so quantitative
     // lag is readable from the public API surface without direct database access.
-    // The indexer block is read fresh from the DB (same source as the `health`
-    // method) so it never reports a stale in-memory counter.
+    // The indexer block is read fresh from the DB (same source and same
+    // committed-only view as the `health` method) so it neither reports a stale
+    // in-memory counter nor advertises an uncommitted one.
     app.get('/status', async (req, res) => {
         let indexerBlock = null;
         let indexerDbUnreachable = false;
+        // Same committed-vs-in-flight split as health : indexerBlock is
+        // the height a committed-only reader (every federation query guard) can
+        // answer at; inFlightBlock is the block being parsed right now, which is
+        // not indexed yet and a reorg may mean it never is.
+        let inFlightBlock = inFlightBlockIndex(indexer.indexerDb);
         try {
             if(indexer.indexerDb)
-                indexerBlock = await indexer.indexerDb.getLatestBlockIndex();
+                indexerBlock = await committedView(indexer.indexerDb).getLatestBlockIndex();
         } catch (err) {
             // Database unreachable; leave indexerBlock null so lag stays null
             // rather than reporting a misleading figure.
             indexerDbUnreachable = true;
         }
+        if(inFlightBlock != null && indexerBlock != null && inFlightBlock <= indexerBlock)
+            inFlightBlock = null;
         let decoderBlock = null;
         try {
             if(indexer.decoderDb)
@@ -1431,6 +1478,7 @@ async function startApi(){
         let unhealthy = indexerDbUnreachable || wedged;
         res.status(unhealthy ? 503 : 200).json({
             indexerBlock: indexerBlock,
+            inFlightBlock: inFlightBlock,
             decoderBlock: decoderBlock,
             lag:          (decoderBlock != null && indexerBlock != null)
                             ? decoderBlock - indexerBlock

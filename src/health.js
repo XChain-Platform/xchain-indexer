@@ -29,7 +29,34 @@
 const { computeArmedMapFingerprint } = require('./armedMapFingerprint');
 const { hubConfigStaleness, stallWedged } = require('./XChainIndexer');
 
-async function buildHealthResponse({ indexer, indexerRunning, indexerError, lastIndexedBlock, now, reorgStats }){
+// Committed-only view of a db handle, for any read that ADVERTISES A HEIGHT
+// . A bare read routes through db.getConnection(), which hands back
+// the block loop's open transactionConnection while a block is processing, so
+// it dirty-reads the uncommitted block: health then reports a height that no
+// committed-only reader can answer at. Every federation query guard reads
+// through apiView(), so an advertised in-flight height is deterministically
+// rejected by the very next call ("block_index N not yet indexed (latest:
+// N-1)") whenever the poll lands mid-block. Worse, if that block later rolls
+// back (reorg, or a guard throwing) the advertised height never committed at
+// all, which is a lie about sync position to any monitor or federation client.
+// Falls back to the raw handle for stubs without apiView (unit/smoke doubles).
+function committedView(db){
+    return (db && typeof db.apiView === 'function') ? db.apiView() : db;
+}
+
+// The block currently INSIDE the open block transaction, or null when no block
+// transaction is open. Derived from state the block loop already keeps
+// (db.blockIndex is stamped right after beginTransaction), so reporting it
+// costs no query and never touches the block's physical connection. db.blockIndex
+// is not cleared on commit, hence the transactionConnection gate: outside a
+// transaction the field is a stale leftover, not an in-flight block.
+function inFlightBlockIndex(db){
+    if(!db || !db.transactionConnection) return null;
+    let bi = db.blockIndex;
+    return (bi === null || bi === undefined) ? null : Number(bi);
+}
+
+async function buildHealthResponse({ indexer, indexerRunning, indexerError, lastIndexedBlock, inFlightBlock, now, reorgStats }){
     let decoderDbCircuit = indexer.decoderDb ? indexer.decoderDb.circuitState : null;
     let indexerDbCircuit = indexer.indexerDb ? indexer.indexerDb.circuitState : null;
     let circuitOpen = decoderDbCircuit === 'open' || indexerDbCircuit === 'open';
@@ -72,7 +99,13 @@ async function buildHealthResponse({ indexer, indexerRunning, indexerError, last
         status:           (indexerRunning && !circuitOpen) ? "healthy" : "unhealthy",
         running:          indexerRunning,
         synced:           indexer.isSynced(),
+        // COMMITTED height only : read through apiView(), the same
+        // committed-only pooled connection every federation query guard uses, so
+        // a client may poll health and immediately query AT this height. The
+        // block being parsed right now is reported separately as inFlightBlock;
+        // it is not indexed yet and a reorg may mean it never is.
         lastIndexedBlock: lastIndexedBlock,
+        inFlightBlock:    (inFlightBlock === undefined) ? null : inFlightBlock,
         decoderBlock:     indexer.lastDecoderBlock,
         lag:              (indexer.lastDecoderBlock != null && lastIndexedBlock != null)
                             ? indexer.lastDecoderBlock - lastIndexedBlock
@@ -127,4 +160,4 @@ async function buildHealthResponse({ indexer, indexerRunning, indexerError, last
     };
 }
 
-module.exports = { buildHealthResponse };
+module.exports = { buildHealthResponse, committedView, inFlightBlockIndex };
