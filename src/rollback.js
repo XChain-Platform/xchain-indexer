@@ -1227,6 +1227,9 @@ class Rollback {
                 this.indexerDb._smtTickNameCache    = null;
                 this.indexerDb._smtAddressNameCache = null;
             }
+            // Still needed on its own after db.clearSmtNameCaches() was wired into
+            // every transaction ABORT: this frees ids by COMMITTING deletes, an abort
+            // frees them by un-assigning them, and neither implies the other .
 
             // Invalidate the early-decide tally watermark (). This reorg may have deleted
             // and re-added ledger, vote, and delegation rows at or above block_index (and reused

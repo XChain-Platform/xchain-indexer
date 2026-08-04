@@ -1293,6 +1293,11 @@ class Database {
                 // epoch here closes even the window before the next block's beginTransaction,
                 // so a post-rollback zombie write cannot land as a stray auto-committed row.
                 this._txEpoch++;
+                // The abort just un-assigned every dense index id this transaction handed
+                // out, so the id -> name memos it filled are now lies about ids the next
+                // caller will be given . In the finally, beside the epoch bump, for
+                // the same reason: a throw out of rollback() must not be able to skip it.
+                this.clearSmtNameCaches();
                 this._releaseTxLock();
             }
         }
@@ -1317,6 +1322,8 @@ class Database {
                     await this.transactionConnection.release();
                     this.transactionConnection = null;
                     this._txEpoch++;
+                    // A failed commit aborts, so its id assignments are gone too .
+                    this.clearSmtNameCaches();
                     this._releaseTxLock();
                 }
                 this.util.throwError('commitTransaction error=' + e);
@@ -1913,6 +1920,38 @@ class Database {
     // re-reads the new chain's block_time. Mirrors the decoder's per-height reorg clear.
     clearBlockTimeCache(){
         this._blockTimeCache = { block_index: null, block_time: null };
+    }
+
+    // Invalidate the light-client touched-key resolver memos (_smtTickNameCache /
+    // _smtAddressNameCache), which map a dense surrogate id to its canonical name.
+    //
+    // THE MEMOS ARE ONLY VALID FOR AS LONG AS THE ID ASSIGNMENTS THEY SAW SURVIVE.
+    // A dense id is handed out as MAX(id)+1 (getNextTickerId / getNextAddressId), so
+    // anything that REMOVES the row hands the same id straight back to the next
+    // caller. A reorg is one way (rollback.js deletes rows and commits, and clears
+    // these there). A TRANSACTION ROLLBACK is the other, and it was missed for three
+    // investigations: the ids an aborted transaction assigned are un-assigned by the
+    // abort, while the id -> name memo it filled survives in process memory .
+    //
+    // The rolled-back writer that matters is not the block loop, it is the READ-ONLY
+    // dry run behind /feequote and /preflight (actions.js computeDryRun): it runs the
+    // real handler inside a transaction it ALWAYS rolls back, so an ISSUE that is
+    // merely quoted still interns its tick, still reaches createLedgerChangeRecord,
+    // and still fills this memo with id -> the quoted name. Nothing is ever
+    // broadcast, the id is freed, and the next real ISSUE/MINT/SEND takes that id -
+    // at which point the choke point records the touched key under the QUOTED name.
+    // The ledger names the real one, the commitment applies the quoted one, and the
+    // touched-set guard refuses the block. That is a HARD WEDGE: the block retries
+    // forever, because the poisoned entry lives in memory that no retry clears, which
+    // is why a process restart (and only a process restart) fixed it every time.
+    //
+    // Called from rollbackTransaction() and from commitTransaction()'s failure
+    // rollback, i.e. wherever assigned ids are un-assigned. Clearing is cheap (pure
+    // memoisation, refilled lazily on the next block's first touch of each id);
+    // invalidating per id would mean enumerating rows the abort has already erased.
+    clearSmtNameCaches(){
+        this._smtTickNameCache    = null;
+        this._smtAddressNameCache = null;
     }
 
     // Early-decide watermark helpers (). See the _pollTallyWatermark comment in the
