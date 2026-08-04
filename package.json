@@ -79,6 +79,7 @@
     "js-yaml": "^4.3.0"
   },
   "engines": {
-    "node": ">=22.0.0"
+    "comment": "Bounded to Node 22 : the vendored xchain-vm dependency pulls isolated-vm 5.0.4, whose native binding fails node-gyp on Node 24 (removed V8 API). Node 22 also matches the node:22-bookworm image the indexer ships in. See .nvmrc.",
+    "node": ">=22.0.0 <23"
   }
 }
