@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- Lockfile engines.node now matches the manifest ceiling >=22.0.0 <23, so a reinstall cannot silently resolve on Node 23+.
 - review review-round fixes: ATTEST exempt from fee-quote preflight, migration lock-skip reported honestly, boot fails fast on bad DB creds, action-alias single source with guard, DEPLOY halts as host-fault when the VM is unavailable, pubkeys widen migration, consensus-guard test escalations, reorg seeder format.
 
 ### Added
