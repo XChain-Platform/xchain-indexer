@@ -31,7 +31,7 @@ class Dispenser_Expire {
         this.mapper    = action.mapper;
     }
 
-    // Handle closing a dispenser
+    // Handle expiring a dispenser
     async parse(params, data, error){
 
         // Get info on the dispenser
@@ -44,7 +44,7 @@ class Dispenser_Expire {
             this.util.addAddressTicker(dispenser['SOURCE'],      dispenser['GIVE_TICK']);
             this.util.addAddressTicker(dispenser['GET_ADDRESS'], dispenser['GIVE_TICK']);
 
-            // Define DISPENSER_CLOSE action
+            // Define DISPENSER_EXPIRE action
             let action = {}
             action['ACTION']      = 'DISPENSER_EXPIRE';
             action['BLOCK_INDEX'] = data['BLOCK_INDEX'];

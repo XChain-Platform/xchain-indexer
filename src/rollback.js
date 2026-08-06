@@ -1098,7 +1098,15 @@ class Rollback {
             // deleting them here closes that window and the later hub-driven row:deleted
             // is a harmless no-op. cross_chain_matches is two-sided: a match drops when
             // EITHER leg on this chain was rolled back. Predicates are byte-identical to
-            // hub_db_sync.js _applyRetraction and ClientRollback.js (drift-guarded).
+            // ClientRollback.js (drift-guarded by the markers below), and deliberately NOT
+            // to hub_db_sync.js _applyRetraction: that path additionally carries the bounded
+            // to_action_index clause and the item-5308 push_generation fence, and for these
+            // two quorum-class tables the fence is MANDATORY ( refuses an unfenced
+            // retraction outright), so its emitted SQL is always stricter than this one.
+            // The asymmetry is the point. This delete is our own authoritative rollback of
+            // our own chain, so it is unbounded from the orphan point up; the hub-driven
+            // delete acts on untrusted input and must be fenced to a generation we produced.
+            // Do not "reconcile" the two by adding a fence here or dropping one there.
             //<CROSS-CHAIN-MIRROR-REORG-DELETE>
             let crossChainFrom = firstActionIndex !== null ? firstActionIndex : Number.MAX_SAFE_INTEGER;
             query = `DELETE FROM cross_chain_calls WHERE source_chain = ? AND source_action_index >= ?`;

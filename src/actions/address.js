@@ -54,10 +54,9 @@ class Address {
         // Define list of known FORMATS
         this.formats = {};
         this.formats[0] = 'VERSION|FEE_PREFERENCE|REQUIRE_MEMO|DISPENSER_PREFERENCE|MEMO';
-        // Programmable policy layer: self-gate one action-class of THIS account by binding a guard
-        // contract (address_controllers table model). Self-signed (SOURCE is the account). One binding
-        // change per action; UNBIND=1 drops the live binding for ACTION_CLASS. COOLDOWN_BLOCKS is
-        // committed at bind time and is the friction on a later drop. See Controller_Bound_Tokens.md.
+        // Self-gate one action-class of THIS account by binding a guard contract (address_controllers;
+        // self-signed). One binding change per action; UNBIND=1 drops the live bind, COOLDOWN_BLOCKS is
+        // committed at bind time as the friction on a later drop (see Controller_Bound_Tokens.md).
         this.formats[1] = 'VERSION|CONTROLLER|ACTION_CLASS|COOLDOWN_BLOCKS|UNBIND|MEMO';
 
         // Define lists of various fields
@@ -145,10 +144,8 @@ class Address {
         if(!error && String(data['MEMO']).length > this.config['MAX_MEMO_LENGTH'])
             error = 'invalid: MEMO (length)';
 
-        // Programmable policy layer: verify CONTROLLER references an existing, active contract on
-        // this chain (BIND only; on UNBIND the CONTROLLER field is empty and ignored). Mirrors the
-        // ISSUE/execute contract-active check; a guard whose `guard` method is missing/throws is
-        // fail-closed at runtime, not here.
+        // Verify CONTROLLER references an existing, active contract on this chain (BIND only; on UNBIND
+        // it is empty and ignored). A missing/throwing guard method is fail-closed at runtime, not here.
         if(!error && format === 1 && !this.util.isNull(data['CONTROLLER'])){
             let controllerInfo = await this.indexerDb.getContract(data['CONTROLLER']);
             if(!controllerInfo){
@@ -196,11 +193,9 @@ class Address {
         // Print status message 
         console.log("\t ADDRESS : " + data['SOURCE'] + ' : ' + data['STATUS']);
 
-        // Persist the action. Format 0 writes address preferences; format 1 (controller binding)
-        // writes address_controllers and must NOT touch the preferences row (a null-preference
-        // write would be read back by getAddressPreferences as fee_preference=0). The CONTROLLER /
-        // COOLDOWN_BLOCKS fields are not in this action's NUMBER list, so they remain raw strings
-        // that map cleanly onto the BIGINT/INT columns.
+        // Persist the action. Format 1 writes address_controllers and must NOT touch the preferences row
+        // (a null-preference write reads back via getAddressPreferences as fee_preference=0). CONTROLLER/
+        // COOLDOWN_BLOCKS stay out of the NUMBER list, remaining raw strings for the BIGINT/INT columns.
         if(format === 1){
             if(status === 'valid'){
                 let addressId   = await this.indexerDb.createAddress(data['SOURCE']);

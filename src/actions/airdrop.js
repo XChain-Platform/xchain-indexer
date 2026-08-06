@@ -106,12 +106,8 @@ class Airdrop {
         let balances    = await this.indexerDb.getAddressBalances(data['SOURCE'], null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
         let preferences = await this.indexerDb.getAddressPreferences(data['SOURCE'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
 
-        // Controller-bound token gas context. If the airdropped TICK's `transfer` class is bound to a
-        // controller, the aggregate outbound move runs that contract's `guard` before settling and
-        // SOURCE pays the (bounded) guard gas in GAS. Loaded once; the guard reserves its ceiling
-        // against the live `balances` view so a denied/cheap guard can never drive GAS negative, and
-        // the metered fee is reserved out of `balances` before the per-tx fee check (below) so the two
-        // GAS charges are cumulative. Pre-CONTROLLER_GUARD flag-day the guard is a strict no-op.
+        // Load gas token info once before the loop: a controller-bound TICK's guard bills SOURCE
+        // metered gas in GAS, reserved against `balances` so a denied/cheap guard can't drive GAS negative.
         let gasTick = this.config['GAS'];
         let gasInfo = await this.indexerDb.getTokenInfo(gasTick, data['BLOCK_INDEX'], data['ACTION_INDEX']);
 
@@ -245,11 +241,8 @@ class Airdrop {
 
             // Build out array of recipient addresses that are allowed to receive the airdrop
 
-            // Fetch TICK's allow/block lists ONCE before the recipient loop (instead of
-            // isActionAllowed() re-fetching the same token info + lists per recipient), then
-            // check membership in memory. tokenInfo is already loaded above; mirrors
-            // isActionAllowed()'s no-block_index allow/block decision exactly (db.js
-            // isActionAllowed) so the set of approved recipients is unchanged.
+            // Fetch TICK's allow/block lists ONCE before the recipient loop, then check membership in
+            // memory, mirroring isActionAllowed()'s no-block_index decision exactly (approved set unchanged).
             let approved = [];
             let hasAllowList = tokenInfo && !this.util.isNull(tokenInfo['ALLOW_LIST']) && this.util.isNumeric(tokenInfo['ALLOW_LIST']);
             let hasBlockList = tokenInfo && !this.util.isNull(tokenInfo['BLOCK_LIST']) && this.util.isNumeric(tokenInfo['BLOCK_LIST']);
@@ -299,27 +292,15 @@ class Airdrop {
             if(!error && !this.util.hasBalance(balances, tokenInfo['TICK_ID'], airdrop['DEBIT']))
                 error = 'invalid: insufficient funds (TICK)';
         
-            // Stage this leg's debits on a CLONED view and commit to the shared
-            // `balances` only once the whole leg validates ( / AIRDROP-1).
-            // Debiting the shared object here meant a later-in-leg failure (guard
-            // DENY, insufficient fee) left the TICK debit applied with no rollback,
-            // so a subsequent leg airdropping the same tick was measured against an
-            // under-counted balance and wrongly rejected. The clone must still
-            // carry the pending TICK debit (send.js's baseGasBalances pattern):
-            // checking the guard's GAS reservation or the fee against the
-            // pre-debit balance would over-spend when the airdropped tick IS the
-            // GAS/fee tick.
+            // Stage this leg's debits on a CLONED view; commit to shared `balances` only once the whole
+            // leg validates, and the clone must still carry the pending TICK debit for when the airdropped
+            // tick IS the GAS/fee tick ( / AIRDROP-1).
             let legBalances = (!error)
                 ? this.util.debitBalances(Object.assign({}, balances), tokenInfo['TICK_ID'], airdrop['DEBIT'])
                 : balances;
 
-            // Controller-bound token: the airdropped TICK's bound contract gates the AGGREGATE
-            // outbound move once (from=SOURCE, amount=total DEBIT, no single recipient). The guard
-            // may DENY (revert the whole airdrop leg) or bill metered gas. Reserve the guard ceiling
-            // against the live GAS balance and, on allow, reduce `balances` by the metered fee BEFORE
-            // the per-tx fee check so a holder short on GAS can't pass the fee check yet be over-debited
-            // by the guard fee (which would drive GAS negative and trip sanityCheck). Runs after all
-            // other validation, so an allow leads directly to a valid airdrop. Flag-gated no-op pre-day.
+            // Run the controller guard once on the AGGREGATE outbound move (from=SOURCE, amount=total DEBIT),
+            // reserving its metered fee against `balances` BEFORE the per-tx fee check so a GAS-short holder can't over-debit GAS and trip sanityCheck.
             if(!error && tokenInfo){
                 let result = await this.util.maybeRunControllerGuard(this.actions, this.indexerDb, {
                     actionType:  'AIRDROP',

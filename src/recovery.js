@@ -70,6 +70,10 @@ const ar      = require('./anchor_reward_activation.js');
 const abas    = require('./archive_batch_author_activation.js');
 const { ARCHIVE_CHUNK_SET_SQL, ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL,
         ARCHIVE_HEAD_GATE_SQL, dedupeArchiveChunks } = require('./anchor-action-query.js');
+// Archive-head version set, spliced rather than hand-copied: recovery must replay the
+// SAME heads the live mirror path reads, so a new publisher-bearing version added to
+// ARCHIVE_HEAD_VERSIONS cannot reach one path and silently skip the other.
+const { ARCHIVE_HEAD_VERSIONS_SQL } = require('./stateHash.js');
 
 class AnchorRecovery {
 
@@ -125,7 +129,7 @@ class AnchorRecovery {
              JOIN index_statuses s ON s.id = a.status_id
              LEFT JOIN actions         act ON act.action_index = a.action_index
              LEFT JOIN index_addresses adr ON adr.id           = act.source_id
-             WHERE a.version IN (1, 6) AND s.status IN ('valid', 'unverified')
+             WHERE a.version ${ARCHIVE_HEAD_VERSIONS_SQL} AND s.status IN ('valid', 'unverified')
              ORDER BY a.match_batch_seq ASC, a.action_index ASC`);
         if(!v1s || v1s.length === 0){
             this.log('recovery: no archive anchors found (anchor_actions has no v1/v6 rows)');

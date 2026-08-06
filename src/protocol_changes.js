@@ -177,11 +177,11 @@ class ProtocolChanges {
         // height can name one coordinated cutover across all three chains, but a single
         // timestamp can. testnet/regtest activate at genesis (base64-native; no pre-base64
         // history to preserve, and the e2e/regtest stack deploys base64 from block 0).
-        // The mainnet timestamp below is the coordinated contract-era flag-day
-        // (2026-08-07 00:00:00 UTC, REPINNED 2026-07-28 by  from the stale
-        // 2026-08-07 anchor, which predated the early-September launch decision),
-        // aligned with the SDK base64
-        // rollout; a wrong value is a second fork.
+        // The mainnet timestamp below is the coordinated contract-era flag-day:
+        // 1786060800 == 2026-08-07 00:00:00 UTC (repinned by ), aligned with
+        // the SDK base64 rollout. It must stay equal to every other 2.0.0
+        // contract-era entry in this file and to xchain-vm's
+        // ASYNC_SURFACE_GATE_BLOCK_TIME; a wrong value is a second fork.
         this.addChange('DEPLOY_BASE64_CODE', '2.0.0',1786060800,0,0,0,0,0);
 
         // Staking actions: capability variants (STAKE v1/v2, UNSTAKE v0, DELEGATE v0/v2, COLLECT) are BTC-only;
@@ -230,6 +230,15 @@ class ProtocolChanges {
         // Define protocol changes (ALL LOWER Case)
         // this.addChange('name','1.0.0',0,0,0,0,0,0);
         this.addChange('UNIFIED_FEES',   '2.0.0',0,0,0,0,0,0);
+        // INVENTORY-ONLY, gates nothing (). Nothing calls
+        // isEnabled('VM_ACTIONS'): the VM actions it nominally covered
+        // (DEPLOY/EXECUTE/DEPOSIT/WITHDRAW) are gated by their own '2.0.0' action
+        // registrations above and dispatched directly from actions.processAction.
+        // Kept declared, not deleted, because the cross-repo action-manifest prose
+        // cites it by name as the canonical example of a non-action feature gate.
+        // Genesis-active (all-zero), so there is no enablement hazard either way;
+        // do NOT wire a consumer to it without a flag-day, since flipping a
+        // genesis-active gate into a real one changes replay.
         this.addChange('VM_ACTIONS',     '2.0.0',0,0,0,0,0,0);
         // Cross-chain DEX gate: when enabled, ORDER/SWAP allow GET_COIN != COIN and the
         // xchain-hub federation drives cross-chain matching + mirror-delivered settlement.

@@ -2213,10 +2213,15 @@ class Utility {
         //
         // Presence of a finalized result row is NOT sufficient: the hub mirror is untrusted (every
         // other pass re-verifies its 2f+1 quorum). A Byzantine/buggy mirror can plant a finalized
-        // result row with invalid signatures - processResult rejects it every block (never pruning
-        // it, since no callback is recorded), so if mere presence suppressed expiry the request
-        // would deadlock forever and indexers mirroring different hubs would diverge on whether the
-        // v2 expiry action exists. So suppress expiry only when the result actually verifies (or the
+        // result row with invalid signatures - processResult rejects it on every block until it ages
+        // out, so if mere presence suppressed expiry the request would stall for that whole window
+        // and indexers mirroring different hubs would diverge on whether the
+        // v2 expiry action exists. (Such a row is no longer immortal: 's
+        // _retireUndeliverableResult records a 'retired:' callback once _resultAgedOut is true, and
+        // getEffectiveUnprocessedCallResults excludes any call_id with a recorded callback, so it
+        // then leaves the set. That bounds the backlog to the grace window; it does not make
+        // presence a safe suppression signal, which is what this paragraph is about.)
+        // So suppress expiry only when the result actually verifies (or the
         // capability snapshot is not mirrored yet, i.e. it will still deliver) - resultSuppressesExpiry.
         // Key on lowercased call_id: local result rows are canonical-lowercase, but a hub-mirrored
         // call_id may arrive uppercase, so an unnormalized key would miss the lookup below and let

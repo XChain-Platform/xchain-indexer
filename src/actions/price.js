@@ -295,7 +295,14 @@ class Price {
                         // Representative = lex-smallest passing pubkey that signed this
                         // round and still holds the full_node capability at this block.
                         let rep = null;
-                        for(let pk of Array.from(src.pubkeys).sort()){
+                        // Byte comparator, not a bare .sort(): this pick lands in a ledger
+                        // write (createValidatorReward), and the default sort is a total order
+                        // here only because every element happens to be lowercase 64-hex. Pin it
+                        // the way the other consensus-feeding sorts do (sweep.js, attest.js) so
+                        // the tiebreak stops depending on that implicit input shape.
+                        for(let pk of Array.from(src.pubkeys)
+                                .sort((a, b) => Buffer.compare(Buffer.from(String(a), 'utf8'),
+                                                               Buffer.from(String(b), 'utf8')))){
                             if(!signed.has(pk)) continue;
                             if(!await this.indexerDb.hasCapability(pk, 'full_node', data['BLOCK_INDEX'])) continue;
                             rep = pk;

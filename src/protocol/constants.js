@@ -350,9 +350,16 @@ const VALID_FIAT_CODES = ['USD', 'CAD', 'AUD', 'MXN', 'GBP', 'JPY', 'CNY', 'CHF'
 const GAS_TICK = 'XCHAIN';
 
 // ── Oracle federation (xchain-hub) ───────────────────────────────────────────
-// Canonical source: xchain-hub/src/constants.js. Mirrored here byte-identical,
-// same as XCALL_MAX_HOPS above, so a hub-side edit or a consumer re-declaring
-// either literal has a cross-repo tripwire.
+// Canonical source: xchain-hub/src/constants.js. Mirrored here by hand and, unlike
+// XCALL_MAX_HOPS above, NOT tripwired (): neither constant is in the
+// GOLDEN/GATED set of test/unit/xcall-constants-cross-repo.test.js, which pins only
+// MAX_CODE_SIZE, XCALL_MAX_GAS, XCALL_MAX_HOPS and XCALL_MIN_DEADLINE_BLOCKS, and the
+// e2e twin checks the hub against the documentation rather than this copy. A hub-side
+// edit to either literal therefore drifts this file silently, and both are
+// federation-uniformity values where a drift is a real divergence. Until the gate is
+// extended to cover them, treat any change as a manual all-copies edit. Nothing in
+// this repo reads either one; they are exported for consumers, so a drift surfaces
+// downstream, not here.
 
 // Coarse global sanity ceiling on an ingested price_snapshots value (pre-scale,
 // covers pairs like BTC/KRW up to ~$7M BTC with headroom); rejects

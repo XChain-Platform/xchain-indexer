@@ -184,6 +184,14 @@ class Send {
         // first result. A multi-send of the same tick to N recipients now costs one query, not N.
         let tickActionAllowed = {};
 
+        // Memoize the SOURCE-side allow/block-list check per distinct tick, same motive.
+        // It depends only on (SOURCE, TICK): SOURCE is fixed for the whole action (send is
+        // an alias of data and only TICK/AMOUNT/DESTINATION are re-set per leg), and the
+        // call passes no block_index, so the answer cannot change across legs of one tick.
+        // Each miss costs a getTokenInfo plus up to two getList reads, so a Multi-Send
+        // (Brief) to N recipients was paying up to 3N round-trips for one answer.
+        let sourceTickAllowed = {};
+
         // Array of credits and debits
         let credits = [],
             debits  = [];
@@ -252,9 +260,13 @@ class Send {
                     error = 'invalid: TICK (sleeping)';
             }
 
-            // Verify TICK action is allowed from SOURCE (allow/block lists)
-            if(!error && await this.indexerDb.isActionAllowed(send['SOURCE'], send['TICK']) == false)
-                error = 'invalid: SOURCE (not authorized)';
+            // Verify TICK action is allowed from SOURCE (allow/block lists, memoized per distinct tick)
+            if(!error){
+                if(sourceTickAllowed[send['TICK']] === undefined)
+                    sourceTickAllowed[send['TICK']] = await this.indexerDb.isActionAllowed(send['SOURCE'], send['TICK']);
+                if(sourceTickAllowed[send['TICK']] == false)
+                    error = 'invalid: SOURCE (not authorized)';
+            }
 
             // Verify TICK action is allowed to DESTINATION (allow/block lists)
             if(!error && await this.indexerDb.isActionAllowed(send['DESTINATION'], send['TICK']) == false)
