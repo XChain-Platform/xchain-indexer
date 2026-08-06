@@ -23,8 +23,12 @@ const mariadb = require('mariadb');
 const fs      = require('fs');
 const path    = require('path');
 const { AsyncLocalStorage } = require('async_hooks');
-const { buildStateHashData, ARCHIVE_HEAD_VERSIONS } = require('./stateHash');
+const { buildStateHashData, ARCHIVE_HEAD_VERSIONS, ARCHIVE_HEAD_VERSIONS_SQL } = require('./stateHash');
 const { canonicalizeHashAddress } = require('./protocolAddressRoles');
+// Single decoder for the decoder's REORG event payload, shared with the getreorghistory RPC
+// so the array-of-{block_index, block_hash} contract is defined once. Pure leaf module (no
+// requires of its own), so no cycle.
+const reorgHistoryQuery = require('./reorg-history-query');
 const swqCap = require('./swq_source_cap_activation');
 const dispenseCancellingMatch = require('./dispense_cancelling_match_activation');
 const stateKeyCollation = require('./state_key_collation_activation');
@@ -1598,28 +1602,16 @@ class Database {
         }
         let reorgs = [];
         for(let row of results){
-            let block_index = null;
-            try {
-                let data = JSON.parse(row.data);
-                if(typeof data === 'object' && data !== null){
-                    for(let block of data){
-                        // Decoder REORG events store an array of {block_index, block_hash};
-                        // unwrap the numeric block index and keep the lowest (deepest) one.
-                        let idx = (typeof block === 'object' && block !== null) ? block.block_index : block;
-                        // A malformed element (object without a numeric block_index) yields
-                        // `undefined`; skip it so it can neither seed nor poison the target.
-                        // Without this, `undefined` slips past the `block_index === null`
-                        // guard below and later valid elements never recover it.
-                        if(!Number.isFinite(Number(idx)))
-                            continue;
-                        idx = Number(idx);
-                        if(block_index === null || idx < block_index)
-                            block_index = idx;
-                    }
-                }
-            } catch(e){
-                // Malformed row.data; treat as yielding no block_index below and skip the row.
-            }
+            // ONE decoder for the decoder's REORG payload, shared with the getreorghistory
+            // RPC (reorg-history-query.parseReorgEvent). Both consumers used to hand-roll the
+            // array-of-{block_index, block_hash} contract with different acceptance rules, so a
+            // payload reshape could be absorbed by one and silently dropped by the other: the
+            // hub-facing RPC answering "not orphaned" while this path still rolled back, or the
+            // reverse. Defining the contract once means a reshape breaks in exactly one place.
+            // min_block_index is the deepest (lowest) orphaned block, the rollback target.
+            // parseReorgEvent swallows a JSON parse fault and yields no blocks, which lands on
+            // the same LOUD drop below that the old inline try/catch did.
+            let block_index = reorgHistoryQuery.parseReorgEvent(row).min_block_index;
             // A malformed or empty payload must never be treated as a valid rollback target
             // (a null/non-finite block_index here would let `lastIndexerBlock >= null` coerce
             // true and call rollback(null), whose predicates match no rows - a silently missed
@@ -5068,6 +5060,11 @@ class Database {
         let id   = await this.createAddress(address);
         let data = [];
         // Lookup the address preferences
+        // Order pinned to binary collation: the SWEEP settlement loop mints a consensus-hashed
+        // ACTION_INDEX per swept ownership in this result's order (sweep.js), so an unpinned sort
+        // would follow each node's default collation and fork the per-block actions hash. Same
+        // house rule as the other consensus reads, and it matches the byte order the SWEEP
+        // controller-guard loops already sort by.
         let query = `SELECT
                         t2.tick
                     FROM
@@ -5077,7 +5074,7 @@ class Database {
                         t1.owner_id=?
                         AND t1.escrow_action_index IS NULL
                     ORDER BY
-                        t2.tick`;
+                        t2.tick COLLATE utf8mb4_bin`;
         let results = await this.doQuery(query, [id]);
         if(results.length > 0)
             for(let row of results)
@@ -11641,9 +11638,31 @@ class Database {
         await this._poolQuery('DELETE FROM pending_hub_pushes WHERE id=?', [id]);
     }
 
+    // Delete terminal `failed` rows older than maxAgeSeconds and report how many
+    // went. Retiring a row to `failed` takes it out of the poller's reach but NOT
+    // out of the table: markHubPushDelivered drops only delivered rows, and the
+    // rollback purge is scoped to an orphaned action range, so before this sweep a
+    // sustained hub outage parked its terminal rows in pending_hub_pushes forever,
+    // against the bounded-growth claim the queue makes for itself (item 3462).
+    // Age-based rather than delete-on-terminal so the recent failures getStats
+    // reports to the health endpoint stay readable. COALESCE covers a row marked
+    // failed with no attempt stamp (unparseable payload, unknown push_type). A
+    // non-positive age means retain forever and prunes nothing.
+    async pruneFailedHubPushes(maxAgeSeconds){
+        let age = Number(maxAgeSeconds);
+        if(!Number.isFinite(age) || age <= 0) return 0;
+        let res = await this._poolQuery(
+            `DELETE FROM pending_hub_pushes
+                     WHERE status = 'failed'
+                       AND COALESCE(last_attempted_at, created_at) <= DATE_SUB(NOW(), INTERVAL ? SECOND)`,
+            [Math.floor(age)]);
+        return Number(res && res.affectedRows ? res.affectedRows : 0);
+    }
+
     // Record a failed delivery attempt: bump the counter, stamp the time, keep
-    // the last error, and retire the row to `failed` once it hits maxAttempts so
-    // the queue stays bounded.
+    // the last error, and retire the row to `failed` once it hits maxAttempts.
+    // Retirement ends the retries; pruneFailedHubPushes above is what keeps the
+    // table bounded once a row is terminal.
     async recordHubPushAttempt(id, errMsg, maxAttempts){
         let max = Number(maxAttempts);
         if(!Number.isFinite(max) || max <= 0) max = 10;
@@ -12663,12 +12682,18 @@ class Database {
     // fail-closed (the chunk lands 'orphan' rather than authenticated against nothing).
     async getAnchorV1ByBatchSeq(batchSeq, author){
         let scoped = (author !== undefined && author !== null);
+        // Version set from ARCHIVE_HEAD_VERSIONS, never a literal IN (1, 6), for the
+        // reason getArchiveReplayWatermarks states above: this is the same earliest-head
+        // pick as ARCHIVE_HEAD_AUTHOR_SQL in anchor-action-query.js, and it feeds the
+        // consensus-visible geometry/CRC verdict in anchor.js _parseContinuation. A
+        // hand-copied set drifts the moment a new publisher-bearing head version is
+        // added, and the two head picks would then disagree fleet-wide.
         let rows = await this.doQuery(
             `SELECT a.*, adr.address AS source
              FROM anchor_actions a
              LEFT JOIN actions         act ON act.action_index = a.action_index
              LEFT JOIN index_addresses adr ON adr.id           = act.source_id
-             WHERE a.version IN (1, 6) AND a.match_batch_seq = ?` +
+             WHERE a.version ${ARCHIVE_HEAD_VERSIONS_SQL} AND a.match_batch_seq = ?` +
             (scoped ? ` AND adr.address = ?` : ``) +
             ` ORDER BY a.action_index ASC LIMIT 1`,
             scoped ? [batchSeq, String(author)] : [batchSeq]);

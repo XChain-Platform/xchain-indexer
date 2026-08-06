@@ -1155,7 +1155,10 @@ class HubDbSync {
         let allowed = await this._localColumns(table);
         let cols = Object.keys(row).filter(c => allowed.has(c));
         // capability_snapshots is a NATURAL-KEY mirror (uq_cap_snap: snapshot_block,
-        // capability, signing_pubkey; no reader keys on id). Hub ids are hub-LOCAL
+        // capability, signing_pubkey, source; no reader keys on id). `source` is the
+        // fourth key column on purpose : a key delegated by two sources yields
+        // one row per source, and a 3-column key collapses them on INSERT IGNORE and
+        // drops the second source. Hub ids are hub-LOCAL
         // (every hub persists these rows independently via an id-less INSERT IGNORE)
         // and AnchorRecovery rebuilds the table id-less too, so a wire id can collide
         // with a locally-assigned PK and INSERT IGNORE would silently drop the row -

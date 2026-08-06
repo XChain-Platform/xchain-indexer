@@ -28,7 +28,8 @@
  * re-sending each row with exponential backoff until the hub accepts it (the
  * hub's pushpriceround / pushoracleprice handlers dedupe, so a replay the hub
  * already has returns cleanly). A row that keeps failing past the attempt cap is
- * marked `failed` so the queue stays bounded.
+ * marked `failed`, which stops the retries, and the same drain tick sweeps
+ * terminal rows once they pass the retention window so the table stays bounded.
  *
  ********************************************************************/
 
@@ -49,6 +50,17 @@ class HubPushQueue {
         this.maxAttempts   = opts.maxAttempts   || parseInt(process.env.HUB_PUSH_MAX_ATTEMPTS)      || 10;
         // Rows pulled per drain tick.
         this.batchSize     = opts.batchSize     || 50;
+        // How long a terminal `failed` row survives before the drain sweeps it, and
+        // how often that sweep runs. A retired row is out of the poller's reach but
+        // still in the table, so without the sweep a long hub outage grows an
+        // operational table with no ceiling (item 3462). The window is wide enough
+        // that the failed count getStats publishes still describes recent reality.
+        // Set HUB_PUSH_FAILED_RETENTION_SECONDS=0 to keep terminal rows forever.
+        let retentionEnv = parseInt(process.env.HUB_PUSH_FAILED_RETENTION_SECONDS);
+        this.failedRetentionSec = (opts.failedRetentionSec != null) ? opts.failedRetentionSec
+            : (Number.isFinite(retentionEnv) ? retentionEnv : 7 * 24 * 3600);
+        this.pruneIntervalMs = opts.pruneIntervalMs || parseInt(process.env.HUB_PUSH_PRUNE_INTERVAL_MS) || 3600000;
+        this._lastPruneMs = 0;
 
         this.timer    = null;
         this.draining = false;
@@ -115,6 +127,10 @@ class HubPushQueue {
         let resolveDone;
         this._drainDone = new Promise(resolve => { resolveDone = resolve; });
         try {
+            // Sweep aged terminal rows before fetching. It rides the existing drain
+            // timer rather than owning one, so it inherits start/stop/pause and adds
+            // no lifecycle: the throttle below is what keeps it off every 30s tick.
+            await this._pruneFailed();
             // The due-time predicate is pushed into SQL (db.js getPendingHubPushes) so
             // parked-in-backoff rows no longer occupy the LIMIT batch slots (review
             // finding 01178748: head-of-line blocking). Pass the SAME backoff params
@@ -133,6 +149,29 @@ class HubPushQueue {
             this.draining = false;
             this._drainDone = null;
             resolveDone();
+        }
+    }
+
+    // Delete terminal `failed` rows past the retention window, at most once per
+    // pruneIntervalMs. Never throws into drain(): a sweep that cannot run is a
+    // housekeeping miss, not a delivery failure, and the next tick retries. The
+    // typeof guard keeps minimal test doubles (indexerDb stubs without the method)
+    // working. Returns the number of rows removed, 0 when it did not run.
+    async _pruneFailed(){
+        if(!(this.failedRetentionSec > 0)) return 0;
+        let now = Date.now();
+        if(now - this._lastPruneMs < this.pruneIntervalMs) return 0;
+        this._lastPruneMs = now;
+        if(typeof this.indexerDb.pruneFailedHubPushes !== 'function') return 0;
+        try {
+            let removed = await this.indexerDb.pruneFailedHubPushes(this.failedRetentionSec);
+            if(removed > 0)
+                console.log('HubPushQueue: pruned ' + removed + ' failed row(s) older than ' +
+                    this.failedRetentionSec + 's');
+            return removed;
+        } catch (err){
+            console.warn('HubPushQueue: failed-row prune error:', err.message || err);
+            return 0;
         }
     }
 

@@ -46,41 +46,79 @@ const path   = require('path');
 
 const SQL_DIR = path.join(__dirname, '..', '..', 'src', 'sql');
 const MIG_DIR = path.join(SQL_DIR, 'migrations');
+const INDEX_BASELINE = path.join(__dirname, '..', 'fixtures', 'schema-index-baseline.json');
 
-// table -> Set(lowercased index names) declared in the canonical definitions.
+// Tables whose CREATE TABLE lives in a dated migration are ledger-covered by that
+// statement, indexes included, so they are outside the inverse direction entirely
+// (same carve-out the column baseline states, #3164). SQL line comments are stripped
+// first: the migrations explain themselves in prose, and an unstripped scan reads
+// words like "IF" or "is" out of a sentence as table names.
+function stripSqlComments(raw){
+    return String(raw).replace(/^\s*--.*$/gm, '');
+}
+
+function collectLedgerCreatedTables(){
+    const tables = new Set();
+    for(const file of fs.readdirSync(MIG_DIR).filter(f => f.endsWith('.sql'))){
+        const raw = stripSqlComments(fs.readFileSync(path.join(MIG_DIR, file), 'utf8'));
+        for(const m of raw.matchAll(/CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?`?(\w+)`?/gi))
+            tables.add(m[1]);
+    }
+    return tables;
+}
+
+// Normalize an index's parenthesized column list into a comparable array.
+// Keeps ORDER (a leading column decides which lookups the index serves) and the
+// (len) prefix (a differently-prefixed index is a different index to the engine),
+// drops backticks, case and whitespace. Returns null when the list is unparsed,
+// which the shape comparison treats as "cannot compare" rather than "differs".
+function normalizeIndexColumns(list){
+    if(list === undefined || list === null) return null;
+    return String(list).split(',')
+        .map(c => c.replace(/`/g, '').trim().toLowerCase().replace(/\s+/g, ''))
+        .filter(c => c.length > 0);
+}
+
+// table -> Map(lowercased index name -> {columns, unique}) declared in the canonical
+// definitions. A Map, not a Set, so the name-only checks below keep working while the
+// shape comparison gets the columns and the UNIQUE flag the old Set threw away (#3529).
 function collectDeclaredIndexes(){
     const declared = {};
-    const add = (table, index) => {
-        (declared[table] || (declared[table] = new Set())).add(String(index).toLowerCase());
+    const add = (table, index, unique, columns) => {
+        const key = String(index).toLowerCase();
+        const map = (declared[table] || (declared[table] = new Map()));
+        // First declaration wins; a table declaring one name twice is its own bug and
+        // is caught by the engine, not here.
+        if(!map.has(key)) map.set(key, { unique: !!unique, columns: normalizeIndexColumns(columns) });
     };
 
     for(const file of fs.readdirSync(SQL_DIR).filter(f => f.endsWith('.sql'))){
         const raw = fs.readFileSync(path.join(SQL_DIR, file), 'utf8');
 
         // Standalone: CREATE [UNIQUE] INDEX <name> on <table> (...)
-        for(const m of raw.matchAll(/CREATE\s+(?:UNIQUE\s+)?INDEX\s+`?(\w+)`?\s+on\s+`?(\w+)`?/gi))
-            add(m[2], m[1]);
+        for(const m of raw.matchAll(/CREATE\s+(UNIQUE\s+)?INDEX\s+`?(\w+)`?\s+on\s+`?(\w+)`?\s*\(([^)]*(?:\([^)]*\)[^)]*)*)\)/gi))
+            add(m[3], m[2], m[1], m[4]);
 
         // Inline: KEY / UNIQUE KEY <name> (...) inside the CREATE TABLE block.
         const createTable = raw.match(/CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?`?(\w+)`?/i);
         if(createTable)
-            for(const m of raw.matchAll(/^\s*(?:UNIQUE\s+)?KEY\s+`?(\w+)`?/gim))
-                add(createTable[1], m[1]);
+            for(const m of raw.matchAll(/^\s*(UNIQUE\s+)?KEY\s+`?(\w+)`?\s*\(([^)]*(?:\([^)]*\)[^)]*)*)\)/gim))
+                add(createTable[1], m[2], m[1], m[3]);
     }
     return declared;
 }
 
-// Every index a dated migration adds: {file, table, index}.
+// Every index a dated migration adds: {file, table, index, unique, columns}.
 function collectMigrationIndexes(){
     const added = [];
     for(const file of fs.readdirSync(MIG_DIR).filter(f => f.endsWith('.sql'))){
         const raw = fs.readFileSync(path.join(MIG_DIR, file), 'utf8');
 
-        for(const m of raw.matchAll(/ALTER\s+TABLE\s+`?(\w+)`?\s+ADD\s+(?:UNIQUE\s+)?INDEX\s+(?:IF\s+NOT\s+EXISTS\s+)?`?(\w+)`?/gi))
-            added.push({ file, table: m[1], index: m[2].toLowerCase() });
+        for(const m of raw.matchAll(/ALTER\s+TABLE\s+`?(\w+)`?\s+ADD\s+(UNIQUE\s+)?INDEX\s+(?:IF\s+NOT\s+EXISTS\s+)?`?(\w+)`?\s*\(([^)]*(?:\([^)]*\)[^)]*)*)\)/gi))
+            added.push({ file, table: m[1], index: m[3].toLowerCase(), unique: !!m[2], columns: normalizeIndexColumns(m[4]) });
 
-        for(const m of raw.matchAll(/CREATE\s+(?:UNIQUE\s+)?INDEX\s+(?:IF\s+NOT\s+EXISTS\s+)?`?(\w+)`?\s+on\s+`?(\w+)`?/gi))
-            added.push({ file, table: m[2], index: m[1].toLowerCase() });
+        for(const m of raw.matchAll(/CREATE\s+(UNIQUE\s+)?INDEX\s+(?:IF\s+NOT\s+EXISTS\s+)?`?(\w+)`?\s+on\s+`?(\w+)`?\s*\(([^)]*(?:\([^)]*\)[^)]*)*)\)/gi))
+            added.push({ file, table: m[3], index: m[2].toLowerCase(), unique: !!m[1], columns: normalizeIndexColumns(m[4]) });
     }
     return added;
 }
@@ -115,5 +153,93 @@ describe('SQL schema index parity (definition path vs ledger path) @regression',
             'fresh installs while long-lived DBs keep them. Declare each in its src/sql/<table>.sql (inline ' +
             'KEY, or a standalone CREATE INDEX so reconcileTableIndexes can self-heal it):\n' +
             orphans.map(o => `  ${o.table}.${o.index}  <- ${o.file}`).join('\n'));
+    });
+
+    // #3529: name equality is not shape equality. A migration `ADD INDEX foo (a, b)` and a
+    // definition `KEY foo (a, c)`, or a `CREATE UNIQUE INDEX foo` against a plain `KEY foo`,
+    // both satisfy the name-only check above while leaving a fresh install and a
+    // migration-replayed install carrying structurally different indexes under one name. The
+    // runtime reconciler is no backstop: reconcileTableIndexes matches by COLUMN SET, and for
+    // an inline KEY it is never consulted at all (parseExpectedIndexes reads only standalone
+    // CREATE INDEX). This is the rigor the sibling column-parity guard already applies to
+    // column types, ported to indexes.
+    it('an index declared on BOTH paths has the same columns and uniqueness, not just the same name', function(){
+        const declared = collectDeclaredIndexes();
+        const mismatches = [];
+
+        for(const a of collectMigrationIndexes()){
+            const decl = declared[a.table] && declared[a.table].get(a.index);
+            if(!decl) continue;                       // orphan case, already covered above
+            if(decl.columns === null || a.columns === null) continue;   // unparsed, do not guess
+            if(decl.columns.join(',') !== a.columns.join(','))
+                mismatches.push(`  ${a.table}.${a.index} columns: definition (${decl.columns.join(', ')}) ` +
+                                `vs migration (${a.columns.join(', ')})  <- ${a.file}`);
+            else if(decl.unique !== a.unique)
+                mismatches.push(`  ${a.table}.${a.index} uniqueness: definition unique=${decl.unique} ` +
+                                `vs migration unique=${a.unique}  <- ${a.file}`);
+        }
+
+        assert.deepStrictEqual(mismatches, [],
+            'These indexes carry the same NAME on both schema-construction paths but a different ' +
+            'SHAPE, so a fresh install and a migration-replayed install end up with different ' +
+            'indexes. Column order and the (len) prefix both matter to the engine, and a UNIQUE ' +
+            'index additionally enforces a constraint the plain KEY does not. Make the definition ' +
+            'in src/sql/<table>.sql and the dated migration agree:\n' + mismatches.join('\n'));
+    });
+
+    // #3386: the inverse direction the column-parity sibling already closes (#2457).
+    // An index that exists ONLY on the definition path is invisible to a DB converged by
+    // replaying migrations alone (an operator-managed or rebuilt replica). It bites hardest
+    // for an inline KEY / UNIQUE KEY added to a CREATE TABLE after the table exists:
+    // reconcileTableIndexes -> parseExpectedIndexes self-heals only standalone
+    // CREATE INDEX ... ON, never an inline KEY, so a running node cannot back-fill it either.
+    // The baseline fixture freezes the indexes that shipped with each table's original
+    // CREATE TABLE; anything new must arrive by dated migration or be baselined on purpose.
+    it('no index exists only on the definition path (every declared index is migration-created or baselined)', function(){
+        const fixture  = JSON.parse(fs.readFileSync(INDEX_BASELINE, 'utf8'));
+        const baseline = fixture.baseline || {};
+        const debt     = new Set((fixture.known_unledgered || []).map(e => String(e).toLowerCase()));
+        const ledgerCreated  = collectLedgerCreatedTables();
+        const migrationAdded = new Set(collectMigrationIndexes().map(a => a.table + '.' + a.index));
+
+        const declared = collectDeclaredIndexes();
+        const unledgered = [];
+        for(const table of Object.keys(declared)){
+            if(ledgerCreated.has(table)) continue;             // ledger-covered by its CREATE TABLE
+            for(const index of declared[table].keys()){
+                const key = table + '.' + index;
+                if(migrationAdded.has(key)) continue;
+                if((baseline[table] || []).includes(index)) continue;
+                if(debt.has(key)) continue;
+                unledgered.push('  ' + key);
+            }
+        }
+
+        assert.deepStrictEqual(unledgered, [],
+            'These indexes are declared in a table definition but are created by no dated migration and ' +
+            'are not in test/fixtures/schema-index-baseline.json, so a DB converged by replaying ' +
+            'migrations alone never gets them. If the index was added to an EXISTING table, ship a dated ' +
+            'migration under src/sql/migrations/ (and prefer a standalone CREATE INDEX over an inline KEY, ' +
+            'so reconcileTableIndexes can self-heal aged DBs). If it genuinely shipped with the table\'s ' +
+            'original CREATE TABLE, add it to the baseline deliberately and say so in the commit:\n' +
+            unledgered.join('\n'));
+    });
+
+    it('sanity: the index baseline is neither empty nor stale (guard is not vacuous)', function(){
+        const fixture  = JSON.parse(fs.readFileSync(INDEX_BASELINE, 'utf8'));
+        const baseline = fixture.baseline || {};
+        assert.ok(Object.keys(baseline).length > 0, 'the index baseline is empty; the inverse guard would pass vacuously');
+
+        // A baseline entry for an index no definition declares any more is dead weight that
+        // would quietly re-waive the guard if the name were ever reused.
+        const declared = collectDeclaredIndexes();
+        const stale = [];
+        for(const table of Object.keys(baseline))
+            for(const index of baseline[table])
+                if(!(declared[table] && declared[table].has(index))) stale.push('  ' + table + '.' + index);
+
+        assert.deepStrictEqual(stale, [],
+            'These baseline entries name an index no src/sql/<table>.sql declares any more. Remove them ' +
+            'from test/fixtures/schema-index-baseline.json:\n' + stale.join('\n'));
     });
 });

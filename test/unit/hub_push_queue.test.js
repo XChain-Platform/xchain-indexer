@@ -288,6 +288,64 @@ describe('HubPushQueue', function(){
             await q.drain();
             assert.strictEqual(indexer.indexerDb.getPendingHubPushes.calledWith(7), true);
         });
+
+        it('sweeps aged failed rows on the drain tick even when nothing is pending', async function(){
+            let indexer = makeIndexer();
+            indexer.indexerDb.pruneFailedHubPushes = sinon.stub().resolves(3);
+            indexer.indexerDb.getPendingHubPushes.resolves([]);
+            let q = new HubPushQueue(indexer, { failedRetentionSec: 1234 });
+            await q.drain();
+            assert.strictEqual(indexer.indexerDb.pruneFailedHubPushes.calledWith(1234), true);
+        });
+    });
+
+    // -----------------------------------------------------------------------
+    // _pruneFailed()  (item 3462: terminal rows must not accumulate forever)
+    // -----------------------------------------------------------------------
+    describe('_pruneFailed()', function(){
+        it('throttles to one sweep per pruneIntervalMs', async function(){
+            let indexer = makeIndexer();
+            indexer.indexerDb.pruneFailedHubPushes = sinon.stub().resolves(0);
+            let q = new HubPushQueue(indexer, { pruneIntervalMs: 3600000 });
+            await q._pruneFailed();
+            await q._pruneFailed();
+            await q._pruneFailed();
+            assert.strictEqual(indexer.indexerDb.pruneFailedHubPushes.callCount, 1);
+        });
+
+        it('sweeps again once the interval has elapsed', async function(){
+            let indexer = makeIndexer();
+            indexer.indexerDb.pruneFailedHubPushes = sinon.stub().resolves(0);
+            let q = new HubPushQueue(indexer, { pruneIntervalMs: 1000 });
+            await q._pruneFailed();
+            q._lastPruneMs = Date.now() - 2000;
+            await q._pruneFailed();
+            assert.strictEqual(indexer.indexerDb.pruneFailedHubPushes.callCount, 2);
+        });
+
+        it('never prunes when retention is 0 (retain-forever opt-out)', async function(){
+            let indexer = makeIndexer();
+            indexer.indexerDb.pruneFailedHubPushes = sinon.stub().resolves(0);
+            let q = new HubPushQueue(indexer, { failedRetentionSec: 0 });
+            await q._pruneFailed();
+            assert.strictEqual(indexer.indexerDb.pruneFailedHubPushes.callCount, 0);
+        });
+
+        it('swallows a prune error so the drain still delivers', async function(){
+            let indexer = makeIndexer();
+            indexer.indexerDb.pruneFailedHubPushes = sinon.stub().rejects(new Error('db down'));
+            indexer.indexerDb.getPendingHubPushes.resolves([makeRow({ last_attempted_at: null })]);
+            let q = new HubPushQueue(indexer);
+            let attemptStub = sinon.stub(q, '_attempt').resolves();
+            await q.drain();
+            assert.strictEqual(attemptStub.callCount, 1);
+        });
+
+        it('is inert against a db double without the prune method', async function(){
+            let indexer = makeIndexer();
+            let q = new HubPushQueue(indexer);
+            assert.strictEqual(await q._pruneFailed(), 0);
+        });
     });
 
     // -----------------------------------------------------------------------
