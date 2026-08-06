@@ -49,9 +49,9 @@ module.exports = {
     // utxo-tracker) to pick their parse path: 'default' = plain bitcoinjs, 'mweb' =
     // strip Litecoin HogEx/MWEB marker+flag, 'auxpow' = merge-mined header stripped
     // before the tx count. Declared here so onboarding a chain picks its wire shape
-    // in one place instead of a hardcoded coin-name list in each consumer. NOT part
-    // of the consensus hash (mirrors the pre-existing decoder-local constant it
-    // replaces); arming it into the pin would be a separate coordinated bump.
+    // in one place instead of a hardcoded coin-name list in each consumer. IS part of
+    // the consensus subset/hash (folded by consensusSubset() in index.js, ,
+    // pin regenerated 2026-07-28), so changing it is a coordinated one-wave flag-day.
     wireFormat: 'default',
 
     // Address roles excluded from the consensus subset/hash (display-only; not read
@@ -88,7 +88,10 @@ module.exports = {
                 minStandardTxNonWitnessSize: 82,
                 singleOpReturnPolicy:        true,
             },
-            // Indexing start boundary only; NOT part of any consensus hash.
+            // Indexing start boundary, and IS part of the consensus subset/hash
+            // (folded by consensusSubset() in index.js, , pin regenerated
+            // 2026-08-06): it decides which block the action history begins at, so
+            // changing it is a coordinated one-wave flag-day, not a local knob.
             firstBlock: 950000,
             // Canonical protocol address roles (UPPERCASE). Consumer adapters
             // alias these (explorer uses lowercase protocol/community/explorer).

@@ -3978,8 +3978,13 @@ class Database {
             address_id = await this.createAddress(address);
         // Get list of address balances based on credits/debits tables
         let balances = await this.getAddressBalances(address_id);
-        // Get list of address balances based on balances table
-        let old_balances = await this.getAddressTableBalances(address_id);
+        // Get list of address balances based on balances table. Only the rollback
+        // branch below reads this, so skip the query entirely on the forward path:
+        // it is one wasted round-trip per touched address per action, and fan-out
+        // actions (DIVIDEND / AIRDROP) run this loop once per holder. Keep the read
+        // HERE rather than inside the rollback branch, since it must observe the
+        // balances table BEFORE the UPSERT/DELETE loop rewrites it.
+        let old_balances = (rollback) ? await this.getAddressTableBalances(address_id) : {};
         // Handle updating any current balances based on credits/debits table records
         for(let tick_id in balances){
             balance = balances[tick_id];

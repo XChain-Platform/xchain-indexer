@@ -15,7 +15,7 @@
 DROP TABLE IF EXISTS pending_hub_pushes;
 CREATE TABLE pending_hub_pushes (
     id                  BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-    push_type           VARCHAR(32) NOT NULL,                     -- 'price_round' (PRICE v0) | 'oracle_price' (PRICE v1)
+    push_type           VARCHAR(32) NOT NULL,                     -- 'price_round' (PRICE v0) | 'oracle_price' (PRICE v1) | 'price_retraction' | 'xcall_retraction' | 'match_retraction' (reorg write-ahead retractions, staged inside the rollback transaction and exempt from its purge)
     action_index        BIGINT UNSIGNED NOT NULL,                 -- source PRICE action; lets a reorg purge queued pushes for orphaned actions
     payload             TEXT NOT NULL,                            -- JSON args for the hub JSON-RPC call
     attempts            INT UNSIGNED NOT NULL DEFAULT 0,          -- delivery attempts made so far

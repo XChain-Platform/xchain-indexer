@@ -62,7 +62,8 @@ for(const tick of ALLOWED_COINS)
 // Block/tx wire-serialization family per coin ('default' | 'mweb' | 'auxpow').
 // Consumed by the decoder/utxo-tracker to pick their parse path from the registry
 // instead of a hardcoded coin-name list. Network-independent, so it is a plain
-// tick -> family map (not resolved per network). NOT part of the consensus subset.
+// tick -> family map (not resolved per network). IS part of the consensus subset
+// (folded by consensusSubset() below, ); changing it is a flag-day.
 const WIRE_FORMAT = {};
 for(const tick of ALLOWED_COINS)
     WIRE_FORMAT[tick] = COIN_FILES[tick].wireFormat;
