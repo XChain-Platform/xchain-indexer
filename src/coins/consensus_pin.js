@@ -47,16 +47,20 @@ module.exports = {
         // block, which consensusSubset() hashes whole, so a pure policy correction
         // still moves the pin and still needs the one-wave rollout above. LTC and DOGE
         // are unchanged and re-verified against the canonical files.
+        //
+        // REGENERATED 2026-08-06 (): folding `firstBlock` into
+        // consensusSubset() changes every hash by construction, same one-wave rollout
+        // rule as the wireFormat fold above. Mainnet stays null (Phase 6 arms it).
         testnet: {
-            BTC:  'f9ec594c2b9ae8b33a653faed64a36578ca11472e00f2e3cc6258541b35460ed',
-            LTC:  '03f62fc2f57151924aa6a76ff5ee97684aece17ca54a3f39eb7d8167bd34a20b',
-            DOGE: '3ec0ad2f7290e36887d09a880761c217ea6b0eeb06078d708ee5c200ef2a2410',
+            BTC:  'a04af39cd9d3d332a6c043c02e0920075857078437cb46c7d07c9da143d1b551',
+            LTC:  '185dddc98eb5c94d9069f006a9acb1b1fd6f2772b0a91a6b68a6e0ceddcba778',
+            DOGE: '860422244b1317a2a125d38a49358fc01d639d9a50c173828235787368884610',
         },
 
         regtest: {
-            BTC:  '10b520d6b33487b46d9d9bcc5ecc6177eb233ebfc8cb1c4d94c1d4ef0c89899d',
-            LTC:  '786d903d2b347803c06a1b5b157011834ebc25a246be54f5c27ddd27629eba57',
-            DOGE: '9f448912ed9d24ac50dc16f132619c91115355c165e8f1a5bb3b630ea090f2e0',
+            BTC:  '24e6a363e5a36285574dea357328a997fdee5762ef812d8947eacf69c51afc24',
+            LTC:  '5ad03b383d873d309640e75dfefa2787a5806cb8a84ee46f4cc7fb25ca7f808b',
+            DOGE: '019220a461e34c99fcf5cbf107673f13d3f2a57d2a20e16a0323ed44c81edd11',
         },
     },
 };

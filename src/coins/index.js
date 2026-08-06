@@ -290,6 +290,13 @@ function consensusSubset(tick, network){
         // different transactions out of the same block while its pin verified clean.
         // Coin-level rather than per-network, matching where the coin files declare it.
         wireFormat: coin.wireFormat,
+        // firstBlock is a CONSENSUS input (), for the same reason wireFormat
+        // is: getCoinConfig() exposes it (below) and the decoder reads it as the chain's
+        // start height (xchain-decoder/src/CryptoNetworks.js), so it decides which block
+        // the action history begins at. A node bundling a higher value skips the actions
+        // below it and replays a different history while its pin verifies clean.
+        // Per-network, matching where the coin files declare it.
+        firstBlock: netBlock.firstBlock,
         addresses:  addresses,
         legacyFees: coin.legacyFees,
         GAS_PRICE:  coin.GAS_PRICE,
