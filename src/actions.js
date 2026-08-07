@@ -53,6 +53,9 @@ const FEE_QUOTE_DENYLIST = new Set(['DEPLOY', 'EXECUTE', 'XEXEC', 'BATCH']);
 // its sub-actions' state-dependent fees, which cannot be priced without running them. Quoting a
 // BATCH from a partial schedule would under-size the output, which is the same funds-burning
 // direction this closes.
+//
+// Served on the PRICING path (computeFeeQuote) only, never on validity-first computePreflight,
+// which carries no pricing fields by design; callers reach it via the SDK's getFeeQuote.
 const FEE_QUOTE_STATIC = new Set(['DEPLOY', 'EXECUTE']);
 
 // Settlement and lifecycle legs that stage NO protocol fee: the fee was already charged when
